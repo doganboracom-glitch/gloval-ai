@@ -12,7 +12,7 @@ import {
 } from './types'
 
 const API_URL = process.env.MAILCOW_API_URL?.replace(/\/$/, '')
-const API_KEY = process.env.API_KEY?.trim()
+const API_KEY = (process.env.MAILCOW_API_KEY || process.env.API_KEY)?.trim()
 const MAIL_SERVER_HOST = process.env.MAIL_SERVER_HOST?.trim() || 'mailserver.gloval.ai'
 
 function configured() {
