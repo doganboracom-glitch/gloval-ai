@@ -272,29 +272,42 @@ export async function adminMailStats(): Promise<AdminMailStats> {
   await requireAdmin()
   const provider = getMailProvider()
 
-  const domains = await listAllMailDomains()
-  const perDomain = await Promise.all(
-    domains.map(async (d) => ({
-      mailboxes: await provider.listMailboxes(d.id),
-      aliases: await provider.listAliases(d.id),
-    })),
-  )
-  const logs = await provider.listLogs({ limit: 500 })
+  try {
+    const domains = await listAllMailDomains()
+    const perDomain = await Promise.all(
+      domains.map(async (d) => ({
+        mailboxes: await provider.listMailboxes(d.id),
+        aliases: await provider.listAliases(d.id),
+      })),
+    )
+    const logs = await provider.listLogs({ limit: 500 })
 
-  const dayAgo = Date.now() - 24 * 60 * 60 * 1000
-  const recent = logs.filter((l) => new Date(l.at).getTime() >= dayAgo)
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+    const recent = logs.filter((l) => new Date(l.at).getTime() >= dayAgo)
 
-  return {
-    domains: domains.length,
-    activeDomains: domains.filter((d) => d.status === 'active').length,
-    mailboxes: perDomain.reduce((sum, d) => sum + d.mailboxes.length, 0),
-    aliases: perDomain.reduce((sum, d) => sum + d.aliases.length, 0),
-    storageUsedMb: perDomain.reduce(
-      (sum, d) => sum + d.mailboxes.reduce((s, m) => s + m.usedMb, 0),
-      0,
-    ),
-    delivered24h: recent.filter((l) => l.status === 'delivered').length,
-    failed24h: recent.filter((l) => l.status !== 'delivered').length,
+    return {
+      domains: domains.length,
+      activeDomains: domains.filter((d) => d.status === 'active').length,
+      mailboxes: perDomain.reduce((sum, d) => sum + d.mailboxes.length, 0),
+      aliases: perDomain.reduce((sum, d) => sum + d.aliases.length, 0),
+      storageUsedMb: perDomain.reduce(
+        (sum, d) => sum + d.mailboxes.reduce((s, m) => s + m.usedMb, 0),
+        0,
+      ),
+      delivered24h: recent.filter((l) => l.status === 'delivered').length,
+      failed24h: recent.filter((l) => l.status !== 'delivered').length,
+    }
+  } catch (error) {
+    console.log('[v0] admin mail stats unavailable:', error)
+    return {
+      domains: 0,
+      activeDomains: 0,
+      mailboxes: 0,
+      aliases: 0,
+      storageUsedMb: 0,
+      delivered24h: 0,
+      failed24h: 0,
+    }
   }
 }
 
@@ -346,9 +359,14 @@ export async function adminListLogs(filter?: {
   search?: string
 }): Promise<MailLogEntry[]> {
   await requireAdmin()
-  return getMailProvider().listLogs({
-    status: filter?.status,
-    search: filter?.search,
-    limit: 200,
-  })
+  try {
+    return await getMailProvider().listLogs({
+      status: filter?.status,
+      search: filter?.search,
+      limit: 200,
+    })
+  } catch (error) {
+    console.log('[v0] admin mail logs unavailable:', error)
+    return []
+  }
 }
