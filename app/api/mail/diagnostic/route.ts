@@ -32,10 +32,11 @@ function json(body: Record<string, unknown>, status = 200) {
 function errorKind(error: unknown) {
   if (!(error instanceof Error)) return 'unknown'
   if (error.name === 'AbortError') return 'timeout'
+  const directCode = (error as Error & { code?: string }).code
   const cause = error.cause as { code?: string } | undefined
-  const code = cause?.code
+  const code = directCode ?? cause?.code
   if (code === 'ECONNREFUSED') return 'connection_refused'
-  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'dns_error'
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return code.toLowerCase()
   if (code === 'CERT_HAS_EXPIRED' || code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || code === 'DEPTH_ZERO_SELF_SIGNED_CERT') return 'tls_error'
   return 'connection_error'
 }
@@ -97,10 +98,9 @@ export async function GET() {
     }, 200)
   }
 
-  let resolvedAddress: string
+  let resolved: { address: string; family: number }
   try {
-    const result = await withTimeout(dns.lookup(target.hostname), REQUEST_TIMEOUT_MS)
-    resolvedAddress = result.address
+    resolved = await withTimeout(dns.lookup(target.hostname), REQUEST_TIMEOUT_MS)
   } catch (error) {
     return json({
       success: false,
@@ -127,7 +127,7 @@ export async function GET() {
       configured: Boolean(apiKey),
       checkedAt,
       target: rawUrl,
-      dns: { status: 'PASS' satisfies DiagnosticStatus, address: resolvedAddress },
+      dns: { status: 'PASS' satisfies DiagnosticStatus, hostname: target.hostname, address: resolved.address, family: resolved.family },
       httpsConnection: { status: 'FAIL' satisfies DiagnosticStatus, error: kind },
       httpResponse: { status: 'NOT REACHED' satisfies DiagnosticStatus },
       mailcow: { reached: false, authentication: 'NOT REACHED' satisfies DiagnosticStatus },
@@ -141,7 +141,7 @@ export async function GET() {
       configured: false,
       checkedAt,
       target: rawUrl,
-      dns: { status: 'PASS' satisfies DiagnosticStatus, address: resolvedAddress },
+      dns: { status: 'PASS' satisfies DiagnosticStatus, hostname: target.hostname, address: resolved.address, family: resolved.family },
       httpsConnection: { status: 'PASS' satisfies DiagnosticStatus },
       httpResponse: { status: 'PASS' satisfies DiagnosticStatus, statusCode: probeResponse.status },
       mailcow: { reached: true, authentication: 'NOT REACHED' satisfies DiagnosticStatus },
@@ -160,7 +160,7 @@ export async function GET() {
       configured: true,
       checkedAt,
       target: rawUrl,
-      dns: { status: 'PASS' satisfies DiagnosticStatus, address: resolvedAddress },
+      dns: { status: 'PASS' satisfies DiagnosticStatus, hostname: target.hostname, address: resolved.address, family: resolved.family },
       httpsConnection: { status: 'PASS' satisfies DiagnosticStatus },
       httpResponse: { status: 'PASS' satisfies DiagnosticStatus, statusCode: probeResponse.status },
       mailcow: { reached: true, authentication: 'NOT REACHED' satisfies DiagnosticStatus },
@@ -179,7 +179,7 @@ export async function GET() {
     configured: true,
     checkedAt,
     target: rawUrl,
-    dns: { status: 'PASS' satisfies DiagnosticStatus, address: resolvedAddress },
+    dns: { status: 'PASS' satisfies DiagnosticStatus, hostname: target.hostname, address: resolved.address, family: resolved.family },
     httpsConnection: { status: 'PASS' satisfies DiagnosticStatus },
     httpResponse: { status: 'PASS' satisfies DiagnosticStatus, statusCode: authResponse.status },
     mailcow: {
