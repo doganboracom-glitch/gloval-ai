@@ -1,0 +1,320 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: var(--font-noto-arabic), var(--font-geist), ui-sans-serif, system-ui,
+    sans-serif;
+  /* Sabit marka moru. `--primary`, hem `.dark` kapsamında hem de
+     prefers-color-scheme: dark altında nötr griye dönüştüğü için (aşağıdaki
+     bloklara bakın) marka vurgusunun mor kalması gereken yerlerde bu token
+     kullanılır — .beta-neon / .glow-primary ile aynı gerekçe. */
+  --color-brand: oklch(0.66 0.2 298);
+  --color-brand-foreground: oklch(0.16 0.018 288);
+  /* Başarılı durumlar için sabit yeşil; koyu zeminde ~9:1 kontrast. */
+  --color-success: oklch(0.79 0.19 150);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: dark;
+  --background: oklch(0.16 0.018 288);
+  --foreground: oklch(0.96 0.008 290);
+  --card: oklch(0.205 0.021 288);
+  --card-foreground: oklch(0.96 0.008 290);
+  --popover: oklch(0.205 0.021 288);
+  --popover-foreground: oklch(0.96 0.008 290);
+  --primary: oklch(0.66 0.2 298);
+  --primary-foreground: oklch(0.16 0.018 288);
+  --secondary: oklch(0.26 0.028 290);
+  --secondary-foreground: oklch(0.96 0.008 290);
+  --muted: oklch(0.24 0.024 290);
+  --muted-foreground: oklch(0.68 0.03 290);
+  --accent: oklch(0.8 0.13 200);
+  --accent-foreground: oklch(0.16 0.018 288);
+  --destructive: oklch(0.62 0.22 25);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.66 0.2 298);
+  --chart-1: oklch(0.66 0.2 298);
+  --chart-2: oklch(0.8 0.13 200);
+  --chart-3: oklch(0.72 0.16 330);
+  --chart-4: oklch(0.55 0.18 275);
+  --chart-5: oklch(0.85 0.14 90);
+  --radius: 0.9rem;
+  --sidebar: oklch(0.205 0.021 288);
+  --sidebar-foreground: oklch(0.96 0.008 290);
+  --sidebar-primary: oklch(0.66 0.2 298);
+  --sidebar-primary-foreground: oklch(0.16 0.018 288);
+  --sidebar-accent: oklch(0.26 0.028 290);
+  --sidebar-accent-foreground: oklch(0.96 0.008 290);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.66 0.2 298);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  /* Geist/Space Grotesk ship no Arabic glyphs, so Arabic text rendered with
+     font-sans/font-display falls back to tofu boxes. Tailwind's `@theme
+     inline` compiles font-sans/font-display utilities to reference
+     var(--font-geist)/var(--font-space-grotesk) directly (not var(--font-sans)),
+     so those are the variables that must be overridden here. next/font's
+     `variable` class that originally sets --font-geist/--font-space-grotesk
+     on <html> is emitted outside any @layer, so it beats this rule on cascade
+     layer order alone regardless of selector specificity — !important is
+     required to win. Scoped to the `ar` locale only — TR/EN/other locales
+     keep the Latin font stack untouched. */
+  html[lang='ar'] {
+    --font-geist: var(--font-arabic) !important;
+    --font-space-grotesk: var(--font-arabic) !important;
+  }
+  /* Rendered demo/generated sites: keep anchor targets clear of the sticky
+     header when nav links smooth-scroll to a section. */
+  [data-website-root] [id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
+@layer utilities {
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, oklch(1 0 0 / 4%) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(1 0 0 / 4%) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+  /* Generated cover panel for blog cards. Reuses the site's existing grid motif
+     and primary accent instead of introducing per-category hues, so adding
+     categories never expands the palette. Real cover images, when present,
+     replace this entirely. */
+  .post-cover {
+    background:
+      radial-gradient(
+        120% 110% at var(--cover-origin-x, 12%) 0%,
+        color-mix(in oklch, var(--primary) 20%, transparent) 0%,
+        transparent 62%
+      ),
+      linear-gradient(
+        var(--cover-angle, 160deg),
+        oklch(0.24 0.02 275) 0%,
+        oklch(0.15 0.012 275) 100%
+      );
+  }
+  .glow-primary {
+    box-shadow: 0 0 0 1px oklch(0.66 0.2 298 / 25%), 0 24px 80px -20px oklch(0.66 0.2 298 / 45%);
+  }
+  .text-gradient {
+    background: linear-gradient(100deg, var(--foreground) 30%, var(--primary) 75%, var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Purple neon "BETA" tag: glowing ring + inner/outer bloom, with a subtle
+     breathing pulse. Sits on the brand hue (298, same as --primary) but a few
+     steps lighter, so the glow and the text stay legible on the dark surface.
+     Kept as a fixed value rather than var(--primary) because the .dark scope
+     overrides that token to a neutral gray, which would kill the neon. */
+  .beta-neon {
+    --neon: oklch(0.78 0.2 298);
+    color: var(--neon);
+    border: 1px solid color-mix(in oklch, var(--neon) 70%, transparent);
+    background: color-mix(in oklch, var(--neon) 12%, transparent);
+    text-shadow: 0 0 6px color-mix(in oklch, var(--neon) 80%, transparent);
+    box-shadow:
+      0 0 4px color-mix(in oklch, var(--neon) 55%, transparent),
+      0 0 12px color-mix(in oklch, var(--neon) 45%, transparent),
+      inset 0 0 6px color-mix(in oklch, var(--neon) 30%, transparent);
+    animation: beta-pulse 2.4s ease-in-out infinite;
+  }
+  /* Publish-status pills for project cards. Same neon recipe as .beta-neon but
+     deliberately without the breathing pulse: these render once per card, and
+     animating a whole grid of them would pull focus from the card content. */
+  .status-neon {
+    color: var(--neon);
+    border: 1px solid color-mix(in oklch, var(--neon) 60%, transparent);
+    background: color-mix(in oklch, var(--neon) 12%, transparent);
+    text-shadow: 0 0 6px color-mix(in oklch, var(--neon) 70%, transparent);
+    box-shadow:
+      0 0 4px color-mix(in oklch, var(--neon) 45%, transparent),
+      0 0 12px color-mix(in oklch, var(--neon) 35%, transparent),
+      inset 0 0 6px color-mix(in oklch, var(--neon) 22%, transparent);
+  }
+  /* Subtle purple neon for the nav "Destek" link only. Fixed hue (see .beta-neon). */
+  .support-neon {
+    --neon: oklch(0.78 0.2 298);
+    color: var(--neon);
+    border: 1px solid color-mix(in oklch, var(--neon) 35%, transparent);
+    background: color-mix(in oklch, var(--neon) 8%, transparent);
+    text-shadow: 0 0 6px color-mix(in oklch, var(--neon) 50%, transparent);
+    box-shadow: 0 0 10px color-mix(in oklch, var(--neon) 25%, transparent);
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.25s ease;
+  }
+  .support-neon:hover,
+  .support-neon:focus-visible {
+    border-color: color-mix(in oklch, var(--neon) 65%, transparent);
+    background: color-mix(in oklch, var(--neon) 14%, transparent);
+    box-shadow:
+      0 0 6px color-mix(in oklch, var(--neon) 50%, transparent),
+      0 0 18px color-mix(in oklch, var(--neon) 40%, transparent);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .support-neon {
+      transition: none;
+    }
+  }
+  /* Neon green = live. */
+  .status-neon-live {
+    --neon: oklch(0.86 0.24 148);
+  }
+  /* Neon red = not live. Lightened well past --destructive so it stays legible
+     as text on the dark card surface while still reading as a danger tone. */
+  .status-neon-offline {
+    --neon: oklch(0.72 0.21 22);
+  }
+}
+
+@keyframes beta-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 4px color-mix(in oklch, var(--neon) 55%, transparent),
+      0 0 12px color-mix(in oklch, var(--neon) 45%, transparent),
+      inset 0 0 6px color-mix(in oklch, var(--neon) 30%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 6px color-mix(in oklch, var(--neon) 70%, transparent),
+      0 0 20px color-mix(in oklch, var(--neon) 60%, transparent),
+      inset 0 0 9px color-mix(in oklch, var(--neon) 40%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beta-neon {
+    animation: none;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
