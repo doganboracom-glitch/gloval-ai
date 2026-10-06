@@ -1,6 +1,6 @@
 import dns from 'node:dns/promises'
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/mail/admin-guard'
+import { requireAdminResponse } from '@/lib/mail/admin-guard'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -54,12 +54,10 @@ async function fetchWithTimeout(url: string, timeoutMs: number, init: RequestIni
 }
 
 export async function GET() {
-  try {
-    await withTimeout(requireAdmin(), REQUEST_TIMEOUT_MS)
-  } catch (error) {
-    if (error instanceof Response) return error
-    return json({ success: false, error: 'DIAGNOSTIC_AUTHORIZATION_FAILED' }, 401)
-  }
+  const denied = await withTimeout(requireAdminResponse(), REQUEST_TIMEOUT_MS).catch(() =>
+    json({ success: false, error: 'DIAGNOSTIC_AUTHORIZATION_FAILED' }, 401),
+  )
+  if (denied) return denied
 
   const rawUrl = process.env.MAILCOW_API_URL?.trim().replace(/\/$/, '')
   const apiKey = (process.env.MAILCOW_API_KEY || process.env.API_KEY)?.trim()

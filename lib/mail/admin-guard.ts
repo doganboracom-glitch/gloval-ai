@@ -48,15 +48,30 @@ export function isAdminEmail(email: string | null | undefined): boolean {
  * or a 403, so the existence of the admin area is not disclosed to people who
  * may not have it.
  */
-export async function requireAdmin(): Promise<{ userId: string; email: string }> {
+async function getAdminUser(): Promise<{ userId: string; email: string } | null> {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user || !isAdminEmail(user.email)) notFound()
-
+  if (!user || !isAdminEmail(user.email)) return null
   return { userId: user.id, email: user.email ?? '' }
+}
+
+export async function requireAdmin(): Promise<{ userId: string; email: string }> {
+  const admin = await getAdminUser()
+  if (!admin) notFound()
+  return admin
+}
+
+/** Route-handler variant: preserves the API response contract instead of throwing Next's notFound sentinel. */
+export async function requireAdminResponse(): Promise<Response | null> {
+  const admin = await getAdminUser()
+  if (admin) return null
+  return new Response(JSON.stringify({ success: false, error: 'not_found' }), {
+    status: 404,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  })
 }
 
 /** Non-throwing variant, for conditionally rendering an admin entry point. */
