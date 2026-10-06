@@ -7,12 +7,14 @@ type Health = {
   configured?: boolean
   mailcow?: { connected: boolean; authenticated: boolean }
   error?: string
+  checkedAt?: string
 }
 
 const labels: Record<string, string> = {
   MAILCOW_CONFIGURATION_MISSING: 'Yapılandırma eksik',
-  MAILCOW_AUTHENTICATION_FAILED: 'Kimlik doğrulama başarısız',
-  MAILCOW_CONNECTION_FAILED: 'Bağlantı kurulamadı',
+  MAILCOW_AUTHENTICATION_FAILED: 'Ulaşılıyor · Kimlik doğrulama geçersiz',
+  MAILCOW_ACCESS_DENIED: 'Erişim reddedildi',
+  MAILCOW_CONNECTION_FAILED: 'Ulaşılamıyor',
   MAILCOW_API_FAILED: 'Mailcow API hatası',
 }
 
@@ -26,7 +28,7 @@ export function MailHealthCard() {
       const response = await fetch('/api/mail/health', { cache: 'no-store' })
       setHealth((await response.json()) as Health)
     } catch {
-      setHealth({ success: false, error: 'MAILCOW_CONNECTION_FAILED' })
+      setHealth({ success: false, error: 'MAILCOW_CONNECTION_FAILED', checkedAt: new Date().toISOString() })
     } finally {
       setLoading(false)
     }
@@ -64,7 +66,13 @@ export function MailHealthCard() {
         <div>
           <dt className="text-xs text-muted-foreground">Authentication</dt>
           <dd className={`mt-1 text-sm font-medium ${health?.mailcow?.authenticated ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-            {health?.mailcow?.authenticated ? 'Geçerli' : health ? 'Başarısız' : 'Kontrol edilmedi'}
+            {health?.mailcow?.authenticated ? 'Geçerli' : health ? 'Geçersiz' : 'Kontrol edilmedi'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">Son kontrol</dt>
+          <dd className="mt-1 text-sm font-medium">
+            {health?.checkedAt ? new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(health.checkedAt)) : 'Henüz yapılmadı'}
           </dd>
         </div>
       </dl>

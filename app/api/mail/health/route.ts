@@ -18,7 +18,7 @@ export async function GET() {
   const apiUrl = process.env.MAILCOW_API_URL?.trim().replace(/\/$/, '')
   const apiKey = (process.env.MAILCOW_API_KEY || process.env.API_KEY)?.trim()
   if (!apiUrl || !apiKey) {
-    return json({ success: false, configured: false, error: 'MAILCOW_CONFIGURATION_MISSING' }, 503)
+    return json({ success: false, configured: false, checkedAt: new Date().toISOString(), error: 'MAILCOW_CONFIGURATION_MISSING' }, 503)
   }
 
   const controller = new AbortController()
@@ -34,7 +34,7 @@ export async function GET() {
     })
     console.log('[v0] Mailcow health: response status:', response.status)
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       return json({
         success: false,
         configured: true,
@@ -42,6 +42,16 @@ export async function GET() {
         error: 'MAILCOW_AUTHENTICATION_FAILED',
       }, 502)
     }
+
+    if (response.status === 403) {
+      return json({
+        success: false,
+        configured: true,
+        mailcow: { connected: true, authenticated: true },
+        error: 'MAILCOW_ACCESS_DENIED',
+      }, 502)
+    }
+
 
     if (!response.ok) {
       return json({
