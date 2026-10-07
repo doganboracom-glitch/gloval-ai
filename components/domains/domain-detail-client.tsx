@@ -25,6 +25,7 @@ import {
   type DomainDetail,
 } from '@/lib/custom-domains/actions'
 import { ConnectionStatus } from '@/components/domains/connection-status'
+import { getRecheckCopy } from '@/components/domains/recheck-copy'
 import { isDomainLive, isDomainUsable, type DomainErrorCode } from '@/lib/custom-domains/types'
 
 /**
@@ -44,7 +45,7 @@ export function DomainDetailClient({
   userEmail: string
   publishableProjects: { id: string; name: string; slug: string }[]
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const router = useRouter()
   const d = t.domains
   const { domain, live, website, email } = detail
@@ -54,7 +55,8 @@ export function DomainDetailClient({
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState(website.projectId ?? '')
 
-  const [action, setAction] = useState<'start' | 'check' | 'email' | null>(null)
+  const [action, setAction] = useState<'start' | 'check' | 'email' | 'recheck' | null>(null)
+  const [recheckError, setRecheckError] = useState<string | null>(null)
   const [emailDnsNotice, setEmailDnsNotice] = useState<string | null>(null)
 
   const usable = isDomainUsable(domain)
@@ -119,6 +121,23 @@ export function DomainDetailClient({
       } else {
         router.refresh()
       }
+      setAction(null)
+    })
+  }
+
+  function handleRecheck() {
+    if (isPending) return
+    setRecheckError(null)
+    setAction('recheck')
+    startTransition(async () => {
+      try {
+        const result = await verifyMyDomain(domain.id)
+        if (!result.ok) setRecheckError(getRecheckCopy(lang).error)
+      } catch {
+        setRecheckError(getRecheckCopy(lang).error)
+      }
+      // Refresh on every outcome so the card and "Son kontrol" time reflect what was persisted.
+      router.refresh()
       setAction(null)
     })
   }
@@ -239,13 +258,14 @@ export function DomainDetailClient({
 
         {usable && (
           <div className="mt-4">
-            <ConnectionStatus domain={domain} live={isDomainLive(domain)} checking={isPending} />
-            {!isDomainLive(domain) && (
-              <Button variant="secondary" size="sm" className="mt-3" onClick={handleVerify} disabled={isPending}>
-                {isPending ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                {d.verify}
-              </Button>
-            )}
+            <ConnectionStatus
+              domain={domain}
+              live={isDomainLive(domain)}
+              checking={isPending}
+              onRecheck={handleRecheck}
+              rechecking={isPending && action === 'recheck'}
+              recheckError={recheckError}
+            />
           </div>
         )}
 
