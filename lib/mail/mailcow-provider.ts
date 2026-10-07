@@ -1,9 +1,11 @@
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   MailError,
   isValidLocalPart,
   type CreateAliasInput,
   type CreateMailboxInput,
   type MailAlias,
+  type MailDnsRecordSpec,
   type MailDomain,
   type MailLogFilter,
   type MailProvider,
@@ -11,73 +13,157 @@ import {
   type UpdateMailboxInput,
 } from './types'
 
-const API_URL = process.env.MAILCOW_API_URL?.replace(/\/$/, '')
+/**
+ * Mailcow adapter (https://mailserver.gloval.ai).
+ *
+ * Facts about the Mailcow API this file depends on:
+ *  - Failures come back as HTTP 200 with `{ type: 'danger' | 'error', msg }`,
+ *    so `response.ok` alone proves nothing. Every call goes through `unwrap`.
+ *  - Quotas are MiB on write and BYTES on read.
+ *  - `edit/*` calls take `{ items: [...], attr: {...} }`.
+ *  - `delete/mailbox` takes mailbox addresses, `delete/alias` takes numeric ids.
+ *  - `get/dkim/<domain>` returns the private key too; it is never exposed here.
+ */
+
+const API_URL = process.env.MAILCOW_API_URL?.trim().replace(/\/+$/, '')
 const API_KEY = (process.env.MAILCOW_API_KEY || process.env.API_KEY)?.trim()
 const MAIL_SERVER_HOST = process.env.MAIL_SERVER_HOST?.trim() || 'mailserver.gloval.ai'
+const DKIM_SELECTOR = 'dkim'
+const TIMEOUT_MS = 15_000
 
-function configured() {
+// Per-customer-domain limits. `quota` is the domain's total pool in MiB and
+// must be at least the sum of its mailboxes, otherwise mailbox creation fails.
+const DOMAIN_LIMITS = { aliases: 100, mailboxes: 50, defquota: 1024, maxquota: 10240, quota: 102400 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function assertConfigured() {
   if (!API_URL || !API_KEY) throw new Error('Mailcow provider is not configured')
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  configured()
-  const response = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY!,
-      ...(init.headers || {}),
-    },
-    cache: 'no-store',
-  })
-  if (!response.ok) throw new Error(`Mailcow request failed: ${response.status}`)
-  return response.json() as Promise<T>
+type MailcowMessage = { type?: string; msg?: unknown; log?: unknown }
+
+function isFailure(item: unknown): item is MailcowMessage {
+  if (!item || typeof item !== 'object') return false
+  const type = (item as MailcowMessage).type
+  return type === 'danger' || type === 'error'
+}
+
+function messageText(item: MailcowMessage): string {
+  const msg = Array.isArray(item.msg) ? item.msg.join(' ') : String(item.msg ?? '')
+  return msg || 'mailcow_error'
+}
+
+async function request<T>(path: string, init: { method?: 'GET' | 'POST'; body?: unknown } = {}): Promise<T> {
+  assertConfigured()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const response = await fetch(`${API_URL}/api/v1/${path}`, {
+      method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY! },
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`Mailcow request failed: ${response.status}`)
+    const data = (await response.json()) as T
+    const items = Array.isArray(data) ? data : [data]
+    const failed = items.find(isFailure)
+    if (failed) throw new Error(messageText(failed))
+    return data
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function mapError(error: unknown): never {
   const message = error instanceof Error ? error.message : ''
-  if (/already|exist|duplicate/i.test(message)) throw new MailError('MAILBOX_EXISTS')
+  if (/exist|already|duplicate/i.test(message)) throw new MailError('MAILBOX_EXISTS')
+  if (/quota/i.test(message)) throw new MailError('QUOTA_EXCEEDED')
+  if (/invalid|syntax/i.test(message)) throw new MailError('INVALID_ADDRESS')
   throw error
 }
 
-function domainFromName(name: string, userId = ''): MailDomain {
-  return {
-    id: name,
-    userId,
-    domain: name,
-    status: 'active',
-    dns: [],
-    createdAt: new Date().toISOString(),
-  }
+/**
+ * The mail module addresses a customer domain by its custom-domain UUID, the
+ * admin screens address it by name. Mailcow only knows names.
+ */
+async function domainName(domainId: string): Promise<string> {
+  if (!UUID_RE.test(domainId)) return domainId.toLowerCase()
+  const { data } = await createAdminClient().from('custom_domains').select('domain').eq('id', domainId).maybeSingle()
+  const name = (data as { domain?: string } | null)?.domain
+  if (!name) throw new MailError('NOT_FOUND')
+  return name.toLowerCase()
 }
+
+function randomPassword() {
+  // Never shown for create (the user sets one through "reset password"); long
+  // and mixed so it satisfies Mailcow's policy.
+  return `${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8).toUpperCase()}a1!`
+}
+
+const mibFromBytes = (bytes: unknown) => Math.round(Number(bytes || 0) / 1048576)
 
 function mailboxFromApi(row: Record<string, unknown>, domainId: string): Mailbox {
   const username = String(row.username || row.email || '')
-  const [localPart, domain] = username.split('@')
+  const localPart = username.split('@')[0]
   return {
     id: username,
     domainId,
     localPart: localPart || username,
     address: username,
-    displayName: String(row.name || row.display_name || localPart || username),
-    quotaMb: Number(row.quota || row.quota_mb || 0),
-    usedMb: Number(row.quota_used || row.used_mb || 0),
+    displayName: String(row.name || localPart || username),
+    quotaMb: mibFromBytes(row.quota),
+    usedMb: mibFromBytes(row.quota_used),
     status: row.active === 0 || row.active === '0' ? 'suspended' : 'active',
     createdAt: String(row.created || new Date().toISOString()),
   }
 }
 
+async function listAliasRows(name: string): Promise<Array<Record<string, unknown>>> {
+  const rows = await request<Array<Record<string, unknown>>>(`get/alias/all/${encodeURIComponent(name)}`)
+  return Array.isArray(rows) ? rows : []
+}
+
+function aliasFromApi(row: Record<string, unknown>, domainId: string): MailAlias {
+  const goto = Array.isArray(row.goto) ? row.goto.map(String) : String(row.goto || '').split(',').map((s) => s.trim()).filter(Boolean)
+  return {
+    id: String(row.id),
+    domainId,
+    address: String(row.address),
+    destinations: goto,
+    createdAt: String(row.created || new Date().toISOString()),
+  }
+}
+
+async function getDkim(name: string): Promise<{ selector: string; txt: string } | null> {
+  const data = await request<Record<string, unknown>>(`get/dkim/${encodeURIComponent(name)}`)
+  if (!data || typeof data.dkim_txt !== 'string' || !data.dkim_txt) return null
+  return { selector: String(data.dkim_selector || DKIM_SELECTOR), txt: data.dkim_txt }
+}
+
 export const mailcowProvider: MailProvider = {
   id: 'mailcow',
 
-  async listDomains(userId) {
-    const rows = await request<Array<Record<string, unknown>>>('/api/v1/get/domain/all')
-    return rows.map((row) => domainFromName(String(row.domain_name || row.domain), userId))
+  async listDomains(userId = '') {
+    const rows = await request<Array<Record<string, unknown>>>('get/domain/all')
+    return (Array.isArray(rows) ? rows : []).map((row): MailDomain => {
+      const name = String(row.domain_name || row.domain)
+      return {
+        id: name,
+        userId,
+        domain: name,
+        status: row.active === 0 || row.active === '0' ? 'failed' : 'active',
+        dns: [],
+        createdAt: String(row.created || new Date().toISOString()),
+      }
+    })
   },
 
   async getDomain(domainId) {
-    const domains = await this.listDomains()
-    return domains.find((domain) => domain.id === domainId) || null
+    const name = await domainName(domainId)
+    return (await this.listDomains()).find((d) => d.domain === name) || null
   },
 
   async verifyDomain(domainId) {
@@ -86,73 +172,123 @@ export const mailcowProvider: MailProvider = {
     return domain
   },
 
+  /** Idempotent: adds the domain and its DKIM key only when missing. */
   async ensureDomain(domain) {
-    try {
-      await request('/api/v1/add/domain', {
-        method: 'POST',
-        body: JSON.stringify({ domain: domain.domain, description: 'GLOVAL Mail', aliases: 100, mailboxes: 100, quota: 10, active: 1 }),
+    const name = domain.domain.toLowerCase()
+    const existing = await request<Record<string, unknown>>(`get/domain/${encodeURIComponent(name)}`)
+    if (!existing || !existing.domain_name) {
+      await request('add/domain', {
+        body: { domain: name, description: 'GLOVAL Mail', active: 1, restart_sogo: 1, ...DOMAIN_LIMITS },
       })
-    } catch (error) {
-      if (!/already|exist|duplicate/i.test(error instanceof Error ? error.message : '')) throw error
+    }
+    if (!(await getDkim(name))) {
+      await request('add/dkim', { body: { domains: name, dkim_selector: DKIM_SELECTOR, key_size: 2048 } })
     }
     return domain
   },
 
+  async dnsRecords(domain: string): Promise<MailDnsRecordSpec[]> {
+    const name = domain.toLowerCase()
+    const dkim = await getDkim(name)
+    if (!dkim) return []
+    return [
+      { type: 'MX', host: '@', value: MAIL_SERVER_HOST, priority: 10 },
+      { type: 'TXT', host: '@', value: 'v=spf1 mx ~all', label: 'SPF' },
+      { type: 'TXT', host: `${dkim.selector}._domainkey`, value: dkim.txt, label: 'DKIM' },
+      { type: 'TXT', host: '_dmarc', value: `v=DMARC1; p=quarantine; adkim=r; aspf=r`, label: 'DMARC' },
+    ]
+  },
+
   async listMailboxes(domainId) {
-    const rows = await request<Array<Record<string, unknown>>>(`/api/v1/get/mailbox/all/${encodeURIComponent(domainId)}`)
-    return rows.map((row) => mailboxFromApi(row, domainId))
+    const name = await domainName(domainId)
+    const rows = await request<Array<Record<string, unknown>>>(`get/mailbox/all/${encodeURIComponent(name)}`)
+    return (Array.isArray(rows) ? rows : []).map((row) => mailboxFromApi(row, domainId))
   },
 
   async createMailbox(input: CreateMailboxInput) {
     const localPart = input.localPart.trim().toLowerCase()
     if (!isValidLocalPart(localPart)) throw new MailError('INVALID_ADDRESS')
+    const name = await domainName(input.domainId)
+    const password = randomPassword()
     try {
-      await request('/api/v1/add/mailbox', {
-        method: 'POST',
-        body: JSON.stringify({ local_part: localPart, domain: input.domainId, name: input.displayName.trim(), quota: Math.ceil(input.quotaMb / 1024), password: crypto.randomUUID() + 'Aa1!' }),
+      await request('add/mailbox', {
+        body: {
+          local_part: localPart,
+          domain: name,
+          name: input.displayName.trim(),
+          quota: String(input.quotaMb), // MiB
+          password,
+          password2: password,
+          active: '1',
+          force_pw_update: '0',
+          tls_enforce_in: '0',
+          tls_enforce_out: '0',
+        },
       })
-      const boxes = await this.listMailboxes(input.domainId)
-      const created = boxes.find((box) => box.localPart === localPart)
-      if (!created) throw new MailError('NOT_FOUND')
-      return created
-    } catch (error) { return mapError(error) }
+    } catch (error) {
+      return mapError(error)
+    }
+    const created = (await this.listMailboxes(input.domainId)).find((box) => box.localPart === localPart)
+    if (!created) throw new MailError('NOT_FOUND')
+    return created
   },
 
   async updateMailbox(id: string, input: UpdateMailboxInput) {
-    await request('/api/v1/edit/mailbox', { method: 'POST', body: JSON.stringify({ username: id, name: input.displayName, active: input.status === 'suspended' ? 0 : 1 }) })
-    const domain = id.split('@')[1]
-    const boxes = await this.listMailboxes(domain)
-    const updated = boxes.find((box) => box.id === id)
+    const attr: Record<string, string> = {}
+    if (input.displayName !== undefined) attr.name = input.displayName.trim()
+    if (input.quotaMb !== undefined) attr.quota = String(input.quotaMb)
+    if (input.status !== undefined) attr.active = input.status === 'suspended' ? '0' : '1'
+    if (Object.keys(attr).length > 0) await request('edit/mailbox', { body: { items: [id], attr } })
+    const updated = (await this.listMailboxes(id.split('@')[1])).find((box) => box.id === id)
     if (!updated) throw new MailError('NOT_FOUND')
     return updated
   },
 
   async deleteMailbox(id) {
-    await request('/api/v1/delete/mailbox', { method: 'POST', body: JSON.stringify({ items: [id] }) })
+    await request('delete/mailbox', { body: [id] })
   },
 
   async resetPassword(id) {
-    const password = `${crypto.randomUUID()}Aa1!`
-    await request('/api/v1/edit/mailbox', { method: 'POST', body: JSON.stringify({ username: id, password }) })
+    const password = randomPassword()
+    await request('edit/mailbox', { body: { items: [id], attr: { password, password2: password } } })
     return { tempPassword: password }
   },
 
   async listAliases(domainId) {
-    const rows = await request<Array<Record<string, unknown>>>(`/api/v1/get/alias/all/${encodeURIComponent(domainId)}`)
-    return rows.map((row) => ({ id: String(row.address), domainId, address: String(row.address), destinations: Array.isArray(row.goto) ? row.goto.map(String) : String(row.goto || '').split(',').filter(Boolean), createdAt: new Date().toISOString() }))
+    const name = await domainName(domainId)
+    // Mailcow also lists each mailbox's own address as an alias; hide those.
+    return (await listAliasRows(name))
+      .filter((row) => String(row.address) !== String(row.goto))
+      .map((row) => aliasFromApi(row, domainId))
   },
 
   async createAlias(input: CreateAliasInput) {
-    const address = `${input.localPart.trim().toLowerCase()}@${input.domainId}`
-    await request('/api/v1/add/alias', { method: 'POST', body: JSON.stringify({ address, goto: input.destinations.join(','), active: 1 }) })
-    return { id: address, domainId: input.domainId, address, destinations: input.destinations, createdAt: new Date().toISOString() }
+    const name = await domainName(input.domainId)
+    const address = `${input.localPart.trim().toLowerCase()}@${name}`
+    try {
+      await request('add/alias', { body: { address, goto: input.destinations.join(','), active: 1 } })
+    } catch (error) {
+      if (/exist|already|duplicate/i.test(error instanceof Error ? error.message : '')) throw new MailError('ALIAS_EXISTS')
+      throw error
+    }
+    const created = (await listAliasRows(name)).find((row) => String(row.address) === address)
+    if (!created) throw new MailError('NOT_FOUND')
+    return aliasFromApi(created, input.domainId)
   },
 
-  async deleteAlias(id) { await request('/api/v1/delete/alias', { method: 'POST', body: JSON.stringify({ items: [id] }) }) },
-  async listLogs(_filter: MailLogFilter) { return [] },
-  webmailUrl(address) { return `https://${MAIL_SERVER_HOST}/SOGo/?user=${encodeURIComponent(address)}` },
+  async deleteAlias(id) {
+    await request('delete/alias', { body: [id] })
+  },
+
+  async listLogs(_filter: MailLogFilter) {
+    return []
+  },
+
+  webmailUrl(address) {
+    return `https://${MAIL_SERVER_HOST}/SOGo/?user=${encodeURIComponent(address)}`
+  },
 }
 
-export function isMailcowConfigured() { return Boolean(API_URL && API_KEY) }
-
-
+export function isMailcowConfigured() {
+  return Boolean(API_URL && API_KEY)
+}

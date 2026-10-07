@@ -1,6 +1,9 @@
 import { getMailProvider } from './provider'
 import { listDomainsForUser } from '@/lib/custom-domains/service'
-import { isDomainUsable, type CustomDomain } from '@/lib/custom-domains/types'
+import { isDomainUsable, type CustomDomain, type DnsRecord } from '@/lib/custom-domains/types'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
+import { getMailQuota } from './access'
 import type { MailDomain, MailDomainStatus } from './types'
 
 /**
@@ -59,12 +62,55 @@ export async function getMyMailDomains(userId: string): Promise<MailDomain[]> {
   if (usable.length === 0) return []
 
   const provider = getMailProvider()
-  const mapped = usable.map(toMailDomain)
 
-  if (provider.ensureDomain) {
-    return Promise.all(mapped.map((domain) => provider.ensureDomain!(domain)))
-  }
-  return mapped
+  // Provisioning on the mail server costs real resources, so it only happens
+  // for customers whose plan actually includes mail. Everyone else just sees
+  // their domain list (the page then shows the "upgrade" state).
+  const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+  const entitled = getMailQuota(plan, subscription).allowed
+  if (!entitled || !provider.ensureDomain) return usable.map(toMailDomain)
+
+  const provisioned = await Promise.all(
+    usable.map(async (domain) => {
+      await provider.ensureDomain!(toMailDomain(domain))
+      return issueEmailDns(domain)
+    }),
+  )
+  return provisioned.map(toMailDomain)
+}
+
+/**
+ * Replace the stand-in email records with the real ones from the mail server
+ * and persist them on the domain, so the domain screen shows exactly what the
+ * customer must publish. Idempotent: a no-op once real records are stored.
+ * Providers without real DNS data (the mock) leave the placeholders alone.
+ */
+async function issueEmailDns(domain: CustomDomain): Promise<CustomDomain> {
+  const provider = getMailProvider()
+  if (!provider.dnsRecords) return domain
+
+  const current = domain.dns.filter((record) => record.purpose === 'email')
+  if (current.length > 0 && current.every((record) => !record.placeholder)) return domain
+
+  const specs = await provider.dnsRecords(domain.domain)
+  if (specs.length === 0) return domain
+
+  const issued: DnsRecord[] = specs.map((spec) => ({
+    type: spec.type,
+    host: spec.host,
+    value: spec.value,
+    priority: spec.priority,
+    label: spec.label,
+    purpose: 'email',
+    verified: false,
+    source: 'gloval',
+    placeholder: false,
+  }))
+  const dns = [...domain.dns.filter((record) => record.purpose !== 'email'), ...issued]
+
+  const { error } = await createAdminClient().from('custom_domains').update({ dns }).eq('id', domain.id)
+  if (error) throw error
+  return { ...domain, dns }
 }
 
 /**
