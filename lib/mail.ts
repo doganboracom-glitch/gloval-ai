@@ -13,8 +13,10 @@ import {
 import { getMailQuota } from '@/lib/mail/access'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { validateMailboxPassword } from '@/lib/mail/password'
+import { validateAliasDestinations } from '@/lib/mail/alias-destinations'
 import {
   MailError,
+  isValidLocalPart,
   type MailAlias,
   type MailDomain,
   type MailErrorCode,
@@ -117,7 +119,7 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     mailboxes,
     aliases,
     quota,
-    webmailBase: provider.webmailUrl(`user@${domain.domain}`),
+    webmailBase: provider.webmailUrl(),
     live: provider.id !== 'mock',
   }
 }
@@ -250,10 +252,37 @@ export async function createMyAlias(input: {
     if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     const domain = await requireOwnedDomain(user.id, input.domainId)
-    const alias = await getMailProvider().createAlias({
-      domainId: domain.id,
-      localPart: input.localPart,
+    const provider = getMailProvider()
+
+    const localPart = typeof input.localPart === 'string' ? input.localPart.trim().toLowerCase() : ''
+    if (!isValidLocalPart(localPart)) throw new MailError('INVALID_ADDRESS')
+    const address = `${localPart}@${domain.domain.toLowerCase()}`
+
+    // Re-read the caller's own mailboxes and aliases: this set is what makes an
+    // address on their domain a legal destination, so a forged request cannot
+    // target an address that is not theirs. External addresses skip it.
+    const [mailboxes, aliases] = await Promise.all([
+      provider.listMailboxes(domain.id),
+      provider.listAliases(domain.id),
+    ])
+    const known = new Set([
+      ...mailboxes.map((m) => m.address.toLowerCase()),
+      ...aliases.map((a) => a.address.toLowerCase()),
+    ])
+    if (known.has(address)) throw new MailError('ALIAS_EXISTS')
+
+    const checked = validateAliasDestinations({
+      aliasAddress: address,
+      domain: domain.domain,
       destinations: input.destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    const alias = await provider.createAlias({
+      domainId: domain.id,
+      localPart,
+      destinations: checked.destinations,
     })
 
     revalidatePath('/dashboard/email')

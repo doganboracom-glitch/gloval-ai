@@ -11,6 +11,8 @@ import {
   type Mailbox,
   type UpdateMailboxInput,
 } from './types'
+import { validateAliasDestinations } from './alias-destinations'
+import { getWebmailUrl } from './webmail'
 
 /**
  * In-memory mail provider used until a real one (Mailcow / Zoho / Workspace) is
@@ -296,21 +298,25 @@ export const mockMailProvider: MailProvider = {
       [...mailboxes.values()].some((m) => m.address === address)
     if (clash) throw new MailError('ALIAS_EXISTS')
 
-    // Every destination must be a real mailbox on this domain, otherwise the
-    // alias would silently black-hole mail.
-    const known = new Set(
-      [...mailboxes.values()].filter((m) => m.domainId === domainId).map((m) => m.address),
-    )
-    const cleaned = destinations.map((d) => d.trim().toLowerCase()).filter(Boolean)
-    if (cleaned.length === 0 || cleaned.some((d) => !known.has(d))) {
-      throw new MailError('INVALID_DESTINATION')
-    }
+    // Addresses on this domain must be real mailboxes/aliases, otherwise the
+    // alias would silently black-hole mail. External addresses are allowed.
+    const known = new Set([
+      ...[...mailboxes.values()].filter((m) => m.domainId === domainId).map((m) => m.address),
+      ...[...aliases.values()].filter((a) => a.domainId === domainId).map((a) => a.address),
+    ])
+    const checked = validateAliasDestinations({
+      aliasAddress: address,
+      domain: domain.domain,
+      destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
 
     const alias: MailAlias = {
       id: id('als'),
       domainId,
       address,
-      destinations: cleaned,
+      destinations: checked.destinations,
       createdAt: new Date().toISOString(),
     }
     aliases.set(alias.id, alias)
@@ -350,7 +356,7 @@ export const mockMailProvider: MailProvider = {
     return latency(result)
   },
 
-  webmailUrl(address) {
-    return `https://webmail.gloval.ai/?user=${encodeURIComponent(address)}`
+  webmailUrl() {
+    return getWebmailUrl()
   },
 }

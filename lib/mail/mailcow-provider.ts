@@ -12,6 +12,8 @@ import {
   type Mailbox,
   type UpdateMailboxInput,
 } from './types'
+import { validateAliasDestinations } from './alias-destinations'
+import { getMailServerHost, getWebmailUrl } from './webmail'
 
 /**
  * Mailcow adapter (https://mailserver.gloval.ai).
@@ -27,7 +29,7 @@ import {
 
 const API_URL = process.env.MAILCOW_API_URL?.trim().replace(/\/+$/, '')
 const API_KEY = (process.env.MAILCOW_API_KEY || process.env.API_KEY)?.trim()
-const MAIL_SERVER_HOST = process.env.MAIL_SERVER_HOST?.trim() || 'mailserver.gloval.ai'
+const MAIL_SERVER_HOST = getMailServerHost()
 const DKIM_SELECTOR = 'dkim'
 const TIMEOUT_MS = 15_000
 
@@ -261,9 +263,23 @@ export const mailcowProvider: MailProvider = {
 
   async createAlias(input: CreateAliasInput) {
     const name = await domainName(input.domainId)
-    const address = `${input.localPart.trim().toLowerCase()}@${name}`
+    const localPart = String(input.localPart ?? '').trim().toLowerCase()
+    if (!isValidLocalPart(localPart)) throw new MailError('INVALID_ADDRESS')
+    const address = `${localPart}@${name}`
+
+    // Format-only check here (the server action owns the "belongs to this
+    // customer" check). It also rebuilds `goto` from validated single addresses,
+    // so no caller can inject extra comma-separated destinations.
+    const checked = validateAliasDestinations({
+      aliasAddress: address,
+      domain: name,
+      destinations: input.destinations,
+      internalAddresses: null,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
     try {
-      await request('add/alias', { body: { address, goto: input.destinations.join(','), active: 1 } })
+      await request('add/alias', { body: { address, goto: checked.destinations.join(','), active: 1 } })
     } catch (error) {
       if (/exist|already|duplicate/i.test(error instanceof Error ? error.message : '')) throw new MailError('ALIAS_EXISTS')
       throw error
@@ -281,8 +297,8 @@ export const mailcowProvider: MailProvider = {
     return []
   },
 
-  webmailUrl(address) {
-    return `https://${MAIL_SERVER_HOST}/SOGo/?user=${encodeURIComponent(address)}`
+  webmailUrl() {
+    return getWebmailUrl()
   },
 }
 
