@@ -53,7 +53,7 @@ export type MailAlias = {
   id: string
   domainId: string
   address: string
-  /** One alias may fan out to several real mailboxes. */
+  /** Mailboxes on the domain and/or external addresses (e.g. a customer's Gmail). */
   destinations: string[]
   createdAt: string
 }
@@ -110,6 +110,8 @@ export type MailErrorCode =
   | 'MAILBOX_LIMIT_REACHED'
   | 'INVALID_ADDRESS'
   | 'INVALID_DESTINATION'
+  | 'TOO_MANY_DESTINATIONS'
+  | 'SELF_DESTINATION'
   | 'INVALID_PASSWORD'
   | 'PASSWORD_UPDATE_FAILED'
   | 'DOMAIN_NOT_ACTIVE'
@@ -178,8 +180,8 @@ export interface MailProvider {
 
   listLogs(filter: MailLogFilter): Promise<MailLogEntry[]>
 
-  /** Where the end user reads this mailbox in a browser. */
-  webmailUrl(address: string): string
+  /** Where end users read mail in a browser. One shared address, never derived from a customer domain (see `lib/mail/webmail.ts`). */
+  webmailUrl(): string
 }
 
 /** Valid local part: RFC-pragmatic subset that real providers accept. */

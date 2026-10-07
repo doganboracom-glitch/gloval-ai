@@ -28,6 +28,13 @@ import { LinkButton } from '@/components/link-button'
 import { StatusBadge } from '@/components/mail/status-badge'
 import { PasswordFields } from '@/components/mail/password-fields'
 import { getPasswordCopy } from '@/components/mail/password-copy'
+import { getAliasCopy } from '@/components/mail/alias-copy'
+import {
+  MAX_ALIAS_DESTINATIONS,
+  isExternalDestination,
+  normalizeDestinationAddress,
+  validateAliasDestinations,
+} from '@/lib/mail/alias-destinations'
 import { formatMb, usagePercent } from '@/lib/mail/access'
 import { validateMailboxPassword } from '@/lib/mail/password'
 import {
@@ -52,6 +59,7 @@ export function EmailClient({
   const router = useRouter()
   const m = t.mail
   const pc = getPasswordCopy(lang)
+  const ac = getAliasCopy(lang)
 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -72,7 +80,9 @@ export function EmailClient({
       MAILBOX_EXISTS: m.errMailboxExists,
       ALIAS_EXISTS: m.errAliasExists,
       INVALID_ADDRESS: m.errInvalidAddress,
-      INVALID_DESTINATION: m.errInvalidDestination,
+      INVALID_DESTINATION: ac.errInvalidDestination,
+      TOO_MANY_DESTINATIONS: ac.errTooMany,
+      SELF_DESTINATION: ac.errSelf,
       INVALID_PASSWORD: pc.invalid,
       PASSWORD_UPDATE_FAILED: pc.updateFailed,
       MAILBOX_LIMIT_REACHED: m.errLimitReached,
@@ -468,7 +478,7 @@ export function EmailClient({
               <Forward className="size-5 text-primary" />
               {m.aliases}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">{m.aliasesHint}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{ac.aliasesHint}</p>
           </div>
           <Button
             variant="outline"
@@ -494,9 +504,21 @@ export function EmailClient({
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{alias.address}</p>
-                  <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {alias.destinations.join(', ')}
-                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1.5">
+                    {alias.destinations.map((dest) => (
+                      <li
+                        key={dest}
+                        className="flex max-w-full items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                      >
+                        <span className="truncate">{dest}</span>
+                        {isExternalDestination(dest, domain.domain) && (
+                          <span className="shrink-0 rounded bg-brand/15 px-1 text-[10px] font-medium uppercase tracking-wide text-brand">
+                            {ac.externalBadge}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
                 <Button
                   variant="ghost"
@@ -519,15 +541,17 @@ export function EmailClient({
           <h2 className="font-display text-base font-semibold">{m.webmailTitle}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{m.webmailBody}</p>
         </div>
-        <a
-          href={`https://webmail.${domain.domain}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
-        >
-          <ExternalLink className="size-4" />
-          {m.openWebmail}
-        </a>
+        {overview.webmailBase && (
+          <a
+            href={overview.webmailBase}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-muted"
+          >
+            <ExternalLink className="size-4" />
+            {m.openWebmail}
+          </a>
+        )}
       </section>
 
       {/* ------------------------------- dialogs ------------------------------- */}
@@ -557,6 +581,7 @@ export function EmailClient({
         <AliasDialog
           domain={domain.domain}
           mailboxes={mailboxes}
+          aliasAddresses={aliases.map((a) => a.address)}
           pending={isPending}
           onCancel={() => setShowNewAlias(false)}
           onSubmit={handleCreateAlias}
@@ -757,33 +782,73 @@ function SetPasswordDialog({
 function AliasDialog({
   domain,
   mailboxes,
+  aliasAddresses,
   pending,
   onCancel,
   onSubmit,
 }: {
   domain: string
   mailboxes: Mailbox[]
+  aliasAddresses: string[]
   pending: boolean
   onCancel: () => void
   onSubmit: (localPart: string, destinations: string[]) => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const m = t.mail
+  const ac = getAliasCopy(lang)
   const [localPart, setLocalPart] = useState('')
   const [selected, setSelected] = useState<string[]>([])
+  const [externals, setExternals] = useState<string[]>([])
+  const [externalInput, setExternalInput] = useState('')
+  const [externalError, setExternalError] = useState<string | null>(null)
 
-  const valid = useMemo(
-    () =>
-      /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/.test(localPart) &&
-      !localPart.includes('..') &&
-      selected.length > 0,
-    [localPart, selected],
+  const aliasAddress = `${localPart}@${domain}`
+  const internalAddresses = useMemo(
+    () => new Set([...mailboxes.map((b) => b.address), ...aliasAddresses].map((a) => a.toLowerCase())),
+    [mailboxes, aliasAddresses],
   )
+
+  function check(destinations: string[]) {
+    return validateAliasDestinations({ aliasAddress, domain, destinations, internalAddresses })
+  }
+
+  const destinations = [...selected, ...externals]
+  const localPartValid =
+    /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/.test(localPart) && !localPart.includes('..')
+  const valid = localPartValid && check(destinations).ok
 
   function toggle(address: string) {
     setSelected((prev) =>
       prev.includes(address) ? prev.filter((a) => a !== address) : [...prev, address],
     )
+  }
+
+  function addExternal() {
+    const address = normalizeDestinationAddress(externalInput)
+    if (!address) {
+      setExternalError(ac.invalidAddress)
+      return
+    }
+    if (destinations.includes(address)) {
+      setExternalInput('')
+      setExternalError(null)
+      return
+    }
+    const result = check([...destinations, address])
+    if (!result.ok) {
+      setExternalError(
+        {
+          INVALID_DESTINATION: ac.unknownInternal,
+          SELF_DESTINATION: ac.selfAddress,
+          TOO_MANY_DESTINATIONS: ac.tooMany,
+        }[result.code],
+      )
+      return
+    }
+    setExternals((prev) => [...prev, address])
+    setExternalInput('')
+    setExternalError(null)
   }
 
   return (
@@ -806,7 +871,7 @@ function AliasDialog({
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-sm font-medium">{m.destinations}</legend>
-          <span className="text-xs text-muted-foreground">{m.selectDestinations}</span>
+          <span className="text-xs text-muted-foreground">{ac.destinationsHint}</span>
           <div className="mt-1 flex flex-col gap-1.5">
             {mailboxes.map((box) => (
               <label
@@ -822,8 +887,69 @@ function AliasDialog({
                 <span className="truncate">{box.address}</span>
               </label>
             ))}
+            {externals.map((address) => (
+              <div
+                key={address}
+                className="flex items-center justify-between gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{address}</span>
+                  <span className="shrink-0 rounded bg-brand/15 px-1 text-[10px] font-medium uppercase tracking-wide text-brand">
+                    {ac.externalBadge}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExternals((prev) => prev.filter((a) => a !== address))}
+                  className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                  aria-label={`${ac.removeExternal}: ${address}`}
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ))}
           </div>
         </fieldset>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="alias-external" className="text-sm font-medium">
+            {ac.externalLabel}
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="alias-external"
+              type="email"
+              inputMode="email"
+              value={externalInput}
+              onChange={(e) => {
+                setExternalInput(e.target.value)
+                setExternalError(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
+                e.preventDefault()
+                addExternal()
+              }}
+              placeholder={ac.externalPlaceholder}
+              aria-invalid={externalError ? true : undefined}
+              aria-describedby={externalError ? 'alias-external-error' : undefined}
+              className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addExternal}
+              disabled={externalInput.trim() === '' || destinations.length >= MAX_ALIAS_DESTINATIONS}
+            >
+              {ac.add}
+            </Button>
+          </div>
+          {externalError && (
+            <p id="alias-external-error" role="alert" className="text-xs text-destructive">
+              {externalError}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
@@ -831,7 +957,7 @@ function AliasDialog({
           {m.cancel}
         </Button>
         <Button
-          onClick={() => onSubmit(localPart, selected)}
+          onClick={() => onSubmit(localPart, destinations)}
           disabled={!valid || pending}
           className="gap-2"
         >
