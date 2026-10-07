@@ -55,6 +55,8 @@ export type MailAlias = {
   address: string
   /** Mailboxes on the domain and/or external addresses (e.g. a customer's Gmail). */
   destinations: string[]
+  /** An inactive alias exists on the server but does not deliver mail. */
+  active: boolean
   createdAt: string
 }
 
@@ -106,6 +108,7 @@ export type MailLogFilter = {
 export type MailErrorCode =
   | 'MAILBOX_EXISTS'
   | 'ALIAS_EXISTS'
+  | 'ADDRESS_IS_MAILBOX'
   | 'QUOTA_EXCEEDED'
   | 'MAILBOX_LIMIT_REACHED'
   | 'INVALID_ADDRESS'
@@ -177,6 +180,7 @@ export interface MailProvider {
   listAliases(domainId: string): Promise<MailAlias[]>
   createAlias(input: CreateAliasInput): Promise<MailAlias>
   deleteAlias(id: string): Promise<void>
+  setAliasActive(id: string, active: boolean): Promise<void>
 
   listLogs(filter: MailLogFilter): Promise<MailLogEntry[]>
 

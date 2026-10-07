@@ -269,7 +269,10 @@ export async function createMyAlias(input: {
       ...mailboxes.map((m) => m.address.toLowerCase()),
       ...aliases.map((a) => a.address.toLowerCase()),
     ])
-    if (known.has(address)) throw new MailError('ALIAS_EXISTS')
+    // A mailbox and an alias cannot share an address, and the customer needs to
+    // be told which one is in the way.
+    if (mailboxes.some((m) => m.address.toLowerCase() === address)) throw new MailError('ADDRESS_IS_MAILBOX')
+    if (aliases.some((a) => a.address.toLowerCase() === address)) throw new MailError('ALIAS_EXISTS')
 
     const checked = validateAliasDestinations({
       aliasAddress: address,
@@ -302,6 +305,27 @@ export async function deleteMyAlias(aliasId: string): Promise<MailResult<null>> 
     if (!owned.some((a) => a.id === aliasId)) throw new MailError('FORBIDDEN')
 
     await provider.deleteAlias(aliasId)
+    revalidatePath('/dashboard/email')
+    return { ok: true, data: null }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Turns an existing alias on or off. Ownership is re-checked against the caller's own alias list. */
+export async function setMyAliasActive(aliasId: string, active: boolean): Promise<MailResult<null>> {
+  try {
+    const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const owned = await provider.listAliases(domain.id)
+    if (!owned.some((a) => a.id === aliasId)) throw new MailError('FORBIDDEN')
+
+    await provider.setAliasActive(aliasId, active === true)
     revalidatePath('/dashboard/email')
     return { ok: true, data: null }
   } catch (error) {

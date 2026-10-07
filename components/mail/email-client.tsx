@@ -41,6 +41,7 @@ import {
   createMyAlias,
   createMyMailbox,
   deleteMyAlias,
+  setMyAliasActive,
   deleteMyMailbox,
   setMyMailboxPassword,
   updateMyMailbox,
@@ -78,7 +79,8 @@ export function EmailClient({
   const errorText = (code: MailErrorCode): string =>
     ({
       MAILBOX_EXISTS: m.errMailboxExists,
-      ALIAS_EXISTS: m.errAliasExists,
+      ALIAS_EXISTS: ac.errAliasExists,
+      ADDRESS_IS_MAILBOX: ac.errAddressIsMailbox,
       INVALID_ADDRESS: m.errInvalidAddress,
       INVALID_DESTINATION: ac.errInvalidDestination,
       TOO_MANY_DESTINATIONS: ac.errTooMany,
@@ -312,14 +314,27 @@ export function EmailClient({
 
   function handleCreateAlias(localPart: string, destinations: string[]) {
     setError(null)
+    setDialogError(null)
     startTransition(async () => {
       const res = await createMyAlias({ domainId: domain!.id, localPart, destinations })
       if (!res.ok) {
-        setError(errorText(res.error))
+        // The dialog is modal, so a page-level banner would sit behind its backdrop.
+        setDialogError(errorText(res.error))
+        // A conflict means the visible list is stale; reload it.
+        router.refresh()
         return
       }
       setShowNewAlias(false)
       router.refresh()
+    })
+  }
+
+  function handleEnableAlias(aliasId: string) {
+    setError(null)
+    startTransition(async () => {
+      const res = await setMyAliasActive(aliasId, true)
+      if (!res.ok) setError(errorText(res.error))
+      else router.refresh()
     })
   }
 
@@ -503,7 +518,18 @@ export function EmailClient({
                 className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card/70 p-4"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{alias.address}</p>
+                  <p className="flex items-center gap-2 font-medium">
+                    <span className="truncate">{alias.address}</span>
+                    <span
+                      className={
+                        alias.active
+                          ? 'shrink-0 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand'
+                          : 'shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'
+                      }
+                    >
+                      {alias.active ? ac.statusActive : ac.statusInactive}
+                    </span>
+                  </p>
                   <ul className="mt-1 flex flex-wrap gap-1.5">
                     {alias.destinations.map((dest) => (
                       <li
@@ -520,15 +546,27 @@ export function EmailClient({
                     ))}
                   </ul>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDeleteAlias(alias.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="size-3.5" />
-                  <span className="sr-only">{m.remove}</span>
-                </Button>
+                <div className="flex items-center gap-1">
+                  {!alias.active && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEnableAlias(alias.id)}
+                      disabled={isPending}
+                    >
+                      {ac.enable}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteAlias(alias.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span className="sr-only">{m.remove}</span>
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -583,7 +621,11 @@ export function EmailClient({
           mailboxes={mailboxes}
           aliasAddresses={aliases.map((a) => a.address)}
           pending={isPending}
-          onCancel={() => setShowNewAlias(false)}
+          error={dialogError}
+          onCancel={() => {
+            setShowNewAlias(false)
+            setDialogError(null)
+          }}
           onSubmit={handleCreateAlias}
         />
       )}
@@ -784,6 +826,7 @@ function AliasDialog({
   mailboxes,
   aliasAddresses,
   pending,
+  error,
   onCancel,
   onSubmit,
 }: {
@@ -791,6 +834,7 @@ function AliasDialog({
   mailboxes: Mailbox[]
   aliasAddresses: string[]
   pending: boolean
+  error?: string | null
   onCancel: () => void
   onSubmit: (localPart: string, destinations: string[]) => void
 }) {
@@ -816,7 +860,14 @@ function AliasDialog({
   const destinations = [...selected, ...externals]
   const localPartValid =
     /^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/.test(localPart) && !localPart.includes('..')
-  const valid = localPartValid && check(destinations).ok
+  const addressConflict: string | null = !localPartValid
+    ? null
+    : mailboxes.some((b) => b.address.toLowerCase() === aliasAddress)
+      ? ac.warnMailboxAddress
+      : aliasAddresses.some((a) => a.toLowerCase() === aliasAddress)
+        ? ac.warnAliasAddress
+        : null
+  const valid = localPartValid && !addressConflict && check(destinations).ok
 
   function toggle(address: string) {
     setSelected((prev) =>
@@ -867,6 +918,11 @@ function AliasDialog({
             />
             <span className="shrink-0 pr-3 text-sm text-muted-foreground">@{domain}</span>
           </div>
+          {addressConflict && (
+            <span role="alert" className="text-xs text-destructive">
+              {addressConflict}
+            </span>
+          )}
         </label>
 
         <fieldset className="flex flex-col gap-1.5">
@@ -951,6 +1007,12 @@ function AliasDialog({
           )}
         </div>
       </div>
+
+      {error && (
+        <p role="alert" className="mt-4 text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={pending}>

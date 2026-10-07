@@ -13,6 +13,7 @@ import {
   type UpdateMailboxInput,
 } from './types'
 import { validateAliasDestinations } from './alias-destinations'
+import { aliasFromRow, classifyAliasConflict, selectAliasRows } from './alias-mapping'
 import { getMailServerHost, getWebmailUrl } from './webmail'
 
 /**
@@ -117,20 +118,23 @@ function mailboxFromApi(row: Record<string, unknown>, domainId: string): Mailbox
   }
 }
 
+/**
+ * Reads `get/alias/all` (no path suffix: whether Mailcow honours a trailing
+ * domain segment on this endpoint is not something this adapter can rely on)
+ * and narrows to the domain by address suffix, so the result is the same
+ * whichever way Mailcow answers. Mailbox self-rows are removed; inactive
+ * aliases and aliases with external destinations are kept.
+ */
 async function listAliasRows(name: string): Promise<Array<Record<string, unknown>>> {
-  const rows = await request<Array<Record<string, unknown>>>(`get/alias/all/${encodeURIComponent(name)}`)
-  return Array.isArray(rows) ? rows : []
+  const rows = await request<unknown>('get/alias/all')
+  return selectAliasRows(rows, name)
 }
 
-function aliasFromApi(row: Record<string, unknown>, domainId: string): MailAlias {
-  const goto = Array.isArray(row.goto) ? row.goto.map(String) : String(row.goto || '').split(',').map((s) => s.trim()).filter(Boolean)
-  return {
-    id: String(row.id),
-    domainId,
-    address: String(row.address),
-    destinations: goto,
-    createdAt: String(row.created || new Date().toISOString()),
-  }
+/** Mailcow's add/alias answers `{ msg: ['alias_added', address, id] }`; the id is the third entry. */
+function createdAliasId(response: unknown): string | null {
+  const first = Array.isArray(response) ? response[0] : response
+  const msg = first && typeof first === 'object' ? (first as MailcowMessage).msg : null
+  return Array.isArray(msg) && msg[2] !== undefined && msg[2] !== null ? String(msg[2]) : null
 }
 
 async function getDkim(name: string): Promise<{ selector: string; txt: string } | null> {
@@ -255,10 +259,7 @@ export const mailcowProvider: MailProvider = {
 
   async listAliases(domainId) {
     const name = await domainName(domainId)
-    // Mailcow also lists each mailbox's own address as an alias; hide those.
-    return (await listAliasRows(name))
-      .filter((row) => String(row.address) !== String(row.goto))
-      .map((row) => aliasFromApi(row, domainId))
+    return (await listAliasRows(name)).map((row) => aliasFromRow(row, domainId))
   },
 
   async createAlias(input: CreateAliasInput) {
@@ -278,19 +279,50 @@ export const mailcowProvider: MailProvider = {
     })
     if (!checked.ok) throw new MailError(checked.code)
 
+    let response: unknown
     try {
-      await request('add/alias', { body: { address, goto: checked.destinations.join(','), active: 1 } })
+      response = await request('add/alias', {
+        body: { address, goto: checked.destinations.join(','), active: '1', sogo_visible: '1' },
+      })
     } catch (error) {
-      if (/exist|already|duplicate/i.test(error instanceof Error ? error.message : '')) throw new MailError('ALIAS_EXISTS')
+      const message = error instanceof Error ? error.message : ''
+      // Mailcow says "object_exists" for a mailbox and for an alias alike; the
+      // live lists decide which one the customer is told about.
+      const [mailboxes, aliasRows] = await Promise.all([
+        this.listMailboxes(input.domainId).catch(() => []),
+        listAliasRows(name).catch(() => []),
+      ])
+      const code = classifyAliasConflict({
+        message,
+        address,
+        mailboxAddresses: mailboxes.map((box) => box.address),
+        aliasAddresses: aliasRows.map((row) => String(row.address)),
+      })
+      if (code) throw new MailError(code)
       throw error
     }
-    const created = (await listAliasRows(name)).find((row) => String(row.address) === address)
-    if (!created) throw new MailError('NOT_FOUND')
-    return aliasFromApi(created, input.domainId)
+
+    // The alias exists on the server at this point. If the follow-up read does
+    // not return it, answer from what was just written instead of reporting a
+    // failure for something that succeeded.
+    const created = (await listAliasRows(name)).find((row) => String(row.address).toLowerCase() === address)
+    if (created) return aliasFromRow(created, input.domainId)
+    return {
+      id: createdAliasId(response) ?? address,
+      domainId: input.domainId,
+      address,
+      destinations: checked.destinations,
+      active: true,
+      createdAt: new Date().toISOString(),
+    }
   },
 
   async deleteAlias(id) {
     await request('delete/alias', { body: [id] })
+  },
+
+  async setAliasActive(id, active) {
+    await request('edit/alias', { body: { items: [id], attr: { active: active ? '1' : '0' } } })
   },
 
   async listLogs(_filter: MailLogFilter) {
