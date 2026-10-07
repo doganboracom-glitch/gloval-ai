@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { StatusBadge } from '@/components/mail/status-badge'
+import { getEmailDnsCopy, hostNoteFor, type EmailDnsCopy } from '@/components/domains/email-dns-copy'
 import { cn } from '@/lib/utils'
 import type { DnsRecord, DomainPurpose } from '@/lib/custom-domains/types'
 
@@ -62,23 +63,30 @@ export function DnsRecords({ records }: { records: DnsRecord[] }) {
               {groupLabel[group.purpose]}
             </h4>
             {group.purpose === 'email' ? (
-              <div className="mt-2 overflow-x-auto rounded-xl border border-border">
-                <table className="w-full min-w-[40rem] text-left text-sm">
-                  <thead className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Type</th>
-                      <th className="px-3 py-2 font-medium">Host</th>
-                      <th className="px-3 py-2 font-medium">Value</th>
-                      <th className="px-3 py-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {group.records.map((record, index) => (
-                      <EmailRecordRow key={`${record.type}-${record.host}-${index}`} record={record} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="mt-2 hidden overflow-x-auto rounded-xl border border-border md:block">
+                  <table className="w-full min-w-[40rem] text-left text-sm">
+                    <thead className="bg-muted/30 text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Type</th>
+                        <th className="px-3 py-2 font-medium">Host</th>
+                        <th className="px-3 py-2 font-medium">Value</th>
+                        <th className="px-3 py-2 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {group.records.map((record, index) => (
+                        <EmailRecordRow key={`${record.type}-${record.host}-${index}`} record={record} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ul className="mt-2 flex flex-col gap-2 md:hidden">
+                  {group.records.map((record, index) => (
+                    <EmailRecordCard key={`${record.type}-${record.host}-${index}`} record={record} />
+                  ))}
+                </ul>
+              </>
             ) : (
               <ul className="mt-2 flex flex-col gap-2">
                 {group.records.map((record, index) => (
@@ -117,26 +125,65 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   )
 }
 
+/** Real DNS type plus, for TXT records, a small note on what the record is for. */
+function EmailTypeCell({ record, copy }: { record: DnsRecord; copy: EmailDnsCopy }) {
+  const role = record.label ? copy.roles[record.label] : null
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-xs font-medium">
+        {record.type}
+      </span>
+      {role && <span className="text-pretty text-xs text-muted-foreground">{role}</span>}
+    </div>
+  )
+}
+
+function EmailHostCell({ record, copy }: { record: DnsRecord; copy: EmailDnsCopy }) {
+  const note = hostNoteFor(record, copy)
+  return (
+    <div className="min-w-0">
+      <div className="flex min-w-32 items-start gap-2">
+        <code className="min-w-0 flex-1 break-all font-mono text-xs">{record.host}</code>
+        <CopyButton value={record.host} label={record.host} />
+      </div>
+      {note && <p className="mt-1 text-pretty text-xs text-muted-foreground">{note}</p>}
+    </div>
+  )
+}
+
+function EmailValueCell({ record, copy }: { record: DnsRecord; copy: EmailDnsCopy }) {
+  const priority = typeof record.priority === 'number' ? String(record.priority) : null
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {priority && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{copy.priority}:</span>
+          <code className="font-mono text-xs">{priority}</code>
+          <CopyButton value={priority} label={`${copy.priority} ${priority}`} />
+        </div>
+      )}
+      <div className="flex min-w-0 items-start gap-2 md:min-w-56">
+        <code className="min-w-0 flex-1 break-all font-mono text-xs text-muted-foreground">{record.value}</code>
+        <CopyButton value={record.value} label={record.value} />
+      </div>
+    </div>
+  )
+}
+
 function EmailRecordRow({ record }: { record: DnsRecord }) {
-  const { t } = useLanguage()
-  const d = t.domains
+  const { t, lang } = useLanguage()
+  const copy = getEmailDnsCopy(lang)
 
   return (
     <tr>
-      <td className="px-3 py-3 align-top font-mono text-xs font-medium">
-        {record.label ?? record.type}
+      <td className="px-3 py-3 align-top">
+        <EmailTypeCell record={record} copy={copy} />
       </td>
       <td className="px-3 py-3 align-top">
-        <div className="flex min-w-32 items-start gap-2">
-          <code className="min-w-0 flex-1 break-all font-mono text-xs">{record.host}</code>
-          <CopyButton value={record.host} label={record.host} />
-        </div>
+        <EmailHostCell record={record} copy={copy} />
       </td>
       <td className="px-3 py-3 align-top">
-        <div className="flex min-w-56 items-start gap-2">
-          <code className="min-w-0 flex-1 break-all font-mono text-xs text-muted-foreground">{record.value}</code>
-          <CopyButton value={record.value} label={record.value} />
-        </div>
+        <EmailValueCell record={record} copy={copy} />
       </td>
       <td className="px-3 py-3 align-top">
         <StatusBadge tone={record.verified ? 'success' : 'muted'}>
@@ -144,6 +191,37 @@ function EmailRecordRow({ record }: { record: DnsRecord }) {
         </StatusBadge>
       </td>
     </tr>
+  )
+}
+
+function EmailRecordCard({ record }: { record: DnsRecord }) {
+  const { t, lang } = useLanguage()
+  const d = t.domains
+  const copy = getEmailDnsCopy(lang)
+
+  return (
+    <li className="rounded-xl border border-border bg-card/70 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <EmailTypeCell record={record} copy={copy} />
+        <StatusBadge tone={record.verified ? 'success' : 'muted'}>
+          {record.verified ? t.mail.verified : t.mail.notVerified}
+        </StatusBadge>
+      </div>
+      <dl className="mt-3 flex flex-col gap-3">
+        <div>
+          <dt className="mb-1 text-xs text-muted-foreground">{d.dnsHost}</dt>
+          <dd>
+            <EmailHostCell record={record} copy={copy} />
+          </dd>
+        </div>
+        <div>
+          <dt className="mb-1 text-xs text-muted-foreground">{d.dnsValue}</dt>
+          <dd>
+            <EmailValueCell record={record} copy={copy} />
+          </dd>
+        </div>
+      </dl>
+    </li>
   )
 }
 
