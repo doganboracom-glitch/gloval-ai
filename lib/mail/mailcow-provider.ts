@@ -31,7 +31,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     cache: 'no-store',
   })
   if (!response.ok) throw new Error(`Mailcow request failed: ${response.status}`)
-  return response.json() as Promise<T>
+  const body = (await response.json()) as unknown
+  // Mailcow answers HTTP 200 even for rejected writes; the verdict is in the body.
+  const entries = Array.isArray(body) ? body : [body]
+  const rejected = entries.find(
+    (entry): entry is { type: string; msg?: unknown } =>
+      typeof entry === 'object' && entry !== null && (entry as { type?: unknown }).type === 'danger',
+  )
+  if (rejected) throw new Error(`Mailcow rejected request: ${String(rejected.msg ?? '')}`)
+  return body as T
+}
+
+/**
+ * Mailcow returns `{}` instead of `[]` when a list endpoint has no rows
+ * (e.g. a domain with no mailboxes or aliases yet), so never `.map` the raw body.
+ */
+function asRows(body: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(body) ? (body as Array<Record<string, unknown>>) : []
 }
 
 function mapError(error: unknown): never {
@@ -71,7 +87,7 @@ export const mailcowProvider: MailProvider = {
   id: 'mailcow',
 
   async listDomains(userId) {
-    const rows = await request<Array<Record<string, unknown>>>('/api/v1/get/domain/all')
+    const rows = asRows(await request<unknown>('/api/v1/get/domain/all'))
     return rows.map((row) => domainFromName(String(row.domain_name || row.domain), userId))
   },
 
@@ -95,11 +111,13 @@ export const mailcowProvider: MailProvider = {
     } catch (error) {
       if (!/already|exist|duplicate/i.test(error instanceof Error ? error.message : '')) throw error
     }
-    return domain
+    // Mailcow addresses a domain by hostname, not by the custom-domain registry's
+    // UUID, so from here on the hostname is the id every mailbox/alias call uses.
+    return { ...domain, id: domain.domain }
   },
 
   async listMailboxes(domainId) {
-    const rows = await request<Array<Record<string, unknown>>>(`/api/v1/get/mailbox/all/${encodeURIComponent(domainId)}`)
+    const rows = asRows(await request<unknown>(`/api/v1/get/mailbox/all/${encodeURIComponent(domainId)}`))
     return rows.map((row) => mailboxFromApi(row, domainId))
   },
 
@@ -138,7 +156,7 @@ export const mailcowProvider: MailProvider = {
   },
 
   async listAliases(domainId) {
-    const rows = await request<Array<Record<string, unknown>>>(`/api/v1/get/alias/all/${encodeURIComponent(domainId)}`)
+    const rows = asRows(await request<unknown>(`/api/v1/get/alias/all/${encodeURIComponent(domainId)}`))
     return rows.map((row) => ({ id: String(row.address), domainId, address: String(row.address), destinations: Array.isArray(row.goto) ? row.goto.map(String) : String(row.goto || '').split(',').filter(Boolean), createdAt: new Date().toISOString() }))
   },
 
