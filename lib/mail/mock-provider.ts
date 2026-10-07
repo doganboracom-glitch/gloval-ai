@@ -267,16 +267,11 @@ export const mockMailProvider: MailProvider = {
     await latency(null, 200)
   },
 
-  async resetPassword(mailboxId) {
+  async setPassword(mailboxId, _password) {
     seed()
     if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
-    // Mock credential: random, shown once, never stored in readable form.
-    const tempPassword = Array.from({ length: 16 }, () =>
-      'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$'.charAt(
-        Math.floor(Math.random() * 60),
-      ),
-    ).join('')
-    return latency({ tempPassword }, 250)
+    // The mock has no credential store; the password is intentionally discarded.
+    await latency(null, 250)
   },
 
   async listAliases(domainId) {

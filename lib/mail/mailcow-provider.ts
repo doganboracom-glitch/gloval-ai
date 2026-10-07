@@ -97,12 +97,6 @@ async function domainName(domainId: string): Promise<string> {
   return name.toLowerCase()
 }
 
-function randomPassword() {
-  // Never shown for create (the user sets one through "reset password"); long
-  // and mixed so it satisfies Mailcow's policy.
-  return `${crypto.randomUUID()}${crypto.randomUUID().slice(0, 8).toUpperCase()}a1!`
-}
-
 const mibFromBytes = (bytes: unknown) => Math.round(Number(bytes || 0) / 1048576)
 
 function mailboxFromApi(row: Record<string, unknown>, domainId: string): Mailbox {
@@ -209,7 +203,6 @@ export const mailcowProvider: MailProvider = {
     const localPart = input.localPart.trim().toLowerCase()
     if (!isValidLocalPart(localPart)) throw new MailError('INVALID_ADDRESS')
     const name = await domainName(input.domainId)
-    const password = randomPassword()
     try {
       await request('add/mailbox', {
         body: {
@@ -217,8 +210,8 @@ export const mailcowProvider: MailProvider = {
           domain: name,
           name: input.displayName.trim(),
           quota: String(input.quotaMb), // MiB
-          password,
-          password2: password,
+          password: input.password,
+          password2: input.password,
           active: '1',
           force_pw_update: '0',
           tls_enforce_in: '0',
@@ -248,10 +241,14 @@ export const mailcowProvider: MailProvider = {
     await request('delete/mailbox', { body: [id] })
   },
 
-  async resetPassword(id) {
-    const password = randomPassword()
-    await request('edit/mailbox', { body: { items: [id], attr: { password, password2: password } } })
-    return { tempPassword: password }
+  async setPassword(id, password) {
+    try {
+      await request('edit/mailbox', { body: { items: [id], attr: { password, password2: password } } })
+    } catch {
+      // Drop the original error: only a fixed code leaves this adapter, so no
+      // Mailcow text (or anything derived from the request) can reach logs or the UI.
+      throw new MailError('PASSWORD_UPDATE_FAILED')
+    }
   },
 
   async listAliases(domainId) {

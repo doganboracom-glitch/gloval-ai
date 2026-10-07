@@ -74,6 +74,8 @@ export type CreateMailboxInput = {
   localPart: string
   displayName: string
   quotaMb: number
+  /** Chosen by the customer and already validated. Forwarded, never stored. */
+  password: string
 }
 
 export type UpdateMailboxInput = {
@@ -108,6 +110,8 @@ export type MailErrorCode =
   | 'MAILBOX_LIMIT_REACHED'
   | 'INVALID_ADDRESS'
   | 'INVALID_DESTINATION'
+  | 'INVALID_PASSWORD'
+  | 'PASSWORD_UPDATE_FAILED'
   | 'DOMAIN_NOT_ACTIVE'
   | 'NOT_FOUND'
   | 'FORBIDDEN'
@@ -165,7 +169,8 @@ export interface MailProvider {
   createMailbox(input: CreateMailboxInput): Promise<Mailbox>
   updateMailbox(id: string, input: UpdateMailboxInput): Promise<Mailbox>
   deleteMailbox(id: string): Promise<void>
-  resetPassword(id: string): Promise<{ tempPassword: string }>
+  /** Sets the mailbox password to a value the customer chose. Returns nothing: the password is never echoed back. */
+  setPassword(id: string, password: string): Promise<void>
 
   listAliases(domainId: string): Promise<MailAlias[]>
   createAlias(input: CreateAliasInput): Promise<MailAlias>

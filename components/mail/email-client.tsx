@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   AtSign,
   Check,
-  Copy,
   ExternalLink,
   Forward,
   Globe,
@@ -27,13 +26,16 @@ import { BrandLogo } from '@/components/brand-logo'
 import { Button } from '@/components/ui/button'
 import { LinkButton } from '@/components/link-button'
 import { StatusBadge } from '@/components/mail/status-badge'
+import { PasswordFields } from '@/components/mail/password-fields'
+import { getPasswordCopy } from '@/components/mail/password-copy'
 import { formatMb, usagePercent } from '@/lib/mail/access'
+import { validateMailboxPassword } from '@/lib/mail/password'
 import {
   createMyAlias,
   createMyMailbox,
   deleteMyAlias,
   deleteMyMailbox,
-  resetMyMailboxPassword,
+  setMyMailboxPassword,
   updateMyMailbox,
   type MailOverview,
 } from '@/lib/mail'
@@ -46,17 +48,21 @@ export function EmailClient({
   overview: MailOverview
   userEmail: string
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const router = useRouter()
   const m = t.mail
+  const pc = getPasswordCopy(lang)
 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  // Errors from the password-bearing dialogs are shown inside the dialog,
+  // because the page-level banner sits behind the modal backdrop.
+  const [dialogError, setDialogError] = useState<string | null>(null)
   const [showNewMailbox, setShowNewMailbox] = useState(false)
   const [showNewAlias, setShowNewAlias] = useState(false)
   const [editing, setEditing] = useState<Mailbox | null>(null)
-  const [tempPassword, setTempPassword] = useState<{ address: string; value: string } | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [passwordTarget, setPasswordTarget] = useState<Mailbox | null>(null)
 
   const { domain, gate, mailboxes, aliases, quota } = overview
 
@@ -67,6 +73,8 @@ export function EmailClient({
       ALIAS_EXISTS: m.errAliasExists,
       INVALID_ADDRESS: m.errInvalidAddress,
       INVALID_DESTINATION: m.errInvalidDestination,
+      INVALID_PASSWORD: pc.invalid,
+      PASSWORD_UPDATE_FAILED: pc.updateFailed,
       MAILBOX_LIMIT_REACHED: m.errLimitReached,
       QUOTA_EXCEEDED: m.errQuota,
       DOMAIN_NOT_ACTIVE: m.errDomainNotActive,
@@ -114,6 +122,21 @@ export function EmailClient({
           >
             <span>{error}</span>
             <button type="button" onClick={() => setError(null)} aria-label={m.close}>
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
+
+        {notice && (
+          <div
+            role="status"
+            className="mt-6 flex items-start justify-between gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm"
+          >
+            <span className="flex items-center gap-2">
+              <Check className="size-4 text-primary" />
+              {notice}
+            </span>
+            <button type="button" onClick={() => setNotice(null)} aria-label={m.close}>
               <X className="size-4" />
             </button>
           </div>
@@ -204,12 +227,24 @@ export function EmailClient({
 
   /* ---------------------- state 3: full mailbox management ------------------- */
 
-  function handleCreateMailbox(localPart: string, displayName: string) {
+  function handleCreateMailbox(
+    localPart: string,
+    displayName: string,
+    password: string,
+    passwordConfirm: string,
+  ) {
     setError(null)
+    setDialogError(null)
     startTransition(async () => {
-      const res = await createMyMailbox({ domainId: domain!.id, localPart, displayName })
+      const res = await createMyMailbox({
+        domainId: domain!.id,
+        localPart,
+        displayName,
+        password,
+        passwordConfirm,
+      })
       if (!res.ok) {
-        setError(errorText(res.error))
+        setDialogError(errorText(res.error))
         return
       }
       setShowNewMailbox(false)
@@ -251,16 +286,17 @@ export function EmailClient({
     })
   }
 
-  function handleResetPassword(box: Mailbox) {
+  function handleSetPassword(box: Mailbox, password: string, passwordConfirm: string) {
     setError(null)
+    setDialogError(null)
     startTransition(async () => {
-      const res = await resetMyMailboxPassword(box.id)
+      const res = await setMyMailboxPassword(box.id, { password, passwordConfirm })
       if (!res.ok) {
-        setError(errorText(res.error))
+        setDialogError(errorText(res.error))
         return
       }
-      setCopied(false)
-      setTempPassword({ address: box.address, value: res.data.tempPassword })
+      setPasswordTarget(null)
+      setNotice(`${pc.updated}: ${box.address}`)
     })
   }
 
@@ -340,7 +376,11 @@ export function EmailClient({
             <p className="mt-1 text-sm text-muted-foreground">{m.mailboxesHint}</p>
           </div>
           <Button
-            onClick={() => setShowNewMailbox(true)}
+            onClick={() => {
+              setDialogError(null)
+              setNotice(null)
+              setShowNewMailbox(true)
+            }}
             disabled={atLimit || isPending}
             className="gap-2"
           >
@@ -389,7 +429,11 @@ export function EmailClient({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleResetPassword(box)}
+                    onClick={() => {
+                      setDialogError(null)
+                      setNotice(null)
+                      setPasswordTarget(box)
+                    }}
                     className="gap-1.5"
                   >
                     <RotateCcw className="size-3.5" />
@@ -492,6 +536,7 @@ export function EmailClient({
           title={m.newMailbox}
           domain={domain.domain}
           pending={isPending}
+          error={dialogError}
           onCancel={() => setShowNewMailbox(false)}
           onSubmit={handleCreateMailbox}
         />
@@ -518,30 +563,14 @@ export function EmailClient({
         />
       )}
 
-      {tempPassword && (
-        <Modal onClose={() => setTempPassword(null)}>
-          <h3 className="font-display text-lg font-semibold">{m.tempPasswordTitle}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{tempPassword.address}</p>
-          <p className="mt-3 text-sm text-muted-foreground">{m.tempPasswordBody}</p>
-          <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-            <code className="flex-1 truncate font-mono text-sm">{tempPassword.value}</code>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                void navigator.clipboard.writeText(tempPassword.value)
-                setCopied(true)
-              }}
-              className="gap-1.5"
-            >
-              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {copied ? m.copied : m.copy}
-            </Button>
-          </div>
-          <div className="mt-5 flex justify-end">
-            <Button onClick={() => setTempPassword(null)}>{m.close}</Button>
-          </div>
-        </Modal>
+      {passwordTarget && (
+        <SetPasswordDialog
+          mailbox={passwordTarget}
+          pending={isPending}
+          error={dialogError}
+          onCancel={() => setPasswordTarget(null)}
+          onSubmit={(password, confirm) => handleSetPassword(passwordTarget, password, confirm)}
+        />
       )}
     </>,
   )
@@ -576,6 +605,7 @@ function MailboxDialog({
   domain,
   pending,
   existing,
+  error,
   onCancel,
   onSubmit,
 }: {
@@ -583,17 +613,23 @@ function MailboxDialog({
   domain: string
   pending: boolean
   existing?: Mailbox
+  error?: string | null
   onCancel: () => void
-  onSubmit: (localPart: string, displayName: string) => void
+  onSubmit: (localPart: string, displayName: string, password: string, passwordConfirm: string) => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const m = t.mail
+  const pc = getPasswordCopy(lang)
   const [localPart, setLocalPart] = useState(existing?.localPart ?? '')
   const [displayName, setDisplayName] = useState(existing?.displayName ?? '')
+  const [passwords, setPasswords] = useState({ password: '', confirm: '' })
 
   // Mirror the provider's own rule so the user gets feedback before a round trip.
-  const valid =
+  const addressValid =
     Boolean(existing) || (/^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$/.test(localPart) && !localPart.includes('..'))
+  const passwordValid =
+    Boolean(existing) || validateMailboxPassword(passwords.password, passwords.confirm).length === 0
+  const valid = addressValid && passwordValid
 
   return (
     <Modal onClose={onCancel}>
@@ -625,6 +661,22 @@ function MailboxDialog({
             placeholder="Bilgi"
           />
         </label>
+
+        {!existing && (
+          <PasswordFields
+            copy={pc}
+            password={passwords.password}
+            confirm={passwords.confirm}
+            onChange={setPasswords}
+            labels={{ password: pc.password, confirm: pc.passwordConfirm }}
+          />
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
       </div>
 
       <div className="mt-6 flex justify-end gap-2">
@@ -632,12 +684,70 @@ function MailboxDialog({
           {m.cancel}
         </Button>
         <Button
-          onClick={() => onSubmit(localPart, displayName)}
+          onClick={() => onSubmit(localPart, displayName, passwords.password, passwords.confirm)}
           disabled={!valid || pending}
           className="gap-2"
         >
           {pending && <Loader2 className="size-4 animate-spin" />}
           {existing ? m.save : m.create}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function SetPasswordDialog({
+  mailbox,
+  pending,
+  error,
+  onCancel,
+  onSubmit,
+}: {
+  mailbox: Mailbox
+  pending: boolean
+  error: string | null
+  onCancel: () => void
+  onSubmit: (password: string, passwordConfirm: string) => void
+}) {
+  const { t, lang } = useLanguage()
+  const m = t.mail
+  const pc = getPasswordCopy(lang)
+  const [passwords, setPasswords] = useState({ password: '', confirm: '' })
+  const valid = validateMailboxPassword(passwords.password, passwords.confirm).length === 0
+
+  return (
+    <Modal onClose={onCancel}>
+      <h3 className="font-display text-lg font-semibold">{pc.resetTitle}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{mailbox.address}</p>
+      <p className="mt-3 text-sm text-muted-foreground">{pc.resetBody}</p>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <PasswordFields
+          copy={pc}
+          password={passwords.password}
+          confirm={passwords.confirm}
+          onChange={setPasswords}
+          labels={{ password: pc.newPassword, confirm: pc.newPasswordConfirm }}
+          autoFocus
+        />
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel} disabled={pending}>
+          {m.cancel}
+        </Button>
+        <Button
+          onClick={() => onSubmit(passwords.password, passwords.confirm)}
+          disabled={!valid || pending}
+          className="gap-2"
+        >
+          {pending && <Loader2 className="size-4 animate-spin" />}
+          {pc.save}
         </Button>
       </div>
     </Modal>

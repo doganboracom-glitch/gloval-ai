@@ -12,6 +12,7 @@ import {
 } from '@/lib/mail/domain-service'
 import { getMailQuota } from '@/lib/mail/access'
 import { requireAdmin } from '@/lib/mail/admin-guard'
+import { validateMailboxPassword } from '@/lib/mail/password'
 import {
   MailError,
   type MailAlias,
@@ -125,12 +126,19 @@ export async function createMyMailbox(input: {
   domainId: string
   localPart: string
   displayName: string
+  password: string
+  passwordConfirm: string
 }): Promise<MailResult<Mailbox>> {
   try {
     const user = await requireUser()
     const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
     const quota = getMailQuota(plan, subscription)
     if (!quota.allowed) throw new MailError('FORBIDDEN')
+
+    // Re-validated here: the dialog's checklist is only a usability aid.
+    if (validateMailboxPassword(input.password, input.passwordConfirm).length > 0) {
+      throw new MailError('INVALID_PASSWORD')
+    }
 
     const domain = await requireOwnedDomain(user.id, input.domainId)
     const provider = getMailProvider()
@@ -145,6 +153,7 @@ export async function createMyMailbox(input: {
       displayName: input.displayName,
       // Quota per box comes from the plan, never from the client.
       quotaMb: quota.quotaMbPerBox,
+      password: input.password,
     })
 
     revalidatePath('/dashboard/email')
@@ -197,21 +206,36 @@ export async function deleteMyMailbox(mailboxId: string): Promise<MailResult<nul
   }
 }
 
-export async function resetMyMailboxPassword(
+/**
+ * Sets a mailbox password chosen by the customer. The password goes straight to
+ * the provider: it is not logged, stored, returned, or put in any error.
+ */
+export async function setMyMailboxPassword(
   mailboxId: string,
-): Promise<MailResult<{ tempPassword: string }>> {
+  input: { password: string; passwordConfirm: string },
+): Promise<MailResult<null>> {
   try {
     const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    if (validateMailboxPassword(input?.password, input?.passwordConfirm).length > 0) {
+      throw new MailError('INVALID_PASSWORD')
+    }
+
     const domain = await requireOwnedDomain(user.id)
     const provider = getMailProvider()
 
     const owned = await provider.listMailboxes(domain.id)
     if (!owned.some((m) => m.id === mailboxId)) throw new MailError('FORBIDDEN')
 
-    const result = await provider.resetPassword(mailboxId)
-    return { ok: true, data: result }
+    await provider.setPassword(mailboxId, input.password)
+    return { ok: true, data: null }
   } catch (error) {
-    return fail(error)
+    // Deliberately no `fail()` here: it logs the raw error object.
+    const code: MailErrorCode = error instanceof MailError ? error.code : 'PASSWORD_UPDATE_FAILED'
+    console.log('[v0] mailbox password update failed:', code)
+    return { ok: false, error: code }
   }
 }
 
