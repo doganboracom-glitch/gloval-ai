@@ -88,6 +88,7 @@ function seed() {
     domainId: SEED_DOMAIN_ID,
     address: 'iletisim@gloval.ai',
     destinations: ['info@gloval.ai'],
+    active: true,
     createdAt: hoursAgo(24 * 12),
   })
 
@@ -293,10 +294,8 @@ export const mockMailProvider: MailProvider = {
     if (!isValidLocalPart(normalized)) throw new MailError('INVALID_ADDRESS')
 
     const address = `${normalized}@${domain.domain}`
-    const clash =
-      [...aliases.values()].some((a) => a.address === address) ||
-      [...mailboxes.values()].some((m) => m.address === address)
-    if (clash) throw new MailError('ALIAS_EXISTS')
+    if ([...mailboxes.values()].some((m) => m.address === address)) throw new MailError('ADDRESS_IS_MAILBOX')
+    if ([...aliases.values()].some((a) => a.address === address)) throw new MailError('ALIAS_EXISTS')
 
     // Addresses on this domain must be real mailboxes/aliases, otherwise the
     // alias would silently black-hole mail. External addresses are allowed.
@@ -317,10 +316,19 @@ export const mockMailProvider: MailProvider = {
       domainId,
       address,
       destinations: checked.destinations,
+      active: true,
       createdAt: new Date().toISOString(),
     }
     aliases.set(alias.id, alias)
     return latency(alias, 250)
+  },
+
+  async setAliasActive(aliasId, active) {
+    seed()
+    const alias = aliases.get(aliasId)
+    if (!alias) throw new MailError('NOT_FOUND')
+    aliases.set(aliasId, { ...alias, active })
+    await latency(null, 200)
   },
 
   async deleteAlias(aliasId) {

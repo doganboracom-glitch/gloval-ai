@@ -19,9 +19,23 @@ export type AliasCopy = {
   errInvalidDestination: string
   errTooMany: string
   errSelf: string
+  errAliasExists: string
+  errAddressIsMailbox: string
+  warnMailboxAddress: string
+  warnAliasAddress: string
+  statusActive: string
+  statusInactive: string
+  enable: string
 }
 
 const TR: AliasCopy = {
+  errAliasExists: 'Bu adres için zaten bir yönlendirme var.',
+  errAddressIsMailbox: 'Bu adres zaten bir posta kutusu olarak kullanılıyor.',
+  warnMailboxAddress: 'Bu adres zaten bir posta kutusu olarak kullanılıyor.',
+  warnAliasAddress: 'Bu adres için zaten bir yönlendirme var.',
+  statusActive: 'Aktif',
+  statusInactive: 'Pasif',
+  enable: 'Etkinleştir',
   aliasesHint: 'Bir adrese gelen postayı posta kutularına veya harici adreslere yönlendir.',
   destinationsHint: 'Gelen postanın gönderileceği adresleri seç veya harici bir adres ekle.',
   externalLabel: 'Harici adres ekle',
@@ -40,6 +54,13 @@ const TR: AliasCopy = {
 }
 
 const EN: AliasCopy = {
+  errAliasExists: 'An alias already exists for this address.',
+  errAddressIsMailbox: 'This address is already used by a mailbox.',
+  warnMailboxAddress: 'This address is already used by a mailbox.',
+  warnAliasAddress: 'An alias already exists for this address.',
+  statusActive: 'Active',
+  statusInactive: 'Inactive',
+  enable: 'Enable',
   aliasesHint: 'Forward mail sent to an address to mailboxes or external addresses.',
   destinationsHint: 'Choose where incoming mail should go, or add an external address.',
   externalLabel: 'Add external address',
