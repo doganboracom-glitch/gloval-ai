@@ -5,6 +5,7 @@ import {
   type CreateMailboxInput,
   type MailAlias,
   type MailDomain,
+  type MailForwarding,
   type MailLogEntry,
   type MailLogFilter,
   type MailProvider,
@@ -12,6 +13,7 @@ import {
   type UpdateMailboxInput,
 } from './types'
 import { validateAliasDestinations } from './alias-destinations'
+import { validateForwardingDestinations } from './forwarding'
 import { getWebmailUrl } from './webmail'
 
 /**
@@ -35,6 +37,7 @@ const SEED_USER_ID = 'seed-user'
 const domains = new Map<string, MailDomain>()
 const mailboxes = new Map<string, Mailbox>()
 const aliases = new Map<string, MailAlias>()
+const forwardings = new Map<string, MailForwarding>()
 let logs: MailLogEntry[] = []
 let seeded = false
 
@@ -336,6 +339,50 @@ export const mockMailProvider: MailProvider = {
     if (!aliases.has(aliasId)) throw new MailError('NOT_FOUND')
     aliases.delete(aliasId)
     await latency(null, 200)
+  },
+
+  async getMailboxForwarding(mailboxId) {
+    seed()
+    if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
+    return latency(forwardings.get(mailboxId) ?? { state: 'none' })
+  },
+
+  async setMailboxForwarding(mailboxId, input) {
+    seed()
+    const box = mailboxes.get(mailboxId)
+    if (!box) throw new MailError('NOT_FOUND')
+
+    const checked = validateForwardingDestinations({
+      mailboxAddress: box.address,
+      domain: box.address.split('@')[1],
+      destinations: input.destinations,
+      internalAddresses: null,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    if (checked.destinations.length === 0) {
+      forwardings.delete(mailboxId)
+      return latency<MailForwarding>({ state: 'none' }, 200)
+    }
+
+    const next: MailForwarding = {
+      state: 'forwarding',
+      destinations: checked.destinations,
+      keepCopy: input.keepCopy === true,
+      active: true,
+    }
+    forwardings.set(mailboxId, next)
+    return latency(next, 250)
+  },
+
+  async listForwardings(mailboxIds) {
+    seed()
+    const result: Record<string, MailForwarding> = {}
+    for (const id of mailboxIds) {
+      const entry = forwardings.get(id)
+      if (entry) result[id] = entry
+    }
+    return latency(result)
   },
 
   async listLogs({ domainId, status, search, limit = 100 }) {

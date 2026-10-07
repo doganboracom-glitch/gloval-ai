@@ -14,12 +14,14 @@ import { getMailQuota } from '@/lib/mail/access'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { validateMailboxPassword } from '@/lib/mail/password'
 import { validateAliasDestinations } from '@/lib/mail/alias-destinations'
+import { validateForwardingDestinations } from '@/lib/mail/forwarding'
 import {
   MailError,
   isValidLocalPart,
   type MailAlias,
   type MailDomain,
   type MailErrorCode,
+  type MailForwarding,
   type MailLogEntry,
   type MailLogStatus,
   type MailResult,
@@ -48,6 +50,8 @@ export type MailOverview = {
   gate: MailDomainGate
   mailboxes: Mailbox[]
   aliases: MailAlias[]
+  /** Mailbox id -> forwarding, only for mailboxes that have one. Best effort: a failed read is left out. */
+  forwardings: Record<string, MailForwarding>
   quota: { allowed: boolean; maxMailboxes: number; quotaMbPerBox: number; reason?: string }
   webmailBase: string | null
   /** True when a real provider is connected (vs. the in-memory mock). */
@@ -102,6 +106,7 @@ export async function getMyMailOverview(): Promise<MailOverview> {
       gate,
       mailboxes: [],
       aliases: [],
+      forwardings: {},
       quota,
       webmailBase: null,
       live: provider.id !== 'mock',
@@ -112,12 +117,16 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     provider.listMailboxes(domain.id),
     provider.listAliases(domain.id),
   ])
+  const forwardings = await provider
+    .listForwardings(mailboxes.map((m) => m.id))
+    .catch(() => ({}) as Record<string, MailForwarding>)
 
   return {
     domain,
     gate,
     mailboxes,
     aliases,
+    forwardings,
     quota,
     webmailBase: provider.webmailUrl(),
     live: provider.id !== 'mock',
@@ -237,6 +246,74 @@ export async function setMyMailboxPassword(
     // Deliberately no `fail()` here: it logs the raw error object.
     const code: MailErrorCode = error instanceof MailError ? error.code : 'PASSWORD_UPDATE_FAILED'
     console.log('[v0] mailbox password update failed:', code)
+    return { ok: false, error: code }
+  }
+}
+
+/** Reads one of the caller's own mailboxes' forwarding. Ownership is re-checked against their mailbox list. */
+export async function getMyMailboxForwarding(mailboxId: string): Promise<MailResult<MailForwarding>> {
+  try {
+    const user = await requireUser()
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const owned = await provider.listMailboxes(domain.id)
+    if (!owned.some((m) => m.id === mailboxId)) throw new MailError('FORBIDDEN')
+
+    return { ok: true, data: await provider.getMailboxForwarding(mailboxId) }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/**
+ * Forwards everything a mailbox receives. An empty destination list turns
+ * forwarding off. Addresses on the customer's own domain must be one of their
+ * mailboxes or aliases; external addresses are allowed.
+ */
+export async function setMyMailboxForwarding(
+  mailboxId: string,
+  input: { destinations: string[]; keepCopy: boolean; overwriteUnreadable?: boolean },
+): Promise<MailResult<MailForwarding>> {
+  try {
+    const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const [mailboxes, aliases] = await Promise.all([
+      provider.listMailboxes(domain.id),
+      provider.listAliases(domain.id),
+    ])
+    const mailbox = mailboxes.find((m) => m.id === mailboxId)
+    if (!mailbox) throw new MailError('FORBIDDEN')
+
+    const known = new Set([
+      ...mailboxes.map((m) => m.address.toLowerCase()),
+      ...aliases.map((a) => a.address.toLowerCase()),
+    ])
+    const checked = validateForwardingDestinations({
+      mailboxAddress: mailbox.address,
+      domain: domain.domain,
+      destinations: input?.destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    const forwarding = await provider.setMailboxForwarding(mailboxId, {
+      destinations: checked.destinations,
+      keepCopy: input.keepCopy === true,
+      overwriteUnreadable: input.overwriteUnreadable === true,
+    })
+
+    revalidatePath('/dashboard/email')
+    return { ok: true, data: forwarding }
+  } catch (error) {
+    // Deliberately no `fail()`: it logs the raw error, which can carry provider text.
+    const code: MailErrorCode = error instanceof MailError ? error.code : 'FORWARD_UPDATE_FAILED'
+    console.log('[v0] mailbox forwarding update failed:', code)
     return { ok: false, error: code }
   }
 }

@@ -7,12 +7,24 @@ import {
   type MailAlias,
   type MailDnsRecordSpec,
   type MailDomain,
+  type MailForwarding,
   type MailLogFilter,
   type MailProvider,
   type Mailbox,
+  type SetForwardingInput,
   type UpdateMailboxInput,
 } from './types'
-import { validateAliasDestinations } from './alias-destinations'
+import { normalizeDestinationAddress, validateAliasDestinations } from './alias-destinations'
+import {
+  FORWARD_FILTER_TYPE,
+  FORWARD_SCRIPT_DESC,
+  buildForwardScript,
+  filterRowFromApi,
+  readForwarding,
+  validateForwardingDestinations,
+  type FilterRow,
+  type ForwardingRead,
+} from './forwarding'
 import { aliasFromRow, classifyAliasConflict, selectAliasRows } from './alias-mapping'
 import { getMailServerHost, getWebmailUrl } from './webmail'
 
@@ -98,6 +110,30 @@ async function domainName(domainId: string): Promise<string> {
   const name = (data as { domain?: string } | null)?.domain
   if (!name) throw new MailError('NOT_FOUND')
   return name.toLowerCase()
+}
+
+/**
+ * `get/filters/<mailbox>` answers with full filter rows. The mailbox id is
+ * checked as a single address first because it ends up in the URL path.
+ */
+async function readMailboxFilters(mailboxId: string): Promise<ForwardingRead> {
+  if (normalizeDestinationAddress(mailboxId) !== mailboxId) throw new MailError('NOT_FOUND')
+  const raw = await request<unknown>(`get/filters/${encodeURIComponent(mailboxId)}`)
+  const rows = (Array.isArray(raw) ? raw : [])
+    .map(filterRowFromApi)
+    .filter((row): row is FilterRow => row !== null)
+  return readForwarding(rows)
+}
+
+function forwardingView(read: ForwardingRead): MailForwarding {
+  if (read.state === 'none') return { state: 'none' }
+  if (read.state === 'unreadable') return { state: 'unreadable' }
+  return {
+    state: 'forwarding',
+    destinations: read.settings.destinations,
+    keepCopy: read.settings.keepCopy,
+    active: read.active,
+  }
 }
 
 const mibFromBytes = (bytes: unknown) => Math.round(Number(bytes || 0) / 1048576)
@@ -323,6 +359,97 @@ export const mailcowProvider: MailProvider = {
 
   async setAliasActive(id, active) {
     await request('edit/alias', { body: { items: [id], attr: { active: active ? '1' : '0' } } })
+  },
+
+  async getMailboxForwarding(mailboxId) {
+    return forwardingView(await readMailboxFilters(mailboxId))
+  },
+
+  async setMailboxForwarding(mailboxId: string, input: SetForwardingInput) {
+    const mailboxAddress = String(mailboxId ?? '')
+    if (normalizeDestinationAddress(mailboxAddress) !== mailboxAddress) throw new MailError('NOT_FOUND')
+
+    // Format-only check; the server action owns "belongs to this customer".
+    const checked = validateForwardingDestinations({
+      mailboxAddress,
+      domain: mailboxAddress.split('@')[1],
+      destinations: input.destinations,
+      internalAddresses: null,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    const before = await readMailboxFilters(mailboxAddress)
+    if (before.state === 'unreadable' && input.overwriteUnreadable !== true) {
+      throw new MailError('FORWARD_UNREADABLE')
+    }
+
+    try {
+      if (checked.destinations.length === 0) {
+        if (before.owned.length > 0) await request('delete/filter', { body: before.owned.map((row) => row.id) })
+        return { state: 'none' }
+      }
+
+      // Mailcow keeps one active filter per mailbox and type, so turning ours
+      // on would silently turn the customer's own postfilter off.
+      if (before.blocker) throw new MailError('FORWARD_FILTER_CONFLICT')
+
+      const scriptData = buildForwardScript(checked.destinations, input.keepCopy === true)
+      const [primary, ...extras] = [...before.owned].sort((a, b) => Number(b.active) - Number(a.active))
+
+      if (primary) {
+        await request('edit/filter', {
+          body: {
+            items: [primary.id],
+            attr: {
+              active: '1',
+              script_desc: FORWARD_SCRIPT_DESC,
+              script_data: scriptData,
+              filter_type: FORWARD_FILTER_TYPE,
+            },
+          },
+        })
+        if (extras.length > 0) await request('delete/filter', { body: extras.map((row) => row.id) })
+      } else {
+        await request('add/filter', {
+          body: {
+            username: mailboxAddress,
+            active: '1',
+            script_desc: FORWARD_SCRIPT_DESC,
+            script_data: scriptData,
+            filter_type: FORWARD_FILTER_TYPE,
+          },
+        })
+      }
+
+      // Mailcow reports a rejected script as a normal 200 response, so trust the
+      // stored result rather than the write.
+      const after = forwardingView(await readMailboxFilters(mailboxAddress))
+      const wanted = [...checked.destinations].sort().join(',')
+      const stored = after.state === 'forwarding' && after.active ? [...after.destinations].sort().join(',') : null
+      if (stored !== wanted) throw new MailError('FORWARD_UPDATE_FAILED')
+      return after
+    } catch (error) {
+      if (error instanceof MailError) throw error
+      // Never forward Mailcow's own message: it can echo the script or request.
+      throw new MailError('FORWARD_UPDATE_FAILED')
+    }
+  },
+
+  async listForwardings(mailboxIds) {
+    const entries = await Promise.all(
+      mailboxIds.map(async (id) => {
+        try {
+          return [id, forwardingView(await readMailboxFilters(id))] as const
+        } catch {
+          return null
+        }
+      }),
+    )
+    const result: Record<string, MailForwarding> = {}
+    for (const entry of entries) {
+      if (entry && entry[1].state !== 'none') result[entry[0]] = entry[1]
+    }
+    return result
   },
 
   async listLogs(_filter: MailLogFilter) {
