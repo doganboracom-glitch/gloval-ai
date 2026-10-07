@@ -123,8 +123,24 @@ export class MailError extends Error {
 /** Discriminated result used by server actions so clients never see a throw. */
 export type MailResult<T> = { ok: true; data: T } | { ok: false; error: MailErrorCode }
 
+/** A real DNS record a customer must publish for mail on their own domain. */
+export type MailDnsRecordSpec = {
+  type: 'MX' | 'TXT'
+  host: string
+  value: string
+  priority?: number
+  label?: 'SPF' | 'DKIM' | 'DMARC'
+}
+
 export interface MailProvider {
   readonly id: string
+
+  /**
+   * The real MX/SPF/DKIM/DMARC records for a provisioned domain. Optional: an
+   * adapter without real DNS data (the mock) omits it, and the placeholder
+   * records stay in place.
+   */
+  dnsRecords?(domain: string): Promise<MailDnsRecordSpec[]>
 
   listDomains(userId?: string): Promise<MailDomain[]>
   getDomain(domainId: string): Promise<MailDomain | null>

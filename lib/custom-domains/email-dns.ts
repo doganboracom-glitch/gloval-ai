@@ -31,7 +31,9 @@ export function txtSatisfies(label: DnsRecord['label'], expected: string, found:
   switch (label) {
     case 'SPF': {
       if (!/^v=spf1\b/i.test(found)) return false
-      const required = expected.split(/\s+/).filter((token) => /^(include|ip4|ip6):/i.test(token))
+      // Customers often merge SPF with other senders, so only the tokens that
+      // route to our server are required, not an exact string match.
+      const required = expected.split(/\s+/).filter((token) => /^(include:|ip4:|ip6:|mx$)/i.test(token))
       if (required.length === 0) return squash(found).toLowerCase() === squash(expected).toLowerCase()
       const present = new Set(found.split(/\s+/).map((token) => token.toLowerCase()))
       return required.every((token) => present.has(token.toLowerCase()))
