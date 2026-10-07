@@ -29,6 +29,8 @@ import { StatusBadge } from '@/components/mail/status-badge'
 import { PasswordFields } from '@/components/mail/password-fields'
 import { getPasswordCopy } from '@/components/mail/password-copy'
 import { getAliasCopy } from '@/components/mail/alias-copy'
+import { getForwardingCopy, type ForwardingCopy } from '@/components/mail/forwarding-copy'
+import { validateForwardingDestinations } from '@/lib/mail/forwarding'
 import {
   MAX_ALIAS_DESTINATIONS,
   isExternalDestination,
@@ -43,11 +45,12 @@ import {
   deleteMyAlias,
   setMyAliasActive,
   deleteMyMailbox,
+  setMyMailboxForwarding,
   setMyMailboxPassword,
   updateMyMailbox,
   type MailOverview,
 } from '@/lib/mail'
-import type { MailErrorCode, Mailbox } from '@/lib/mail/types'
+import type { MailErrorCode, MailForwarding, Mailbox } from '@/lib/mail/types'
 
 export function EmailClient({
   overview,
@@ -61,6 +64,7 @@ export function EmailClient({
   const m = t.mail
   const pc = getPasswordCopy(lang)
   const ac = getAliasCopy(lang)
+  const fc = getForwardingCopy(lang)
 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -72,8 +76,9 @@ export function EmailClient({
   const [showNewAlias, setShowNewAlias] = useState(false)
   const [editing, setEditing] = useState<Mailbox | null>(null)
   const [passwordTarget, setPasswordTarget] = useState<Mailbox | null>(null)
+  const [forwardTarget, setForwardTarget] = useState<Mailbox | null>(null)
 
-  const { domain, gate, mailboxes, aliases, quota } = overview
+  const { domain, gate, mailboxes, aliases, forwardings, quota } = overview
 
   /** Localize a provider error code; never surface raw provider text. */
   const errorText = (code: MailErrorCode): string =>
@@ -87,6 +92,9 @@ export function EmailClient({
       SELF_DESTINATION: ac.errSelf,
       INVALID_PASSWORD: pc.invalid,
       PASSWORD_UPDATE_FAILED: pc.updateFailed,
+      FORWARD_UPDATE_FAILED: fc.errUpdateFailed,
+      FORWARD_FILTER_CONFLICT: fc.errConflict,
+      FORWARD_UNREADABLE: fc.errUnreadable,
       MAILBOX_LIMIT_REACHED: m.errLimitReached,
       QUOTA_EXCEEDED: m.errQuota,
       DOMAIN_NOT_ACTIVE: m.errDomainNotActive,
@@ -312,6 +320,26 @@ export function EmailClient({
     })
   }
 
+  function handleSetForwarding(
+    box: Mailbox,
+    destinations: string[],
+    keepCopy: boolean,
+    overwriteUnreadable: boolean,
+  ) {
+    setError(null)
+    setDialogError(null)
+    startTransition(async () => {
+      const res = await setMyMailboxForwarding(box.id, { destinations, keepCopy, overwriteUnreadable })
+      if (!res.ok) {
+        setDialogError(errorText(res.error))
+        return
+      }
+      setForwardTarget(null)
+      setNotice(`${destinations.length > 0 ? fc.saved : fc.disabled}: ${box.address}`)
+      router.refresh()
+    })
+  }
+
   function handleCreateAlias(localPart: string, destinations: string[]) {
     setError(null)
     setDialogError(null)
@@ -433,6 +461,7 @@ export function EmailClient({
                     </StatusBadge>
                   </div>
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">{box.displayName}</p>
+                  <ForwardingSummary forwarding={forwardings[box.id]} copy={fc} domain={domain.domain} />
                   <div className="mt-2 flex items-center gap-2">
                     <div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">
                       <div
@@ -463,6 +492,19 @@ export function EmailClient({
                   >
                     <RotateCcw className="size-3.5" />
                     <span className="sr-only sm:not-sr-only">{m.resetPassword}</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setDialogError(null)
+                      setNotice(null)
+                      setForwardTarget(box)
+                    }}
+                    className="gap-1.5"
+                  >
+                    <Forward className="size-3.5" />
+                    <span className="sr-only sm:not-sr-only">{fc.action}</span>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => toggleSuspend(box)}>
                     <span className="text-xs">
@@ -627,6 +669,27 @@ export function EmailClient({
             setDialogError(null)
           }}
           onSubmit={handleCreateAlias}
+        />
+      )}
+
+      {forwardTarget && (
+        <ForwardingDialog
+          key={forwardTarget.id}
+          mailbox={forwardTarget}
+          forwarding={forwardings[forwardTarget.id]}
+          domain={domain.domain}
+          internalAddresses={
+            new Set([...mailboxes.map((b) => b.address), ...aliases.map((a) => a.address)].map((a) => a.toLowerCase()))
+          }
+          pending={isPending}
+          error={dialogError}
+          onCancel={() => {
+            setForwardTarget(null)
+            setDialogError(null)
+          }}
+          onSubmit={(destinations, keepCopy, overwrite) =>
+            handleSetForwarding(forwardTarget, destinations, keepCopy, overwrite)
+          }
         />
       )}
 
@@ -816,6 +879,275 @@ function SetPasswordDialog({
           {pending && <Loader2 className="size-4 animate-spin" />}
           {pc.save}
         </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function ForwardingSummary({
+  forwarding,
+  copy,
+  domain,
+}: {
+  forwarding: MailForwarding | undefined
+  copy: ForwardingCopy
+  domain: string
+}) {
+  if (!forwarding || forwarding.state === 'none') return null
+
+  if (forwarding.state === 'unreadable') {
+    return (
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Info className="size-3.5 shrink-0 text-accent" />
+        {copy.unreadableTitle}
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-1">
+      <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span
+          className={
+            forwarding.active
+              ? 'shrink-0 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand'
+              : 'shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'
+          }
+        >
+          {forwarding.active ? copy.badgeOn : copy.badgeOff}
+        </span>
+        {forwarding.keepCopy && <span>{copy.keepsCopy}</span>}
+      </p>
+      <ul className="flex flex-wrap gap-1.5" aria-label={copy.forwardsTo}>
+        {forwarding.destinations.map((dest) => (
+          <li
+            key={dest}
+            className="flex max-w-full items-center gap-1.5 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+          >
+            <span className="truncate">{dest}</span>
+            {isExternalDestination(dest, domain) && (
+              <span className="shrink-0 rounded bg-brand/15 px-1 text-[10px] font-medium uppercase tracking-wide text-brand">
+                {copy.externalBadge}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ForwardingDialog({
+  mailbox,
+  forwarding,
+  domain,
+  internalAddresses,
+  pending,
+  error,
+  onCancel,
+  onSubmit,
+}: {
+  mailbox: Mailbox
+  forwarding: MailForwarding | undefined
+  domain: string
+  internalAddresses: ReadonlySet<string>
+  pending: boolean
+  error: string | null
+  onCancel: () => void
+  onSubmit: (destinations: string[], keepCopy: boolean, overwriteUnreadable: boolean) => void
+}) {
+  const { t, lang } = useLanguage()
+  const m = t.mail
+  const fc = getForwardingCopy(lang)
+  const current = forwarding?.state === 'forwarding' ? forwarding : null
+  const unreadable = forwarding?.state === 'unreadable'
+
+  const [destinations, setDestinations] = useState<string[]>(current?.destinations ?? [])
+  const [keepCopy, setKeepCopy] = useState(current?.keepCopy ?? true)
+  const [overwrite, setOverwrite] = useState(false)
+  const [input, setInput] = useState('')
+  const [inputError, setInputError] = useState<string | null>(null)
+
+  function check(list: string[]) {
+    return validateForwardingDestinations({
+      mailboxAddress: mailbox.address,
+      domain,
+      destinations: list,
+      internalAddresses,
+    })
+  }
+
+  function addAddress() {
+    const address = normalizeDestinationAddress(input)
+    if (!address) {
+      setInputError(fc.invalidAddress)
+      return
+    }
+    if (destinations.includes(address)) {
+      setInput('')
+      setInputError(null)
+      return
+    }
+    const result = check([...destinations, address])
+    if (!result.ok) {
+      setInputError(
+        {
+          INVALID_DESTINATION: fc.unknownInternal,
+          SELF_DESTINATION: fc.selfAddress,
+          TOO_MANY_DESTINATIONS: fc.tooMany,
+        }[result.code],
+      )
+      return
+    }
+    setDestinations((prev) => [...prev, address])
+    setInput('')
+    setInputError(null)
+  }
+
+  const needsOverwrite = unreadable && !overwrite
+  const canSave = destinations.length > 0 && check(destinations).ok && !needsOverwrite
+
+  return (
+    <Modal onClose={onCancel}>
+      <h3 className="font-display text-lg font-semibold">{fc.title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{mailbox.address}</p>
+      <p className="mt-3 text-sm text-muted-foreground">{fc.body}</p>
+
+      <div className="mt-4 flex flex-col gap-4">
+        {unreadable && (
+          <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-sm">
+            <p className="font-medium">{fc.unreadableTitle}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{fc.unreadableBody}</p>
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={overwrite}
+                onChange={(e) => setOverwrite(e.target.checked)}
+                className="size-4 accent-primary"
+              />
+              {fc.overwrite}
+            </label>
+          </div>
+        )}
+
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-sm font-medium">{fc.destinationsLabel}</legend>
+          <span className="text-xs text-muted-foreground">{fc.destinationsHint}</span>
+          {destinations.length === 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">{fc.noDestinations}</p>
+          ) : (
+            <div className="mt-1 flex flex-col gap-1.5">
+              {destinations.map((address) => (
+                <div
+                  key={address}
+                  className="flex items-center justify-between gap-2 rounded-md bg-muted/60 px-2 py-1.5 text-sm"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{address}</span>
+                    {isExternalDestination(address, domain) && (
+                      <span className="shrink-0 rounded bg-brand/15 px-1 text-[10px] font-medium uppercase tracking-wide text-brand">
+                        {fc.externalBadge}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDestinations((prev) => prev.filter((a) => a !== address))}
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                    aria-label={`${fc.remove}: ${address}`}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="forward-address" className="text-sm font-medium">
+            {fc.addLabel}
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="forward-address"
+              type="email"
+              inputMode="email"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value)
+                setInputError(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
+                e.preventDefault()
+                addAddress()
+              }}
+              placeholder={fc.addPlaceholder}
+              aria-invalid={inputError ? true : undefined}
+              aria-describedby={inputError ? 'forward-address-error' : undefined}
+              className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addAddress}
+              disabled={input.trim() === '' || destinations.length >= MAX_ALIAS_DESTINATIONS}
+            >
+              {fc.add}
+            </Button>
+          </div>
+          {inputError && (
+            <p id="forward-address-error" role="alert" className="text-xs text-destructive">
+              {inputError}
+            </p>
+          )}
+        </div>
+
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={keepCopy}
+            onChange={(e) => setKeepCopy(e.target.checked)}
+            className="mt-0.5 size-4 accent-primary"
+          />
+          <span className="flex flex-col">
+            <span className="font-medium">{fc.keepCopy}</span>
+            <span className="text-xs text-muted-foreground">{fc.keepCopyHint}</span>
+          </span>
+        </label>
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
+        {current || unreadable ? (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (window.confirm(fc.turnOffConfirm)) onSubmit([], false, overwrite)
+            }}
+            disabled={pending || needsOverwrite}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            {fc.turnOff}
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={pending}>
+            {m.cancel}
+          </Button>
+          <Button onClick={() => onSubmit(destinations, keepCopy, overwrite)} disabled={!canSave || pending} className="gap-2">
+            {pending && <Loader2 className="size-4 animate-spin" />}
+            {fc.save}
+          </Button>
+        </div>
       </div>
     </Modal>
   )

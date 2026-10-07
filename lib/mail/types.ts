@@ -92,6 +92,23 @@ export type CreateAliasInput = {
   destinations: string[]
 }
 
+/**
+ * Forwarding of everything a mailbox receives. `unreadable` means a filter with
+ * Gloval's name exists but is not in the shape Gloval writes, so it is never
+ * edited without an explicit overwrite.
+ */
+export type MailForwarding =
+  | { state: 'none' }
+  | { state: 'forwarding'; destinations: string[]; keepCopy: boolean; active: boolean }
+  | { state: 'unreadable' }
+
+export type SetForwardingInput = {
+  /** Empty turns forwarding off. */
+  destinations: string[]
+  keepCopy: boolean
+  overwriteUnreadable?: boolean
+}
+
 export type MailLogFilter = {
   domainId?: string
   status?: MailLogStatus
@@ -117,6 +134,9 @@ export type MailErrorCode =
   | 'SELF_DESTINATION'
   | 'INVALID_PASSWORD'
   | 'PASSWORD_UPDATE_FAILED'
+  | 'FORWARD_UPDATE_FAILED'
+  | 'FORWARD_FILTER_CONFLICT'
+  | 'FORWARD_UNREADABLE'
   | 'DOMAIN_NOT_ACTIVE'
   | 'NOT_FOUND'
   | 'FORBIDDEN'
@@ -181,6 +201,11 @@ export interface MailProvider {
   createAlias(input: CreateAliasInput): Promise<MailAlias>
   deleteAlias(id: string): Promise<void>
   setAliasActive(id: string, active: boolean): Promise<void>
+
+  getMailboxForwarding(mailboxId: string): Promise<MailForwarding>
+  setMailboxForwarding(mailboxId: string, input: SetForwardingInput): Promise<MailForwarding>
+  /** Forwarding state per mailbox id; mailboxes without forwarding are omitted. */
+  listForwardings(mailboxIds: string[]): Promise<Record<string, MailForwarding>>
 
   listLogs(filter: MailLogFilter): Promise<MailLogEntry[]>
 
