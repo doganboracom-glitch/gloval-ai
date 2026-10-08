@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planIncludesMail, subscriptionSourceEndsAt, type MailAccessSource } from './access-state'
+import { mailAddonGrantsFromRows, type MailAddonEntitlementRow } from './addon-grants'
 import {
   grantsToAccessSources,
   type MailAddonGrant,
@@ -77,15 +78,23 @@ export async function loadMailPlanGrants(userId: string): Promise<MailPlanGrant[
 }
 
 /**
- * Source 2: standalone GLOVAL Mail add-ons (capacity 1 / 10 / 25 / 50 mailboxes each).
- *
- * PLACEHOLDER: there is no GLOVAL Mail add-on in the catalog or in
- * `user_addon_entitlements` yet, so this returns no grants. This is the ONE place
- * to wire it: return one `{ capacity, entitled, endsAt }` per grant and both the
- * access state (`loadMailAddonSources`) and the mailbox limit pick it up.
+ * Source 2: GLOVAL Mail add-ons (capacity 1 / 10 / 25 / 50 mailboxes each), read
+ * from `user_addon_entitlements` (kind = 'mail') with the live state of the
+ * subscription each one was bought on. Several add-ons simply add up. Throws on a
+ * read error like the plan loaders: callers fall back to the stored access row
+ * instead of treating an unreadable table as "no add-ons".
  */
-export async function loadMailAddonGrants(_userId: string): Promise<MailAddonGrant[]> {
-  return []
+export async function loadMailAddonGrants(userId: string): Promise<MailAddonGrant[]> {
+  const { data, error } = await createAdminClient()
+    .from('user_addon_entitlements')
+    .select(
+      'addon_code, status, starts_at, expires_at, subscription_id, billing_subscriptions(status, current_period_end, grace_period_ends_at, updated_at)',
+    )
+    .eq('user_id', userId)
+    .eq('kind', 'mail')
+    .eq('status', 'active')
+  if (error) throw new Error('mail_addon_grants_read_failed')
+  return mailAddonGrantsFromRows((data ?? []) as unknown as MailAddonEntitlementRow[])
 }
 
 export async function loadMailAddonSources(userId: string): Promise<MailAccessSource[]> {

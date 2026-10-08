@@ -11,6 +11,7 @@ import {
   Clock,
   ExternalLink,
   Loader2,
+  Mail,
   Package,
   ShieldAlert,
   X,
@@ -23,6 +24,7 @@ import {
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
 import { formatMoney } from '@/lib/billing-utils'
+import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
 import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'
 import { purchaseAddOn } from '@/lib/addon-purchase-actions'
@@ -126,7 +128,7 @@ export function AddOnCatalogGroup({
   /** True while any purchase is in flight, so a second one cannot be started. */
   purchaseLocked?: boolean
 }) {
-  const Icon = kind === 'site' ? Building2 : Package
+  const Icon = kind === 'site' ? Building2 : kind === 'mail' ? Mail : Package
   return (
     <div
       className={`rounded-2xl border border-border bg-card/70 p-5 ${eligible ? '' : 'opacity-70'}`}
@@ -143,7 +145,9 @@ export function AddOnCatalogGroup({
 
       {eligible ? (
         <>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-3">
+          <ul
+            className={`mt-4 grid gap-2 ${items.length > 3 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}
+          >
             {items.map((item) => {
               const busy = busyCode === item.code
               return (
@@ -299,6 +303,10 @@ export function AddOnsPanel({
   const dateFmt = new Intl.DateTimeFormat(lang, { dateStyle: 'medium' })
   const siteItems = overview.catalog.filter((c) => c.kind === 'site')
   const productItems = overview.catalog.filter((c) => c.kind === 'product')
+  const mailItems = overview.catalog.filter((c) => c.kind === 'mail')
+  const mc = getMailAddOnCopy(lang)
+  const unitTemplate = (kind: AddOnKind) =>
+    kind === 'site' ? a.siteUnit : kind === 'mail' ? mc.unit : a.productUnit
 
   const [checkoutCode, setCheckoutCode] = useState<AddOnCode | null>(null)
   const [busyCode, setBusyCode] = useState<AddOnCode | null>(null)
@@ -321,7 +329,7 @@ export function AddOnsPanel({
 
   const unitLabelFor = (code: AddOnCode) => {
     const def = ADD_ONS[code]
-    return fill(def.kind === 'site' ? a.siteUnit : a.productUnit, { n: def.capacity })
+    return fill(unitTemplate(def.kind), { n: def.capacity })
   }
 
   function showResult() {
@@ -436,12 +444,19 @@ export function AddOnsPanel({
     dismiss: a.dismiss,
   }
   if (outcome) {
-    outcomeCopy.successTotal = outcome.kind === 'site' ? a.successTotalSite : a.successTotalProduct
+    outcomeCopy.successTotal =
+      outcome.kind === 'site'
+        ? a.successTotalSite
+        : outcome.kind === 'mail'
+          ? mc.successTotal
+          : a.successTotalProduct
   }
   const outcomeTotal = outcome
     ? outcome.kind === 'site'
       ? overview.site.total
-      : overview.product.total
+      : outcome.kind === 'mail'
+        ? overview.mail.total
+        : overview.product.total
     : null
 
   return (
@@ -551,6 +566,16 @@ export function AddOnsPanel({
             totalLabel={a.totalLabel}
             emptyLabel={a.noProductLimit}
           />
+          <CapacityRow
+            label={mc.mailLimit}
+            base={overview.mail.base}
+            addOn={overview.mail.addOn}
+            total={overview.mail.total}
+            baseLabel={a.planLimitLabel}
+            addOnLabel={a.addOnLabel}
+            totalLabel={a.totalLabel}
+            emptyLabel={a.noProductLimit}
+          />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           {fill(a.ecommerceNote, { n: overview.ecommerceSiteLimit })}
@@ -571,9 +596,7 @@ export function AddOnsPanel({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/40 px-3 py-2 text-sm"
                   >
                     <span className="font-medium">
-                      {fill(item.kind === 'site' ? a.siteUnit : a.productUnit, {
-                        n: item.capacity,
-                      })}
+                      {fill(unitTemplate(item.kind), { n: item.capacity })}
                     </span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
@@ -616,6 +639,23 @@ export function AddOnsPanel({
               description={a.productGroupDesc}
               unitLabel={a.productUnit}
               notEligible={a.notEligibleProduct}
+              notEligibleBadge={a.notEligibleBadge}
+              perMonth={a.perMonth}
+              periodNote={a.periodNote}
+              buyLabel={a.buy}
+              buyingLabel={a.buying}
+              onBuy={canBuy ? openCheckout : undefined}
+              busyCode={busyCode}
+              purchaseLocked={purchaseLocked}
+            />
+            <AddOnCatalogGroup
+              kind="mail"
+              items={mailItems}
+              eligible={overview.mail.eligible}
+              title={mc.group}
+              description={mc.groupDesc}
+              unitLabel={mc.unit}
+              notEligible={mc.notEligible}
               notEligibleBadge={a.notEligibleBadge}
               perMonth={a.perMonth}
               periodNote={a.periodNote}

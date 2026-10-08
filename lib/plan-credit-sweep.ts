@@ -210,6 +210,82 @@ export type PlanCreditSweepOptions = {
   maxSubscriptions?: number
 }
 
+export type PlanCreditCandidate = {
+  sub: PlanCreditSubscription
+  rule: GrantRule
+  cycle: CreditCycle
+  start: Date
+  reason: string
+}
+
+export type PlanCreditSkipReason = keyof PlanCreditSweepSummary['skipped']
+
+/**
+ * Decides whether ONE subscription earns plan credits right now and for which
+ * credit period. Shared by the daily sweep and the instant grant after a
+ * payment, so both always agree on who is eligible.
+ */
+export function classifyPlanCreditSubscription(
+  sub: PlanCreditSubscription,
+  now: Date,
+): { candidate: PlanCreditCandidate } | { skip: PlanCreditSkipReason } {
+  if (sub.status !== 'active') return { skip: 'inactive' }
+  // `toPlanCode` matches substrings ("extra_product_100" contains "pro"), so
+  // add-ons must be excluded by category before the code is interpreted.
+  const mapped = sub.productCategory === 'addon' ? 'free' : toPlanCode(sub.planCode)
+  if (mapped === 'free') return { skip: 'notCreditPlan' }
+  const periodStart = sub.periodStart ? new Date(sub.periodStart) : null
+  const period = periodStart
+    ? resolveCreditPeriod(mapped, periodStart, sub.periodEnd ? new Date(sub.periodEnd) : null, now)
+    : null
+  if (!period) return { skip: 'noPaidPeriod' }
+  return {
+    candidate: {
+      sub,
+      rule: resolveGrantRule(mapped),
+      cycle: sub.interval === 'year' ? 'yearly' : 'monthly',
+      start: period.start,
+      reason: planGrantReason(sub.id, period.start),
+    },
+  }
+}
+
+export type PlanCreditGrantOutcome =
+  | { kind: 'already_granted' }
+  | { kind: 'would_grant'; entry: PlanCreditEntry }
+  | { kind: 'granted'; entry: PlanCreditEntry; result: GrantResult }
+
+/**
+ * Grants (or, in dry-run, previews) the credits of ONE eligible candidate.
+ * Idempotent per (subscription, period): the RPC and the preview both report a
+ * duplicate instead of writing twice. Throws on store errors; callers decide
+ * how to isolate them.
+ */
+export async function grantPlanCreditCandidate(
+  store: PlanCreditStore,
+  candidate: PlanCreditCandidate,
+  dryRun: boolean,
+): Promise<PlanCreditGrantOutcome> {
+  const { sub, rule, cycle, start } = candidate
+  const entry = (amount: number, firstPeriod: boolean): PlanCreditEntry => ({
+    subscriptionId: sub.id,
+    plan: rule.planCode,
+    cycle,
+    periodStart: start.toISOString(),
+    amount,
+    firstPeriod,
+  })
+  if (dryRun) {
+    const preview = previewPlanGrant(await store.loadLedger(sub.userId), rule, sub.id, start)
+    return preview.duplicate
+      ? { kind: 'already_granted' }
+      : { kind: 'would_grant', entry: entry(preview.granted, preview.firstPeriod) }
+  }
+  const result = await store.grant({ userId: sub.userId, subscriptionId: sub.id, periodRef: start.toISOString(), rule })
+  if (result.duplicate) return { kind: 'already_granted' }
+  return { kind: 'granted', entry: entry(result.granted, result.firstPeriod), result }
+}
+
 /** Dry-run unless the variable is exactly "false" (case-insensitive). */
 export function isPlanCreditDryRun(raw: string | undefined): boolean {
   return raw?.trim().toLowerCase() !== 'false'
@@ -267,41 +343,13 @@ async function runPlanCreditSweep(options: PlanCreditSweepOptions): Promise<Plan
   const limitReached = () =>
     summary.scanned >= maxSubscriptions || (deadlineMs !== undefined && Date.now() >= deadlineMs)
 
-  type Candidate = {
-    sub: PlanCreditSubscription
-    rule: GrantRule
-    cycle: CreditCycle
-    start: Date
-    reason: string
-  }
-
-  const classify = (sub: PlanCreditSubscription): Candidate | null => {
-    if (sub.status !== 'active') {
-      summary.skipped.inactive += 1
+  const classify = (sub: PlanCreditSubscription): PlanCreditCandidate | null => {
+    const result = classifyPlanCreditSubscription(sub, now)
+    if ('skip' in result) {
+      summary.skipped[result.skip] += 1
       return null
     }
-    // `toPlanCode` matches substrings ("extra_product_100" contains "pro"), so
-    // add-ons must be excluded by category before the code is interpreted.
-    const mapped = sub.productCategory === 'addon' ? 'free' : toPlanCode(sub.planCode)
-    if (mapped === 'free') {
-      summary.skipped.notCreditPlan += 1
-      return null
-    }
-    const periodStart = sub.periodStart ? new Date(sub.periodStart) : null
-    const period = periodStart
-      ? resolveCreditPeriod(mapped, periodStart, sub.periodEnd ? new Date(sub.periodEnd) : null, now)
-      : null
-    if (!period) {
-      summary.skipped.noPaidPeriod += 1
-      return null
-    }
-    return {
-      sub,
-      rule: resolveGrantRule(mapped),
-      cycle: sub.interval === 'year' ? 'yearly' : 'monthly',
-      start: period.start,
-      reason: planGrantReason(sub.id, period.start),
-    }
+    return result.candidate
   }
 
   let cursor: string | null = null
@@ -309,7 +357,7 @@ async function runPlanCreditSweep(options: PlanCreditSweepOptions): Promise<Plan
     const page = await store.listPage(cursor, pageSize)
     if (page.length === 0) break
 
-    const candidates: Candidate[] = []
+    const candidates: PlanCreditCandidate[] = []
     for (const sub of page) {
       if (limitReached()) {
         summary.truncated = true
@@ -336,34 +384,20 @@ async function runPlanCreditSweep(options: PlanCreditSweepOptions): Promise<Plan
         summary.truncated = true
         return summary
       }
-      const { sub, rule, cycle, start, reason } = candidate
+      const { sub, reason } = candidate
       if (existing.has(reason)) {
         summary.alreadyGranted += 1
         continue
       }
-      const entry = (amount: number, firstPeriod: boolean): PlanCreditEntry => ({
-        subscriptionId: sub.id,
-        plan: rule.planCode,
-        cycle,
-        periodStart: start.toISOString(),
-        amount,
-        firstPeriod,
-      })
 
       try {
-        if (dryRun) {
-          const preview = previewPlanGrant(await store.loadLedger(sub.userId), rule, sub.id, start)
-          if (preview.duplicate) summary.alreadyGranted += 1
-          else summary.wouldGrant.push(entry(preview.granted, preview.firstPeriod))
-          continue
+        const outcome = await grantPlanCreditCandidate(store, candidate, dryRun)
+        if (outcome.kind === 'already_granted') summary.alreadyGranted += 1
+        else if (outcome.kind === 'would_grant') summary.wouldGrant.push(outcome.entry)
+        else {
+          summary.granted.push(outcome.entry)
+          console.log(`[plan-credits] granted subscription=${sub.id} amount=${outcome.result.granted} expired=${outcome.result.expired}`)
         }
-        const result = await store.grant({ userId: sub.userId, subscriptionId: sub.id, periodRef: start.toISOString(), rule })
-        if (result.duplicate) {
-          summary.alreadyGranted += 1
-          continue
-        }
-        summary.granted.push(entry(result.granted, result.firstPeriod))
-        console.log(`[plan-credits] granted subscription=${sub.id} amount=${result.granted} expired=${result.expired}`)
       } catch {
         fail(sub.id, dryRun ? 'preview_failed' : 'grant_failed')
       }

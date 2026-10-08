@@ -98,6 +98,17 @@ export const supabasePlanCreditStore: PlanCreditStore = {
   },
 }
 
+/** One subscription in the sweep's shape (used by the instant grant). */
+export async function loadPlanCreditSubscription(subscriptionId: string): Promise<PlanCreditSubscription | null> {
+  const { data, error } = await createAdminClient()
+    .from('billing_subscriptions')
+    .select(COLUMNS)
+    .eq('id', subscriptionId)
+    .maybeSingle()
+  if (error) throw new Error('plan_credit_store_read_failed')
+  return data ? toSubscription(data as unknown as SubscriptionDbRow) : null
+}
+
 /** Cron entry point. Writes nothing unless AI_CREDIT_GRANT_DRY_RUN is exactly "false". */
 export async function runPlanCreditSweep(options: { deadlineMs?: number } = {}): Promise<PlanCreditSweepSummary> {
   return sweepPlanCredits({

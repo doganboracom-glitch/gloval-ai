@@ -129,7 +129,7 @@ const UNIQUE_VIOLATION = '23505'
  * Any other logging failure fails open (true) so a broken log table can never
  * swallow a payment notice.
  */
-async function claimNotification(input: {
+export async function claimNotification(input: {
   userId: string
   type: string
   subject: string

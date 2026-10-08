@@ -4,6 +4,7 @@ import { formatTicketNumber, logUserEvent } from '@/lib/notify'
 import { buildLifecycleNotice, type LifecycleNoticeKind } from '@/lib/billing-notices'
 import type { SubscriptionStatus } from '@/lib/payments'
 import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
+import { grantPlanCreditsAfterPayment } from '@/lib/plan-credit-instant-store'
 
 const DEFAULT_GRACE_DAYS = 7
 
@@ -486,6 +487,7 @@ export async function settleSubscriptionRenewal(input: {
       dedupeKey: `renewal:succeeded:${charge.id}`,
     })
     await triggerMailAccessSync(sub.user_id, 'subscription_renewed')
+    if (!input.source || input.source === 'provider') grantPlanCreditsAfterPayment(sub.id)
     return { kind: 'renewed', restored, skipped }
   } catch (error) {
     // Hand the ledger row back so a retried callback can finish the renewal.

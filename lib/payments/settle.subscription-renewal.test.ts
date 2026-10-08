@@ -50,6 +50,7 @@ function makeBuilder(table: string) {
   return b
 }
 
+vi.mock('@/lib/plan-credit-instant-store', () => ({ grantPlanCreditsAfterPayment: vi.fn(async () => {}) }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (t: string) => makeBuilder(t) }) }))
 vi.mock('@/lib/notify', () => ({
   logUserEvent: (...args: unknown[]) => (state.logUserEvent as (...a: unknown[]) => Promise<void>)(...args),

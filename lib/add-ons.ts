@@ -5,6 +5,7 @@ import {
   toPlanCode,
   type PlanCode,
 } from '@/lib/pricing-config'
+import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 
 /**
  * "Ek Hizmetler" katalogu ve kapasite çözümleyicileri.
@@ -14,7 +15,7 @@ import {
  * istemciden veya veritabanındaki serbest bir sayıdan ASLA okunmaz.
  */
 
-export type AddOnKind = 'site' | 'product'
+export type AddOnKind = 'site' | 'product' | 'mail'
 
 export type AddOnCode =
   | 'extra_site_1'
@@ -23,6 +24,10 @@ export type AddOnCode =
   | 'extra_product_100'
   | 'extra_product_200'
   | 'extra_product_500'
+  | 'extra_mail_1'
+  | 'extra_mail_10'
+  | 'extra_mail_25'
+  | 'extra_mail_50'
 
 export type AddOnDefinition = {
   code: AddOnCode
@@ -47,7 +52,17 @@ export const ADD_ONS: Record<AddOnCode, AddOnDefinition> = {
   extra_product_100: { code: 'extra_product_100', kind: 'product', capacity: 100, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period' },
   extra_product_200: { code: 'extra_product_200', kind: 'product', capacity: 200, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period' },
   extra_product_500: { code: 'extra_product_500', kind: 'product', capacity: 500, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
+  // GLOVAL Mail: `capacity` is the number of mailboxes. This is the only place prices and sizes live.
+  extra_mail_1: { code: 'extra_mail_1', kind: 'mail', capacity: 1, listPriceCents: 4900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_10: { code: 'extra_mail_10', kind: 'mail', capacity: 10, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_25: { code: 'extra_mail_25', kind: 'mail', capacity: 25, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_50: { code: 'extra_mail_50', kind: 'mail', capacity: 50, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period' },
 }
+
+/** Every GLOVAL Mail add-on code, in catalog order. */
+export const MAIL_ADD_ON_CODES: readonly AddOnCode[] = Object.values(ADD_ONS)
+  .filter((def) => def.kind === 'mail')
+  .map((def) => def.code)
 
 /** `billing_plans` içinden add-on fiyatını çözmek için gereken alanlar. */
 export type AddOnPlanRow = {
@@ -98,6 +113,9 @@ export function resolveAddOnPrices(rows: readonly AddOnPlanRow[]): Record<AddOnC
 export const ADD_ON_ELIGIBLE_PLANS: Record<AddOnKind, readonly PlanCode[]> = {
   site: ['pro', 'ecommerce'],
   product: ['pro', 'ecommerce'],
+  // Mail is open to every package; the buyer still needs an active subscription
+  // row, which `purchaseAddOn` enforces before eligibility is even checked.
+  mail: ['free', 'starter', 'pro', 'ecommerce'],
 }
 
 export function isAddOnCode(value: unknown): value is AddOnCode {
@@ -236,6 +254,8 @@ export type AddOnOverview = {
   planCode: PlanCode
   site: { eligible: boolean; base: number; addOn: number; total: number }
   product: { eligible: boolean; base: number | null; addOn: number; total: number | null }
+  /** Mailboxes: included by the package + active GLOVAL Mail add-ons. */
+  mail: { eligible: boolean; base: number; addOn: number; total: number }
   /** Ek site ile ARTMAYAN e-ticaret sitesi hakkı. */
   ecommerceSiteLimit: number
   /** Yalnızca şu an kapasiteye gerçekten katkı veren kayıtlar. */
@@ -252,6 +272,8 @@ export function buildAddOnOverview(
   const siteAddOn = sumActiveAddOnCapacity(input.grants, 'site', planCode, now)
   const productAddOn = sumActiveAddOnCapacity(input.grants, 'product', planCode, now)
   const productBase = PRODUCT_LIMITS[planCode]
+  const mailAddOn = sumActiveAddOnCapacity(input.grants, 'mail', planCode, now)
+  const mailBase = PLAN_INCLUDED_MAILBOXES[planCode]
 
   const active: ActiveAddOn[] = []
   for (const grant of input.grants) {
@@ -280,6 +302,12 @@ export function buildAddOnOverview(
       base: productBase,
       addOn: productAddOn,
       total: resolveEffectiveProductLimit({ ...input, now }),
+    },
+    mail: {
+      eligible: isAddOnEligible('mail', planCode),
+      base: mailBase,
+      addOn: mailAddOn,
+      total: mailBase + mailAddOn,
     },
     ecommerceSiteLimit: resolveEcommerceSiteLimit(planCode),
     active,
