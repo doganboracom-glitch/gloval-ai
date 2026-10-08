@@ -215,7 +215,36 @@ export function isPlanCreditDryRun(raw: string | undefined): boolean {
   return raw?.trim().toLowerCase() !== 'false'
 }
 
+/**
+ * Single-line, PII-free JSON log of a finished sweep: counts and amounts only
+ * (no user ids, no subscription ids, no emails); errors are grouped by code.
+ */
+export function formatPlanCreditSweepLog(summary: PlanCreditSweepSummary): string {
+  const sum = (entries: PlanCreditEntry[]) => entries.reduce((total, e) => total + e.amount, 0)
+  const errors: Record<string, number> = {}
+  for (const e of summary.errors) errors[e.code] = (errors[e.code] ?? 0) + 1
+  return JSON.stringify({
+    dryRun: summary.dryRun,
+    scanned: summary.scanned,
+    wouldGrant: summary.wouldGrant.length,
+    wouldGrantAmount: sum(summary.wouldGrant),
+    granted: summary.granted.length,
+    grantedAmount: sum(summary.granted),
+    alreadyGranted: summary.alreadyGranted,
+    skipped: summary.skipped,
+    errorCount: summary.errorCount,
+    errors,
+    truncated: summary.truncated,
+  })
+}
+
 export async function sweepPlanCredits(options: PlanCreditSweepOptions): Promise<PlanCreditSweepSummary> {
+  const summary = await runPlanCreditSweep(options)
+  console.log('[plan-credit-sweep]', formatPlanCreditSweepLog(summary))
+  return summary
+}
+
+async function runPlanCreditSweep(options: PlanCreditSweepOptions): Promise<PlanCreditSweepSummary> {
   const { store, dryRun, deadlineMs, pageSize = 100, maxSubscriptions = 2000 } = options
   const now = options.now ?? new Date()
 

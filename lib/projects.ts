@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
-import { getMyCurrentPlan } from '@/lib/billing'
+import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
+import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
 import { getEffectiveSiteLimit, getEffectiveProductLimit } from '@/lib/effective-limits'
 import {
   SITE_LIMIT_ERROR,
@@ -210,8 +211,32 @@ export async function saveProjectSchema(input: {
   schema: WebsiteSchema
   name?: string
 }): Promise<void> {
-  const { db } = await clientForProject(input.id)
+  const { db, elevated } = await clientForProject(input.id)
   const parsed = websiteSchema.parse(input.schema)
+
+  // Server-side backstop for the plan page limit: only GROWTH past the limit is
+  // refused, so a site already over its limit (downgrade, limit change) can
+  // still be saved and edited. Admins editing a tenant's site are exempt.
+  if (!elevated) {
+    const { data: existing, error: existingErr } = await db
+      .from('projects')
+      .select('owner_id, schema_data')
+      .eq('id', input.id)
+      .maybeSingle()
+    if (existingErr) throw existingErr
+    if (existing) {
+      const currentPages = Array.isArray(
+        (existing.schema_data as { pages?: unknown } | null)?.pages,
+      )
+        ? ((existing.schema_data as { pages: unknown[] }).pages.length)
+        : 0
+      const limit = pageLimitForPlan(await getPlanCodeForUser(existing.owner_id as string))
+      if (isPageGrowthBlocked(currentPages, parsed.pages.length, limit)) {
+        throw new Error(PAGE_LIMIT_ERROR)
+      }
+    }
+  }
+
   const patch: Record<string, unknown> = {
     schema_data: parsed,
     updated_at: new Date().toISOString(),

@@ -7,6 +7,8 @@ import { sectorPromptHint, deriveSeoTitle, detectSector, isEcommerceIntent } fro
 import { attachHeroImage } from '@/lib/hero-image'
 import { attachSectionImages } from '@/lib/section-images'
 import { createClient } from '@/lib/supabase/server'
+import { getPlanCodeForUser } from '@/lib/billing'
+import { capPagesToLimit, pageLimitForPlan, pageLimitPromptHint } from '@/lib/page-limits'
 import {
   ANON_AI_LIMIT_ERROR,
   releaseAnonAiActions,
@@ -104,8 +106,12 @@ export async function POST(req: Request) {
 
   const supabase = await createClient()
   const { data: userData } = await supabase.auth.getUser()
-  if (userData?.user) return runGenerate(body)
+  if (userData?.user) {
+    const pageLimit = pageLimitForPlan(await getPlanCodeForUser(userData.user.id))
+    return runGenerate(body, pageLimit)
+  }
 
+  const pageLimit = pageLimitForPlan(null)
   const reservation = await reserveAnonAiAction(req)
   if (!reservation.allowed) {
     return Response.json(
@@ -120,7 +126,7 @@ export async function POST(req: Request) {
 
   let counted = false
   try {
-    const res = await runGenerate(body)
+    const res = await runGenerate(body, pageLimit)
     if (res.ok) {
       const data = (await res.clone().json().catch(() => null)) as { source?: string } | null
       counted = data?.source === 'ai'
@@ -131,7 +137,7 @@ export async function POST(req: Request) {
   }
 }
 
-async function runGenerate({ prompt, lang, mode }: GenerateBody) {
+async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: number) {
   if (!prompt) return Response.json({ error: 'Prompt too short' }, { status: 400 })
 
   const normalizedLang: 'tr' | 'en' = lang === 'en' ? 'en' : 'tr'
@@ -142,7 +148,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody) {
   /* ---- Website mode: produce a full structured WebsiteSchema ---- */
   if (mode === 'website') {
     try {
-      const { object } = await generateObject({
+      const { object: generated } = await generateObject({
         model: 'openai/gpt-5-mini',
         // Includes meta.seoTitle (auto-generated on creation) but excludes the
         // owner-only `tracking` snippets.
@@ -167,6 +173,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody) {
               `Cart" buttonText; add oldPrice + a discount badge on sale items) and a "products" page in ` +
               `pages. Prefer a "slider" hero for campaign slides. `
             : '') +
+          pageLimitPromptHint(pageLimit) +
           `Use the available section types richly and appropriately: hero, about, services, features, ` +
           `stats, testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
           `Set meta.seoTitle to a short, keyword-rich search phrase (3-6 words) that helps this ` +
@@ -181,6 +188,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody) {
           `Do NOT output any HTML, React, or code; only structured content.`,
         prompt: prompt.slice(0, 800),
       })
+
+      // The prompt asks for at most `pageLimit` pages, but the model can still
+      // overshoot; hard-cap the generated site so it never exceeds the plan.
+      const object = capPagesToLimit(generated, pageLimit)
 
       // If the model skipped or blanked the SEO title, fall back to the
       // deterministic keyword derivation so a new site is never published
@@ -220,7 +231,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody) {
       // AI Gateway may be unavailable (e.g. no billing configured). Fall back to
       // a deterministic website so the pipeline still produces valid schema.
       console.log('[v0] generate(website) error:', err instanceof Error ? err.message : err)
-      const website = fallbackWebsite(prompt, normalizedLang)
+      const website = capPagesToLimit(fallbackWebsite(prompt, normalizedLang), pageLimit)
       const [img, sectionImages] = await Promise.all([
         attachHeroImage(website, prompt),
         attachSectionImages(website, prompt),
