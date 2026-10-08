@@ -2,12 +2,15 @@ import { websiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { generateSiteImage, type ImageAspect } from '@/lib/image-provider'
+import { claudeLogoAvailable, generateLogoSvg } from '@/lib/logo-svg'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 
 // Several logo alternatives are generated in parallel; each call is already
-// bounded by `generateSiteImage`'s own ~25s timeout, so 60s leaves headroom.
+// bounded by its own ~25s timeout (`generateLogoSvg` / `generateSiteImage`).
+// A Claude attempt that fails falls back to the image model, so the worst case
+// is two sequential 25s attempts — 60s still leaves headroom for most runs.
 export const maxDuration = 60
 
 const MAX_ALTERNATIVES = 4
@@ -42,12 +45,14 @@ const VARIATION_HINTS = [
 /**
  * POST /api/logo-image
  * ---------------------
- * Generates 1-4 REAL logo alternatives with the AI Gateway image model —
- * distinct from the deterministic, free `buildLogoMark` initials generator in
- * `lib/logo-mark.ts`. Every candidate is built from the site's OWN palette so
- * the result always matches the brand's existing colors; the caller previews
- * the alternatives and applies one explicitly (see `logo-field.tsx`) — nothing
- * here writes to the schema.
+ * Generates 1-4 REAL logo alternatives — distinct from the deterministic, free
+ * `buildLogoMark` initials generator in `lib/logo-mark.ts`. When
+ * `ANTHROPIC_API_KEY` is configured each alternative is first written as an
+ * editable SVG by Claude (`lib/logo-svg.ts`); if that is unavailable or fails,
+ * the AI Gateway image model produces a raster logo instead. Every candidate is
+ * built from the site's OWN palette so the result always matches the brand's
+ * existing colors; the caller previews the alternatives and applies one
+ * explicitly (see `logo-field.tsx`) — nothing here writes to the schema.
  *
  * Credits are charged per alternative that actually generated (never for a
  * failed/timed-out one), mirroring `/api/hero-image`'s "pay only for what you
@@ -123,15 +128,32 @@ export async function POST(req: Request) {
     .filter(Boolean)
     .join(' ')
 
+  const useClaude = claudeLogoAvailable()
+
+  // One alternative: Claude SVG first (when configured), image model second.
+  const generateAlternative = async (i: number) => {
+    const variationHint = VARIATION_HINTS[i % VARIATION_HINTS.length]
+    if (useClaude) {
+      const svg = await generateLogoSvg({
+        companyName,
+        sector,
+        description,
+        styleHint: STYLE_HINT[style],
+        symbol,
+        format,
+        colors,
+        variationHint,
+      })
+      if (svg) return svg
+    }
+    return generateSiteImage({
+      prompt: `${basePrompt} Variation: ${variationHint}.`,
+      aspectRatio: FORMAT_ASPECT[format],
+    })
+  }
+
   try {
-    const results = await Promise.all(
-      Array.from({ length: count }, (_, i) =>
-        generateSiteImage({
-          prompt: `${basePrompt} Variation: ${VARIATION_HINTS[i % VARIATION_HINTS.length]}.`,
-          aspectRatio: FORMAT_ASPECT[format],
-        }),
-      ),
-    )
+    const results = await Promise.all(Array.from({ length: count }, (_, i) => generateAlternative(i)))
 
     const alternatives = results
       .filter((r): r is NonNullable<typeof r> => Boolean(r?.src))
