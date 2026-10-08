@@ -359,6 +359,9 @@ export async function settleSubscriptionRenewal(input: {
   paidCurrency?: string
   charge: RenewalCharge
   now?: Date
+  /** Admin-recorded settlements only; provider renewals leave both unset. */
+  periodMonths?: number
+  source?: 'provider' | 'manual' | 'gift'
 }): Promise<RenewalOutcome> {
   const admin = createAdminClient()
   const { charge } = input
@@ -440,7 +443,10 @@ export async function settleSubscriptionRenewal(input: {
     const previousEnd = sub.current_period_end ? new Date(sub.current_period_end) : null
     const periodExpired = !previousEnd || previousEnd <= now
     const periodStart = periodExpired ? now : (previousEnd as Date)
-    const periodEnd = nextBillingPeriod(periodStart, plan?.interval === 'year' ? 'year' : 'month')
+    const periodEnd =
+      input.periodMonths && input.periodMonths > 0
+        ? addCalendarMonths(periodStart, input.periodMonths)
+        : nextBillingPeriod(periodStart, plan?.interval === 'year' ? 'year' : 'month')
     const suspendedIds = Array.isArray(sub.suspended_project_ids)
       ? sub.suspended_project_ids.filter((id): id is string => typeof id === 'string')
       : []
@@ -467,9 +473,13 @@ export async function settleSubscriptionRenewal(input: {
     await logUserEvent({
       userId: sub.user_id,
       type: 'payment_succeeded',
-      subject: 'Abonelik yenilendi',
+      subject: input.source === 'gift' ? 'Aboneliğinize hediye süre tanımlandı' : 'Abonelik yenilendi',
       body:
-        `Yenileme ödemeniz onaylandı${plan ? ` (${plan.name})` : ''}. Yeni dönem sonu: ${periodEnd.toLocaleDateString('tr-TR')}.` +
+        (input.source === 'gift'
+          ? `Aboneliğinize ${input.periodMonths ?? 1} ay hediye süre tanımlandı${plan ? ` (${plan.name})` : ''}. Yeni dönem sonu: ${periodEnd.toLocaleDateString('tr-TR')}.`
+          : input.source === 'manual'
+            ? `Ödemeniz (havale/EFT/nakit) onaylandı${plan ? ` (${plan.name})` : ''}. Yeni dönem sonu: ${periodEnd.toLocaleDateString('tr-TR')}.`
+            : `Yenileme ödemeniz onaylandı${plan ? ` (${plan.name})` : ''}. Yeni dönem sonu: ${periodEnd.toLocaleDateString('tr-TR')}.`) +
         (restored ? ` ${restored} site yeniden yayına alındı.` : '') +
         (skipped ? ` ${skipped} site paket limitinin dışında kaldığı için yayına alınmadı.` : '') +
         ` İşlem No: ${ticket}.`,
