@@ -13,6 +13,7 @@ import { getAddOnOverview } from '@/lib/effective-limits'
 import { getCreditLedger } from '@/lib/ai-credits'
 import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
 import { BillingClient } from '@/components/billing/billing-client'
+import { CreditNoticeToast } from '@/components/credit-notice-toast'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
 // made moments earlier is never served from a stale cache.
@@ -94,6 +95,8 @@ export default async function BillingPage({
   })
 
   return (
+    <>
+    <CreditNoticeToast />
     <BillingClient
       plans={plans}
       subscription={subscription}
@@ -115,5 +118,6 @@ export default async function BillingPage({
       publishProjectId={projects.find((p) => p.id === publish)?.id ?? null}
       initialTopUpId={topup ?? null}
     />
+    </>
   )
 }

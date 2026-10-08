@@ -4,6 +4,7 @@ import { listProjects } from '@/lib/projects'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
+import { CreditNoticeToast } from '@/components/credit-notice-toast'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
 // stale full-route cache — always render it dynamically so a project created
@@ -34,11 +35,14 @@ export default async function DashboardPage() {
       : null
 
   return (
-    <DashboardClient
-      projects={projects}
-      userEmail={user.email ?? ''}
-      planCode={toPlanCode(currentPlan?.code)}
-      billingAlert={billingAlert}
-    />
+    <>
+      <CreditNoticeToast />
+      <DashboardClient
+        projects={projects}
+        userEmail={user.email ?? ''}
+        planCode={toPlanCode(currentPlan?.code)}
+        billingAlert={billingAlert}
+      />
+    </>
   )
 }
