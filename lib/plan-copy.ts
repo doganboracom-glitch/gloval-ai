@@ -5,7 +5,6 @@ import {
   PRODUCT_LIMITS,
   SITE_LIMITS,
   formatTL,
-  proMonthlyCredits,
   type BillingCycle,
   type Plan,
   type PlanCode,
@@ -475,7 +474,7 @@ export function buildPlanView(
       ...head,
       creditSummary: s.credits.proFirst(nf.format(AI_CREDIT_CONFIG.pro.initialCredits)),
       creditNotes: [
-        s.credits.proMonthly(proMonthlyCredits(cycle)),
+        s.credits.proMonthly(AI_CREDIT_CONFIG.pro.monthlyCredits),
         s.credits.proRollover,
         s.credits.proMax(nf.format(AI_CREDIT_CONFIG.pro.maxBalance)),
       ],
@@ -520,6 +519,8 @@ export function buildPlanView(
     creditSummary: s.credits.ecomFirst(nf.format(AI_CREDIT_CONFIG.ecommerce.initialCredits)),
     creditNotes: [
       s.credits.ecomMonthly(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits)),
+      s.credits.proRollover,
+      s.credits.proMax(nf.format(AI_CREDIT_CONFIG.ecommerce.maxBalance)),
       s.credits.ecomNote,
     ],
     footnote: s.ecommerceFootnote,
