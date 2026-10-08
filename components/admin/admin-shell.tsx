@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
+  AlertCircle,
   ArrowLeft,
   Bell,
   CreditCard,
@@ -18,6 +19,7 @@ import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { adminT } from '@/lib/admin/i18n'
+import { overdueT } from '@/lib/admin/overdue-copy'
 import { cn } from '@/lib/utils'
 
 /**
@@ -44,6 +46,7 @@ export function AdminShell({
     { href: '/admin/users', label: t.nav.users, icon: Users },
     { href: '/admin/sites', label: t.nav.sites, icon: LayoutTemplate },
     { href: '/admin/billing', label: t.nav.billing, icon: CreditCard },
+    { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe },
     { href: '/admin/support', label: t.nav.support, icon: LifeBuoy },
