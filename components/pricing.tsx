@@ -5,7 +5,9 @@ import { Sparkles } from 'lucide-react'
 import { PlanCard } from '@/components/pricing/plan-card'
 import { ComparisonAccordion } from '@/components/pricing/comparison-accordion'
 import { CreditRulesDialog } from '@/components/pricing/credit-rules-dialog'
-import { PLANS, YEARLY_HIGHLIGHT, type BillingCycle } from '@/lib/pricing-config'
+import { useLanguage } from '@/components/language-provider'
+import { getCommonPlanCopy } from '@/lib/plan-copy'
+import { PLANS, type BillingCycle } from '@/lib/pricing-config'
 
 const CYCLES: Array<{ value: BillingCycle; label: string }> = [
   { value: 'monthly', label: 'Aylık' },
@@ -16,6 +18,8 @@ export function Pricing() {
   // İlk açılışta aylık paketler listelenir; yıllık avantaj toggle ile seçilir.
   const [cycle, setCycle] = useState<BillingCycle>('monthly')
   const [creditRulesOpen, setCreditRulesOpen] = useState(false)
+  const { lang } = useLanguage()
+  const yearlyHighlight = getCommonPlanCopy(lang).yearlyHighlight
 
   return (
     <section
@@ -61,7 +65,7 @@ export function Pricing() {
           {/* Yıllık avantaj metni her iki dönemde de sabit gösterilir. */}
           <p className="flex h-5 items-center gap-1.5 text-sm font-bold text-brand">
             <Sparkles className="h-3.5 w-3.5" />
-            {YEARLY_HIGHLIGHT}
+            {yearlyHighlight}
           </p>
         </div>
 

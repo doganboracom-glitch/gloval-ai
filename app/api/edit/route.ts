@@ -13,6 +13,12 @@ import { preserveResolvedImages } from '@/lib/hero-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
+import {
+  PAGE_LIMIT_ERROR,
+  isPageGrowthBlocked,
+  pageLimitForPlan,
+  pageLimitMessage,
+} from '@/lib/page-limits'
 import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 
@@ -188,6 +194,22 @@ export async function POST(req: Request) {
     return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
   }
 
+  // A plan's page limit only blocks GROWTH: edits that keep or reduce the page
+  // count always pass, even on a site that is already over the limit.
+  const pageLimit = pageLimitForPlan(planCode)
+  const pageLimitResponse = (next: WebsiteSchema): Response | null => {
+    if (!isPageGrowthBlocked(original.pages.length, next.pages.length, pageLimit)) return null
+    return Response.json(
+      {
+        error: PAGE_LIMIT_ERROR,
+        message: pageLimitMessage(normalizedLang, pageLimit, original.pages.length),
+        limit: pageLimit,
+        current: original.pages.length,
+      },
+      { status: 403 },
+    )
+  }
+
   const cost = AI_ACTION_COSTS.edit
   const balance = await getCreditBalance(userId)
   if (balance < cost) {
@@ -252,7 +274,11 @@ export async function POST(req: Request) {
       if (!hasValidScope) {
         console.log('[v0] edit validation failed, trying command parser')
         const command = tryCommandParser(original, instruction)
-        if (command) return Response.json({ schema: command, source: 'command' })
+        if (command) {
+          const blocked = pageLimitResponse(command)
+          if (blocked) return blocked
+          return Response.json({ schema: command, source: 'command' })
+        }
       }
       return Response.json({ schema: original, source: 'fallback' })
     }
@@ -287,6 +313,10 @@ export async function POST(req: Request) {
       return Response.json({ schema: original, source: 'fallback' })
     }
 
+    // Refuse before charging: a result that adds pages past the plan limit costs nothing.
+    const blockedByPageLimit = pageLimitResponse(finalSchema)
+    if (blockedByPageLimit) return blockedByPageLimit
+
     // Only spend a credit once the AI has actually produced a usable result.
     // consumeCredits is an atomic RPC, so a race with a concurrent request
     // from the same user can never push the balance negative; if it reports
@@ -306,7 +336,11 @@ export async function POST(req: Request) {
     // Scoped edits must never fall back to the scope-blind whole-site parser.
     if (!hasValidScope) {
       const command = tryCommandParser(original, instruction)
-      if (command) return Response.json({ schema: command, source: 'command' })
+      if (command) {
+        const blocked = pageLimitResponse(command)
+        if (blocked) return blocked
+        return Response.json({ schema: command, source: 'command' })
+      }
     }
     return Response.json({ schema: original, source: 'fallback' })
   }

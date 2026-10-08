@@ -824,9 +824,6 @@ const fr: DeepPartial<Dict> = {
     confirmRemoveMailbox:
       'Cette boîte mail et tous les messages qu’elle contient seront définitivement supprimés. Voulez-vous continuer ?',
     confirmRemoveAlias: 'Cet alias sera supprimé. Voulez-vous continuer ?',
-    tempPasswordTitle: 'Mot de passe temporaire',
-    tempPasswordBody:
-      'Ce mot de passe ne s’affiche qu’une seule fois. Copiez-le et partagez-le de façon sécurisée avec l’utilisateur.',
     copy: 'Copier',
     copied: 'Copié',
     close: 'Fermer',

@@ -805,8 +805,6 @@ const ar: DeepPartial<Dict> = {
     resetPassword: 'إعادة تع��ين كلمة المرور',
     confirmRemoveMailbox: 'سيتم حذف هذا الصندوق وجميع الرسائل بداخله نهائيًا. هل تريد المتابعة؟',
     confirmRemoveAlias: 'سيتم حذف هذا الاسم المستعار. هل تريد المتابعة؟',
-    tempPasswordTitle: 'كلمة مرور مؤقتة',
-    tempPasswordBody: 'تظهر كلمة المرور هذه مرة واحدة فقط. انسخها وشاركها بأمان مع المستخدم.',
     copy: 'نسخ',
     copied: 'تم النسخ',
     close: 'إغلاق',

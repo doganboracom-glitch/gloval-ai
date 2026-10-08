@@ -1041,6 +1041,18 @@ export function WebsitePreview({
         setAiPhase(null)
         return false
       }
+      // Plan page limit reached: explain it instead of a generic failure.
+      // Existing pages are untouched; only the growth was refused (no credit spent).
+      if (res.status === 403) {
+        const body = await res.json().catch(() => null)
+        if (body?.error === 'PAGE_LIMIT_REACHED') {
+          const message = typeof body.message === 'string' ? body.message : t.editor.failure
+          setMessages((prev) => [...prev, { role: 'assistant', text: message }])
+          flashToast('err', message)
+          return false
+        }
+        throw new Error('failed')
+      }
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       debug('AI edit — endpoint source:', data.source)
