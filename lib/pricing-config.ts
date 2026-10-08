@@ -41,6 +41,18 @@ export type PlanFeature = {
 /* AI kredi sistemi                                                            */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Devir ve azami bakiye PRO ile E-TİCARET için aynıdır; tek yerde tanımlanır ve
+ * E-TİCARET bunu PRO'dan miras alır.
+ */
+const MONTHLY_PLAN_ROLLOVER = true as const
+const MONTHLY_PLAN_MAX_BALANCE = 1500 as const
+
+/**
+ * Kredi değerleri ödeme dönemine (aylık/yıllık) BAĞLI DEĞİLDİR. "10 ay öde,
+ * 12 ay kullan" yalnızca bir fiyat kuralıdır; yıllık ödeyen de aylık ödeyenle
+ * aynı kredi kuralına tabidir.
+ */
 export const AI_CREDIT_CONFIG = {
   free: {
     credits: 50,
@@ -54,24 +66,21 @@ export const AI_CREDIT_CONFIG = {
   },
   pro: {
     initialCredits: 450,
-    // Aylık yenilenen kredi ödeme dönemine göre değişir: yıllık pakette her ay
-    // +150, aylık pakette +50 AI kredisi.
-    monthlyCredits: { yearly: 150, monthly: 50 },
-    rollover: true,
-    maxBalance: 1500,
+    monthlyCredits: 150,
+    rollover: MONTHLY_PLAN_ROLLOVER,
+    maxBalance: MONTHLY_PLAN_MAX_BALANCE,
   },
   ecommerce: {
-    // E-ticaret paketi ilk ay 500 AI kredisiyle başlar, sonraki her ay 250 AI
-    // kredisi alır (ödeme döneminden bağımsız).
     initialCredits: 500,
-    monthlyCredits: 250,
-    rollover: false,
+    monthlyCredits: 150,
+    rollover: MONTHLY_PLAN_ROLLOVER,
+    maxBalance: MONTHLY_PLAN_MAX_BALANCE,
   },
 } as const
 
-/** PRO paketinde ödeme dönemine göre aylık kazanılan AI kredisi. */
-export function proMonthlyCredits(cycle: BillingCycle): number {
-  return AI_CREDIT_CONFIG.pro.monthlyCredits[cycle]
+/** Binlik ayraçlı sayı (1.500) — yalnızca TR pazarlama metinleri için. */
+function trNumber(n: number): string {
+  return n.toLocaleString('tr-TR')
 }
 
 /**
@@ -237,18 +246,18 @@ export const PLANS: Plan[] = [
     cta: 'PRO ile Büyümeye Başla',
     badge: 'En Çok Tercih Edilen',
     featured: true,
-    creditSummary: 'İlk ay 450 AI işlemi',
+    creditSummary: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
     creditNotes: [
-      'Her ay +150 AI işlemi.',
+      `Her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
       'Kullanılmayan AI işlemleri devreder.',
     ],
     features: [
       { label: '3 site' },
       { label: '100 sayfaya kadar' },
-      { label: 'İlk ay 450 AI işlemi', highlight: true },
-      { label: 'Her ay +150 AI işlemi', highlight: true },
+      { label: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`, highlight: true },
+      { label: `Her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi`, highlight: true },
       { label: 'Kullanılmayan AI işlemleri devreder', highlight: true },
-      { label: 'Maksimum AI işlem bakiyesi 1.500' },
+      { label: `Maksimum AI işlem bakiyesi ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)}` },
       { label: 'Özel domain' },
       {
         label: '1 adet .com.tr domain hediyesi',
@@ -282,9 +291,9 @@ export const PLANS: Plan[] = [
     monthlyPrice: 1999,
     yearlyPrice: 19990,
     cta: 'E-Ticarete Başla',
-    creditSummary: 'İlk ay 500 AI işlemi',
+    creditSummary: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     creditNotes: [
-      'Sonraki her ay 250 AI işlemi.',
+      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
       'E-ticaret içeriklerinde kullanılır.',
     ],
     features: [
@@ -293,8 +302,8 @@ export const PLANS: Plan[] = [
         note: '3 kurumsal site + 1 e-ticaret mağazası.',
         highlight: true,
       },
-      { label: 'İlk ay 500 AI işlemi', highlight: true },
-      { label: 'Sonraki her ay 250 AI işlemi', highlight: true },
+      { label: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`, highlight: true },
+      { label: `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi`, highlight: true },
       { label: '150 ürün', highlight: true },
       { label: 'Ürün yönetimi' },
       { label: 'Sepet' },
@@ -345,31 +354,33 @@ export const CREDIT_RULES_BY_PLAN: Array<{
   {
     plan: 'free',
     name: 'FREE',
-    amount: '50 AI işlemi',
+    amount: `${AI_CREDIT_CONFIG.free.credits} AI işlemi`,
     lines: ['Tek seferlik'],
   },
   {
     plan: 'starter',
     name: 'STARTER',
-    amount: '150 AI işlemi / 30 gün',
+    amount: `${AI_CREDIT_CONFIG.starter.credits} AI işlemi / ${AI_CREDIT_CONFIG.starter.creditPeriodDays} gün`,
     lines: ['Kullanılmayan AI işlemleri devretmez.'],
   },
   {
     plan: 'pro',
     name: 'PRO',
-    amount: '450 AI işlemi ile başlar',
+    amount: `${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi ile başlar`,
     lines: [
-      'Yıllık pakette her ay +150, aylık pakette +50 AI işlemi kazanır.',
+      `Sonraki her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi kazanır.`,
       'Kullanılmayan AI işlemleri devreder.',
-      'Maksimum bakiye 1.500 AI işlemidir.',
+      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} AI işlemidir.`,
     ],
   },
   {
     plan: 'ecommerce',
     name: 'E-TİCARET',
-    amount: 'İlk ay 500 AI işlemi',
+    amount: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     lines: [
-      'Sonraki her ay 250 AI işlemi kazanır.',
+      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi kazanır.`,
+      'Kullanılmayan AI işlemleri devreder.',
+      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} AI işlemidir.`,
       'E-ticaret içeriklerinde kullanılır.',
     ],
   },
@@ -527,24 +538,24 @@ export const COMPARISON: ComparisonGroup[] = [
     rows: [
       {
         label: 'AI işlemi',
-        free: '50 AI işlemi (tek seferlik)',
-        starter: '150 AI işlemi / 30 gün',
-        pro: '450 AI işlemi + her ay 150 (yıllık) / 50 (aylık)',
-        ecommerce: '500 AI işlemi (ilk ay) + her ay 250 AI işlemi',
+        free: `${AI_CREDIT_CONFIG.free.credits} AI işlemi (tek seferlik)`,
+        starter: `${AI_CREDIT_CONFIG.starter.credits} AI işlemi / ${AI_CREDIT_CONFIG.starter.creditPeriodDays} gün`,
+        pro: `${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi (ilk ay) + her ay ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi`,
+        ecommerce: `${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi (ilk ay) + her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi`,
       },
       {
         label: 'AI işlemi devri',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
+        free: AI_CREDIT_CONFIG.free.rollover,
+        starter: AI_CREDIT_CONFIG.starter.rollover,
+        pro: AI_CREDIT_CONFIG.pro.rollover,
+        ecommerce: AI_CREDIT_CONFIG.ecommerce.rollover,
       },
       {
         label: 'Maksimum AI işlem bakiyesi',
         free: '—',
         starter: '—',
-        pro: '1.500',
-        ecommerce: '—',
+        pro: trNumber(AI_CREDIT_CONFIG.pro.maxBalance),
+        ecommerce: trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance),
       },
       {
         label: 'AI SEO özellikleri',
@@ -819,30 +830,6 @@ export function yearlySavingLabel(plan: Plan): string | null {
   const saving = plan.monthlyPrice * 12 - plan.yearlyPrice
   if (saving <= 0) return null
   return `Yıllık ödemede ${formatTL(saving)} avantaj`
-}
-
-/**
- * Ödeme dönemine göre paketi çözümler. PRO'nun aylık kazandığı AI kredisi
- * yıllıkta +150, aylıkta +50 olduğu için ilgili özet/not/özellik satırları
- * seçilen döneme göre yeniden yazılır. Diğer paketler değişmeden döner;
- * böylece mevcut yapı korunur, sadece PRO'nun kredi metni dinamikleşir.
- */
-export function resolvePlanForCycle(plan: Plan, cycle: BillingCycle): Plan {
-  if (plan.code !== 'pro') return plan
-  const monthly = proMonthlyCredits(cycle)
-  const monthlyLabel = `Her ay +${monthly} AI işlemi`
-  return {
-    ...plan,
-    creditNotes: [
-      `${monthlyLabel}.`,
-      'Kullanılmayan AI işlemleri devreder.',
-    ],
-    features: plan.features.map((feature) =>
-      feature.label.startsWith('Her ay +')
-        ? { ...feature, label: monthlyLabel }
-        : feature,
-    ),
-  }
 }
 
 /** `billing_plans.code` değerini pazarlama paket koduna eşler. */

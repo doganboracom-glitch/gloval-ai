@@ -116,11 +116,20 @@ describe('plan copy follows the configuration', () => {
     }
   })
 
-  it('PRO monthly credits depend on the billing cycle, like the config', () => {
-    const monthly = buildPlanView('pro', 'monthly', 'en').creditNotes[0]
-    const yearly = buildPlanView('pro', 'yearly', 'en').creditNotes[0]
-    expect(monthly).toContain(`+${AI_CREDIT_CONFIG.pro.monthlyCredits.monthly}`)
-    expect(yearly).toContain(`+${AI_CREDIT_CONFIG.pro.monthlyCredits.yearly}`)
+  it('PRO credits are identical for monthly and yearly billing', () => {
+    for (const lang of ['tr', 'en']) {
+      const monthly = buildPlanView('pro', 'monthly', lang)
+      const yearly = buildPlanView('pro', 'yearly', lang)
+      expect(monthly.creditSummary).toBe(yearly.creditSummary)
+      expect(monthly.creditNotes).toEqual(yearly.creditNotes)
+      expect(monthly.creditNotes[0]).toContain(`+${AI_CREDIT_CONFIG.pro.monthlyCredits}`)
+    }
+  })
+
+  it('PRO and e-commerce share the same rollover rule and balance cap', () => {
+    expect(AI_CREDIT_CONFIG.ecommerce.rollover).toBe(AI_CREDIT_CONFIG.pro.rollover)
+    expect(AI_CREDIT_CONFIG.ecommerce.maxBalance).toBe(AI_CREDIT_CONFIG.pro.maxBalance)
+    expect(AI_CREDIT_CONFIG.ecommerce.monthlyCredits).toBe(AI_CREDIT_CONFIG.pro.monthlyCredits)
   })
 
   it('e-commerce credits come from the config, not from literals', () => {

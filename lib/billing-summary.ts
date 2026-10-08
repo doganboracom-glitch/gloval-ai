@@ -138,8 +138,7 @@ export function buildCreditSummary(input: {
       periodAllowance = AI_CREDIT_CONFIG.starter.credits
       break
     case 'pro':
-      periodAllowance =
-        AI_CREDIT_CONFIG.pro.monthlyCredits[input.interval === 'year' ? 'yearly' : 'monthly']
+      periodAllowance = AI_CREDIT_CONFIG.pro.monthlyCredits
       firstPeriodAllowance = AI_CREDIT_CONFIG.pro.initialCredits
       rollover = AI_CREDIT_CONFIG.pro.rollover
       maxBalance = AI_CREDIT_CONFIG.pro.maxBalance
@@ -147,6 +146,8 @@ export function buildCreditSummary(input: {
     case 'ecommerce':
       periodAllowance = AI_CREDIT_CONFIG.ecommerce.monthlyCredits
       firstPeriodAllowance = AI_CREDIT_CONFIG.ecommerce.initialCredits
+      rollover = AI_CREDIT_CONFIG.ecommerce.rollover
+      maxBalance = AI_CREDIT_CONFIG.ecommerce.maxBalance
       break
     default:
       break
