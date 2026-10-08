@@ -118,9 +118,9 @@ export const SITE_LIMITS: Record<PlanCode, number> = {
 /** Paket başına sayfa limiti. */
 export const PAGE_LIMITS: Record<PlanCode, number> = {
   free: 5,
-  starter: 25,
-  pro: 100,
-  ecommerce: 100,
+  starter: 15,
+  pro: 75,
+  ecommerce: 75,
 }
 
 /**
@@ -188,7 +188,7 @@ export const PLANS: Plan[] = [
     features: [
       { label: '1 site' },
       { label: '50 AI işlemi', note: 'Tek seferlik', highlight: true },
-      { label: '5 sayfaya kadar' },
+      { label: `${PAGE_LIMITS.free} sayfaya kadar` },
       { label: 'GLOVAL alt alan adı' },
       { label: 'SSL' },
       { label: 'Mobil uyumluluk' },
@@ -209,7 +209,7 @@ export const PLANS: Plan[] = [
     creditNotes: ['Kullanılmayan AI işlemleri devretmez.'],
     features: [
       { label: '1 site' },
-      { label: '25 sayfaya kadar' },
+      { label: `${PAGE_LIMITS.starter} sayfaya kadar` },
       {
         label: '150 AI işlemi / 30 gün',
         note: 'Kullanılmayan AI işlemleri devretmez.',
@@ -253,7 +253,7 @@ export const PLANS: Plan[] = [
     ],
     features: [
       { label: '3 site' },
-      { label: '100 sayfaya kadar' },
+      { label: `${PAGE_LIMITS.pro} sayfaya kadar` },
       { label: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`, highlight: true },
       { label: `Her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi`, highlight: true },
       { label: 'Kullanılmayan AI işlemleri devreder', highlight: true },
@@ -501,13 +501,19 @@ export const COMPARISON: ComparisonGroup[] = [
   {
     category: 'Site',
     rows: [
-      { label: 'Site sayısı', free: '1', starter: '1', pro: '3', ecommerce: '4' },
+      {
+        label: 'Site sayısı',
+        free: String(SITE_LIMITS.free),
+        starter: String(SITE_LIMITS.starter),
+        pro: String(SITE_LIMITS.pro),
+        ecommerce: String(SITE_LIMITS.ecommerce),
+      },
       {
         label: 'Sayfa limiti',
-        free: '5',
-        starter: '25',
-        pro: '100',
-        ecommerce: '100',
+        free: String(PAGE_LIMITS.free),
+        starter: String(PAGE_LIMITS.starter),
+        pro: String(PAGE_LIMITS.pro),
+        ecommerce: String(PAGE_LIMITS.ecommerce),
       },
       { label: 'SSL', free: true, starter: true, pro: true, ecommerce: true },
       {
@@ -714,7 +720,13 @@ export const COMPARISON: ComparisonGroup[] = [
         pro: false,
         ecommerce: true,
       },
-      { label: 'Ürün limiti', free: '—', starter: '—', pro: '—', ecommerce: '100' },
+      {
+        label: 'Ürün limiti',
+        free: '—',
+        starter: '—',
+        pro: '—',
+        ecommerce: String(PRODUCT_LIMITS.ecommerce ?? '—'),
+      },
       {
         label: 'Sepet ve sipariş yönetimi',
         free: false,

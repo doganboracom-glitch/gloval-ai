@@ -52,12 +52,7 @@ export function PlanCard({
     lang === 'tr' ? 'tr-TR' : 'en-US',
   )
   const saving = cycle === 'yearly' ? yearlySavingText(plan, lang) : null
-  // Yıllık pakete özel satırlar (.com.tr alan adı hediyesi) aylık seçimde
-  // gösterilmez; yanlış beklenti yaratmasın.
-  const groups = view.groups.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => !item.yearlyOnly || cycle === 'yearly'),
-  }))
+  const { groups } = view
 
   return (
     <div
@@ -173,6 +168,11 @@ export function PlanCard({
       )}
 
       <div className="mt-6 flex-1 space-y-5">
+        {view.extendsLabel && (
+          <p className="border-b border-border pb-3 text-xs font-semibold uppercase tracking-wider text-brand">
+            {view.extendsLabel}
+          </p>
+        )}
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title}>
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
@@ -208,12 +208,6 @@ export function PlanCard({
           </section>
         ))}
       </div>
-
-      {view.footnote && (
-        <p className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground/80">
-          {view.footnote}
-        </p>
-      )}
     </div>
   )
 }

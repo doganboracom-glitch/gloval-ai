@@ -18,6 +18,9 @@ import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
  * mailbox counts are read from `pricing-config.ts` and `access-state.ts`, so
  * the wording can change without touching behaviour. The shared 11-language
  * dictionary is intentionally not used here.
+ *
+ * Cards are INCREMENTAL: STARTER lists everything it has, PRO lists only what
+ * it adds on top of STARTER, and E-COMMERCE only what it adds on top of PRO.
  */
 
 export type CopyLang = 'tr' | 'en'
@@ -30,8 +33,6 @@ export type PlanCopyItem = {
   label: string
   note?: string
   highlight?: boolean
-  /** Shown only for yearly billing. */
-  yearlyOnly?: boolean
   /** Rendered as "not included" (muted, minus icon). */
   excluded?: boolean
 }
@@ -50,8 +51,9 @@ export type PlanView = {
   badge?: string
   creditSummary: string
   creditNotes: string[]
+  /** Set on cards that only list what they add on top of a lower plan. */
+  extendsLabel?: string
   groups: PlanCopyGroup[]
-  footnote?: string
 }
 
 export type CommonPlanCopy = {
@@ -70,10 +72,13 @@ type Strings = {
   common: CommonPlanCopy
   groups: {
     site: string
-    growth: string
     store: string
     email: string
     support: string
+  }
+  extendsLabel: {
+    starter: string
+    pro: string
   }
   plans: Record<
     PlanCode,
@@ -85,63 +90,50 @@ type Strings = {
       badge?: string
     }
   >
-  ecommerceFootnote: string
   credits: {
     freeSummary: (n: string) => string
     freeNote: string
     starterSummary: (n: string) => string
     starterNote: string
-    proFirst: (n: string) => string
-    proMonthly: (n: number) => string
-    proRollover: string
-    proMax: (n: string) => string
-    ecomFirst: (n: string) => string
-    ecomMonthly: (n: string) => string
-    ecomNote: string
+    firstPeriod: (n: string) => string
+    following: (n: string) => string
+    rollover: string
+    max: (n: string) => string
   }
   f: {
     sites: (n: number) => string
-    ecomSitesNote: (corporate: number, store: number) => string
+    sitesRight: (n: number) => string
+    ecomSites: (corporate: number, store: number) => string
     glovalAddress: string
     pagesUpTo: (n: number) => string
     ssl: string
     sslNote: string
     mobile: string
-    mobileStore: string
     basicSeo: string
     seo: string
-    advancedSeo: string
     seoNote: string
     contactForm: string
     contactForms: string
     socialLinks: string
-    social: string
     customDomain: string
-    domainGift: string
-    domainGiftNote: string
     analytics: string
     analyticsNote: string
     searchConsole: string
     phoneWhatsapp: string
-    whatsapp: string
     backup: string
-    aiSeo: string
-    aiAudit: string
-    competitor: string
-    visitorAnalytics: string
     versionHistory: string
-    googleAds: string
-    growth: string
     products: (n: number) => string
     productMgmt: string
     cart: string
     orders: string
     payments: string
+    paymentProviders: string
     productSeo: string
-    googleSeo: string
+    productSeoNote: string
+    storePages: string
+    storePagesNote: string
     mailboxes: (n: number) => string
     mailNote: string
-    mailExcluded: string
     standardSupport: string
     prioritySupport: string
   }
@@ -161,10 +153,13 @@ const TR: Strings = {
   },
   groups: {
     site: 'Sitenizde neler var',
-    growth: 'Büyüme ve raporlar',
     store: 'Mağaza',
     email: 'E-posta',
     support: 'Destek',
+  },
+  extendsLabel: {
+    starter: 'STARTER PAKET’E EK OLARAK',
+    pro: 'PRO PAKET’E EK OLARAK',
   },
   plans: {
     free: {
@@ -194,64 +189,51 @@ const TR: Strings = {
       cta: 'E-Ticarete Başla',
     },
   },
-  ecommerceFootnote:
-    'Kargo entegrasyonu, pazaryeri entegrasyonları ve banka ödeme sistemleri temel pakete dahil değildir. Bu hizmetleri daha sonra ek ücretli olarak satın alabilirsin.',
   credits: {
     freeSummary: (n) => `${n} yapay zeka işlemi`,
     freeNote: 'Bir defalık. Aylık yenilenmez.',
     starterSummary: (n) => `${n} yapay zeka işlemi / 30 gün`,
     starterNote: 'Kullanılmayan işlemler devretmez.',
-    proFirst: (n) => `İlk ay ${n} yapay zeka işlemi`,
-    proMonthly: (n) => `Her ay +${n} yapay zeka işlemi.`,
-    proRollover: 'Kullanılmayan işlemler devreder.',
-    proMax: (n) => `En fazla ${n} işlem bakiyesi.`,
-    ecomFirst: (n) => `İlk ay ${n} yapay zeka işlemi`,
-    ecomMonthly: (n) => `Sonraki her ay ${n} yapay zeka işlemi.`,
-    ecomNote: 'E-ticaret içeriklerinde kullanılır.',
+    firstPeriod: (n) => `İlk ay ${n} yapay zeka işlemi`,
+    following: (n) => `Sonraki dönemlerde ${n} yapay zeka işlemi.`,
+    rollover: 'Kullanılmayan işlemler devreder.',
+    max: (n) => `En fazla ${n} işlem bakiyesi.`,
   },
   f: {
     sites: (n) => `${n} site`,
-    ecomSitesNote: (c, s) => `${c} kurumsal site + ${s} e-ticaret sitesi`,
+    sitesRight: (n) => `${n} site hakkı`,
+    ecomSites: (c, s) => `${c} kurumsal site + ${s} e-ticaret sitesi`,
     glovalAddress: 'xxx.gloval.site adresi',
     pagesUpTo: (n) => `${n} sayfaya kadar`,
-    ssl: 'Güvenli bağlantı (SSL)',
-    sslNote: 'Adres çubuğunda kilit simgesi görünür.',
-    mobile: 'Mobil uyumlu',
-    mobileStore: 'Mobil uyumlu mağaza',
+    ssl: 'SSL',
+    sslNote: 'Adres çubuğunda kilit simgesi: güvenli bağlantı.',
+    mobile: 'Mobil uyumluluk',
     basicSeo: 'Temel SEO',
-    seo: 'SEO',
-    advancedSeo: 'Gelişmiş SEO',
+    seo: 'SEO uyumlu',
     seoNote: 'Arama motorlarında bulunmanıza yardımcı olur.',
     contactForm: 'İletişim formu',
     contactForms: 'İletişim formları',
     socialLinks: 'Sosyal medya bağlantıları',
-    social: 'Sosyal medya',
-    customDomain: 'Kendi alan adınız',
-    domainGift: '.com.tr alan adı hediye',
-    domainGiftNote: 'Yıllık pakette geçerli.',
+    customDomain: 'Kendi alan adını bağla',
     analytics: 'Google Analytics',
     analyticsNote: 'Ziyaretçi istatistikleri.',
     searchConsole: 'Google Search Console',
     phoneWhatsapp: 'Telefon ve WhatsApp',
-    whatsapp: 'WhatsApp',
     backup: 'Otomatik yedekleme',
-    aiSeo: 'Yapay zeka SEO',
-    aiAudit: 'Yapay zeka site analizi',
-    competitor: 'Rakip analizi',
-    visitorAnalytics: 'Gelişmiş ziyaretçi analizi',
     versionHistory: 'Sürüm geçmişi',
-    googleAds: 'Google Ads özellikleri',
-    growth: 'Growth özellikleri',
     products: (n) => `${n} ürün`,
     productMgmt: 'Ürün yönetimi',
     cart: 'Sepet',
     orders: 'Sipariş yönetimi',
-    payments: 'Ödeme altyapısı (PayTR / iyzico)',
+    payments: 'Ödeme altyapısı',
+    paymentProviders: 'PayTR / iyzico entegrasyonu',
     productSeo: 'Ürün SEO',
-    googleSeo: 'Google SEO',
+    productSeoNote: 'Ürünlerinizin arama motorlarında bulunmasına yardımcı olur.',
+    storePages: 'Hazır mağaza sayfaları',
+    storePagesNote:
+      'Ürün listesi, ürün detayı, sepet ve sipariş sayfaları sitenizin içinde hazır gelir.',
     mailboxes: (n) => `${n} kurumsal e-posta`,
     mailNote: 'info@firmaadi.com gibi kendi alan adınızla e-posta adresleri.',
-    mailExcluded: 'Kurumsal e-posta dahil değil',
     standardSupport: 'Standart destek',
     prioritySupport: 'Öncelikli destek',
   },
@@ -271,10 +253,13 @@ const EN: Strings = {
   },
   groups: {
     site: 'What’s on your site',
-    growth: 'Growth and reports',
     store: 'Store',
     email: 'Email',
     support: 'Support',
+  },
+  extendsLabel: {
+    starter: 'IN ADDITION TO THE STARTER PLAN',
+    pro: 'IN ADDITION TO THE PRO PLAN',
   },
   plans: {
     free: {
@@ -292,8 +277,7 @@ const EN: Strings = {
     pro: {
       name: 'PRO',
       headline: 'Grow your business',
-      description:
-        'For businesses that actively use SEO, AI and growth tools.',
+      description: 'For businesses that actively use SEO, AI and growth tools.',
       cta: 'Start Growing with PRO',
       badge: 'Most Popular',
     },
@@ -304,65 +288,52 @@ const EN: Strings = {
       cta: 'Start Selling',
     },
   },
-  ecommerceFootnote:
-    'Shipping integrations, marketplace integrations and bank payment systems are not part of the base plan. You can buy these services later as paid extras.',
   credits: {
     freeSummary: (n) => `${n} AI actions`,
     freeNote: 'One-time. Does not renew monthly.',
     starterSummary: (n) => `${n} AI actions / 30 days`,
     starterNote: 'Unused actions do not carry over.',
-    proFirst: (n) => `${n} AI actions in the first month`,
-    proMonthly: (n) => `+${n} AI actions every month.`,
-    proRollover: 'Unused actions carry over.',
-    proMax: (n) => `Balance capped at ${n} actions.`,
-    ecomFirst: (n) => `${n} AI actions in the first month`,
-    ecomMonthly: (n) => `${n} AI actions every following month.`,
-    ecomNote: 'Used for store content.',
+    firstPeriod: (n) => `${n} AI actions in the first month`,
+    following: (n) => `${n} AI actions in following periods.`,
+    rollover: 'Unused actions carry over.',
+    max: (n) => `Balance capped at ${n} actions.`,
   },
   f: {
     sites: (n) => `${n} ${n === 1 ? 'site' : 'sites'}`,
-    ecomSitesNote: (c, s) =>
+    sitesRight: (n) => `${n} ${n === 1 ? 'site' : 'sites'}`,
+    ecomSites: (c, s) =>
       `${c} business sites + ${s} online ${s === 1 ? 'store' : 'stores'}`,
     glovalAddress: 'xxx.gloval.site address',
     pagesUpTo: (n) => `Up to ${n} pages`,
-    ssl: 'Secure connection (SSL)',
-    sslNote: 'A padlock shows in the address bar.',
+    ssl: 'SSL',
+    sslNote: 'A padlock in the address bar: a secure connection.',
     mobile: 'Mobile friendly',
-    mobileStore: 'Mobile-friendly store',
     basicSeo: 'Basic SEO',
-    seo: 'SEO',
-    advancedSeo: 'Advanced SEO',
+    seo: 'SEO friendly',
     seoNote: 'Helps people find you in search engines.',
     contactForm: 'Contact form',
     contactForms: 'Contact forms',
     socialLinks: 'Social media links',
-    social: 'Social media',
-    customDomain: 'Your own domain name',
-    domainGift: 'Free .com.tr domain',
-    domainGiftNote: 'Included with yearly billing.',
+    customDomain: 'Connect your own domain',
     analytics: 'Google Analytics',
     analyticsNote: 'Visitor statistics.',
     searchConsole: 'Google Search Console',
     phoneWhatsapp: 'Phone and WhatsApp',
-    whatsapp: 'WhatsApp',
     backup: 'Automatic backups',
-    aiSeo: 'AI SEO',
-    aiAudit: 'AI site analysis',
-    competitor: 'Competitor analysis',
-    visitorAnalytics: 'Advanced visitor analytics',
     versionHistory: 'Version history',
-    googleAds: 'Google Ads features',
-    growth: 'Growth features',
     products: (n) => `${n} products`,
     productMgmt: 'Product management',
     cart: 'Cart',
     orders: 'Order management',
-    payments: 'Payment system (PayTR / iyzico)',
+    payments: 'Payment system',
+    paymentProviders: 'PayTR / iyzico integration',
     productSeo: 'Product SEO',
-    googleSeo: 'Google SEO',
+    productSeoNote: 'Helps people find your products in search engines.',
+    storePages: 'Ready-made store pages',
+    storePagesNote:
+      'Product list, product detail, cart and order pages come ready inside your site.',
     mailboxes: (n) => `${n} business ${n === 1 ? 'email' : 'emails'}`,
     mailNote: 'Email addresses on your own domain, like info@yourcompany.com.',
-    mailExcluded: 'Business email not included',
     standardSupport: 'Standard support',
     prioritySupport: 'Priority support',
   },
@@ -378,18 +349,17 @@ function numberFormatter(lang: CopyLang) {
   return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US')
 }
 
-function mailItems(s: Strings, code: PlanCode): PlanCopyItem[] {
+/** Nothing is shown for a plan without mailboxes (FREE): no "not included" row. */
+function mailGroup(s: Strings, code: PlanCode): PlanCopyGroup[] {
   const count = PLAN_INCLUDED_MAILBOXES[code]
-  if (count <= 0) return [{ label: s.f.mailExcluded, excluded: true }]
-  return [{ label: s.f.mailboxes(count), note: s.f.mailNote, highlight: true }]
+  if (count <= 0) return []
+  return [
+    {
+      title: s.groups.email,
+      items: [{ label: s.f.mailboxes(count), note: s.f.mailNote, highlight: true }],
+    },
+  ]
 }
-
-const domainGiftItem = (s: Strings): PlanCopyItem => ({
-  label: s.f.domainGift,
-  note: s.f.domainGiftNote,
-  highlight: true,
-  yearlyOnly: true,
-})
 
 /**
  * Builds the card content for one plan. TR and EN share this single structure,
@@ -397,7 +367,9 @@ const domainGiftItem = (s: Strings): PlanCopyItem => ({
  */
 export function buildPlanView(
   code: PlanCode,
-  cycle: BillingCycle,
+  // Kept so every caller passes the billing cycle; no row depends on it now
+  // that the .com.tr gift is only shown under the price.
+  _cycle: BillingCycle,
   langInput: string | null | undefined,
 ): PlanView {
   const lang = copyLang(langInput)
@@ -434,7 +406,7 @@ export function buildPlanView(
             { label: f.socialLinks },
           ],
         },
-        { title: g.email, items: mailItems(s, code) },
+        ...mailGroup(s, code),
       ],
     }
   }
@@ -451,19 +423,18 @@ export function buildPlanView(
             { label: f.sites(SITE_LIMITS.starter) },
             { label: f.pagesUpTo(PAGE_LIMITS.starter) },
             { label: f.customDomain },
-            domainGiftItem(s),
             { label: f.ssl, note: f.sslNote },
             { label: f.mobile },
             { label: f.seo, note: f.seoNote },
             { label: f.analytics, note: f.analyticsNote },
             { label: f.searchConsole },
             { label: f.phoneWhatsapp },
-            { label: f.social },
+            { label: f.socialLinks },
             { label: f.contactForms },
             { label: f.backup },
           ],
         },
-        { title: g.email, items: mailItems(s, code) },
+        ...mailGroup(s, code),
         { title: g.support, items: [{ label: f.standardSupport }] },
       ],
     }
@@ -472,72 +443,50 @@ export function buildPlanView(
   if (code === 'pro') {
     return {
       ...head,
-      creditSummary: s.credits.proFirst(nf.format(AI_CREDIT_CONFIG.pro.initialCredits)),
+      extendsLabel: s.extendsLabel.starter,
+      creditSummary: s.credits.firstPeriod(nf.format(AI_CREDIT_CONFIG.pro.initialCredits)),
       creditNotes: [
-        s.credits.proMonthly(AI_CREDIT_CONFIG.pro.monthlyCredits),
-        s.credits.proRollover,
-        s.credits.proMax(nf.format(AI_CREDIT_CONFIG.pro.maxBalance)),
+        s.credits.following(nf.format(AI_CREDIT_CONFIG.pro.monthlyCredits)),
+        s.credits.rollover,
+        s.credits.max(nf.format(AI_CREDIT_CONFIG.pro.maxBalance)),
       ],
       groups: [
         {
           title: g.site,
           items: [
-            { label: f.sites(SITE_LIMITS.pro) },
+            { label: f.sitesRight(SITE_LIMITS.pro), highlight: true },
             { label: f.pagesUpTo(PAGE_LIMITS.pro) },
-            { label: f.customDomain },
-            domainGiftItem(s),
-            { label: f.ssl, note: f.sslNote },
-            { label: f.mobile },
-            { label: f.phoneWhatsapp },
             { label: f.backup },
             { label: f.versionHistory },
           ],
         },
-        {
-          title: g.growth,
-          items: [
-            { label: f.advancedSeo, note: f.seoNote },
-            { label: f.aiSeo },
-            { label: f.aiAudit },
-            { label: f.competitor },
-            { label: f.analytics, note: f.analyticsNote },
-            { label: f.searchConsole },
-            { label: f.visitorAnalytics },
-            { label: f.googleAds },
-            { label: f.growth },
-          ],
-        },
-        { title: g.email, items: mailItems(s, code) },
+        ...mailGroup(s, code),
         { title: g.support, items: [{ label: f.prioritySupport }] },
       ],
     }
   }
 
   const corporateSites = SITE_LIMITS.ecommerce - ECOMMERCE_SITE_LIMITS.ecommerce
+  // Pages are inherited from PRO; only mention them if the limits ever diverge.
+  const pageItems: PlanCopyItem[] =
+    PAGE_LIMITS.ecommerce === PAGE_LIMITS.pro
+      ? []
+      : [{ label: f.pagesUpTo(PAGE_LIMITS.ecommerce) }]
+
   return {
     ...head,
-    creditSummary: s.credits.ecomFirst(nf.format(AI_CREDIT_CONFIG.ecommerce.initialCredits)),
-    creditNotes: [
-      s.credits.ecomMonthly(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits)),
-      s.credits.proRollover,
-      s.credits.proMax(nf.format(AI_CREDIT_CONFIG.ecommerce.maxBalance)),
-      s.credits.ecomNote,
-    ],
-    footnote: s.ecommerceFootnote,
+    extendsLabel: s.extendsLabel.pro,
+    creditSummary: s.credits.firstPeriod(nf.format(AI_CREDIT_CONFIG.ecommerce.initialCredits)),
+    creditNotes: [s.credits.following(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits))],
     groups: [
       {
         title: g.site,
         items: [
           {
-            label: f.sites(SITE_LIMITS.ecommerce),
-            note: f.ecomSitesNote(corporateSites, ECOMMERCE_SITE_LIMITS.ecommerce),
+            label: f.ecomSites(corporateSites, ECOMMERCE_SITE_LIMITS.ecommerce),
             highlight: true,
           },
-          domainGiftItem(s),
-          { label: f.ssl, note: f.sslNote },
-          { label: f.googleSeo, note: f.seoNote },
-          { label: f.social },
-          { label: f.whatsapp },
+          ...pageItems,
         ],
       },
       {
@@ -548,11 +497,12 @@ export function buildPlanView(
           { label: f.cart },
           { label: f.orders },
           { label: f.payments },
-          { label: f.productSeo },
-          { label: f.mobileStore },
+          { label: f.paymentProviders },
+          { label: f.productSeo, note: f.productSeoNote },
+          { label: f.storePages, note: f.storePagesNote },
         ],
       },
-      { title: g.email, items: mailItems(s, code) },
+      ...mailGroup(s, code),
     ],
   }
 }

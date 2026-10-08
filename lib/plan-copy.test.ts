@@ -8,6 +8,7 @@ import {
 } from './plan-copy'
 import {
   AI_CREDIT_CONFIG,
+  PAGE_LIMITS,
   PLANS,
   type BillingCycle,
   type PlanCode,
@@ -21,13 +22,12 @@ function shape(view: PlanView) {
   return {
     code: view.code,
     hasBadge: Boolean(view.badge),
-    hasFootnote: Boolean(view.footnote),
+    hasExtendsLabel: Boolean(view.extendsLabel),
     creditNotes: view.creditNotes.length,
     groups: view.groups.map((group) => ({
       items: group.items.map((item) => ({
         hasNote: Boolean(item.note),
         highlight: Boolean(item.highlight),
-        yearlyOnly: Boolean(item.yearlyOnly),
         excluded: Boolean(item.excluded),
       })),
     })),
@@ -95,24 +95,47 @@ describe('plan copy follows the configuration', () => {
       const emailGroup = buildPlanView(code, 'monthly', 'tr').groups.find(
         (group) => group.title === 'E-posta',
       )
-      expect(emailGroup).toBeDefined()
-      const [item] = emailGroup!.items
       const count = PLAN_INCLUDED_MAILBOXES[code]
       if (count === 0) {
-        expect(item.excluded).toBe(true)
+        expect(emailGroup).toBeUndefined()
       } else {
-        expect(item.excluded).toBeFalsy()
-        expect(item.label).toContain(String(count))
+        expect(emailGroup).toBeDefined()
+        expect(emailGroup!.items[0].label).toContain(String(count))
       }
     }
   })
 
-  it('hides nothing but yearly-only rows, and only the domain gift is yearly-only', () => {
+  it('lists the .com.tr gift only under the price, never as a feature row', () => {
     for (const code of CODES) {
-      const yearlyOnly = buildPlanView(code, 'yearly', 'en')
-        .groups.flatMap((group) => group.items)
-        .filter((item) => item.yearlyOnly)
-      expect(yearlyOnly.length).toBe(code === 'free' ? 0 : 1)
+      for (const lang of ['tr', 'en']) {
+        const labels = buildPlanView(code, 'yearly', lang)
+          .groups.flatMap((group) => group.items)
+          .map((item) => item.label)
+        expect(labels.some((label) => label.includes('.com.tr'))).toBe(false)
+      }
+    }
+  })
+
+  it('PRO and e-commerce only list what they add on top of the plan below', () => {
+    expect(buildPlanView('free', 'yearly', 'en').extendsLabel).toBeUndefined()
+    expect(buildPlanView('starter', 'yearly', 'en').extendsLabel).toBeUndefined()
+    expect(buildPlanView('pro', 'yearly', 'en').extendsLabel).toContain('STARTER')
+    expect(buildPlanView('ecommerce', 'yearly', 'en').extendsLabel).toContain('PRO')
+
+    const proLabels = buildPlanView('pro', 'yearly', 'en').groups.flatMap((g) =>
+      g.items.map((i) => i.label),
+    )
+    for (const inherited of ['SSL', 'Mobile friendly', 'Google Analytics']) {
+      expect(proLabels).not.toContain(inherited)
+    }
+  })
+
+  it('page limits shown on the cards come from PAGE_LIMITS', () => {
+    for (const code of ['free', 'starter', 'pro'] as const) {
+      const labels = buildPlanView(code, 'yearly', 'en').groups.flatMap((g) =>
+        g.items.map((i) => i.label),
+      )
+      expect(labels).toContain(`Up to ${PAGE_LIMITS[code]} pages`)
     }
   })
 
@@ -122,7 +145,7 @@ describe('plan copy follows the configuration', () => {
       const yearly = buildPlanView('pro', 'yearly', lang)
       expect(monthly.creditSummary).toBe(yearly.creditSummary)
       expect(monthly.creditNotes).toEqual(yearly.creditNotes)
-      expect(monthly.creditNotes[0]).toContain(`+${AI_CREDIT_CONFIG.pro.monthlyCredits}`)
+      expect(monthly.creditNotes[0]).toContain(String(AI_CREDIT_CONFIG.pro.monthlyCredits))
     }
   })
 
