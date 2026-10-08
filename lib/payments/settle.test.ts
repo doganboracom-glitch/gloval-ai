@@ -67,6 +67,7 @@ function makeBuilder(table: string) {
   return builder
 }
 
+vi.mock('@/lib/plan-credit-instant-store', () => ({ grantPlanCreditsAfterPayment: vi.fn(async () => {}) }))
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({ from: (t: string) => makeBuilder(t) }),
 }))
