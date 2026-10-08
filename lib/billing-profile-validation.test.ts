@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendBillingProfileReminder, getBillingProfileCopy } from '@/lib/billing-profile-copy'
+import { appendBillingProfileReminder, billingProfileReminderText, getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { buildCreditNotice, parseCreditNoticeAmount } from '@/lib/credit-notice'
 import { escapeCsvCell, serializeCsv } from '@/lib/billing-profile-csv'
 import {
@@ -135,9 +135,9 @@ describe('billing profile reminders', () => {
   it('adds a localized, direct billing link only for incomplete profiles', () => {
     const turkish = appendBillingProfileReminder('Ödeme başarılı.', true, 'tr')
     const english = appendBillingProfileReminder('Payment successful.', true, 'en')
-    expect(turkish).toContain(getBillingProfileCopy('tr').creditReminder)
+    expect(turkish).toContain(billingProfileReminderText('tr'))
     expect(turkish).toContain('https://gloval.ai/billing#fatura-bilgileri')
-    expect(english).toContain(getBillingProfileCopy('en').creditReminder)
+    expect(english).toContain(billingProfileReminderText('en'))
     expect(english).toContain('/billing#fatura-bilgileri')
   })
 
