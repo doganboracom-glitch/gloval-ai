@@ -29,6 +29,7 @@ import { StatusBadge } from '@/components/mail/status-badge'
 import { PasswordFields } from '@/components/mail/password-fields'
 import { getPasswordCopy } from '@/components/mail/password-copy'
 import { getAliasCopy } from '@/components/mail/alias-copy'
+import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { formatGraceBody, getLimitsCopy } from '@/components/mail/limits-copy'
 import { getForwardingCopy, type ForwardingCopy } from '@/components/mail/forwarding-copy'
 import { validateForwardingDestinations } from '@/lib/mail/forwarding'
@@ -461,7 +462,14 @@ export function EmailClient({
               <p className="mt-0.5 text-muted-foreground">{lc.overLimitHint}</p>
             </div>
           ) : (
-            atLimit && !locked && <p className="mt-2 text-xs text-muted-foreground">{m.limitReachedHint}</p>
+            atLimit && !locked && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {m.limitReachedHint}{' '}
+                <Link href="/billing" className="font-medium text-brand underline underline-offset-2">
+                  {getMailAddOnCopy(lang).getMore}
+                </Link>
+              </p>
+            )
           )}
         </div>
       </section>
