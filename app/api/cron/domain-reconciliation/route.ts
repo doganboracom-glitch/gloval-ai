@@ -5,11 +5,13 @@ import { reconcileRenewals, sweepStaleRenewals } from '@/lib/custom-domains/regi
 import { syncAllTransfers } from '@/lib/custom-domains/registrar/transfer-service'
 import { reconcileSubscriptionLifecycle } from '@/lib/billing-lifecycle'
 import { syncAllMailAccess } from '@/lib/mail/access-sync'
+import { runPlanCreditSweep } from '@/lib/plan-credit-sweep-store'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const MAIL_ACCESS_BUDGET_MS = 15_000
+const PLAN_CREDITS_BUDGET_MS = 10_000
 const CONNECTION_BATCH_LIMIT = 25
 const CONNECTION_BUDGET_MS = 40_000
 
@@ -43,6 +45,17 @@ export async function GET(request: Request) {
     mailAccess = { error: 'mail_access_sweep_failed' }
   }
 
+  // Isolated and time-boxed like the sweeps above. Runs after mail access; it
+  // only reads subscriptions and calls the idempotent grant RPC, and stays a
+  // dry run until AI_CREDIT_GRANT_DRY_RUN is explicitly set to "false".
+  let aiCredits: Awaited<ReturnType<typeof runPlanCreditSweep>> | { error: string }
+  try {
+    aiCredits = await runPlanCreditSweep({ deadlineMs: Date.now() + PLAN_CREDITS_BUDGET_MS })
+  } catch (error) {
+    console.log('[plan-credits] sweep failed:', error instanceof Error ? error.message : 'unknown')
+    aiCredits = { error: 'plan_credit_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -57,8 +70,8 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
-    return NextResponse.json({ error: 'reconciliation_failed', billing }, { status: 500 })
+    return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }
 }
