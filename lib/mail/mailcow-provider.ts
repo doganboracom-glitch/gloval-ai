@@ -92,6 +92,15 @@ async function request<T>(path: string, init: { method?: 'GET' | 'POST'; body?: 
   }
 }
 
+/** A concurrent provisioning run may create the domain or DKIM key first; that is not a failure. */
+async function ignoreAlreadyExists(pending: Promise<unknown>): Promise<void> {
+  try {
+    await pending
+  } catch (error) {
+    if (!/already|exist|duplicate/i.test(error instanceof Error ? error.message : '')) throw error
+  }
+}
+
 function mapError(error: unknown): never {
   const message = error instanceof Error ? error.message : ''
   if (/exist|already|duplicate/i.test(message)) throw new MailError('MAILBOX_EXISTS')
@@ -213,14 +222,20 @@ export const mailcowProvider: MailProvider = {
     const name = domain.domain.toLowerCase()
     const existing = await request<Record<string, unknown>>(`get/domain/${encodeURIComponent(name)}`)
     if (!existing || !existing.domain_name) {
-      await request('add/domain', {
-        body: { domain: name, description: 'GLOVAL Mail', active: 1, restart_sogo: 1, ...DOMAIN_LIMITS },
-      })
+      await ignoreAlreadyExists(
+        request('add/domain', {
+          body: { domain: name, description: 'GLOVAL Mail', active: 1, restart_sogo: 1, ...DOMAIN_LIMITS },
+        }),
+      )
     }
     if (!(await getDkim(name))) {
-      await request('add/dkim', { body: { domains: name, dkim_selector: DKIM_SELECTOR, key_size: 2048 } })
+      await ignoreAlreadyExists(
+        request('add/dkim', { body: { domains: name, dkim_selector: DKIM_SELECTOR, key_size: 2048 } }),
+      )
     }
-    return domain
+    // Mailcow addresses a domain by hostname, not by the custom-domain registry's
+    // UUID, so from here on the hostname is the id every mailbox/alias call uses.
+    return { ...domain, id: name }
   },
 
   async dnsRecords(domain: string): Promise<MailDnsRecordSpec[]> {
