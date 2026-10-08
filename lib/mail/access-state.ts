@@ -64,6 +64,26 @@ export function planIncludesMail(planCode: string | null | undefined): boolean {
   return PLAN_INCLUDED_MAILBOXES[toPlanCode(planCode)] > 0
 }
 
+/**
+ * End of validity of a subscription-backed mail source. A `past_due` plan is
+ * still inside its billing grace window until `grace_period_ends_at`, so mail
+ * stays fully open until then and mail's own grace starts only afterwards:
+ * `max(current_period_end, grace_period_ends_at)`. Every other status, and a
+ * `past_due` row without a usable grace end, keeps `current_period_end`.
+ */
+export function subscriptionSourceEndsAt(
+  status: string,
+  currentPeriodEnd: Date | string | null,
+  gracePeriodEndsAt: Date | string | null | undefined,
+): Date | string | null {
+  if (status !== 'past_due') return currentPeriodEnd
+  const periodEnd = toDate(currentPeriodEnd)
+  const graceEnd = toDate(gracePeriodEndsAt)
+  // An open-ended period (null) stays open-ended.
+  if (periodEnd === null || graceEnd === null) return currentPeriodEnd
+  return graceEnd.getTime() > periodEnd.getTime() ? gracePeriodEndsAt! : currentPeriodEnd
+}
+
 /** `MAIL_GRACE_DAYS` env value -> whole days. Missing/invalid falls back to the default; `0` disables grace. */
 export function resolveMailGraceDays(raw: string | undefined | null): number {
   if (raw === undefined || raw === null || raw.trim() === '') return DEFAULT_MAIL_GRACE_DAYS

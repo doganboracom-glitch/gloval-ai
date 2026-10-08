@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { planIncludesMail, type MailAccessSource } from './access-state'
+import { planIncludesMail, subscriptionSourceEndsAt, type MailAccessSource } from './access-state'
 import {
   grantsToAccessSources,
   type MailAddonGrant,
@@ -18,6 +18,7 @@ type SubscriptionRow = {
   status: string
   current_period_end: string | null
   trial_ends_at?: string | null
+  grace_period_ends_at: string | null
   updated_at: string | null
   billing_plans: { code: string } | { code: string }[] | null
 }
@@ -27,7 +28,7 @@ export async function loadMailPlanSources(userId: string): Promise<MailAccessSou
   const { data, error } = await createAdminClient()
     .from('billing_subscriptions')
     .select(
-      'status, current_period_end, updated_at, billing_plans!billing_subscriptions_plan_id_fkey(code)',
+      'status, current_period_end, grace_period_ends_at, updated_at, billing_plans!billing_subscriptions_plan_id_fkey(code)',
     )
     .eq('user_id', userId)
     .neq('status', 'incomplete')
@@ -41,7 +42,7 @@ export async function loadMailPlanSources(userId: string): Promise<MailAccessSou
     sources.push({
       kind: 'plan',
       entitled,
-      endsAt: row.current_period_end,
+      endsAt: subscriptionSourceEndsAt(row.status, row.current_period_end, row.grace_period_ends_at),
       // When an immediate cancel/suspension happened, `updated_at` is the closest record of it.
       endedAt: entitled ? null : row.updated_at,
     })
@@ -54,7 +55,7 @@ export async function loadMailPlanGrants(userId: string): Promise<MailPlanGrant[
   const { data, error } = await createAdminClient()
     .from('billing_subscriptions')
     .select(
-      'status, current_period_end, updated_at, billing_plans!billing_subscriptions_plan_id_fkey(code)',
+      'status, current_period_end, grace_period_ends_at, updated_at, billing_plans!billing_subscriptions_plan_id_fkey(code)',
     )
     .eq('user_id', userId)
     .neq('status', 'incomplete')
@@ -68,7 +69,7 @@ export async function loadMailPlanGrants(userId: string): Promise<MailPlanGrant[
     grants.push({
       code: plan.code,
       entitled,
-      endsAt: row.current_period_end,
+      endsAt: subscriptionSourceEndsAt(row.status, row.current_period_end, row.grace_period_ends_at),
       endedAt: entitled ? null : row.updated_at,
     })
   }
