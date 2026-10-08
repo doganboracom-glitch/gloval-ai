@@ -4,6 +4,7 @@ import { finalizeDomainOrder } from '@/lib/custom-domains/registrar/service'
 import { finalizeTransferIn } from '@/lib/custom-domains/registrar/transfer-service'
 import { finalizeRenewal } from '@/lib/custom-domains/registrar/renewal-service'
 import { settleSubscriptionRenewal } from '@/lib/billing-lifecycle'
+import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import { settleTopUpResult } from './topup-fulfillment'
 import { settleAddOnResult } from './addon-fulfillment'
 import type { PaymentProviderId, PaymentWebhookResult } from './types'
@@ -162,6 +163,7 @@ export async function settlePaymentResult(
         adminSubject: (userEmail) => `${userEmail} üye ${isUpgrade ? 'paket yükseltme' : 'ödemesi'} başarılı`,
         adminBody: (userEmail) => `Kullanıcı e-posta adresi: ${userEmail}\\nEski paket: ${isUpgrade ? 'Mevcut abonelik' : 'Yok'}\\nYeni paket: ${plan?.name ?? 'Bilinmiyor'}\\nİşlem No: ${formatTicketNumber(ref)}\\nİşlem tarihi: ${new Date().toLocaleString('tr-TR')}\\nÖdenen ara fark: ${((pendingCharge?.amount_cents ?? 0) / 100).toFixed(2)} ${pendingCharge?.currency ?? plan?.currency ?? 'TRY'}\\nİşlem sonucu: Başarılı`,
       })
+      await triggerMailAccessSync(sub.user_id, isUpgrade ? 'plan_upgraded' : 'payment_succeeded')
     } else if (result.status === 'failed') {
       if (isUpgrade) {
         await admin

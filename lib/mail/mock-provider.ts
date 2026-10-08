@@ -38,8 +38,19 @@ const domains = new Map<string, MailDomain>()
 const mailboxes = new Map<string, Mailbox>()
 const aliases = new Map<string, MailAlias>()
 const forwardings = new Map<string, MailForwarding>()
+/** Per-mailbox login/sending access (absent = enabled) and domains switched off by the access sync. */
+const mailboxAccess = new Map<string, boolean>()
+const inactiveDomains = new Set<string>()
 let logs: MailLogEntry[] = []
 let seeded = false
+
+export function getMockMailboxAccess(mailboxId: string): boolean {
+  return mailboxAccess.get(mailboxId) ?? true
+}
+
+export function isMockDomainActive(domainId: string): boolean {
+  return !inactiveDomains.has(domainId)
+}
 
 let counter = 0
 function id(prefix: string): string {
@@ -278,6 +289,25 @@ export const mockMailProvider: MailProvider = {
     if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
     // The mock has no credential store; the password is intentionally discarded.
     await latency(null, 250)
+  },
+
+  async setMailboxAccess(mailboxId, enabled) {
+    seed()
+    if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
+    mailboxAccess.set(mailboxId, enabled)
+  },
+
+  async setMailboxActive(mailboxId, active) {
+    seed()
+    const box = mailboxes.get(mailboxId)
+    if (!box) throw new MailError('NOT_FOUND')
+    mailboxes.set(mailboxId, { ...box, status: active ? 'active' : 'suspended' })
+  },
+
+  async setDomainActive(domainId, active) {
+    requireDomain(domainId)
+    if (active) inactiveDomains.delete(domainId)
+    else inactiveDomains.add(domainId)
   },
 
   async listAliases(domainId) {

@@ -128,6 +128,7 @@ export type MailErrorCode =
   | 'ADDRESS_IS_MAILBOX'
   | 'QUOTA_EXCEEDED'
   | 'MAILBOX_LIMIT_REACHED'
+  | 'MAIL_ACCESS_INACTIVE'
   | 'INVALID_ADDRESS'
   | 'INVALID_DESTINATION'
   | 'TOO_MANY_DESTINATIONS'
@@ -196,6 +197,16 @@ export interface MailProvider {
   deleteMailbox(id: string): Promise<void>
   /** Sets the mailbox password to a value the customer chose. Returns nothing: the password is never echoed back. */
   setPassword(id: string, password: string): Promise<void>
+
+  /**
+   * Subscription-driven access control. `setMailboxAccess` toggles login and
+   * sending (IMAP, POP3, SMTP, webmail) while the mailbox keeps receiving;
+   * `setMailboxActive` / `setDomainActive` switch delivery itself on or off.
+   * None of them delete data. Failures throw a generic error without provider text.
+   */
+  setMailboxAccess(mailboxId: string, enabled: boolean): Promise<void>
+  setMailboxActive(mailboxId: string, active: boolean): Promise<void>
+  setDomainActive(domainId: string, active: boolean): Promise<void>
 
   listAliases(domainId: string): Promise<MailAlias[]>
   createAlias(input: CreateAliasInput): Promise<MailAlias>

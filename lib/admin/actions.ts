@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
+import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
   SUPPORT_EMAIL,
   notifyAccountReactivated,
@@ -304,6 +305,7 @@ export async function changeUserPlan(input: {
       body: baseReason || null,
       status: 'sent',
     })
+    await triggerMailAccessSync(input.userId, 'admin_plan_changed')
   }
   revalidateUserPackage(input.userId)
   return { ok: true }
@@ -378,6 +380,7 @@ export async function setUserPeriodEnd(input: {
     await logFailedPackageAction({ email, adminId, userId: input.userId, action: 'period_change', field: 'current_period_end', newValue: end, reason, error: result.error })
     return result
   }
+  await triggerMailAccessSync(input.userId, 'admin_period_end_changed')
   revalidateUserPackage(input.userId)
   return { ok: true }
 }

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { getMailProvider } from '@/lib/mail/provider'
 import { getMailQuota } from '@/lib/mail/access'
+import { loadMailLimitContext } from '@/lib/mail/limits-server'
 import { getDomainEntitlement, type DomainEntitlement } from './access'
 import { connectDomainToProject } from './connect'
 import { dohResolver } from './connection'
@@ -170,6 +171,16 @@ export async function getMyDomainDetail(domainId: string): Promise<DomainDetail 
         ? await getMailProvider().listMailboxes(domain.id)
         : []
 
+    // The shown ceiling is package + add-ons, not the old per-category constant.
+    let maxMailboxes = mailQuota.maxMailboxes
+    if (domain.status === 'active') {
+      try {
+        maxMailboxes = (await loadMailLimitContext(user.id, domain.id)).limit.max
+      } catch {
+        // Keep the legacy figure rather than failing the whole detail page.
+      }
+    }
+
     let projectName: string | null = null
     if (domain.websiteProjectId) {
       const { getProject } = await import('@/lib/projects')
@@ -187,7 +198,7 @@ export async function getMyDomainDetail(domainId: string): Promise<DomainDetail 
       email: {
         entitled: mailQuota.allowed,
         mailboxCount: mailboxes.length,
-        maxMailboxes: mailQuota.maxMailboxes,
+        maxMailboxes,
       },
     }
   } catch {

@@ -4,10 +4,12 @@ import { getDomainProvider } from '@/lib/custom-domains/provider'
 import { reconcileRenewals, sweepStaleRenewals } from '@/lib/custom-domains/registrar/renewal-service'
 import { syncAllTransfers } from '@/lib/custom-domains/registrar/transfer-service'
 import { reconcileSubscriptionLifecycle } from '@/lib/billing-lifecycle'
+import { syncAllMailAccess } from '@/lib/mail/access-sync'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+const MAIL_ACCESS_BUDGET_MS = 15_000
 const CONNECTION_BATCH_LIMIT = 25
 const CONNECTION_BUDGET_MS = 40_000
 
@@ -30,6 +32,17 @@ export async function GET(request: Request) {
     billing = { error: 'billing_sweep_failed' }
   }
 
+  // Isolated like billing: the mailbox access sweep is the safety net for any
+  // plan/add-on change that happened without an event hook (grace windows
+  // elapsing, failed pushes to Mailcow, manual DB edits).
+  let mailAccess: Awaited<ReturnType<typeof syncAllMailAccess>> | { error: string }
+  try {
+    mailAccess = await syncAllMailAccess({ deadlineMs: Date.now() + MAIL_ACCESS_BUDGET_MS })
+  } catch (error) {
+    console.log('[mail-access] sweep failed:', error)
+    mailAccess = { error: 'mail_access_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -44,7 +57,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing }, { status: 500 })
   }
