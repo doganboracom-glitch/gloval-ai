@@ -3,6 +3,7 @@ import { addCalendarMonths, isYearlySwitchTarget, parseRenewalTargetPlanId } fro
 import { formatTicketNumber, logUserEvent } from '@/lib/notify'
 import { buildLifecycleNotice, type LifecycleNoticeKind } from '@/lib/billing-notices'
 import type { SubscriptionStatus } from '@/lib/payments'
+import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 
 const DEFAULT_GRACE_DAYS = 7
 
@@ -202,7 +203,11 @@ export async function reconcileSubscriptionLifecycle(now = new Date()): Promise<
   for (const sub of (expired ?? []) as SweepSub[]) {
     result.detected++
     try {
-      record(await processExpired(sub))
+      const entry = await processExpired(sub)
+      record(entry)
+      if (entry.outcome === 'past_due' || entry.outcome === 'suspended') {
+        await triggerMailAccessSync(sub.user_id, 'subscription_expired')
+      }
     } catch (error) {
       console.log('[billing-lifecycle] failed:', sub.id, error)
       record({
@@ -470,6 +475,7 @@ export async function settleSubscriptionRenewal(input: {
         ` İşlem No: ${ticket}.`,
       dedupeKey: `renewal:succeeded:${charge.id}`,
     })
+    await triggerMailAccessSync(sub.user_id, 'subscription_renewed')
     return { kind: 'renewed', restored, skipped }
   } catch (error) {
     // Hand the ledger row back so a retried callback can finish the renewal.

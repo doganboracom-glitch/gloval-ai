@@ -12,6 +12,7 @@ import {
   type SubscriptionStatus,
 } from '@/lib/payments'
 import { toSafeFailureCode } from '@/lib/payments/failure-code'
+import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
   subscriptionStatusLabelTr,
   addCalendarMonths,
@@ -653,6 +654,7 @@ export async function changePlan(
     emailAdmin: true,
   })
 
+  await triggerMailAccessSync(userId, isUpgrade ? 'plan_upgraded' : 'plan_downgraded')
   revalidatePath('/billing')
   return { ok: true, status: newStatus, netCents }
 }
@@ -863,6 +865,7 @@ export async function cancelSubscription(
     },
   })
 
+  await triggerMailAccessSync(userId, 'subscription_canceled')
   revalidatePath('/billing')
   return {
     ok: true,

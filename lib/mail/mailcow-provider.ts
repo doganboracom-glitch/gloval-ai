@@ -293,6 +293,38 @@ export const mailcowProvider: MailProvider = {
     }
   },
 
+  async setMailboxAccess(id, enabled) {
+    if (normalizeDestinationAddress(String(id ?? '')) !== id) throw new Error('mail_access_update_failed')
+    const flag = enabled ? '1' : '0'
+    try {
+      await request('edit/mailbox', {
+        body: { items: [id], attr: { imap_access: flag, pop3_access: flag, smtp_access: flag, sogo_access: flag } },
+      })
+    } catch {
+      // Fixed code only: Mailcow's own text never reaches logs or stored state.
+      throw new Error('mail_access_update_failed')
+    }
+  },
+
+  async setMailboxActive(id, active) {
+    if (normalizeDestinationAddress(String(id ?? '')) !== id) throw new Error('mail_access_update_failed')
+    try {
+      await request('edit/mailbox', { body: { items: [id], attr: { active: active ? '1' : '0' } } })
+    } catch {
+      throw new Error('mail_access_update_failed')
+    }
+  },
+
+  async setDomainActive(domainId, active) {
+    try {
+      const name = await domainName(domainId)
+      await request('edit/domain', { body: { items: [name], attr: { active: active ? '1' : '0' } } })
+    } catch (error) {
+      if (error instanceof MailError) throw error
+      throw new Error('mail_access_update_failed')
+    }
+  },
+
   async listAliases(domainId) {
     const name = await domainName(domainId)
     return (await listAliasRows(name)).map((row) => aliasFromRow(row, domainId))
