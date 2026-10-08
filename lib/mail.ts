@@ -11,6 +11,14 @@ import {
   type MailDomainGate,
 } from '@/lib/mail/domain-service'
 import { getMailQuota } from '@/lib/mail/access'
+import type { MailAccessStatus } from '@/lib/mail/access-state'
+import { loadMailLimitContext } from '@/lib/mail/limits-server'
+import {
+  evaluateMailboxCreation,
+  mailboxOverLimit,
+  perBoxQuotaMb,
+  resolveMailboxQuotaMb,
+} from '@/lib/mail/mailbox-limits'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { validateMailboxPassword } from '@/lib/mail/password'
 import { validateAliasDestinations } from '@/lib/mail/alias-destinations'
@@ -52,7 +60,16 @@ export type MailOverview = {
   aliases: MailAlias[]
   /** Mailbox id -> forwarding, only for mailboxes that have one. Best effort: a failed read is left out. */
   forwardings: Record<string, MailForwarding>
+  /** `allowed`: the owner has (or had) a mail source; `maxMailboxes` is the computed limit. */
   quota: { allowed: boolean; maxMailboxes: number; quotaMbPerBox: number; reason?: string }
+  /** Live mail access state of the domain. The client only displays it; actions re-check on the server. */
+  access: {
+    status: MailAccessStatus
+    graceDaysRemaining: number | null
+    graceEndsAt: string | null
+  }
+  /** Mailbox limit breakdown: main package + active add-ons. `overBy` > 0 after a downgrade. */
+  limit: { max: number; fromPlan: number; fromAddons: number; used: number; overBy: number }
   webmailBase: string | null
   /** True when a real provider is connected (vs. the in-memory mock). */
   live: boolean
@@ -97,10 +114,24 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     getMyMailDomainGate(user.id),
   ])
 
-  const quota = getMailQuota(plan, subscription)
+  const planQuota = getMailQuota(plan, subscription)
   const domain = domains[0] ?? null
+  const ctx = await loadMailLimitContext(user.id, domain?.id ?? null)
 
-  if (!domain || !quota.allowed) {
+  const quota = {
+    allowed: ctx.hasMailSource,
+    maxMailboxes: ctx.limit.max,
+    quotaMbPerBox: perBoxQuotaMb(planQuota),
+    reason: ctx.hasMailSource ? undefined : (planQuota.reason ?? 'no_subscription'),
+  }
+  const limitFor = (used: number) => ({
+    ...ctx.limit,
+    used,
+    // A lapsed owner cannot create anyway; "over limit" is only meaningful while access is active.
+    overBy: ctx.access.status === 'active' ? mailboxOverLimit(used, ctx.limit.max) : 0,
+  })
+
+  if (!domain || !ctx.hasMailSource) {
     return {
       domain,
       gate,
@@ -108,6 +139,8 @@ export async function getMyMailOverview(): Promise<MailOverview> {
       aliases: [],
       forwardings: {},
       quota,
+      access: ctx.access,
+      limit: limitFor(0),
       webmailBase: null,
       live: provider.id !== 'mock',
     }
@@ -128,9 +161,17 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     aliases,
     forwardings,
     quota,
+    access: ctx.access,
+    limit: limitFor(mailboxes.length),
     webmailBase: provider.webmailUrl(),
     live: provider.id !== 'mock',
   }
+}
+
+/** Server-side guard shared by the actions that must stay closed while mail is in grace or suspended. */
+async function requireActiveMailAccess(userId: string, domainId: string): Promise<void> {
+  const ctx = await loadMailLimitContext(userId, domainId)
+  if (ctx.access.status !== 'active') throw new MailError('MAIL_ACCESS_INACTIVE')
 }
 
 export async function createMyMailbox(input: {
@@ -143,8 +184,7 @@ export async function createMyMailbox(input: {
   try {
     const user = await requireUser()
     const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
-    const quota = getMailQuota(plan, subscription)
-    if (!quota.allowed) throw new MailError('FORBIDDEN')
+    const planQuota = getMailQuota(plan, subscription)
 
     // Re-validated here: the dialog's checklist is only a usability aid.
     if (validateMailboxPassword(input.password, input.passwordConfirm).length > 0) {
@@ -154,16 +194,23 @@ export async function createMyMailbox(input: {
     const domain = await requireOwnedDomain(user.id, input.domainId)
     const provider = getMailProvider()
 
+    // Access status and limit are recomputed here; nothing from the client is trusted.
+    const ctx = await loadMailLimitContext(user.id, domain.id)
     // Re-count server-side: the client's view of the list may be stale or forged.
     const existing = await provider.listMailboxes(domain.id)
-    if (existing.length >= quota.maxMailboxes) throw new MailError('MAILBOX_LIMIT_REACHED')
+    const check = evaluateMailboxCreation({
+      status: ctx.access.status,
+      used: existing.length,
+      max: ctx.limit.max,
+    })
+    if (!check.ok) throw new MailError(check.code)
 
     const mailbox = await provider.createMailbox({
       domainId: domain.id,
       localPart: input.localPart,
       displayName: input.displayName,
-      // Quota per box comes from the plan, never from the client.
-      quotaMb: quota.quotaMbPerBox,
+      // Size per box comes from the package, never from the client.
+      quotaMb: resolveMailboxQuotaMb(undefined, perBoxQuotaMb(planQuota)),
       password: input.password,
     })
 
@@ -227,14 +274,13 @@ export async function setMyMailboxPassword(
 ): Promise<MailResult<null>> {
   try {
     const user = await requireUser()
-    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
-    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     if (validateMailboxPassword(input?.password, input?.passwordConfirm).length > 0) {
       throw new MailError('INVALID_PASSWORD')
     }
 
     const domain = await requireOwnedDomain(user.id)
+    await requireActiveMailAccess(user.id, domain.id)
     const provider = getMailProvider()
 
     const owned = await provider.listMailboxes(domain.id)
@@ -277,10 +323,9 @@ export async function setMyMailboxForwarding(
 ): Promise<MailResult<MailForwarding>> {
   try {
     const user = await requireUser()
-    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
-    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     const domain = await requireOwnedDomain(user.id)
+    await requireActiveMailAccess(user.id, domain.id)
     const provider = getMailProvider()
 
     const [mailboxes, aliases] = await Promise.all([
@@ -325,10 +370,9 @@ export async function createMyAlias(input: {
 }): Promise<MailResult<MailAlias>> {
   try {
     const user = await requireUser()
-    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
-    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     const domain = await requireOwnedDomain(user.id, input.domainId)
+    await requireActiveMailAccess(user.id, domain.id)
     const provider = getMailProvider()
 
     const localPart = typeof input.localPart === 'string' ? input.localPart.trim().toLowerCase() : ''
@@ -393,10 +437,9 @@ export async function deleteMyAlias(aliasId: string): Promise<MailResult<null>> 
 export async function setMyAliasActive(aliasId: string, active: boolean): Promise<MailResult<null>> {
   try {
     const user = await requireUser()
-    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
-    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     const domain = await requireOwnedDomain(user.id)
+    await requireActiveMailAccess(user.id, domain.id)
     const provider = getMailProvider()
 
     const owned = await provider.listAliases(domain.id)

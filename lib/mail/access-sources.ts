@@ -1,5 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planIncludesMail, type MailAccessSource } from './access-state'
+import {
+  grantsToAccessSources,
+  type MailAddonGrant,
+  type MailGrants,
+  type MailPlanGrant,
+} from './mailbox-limits'
 
 /**
  * Where the two mail-access sources are read from. Server only; takes a user id
@@ -43,16 +49,52 @@ export async function loadMailPlanSources(userId: string): Promise<MailAccessSou
   return sources
 }
 
+/** Same rows as `loadMailPlanSources`, but keeping the plan code so the mailbox limit can be derived. */
+export async function loadMailPlanGrants(userId: string): Promise<MailPlanGrant[]> {
+  const { data, error } = await createAdminClient()
+    .from('billing_subscriptions')
+    .select(
+      'status, current_period_end, updated_at, billing_plans!billing_subscriptions_plan_id_fkey(code)',
+    )
+    .eq('user_id', userId)
+    .neq('status', 'incomplete')
+  if (error) throw new Error('mail_access_sources_read_failed')
+
+  const grants: MailPlanGrant[] = []
+  for (const row of (data ?? []) as unknown as SubscriptionRow[]) {
+    const plan = Array.isArray(row.billing_plans) ? row.billing_plans[0] : row.billing_plans
+    if (!plan?.code || !planIncludesMail(plan.code)) continue
+    const entitled = ENTITLING_STATUSES.has(row.status)
+    grants.push({
+      code: plan.code,
+      entitled,
+      endsAt: row.current_period_end,
+      endedAt: entitled ? null : row.updated_at,
+    })
+  }
+  return grants
+}
+
 /**
- * Source 2: a standalone GLOVAL Mail add-on.
+ * Source 2: standalone GLOVAL Mail add-ons (capacity 1 / 10 / 25 / 50 mailboxes each).
  *
  * PLACEHOLDER: there is no GLOVAL Mail add-on in the catalog or in
- * `user_addon_entitlements` yet, so this returns no sources. When the add-on
- * exists, return one `{ kind: 'addon', entitled, endsAt }` per active grant here
- * and nothing else needs to change.
+ * `user_addon_entitlements` yet, so this returns no grants. This is the ONE place
+ * to wire it: return one `{ capacity, entitled, endsAt }` per grant and both the
+ * access state (`loadMailAddonSources`) and the mailbox limit pick it up.
  */
-export async function loadMailAddonSources(_userId: string): Promise<MailAccessSource[]> {
+export async function loadMailAddonGrants(_userId: string): Promise<MailAddonGrant[]> {
   return []
+}
+
+export async function loadMailAddonSources(userId: string): Promise<MailAccessSource[]> {
+  return grantsToAccessSources({ plans: [], addons: await loadMailAddonGrants(userId) })
+}
+
+/** Both grant kinds in one read, for the page and the mailbox-creation check. */
+export async function loadMailGrants(userId: string): Promise<MailGrants> {
+  const [plans, addons] = await Promise.all([loadMailPlanGrants(userId), loadMailAddonGrants(userId)])
+  return { plans, addons }
 }
 
 export async function loadMailAccessSources(userId: string): Promise<MailAccessSource[]> {

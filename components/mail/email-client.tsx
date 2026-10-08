@@ -29,6 +29,7 @@ import { StatusBadge } from '@/components/mail/status-badge'
 import { PasswordFields } from '@/components/mail/password-fields'
 import { getPasswordCopy } from '@/components/mail/password-copy'
 import { getAliasCopy } from '@/components/mail/alias-copy'
+import { formatGraceBody, getLimitsCopy } from '@/components/mail/limits-copy'
 import { getForwardingCopy, type ForwardingCopy } from '@/components/mail/forwarding-copy'
 import { validateForwardingDestinations } from '@/lib/mail/forwarding'
 import {
@@ -65,6 +66,7 @@ export function EmailClient({
   const pc = getPasswordCopy(lang)
   const ac = getAliasCopy(lang)
   const fc = getForwardingCopy(lang)
+  const lc = getLimitsCopy(lang)
 
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -78,7 +80,7 @@ export function EmailClient({
   const [passwordTarget, setPasswordTarget] = useState<Mailbox | null>(null)
   const [forwardTarget, setForwardTarget] = useState<Mailbox | null>(null)
 
-  const { domain, gate, mailboxes, aliases, forwardings, quota } = overview
+  const { domain, gate, mailboxes, aliases, forwardings, quota, access, limit } = overview
 
   /** Localize a provider error code; never surface raw provider text. */
   const errorText = (code: MailErrorCode): string =>
@@ -95,7 +97,8 @@ export function EmailClient({
       FORWARD_UPDATE_FAILED: fc.errUpdateFailed,
       FORWARD_FILTER_CONFLICT: fc.errConflict,
       FORWARD_UNREADABLE: fc.errUnreadable,
-      MAILBOX_LIMIT_REACHED: m.errLimitReached,
+      MAILBOX_LIMIT_REACHED: lc.errLimitReached,
+      MAIL_ACCESS_INACTIVE: lc.errAccessInactive,
       QUOTA_EXCEEDED: m.errQuota,
       DOMAIN_NOT_ACTIVE: m.errDomainNotActive,
       FORBIDDEN: m.errForbidden,
@@ -103,7 +106,11 @@ export function EmailClient({
       NOT_FOUND: m.errGeneric,
     })[code] ?? m.errGeneric
 
-  const atLimit = mailboxes.length >= quota.maxMailboxes
+  // Display only: every action re-checks access and limit on the server.
+  const locked = access.status !== 'active'
+  const atLimit = mailboxes.length >= limit.max
+  const overLimit = limit.overBy > 0
+  const createBlocked = locked || atLimit
 
   const shell = (children: React.ReactNode) => (
     <div className="relative min-h-svh">
@@ -378,6 +385,31 @@ export function EmailClient({
 
   return shell(
     <>
+      {access.status === 'grace' && (
+        <div
+          role="status"
+          className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm"
+        >
+          <p className="min-w-0 flex-1 basis-64 leading-relaxed text-foreground">
+            {formatGraceBody(lc, access.graceDaysRemaining)}
+          </p>
+          <LinkButton href="/billing" size="sm">
+            {lc.renew}
+          </LinkButton>
+        </div>
+      )}
+      {access.status === 'suspended' && (
+        <div
+          role="alert"
+          className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm"
+        >
+          <p className="min-w-0 flex-1 basis-64 leading-relaxed text-foreground">{lc.suspendedBody}</p>
+          <LinkButton href="/billing" size="sm">
+            {lc.renew}
+          </LinkButton>
+        </div>
+      )}
+
       {/* Domain + quota summary */}
       <section className="mt-8 grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card/70 p-6">
@@ -396,7 +428,7 @@ export function EmailClient({
             {mailboxes.length}
             <span className="text-base font-normal text-muted-foreground">
               {' / '}
-              {quota.maxMailboxes}
+              {limit.max}
             </span>
           </p>
           <div
@@ -404,17 +436,33 @@ export function EmailClient({
             role="progressbar"
             aria-valuenow={mailboxes.length}
             aria-valuemin={0}
-            aria-valuemax={quota.maxMailboxes}
+            aria-valuemax={limit.max}
             aria-label={m.mailboxes}
           >
             <div
               className="h-full rounded-full bg-primary transition-all"
               style={{
-                width: `${usagePercent(mailboxes.length, quota.maxMailboxes)}%`,
+                width: `${usagePercent(mailboxes.length, limit.max)}%`,
               }}
             />
           </div>
-          {atLimit && <p className="mt-2 text-xs text-muted-foreground">{m.limitReachedHint}</p>}
+          <p className="mt-2 text-xs text-muted-foreground">
+            {lc.limitFromPlan}: {limit.fromPlan}
+            {limit.fromAddons > 0 && ` · ${lc.limitFromAddons}: ${limit.fromAddons}`}
+          </p>
+          {overLimit ? (
+            <div
+              role="alert"
+              className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed"
+            >
+              <p className="font-semibold">
+                {lc.overLimit} ({mailboxes.length} / {limit.max})
+              </p>
+              <p className="mt-0.5 text-muted-foreground">{lc.overLimitHint}</p>
+            </div>
+          ) : (
+            atLimit && !locked && <p className="mt-2 text-xs text-muted-foreground">{m.limitReachedHint}</p>
+          )}
         </div>
       </section>
 
@@ -427,6 +475,7 @@ export function EmailClient({
               {m.mailboxes}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{m.mailboxesHint}</p>
+            {locked && <p className="mt-1 text-xs text-muted-foreground">{lc.lockedHint}</p>}
           </div>
           <Button
             onClick={() => {
@@ -434,7 +483,8 @@ export function EmailClient({
               setNotice(null)
               setShowNewMailbox(true)
             }}
-            disabled={atLimit || isPending}
+            disabled={createBlocked || isPending}
+            title={locked ? lc.lockedHint : undefined}
             className="gap-2"
           >
             <Plus className="size-4" />
@@ -488,6 +538,8 @@ export function EmailClient({
                       setNotice(null)
                       setPasswordTarget(box)
                     }}
+                    disabled={locked}
+                    title={locked ? lc.lockedHint : undefined}
                     className="gap-1.5"
                   >
                     <RotateCcw className="size-3.5" />
@@ -501,6 +553,8 @@ export function EmailClient({
                       setNotice(null)
                       setForwardTarget(box)
                     }}
+                    disabled={locked}
+                    title={locked ? lc.lockedHint : undefined}
                     className="gap-1.5"
                   >
                     <Forward className="size-3.5" />
@@ -536,11 +590,13 @@ export function EmailClient({
               {m.aliases}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">{ac.aliasesHint}</p>
+            {locked && <p className="mt-1 text-xs text-muted-foreground">{lc.lockedHint}</p>}
           </div>
           <Button
             variant="outline"
             onClick={() => setShowNewAlias(true)}
-            disabled={mailboxes.length === 0 || isPending}
+            disabled={mailboxes.length === 0 || locked || isPending}
+            title={locked ? lc.lockedHint : undefined}
             className="gap-2"
           >
             <Plus className="size-4" />
@@ -594,7 +650,8 @@ export function EmailClient({
                       variant="outline"
                       size="sm"
                       onClick={() => handleEnableAlias(alias.id)}
-                      disabled={isPending}
+                      disabled={locked || isPending}
+                      title={locked ? lc.lockedHint : undefined}
                     >
                       {ac.enable}
                     </Button>
