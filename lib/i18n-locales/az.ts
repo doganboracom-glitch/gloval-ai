@@ -927,9 +927,6 @@ const az: DeepPartial<Dict> = {
     resetPassword: 'Şifrəni sıfırla',
     confirmRemoveMailbox: 'Bu poçt qutusu və içindəki bütün e-poçtlar həmişəlik silinəcək. Əminsiniz?',
     confirmRemoveAlias: 'Bu ləqəb silinəcək. Əminsiniz?',
-    tempPasswordTitle: 'Müvəqqəti şifrə',
-    tempPasswordBody:
-      'Bu şifrə yalnız bir dəfə göstərilir. Onu kopyalayın və istifadəçiyə təhlükəsiz şəkildə ötürün.',
     copy: 'Kopyala',
     copied: 'Kopyalandı',
     close: 'Bağla',

@@ -1063,9 +1063,6 @@ const dict = {
       confirmRemoveMailbox:
         'Bu posta kutusu ve içindeki tüm postalar kalıcı olarak silinecek. Emin misin?',
       confirmRemoveAlias: 'Bu yönlendirme silinecek. Emin misin?',
-      tempPasswordTitle: 'Geçici şifre',
-      tempPasswordBody:
-        'Bu şifre yalnızca bir kez gösterilir. Kopyalayıp kullanıcıya güvenli bir şekilde ilet.',
       copy: 'Kopyala',
       copied: 'Kopyalandı',
       close: 'Kapat',
@@ -2534,9 +2531,6 @@ const dict = {
       confirmRemoveMailbox:
         'This mailbox and all mail inside it will be permanently deleted. Are you sure?',
       confirmRemoveAlias: 'This alias will be deleted. Are you sure?',
-      tempPasswordTitle: 'Temporary password',
-      tempPasswordBody:
-        'This password is shown only once. Copy it and share it securely with the user.',
       copy: 'Copy',
       copied: 'Copied',
       close: 'Close',

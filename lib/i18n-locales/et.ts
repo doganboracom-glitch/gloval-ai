@@ -927,9 +927,6 @@ const et: DeepPartial<Dict> = {
     resetPassword: 'Lähtesta parool',
     confirmRemoveMailbox: 'See postkast ja kõik selles sisalduvad e-kirjad kustutatakse jäädavalt. Kas oled kindel?',
     confirmRemoveAlias: 'See alias kustutatakse. Kas oled kindel?',
-    tempPasswordTitle: 'Ajutine parool',
-    tempPasswordBody:
-      'Seda parooli näidatakse ainult üks kord. Kopeeri see ja jaga turvaliselt kasutajaga.',
     copy: 'Kopeeri',
     copied: 'Kopeeritud',
     close: 'Sulge',

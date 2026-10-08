@@ -927,9 +927,6 @@ const pl: DeepPartial<Dict> = {
     resetPassword: 'Zresetuj hasło',
     confirmRemoveMailbox: 'Ta skrzynka pocztowa i wszystkie zawarte w niej e-maile zostaną trwale usunięte. Czy na pewno?',
     confirmRemoveAlias: 'Ten alias zostanie usunięty. Czy na pewno?',
-    tempPasswordTitle: 'Hasło tymczasowe',
-    tempPasswordBody:
-      'To hasło zostanie wyświetlone tylko raz. Skopiuj je i bezpiecznie przekaż użytkownikowi.',
     copy: 'Kopiuj',
     copied: 'Skopiowano',
     close: 'Zamknij',
