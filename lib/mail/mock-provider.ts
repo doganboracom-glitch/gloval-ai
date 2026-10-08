@@ -5,12 +5,16 @@ import {
   type CreateMailboxInput,
   type MailAlias,
   type MailDomain,
+  type MailForwarding,
   type MailLogEntry,
   type MailLogFilter,
   type MailProvider,
   type Mailbox,
   type UpdateMailboxInput,
 } from './types'
+import { validateAliasDestinations } from './alias-destinations'
+import { validateForwardingDestinations } from './forwarding'
+import { getWebmailUrl } from './webmail'
 
 /**
  * In-memory mail provider used until a real one (Mailcow / Zoho / Workspace) is
@@ -33,6 +37,7 @@ const SEED_USER_ID = 'seed-user'
 const domains = new Map<string, MailDomain>()
 const mailboxes = new Map<string, Mailbox>()
 const aliases = new Map<string, MailAlias>()
+const forwardings = new Map<string, MailForwarding>()
 let logs: MailLogEntry[] = []
 let seeded = false
 
@@ -86,6 +91,7 @@ function seed() {
     domainId: SEED_DOMAIN_ID,
     address: 'iletisim@gloval.ai',
     destinations: ['info@gloval.ai'],
+    active: true,
     createdAt: hoursAgo(24 * 12),
   })
 
@@ -267,16 +273,11 @@ export const mockMailProvider: MailProvider = {
     await latency(null, 200)
   },
 
-  async resetPassword(mailboxId) {
+  async setPassword(mailboxId, _password) {
     seed()
     if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
-    // Mock credential: random, shown once, never stored in readable form.
-    const tempPassword = Array.from({ length: 16 }, () =>
-      'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$'.charAt(
-        Math.floor(Math.random() * 60),
-      ),
-    ).join('')
-    return latency({ tempPassword }, 250)
+    // The mock has no credential store; the password is intentionally discarded.
+    await latency(null, 250)
   },
 
   async listAliases(domainId) {
@@ -296,30 +297,41 @@ export const mockMailProvider: MailProvider = {
     if (!isValidLocalPart(normalized)) throw new MailError('INVALID_ADDRESS')
 
     const address = `${normalized}@${domain.domain}`
-    const clash =
-      [...aliases.values()].some((a) => a.address === address) ||
-      [...mailboxes.values()].some((m) => m.address === address)
-    if (clash) throw new MailError('ALIAS_EXISTS')
+    if ([...mailboxes.values()].some((m) => m.address === address)) throw new MailError('ADDRESS_IS_MAILBOX')
+    if ([...aliases.values()].some((a) => a.address === address)) throw new MailError('ALIAS_EXISTS')
 
-    // Every destination must be a real mailbox on this domain, otherwise the
-    // alias would silently black-hole mail.
-    const known = new Set(
-      [...mailboxes.values()].filter((m) => m.domainId === domainId).map((m) => m.address),
-    )
-    const cleaned = destinations.map((d) => d.trim().toLowerCase()).filter(Boolean)
-    if (cleaned.length === 0 || cleaned.some((d) => !known.has(d))) {
-      throw new MailError('INVALID_DESTINATION')
-    }
+    // Addresses on this domain must be real mailboxes/aliases, otherwise the
+    // alias would silently black-hole mail. External addresses are allowed.
+    const known = new Set([
+      ...[...mailboxes.values()].filter((m) => m.domainId === domainId).map((m) => m.address),
+      ...[...aliases.values()].filter((a) => a.domainId === domainId).map((a) => a.address),
+    ])
+    const checked = validateAliasDestinations({
+      aliasAddress: address,
+      domain: domain.domain,
+      destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
 
     const alias: MailAlias = {
       id: id('als'),
       domainId,
       address,
-      destinations: cleaned,
+      destinations: checked.destinations,
+      active: true,
       createdAt: new Date().toISOString(),
     }
     aliases.set(alias.id, alias)
     return latency(alias, 250)
+  },
+
+  async setAliasActive(aliasId, active) {
+    seed()
+    const alias = aliases.get(aliasId)
+    if (!alias) throw new MailError('NOT_FOUND')
+    aliases.set(aliasId, { ...alias, active })
+    await latency(null, 200)
   },
 
   async deleteAlias(aliasId) {
@@ -327,6 +339,50 @@ export const mockMailProvider: MailProvider = {
     if (!aliases.has(aliasId)) throw new MailError('NOT_FOUND')
     aliases.delete(aliasId)
     await latency(null, 200)
+  },
+
+  async getMailboxForwarding(mailboxId) {
+    seed()
+    if (!mailboxes.has(mailboxId)) throw new MailError('NOT_FOUND')
+    return latency(forwardings.get(mailboxId) ?? { state: 'none' })
+  },
+
+  async setMailboxForwarding(mailboxId, input) {
+    seed()
+    const box = mailboxes.get(mailboxId)
+    if (!box) throw new MailError('NOT_FOUND')
+
+    const checked = validateForwardingDestinations({
+      mailboxAddress: box.address,
+      domain: box.address.split('@')[1],
+      destinations: input.destinations,
+      internalAddresses: null,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    if (checked.destinations.length === 0) {
+      forwardings.delete(mailboxId)
+      return latency<MailForwarding>({ state: 'none' }, 200)
+    }
+
+    const next: MailForwarding = {
+      state: 'forwarding',
+      destinations: checked.destinations,
+      keepCopy: input.keepCopy === true,
+      active: true,
+    }
+    forwardings.set(mailboxId, next)
+    return latency(next, 250)
+  },
+
+  async listForwardings(mailboxIds) {
+    seed()
+    const result: Record<string, MailForwarding> = {}
+    for (const id of mailboxIds) {
+      const entry = forwardings.get(id)
+      if (entry) result[id] = entry
+    }
+    return latency(result)
   },
 
   async listLogs({ domainId, status, search, limit = 100 }) {
@@ -355,7 +411,7 @@ export const mockMailProvider: MailProvider = {
     return latency(result)
   },
 
-  webmailUrl(address) {
-    return `https://webmail.gloval.ai/?user=${encodeURIComponent(address)}`
+  webmailUrl() {
+    return getWebmailUrl()
   },
 }

@@ -54,7 +54,9 @@ describe('mailcowProvider', () => {
 
   it('tolerates a domain that already exists on the server', async () => {
     const provider = await loadProvider()
-    fetchMock.mockImplementation(async () => json([{ type: 'danger', msg: 'domain_exists' }]))
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes('/add/') ? json([{ type: 'danger', msg: 'domain_exists' }]) : json({}),
+    )
 
     await expect(provider.ensureDomain!(customDomain)).resolves.toMatchObject({ id: 'example.com.tr' })
   })

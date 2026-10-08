@@ -1,7 +1,9 @@
 'use client'
 
-import { CheckCircle2, CircleDashed, Loader2, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, CircleDashed, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { Button } from '@/components/ui/button'
+import { getRecheckCopy } from '@/components/domains/recheck-copy'
 import type { CustomDomain } from '@/lib/custom-domains/types'
 import type { Dict } from '@/lib/i18n'
 
@@ -33,9 +35,25 @@ function Row({ label, text, tone }: { label: string; text: string; tone: Tone })
   )
 }
 
-export function ConnectionStatus({ domain, live, checking }: { domain: CustomDomain; live: boolean; checking: boolean }) {
-  const { t } = useLanguage()
+export function ConnectionStatus({
+  domain,
+  live,
+  checking,
+  onRecheck,
+  rechecking = false,
+  recheckError = null,
+}: {
+  domain: CustomDomain
+  live: boolean
+  checking: boolean
+  /** When provided, a "Re-check" button is shown regardless of the domain's live state. */
+  onRecheck?: () => void
+  rechecking?: boolean
+  recheckError?: string | null
+}) {
+  const { t, lang } = useLanguage()
   const c = t.domains.connection
+  const rc = getRecheckCopy(lang)
   const { connection: k } = domain
   const hostingMissing = !k.legacy && k.vercel === 'not_configured'
   const unconfirmed = live && !k.legacy && k.lastError?.startsWith('inconclusive:') === true
@@ -86,6 +104,19 @@ export function ConnectionStatus({ domain, live, checking }: { domain: CustomDom
         <p className="mt-1 text-pretty text-xs text-destructive" title={k.lastError}>
           {describeError(k.lastError, c)}
         </p>
+      )}
+      {onRecheck && (
+        <div className="mt-4">
+          <Button variant="secondary" size="sm" onClick={onRecheck} disabled={checking || rechecking}>
+            {rechecking ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            {rechecking ? rc.checking : rc.button}
+          </Button>
+          {recheckError && (
+            <p role="alert" className="mt-2 text-pretty text-xs text-destructive">
+              {recheckError}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

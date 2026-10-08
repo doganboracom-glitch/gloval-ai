@@ -53,8 +53,10 @@ export type MailAlias = {
   id: string
   domainId: string
   address: string
-  /** One alias may fan out to several real mailboxes. */
+  /** Mailboxes on the domain and/or external addresses (e.g. a customer's Gmail). */
   destinations: string[]
+  /** An inactive alias exists on the server but does not deliver mail. */
+  active: boolean
   createdAt: string
 }
 
@@ -74,6 +76,8 @@ export type CreateMailboxInput = {
   localPart: string
   displayName: string
   quotaMb: number
+  /** Chosen by the customer and already validated. Forwarded, never stored. */
+  password: string
 }
 
 export type UpdateMailboxInput = {
@@ -86,6 +90,23 @@ export type CreateAliasInput = {
   domainId: string
   localPart: string
   destinations: string[]
+}
+
+/**
+ * Forwarding of everything a mailbox receives. `unreadable` means a filter with
+ * Gloval's name exists but is not in the shape Gloval writes, so it is never
+ * edited without an explicit overwrite.
+ */
+export type MailForwarding =
+  | { state: 'none' }
+  | { state: 'forwarding'; destinations: string[]; keepCopy: boolean; active: boolean }
+  | { state: 'unreadable' }
+
+export type SetForwardingInput = {
+  /** Empty turns forwarding off. */
+  destinations: string[]
+  keepCopy: boolean
+  overwriteUnreadable?: boolean
 }
 
 export type MailLogFilter = {
@@ -104,10 +125,18 @@ export type MailLogFilter = {
 export type MailErrorCode =
   | 'MAILBOX_EXISTS'
   | 'ALIAS_EXISTS'
+  | 'ADDRESS_IS_MAILBOX'
   | 'QUOTA_EXCEEDED'
   | 'MAILBOX_LIMIT_REACHED'
   | 'INVALID_ADDRESS'
   | 'INVALID_DESTINATION'
+  | 'TOO_MANY_DESTINATIONS'
+  | 'SELF_DESTINATION'
+  | 'INVALID_PASSWORD'
+  | 'PASSWORD_UPDATE_FAILED'
+  | 'FORWARD_UPDATE_FAILED'
+  | 'FORWARD_FILTER_CONFLICT'
+  | 'FORWARD_UNREADABLE'
   | 'DOMAIN_NOT_ACTIVE'
   | 'NOT_FOUND'
   | 'FORBIDDEN'
@@ -123,8 +152,24 @@ export class MailError extends Error {
 /** Discriminated result used by server actions so clients never see a throw. */
 export type MailResult<T> = { ok: true; data: T } | { ok: false; error: MailErrorCode }
 
+/** A real DNS record a customer must publish for mail on their own domain. */
+export type MailDnsRecordSpec = {
+  type: 'MX' | 'TXT'
+  host: string
+  value: string
+  priority?: number
+  label?: 'SPF' | 'DKIM' | 'DMARC'
+}
+
 export interface MailProvider {
   readonly id: string
+
+  /**
+   * The real MX/SPF/DKIM/DMARC records for a provisioned domain. Optional: an
+   * adapter without real DNS data (the mock) omits it, and the placeholder
+   * records stay in place.
+   */
+  dnsRecords?(domain: string): Promise<MailDnsRecordSpec[]>
 
   listDomains(userId?: string): Promise<MailDomain[]>
   getDomain(domainId: string): Promise<MailDomain | null>
@@ -149,16 +194,23 @@ export interface MailProvider {
   createMailbox(input: CreateMailboxInput): Promise<Mailbox>
   updateMailbox(id: string, input: UpdateMailboxInput): Promise<Mailbox>
   deleteMailbox(id: string): Promise<void>
-  resetPassword(id: string): Promise<{ tempPassword: string }>
+  /** Sets the mailbox password to a value the customer chose. Returns nothing: the password is never echoed back. */
+  setPassword(id: string, password: string): Promise<void>
 
   listAliases(domainId: string): Promise<MailAlias[]>
   createAlias(input: CreateAliasInput): Promise<MailAlias>
   deleteAlias(id: string): Promise<void>
+  setAliasActive(id: string, active: boolean): Promise<void>
+
+  getMailboxForwarding(mailboxId: string): Promise<MailForwarding>
+  setMailboxForwarding(mailboxId: string, input: SetForwardingInput): Promise<MailForwarding>
+  /** Forwarding state per mailbox id; mailboxes without forwarding are omitted. */
+  listForwardings(mailboxIds: string[]): Promise<Record<string, MailForwarding>>
 
   listLogs(filter: MailLogFilter): Promise<MailLogEntry[]>
 
-  /** Where the end user reads this mailbox in a browser. */
-  webmailUrl(address: string): string
+  /** Where end users read mail in a browser. One shared address, never derived from a customer domain (see `lib/mail/webmail.ts`). */
+  webmailUrl(): string
 }
 
 /** Valid local part: RFC-pragmatic subset that real providers accept. */

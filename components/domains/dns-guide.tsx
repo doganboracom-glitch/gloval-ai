@@ -2,11 +2,13 @@
 
 import { Info, ListChecks, MailWarning } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { getEmailDnsCopy } from '@/components/domains/email-dns-copy'
 import type { CustomDomain } from '@/lib/custom-domains/types'
 
 export function DnsGuide({ domain }: { domain: CustomDomain }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const c = t.domains.guide
+  const emailCopy = getEmailDnsCopy(lang)
 
   const usable = domain.status === 'active'
   const actionable = domain.dns.filter((r) => r.purpose !== 'email' && !r.placeholder)
@@ -46,6 +48,22 @@ export function DnsGuide({ domain }: { domain: CustomDomain }) {
             ))}
           </ol>
           {hasWebsiteRecords && <p className="mt-3 text-pretty text-xs text-muted-foreground">{c.sameNameNote}</p>}
+        </section>
+      )}
+
+      {hasEmailRecords && (
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h3 className="flex items-center gap-2 font-display text-sm font-semibold">
+            <ListChecks className="size-4 text-muted-foreground" />
+            {emailCopy.stepsTitle}
+          </h3>
+          <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted-foreground">
+            {emailCopy.steps.map((step) => (
+              <li key={step} className="text-pretty">
+                {step}
+              </li>
+            ))}
+          </ol>
         </section>
       )}
 

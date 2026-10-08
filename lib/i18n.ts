@@ -1375,7 +1375,7 @@ const dict = {
           'Aynı ada ve türe sahip eski bir A veya CNAME (web sitesi) kaydı varsa onu yenisiyle değiştirin; iki tane bırakmayın.',
         emailTitle: 'E-posta kayıtlarına dokunmayın',
         emailBody:
-          'Mevcut MX, SPF, DKIM ve DMARC kayıtlarınızı silmeyin veya değiştirmeyin. Yukarıdaki web sitesi ve doğrulama kayıtları onlardan ayrıdır ve e-postanızı etkilemez.',
+          'Mevcut MX ve TXT kayıtlarınızı (SPF, DKIM, DMARC) silmeyin veya değiştirmeyin. Yukarıdaki web sitesi ve doğrulama kayıtları onlardan ayrıdır ve e-postanızı etkilemez.',
         needsOwnership:
           'Web sitesi kayıtları (A/CNAME), sahiplik doğrulandıktan sonra barındırma sağlayıcısından alınır. Şimdilik yalnızca doğrulama TXT kaydını ekleyin.',
         hostingMissing:

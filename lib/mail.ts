@@ -12,11 +12,16 @@ import {
 } from '@/lib/mail/domain-service'
 import { getMailQuota } from '@/lib/mail/access'
 import { requireAdmin } from '@/lib/mail/admin-guard'
+import { validateMailboxPassword } from '@/lib/mail/password'
+import { validateAliasDestinations } from '@/lib/mail/alias-destinations'
+import { validateForwardingDestinations } from '@/lib/mail/forwarding'
 import {
   MailError,
+  isValidLocalPart,
   type MailAlias,
   type MailDomain,
   type MailErrorCode,
+  type MailForwarding,
   type MailLogEntry,
   type MailLogStatus,
   type MailResult,
@@ -45,6 +50,8 @@ export type MailOverview = {
   gate: MailDomainGate
   mailboxes: Mailbox[]
   aliases: MailAlias[]
+  /** Mailbox id -> forwarding, only for mailboxes that have one. Best effort: a failed read is left out. */
+  forwardings: Record<string, MailForwarding>
   quota: { allowed: boolean; maxMailboxes: number; quotaMbPerBox: number; reason?: string }
   webmailBase: string | null
   /** True when a real provider is connected (vs. the in-memory mock). */
@@ -99,6 +106,7 @@ export async function getMyMailOverview(): Promise<MailOverview> {
       gate,
       mailboxes: [],
       aliases: [],
+      forwardings: {},
       quota,
       webmailBase: null,
       live: provider.id !== 'mock',
@@ -109,14 +117,18 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     provider.listMailboxes(domain.id),
     provider.listAliases(domain.id),
   ])
+  const forwardings = await provider
+    .listForwardings(mailboxes.map((m) => m.id))
+    .catch(() => ({}) as Record<string, MailForwarding>)
 
   return {
     domain,
     gate,
     mailboxes,
     aliases,
+    forwardings,
     quota,
-    webmailBase: provider.webmailUrl(`user@${domain.domain}`),
+    webmailBase: provider.webmailUrl(),
     live: provider.id !== 'mock',
   }
 }
@@ -125,12 +137,19 @@ export async function createMyMailbox(input: {
   domainId: string
   localPart: string
   displayName: string
+  password: string
+  passwordConfirm: string
 }): Promise<MailResult<Mailbox>> {
   try {
     const user = await requireUser()
     const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
     const quota = getMailQuota(plan, subscription)
     if (!quota.allowed) throw new MailError('FORBIDDEN')
+
+    // Re-validated here: the dialog's checklist is only a usability aid.
+    if (validateMailboxPassword(input.password, input.passwordConfirm).length > 0) {
+      throw new MailError('INVALID_PASSWORD')
+    }
 
     const domain = await requireOwnedDomain(user.id, input.domainId)
     const provider = getMailProvider()
@@ -145,6 +164,7 @@ export async function createMyMailbox(input: {
       displayName: input.displayName,
       // Quota per box comes from the plan, never from the client.
       quotaMb: quota.quotaMbPerBox,
+      password: input.password,
     })
 
     revalidatePath('/dashboard/email')
@@ -197,9 +217,41 @@ export async function deleteMyMailbox(mailboxId: string): Promise<MailResult<nul
   }
 }
 
-export async function resetMyMailboxPassword(
+/**
+ * Sets a mailbox password chosen by the customer. The password goes straight to
+ * the provider: it is not logged, stored, returned, or put in any error.
+ */
+export async function setMyMailboxPassword(
   mailboxId: string,
-): Promise<MailResult<{ tempPassword: string }>> {
+  input: { password: string; passwordConfirm: string },
+): Promise<MailResult<null>> {
+  try {
+    const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    if (validateMailboxPassword(input?.password, input?.passwordConfirm).length > 0) {
+      throw new MailError('INVALID_PASSWORD')
+    }
+
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const owned = await provider.listMailboxes(domain.id)
+    if (!owned.some((m) => m.id === mailboxId)) throw new MailError('FORBIDDEN')
+
+    await provider.setPassword(mailboxId, input.password)
+    return { ok: true, data: null }
+  } catch (error) {
+    // Deliberately no `fail()` here: it logs the raw error object.
+    const code: MailErrorCode = error instanceof MailError ? error.code : 'PASSWORD_UPDATE_FAILED'
+    console.log('[v0] mailbox password update failed:', code)
+    return { ok: false, error: code }
+  }
+}
+
+/** Reads one of the caller's own mailboxes' forwarding. Ownership is re-checked against their mailbox list. */
+export async function getMyMailboxForwarding(mailboxId: string): Promise<MailResult<MailForwarding>> {
   try {
     const user = await requireUser()
     const domain = await requireOwnedDomain(user.id)
@@ -208,10 +260,61 @@ export async function resetMyMailboxPassword(
     const owned = await provider.listMailboxes(domain.id)
     if (!owned.some((m) => m.id === mailboxId)) throw new MailError('FORBIDDEN')
 
-    const result = await provider.resetPassword(mailboxId)
-    return { ok: true, data: result }
+    return { ok: true, data: await provider.getMailboxForwarding(mailboxId) }
   } catch (error) {
     return fail(error)
+  }
+}
+
+/**
+ * Forwards everything a mailbox receives. An empty destination list turns
+ * forwarding off. Addresses on the customer's own domain must be one of their
+ * mailboxes or aliases; external addresses are allowed.
+ */
+export async function setMyMailboxForwarding(
+  mailboxId: string,
+  input: { destinations: string[]; keepCopy: boolean; overwriteUnreadable?: boolean },
+): Promise<MailResult<MailForwarding>> {
+  try {
+    const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const [mailboxes, aliases] = await Promise.all([
+      provider.listMailboxes(domain.id),
+      provider.listAliases(domain.id),
+    ])
+    const mailbox = mailboxes.find((m) => m.id === mailboxId)
+    if (!mailbox) throw new MailError('FORBIDDEN')
+
+    const known = new Set([
+      ...mailboxes.map((m) => m.address.toLowerCase()),
+      ...aliases.map((a) => a.address.toLowerCase()),
+    ])
+    const checked = validateForwardingDestinations({
+      mailboxAddress: mailbox.address,
+      domain: domain.domain,
+      destinations: input?.destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    const forwarding = await provider.setMailboxForwarding(mailboxId, {
+      destinations: checked.destinations,
+      keepCopy: input.keepCopy === true,
+      overwriteUnreadable: input.overwriteUnreadable === true,
+    })
+
+    revalidatePath('/dashboard/email')
+    return { ok: true, data: forwarding }
+  } catch (error) {
+    // Deliberately no `fail()`: it logs the raw error, which can carry provider text.
+    const code: MailErrorCode = error instanceof MailError ? error.code : 'FORWARD_UPDATE_FAILED'
+    console.log('[v0] mailbox forwarding update failed:', code)
+    return { ok: false, error: code }
   }
 }
 
@@ -226,10 +329,40 @@ export async function createMyAlias(input: {
     if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
 
     const domain = await requireOwnedDomain(user.id, input.domainId)
-    const alias = await getMailProvider().createAlias({
-      domainId: domain.id,
-      localPart: input.localPart,
+    const provider = getMailProvider()
+
+    const localPart = typeof input.localPart === 'string' ? input.localPart.trim().toLowerCase() : ''
+    if (!isValidLocalPart(localPart)) throw new MailError('INVALID_ADDRESS')
+    const address = `${localPart}@${domain.domain.toLowerCase()}`
+
+    // Re-read the caller's own mailboxes and aliases: this set is what makes an
+    // address on their domain a legal destination, so a forged request cannot
+    // target an address that is not theirs. External addresses skip it.
+    const [mailboxes, aliases] = await Promise.all([
+      provider.listMailboxes(domain.id),
+      provider.listAliases(domain.id),
+    ])
+    const known = new Set([
+      ...mailboxes.map((m) => m.address.toLowerCase()),
+      ...aliases.map((a) => a.address.toLowerCase()),
+    ])
+    // A mailbox and an alias cannot share an address, and the customer needs to
+    // be told which one is in the way.
+    if (mailboxes.some((m) => m.address.toLowerCase() === address)) throw new MailError('ADDRESS_IS_MAILBOX')
+    if (aliases.some((a) => a.address.toLowerCase() === address)) throw new MailError('ALIAS_EXISTS')
+
+    const checked = validateAliasDestinations({
+      aliasAddress: address,
+      domain: domain.domain,
       destinations: input.destinations,
+      internalAddresses: known,
+    })
+    if (!checked.ok) throw new MailError(checked.code)
+
+    const alias = await provider.createAlias({
+      domainId: domain.id,
+      localPart,
+      destinations: checked.destinations,
     })
 
     revalidatePath('/dashboard/email')
@@ -249,6 +382,27 @@ export async function deleteMyAlias(aliasId: string): Promise<MailResult<null>> 
     if (!owned.some((a) => a.id === aliasId)) throw new MailError('FORBIDDEN')
 
     await provider.deleteAlias(aliasId)
+    revalidatePath('/dashboard/email')
+    return { ok: true, data: null }
+  } catch (error) {
+    return fail(error)
+  }
+}
+
+/** Turns an existing alias on or off. Ownership is re-checked against the caller's own alias list. */
+export async function setMyAliasActive(aliasId: string, active: boolean): Promise<MailResult<null>> {
+  try {
+    const user = await requireUser()
+    const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
+    if (!getMailQuota(plan, subscription).allowed) throw new MailError('FORBIDDEN')
+
+    const domain = await requireOwnedDomain(user.id)
+    const provider = getMailProvider()
+
+    const owned = await provider.listAliases(domain.id)
+    if (!owned.some((a) => a.id === aliasId)) throw new MailError('FORBIDDEN')
+
+    await provider.setAliasActive(aliasId, active === true)
     revalidatePath('/dashboard/email')
     return { ok: true, data: null }
   } catch (error) {
