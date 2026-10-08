@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getBillingProfileStatusForUser } from '@/lib/billing-profile-store'
 import {
   CREDIT_NOTICE_MAX_AGE_DAYS,
   CREDIT_NOTICE_SEEN_COOKIE,
@@ -42,10 +43,12 @@ export async function GET() {
   const amount = parseCreditNoticeAmount(data.body)
   if (!amount || seen === String(data.id)) return NextResponse.json({ notice: null }, { headers: NO_STORE })
 
+  const billingProfileStatus = await getBillingProfileStatusForUser(userId)
   const notice: CreditNoticeView = {
     id: String(data.id),
     amount,
     firstPeriod: data.type === CREDIT_NOTICE_TYPE_FIRST,
+    billingProfileIncomplete: billingProfileStatus.available && !billingProfileStatus.complete,
   }
   return NextResponse.json({ notice }, { headers: NO_STORE })
 }

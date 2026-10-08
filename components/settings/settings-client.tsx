@@ -11,6 +11,7 @@ import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/brand-logo'
+import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -21,7 +22,8 @@ export function SettingsClient({
   userEmail: string
   fullName: string
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
+  const billingProfileCopy = getBillingProfileCopy(lang)
   const router = useRouter()
 
   // Profile (display name) modal
@@ -167,6 +169,13 @@ export function SettingsClient({
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">{t.settings.subtitle}</p>
         </div>
+
+        <Link
+          href="/billing#fatura-bilgileri"
+          className="mt-5 inline-flex items-center rounded-lg border border-brand/40 bg-brand/10 px-3 py-2 text-sm font-medium text-brand transition-colors hover:bg-brand/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {billingProfileCopy.accountLink}
+        </Link>
 
         <section className="mt-8 rounded-xl border border-border bg-card p-5">
           <div className="flex items-center justify-between gap-3">

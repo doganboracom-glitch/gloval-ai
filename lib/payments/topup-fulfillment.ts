@@ -61,8 +61,9 @@ export async function grantTopUpCredits(
 
   await logUserEvent({
     userId: charge.user_id,
-    type: 'payment_succeeded',
-    subject: 'Ödeme başarılı — AI işlemleri eklendi',
+  type: 'payment_succeeded',
+  subject: 'Ödeme başarılı — AI işlemleri eklendi',
+  includeBillingProfileReminder: true,
     body: `Ek AI paketi ödemeniz onaylandı ve hesabınıza ${pack.credits} AI işlemi eklendi. İşlem No: ${formatTicketNumber(charge.provider_ref ?? charge.id)}.`,
     emailAdmin: false,
   })

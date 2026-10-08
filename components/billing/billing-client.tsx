@@ -21,6 +21,9 @@ import { SiteCapacityCard, CreditSummaryCard } from '@/components/billing/capaci
 import type { AddOnOverview } from '@/lib/add-ons'
 import type { CreditSummary, SiteCapacity } from '@/lib/billing-summary'
 import { Button } from '@/components/ui/button'
+import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
+import { BillingProfileCard } from '@/components/billing/billing-profile-card'
+import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 import {
   subscribeToPlan,
   changePlan,
@@ -99,6 +102,10 @@ export function BillingClient({
   siteCapacity = null,
   creditSummary,
   userEmail,
+  billingProfile,
+  billingProfileStorageAvailable,
+  billingProfileDefaultFullName,
+  hasActivePaidSubscription = false,
   publishProjectId = null,
   initialTopUpId = null,
 }: {
@@ -117,12 +124,17 @@ export function BillingClient({
   /** Server-computed AI credit balance/period summary from the ledger. */
   creditSummary: CreditSummary
   userEmail: string
+  billingProfile: BillingProfileSummary | null
+  billingProfileStorageAvailable: boolean
+  billingProfileDefaultFullName: string
+  hasActivePaidSubscription?: boolean
   publishProjectId?: string | null
   /** Pack chosen in the out-of-credits modal; opens its checkout on arrival. */
   initialTopUpId?: string | null
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
+  const [billingProfileComplete, setBillingProfileComplete] = useState(billingProfile?.complete ?? false)
   const [isPending, startTransition] = useTransition()
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -887,6 +899,21 @@ export function BillingClient({
             {error}
           </div>
         )}
+
+        <BillingProfileBanner
+          show={
+            hasActivePaidSubscription &&
+            billingProfileStorageAvailable &&
+            !billingProfileComplete
+          }
+        />
+        <BillingProfileCard
+          initialProfile={billingProfile}
+          storageAvailable={billingProfileStorageAvailable}
+          defaultFullName={billingProfileDefaultFullName}
+          defaultEmail={userEmail}
+          onSaved={(profile) => setBillingProfileComplete(profile.complete)}
+        />
 
         {/* Current plan + usage summary */}
         <section className="mt-8 grid gap-4 sm:grid-cols-2">

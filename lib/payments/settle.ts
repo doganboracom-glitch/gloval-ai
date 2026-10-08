@@ -156,8 +156,9 @@ export async function settlePaymentResult(
       await logUserEvent({
         userId: sub.user_id,
         type: isUpgrade ? 'plan_upgraded' : 'payment_succeeded',
-        subject: isUpgrade ? 'Paket yükseltme başarılı' : 'Ödeme başarılı — paket aktif edildi',
-        body: isUpgrade
+  subject: isUpgrade ? 'Paket yükseltme başarılı' : 'Ödeme başarılı — paket aktif edildi',
+  includeBillingProfileReminder: true,
+  body: isUpgrade
           ? `Paket yükseltmeniz onaylandı. Yeni paket: ${plan?.name ?? 'Bilinmiyor'}. Ödenen ara fark: ${((pendingCharge?.amount_cents ?? 0) / 100).toFixed(2)} ${pendingCharge?.currency ?? plan?.currency ?? 'TRY'}. İşlem No: ${formatTicketNumber(ref)}.`
           : `Abonelik ödemeniz onaylandı ve paketiniz etkinleştirildi. İşlem No: ${formatTicketNumber(ref)}.`,
         emailAdmin: true,
@@ -231,8 +232,9 @@ export async function settlePaymentResult(
       await logUserEvent({
         userId: ent.user_id,
         type: 'payment_succeeded',
-        subject: 'Ödeme başarılı — hak etkinleştirildi',
-        body: `Tek seferlik hak ödemesi onaylandı (${ent.name}).`,
+  subject: 'Ödeme başarılı — hak etkinleştirildi',
+  includeBillingProfileReminder: true,
+  body: `Tek seferlik hak ödemesi onaylandı (${ent.name}).`,
         emailAdmin: true,
         adminSubject: (userEmail) => `${userEmail} üye ödemesi başarılı`,
         adminBody: (userEmail) => `Kullanıcı e-posta adresi: ${userEmail}\nPaket adı: ${ent.name}\nİşlem No: ${formatTicketNumber(ref)}\nİşlem tarihi: ${new Date().toLocaleString('tr-TR')}\nİşlem sonucu: Başarılı`,

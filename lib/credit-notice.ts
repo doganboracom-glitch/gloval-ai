@@ -8,6 +8,8 @@
  * it) and the first-period flag from the row `type`.
  */
 
+import { appendBillingProfileReminder } from '@/lib/billing-profile-copy'
+
 export const CREDIT_NOTICE_TYPE_FIRST = 'plan_credits_first'
 export const CREDIT_NOTICE_TYPE_PERIOD = 'plan_credits_period'
 export const CREDIT_NOTICE_TYPES = [CREDIT_NOTICE_TYPE_FIRST, CREDIT_NOTICE_TYPE_PERIOD] as const
@@ -38,12 +40,18 @@ export function creditNoticeDedupeKey(subscriptionId: string, periodStartIso: st
 }
 
 /** Row written to `notification_logs` (Turkish, for the admin screen). */
-export function buildCreditNotice(input: { amount: number; firstPeriod: boolean }) {
+export function buildCreditNotice(input: {
+  amount: number
+  firstPeriod: boolean
+  billingProfileIncomplete?: boolean
+}) {
+  const body = creditNoticeText('tr', input.amount, input.firstPeriod).replace(/\./g, '')
+
   return {
     type: input.firstPeriod ? CREDIT_NOTICE_TYPE_FIRST : CREDIT_NOTICE_TYPE_PERIOD,
     subject: 'Yapay zeka işlemleri eklendi',
     // Plain integer on purpose: `parseCreditNoticeAmount` reads it back.
-    body: creditNoticeText('tr', input.amount, input.firstPeriod).replace(/\./g, ''),
+    body: appendBillingProfileReminder(body, input.billingProfileIncomplete === true, 'tr'),
   }
 }
 
@@ -54,4 +62,9 @@ export function parseCreditNoticeAmount(body: string | null | undefined): number
   return Number.isFinite(amount) && amount > 0 ? amount : null
 }
 
-export type CreditNoticeView = { id: string; amount: number; firstPeriod: boolean }
+export type CreditNoticeView = {
+  id: string
+  amount: number
+  firstPeriod: boolean
+  billingProfileIncomplete: boolean
+}

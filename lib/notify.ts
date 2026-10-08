@@ -2,6 +2,8 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { appendBillingProfileReminder } from '@/lib/billing-profile-copy'
+import { getBillingProfileStatusForUser } from '@/lib/billing-profile-store'
 
 /**
  * Platform notification layer.
@@ -269,6 +271,7 @@ export async function logUserEvent(input: {
   subject: string
   body?: string | null
   emailAdmin?: boolean
+  includeBillingProfileReminder?: boolean
   adminSubject?: (userEmail: string) => string
   adminBody?: (userEmail: string) => string
   /**
@@ -279,12 +282,27 @@ export async function logUserEvent(input: {
    */
   dedupeKey?: string
 }): Promise<boolean> {
+  let body = input.body ?? input.subject
+  let notificationBody = input.body ?? null
+
+  if (input.includeBillingProfileReminder) {
+    try {
+      const profileStatus = await getBillingProfileStatusForUser(input.userId)
+      if (profileStatus.available && !profileStatus.complete) {
+        body = appendBillingProfileReminder(body, true, 'tr')
+        notificationBody = body
+      }
+    } catch {
+      // Notification enrichment is best-effort and never blocks payment handling.
+    }
+  }
+
   if (input.dedupeKey) {
     const claimed = await claimNotification({
       userId: input.userId,
       type: input.type,
       subject: input.subject,
-      body: input.body ?? null,
+      body: notificationBody,
       dedupeKey: input.dedupeKey,
     })
     if (!claimed) return false
@@ -294,12 +312,11 @@ export async function logUserEvent(input: {
       channel: 'system',
       type: input.type,
       subject: input.subject,
-      body: input.body ?? null,
+      body: notificationBody,
       status: 'sent',
     })
   }
 
-  const body = input.body ?? input.subject
   const html = emailShell(input.subject, `<p>${body}</p>`)
   const admin = createAdminClient()
   const {
@@ -318,7 +335,7 @@ export async function logUserEvent(input: {
   if (input.emailAdmin) {
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim() || 'doganboracom@gmail.com'
     const userEmail = user?.email ?? 'Bilinmiyor'
-    const adminBody = input.adminBody?.(userEmail) ?? body
+    const adminBody = input.adminBody?.(userEmail) ?? input.body ?? input.subject
     const adminSubject = input.adminSubject?.(userEmail) ?? `[Gloval AI] ${input.subject}`
     await sendTransactionalEmail({
       to: adminEmail,
