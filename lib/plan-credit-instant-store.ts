@@ -3,6 +3,7 @@ import 'server-only'
 import { after } from 'next/server'
 import { claimNotification } from '@/lib/notify'
 import { buildCreditNotice, creditNoticeDedupeKey } from '@/lib/credit-notice'
+import { isBillingProfileIncompleteForNotice } from '@/lib/billing-profile-store'
 import { isPlanCreditDryRun } from '@/lib/plan-credit-sweep'
 import { loadPlanCreditSubscription, supabasePlanCreditStore } from '@/lib/plan-credit-sweep-store'
 import {
@@ -16,7 +17,12 @@ import {
  * and credit period, claimed under a unique dedupe key so a replay stays silent.
  */
 async function writeCreditNotice(input: CreditNoticeInput): Promise<void> {
-  const notice = buildCreditNotice({ amount: input.amount, firstPeriod: input.firstPeriod })
+  const billingProfileIncomplete = await isBillingProfileIncompleteForNotice(input.userId)
+  const notice = buildCreditNotice({
+    amount: input.amount,
+    firstPeriod: input.firstPeriod,
+    billingProfileIncomplete,
+  })
   await claimNotification({
     userId: input.userId,
     type: notice.type,

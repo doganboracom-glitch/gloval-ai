@@ -30,6 +30,7 @@ import { LinkButton } from '@/components/link-button'
 import { BrandLogo } from '@/components/brand-logo'
 import type { PlanCode } from '@/lib/pricing-config'
 import { tenantUrl } from '@/lib/domains'
+import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 
 const headerActionClass =
   'h-11 gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted hover:text-foreground'
@@ -39,6 +40,7 @@ export function DashboardClient({
   userEmail,
   planCode,
   billingAlert = null,
+  showBillingProfileReminder = false,
 }: {
   projects: ProjectListItem[]
   userEmail: string
@@ -46,6 +48,7 @@ export function DashboardClient({
   planCode: PlanCode
   /** Ödeme gerektiren abonelik durumu; yoksa uyarı gösterilmez. */
   billingAlert?: 'past_due' | 'suspended' | null
+  showBillingProfileReminder?: boolean
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -206,6 +209,8 @@ export function DashboardClient({
             </LinkButton>
           </div>
         )}
+
+        <BillingProfileBanner show={showBillingProfileReminder} />
 
         {pendingError && (
           <div

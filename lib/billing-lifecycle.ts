@@ -474,8 +474,9 @@ export async function settleSubscriptionRenewal(input: {
     await logUserEvent({
       userId: sub.user_id,
       type: 'payment_succeeded',
-      subject: input.source === 'gift' ? 'Aboneliğinize hediye süre tanımlandı' : 'Abonelik yenilendi',
-      body:
+  subject: input.source === 'gift' ? 'Aboneliğinize hediye süre tanımlandı' : 'Abonelik yenilendi',
+  includeBillingProfileReminder: input.source !== 'gift',
+  body:
         (input.source === 'gift'
           ? `Aboneliğinize ${input.periodMonths ?? 1} ay hediye süre tanımlandı${plan ? ` (${plan.name})` : ''}. Yeni dönem sonu: ${periodEnd.toLocaleDateString('tr-TR')}.`
           : input.source === 'manual'

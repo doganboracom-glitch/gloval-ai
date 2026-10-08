@@ -5,6 +5,7 @@ import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
+import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
 // stale full-route cache — always render it dynamically so a project created
@@ -33,6 +34,15 @@ export default async function DashboardPage() {
     subscription?.status === 'past_due' || subscription?.status === 'suspended'
       ? subscription.status
       : null
+  const billingProfileStatus = await getMyBillingProfileStatusAction().catch(() => ({
+    available: false,
+    complete: false,
+  }))
+  const showBillingProfileReminder =
+    subscription?.status === 'active' &&
+    (currentPlan?.price_cents ?? 0) > 0 &&
+    billingProfileStatus.available &&
+    !billingProfileStatus.complete
 
   return (
     <>
@@ -42,6 +52,7 @@ export default async function DashboardPage() {
         userEmail={user.email ?? ''}
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}
+        showBillingProfileReminder={showBillingProfileReminder}
       />
     </>
   )

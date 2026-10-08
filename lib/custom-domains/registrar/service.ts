@@ -256,8 +256,9 @@ export async function finalizeDomainOrder(orderId: string): Promise<void> {
 
     await logUserEvent({
       userId: order.user_id,
-      type: 'domain_registered',
-      subject: 'Alan adı kaydı tamamlandı',
+  type: 'domain_registered',
+  subject: 'Alan adı kaydı tamamlandı',
+  includeBillingProfileReminder: true,
       body: `${order.domain} alan adınız başarıyla kaydedildi ve hesabınıza eklendi. İşlem No: ${formatTicketNumber(order.payment_reference ?? orderId)}.`,
       emailAdmin: true,
       adminSubject: (userEmail) => `${userEmail} yeni alan adı satın aldı: ${order.domain}`,

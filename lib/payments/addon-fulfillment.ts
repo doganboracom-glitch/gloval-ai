@@ -243,8 +243,9 @@ async function fulfilPaidPurchase(
   await safeNotify(() =>
     logUserEvent({
       userId: purchase.user_id,
-      type: 'payment_succeeded',
-      subject: 'Ödeme başarılı — ek hizmet etkinleştirildi',
+  type: 'payment_succeeded',
+  subject: 'Ödeme başarılı — ek hizmet etkinleştirildi',
+  includeBillingProfileReminder: true,
       body: `Ek hizmet ödemeniz onaylandı ve hizmetiniz etkinleştirildi. İşlem No: ${formatTicketNumber(result.reference)}.`,
       emailAdmin: false,
     }),

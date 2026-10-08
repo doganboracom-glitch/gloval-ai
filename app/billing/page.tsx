@@ -14,6 +14,7 @@ import { getCreditLedger } from '@/lib/ai-credits'
 import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
 import { BillingClient } from '@/components/billing/billing-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
+import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
 // made moments earlier is never served from a stale cache.
@@ -30,6 +31,14 @@ export default async function BillingPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/billing')
+
+  const [billingProfileResult, accountProfileResult] = await Promise.all([
+    getMyBillingProfileAction(),
+    supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
+  ])
+  const billingProfile = billingProfileResult.profile
+  const billingProfileStorageAvailable = billingProfileResult.available
+  const defaultBillingName = accountProfileResult.data?.full_name ?? ''
 
   // Each read below hits Supabase independently (several re-verify the session
   // with their own auth.getUser() round trip). A single transient network blip
@@ -115,6 +124,10 @@ export default async function BillingPage({
       siteCapacity={siteCapacity}
       creditSummary={creditSummary}
       userEmail={user.email ?? ''}
+      billingProfile={billingProfile}
+      billingProfileStorageAvailable={billingProfileStorageAvailable}
+      billingProfileDefaultFullName={defaultBillingName}
+      hasActivePaidSubscription={subscription?.status === 'active' && (currentPlan?.price_cents ?? 0) > 0}
       publishProjectId={projects.find((p) => p.id === publish)?.id ?? null}
       initialTopUpId={topup ?? null}
     />

@@ -646,8 +646,9 @@ export async function changePlan(
   // Log the upgrade/downgrade for the admin panel + notify the platform admin.
   await logUserEvent({
     userId,
-    type: isUpgrade ? 'plan_upgraded' : 'plan_downgraded',
-    subject: `${isUpgrade ? 'Paket yükseltme' : 'Paket düşürme'}: ${currentPlan.name} → ${newPlan.name}`,
+  type: isUpgrade ? 'plan_upgraded' : 'plan_downgraded',
+  subject: `${isUpgrade ? 'Paket yükseltme' : 'Paket düşürme'}: ${currentPlan.name} → ${newPlan.name}`,
+  includeBillingProfileReminder: isUpgrade,
     body: `Kullanıcı planını ${currentPlan.name} planından ${newPlan.name} planına ${
       isUpgrade ? 'yükseltti' : 'düşürdü'
     }. Net tutar: ${(netCents / 100).toFixed(2)} ${newPlan.currency}.`,

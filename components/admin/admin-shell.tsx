@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bell,
   CreditCard,
+  FileText,
   Globe,
   LayoutDashboard,
   LayoutTemplate,
@@ -20,6 +21,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { adminT } from '@/lib/admin/i18n'
 import { overdueT } from '@/lib/admin/overdue-copy'
+import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { cn } from '@/lib/utils'
 
 /**
@@ -39,13 +41,15 @@ export function AdminShell({
 }) {
   const { lang } = useLanguage()
   const t = adminT(lang)
+  const billingProfileCopy = getBillingProfileCopy(lang)
   const pathname = usePathname()
 
   const nav = [
     { href: '/admin', label: t.nav.dashboard, icon: LayoutDashboard, exact: true },
     { href: '/admin/users', label: t.nav.users, icon: Users },
     { href: '/admin/sites', label: t.nav.sites, icon: LayoutTemplate },
-    { href: '/admin/billing', label: t.nav.billing, icon: CreditCard },
+    { href: '/admin/billing', label: t.nav.billing, icon: CreditCard, exact: true },
+    { href: '/admin/billing/profiles', label: billingProfileCopy.adminNav, icon: FileText },
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe },

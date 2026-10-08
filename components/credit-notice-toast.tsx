@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import useSWR from 'swr'
 import { Sparkles, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { creditNoticeText, type CreditNoticeView } from '@/lib/credit-notice'
 
 const fetchNotice = async (url: string): Promise<CreditNoticeView | null> => {
@@ -22,6 +24,7 @@ const AUTO_HIDE_MS = 9000
  */
 export function CreditNoticeToast() {
   const { lang } = useLanguage()
+  const billingCopy = getBillingProfileCopy(lang)
   const { data: notice } = useSWR('/api/credit-notice', fetchNotice, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
@@ -50,9 +53,22 @@ export function CreditNoticeToast() {
       className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-brand/40 bg-card p-4 text-card-foreground shadow-lg sm:left-auto sm:right-4 sm:mx-0"
     >
       <Sparkles className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
-      <p className="flex-1 text-sm leading-relaxed">
-        {creditNoticeText(lang === 'tr' ? 'tr' : 'en', visible.amount, visible.firstPeriod)}
-      </p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm leading-relaxed">
+          {creditNoticeText(lang === 'tr' ? 'tr' : 'en', visible.amount, visible.firstPeriod)}
+        </p>
+        {visible.billingProfileIncomplete ? (
+          <div className="mt-2 flex flex-col gap-1 text-sm leading-relaxed">
+            <p>{billingCopy.creditReminder}</p>
+            <Link
+              href="/billing#fatura-bilgileri"
+              className="font-medium text-brand underline underline-offset-4"
+            >
+              {billingCopy.bannerCta}
+            </Link>
+          </div>
+        ) : null}
+      </div>
       <button
         type="button"
         onClick={() => setDismissedId(visible.id)}
