@@ -13,6 +13,21 @@ function emptyForm(profile: BillingProfileSummary | null, name: string, email: s
   return { customerType: profile?.customerType ?? 'individual', fullName: profile?.fullName || name, companyTitle: profile?.companyTitle ?? '', taxOffice: profile?.taxOffice ?? '', nationalId: '', taxNumber: '', addressLine: profile?.addressLine ?? '', district: profile?.district ?? '', city: profile?.city ?? '', postalCode: profile?.postalCode ?? '', country: 'TR', phone: profile?.phone ?? '', invoiceEmail: profile?.invoiceEmail || email, eInvoicePayer: profile?.eInvoicePayer ?? false }
 }
 
+/**
+ * Browser autofill can fill inputs without firing change events, leaving React state stale.
+ * On submit the DOM is the source of truth: every named text input overrides its state value.
+ */
+function readFormValues(formElement: HTMLFormElement, state: BillingProfileFormValues): BillingProfileFormValues {
+  const data = new FormData(formElement)
+  const next: BillingProfileFormValues = { ...state }
+  for (const key of Object.keys(state) as BillingProfileField[]) {
+    if (key === 'customerType' || key === 'eInvoicePayer') continue
+    const raw = data.get(key)
+    if (typeof raw === 'string') (next as Record<string, string | boolean>)[key] = raw
+  }
+  return next
+}
+
 export function BillingProfileCard({ initialProfile, storageAvailable, defaultFullName, defaultEmail, onSaved, openRequest = 0 }: { initialProfile: BillingProfileSummary | null; storageAvailable: boolean; defaultFullName: string; defaultEmail: string; onSaved?: (profile: BillingProfileSummary) => void; openRequest?: number }) {
   const { lang } = useLanguage()
   const copy = getBillingProfileCopy(lang)
@@ -64,11 +79,17 @@ export function BillingProfileCard({ initialProfile, storageAvailable, defaultFu
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    const validation = validateBillingProfileInput(form, { hasSavedNationalId: Boolean(profile?.hasNationalId), hasSavedTaxNumber: Boolean(profile?.hasTaxNumber) })
-    if (!validation.ok) { setErrors(validation.fieldErrors); setNotice(copy.saveFailed); return }
+    const values = readFormValues(event.currentTarget as HTMLFormElement, form)
+    setForm(values)
+    const validation = validateBillingProfileInput(values, { hasSavedNationalId: Boolean(profile?.hasNationalId), hasSavedTaxNumber: Boolean(profile?.hasTaxNumber) })
+    if (!validation.ok) { setErrors(validation.fieldErrors); setNotice(copy.fixFields); return }
     startTransition(async () => {
-      const result = await saveBillingProfileAction(form)
-      if (!result.ok) { setErrors(pickKnownFieldErrors(result.fieldErrors).fieldErrors); setNotice(result.error === 'unavailable' ? copy.unavailable : copy.saveFailed); return }
+      const result = await saveBillingProfileAction(values)
+      if (!result.ok) {
+        setErrors(pickKnownFieldErrors(result.fieldErrors).fieldErrors)
+        setNotice(result.error === 'unavailable' ? copy.unavailable : result.error === 'validation' ? copy.fixFields : copy.saveFailed)
+        return
+      }
       setProfile(result.profile)
       setOpen(false)
       setNotice(copy.saved)
@@ -79,8 +100,10 @@ export function BillingProfileCard({ initialProfile, storageAvailable, defaultFu
   const field = (key: BillingProfileField, label: string, required = false, maxLength?: number, hint?: string) => {
     const error = errors[key]
     const id = `billing-${key}`
-    const specific = copy.validation[key as keyof typeof copy.validation]
-    return <label key={key} className="flex flex-col gap-1.5 text-sm"><span className="font-medium">{label}{required ? <span className="text-destructive"> *</span> : null}</span><input ref={key === 'fullName' || key === 'companyTitle' ? firstInput : undefined} id={id} value={String(form[key] ?? '')} onChange={(event) => update(key, event.target.value)} maxLength={maxLength} inputMode={key === 'nationalId' || key === 'taxNumber' ? 'numeric' : undefined} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined} className={`rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/30 ${error ? 'border-destructive' : 'border-border'}`} />{hint && !error ? <span id={`${id}-hint`} className="text-xs text-muted-foreground">{hint}</span> : null}{error ? <span id={`${id}-error`} className="text-xs text-destructive">{specific || copy.validation[error]}</span> : null}</label>
+    const specific = key === 'invoiceEmail'
+      ? error === 'required' ? copy.validation.invoiceEmailRequired : error === 'too_long' ? copy.validation.too_long : copy.validation.invoiceEmail
+      : copy.validation[key as keyof typeof copy.validation]
+    return <label key={key} className="flex flex-col gap-1.5 text-sm"><span className="font-medium">{label}{required ? <span className="text-destructive"> *</span> : null}</span><input ref={key === 'fullName' || key === 'companyTitle' ? firstInput : undefined} id={id} name={key} value={String(form[key] ?? '')} onChange={(event) => update(key, event.target.value)} maxLength={maxLength} inputMode={key === 'nationalId' || key === 'taxNumber' ? 'numeric' : undefined} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined} className={`rounded-lg border bg-background px-3 py-2.5 outline-none focus:ring-2 focus:ring-primary/30 ${error ? 'border-destructive' : 'border-border'}`} />{hint && !error ? <span id={`${id}-hint`} className="text-xs text-muted-foreground">{hint}</span> : null}{error ? <span id={`${id}-error`} className="text-xs text-destructive">{specific || copy.validation[error]}</span> : null}</label>
   }
 
   const incomplete = !profile?.complete
@@ -90,6 +113,6 @@ export function BillingProfileCard({ initialProfile, storageAvailable, defaultFu
   return <section id="fatura-bilgileri" className="scroll-mt-24" aria-label={copy.title}>
     {incomplete ? null : <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card/80 p-4 sm:p-5"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="font-medium">{copy.title}</h2><span className="inline-flex items-center gap-1 rounded-full border border-primary/30 px-2 py-0.5 text-xs text-primary"><Check aria-hidden="true" className="size-3" />{copy.complete}</span></div><p className="mt-2 truncate text-sm text-muted-foreground">{summary}</p></div><Button type="button" variant="outline" onClick={openEditor} aria-expanded={open} aria-controls="billing-profile-panel">{copy.edit}</Button></div>}
     {notice && !open ? <p role="status" className="mt-3 text-sm text-muted-foreground">{notice}</p> : null}
-    <div ref={panelRef} id="billing-profile-panel" hidden={!open} role="region" aria-label={copy.title} className="mt-3 rounded-2xl border border-border bg-card/80 p-4 sm:p-5"><form className="flex flex-col gap-5" onSubmit={submit}>{notice && open ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{notice}</p> : null}<fieldset className="flex flex-col gap-2"><legend className="text-sm font-medium">{copy.typeLabel}</legend><div className="grid gap-3 sm:grid-cols-2">{(['individual', 'company'] as const).map((type) => <label key={type} className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm"><input type="radio" name="billing-type" checked={form.customerType === type} onChange={() => update('customerType', type)} />{type === 'individual' ? copy.individual : copy.company}</label>)}</div></fieldset><div className="grid gap-4 sm:grid-cols-2">{form.customerType === 'individual' ? field('fullName', copy.fullName, true, 160) : <>{field('companyTitle', copy.companyTitle, true, 200)}{field('taxOffice', copy.taxOffice, true, 120)}{field('fullName', copy.fullNameOptional, false, 160)}</>}{form.customerType === 'individual' ? field('nationalId', copy.nationalId, true, 11, copy.tcknHint) : field('taxNumber', copy.taxNumber, true, 10, copy.vknHint)}{field('addressLine', copy.addressLine, true, 240, copy.validation.addressLine)}{field('district', copy.district, true, 100)}{field('city', copy.city, true, 100)}{field('postalCode', copy.postalCode, false, 20)}{field('phone', copy.phone, true)}{field('invoiceEmail', copy.invoiceEmail, true, 254, copy.validation.invoiceEmail)}</div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.eInvoicePayer} onChange={(event) => update('eInvoicePayer', event.target.checked)} />{copy.eInvoicePayer}</label><div className="flex flex-wrap justify-end gap-3"><Button type="button" variant="ghost" onClick={closeEditor}>{copy.cancel}</Button><Button type="submit" disabled={pending}>{pending ? <><Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />{copy.saving}</> : copy.save}</Button></div></form></div>
+    <div ref={panelRef} id="billing-profile-panel" hidden={!open} role="region" aria-label={copy.title} className="mt-3 rounded-2xl border border-border bg-card/80 p-4 sm:p-5"><form className="flex flex-col gap-5" onSubmit={submit}>{notice && open ? <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{notice}</p> : null}<fieldset className="flex flex-col gap-2"><legend className="text-sm font-medium">{copy.typeLabel}</legend><div className="grid gap-3 sm:grid-cols-2">{(['individual', 'company'] as const).map((type) => <label key={type} className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm"><input type="radio" name="billing-type" checked={form.customerType === type} onChange={() => update('customerType', type)} />{type === 'individual' ? copy.individual : copy.company}</label>)}</div></fieldset><div className="grid gap-4 sm:grid-cols-2">{form.customerType === 'individual' ? field('fullName', copy.fullName, true, 160) : <>{field('companyTitle', copy.companyTitle, true, 200)}{field('taxOffice', copy.taxOffice, true, 120)}{field('fullName', copy.fullNameOptional, false, 160)}</>}{form.customerType === 'individual' ? field('nationalId', copy.nationalId, true, 11, copy.tcknHint) : field('taxNumber', copy.taxNumber, true, 10, copy.vknHint)}{field('addressLine', copy.addressLine, true, 240, copy.validation.addressLine)}{field('district', copy.district, true, 100)}{field('city', copy.city, true, 100)}{field('postalCode', copy.postalCode, false, 20)}{field('phone', copy.phone, true)}{field('invoiceEmail', copy.invoiceEmail, true, 254)}</div><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.eInvoicePayer} onChange={(event) => update('eInvoicePayer', event.target.checked)} />{copy.eInvoicePayer}</label><div className="flex flex-wrap justify-end gap-3"><Button type="button" variant="ghost" onClick={closeEditor}>{copy.cancel}</Button><Button type="submit" disabled={pending}>{pending ? <><Loader2 aria-hidden="true" className="mr-2 size-4 animate-spin" />{copy.saving}</> : copy.save}</Button></div></form></div>
   </section>
 }
