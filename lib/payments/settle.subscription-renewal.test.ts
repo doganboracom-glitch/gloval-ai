@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   db: {} as Record<string, Row[]>,
   siteLimit: 3,
   logUserEvent: vi.fn(async () => {}),
+  grantPlanCreditsAfterPayment: vi.fn(() => {}),
 }))
 
 function makeBuilder(table: string) {
@@ -50,7 +51,7 @@ function makeBuilder(table: string) {
   return b
 }
 
-vi.mock('@/lib/plan-credit-instant-store', () => ({ grantPlanCreditsAfterPayment: vi.fn(async () => {}) }))
+vi.mock('@/lib/plan-credit-instant-store', () => ({ grantPlanCreditsAfterPayment: state.grantPlanCreditsAfterPayment }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (t: string) => makeBuilder(t) }) }))
 vi.mock('@/lib/notify', () => ({
   logUserEvent: (...args: unknown[]) => (state.logUserEvent as (...a: unknown[]) => Promise<void>)(...args),
@@ -142,6 +143,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'log').mockImplementation(() => {})
   state.siteLimit = 3
+  state.grantPlanCreditsAfterPayment.mockClear()
   seed()
 })
 
@@ -163,6 +165,7 @@ describe('settlePaymentResult - subscription renewal', () => {
     expect(['a', 'b', 'c'].every((id) => project(id).published === true)).toBe(true)
     expect(project('d').published).toBe(false)
     expect(state.logUserEvent).toHaveBeenCalledTimes(1)
+    expect(state.grantPlanCreditsAfterPayment).toHaveBeenCalledWith('sub-1')
   })
 
   it('is idempotent: a replayed callback changes and notifies nothing', async () => {
@@ -174,6 +177,7 @@ describe('settlePaymentResult - subscription renewal', () => {
     expect(sub().current_period_end).toBe(periodEnd)
     expect(project('a').published).toBe(false)
     expect(state.logUserEvent).toHaveBeenCalledTimes(1)
+    expect(state.grantPlanCreditsAfterPayment).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the e-commerce plan at 1 e-commerce + corporate sites, never over the total', async () => {
