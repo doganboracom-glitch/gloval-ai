@@ -488,7 +488,7 @@ export async function settleSubscriptionRenewal(input: {
       dedupeKey: `renewal:succeeded:${charge.id}`,
     })
     await triggerMailAccessSync(sub.user_id, 'subscription_renewed')
-    if (!input.source || input.source === 'provider') grantPlanCreditsAfterPayment(sub.id)
+    grantPlanCreditsAfterPayment(sub.id)
     return { kind: 'renewed', restored, skipped }
   } catch (error) {
     // Hand the ledger row back so a retried callback can finish the renewal.
