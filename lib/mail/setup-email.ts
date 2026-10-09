@@ -8,7 +8,6 @@ import {
   renderEmailPlainText,
   renderSection,
   renderStepCard,
-  renderSupportUrl,
   renderTable,
 } from '@/lib/email/layout'
 import { resolveEmailLang } from '@/lib/email/lang'
@@ -30,25 +29,23 @@ function settingsRows(lang: 'tr' | 'en', address: string, host: string): Array<[
 export function renderMailSetupHtml(lang: string, address: string, webmail: string, host: string) {
   const l = resolveEmailLang(lang)
   const c = getMailSetupCopy(l)
-  const supportUrl = renderSupportUrl()
+  const webmailLink = `<a class="link" href="${escape(webmail)}" style="color:#6d43bd;text-decoration:underline;">${escape(webmail)}</a>`
   const body = [
-    `<p style="margin:0 0 4px;">${escape(c.greeting)}</p>`,
     renderSection(c.settingsTitle, renderTable(settingsRows(l, address, host))),
     `<p style="margin:0;font-size:13px;">${escape(c.passwordNote)}</p>`,
     renderSection(c.appsTitle, ''),
     renderStepCard(c.android, c.androidSteps),
     renderStepCard(c.iphone, c.iphoneSteps),
     renderStepCard(c.outlook, c.outlookSteps),
-    renderStepCard(c.browser, [c.browserText]),
-    renderSection(c.helpTitle, `<p style="margin:0;">${escape(c.help)} ${escape(c.supportLead)} <a class="link" href="${escape(supportUrl)}" style="color:#6d43bd;text-decoration:underline;">${escape(c.supportText)}</a>.</p>`),
+    renderStepCard(c.browser, [{ html: `${escape(c.browserLead)} ${webmailLink} ${escape(c.browserRest)}` }]),
   ].join('')
 
   return renderEmailLayout({
     lang: l,
     previewText: c.greeting,
-    title: c.heading,
+    title: c.settingsTitle,
+    hideHeading: true,
     body,
-    cta: { label: c.openWebmail, href: webmail },
     footer: mailSetupFooter(l, address),
   })
 }
@@ -59,17 +56,14 @@ export function renderMailSetupText(lang: string, address: string, webmail: stri
   const rows = settingsRows(l, address, host).map(([label, value]) => `${label}: ${value}`).join('\n')
   const steps = (title: string, list: readonly string[]) => `${title}\n${list.map((step, i) => `${i + 1}. ${step}`).join('\n')}`
   const content = [
-    c.greeting,
-    `${c.openWebmail}: ${webmail}`,
     `${c.settingsTitle}\n${rows}`,
     c.passwordNote,
     steps(c.android, c.androidSteps),
     steps(c.iphone, c.iphoneSteps),
     steps(c.outlook, c.outlookSteps),
-    `${c.browser}\n${c.browserText}`,
-    `${c.helpTitle}\n${c.help} ${c.supportLead} ${renderSupportUrl()}`,
+    steps(c.browser, [`${c.browserLead} ${webmail} ${c.browserRest}`]),
   ].join('\n\n')
-  return renderEmailPlainText(c.heading, content, mailSetupFooter(l, address))
+  return renderEmailPlainText('', content, mailSetupFooter(l, address))
 }
 
 export function mailSetupSubject(lang: string, address: string, kind: 'created' | 'resend' = 'created') {
