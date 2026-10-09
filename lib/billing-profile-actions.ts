@@ -11,7 +11,7 @@ import {
   toBillingProfileSummary,
 } from '@/lib/billing-profile-store'
 import { validateBillingProfileInput } from '@/lib/billing-profile-validation'
-import type { BillingProfileSummary } from '@/lib/billing-profile-types'
+import type { BillingProfileField, BillingProfileSummary } from '@/lib/billing-profile-types'
 
 export async function getMyBillingProfileAction() {
   try {
@@ -85,7 +85,29 @@ export async function saveBillingProfileAction(input: unknown): Promise<SaveBill
     const { error: saveError } = await admin
       .from('billing_profiles')
       .upsert(fields, { onConflict: 'user_id' })
-    if (saveError) return { ok: false, error: 'save_failed' }
+    if (saveError) {
+      const constraintField: Record<string, BillingProfileField> = {
+        billing_profiles_customer_type_check: 'customerType',
+        billing_profiles_full_name_check: 'fullName',
+        billing_profiles_company_title_check: 'companyTitle',
+        billing_profiles_tax_office_check: 'taxOffice',
+        billing_profiles_customer_identity_check: 'customerType',
+        billing_profiles_address_check: 'addressLine',
+        billing_profiles_district_check: 'district',
+        billing_profiles_city_check: 'city',
+        billing_profiles_postal_code_check: 'postalCode',
+        billing_profiles_country_check: 'country',
+        billing_profiles_phone_check: 'phone',
+        billing_profiles_invoice_email_check: 'invoiceEmail',
+      }
+      const matchedConstraint = Object.keys(constraintField).find((constraint) => saveError.message.includes(constraint))
+      const field = matchedConstraint ? constraintField[matchedConstraint] : null
+      return {
+        ok: false,
+        error: 'save_failed',
+        ...(field ? { fieldErrors: { [field]: 'invalid' as const } } : {}),
+      }
+    }
 
     const createdAt = existing?.created_at ?? now
     return {
