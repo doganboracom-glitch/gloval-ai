@@ -7,9 +7,14 @@ import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 
 type BillingProfileBannerProps = {
   show: boolean
+  /** On /billing the strip opens the form in place; elsewhere it links to /billing. */
+  onEnter?: () => void
 }
 
-export function BillingProfileBanner({ show }: BillingProfileBannerProps) {
+const ctaClassName =
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+export function BillingProfileBanner({ show, onEnter }: BillingProfileBannerProps) {
   const { lang } = useLanguage()
   const copy = getBillingProfileCopy(lang)
 
@@ -25,13 +30,22 @@ export function BillingProfileBanner({ show }: BillingProfileBannerProps) {
         <p className="text-sm font-semibold">{copy.bannerTitle}</p>
         <p className="text-sm leading-relaxed text-muted-foreground">{copy.bannerBody}</p>
       </div>
-      <Link
-        href="/billing?fatura=1#fatura-bilgileri"
-        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {copy.bannerCta}
-        <ArrowRight aria-hidden="true" data-icon="inline-end" />
-      </Link>
+      {onEnter ? (
+        <button
+          type="button"
+          onClick={onEnter}
+          aria-controls="billing-profile-panel"
+          className={ctaClassName}
+        >
+          {copy.bannerCta}
+          <ArrowRight aria-hidden="true" data-icon="inline-end" />
+        </button>
+      ) : (
+        <Link href="/billing?fatura=1#fatura-bilgileri" className={ctaClassName}>
+          {copy.bannerCta}
+          <ArrowRight aria-hidden="true" data-icon="inline-end" />
+        </Link>
+      )}
     </aside>
   )
 }
