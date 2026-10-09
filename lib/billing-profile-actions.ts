@@ -11,7 +11,8 @@ import {
   toBillingProfileSummary,
 } from '@/lib/billing-profile-store'
 import { validateBillingProfileInput } from '@/lib/billing-profile-validation'
-import type { BillingProfileField, BillingProfileSummary } from '@/lib/billing-profile-types'
+import { fieldForConstraint, parseConstraintName, saveFailureLog, validationFailureLog } from '@/lib/billing-profile-save-errors'
+import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 
 export async function getMyBillingProfileAction() {
   try {
@@ -51,13 +52,17 @@ export async function saveBillingProfileAction(input: unknown): Promise<SaveBill
       .select(BILLING_PROFILE_COLUMNS)
       .eq('user_id', user.id)
       .maybeSingle()
-    if (readError) return { ok: false, error: 'unavailable' }
+    if (readError) {
+      console.error(saveFailureLog(readError).replace('save_failed', 'read_failed'))
+      return { ok: false, error: 'unavailable' }
+    }
 
     const validation = validateBillingProfileInput(input, {
       existingNationalId: existing?.national_id ?? null,
       existingTaxNumber: existing?.tax_number ?? null,
     })
     if (!validation.ok) {
+      console.warn(validationFailureLog(validation.fieldErrors))
       return { ok: false, error: 'validation', fieldErrors: validation.fieldErrors }
     }
 
@@ -86,22 +91,8 @@ export async function saveBillingProfileAction(input: unknown): Promise<SaveBill
       .from('billing_profiles')
       .upsert(fields, { onConflict: 'user_id' })
     if (saveError) {
-      const constraintField: Record<string, BillingProfileField> = {
-        billing_profiles_customer_type_check: 'customerType',
-        billing_profiles_full_name_check: 'fullName',
-        billing_profiles_company_title_check: 'companyTitle',
-        billing_profiles_tax_office_check: 'taxOffice',
-        billing_profiles_customer_identity_check: 'customerType',
-        billing_profiles_address_check: 'addressLine',
-        billing_profiles_district_check: 'district',
-        billing_profiles_city_check: 'city',
-        billing_profiles_postal_code_check: 'postalCode',
-        billing_profiles_country_check: 'country',
-        billing_profiles_phone_check: 'phone',
-        billing_profiles_invoice_email_check: 'invoiceEmail',
-      }
-      const matchedConstraint = Object.keys(constraintField).find((constraint) => saveError.message.includes(constraint))
-      const field = matchedConstraint ? constraintField[matchedConstraint] : null
+      console.error(saveFailureLog(saveError))
+      const field = fieldForConstraint(parseConstraintName(saveError.message), value.customerType)
       return {
         ok: false,
         error: 'save_failed',

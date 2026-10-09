@@ -190,6 +190,25 @@ export function validateBillingProfileInput(
   }
 }
 
+const BILLING_PROFILE_FIELD_KEYS: readonly BillingProfileField[] = [
+  'customerType', 'fullName', 'companyTitle', 'taxOffice', 'nationalId', 'taxNumber', 'addressLine',
+  'district', 'city', 'postalCode', 'country', 'phone', 'invoiceEmail', 'eInvoicePayer',
+]
+
+/** Keeps only errors whose key is an exact form field; unknown keys are reported, never written to a field. */
+export function pickKnownFieldErrors(raw: Record<string, string> | undefined): {
+  fieldErrors: BillingProfileFieldErrors
+  hasUnknownKeys: boolean
+} {
+  const fieldErrors: BillingProfileFieldErrors = {}
+  let hasUnknownKeys = false
+  for (const [key, value] of Object.entries(raw ?? {})) {
+    if (!(BILLING_PROFILE_FIELD_KEYS as readonly string[]).includes(key)) { hasUnknownKeys = true; continue }
+    fieldErrors[key as BillingProfileField] = value === 'required' || value === 'too_long' ? value : 'invalid'
+  }
+  return { fieldErrors, hasUnknownKeys }
+}
+
 export function isBillingProfileComplete(input: unknown): boolean {
   return validateBillingProfileInput(input).ok
 }

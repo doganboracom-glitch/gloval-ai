@@ -135,6 +135,7 @@ export function BillingClient({
   const { t, lang } = useLanguage()
   const router = useRouter()
   const [billingProfileComplete, setBillingProfileComplete] = useState(billingProfile?.complete ?? false)
+  const [billingProfileOpenRequest, setBillingProfileOpenRequest] = useState(0)
   const [isPending, startTransition] = useTransition()
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -906,8 +907,10 @@ export function BillingClient({
             billingProfileStorageAvailable &&
             !billingProfileComplete
           }
+          onEnter={() => setBillingProfileOpenRequest((count) => count + 1)}
         />
         <BillingProfileCard
+          openRequest={billingProfileOpenRequest}
           initialProfile={billingProfile}
           storageAvailable={billingProfileStorageAvailable}
           defaultFullName={billingProfileDefaultFullName}

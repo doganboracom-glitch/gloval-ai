@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { appendBillingProfileReminder, billingProfileReminderText, getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { buildCreditNotice, parseCreditNoticeAmount } from '@/lib/credit-notice'
+import {
+  fieldForConstraint,
+  parseConstraintName,
+  saveFailureLog,
+  validationFailureLog,
+} from '@/lib/billing-profile-save-errors'
 import { escapeCsvCell, serializeCsv } from '@/lib/billing-profile-csv'
 import {
   isBillingProfileComplete,
   isValidTurkishNationalId,
   isValidTurkishTaxNumber,
   normalizeBillingPhone,
+  pickKnownFieldErrors,
   validateBillingProfileInput,
 } from '@/lib/billing-profile-validation'
 
@@ -175,5 +182,34 @@ describe('billing profile reminders', () => {
     const notice = buildCreditNotice({ amount: 2500, firstPeriod: true, billingProfileIncomplete: true })
     expect(parseCreditNoticeAmount(notice.body)).toBe(2500)
     expect(notice.body).toContain('fatura bilgilerinizi')
+  })
+})
+
+describe('billing profile save diagnostics', () => {
+  it('maps a constraint to exactly one field', () => {
+    const message = 'new row for relation "billing_profiles" violates check constraint "billing_profiles_phone_check"'
+    expect(parseConstraintName(message)).toBe('billing_profiles_phone_check')
+    expect(fieldForConstraint('billing_profiles_phone_check', 'individual')).toBe('phone')
+    expect(fieldForConstraint('billing_profiles_invoice_email_check', 'individual')).toBe('invoiceEmail')
+    expect(fieldForConstraint('billing_profiles_customer_identity_check', 'individual')).toBe('nationalId')
+    expect(fieldForConstraint('billing_profiles_customer_identity_check', 'company')).toBe('taxNumber')
+    expect(fieldForConstraint('something_else', 'individual')).toBeNull()
+    expect(fieldForConstraint(null, 'individual')).toBeNull()
+  })
+
+  it('logs codes and names only, never row data', () => {
+    const log = saveFailureLog({
+      code: '23514',
+      message: 'violates check constraint "billing_profiles_phone_check" Failing row contains (doganboracom@gmail.com)',
+    })
+    expect(log).toBe('[billing-profile] save_failed code=23514 constraint=billing_profiles_phone_check')
+    expect(log).not.toContain('gmail')
+    expect(validationFailureLog({ phone: 'invalid', city: 'required' })).toBe('[billing-profile] validation_failed fields=city,phone')
+  })
+
+  it('drops unknown server field keys instead of misplacing them', () => {
+    const { fieldErrors, hasUnknownKeys } = pickKnownFieldErrors({ invoiceEmail: 'invalid', bogus: 'invalid' })
+    expect(fieldErrors).toEqual({ invoiceEmail: 'invalid' })
+    expect(hasUnknownKeys).toBe(true)
   })
 })
