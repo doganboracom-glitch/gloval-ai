@@ -61,7 +61,7 @@ export function CreditNoticeToast() {
           <div className="mt-2 flex flex-col gap-1 text-sm leading-relaxed">
             <p>{billingCopy.creditReminder}</p>
             <Link
-              href="/billing#fatura-bilgileri"
+              href="/billing?fatura=1#fatura-bilgileri"
               className="font-medium text-brand underline underline-offset-4"
             >
               {billingCopy.bannerCta}

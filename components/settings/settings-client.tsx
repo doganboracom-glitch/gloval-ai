@@ -171,7 +171,7 @@ export function SettingsClient({
         </div>
 
         <Link
-          href="/billing#fatura-bilgileri"
+          href="/billing?fatura=1#fatura-bilgileri"
           className="mt-5 inline-flex items-center rounded-lg border border-brand/40 bg-brand/10 px-3 py-2 text-sm font-medium text-brand transition-colors hover:bg-brand/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {billingProfileCopy.accountLink}

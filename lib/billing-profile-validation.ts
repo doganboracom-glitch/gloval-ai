@@ -5,7 +5,7 @@ import type {
   BillingProfileValidationError,
 } from '@/lib/billing-profile-types'
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export type ExistingBillingIdentifiers = {
   existingNationalId?: string | null
