@@ -110,7 +110,7 @@ describe('billing profile validation', () => {
   })
 
   it('rejects emails with whitespace, missing at-signs or dots, and overlong values', () => {
-    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', '@ornek', 'ad@', 'a'.repeat(250) + '@a']) {
+    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', '@ornek', 'ad@', 'a'.repeat(253) + '@a']) {
       const result = validateBillingProfileInput({ ...validIndividual, invoiceEmail })
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.fieldErrors.invoiceEmail).toBe('invalid')

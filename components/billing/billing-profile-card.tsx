@@ -80,7 +80,7 @@ export function BillingProfileCard({ initialProfile, storageAvailable, defaultFu
   }
 
   const incomplete = !profile?.complete
-  const summary = profile ? `${profile.customerType === 'company' ? profile.companyTitle : profile.fullName} · •••${profile.customerType === 'company' ? profile.taxNumber?.slice(-3) : profile.nationalId?.slice(-3)} · ${profile.city} · ${profile.invoiceEmail}` : copy.notProvided
+  const summary = profile ? `${profile.customerType === 'company' ? profile.companyTitle : profile.fullName} · •••${profile.customerType === 'company' ? profile.taxNumberLast3 ?? '•••' : profile.nationalIdLast3 ?? '•••'} · ${profile.city} · ${profile.invoiceEmail}` : copy.notProvided
   if (!storageAvailable) return <section id="fatura-bilgileri" className="scroll-mt-24"><p role="status" className="text-sm text-muted-foreground">{copy.unavailable}</p></section>
 
   return <section id="fatura-bilgileri" className="scroll-mt-24" aria-label={copy.title}>
