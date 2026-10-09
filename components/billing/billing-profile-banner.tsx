@@ -26,7 +26,7 @@ export function BillingProfileBanner({ show }: BillingProfileBannerProps) {
         <p className="text-sm leading-relaxed text-muted-foreground">{copy.bannerBody}</p>
       </div>
       <Link
-        href="/billing#fatura-bilgileri"
+        href="/billing?fatura=1#fatura-bilgileri"
         className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         {copy.bannerCta}
