@@ -3,7 +3,11 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { exportAdminBillingProfilesCsv } from '@/lib/admin/billing-profile-data'
+import {
+  exportAdminBillingProfilesCsv,
+  listAdminBillingProfileAccessHistory,
+  revealAdminBillingProfileIdentifier,
+} from '@/lib/admin/billing-profile-data'
 import {
   BILLING_PROFILE_COLUMNS,
   getBillingProfileForUser,
@@ -108,6 +112,22 @@ export async function saveBillingProfileAction(input: unknown): Promise<SaveBill
     }
   } catch {
     return { ok: false, error: 'unavailable' }
+  }
+}
+
+export async function revealBillingProfileIdentifierAction(targetUserId: unknown, field: unknown) {
+  try {
+    return await revealAdminBillingProfileIdentifier(targetUserId, field)
+  } catch {
+    return { ok: false as const, error: 'unavailable' as const }
+  }
+}
+
+export async function listBillingProfileAccessHistoryAction() {
+  try {
+    return await listAdminBillingProfileAccessHistory()
+  } catch {
+    return []
   }
 }
 

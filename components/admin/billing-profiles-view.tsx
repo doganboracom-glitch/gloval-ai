@@ -1,20 +1,22 @@
 'use client'
 
-import { Fragment, useMemo, useState, useTransition } from 'react'
-import { Download, Loader2 } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { Check, Copy, Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
-import { exportBillingProfilesCsvAction } from '@/lib/billing-profile-actions'
-import type { AdminBillingProfileRow } from '@/lib/admin/billing-profile-data'
+import { exportBillingProfilesCsvAction, listBillingProfileAccessHistoryAction, revealBillingProfileIdentifierAction } from '@/lib/billing-profile-actions'
+import type { AdminBillingProfileRow, BillingProfileAccessHistoryRow, BillingProfileRevealField } from '@/lib/admin/billing-profile-data'
 import type { BillingProfileExportFilter } from '@/lib/billing-profile-types'
 
 export function BillingProfilesView({
   available,
   rows,
+  history,
 }: {
   available: boolean
   rows: AdminBillingProfileRow[]
+  history: BillingProfileAccessHistoryRow[]
 }) {
   const { lang } = useLanguage()
   const copy = getBillingProfileCopy(lang)
@@ -22,7 +24,44 @@ export function BillingProfilesView({
   const [search, setSearch] = useState('')
   const [openUserId, setOpenUserId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [revealed, setRevealed] = useState<{ userId: string; field: BillingProfileRevealField; value: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [revealPending, setRevealPending] = useState(false)
+  const revealTimer = useRef<number | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    setRevealed(null)
+    setCopied(false)
+    if (revealTimer.current) window.clearTimeout(revealTimer.current)
+  }, [filter, search, rows])
+
+  useEffect(() => () => {
+    if (revealTimer.current) window.clearTimeout(revealTimer.current)
+  }, [])
+
+  async function revealIdentifier(userId: string, field: BillingProfileRevealField) {
+    setRevealPending(true)
+    setFeedback(null)
+    const result = await revealBillingProfileIdentifierAction(userId, field)
+    setRevealPending(false)
+    if (!result.ok) {
+      const message = result.error === 'unauthorized' ? copy.revealUnauthorized : result.error === 'rate_limited' ? copy.revealRateLimited : result.error === 'audit_failed' ? copy.revealAuditFailed : copy.revealFailed
+      setFeedback({ type: 'error', text: message })
+      return
+    }
+    setRevealed({ userId, field, value: result.value })
+    setCopied(false)
+    if (revealTimer.current) window.clearTimeout(revealTimer.current)
+    revealTimer.current = window.setTimeout(() => setRevealed(null), 30_000)
+  }
+
+  async function copyIdentifier() {
+    if (!revealed) return
+    await navigator.clipboard.writeText(revealed.value)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
+  }
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase(lang === 'tr' ? 'tr-TR' : 'en-US')
@@ -161,7 +200,7 @@ export function BillingProfilesView({
                     <td className="px-4 py-3 text-muted-foreground">{profile?.taxOffice || '—'}</td>
                     <td className="px-4 py-3 font-mono text-xs text-foreground">{maskedId}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${row.complete ? 'border-accent/25 bg-accent/10 text-accent' : 'border-primary/30 bg-primary/10 text-primary'}`}>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${row.complete ? 'border-accent/40 bg-accent/15 text-accent-foreground' : 'border-primary/30 bg-primary/10 text-primary'}`}>
                         {row.complete ? copy.complete : copy.incomplete}
                       </span>
                     </td>
@@ -183,13 +222,22 @@ export function BillingProfilesView({
                         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
                           <Detail label={copy.user} value={row.fullName || row.accountEmail || row.userId} />
                           <Detail label={copy.plan} value={row.planName} />
-                          <Detail label={copy.subscriptionStatus} value={row.subscriptionStatus} />
+                          <Detail label={copy.subscriptionStatus} value={statusLabel(row.subscriptionStatus, copy)} />
                           {profile ? (
                             <>
                               <Detail label={copy.companyColumn} value={profile.companyTitle || '—'} />
                               <Detail label={copy.fullNameColumn} value={profile.fullName || '—'} />
                               <Detail label={copy.taxOfficeColumn} value={profile.taxOffice || '—'} />
-                              <Detail label={profile.customerType === 'company' ? copy.vknLabel : copy.tcknLabel} value={maskedId} />
+                              <IdentifierDetail
+                                label={profile.customerType === 'company' ? copy.vknLabel : copy.tcknLabel}
+                                maskedValue={maskedId}
+                                revealedValue={revealed?.userId === row.userId ? revealed.value : null}
+                                onReveal={() => revealIdentifier(row.userId, profile.customerType === 'company' ? 'tax_number' : 'national_id')}
+                                onCopy={copyIdentifier}
+                                copied={copied && revealed?.userId === row.userId}
+                                pending={revealPending}
+                                copy={copy}
+                              />
                               <Detail label={copy.invoiceEmailColumn} value={profile.invoiceEmail} />
                               <Detail label={copy.phoneColumn} value={profile.phone} />
                               <Detail label={copy.address} value={[profile.addressLine, profile.district, profile.city, profile.postalCode, profile.country].filter(Boolean).join(', ')} />
@@ -215,11 +263,25 @@ export function BillingProfilesView({
           </tbody>
         </table>
       </div>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {visibleRows.length} / {rows.length}
-      </p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{visibleRows.length} / {rows.length}</p>
+      <section aria-labelledby="billing-access-history" className="rounded-2xl border border-border bg-card/70 p-4 sm:p-5">
+        <h3 id="billing-access-history" className="font-medium text-foreground">{copy.accessHistory}</h3>
+        {history.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">{copy.noAccessHistory}</p> : (
+          <ul className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground">
+            {history.map((entry) => <li key={entry.id} className="flex flex-wrap gap-x-2 gap-y-1"><span>{entry.adminEmail}</span><span>·</span><span>{entry.field === 'tax_number' ? copy.vknLabel : copy.tcknLabel}</span><span>·</span><time dateTime={entry.createdAt}>{new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(entry.createdAt))}</time></li>)}
+          </ul>
+        )}
+      </section>
     </div>
   )
+}
+
+function statusLabel(status: string, copy: ReturnType<typeof getBillingProfileCopy>) {
+  return ({ active: copy.statusActive, past_due: copy.statusPastDue, canceled: copy.statusCanceled, suspended: copy.statusSuspended } as Record<string, string>)[status] ?? copy.statusUnknown
+}
+
+function IdentifierDetail({ label, maskedValue, revealedValue, onReveal, onCopy, copied, pending, copy }: { label: string; maskedValue: string; revealedValue: string | null; onReveal: () => void; onCopy: () => void; copied: boolean; pending: boolean; copy: ReturnType<typeof getBillingProfileCopy> }) {
+  return <div className="min-w-0"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 flex flex-wrap items-center gap-2 text-sm text-foreground"><span className="font-mono">{revealedValue ?? maskedValue}</span>{revealedValue ? <Button type="button" variant="outline" size="sm" onClick={onCopy} aria-label={copy.copy}>{copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}{copied ? copy.copied : copy.copy}</Button> : <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onReveal}>{pending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}{copy.reveal}</Button>}</dd></div>
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

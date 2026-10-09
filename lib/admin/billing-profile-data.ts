@@ -41,6 +41,87 @@ export type AdminBillingProfileRow = {
   complete: boolean
 }
 
+export type BillingProfileRevealField = 'national_id' | 'tax_number'
+export type BillingProfileAccessHistoryRow = {
+  id: string
+  createdAt: string
+  adminEmail: string
+  adminUserId: string
+  targetUserId: string
+  field: BillingProfileRevealField
+}
+
+const revealTimestamps = new Map<string, number[]>()
+const revealLimit = 30
+const revealWindowMs = 60_000
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export type BillingProfileRevealResult =
+  | { ok: true; value: string }
+  | { ok: false; error: 'unauthorized' | 'invalid_target' | 'invalid_field' | 'rate_limited' | 'audit_failed' | 'unavailable' }
+
+export async function revealAdminBillingProfileIdentifier(
+  targetUserIdValue: unknown,
+  fieldValue: unknown,
+): Promise<BillingProfileRevealResult> {
+  const actor = await requireAdmin().catch(() => null)
+  if (!actor) return { ok: false, error: 'unauthorized' }
+  if (typeof targetUserIdValue !== 'string' || !uuidPattern.test(targetUserIdValue)) return { ok: false, error: 'invalid_target' }
+  if (fieldValue !== 'national_id' && fieldValue !== 'tax_number') return { ok: false, error: 'invalid_field' }
+
+  const now = Date.now()
+  const recent = (revealTimestamps.get(actor.userId) ?? []).filter((timestamp) => now - timestamp < revealWindowMs)
+  if (recent.length >= revealLimit) {
+    revealTimestamps.set(actor.userId, recent)
+    return { ok: false, error: 'rate_limited' }
+  }
+
+  const admin = createAdminClient()
+  const { data: profile, error: profileError } = await admin
+    .from('billing_profiles')
+    .select('customer_type, national_id, tax_number')
+    .eq('user_id', targetUserIdValue)
+    .maybeSingle()
+  if (profileError || !profile) return { ok: false, error: 'unavailable' }
+  if ((fieldValue === 'national_id' && profile.customer_type !== 'individual') || (fieldValue === 'tax_number' && profile.customer_type !== 'company')) {
+    return { ok: false, error: 'invalid_field' }
+  }
+  const value = fieldValue === 'national_id' ? profile.national_id : profile.tax_number
+  if (typeof value !== 'string' || !value) return { ok: false, error: 'unavailable' }
+
+  const { error: auditError } = await admin.from('billing_profile_reveal_audit').insert({
+    admin_email: actor.email,
+    admin_user_id: actor.userId,
+    target_user_id: targetUserIdValue,
+    field: fieldValue,
+  })
+  if (auditError) return { ok: false, error: 'audit_failed' }
+  revealTimestamps.set(actor.userId, [...recent, now])
+  return { ok: true, value }
+}
+
+export async function listAdminBillingProfileAccessHistory(limit = 20): Promise<BillingProfileAccessHistoryRow[]> {
+  await requireAdmin()
+  const { data, error } = await createAdminClient()
+    .from('billing_profile_reveal_audit')
+    .select('id, created_at, admin_email, admin_user_id, target_user_id, field')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 50))
+  if (error) return []
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    createdAt: row.created_at,
+    adminEmail: row.admin_email,
+    adminUserId: row.admin_user_id,
+    targetUserId: row.target_user_id,
+    field: row.field as BillingProfileRevealField,
+  }))
+}
+
+export function resetBillingProfileRevealLimiterForTests() {
+  revealTimestamps.clear()
+}
+
 async function loadPaidSubscriberProfiles(): Promise<{
   available: boolean
   rows: RawAdminBillingProfile[]
