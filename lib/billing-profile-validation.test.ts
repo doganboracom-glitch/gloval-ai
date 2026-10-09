@@ -4,12 +4,14 @@ import { buildCreditNotice, parseCreditNoticeAmount } from '@/lib/credit-notice'
 import {
   fieldForConstraint,
   parseConstraintName,
+  payloadPresenceLog,
   saveFailureLog,
   validationFailureLog,
 } from '@/lib/billing-profile-save-errors'
 import { escapeCsvCell, serializeCsv } from '@/lib/billing-profile-csv'
 import {
   isBillingProfileComplete,
+  isValidBillingEmail,
   isValidTurkishNationalId,
   isValidTurkishTaxNumber,
   normalizeBillingPhone,
@@ -116,12 +118,35 @@ describe('billing profile validation', () => {
     }
   })
 
-  it('rejects emails with whitespace, missing at-signs or dots, and overlong values', () => {
-    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', '@ornek', 'ad@', 'a'.repeat(253) + '@a']) {
-      const result = validateBillingProfileInput({ ...validIndividual, invoiceEmail })
-      expect(result.ok).toBe(false)
-      if (!result.ok) expect(result.fieldErrors.invoiceEmail).toBe('invalid')
+  it('matches the database rule: only an at-sign with a character before it is required', () => {
+    for (const invoiceEmail of ['a@b', 'ad soyad@gmail.com', 'ad@@x', '  doganboracom@gmail.com  ']) {
+      expect(isValidBillingEmail(invoiceEmail)).toBe(true)
     }
+    for (const invoiceEmail of ['a@', 'adgmail.com', '@ornek', '', '  ', 'a'.repeat(254) + '@']) {
+      expect(isValidBillingEmail(invoiceEmail)).toBe(false)
+    }
+  })
+
+  it('reports missing at-signs as invalid, empty as required and overlong as too_long', () => {
+    const missing = validateBillingProfileInput({ ...validIndividual, invoiceEmail: 'adgmail.com' })
+    expect(missing.ok).toBe(false)
+    if (!missing.ok) expect(missing.fieldErrors.invoiceEmail).toBe('invalid')
+
+    const empty = validateBillingProfileInput({ ...validIndividual, invoiceEmail: '' })
+    expect(empty.ok).toBe(false)
+    if (!empty.ok) expect(empty.fieldErrors.invoiceEmail).toBe('required')
+
+    const long = validateBillingProfileInput({ ...validIndividual, invoiceEmail: 'a'.repeat(253) + '@a' })
+    expect(long.ok).toBe(false)
+    if (!long.ok) expect(long.fieldErrors.invoiceEmail).toBe('too_long')
+  })
+
+  it('logs payload presence without leaking any value', () => {
+    const line = payloadPresenceLog({ ...validIndividual, invoiceEmail: 'secret@example.com', companyTitle: '' })
+    expect(line).toContain('invoice_email:true')
+    expect(line).toContain('company_title:false')
+    expect(line).not.toContain('secret')
+    expect(line).not.toContain(validIndividual.nationalId)
   })
 
   it('maps phone normalization and validation to the phone field', () => {

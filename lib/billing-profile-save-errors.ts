@@ -34,6 +34,34 @@ export function fieldForConstraint(
   return field
 }
 
+const PAYLOAD_LOG_KEYS: readonly [BillingProfileField, string][] = [
+  ['customerType', 'customer_type'],
+  ['fullName', 'full_name'],
+  ['companyTitle', 'company_title'],
+  ['taxOffice', 'tax_office'],
+  ['nationalId', 'national_id'],
+  ['taxNumber', 'tax_number'],
+  ['addressLine', 'address_line'],
+  ['district', 'district'],
+  ['city', 'city'],
+  ['postalCode', 'postal_code'],
+  ['country', 'country'],
+  ['phone', 'phone'],
+  ['invoiceEmail', 'invoice_email'],
+  ['eInvoicePayer', 'e_invoice_payer'],
+]
+
+/** Log line stating only whether each key arrived non-empty; never any value. */
+export function payloadPresenceLog(input: unknown): string {
+  const source = typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
+  const parts = PAYLOAD_LOG_KEYS.map(([key, column]) => {
+    const value = source[key]
+    const present = typeof value === 'string' ? value.trim().length > 0 : typeof value === 'boolean'
+    return `${column}:${present}`
+  })
+  return `[billing-profile] payload present=${parts.join(',')}`
+}
+
 /** Log line containing field NAMES only. */
 export function validationFailureLog(fieldErrors: Record<string, unknown>): string {
   return `[billing-profile] validation_failed fields=${Object.keys(fieldErrors).sort().join(',') || 'none'}`

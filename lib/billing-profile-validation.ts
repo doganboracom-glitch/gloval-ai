@@ -5,7 +5,18 @@ import type {
   BillingProfileValidationError,
 } from '@/lib/billing-profile-types'
 
-const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/
+const EMAIL_MIN_LENGTH = 3
+const EMAIL_MAX_LENGTH = 254
+
+/**
+ * The single invoice e-mail rule, identical to the database CHECK
+ * (`char_length(btrim(x)) between 3 and 254 and position('@' in x) > 1`):
+ * the trimmed value contains an '@' with at least one character before it.
+ */
+export function isValidBillingEmail(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length >= EMAIL_MIN_LENGTH && trimmed.length <= EMAIL_MAX_LENGTH && trimmed.indexOf('@') >= 1
+}
 
 export type ExistingBillingIdentifiers = {
   existingNationalId?: string | null
@@ -129,7 +140,8 @@ export function validateBillingProfileInput(
   if (!normalizedPhone) fieldErrors.phone = rawPhone ? 'invalid' : 'required'
 
   if (!invoiceEmail) fieldErrors.invoiceEmail = 'required'
-  else if (invoiceEmail.length > 254 || !EMAIL_PATTERN.test(invoiceEmail)) fieldErrors.invoiceEmail = 'invalid'
+  else if (invoiceEmail.length > EMAIL_MAX_LENGTH) fieldErrors.invoiceEmail = 'too_long'
+  else if (!isValidBillingEmail(invoiceEmail)) fieldErrors.invoiceEmail = 'invalid'
 
   checkRequiredText(addressLine, 'addressLine', fieldErrors, 3, 240)
   checkRequiredText(district, 'district', fieldErrors, 1, 100)

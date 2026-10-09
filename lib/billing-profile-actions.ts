@@ -11,7 +11,7 @@ import {
   toBillingProfileSummary,
 } from '@/lib/billing-profile-store'
 import { validateBillingProfileInput } from '@/lib/billing-profile-validation'
-import { fieldForConstraint, parseConstraintName, saveFailureLog, validationFailureLog } from '@/lib/billing-profile-save-errors'
+import { fieldForConstraint, parseConstraintName, payloadPresenceLog, saveFailureLog, validationFailureLog } from '@/lib/billing-profile-save-errors'
 import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 
 export async function getMyBillingProfileAction() {
@@ -42,6 +42,7 @@ export type SaveBillingProfileResult =
 
 export async function saveBillingProfileAction(input: unknown): Promise<SaveBillingProfileResult> {
   try {
+    console.info(payloadPresenceLog(input))
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return { ok: false, error: 'unauthenticated' }
