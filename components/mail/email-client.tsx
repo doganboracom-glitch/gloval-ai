@@ -32,6 +32,7 @@ import { getAliasCopy } from '@/components/mail/alias-copy'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { formatGraceBody, getLimitsCopy } from '@/components/mail/limits-copy'
 import { getForwardingCopy, type ForwardingCopy } from '@/components/mail/forwarding-copy'
+import { MailSetupGuide } from '@/components/mail/mail-setup-guide'
 import { validateForwardingDestinations } from '@/lib/mail/forwarding'
 import {
   MAX_ALIAS_DESTINATIONS,
@@ -679,6 +680,8 @@ export function EmailClient({
           </ul>
         )}
       </section>
+
+      <MailSetupGuide mailboxes={mailboxes} webmailBase={overview.webmailBase} mailServerHost={overview.mailServerHost} lang={lang} />
 
       {/* Webmail */}
       <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card/70 p-6">

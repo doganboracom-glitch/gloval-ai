@@ -23,6 +23,8 @@ import { requireAdmin } from '@/lib/mail/admin-guard'
 import { validateMailboxPassword } from '@/lib/mail/password'
 import { validateAliasDestinations } from '@/lib/mail/alias-destinations'
 import { validateForwardingDestinations } from '@/lib/mail/forwarding'
+import { getMailServerHost } from '@/lib/mail/webmail'
+import { queueMailboxSetupEmail, resendMailboxSetupEmail } from '@/lib/mail/setup-notifications'
 import {
   MailError,
   isValidLocalPart,
@@ -71,6 +73,7 @@ export type MailOverview = {
   /** Mailbox limit breakdown: main package + active add-ons. `overBy` > 0 after a downgrade. */
   limit: { max: number; fromPlan: number; fromAddons: number; used: number; overBy: number }
   webmailBase: string | null
+  mailServerHost: string
   /** True when a real provider is connected (vs. the in-memory mock). */
   live: boolean
 }
@@ -142,6 +145,7 @@ export async function getMyMailOverview(): Promise<MailOverview> {
       access: ctx.access,
       limit: limitFor(0),
       webmailBase: null,
+      mailServerHost: getMailServerHost(),
       live: provider.id !== 'mock',
     }
   }
@@ -164,6 +168,7 @@ export async function getMyMailOverview(): Promise<MailOverview> {
     access: ctx.access,
     limit: limitFor(mailboxes.length),
     webmailBase: provider.webmailUrl(),
+    mailServerHost: getMailServerHost(),
     live: provider.id !== 'mock',
   }
 }
@@ -214,11 +219,23 @@ export async function createMyMailbox(input: {
       password: input.password,
     })
 
+    queueMailboxSetupEmail({ userId: user.id, accountEmail: user.email ?? '', mailbox, domainVerified: domain.status === 'active', lang: user.user_metadata?.language === 'tr' ? 'tr' : 'en' })
     revalidatePath('/dashboard/email')
     return { ok: true, data: mailbox }
   } catch (error) {
     return fail(error)
   }
+}
+
+export async function resendMyMailboxSetupEmail(mailboxId: string): Promise<MailResult<null>> {
+  try {
+    const user = await requireUser(); const domain = await requireOwnedDomain(user.id); const provider = getMailProvider()
+    const owned = await provider.listMailboxes(domain.id); const mailbox = owned.find((item) => item.id === mailboxId)
+    if (!mailbox) throw new MailError('FORBIDDEN')
+    const result = await resendMailboxSetupEmail({ userId: user.id, accountEmail: user.email ?? '', mailbox, lang: user.user_metadata?.language === 'tr' ? 'tr' : 'en' })
+    if (!result.ok) return { ok: false, error: 'FORWARD_UPDATE_FAILED' }
+    return { ok: true, data: null }
+  } catch (error) { return fail(error) }
 }
 
 export async function updateMyMailbox(
