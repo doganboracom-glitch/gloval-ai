@@ -95,7 +95,15 @@ export async function revealAdminBillingProfileIdentifier(
     target_user_id: targetUserIdValue,
     field: fieldValue,
   })
-  if (auditError) return { ok: false, error: 'audit_failed' }
+  if (auditError) {
+    console.error('[v0] billing profile reveal audit insert failed', {
+      code: auditError.code,
+      message: auditError.message,
+      details: auditError.details,
+      hint: auditError.hint,
+    })
+    return { ok: false, error: 'audit_failed' }
+  }
   revealTimestamps.set(actor.userId, [...recent, now])
   return { ok: true, value }
 }
