@@ -5,7 +5,7 @@ import type {
   BillingProfileValidationError,
 } from '@/lib/billing-profile-types'
 
-const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+$/
 
 export type ExistingBillingIdentifiers = {
   existingNationalId?: string | null
@@ -83,23 +83,17 @@ export function isValidTurkishTaxNumber(value: string): boolean {
 }
 
 export function normalizeBillingPhone(value: string, country: string): string | null {
-  const compact = value.trim().replace(/[\s().-]/g, '')
-  if (!/^\+?\d+$/.test(compact)) return null
+  const trimmed = value.trim()
+  const digits = trimmed.replace(/\D/g, '')
+  if (!digits) return null
+  if (digits.length < 8 || digits.length > 15) return null
 
   if (country === 'TR') {
-    const digits = compact.replace(/\D/g, '')
-    const national =
-      digits.length === 12 && digits.startsWith('90')
-        ? digits.slice(2)
-        : digits.length === 11 && digits.startsWith('0')
-          ? digits.slice(1)
-          : digits.length === 10
-            ? digits
-            : ''
-    return /^[2-5]\d{9}$/.test(national) ? `+90${national}` : null
+    const national = digits.startsWith('90') && digits.length === 12 ? digits.slice(2) : digits.startsWith('0') && digits.length === 11 ? digits.slice(1) : digits.length === 10 ? digits : digits
+    return `+90${national}`
   }
 
-  return /^\+[1-9]\d{7,14}$/.test(compact) ? compact : null
+  return `+${digits}`
 }
 
 export function validateBillingProfileInput(
@@ -126,7 +120,7 @@ export function validateBillingProfileInput(
   const postalCode = readString(source, 'postalCode', fieldErrors)
   const rawCountry = readString(source, 'country', fieldErrors)
   const rawPhone = readString(source, 'phone', fieldErrors)
-  const invoiceEmail = readString(source, 'invoiceEmail', fieldErrors).toLowerCase()
+  const invoiceEmail = readString(source, 'invoiceEmail', fieldErrors)
 
   const normalizedCountry = (rawCountry || 'TR').toUpperCase()
   if (!/^[A-Z]{2}$/.test(normalizedCountry)) fieldErrors.country = 'invalid'
@@ -137,9 +131,9 @@ export function validateBillingProfileInput(
   if (!invoiceEmail) fieldErrors.invoiceEmail = 'required'
   else if (invoiceEmail.length > 254 || !EMAIL_PATTERN.test(invoiceEmail)) fieldErrors.invoiceEmail = 'invalid'
 
-  checkRequiredText(addressLine, 'addressLine', fieldErrors, 5, 240)
-  checkRequiredText(district, 'district', fieldErrors, 2, 100)
-  checkRequiredText(city, 'city', fieldErrors, 2, 100)
+  checkRequiredText(addressLine, 'addressLine', fieldErrors, 3, 240)
+  checkRequiredText(district, 'district', fieldErrors, 1, 100)
+  checkRequiredText(city, 'city', fieldErrors, 1, 100)
   checkOptionalText(postalCode, 'postalCode', fieldErrors, 20)
 
   if (customerType === 'individual') {
