@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 
+import { getMailSetupCopy } from '@/components/mail/setup-copy'
 import { mailSetupSubject, renderMailSetupHtml, renderMailSetupText } from './setup-email'
 
 const ADDRESS = 'info@firma.com'
@@ -15,9 +16,7 @@ describe('mailbox setup email', () => {
 
   it('renders the Turkish template with required content', () => {
     expect(tr).toContain('<html lang="tr">')
-    expect(tr).toContain('Posta kutunuz hazır')
-    expect(tr).toContain('Webmail’i aç')
-    expect(tr).toContain(`href="${WEBMAIL}"`)
+    expect(tr).toContain('Posta kutusu ayarları')
     expect(tr).toContain(HOST)
     expect(tr).toContain('993')
     expect(tr).toContain('465')
@@ -28,17 +27,56 @@ describe('mailbox setup email', () => {
     expect(tr).toContain('alt="GLOVAL AI"')
     expect(tr).toContain('https://gloval.ai/logo.png')
     expect(tr).toContain('#0f0d14')
-    expect(tr).toContain('#A36FFA')
     expect(tr).toContain('max-width:600px')
-    expect(tr).toContain('Giriş yapamıyorum')
   })
 
   it('renders the English template', () => {
     expect(en).toContain('<html lang="en">')
-    expect(en).toContain('Your mailbox is ready')
-    expect(en).toContain('Open webmail')
+    expect(en).toContain('Mailbox settings')
     expect(en).toContain('This email was sent by GLOVAL AI because the info@firma.com mailbox was created.')
     expect(en).not.toContain('Posta kutunuz hazır')
+  })
+
+  const removed = {
+    tr: ['Posta kutunuz hazır</h1>', 'Giriş yapamıyorum', 'Destek sayfamız', 'Hâlâ giriş yapamıyorsanız', 'Webmail’i aç', '/support'],
+    en: ['Your mailbox is ready</h1>', 'Cannot sign in?', 'our support page', 'If you still cannot sign in', 'Open webmail', '/support'],
+  }
+  const visible = (html: string) => html.replace(/<div style="display:none[^>]*>.*?<\/div>/, '')
+
+  it.each(['tr', 'en'] as const)('drops the intro block, help section and webmail button (%s)', (lang) => {
+    const html = lang === 'tr' ? tr : en
+    const text = renderMailSetupText(lang, ADDRESS, WEBMAIL, HOST)
+    const copy = getMailSetupCopy(lang)
+    for (const phrase of removed[lang]) {
+      expect(html).not.toContain(phrase)
+      expect(text).not.toContain(phrase)
+    }
+    expect(html).not.toContain('<h1')
+    expect(visible(html)).not.toContain(copy.greeting)
+    expect(text).not.toContain(copy.greeting)
+    expect(text.startsWith(copy.settingsTitle)).toBe(true)
+    // The first visible heading after the header band is the settings section.
+    expect(visible(html).split('<h2')[1]).toContain(copy.settingsTitle)
+  })
+
+  it.each(['tr', 'en'] as const)('keeps the greeting only as the preheader (%s)', (lang) => {
+    const html = lang === 'tr' ? tr : en
+    expect(html.split(getMailSetupCopy(lang).greeting).length - 1).toBe(1)
+  })
+
+  it.each(['tr', 'en'] as const)('shows the webmail address as a clickable link in the browser card (%s)', (lang) => {
+    const html = lang === 'tr' ? tr : en
+    const text = renderMailSetupText(lang, ADDRESS, WEBMAIL, HOST)
+    const copy = getMailSetupCopy(lang)
+    expect(html).toContain(`<a class="link" href="${WEBMAIL}" style="color:#6d43bd;text-decoration:underline;">${WEBMAIL}</a>`)
+    expect(html.indexOf(copy.browser)).toBeLessThan(html.indexOf(`href="${WEBMAIL}"`))
+    expect(html.split(`href="${WEBMAIL}"`).length - 1).toBe(1)
+    expect(text).toContain(`${copy.browser}\n1. ${copy.browserLead} ${WEBMAIL} ${copy.browserRest}`)
+  })
+
+  it('escapes a custom webmail address in the link', () => {
+    const html = renderMailSetupHtml('tr', ADDRESS, 'https://x.test/a?b=1&c="2"', HOST)
+    expect(html).toContain('href="https://x.test/a?b=1&amp;c=&quot;2&quot;"')
   })
 
   it('treats an unknown language as Turkish', () => {
