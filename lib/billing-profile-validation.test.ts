@@ -54,7 +54,9 @@ describe('Turkish billing identifiers and phone normalization', () => {
   it('normalizes Turkish landline and mobile phone formats to E.164', () => {
     expect(normalizeBillingPhone('0212 555 10 10', 'TR')).toBe('+902125551010')
     expect(normalizeBillingPhone('+90 (532) 555-12-34', 'TR')).toBe('+905325551234')
-    expect(normalizeBillingPhone('1234567890', 'TR')).toBeNull()
+    expect(normalizeBillingPhone('1234567890', 'TR')).toBe('+901234567890')
+    expect(normalizeBillingPhone('(542) 464-76-10', 'TR')).toBe('+905424647610')
+    expect(normalizeBillingPhone('abc', 'TR')).toBeNull()
   })
 })
 
@@ -101,14 +103,14 @@ describe('billing profile validation', () => {
     }
   })
 
-  it('accepts every email shape allowed by the billing constraint', () => {
-    for (const invoiceEmail of ['ad@gmail.com', 'ad.soyad+etiket@ornek.com.tr', 'AD@ORNEK.COM', 'a@subdomain.ornek.com']) {
+  it('accepts declaration-based email shapes without lowercasing or requiring a dot', () => {
+    for (const invoiceEmail of ['doganboracom@gmail.com', 'yerel@localhost', 'AD+etiket@Türkçe_alan-adı', 'ad.soyad+etiket@ornek.com.tr']) {
       expect(validateBillingProfileInput({ ...validIndividual, invoiceEmail }).ok).toBe(true)
     }
   })
 
   it('rejects emails with whitespace, missing at-signs or dots, and overlong values', () => {
-    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', 'ad@ornek', 'a'.repeat(250) + '@a.com']) {
+    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', '@ornek', 'ad@', 'a'.repeat(250) + '@a']) {
       const result = validateBillingProfileInput({ ...validIndividual, invoiceEmail })
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.fieldErrors.invoiceEmail).toBe('invalid')
