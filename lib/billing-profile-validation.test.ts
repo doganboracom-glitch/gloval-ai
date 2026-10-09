@@ -101,10 +101,38 @@ describe('billing profile validation', () => {
     }
   })
 
-  it('rejects invalid invoice email addresses', () => {
-    const result = validateBillingProfileInput({ ...validIndividual, invoiceEmail: 'not-an-email' })
+  it('accepts every email shape allowed by the billing constraint', () => {
+    for (const invoiceEmail of ['ad@gmail.com', 'ad.soyad+etiket@ornek.com.tr', 'AD@ORNEK.COM', 'a@subdomain.ornek.com']) {
+      expect(validateBillingProfileInput({ ...validIndividual, invoiceEmail }).ok).toBe(true)
+    }
+  })
+
+  it('rejects emails with whitespace, missing at-signs or dots, and overlong values', () => {
+    for (const invoiceEmail of ['ad soyad@gmail.com', 'adgmail.com', 'ad@ornek', 'a'.repeat(250) + '@a.com']) {
+      const result = validateBillingProfileInput({ ...validIndividual, invoiceEmail })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.fieldErrors.invoiceEmail).toBe('invalid')
+    }
+  })
+
+  it('maps phone normalization and validation to the phone field', () => {
+    const accepted = validateBillingProfileInput({ ...validIndividual, phone: '05424647610' })
+    expect(accepted.ok).toBe(true)
+    if (accepted.ok) expect(accepted.value.phone).toBe('+905424647610')
+
+    const rejected = validateBillingProfileInput({ ...validIndividual, phone: 'invalid' })
+    expect(rejected.ok).toBe(false)
+    if (!rejected.ok) expect(rejected.fieldErrors.phone).toBe('invalid')
+  })
+
+  it('keeps address and identity errors on their own fields', () => {
+    const result = validateBillingProfileInput({ ...validIndividual, addressLine: '', nationalId: '123' })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.fieldErrors.invoiceEmail).toBe('invalid')
+    if (!result.ok) {
+      expect(result.fieldErrors.addressLine).toBe('required')
+      expect(result.fieldErrors.nationalId).toBe('invalid')
+      expect(result.fieldErrors.invoiceEmail).toBeUndefined()
+    }
   })
 
   it('only treats profiles with valid type-specific identifiers as complete', () => {
