@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { scheduleOrderNotification } from '@/lib/store-order-notifications'
 import {
   getPaymentProvider,
   getProviderWebhookSecret,
@@ -115,6 +116,8 @@ export async function POST(
       }
     }
   }
+
+  if (result.status === 'paid') scheduleOrderNotification(order.id)
 
   return ack()
 }

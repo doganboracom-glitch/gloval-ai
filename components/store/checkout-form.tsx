@@ -163,7 +163,7 @@ function CheckoutInner({
 
     if (result.ok) {
       cart.clear()
-      router.push(`/site/${slug}/order/${result.orderId}`)
+      router.push(result.orderPath)
     } else {
       setError(errorMessages[result.error] ?? errorMessages.order_failed)
       setSubmitting(false)
