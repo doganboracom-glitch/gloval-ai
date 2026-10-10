@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { encryptSecret, decryptSecret } from '@/lib/crypto'
 import { PAYMENT_METHODS, type PaymentMethodId } from '@/lib/payments/methods'
+import { loadStorePaymentConfig } from '@/lib/store-payment-config'
 
 /**
  * Owner-facing payment configuration for an e-commerce project.
@@ -29,6 +30,8 @@ export type PaymentSettingsView = {
   publicConfig: Record<string, Record<string, string>>
   /** Which secret fields already have a stored value (booleans only). */
   secretsPresent: Record<string, Record<string, boolean>>
+  /** True when stored secrets exist but cannot be decrypted (key rotated/corrupt). */
+  secretsUnreadable?: boolean
 }
 
 export type SavePaymentSettingsInput = {
@@ -68,12 +71,29 @@ async function authorizeProjectOwner(projectId: string): Promise<string> {
 
 type StoredSecrets = Record<string, Record<string, string>>
 
+class SecretsUnreadableError extends Error {
+  constructor() {
+    super('Stored payment secrets could not be decrypted.')
+    this.name = 'SecretsUnreadableError'
+  }
+}
+
+/**
+ * Decrypts the stored secrets. A present-but-unreadable blob (wrong key,
+ * corruption, bad JSON) THROWS instead of reading as "no secrets": returning
+ * `{}` there would let the next save silently overwrite the owner's real
+ * credentials. Nothing from the ciphertext or plaintext is logged by callers.
+ */
 function readStoredSecrets(encrypted: string | null): StoredSecrets {
   if (!encrypted) return {}
   try {
-    return JSON.parse(decryptSecret(encrypted)) as StoredSecrets
+    const parsed: unknown = JSON.parse(decryptSecret(encrypted))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new SecretsUnreadableError()
+    }
+    return parsed as StoredSecrets
   } catch {
-    return {}
+    throw new SecretsUnreadableError()
   }
 }
 
@@ -101,7 +121,14 @@ export async function getPaymentSettingsForOwner(
   )
 
   const publicConfig = (data?.public_config as Record<string, Record<string, string>>) ?? {}
-  const stored = readStoredSecrets(data?.secret_encrypted ?? null)
+  let stored: StoredSecrets = {}
+  let secretsUnreadable = false
+  try {
+    stored = readStoredSecrets(data?.secret_encrypted ?? null)
+  } catch {
+    secretsUnreadable = true
+    console.error('[payment-settings] stored secrets unreadable', { projectId })
+  }
 
   const secretsPresent: Record<string, Record<string, boolean>> = {}
   for (const method of PAYMENT_METHODS) {
@@ -114,7 +141,22 @@ export async function getPaymentSettingsForOwner(
     if (Object.keys(present).length > 0) secretsPresent[method.id] = present
   }
 
-  return { enabled, publicConfig, secretsPresent }
+  return { enabled, publicConfig, secretsPresent, secretsUnreadable }
+}
+
+/**
+ * Whether the owner's store can currently take real payments. Mock-only (the
+ * non-production opt-in) does not count as ready.
+ */
+export async function getStorePaymentReadiness(
+  projectId: string,
+): Promise<{ ready: boolean; unreadable: boolean }> {
+  await authorizeProjectOwner(projectId)
+  const resolution = await loadStorePaymentConfig(projectId)
+  if (!resolution.ok) {
+    return { ready: false, unreadable: resolution.reason === 'config_unreadable' }
+  }
+  return { ready: resolution.methods.some((m) => m !== 'mock'), unreadable: false }
 }
 
 export type SaveResult = { ok: true } | { ok: false; error: string; missing?: string[] }
@@ -138,12 +180,26 @@ export async function savePaymentSettings(
   )
 
   // Load existing secrets so blank fields keep their stored value.
-  const { data: existingRow } = await admin
+  const { data: existingRow, error: existingError } = await admin
     .from('ecommerce_payment_settings')
     .select('secret_encrypted')
     .eq('project_id', projectId)
     .maybeSingle()
-  const storedSecrets = readStoredSecrets(existingRow?.secret_encrypted ?? null)
+  // A failed read is not "no stored secrets"; saving on top of it could wipe them.
+  if (existingError) {
+    console.error('[payment-settings] existing row read failed', {
+      projectId,
+      code: existingError.code,
+    })
+    return { ok: false, error: 'save_failed' }
+  }
+  let storedSecrets: StoredSecrets
+  try {
+    storedSecrets = readStoredSecrets(existingRow?.secret_encrypted ?? null)
+  } catch {
+    console.error('[payment-settings] stored secrets unreadable, save rejected', { projectId })
+    return { ok: false, error: 'secrets_unreadable' }
+  }
 
   const nextPublic: Record<string, Record<string, string>> = {}
   const nextSecrets: StoredSecrets = {}

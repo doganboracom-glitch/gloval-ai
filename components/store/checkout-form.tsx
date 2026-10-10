@@ -9,6 +9,10 @@ import { CartProvider, useCart, formatPrice } from './cart-provider'
 import { createOrder } from '@/lib/store'
 import type { PaymentProviderId } from '@/lib/payments/types'
 import { PaymentMethodSelect, normalizeMethods } from './payment-method-select'
+import {
+  STORE_PAYMENT_UNAVAILABLE_MESSAGE,
+  type StorePaymentUnavailableReason,
+} from '@/lib/store-payment-policy'
 import { UserCheck, LogIn } from 'lucide-react'
 import {
   InvoiceFields,
@@ -30,24 +34,27 @@ export type CheckoutCustomer = {
 export function CheckoutForm({
   slug,
   storeName,
-  methods = ['mock'],
+  methods = [],
   publicConfig = {},
   customer = null,
+  paymentUnavailableReason = null,
 }: {
   slug: string
   storeName: string
   methods?: PaymentProviderId[]
   publicConfig?: Record<string, unknown>
   customer?: CheckoutCustomer
+  paymentUnavailableReason?: StorePaymentUnavailableReason | null
 }) {
   return (
     <CartProvider slug={slug}>
       <CheckoutInner
         slug={slug}
         storeName={storeName}
-        methods={normalizeMethods(methods)}
+        methods={paymentUnavailableReason ? [] : normalizeMethods(methods)}
         publicConfig={publicConfig}
         customer={customer}
+        paymentUnavailableReason={paymentUnavailableReason}
       />
     </CartProvider>
   )
@@ -62,13 +69,16 @@ function CheckoutInner({
   methods,
   publicConfig,
   customer,
+  paymentUnavailableReason,
 }: {
   slug: string
   storeName: string
   methods: PaymentProviderId[]
   publicConfig: Record<string, unknown>
   customer: CheckoutCustomer
+  paymentUnavailableReason: StorePaymentUnavailableReason | null
 }) {
+  const paymentBlocked = paymentUnavailableReason !== null || methods.length === 0
   const cart = useCart()
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
@@ -110,12 +120,14 @@ function CheckoutInner({
     too_many_items: 'Sepette çok fazla ürün var.',
     store_not_found: 'Mağaza bulunamadı.',
     order_failed: 'Sipariş oluşturulamadı. Lütfen tekrar dene.',
+    payment_not_configured: STORE_PAYMENT_UNAVAILABLE_MESSAGE.not_configured.tr,
+    payment_config_unreadable: STORE_PAYMENT_UNAVAILABLE_MESSAGE.config_unreadable.tr,
     bad_request: 'Bir hata oluştu. Lütfen tekrar dene.',
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (submitting || cart.items.length === 0) return
+    if (submitting || paymentBlocked || cart.items.length === 0) return
 
     // Buyer cannot complete the order without the required delivery details.
     const required: [keyof typeof form, string][] = [
@@ -301,12 +313,24 @@ function CheckoutInner({
           </div>
 
           <div className="mt-2 border-t border-border pt-5">
-            <PaymentMethodSelect
-              methods={methods}
-              value={paymentMethod}
-              onChange={setPaymentMethod}
-              publicConfig={publicConfig}
-            />
+            {paymentBlocked ? (
+              <p
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-3 text-sm text-destructive"
+              >
+                {
+                  STORE_PAYMENT_UNAVAILABLE_MESSAGE[paymentUnavailableReason ?? 'not_configured']
+                    .tr
+                }
+              </p>
+            ) : (
+              <PaymentMethodSelect
+                methods={methods}
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                publicConfig={publicConfig}
+              />
+            )}
           </div>
 
           <div className="border-t border-border pt-5">
@@ -319,7 +343,12 @@ function CheckoutInner({
             </p>
           )}
 
-          <Button type="submit" size="lg" disabled={submitting} className="gap-2">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={submitting || paymentBlocked}
+            className="gap-2"
+          >
             {submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
@@ -332,9 +361,11 @@ function CheckoutInner({
               </>
             )}
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            Bu bir test ödeme akışıdır. Gerçek kart bilgisi girilmez.
-          </p>
+          {paymentMethod === 'mock' && !paymentBlocked && (
+            <p className="text-center text-xs text-muted-foreground">
+              Bu bir test ödeme akışıdır. Gerçek kart bilgisi girilmez.
+            </p>
+          )}
         </form>
 
         <aside className="h-fit rounded-2xl border border-border bg-card p-5">

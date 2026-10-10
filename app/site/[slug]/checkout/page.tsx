@@ -18,13 +18,14 @@ export default async function CheckoutPage({
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
-  const { methods, publicConfig } = await getStorePaymentMethods(slug)
+  const { available, reason, methods, publicConfig } = await getStorePaymentMethods(slug)
   const customer = await getCurrentStoreCustomer(slug)
 
   return (
     <CheckoutForm
       slug={slug}
       storeName={site.name}
+      paymentUnavailableReason={available ? null : (reason ?? 'not_configured')}
       methods={methods}
       publicConfig={publicConfig}
       customer={
