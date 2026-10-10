@@ -269,10 +269,16 @@ export const paytrProvider: PaymentProvider = {
       return null
     }
 
+    // total_amount is covered by the signature above (unlike the other
+    // callback fields), so it is the only amount we may trust.
+    const signedTotal = Number(totalAmount)
     return {
       kind: 'payment',
       reference: merchantOid,
       status: status === 'success' ? 'paid' : 'failed',
+      ...(Number.isFinite(signedTotal)
+        ? { paidAmountCents: signedTotal, amountMatch: 'at_least' as const }
+        : {}),
     }
   },
 }
