@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { loadDemoStoreIds } from '@/lib/store-demo'
 import {
+  isDemoStore,
   resolveStorePayment,
   type StorePaymentResolution,
   type StorePaymentRow,
@@ -32,7 +34,13 @@ export async function loadStorePaymentConfig(
       })
       return resolveStorePayment(null, true)
     }
-    return resolveStorePayment((data as StorePaymentRow | null) ?? null, false)
+    const demoIds = await loadDemoStoreIds(admin, projectId)
+    return resolveStorePayment(
+      (data as StorePaymentRow | null) ?? null,
+      false,
+      undefined,
+      isDemoStore(projectId, demoIds),
+    )
   } catch (err) {
     console.error('[store-payments] settings read threw', {
       projectId,

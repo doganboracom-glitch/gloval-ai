@@ -10,6 +10,7 @@ export type PaymentProviderId =
   | 'iyzico'
   | 'paytr'
   | 'bank_transfer'
+  | 'cash_on_delivery'
 
 /**
  * Raised when a provider is asked to do real work but has not been configured

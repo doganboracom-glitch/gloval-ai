@@ -6,7 +6,8 @@ import { syncAllTransfers } from '@/lib/custom-domains/registrar/transfer-servic
 import { reconcileSubscriptionLifecycle } from '@/lib/billing-lifecycle'
 import { syncAllMailAccess } from '@/lib/mail/access-sync'
 import { runPlanCreditSweep } from '@/lib/plan-credit-sweep-store'
-import { releaseStaleOrderStock } from '@/lib/store-order-stock'
+import { releaseOrderStock, releaseStaleOrderStock } from '@/lib/store-order-stock'
+import { expireStaleManualOrders } from '@/lib/store-manual-orders'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -63,7 +64,10 @@ export async function GET(request: Request) {
   // Without this the release only ran when that same store received a new checkout.
   let storeStock: { ok: true } | { error: string }
   try {
-    await releaseStaleOrderStock(createAdminClient(), null)
+    const admin = createAdminClient()
+    await releaseStaleOrderStock(admin, null)
+    // Bank-transfer orders past their owner-set payment term (default 3 days).
+    await expireStaleManualOrders(admin, null, { releaseOrderStock })
     storeStock = { ok: true }
   } catch (error) {
     console.log('[store-stock] stale sweep failed:', error instanceof Error ? error.message : 'unknown')

@@ -59,11 +59,53 @@ export async function releaseOrderStock(
   }
 }
 
-/** Cancels this store's abandoned unpaid orders and returns their stock. */
-export async function releaseStaleOrderStock(admin: Admin, projectId: string | null): Promise<void> {
-  const { error } = await admin.rpc('release_stale_order_stock', { p_project_id: projectId })
-  if (error && !isMissingFunctionError(error)) {
-    console.error('[store-stock] stale release failed', { code: error.code })
+const STALE_ONLINE_ORDER_MS = 2 * 60 * 60 * 1000
+
+/**
+ * Cancels abandoned unpaid ONLINE-payment orders (card PSP checkouts never
+ * completed) and returns their stock. Manual methods (bank transfer, cash on
+ * delivery) are excluded: they wait for a human and expire on their own
+ * schedule (`expireStaleManualOrders`).
+ *
+ * Done in application code rather than through the `release_stale_order_stock`
+ * SQL function so the manual-method exclusion holds even before scripts/034
+ * changes that function (the 032 version only exempts bank transfers and would
+ * cancel pending cash-on-delivery orders after two hours).
+ */
+export async function releaseStaleOrderStock(
+  admin: Admin,
+  projectId: string | null,
+  now: number = Date.now(),
+): Promise<void> {
+  const cutoff = new Date(now - STALE_ONLINE_ORDER_MS).toISOString()
+  let query = admin
+    .from('ecommerce_orders')
+    .select('id')
+    .eq('status', 'pending')
+    .eq('payment_status', 'pending')
+    .not('payment_provider', 'in', '(bank_transfer,cash_on_delivery)')
+    .lt('created_at', cutoff)
+    .order('created_at', { ascending: true })
+    .limit(200)
+  if (projectId) query = query.eq('project_id', projectId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error('[store-stock] stale lookup failed', { code: error.code })
+    return
+  }
+
+  for (const row of (data ?? []) as { id: string }[]) {
+    const { data: moved } = await admin
+      .from('ecommerce_orders')
+      .update({ status: 'cancelled' })
+      .eq('id', row.id)
+      .eq('status', 'pending')
+      .eq('payment_status', 'pending')
+      .select('id')
+    if (moved && moved.length > 0) {
+      await releaseOrderStock(admin, row.id, { onlyUnpaid: true })
+    }
   }
 }
 
