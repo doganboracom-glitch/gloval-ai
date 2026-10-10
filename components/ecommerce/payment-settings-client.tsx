@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CreditCard, Loader2, Check, ShieldCheck, Landmark, Sparkles } from 'lucide-react'
+import { ArrowLeft, CreditCard, Loader2, Check, ShieldCheck, Landmark, Sparkles, Truck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { PAYMENT_METHODS, type PaymentMethodId } from '@/lib/payments/methods'
@@ -62,6 +62,7 @@ const ICONS: Record<PaymentMethodId, typeof CreditCard> = {
   paytr: CreditCard,
   iyzico: CreditCard,
   bank_transfer: Landmark,
+  cash_on_delivery: Truck,
 }
 
 export function PaymentSettingsClient({
@@ -146,7 +147,7 @@ export function PaymentSettingsClient({
         setSecretVals({})
         router.refresh()
         window.setTimeout(() => setSaved(false), 2500)
-      } else if (result.error === 'missing_fields') {
+      } else if (result.error === 'missing_fields' || result.error === 'invalid_fields') {
         setMissing(result.missing ?? [])
       } else {
         setError(c.saveError)
@@ -255,7 +256,7 @@ export function PaymentSettingsClient({
                   </label>
                 </div>
 
-                {on && (
+                {on && method.fields.length > 0 && (
                   <div className="mt-5 grid gap-4 border-t border-border pt-5 sm:grid-cols-2">
                     {method.fields.map((field) => {
                       const label = field.label[lang === 'en' ? 'en' : 'tr']

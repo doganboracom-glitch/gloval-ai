@@ -3,9 +3,12 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ClipboardList, Loader2, Package } from 'lucide-react'
+import { ArrowLeft, Check, ClipboardList, Loader2, Package, X } from 'lucide-react'
 import {
+  cancelOrderPayment,
+  confirmOrderPayment,
   updateOrderStatus,
+  type ManualOrderActionResult,
   type OrderWithItems,
   type OrderStatus,
 } from '@/lib/ecommerce'
@@ -74,6 +77,70 @@ export function OrdersClient({
     if (s === 'failed' || s === 'cancelled') return 'bg-destructive/15 text-destructive'
     if (s === 'refunded') return 'bg-muted text-muted-foreground'
     return 'bg-primary/15 text-primary'
+  }
+
+  const tr = lang === 'tr'
+  const isAwaitingManualPayment = (o: OrderWithItems) =>
+    (o.payment_provider === 'bank_transfer' || o.payment_provider === 'cash_on_delivery') &&
+    o.payment_status === 'pending' &&
+    o.status === 'pending'
+
+  const providerLabel = (id: string) =>
+    id === 'bank_transfer'
+      ? tr ? 'Havale/EFT' : 'Bank transfer'
+      : id === 'cash_on_delivery'
+        ? tr ? 'Kapıda ödeme' : 'Cash on delivery'
+        : id
+
+  const manualErrorMessage = (r: Extract<ManualOrderActionResult, { ok: false }>) =>
+    r.error === 'not_pending'
+      ? tr ? 'Bu sipariş artık beklemede değil. Sayfa yenileniyor.' : 'This order is no longer pending. Refreshing.'
+      : t.ecom.statusUpdateError
+
+  function handleManualAction(orderId: string, action: 'confirm' | 'cancel') {
+    const message =
+      action === 'confirm'
+        ? tr
+          ? 'Ödemenin hesabınıza ulaştığını onaylıyor musunuz? Müşteriye ödeme alındı e-postası gönderilir.'
+          : 'Confirm the payment has been received? The buyer is emailed a payment confirmation.'
+        : tr
+          ? 'Siparişi iptal etmek istiyor musunuz? Ayrılan stok geri verilir.'
+          : 'Cancel this order? Reserved stock is returned.'
+    if (!window.confirm(message)) return
+    setError(null)
+    setPendingId(orderId)
+    startTransition(async () => {
+      try {
+        const result =
+          action === 'confirm'
+            ? await confirmOrderPayment(projectId, orderId)
+            : await cancelOrderPayment(projectId, orderId)
+        if (!result.ok) setError(manualErrorMessage(result))
+        else if (result.ok && result.oversold) {
+          setError(
+            tr
+              ? 'Ödeme onaylandı ancak stok yetersiz kaldı; siparişi manuel kontrol edin.'
+              : 'Payment confirmed but stock ran short; please review the order manually.',
+          )
+        }
+        router.refresh()
+        if (result.ok) {
+          setOrders((os) =>
+            os.map((o) =>
+              o.id === orderId
+                ? action === 'confirm'
+                  ? { ...o, status: 'paid', payment_status: 'paid' }
+                  : { ...o, status: 'cancelled' }
+                : o,
+            ),
+          )
+        }
+      } catch {
+        setError(t.ecom.statusUpdateError)
+      } finally {
+        setPendingId(null)
+      }
+    })
   }
 
   function handleStatusChange(orderId: string, next: OrderStatus) {
@@ -160,7 +227,7 @@ export function OrdersClient({
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {t.ecom.orderDate}: {dateFmt.format(new Date(o.created_at))} ·{' '}
-                      {t.ecom.payment}: {o.payment_provider} ({o.payment_status})
+                      {t.ecom.payment}: {providerLabel(o.payment_provider)} ({o.payment_status})
                     </p>
                   </div>
 
@@ -168,6 +235,33 @@ export function OrdersClient({
                     <p className="text-lg font-semibold">
                       {currencyFmt.format(o.total_cents / 100)}
                     </p>
+                    {isAwaitingManualPayment(o) ? (
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending && pendingId === o.id}
+                          onClick={() => handleManualAction(o.id, 'confirm')}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          <Check className="size-4" aria-hidden />
+                          {o.payment_provider === 'cash_on_delivery'
+                            ? tr ? 'Ödeme alındı' : 'Mark as paid'
+                            : tr ? 'Ödemeyi onayla' : 'Confirm payment'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPending && pendingId === o.id}
+                          onClick={() => handleManualAction(o.id, 'cancel')}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          <X className="size-4" aria-hidden />
+                          {tr ? 'İptal et' : 'Cancel'}
+                        </button>
+                        {isPending && pendingId === o.id && (
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    ) : (
                     <label className="flex items-center gap-1.5">
                       <span className="sr-only">{t.ecom.orderStatus}</span>
                       <select
@@ -188,6 +282,7 @@ export function OrdersClient({
                         <Loader2 className="size-4 animate-spin text-muted-foreground" />
                       )}
                     </label>
+                    )}
                   </div>
                 </div>
 

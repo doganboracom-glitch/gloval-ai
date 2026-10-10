@@ -38,6 +38,7 @@ export function CheckoutForm({
   publicConfig = {},
   customer = null,
   paymentUnavailableReason = null,
+  demo = false,
 }: {
   slug: string
   storeName: string
@@ -45,6 +46,7 @@ export function CheckoutForm({
   publicConfig?: Record<string, unknown>
   customer?: CheckoutCustomer
   paymentUnavailableReason?: StorePaymentUnavailableReason | null
+  demo?: boolean
 }) {
   return (
     <CartProvider slug={slug}>
@@ -55,6 +57,7 @@ export function CheckoutForm({
         publicConfig={publicConfig}
         customer={customer}
         paymentUnavailableReason={paymentUnavailableReason}
+        demo={demo}
       />
     </CartProvider>
   )
@@ -70,6 +73,7 @@ function CheckoutInner({
   publicConfig,
   customer,
   paymentUnavailableReason,
+  demo,
 }: {
   slug: string
   storeName: string
@@ -77,6 +81,7 @@ function CheckoutInner({
   publicConfig: Record<string, unknown>
   customer: CheckoutCustomer
   paymentUnavailableReason: StorePaymentUnavailableReason | null
+  demo: boolean
 }) {
   const paymentBlocked = paymentUnavailableReason !== null || methods.length === 0
   const cart = useCart()
@@ -329,6 +334,7 @@ function CheckoutInner({
                 value={paymentMethod}
                 onChange={setPaymentMethod}
                 publicConfig={publicConfig}
+                demo={demo}
               />
             )}
           </div>
@@ -363,7 +369,9 @@ function CheckoutInner({
           </Button>
           {paymentMethod === 'mock' && !paymentBlocked && (
             <p className="text-center text-xs text-muted-foreground">
-              Bu bir test ödeme akışıdır. Gerçek kart bilgisi girilmez.
+              {demo
+                ? 'Bu bir demo mağazadır, gerçek ödeme alınmaz. Gerçek kart bilgisi girmeyin.'
+                : 'Bu bir test ödeme akışıdır. Gerçek kart bilgisi girilmez.'}
             </p>
           )}
         </form>

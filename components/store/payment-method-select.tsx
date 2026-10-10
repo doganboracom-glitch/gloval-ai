@@ -2,7 +2,8 @@
 
 import type { PaymentProviderId } from '@/lib/payments/types'
 import { buyerMethodName, buyerMethodBlurb, isCardProviderMethod } from '@/lib/payments/methods'
-import { CreditCard, Landmark, ShieldCheck } from 'lucide-react'
+import { CreditCard, Landmark, ShieldCheck, Truck } from 'lucide-react'
+import { formatIban } from '@/lib/iban'
 
 /**
  * Buyer-facing payment-method picker for the real store checkout. Renders only
@@ -18,11 +19,14 @@ export function PaymentMethodSelect({
   value,
   onChange,
   publicConfig,
+  demo = false,
 }: {
   methods: PaymentProviderId[]
   value: PaymentProviderId
   onChange: (id: PaymentProviderId) => void
   publicConfig?: Record<string, unknown>
+  /** Server-verified demo store: the mock card is labelled as a demo. */
+  demo?: boolean
 }) {
   // Collapse multiple enabled card PSPs into a single buyer-facing row that
   // submits whichever card provider comes first (createOrder still receives a
@@ -41,11 +45,19 @@ export function PaymentMethodSelect({
       {visibleMethods.map((id) => {
         const selected = value === id
         const isBank = id === 'bank_transfer'
-        const Icon = isBank ? Landmark : id === 'mock' ? ShieldCheck : CreditCard
-        const name = id === 'mock' ? 'Test Ödeme' : buyerMethodName(id, 'tr')
+        const isCod = id === 'cash_on_delivery'
+        const Icon = isBank ? Landmark : isCod ? Truck : id === 'mock' ? ShieldCheck : CreditCard
+        const name =
+          id === 'mock'
+            ? demo
+              ? 'Kredi/Banka kartı (demo)'
+              : 'Test Ödeme'
+            : buyerMethodName(id, 'tr')
         const blurb =
           id === 'mock'
-            ? 'Bu mağaza henüz gerçek bir ödeme sağlayıcısı bağlamadı; test ödemesi kullanılır.'
+            ? demo
+              ? 'Bu bir demo mağazadır, gerçek ödeme alınmaz.'
+              : 'Bu mağaza henüz gerçek bir ödeme sağlayıcısı bağlamadı; test ödemesi kullanılır.'
             : buyerMethodBlurb(id, 'tr')
         return (
           <label
@@ -74,6 +86,11 @@ export function PaymentMethodSelect({
               {isBank && selected && publicConfig ? (
                 <BankDetails config={publicConfig} />
               ) : null}
+              {isCod && selected ? (
+                <span className="mt-1 text-xs text-muted-foreground">
+                  Ödemeyi siparişiniz teslim edilirken yaparsınız. Ek ücret alınmaz.
+                </span>
+              ) : null}
             </span>
           </label>
         )
@@ -90,11 +107,15 @@ function BankDetails({ config }: { config: Record<string, unknown> }) {
   }
   push('Banka', 'bank_name')
   push('Hesap Sahibi', 'account_holder')
-  push('IBAN', 'iban')
+  const iban = config.iban
+  if (typeof iban === 'string' && iban.trim()) rows.push({ label: 'IBAN', value: formatIban(iban) })
   push('Açıklama', 'instructions')
   if (rows.length === 0) return null
   return (
     <span className="mt-2 grid gap-1 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+      <span className="mb-1 text-muted-foreground">
+        Siparişiniz alındıktan sonra ödemeyi yapın, açıklamaya sipariş numarasını yazın.
+      </span>
       {rows.map((r) => (
         <span key={r.label} className="flex justify-between gap-3">
           <span className="text-muted-foreground">{r.label}</span>
@@ -107,7 +128,7 @@ function BankDetails({ config }: { config: Record<string, unknown> }) {
 
 /** Ordered, de-duplicated list with a sensible default selection. */
 export function normalizeMethods(methods: PaymentProviderId[]): PaymentProviderId[] {
-  const order: PaymentProviderId[] = ['paytr', 'iyzico', 'bank_transfer', 'stripe', 'mock']
+  const order: PaymentProviderId[] = ['paytr', 'iyzico', 'bank_transfer', 'cash_on_delivery', 'stripe', 'mock']
   const set = new Set(methods.length > 0 ? methods : (['mock'] as PaymentProviderId[]))
   return order.filter((id) => set.has(id))
 }

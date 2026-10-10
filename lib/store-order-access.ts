@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
 import { signOrderToken, verifyOrderToken } from '@/lib/store-order-token'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
+import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payment-policy'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -37,6 +38,16 @@ export type OrderConfirmation = {
   total_cents: number
   currency: string
   created_at: string
+  payment_provider: string | null
+  /** Non-secret bank details, only for a bank-transfer order still awaiting payment. */
+  bank: {
+    bankName: string
+    accountHolder: string
+    iban: string
+    instructions: string
+    /** ISO time after which the unpaid order is cancelled automatically. */
+    dueAt: string
+  } | null
   items: {
     name: string
     unit_price_cents: number
@@ -72,7 +83,7 @@ export async function getOrderConfirmation(
   const { data: order } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, total_cents, currency, created_at',
+      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, total_cents, currency, created_at, payment_provider',
     )
     .eq('id', orderId)
     .eq('project_id', project.id)
@@ -102,9 +113,38 @@ export async function getOrderConfirmation(
     .select('name, unit_price_cents, quantity, line_total_cents')
     .eq('order_id', orderId)
 
+  let bank: OrderConfirmation['bank'] = null
+  const provider = (order.payment_provider as string | null) ?? null
+  if (
+    provider === 'bank_transfer' &&
+    isManualStoreProvider(provider) &&
+    order.payment_status === 'pending' &&
+    order.status === 'pending'
+  ) {
+    const { data: settings } = await admin
+      .from('ecommerce_payment_settings')
+      .select('public_config')
+      .eq('project_id', project.id)
+      .maybeSingle()
+    const cfg = readBankTransferConfig(settings?.public_config)
+    if (cfg.iban) {
+      bank = {
+        bankName: cfg.bankName,
+        accountHolder: cfg.accountHolder,
+        iban: cfg.iban,
+        instructions: cfg.instructions,
+        dueAt: new Date(
+          new Date(order.created_at).getTime() + cfg.termDays * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      }
+    }
+  }
+
   return {
     id: order.id,
     status: order.status,
+    payment_provider: provider,
+    bank,
     payment_status: order.payment_status,
     first_name: firstNameOf(order.customer_name),
     masked_email: maskEmail(order.customer_email),

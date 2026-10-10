@@ -47,6 +47,10 @@ export type OrderEmailData = {
   /** Owner: link to the order list in the dashboard. */
   dashboardUrl?: string
   bank?: BankTransferInfo
+  /** Owner mail: the order is placed but not yet paid (bank transfer / COD). */
+  paymentPending?: boolean
+  /** Pending buyer mail: payment is made on delivery, no bank details apply. */
+  cashOnDelivery?: boolean
 }
 
 export type RenderedOrderEmail = { subject: string; html: string; text: string }
@@ -147,9 +151,45 @@ const OWNER: Record<EmailLang, Copy> = {
   },
 }
 
-function copyFor(kind: OrderEmailKind, lang: EmailLang): Copy {
-  const table = kind === 'owner' ? OWNER : kind === 'buyer-pending' ? BUYER_PENDING : BUYER_PAID
-  return table[lang]
+const OWNER_PENDING: Record<EmailLang, Copy> = {
+  tr: {
+    ...OWNER.tr,
+    subject: (s, n) => `Yeni sipariş (ödeme bekleniyor): ${s} (#${n})`,
+    title: 'Yeni sipariş, ödeme bekleniyor',
+    preview: (s, n) => `${s} mağazanıza #${n} numaralı sipariş geldi, ödeme henüz alınmadı.`,
+    intro: (_n, s) =>
+      `${s} mağazanıza yeni bir sipariş geldi; ödeme henüz alınmadı. Ödemeyi aldığınızda sipariş ekranından "Ödemeyi onayla" deyin.`,
+  },
+  en: {
+    ...OWNER.en,
+    subject: (s, n) => `New order (awaiting payment): ${s} (#${n})`,
+    title: 'New order, awaiting payment',
+    preview: (s, n) => `A new order #${n} arrived at ${s}; payment is not received yet.`,
+    intro: (_n, s) =>
+      `A new order arrived at ${s}; payment has not been received yet. Once you receive it, use "Confirm payment" on the orders screen.`,
+  },
+}
+
+const BUYER_COD: Record<EmailLang, Copy> = {
+  tr: {
+    ...BUYER_PENDING.tr,
+    preview: (s, n) => `${s} - #${n} numaralı sipariş için ödeme teslimatta alınacak.`,
+    intro: (name, s) =>
+      `Merhaba ${name}, ${s} mağazasındaki siparişinizi aldık. Ödemeyi teslimat sırasında yapacaksınız.`,
+  },
+  en: {
+    ...BUYER_PENDING.en,
+    preview: (s, n) => `${s} - payment for order #${n} is due on delivery.`,
+    intro: (name, s) =>
+      `Hi ${name}, we received your order at ${s}. You will pay when it is delivered.`,
+  },
+}
+
+function copyFor(data: OrderEmailData): Copy {
+  const { kind, lang } = data
+  if (kind === 'owner') return (data.paymentPending ? OWNER_PENDING : OWNER)[lang]
+  if (kind === 'buyer-pending') return (data.cashOnDelivery ? BUYER_COD : BUYER_PENDING)[lang]
+  return BUYER_PAID[lang]
 }
 
 function itemsTable(items: OrderEmailItem[], currency: string): string {
@@ -163,7 +203,7 @@ function itemsTable(items: OrderEmailItem[], currency: string): string {
 }
 
 export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
-  const c = copyFor(data.kind, data.lang)
+  const c = copyFor(data)
   const isOwner = data.kind === 'owner'
   const money = (cents: number) => formatPrice(cents, data.currency)
 

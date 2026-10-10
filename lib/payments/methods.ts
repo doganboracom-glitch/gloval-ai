@@ -9,7 +9,10 @@ import { pickLang, type Lang } from '@/lib/i18n'
  * NO secrets — only labels, descriptions and the shape of the config fields.
  */
 
-export type PaymentMethodId = Extract<PaymentProviderId, 'paytr' | 'iyzico' | 'bank_transfer'>
+export type PaymentMethodId = Extract<
+  PaymentProviderId,
+  'paytr' | 'iyzico' | 'bank_transfer' | 'cash_on_delivery'
+>
 
 export type PaymentConfigField = {
   /** Stable key stored in the provider config object. */
@@ -76,7 +79,18 @@ export const PAYMENT_METHODS: PaymentMethodMeta[] = [
       { key: 'account_holder', label: { tr: 'Hesap Sahibi', en: 'Account Holder' }, kind: 'text', required: true },
       { key: 'iban', label: { tr: 'IBAN', en: 'IBAN' }, kind: 'text', required: true, placeholder: 'TR00 0000 0000 0000 0000 0000 00' },
       { key: 'instructions', label: { tr: 'Açıklama / Talimat', en: 'Notes / Instructions' }, kind: 'text', multiline: true },
+      { key: 'payment_term_days', label: { tr: 'Ödeme süresi (gün)', en: 'Payment term (days)' }, kind: 'text', placeholder: '3' },
     ],
+  },
+  {
+    id: 'cash_on_delivery',
+    name: { tr: 'Kapıda Ödeme', en: 'Cash on Delivery' },
+    blurb: {
+      tr: 'Siparişinizi teslim alırken ödeme yapın.',
+      en: 'Pay when your order is delivered.',
+    },
+    manual: true,
+    fields: [],
   },
 ]
 

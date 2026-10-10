@@ -11,6 +11,14 @@ import { getEffectiveProductLimit } from '@/lib/effective-limits'
 import { PRODUCT_LIMIT_ERROR } from '@/lib/pricing-config'
 import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
+import {
+  cancelManualOrder,
+  confirmManualPayment,
+  defaultManualOrderDeps,
+  type ManualOrderOutcome,
+} from '@/lib/store-manual-orders'
+import { isManualStoreProvider } from '@/lib/store-payment-policy'
+import { scheduleOrderNotification } from '@/lib/store-order-notifications'
 
 /**
  * Phase 1 e-commerce data layer.
@@ -438,7 +446,62 @@ const ORDER_STATUSES: OrderStatus[] = [
   'fulfilled',
 ]
 
-/** Updates an order's fulfilment status. Owner + RLS scoped. */
+export type ManualOrderActionResult =
+  | { ok: true; outcome: 'confirmed' | 'cancelled'; oversold?: boolean }
+  | { ok: false; error: 'not_found' | 'not_manual' | 'not_pending' | 'failed' }
+
+function toActionResult(res: ManualOrderOutcome): ManualOrderActionResult {
+  if (res.outcome === 'confirmed') return { ok: true, outcome: 'confirmed', oversold: res.oversold }
+  if (res.outcome === 'cancelled') return { ok: true, outcome: 'cancelled' }
+  return { ok: false, error: res.outcome }
+}
+
+/**
+ * Owner confirms that a pending bank-transfer / cash-on-delivery order has been
+ * paid. Ownership of `projectId` is proven first (owner or allow-listed admin);
+ * the order is then resolved inside that project only, so another store's
+ * order id is "not_found". The transition is a conditional update, so it runs
+ * once and the "payment received" e-mail is sent exactly once.
+ */
+export async function confirmOrderPayment(
+  projectId: string,
+  orderId: string,
+): Promise<ManualOrderActionResult> {
+  await requireOwnedEcommerceProject(projectId)
+  const { userId: actorId } = await requireUser()
+  const res = await confirmManualPayment(
+    createAdminClient(),
+    { projectId, orderId, actorId },
+    defaultManualOrderDeps(scheduleOrderNotification),
+  )
+  revalidatePath(`/ecommerce/${projectId}/orders`)
+  return toActionResult(res)
+}
+
+/** Owner cancels a pending manual order; its reserved stock is released. */
+export async function cancelOrderPayment(
+  projectId: string,
+  orderId: string,
+): Promise<ManualOrderActionResult> {
+  await requireOwnedEcommerceProject(projectId)
+  const { userId: actorId } = await requireUser()
+  const res = await cancelManualOrder(
+    createAdminClient(),
+    { projectId, orderId, actorId },
+    defaultManualOrderDeps(scheduleOrderNotification),
+  )
+  revalidatePath(`/ecommerce/${projectId}/orders`)
+  return toActionResult(res)
+}
+
+/**
+ * Updates an order's fulfilment status. Owner + RLS scoped.
+ *
+ * Orders waiting on a manual payment never change payment state through this
+ * generic path: "paid" / "cancelled" / "failed" are routed to the audited,
+ * conditional confirm/cancel actions, and a bank-transfer order cannot move to
+ * a fulfilment status before the transfer is confirmed.
+ */
 export async function updateOrderStatus(
   projectId: string,
   orderId: string,
@@ -446,6 +509,33 @@ export async function updateOrderStatus(
 ): Promise<void> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
   if (!ORDER_STATUSES.includes(status)) throw new Error('INVALID_STATUS')
+
+  const { data: current } = await supabase
+    .from('ecommerce_orders')
+    .select('payment_provider, payment_status')
+    .eq('id', orderId)
+    .eq('project_id', projectId)
+    .maybeSingle()
+  if (!current) throw new Error('NOT_FOUND')
+
+  if (
+    isManualStoreProvider(current.payment_provider as string) &&
+    current.payment_status === 'pending'
+  ) {
+    if (status === 'paid') {
+      const r = await confirmOrderPayment(projectId, orderId)
+      if (!r.ok) throw new Error(r.error.toUpperCase())
+      return
+    }
+    if (status === 'cancelled' || status === 'failed') {
+      const r = await cancelOrderPayment(projectId, orderId)
+      if (!r.ok) throw new Error(r.error.toUpperCase())
+      return
+    }
+    if (status === 'pending') return
+    if (current.payment_provider === 'bank_transfer') throw new Error('PAYMENT_PENDING')
+  }
+
   const { error } = await supabase
     .from('ecommerce_orders')
     .update({ status })
@@ -453,9 +543,6 @@ export async function updateOrderStatus(
     .eq('project_id', projectId)
   if (error) throw error
 
-  // The owner confirming a transfer takes the stock if it is not held yet;
-  // cancelling/failing an order (e.g. an unpaid bank transfer) gives it back.
-  // Both are idempotent, so repeated clicks change nothing.
   if (status === 'paid') {
     await finalizePaidStock(createAdminClient(), orderId)
   } else if (status === 'cancelled' || status === 'failed') {

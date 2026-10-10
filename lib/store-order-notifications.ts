@@ -11,6 +11,8 @@ import { resolveEmailLang } from '@/lib/email/lang'
 import { sanitizeReplyTo } from '@/lib/email/from'
 import { tenantUrl } from '@/lib/domains'
 import { buyerMethodName } from '@/lib/payments/methods'
+import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
+import { loadDemoStoreIds } from '@/lib/store-demo'
 import { firstNameOf } from '@/lib/store-order-privacy'
 import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
 import {
@@ -43,7 +45,7 @@ export function buyerKindFor(
   paymentProvider: string,
 ): Extract<OrderEmailKind, 'buyer-paid' | 'buyer-pending'> | null {
   if (paymentStatus === 'paid') return 'buyer-paid'
-  if (paymentStatus === 'pending' && paymentProvider === 'bank_transfer') return 'buyer-pending'
+  if (paymentStatus === 'pending' && isManualStoreProvider(paymentProvider)) return 'buyer-pending'
   return null
 }
 
@@ -150,6 +152,10 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
     .maybeSingle()
   if (!project) return
 
+  // Demo stores never e-mail anyone (neither buyer nor owner): their orders are
+  // made-up and the "buyer" address is whatever a visitor typed.
+  if (isDemoStore(project.id, await loadDemoStoreIds(admin, project.id))) return
+
   const [{ data: items }, { data: pay }, ownerRes] = await Promise.all([
     admin
       .from('ecommerce_order_items')
@@ -192,7 +198,11 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
         kind: buyerKind,
         customerName: firstNameOf(order.customer_name),
         orderUrl,
-        bank: buyerKind === 'buyer-pending' ? readBank(pay?.public_config) : undefined,
+        bank:
+          buyerKind === 'buyer-pending' && order.payment_provider === 'bank_transfer'
+            ? readBank(pay?.public_config)
+            : undefined,
+        cashOnDelivery: order.payment_provider === 'cash_on_delivery',
       })
       await sendOnce({
         ownerId: project.owner_id,
@@ -213,6 +223,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
       const email = renderOrderEmail({
         ...base,
         kind: 'owner',
+        paymentPending: order.payment_status === 'pending',
         customerEmail: order.customer_email ?? undefined,
         customerPhone: order.customer_phone ?? undefined,
         shippingAddress: formatShippingAddress(order.shipping_address) || undefined,

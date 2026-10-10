@@ -6,8 +6,11 @@ import { getPaymentProvider, isProviderImplemented, type PaymentProviderId } fro
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
+import { isValidTurkishIban } from '@/lib/iban'
+import { expireStaleManualOrders } from '@/lib/store-manual-orders'
 import {
   isManualStoreProvider,
+  readBankTransferConfig,
   STORE_PAYMENT_ERROR_CODE,
   type StorePaymentUnavailableReason,
 } from '@/lib/store-payment-policy'
@@ -76,12 +79,15 @@ export async function getStorePaymentMethods(storeSlug: string): Promise<{
   reason?: StorePaymentUnavailableReason
   methods: PaymentProviderId[]
   publicConfig: Record<string, unknown>
+  /** Server-verified demo store: the mock card is offered, no real money moves. */
+  demo: boolean
 }> {
   const closed = (reason: StorePaymentUnavailableReason) => ({
     available: false as const,
     reason,
     methods: [] as PaymentProviderId[],
     publicConfig: {},
+    demo: false,
   })
 
   const admin = createAdminClient()
@@ -107,6 +113,7 @@ export async function getStorePaymentMethods(storeSlug: string): Promise<{
     available: true,
     methods: resolution.methods,
     publicConfig: resolution.publicConfig,
+    demo: resolution.demo,
   }
 }
 
@@ -271,6 +278,18 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   if (!isManualStoreProvider(providerId) && !isProviderImplemented(providerId)) {
     return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured }
   }
+
+  // A bank-transfer order is only worth taking if the buyer can be told where
+  // to pay: refuse when the owner's IBAN is missing or malformed.
+  if (providerId === 'bank_transfer') {
+    const bank = readBankTransferConfig(payment.publicConfig)
+    if (!isValidTurkishIban(bank.iban)) {
+      return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured }
+    }
+  }
+
+  // Free stock of abandoned bank-transfer orders past their term (best effort).
+  await expireStaleManualOrders(admin, project.id, { releaseOrderStock })
 
   // Attribute the order to the logged-in store customer, if any. Guests get
   // null — the column is nullable, so nothing changes for anonymous checkout.

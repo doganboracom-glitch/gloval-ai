@@ -7,6 +7,8 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { encryptSecret, decryptSecret } from '@/lib/crypto'
 import { PAYMENT_METHODS, type PaymentMethodId } from '@/lib/payments/methods'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
+import { isValidTurkishIban, normalizeIban } from '@/lib/iban'
+import { parsePaymentTermDays } from '@/lib/store-payment-policy'
 
 /**
  * Owner-facing payment configuration for an e-commerce project.
@@ -159,7 +161,9 @@ export async function getStorePaymentReadiness(
   return { ready: resolution.methods.some((m) => m !== 'mock'), unreadable: false }
 }
 
-export type SaveResult = { ok: true } | { ok: false; error: string; missing?: string[] }
+export type SaveResult =
+  | { ok: true }
+  | { ok: false; error: string; missing?: string[] }
 
 /**
  * Persists the owner's payment configuration. Validates that every enabled
@@ -235,6 +239,23 @@ export async function savePaymentSettings(
 
   if (missing.length > 0) {
     return { ok: false, error: 'missing_fields', missing }
+  }
+
+  // Bank transfer: the IBAN must be a valid Turkish IBAN (stored normalized)
+  // and the payment term a whole number of days in range (blank = default).
+  const invalid: string[] = []
+  const bank = nextPublic.bank_transfer
+  if (bank) {
+    if (!isValidTurkishIban(bank.iban ?? '')) invalid.push('Havale/EFT · IBAN (TR + 24 hane)')
+    else bank.iban = normalizeIban(bank.iban)
+    if (bank.payment_term_days) {
+      if (parsePaymentTermDays(bank.payment_term_days) === null) {
+        invalid.push('Havale/EFT · Ödeme süresi (1-30 gün)')
+      }
+    }
+  }
+  if (invalid.length > 0) {
+    return { ok: false, error: 'invalid_fields', missing: invalid }
   }
 
   const primary: PaymentMethodId | 'mock' = enabled[0] ?? 'mock'
