@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { composeStoreFrom } from '@/lib/email/from'
 import { appendBillingProfileReminder } from '@/lib/billing-profile-copy'
 import { getBillingProfileStatusForUser } from '@/lib/billing-profile-store'
 
@@ -62,9 +63,13 @@ export async function sendTransactionalEmail(input: {
   html: string
   text?: string
   replyTo?: string
+  /** Store name shown as "<name> via GLOVAL AI"; the address stays MAIL_FROM. */
+  fromName?: string
 }): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
-  const from = process.env.MAIL_FROM?.trim()
+  const mailFrom = process.env.MAIL_FROM?.trim()
+  const from =
+    mailFrom && input.fromName ? composeStoreFrom(mailFrom, input.fromName) : mailFrom
   const to = input.to?.trim()
 
   if (!apiKey || !from || !to) return false
@@ -155,6 +160,19 @@ export async function claimNotification(input: {
   } catch (error) {
     console.log('[v0] notification claim error:', error)
     return true
+  }
+}
+
+/**
+ * Releases a claim made by `claimNotification` when the send itself failed, so
+ * a later retry (e.g. a webhook redelivery) can still deliver the email.
+ */
+export async function releaseNotificationClaim(dedupeKey: string): Promise<void> {
+  try {
+    const admin = createAdminClient()
+    await admin.from('notification_logs').delete().eq('dedupe_key', dedupeKey)
+  } catch (error) {
+    console.log('[v0] notification release error:', error)
   }
 }
 

@@ -2,8 +2,16 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPaymentProvider, type PaymentProviderId } from '@/lib/payments'
+import { getPaymentProvider, isProviderImplemented, type PaymentProviderId } from '@/lib/payments'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
+import { loadStorePaymentConfig } from '@/lib/store-payment-config'
+import {
+  isManualStoreProvider,
+  STORE_PAYMENT_ERROR_CODE,
+  type StorePaymentUnavailableReason,
+} from '@/lib/store-payment-policy'
+import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
+import { scheduleOrderNotification } from '@/lib/store-order-notifications'
 
 export type StoreProduct = {
   id: string
@@ -50,37 +58,47 @@ export async function getStoreProductBySlug(
  * Public read of a published store's buyer-selectable payment methods. Returns
  * only the enabled provider ids plus non-secret public config (e.g. bank
  * transfer instructions) — never any secret credential. Safe to call from the
- * checkout page. Falls back to ['mock'] when the store has no config.
+ * checkout page. FAILS CLOSED: when the store has no usable config (or the
+ * config could not be read) `available` is false and `methods` is empty — it
+ * never falls back to the instant-"paid" mock provider (see
+ * `lib/store-payment-policy.ts`).
  */
 export async function getStorePaymentMethods(storeSlug: string): Promise<{
+  available: boolean
+  reason?: StorePaymentUnavailableReason
   methods: PaymentProviderId[]
   publicConfig: Record<string, unknown>
 }> {
+  const closed = (reason: StorePaymentUnavailableReason) => ({
+    available: false as const,
+    reason,
+    methods: [] as PaymentProviderId[],
+    publicConfig: {},
+  })
+
   const admin = createAdminClient()
-  const { data: project } = await admin
+  const { data: project, error } = await admin
     .from('projects')
     .select('id')
     .eq('slug', storeSlug)
     .eq('published', true)
     .maybeSingle()
-  if (!project) return { methods: ['mock'], publicConfig: {} }
+  if (error) {
+    console.error('[store-payments] project lookup failed', {
+      code: error.code,
+      message: error.message,
+    })
+    return closed('config_unreadable')
+  }
+  if (!project) return closed('not_configured')
 
-  const { data: s } = await admin
-    .from('ecommerce_payment_settings')
-    .select('provider, enabled, enabled_providers, public_config')
-    .eq('project_id', project.id)
-    .maybeSingle()
-
-  if (!s || !s.enabled) return { methods: ['mock'], publicConfig: {} }
-
-  const list =
-    Array.isArray(s.enabled_providers) && s.enabled_providers.length > 0
-      ? (s.enabled_providers as PaymentProviderId[])
-      : [(s.provider as PaymentProviderId) || 'mock']
+  const resolution = await loadStorePaymentConfig(project.id)
+  if (!resolution.ok) return closed(resolution.reason)
 
   return {
-    methods: list.filter(Boolean),
-    publicConfig: (s.public_config as Record<string, unknown>) ?? {},
+    available: true,
+    methods: resolution.methods,
+    publicConfig: resolution.publicConfig,
   }
 }
 
@@ -113,7 +131,14 @@ export type CheckoutInput = {
 }
 
 export type CheckoutResult =
-  | { ok: true; orderId: string; totalCents: number; currency: string }
+  | {
+      ok: true
+      orderId: string
+      totalCents: number
+      currency: string
+      /** Order page path including the signed access token. */
+      orderPath: string
+    }
   | { ok: false; error: string }
 
 /**
@@ -187,7 +212,15 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
       orderId: existing.id,
       totalCents: existing.total_cents,
       currency: existing.currency,
+      orderPath: buildOrderPath(storeSlug, existing.id, issueOrderAccessToken(existing.id)),
     }
+  }
+
+  // Payment gate: resolved BEFORE any order/stock write. A store with no usable
+  // payment config, or whose config cannot be read, takes no orders at all.
+  const payment = await loadStorePaymentConfig(project.id)
+  if (!payment.ok) {
+    return { ok: false, error: STORE_PAYMENT_ERROR_CODE[payment.reason] }
   }
 
   // Fetch authoritative product data for the requested ids.
@@ -261,33 +294,21 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   const shipping = 0
   const total = subtotal + shipping
 
-  // Determine payment provider from store settings (default mock).
-  const { data: paySettings } = await admin
-    .from('ecommerce_payment_settings')
-    .select('provider, enabled, enabled_providers, public_config')
-    .eq('project_id', project.id)
-    .maybeSingle()
-
-  // The owner's default/primary method (used when the buyer sends nothing or a
-  // method that is not permitted).
-  const defaultProvider: PaymentProviderId =
-    (paySettings?.enabled && (paySettings.provider as PaymentProviderId)) || 'mock'
-
-  // The set of methods the buyer is actually allowed to pick. When the store
-  // has an explicit enabled list we honor it; otherwise we only allow the
-  // single configured default. This is the authoritative allow-list — the
-  // client's selection can never widen it.
-  const enabledSet = new Set<PaymentProviderId>(
-    (Array.isArray(paySettings?.enabled_providers) && paySettings!.enabled_providers.length > 0
-      ? (paySettings!.enabled_providers as PaymentProviderId[])
-      : [defaultProvider]
-    ).filter(Boolean),
-  )
+  // The owner's default method (used when the buyer sends nothing or a method
+  // that is not permitted) and the authoritative allow-list. The client's
+  // selection can never widen it.
+  const enabledSet = new Set<PaymentProviderId>(payment.methods)
 
   // Honor the buyer's choice only if the owner enabled it; else fall back.
   const requested = input.paymentMethod
   const providerId: PaymentProviderId =
-    requested && enabledSet.has(requested) ? requested : defaultProvider
+    requested && enabledSet.has(requested) ? requested : payment.defaultProvider
+
+  // Never route to a provider without a real implementation: the registry's
+  // generic fallback is the mock provider, which would settle as "paid".
+  if (!isManualStoreProvider(providerId) && !isProviderImplemented(providerId)) {
+    return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured }
+  }
 
   // Attribute the order to the logged-in store customer, if any. Guests get
   // null — the column is nullable, so nothing changes for anonymous checkout.
@@ -338,6 +359,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
         orderId: race.id,
         totalCents: race.total_cents,
         currency: race.currency,
+        orderPath: buildOrderPath(storeSlug, race.id, issueOrderAccessToken(race.id)),
       }
     }
     return { ok: false, error: 'order_failed' }
@@ -347,19 +369,44 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
     .from('ecommerce_order_items')
     .insert(orderItems.map((oi) => ({ ...oi, order_id: order.id })))
 
+  const orderPath = buildOrderPath(storeSlug, order.id, issueOrderAccessToken(order.id))
+
+  // Bank transfer has no PSP: the order stays pending (no stock change) until
+  // the owner confirms the transfer. It must never reach a provider adapter.
+  if (isManualStoreProvider(providerId)) {
+    scheduleOrderNotification(order.id)
+    return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
+  }
+
   // Create the payment intent through the resolved provider.
   const provider = getPaymentProvider(providerId)
-  const intent = await provider.createIntent({
-    orderId: order.id,
-    amountCents: total,
-    currency,
-    customerEmail: customer.email.trim(),
-    returnUrl: `/site/${storeSlug}/order/${order.id}`,
-    publicConfig: paySettings?.public_config as Record<string, unknown> | undefined,
-    secret: null,
-  })
+  let intent: Awaited<ReturnType<typeof provider.createIntent>>
+  try {
+    intent = await provider.createIntent({
+      orderId: order.id,
+      amountCents: total,
+      currency,
+      customerEmail: customer.email.trim(),
+      returnUrl: orderPath,
+      publicConfig: payment.publicConfig,
+      secret: null,
+    })
+  } catch (err) {
+    console.error('[store-payments] createIntent failed', {
+      projectId: project.id,
+      orderId: order.id,
+      provider: providerId,
+      message: err instanceof Error ? err.message : 'unknown',
+    })
+    await admin
+      .from('ecommerce_orders')
+      .update({ status: 'failed', payment_status: 'failed' })
+      .eq('id', order.id)
+    return { ok: false, error: 'order_failed' }
+  }
 
-  // Mock settles synchronously; mark paid and decrement stock.
+  // Only the mock provider settles synchronously (and only where explicitly
+  // allowed); mark paid and decrement stock.
   if (intent.action === 'completed' && intent.status === 'paid') {
     await admin
       .from('ecommerce_orders')
@@ -386,47 +433,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
       .eq('id', order.id)
   }
 
-  return { ok: true, orderId: order.id, totalCents: total, currency }
-}
+  scheduleOrderNotification(order.id)
 
-export type OrderConfirmation = {
-  id: string
-  status: string
-  payment_status: string
-  customer_name: string
-  customer_email: string
-  total_cents: number
-  currency: string
-  created_at: string
-  items: {
-    name: string
-    unit_price_cents: number
-    quantity: number
-    line_total_cents: number
-  }[]
-}
-
-/**
- * Public order-confirmation read (buyer returning to the confirmation page).
- * Requires the exact order id (an unguessable uuid), so no auth is needed.
- */
-export async function getOrderConfirmation(
-  orderId: string,
-): Promise<OrderConfirmation | null> {
-  const admin = createAdminClient()
-  const { data: order } = await admin
-    .from('ecommerce_orders')
-    .select(
-      'id, status, payment_status, customer_name, customer_email, total_cents, currency, created_at',
-    )
-    .eq('id', orderId)
-    .maybeSingle()
-  if (!order) return null
-
-  const { data: items } = await admin
-    .from('ecommerce_order_items')
-    .select('name, unit_price_cents, quantity, line_total_cents')
-    .eq('order_id', orderId)
-
-  return { ...order, items: items ?? [] }
+  return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
 }
