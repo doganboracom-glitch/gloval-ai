@@ -67,10 +67,11 @@ const STALE_ONLINE_ORDER_MS = 2 * 60 * 60 * 1000
  * delivery) are excluded: they wait for a human and expire on their own
  * schedule (`expireStaleManualOrders`).
  *
- * Done in application code rather than through the `release_stale_order_stock`
- * SQL function so the manual-method exclusion holds even before scripts/034
- * changes that function (the 032 version only exempts bank transfers and would
- * cancel pending cash-on-delivery orders after two hours).
+   * Done in application code rather than through the `release_stale_order_stock`
+   * SQL function so the manual-method exclusion holds even where scripts/035
+   * has not been applied (the 032 version only exempts bank transfers and would
+   * cancel pending cash-on-delivery orders after two hours). 035 makes the SQL
+   * function exclude both manual methods too, matching this implementation.
  */
 export async function releaseStaleOrderStock(
   admin: Admin,
