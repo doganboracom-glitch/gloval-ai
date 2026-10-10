@@ -206,32 +206,35 @@ grant execute on function public.release_stale_order_stock(uuid, interval) to se
 -- (return type changes, so the function must be dropped and recreated)
 drop function if exists public.get_store_products(text);
 
+-- Mirrors the LIVE definition (project_id column, projects.published flag,
+-- sort_order asc / created_at desc) and only appends track_stock.
 create function public.get_store_products(p_slug text)
 returns table (
   id uuid,
-  category_id uuid,
+  project_id uuid,
   name text,
   slug text,
   description text,
-  price_cents int,
+  price_cents integer,
   currency text,
-  stock int,
+  stock integer,
   images jsonb,
+  category_id uuid,
   track_stock boolean
 )
 language sql
-stable
 security definer
-set search_path = public
+set search_path to 'public'
 as $$
-  select p.id, p.category_id, p.name, p.slug, p.description, p.price_cents,
-         p.currency, p.stock, to_jsonb(p.images), p.track_stock
-    from public.ecommerce_products p
-    join public.projects pr on pr.id = p.project_id
-   where pr.slug = p_slug
-     and pr.status = 'published'
-     and p.status = 'active'
-   order by p.sort_order, p.created_at;
+  select pr.id, pr.project_id, pr.name, pr.slug, pr.description,
+         pr.price_cents, pr.currency, pr.stock, pr.images, pr.category_id,
+         pr.track_stock
+    from public.ecommerce_products pr
+    join public.projects p on p.id = pr.project_id
+   where p.slug = p_slug
+     and p.published = true
+     and pr.status = 'active'
+   order by pr.sort_order asc, pr.created_at desc;
 $$;
 
 grant execute on function public.get_store_products(text) to anon, authenticated, service_role;
