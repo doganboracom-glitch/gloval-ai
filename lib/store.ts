@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPaymentProvider, type PaymentProviderId } from '@/lib/payments'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
+import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
+import { scheduleOrderNotification } from '@/lib/store-order-notifications'
 
 export type StoreProduct = {
   id: string
@@ -113,7 +115,14 @@ export type CheckoutInput = {
 }
 
 export type CheckoutResult =
-  | { ok: true; orderId: string; totalCents: number; currency: string }
+  | {
+      ok: true
+      orderId: string
+      totalCents: number
+      currency: string
+      /** Order page path including the signed access token. */
+      orderPath: string
+    }
   | { ok: false; error: string }
 
 /**
@@ -187,6 +196,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
       orderId: existing.id,
       totalCents: existing.total_cents,
       currency: existing.currency,
+      orderPath: buildOrderPath(storeSlug, existing.id, issueOrderAccessToken(existing.id)),
     }
   }
 
@@ -338,6 +348,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
         orderId: race.id,
         totalCents: race.total_cents,
         currency: race.currency,
+        orderPath: buildOrderPath(storeSlug, race.id, issueOrderAccessToken(race.id)),
       }
     }
     return { ok: false, error: 'order_failed' }
@@ -347,6 +358,8 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
     .from('ecommerce_order_items')
     .insert(orderItems.map((oi) => ({ ...oi, order_id: order.id })))
 
+  const orderPath = buildOrderPath(storeSlug, order.id, issueOrderAccessToken(order.id))
+
   // Create the payment intent through the resolved provider.
   const provider = getPaymentProvider(providerId)
   const intent = await provider.createIntent({
@@ -354,7 +367,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
     amountCents: total,
     currency,
     customerEmail: customer.email.trim(),
-    returnUrl: `/site/${storeSlug}/order/${order.id}`,
+    returnUrl: orderPath,
     publicConfig: paySettings?.public_config as Record<string, unknown> | undefined,
     secret: null,
   })
@@ -386,47 +399,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
       .eq('id', order.id)
   }
 
-  return { ok: true, orderId: order.id, totalCents: total, currency }
-}
+  scheduleOrderNotification(order.id)
 
-export type OrderConfirmation = {
-  id: string
-  status: string
-  payment_status: string
-  customer_name: string
-  customer_email: string
-  total_cents: number
-  currency: string
-  created_at: string
-  items: {
-    name: string
-    unit_price_cents: number
-    quantity: number
-    line_total_cents: number
-  }[]
-}
-
-/**
- * Public order-confirmation read (buyer returning to the confirmation page).
- * Requires the exact order id (an unguessable uuid), so no auth is needed.
- */
-export async function getOrderConfirmation(
-  orderId: string,
-): Promise<OrderConfirmation | null> {
-  const admin = createAdminClient()
-  const { data: order } = await admin
-    .from('ecommerce_orders')
-    .select(
-      'id, status, payment_status, customer_name, customer_email, total_cents, currency, created_at',
-    )
-    .eq('id', orderId)
-    .maybeSingle()
-  if (!order) return null
-
-  const { data: items } = await admin
-    .from('ecommerce_order_items')
-    .select('name, unit_price_cents, quantity, line_total_cents')
-    .eq('order_id', orderId)
-
-  return { ...order, items: items ?? [] }
+  return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
 }
