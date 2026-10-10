@@ -36,9 +36,6 @@ type ProductSeed = {
 
 type CategorySeed = { name: string; slug: string }
 
-/** Default on-hand stock for a freshly synced product so it is purchasable. */
-const DEFAULT_STOCK = 999
-
 function collectSeeds(schema: WebsiteSchema): {
   categories: CategorySeed[]
   products: ProductSeed[]
@@ -139,7 +136,9 @@ export async function syncStoreFromSchema(
   const toUpdate = products.filter((p) => existingSlugs.has(p.slug))
 
   if (toInsert.length > 0) {
-    await admin.from('ecommerce_products').insert(
+    // Synced products start with stock tracking OFF (always purchasable); the
+    // owner opts into tracking per product and then sets the on-hand count.
+    const { error: insertError } = await admin.from('ecommerce_products').insert(
       toInsert.map((p, i) => ({
         project_id: projectId,
         owner_id: ownerId,
@@ -149,12 +148,16 @@ export async function syncStoreFromSchema(
         description: p.description,
         price_cents: p.priceCents,
         currency: p.currency,
-        stock: DEFAULT_STOCK,
+        stock: 0,
+        track_stock: false,
         status: 'active',
         images: p.images,
         sort_order: (existingProducts?.length ?? 0) + i,
       })),
     )
+    if (insertError) {
+      console.error('[store-sync] product insert failed', { projectId, code: insertError.code })
+    }
   }
 
   // Refresh presentation fields only — never touch owner-managed stock, sku,

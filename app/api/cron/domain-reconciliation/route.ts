@@ -6,6 +6,8 @@ import { syncAllTransfers } from '@/lib/custom-domains/registrar/transfer-servic
 import { reconcileSubscriptionLifecycle } from '@/lib/billing-lifecycle'
 import { syncAllMailAccess } from '@/lib/mail/access-sync'
 import { runPlanCreditSweep } from '@/lib/plan-credit-sweep-store'
+import { releaseStaleOrderStock } from '@/lib/store-order-stock'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -56,6 +58,18 @@ export async function GET(request: Request) {
     aiCredits = { error: 'plan_credit_sweep_failed' }
   }
 
+  // Isolated like the sweeps above: returns the stock held by abandoned,
+  // never-paid store orders (all stores) so it cannot stay locked forever.
+  // Without this the release only ran when that same store received a new checkout.
+  let storeStock: { ok: true } | { error: string }
+  try {
+    await releaseStaleOrderStock(createAdminClient(), null)
+    storeStock = { ok: true }
+  } catch (error) {
+    console.log('[store-stock] stale sweep failed:', error instanceof Error ? error.message : 'unknown')
+    storeStock = { error: 'store_stock_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -70,7 +84,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, storeStock, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

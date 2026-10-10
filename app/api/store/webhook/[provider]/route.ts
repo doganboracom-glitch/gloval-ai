@@ -5,33 +5,30 @@ import {
   getPaymentProvider,
   getProviderWebhookSecret,
   isProviderImplemented,
-  type PaymentProviderId,
 } from '@/lib/payments'
-import { isMockStorePaymentsAllowed } from '@/lib/store-payment-policy'
+import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
+import { applyStorePaymentWebhook } from '@/lib/store-webhook-handler'
+import { isStoreWebhookProvider } from '@/lib/store-webhook-rules'
 
 /**
  * Generic payment webhook endpoint. Async providers (Stripe, iyzico, PayTR)
- * POST here; the matching provider verifies and normalizes the payload, and we
- * update the order idempotently. Already-final orders are left untouched, so
- * duplicate webhook deliveries are safe.
+ * POST here; the matching provider verifies and normalizes the payload, and
+ * `applyStorePaymentWebhook` updates the order idempotently (amount/currency
+ * check, conditional transitions, stock and email only on the first paid).
  */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ provider: string }> },
 ) {
   const { provider: providerParam } = await params
-  const providerId = providerParam as PaymentProviderId
 
-  // The provider registry falls back to the mock provider (which accepts any
-  // payload as "paid") for unknown ids, and the mock id itself is reachable
-  // from the public URL. Only real, implemented providers may settle store
-  // orders here; mock only where explicitly allowed outside production.
-  if (!isProviderImplemented(providerId)) {
+  // Only real, implemented PSPs may settle store orders. The registry falls
+  // back to the mock provider (which accepts any payload as "paid") for unknown
+  // ids, and `mock`/`bank_transfer` are not webhook providers at all.
+  if (!isStoreWebhookProvider(providerParam) || !isProviderImplemented(providerParam)) {
     return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
   }
-  if (providerId === 'mock' && !isMockStorePaymentsAllowed()) {
-    return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
-  }
+  const providerId = providerParam
   const provider = getPaymentProvider(providerId)
 
   // PayTR mandates a plain-text "OK" body on every processed callback, or it
@@ -47,7 +44,7 @@ export async function POST(
   })
 
   // Real providers require their server-side webhook secret to verify the
-  // signature; mock ignores it. Secrets come from env, never from the client.
+  // signature. Secrets come from env, never from the client.
   const webhookSecret = getProviderWebhookSecret(providerId)
   const result = await provider.parseWebhook(rawBody, headers, webhookSecret)
   if (!result) {
@@ -60,64 +57,28 @@ export async function POST(
     return ack({ ignored: 'subscription' })
   }
 
-  const admin = createAdminClient()
+  const outcome = await applyStorePaymentWebhook(createAdminClient(), providerId, result, {
+    finalizePaidStock,
+    releaseOrderStock,
+    notifyOrder: scheduleOrderNotification,
+  })
 
-  // Locate the order by its provider reference.
-  const { data: order } = await admin
-    .from('ecommerce_orders')
-    .select('id, payment_status, status')
-    .eq('payment_ref', result.reference)
-    .maybeSingle()
-
-  if (!order) {
-    // Verified callback but no matching order: acknowledge so PayTR stops
-    // retrying (nothing more we can do), but 404 for other providers.
-    if (isPayTR) return new Response('OK')
-    return NextResponse.json({ error: 'order_not_found' }, { status: 404 })
+  switch (outcome.outcome) {
+    case 'order_not_found':
+      // Verified callback but no matching order: acknowledge so PayTR stops
+      // retrying (nothing more we can do), but 404 for other providers.
+      if (isPayTR) return new Response('OK')
+      return NextResponse.json({ error: 'order_not_found' }, { status: 404 })
+    case 'rejected':
+      // The order is NOT fulfilled. PayTR is acknowledged anyway because a
+      // retry cannot fix an amount mismatch and would only repeat forever.
+      if (isPayTR) return new Response('OK')
+      return NextResponse.json({ error: outcome.reason }, { status: 422 })
+    case 'duplicate':
+      return ack({ idempotent: true })
+    case 'ignored':
+      return ack({ ignored: outcome.reason })
+    default:
+      return ack()
   }
-
-  // Idempotency: ignore if the order is already in a final paid/refunded state.
-  if (order.payment_status === 'paid' && result.status === 'paid') {
-    return ack({ idempotent: true })
-  }
-
-  const paymentStatus = result.status
-  const orderStatus =
-    result.status === 'paid'
-      ? 'paid'
-      : result.status === 'refunded'
-        ? 'refunded'
-        : 'failed'
-
-  await admin
-    .from('ecommerce_orders')
-    .update({ payment_status: paymentStatus, status: orderStatus })
-    .eq('id', order.id)
-
-  // Decrement stock only on the first transition into paid.
-  if (result.status === 'paid' && order.payment_status !== 'paid') {
-    const { data: items } = await admin
-      .from('ecommerce_order_items')
-      .select('product_id, quantity')
-      .eq('order_id', order.id)
-
-    for (const item of items ?? []) {
-      if (!item.product_id) continue
-      const { data: product } = await admin
-        .from('ecommerce_products')
-        .select('stock')
-        .eq('id', item.product_id)
-        .maybeSingle()
-      if (product) {
-        await admin
-          .from('ecommerce_products')
-          .update({ stock: Math.max(0, product.stock - item.quantity) })
-          .eq('id', item.product_id)
-      }
-    }
-  }
-
-  if (result.status === 'paid') scheduleOrderNotification(order.id)
-
-  return ack()
 }
