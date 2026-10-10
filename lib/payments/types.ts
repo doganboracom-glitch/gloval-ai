@@ -64,6 +64,11 @@ export interface PaymentWebhookResult {
    */
   paidAmountCents?: number
   paidCurrency?: string
+  /**
+   * How `paidAmountCents` must relate to the order total. Defaults to 'exact';
+   * 'at_least' is for PSPs whose signed total can include an installment fee.
+   */
+  amountMatch?: 'exact' | 'at_least'
   /** Reference the order was created with (iyzico conversationId/basketId). */
   orderRef?: string
   /** Present for subscription webhooks (kind === 'subscription'). */

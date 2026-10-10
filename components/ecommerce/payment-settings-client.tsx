@@ -27,7 +27,7 @@ const copy = {
     stored: '•••••••• (kayıtlı)',
     missing: 'Lütfen şu zorunlu alanları doldurun:',
     saveError: 'Ayarlar kaydedilemedi. Lütfen tekrar deneyin.',
-    none: 'Henüz bir ödeme yöntemi etkin değil. Etkinleştirilen yöntem olmadan müşterileriniz yalnızca test ödemesi görür.',
+    none: 'Henüz bir ödeme yöntemi etkin değil. Bir yöntem etkinleştirene kadar mağazanız sipariş alamaz ve müşterileriniz ödeme adımında uyarı görür.',
     note: 'Not: Canlı ödeme alma, geçerli mağaza hesabı bilgileriyle etkinleşir. Girdiğiniz gizli anahtarlar sunucuda şifrelenir ve panelde bir daha gösterilmez.',
     tryOnTitle: 'AI ile Üzerinde Dene',
     tryOnBlurb:

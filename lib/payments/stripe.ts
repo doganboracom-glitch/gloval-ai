@@ -164,7 +164,19 @@ export const stripeProvider: PaymentProvider = {
 
     // One-off payment events.
     if (type === 'checkout.session.completed' || type === 'payment_intent.succeeded') {
-      return { kind: 'payment', reference: String(obj.id ?? ''), status: 'paid' }
+      const amount =
+        typeof obj.amount_total === 'number'
+          ? obj.amount_total
+          : typeof obj.amount_received === 'number'
+            ? obj.amount_received
+            : undefined
+      return {
+        kind: 'payment',
+        reference: String(obj.id ?? ''),
+        status: 'paid',
+        ...(amount !== undefined ? { paidAmountCents: amount } : {}),
+        ...(typeof obj.currency === 'string' ? { paidCurrency: obj.currency.toUpperCase() } : {}),
+      }
     }
     if (type === 'payment_intent.payment_failed') {
       return { kind: 'payment', reference: String(obj.id ?? ''), status: 'failed' }
