@@ -461,7 +461,11 @@ function AuthView({ slug, redirect }: { slug: string; redirect?: string }) {
     setNotice(null)
     startTransition(async () => {
       if (mode === 'forgot') {
-        await sendStoreCustomerPasswordReset({ storeSlug: slug, email: form.email })
+        const reset = await sendStoreCustomerPasswordReset({ storeSlug: slug, email: form.email })
+        if (!reset.ok) {
+          setError(reset.error)
+          return
+        }
         setNotice(
           'Eğer bu e-posta ile kayıtlı bir hesap varsa, şifre sıfırlama bağlantısı gönderildi.',
         )
