@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPaymentProvider, isProviderImplemented, type PaymentProviderId } from '@/lib/payments'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
+import { sanitizeInvoice } from '@/lib/store-invoice'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
 import {
   isManualStoreProvider,
@@ -149,24 +150,8 @@ export type CheckoutResult =
 function normalizeCheckoutInvoice(
   raw: CheckoutInput['invoice'],
 ): Record<string, string> | null {
-  if (!raw || typeof raw !== 'object') return null
-  const clean = (v?: string) => (typeof v === 'string' ? v.trim() : '')
-  if (raw.type === 'corporate') {
-    const companyName = clean(raw.companyName)
-    const taxNumber = clean(raw.taxNumber)
-    if (!companyName && !taxNumber) return null
-    return {
-      type: 'corporate',
-      companyName,
-      taxOffice: clean(raw.taxOffice),
-      taxNumber,
-      address: clean(raw.address),
-    }
-  }
-  const tckn = clean(raw.tckn)
-  const address = clean(raw.address)
-  if (!tckn && !address) return { type: 'individual' }
-  return { type: 'individual', tckn, address }
+  const result = sanitizeInvoice(raw, 'clamp')
+  return result.ok ? result.value : null
 }
 
 /**

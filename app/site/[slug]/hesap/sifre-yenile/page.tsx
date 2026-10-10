@@ -5,17 +5,21 @@ import { ResetPassword } from '@/components/store/reset-password'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = { title: 'Şifre Yenile' }
+export const metadata: Metadata = {
+  title: 'Şifre Yenile',
+  referrer: 'no-referrer',
+  robots: { index: false, follow: false },
+}
 
 export default async function ResetPasswordPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ email?: string; token?: string }>
+  searchParams: Promise<{ token?: string }>
 }) {
   const { slug } = await params
-  const { email, token } = await searchParams
+  const { token } = await searchParams
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
@@ -23,8 +27,7 @@ export default async function ResetPasswordPage({
     <ResetPassword
       slug={slug}
       storeName={site.name}
-      email={email ?? ''}
-      token={token ?? ''}
+      legacyToken={typeof token === 'string' ? token : ''}
     />
   )
 }

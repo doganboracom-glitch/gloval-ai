@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react'
@@ -10,24 +10,37 @@ import { resetStoreCustomerPassword } from '@/lib/store-customer'
 const inputClass =
   'h-11 w-full rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
 
+/**
+ * The reset token arrives in the URL fragment (`#token=...`), which browsers
+ * never send to the server or in Referer headers. It is read once on mount and
+ * then removed from the address bar. `legacyToken` supports links e-mailed
+ * before the fragment format (`?token=`).
+ */
 export function ResetPassword({
   slug,
   storeName,
-  email,
-  token,
+  legacyToken,
 }: {
   slug: string
   storeName: string
-  email: string
-  token: string
+  legacyToken: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const [form, setForm] = useState({ next: '', confirm: '' })
+  const [token, setToken] = useState<string | null>(null)
 
-  const linkValid = Boolean(email && token)
+  useEffect(() => {
+    const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token')
+    setToken(fromHash || legacyToken || '')
+    if (window.location.hash || window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  }, [legacyToken])
+
+  const linkValid = Boolean(token)
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -39,8 +52,7 @@ export function ResetPassword({
     startTransition(async () => {
       const res = await resetStoreCustomerPassword({
         storeSlug: slug,
-        email,
-        token,
+        token: token ?? '',
         newPassword: form.next,
       })
       if (res.ok) setDone(true)
@@ -73,7 +85,7 @@ export function ResetPassword({
             </p>
             <Button onClick={() => router.push(`/site/${slug}/hesap`)}>Girişe git</Button>
           </div>
-        ) : !linkValid ? (
+        ) : token === null ? null : !linkValid ? (
           <div className="mt-6 rounded-2xl border border-destructive/40 bg-destructive/10 p-5 text-sm text-destructive">
             Bu bağlantı geçersiz veya eksik. Lütfen şifre sıfırlama e-postasındaki bağlantıyı
             kullanın veya yeniden talep edin.
@@ -81,8 +93,7 @@ export function ResetPassword({
         ) : (
           <>
             <p className="mb-6 text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{email}</span> hesabı için yeni bir şifre
-              belirleyin.
+              Hesabınız için yeni bir şifre belirleyin. Bağlantı yalnızca bir kez kullanılabilir.
             </p>
             <form onSubmit={submit} className="flex flex-col gap-4">
               <label className="flex flex-col gap-1.5">
@@ -94,6 +105,8 @@ export function ResetPassword({
                   onChange={(e) => setForm({ ...form, next: e.target.value })}
                   required
                   minLength={6}
+                  maxLength={128}
+                  autoComplete="new-password"
                 />
               </label>
               <label className="flex flex-col gap-1.5">
