@@ -2,21 +2,28 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { CheckCircle2, Clock, XCircle } from 'lucide-react'
-import { getOrderConfirmation } from '@/lib/store'
+import { getOrderConfirmation } from '@/lib/store-order-access'
 import { formatPrice } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = { title: 'Sipariş onayı' }
+export const metadata: Metadata = {
+  title: 'Sipariş onayı',
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
+}
 
 export default async function OrderConfirmationPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; orderId: string }>
+  searchParams: Promise<{ t?: string | string[] }>
 }) {
   const { slug, orderId } = await params
-  const order = await getOrderConfirmation(orderId)
+  const { t } = await searchParams
+  const order = await getOrderConfirmation(orderId, slug, Array.isArray(t) ? t[0] : t)
   if (!order) notFound()
 
   const paid = order.payment_status === 'paid'
@@ -42,7 +49,7 @@ export default async function OrderConfirmationPage({
           </h1>
           <p className="text-muted-foreground">
             {paid
-              ? `Teşekkürler ${order.customer_name}. Onay e-postası ${order.customer_email} adresine gönderilecek.`
+              ? `Teşekkürler ${order.first_name}. Onay e-postası ${order.masked_email} adresine gönderilecek.`
               : 'Sipariş durumunu aşağıda görebilirsin.'}
           </p>
           <p className="text-sm text-muted-foreground">
