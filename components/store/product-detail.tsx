@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { CartProvider, useCart, useAddWithConfirm, formatPrice } from './cart-provider'
 import { TryOnButton } from './try-on-button'
 import type { StoreProduct } from '@/lib/store'
+import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
 
 export function ProductDetail({
   slug,
@@ -42,7 +43,9 @@ function ProductDetailInner({
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
   const image = product.images[0] ?? null
-  const outOfStock = product.stock <= 0
+  const outOfStock = isSoldOut(product)
+  const maxQty = purchasableMax(product)
+  const stockNotice = getStockNotice(product)
 
   function flashAdded() {
     setAdded(true)
@@ -58,7 +61,7 @@ function ProductDetailInner({
         priceCents: product.price_cents,
         currency: product.currency,
         image,
-        maxStock: product.stock,
+        maxStock: maxQty,
       },
       qty,
     )
@@ -113,13 +116,17 @@ function ProductDetailInner({
             <p className="leading-relaxed text-muted-foreground">{product.description}</p>
           )}
 
-          <div className="text-sm text-muted-foreground">
-            {outOfStock ? (
-              <span className="text-destructive">Stokta yok</span>
-            ) : (
-              <span>Stokta {product.stock} adet</span>
-            )}
-          </div>
+          {stockNotice && (
+            <p
+              className={
+                stockNotice.kind === 'sold_out'
+                  ? 'text-sm font-medium text-destructive'
+                  : 'text-sm font-medium text-amber-600'
+              }
+            >
+              {stockNotice.text}
+            </p>
+          )}
 
           {!outOfStock && (
             <div className="mt-2 flex items-center gap-3">
@@ -135,8 +142,8 @@ function ProductDetailInner({
                 <span className="min-w-10 text-center font-medium">{qty}</span>
                 <button
                   type="button"
-                  onClick={() => setQty((q) => Math.min(product.stock, q + 1))}
-                  disabled={qty >= product.stock}
+                  onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+                  disabled={qty >= maxQty}
                   className="p-2.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
                   aria-label="Artır"
                 >

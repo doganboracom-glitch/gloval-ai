@@ -6,6 +6,7 @@ import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, AlertCirc
 import { Button } from '@/components/ui/button'
 import { CartProvider, useCart, useAddWithConfirm, formatPrice, type CartItem } from './cart-provider'
 import type { StoreProduct } from '@/lib/store'
+import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
 
 type StoreFrontProps = {
   slug: string
@@ -91,7 +92,8 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
   const cart = useCart()
   const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
   const image = product.images[0] ?? null
-  const outOfStock = product.stock <= 0
+  const outOfStock = isSoldOut(product)
+  const stockNotice = getStockNotice(product)
 
   const cartItem: Omit<CartItem, 'quantity'> = {
     productId: product.id,
@@ -99,7 +101,7 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
     priceCents: product.price_cents,
     currency: product.currency,
     image,
-    maxStock: product.stock,
+    maxStock: purchasableMax(product),
   }
 
   return (
@@ -128,6 +130,9 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
         </Link>
         {product.description && (
           <p className="line-clamp-2 text-sm text-muted-foreground">{product.description}</p>
+        )}
+        {stockNotice && stockNotice.kind === 'low' && (
+          <p className="text-xs font-medium text-amber-600">{stockNotice.text}</p>
         )}
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
           <span className="font-display text-lg font-bold">

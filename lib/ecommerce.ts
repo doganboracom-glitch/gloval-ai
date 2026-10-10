@@ -9,6 +9,8 @@ import { createProject } from '@/lib/projects'
 import { getMyCurrentPlan } from '@/lib/billing'
 import { getEffectiveProductLimit } from '@/lib/effective-limits'
 import { PRODUCT_LIMIT_ERROR } from '@/lib/pricing-config'
+import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 
 /**
  * Phase 1 e-commerce data layer.
@@ -43,6 +45,8 @@ export type ProductRow = {
   currency: string
   sku: string | null
   stock: number
+  /** Absent until scripts/032 is applied; treated as tracked (true). */
+  track_stock?: boolean
   status: ProductStatus
   images: string[]
   sort_order: number
@@ -227,6 +231,8 @@ export type ProductInput = {
   currency?: string
   sku?: string | null
   stock: number
+  /** false = unlimited / not tracked (services, digital goods, made-to-order). */
+  trackStock?: boolean
   status?: ProductStatus
   categoryId?: string | null
   images?: string[]
@@ -255,10 +261,20 @@ function normalizeProductInput(input: ProductInput) {
     currency: (input.currency || 'TRY').slice(0, 8),
     sku: input.sku?.trim() || null,
     stock,
+    track_stock: input.trackStock !== false,
     status,
     category_id: input.categoryId || null,
     images,
   }
+}
+
+/**
+ * `track_stock` only exists after scripts/032. Until then, write without it
+ * (every product is tracked, which is the legacy behavior) instead of failing.
+ */
+function withoutTrackStock<T extends { track_stock: boolean }>(fields: T) {
+  const { track_stock: _ignored, ...rest } = fields
+  return rest
 }
 
 export async function createProduct(projectId: string, input: ProductInput): Promise<ProductRow> {
@@ -278,16 +294,19 @@ export async function createProduct(projectId: string, input: ProductInput): Pro
     if ((count ?? 0) >= limit) throw new Error(PRODUCT_LIMIT_ERROR)
   }
 
-  const { data, error } = await supabase
+  const base = { project_id: projectId, owner_id: userId, slug: slugify(fields.name) }
+  let { data, error } = await supabase
     .from('ecommerce_products')
-    .insert({
-      project_id: projectId,
-      owner_id: userId,
-      slug: slugify(fields.name),
-      ...fields,
-    })
+    .insert({ ...base, ...fields })
     .select('*')
     .single()
+  if (isMissingColumnError(error)) {
+    ;({ data, error } = await supabase
+      .from('ecommerce_products')
+      .insert({ ...base, ...withoutTrackStock(fields) })
+      .select('*')
+      .single())
+  }
   if (error) throw error
   revalidatePath(`/ecommerce/${projectId}`)
   return data as ProductRow
@@ -300,13 +319,22 @@ export async function updateProduct(
 ): Promise<ProductRow> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
   const fields = normalizeProductInput(input)
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('ecommerce_products')
     .update(fields)
     .eq('id', productId)
     .eq('project_id', projectId)
     .select('*')
     .single()
+  if (isMissingColumnError(error)) {
+    ;({ data, error } = await supabase
+      .from('ecommerce_products')
+      .update(withoutTrackStock(fields))
+      .eq('id', productId)
+      .eq('project_id', projectId)
+      .select('*')
+      .single())
+  }
   if (error) throw error
   revalidatePath(`/ecommerce/${projectId}`)
   return data as ProductRow
@@ -424,5 +452,14 @@ export async function updateOrderStatus(
     .eq('id', orderId)
     .eq('project_id', projectId)
   if (error) throw error
+
+  // The owner confirming a transfer takes the stock if it is not held yet;
+  // cancelling/failing an order (e.g. an unpaid bank transfer) gives it back.
+  // Both are idempotent, so repeated clicks change nothing.
+  if (status === 'paid') {
+    await finalizePaidStock(createAdminClient(), orderId)
+  } else if (status === 'cancelled' || status === 'failed') {
+    await releaseOrderStock(createAdminClient(), orderId, { onlyUnpaid: true })
+  }
   revalidatePath(`/ecommerce/${projectId}/orders`)
 }

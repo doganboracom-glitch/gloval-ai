@@ -502,6 +502,10 @@ const dict = {
       price: 'Fiyat',
       currency: 'Para birimi',
       stock: 'Stok',
+      trackStock: 'Stok takibi yap',
+      trackStockHint:
+        'Açıkken stok adedi düşer ve tükenince satış durur. Kapalıyken ürün her zaman satın alınabilir (hizmet, dijital ürün, siparişe özel).',
+      stockUntracked: 'Takip yok',
       sku: 'Stok kodu (SKU)',
       status: 'Durum',
       category: 'Kategori',
@@ -1918,6 +1922,10 @@ const dict = {
       price: 'Price',
       currency: 'Currency',
       stock: 'Stock',
+      trackStock: 'Track stock',
+      trackStockHint:
+        'When on, the stock count decreases and sales stop at zero. When off, the product is always purchasable (services, digital goods, made-to-order).',
+      stockUntracked: 'Not tracked',
       sku: 'SKU',
       status: 'Status',
       category: 'Category',

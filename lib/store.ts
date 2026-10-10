@@ -13,6 +13,14 @@ import {
 } from '@/lib/store-payment-policy'
 import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
 import { scheduleOrderNotification } from '@/lib/store-order-notifications'
+import { buildOrderLines, type OrderProductRow } from '@/lib/store-order-rules'
+import {
+  finalizePaidStock,
+  releaseOrderStock,
+  releaseStaleOrderStock,
+  reserveOrderStock,
+} from '@/lib/store-order-stock'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 
 export type StoreProduct = {
   id: string
@@ -25,10 +33,9 @@ export type StoreProduct = {
   stock: number
   images: string[]
   category_id: string | null
+  /** False for made-to-order/digital products. Missing on a pre-migration DB. */
+  track_stock?: boolean
 }
-
-const MAX_QTY_PER_LINE = 99
-const MAX_TOTAL_ITEMS = 999
 
 /**
  * Public catalog read for a PUBLISHED store, via the SECURITY DEFINER RPC.
@@ -140,7 +147,14 @@ export type CheckoutResult =
       /** Order page path including the signed access token. */
       orderPath: string
     }
-  | { ok: false; error: string }
+  | {
+      ok: false
+      error: string
+      /** Set for line-level failures so the UI can name the product. */
+      productId?: string
+      productName?: string
+      available?: number
+    }
 
 /**
  * Sanitizes checkout invoice input into a stored jsonb shape, keeping only the
@@ -208,73 +222,36 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
     return { ok: false, error: STORE_PAYMENT_ERROR_CODE[payment.reason] }
   }
 
-  // Fetch authoritative product data for the requested ids.
-  const ids = Array.from(new Set(items.map((i) => i.productId)))
-  const { data: products } = await admin
-    .from('ecommerce_products')
-    .select('id, name, price_cents, currency, stock, status, project_id')
-    .eq('project_id', project.id)
-    .in('id', ids)
+  // Free stock of abandoned online-payment orders in this store (best effort).
+  await releaseStaleOrderStock(admin, project.id)
 
-  if (!products || products.length === 0) {
+  // Fetch authoritative product data for the requested ids.
+  const requestedIds = Array.from(
+    new Set(
+      items
+        .map((i) => i?.productId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  )
+  if (requestedIds.length === 0) {
     return { ok: false, error: 'invalid_items' }
   }
 
-  const productById = new Map(products.map((p) => [p.id, p]))
+  const products = await loadOrderProducts(admin, project.id, requestedIds)
+  if (!products) return { ok: false, error: 'order_failed' }
 
-  // Aggregate requested quantity per product (handles duplicate lines).
-  const qtyByProduct = new Map<string, number>()
-  for (const item of items) {
-    const qty = Math.floor(Number(item.quantity))
-    if (!Number.isFinite(qty) || qty <= 0) {
-      return { ok: false, error: 'invalid_quantity' }
+  const built = buildOrderLines(items, new Map(products.map((p) => [p.id, p])))
+  if (!built.ok) {
+    return {
+      ok: false,
+      error: built.error,
+      productId: built.productId,
+      productName: built.productName,
+      available: built.available,
     }
-    qtyByProduct.set(
-      item.productId,
-      (qtyByProduct.get(item.productId) ?? 0) + qty,
-    )
   }
 
-  let subtotal = 0
-  let totalItems = 0
-  let currency = 'TRY'
-  const orderItems: {
-    product_id: string
-    name: string
-    unit_price_cents: number
-    quantity: number
-    line_total_cents: number
-    project_id: string
-  }[] = []
-
-  for (const [productId, qty] of qtyByProduct) {
-    const product = productById.get(productId)
-    if (!product || product.status !== 'active') {
-      return { ok: false, error: 'invalid_items' }
-    }
-    if (qty > MAX_QTY_PER_LINE) {
-      return { ok: false, error: 'quantity_too_high' }
-    }
-    if (product.stock < qty) {
-      return { ok: false, error: 'insufficient_stock' }
-    }
-    totalItems += qty
-    currency = product.currency || 'TRY'
-    const lineTotal = product.price_cents * qty
-    subtotal += lineTotal
-    orderItems.push({
-      product_id: product.id,
-      name: product.name,
-      unit_price_cents: product.price_cents,
-      quantity: qty,
-      line_total_cents: lineTotal,
-      project_id: project.id,
-    })
-  }
-
-  if (totalItems > MAX_TOTAL_ITEMS) {
-    return { ok: false, error: 'too_many_items' }
-  }
+  const { lines: orderItems, subtotalCents: subtotal, currency } = built
 
   const shipping = 0
   const total = subtotal + shipping
@@ -350,14 +327,46 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
     return { ok: false, error: 'order_failed' }
   }
 
-  await admin
+  const { error: itemsError } = await admin
     .from('ecommerce_order_items')
-    .insert(orderItems.map((oi) => ({ ...oi, order_id: order.id })))
+    .insert(orderItems.map((oi) => ({ ...oi, project_id: project.id, order_id: order.id })))
+
+  // An order without its lines would be unfulfillable and could never take
+  // stock, so it must not survive.
+  if (itemsError) {
+    console.error('[store-order] item insert failed', {
+      projectId: project.id,
+      orderId: order.id,
+      code: itemsError.code,
+    })
+    await voidOrder(admin, order.id, idempotencyKey)
+    return { ok: false, error: 'order_failed' }
+  }
+
+  // Take the stock of every line atomically (all or nothing). Every payment
+  // method holds stock from here: online payments are released again on
+  // failure/timeout, bank transfers when the owner cancels the order.
+  const reserved = await reserveOrderStock(admin, order.id)
+  if (!reserved.ok) {
+    await voidOrder(admin, order.id, idempotencyKey)
+    if (reserved.error === 'insufficient_stock') {
+      const short = reserved.productId
+        ? products.find((p) => p.id === reserved.productId)
+        : undefined
+      return {
+        ok: false,
+        error: 'insufficient_stock',
+        productId: reserved.productId ?? undefined,
+        productName: short?.name,
+      }
+    }
+    return { ok: false, error: 'order_failed' }
+  }
 
   const orderPath = buildOrderPath(storeSlug, order.id, issueOrderAccessToken(order.id))
 
-  // Bank transfer has no PSP: the order stays pending (no stock change) until
-  // the owner confirms the transfer. It must never reach a provider adapter.
+  // Bank transfer has no PSP: the order stays pending until the owner confirms
+  // the transfer. It must never reach a provider adapter.
   if (isManualStoreProvider(providerId)) {
     scheduleOrderNotification(order.id)
     return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
@@ -383,6 +392,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
       provider: providerId,
       message: err instanceof Error ? err.message : 'unknown',
     })
+    await releaseOrderStock(admin, order.id)
     await admin
       .from('ecommerce_orders')
       .update({ status: 'failed', payment_status: 'failed' })
@@ -391,7 +401,8 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   }
 
   // Only the mock provider settles synchronously (and only where explicitly
-  // allowed); mark paid and decrement stock.
+  // allowed). Its stock is already reserved above; finalizing is a no-op there
+  // and only does work on a database without the stock functions.
   if (intent.action === 'completed' && intent.status === 'paid') {
     await admin
       .from('ecommerce_orders')
@@ -401,16 +412,7 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
         payment_ref: intent.reference,
       })
       .eq('id', order.id)
-
-    for (const oi of orderItems) {
-      const product = productById.get(oi.product_id)
-      if (product) {
-        await admin
-          .from('ecommerce_products')
-          .update({ stock: Math.max(0, product.stock - oi.quantity) })
-          .eq('id', oi.product_id)
-      }
-    }
+    await finalizePaidStock(admin, order.id)
   } else {
     await admin
       .from('ecommerce_orders')
@@ -421,4 +423,59 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   scheduleOrderNotification(order.id)
 
   return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
+}
+
+/**
+ * Reads the authoritative product rows. `track_stock` only exists after the
+ * order-integrity migration, so the query falls back to the legacy columns
+ * until then. Returns null when the catalog cannot be read.
+ */
+async function loadOrderProducts(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  ids: string[],
+): Promise<OrderProductRow[] | null> {
+  const base = 'id, name, price_cents, currency, stock, status'
+  const withTracking = await admin
+    .from('ecommerce_products')
+    .select(`${base}, track_stock`)
+    .eq('project_id', projectId)
+    .in('id', ids)
+  if (!withTracking.error) return (withTracking.data ?? []) as unknown as OrderProductRow[]
+
+  if (!isMissingColumnError(withTracking.error)) {
+    console.error('[store-order] product read failed', { projectId, code: withTracking.error.code })
+    return null
+  }
+
+  const legacy = await admin
+    .from('ecommerce_products')
+    .select(base)
+    .eq('project_id', projectId)
+    .in('id', ids)
+  if (legacy.error) {
+    console.error('[store-order] product read failed', { projectId, code: legacy.error.code })
+    return null
+  }
+  return (legacy.data ?? []) as unknown as OrderProductRow[]
+}
+
+/**
+ * Discards an order that never became valid. The idempotency key is retired so
+ * a retry of the same checkout creates a fresh order instead of resolving to
+ * this cancelled one.
+ */
+async function voidOrder(
+  admin: ReturnType<typeof createAdminClient>,
+  orderId: string,
+  idempotencyKey: string,
+): Promise<void> {
+  await admin
+    .from('ecommerce_orders')
+    .update({
+      status: 'cancelled',
+      payment_status: 'failed',
+      idempotency_key: `${idempotencyKey}#void-${orderId}`,
+    })
+    .eq('id', orderId)
 }

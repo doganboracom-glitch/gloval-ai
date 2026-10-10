@@ -32,6 +32,7 @@ type FormState = {
   price: string
   currency: string
   stock: string
+  trackStock: boolean
   sku: string
   status: ProductStatus
   categoryId: string
@@ -43,6 +44,7 @@ const emptyForm: FormState = {
   price: '',
   currency: 'TRY',
   stock: '0',
+  trackStock: false,
   sku: '',
   status: 'active',
   categoryId: '',
@@ -103,6 +105,7 @@ export function EcommerceClient({
       price: (p.price_cents / 100).toString(),
       currency: p.currency,
       stock: p.stock.toString(),
+      trackStock: p.track_stock !== false,
       sku: p.sku ?? '',
       status: p.status,
       categoryId: p.category_id ?? '',
@@ -131,7 +134,8 @@ export function EcommerceClient({
       description: form.description,
       priceCents,
       currency: form.currency,
-      stock: Number.isFinite(stock) && stock >= 0 ? stock : 0,
+      stock: form.trackStock && Number.isFinite(stock) && stock >= 0 ? stock : 0,
+      trackStock: form.trackStock,
       sku: form.sku,
       status: form.status,
       categoryId: form.categoryId || null,
@@ -283,7 +287,7 @@ export function EcommerceClient({
                 <div className="hidden shrink-0 text-right sm:block">
                   <p className="font-medium">{currencyFmt.format(p.price_cents / 100)}</p>
                   <p className="text-sm text-muted-foreground">
-                    {t.ecom.stock}: {p.stock}
+                    {t.ecom.stock}: {p.track_stock === false ? t.ecom.stockUntracked : p.stock}
                   </p>
                 </div>
 
@@ -371,9 +375,11 @@ export function EcommerceClient({
                     min="0"
                     step="1"
                     inputMode="numeric"
-                    value={form.stock}
+                    value={form.trackStock ? form.stock : ''}
+                    placeholder={form.trackStock ? undefined : t.ecom.stockUntracked}
+                    disabled={!form.trackStock}
                     onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                    className={inputCls}
+                    className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-60`}
                   />
                 </Field>
               </div>
