@@ -3,8 +3,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   getPaymentProvider,
   getProviderWebhookSecret,
+  isProviderImplemented,
   type PaymentProviderId,
 } from '@/lib/payments'
+import { isMockStorePaymentsAllowed } from '@/lib/store-payment-policy'
 
 /**
  * Generic payment webhook endpoint. Async providers (Stripe, iyzico, PayTR)
@@ -18,6 +20,17 @@ export async function POST(
 ) {
   const { provider: providerParam } = await params
   const providerId = providerParam as PaymentProviderId
+
+  // The provider registry falls back to the mock provider (which accepts any
+  // payload as "paid") for unknown ids, and the mock id itself is reachable
+  // from the public URL. Only real, implemented providers may settle store
+  // orders here; mock only where explicitly allowed outside production.
+  if (!isProviderImplemented(providerId)) {
+    return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
+  }
+  if (providerId === 'mock' && !isMockStorePaymentsAllowed()) {
+    return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
+  }
   const provider = getPaymentProvider(providerId)
 
   // PayTR mandates a plain-text "OK" body on every processed callback, or it
