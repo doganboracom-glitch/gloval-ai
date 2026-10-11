@@ -13,6 +13,7 @@ import {
   type CartItem,
 } from './cart-provider'
 import type { StoreProduct } from '@/lib/store'
+import { discountPercent } from '@/lib/store-product-display'
 import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
 
 type StoreFrontProps = {
@@ -101,6 +102,7 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
   const image = product.images[0] ?? null
   const outOfStock = isSoldOut(product)
   const stockNotice = getStockNotice(product)
+  const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
 
   const cartItem: Omit<CartItem, 'quantity'> = {
     productId: product.id,
@@ -130,6 +132,11 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
             <PackageOpen className="size-10" />
           </div>
         )}
+        {discount !== null && (
+          <span className="absolute left-2 top-2 rounded-md bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground">
+            %{discount}
+          </span>
+        )}
       </Link>
       <div className="flex flex-1 flex-col gap-2 p-4">
         <Link href={`/site/${slug}/store/${product.slug}`}>
@@ -142,8 +149,15 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
           <p className="text-xs font-medium text-amber-600">{stockNotice.text}</p>
         )}
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span className="font-display text-lg font-bold">
-            {formatPrice(product.price_cents, product.currency)}
+          <span className="flex flex-col">
+            <span className="font-display text-lg font-bold">
+              {formatPrice(product.price_cents, product.currency)}
+            </span>
+            {discount !== null && product.compare_at_price_cents != null && (
+              <span className="text-xs text-muted-foreground line-through">
+                {formatPrice(product.compare_at_price_cents, product.currency)}
+              </span>
+            )}
           </span>
           <Button
             size="sm"

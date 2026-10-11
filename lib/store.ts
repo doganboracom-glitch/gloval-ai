@@ -26,7 +26,15 @@ import {
   issueOrderAccessToken,
 } from "@/lib/store-order-access";
 import { scheduleOrderNotification } from "@/lib/store-order-notifications";
-import { buildOrderLines, type OrderProductRow } from "@/lib/store-order-rules";
+import {
+  buildOrderLines,
+  withoutVatColumns,
+  type OrderProductRow,
+} from "@/lib/store-order-rules";
+import {
+  readProductExtras,
+  type StoreProductExtras,
+} from "@/lib/store-product-display";
 import {
   finalizePaidStock,
   releaseOrderStock,
@@ -54,7 +62,7 @@ export type StoreProduct = {
   track_stock?: boolean;
   /** Camel-case alias used by renderer catalog entries. */
   trackStock?: boolean;
-};
+} & Partial<StoreProductExtras>;
 
 /**
  * Public catalog read for a PUBLISHED store, via the SECURITY DEFINER RPC.
@@ -82,7 +90,11 @@ export async function getStoreProducts(slug: string): Promise<StoreProduct[]> {
         images = []
       }
     }
-    return { ...p, images }
+    return {
+      ...p,
+      images,
+      ...readProductExtras(p as unknown as Record<string, unknown>, p.price_cents),
+    }
   });
 }
 
@@ -440,7 +452,7 @@ export async function createOrder(
     return { ok: false, error: "order_failed" };
   }
 
-  const { error: itemsError } = await admin
+  let { error: itemsError } = await admin
     .from("ecommerce_order_items")
     .insert(
       orderItems.map((oi) => ({
@@ -449,6 +461,16 @@ export async function createOrder(
         order_id: order.id,
       })),
     );
+  // Before scripts/037 the VAT columns do not exist: store the lines without them.
+  if (isMissingColumnError(itemsError)) {
+    ({ error: itemsError } = await admin.from("ecommerce_order_items").insert(
+      orderItems.map((oi) => ({
+        ...withoutVatColumns(oi),
+        project_id: project.id,
+        order_id: order.id,
+      })),
+    ));
+  }
 
   // An order without its lines would be unfulfillable and could never take
   // stock, so it must not survive.
@@ -618,6 +640,24 @@ async function loadOrderProducts(
   ids: string[],
 ): Promise<OrderProductRow[] | null> {
   const base = "id, name, price_cents, currency, stock, status";
+  // vat_rate (scripts/037) and track_stock (scripts/032) arrive separately;
+  // try the richest column set first and degrade without failing the order.
+  const withVat = await admin
+    .from("ecommerce_products")
+    .select(`${base}, track_stock, vat_rate`)
+    .eq("project_id", projectId)
+    .in("id", ids);
+  if (!withVat.error)
+    return (withVat.data ?? []) as unknown as OrderProductRow[];
+
+  if (!isMissingColumnError(withVat.error)) {
+    console.error("[store-order] product read failed", {
+      projectId,
+      code: withVat.error.code,
+    });
+    return null;
+  }
+
   const withTracking = await admin
     .from("ecommerce_products")
     .select(`${base}, track_stock`)

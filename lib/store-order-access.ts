@@ -6,6 +6,7 @@ import { signOrderToken, verifyOrderToken } from '@/lib/store-order-token'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
 import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payment-policy'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
+import { readOrderItems } from '@/lib/store-order-items'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -56,6 +57,9 @@ export type OrderConfirmation = {
     unit_price_cents: number
     quantity: number
     line_total_cents: number
+    /** Frozen at order time; absent on orders placed before the VAT migration. */
+    vat_rate?: number | null
+    vat_cents?: number | null
   }[]
 }
 
@@ -111,10 +115,11 @@ export async function getOrderConfirmation(
     return null
   }
 
-  const { data: items } = await admin
-    .from('ecommerce_order_items')
-    .select('name, unit_price_cents, quantity, line_total_cents')
-    .eq('order_id', orderId)
+  const items = await readOrderItems<OrderConfirmation['items'][number]>(
+    admin,
+    orderId,
+    'name, unit_price_cents, quantity, line_total_cents',
+  )
 
   let bank: OrderConfirmation['bank'] = null
   const provider = (order.payment_provider as string | null) ?? null

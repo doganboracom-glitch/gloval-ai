@@ -9,6 +9,7 @@ import {
 } from '@/lib/email/layout'
 import type { EmailLang } from '@/lib/email/lang'
 import { formatPrice } from '@/lib/format'
+import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 
 export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'owner'
 
@@ -16,6 +17,8 @@ export type OrderEmailItem = {
   name: string
   quantity: number
   line_total_cents: number
+  vat_rate?: number | null
+  vat_cents?: number | null
 }
 
 export type BankTransferInfo = {
@@ -71,6 +74,7 @@ type Copy = {
     shipping: string
     codFee: string
     total: string
+    vat: string
     customer: string
     email: string
     phone: string
@@ -91,7 +95,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişiniz için ödemeniz onaylandı. Siparişinizi hazırlamaya başlıyoruz.`,
     cta: 'Siparişi görüntüle',
     summary: 'Sipariş özeti',
-    rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
+    rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', vat: 'KDV', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
     items: 'Ürünler',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
     footer: (s) => `Bu e-posta, ${s} mağazasında sipariş verdiğiniz için gönderildi.`,
@@ -103,7 +107,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     intro: (name, s) => `Hi ${name}, your payment for your order at ${s} is confirmed. We are getting it ready.`,
     cta: 'View order',
     summary: 'Order summary',
-    rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
+    rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', vat: 'VAT', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
     items: 'Items',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
     footer: (s) => `This email was sent because you placed an order at ${s}.`,
@@ -220,6 +224,8 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
       : []),
     [c.rows.total, money(data.totalCents)],
   ]
+  const vatLine = formatVatLine(summarizeVat(data.items), money, data.lang === 'en' ? 'en' : 'tr')
+  if (vatLine) summaryRows.push([c.rows.vat, vatLine])
 
   const customerRows: Array<[string, string]> = []
   if (isOwner) {

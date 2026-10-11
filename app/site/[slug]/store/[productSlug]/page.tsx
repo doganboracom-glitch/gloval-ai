@@ -14,7 +14,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, productSlug } = await params
   const product = await getStoreProductBySlug(slug, productSlug)
-  return { title: product ? product.name : 'Ürün' }
+  if (!product) return { title: 'Ürün' }
+  const description = product.seo_description ?? product.description ?? undefined
+  return {
+    title: product.seo_title ?? product.name,
+    ...(description ? { description } : {}),
+  }
 }
 
 export default async function ProductPage({

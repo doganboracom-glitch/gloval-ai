@@ -11,6 +11,7 @@ import { getEffectiveProductLimit } from '@/lib/effective-limits'
 import { PRODUCT_LIMIT_ERROR } from '@/lib/pricing-config'
 import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
+import { normalizeProductInput, withoutOptionalColumns, type ProductInput } from '@/lib/product-input'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import {
   cancelManualOrder,
@@ -239,87 +240,8 @@ export async function listProducts(projectId: string): Promise<ProductRow[]> {
   return (data as ProductRow[]) ?? []
 }
 
-export type ProductInput = {
-  name: string
-  description?: string | null
-  priceCents: number
-  currency?: string
-  sku?: string | null
-  stock: number
-  /** false = unlimited / not tracked (services, digital goods, made-to-order). */
-  trackStock?: boolean
-  status?: ProductStatus
-  categoryId?: string | null
-  images?: string[]
-  compareAtPriceCents?: number | null
-  vatRate?: 0 | 1 | 10 | 20
-  specs?: Array<{ name: string; value: string }>
-  shippingNote?: string | null
-  seoTitle?: string | null
-  seoDescription?: string | null
-}
+export type { ProductInput }
 
-/** Server-side validation shared by create + update. */
-function normalizeProductInput(input: ProductInput) {
-  const name = input.name?.trim()
-  if (!name) throw new Error('INVALID_NAME')
-
-  const priceCents = Math.round(Number(input.priceCents))
-  if (!Number.isFinite(priceCents) || priceCents <= 0) throw new Error('INVALID_PRICE')
-
-  const compareAtPriceCents = input.compareAtPriceCents == null ? null : Math.round(Number(input.compareAtPriceCents))
-  if (compareAtPriceCents != null && (!Number.isFinite(compareAtPriceCents) || compareAtPriceCents <= priceCents)) throw new Error('INVALID_COMPARE_PRICE')
-  const vatRate = [0, 1, 10, 20].includes(Number(input.vatRate)) ? Number(input.vatRate) : 20
-  const specs = (Array.isArray(input.specs) ? input.specs : []).slice(0, 20).map((spec) => ({
-    name: String(spec?.name ?? '').trim().slice(0, 80),
-    value: String(spec?.value ?? '').trim().slice(0, 200),
-  })).filter((spec) => spec.name && spec.value)
-
-  const stock = Math.round(Number(input.stock))
-  if (!Number.isFinite(stock) || stock < 0) throw new Error('INVALID_STOCK')
-
-  const status: ProductStatus = input.status ?? 'active'
-  if (!['active', 'draft', 'archived'].includes(status)) throw new Error('INVALID_STATUS')
-
-  const images = Array.isArray(input.images) ? input.images.filter((s) => typeof s === 'string') : []
-
-  return {
-    name,
-    description: input.description?.trim() || null,
-    price_cents: priceCents,
-    currency: (input.currency || 'TRY').slice(0, 8),
-    sku: input.sku?.trim() || null,
-    stock,
-    track_stock: input.trackStock !== false,
-    status,
-    category_id: input.categoryId || null,
-    images,
-    compare_at_price_cents: compareAtPriceCents,
-    vat_rate: vatRate,
-    specs,
-    shipping_note: input.shippingNote?.trim().slice(0, 120) || null,
-    seo_title: input.seoTitle?.trim().slice(0, 70) || null,
-    seo_description: input.seoDescription?.trim().slice(0, 160) || null,
-  }
-}
-
-/**
- * `track_stock` only exists after scripts/032. Until then, write without it
- * (every product is tracked, which is the legacy behavior) instead of failing.
- */
-function withoutOptionalColumns<T extends { track_stock: boolean }>(fields: T) {
-  const {
-    track_stock: _trackStock,
-    compare_at_price_cents: _compare,
-    vat_rate: _vat,
-    specs: _specs,
-    shipping_note: _shipping,
-    seo_title: _seoTitle,
-    seo_description: _seoDescription,
-    ...rest
-  } = fields as T & Record<string, unknown>
-  return rest
-}
 
 export async function createProduct(projectId: string, input: ProductInput): Promise<ProductRow> {
   const { supabase, userId } = await requireOwnedEcommerceProject(projectId)
@@ -434,6 +356,9 @@ export type OrderItemRow = {
   unit_price_cents: number
   quantity: number
   line_total_cents: number
+  /** Frozen at order time; absent before scripts/037. */
+  vat_rate?: number | null
+  vat_cents?: number | null
 }
 
 export type OrderWithItems = OrderRow & { items: OrderItemRow[] }
@@ -451,13 +376,21 @@ export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
   if (error) throw error
   if (!orders || orders.length === 0) return []
 
-  const { data: items } = await supabase
+  const orderIds = orders.map((o) => o.id)
+  const itemColumns = 'id, order_id, name, unit_price_cents, quantity, line_total_cents'
+  // vat_rate / vat_cents arrive with scripts/037; read without them until then.
+  const withVat = await supabase
     .from('ecommerce_order_items')
-    .select('id, order_id, name, unit_price_cents, quantity, line_total_cents')
-    .in(
-      'order_id',
-      orders.map((o) => o.id),
-    )
+    .select(`${itemColumns}, vat_rate, vat_cents`)
+    .in('order_id', orderIds)
+  let items: Record<string, unknown>[] | null = withVat.data
+  if (isMissingColumnError(withVat.error)) {
+    const legacy = await supabase
+      .from('ecommerce_order_items')
+      .select(itemColumns)
+      .in('order_id', orderIds)
+    items = legacy.data
+  }
 
   const itemsByOrder = new Map<string, OrderItemRow[]>()
   for (const it of items ?? []) {

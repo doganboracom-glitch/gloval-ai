@@ -36,6 +36,44 @@ type ProductSeed = {
 
 type CategorySeed = { name: string; slug: string }
 
+/**
+ * New rows deliberately omit the panel fields (compare_at_price_cents, vat_rate,
+ * specs, shipping_note, seo_*): the database defaults apply, and the insert keeps
+ * working before scripts/037 adds those columns.
+ */
+export function buildSyncedProductInsert(
+  p: ProductSeed,
+  ctx: { projectId: string; ownerId: string; categoryId: string | null; sortOrder: number },
+) {
+  return {
+    project_id: ctx.projectId,
+    owner_id: ctx.ownerId,
+    category_id: ctx.categoryId,
+    name: p.name,
+    slug: p.slug,
+    description: p.description,
+    price_cents: p.priceCents,
+    currency: p.currency,
+    stock: 0,
+    track_stock: false,
+    status: 'active',
+    images: p.images,
+    sort_order: ctx.sortOrder,
+  }
+}
+
+/** Presentation fields only; owner-managed panel fields are never in the patch. */
+export function buildSyncedProductUpdate(p: ProductSeed, categoryId: string | null) {
+  return {
+    name: p.name,
+    description: p.description,
+    price_cents: p.priceCents,
+    currency: p.currency,
+    images: p.images,
+    category_id: categoryId,
+  }
+}
+
 function collectSeeds(schema: WebsiteSchema): {
   categories: CategorySeed[]
   products: ProductSeed[]
@@ -139,21 +177,14 @@ export async function syncStoreFromSchema(
     // Synced products start with stock tracking OFF (always purchasable); the
     // owner opts into tracking per product and then sets the on-hand count.
     const { error: insertError } = await admin.from('ecommerce_products').insert(
-      toInsert.map((p, i) => ({
-        project_id: projectId,
-        owner_id: ownerId,
-        category_id: p.categorySlug ? catIdBySlug.get(p.categorySlug) ?? null : null,
-        name: p.name,
-        slug: p.slug,
-        description: p.description,
-        price_cents: p.priceCents,
-        currency: p.currency,
-        stock: 0,
-        track_stock: false,
-        status: 'active',
-        images: p.images,
-        sort_order: (existingProducts?.length ?? 0) + i,
-      })),
+      toInsert.map((p, i) =>
+        buildSyncedProductInsert(p, {
+          projectId,
+          ownerId,
+          categoryId: p.categorySlug ? catIdBySlug.get(p.categorySlug) ?? null : null,
+          sortOrder: (existingProducts?.length ?? 0) + i,
+        }),
+      ),
     )
     if (insertError) {
       console.error('[store-sync] product insert failed', { projectId, code: insertError.code })
@@ -165,14 +196,7 @@ export async function syncStoreFromSchema(
   for (const p of toUpdate) {
     await admin
       .from('ecommerce_products')
-      .update({
-        name: p.name,
-        description: p.description,
-        price_cents: p.priceCents,
-        currency: p.currency,
-        images: p.images,
-        category_id: p.categorySlug ? catIdBySlug.get(p.categorySlug) ?? null : null,
-      })
+      .update(buildSyncedProductUpdate(p, p.categorySlug ? catIdBySlug.get(p.categorySlug) ?? null : null))
       .eq('project_id', projectId)
       .eq('slug', p.slug)
   }

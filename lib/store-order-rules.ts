@@ -1,3 +1,5 @@
+import { lineVatCents, readVatRate } from '@/lib/store-vat'
+
 export const MAX_QTY_PER_LINE = 99
 export const MAX_TOTAL_ITEMS = 999
 const MAX_INT4 = 2_147_483_647
@@ -11,6 +13,8 @@ export type OrderProductRow = {
   status: string
   /** Absent on databases that have not run the order-integrity migration. */
   track_stock?: boolean | null
+  /** Absent until scripts/037 is applied; then VAT is simply not recorded. */
+  vat_rate?: number | null
 }
 
 export type OrderLine = {
@@ -19,6 +23,17 @@ export type OrderLine = {
   unit_price_cents: number
   quantity: number
   line_total_cents: number
+  /** Frozen from the product at order time; null when the column does not exist yet. */
+  vat_rate: number | null
+  vat_cents: number | null
+}
+
+/** Order-line columns introduced by scripts/037. */
+export function withoutVatColumns<T extends { vat_rate?: unknown; vat_cents?: unknown }>(line: T) {
+  const rest: Record<string, unknown> = { ...line }
+  delete rest.vat_rate
+  delete rest.vat_cents
+  return rest
 }
 
 export type OrderRuleError =
@@ -126,12 +141,15 @@ export function buildOrderLines(
     if (!Number.isSafeInteger(subtotal) || subtotal > MAX_INT4) {
       return { ok: false, error: 'order_too_large' }
     }
+    const vatRate = readVatRate(product.vat_rate)
     lines.push({
       product_id: product.id,
       name: product.name,
       unit_price_cents: product.price_cents,
       quantity: qty,
       line_total_cents: lineTotal,
+      vat_rate: vatRate,
+      vat_cents: vatRate === null ? null : lineVatCents(lineTotal, vatRate),
     })
   }
 
