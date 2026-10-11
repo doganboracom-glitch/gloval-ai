@@ -5,6 +5,8 @@ import { websiteSchema } from '@/lib/website-schema'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { EditorClient } from '@/components/editor/editor-client'
+import { isAdminEmail } from '@/lib/mail/admin-guard'
+import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 
 export default async function EditorPage({
   params,
@@ -43,6 +45,15 @@ export default async function EditorPage({
     : await getPlanCodeForUser(project.owner_id)
   const planCode = toPlanCode(ownerPlanCode)
 
+  // "Sanal Poslar" tab: store sites only, and only for the owner or an admin.
+  // The summary read re-checks ownership server side; a failure just hides
+  // the badge, never the editor.
+  const canManagePayments =
+    project.project_type === 'ecommerce' && (isOwner || isAdminEmail(user.email))
+  const paymentSummary = canManagePayments
+    ? await getPaymentSummary(projectId).catch(() => null)
+    : null
+
   return (
     <EditorClient
       projectId={projectId}
@@ -53,6 +64,7 @@ export default async function EditorPage({
       initialVersions={initialVersions}
       planCode={planCode}
       autoPublish={autopublish === '1'}
+      payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
     />
   )
 }

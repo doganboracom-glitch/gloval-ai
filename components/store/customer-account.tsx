@@ -259,6 +259,13 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
         </span>
       </div>
 
+      {order.cod_fee_cents > 0 && (
+        <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3 text-sm">
+          <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
+          <span className="font-medium">{formatPrice(order.cod_fee_cents, order.currency)}</span>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
         <span
           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.tone}`}

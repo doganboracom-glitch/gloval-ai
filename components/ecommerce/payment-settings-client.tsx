@@ -73,12 +73,20 @@ export function PaymentSettingsClient({
   initial,
   initialTryOnEnabled = false,
   initialPaytr,
+  embedded = false,
+  onlyMethods,
+  onSaved,
 }: {
   projectId: string
   projectName: string
   initialPaytr: PaytrSettingsView
   initial: PaymentSettingsView
   initialTryOnEnabled?: boolean
+  /** Renders just the form (no page chrome) so the editor dialog can reuse it. */
+  embedded?: boolean
+  /** Restricts which methods are listed (the dialog edits only bank details). */
+  onlyMethods?: PaymentMethodId[]
+  onSaved?: () => void
 }) {
   const { lang } = useLanguage()
   const c = copy[lang === 'en' ? 'en' : 'tr']
@@ -149,7 +157,8 @@ export function PaymentSettingsClient({
       if (result.ok) {
         setSaved(true)
         setSecretVals({})
-        router.refresh()
+        if (!embedded) router.refresh()
+        onSaved?.()
         window.setTimeout(() => setSaved(false), 2500)
       } else if (result.error === 'missing_fields' || result.error === 'invalid_fields') {
         setMissing(result.missing ?? [])
@@ -160,10 +169,14 @@ export function PaymentSettingsClient({
   }
 
   return (
-    <div className="relative min-h-svh">
-      <div className="grid-bg pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+    <div className={embedded ? '' : 'relative min-h-svh'}>
+      {!embedded && (
+        <div className="grid-bg pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+      )}
 
-      <div className="relative mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className={embedded ? '' : 'relative mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12'}>
+        {!embedded && (
+        <>
         <Link
           href={`/ecommerce/${projectId}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -183,6 +196,10 @@ export function PaymentSettingsClient({
           <p className="mt-1 max-w-prose text-muted-foreground">{c.subtitle}</p>
         </div>
 
+        </>
+        )}
+
+        {!embedded && (
         <section className="mt-8 rounded-2xl border border-border bg-card p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
@@ -217,15 +234,16 @@ export function PaymentSettingsClient({
             </label>
           </div>
         </section>
+        )}
 
-        {enabled.size === 0 && (
+        {!embedded && enabled.size === 0 && (
           <p className="mt-6 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             {c.none}
           </p>
         )}
 
-        <div className="mt-8 flex flex-col gap-4">
-          {PAYMENT_METHODS.map((method) => {
+        <div className={`${embedded ? '' : 'mt-8 '}flex flex-col gap-4`}>
+          {PAYMENT_METHODS.filter((m) => !onlyMethods || onlyMethods.includes(m.id)).map((method) => {
             if (method.id === 'paytr') {
               return <PaytrPanel key="paytr" projectId={projectId} initial={initialPaytr} />
             }

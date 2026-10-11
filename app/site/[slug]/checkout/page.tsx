@@ -18,7 +18,7 @@ export default async function CheckoutPage({
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
-  const { available, reason, methods, publicConfig, demo } = await getStorePaymentMethods(slug)
+  const { available, reason, methods, publicConfig, demo, guestCheckout, codFeeCents } = await getStorePaymentMethods(slug)
   const customer = await getCurrentStoreCustomer(slug)
 
   return (
@@ -29,6 +29,8 @@ export default async function CheckoutPage({
       methods={methods}
       publicConfig={publicConfig}
       demo={demo}
+      guestCheckout={guestCheckout}
+      codFeeCents={codFeeCents}
       customer={
         customer
           ? {

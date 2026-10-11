@@ -11,6 +11,7 @@ import { getEffectiveProductLimit } from '@/lib/effective-limits'
 import { PRODUCT_LIMIT_ERROR } from '@/lib/pricing-config'
 import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
+import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import {
   cancelManualOrder,
   confirmManualPayment,
@@ -383,6 +384,8 @@ export type OrderRow = {
   customer_phone: string | null
   subtotal_cents: number
   shipping_cents: number
+  /** Cash-on-delivery fee, derived; 0 for any other payment method. */
+  cod_fee_cents: number
   total_cents: number
   currency: string
   payment_provider: string
@@ -428,8 +431,9 @@ export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
     itemsByOrder.set(it.order_id as string, list)
   }
 
-  return (orders as OrderRow[]).map((o) => ({
+  return (orders as Omit<OrderRow, 'cod_fee_cents'>[]).map((o) => ({
     ...o,
+    cod_fee_cents: orderCodFeeCents(o),
     items: itemsByOrder.get(o.id) ?? [],
   }))
 }

@@ -10,6 +10,7 @@ import { resolveEmailLang } from '@/lib/email/lang'
 import { hmacBase64Url, hmacHex } from '@/lib/store-customer-keys'
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
+import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import {
   RESET_TOKEN_TTL_MINUTES,
   buildPasswordResetUrl,
@@ -520,6 +521,8 @@ export type CustomerOrder = {
   created_at: string
   status: string
   total_cents: number
+  /** Cash-on-delivery fee included in total_cents; 0 when not applicable. */
+  cod_fee_cents: number
   currency: string
   item_count: number
   shipping_status: ShippingStatus
@@ -556,7 +559,7 @@ export async function getStoreCustomerOrders(
   const { data } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, created_at, status, total_cents, currency, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
+      'id, created_at, status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
     )
     .eq('project_id', project.id)
     .eq('customer_id', customer.id)
@@ -572,6 +575,12 @@ export async function getStoreCustomerOrders(
       created_at: o.created_at,
       status: o.status,
       total_cents: o.total_cents ?? 0,
+      cod_fee_cents: orderCodFeeCents({
+        payment_provider: o.payment_provider,
+        subtotal_cents: o.subtotal_cents ?? 0,
+        shipping_cents: o.shipping_cents ?? 0,
+        total_cents: o.total_cents ?? 0,
+      }),
       currency: o.currency ?? 'TRY',
       item_count: Array.isArray(rel) && rel[0] ? rel[0].count : 0,
       shipping_status: toShippingStatus(o.shipping_status),
