@@ -5,6 +5,7 @@ import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
 import { signOrderToken, verifyOrderToken } from '@/lib/store-order-token'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
 import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payment-policy'
+import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -36,6 +37,8 @@ export type OrderConfirmation = {
   first_name: string
   masked_email: string
   total_cents: number
+  /** Cash-on-delivery surcharge included in total_cents (0 for other methods). */
+  cod_fee_cents: number
   currency: string
   created_at: string
   payment_provider: string | null
@@ -83,7 +86,7 @@ export async function getOrderConfirmation(
   const { data: order } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, total_cents, currency, created_at, payment_provider',
+      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider',
     )
     .eq('id', orderId)
     .eq('project_id', project.id)
@@ -149,6 +152,7 @@ export async function getOrderConfirmation(
     first_name: firstNameOf(order.customer_name),
     masked_email: maskEmail(order.customer_email),
     total_cents: order.total_cents,
+    cod_fee_cents: orderCodFeeCents(order),
     currency: order.currency,
     created_at: order.created_at,
     items: items ?? [],

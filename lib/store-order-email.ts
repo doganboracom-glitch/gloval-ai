@@ -34,6 +34,8 @@ export type OrderEmailData = {
   items: OrderEmailItem[]
   subtotalCents: number
   shippingCents: number
+  /** Cash-on-delivery surcharge; its own line only when above 0. */
+  codFeeCents?: number
   totalCents: number
   currency: string
   paymentLabel: string
@@ -67,6 +69,7 @@ type Copy = {
     payment: string
     subtotal: string
     shipping: string
+    codFee: string
     total: string
     customer: string
     email: string
@@ -88,7 +91,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişiniz için ödemeniz onaylandı. Siparişinizi hazırlamaya başlıyoruz.`,
     cta: 'Siparişi görüntüle',
     summary: 'Sipariş özeti',
-    rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', total: 'Toplam', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
+    rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
     items: 'Ürünler',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
     footer: (s) => `Bu e-posta, ${s} mağazasında sipariş verdiğiniz için gönderildi.`,
@@ -100,7 +103,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     intro: (name, s) => `Hi ${name}, your payment for your order at ${s} is confirmed. We are getting it ready.`,
     cta: 'View order',
     summary: 'Order summary',
-    rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', total: 'Total', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
+    rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
     items: 'Items',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
     footer: (s) => `This email was sent because you placed an order at ${s}.`,
@@ -212,6 +215,9 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     [c.rows.payment, data.paymentLabel],
     [c.rows.subtotal, money(data.subtotalCents)],
     [c.rows.shipping, money(data.shippingCents)],
+    ...((data.codFeeCents ?? 0) > 0
+      ? ([[c.rows.codFee, money(data.codFeeCents ?? 0)]] as Array<[string, string]>)
+      : []),
     [c.rows.total, money(data.totalCents)],
   ]
 

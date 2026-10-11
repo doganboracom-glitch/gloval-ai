@@ -25,6 +25,7 @@ import { slugifyProjectName } from '@/lib/slug'
 import { fitLogoToCanvas } from '@/lib/logo-mark'
 import type { ProjectVersionItem } from '@/lib/projects'
 import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
+import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
 
@@ -125,6 +126,7 @@ export function WebsitePreview({
   lang,
   initialEditorOpen = false,
   planCode = 'free',
+  payments = null,
   persist,
   autoPublish = false,
   onAuthenticatedPublish,
@@ -141,6 +143,8 @@ export function WebsitePreview({
    * butonları) buna göre kilitlenir. Anonim landing önizlemesinde FREE.
    */
   planCode?: PlanCode
+  /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
+  payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /**
    * Optional persistence. When provided (editor route), the live schema is
    * debounce-autosaved and a manual "Save" button records a version snapshot.
@@ -1416,6 +1420,7 @@ export function WebsitePreview({
           <aside className="absolute inset-y-0 right-0 z-10 w-full max-w-[380px] p-3 md:static md:z-auto md:w-[380px] md:shrink-0 md:border-l md:border-border md:p-3">
               <WebsiteEditorPanel
                 site={currentSite}
+                payments={payments}
                 planCode={planCode}
                 onBeforeUpgrade={flushDraft}
                 messages={messages}

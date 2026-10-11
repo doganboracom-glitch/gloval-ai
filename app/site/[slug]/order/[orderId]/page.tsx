@@ -128,6 +128,12 @@ export default async function OrderConfirmationPage({
               </li>
             ))}
           </ul>
+          {order.cod_fee_cents > 0 && (
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
+              <span className="font-medium">{formatPrice(order.cod_fee_cents, order.currency)}</span>
+            </div>
+          )}
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <span className="text-muted-foreground">Toplam</span>
             <span className="font-display text-xl font-bold">

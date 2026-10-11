@@ -12,6 +12,7 @@ import { sanitizeReplyTo } from '@/lib/email/from'
 import { tenantUrl } from '@/lib/domains'
 import { buyerMethodName } from '@/lib/payments/methods'
 import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
+import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { loadDemoStoreIds } from '@/lib/store-demo'
 import { firstNameOf } from '@/lib/store-order-privacy'
 import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
@@ -33,6 +34,7 @@ type OrderRow = {
   shipping_address: Record<string, unknown> | null
   subtotal_cents: number
   shipping_cents: number
+  cod_fee_cents?: number | null
   total_cents: number
   currency: string
   payment_provider: string
@@ -182,6 +184,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
     items: items ?? [],
     subtotalCents: order.subtotal_cents,
     shippingCents: order.shipping_cents,
+    codFeeCents: orderCodFeeCents(order),
     totalCents: order.total_cents,
     currency: order.currency,
     paymentLabel: buyerMethodName(order.payment_provider, lang),

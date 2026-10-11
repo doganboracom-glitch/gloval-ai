@@ -39,6 +39,8 @@ export function CheckoutForm({
   customer = null,
   paymentUnavailableReason = null,
   demo = false,
+  guestCheckout = true,
+  codFeeCents = 0,
 }: {
   slug: string
   storeName: string
@@ -47,6 +49,8 @@ export function CheckoutForm({
   customer?: CheckoutCustomer
   paymentUnavailableReason?: StorePaymentUnavailableReason | null
   demo?: boolean
+  guestCheckout?: boolean
+  codFeeCents?: number
 }) {
   return (
     <CartProvider slug={slug}>
@@ -58,6 +62,8 @@ export function CheckoutForm({
         customer={customer}
         paymentUnavailableReason={paymentUnavailableReason}
         demo={demo}
+        guestCheckout={guestCheckout}
+        codFeeCents={codFeeCents}
       />
     </CartProvider>
   )
@@ -74,6 +80,8 @@ function CheckoutInner({
   customer,
   paymentUnavailableReason,
   demo,
+  guestCheckout,
+  codFeeCents,
 }: {
   slug: string
   storeName: string
@@ -82,6 +90,8 @@ function CheckoutInner({
   customer: CheckoutCustomer
   paymentUnavailableReason: StorePaymentUnavailableReason | null
   demo: boolean
+  guestCheckout: boolean
+  codFeeCents: number
 }) {
   const paymentBlocked = paymentUnavailableReason !== null || methods.length === 0
   const cart = useCart()
@@ -109,6 +119,9 @@ function CheckoutInner({
   // Mandatory distance-selling + KVKK consent.
   const [consent, setConsent] = useState<LegalConsentState>({ sales: false, kvkk: false })
 
+  // Display only; createOrder recomputes the fee server side.
+  const codFee = paymentMethod === 'cash_on_delivery' ? codFeeCents : 0
+
   // Stable idempotency key for this checkout attempt (per mount).
   const idempotencyKey = useMemo(
     () => `${slug}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -116,6 +129,7 @@ function CheckoutInner({
   )
 
   const errorMessages: Record<string, string> = {
+    login_required: 'Bu mağazada sipariş vermek için giriş yapmanız gerekiyor.',
     missing_customer: 'Lütfen ad ve e-posta bilgilerini gir.',
     empty_cart: 'Sepetin boş.',
     insufficient_stock: 'Bazı ürünlerde yeterli stok yok.',
@@ -179,6 +193,24 @@ function CheckoutInner({
       setError(errorMessages[result.error] ?? errorMessages.order_failed)
       setSubmitting(false)
     }
+  }
+
+  if (!guestCheckout && !customer && cart.items.length > 0) {
+    return (
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
+        <LogIn className="size-12 text-muted-foreground" />
+        <h1 className="font-display text-xl font-bold">Sipariş için giriş yapın</h1>
+        <p className="text-sm text-muted-foreground">
+          Bu mağaza yalnızca üye müşterilerden sipariş alıyor. Giriş yapın veya üye olun, sepetiniz korunur.
+        </p>
+        <Link href={`/site/${slug}/hesap?redirect=checkout`}>
+          <Button className="gap-2">
+            <LogIn className="size-4" />
+            Giriş yap / Üye ol
+          </Button>
+        </Link>
+      </div>
+    )
   }
 
   if (cart.items.length === 0) {
@@ -369,7 +401,7 @@ function CheckoutInner({
             ) : (
               <>
                 <Lock className="size-4" />
-                Siparişi tamamla · {formatPrice(cart.subtotalCents, cart.currency)}
+                Siparişi tamamla · {formatPrice(cart.subtotalCents + codFee, cart.currency)}
               </>
             )}
           </Button>
@@ -396,10 +428,16 @@ function CheckoutInner({
               </li>
             ))}
           </ul>
+          {codFee > 0 && (
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
+              <span className="font-medium">{formatPrice(codFee, cart.currency)}</span>
+            </div>
+          )}
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <span className="text-muted-foreground">Toplam</span>
             <span className="font-display text-xl font-bold">
-              {formatPrice(cart.subtotalCents, cart.currency)}
+              {formatPrice(cart.subtotalCents + codFee, cart.currency)}
             </span>
           </div>
         </aside>

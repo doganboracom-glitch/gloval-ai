@@ -23,6 +23,7 @@ import {
   Upload,
   Pencil,
   Lock,
+  CreditCard,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
@@ -35,6 +36,8 @@ import { TextField, IconBtn, UploadButton } from '@/components/editor/editor-fie
 import { LogoField } from '@/components/editor/logo-field'
 import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
+import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
+import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
   canUseContactActions,
@@ -46,7 +49,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string }
 export type AiPhase = 'analyzing' | 'applying' | null
 
 type HeroSection = Extract<Section, { type: 'hero' }>
-type Tab = 'design' | 'ai' | 'history'
+type Tab = 'design' | 'ai' | 'history' | 'payments'
 
 /**
  * WebsiteEditorPanel
@@ -85,8 +88,11 @@ export function WebsiteEditorPanel({
   onApplyAiEdit,
   onRejectAiEdit,
   onBeforeUpgrade,
+  payments = null,
 }: {
   site: WebsiteSchema
+  /** Store owner/admin only: shows the Sanal Poslar tab. */
+  payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Anonim ziyaretçi yükseltme için girişe giderken taslağı saklar. */
   onBeforeUpgrade?: () => Promise<boolean>
   /** Pakete bağlı özellik kilitleri (FREE = telefon / WhatsApp kapalı). */
@@ -138,10 +144,13 @@ export function WebsiteEditorPanel({
   onApplyAiEdit?: () => void
   onRejectAiEdit?: () => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const ui = t.editor.ui
   const [tab, setTab] = useState<Tab>('design')
   const historyEnabled = versions !== null
+  const [paySummary, setPaySummary] = useState<PaymentSummary | null>(
+    payments?.initialSummary ?? null,
+  )
   const locked = pendingAiEdit !== null
 
   // A canvas click always jumps to the Design tab so the selected section's
@@ -216,6 +225,25 @@ export function WebsiteEditorPanel({
             {t.editor.history.tab}
           </TabButton>
         )}
+        {payments && (
+          <TabButton active={tab === 'payments'} onClick={() => setTab('payments')}>
+            <CreditCard className="h-4 w-4 shrink-0" />
+            <span className="truncate">{lang === 'en' ? 'Card POS' : 'Sanal Poslar'}</span>
+            {paySummary && (
+              <span
+                role="status"
+                aria-label={
+                  paySummary.ordersOpen
+                    ? lang === 'en' ? 'Payments on' : 'Ödeme açık'
+                    : lang === 'en' ? 'Payments off' : 'Ödeme kapalı'
+                }
+                className={`size-2 shrink-0 rounded-full ${
+                  paySummary.ordersOpen ? 'bg-emerald-500' : 'bg-destructive'
+                }`}
+              />
+            )}
+          </TabButton>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -245,6 +273,13 @@ export function WebsiteEditorPanel({
             locked={locked}
             selectedIndex={selectedIndex}
             onClearSelection={onSelectIndex ? () => onSelectIndex(null) : undefined}
+          />
+        )}
+        {tab === 'payments' && payments && (
+          <SanalPoslarTab
+            projectId={payments.projectId}
+            summary={paySummary}
+            onSummaryChange={setPaySummary}
           />
         )}
         {tab === 'history' && historyEnabled && (
@@ -1320,7 +1355,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+      className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
         active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'
       }`}
     >
