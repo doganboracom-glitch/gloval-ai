@@ -38,18 +38,18 @@ export function SiteConfirmDialog({
       <div
         className="relative w-full max-w-sm p-6 shadow-2xl"
         style={{
-          borderRadius: 'var(--site-radius)',
-          backgroundColor: 'var(--site-card)',
-          color: 'var(--site-fg)',
-          border: '1px solid var(--site-border)',
+          borderRadius: 'var(--site-radius, 0.75rem)',
+          backgroundColor: 'var(--site-card, var(--card))',
+          color: 'var(--site-fg, var(--foreground))',
+          border: '1px solid var(--site-border, var(--border))',
         }}
       >
         <div className="flex items-start gap-3">
           <span
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
             style={{
-              backgroundColor: 'color-mix(in srgb, var(--site-primary) 14%, transparent)',
-              color: 'var(--site-primary)',
+              backgroundColor: 'color-mix(in srgb, var(--site-primary, var(--primary)) 14%, transparent)',
+              color: 'var(--site-primary, var(--primary))',
             }}
           >
             <AlertCircle className="h-5 w-5" aria-hidden />
@@ -58,7 +58,7 @@ export function SiteConfirmDialog({
             <h2 className="text-base font-bold" style={{ fontFamily: 'var(--site-heading-font)' }}>
               {title}
             </h2>
-            <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--site-muted-fg)' }}>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--site-muted-fg, var(--muted-foreground))' }}>
               {description}
             </p>
           </div>
@@ -69,9 +69,9 @@ export function SiteConfirmDialog({
             onClick={onCancel}
             className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-70"
             style={{
-              borderRadius: 'var(--site-radius)',
-              border: '1px solid var(--site-border)',
-              color: 'var(--site-fg)',
+              borderRadius: 'var(--site-radius, 0.75rem)',
+              border: '1px solid var(--site-border, var(--border))',
+              color: 'var(--site-fg, var(--foreground))',
             }}
           >
             {cancelLabel}
@@ -81,9 +81,9 @@ export function SiteConfirmDialog({
             onClick={onConfirm}
             className="inline-flex items-center justify-center px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
             style={{
-              borderRadius: 'var(--site-radius)',
-              backgroundColor: 'var(--site-primary)',
-              color: 'var(--site-primary-fg)',
+              borderRadius: 'var(--site-radius, 0.75rem)',
+              backgroundColor: 'var(--site-primary, var(--primary))',
+              color: 'var(--site-primary-fg, var(--primary-foreground))',
             }}
           >
             {confirmLabel}

@@ -9,6 +9,11 @@ import {
 } from '@/lib/website-schema'
 import { applyOperation } from '@/lib/website-edit-operations'
 import { parseCommand } from '@/lib/website-command-parser'
+import {
+  PRODUCTS_MANAGED_IN_PANEL,
+  isBlockedProductOperation,
+  lockStorefrontProducts,
+} from '@/lib/storefront-product-lock'
 import { preserveResolvedImages } from '@/lib/hero-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
@@ -32,7 +37,17 @@ function tryCommandParser(original: WebsiteSchema, instruction: string) {
   if (!parsed || parsed.operations.length === 0) return null
   const next = parsed.operations.reduce((acc, op) => applyOperation(acc, op), original)
   const valid = websiteSchema.safeParse(next)
-  return valid.success ? valid.data : null
+  if (!valid.success) return null
+  // Product edits on a storefront are refused by applyOperation; an untouched
+  // result must not be reported as a successful command.
+  if (JSON.stringify(valid.data) === JSON.stringify(original)) return null
+  return valid.data
+}
+
+/** True when the offline parser only wanted to edit a storefront's catalog. */
+function parserWantedProductEdit(original: WebsiteSchema, instruction: string): boolean {
+  const parsed = parseCommand(instruction, original)
+  return !!parsed?.operations.some((op) => isBlockedProductOperation(original, op))
 }
 
 /**
@@ -280,7 +295,11 @@ export async function POST(req: Request) {
           return Response.json({ schema: command, source: 'command' })
         }
       }
-      return Response.json({ schema: original, source: 'fallback' })
+      return Response.json({
+        schema: original,
+        source: 'fallback',
+        notice: parserWantedProductEdit(original, instruction) ? PRODUCTS_MANAGED_IN_PANEL : undefined,
+      })
     }
 
     // Restore any image `src` the model dropped, so an unrelated text edit can
@@ -304,13 +323,17 @@ export async function POST(req: Request) {
       contactActions: nextSite.contactActions ?? original.contactActions,
       tracking: original.tracking,
     }
-    const finalSchema = preserveResolvedImages(original, restored)
+    // A storefront's catalog lives in the database: any product data the model
+    // wrote into the schema is discarded and the user is pointed to the panel.
+    const locked = lockStorefrontProducts(original, restored)
+    const notice = locked.touched ? PRODUCTS_MANAGED_IN_PANEL : undefined
+    const finalSchema = preserveResolvedImages(original, locked.schema)
 
     // The model sometimes answers "done" while returning the site untouched.
     // That must surface as a failure (and cost nothing), never as a success.
     if (JSON.stringify(finalSchema) === JSON.stringify(original)) {
       console.log('[v0] edit produced no change, reporting fallback')
-      return Response.json({ schema: original, source: 'fallback' })
+      return Response.json({ schema: original, source: 'fallback', notice })
     }
 
     // Refuse before charging: a result that adds pages past the plan limit costs nothing.
@@ -327,7 +350,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
     }
 
-    return Response.json({ schema: finalSchema, source: 'ai' })
+    return Response.json({ schema: finalSchema, source: 'ai', notice })
   } catch (err) {
     // AI Gateway unavailable or generation failed. Fall back to the offline
     // deterministic command parser so common edits still work; never destroy
@@ -342,6 +365,13 @@ export async function POST(req: Request) {
         return Response.json({ schema: command, source: 'command' })
       }
     }
-    return Response.json({ schema: original, source: 'fallback' })
+    return Response.json({
+      schema: original,
+      source: 'fallback',
+      notice:
+        !hasValidScope && parserWantedProductEdit(original, instruction)
+          ? PRODUCTS_MANAGED_IN_PANEL
+          : undefined,
+    })
   }
 }

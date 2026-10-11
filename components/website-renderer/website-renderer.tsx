@@ -15,6 +15,7 @@ import { BackToTop, scrollSiteToTop } from '@/components/website-renderer/back-t
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
 import { SiteFloatingActions } from '@/components/website-renderer/site-floating-actions'
 import { CartProvider } from '@/components/store/cart-provider'
+import type { StoreProduct } from '@/lib/store'
 import {
   StoreCatalogProvider,
   buildPreviewCatalog,
@@ -77,6 +78,7 @@ export function WebsiteRenderer({
   showContactActions = true,
   planCode,
   store = null,
+  previewProducts,
   preview = null,
   editSelection = null,
 }: {
@@ -99,6 +101,11 @@ export function WebsiteRenderer({
    * completely unchanged.
    */
   store?: StoreCatalog | null
+  /**
+   * Editor preview only: the owner's active catalog products, shown by product
+   * showcase sections. Display-only (no cart).
+   */
+  previewProducts?: StoreProduct[]
   /**
    * Set to false when the surrounding page already renders its own phone /
    * WhatsApp buttons (the demo routes do, from their catalog), so they never
@@ -175,13 +182,13 @@ export function WebsiteRenderer({
   // Display-only catalog for a storefront preview, so product cards link to the
   // real `/site/<slug>/store/<slug>` detail route (which `onStoreRoute` then
   // turns into the live tenant URL) instead of the model's invented href.
-  const previewCatalog = useMemo(
-    () =>
-      preview && parsed.success && isStorefront(parsed.data)
-        ? buildPreviewCatalog(parsed.data, preview.slug ?? 'preview')
-        : null,
-    [preview, parsed],
-  )
+  const previewCatalog = useMemo(() => {
+    if (!preview || !parsed.success || !isStorefront(parsed.data)) return null
+    const catalog = buildPreviewCatalog(parsed.data, preview.slug ?? 'preview')
+    // Real catalog (read-only, owner's active products) so the preview shows the
+    // same product showcase the published site will.
+    return { ...catalog, products: previewProducts ?? [], isPreview: true }
+  }, [preview, parsed, previewProducts])
 
   if (!parsed.success) {
     return <RendererError />

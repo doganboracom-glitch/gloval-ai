@@ -1,8 +1,15 @@
 'use client'
 
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import type { WebsiteSchema } from '@/lib/website-schema'
+import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import {
+  resolveShowcaseSettings,
+  SHOWCASE_LIMITS,
+  SHOWCASE_SOURCES,
+} from '@/lib/store-showcase'
 import {
   collectionOf,
   IMAGE_ITEM_SECTIONS,
@@ -92,6 +99,9 @@ export function SectionInspector({
   const items = collectionOf(section) ?? []
   const hasImages = IMAGE_ITEM_SECTIONS.includes(section.type)
   const label = (field: string) => ui.fieldLabels[field] ?? field
+  const params = useParams<{ projectId?: string }>()
+  const projectId = typeof params?.projectId === 'string' ? params.projectId : null
+  const managedProducts = section.type === 'products' && isStorefront(site)
 
   return (
     <div className="mt-2 flex flex-col gap-3 border-t border-border pt-2">
@@ -167,7 +177,16 @@ export function SectionInspector({
         )
       })}
 
-      {items.length > 0 && (
+      {managedProducts && (
+        <ProductsShowcaseSettings
+          index={index}
+          section={record}
+          projectId={projectId}
+          onDispatch={onDispatch}
+        />
+      )}
+
+      {!managedProducts && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (
@@ -188,6 +207,84 @@ export function SectionInspector({
             {ui.addItem}
           </GhostButton>
         </div>
+      )}
+    </div>
+  )
+}
+
+function ProductsShowcaseSettings({
+  index,
+  section,
+  projectId,
+  onDispatch,
+}: {
+  index: number
+  section: Record<string, unknown>
+  projectId: string | null
+  onDispatch: (op: EditOperation) => void
+}) {
+  const { t } = useLanguage()
+  const ui = t.editor.ui
+  const settings = resolveShowcaseSettings(section)
+  const selectClass =
+    'h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground'
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-2">
+      <p className="text-xs leading-relaxed text-muted-foreground">{ui.showcaseManaged}</p>
+
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        {ui.showcaseSource}
+        <select
+          className={selectClass}
+          value={settings.source}
+          onChange={(e) =>
+            onDispatch({
+              op: 'updateProductsShowcase',
+              index,
+              source: e.target.value as (typeof SHOWCASE_SOURCES)[number],
+            })
+          }
+        >
+          {SHOWCASE_SOURCES.map((source) => (
+            <option key={source} value={source}>
+              {ui.showcaseSources[source]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {settings.source === 'manual' && (
+        <p className="text-xs leading-relaxed text-muted-foreground">{ui.showcaseManualHint}</p>
+      )}
+
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        {ui.showcaseLimit}
+        <select
+          className={selectClass}
+          value={settings.limit}
+          onChange={(e) =>
+            onDispatch({
+              op: 'updateProductsShowcase',
+              index,
+              limit: Number(e.target.value) as (typeof SHOWCASE_LIMITS)[number],
+            })
+          }
+        >
+          {SHOWCASE_LIMITS.map((limit) => (
+            <option key={limit} value={limit}>
+              {limit}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {projectId && (
+        <Link
+          href={`/ecommerce/${projectId}`}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-brand/40 px-3 text-sm font-medium text-brand hover:bg-brand/10"
+        >
+          {ui.manageProducts}
+        </Link>
       )}
     </div>
   )

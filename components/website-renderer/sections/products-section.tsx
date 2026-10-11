@@ -19,7 +19,11 @@ import {
 import {
   useStoreCatalog,
   resolveCatalogEntry,
+  type StoreCatalog,
 } from '@/components/website-renderer/store-catalog-context'
+import { ProductCard as StoreProductCard } from '@/components/store/product-card'
+import type { StoreProduct } from '@/lib/store'
+import { resolveShowcaseSettings, selectShowcaseProducts } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { SiteConfirmDialog } from '@/components/website-renderer/site-confirm-dialog'
 
@@ -47,6 +51,67 @@ function productIdFor(item: ProductItem): string {
  * radius and fonts all read from the scoped `--site-*` theme variables.
  */
 export function ProductsSection({ data }: { data: ProductsData }) {
+  const catalog = useStoreCatalog()
+  if (catalog?.products) {
+    return <CatalogShowcase data={data} catalog={catalog} products={catalog.products} />
+  }
+  return <SchemaProducts data={data} />
+}
+
+/**
+ * Storefront home showcase: shows real database products chosen by the
+ * section's `source` and `limit`, so the home page and the store list share one
+ * source of truth (and one card).
+ */
+function CatalogShowcase({
+  data,
+  catalog,
+  products,
+}: {
+  data: ProductsData
+  catalog: StoreCatalog
+  products: StoreProduct[]
+}) {
+  const settings = resolveShowcaseSettings(data)
+  const selected = selectShowcaseProducts(products, settings)
+  const carousel = data.layout === 'carousel'
+
+  if (selected.length === 0 && !catalog.isPreview) return null
+
+  return (
+    <SectionShell id="products">
+      <SectionHeading title={data.title} subtitle={data.subtitle} />
+      {selected.length === 0 ? (
+        <p
+          className="mt-10 rounded-xl border border-dashed p-6 text-center text-sm"
+          style={{ borderColor: 'var(--site-border)', color: 'var(--site-muted-fg)' }}
+        >
+          {settings.source === 'manual'
+            ? 'Henüz ana sayfada gösterilecek ürün seçmedin. Ürün panelinden “Ana sayfada göster” seçeneğini işaretle.'
+            : settings.source === 'sale'
+              ? 'İndirimli ürün yok. Ürün panelinde bir ürüne eski fiyat girdiğinde burada görünür.'
+              : 'Mağazanda henüz aktif ürün yok.'}
+        </p>
+      ) : carousel ? (
+        <div className="mt-10 flex gap-5 overflow-x-auto overscroll-x-contain pb-4 snap-x snap-mandatory [scrollbar-width:thin] lg:grid lg:grid-cols-4 lg:gap-5 lg:overflow-visible">
+          {selected.map((p) => (
+            <div key={p.id} className="w-60 shrink-0 snap-start sm:w-64 lg:w-auto">
+              <StoreProductCard product={p} slug={catalog.slug} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-10 grid grid-cols-2 gap-5 lg:grid-cols-4">
+          {selected.map((p) => (
+            <StoreProductCard key={p.id} product={p} slug={catalog.slug} />
+          ))}
+        </div>
+      )}
+    </SectionShell>
+  )
+}
+
+function SchemaProducts({ data }: { data: ProductsData }) {
   const carousel = data.layout === 'carousel'
 
   return (

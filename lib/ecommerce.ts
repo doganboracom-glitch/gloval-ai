@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidateStorefront } from '@/lib/store-revalidate'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOwnedEcommerceProject, requireUser } from '@/lib/ecommerce-access'
 import {
@@ -72,6 +73,8 @@ export type ProductRow = {
   shipping_note: string | null
   seo_title: string | null
   seo_description: string | null
+  /** Absent until scripts/038 is applied; treated as false. */
+  show_on_home?: boolean
   sort_order: number
   created_at: string
   updated_at: string
@@ -204,6 +207,21 @@ export async function discardProductImages(projectId: string, urls: string[]): P
 }
 
 
+type OwnedSupabase = Awaited<ReturnType<typeof requireOwnedEcommerceProject>>['supabase']
+
+function refreshStorefront(supabase: OwnedSupabase, projectId: string) {
+  return revalidateStorefront(
+    {
+      findSlug: async (id) => {
+        const { data } = await supabase.from('projects').select('slug').eq('id', id).maybeSingle()
+        return typeof data?.slug === 'string' && data.slug ? data.slug : null
+      },
+      revalidatePath,
+    },
+    projectId,
+  )
+}
+
 export async function createProduct(projectId: string, input: ProductInput): Promise<ProductRow> {
   const { supabase, userId } = await requireOwnedEcommerceProject(projectId)
   const normalized = normalizeProductInput(input)
@@ -245,6 +263,7 @@ export async function createProduct(projectId: string, input: ProductInput): Pro
   }
   if (error) throw error
   revalidatePath(`/ecommerce/${projectId}`)
+  await refreshStorefront(supabase, projectId)
   return withNormalizedImages(data as ProductRow)
 }
 
@@ -291,6 +310,7 @@ export async function updateProduct(
   if (error) throw error
   await removeUnreferencedProjectImages(createProductImageCleanupDeps(), projectId, removedPaths)
   revalidatePath(`/ecommerce/${projectId}`)
+  await refreshStorefront(supabase, projectId)
   return withNormalizedImages(data as ProductRow)
 }
 
@@ -316,6 +336,7 @@ export async function deleteProduct(projectId: string, productId: string): Promi
     normalizeProductImages(current?.images).map((i) => i.url),
   )
   revalidatePath(`/ecommerce/${projectId}`)
+  await refreshStorefront(supabase, projectId)
 }
 
 // ---------------------------------------------------------------------------

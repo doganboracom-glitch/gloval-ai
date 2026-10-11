@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { slugify } from '@/lib/slug'
+import type { StoreProduct } from '@/lib/store'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 /**
@@ -23,6 +24,14 @@ export type StoreCatalog = {
   slug: string
   /** Real products keyed by their slug (== slugify(name)). */
   bySlug: Record<string, StoreCatalogEntry>
+  /**
+   * The live catalog in display order. When present, product sections render
+   * these database products (see `selectShowcaseProducts`) instead of the
+   * schema's own items. Absent on legacy/display-only catalogs.
+   */
+  products?: StoreProduct[]
+  /** True for the editor preview, which shows owner hints and has no cart. */
+  isPreview?: boolean
 }
 
 const StoreCatalogContext = createContext<StoreCatalog | null>(null)

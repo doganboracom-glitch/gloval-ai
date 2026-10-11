@@ -44,6 +44,7 @@ type FormState = {
   shippingNote: string
   seoTitle: string
   seoDescription: string
+  showOnHome: boolean
   specs: Array<{ name: string; value: string }>
   images: ProductImage[]
 }
@@ -63,6 +64,7 @@ const emptyForm: FormState = {
   shippingNote: '',
   seoTitle: '',
   seoDescription: '',
+  showOnHome: false,
   specs: [],
   images: [],
 }
@@ -135,6 +137,7 @@ export function EcommerceClient({
       shippingNote: p.shipping_note ?? '',
       seoTitle: p.seo_title ?? '',
       seoDescription: p.seo_description ?? '',
+      showOnHome: p.show_on_home === true,
       specs: Array.isArray(p.specs) ? p.specs : [],
       images: p.images,
     })
@@ -180,6 +183,7 @@ export function EcommerceClient({
       shippingNote: form.shippingNote,
       seoTitle: form.seoTitle,
       seoDescription: form.seoDescription,
+      showOnHome: form.showOnHome,
       specs: form.specs,
       images: form.images,
     }
@@ -465,6 +469,21 @@ export function EcommerceClient({
                   </select>
                 </Field>
               </div>
+
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.showOnHome}
+                  onChange={(e) => setForm((f) => ({ ...f, showOnHome: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  Ana sayfada göster
+                  <span className="block text-xs text-muted-foreground">
+                    Vitrin &quot;Elle seçtiklerim&quot; modundayken bu ürün ana sayfada görünür.
+                  </span>
+                </span>
+              </label>
 
               <details open className="rounded-lg border border-border p-3">
                 <summary className="cursor-pointer font-medium">Fiyat ve KDV</summary>

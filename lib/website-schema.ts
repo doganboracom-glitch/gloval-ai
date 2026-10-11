@@ -320,6 +320,13 @@ export const productsSection = z.object({
     .enum(['grid', 'carousel'])
     .optional()
     .describe('"grid" (wrapped card grid) or "carousel" (horizontally scrolling row)'),
+  /** Which catalog products a storefront shows here. The catalog itself lives in the database. */
+  source: z
+    .enum(['latest', 'sale', 'manual'])
+    .optional()
+    .describe('"latest" (newest products), "sale" (discounted products) or "manual" (owner-selected products)'),
+  /** How many catalog products a storefront shows here. */
+  limit: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional().describe('Number of products: 4, 8 or 12'),
   items: z
     .array(
       z.object({

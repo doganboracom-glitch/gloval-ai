@@ -2,19 +2,15 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, AlertCircle, User } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   CartProvider,
   useCart,
-  useAddWithConfirm,
   formatPrice,
-  requestOpenCart,
-  type CartItem,
 } from './cart-provider'
 import type { StoreProduct } from '@/lib/store'
-import { discountPercent } from '@/lib/store-product-display'
-import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
+import { ProductCard } from './product-card'
 
 type StoreFrontProps = {
   slug: string
@@ -93,116 +89,6 @@ function StoreFrontInner({ slug, storeName, products }: StoreFrontProps) {
 
       <CartDrawer slug={slug} open={cartOpen} onClose={() => setCartOpen(false)} />
     </div>
-  )
-}
-
-function ProductCard({ slug, product }: { slug: string; product: StoreProduct }) {
-  const cart = useCart()
-  const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
-  const cover = product.images[0] ?? null
-  const image = cover?.url ?? null
-  const outOfStock = isSoldOut(product)
-  const stockNotice = getStockNotice(product)
-  const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
-
-  const cartItem: Omit<CartItem, 'quantity'> = {
-    productId: product.id,
-    name: product.name,
-    priceCents: product.price_cents,
-    currency: product.currency,
-    image,
-    maxStock: purchasableMax(product),
-  }
-
-  return (
-    <>
-    <div className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-lg">
-      <Link
-        href={`/site/${slug}/store/${product.slug}`}
-        className="relative aspect-square overflow-hidden bg-muted"
-      >
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image || '/placeholder.svg'}
-            alt={cover?.alt || product.name}
-            className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <PackageOpen className="size-10" />
-          </div>
-        )}
-        {discount !== null && (
-          <span className="absolute left-2 top-2 rounded-md bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground">
-            %{discount}
-          </span>
-        )}
-      </Link>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <Link href={`/site/${slug}/store/${product.slug}`}>
-          <h3 className="line-clamp-1 font-medium hover:underline">{product.name}</h3>
-        </Link>
-        {product.description && (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{product.description}</p>
-        )}
-        {stockNotice && stockNotice.kind === 'low' && (
-          <p className="text-xs font-medium text-amber-600">{stockNotice.text}</p>
-        )}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <span className="flex flex-col">
-            <span className="font-display text-lg font-bold">
-              {formatPrice(product.price_cents, product.currency)}
-            </span>
-            {discount !== null && product.compare_at_price_cents != null && (
-              <span className="text-xs text-muted-foreground line-through">
-                {formatPrice(product.compare_at_price_cents, product.currency)}
-              </span>
-            )}
-          </span>
-          <Button
-            size="sm"
-            disabled={outOfStock}
-            onClick={() => {
-              requestAdd(cartItem, 1)
-              requestOpenCart()
-            }}
-            className="gap-1.5"
-          >
-            <Plus className="size-4" />
-            {outOfStock ? 'Tükendi' : 'Ekle'}
-          </Button>
-        </div>
-      </div>
-    </div>
-
-    {pending !== null && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-        <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={cancel} aria-hidden="true" />
-        <div className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
-          <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-              <AlertCircle className="size-5" />
-            </span>
-            <div className="flex-1">
-              <h2 className="font-display text-base font-bold">Ürün zaten sepetinizde</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {'"' + product.name + '" sepetinizde bulunuyor. Bir adet daha eklensin mi?'}
-              </p>
-            </div>
-          </div>
-          <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" size="sm" onClick={cancel}>
-              Vazgeç
-            </Button>
-            <Button size="sm" onClick={confirm}>
-              Evet, ekle
-            </Button>
-          </div>
-        </div>
-      </div>
-    )}
-    </>
   )
 }
 
