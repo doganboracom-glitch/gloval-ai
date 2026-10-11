@@ -52,6 +52,8 @@ export type StoreProduct = {
   category_id: string | null;
   /** False for made-to-order/digital products. Missing on a pre-migration DB. */
   track_stock?: boolean;
+  /** Camel-case alias used by renderer catalog entries. */
+  trackStock?: boolean;
 };
 
 /**
@@ -65,10 +67,23 @@ export async function getStoreProducts(slug: string): Promise<StoreProduct[]> {
     p_slug: slug,
   });
   if (error || !data) return [];
-  return (data as StoreProduct[]).map((p) => ({
-    ...p,
-    images: Array.isArray(p.images) ? p.images : [],
-  }));
+  return (data as StoreProduct[]).map((p) => {
+    const rawImages = p.images as unknown
+    let images: string[] = []
+    if (Array.isArray(rawImages)) {
+      images = rawImages.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    } else if (typeof rawImages === 'string') {
+      try {
+        const parsed = JSON.parse(rawImages)
+        images = Array.isArray(parsed)
+          ? parsed.filter((value): value is string => typeof value === 'string' && value.length > 0)
+          : []
+      } catch {
+        images = []
+      }
+    }
+    return { ...p, images }
+  });
 }
 
 export async function getStoreProductBySlug(

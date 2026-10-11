@@ -14,6 +14,7 @@ export type StoreCatalogEntry = {
   priceCents: number
   currency: string
   stock: number
+  trackStock?: boolean
   image: string | null
 }
 

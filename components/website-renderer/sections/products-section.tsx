@@ -123,7 +123,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
       priceCents: entry ? entry.priceCents : parsePriceToCents(item.price),
       currency: entry ? entry.currency : inferCurrency(item.price),
       image: entry?.image ?? item.src ?? null,
-      maxStock: entry ? Math.max(1, entry.stock) : 99,
+      maxStock: entry ? (entry.trackStock === false ? 99 : Math.max(0, entry.stock)) : 99,
     })
     // Fresh adds apply immediately; duplicates wait for dialog confirmation.
     if (!alreadyIn) flashAdded()

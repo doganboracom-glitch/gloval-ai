@@ -133,6 +133,11 @@ export function GeneralPaymentSettings({
         })
         if (res.ok) {
           setSaved(true)
+          setGuest(res.view.guestCheckout)
+          setBank(res.view.bankEnabled)
+          setCod(res.view.codEnabled)
+          setCard(res.view.cardEnabled)
+          setFee(formatCodFeeInput(res.view.codFeeCents))
           onSaved(res.view)
           window.setTimeout(() => setSaved(false), 2500)
         } else {
