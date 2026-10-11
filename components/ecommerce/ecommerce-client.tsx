@@ -4,7 +4,8 @@ import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Package, ClipboardList, ExternalLink, CreditCard, Loader2, Check } from 'lucide-react'
-import { archiveProduct, deleteProduct, type ProductRow, type CategoryRow } from '@/lib/ecommerce'
+import { archiveProduct, deleteProduct, saveProduct, type ProductRow, type CategoryRow } from '@/lib/ecommerce'
+import { formFromProduct, toProductInput } from '@/lib/product-form'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from './form-parts'
@@ -34,6 +35,7 @@ export function EcommerceClient({
   const [removeTarget, setRemoveTarget] = useState<ProductRow | null>(null)
   const [removeNotice, setRemoveNotice] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [publishingId, setPublishingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const products = initialProducts
@@ -53,6 +55,30 @@ export function EcommerceClient({
   function closeRemove() {
     setRemoveTarget(null)
     setRemoveNotice(null)
+  }
+
+  function handlePublish(product: ProductRow) {
+    setPublishingId(product.id)
+    startTransition(async () => {
+      try {
+        const input = toProductInput({ ...formFromProduct(product), status: 'active' })
+        const result = await saveProduct(projectId, product.id, input)
+        if (result.ok) {
+          setToast(`“${product.name}” yayına alındı.`)
+          router.refresh()
+        } else {
+          setToast(
+            result.errors.length > 0
+              ? `“${product.name}” yayına alınamadı: ürün bilgilerinde eksik var. Düzenleyip kaydedin.`
+              : 'Ürün yayına alınamadı. Lütfen tekrar deneyin.',
+          )
+        }
+      } catch {
+        setToast('Ürün yayına alınamadı. Lütfen tekrar deneyin.')
+      } finally {
+        setPublishingId(null)
+      }
+    })
   }
 
   function handleArchive(product: ProductRow) {
@@ -148,9 +174,11 @@ export function EcommerceClient({
         <ProductList
           products={products}
           categories={initialCategories}
+          publishingId={publishingId}
           onAdd={() => setFormTarget({ product: null })}
           onEdit={(product) => setFormTarget({ product })}
           onRemove={setRemoveTarget}
+          onPublish={handlePublish}
         />
       </div>
 
