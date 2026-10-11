@@ -39,8 +39,9 @@ function parseSpecs(raw: unknown): ProductSpec[] {
   const specs: ProductSpec[] = []
   for (const row of value) {
     const name = text((row as { name?: unknown })?.name)
-    const specValue = text((row as { value?: unknown })?.value)
-    if (name && specValue) specs.push({ name, value: specValue })
+    // An empty value is valid: the storefront shows it as a "✓ name" tag.
+    const specValue = text((row as { value?: unknown })?.value) ?? ''
+    if (name) specs.push({ name, value: specValue })
   }
   return specs
 }

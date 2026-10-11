@@ -166,9 +166,9 @@ describe('storefront revalidation', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('is wired into create, update and delete product', () => {
+  it('is wired into create, update, archive and delete product', () => {
     const src = readFileSync(join(process.cwd(), 'lib/ecommerce.ts'), 'utf8')
-    expect(src.match(/await refreshStorefront\(supabase, projectId\)/g)).toHaveLength(3)
+    expect(src.match(/await refreshStorefront\(supabase, projectId\)/g)).toHaveLength(4)
   })
 })
 

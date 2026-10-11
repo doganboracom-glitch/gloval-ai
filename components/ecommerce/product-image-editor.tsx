@@ -1,7 +1,7 @@
 'use client'
 
 import { useId, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ImagePlus, Info, Loader2, Trash2 } from 'lucide-react'
 import {
   PRODUCT_IMAGE_ERROR_MESSAGES as ERROR_MESSAGES,
   PRODUCT_IMAGE_FALLBACK_ERROR,
@@ -14,15 +14,66 @@ import {
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background/60 px-2 text-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
 
+const ALT_HELP =
+  'Alternatif metin, görseli göremeyen ziyaretçiler için okunur ve arama motorlarına görselin ne olduğunu anlatır. Boş bırakırsanız ürün adı kullanılır.'
+
+function AltTextField({ index, value, onChange }: { index: number; value: string; onChange: (alt: string) => void }) {
+  const [open, setOpen] = useState(value !== '')
+  const [showHelp, setShowHelp] = useState(false)
+  const helpId = useId()
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-1">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="rounded-md px-1 py-1 text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {open ? 'Açıklamayı gizle' : value ? 'Açıklamayı düzenle' : 'Açıklama ekle'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowHelp((v) => !v)}
+          aria-label="Görsel açıklaması nedir?"
+          aria-expanded={showHelp}
+          aria-controls={helpId}
+          className="rounded-md p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          <Info className="size-3.5" />
+        </button>
+      </div>
+      {showHelp && (
+        <p id={helpId} className="rounded-md bg-muted/60 px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">
+          {ALT_HELP}
+        </p>
+      )}
+      {open && (
+        <input
+          aria-label={`${index + 1}. görsel açıklaması`}
+          value={value}
+          maxLength={PRODUCT_IMAGE_LIMITS.maxAlt}
+          placeholder="Örn. Altın kolye ön görünüm"
+          onChange={(e) => onChange(e.target.value)}
+          className={inputCls}
+        />
+      )}
+    </div>
+  )
+}
+
 type Props = {
   projectId: string
+  /** Shown to screen readers while a photo has no description of its own. */
+  productName?: string
   images: ProductImage[]
   onChange: (images: ProductImage[]) => void
   onUploaded: (url: string) => void
   onBusyChange: (busy: boolean) => void
 }
 
-export function ProductImageEditor({ projectId, images, onChange, onUploaded, onBusyChange }: Props) {
+export function ProductImageEditor({ projectId, productName = '', images, onChange, onUploaded, onBusyChange }: Props) {
   const inputId = useId()
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(0)
@@ -97,22 +148,17 @@ export function ProductImageEditor({ projectId, images, onChange, onUploaded, on
             <li key={image.url} className="flex flex-col gap-2 rounded-lg border border-border p-2">
               <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={image.url} alt={image.alt} className="size-full object-cover" />
+                <img src={image.url} alt={image.alt || productName} className="size-full object-cover" />
                 {index === 0 && (
                   <span className="absolute left-1.5 top-1.5 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
                     Kapak
                   </span>
                 )}
               </div>
-              <input
-                aria-label={`${index + 1}. görsel alternatif metni`}
+              <AltTextField
+                index={index}
                 value={image.alt}
-                maxLength={PRODUCT_IMAGE_LIMITS.maxAlt}
-                placeholder="Alternatif metin"
-                onChange={(e) =>
-                  onChange(images.map((it, i) => (i === index ? { ...it, alt: e.target.value } : it)))
-                }
-                className={inputCls}
+                onChange={(alt) => onChange(images.map((it, i) => (i === index ? { ...it, alt } : it)))}
               />
               <div className="flex items-center justify-between">
                 <div className="flex gap-1">
