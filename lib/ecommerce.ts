@@ -18,7 +18,13 @@ import { getEffectiveProductLimit } from '@/lib/effective-limits'
 import { PRODUCT_LIMIT_ERROR } from '@/lib/pricing-config'
 import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
-import { normalizeProductInput, withoutOptionalColumns, type ProductInput } from '@/lib/product-input'
+import {
+  checkProductInput,
+  normalizeProductInput,
+  withoutOptionalColumns,
+  type ProductFieldError,
+  type ProductInput,
+} from '@/lib/product-input'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import {
   cancelManualOrder,
@@ -314,8 +320,69 @@ export async function updateProduct(
   return withNormalizedImages(data as ProductRow)
 }
 
-export async function deleteProduct(projectId: string, productId: string): Promise<void> {
+export type SaveProductResult =
+  | { ok: true; product: ProductRow }
+  | {
+      ok: false
+      /** Problems tied to a field; empty for limit and unexpected failures. */
+      errors: ProductFieldError[]
+      reason: 'invalid' | 'limit_reached' | 'unexpected'
+    }
+
+/**
+ * Create (`productId` null) or update, answering with per-field problems
+ * instead of throwing: a thrown server-action error reaches the browser as an
+ * opaque message in production, so the form could not say which field is wrong.
+ */
+export async function saveProduct(
+  projectId: string,
+  productId: string | null,
+  input: ProductInput,
+): Promise<SaveProductResult> {
+  const checked = checkProductInput(input)
+  if (!checked.ok) return { ok: false, errors: checked.errors, reason: 'invalid' }
+
+  try {
+    const product = productId
+      ? await updateProduct(projectId, productId, input)
+      : await createProduct(projectId, input)
+    return { ok: true, product }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    if (message === PRODUCT_LIMIT_ERROR) return { ok: false, errors: [], reason: 'limit_reached' }
+    if (message === 'INVALID_IMAGES' || message === 'INVALID_IMAGE_URL') {
+      return { ok: false, errors: [{ field: 'images', code: message }], reason: 'invalid' }
+    }
+    return { ok: false, errors: [], reason: 'unexpected' }
+  }
+}
+
+/** Hides the product from the store without touching its data or its orders. */
+export async function archiveProduct(projectId: string, productId: string): Promise<void> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
+  const { error } = await supabase
+    .from('ecommerce_products')
+    .update({ status: 'archived' })
+    .eq('id', productId)
+    .eq('project_id', projectId)
+  if (error) throw error
+  revalidatePath(`/ecommerce/${projectId}`)
+  await refreshStorefront(supabase, projectId)
+}
+
+export type DeleteProductResult = { ok: true } | { ok: false; reason: 'has_orders' }
+
+/** A product that appears on any order is never deleted; it can only be archived. */
+export async function deleteProduct(projectId: string, productId: string): Promise<DeleteProductResult> {
+  const { supabase } = await requireOwnedEcommerceProject(projectId)
+
+  const { count: orderLines, error: orderErr } = await createAdminClient()
+    .from('ecommerce_order_items')
+    .select('order_id', { count: 'exact', head: true })
+    .eq('product_id', productId)
+  if (orderErr) throw orderErr
+  if ((orderLines ?? 0) > 0) return { ok: false, reason: 'has_orders' }
+
   const { data: current } = await supabase
     .from('ecommerce_products')
     .select('images')
@@ -337,6 +404,7 @@ export async function deleteProduct(projectId: string, productId: string): Promi
   )
   revalidatePath(`/ecommerce/${projectId}`)
   await refreshStorefront(supabase, projectId)
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------

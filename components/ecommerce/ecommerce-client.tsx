@@ -1,73 +1,17 @@
 'use client'
 
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  Loader2,
-  Package,
-  Pencil,
-  X,
-  ClipboardList,
-  ExternalLink,
-  CreditCard,
-} from 'lucide-react'
-import {
-  createProduct,
-  updateProduct,
-  deleteProduct,
-  discardProductImages,
-  type ProductRow,
-  type CategoryRow,
-  type ProductStatus,
-} from '@/lib/ecommerce'
-import type { ProductImage } from '@/lib/product-images'
+import { ArrowLeft, Plus, Package, ClipboardList, ExternalLink, CreditCard, Loader2, Check } from 'lucide-react'
+import { archiveProduct, deleteProduct, type ProductRow, type CategoryRow } from '@/lib/ecommerce'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
-import { ProductImageEditor } from './product-image-editor'
+import { ConfirmDialog } from './form-parts'
+import { ProductFormDialog } from './product-form-dialog'
+import { ProductList } from './product-list'
 
-type FormState = {
-  name: string
-  description: string
-  price: string
-  currency: string
-  stock: string
-  trackStock: boolean
-  sku: string
-  status: ProductStatus
-  categoryId: string
-  compareAtPrice: string
-  vatRate: '0' | '1' | '10' | '20'
-  shippingNote: string
-  seoTitle: string
-  seoDescription: string
-  showOnHome: boolean
-  specs: Array<{ name: string; value: string }>
-  images: ProductImage[]
-}
-
-const emptyForm: FormState = {
-  name: '',
-  description: '',
-  price: '',
-  currency: 'TRY',
-  stock: '0',
-  trackStock: false,
-  sku: '',
-  status: 'active',
-  categoryId: '',
-  compareAtPrice: '',
-  vatRate: '20',
-  shippingNote: '',
-  seoTitle: '',
-  seoDescription: '',
-  showOnHome: false,
-  specs: [],
-  images: [],
-}
+type FormTarget = { product: ProductRow | null } | null
 
 export function EcommerceClient({
   projectId,
@@ -84,142 +28,62 @@ export function EcommerceClient({
   storeSlug?: string | null
   published?: boolean
 }) {
-  const { t, lang } = useLanguage()
+  const { t } = useLanguage()
   const router = useRouter()
-  const [categories] = useState<CategoryRow[]>(initialCategories)
-  const [editing, setEditing] = useState<ProductRow | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState<FormState>(emptyForm)
-  const [error, setError] = useState<string | null>(null)
+  const [formTarget, setFormTarget] = useState<FormTarget>(null)
+  const [removeTarget, setRemoveTarget] = useState<ProductRow | null>(null)
+  const [removeNotice, setRemoveNotice] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [imagesBusy, setImagesBusy] = useState(false)
-  const sessionUploads = useRef<Set<string>>(new Set())
 
   const products = initialProducts
 
-  const currencyFmt = useMemo(
-    () =>
-      new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
-        style: 'currency',
-        currency: 'TRY',
-        maximumFractionDigits: 2,
-      }),
-    [lang],
-  )
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
-  const categoryName = (id: string | null) =>
-    categories.find((c) => c.id === id)?.name ?? t.ecom.noCategory
-
-  function openNew() {
-    sessionUploads.current = new Set()
-    setEditing(null)
-    setForm(emptyForm)
-    setError(null)
-    setShowForm(true)
+  function handleSaved(product: ProductRow, mode: 'created' | 'updated') {
+    setFormTarget(null)
+    setToast(mode === 'created' ? `“${product.name}” eklendi.` : `“${product.name}” güncellendi.`)
+    router.refresh()
   }
 
-  function openEdit(p: ProductRow) {
-    sessionUploads.current = new Set()
-    setEditing(p)
-    setForm({
-      name: p.name,
-      description: p.description ?? '',
-      price: (p.price_cents / 100).toString(),
-      currency: p.currency,
-      stock: p.stock.toString(),
-      trackStock: p.track_stock !== false,
-      sku: p.sku ?? '',
-      status: p.status,
-      categoryId: p.category_id ?? '',
-      compareAtPrice: p.compare_at_price_cents ? (p.compare_at_price_cents / 100).toString() : '',
-      vatRate: String(p.vat_rate ?? 20) as FormState['vatRate'],
-      shippingNote: p.shipping_note ?? '',
-      seoTitle: p.seo_title ?? '',
-      seoDescription: p.seo_description ?? '',
-      showOnHome: p.show_on_home === true,
-      specs: Array.isArray(p.specs) ? p.specs : [],
-      images: p.images,
-    })
-    setError(null)
-    setShowForm(true)
+  function closeRemove() {
+    setRemoveTarget(null)
+    setRemoveNotice(null)
   }
 
-  function closeForm() {
-    setShowForm(false)
-    setEditing(null)
-    setError(null)
-    setImagesBusy(false)
-    sessionUploads.current = new Set()
-  }
-
-  function cancelForm() {
-    const orphans = Array.from(sessionUploads.current)
-    if (orphans.length > 0) void discardProductImages(projectId, orphans).catch(() => {})
-    closeForm()
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    const priceCents = Math.round(Number(form.price.replace(',', '.')) * 100)
-    const stock = Math.round(Number(form.stock))
-    if (!form.name.trim() || !Number.isFinite(priceCents) || priceCents < 0) {
-      setError(t.ecom.saveError)
-      return
-    }
-    const payload = {
-      name: form.name,
-      description: form.description,
-      priceCents,
-      currency: form.currency,
-      stock: form.trackStock && Number.isFinite(stock) && stock >= 0 ? stock : 0,
-      trackStock: form.trackStock,
-      sku: form.sku,
-      status: form.status,
-      categoryId: form.categoryId || null,
-      compareAtPriceCents: form.compareAtPrice ? Math.round(Number(form.compareAtPrice.replace(',', '.')) * 100) : null,
-      vatRate: Number(form.vatRate) as 0 | 1 | 10 | 20,
-      shippingNote: form.shippingNote,
-      seoTitle: form.seoTitle,
-      seoDescription: form.seoDescription,
-      showOnHome: form.showOnHome,
-      specs: form.specs,
-      images: form.images,
-    }
+  function handleArchive(product: ProductRow) {
     startTransition(async () => {
       try {
-        if (editing) {
-          await updateProduct(projectId, editing.id, payload)
-        } else {
-          await createProduct(projectId, payload)
-        }
-        const kept = new Set(form.images.map((image) => image.url))
-        const orphans = Array.from(sessionUploads.current).filter((url) => !kept.has(url))
-        if (orphans.length > 0) void discardProductImages(projectId, orphans).catch(() => {})
-        closeForm()
+        await archiveProduct(projectId, product.id)
+        closeRemove()
+        setToast(`“${product.name}” arşivlendi.`)
         router.refresh()
       } catch {
-        setError(t.ecom.saveError)
+        setRemoveNotice('Ürün arşivlenemedi. Lütfen tekrar deneyin.')
       }
     })
   }
 
-  function handleDelete(id: string) {
-    if (!window.confirm(t.ecom.deleteConfirm)) return
-    setPendingDeleteId(id)
+  function handleDelete(product: ProductRow) {
     startTransition(async () => {
       try {
-        await deleteProduct(projectId, id)
-      } finally {
-        setPendingDeleteId(null)
+        const result = await deleteProduct(projectId, product.id)
+        if (!result.ok) {
+          setRemoveNotice('Bu ürün siparişlerde yer aldığı için kalıcı olarak silinemez. Mağazadan kaldırmak için arşivleyebilirsiniz.')
+          return
+        }
+        closeRemove()
+        setToast(`“${product.name}” silindi.`)
         router.refresh()
+      } catch {
+        setRemoveNotice('Ürün silinemedi. Lütfen tekrar deneyin.')
       }
     })
   }
-
-  const statusLabel = (s: ProductStatus) =>
-    s === 'active' ? t.ecom.statusActive : s === 'draft' ? t.ecom.statusDraft : t.ecom.statusArchived
 
   return (
     <div className="relative min-h-svh">
@@ -270,321 +134,86 @@ export function EcommerceClient({
               <Package className="size-5" />
               <span className="text-sm font-medium uppercase tracking-wide">{projectName}</span>
             </div>
-            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-balance">
-              {t.ecom.title}
-            </h1>
+            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-balance">{t.ecom.title}</h1>
             <p className="mt-1 text-muted-foreground">
               {t.ecom.subtitle} · {products.length} {t.ecom.noProducts}
             </p>
           </div>
-          <Button onClick={openNew} size="lg" className="gap-2 self-start sm:self-auto">
+          <Button onClick={() => setFormTarget({ product: null })} size="lg" className="gap-2 self-start sm:self-auto">
             <Plus className="size-4" />
             {t.ecom.addProduct}
           </Button>
         </div>
 
-        {products.length === 0 ? (
-          <div className="mt-12 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-20 text-center">
-            <div className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Package className="size-7" />
-            </div>
-            <p className="mt-5 text-lg font-medium">{t.ecom.empty}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{t.ecom.emptyCta}</p>
-            <Button onClick={openNew} className="mt-6 gap-2">
-              <Plus className="size-4" />
-              {t.ecom.addProduct}
-            </Button>
-          </div>
-        ) : (
-          <ul className="mt-8 flex flex-col gap-3">
-            {products.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center gap-4 rounded-xl border border-border bg-card/70 p-4 transition-colors hover:border-primary/40"
-              >
-                <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
-                  {p.images[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.images[0].url || '/placeholder.svg'}
-                      alt={p.images[0].alt || p.name}
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    <Package className="size-5 text-muted-foreground" />
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="truncate font-medium">{p.name}</h2>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        p.status === 'active'
-                          ? 'bg-accent/15 text-accent'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {statusLabel(p.status)}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {categoryName(p.category_id)}
-                    {p.sku ? ` · ${p.sku}` : ''}
-                  </p>
-                </div>
-
-                <div className="hidden shrink-0 text-right sm:block">
-                  <p className="font-medium">{currencyFmt.format(p.price_cents / 100)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {t.ecom.stock}: {p.track_stock === false ? t.ecom.stockUntracked : p.stock}
-                  </p>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(p)}
-                    aria-label={t.ecom.editProduct}
-                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    <Pencil className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(p.id)}
-                    disabled={isPending && pendingDeleteId === p.id}
-                    aria-label={t.ecom.delete}
-                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    {isPending && pendingDeleteId === p.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ProductList
+          products={products}
+          categories={initialCategories}
+          onAdd={() => setFormTarget({ product: null })}
+          onEdit={(product) => setFormTarget({ product })}
+          onRemove={setRemoveTarget}
+        />
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[92svh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card p-6 shadow-2xl sm:rounded-2xl">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold">
-                {editing ? t.ecom.editProduct : t.ecom.newProduct}
-              </h2>
-              <button
-                type="button"
-                onClick={cancelForm}
-                aria-label={t.ecom.cancel}
-                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
+      {formTarget && (
+        <ProductFormDialog
+          key={formTarget.product?.id ?? 'new'}
+          projectId={projectId}
+          product={formTarget.product}
+          categories={initialCategories}
+          onClose={() => setFormTarget(null)}
+          onSaved={handleSaved}
+        />
+      )}
 
-            <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-4">
-              <Field label={t.ecom.name} required>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  required
-                  className={inputCls}
-                />
-              </Field>
-
-              <Field label={t.ecom.description}>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  className={`${inputCls} h-auto resize-y py-2`}
-                />
-              </Field>
-
-              <details open className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer font-medium">Ürün görselleri</summary>
-                <div className="mt-3">
-                  <ProductImageEditor
-                    projectId={projectId}
-                    images={form.images}
-                    onChange={(images) => setForm((f) => ({ ...f, images }))}
-                    onUploaded={(url) => sessionUploads.current.add(url)}
-                    onBusyChange={setImagesBusy}
-                  />
-                </div>
-              </details>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Field label={t.ecom.price} required>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={form.price}
-                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-                    required
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label={t.ecom.stock}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputMode="numeric"
-                    value={form.trackStock ? form.stock : ''}
-                    placeholder={form.trackStock ? undefined : t.ecom.stockUntracked}
-                    disabled={!form.trackStock}
-                    onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))}
-                    className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-60`}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Field label={t.ecom.sku}>
-                  <input
-                    value={form.sku}
-                    onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-                    className={inputCls}
-                  />
-                </Field>
-                <Field label={t.ecom.status}>
-                  <select
-                    value={form.status}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, status: e.target.value as ProductStatus }))
-                    }
-                    className={inputCls}
-                  >
-                    <option value="active">{t.ecom.statusActive}</option>
-                    <option value="draft">{t.ecom.statusDraft}</option>
-                    <option value="archived">{t.ecom.statusArchived}</option>
-                  </select>
-                </Field>
-              </div>
-
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.showOnHome}
-                  onChange={(e) => setForm((f) => ({ ...f, showOnHome: e.target.checked }))}
-                  className="mt-0.5 h-4 w-4"
-                />
-                <span>
-                  Ana sayfada göster
-                  <span className="block text-xs text-muted-foreground">
-                    Vitrin &quot;Elle seçtiklerim&quot; modundayken bu ürün ana sayfada görünür.
-                  </span>
-                </span>
-              </label>
-
-              <details open className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer font-medium">Fiyat ve KDV</summary>
-                <div className="mt-3 grid grid-cols-2 gap-4">
-                  <Field label="Eski fiyat">
-                    <input type="number" min="0" step="0.01" value={form.compareAtPrice} onChange={(e) => setForm((f) => ({ ...f, compareAtPrice: e.target.value }))} className={inputCls} />
-                  </Field>
-                  <Field label="KDV oranı">
-                    <select value={form.vatRate} onChange={(e) => setForm((f) => ({ ...f, vatRate: e.target.value as FormState['vatRate'] }))} className={inputCls}>
-                      <option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20">%20</option>
-                    </select>
-                  </Field>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">Fiyatlar KDV dahildir; sitede “KDV dahil” yazar.</p>
-              </details>
-
-              <details open className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer font-medium">Stok ve gönderim</summary>
-                <Field label="Hazırlık/kargo süresi">
-                  <input value={form.shippingNote} onChange={(e) => setForm((f) => ({ ...f, shippingNote: e.target.value }))} placeholder="1-3 iş günü" className={inputCls} />
-                </Field>
-              </details>
-
-              <details className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer font-medium">Ürün özellikleri</summary>
-                <div className="mt-3 flex flex-col gap-2">
-                  {form.specs.map((spec, index) => <div key={index} className="flex gap-2"><input aria-label="Özellik adı" value={spec.name} onChange={(e) => setForm((f) => ({ ...f, specs: f.specs.map((s, i) => i === index ? { ...s, name: e.target.value } : s) }))} placeholder="Özellik adı" className={inputCls} /><input aria-label="Özellik değeri" value={spec.value} onChange={(e) => setForm((f) => ({ ...f, specs: f.specs.map((s, i) => i === index ? { ...s, value: e.target.value } : s) }))} placeholder="Değer" className={inputCls} /><button type="button" onClick={() => setForm((f) => ({ ...f, specs: f.specs.filter((_, i) => i !== index) }))} aria-label="Özelliği sil"><Trash2 className="size-4" /></button></div>)}
-                  {form.specs.length < 20 && <Button type="button" variant="outline" onClick={() => setForm((f) => ({ ...f, specs: [...f.specs, { name: '', value: '' }] }))}>Özellik ekle</Button>}
-                </div>
-              </details>
-
-              <details className="rounded-lg border border-border p-3">
-                <summary className="cursor-pointer font-medium">Yayın ve SEO</summary>
-                <div className="mt-3 flex flex-col gap-3"><Field label="SEO başlığı"><input maxLength={70} value={form.seoTitle} onChange={(e) => setForm((f) => ({ ...f, seoTitle: e.target.value }))} className={inputCls} /></Field><Field label="SEO açıklaması"><textarea maxLength={160} value={form.seoDescription} onChange={(e) => setForm((f) => ({ ...f, seoDescription: e.target.value }))} rows={2} className={`${inputCls} h-auto py-2`} /></Field></div>
-              </details>
-
-              {categories.length > 0 && (
-                <Field label={t.ecom.category}>
-                  <select
-                    value={form.categoryId}
-                    onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">{t.ecom.noCategory}</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
-
-              {error && (
-                <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
+      {removeTarget && (
+        <ConfirmDialog
+          title={`“${removeTarget.name}” ürününü ne yapalım?`}
+          description={
+            <>
+              <p>
+                <strong className="text-foreground">Arşivle:</strong> ürün mağazadan kalkar, bilgileri ve siparişleri korunur. İstediğiniz zaman yeniden etkinleştirebilirsiniz.
+              </p>
+              <p className="mt-2">
+                <strong className="text-foreground">Kalıcı sil:</strong> geri alınamaz. Siparişi olan ürünler silinemez.
+              </p>
+              {removeNotice && (
+                <p role="alert" className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">
+                  {removeNotice}
                 </p>
               )}
+            </>
+          }
+          onDismiss={closeRemove}
+        >
+          <Button variant="ghost" onClick={closeRemove} disabled={isPending}>
+            Vazgeç
+          </Button>
+          <button
+            type="button"
+            onClick={() => handleDelete(removeTarget)}
+            disabled={isPending}
+            className="inline-flex h-10 items-center justify-center rounded-md border border-destructive/50 px-4 text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-destructive/50 disabled:opacity-60"
+          >
+            Kalıcı olarak sil
+          </button>
+          {removeTarget.status !== 'archived' && (
+            <Button data-autofocus onClick={() => handleArchive(removeTarget)} disabled={isPending} className="gap-2">
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              Arşivle
+            </Button>
+          )}
+        </ConfirmDialog>
+      )}
 
-              <div className="mt-2 flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={cancelForm}>
-                  {t.ecom.cancel}
-                </Button>
-                <Button type="submit" disabled={isPending || imagesBusy} className="gap-2">
-                  {isPending ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      {t.ecom.saving}
-                    </>
-                  ) : (
-                    t.ecom.save
-                  )}
-                </Button>
-              </div>
-            </form>
-          </div>
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm shadow-xl"
+        >
+          <Check className="size-4 text-accent" />
+          {toast}
         </div>
       )}
     </div>
-  )
-}
-
-const inputCls =
-  'h-11 w-full rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
-
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string
-  required?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-destructive">*</span>}
-      </span>
-      {children}
-    </label>
   )
 }

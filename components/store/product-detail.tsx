@@ -131,9 +131,24 @@ function ProductDetailInner({
               {product.shipping_note}
             </p>
           )}
-          {specs.length > 0 && (
+          {specs.some((spec) => !spec.value) && (
+            <ul className="flex flex-wrap gap-2 text-sm">
+              {specs
+                .filter((spec) => !spec.value)
+                .map((spec, i) => (
+                  <li
+                    key={`${spec.name}-${i}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1"
+                  >
+                    <Check aria-hidden className="size-3.5 text-primary" />
+                    {spec.name}
+                  </li>
+                ))}
+            </ul>
+          )}
+          {specs.some((spec) => spec.value) && (
             <dl className="divide-y divide-border rounded-xl border border-border text-sm">
-              {specs.map((spec, i) => (
+              {specs.filter((spec) => spec.value).map((spec, i) => (
                 <div key={`${spec.name}-${i}`} className="grid grid-cols-[2fr_3fr] gap-3 px-4 py-2.5">
                   <dt className="text-muted-foreground">{spec.name}</dt>
                   <dd className="break-words font-medium">{spec.value}</dd>

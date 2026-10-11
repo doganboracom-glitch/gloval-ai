@@ -47,6 +47,8 @@ export type ProductInputErrorCode =
   | 'INVALID_STOCK'
   | 'INVALID_STATUS'
   | 'INVALID_SPECS'
+  | 'INVALID_SPEC_NAME'
+  | 'INVALID_SPEC_VALUE'
   | 'INVALID_SHIPPING_NOTE'
   | 'INVALID_SEO_TITLE'
   | 'INVALID_SEO_DESCRIPTION'
@@ -64,8 +66,16 @@ const MESSAGES: Record<ProductInputErrorCode, { tr: string; en: string }> = {
   INVALID_STOCK: { tr: 'Stok sıfır veya pozitif bir tam sayı olmalı.', en: 'Stock must be zero or a positive whole number.' },
   INVALID_STATUS: { tr: 'Geçersiz ürün durumu.', en: 'Invalid product status.' },
   INVALID_SPECS: {
-    tr: `Özellikler: en fazla ${PRODUCT_LIMITS.specCount} satır, ad en fazla ${PRODUCT_LIMITS.specName}, değer en fazla ${PRODUCT_LIMITS.specValue} karakter; ad ve değer birlikte dolu olmalı ve HTML içermemeli.`,
-    en: `Specs: up to ${PRODUCT_LIMITS.specCount} rows, name up to ${PRODUCT_LIMITS.specName} and value up to ${PRODUCT_LIMITS.specValue} characters; both fields are required and HTML is not allowed.`,
+    tr: `Ürün özellikleri geçersiz. En fazla ${PRODUCT_LIMITS.specCount} satır ekleyebilirsiniz.`,
+    en: `Specs are invalid. You can add up to ${PRODUCT_LIMITS.specCount} rows.`,
+  },
+  INVALID_SPEC_NAME: {
+    tr: `Özellik adı gerekli (değer boş bırakılabilir). En fazla ${PRODUCT_LIMITS.specName} karakter olmalı ve HTML içermemeli.`,
+    en: `The spec name is required (the value may stay empty). Up to ${PRODUCT_LIMITS.specName} characters, no HTML.`,
+  },
+  INVALID_SPEC_VALUE: {
+    tr: `Özellik değeri en fazla ${PRODUCT_LIMITS.specValue} karakter olmalı ve HTML içermemeli.`,
+    en: `The spec value must be at most ${PRODUCT_LIMITS.specValue} characters with no HTML.`,
   },
   INVALID_SHIPPING_NOTE: {
     tr: `Gönderim notu en fazla ${PRODUCT_LIMITS.shippingNote} karakter olmalı ve HTML içermemeli.`,
@@ -116,31 +126,66 @@ function optionalText(raw: unknown, max: number, code: ProductInputErrorCode): s
   return value
 }
 
-function normalizeSpecs(raw: unknown): ProductSpec[] {
+/** A validation problem tied to one input field (`specs.2.name` points at a spec row). */
+export type ProductFieldError = { field: string; code: ProductInputErrorCode }
+
+/**
+ * Spec rows: the name is required, the value is optional (an empty value is
+ * shown as a "✓ name" tag on the storefront). Rows whose name AND value are
+ * blank are dropped silently. Error fields use the index of the row as submitted.
+ */
+function normalizeSpecs(raw: unknown, errors: ProductFieldError[]): ProductSpec[] {
   if (raw == null) return []
-  if (!Array.isArray(raw)) throw new Error('INVALID_SPECS')
-
-  const rows = raw
-    .map((row) => {
-      if (!row || typeof row !== 'object') throw new Error('INVALID_SPECS')
-      const { name, value } = row as { name?: unknown; value?: unknown }
-      if ((name != null && typeof name !== 'string') || (value != null && typeof value !== 'string')) {
-        throw new Error('INVALID_SPECS')
-      }
-      return { name: (name ?? '').trim(), value: (value ?? '').trim() }
-    })
-    // Fully blank rows are just empty form rows, not data.
-    .filter((row) => row.name || row.value)
-
-  if (rows.length > PRODUCT_LIMITS.specCount) throw new Error('INVALID_SPECS')
-  for (const row of rows) {
-    if (!row.name || !row.value) throw new Error('INVALID_SPECS')
-    if (row.name.length > PRODUCT_LIMITS.specName || row.value.length > PRODUCT_LIMITS.specValue) {
-      throw new Error('INVALID_SPECS')
-    }
-    if (containsHtml(row.name) || containsHtml(row.value)) throw new Error('INVALID_SPECS')
+  if (!Array.isArray(raw)) {
+    errors.push({ field: 'specs', code: 'INVALID_SPECS' })
+    return []
   }
+
+  const rows: ProductSpec[] = []
+  raw.forEach((row, index) => {
+    if (!row || typeof row !== 'object') {
+      errors.push({ field: 'specs', code: 'INVALID_SPECS' })
+      return
+    }
+    const { name, value } = row as { name?: unknown; value?: unknown }
+    if (name != null && typeof name !== 'string') {
+      errors.push({ field: `specs.${index}.name`, code: 'INVALID_SPEC_NAME' })
+      return
+    }
+    if (value != null && typeof value !== 'string') {
+      errors.push({ field: `specs.${index}.value`, code: 'INVALID_SPEC_VALUE' })
+      return
+    }
+    const cleanName = (name ?? '').trim()
+    const cleanValue = (value ?? '').trim()
+    if (!cleanName && !cleanValue) return
+
+    if (!cleanName || cleanName.length > PRODUCT_LIMITS.specName || containsHtml(cleanName)) {
+      errors.push({ field: `specs.${index}.name`, code: 'INVALID_SPEC_NAME' })
+    }
+    if (cleanValue.length > PRODUCT_LIMITS.specValue || containsHtml(cleanValue)) {
+      errors.push({ field: `specs.${index}.value`, code: 'INVALID_SPEC_VALUE' })
+    }
+    rows.push({ name: cleanName, value: cleanValue })
+  })
+
+  if (rows.length > PRODUCT_LIMITS.specCount) errors.push({ field: 'specs', code: 'INVALID_SPECS' })
   return rows
+}
+
+function checkOptionalText(
+  raw: unknown,
+  max: number,
+  field: string,
+  code: ProductInputErrorCode,
+  errors: ProductFieldError[],
+): string | null {
+  try {
+    return optionalText(raw, max, code)
+  } catch {
+    errors.push({ field, code })
+    return null
+  }
 }
 
 /**
@@ -149,56 +194,121 @@ function normalizeSpecs(raw: unknown): ProductSpec[] {
  * silently coerced. The client may run this too, but only for early feedback.
  */
 export function normalizeProductInput(input: ProductInput) {
-  const name = input.name?.trim()
-  if (!name) throw new Error('INVALID_NAME')
+  const result = checkProductInput(input)
+  if (!result.ok) throw new Error(result.errors[0].code)
+  return result.value
+}
+
+export type NormalizedProductInput = {
+  name: string
+  description: string | null
+  price_cents: number
+  currency: string
+  sku: string | null
+  stock: number
+  track_stock: boolean
+  status: ProductStatus
+  category_id: string | null
+  images: ProductImage[]
+  compare_at_price_cents: number | null
+  vat_rate: VatRate
+  specs: ProductSpec[]
+  shipping_note: string | null
+  seo_title: string | null
+  seo_description: string | null
+  show_on_home: boolean
+}
+
+export type ProductInputCheck =
+  | { ok: true; value: NormalizedProductInput }
+  | { ok: false; errors: ProductFieldError[] }
+
+/**
+ * Same rules as `normalizeProductInput`, but collects EVERY problem with the
+ * field it belongs to instead of stopping at the first one. Errors come in
+ * form order, so `errors[0]` is what `normalizeProductInput` throws.
+ */
+export function checkProductInput(input: ProductInput): ProductInputCheck {
+  const errors: ProductFieldError[] = []
+
+  const name = typeof input.name === 'string' ? input.name.trim() : ''
+  if (!name) errors.push({ field: 'name', code: 'INVALID_NAME' })
 
   const priceCents = Number(input.priceCents)
-  if (!Number.isSafeInteger(priceCents) || priceCents <= 0) throw new Error('INVALID_PRICE')
+  const priceOk = Number.isSafeInteger(priceCents) && priceCents > 0
+  if (!priceOk) errors.push({ field: 'price', code: 'INVALID_PRICE' })
 
   let compareAtPriceCents: number | null = null
   if (input.compareAtPriceCents != null) {
     const compare = Number(input.compareAtPriceCents)
-    if (!Number.isSafeInteger(compare) || compare <= priceCents) throw new Error('INVALID_COMPARE_PRICE')
-    compareAtPriceCents = compare
+    // Without a valid sale price there is nothing to compare against yet.
+    if (!Number.isSafeInteger(compare) || (priceOk && compare <= priceCents)) {
+      errors.push({ field: 'compareAtPrice', code: 'INVALID_COMPARE_PRICE' })
+    } else {
+      compareAtPriceCents = compare
+    }
   }
 
   let vatRate: VatRate = DEFAULT_VAT_RATE
   if (input.vatRate != null) {
-    if (!isVatRate(input.vatRate)) throw new Error('INVALID_VAT_RATE')
-    vatRate = input.vatRate
+    if (!isVatRate(input.vatRate)) errors.push({ field: 'vatRate', code: 'INVALID_VAT_RATE' })
+    else vatRate = input.vatRate
   }
 
-  const specs = normalizeSpecs(input.specs)
-  const shippingNote = optionalText(input.shippingNote, PRODUCT_LIMITS.shippingNote, 'INVALID_SHIPPING_NOTE')
-  const seoTitle = optionalText(input.seoTitle, PRODUCT_LIMITS.seoTitle, 'INVALID_SEO_TITLE')
-  const seoDescription = optionalText(input.seoDescription, PRODUCT_LIMITS.seoDescription, 'INVALID_SEO_DESCRIPTION')
+  const specs = normalizeSpecs(input.specs, errors)
+  const shippingNote = checkOptionalText(
+    input.shippingNote,
+    PRODUCT_LIMITS.shippingNote,
+    'shippingNote',
+    'INVALID_SHIPPING_NOTE',
+    errors,
+  )
+  const seoTitle = checkOptionalText(input.seoTitle, PRODUCT_LIMITS.seoTitle, 'seoTitle', 'INVALID_SEO_TITLE', errors)
+  const seoDescription = checkOptionalText(
+    input.seoDescription,
+    PRODUCT_LIMITS.seoDescription,
+    'seoDescription',
+    'INVALID_SEO_DESCRIPTION',
+    errors,
+  )
 
   const stock = Math.round(Number(input.stock))
-  if (!Number.isFinite(stock) || stock < 0) throw new Error('INVALID_STOCK')
+  if (!Number.isFinite(stock) || stock < 0) errors.push({ field: 'stock', code: 'INVALID_STOCK' })
 
   const status: ProductStatus = input.status ?? 'active'
-  if (!['active', 'draft', 'archived'].includes(status)) throw new Error('INVALID_STATUS')
+  if (!['active', 'draft', 'archived'].includes(status)) errors.push({ field: 'status', code: 'INVALID_STATUS' })
 
-  const images = parseProductImagesInput(input.images)
+  let images: ProductImage[] = []
+  try {
+    images = parseProductImagesInput(input.images)
+  } catch (error) {
+    const code = error instanceof Error && error.message === 'INVALID_IMAGE_URL' ? 'INVALID_IMAGE_URL' : 'INVALID_IMAGES'
+    errors.push({ field: 'images', code })
+  }
+
+  if (errors.length > 0) return { ok: false, errors }
 
   return {
-    name,
-    description: input.description?.trim() || null,
-    price_cents: priceCents,
-    currency: (input.currency || 'TRY').slice(0, 8),
-    sku: input.sku?.trim() || null,
-    stock,
-    track_stock: input.trackStock !== false,
-    status,
-    category_id: input.categoryId || null,
-    images,
-    compare_at_price_cents: compareAtPriceCents,
-    vat_rate: vatRate,
-    specs,
-    shipping_note: shippingNote,
-    seo_title: seoTitle,
-    seo_description: seoDescription,
-    show_on_home: input.showOnHome === true,
+    ok: true,
+    value: {
+      name,
+      description: input.description?.trim() || null,
+      price_cents: priceCents,
+      currency: (input.currency || 'TRY').slice(0, 8),
+      sku: input.sku?.trim() || null,
+      stock,
+      track_stock: input.trackStock !== false,
+      status,
+      category_id: input.categoryId || null,
+      images,
+      compare_at_price_cents: compareAtPriceCents,
+      vat_rate: vatRate,
+      specs,
+      shipping_note: shippingNote,
+      seo_title: seoTitle,
+      seo_description: seoDescription,
+      show_on_home: input.showOnHome === true,
+    },
   }
 }
 
