@@ -1,9 +1,15 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isAdminEmail } from '@/lib/mail/admin-guard'
+import { requireOwnedEcommerceProject, requireUser } from '@/lib/ecommerce-access'
+import {
+  normalizeProductImages,
+  prepareProductImagesForSave,
+  type ProductImage,
+} from '@/lib/product-images'
+import { discardProjectImageUrls, removeUnreferencedProjectImages } from '@/lib/product-image-service'
+import { createProductImageCleanupDeps, getProductImageStorageBase } from '@/lib/product-image-store'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { createProject } from '@/lib/projects'
 import { getMyCurrentPlan } from '@/lib/billing'
@@ -58,7 +64,8 @@ export type ProductRow = {
   /** Absent until scripts/032 is applied; treated as tracked (true). */
   track_stock?: boolean
   status: ProductStatus
-  images: string[]
+  /** Normalized on read: legacy URL strings become `{ url, alt: '' }`. Cover first. */
+  images: ProductImage[]
   compare_at_price_cents: number | null
   vat_rate: number
   specs: Array<{ name: string; value: string }>
@@ -68,71 +75,6 @@ export type ProductRow = {
   sort_order: number
   created_at: string
   updated_at: string
-}
-
-/** Requires an authenticated user; returns the Supabase client + user id. */
-async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
-  return { supabase, userId: user.id }
-}
-
-/**
- * Resolves access to a single e-commerce project's data.
- *
- * Normal users stay on their RLS-scoped session client and can only ever reach
- * a project they own — behavior is completely unchanged. A verified admin
- * (server-side `ADMIN_EMAILS` allowlist) operating on a project they do NOT own
- * is elevated to the service-role client so the back office can manage ANY
- * tenant's catalog and orders. RLS is never weakened; elevation is gated by the
- * same allowlist that guards the admin panel and only for rows the caller
- * cannot already reach.
- *
- * `ownerId` is always the PROJECT's real owner (not the caller), so admin-created
- * categories/products are stamped with the correct owner_id and remain visible
- * to the tenant under their own RLS.
- *
- * Note: the returned key stays `supabase` so every existing call site keeps
- * working — it's a Supabase client either way, just at a different privilege.
- */
-async function requireOwnedEcommerceProject(projectId: string): Promise<{
-  supabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createAdminClient>
-  userId: string
-  elevated: boolean
-}> {
-  const { supabase, userId } = await requireUser()
-
-  // Owner path (RLS): unchanged for normal users.
-  const { data: owned, error } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('id', projectId)
-    .eq('owner_id', userId)
-    .maybeSingle()
-  if (error) throw error
-  if (owned) return { supabase, userId, elevated: false }
-
-  // Admin path: verified admin editing another tenant's store.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (isAdminEmail(user?.email ?? null)) {
-    const admin = createAdminClient()
-    const { data: proj, error: pErr } = await admin
-      .from('projects')
-      .select('id, owner_id')
-      .eq('id', projectId)
-      .maybeSingle()
-    if (pErr) throw pErr
-    if (!proj) throw new Error('NOT_FOUND')
-    // userId = the project's real owner so inserts stamp the correct owner_id.
-    return { supabase: admin, userId: proj.owner_id as string, elevated: true }
-  }
-
-  throw new Error('NOT_FOUND')
 }
 
 /**
@@ -237,15 +179,43 @@ export async function listProducts(projectId: string): Promise<ProductRow[]> {
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data as ProductRow[]) ?? []
+  return ((data as ProductRow[]) ?? []).map(withNormalizedImages)
 }
 
 export type { ProductInput }
 
+/** Legacy rows store plain URL strings; the app always works with `{ url, alt }`. */
+function withNormalizedImages(row: ProductRow): ProductRow {
+  return { ...row, images: normalizeProductImages(row.images) }
+}
+
+/**
+ * Removes unsaved uploads the owner discarded (or a failed save left behind).
+ * Only this project's own files that no product references are ever deleted.
+ */
+export async function discardProductImages(projectId: string, urls: string[]): Promise<void> {
+  await requireOwnedEcommerceProject(projectId)
+  if (!Array.isArray(urls) || urls.length === 0) return
+  await discardProjectImageUrls(
+    createProductImageCleanupDeps(),
+    projectId,
+    urls.filter((u): u is string => typeof u === 'string').slice(0, 100),
+  )
+}
+
 
 export async function createProduct(projectId: string, input: ProductInput): Promise<ProductRow> {
   const { supabase, userId } = await requireOwnedEcommerceProject(projectId)
-  const fields = normalizeProductInput(input)
+  const normalized = normalizeProductInput(input)
+  const fields = {
+    ...normalized,
+    images: prepareProductImagesForSave({
+      images: normalized.images,
+      projectId,
+      storageBase: getProductImageStorageBase(),
+      existingUrls: [],
+    }).images,
+  }
 
   // Server-side capacity: plan product limit + active "Ek Ürün" add-ons.
   // Nothing the client sends influences this number.
@@ -275,7 +245,7 @@ export async function createProduct(projectId: string, input: ProductInput): Pro
   }
   if (error) throw error
   revalidatePath(`/ecommerce/${projectId}`)
-  return data as ProductRow
+  return withNormalizedImages(data as ProductRow)
 }
 
 export async function updateProduct(
@@ -284,7 +254,24 @@ export async function updateProduct(
   input: ProductInput,
 ): Promise<ProductRow> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
-  const fields = normalizeProductInput(input)
+  const normalized = normalizeProductInput(input)
+
+  const { data: current, error: currentErr } = await supabase
+    .from('ecommerce_products')
+    .select('images')
+    .eq('id', productId)
+    .eq('project_id', projectId)
+    .single()
+  if (currentErr) throw currentErr
+
+  const { images, removedPaths } = prepareProductImagesForSave({
+    images: normalized.images,
+    projectId,
+    storageBase: getProductImageStorageBase(),
+    existingUrls: normalizeProductImages(current?.images).map((i) => i.url),
+  })
+  const fields = { ...normalized, images }
+
   let { data, error } = await supabase
     .from('ecommerce_products')
     .update(fields)
@@ -302,18 +289,32 @@ export async function updateProduct(
       .single())
   }
   if (error) throw error
+  await removeUnreferencedProjectImages(createProductImageCleanupDeps(), projectId, removedPaths)
   revalidatePath(`/ecommerce/${projectId}`)
-  return data as ProductRow
+  return withNormalizedImages(data as ProductRow)
 }
 
 export async function deleteProduct(projectId: string, productId: string): Promise<void> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
+  const { data: current } = await supabase
+    .from('ecommerce_products')
+    .select('images')
+    .eq('id', productId)
+    .eq('project_id', projectId)
+    .maybeSingle()
   const { error } = await supabase
     .from('ecommerce_products')
     .delete()
     .eq('id', productId)
     .eq('project_id', projectId)
   if (error) throw error
+
+  const deps = createProductImageCleanupDeps()
+  await discardProjectImageUrls(
+    deps,
+    projectId,
+    normalizeProductImages(current?.images).map((i) => i.url),
+  )
   revalidatePath(`/ecommerce/${projectId}`)
 }
 

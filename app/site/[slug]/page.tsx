@@ -69,7 +69,7 @@ export default async function PublicSitePage({
                 priceCents: p.price_cents,
                 currency: p.currency,
                 stock: p.stock,
-                image: p.images[0] ?? null,
+                image: p.images[0]?.url ?? null,
               },
             ]),
           ),

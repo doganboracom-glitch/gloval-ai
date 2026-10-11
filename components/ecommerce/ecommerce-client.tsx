@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -19,12 +19,15 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  discardProductImages,
   type ProductRow,
   type CategoryRow,
   type ProductStatus,
 } from '@/lib/ecommerce'
+import type { ProductImage } from '@/lib/product-images'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
+import { ProductImageEditor } from './product-image-editor'
 
 type FormState = {
   name: string
@@ -42,6 +45,7 @@ type FormState = {
   seoTitle: string
   seoDescription: string
   specs: Array<{ name: string; value: string }>
+  images: ProductImage[]
 }
 
 const emptyForm: FormState = {
@@ -60,6 +64,7 @@ const emptyForm: FormState = {
   seoTitle: '',
   seoDescription: '',
   specs: [],
+  images: [],
 }
 
 export function EcommerceClient({
@@ -86,6 +91,8 @@ export function EcommerceClient({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [imagesBusy, setImagesBusy] = useState(false)
+  const sessionUploads = useRef<Set<string>>(new Set())
 
   const products = initialProducts
 
@@ -103,6 +110,7 @@ export function EcommerceClient({
     categories.find((c) => c.id === id)?.name ?? t.ecom.noCategory
 
   function openNew() {
+    sessionUploads.current = new Set()
     setEditing(null)
     setForm(emptyForm)
     setError(null)
@@ -110,6 +118,7 @@ export function EcommerceClient({
   }
 
   function openEdit(p: ProductRow) {
+    sessionUploads.current = new Set()
     setEditing(p)
     setForm({
       name: p.name,
@@ -127,6 +136,7 @@ export function EcommerceClient({
       seoTitle: p.seo_title ?? '',
       seoDescription: p.seo_description ?? '',
       specs: Array.isArray(p.specs) ? p.specs : [],
+      images: p.images,
     })
     setError(null)
     setShowForm(true)
@@ -136,6 +146,14 @@ export function EcommerceClient({
     setShowForm(false)
     setEditing(null)
     setError(null)
+    setImagesBusy(false)
+    sessionUploads.current = new Set()
+  }
+
+  function cancelForm() {
+    const orphans = Array.from(sessionUploads.current)
+    if (orphans.length > 0) void discardProductImages(projectId, orphans).catch(() => {})
+    closeForm()
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -163,6 +181,7 @@ export function EcommerceClient({
       seoTitle: form.seoTitle,
       seoDescription: form.seoDescription,
       specs: form.specs,
+      images: form.images,
     }
     startTransition(async () => {
       try {
@@ -171,6 +190,9 @@ export function EcommerceClient({
         } else {
           await createProduct(projectId, payload)
         }
+        const kept = new Set(form.images.map((image) => image.url))
+        const orphans = Array.from(sessionUploads.current).filter((url) => !kept.has(url))
+        if (orphans.length > 0) void discardProductImages(projectId, orphans).catch(() => {})
         closeForm()
         router.refresh()
       } catch {
@@ -280,8 +302,8 @@ export function EcommerceClient({
                   {p.images[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={p.images[0] || '/placeholder.svg'}
-                      alt={p.name}
+                      src={p.images[0].url || '/placeholder.svg'}
+                      alt={p.images[0].alt || p.name}
                       className="size-full object-cover"
                     />
                   ) : (
@@ -353,7 +375,7 @@ export function EcommerceClient({
               </h2>
               <button
                 type="button"
-                onClick={closeForm}
+                onClick={cancelForm}
                 aria-label={t.ecom.cancel}
                 className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
@@ -379,6 +401,19 @@ export function EcommerceClient({
                   className={`${inputCls} h-auto resize-y py-2`}
                 />
               </Field>
+
+              <details open className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer font-medium">Ürün görselleri</summary>
+                <div className="mt-3">
+                  <ProductImageEditor
+                    projectId={projectId}
+                    images={form.images}
+                    onChange={(images) => setForm((f) => ({ ...f, images }))}
+                    onUploaded={(url) => sessionUploads.current.add(url)}
+                    onBusyChange={setImagesBusy}
+                  />
+                </div>
+              </details>
 
               <div className="grid grid-cols-2 gap-4">
                 <Field label={t.ecom.price} required>
@@ -490,10 +525,10 @@ export function EcommerceClient({
               )}
 
               <div className="mt-2 flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={closeForm}>
+                <Button type="button" variant="ghost" onClick={cancelForm}>
                   {t.ecom.cancel}
                 </Button>
-                <Button type="submit" disabled={isPending} className="gap-2">
+                <Button type="submit" disabled={isPending || imagesBusy} className="gap-2">
                   {isPending ? (
                     <>
                       <Loader2 className="size-4 animate-spin" />

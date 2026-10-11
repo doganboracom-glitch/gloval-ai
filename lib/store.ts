@@ -42,6 +42,7 @@ import {
   reserveOrderStock,
 } from "@/lib/store-order-stock";
 import { isMissingColumnError } from "@/lib/store-schema-compat";
+import { normalizeProductImages, type ProductImage } from "@/lib/product-images";
 import {
   computeOrderTotals,
   isCheckoutAllowed,
@@ -56,7 +57,8 @@ export type StoreProduct = {
   price_cents: number;
   currency: string;
   stock: number;
-  images: string[];
+  /** Cover first. Legacy URL strings are normalized to `{ url, alt: '' }`. */
+  images: ProductImage[];
   category_id: string | null;
   /** False for made-to-order/digital products. Missing on a pre-migration DB. */
   track_stock?: boolean;
@@ -75,27 +77,11 @@ export async function getStoreProducts(slug: string): Promise<StoreProduct[]> {
     p_slug: slug,
   });
   if (error || !data) return [];
-  return (data as StoreProduct[]).map((p) => {
-    const rawImages = p.images as unknown
-    let images: string[] = []
-    if (Array.isArray(rawImages)) {
-      images = rawImages.filter((value): value is string => typeof value === 'string' && value.length > 0)
-    } else if (typeof rawImages === 'string') {
-      try {
-        const parsed = JSON.parse(rawImages)
-        images = Array.isArray(parsed)
-          ? parsed.filter((value): value is string => typeof value === 'string' && value.length > 0)
-          : []
-      } catch {
-        images = []
-      }
-    }
-    return {
-      ...p,
-      images,
-      ...readProductExtras(p as unknown as Record<string, unknown>, p.price_cents),
-    }
-  });
+  return (data as StoreProduct[]).map((p) => ({
+    ...p,
+    images: normalizeProductImages(p.images),
+    ...readProductExtras(p as unknown as Record<string, unknown>, p.price_cents),
+  }));
 }
 
 export async function getStoreProductBySlug(

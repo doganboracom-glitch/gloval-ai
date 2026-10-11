@@ -1,3 +1,5 @@
+import { parseProductImagesInput, PRODUCT_IMAGE_LIMITS, type ProductImage } from '@/lib/product-images'
+
 export const VAT_RATES = [0, 1, 10, 20] as const
 export type VatRate = (typeof VAT_RATES)[number]
 export const DEFAULT_VAT_RATE: VatRate = 20
@@ -25,7 +27,8 @@ export type ProductInput = {
   trackStock?: boolean
   status?: ProductStatus
   categoryId?: string | null
-  images?: string[]
+  /** Cover first. Plain URL strings are still accepted and read as `{ url, alt: '' }`. */
+  images?: Array<string | ProductImage>
   compareAtPriceCents?: number | null
   vatRate?: VatRate
   specs?: ProductSpec[]
@@ -45,6 +48,8 @@ export type ProductInputErrorCode =
   | 'INVALID_SHIPPING_NOTE'
   | 'INVALID_SEO_TITLE'
   | 'INVALID_SEO_DESCRIPTION'
+  | 'INVALID_IMAGES'
+  | 'INVALID_IMAGE_URL'
 
 const MESSAGES: Record<ProductInputErrorCode, { tr: string; en: string }> = {
   INVALID_NAME: { tr: 'Ürün adı gerekli.', en: 'Product name is required.' },
@@ -71,6 +76,14 @@ const MESSAGES: Record<ProductInputErrorCode, { tr: string; en: string }> = {
   INVALID_SEO_DESCRIPTION: {
     tr: `SEO açıklaması en fazla ${PRODUCT_LIMITS.seoDescription} karakter olmalı ve HTML içermemeli.`,
     en: `SEO description must be at most ${PRODUCT_LIMITS.seoDescription} characters with no HTML.`,
+  },
+  INVALID_IMAGES: {
+    tr: `Görseller: en fazla ${PRODUCT_IMAGE_LIMITS.maxCount} görsel; görsel açıklaması en fazla ${PRODUCT_IMAGE_LIMITS.maxAlt} karakter olmalı ve HTML içermemeli.`,
+    en: `Images: up to ${PRODUCT_IMAGE_LIMITS.maxCount} images; alt text up to ${PRODUCT_IMAGE_LIMITS.maxAlt} characters with no HTML.`,
+  },
+  INVALID_IMAGE_URL: {
+    tr: 'Görsel bu mağazaya yüklenmemiş. Görseli yeniden yükle.',
+    en: 'This image was not uploaded to this store. Upload it again.',
   },
 }
 
@@ -164,7 +177,7 @@ export function normalizeProductInput(input: ProductInput) {
   const status: ProductStatus = input.status ?? 'active'
   if (!['active', 'draft', 'archived'].includes(status)) throw new Error('INVALID_STATUS')
 
-  const images = Array.isArray(input.images) ? input.images.filter((s) => typeof s === 'string') : []
+  const images = parseProductImagesInput(input.images)
 
   return {
     name,
