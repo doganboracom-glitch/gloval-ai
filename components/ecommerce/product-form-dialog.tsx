@@ -42,6 +42,7 @@ import {
 } from '@/lib/product-form'
 import { ConfirmDialog, Field, FormSection, controlProps, inputClass, trapTab } from './form-parts'
 import { ProductImageEditor } from './product-image-editor'
+import { ProductAiAssistant, type AiApplyChange } from './product-ai-assistant'
 
 export type ProductFormHandle = {
   /** Fills fields from outside (e.g. an AI assistant). Marks the form dirty, never saves. */
@@ -94,6 +95,8 @@ function fieldLabel(field: string): string {
 
 export function ProductFormDialog({ projectId, product, categories, onClose, onSaved, formRef }: Props) {
   const [initial] = useState(() => formFromProduct(product))
+  // Drafts get a client-made id so retries of the same new product share one AI series.
+  const [aiProductKey] = useState(() => product?.id ?? crypto.randomUUID())
   const [form, setForm] = useState<ProductFormState>(initial)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [general, setGeneral] = useState<string | null>(null)
@@ -155,6 +158,35 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
     [categories, clearErrors],
   )
   useImperativeHandle(formRef, () => ({ applyFields }), [applyFields])
+
+  function applyAiChange(change: AiApplyChange) {
+    setForm((current) => {
+      const next = { ...current }
+      if (change.description !== undefined) {
+        next.description = change.description
+      }
+      if (change.seoTitle !== undefined) {
+        next.seoTitle = change.seoTitle
+      }
+      if (change.seoDescription !== undefined) {
+        next.seoDescription = change.seoDescription
+      }
+      if (change.categoryId !== undefined && categories.some((c) => c.id === change.categoryId)) {
+        next.categoryId = change.categoryId
+      }
+      if (change.specs) {
+        const known = new Set(current.specs.map((s) => s.name.trim().toLocaleLowerCase('tr')))
+        const added = change.specs.filter((s) => !known.has(s.name.trim().toLocaleLowerCase('tr')))
+        next.specs = [...current.specs, ...added].slice(0, PRODUCT_LIMITS.specCount)
+      }
+      if (change.imageAlts) {
+        const alts = change.imageAlts
+        next.images = current.images.map((image, index) => (alts[index] ? { ...image, alt: alts[index] as string } : image))
+      }
+      return next
+    })
+    clearErrors('description', 'seoTitle', 'seoDescription', 'categoryId', 'specs', 'images')
+  }
 
   function patch(change: Partial<ProductFormState>, ...fields: string[]) {
     setForm((current) => ({ ...current, ...change }))
@@ -294,6 +326,18 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
                 {general}
               </p>
             )}
+
+            <ProductAiAssistant
+              projectId={projectId}
+              productKey={aiProductKey}
+              name={form.name}
+              categoryId={form.categoryId}
+              categories={categories}
+              specs={form.specs}
+              imageUrls={form.images.map((image) => image.url)}
+              disabled={busy}
+              onApply={applyAiChange}
+            />
 
             <FormSection {...sectionProps('basics')}>
               <Field id={fieldDomId('name')} label="Ürün adı" required error={errors.name}>
