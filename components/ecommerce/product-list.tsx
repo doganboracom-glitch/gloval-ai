@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Archive, Package, Pencil, Plus, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, Loader2, Package, Pencil, Plus, Search } from 'lucide-react'
 import type { CategoryRow, ProductRow, ProductStatus } from '@/lib/ecommerce'
 import { formatTry } from '@/lib/product-form'
-import { matchesSearch, stockLabel } from '@/lib/product-list'
+import { countByStatus, matchesSearch, matchesStatus, STATUS_FILTERS, stockLabel, type StatusFilter } from '@/lib/product-list'
 import { Button } from '@/components/ui/button'
 
 const STATUS_LABELS: Record<ProductStatus, string> = { active: 'Aktif', draft: 'Taslak', archived: 'Arşiv' }
@@ -12,14 +12,26 @@ const STATUS_LABELS: Record<ProductStatus, string> = { active: 'Aktif', draft: '
 type Props = {
   products: ProductRow[]
   categories: CategoryRow[]
+  publishingId?: string | null
   onAdd: () => void
   onEdit: (product: ProductRow) => void
   onRemove: (product: ProductRow) => void
+  onPublish: (product: ProductRow) => void
 }
 
-export function ProductList({ products, categories, onAdd, onEdit, onRemove }: Props) {
+export function ProductList({ products, categories, publishingId = null, onAdd, onEdit, onRemove, onPublish }: Props) {
   const [query, setQuery] = useState('')
-  const visible = useMemo(() => products.filter((p) => matchesSearch(p, query)), [products, query])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const counts = useMemo(() => countByStatus(products), [products])
+  const visible = useMemo(
+    () => products.filter((p) => matchesStatus(p, statusFilter) && matchesSearch(p, query)),
+    [products, statusFilter, query],
+  )
+  const filtering = query.trim() !== '' || statusFilter !== 'all'
+  const clearFilters = () => {
+    setQuery('')
+    setStatusFilter('all')
+  }
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? 'Kategorisiz'
 
   if (products.length === 0) {
@@ -54,12 +66,38 @@ export function ProductList({ products, categories, onAdd, onEdit, onRemove }: P
         />
       </div>
 
+      <div role="group" aria-label="Duruma göre filtrele" className="mt-3 flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => {
+          const selected = statusFilter === f.value
+          return (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setStatusFilter(f.value)}
+              aria-pressed={selected}
+              className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                selected
+                  ? 'border-primary bg-primary/15 text-foreground'
+                  : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+            >
+              {f.label}
+              <span className="text-xs tabular-nums text-muted-foreground">{counts[f.value]}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {visible.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center">
-          <p className="font-medium">Aramanızla eşleşen ürün yok</p>
-          <p className="mt-1 text-sm text-muted-foreground">Farklı bir ürün adı veya stok kodu deneyin.</p>
-          <Button variant="outline" onClick={() => setQuery('')} className="mt-4">
-            Aramayı temizle
+          <p className="font-medium">{filtering ? 'Eşleşen ürün yok' : 'Gösterilecek ürün yok'}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {statusFilter !== 'all'
+              ? `“${STATUS_FILTERS.find((f) => f.value === statusFilter)?.label}” durumunda ürün bulunamadı. Aramayı veya filtreyi değiştirin.`
+              : 'Farklı bir ürün adı veya stok kodu deneyin.'}
+          </p>
+          <Button variant="outline" onClick={clearFilters} className="mt-4">
+            Filtreleri temizle
           </Button>
         </div>
       ) : (
@@ -85,10 +123,15 @@ export function ProductList({ products, categories, onAdd, onEdit, onRemove }: P
                     <div className="flex items-center gap-2">
                       <h2 className="truncate font-medium">{p.name}</h2>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          p.status === 'active' ? 'bg-accent/15 text-accent' : 'bg-muted text-muted-foreground'
+                        className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                          p.status === 'active'
+                            ? 'bg-accent/15 text-accent'
+                            : p.status === 'archived'
+                              ? 'border border-border bg-muted text-muted-foreground'
+                              : 'bg-muted text-muted-foreground'
                         }`}
                       >
+                        {p.status === 'archived' && <Archive aria-hidden className="size-3" />}
                         {STATUS_LABELS[p.status]}
                       </span>
                     </div>
@@ -114,6 +157,17 @@ export function ProductList({ products, categories, onAdd, onEdit, onRemove }: P
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
+                  {p.status === 'archived' && (
+                    <Button
+                      onClick={() => onPublish(p)}
+                      disabled={publishingId !== null}
+                      aria-label={`${p.name} ürününü yayına al`}
+                      className="h-10 flex-1 gap-2 sm:flex-none"
+                    >
+                      {publishingId === p.id ? <Loader2 className="size-4 animate-spin" /> : <ArchiveRestore className="size-4" />}
+                      Yayına al
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={() => onEdit(p)} className="h-10 flex-1 gap-2 sm:flex-none">
                     <Pencil className="size-4" />
                     Düzenle

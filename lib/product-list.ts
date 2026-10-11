@@ -14,6 +14,28 @@ export function stockLabel(product: Pick<Listable, 'stock' | 'track_stock'>): st
   return `${product.stock} adet`
 }
 
+export type StatusFilter = 'all' | 'active' | 'draft' | 'archived'
+
+export const STATUS_FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: 'Tümü' },
+  { value: 'active', label: 'Aktif' },
+  { value: 'draft', label: 'Taslak' },
+  { value: 'archived', label: 'Arşiv' },
+]
+
+export function matchesStatus(product: { status: string }, filter: StatusFilter): boolean {
+  return filter === 'all' || product.status === filter
+}
+
+/** Product counts per filter tab; `all` is the total. */
+export function countByStatus(products: ReadonlyArray<{ status: string }>): Record<StatusFilter, number> {
+  const counts: Record<StatusFilter, number> = { all: products.length, active: 0, draft: 0, archived: 0 }
+  for (const p of products) {
+    if (p.status === 'active' || p.status === 'draft' || p.status === 'archived') counts[p.status] += 1
+  }
+  return counts
+}
+
 function fold(text: string): string {
   return text.toLocaleLowerCase('tr').trim()
 }
