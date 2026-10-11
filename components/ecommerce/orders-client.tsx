@@ -310,6 +310,16 @@ export function OrdersClient({
                         </li>
                       ))}
                     </ul>
+                    {o.cod_fee_cents > 0 && (
+                      <p className="mt-2 flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-sm">
+                        <span className="text-muted-foreground">
+                          {lang === 'tr' ? 'Kapıda ödeme ücreti' : 'Cash on delivery fee'}
+                        </span>
+                        <span className="shrink-0 font-medium">
+                          {currencyFmt.format(o.cod_fee_cents / 100)}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 )}
               </li>
