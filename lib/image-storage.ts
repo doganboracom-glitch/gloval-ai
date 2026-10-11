@@ -17,7 +17,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  * the image still renders and the pipeline is never broken.
  */
 
-const BUCKET = 'site-images'
+export const BUCKET = 'site-images'
 
 /** A Supabase admin client (service role) or null when storage isn't configured. */
 function adminClient() {
@@ -36,7 +36,7 @@ function parseDataUri(uri: string): { mime: string; buffer: Buffer } | null {
 }
 
 /** Best-effort ensure the public bucket exists. Safe to call repeatedly. */
-async function ensureBucket(client: SupabaseClient) {
+export async function ensureBucket(client: SupabaseClient) {
   try {
     const { error } = await client.storage.createBucket(BUCKET, {
       public: true,

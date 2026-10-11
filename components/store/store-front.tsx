@@ -99,7 +99,8 @@ function StoreFrontInner({ slug, storeName, products }: StoreFrontProps) {
 function ProductCard({ slug, product }: { slug: string; product: StoreProduct }) {
   const cart = useCart()
   const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
-  const image = product.images[0] ?? null
+  const cover = product.images[0] ?? null
+  const image = cover?.url ?? null
   const outOfStock = isSoldOut(product)
   const stockNotice = getStockNotice(product)
   const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
@@ -124,7 +125,7 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image || '/placeholder.svg'}
-            alt={product.name}
+            alt={cover?.alt || product.name}
             className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (

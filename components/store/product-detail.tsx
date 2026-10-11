@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Minus, Plus, ShoppingCart, PackageOpen, Check, AlertCircle, Truck } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, ShoppingCart, Check, AlertCircle, Truck } from 'lucide-react'
+import { ProductGallery } from './product-gallery'
 import { discountPercent } from '@/lib/store-product-display'
 import { Button } from '@/components/ui/button'
 import { CartProvider, useCart, useAddWithConfirm, formatPrice } from './cart-provider'
@@ -43,7 +44,7 @@ function ProductDetailInner({
   const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
-  const image = product.images[0] ?? null
+  const image = product.images[0]?.url ?? null
   const outOfStock = isSoldOut(product)
   const maxQty = purchasableMax(product)
   const stockNotice = getStockNotice(product)
@@ -98,16 +99,7 @@ function ProductDetailInner({
       </header>
 
       <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 md:grid-cols-2">
-        <div className="aspect-square overflow-hidden rounded-2xl border border-border bg-muted">
-          {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={image || '/placeholder.svg'} alt={product.name} className="size-full object-cover" />
-          ) : (
-            <div className="flex size-full items-center justify-center text-muted-foreground">
-              <PackageOpen className="size-16" />
-            </div>
-          )}
-        </div>
+        <ProductGallery images={product.images} name={product.name} />
 
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">{storeName}</p>
