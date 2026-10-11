@@ -58,6 +58,12 @@ export type ProductRow = {
   track_stock?: boolean
   status: ProductStatus
   images: string[]
+  compare_at_price_cents: number | null
+  vat_rate: number
+  specs: Array<{ name: string; value: string }>
+  shipping_note: string | null
+  seo_title: string | null
+  seo_description: string | null
   sort_order: number
   created_at: string
   updated_at: string
@@ -245,6 +251,12 @@ export type ProductInput = {
   status?: ProductStatus
   categoryId?: string | null
   images?: string[]
+  compareAtPriceCents?: number | null
+  vatRate?: 0 | 1 | 10 | 20
+  specs?: Array<{ name: string; value: string }>
+  shippingNote?: string | null
+  seoTitle?: string | null
+  seoDescription?: string | null
 }
 
 /** Server-side validation shared by create + update. */
@@ -253,7 +265,15 @@ function normalizeProductInput(input: ProductInput) {
   if (!name) throw new Error('INVALID_NAME')
 
   const priceCents = Math.round(Number(input.priceCents))
-  if (!Number.isFinite(priceCents) || priceCents < 0) throw new Error('INVALID_PRICE')
+  if (!Number.isFinite(priceCents) || priceCents <= 0) throw new Error('INVALID_PRICE')
+
+  const compareAtPriceCents = input.compareAtPriceCents == null ? null : Math.round(Number(input.compareAtPriceCents))
+  if (compareAtPriceCents != null && (!Number.isFinite(compareAtPriceCents) || compareAtPriceCents <= priceCents)) throw new Error('INVALID_COMPARE_PRICE')
+  const vatRate = [0, 1, 10, 20].includes(Number(input.vatRate)) ? Number(input.vatRate) : 20
+  const specs = (Array.isArray(input.specs) ? input.specs : []).slice(0, 20).map((spec) => ({
+    name: String(spec?.name ?? '').trim().slice(0, 80),
+    value: String(spec?.value ?? '').trim().slice(0, 200),
+  })).filter((spec) => spec.name && spec.value)
 
   const stock = Math.round(Number(input.stock))
   if (!Number.isFinite(stock) || stock < 0) throw new Error('INVALID_STOCK')
@@ -274,6 +294,12 @@ function normalizeProductInput(input: ProductInput) {
     status,
     category_id: input.categoryId || null,
     images,
+    compare_at_price_cents: compareAtPriceCents,
+    vat_rate: vatRate,
+    specs,
+    shipping_note: input.shippingNote?.trim().slice(0, 120) || null,
+    seo_title: input.seoTitle?.trim().slice(0, 70) || null,
+    seo_description: input.seoDescription?.trim().slice(0, 160) || null,
   }
 }
 
@@ -281,8 +307,17 @@ function normalizeProductInput(input: ProductInput) {
  * `track_stock` only exists after scripts/032. Until then, write without it
  * (every product is tracked, which is the legacy behavior) instead of failing.
  */
-function withoutTrackStock<T extends { track_stock: boolean }>(fields: T) {
-  const { track_stock: _ignored, ...rest } = fields
+function withoutOptionalColumns<T extends { track_stock: boolean }>(fields: T) {
+  const {
+    track_stock: _trackStock,
+    compare_at_price_cents: _compare,
+    vat_rate: _vat,
+    specs: _specs,
+    shipping_note: _shipping,
+    seo_title: _seoTitle,
+    seo_description: _seoDescription,
+    ...rest
+  } = fields as T & Record<string, unknown>
   return rest
 }
 
@@ -312,7 +347,7 @@ export async function createProduct(projectId: string, input: ProductInput): Pro
   if (isMissingColumnError(error)) {
     ;({ data, error } = await supabase
       .from('ecommerce_products')
-      .insert({ ...base, ...withoutTrackStock(fields) })
+      .insert({ ...base, ...withoutOptionalColumns(fields) })
       .select('*')
       .single())
   }
@@ -338,7 +373,7 @@ export async function updateProduct(
   if (isMissingColumnError(error)) {
     ;({ data, error } = await supabase
       .from('ecommerce_products')
-      .update(withoutTrackStock(fields))
+      .update(withoutOptionalColumns(fields))
       .eq('id', productId)
       .eq('project_id', projectId)
       .select('*')

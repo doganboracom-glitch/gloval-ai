@@ -36,6 +36,12 @@ type FormState = {
   sku: string
   status: ProductStatus
   categoryId: string
+  compareAtPrice: string
+  vatRate: '0' | '1' | '10' | '20'
+  shippingNote: string
+  seoTitle: string
+  seoDescription: string
+  specs: Array<{ name: string; value: string }>
 }
 
 const emptyForm: FormState = {
@@ -48,6 +54,12 @@ const emptyForm: FormState = {
   sku: '',
   status: 'active',
   categoryId: '',
+  compareAtPrice: '',
+  vatRate: '20',
+  shippingNote: '',
+  seoTitle: '',
+  seoDescription: '',
+  specs: [],
 }
 
 export function EcommerceClient({
@@ -109,6 +121,12 @@ export function EcommerceClient({
       sku: p.sku ?? '',
       status: p.status,
       categoryId: p.category_id ?? '',
+      compareAtPrice: p.compare_at_price_cents ? (p.compare_at_price_cents / 100).toString() : '',
+      vatRate: String(p.vat_rate ?? 20) as FormState['vatRate'],
+      shippingNote: p.shipping_note ?? '',
+      seoTitle: p.seo_title ?? '',
+      seoDescription: p.seo_description ?? '',
+      specs: Array.isArray(p.specs) ? p.specs : [],
     })
     setError(null)
     setShowForm(true)
@@ -139,6 +157,12 @@ export function EcommerceClient({
       sku: form.sku,
       status: form.status,
       categoryId: form.categoryId || null,
+      compareAtPriceCents: form.compareAtPrice ? Math.round(Number(form.compareAtPrice.replace(',', '.')) * 100) : null,
+      vatRate: Number(form.vatRate) as 0 | 1 | 10 | 20,
+      shippingNote: form.shippingNote,
+      seoTitle: form.seoTitle,
+      seoDescription: form.seoDescription,
+      specs: form.specs,
     }
     startTransition(async () => {
       try {
@@ -406,6 +430,41 @@ export function EcommerceClient({
                   </select>
                 </Field>
               </div>
+
+              <details open className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer font-medium">Fiyat ve KDV</summary>
+                <div className="mt-3 grid grid-cols-2 gap-4">
+                  <Field label="Eski fiyat">
+                    <input type="number" min="0" step="0.01" value={form.compareAtPrice} onChange={(e) => setForm((f) => ({ ...f, compareAtPrice: e.target.value }))} className={inputCls} />
+                  </Field>
+                  <Field label="KDV oranı">
+                    <select value={form.vatRate} onChange={(e) => setForm((f) => ({ ...f, vatRate: e.target.value as FormState['vatRate'] }))} className={inputCls}>
+                      <option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20">%20</option>
+                    </select>
+                  </Field>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">Fiyatlar KDV dahildir; sitede “KDV dahil” yazar.</p>
+              </details>
+
+              <details open className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer font-medium">Stok ve gönderim</summary>
+                <Field label="Hazırlık/kargo süresi">
+                  <input value={form.shippingNote} onChange={(e) => setForm((f) => ({ ...f, shippingNote: e.target.value }))} placeholder="1-3 iş günü" className={inputCls} />
+                </Field>
+              </details>
+
+              <details className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer font-medium">Ürün özellikleri</summary>
+                <div className="mt-3 flex flex-col gap-2">
+                  {form.specs.map((spec, index) => <div key={index} className="flex gap-2"><input aria-label="Özellik adı" value={spec.name} onChange={(e) => setForm((f) => ({ ...f, specs: f.specs.map((s, i) => i === index ? { ...s, name: e.target.value } : s) }))} placeholder="Özellik adı" className={inputCls} /><input aria-label="Özellik değeri" value={spec.value} onChange={(e) => setForm((f) => ({ ...f, specs: f.specs.map((s, i) => i === index ? { ...s, value: e.target.value } : s) }))} placeholder="Değer" className={inputCls} /><button type="button" onClick={() => setForm((f) => ({ ...f, specs: f.specs.filter((_, i) => i !== index) }))} aria-label="Özelliği sil"><Trash2 className="size-4" /></button></div>)}
+                  {form.specs.length < 20 && <Button type="button" variant="outline" onClick={() => setForm((f) => ({ ...f, specs: [...f.specs, { name: '', value: '' }] }))}>Özellik ekle</Button>}
+                </div>
+              </details>
+
+              <details className="rounded-lg border border-border p-3">
+                <summary className="cursor-pointer font-medium">Yayın ve SEO</summary>
+                <div className="mt-3 flex flex-col gap-3"><Field label="SEO başlığı"><input maxLength={70} value={form.seoTitle} onChange={(e) => setForm((f) => ({ ...f, seoTitle: e.target.value }))} className={inputCls} /></Field><Field label="SEO açıklaması"><textarea maxLength={160} value={form.seoDescription} onChange={(e) => setForm((f) => ({ ...f, seoDescription: e.target.value }))} rows={2} className={`${inputCls} h-auto py-2`} /></Field></div>
+              </details>
 
               {categories.length > 0 && (
                 <Field label={t.ecom.category}>
