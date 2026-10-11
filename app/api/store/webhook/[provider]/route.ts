@@ -75,6 +75,9 @@ export async function POST(
   if (providerId === 'paytr') return handlePaytr(request)
 
   const provider = getPaymentProvider(providerId)
+  if (!provider) {
+    return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
+  }
   const ack = (extra?: Record<string, unknown>) => NextResponse.json({ ok: true, ...extra })
 
   const rawBody = await request.text()

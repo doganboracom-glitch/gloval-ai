@@ -4,7 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, AlertCircle, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { CartProvider, useCart, useAddWithConfirm, formatPrice, type CartItem } from './cart-provider'
+import {
+  CartProvider,
+  useCart,
+  useAddWithConfirm,
+  formatPrice,
+  requestOpenCart,
+  type CartItem,
+} from './cart-provider'
 import type { StoreProduct } from '@/lib/store'
 import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
 
@@ -141,7 +148,10 @@ function ProductCard({ slug, product }: { slug: string; product: StoreProduct })
           <Button
             size="sm"
             disabled={outOfStock}
-            onClick={() => requestAdd(cartItem, 1)}
+            onClick={() => {
+              requestAdd(cartItem, 1)
+              requestOpenCart()
+            }}
             className="gap-1.5"
           >
             <Plus className="size-4" />
