@@ -52,6 +52,8 @@ export type StoreProduct = {
   category_id: string | null;
   /** False for made-to-order/digital products. Missing on a pre-migration DB. */
   track_stock?: boolean;
+  /** Camel-case alias used by renderer catalog entries. */
+  trackStock?: boolean;
 };
 
 /**
