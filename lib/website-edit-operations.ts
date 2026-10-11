@@ -1,4 +1,6 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
+import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
+import type { ShowcaseLimit, ShowcaseSource } from '@/lib/store-showcase'
 
 /* -------------------------------------------------------------------------- */
 /*  Typed edit operations                                                     */
@@ -101,6 +103,8 @@ export type EditOperation =
       value: string | null
     }
   | { op: 'addStringListItem'; index: number; field: string; value: string }
+  /** Display settings of a storefront's product showcase (the catalog itself lives in the database). */
+  | { op: 'updateProductsShowcase'; index: number; source?: ShowcaseSource; limit?: ShowcaseLimit }
   /** Navigation links and CTA. */
   | { op: 'updateNavLink'; linkIndex: number; field: 'label' | 'href'; value: string }
   | { op: 'addNavLink'; label: string }
@@ -170,9 +174,21 @@ export function applyOperation(
   site: WebsiteSchema,
   operation: EditOperation,
 ): WebsiteSchema {
+  // A storefront's products live in the database; the schema never takes them.
+  if (isBlockedProductOperation(site, operation)) return site
+
   const next = clone(site)
 
   switch (operation.op) {
+    case 'updateProductsShowcase': {
+      const section = next.sections[operation.index]
+      if (section?.type === 'products') {
+        if (operation.source !== undefined) section.source = operation.source
+        if (operation.limit !== undefined) section.limit = operation.limit
+      }
+      return next
+    }
+
     case 'updateMeta': {
       if (operation.name !== undefined) {
         const previousName = next.meta.name

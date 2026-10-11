@@ -1063,6 +1063,8 @@ export function WebsitePreview({
       const parsed = websiteSchema.safeParse(data.schema)
       if (!parsed.success) throw new Error('invalid')
 
+      const productsNotice = data.notice ? t.editor.productsManagedNotice : null
+
       if (data.source !== 'fallback') {
         // Don't commit yet: hand the result to the user as a preview they
         // must explicitly Apply or Reject, so an AI edit can never silently
@@ -1072,8 +1074,16 @@ export function WebsitePreview({
           after: parsed.data,
           sectionIndex: scopedSectionIndex,
         })
-        setMessages((prev) => [...prev, { role: 'assistant', text: t.editor.assistantAck }])
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', text: t.editor.assistantAck },
+          ...(productsNotice ? [{ role: 'assistant' as const, text: productsNotice }] : []),
+        ])
         return true
+      } else if (productsNotice) {
+        setMessages((prev) => [...prev, { role: 'assistant', text: productsNotice }])
+        flashToast('err', productsNotice)
+        return false
       } else {
         setMessages((prev) => [...prev, { role: 'assistant', text: t.editor.assistantAckFallback }])
         flashToast('err', t.editor.failure)

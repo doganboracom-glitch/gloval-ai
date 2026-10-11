@@ -72,6 +72,8 @@ export type ProductRow = {
   shipping_note: string | null
   seo_title: string | null
   seo_description: string | null
+  /** Absent until scripts/038 is applied; treated as false. */
+  show_on_home?: boolean
   sort_order: number
   created_at: string
   updated_at: string

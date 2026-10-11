@@ -35,6 +35,8 @@ export type ProductInput = {
   shippingNote?: string | null
   seoTitle?: string | null
   seoDescription?: string | null
+  /** Owner picks this product for the home-page showcase when its source is "manual". */
+  showOnHome?: boolean
 }
 
 export type ProductInputErrorCode =
@@ -196,6 +198,7 @@ export function normalizeProductInput(input: ProductInput) {
     shipping_note: shippingNote,
     seo_title: seoTitle,
     seo_description: seoDescription,
+    show_on_home: input.showOnHome === true,
   }
 }
 
@@ -217,5 +220,6 @@ export function withoutOptionalColumns<T extends { track_stock: boolean }>(field
   const rest: Record<string, unknown> = { ...fields }
   delete rest.track_stock
   for (const column of PANEL_COLUMNS) delete rest[column]
+  delete rest.show_on_home
   return rest
 }

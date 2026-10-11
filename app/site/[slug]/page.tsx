@@ -60,6 +60,7 @@ export default async function PublicSitePage({
     products.length > 0
       ? {
           slug,
+          products,
           bySlug: Object.fromEntries(
             products.map((p) => [
               p.slug,

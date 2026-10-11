@@ -190,6 +190,8 @@ const dict = {
       assistantAck: 'İsteğini uyguladım ve siteyi güncelledim.',
       assistantAckFallback:
         'Şu anda değişikliği uygulayamadım, mevcut tasarımı korudum. Lütfen tekrar dener misin?',
+      productsManagedNotice:
+        'Ürünler tek kaynaktan, mağaza panelinden yönetilir. Ürün ekleme, silme veya düzenleme için Ürünler sekmesini kullan; vitrin düzenini (kaynak, adet) buradan değiştirebilirsin.',
       imageGenerating: 'Ana görsel hazırlanıyor...',
       imageApplied: 'Ana görseli isteğine göre yeniden oluşturdum.',
       imageLinked: 'Ana görseli verdiğin bağlantıyla değiştirdim.',
@@ -325,6 +327,17 @@ const dict = {
         itemsLabel: 'Öğeler',
         addItem: 'Öğe ekle',
         addEntry: 'Satır ekle',
+        showcaseManaged:
+          'Ürünler mağaza panelinden yönetilir. Ad, fiyat, görsel ve indirim burada düzenlenmez.',
+        manageProducts: 'Ürünleri yönet',
+        showcaseSource: 'Hangi ürünler',
+        showcaseLimit: 'Ürün sayısı',
+        showcaseSources: {
+          latest: 'Son eklenenler',
+          sale: 'İndirimdeki ürünler',
+          manual: 'Elle seçtiklerim',
+        },
+        showcaseManualHint: 'Ürünleri yönet bölümünde "Ana sayfada göster" ile işaretlediğin ürünler görünür.',
         imageDescription: 'Görsel açıklaması',
         sectionFields: {
           badge: 'Rozet',
@@ -1613,6 +1626,8 @@ const dict = {
       assistantAck: 'I applied your request and updated the website.',
       assistantAckFallback:
         'I could not apply the change right now and kept your current design. Could you try again?',
+      productsManagedNotice:
+        'Products are managed from a single source, the store panel. Use the Products tab to add, remove or edit products; you can change the showcase layout (source, count) here.',
       imageGenerating: 'Preparing the hero image...',
       imageApplied: 'I regenerated the hero image from your description.',
       imageLinked: 'I replaced the hero image with the URL you provided.',
@@ -1748,6 +1763,17 @@ const dict = {
       itemsLabel: 'Items',
       addItem: 'Add item',
       addEntry: 'Add row',
+      showcaseManaged:
+        'Products are managed from the store panel. Name, price, images and discounts are not edited here.',
+      manageProducts: 'Manage products',
+      showcaseSource: 'Which products',
+      showcaseLimit: 'Number of products',
+      showcaseSources: {
+        latest: 'Latest products',
+        sale: 'Discounted products',
+        manual: 'My selection',
+      },
+      showcaseManualHint: 'Shows the products you flag with "Show on home page" in Manage products.',
       imageDescription: 'Image description',
       sectionFields: {
         badge: 'Badge',
