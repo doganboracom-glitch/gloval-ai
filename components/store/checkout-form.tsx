@@ -128,6 +128,7 @@ function CheckoutInner({
     payment_not_configured: STORE_PAYMENT_UNAVAILABLE_MESSAGE.not_configured.tr,
     payment_config_unreadable: STORE_PAYMENT_UNAVAILABLE_MESSAGE.config_unreadable.tr,
     bad_request: 'Bir hata oluştu. Lütfen tekrar dene.',
+    payment_init_failed: 'Ödeme sayfası başlatılamadı. Lütfen tekrar dene veya başka bir ödeme yöntemi seç.',
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -168,6 +169,11 @@ function CheckoutInner({
 
     if (result.ok) {
       cart.clear()
+      const external = 'paymentUrl' in result ? (result as { paymentUrl?: string }).paymentUrl : undefined
+      if (external) {
+        window.location.assign(external)
+        return
+      }
       router.push(result.orderPath)
     } else {
       setError(errorMessages[result.error] ?? errorMessages.order_failed)
