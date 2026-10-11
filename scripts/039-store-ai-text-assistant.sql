@@ -74,7 +74,7 @@ create or replace function public.store_ai_begin(
 returns table(outcome text, out_attempt_id uuid, out_attempt_no integer, out_charged integer, out_balance integer)
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path = public, pg_temp
 as $function$
 declare
   v_stale   record;
@@ -92,8 +92,12 @@ begin
   if p_kind not in ('text', 'image') then
     raise exception 'invalid kind';
   end if;
-  if p_cost is null or p_cost < 0 or p_free_cycle is null or p_free_cycle < 1
-     or p_per_minute < 1 or p_concurrent < 1 or p_daily < 1 or p_stale_seconds < 1 then
+  if p_cost is null or p_cost < 0
+     or p_free_cycle is null or p_free_cycle < 1
+     or p_per_minute is null or p_per_minute < 1
+     or p_concurrent is null or p_concurrent < 1
+     or p_daily is null or p_daily < 1
+     or p_stale_seconds is null or p_stale_seconds < 1 then
     raise exception 'invalid parameters';
   end if;
 
@@ -182,7 +186,7 @@ create or replace function public.store_ai_finish(p_attempt_id uuid, p_success b
 returns text
 language plpgsql
 security definer
-set search_path to 'public'
+set search_path = public, pg_temp
 as $function$
 declare
   v_user uuid;
@@ -226,7 +230,7 @@ create or replace function public.store_ai_reset_series(p_project_id uuid, p_pro
 returns void
 language sql
 security definer
-set search_path to 'public'
+set search_path = public, pg_temp
 as $function$
   update public.store_ai_series
      set succeeded_count = 0, updated_at = now()
