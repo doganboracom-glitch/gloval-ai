@@ -1,10 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { isAdminEmail } from '@/lib/mail/admin-guard'
-import { encryptSecret, decryptSecret } from '@/lib/crypto'
+import { encryptSecret } from '@/lib/crypto'
+import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
+import { readStoredSecrets, type StoredSecrets } from '@/lib/store-payments/secrets-store'
 import { PAYMENT_METHODS, type PaymentMethodId } from '@/lib/payments/methods'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
 import { isValidTurkishIban, normalizeIban } from '@/lib/iban'
@@ -25,6 +25,14 @@ import { parsePaymentTermDays } from '@/lib/store-payment-policy'
 
 const VALID_METHODS = new Set<PaymentMethodId>(PAYMENT_METHODS.map((m) => m.id))
 
+/**
+ * Card providers are configured through their own dialog/actions
+ * (`lib/store-payments/paytr-settings.ts`), which validate and connection-test
+ * credentials. This generic save must carry their stored state through
+ * untouched instead of dropping or re-validating it.
+ */
+const CARD_MANAGED = new Set<string>(['paytr', 'iyzico'])
+
 export type PaymentSettingsView = {
   /** Methods the owner has enabled (buyer-selectable at checkout). */
   enabled: PaymentMethodId[]
@@ -41,62 +49,6 @@ export type SavePaymentSettingsInput = {
   publicConfig: Record<string, Record<string, string>>
   /** New secret values; a blank/absent field keeps the existing stored secret. */
   secrets: Record<string, Record<string, string>>
-}
-
-/** Verifies the caller owns the project (or is an admin) and returns owner id. */
-async function authorizeProjectOwner(projectId: string): Promise<string> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
-
-  const { data: owned } = await supabase
-    .from('projects')
-    .select('owner_id')
-    .eq('id', projectId)
-    .eq('owner_id', user.id)
-    .maybeSingle()
-  if (owned) return owned.owner_id as string
-
-  if (isAdminEmail(user.email ?? null)) {
-    const admin = createAdminClient()
-    const { data: proj } = await admin
-      .from('projects')
-      .select('owner_id')
-      .eq('id', projectId)
-      .maybeSingle()
-    if (proj) return proj.owner_id as string
-  }
-  throw new Error('NOT_FOUND')
-}
-
-type StoredSecrets = Record<string, Record<string, string>>
-
-class SecretsUnreadableError extends Error {
-  constructor() {
-    super('Stored payment secrets could not be decrypted.')
-    this.name = 'SecretsUnreadableError'
-  }
-}
-
-/**
- * Decrypts the stored secrets. A present-but-unreadable blob (wrong key,
- * corruption, bad JSON) THROWS instead of reading as "no secrets": returning
- * `{}` there would let the next save silently overwrite the owner's real
- * credentials. Nothing from the ciphertext or plaintext is logged by callers.
- */
-function readStoredSecrets(encrypted: string | null): StoredSecrets {
-  if (!encrypted) return {}
-  try {
-    const parsed: unknown = JSON.parse(decryptSecret(encrypted))
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new SecretsUnreadableError()
-    }
-    return parsed as StoredSecrets
-  } catch {
-    throw new SecretsUnreadableError()
-  }
 }
 
 /** Loads the current settings for the owner UI. Secrets are reduced to booleans. */
@@ -175,18 +127,18 @@ export async function savePaymentSettings(
   projectId: string,
   input: SavePaymentSettingsInput,
 ): Promise<SaveResult> {
-  const ownerId = await authorizeProjectOwner(projectId)
+  const { ownerId } = await authorizeProjectOwner(projectId)
   const admin = createAdminClient()
 
   // Normalize + validate the enabled set against the known methods.
-  const enabled = Array.from(new Set(input.enabled)).filter((m): m is PaymentMethodId =>
-    VALID_METHODS.has(m as PaymentMethodId),
+  const requestedEnabled = Array.from(new Set(input.enabled)).filter(
+    (m): m is PaymentMethodId => VALID_METHODS.has(m as PaymentMethodId) && !CARD_MANAGED.has(m),
   )
 
   // Load existing secrets so blank fields keep their stored value.
   const { data: existingRow, error: existingError } = await admin
     .from('ecommerce_payment_settings')
-    .select('secret_encrypted')
+    .select('secret_encrypted, enabled, enabled_providers, public_config')
     .eq('project_id', projectId)
     .maybeSingle()
   // A failed read is not "no stored secrets"; saving on top of it could wipe them.
@@ -205,11 +157,24 @@ export async function savePaymentSettings(
     return { ok: false, error: 'secrets_unreadable' }
   }
 
+  const priorEnabled: string[] = Array.isArray(existingRow?.enabled_providers)
+    ? (existingRow!.enabled_providers as string[])
+    : []
+  const priorPublic = (existingRow?.public_config as Record<string, Record<string, string>> | null) ?? {}
+  const keptCardMethods = priorEnabled.filter(
+    (m): m is PaymentMethodId => CARD_MANAGED.has(m) && VALID_METHODS.has(m as PaymentMethodId),
+  )
+  const enabled = Array.from(new Set([...requestedEnabled, ...keptCardMethods]))
+
   const nextPublic: Record<string, Record<string, string>> = {}
   const nextSecrets: StoredSecrets = {}
   const missing: string[] = []
+  for (const id of CARD_MANAGED) {
+    if (priorPublic[id]) nextPublic[id] = priorPublic[id]
+    if (storedSecrets[id]) nextSecrets[id] = storedSecrets[id]
+  }
 
-  for (const methodId of enabled) {
+  for (const methodId of requestedEnabled) {
     const meta = PAYMENT_METHODS.find((m) => m.id === methodId)!
     const pubIn = input.publicConfig[methodId] ?? {}
     const secIn = input.secrets[methodId] ?? {}

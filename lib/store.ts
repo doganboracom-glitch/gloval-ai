@@ -1,8 +1,12 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getPaymentProvider, isProviderImplemented, type PaymentProviderId } from '@/lib/payments'
+import { getPaymentProvider, type PaymentProviderId } from '@/lib/payments'
+import { loadStorePaytr } from '@/lib/store-payments/paytr-credentials'
+import { startPaytrCheckout } from '@/lib/store-payments/paytr-checkout'
+import { pickClientIp, type PaytrCredentials } from '@/lib/store-payments/paytr-core'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
@@ -153,6 +157,8 @@ export type CheckoutResult =
       currency: string
       /** Order page path including the signed access token. */
       orderPath: string
+      /** Set for card orders: the buyer must be sent here to pay. */
+      paymentUrl?: string
     }
   | {
       ok: false
@@ -273,10 +279,26 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   const providerId: PaymentProviderId =
     requested && enabledSet.has(requested) ? requested : payment.defaultProvider
 
-  // Never route to a provider without a real implementation: the registry's
-  // generic fallback is the mock provider, which would settle as "paid".
-  if (!isManualStoreProvider(providerId) && !isProviderImplemented(providerId)) {
+  // Only manual methods, the store's own PayTR and the (explicitly allowed)
+  // mock provider can take an order. Anything else (e.g. iyzico, which has no
+  // per-store credentials yet) must never fall through to a PLATFORM-keyed
+  // adapter: the money would land in Gloval's account instead of the store's.
+  if (!isManualStoreProvider(providerId) && providerId !== 'paytr' && providerId !== 'mock') {
     return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured }
+  }
+
+  // PayTR takes the owner's own Merchant ID/Key/Salt. Resolve them BEFORE any
+  // order or stock write; an unreadable or missing set means no card orders.
+  let paytrCredentials: PaytrCredentials | null = null
+  if (providerId === 'paytr') {
+    try {
+      paytrCredentials = (await loadStorePaytr(admin, project.id)).credentials
+    } catch {
+      paytrCredentials = null
+    }
+    if (!paytrCredentials) {
+      return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured }
+    }
   }
 
   // A bank-transfer order is only worth taking if the buyer can be told where
@@ -389,6 +411,51 @@ export async function createOrder(input: CheckoutInput): Promise<CheckoutResult>
   if (isManualStoreProvider(providerId)) {
     scheduleOrderNotification(order.id)
     return { ok: true, orderId: order.id, totalCents: total, currency, orderPath }
+  }
+
+  if (providerId === 'paytr' && paytrCredentials) {
+    const requestHeaders = await headers()
+    const userIp = pickClientIp((name) => requestHeaders.get(name))
+    const started = userIp
+      ? await startPaytrCheckout({
+          admin,
+          projectId: project.id,
+          storeSlug,
+          credentials: paytrCredentials,
+          order: { id: order.id, totalCents: total, currency },
+          orderPath,
+          customer: {
+            name: [customer.name.trim(), customer.lastName?.trim()].filter(Boolean).join(' '),
+            email: customer.email.trim(),
+            phone: customer.phone?.trim() || '',
+            address: [customer.address, customer.district, customer.city]
+              .map((part) => part?.trim())
+              .filter(Boolean)
+              .join(' '),
+          },
+          lines: orderItems,
+          userIp,
+        })
+      : ({ ok: false, error: 'payment_init_failed' } as const)
+
+    if (!started.ok) {
+      await releaseOrderStock(admin, order.id)
+      await admin
+        .from('ecommerce_orders')
+        .update({ status: 'failed', payment_status: 'failed' })
+        .eq('id', order.id)
+      return { ok: false, error: started.error }
+    }
+    // Paid status only ever comes from the verified PayTR callback.
+    scheduleOrderNotification(order.id)
+    return {
+      ok: true,
+      orderId: order.id,
+      totalCents: total,
+      currency,
+      orderPath,
+      paymentUrl: started.paymentUrl,
+    }
   }
 
   // Create the payment intent through the resolved provider.

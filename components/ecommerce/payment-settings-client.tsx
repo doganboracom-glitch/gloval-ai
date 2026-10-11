@@ -12,6 +12,8 @@ import {
   type PaymentSettingsView,
 } from '@/lib/payment-settings'
 import { setTryOnEnabled } from '@/lib/try-on-settings'
+import { PaytrPanel } from '@/components/ecommerce/paytr-panel'
+import type { PaytrSettingsView } from '@/lib/store-payments/paytr-settings'
 
 const copy = {
   tr: {
@@ -70,9 +72,11 @@ export function PaymentSettingsClient({
   projectName,
   initial,
   initialTryOnEnabled = false,
+  initialPaytr,
 }: {
   projectId: string
   projectName: string
+  initialPaytr: PaytrSettingsView
   initial: PaymentSettingsView
   initialTryOnEnabled?: boolean
 }) {
@@ -222,6 +226,9 @@ export function PaymentSettingsClient({
 
         <div className="mt-8 flex flex-col gap-4">
           {PAYMENT_METHODS.map((method) => {
+            if (method.id === 'paytr') {
+              return <PaytrPanel key="paytr" projectId={projectId} initial={initialPaytr} />
+            }
             const Icon = ICONS[method.id]
             const on = enabled.has(method.id)
             return (
