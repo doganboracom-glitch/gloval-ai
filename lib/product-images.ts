@@ -8,12 +8,34 @@
 
 export const PRODUCT_IMAGE_LIMITS = {
   maxCount: 8,
-  maxBytes: 5 * 1024 * 1024,
+  // Vercel serverless request bodies are capped at ~4.5 MB, so a bigger file never reaches the route.
+  maxBytes: 4 * 1024 * 1024,
   maxAlt: 125,
   maxEdge: 2000,
 } as const
 
+export const PRODUCT_IMAGE_MAX_MB = PRODUCT_IMAGE_LIMITS.maxBytes / (1024 * 1024)
+
+/** Per signed-in user, across all projects. */
+export const PRODUCT_IMAGE_UPLOAD_RATE = { limit: 40, windowMs: 10 * 60 * 1000 } as const
+
 export const PRODUCT_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+
+/** Error codes the upload route returns, with the Turkish text the owner sees. */
+export const PRODUCT_IMAGE_ERROR_MESSAGES: Record<string, string> = {
+  too_large: `Görsel en fazla ${PRODUCT_IMAGE_MAX_MB} MB olabilir. Lütfen dosyayı küçültüp tekrar deneyin.`,
+  unsupported_type: 'Yalnızca JPG, PNG veya WebP yükleyebilirsiniz.',
+  corrupt: 'Dosya geçerli bir görsel değil.',
+  invalid_request: 'Yükleme isteği geçersiz.',
+  invalid_project: 'Yükleme isteği geçersiz.',
+  unauthenticated: 'Oturumunuz sona ermiş. Lütfen yeniden giriş yapın.',
+  forbidden: 'Bu mağazaya görsel yükleme yetkiniz yok.',
+  rate_limited: 'Kısa sürede çok fazla görsel yüklediniz. Lütfen birkaç dakika bekleyip tekrar deneyin.',
+  upload_failed: 'Görsel yüklenemedi. Lütfen tekrar deneyin.',
+  server_error: 'Görsel yüklenemedi. Lütfen tekrar deneyin.',
+}
+
+export const PRODUCT_IMAGE_FALLBACK_ERROR = 'Görsel yüklenemedi. Lütfen tekrar deneyin.'
 
 export type ProductImage = { url: string; alt: string }
 

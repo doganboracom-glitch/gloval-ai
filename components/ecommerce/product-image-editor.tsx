@@ -3,17 +3,13 @@
 import { useId, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Trash2 } from 'lucide-react'
 import {
+  PRODUCT_IMAGE_ERROR_MESSAGES as ERROR_MESSAGES,
+  PRODUCT_IMAGE_FALLBACK_ERROR,
   PRODUCT_IMAGE_LIMITS,
+  PRODUCT_IMAGE_MAX_MB,
   PRODUCT_IMAGE_MIME_TYPES,
   type ProductImage,
 } from '@/lib/product-images'
-
-const ERROR_MESSAGES: Record<string, string> = {
-  too_large: 'Görsel 5 MB sınırını aşıyor.',
-  invalid_request: 'Yükleme isteği geçersiz.',
-  unsupported_type: 'Yalnızca JPG, PNG veya WebP yükleyebilirsiniz.',
-  invalid_image: 'Dosya geçerli bir görsel değil.',
-}
 
 const inputCls =
   'h-9 w-full rounded-md border border-input bg-background/60 px-2 text-xs outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
@@ -47,9 +43,11 @@ export function ProductImageEditor({ projectId, images, onChange, onUploaded, on
     body.set('file', file)
     try {
       const res = await fetch('/api/ecommerce/product-images', { method: 'POST', body })
+      // The platform itself answers an oversized body with a non-JSON 413.
+      if (res.status === 413) return ERROR_MESSAGES.too_large
       const data = (await res.json()) as { ok: boolean; url?: string; error?: string }
       if (!data.ok || !data.url) {
-        return ERROR_MESSAGES[data.error ?? ''] ?? 'Görsel yüklenemedi. Lütfen tekrar deneyin.'
+        return ERROR_MESSAGES[data.error ?? ''] ?? PRODUCT_IMAGE_FALLBACK_ERROR
       }
       onUploaded(data.url)
       onChange([...latest.current, { url: data.url, alt: '' }])
@@ -172,8 +170,8 @@ export function ProductImageEditor({ projectId, images, onChange, onUploaded, on
           {uploading > 0 ? 'Yükleniyor…' : 'Görsel ekle'}
         </label>
         <p className="mt-1.5 text-xs text-muted-foreground">
-          {images.length}/{PRODUCT_IMAGE_LIMITS.maxCount} görsel. JPG, PNG veya WebP, en fazla 5 MB. İlk görsel
-          kapak olarak kullanılır.
+          {images.length}/{PRODUCT_IMAGE_LIMITS.maxCount} görsel. JPG, PNG veya WebP, görsel başına en fazla {PRODUCT_IMAGE_MAX_MB} MB.
+          İlk görsel kapak olarak kullanılır.
         </p>
       </div>
 

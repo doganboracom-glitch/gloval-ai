@@ -33,9 +33,12 @@ export async function requireUser() {
 export async function requireOwnedEcommerceProject(projectId: string): Promise<{
   supabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createAdminClient>
   userId: string
+  /** The signed-in caller; differs from `userId` when an admin acts on another tenant's project. */
+  actorId: string
   elevated: boolean
 }> {
   const { supabase, userId } = await requireUser()
+  const actorId = userId
 
   // Owner path (RLS): unchanged for normal users.
   const { data: owned, error } = await supabase
@@ -45,7 +48,7 @@ export async function requireOwnedEcommerceProject(projectId: string): Promise<{
     .eq('owner_id', userId)
     .maybeSingle()
   if (error) throw error
-  if (owned) return { supabase, userId, elevated: false }
+  if (owned) return { supabase, userId, actorId, elevated: false }
 
   // Admin path: verified admin editing another tenant's store.
   const {
@@ -61,7 +64,7 @@ export async function requireOwnedEcommerceProject(projectId: string): Promise<{
     if (pErr) throw pErr
     if (!proj) throw new Error('NOT_FOUND')
     // userId = the project's real owner so inserts stamp the correct owner_id.
-    return { supabase: admin, userId: proj.owner_id as string, elevated: true }
+    return { supabase: admin, userId: proj.owner_id as string, actorId, elevated: true }
   }
 
   throw new Error('NOT_FOUND')

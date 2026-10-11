@@ -16,8 +16,14 @@ export type ImageStore = {
 }
 
 export type UploadDeps = {
-  /** Resolves when the caller may write to the project, throws otherwise. */
-  authorize(projectId: string): Promise<void>
+  /**
+   * Resolves with the signed-in caller when they may write to the project.
+   * Throws `UNAUTHENTICATED` (no session) or `NOT_FOUND` (not theirs); any other
+   * error is an infrastructure failure.
+   */
+  authorize(projectId: string): Promise<{ actorId: string }>
+  /** Per-caller quota, consulted only after authorization so strangers cannot burn it. */
+  rateLimit?(actorId: string): { allowed: boolean; retryAfterMs: number }
   store: ImageStore
   newId(): string
 }
@@ -26,8 +32,19 @@ export type UploadResult =
   | { ok: true; url: string; path: string; width: number; height: number }
   | {
       ok: false
-      status: 400 | 401 | 403 | 413 | 415 | 500
-      error: 'invalid_project' | 'unauthenticated' | 'forbidden' | 'too_large' | 'unsupported_type' | 'corrupt' | 'upload_failed'
+      status: 400 | 401 | 403 | 413 | 415 | 429 | 500
+      error:
+        | 'invalid_project'
+        | 'unauthenticated'
+        | 'forbidden'
+        | 'rate_limited'
+        | 'too_large'
+        | 'unsupported_type'
+        | 'corrupt'
+        | 'upload_failed'
+        | 'server_error'
+      /** Only set for `rate_limited`. */
+      retryAfterSeconds?: number
     }
 
 /**
@@ -42,13 +59,26 @@ export async function uploadProductImage(
 ): Promise<UploadResult> {
   if (!isUuid(projectId)) return { ok: false, status: 400, error: 'invalid_project' }
 
+  let actorId: string
   try {
-    await deps.authorize(projectId)
+    ;({ actorId } = await deps.authorize(projectId))
   } catch (err) {
-    const unauthenticated = err instanceof Error && err.message === 'UNAUTHENTICATED'
-    return unauthenticated
-      ? { ok: false, status: 401, error: 'unauthenticated' }
-      : { ok: false, status: 403, error: 'forbidden' }
+    const code = err instanceof Error ? err.message : ''
+    if (code === 'UNAUTHENTICATED') return { ok: false, status: 401, error: 'unauthenticated' }
+    if (code === 'NOT_FOUND') return { ok: false, status: 403, error: 'forbidden' }
+    // Never echo internals to the caller; the log is the only place they appear.
+    console.error('[product-images] authorization failed', { code })
+    return { ok: false, status: 500, error: 'server_error' }
+  }
+
+  const quota = deps.rateLimit?.(actorId)
+  if (quota && !quota.allowed) {
+    return {
+      ok: false,
+      status: 429,
+      error: 'rate_limited',
+      retryAfterSeconds: Math.max(1, Math.ceil(quota.retryAfterMs / 1000)),
+    }
   }
 
   const processed = await processProductImage(bytes)
