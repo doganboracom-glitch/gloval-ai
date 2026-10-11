@@ -13,6 +13,7 @@ import { tenantUrl } from '@/lib/domains'
 import { buyerMethodName } from '@/lib/payments/methods'
 import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
+import { readOrderItems } from '@/lib/store-order-items'
 import { loadDemoStoreIds } from '@/lib/store-demo'
 import { firstNameOf } from '@/lib/store-order-privacy'
 import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
@@ -158,11 +159,12 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
   // made-up and the "buyer" address is whatever a visitor typed.
   if (isDemoStore(project.id, await loadDemoStoreIds(admin, project.id))) return
 
-  const [{ data: items }, { data: pay }, ownerRes] = await Promise.all([
-    admin
-      .from('ecommerce_order_items')
-      .select('name, quantity, line_total_cents')
-      .eq('order_id', order.id),
+  const [items, { data: pay }, ownerRes] = await Promise.all([
+    readOrderItems<{ name: string; quantity: number; line_total_cents: number }>(
+      admin,
+      order.id,
+      'name, quantity, line_total_cents',
+    ),
     admin
       .from('ecommerce_payment_settings')
       .select('public_config')
@@ -181,7 +183,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
     lang,
     storeName,
     orderNumber: order.id.slice(0, 8).toUpperCase(),
-    items: items ?? [],
+    items,
     subtotalCents: order.subtotal_cents,
     shippingCents: order.shipping_cents,
     codFeeCents: orderCodFeeCents(order),

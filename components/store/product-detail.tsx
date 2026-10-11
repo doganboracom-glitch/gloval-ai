@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Minus, Plus, ShoppingCart, PackageOpen, Check, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, ShoppingCart, PackageOpen, Check, AlertCircle, Truck } from 'lucide-react'
+import { discountPercent } from '@/lib/store-product-display'
 import { Button } from '@/components/ui/button'
 import { CartProvider, useCart, useAddWithConfirm, formatPrice } from './cart-provider'
 import { TryOnButton } from './try-on-button'
@@ -46,6 +47,8 @@ function ProductDetailInner({
   const outOfStock = isSoldOut(product)
   const maxQty = purchasableMax(product)
   const stockNotice = getStockNotice(product)
+  const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
+  const specs = product.specs ?? []
 
   function flashAdded() {
     setAdded(true)
@@ -109,11 +112,42 @@ function ProductDetailInner({
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">{storeName}</p>
           <h1 className="font-display text-3xl font-bold text-balance">{product.name}</h1>
-          <span className="font-display text-2xl font-bold">
-            {formatPrice(product.price_cents, product.currency)}
-          </span>
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-baseline gap-3">
+              <span className="font-display text-2xl font-bold">
+                {formatPrice(product.price_cents, product.currency)}
+              </span>
+              {discount !== null && product.compare_at_price_cents != null && (
+                <>
+                  <span className="text-base text-muted-foreground line-through">
+                    {formatPrice(product.compare_at_price_cents, product.currency)}
+                  </span>
+                  <span className="rounded-md bg-destructive px-2 py-0.5 text-xs font-bold text-destructive-foreground">
+                    %{discount} indirim
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">KDV dahil</p>
+          </div>
           {product.description && (
             <p className="leading-relaxed text-muted-foreground">{product.description}</p>
+          )}
+          {product.shipping_note && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Truck className="size-4 shrink-0" />
+              {product.shipping_note}
+            </p>
+          )}
+          {specs.length > 0 && (
+            <dl className="divide-y divide-border rounded-xl border border-border text-sm">
+              {specs.map((spec, i) => (
+                <div key={`${spec.name}-${i}`} className="grid grid-cols-[2fr_3fr] gap-3 px-4 py-2.5">
+                  <dt className="text-muted-foreground">{spec.name}</dt>
+                  <dd className="break-words font-medium">{spec.value}</dd>
+                </div>
+              ))}
+            </dl>
           )}
 
           {stockNotice && (

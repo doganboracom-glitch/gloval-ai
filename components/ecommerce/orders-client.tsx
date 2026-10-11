@@ -13,6 +13,7 @@ import {
   type OrderStatus,
 } from '@/lib/ecommerce'
 import { useLanguage } from '@/components/language-provider'
+import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -310,6 +311,16 @@ export function OrdersClient({
                         </li>
                       ))}
                     </ul>
+                    {(() => {
+                      const vatLine = formatVatLine(
+                        summarizeVat(o.items),
+                        (cents) => currencyFmt.format(cents / 100),
+                        lang === 'tr' ? 'tr' : 'en',
+                      )
+                      return vatLine ? (
+                        <p className="mt-2 text-xs text-muted-foreground">{vatLine}</p>
+                      ) : null
+                    })()}
                     {o.cod_fee_cents > 0 && (
                       <p className="mt-2 flex items-center justify-between gap-3 border-t border-border/60 pt-2 text-sm">
                         <span className="text-muted-foreground">

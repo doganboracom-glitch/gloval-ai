@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { formatIban } from '@/lib/iban'
 import { getOrderConfirmation } from '@/lib/store-order-access'
 import { formatPrice } from '@/lib/format'
+import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { Button } from '@/components/ui/button'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,7 @@ export default async function OrderConfirmationPage({
   const order = await getOrderConfirmation(orderId, slug, Array.isArray(t) ? t[0] : t)
   if (!order) notFound()
 
+  const vatLine = formatVatLine(summarizeVat(order.items), (cents) => formatPrice(cents, order.currency))
   const paid = order.payment_status === 'paid'
   const failed = order.payment_status === 'failed'
   const cancelled = order.status === 'cancelled'
@@ -140,6 +142,7 @@ export default async function OrderConfirmationPage({
               {formatPrice(order.total_cents, order.currency)}
             </span>
           </div>
+          {vatLine && <p className="mt-2 text-right text-xs text-muted-foreground">{vatLine}</p>}
         </div>
 
         <div className="mt-8 flex justify-center">
