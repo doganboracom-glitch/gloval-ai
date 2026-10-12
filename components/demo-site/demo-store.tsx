@@ -262,7 +262,7 @@ export function DemoAddToCart({
   lang: Lang
 }) {
   const cart = useOptionalCart()
-  const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
+  const { requestAdd } = useAddWithConfirm(cart)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
 
@@ -331,22 +331,6 @@ export function DemoAddToCart({
       </button>
     </div>
 
-    <SiteConfirmDialog
-      open={pending !== null}
-      title={t(lang, 'Ürün zaten sepetinizde', 'Already in your cart')}
-      description={t(
-        lang,
-        `"${name}" sepetinizde bulunuyor. Bir adet daha eklensin mi?`,
-        `"${name}" is already in your cart. Add one more?`,
-      )}
-      confirmLabel={t(lang, 'Evet, ekle', 'Yes, add')}
-      cancelLabel={t(lang, 'Vazgeç', 'Cancel')}
-      onConfirm={() => {
-        confirm()
-        afterAdd()
-      }}
-      onCancel={cancel}
-    />
     </>
   )
 }

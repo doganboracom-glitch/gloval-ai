@@ -11,11 +11,13 @@ export function WebsiteHeader({
   pages,
   activeSlug,
   onNavigate,
+  storeSlug,
 }: {
   navigation: WebsiteSchema['navigation']
   pages?: PageItem[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
+  storeSlug?: string
 }) {
   const nav = useSiteNav()
   // Use real page navigation when the site has more than one page; otherwise
@@ -31,7 +33,29 @@ export function WebsiteHeader({
       }}
     >
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
-        <button
+        {storeSlug ? (
+          <a
+            href={`/site/${storeSlug}`}
+            aria-label={navigation.logoText}
+            className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
+            style={{
+              fontFamily: 'var(--site-heading-font)',
+              color: 'var(--site-fg)',
+              justifyContent:
+                navigation.logo?.align === 'center'
+                  ? 'center'
+                  : navigation.logo?.align === 'right'
+                    ? 'flex-end'
+                    : undefined,
+            }}
+          >
+            {navigation.logo?.src ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={navigation.logo.src} alt={navigation.logo.alt || navigation.logoText} className="[height:var(--logo-h,48px)] [max-width:var(--logo-maxw,200px)] [width:var(--logo-mobile-w,auto)] object-contain md:[height:var(--logo-h,64px)] md:[max-width:var(--logo-maxw,280px)] md:[width:var(--logo-w,auto)]" />
+            ) : null}
+            <span>{navigation.logoText}</span>
+          </a>
+        ) : <button
           type="button"
           aria-label={navigation.logoText}
           onClick={(e) => {
@@ -85,7 +109,7 @@ export function WebsiteHeader({
             />
           ) : null}
           <span>{navigation.logoText}</span>
-        </button>
+        </button>}
 
         <nav className="hidden items-center gap-6 md:flex">
           {multiPage
@@ -96,7 +120,7 @@ export function WebsiteHeader({
                     key={page.slug}
                     type="button"
                     onClick={() => onNavigate?.(page.slug)}
-                    className="text-sm font-medium transition-opacity hover:opacity-70"
+                    className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
                     style={{
                       color: isActive ? 'var(--site-primary)' : 'var(--site-muted-fg)',
                       fontWeight: isActive ? 700 : 500,
@@ -111,7 +135,7 @@ export function WebsiteHeader({
                   key={link.label + link.href}
                   href={link.href || '#'}
                   onClick={(e) => onSiteNavClick(e, link.href, nav)}
-                  className="text-sm font-medium transition-opacity hover:opacity-70"
+                  className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
                   style={{ color: 'var(--site-muted-fg)' }}
                 >
                   {link.label}
@@ -119,7 +143,17 @@ export function WebsiteHeader({
               ))}
         </nav>
 
-        {navigation.cta ? <SiteButton button={navigation.cta} /> : <span />}
+        {navigation.cta ? (
+          storeSlug && /sepete|cart/i.test(navigation.cta.label) ? (
+            <a
+              href={`/site/${storeSlug}/checkout`}
+              className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{ borderRadius: 'var(--site-radius)', fontFamily: 'var(--site-body-font)', backgroundColor: 'var(--site-primary)', color: 'var(--site-primary-fg)' }}
+            >
+              {navigation.cta.label}
+            </a>
+          ) : <SiteButton button={navigation.cta} />
+        ) : <span />}
       </div>
     </header>
   )

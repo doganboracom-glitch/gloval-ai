@@ -5,7 +5,7 @@ import { Check, Minus, Plus, ShoppingCart, Truck, MessageCircle, ShieldCheck, Cr
 import { ProductGallery } from './product-gallery'
 import { ProductCard } from './product-card'
 import { discountPercent } from '@/lib/store-product-display'
-import { CartProvider, useCart, useAddWithConfirm, formatPrice, requestOpenCart } from './cart-provider'
+import { useCart, useAddWithConfirm, formatPrice, requestOpenCart } from './cart-provider'
 import { TryOnButton } from './try-on-button'
 import type { StoreProduct } from '@/lib/store'
 import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
@@ -16,17 +16,16 @@ type Props = { slug: string; storeName: string; product: StoreProduct; relatedPr
 
 const themedButton = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--site-radius,0.75rem)] px-5 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-primary,var(--primary))] disabled:cursor-not-allowed disabled:opacity-50'
 
-export function ProductDetail(props: Props) { return <CartProvider slug={props.slug}><ProductDetailInner {...props} /></CartProvider> }
+export function ProductDetail(props: Props) { return <ProductDetailInner {...props} /> }
 
 function ProductDetailInner({ slug, storeName, product, relatedProducts = [], enableTryOn = false, shipping = DEFAULT_SHIPPING_SETTINGS, whatsapp, cardPaymentEnabled = false, codEnabled = false }: Props) {
   const cart = useCart()
-  const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
+  const { requestAdd } = useAddWithConfirm(cart)
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
   const [tab, setTab] = useState<'description' | 'specs' | 'delivery'>('description')
   const flashTimer = useRef<number | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
-  const cancelRef = useRef<HTMLButtonElement>(null)
   const image = product.images[0]?.url ?? null
   const outOfStock = isSoldOut(product)
   const maxQty = purchasableMax(product)
@@ -34,7 +33,6 @@ function ProductDetailInner({ slug, storeName, product, relatedProducts = [], en
   const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
   const specs = product.specs ?? []
   useEffect(() => () => { if (flashTimer.current) window.clearTimeout(flashTimer.current) }, [])
-  useEffect(() => { if (pending !== null) cancelRef.current?.focus() }, [pending])
   const flashAdded = () => { setAdded(true); requestOpenCart(); if (flashTimer.current) window.clearTimeout(flashTimer.current); flashTimer.current = window.setTimeout(() => setAdded(false), 1800) }
   const item = { productId: product.id, name: product.name, priceCents: product.price_cents, currency: product.currency, image, maxStock: maxQty }
   const add = () => { const already = cart.items.some((i) => i.productId === product.id); requestAdd(item, qty); if (!already) flashAdded() }
@@ -60,6 +58,6 @@ function ProductDetailInner({ slug, storeName, product, relatedProducts = [], en
     <section className="border-y border-[var(--site-border,var(--border))]"><div role="tablist" aria-label="Ürün bilgileri" className="flex gap-4 overflow-x-auto">{([['description','Açıklama'],['specs','Özellikler'],['delivery','Teslimat ve iade']] as const).map(([value,label], index, tabs) => <button key={value} id={`tab-${value}`} type="button" role="tab" tabIndex={tab === value ? 0 : -1} aria-controls={`panel-${value}`} aria-selected={tab === value} onKeyDown={(event) => { if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); setTab(tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length][0]) } }} onClick={() => setTab(value)} className="min-h-12 shrink-0 border-b-2 px-1 text-sm font-semibold" style={{ borderColor: tab === value ? 'var(--site-primary, var(--primary))' : 'transparent' }}>{label}</button>)}</div><div className="max-w-3xl py-6 leading-relaxed text-muted-foreground">{tab === 'description' && <p className="whitespace-pre-line">{product.description || 'Bu ürün için açıklama bulunmuyor.'}</p>}{tab === 'specs' && <div className="grid gap-2">{specs.length ? specs.map((spec, i) => <div key={`${spec.name}-${i}`} className="flex gap-3 border-b border-border py-3"><Check className="mt-1 size-4 shrink-0" style={{ color: 'var(--site-primary, var(--primary))' }} /><span><strong className="text-foreground">{spec.name}</strong>{spec.value ? `: ${spec.value}` : ''}</span></div>) : 'Bu ürün için özellik bilgisi bulunmuyor.'}</div>}{tab === 'delivery' && <p>{productShippingLine(shipping)}{product.shipping_note ? ` · ${product.shipping_note}` : ''}</p>}</div></section>
     {relatedProducts.length > 0 && <section><h2 className="mb-5 text-2xl font-bold">Benzer ürünler</h2><div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{relatedProducts.map((item) => <ProductCard key={item.id} product={item} slug={slug} />)}</div></section>}
     {!outOfStock && <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-border bg-background/95 p-3 backdrop-blur md:hidden"><span className="font-bold">{formatPrice(product.price_cents, product.currency)}</span><button type="button" onClick={add} className={themedButton + ' min-h-11 flex-1'} style={{ backgroundColor: 'var(--site-primary, var(--primary))', color: 'var(--site-primary-fg, var(--primary-foreground))' }}><ShoppingCart className="size-4" />Sepete ekle</button></div>}
-    {pending !== null && <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl"><h2 className="font-bold">Ürün zaten sepetinizde</h2><p className="mt-2 text-sm text-muted-foreground">Bir adet daha eklensin mi?</p><div className="mt-5 flex justify-end gap-2"><button type="button" className={themedButton + ' border'} onClick={cancel}>Vazgeç</button><button type="button" className={themedButton} style={{ backgroundColor: 'var(--site-primary, var(--primary))', color: 'var(--site-primary-fg, var(--primary-foreground))' }} onClick={() => { confirm(); flashAdded() }}>Evet, ekle</button></div></div></div>}
+
   </div>
 }

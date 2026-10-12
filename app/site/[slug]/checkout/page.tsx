@@ -29,7 +29,7 @@ export default async function CheckoutPage({
   const shipping = await getStoreShippingInfo(slug)
 
   return (
-    <StoreSiteShell site={site.schema}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
       <CheckoutForm
         slug={slug}
         shipping={shipping}

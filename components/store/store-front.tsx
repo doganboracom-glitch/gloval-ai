@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  CartProvider,
   useCart,
   formatPrice,
 } from './cart-provider'
@@ -22,11 +21,7 @@ type StoreFrontProps = {
 }
 
 export function StoreFront(props: StoreFrontProps) {
-  return (
-    <CartProvider slug={props.slug}>
-      <StoreFrontInner {...props} />
-    </CartProvider>
-  )
+  return <StoreFrontInner {...props} />
 }
 
 function StoreFrontInner({

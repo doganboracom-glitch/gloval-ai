@@ -58,7 +58,7 @@ export default async function ProductPage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
       <ProductDetail
         slug={slug}
         shipping={shipping}

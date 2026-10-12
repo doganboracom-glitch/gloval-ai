@@ -81,7 +81,7 @@ export function SiteButton({
     <a
       href={button.href || '#'}
       onClick={(e) => onSiteNavClick(e, button.href, nav)}
-      className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+      className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
       style={style}
     >
       {button.label}
