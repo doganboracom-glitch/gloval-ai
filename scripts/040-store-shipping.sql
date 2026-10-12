@@ -43,15 +43,31 @@ alter table public.ecommerce_orders
   add column if not exists shipped_at timestamptz,
   add column if not exists delivered_at timestamptz;
 
-alter table public.ecommerce_orders
-  add constraint ecommerce_orders_shipping_status_chk
-  check (shipping_status in ('preparing', 'shipped', 'in_transit', 'delivered', 'cancelled')) not valid;
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.ecommerce_orders'::regclass
+      and conname = 'ecommerce_orders_shipping_status_chk'
+  ) then
+    alter table public.ecommerce_orders
+      add constraint ecommerce_orders_shipping_status_chk
+      check (shipping_status in ('preparing', 'shipped', 'in_transit', 'delivered', 'cancelled')) not valid;
+  end if;
+end $$;
 alter table public.ecommerce_orders
   validate constraint ecommerce_orders_shipping_status_chk;
 
-alter table public.ecommerce_orders
-  add constraint ecommerce_orders_tracking_number_chk
-  check (tracking_number is null or tracking_number ~ '^[A-Za-z0-9-]{6,40}$') not valid;
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.ecommerce_orders'::regclass
+      and conname = 'ecommerce_orders_tracking_number_chk'
+  ) then
+    alter table public.ecommerce_orders
+      add constraint ecommerce_orders_tracking_number_chk
+      check (tracking_number is null or tracking_number ~ '^[A-Za-z0-9-]{6,40}$') not valid;
+  end if;
+end $$;
 alter table public.ecommerce_orders
   validate constraint ecommerce_orders_tracking_number_chk;
 
