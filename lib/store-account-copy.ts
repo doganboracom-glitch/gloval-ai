@@ -98,3 +98,101 @@ export const ACCOUNT_DELETED_EMAIL_COPY = {
     footer: 'This is the last email you will receive about this account.',
   },
 } as const
+
+/** Owner-panel copy for the 30-day suspension flow (Turkish only, like the panel). */
+export const OWNER_DELETION_COPY = {
+  tabActive: 'Aktif',
+  tabPending: 'Silinme bekleyen',
+  suspendButton: 'Hesabı sil (müşteri talebi)',
+  suspendNotice:
+    'Hesap 30 gün askıya alınır; bu süre içinde geri alabilirsiniz. Süre dolunca kişisel veriler kalıcı silinir (siparişler yasal saklama gereği korunur).',
+  suspendSubmit: 'Hesabı askıya al',
+  suspendedToast: 'Hesap askıya alındı.',
+  pendingEmpty: 'Silinme bekleyen hesap yok.',
+  suspendedAt: 'Askıya alınma',
+  remaining: (days: number) => (days === 1 ? 'Kalan: 1 gün' : `Kalan: ${days} gün`),
+  banner: (date: string) => `Bu hesap ${date} tarihinde kalıcı olarak silinecek.`,
+  restore: 'Kurtar',
+  restoreTitle: 'Hesabı kurtar',
+  restoreBody: 'Hesap eski hâline döner; müşteri aynı şifresiyle tekrar giriş yapabilir ve kendisine bilgi e-postası gönderilir.',
+  restoreSubmit: 'Hesabı kurtar',
+  purge: 'Hemen kalıcı sil',
+  purgeTitle: 'Hemen kalıcı sil',
+  purgeBody:
+    'Kişisel veriler şimdi kalıcı olarak silinir ve bu işlem geri alınamaz. Siparişler yasal saklama gereği korunur.',
+  purgeConfirm: 'Onaylamak için müşterinin e-postasını yazın',
+  purgeSubmit: 'Kalıcı olarak sil',
+  cancel: 'Vazgeç',
+  errors: {
+    unauthorized: 'Yetkisiz erişim.',
+    notFound: 'Müşteri bulunamadı.',
+    alreadyPending: 'Bu hesap zaten silinme sürecinde.',
+    notPending: 'Bu hesap silinme sürecinde değil.',
+    notRestorable: 'Süresi dolmuş veya silinmiş hesap kurtarılamaz.',
+    blocked: 'Müşterinin devam eden siparişi var; tamamlanınca veya iptal edilince silinebilir.',
+    confirmEmail: 'Onay için müşterinin e-posta adresini yazın.',
+    migrationPending: 'Bu özellik için veritabanı güncellemesi bekleniyor.',
+    failed: 'İşlem tamamlanamadı. Lütfen daha sonra tekrar deneyin.',
+  },
+} as const
+
+export const ACCOUNT_SUSPENSION_MESSAGES = {
+  login: 'Hesabınız silinme sürecinde. Bilgi için mağaza ile iletişime geçin.',
+  register: 'Bu e-posta ile bir hesap silinme sürecinde. Mağaza ile iletişime geçin.',
+} as const
+
+export const ACCOUNT_SUSPENDED_EMAIL_COPY = {
+  tr: {
+    subject: (store: string) => `${store} hesabınız silinme sürecine alındı`,
+    preview: 'Hesabınız silinme sürecine alındı.',
+    title: 'Hesabınız silinme sürecinde',
+    hello: (name: string) => (name ? `Merhaba ${name},` : 'Merhaba,'),
+    intro: (store: string) => `${store} mağazasındaki hesabınız mağaza tarafından silinme sürecine alındı.`,
+    schedule: (date: string) => `Hesabınız ${date} tarihinde kalıcı olarak silinecek.`,
+    contact: (email: string) =>
+      email
+        ? `Hata olduğunu düşünüyorsanız ${email} adresinden mağaza ile iletişime geçin.`
+        : 'Hata olduğunu düşünüyorsanız mağaza ile iletişime geçin.',
+    footer: 'Bu süre içinde mağaza hesabınızı yeniden etkinleştirebilir.',
+  },
+  en: {
+    subject: (store: string) => `Your ${store} account is scheduled for deletion`,
+    preview: 'Your account was scheduled for deletion.',
+    title: 'Your account is scheduled for deletion',
+    hello: (name: string) => (name ? `Hello ${name},` : 'Hello,'),
+    intro: (store: string) => `Your ${store} account was scheduled for deletion by the store.`,
+    schedule: (date: string) => `Your account will be permanently deleted on ${date}.`,
+    contact: (email: string) =>
+      email
+        ? `If you think this is a mistake, contact the store at ${email}.`
+        : 'If you think this is a mistake, please contact the store.',
+    footer: 'Until then the store can reactivate your account.',
+  },
+} as const
+
+export const ACCOUNT_RESTORED_EMAIL_COPY = {
+  tr: {
+    subject: (store: string) => `${store} hesabınız yeniden etkinleştirildi`,
+    preview: 'Hesabınız yeniden etkinleştirildi.',
+    title: 'Hesabınız yeniden etkinleştirildi',
+    hello: (name: string) => (name ? `Merhaba ${name},` : 'Merhaba,'),
+    intro: (store: string) => `${store} mağazasındaki hesabınız yeniden etkinleştirildi; silinme işlemi iptal edildi.`,
+    detail: 'Mevcut e-posta ve şifrenizle tekrar giriş yapabilirsiniz.',
+    contact: (email: string) =>
+      email
+        ? `Sorunuz varsa ${email} adresinden mağaza ile iletişime geçin.`
+        : 'Sorunuz varsa mağaza ile iletişime geçin.',
+    footer: 'Bilgilendirme amaçlı gönderilmiştir.',
+  },
+  en: {
+    subject: (store: string) => `Your ${store} account was reactivated`,
+    preview: 'Your account was reactivated.',
+    title: 'Your account was reactivated',
+    hello: (name: string) => (name ? `Hello ${name},` : 'Hello,'),
+    intro: (store: string) => `Your ${store} account was reactivated and the deletion was cancelled.`,
+    detail: 'You can sign in again with your existing email and password.',
+    contact: (email: string) =>
+      email ? `If you have questions, contact the store at ${email}.` : 'If you have questions, please contact the store.',
+    footer: 'Sent for your information.',
+  },
+} as const

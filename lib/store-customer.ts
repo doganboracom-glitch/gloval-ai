@@ -18,8 +18,8 @@ import {
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
-import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
-import { confirmPhraseMatches } from '@/lib/store-customer-privacy'
+import { ACCOUNT_DELETION_COPY, ACCOUNT_SUSPENSION_MESSAGES } from '@/lib/store-account-copy'
+import { confirmPhraseMatches, isPendingDeletion } from '@/lib/store-customer-privacy'
 import { anonymizeStoreCustomer, sendAccountDeletedEmail } from '@/lib/store-customer-deletion'
 import {
   RESET_TOKEN_TTL_MINUTES,
@@ -105,6 +105,8 @@ const MSG = {
   invalidInput: 'Girilen bilgiler geçersiz.',
   invalidInvoice: 'Fatura bilgileri geçersiz.',
   resetInvalid: 'Bağlantı geçersiz veya süresi dolmuş. Yeniden isteyin.',
+  accountPendingDeletion: ACCOUNT_SUSPENSION_MESSAGES.login,
+  emailPendingDeletion: ACCOUNT_SUSPENSION_MESSAGES.register,
 } as const
 
 type DbError = { code?: string; message?: string } | null
@@ -119,6 +121,9 @@ type CustomerRow = {
   invoice?: unknown
   password_hash: string
   password_changed_at?: string | null
+  deleted_at?: string | null
+  anonymized_at?: string | null
+  deletion_scheduled_at?: string | null
 }
 
 /* ----------------------------- password hashing ---------------------------- */
@@ -376,8 +381,9 @@ export async function registerStoreCustomer(input: {
   // Hash before the existence check so "taken" and "free" cost the same time.
   const passwordHash = await hashPassword(input.password)
 
-  if (await findCustomerByEmail(project.id, email)) {
-    return { ok: false, error: MSG.emailTaken }
+  const existing = await findCustomerByEmail(project.id, email)
+  if (existing) {
+    return { ok: false, error: isPendingDeletion(existing) ? MSG.emailPendingDeletion : MSG.emailTaken }
   }
 
   const admin = createAdminClient()
@@ -441,6 +447,8 @@ export async function loginStoreCustomer(input: {
   if (!(await verifyPassword(password, row.password_hash))) {
     return { ok: false, error: MSG.loginFailed }
   }
+  // Only reached with the right password, so the notice is never shown to a stranger.
+  if (isPendingDeletion(row)) return { ok: false, error: MSG.accountPendingDeletion }
 
   await setSession(project.id, row.id, sessionVersion(row))
   return { ok: true, customer: toCustomer(row) }
@@ -825,7 +833,8 @@ export async function sendStoreCustomerPasswordReset(input: {
   if (!project) return RESET_GENERIC_OK
 
   const customer = await findCustomerByEmail(project.id, email)
-  if (!customer) return RESET_GENERIC_OK
+  // Same constant answer, but no link is issued for an account held for deletion.
+  if (!customer || isPendingDeletion(customer)) return RESET_GENERIC_OK
 
   const h = await headers()
   const lang = resolveEmailLang(h.get('accept-language')?.split(',')[0])
@@ -872,6 +881,18 @@ export async function resetStoreCustomerPassword(input: {
 
   const newHash = await hashPassword(input.newPassword)
   const admin = createAdminClient()
+
+  // Suspension clears reset tokens; this also covers a link issued at the same instant.
+  const { data: tokenRows } = await admin
+    .from('store_customers')
+    .select('*')
+    .eq('project_id', project.id)
+    .eq('reset_token_hash', hashResetToken(token))
+    .limit(1)
+  if (isPendingDeletion((tokenRows?.[0] as CustomerRow | undefined) ?? null)) {
+    return { ok: false, error: MSG.accountPendingDeletion }
+  }
+
   const { data, error } = await writeWithPasswordVersion<Array<{ id: string }>>((extra) =>
     admin
       .from('store_customers')

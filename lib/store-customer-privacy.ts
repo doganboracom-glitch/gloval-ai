@@ -101,6 +101,8 @@ export function isMissingDeletionSchema(error: { code?: string; message?: string
   return (
     message.includes('deleted_at') ||
     message.includes('anonymized_at') ||
+    message.includes('deletion_scheduled_at') ||
+    message.includes('deletion_requested') ||
     message.includes('store_owner_customers') ||
     message.includes('store_customer_events')
   )
@@ -220,7 +222,7 @@ export function emailConfirmMatches(input: unknown, email: string): boolean {
 export function buildAuditEvent(input: {
   projectId: string
   customerId: string | null
-  event: 'deleted_by_customer' | 'anonymized_by_owner' | 'exported_by_owner'
+  event: CustomerEvent
   actorUserId?: string | null
 }) {
   return {
@@ -229,4 +231,91 @@ export function buildAuditEvent(input: {
     event: input.event,
     actor_user_id: input.actorUserId ?? null,
   }
+}
+
+export type CustomerEvent =
+  | 'deleted_by_customer'
+  | 'anonymized_by_owner'
+  | 'exported_by_owner'
+  | 'suspended_by_owner'
+  | 'restored_by_owner'
+  | 'finalized_after_grace'
+  | 'purged_early_by_owner'
+  | 'deletion_postponed'
+
+/** Owner-requested deletion is held for this long before personal data is wiped. */
+export const DELETION_GRACE_DAYS = 30
+/** A due deletion that still has an order in flight is pushed back by this many days. */
+export const DELETION_POSTPONE_DAYS = 7
+export const DELETION_SWEEP_LIMIT = 50
+export const DELETION_SWEEP_BUDGET_MS = 25_000
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+export function addDaysIso(fromIso: string | number | Date, days: number): string {
+  return new Date(new Date(fromIso).getTime() + days * DAY_MS).toISOString()
+}
+
+/** Row fields that describe where an account is in the deletion lifecycle. */
+export type DeletionStateRow = {
+  deleted_at?: string | null
+  anonymized_at?: string | null
+  deletion_scheduled_at?: string | null
+}
+
+/** Suspended: a deletion date is set and the personal data has not been wiped yet. */
+export function isPendingDeletion(row: DeletionStateRow | null | undefined): boolean {
+  return !!row && !!row.deletion_scheduled_at && !row.anonymized_at && !row.deleted_at
+}
+
+/** Whole days left until the scheduled deletion, rounded up, never negative. */
+export function daysRemaining(scheduledIso: string | null | undefined, nowMs: number = Date.now()): number {
+  const t = scheduledIso ? Date.parse(scheduledIso) : NaN
+  if (!Number.isFinite(t)) return 0
+  return Math.max(0, Math.ceil((t - nowMs) / DAY_MS))
+}
+
+/** The last days are highlighted in the owner panel. */
+export function isDeletionUrgent(scheduledIso: string | null | undefined, nowMs: number = Date.now()): boolean {
+  return daysRemaining(scheduledIso, nowMs) <= 3
+}
+
+/**
+ * Suspension patch. Reset tokens are cleared so a link issued earlier can never
+ * work, and `password_changed_at` is bumped so every cookie in circulation dies.
+ */
+export function buildSuspendPatch(nowIso: string) {
+  return {
+    deletion_requested_at: nowIso,
+    deletion_scheduled_at: addDaysIso(nowIso, DELETION_GRACE_DAYS),
+    deletion_requested_by: 'owner',
+    reset_token_hash: null,
+    reset_token_expires: null,
+    password_changed_at: nowIso,
+  }
+}
+
+/** Restore only clears the deletion markers; password and profile are untouched. */
+export function buildRestorePatch() {
+  return {
+    deletion_requested_at: null,
+    deletion_scheduled_at: null,
+    deletion_requested_by: null,
+  }
+}
+
+export type CustomerStatus = 'active' | 'pending_deletion'
+
+export function parseCustomerStatus(raw: unknown): CustomerStatus {
+  return raw === 'pending_deletion' ? 'pending_deletion' : 'active'
+}
+
+/** Long date in the store's language, in Istanbul time so the day never shifts. */
+export function formatGraceDate(iso: string, lang: 'tr' | 'en'): string {
+  return new Date(iso).toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-GB', {
+    timeZone: 'Europe/Istanbul',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
 }

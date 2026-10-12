@@ -5,14 +5,17 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Download, Loader2, Search, Users, X } from 'lucide-react'
 import {
-  deleteCustomerByOwner,
   exportCustomersCsv,
   getOwnerCustomerDetail,
+  purgeCustomerByOwner,
+  restoreCustomerByOwner,
+  suspendCustomerByOwner,
   type OwnerCustomerDetail,
   type OwnerCustomerList,
   type OwnerCustomerRow,
 } from '@/lib/store-owner-customers'
-import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
+import { ACCOUNT_DELETION_COPY, OWNER_DELETION_COPY } from '@/lib/store-account-copy'
+import { daysRemaining, isDeletionUrgent } from '@/lib/store-customer-privacy'
 
 const money = (cents: number, currency = 'TRY') =>
   new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(cents / 100)
@@ -29,11 +32,13 @@ export function CustomersClient({
   result,
   q,
   sort,
+  status,
 }: {
   projectId: string
   result: OwnerCustomerList
   q: string
   sort: string
+  status: 'active' | 'pending_deletion'
 }) {
   const router = useRouter()
   const [detail, setDetail] = useState<OwnerCustomerDetail | null>(null)
@@ -70,7 +75,9 @@ export function CustomersClient({
   }
 
   const href = (page: number) =>
-    `/ecommerce/${projectId}/customers?${new URLSearchParams({ ...(q ? { q } : {}), sort, page: String(page) })}`
+    `/ecommerce/${projectId}/customers?${new URLSearchParams({ ...(q ? { q } : {}), sort, status, page: String(page) })}`
+  const tabHref = (next: 'active' | 'pending_deletion') =>
+    `/ecommerce/${projectId}/customers?${new URLSearchParams({ ...(q ? { q } : {}), sort, status: next })}`
 
   return (
     <div className="relative min-h-svh">
@@ -122,7 +129,31 @@ export function CustomersClient({
               ))}
             </dl>
 
-            <form method="get" className="mt-6 flex flex-col gap-2 sm:flex-row">
+            <nav className="mt-6 flex gap-2" aria-label="Müşteri durumu">
+              {(
+                [
+                  ['active', OWNER_DELETION_COPY.tabActive, result.stats.members],
+                  ['pending_deletion', OWNER_DELETION_COPY.tabPending, result.stats.pending],
+                ] as const
+              ).map(([value, label, count]) => (
+                <Link
+                  key={value}
+                  href={tabHref(value)}
+                  aria-current={status === value ? 'page' : undefined}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    status === value
+                      ? 'border-primary/60 bg-primary/10 text-foreground'
+                      : 'border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                  <span className="tabular-nums text-xs text-muted-foreground">{count}</span>
+                </Link>
+              ))}
+            </nav>
+
+            <form method="get" className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <input type="hidden" name="status" value={status} />
               <label className="relative flex-1">
                 <span className="sr-only">Müşteri ara</span>
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -164,7 +195,13 @@ export function CustomersClient({
             {result.rows.length === 0 ? (
               <div className="mt-8 flex flex-col items-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
                 <Users className="size-8 text-muted-foreground" />
-                <p className="mt-4 font-medium">{q ? 'Aramanızla eşleşen müşteri yok.' : 'Henüz üye müşteri yok.'}</p>
+                <p className="mt-4 font-medium">
+                  {q
+                    ? 'Aramanızla eşleşen müşteri yok.'
+                    : status === 'pending_deletion'
+                      ? OWNER_DELETION_COPY.pendingEmpty
+                      : 'Henüz üye müşteri yok.'}
+                </p>
               </div>
             ) : (
               <ul className="mt-6 flex flex-col gap-3">
@@ -191,6 +228,15 @@ export function CustomersClient({
                       <p className="mt-2 text-xs text-muted-foreground">
                         Kayıt: {date(r.created_at)} · Son sipariş: {date(r.last_order_at)}
                       </p>
+                      {r.deletion_scheduled_at && (
+                        <p
+                          className={`mt-1 text-xs font-medium ${
+                            isDeletionUrgent(r.deletion_scheduled_at) ? 'text-destructive' : 'text-muted-foreground'
+                          }`}
+                        >
+                          {OWNER_DELETION_COPY.remaining(daysRemaining(r.deletion_scheduled_at))} · {date(r.deletion_scheduled_at)}
+                        </p>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -250,7 +296,7 @@ export function CustomersClient({
           projectId={projectId}
           customer={detail}
           onClose={() => setDetail(null)}
-          onDeleted={() => {
+          onChanged={() => {
             setDetail(null)
             router.refresh()
           }}
@@ -280,27 +326,35 @@ function DetailDrawer({
   projectId,
   customer,
   onClose,
-  onDeleted,
+  onChanged,
 }: {
   projectId: string
   customer: OwnerCustomerDetail
   onClose: () => void
-  onDeleted: () => void
+  onChanged: () => void
 }) {
   const copy = ACCOUNT_DELETION_COPY.tr
+  const owner = OWNER_DELETION_COPY
+  const suspended = customer.deletionScheduledAt !== null
   const [deleting, setDeleting] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function remove() {
+  function run(action: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setError(null)
     startTransition(async () => {
-      const res = await deleteCustomerByOwner({ projectId, customerId: customer.id, confirmEmail: email })
-      if (res.ok) onDeleted()
+      const res = await action()
+      if (res.ok) onChanged()
       else setError(res.error)
     })
   }
+
+  const confirmArgs = () => ({ projectId, customerId: customer.id, confirmEmail: email })
+  const suspend = () => run(() => suspendCustomerByOwner(confirmArgs()))
+  const purge = () => run(() => purgeCustomerByOwner(confirmArgs()))
+  const restore = () => run(() => restoreCustomerByOwner({ projectId, customerId: customer.id }))
 
   const invoiceEntries = Object.entries(customer.invoice ?? {}).filter(
     ([, v]) => typeof v === 'string' && v.trim() !== '',
@@ -318,6 +372,11 @@ function DetailDrawer({
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold">{customer.name || customer.email}</h2>
             <p className="text-sm text-muted-foreground">Kayıt: {date(customer.created_at)}</p>
+            {customer.deletionScheduledAt && (
+              <p role="status" className="mt-1 text-sm font-medium text-destructive">
+                {owner.banner(date(customer.deletionScheduledAt))} {owner.remaining(daysRemaining(customer.deletionScheduledAt))}
+              </p>
+            )}
           </div>
           <button type="button" onClick={onClose} aria-label="Kapat" className="rounded-md p-1 text-muted-foreground hover:text-foreground">
             <X className="size-5" />
@@ -393,16 +452,72 @@ function DetailDrawer({
         </section>
 
         <section className="mt-auto rounded-xl border border-destructive/40 p-4">
-          {!deleting ? (
+          {suspended && !deleting && !restoring ? (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setRestoring(true)}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm font-medium hover:border-primary/40"
+              >
+                {owner.restore}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleting(true)}
+                className="w-full rounded-lg border border-destructive/50 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
+              >
+                {owner.purge}
+              </button>
+            </div>
+          ) : restoring ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="font-medium">{owner.restoreTitle}</p>
+              <p className="text-muted-foreground">{owner.restoreBody}</p>
+              {error && (
+                <p role="alert" className="text-destructive">
+                  {error}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRestoring(false)
+                    setError(null)
+                  }}
+                  className="h-10 flex-1 rounded-lg border border-border"
+                >
+                  {owner.cancel}
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={restore}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 font-medium text-primary-foreground disabled:opacity-60"
+                >
+                  {pending && <Loader2 className="size-4 animate-spin" />}
+                  {owner.restoreSubmit}
+                </button>
+              </div>
+            </div>
+          ) : !deleting ? (
             <button
               type="button"
               onClick={() => setDeleting(true)}
               className="w-full rounded-lg border border-destructive/50 px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10"
             >
-              Hesabı sil (müşteri talebi)
+              {owner.suspendButton}
             </button>
           ) : (
             <div className="flex flex-col gap-3 text-sm">
+              {suspended ? (
+                <div>
+                  <p className="font-medium">{owner.purgeTitle}</p>
+                  <p className="text-muted-foreground">{owner.purgeBody}</p>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">{owner.suspendNotice}</p>
+              )}
               <div>
                 <p className="font-medium">{copy.removedTitle}</p>
                 <ul className="list-disc pl-5 text-muted-foreground">
@@ -420,7 +535,7 @@ function DetailDrawer({
                 </ul>
               </div>
               <label className="flex flex-col gap-1">
-                <span>Onaylamak için müşterinin e-postasını yazın</span>
+                <span>{owner.purgeConfirm}</span>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -443,16 +558,16 @@ function DetailDrawer({
                   }}
                   className="h-10 flex-1 rounded-lg border border-border"
                 >
-                  Vazgeç
+                  {owner.cancel}
                 </button>
                 <button
                   type="button"
                   disabled={pending || !email.trim()}
-                  onClick={remove}
+                  onClick={suspended ? purge : suspend}
                   className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-destructive px-3 font-medium text-destructive-foreground disabled:opacity-60"
                 >
                   {pending && <Loader2 className="size-4 animate-spin" />}
-                  Kalıcı olarak sil
+                  {suspended ? owner.purgeSubmit : owner.suspendSubmit}
                 </button>
               </div>
             </div>
