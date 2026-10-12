@@ -215,6 +215,7 @@ export function WebsiteRenderer({
         activeSlug={active}
         onNavigate={handleNavigate}
         cartSlug={store?.slug}
+        lang={data.meta.language}
       />
       {sections.map((section, i) => {
         const rendered = (

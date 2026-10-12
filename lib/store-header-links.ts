@@ -2,6 +2,25 @@ export const storeHomeHref = (slug: string) => `/site/${slug}`
 export const storeListHref = (slug: string) => `/site/${slug}/store`
 export const storeCartHref = (slug: string) => `/site/${slug}/checkout`
 
+export const storeAccountHref = (slug: string) => `/site/${slug}/hesap`
+export const storeSessionApiHref = (slug: string) =>
+  `/api/store/session?slug=${encodeURIComponent(slug)}`
+
+export const ACCOUNT_LABELS = {
+  tr: { signIn: 'Giriş yap', account: 'Hesabım' },
+  en: { signIn: 'Sign in', account: 'My account' },
+} as const
+
+/** Only storefront pages (which carry a store slug) get the customer-account link. */
+export function shouldShowAccountLink(storeSlug?: string | null): storeSlug is string {
+  return typeof storeSlug === 'string' && storeSlug.length > 0
+}
+
+export function accountLinkLabel(loggedIn: boolean, lang: 'tr' | 'en' = 'tr'): string {
+  const labels = ACCOUNT_LABELS[lang] ?? ACCOUNT_LABELS.tr
+  return loggedIn ? labels.account : labels.signIn
+}
+
 /** A header CTA that means "go to the cart" (label or target). */
 export function isCartCta(cta: { label: string; href?: string | null }): boolean {
   return /sepet|cart/i.test(cta.label) || /\/(checkout|cart|sepet)\b/i.test(cta.href ?? '')

@@ -6,7 +6,15 @@ import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primit
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { useOptionalCart } from '@/components/store/cart-provider'
-import { isCartCta, isProductsLink, storeCartHref, storeHomeHref, storeListHref } from '@/lib/store-header-links'
+import { StoreAccountLink } from '@/components/website-renderer/store-account-link'
+import {
+  isCartCta,
+  isProductsLink,
+  shouldShowAccountLink,
+  storeCartHref,
+  storeHomeHref,
+  storeListHref,
+} from '@/lib/store-header-links'
 
 export function WebsiteHeader({
   navigation,
@@ -15,7 +23,9 @@ export function WebsiteHeader({
   onNavigate,
   storeSlug,
   cartSlug: cartSlugProp,
+  lang = 'tr',
 }: {
+  lang?: 'tr' | 'en'
   navigation: WebsiteSchema['navigation']
   pages?: PageItem[]
   activeSlug?: string
@@ -170,6 +180,8 @@ export function WebsiteHeader({
               })}
         </nav>
 
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
         {navigation.cta ? (
           cartSlug && isCartCta(navigation.cta) ? (
             <a
@@ -189,7 +201,8 @@ export function WebsiteHeader({
               )}
             </a>
           ) : <SiteButton button={navigation.cta} />
-        ) : <span />}
+        ) : null}
+        </div>
       </div>
     </header>
   )
