@@ -21,6 +21,8 @@ import {
   type InvoiceInput,
   type LegalConsentState,
 } from './checkout-extras'
+import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
+import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
 
 export type CheckoutCustomer = {
   name: string
@@ -41,6 +43,7 @@ export function CheckoutForm({
   demo = false,
   guestCheckout = true,
   codFeeCents = 0,
+  shipping = DEFAULT_SHIPPING_SETTINGS,
 }: {
   slug: string
   storeName: string
@@ -51,6 +54,7 @@ export function CheckoutForm({
   demo?: boolean
   guestCheckout?: boolean
   codFeeCents?: number
+  shipping?: ShippingSettings
 }) {
   return (
     <CartProvider slug={slug}>
@@ -64,6 +68,7 @@ export function CheckoutForm({
         demo={demo}
         guestCheckout={guestCheckout}
         codFeeCents={codFeeCents}
+        shipping={shipping}
       />
     </CartProvider>
   )
@@ -82,6 +87,7 @@ function CheckoutInner({
   demo,
   guestCheckout,
   codFeeCents,
+  shipping,
 }: {
   slug: string
   storeName: string
@@ -92,6 +98,7 @@ function CheckoutInner({
   demo: boolean
   guestCheckout: boolean
   codFeeCents: number
+  shipping: ShippingSettings
 }) {
   const paymentBlocked = paymentUnavailableReason !== null || methods.length === 0
   const cart = useCart()
@@ -121,6 +128,8 @@ function CheckoutInner({
 
   // Display only; createOrder recomputes the fee server side.
   const codFee = paymentMethod === 'cash_on_delivery' ? codFeeCents : 0
+  const shippingView = buildShippingView(cart.subtotalCents, shipping)
+  const grandTotalCents = cartTotalCents(cart.subtotalCents, shipping, codFee)
 
   // Stable idempotency key for this checkout attempt (per mount).
   const idempotencyKey = useMemo(
@@ -401,7 +410,7 @@ function CheckoutInner({
             ) : (
               <>
                 <Lock className="size-4" />
-                Siparişi tamamla · {formatPrice(cart.subtotalCents + codFee, cart.currency)}
+                Siparişi tamamla · {formatPrice(grandTotalCents, cart.currency)}
               </>
             )}
           </Button>
@@ -428,8 +437,21 @@ function CheckoutInner({
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Ara toplam</span>
+            <span className="font-medium">{formatPrice(cart.subtotalCents, cart.currency)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">{SHIPPING_COPY.tr.label}</span>
+            <span className="font-medium">
+              {shippingView.free
+                ? SHIPPING_COPY.tr.free
+                : formatPrice(shippingView.shippingCents, cart.currency)}
+            </span>
+          </div>
+          {shippingView.hint && <p className="mt-1 text-xs text-muted-foreground">{shippingView.hint}</p>}
           {codFee > 0 && (
-            <div className="mt-4 flex items-center justify-between text-sm">
+            <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
               <span className="font-medium">{formatPrice(codFee, cart.currency)}</span>
             </div>
@@ -437,7 +459,7 @@ function CheckoutInner({
           <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
             <span className="text-muted-foreground">Toplam</span>
             <span className="font-display text-xl font-bold">
-              {formatPrice(cart.subtotalCents + codFee, cart.currency)}
+              {formatPrice(grandTotalCents, cart.currency)}
             </span>
           </div>
         </aside>

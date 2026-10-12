@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, XCircle } from 'lucide-react'
 import { formatIban } from '@/lib/iban'
 import { getOrderConfirmation } from '@/lib/store-order-access'
 import { formatPrice } from '@/lib/format'
+import { shippingRowValue } from '@/lib/store-shipping-display'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { Button } from '@/components/ui/button'
 
@@ -130,8 +131,18 @@ export default async function OrderConfirmationPage({
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Ara toplam</span>
+            <span className="font-medium">{formatPrice(order.subtotal_cents, order.currency)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Kargo</span>
+            <span className="font-medium">
+              {shippingRowValue(order.shipping_cents, (cents) => formatPrice(cents, order.currency))}
+            </span>
+          </div>
           {order.cod_fee_cents > 0 && (
-            <div className="mt-4 flex items-center justify-between text-sm">
+            <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
               <span className="font-medium">{formatPrice(order.cod_fee_cents, order.currency)}</span>
             </div>

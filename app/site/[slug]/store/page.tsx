@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
+import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,10 @@ export default async function StorePage({
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
-  const products = await getStoreProducts(slug)
+  const [products, shipping] = await Promise.all([
+    getStoreProducts(slug),
+    getStoreShippingInfo(slug),
+  ])
 
-  return <StoreFront slug={slug} storeName={site.name} products={products} />
+  return <StoreFront slug={slug} storeName={site.name} products={products} shipping={shipping} />
 }

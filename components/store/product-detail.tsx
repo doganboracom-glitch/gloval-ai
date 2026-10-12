@@ -10,21 +10,31 @@ import { CartProvider, useCart, useAddWithConfirm, formatPrice } from './cart-pr
 import { TryOnButton } from './try-on-button'
 import type { StoreProduct } from '@/lib/store'
 import { getStockNotice, isSoldOut, purchasableMax } from '@/lib/store-stock'
+import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
+import { productShippingLine } from '@/lib/store-shipping-display'
 
 export function ProductDetail({
   slug,
   storeName,
   product,
   enableTryOn = false,
+  shipping = DEFAULT_SHIPPING_SETTINGS,
 }: {
   slug: string
   storeName: string
   product: StoreProduct
   enableTryOn?: boolean
+  shipping?: ShippingSettings
 }) {
   return (
     <CartProvider slug={slug}>
-      <ProductDetailInner slug={slug} storeName={storeName} product={product} enableTryOn={enableTryOn} />
+      <ProductDetailInner
+        slug={slug}
+        storeName={storeName}
+        product={product}
+        enableTryOn={enableTryOn}
+        shipping={shipping}
+      />
     </CartProvider>
   )
 }
@@ -34,11 +44,13 @@ function ProductDetailInner({
   storeName,
   product,
   enableTryOn,
+  shipping,
 }: {
   slug: string
   storeName: string
   product: StoreProduct
   enableTryOn: boolean
+  shipping: ShippingSettings
 }) {
   const cart = useCart()
   const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
@@ -125,12 +137,13 @@ function ProductDetailInner({
           {product.description && (
             <p className="leading-relaxed text-muted-foreground">{product.description}</p>
           )}
-          {product.shipping_note && (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+            <p className="flex items-center gap-2">
               <Truck className="size-4 shrink-0" />
-              {product.shipping_note}
+              {productShippingLine(shipping)}
             </p>
-          )}
+            {product.shipping_note && <p className="pl-6">{product.shipping_note}</p>}
+          </div>
           {specs.some((spec) => !spec.value) && (
             <ul className="flex flex-wrap gap-2 text-sm">
               {specs

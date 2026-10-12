@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { slugify } from '@/lib/slug'
 import type { StoreProduct } from '@/lib/store'
 import type { WebsiteSchema } from '@/lib/website-schema'
+import type { ShippingSettings } from '@/lib/store-shipping-rules'
 
 /**
  * A single real catalog product, projected to just what the generated-site
@@ -30,6 +31,8 @@ export type StoreCatalog = {
    * schema's own items. Absent on legacy/display-only catalogs.
    */
   products?: StoreProduct[]
+  /** Display-only shipping rules for the cart drawer; createOrder recomputes the real charge. */
+  shipping?: ShippingSettings
   /** True for the editor preview, which shows owner hints and has no cart. */
   isPreview?: boolean
 }

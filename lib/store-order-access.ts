@@ -38,6 +38,9 @@ export type OrderConfirmation = {
   first_name: string
   masked_email: string
   total_cents: number
+  subtotal_cents: number
+  /** Shipping charge included in total_cents (0 = free, or an order from before shipping existed). */
+  shipping_cents: number
   /** Cash-on-delivery surcharge included in total_cents (0 for other methods). */
   cod_fee_cents: number
   currency: string
@@ -157,6 +160,8 @@ export async function getOrderConfirmation(
     first_name: firstNameOf(order.customer_name),
     masked_email: maskEmail(order.customer_email),
     total_cents: order.total_cents,
+    subtotal_cents: order.subtotal_cents ?? 0,
+    shipping_cents: order.shipping_cents ?? 0,
     cod_fee_cents: orderCodFeeCents(order),
     currency: order.currency,
     created_at: order.created_at,
