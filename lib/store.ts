@@ -81,11 +81,16 @@ export type StoreProduct = {
   sku?: string | null
 } & Partial<StoreProductExtras>;
 
+/** Collections are optional decoration: a missing function or a failed call means "no collections". */
 export async function getStoreCollections(slug: string): Promise<StoreCollection[]> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.rpc('get_store_collections', { p_slug: slug })
-  if (error || !data) return []
-  return data as StoreCollection[]
+  try {
+    const supabase = await createClient()
+    const { data, error } = await supabase.rpc('get_store_collections', { p_slug: slug })
+    if (error || !Array.isArray(data)) return []
+    return data as StoreCollection[]
+  } catch {
+    return []
+  }
 }
 
 /**
