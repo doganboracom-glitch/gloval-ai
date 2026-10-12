@@ -1,29 +1,27 @@
 /**
- * Storefront pages (home showcase, store list, product page) read the catalog
- * from the database. Custom domains and `*.gloval.site` are rewritten to
+ * Storefront pages (home showcase, store list, product page, checkout) read the
+ * catalog from the database. Custom domains and `*.gloval.site` are rewritten to
  * `/site/<slug>`, so refreshing that path tree covers every host.
  */
 
 export type StorefrontRevalidateDeps = {
-  findSlug: (projectId: string) => Promise<string | null>
+  /** Resolves the public slug from whatever id the caller has (project or order). */
+  findSlug: (id: string) => Promise<string | null>
   revalidatePath: (path: string, type?: 'layout' | 'page') => void
 }
 
+/** One `layout` entry refreshes the home page and every route below it (store, product, cart, checkout). */
 export function storefrontPaths(slug: string): Array<{ path: string; type: 'layout' | 'page' }> {
-  const base = `/site/${slug}`
-  return [
-    { path: base, type: 'page' },
-    { path: `${base}/store`, type: 'layout' },
-  ]
+  return [{ path: `/site/${slug}`, type: 'layout' }]
 }
 
 /** Never throws: a failed refresh must not turn a successful product save into an error. */
 export async function revalidateStorefront(
   deps: StorefrontRevalidateDeps,
-  projectId: string,
+  id: string,
 ): Promise<void> {
   try {
-    const slug = await deps.findSlug(projectId)
+    const slug = await deps.findSlug(id)
     if (!slug) return
     for (const { path, type } of storefrontPaths(slug)) deps.revalidatePath(path, type)
   } catch {

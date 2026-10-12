@@ -149,12 +149,12 @@ describe('AI/editor product lock', () => {
 })
 
 describe('storefront revalidation', () => {
-  it('refreshes home and store paths for the project slug', async () => {
+  it('refreshes the whole site tree (home, store, product, checkout) for the slug', async () => {
     const revalidatePath = vi.fn()
     await revalidateStorefront({ findSlug: async () => 'luna-mucevher', revalidatePath }, 'p1')
-    expect(revalidatePath).toHaveBeenCalledWith('/site/luna-mucevher', 'page')
-    expect(revalidatePath).toHaveBeenCalledWith('/site/luna-mucevher/store', 'layout')
-    expect(storefrontPaths('x')).toHaveLength(2)
+    expect(revalidatePath).toHaveBeenCalledTimes(1)
+    expect(revalidatePath).toHaveBeenCalledWith('/site/luna-mucevher', 'layout')
+    expect(storefrontPaths('x')).toEqual([{ path: '/site/x', type: 'layout' }])
   })
 
   it('does nothing without a slug and never throws', async () => {

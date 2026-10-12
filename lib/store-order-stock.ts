@@ -1,9 +1,35 @@
 import 'server-only'
 
+import { revalidatePath } from 'next/cache'
 import type { createAdminClient } from '@/lib/supabase/admin'
+import { revalidateStorefront } from '@/lib/store-revalidate'
 import { isMissingFunctionError } from '@/lib/store-schema-compat'
 
 type Admin = ReturnType<typeof createAdminClient>
+
+/** Stock shown on the live pages changed: refresh the order's store (never throws). */
+export function refreshStorefrontForOrder(admin: Admin, orderId: string): Promise<void> {
+  return revalidateStorefront(
+    {
+      findSlug: async (id) => {
+        const { data: order } = await admin
+          .from('ecommerce_orders')
+          .select('project_id')
+          .eq('id', id)
+          .maybeSingle()
+        if (!order?.project_id) return null
+        const { data: project } = await admin
+          .from('projects')
+          .select('slug')
+          .eq('id', order.project_id as string)
+          .maybeSingle()
+        return typeof project?.slug === 'string' && project.slug ? project.slug : null
+      },
+      revalidatePath,
+    },
+    orderId,
+  )
+}
 
 export type ReserveResult =
   | { ok: true; mode: 'atomic'; already: boolean }
@@ -32,7 +58,10 @@ export async function reserveOrderStock(admin: Admin, orderId: string): Promise<
     return { ok: false, error: 'stock_failed' }
   }
   const res = (data ?? null) as RpcReserve | null
-  if (res?.ok) return { ok: true, mode: 'atomic', already: Boolean(res.already) }
+  if (res?.ok) {
+    if (!res.already) await refreshStorefrontForOrder(admin, orderId)
+    return { ok: true, mode: 'atomic', already: Boolean(res.already) }
+  }
   if (res?.error === 'insufficient_stock') {
     return { ok: false, error: 'insufficient_stock', productId: res.product_id ?? null }
   }
@@ -56,7 +85,9 @@ export async function releaseOrderStock(
   })
   if (error && !isMissingFunctionError(error)) {
     console.error('[store-stock] release failed', { orderId, code: error.code })
+    return
   }
+  if (!error) await refreshStorefrontForOrder(admin, orderId)
 }
 
 const STALE_ONLINE_ORDER_MS = 2 * 60 * 60 * 1000
@@ -154,6 +185,7 @@ export async function finalizePaidStock(
   const reserved = await reserveOrderStock(admin, orderId)
   if (reserved.ok && reserved.mode === 'legacy') {
     await legacyDecrementForOrder(admin, orderId)
+    await refreshStorefrontForOrder(admin, orderId)
     return { oversold: false }
   }
   if (!reserved.ok) {
