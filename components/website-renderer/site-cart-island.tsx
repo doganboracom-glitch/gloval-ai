@@ -1,8 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ShoppingCart, Plus, Minus, Trash2, X, PackageOpen } from 'lucide-react'
-import { useCart, formatPrice, OPEN_CART_EVENT } from '@/components/store/cart-provider'
+import { ShoppingCart, Plus, Minus, Trash2, X, PackageOpen, Check } from 'lucide-react'
+import {
+  useCart,
+  formatPrice,
+  OPEN_CART_EVENT,
+  CART_TOAST_EVENT,
+  type CartToastDetail,
+} from '@/components/store/cart-provider'
+import { CART_TOAST_DURATION_MS, cartToastMessage } from '@/lib/store-cart-feedback'
 import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
 import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
 
@@ -31,15 +38,34 @@ export function SiteCartIsland({
   const shippingView = buildShippingView(cart.subtotalCents, shipping, lang)
   const showShipping = shipping.feeCents > 0
 
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null)
+
   useEffect(() => {
     const openCart = () => setOpen(true)
     window.addEventListener(OPEN_CART_EVENT, openCart)
     return () => window.removeEventListener(OPEN_CART_EVENT, openCart)
   }, [])
 
+  useEffect(() => {
+    const onToast = (e: Event) => {
+      const detail = (e as CustomEvent<CartToastDetail>).detail
+      if (!detail) return
+      setToast({ id: Date.now(), message: cartToastMessage(detail, lang) })
+    }
+    window.addEventListener(CART_TOAST_EVENT, onToast)
+    return () => window.removeEventListener(CART_TOAST_EVENT, onToast)
+  }, [lang])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), CART_TOAST_DURATION_MS)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
   const t =
     lang === 'en'
       ? {
+          goToCart: 'Go to cart',
           openCart: 'Open cart',
           cart: 'Cart',
           empty: 'Your cart is empty.',
@@ -52,6 +78,7 @@ export function SiteCartIsland({
           remove: 'Remove',
         }
       : {
+          goToCart: 'Sepete git',
           openCart: 'Sepeti aç',
           cart: 'Sepetim',
           empty: 'Sepetin boş.',
@@ -88,6 +115,38 @@ export function SiteCartIsland({
           </span>
         )}
       </button>
+
+      <div aria-live="polite" role="status" className="pointer-events-none fixed inset-x-3 bottom-24 z-[60] flex justify-center sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-36 sm:justify-end">
+        {toast && (
+          <div
+            key={toast.id}
+            data-cart-toast
+            className="pointer-events-auto flex w-full max-w-sm items-center justify-between gap-3 px-4 py-3 text-sm shadow-xl sm:w-auto sm:min-w-72"
+            style={{
+              borderRadius: 'var(--site-radius)',
+              backgroundColor: 'var(--site-card)',
+              color: 'var(--site-fg)',
+              border: '1px solid var(--site-border)',
+            }}
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <Check className="size-4 shrink-0" style={{ color: 'var(--site-primary)' }} aria-hidden />
+              {toast.message}
+            </span>
+            <a
+              href={`/site/${slug}/checkout`}
+              className="shrink-0 px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-90"
+              style={{
+                borderRadius: 'var(--site-radius)',
+                backgroundColor: 'var(--site-primary)',
+                color: 'var(--site-primary-fg)',
+              }}
+            >
+              {t.goToCart}
+            </a>
+          </div>
+        )}
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end">

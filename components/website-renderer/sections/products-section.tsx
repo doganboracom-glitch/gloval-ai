@@ -25,6 +25,7 @@ import { ProductCard as StoreProductCard } from '@/components/store/product-card
 import type { StoreProduct } from '@/lib/store'
 import { resolveShowcaseSettings, selectShowcaseProducts } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { resolveViewAllLabel, storeListHref } from '@/lib/store-header-links'
 
 type ProductsData = Extract<Section, { type: 'products' }>
 type ProductItem = ProductsData['items'][number]
@@ -74,6 +75,9 @@ function CatalogShowcase({
   const settings = resolveShowcaseSettings(data)
   const selected = selectShowcaseProducts(products, settings)
   const carousel = data.layout === 'carousel'
+  const nav = useSiteNav()
+  const viewAllLabel = resolveViewAllLabel(data.viewAllLabel)
+  const listHref = storeListHref(catalog.slug)
 
   if (selected.length === 0 && !catalog.isPreview) return null
 
@@ -106,6 +110,24 @@ function CatalogShowcase({
           ))}
         </div>
       )}
+      {viewAllLabel ? (
+        <div className="mt-8 flex justify-center">
+          <a
+            href={listHref}
+            data-view-all-products
+            onClick={(e) => onSiteNavClick(e, listHref, nav)}
+            className="inline-flex cursor-pointer items-center justify-center px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{
+              borderRadius: 'var(--site-radius)',
+              fontFamily: 'var(--site-body-font)',
+              border: '1px solid var(--site-primary)',
+              color: 'var(--site-primary)',
+            }}
+          >
+            {viewAllLabel}
+          </a>
+        </div>
+      ) : null}
     </SectionShell>
   )
 }

@@ -327,6 +327,8 @@ export const productsSection = z.object({
     .describe('"latest" (newest products), "sale" (discounted products) or "manual" (owner-selected products)'),
   /** How many catalog products a storefront shows here. */
   limit: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional().describe('Number of products: 4, 8 or 12'),
+  /** Label of the "view all products" link on a storefront. Unset = default text; empty string = hidden. */
+  viewAllLabel: z.string().optional().describe('Label of the link to the full product list, e.g. "Tüm ürünleri gör". Empty hides the link.'),
   items: z
     .array(
       z.object({

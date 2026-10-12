@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { MAX_CART_QTY, cartAddOutcome, clampCartQty, type CartAddOutcome } from '@/lib/store-cart-feedback'
 
 export type CartItem = {
   productId: string
@@ -31,8 +32,6 @@ type CartContextValue = {
 }
 
 const CartContext = createContext<CartContextValue | null>(null)
-
-const MAX_QTY = 99
 
 /**
  * Persistent, per-store cart. Cart state is keyed by store slug in
@@ -75,8 +74,7 @@ export function CartProvider({
   }, [items, hydrated, storageKey])
 
   const value = useMemo<CartContextValue>(() => {
-    const clampQty = (qty: number, max: number) =>
-      Math.max(1, Math.min(qty, Math.min(MAX_QTY, max || MAX_QTY)))
+    const clampQty = clampCartQty
 
     return {
       items,
@@ -129,14 +127,24 @@ export function useOptionalCart() {
   return useContext(CartContext)
 }
 
+/** Fired after every add; the cart island shows a short, accessible toast. */
+export const CART_TOAST_EVENT = 'gloval-cart:toast'
+
+export type CartToastDetail = CartAddOutcome
+
 /**
- * Adds immediately and increments an existing line item without confirmation.
- * Quantity controls and the cart drawer remain the place where buyers review
- * or correct the quantity before checkout.
+ * Adds immediately (the counter updates at once) and announces the result with
+ * a toast instead of a confirmation dialog: "added" for a new line, "quantity
+ * updated" when the product was already in the cart.
  */
 export function useAddWithConfirm(cart: CartContextValue | null) {
   const requestAdd = (item: Omit<CartItem, 'quantity'>, qty = 1) => {
-    cart?.add(item, qty)
+    if (!cart) return
+    const outcome = cartAddOutcome(cart.items, item.productId, qty, item.maxStock)
+    cart.add(item, qty)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent<CartToastDetail>(CART_TOAST_EVENT, { detail: outcome }))
+    }
   }
 
   return { requestAdd }

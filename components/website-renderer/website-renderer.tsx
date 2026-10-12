@@ -214,6 +214,7 @@ export function WebsiteRenderer({
         pages={pages}
         activeSlug={active}
         onNavigate={handleNavigate}
+        cartSlug={store?.slug}
       />
       {sections.map((section, i) => {
         const rendered = (
