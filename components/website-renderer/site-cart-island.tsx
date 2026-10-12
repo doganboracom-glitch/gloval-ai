@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { ShoppingCart, Plus, Minus, Trash2, X, PackageOpen } from 'lucide-react'
 import { useCart, formatPrice, OPEN_CART_EVENT } from '@/components/store/cart-provider'
+import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
+import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
 
 /**
  * Self-contained cart control for a GENERATED storefront. It is mounted by the
@@ -15,9 +17,19 @@ import { useCart, formatPrice, OPEN_CART_EVENT } from '@/components/store/cart-p
  * credit. It opens automatically when a product card dispatches the shared
  * "open cart" event after an add, and links to the existing checkout route.
  */
-export function SiteCartIsland({ slug, lang }: { slug: string; lang: 'tr' | 'en' }) {
+export function SiteCartIsland({
+  slug,
+  lang,
+  shipping = DEFAULT_SHIPPING_SETTINGS,
+}: {
+  slug: string
+  lang: 'tr' | 'en'
+  shipping?: ShippingSettings
+}) {
   const cart = useCart()
   const [open, setOpen] = useState(false)
+  const shippingView = buildShippingView(cart.subtotalCents, shipping, lang)
+  const showShipping = shipping.feeCents > 0
 
   useEffect(() => {
     const openCart = () => setOpen(true)
@@ -32,6 +44,7 @@ export function SiteCartIsland({ slug, lang }: { slug: string; lang: 'tr' | 'en'
           cart: 'Cart',
           empty: 'Your cart is empty.',
           subtotal: 'Subtotal',
+          total: 'Total',
           checkout: 'Checkout',
           close: 'Close',
           decrease: 'Decrease',
@@ -43,6 +56,7 @@ export function SiteCartIsland({ slug, lang }: { slug: string; lang: 'tr' | 'en'
           cart: 'Sepetim',
           empty: 'Sepetin boş.',
           subtotal: 'Ara toplam',
+          total: 'Toplam',
           checkout: 'Ödemeye geç',
           close: 'Kapat',
           decrease: 'Azalt',
@@ -173,10 +187,51 @@ export function SiteCartIsland({ slug, lang }: { slug: string; lang: 'tr' | 'en'
                   ))}
                 </ul>
                 <div className="px-5 py-4" style={{ borderTop: '1px solid var(--site-border)' }}>
+                  {showShipping && shippingView.hint && (
+                    <div className="mb-3">
+                      <p className="text-xs" style={{ color: 'var(--site-muted-fg)' }}>
+                        {shippingView.hint}
+                      </p>
+                      {shippingView.progress !== null && (
+                        <div
+                          className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full"
+                          style={{ backgroundColor: 'var(--site-border)' }}
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(shippingView.progress * 100)}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.round(shippingView.progress * 100)}%`,
+                              backgroundColor: 'var(--site-primary)',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {showShipping && (
+                    <>
+                      <div className="mb-1.5 flex items-center justify-between text-sm">
+                        <span style={{ color: 'var(--site-muted-fg)' }}>{t.subtotal}</span>
+                        <span>{formatPrice(cart.subtotalCents, cart.currency)}</span>
+                      </div>
+                      <div className="mb-3 flex items-center justify-between text-sm">
+                        <span style={{ color: 'var(--site-muted-fg)' }}>{SHIPPING_COPY[lang].label}</span>
+                        <span>
+                          {shippingView.free
+                            ? SHIPPING_COPY[lang].free
+                            : formatPrice(shippingView.shippingCents, cart.currency)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="mb-3 flex items-center justify-between">
-                    <span style={{ color: 'var(--site-muted-fg)' }}>{t.subtotal}</span>
+                    <span style={{ color: 'var(--site-muted-fg)' }}>{showShipping ? t.total : t.subtotal}</span>
                     <span className="text-lg font-bold" style={{ fontFamily: 'var(--site-heading-font)' }}>
-                      {formatPrice(cart.subtotalCents, cart.currency)}
+                      {formatPrice(cartTotalCents(cart.subtotalCents, shipping), cart.currency)}
                     </span>
                   </div>
                   <a

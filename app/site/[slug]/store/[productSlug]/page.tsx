@@ -4,6 +4,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { getStoreProductBySlug } from '@/lib/store'
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
 import { ProductDetail } from '@/components/store/product-detail'
+import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,11 +35,15 @@ export default async function ProductPage({
   const product = await getStoreProductBySlug(slug, productSlug)
   if (!product) notFound()
 
-  const tryOnConfig = await getTryOnConfigForStore(slug)
+  const [tryOnConfig, shipping] = await Promise.all([
+    getTryOnConfigForStore(slug),
+    getStoreShippingInfo(slug),
+  ])
 
   return (
     <ProductDetail
       slug={slug}
+      shipping={shipping}
       storeName={site.name}
       product={product}
       enableTryOn={tryOnConfig !== null}

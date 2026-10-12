@@ -4,6 +4,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { CheckoutForm } from '@/components/store/checkout-form'
 import { getStorePaymentMethods } from '@/lib/store'
 import { getCurrentStoreCustomer } from '@/lib/store-customer'
+import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,10 +21,12 @@ export default async function CheckoutPage({
 
   const { available, reason, methods, publicConfig, demo, guestCheckout, codFeeCents } = await getStorePaymentMethods(slug)
   const customer = await getCurrentStoreCustomer(slug)
+  const shipping = await getStoreShippingInfo(slug)
 
   return (
     <CheckoutForm
       slug={slug}
+      shipping={shipping}
       storeName={site.name}
       paymentUnavailableReason={available ? null : (reason ?? 'not_configured')}
       methods={methods}

@@ -257,7 +257,7 @@ export function WebsiteRenderer({
       {showBranding && !hasFooter && (
         <GlovalBadge lang={data.meta.language} variant="floating" />
       )}
-      {store && <SiteCartIsland slug={store.slug} lang={data.meta.language} />}
+      {store && <SiteCartIsland slug={store.slug} lang={data.meta.language} shipping={store.shipping} />}
     </div>
     </SiteNavProvider>
   )

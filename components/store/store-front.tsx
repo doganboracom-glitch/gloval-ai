@@ -11,11 +11,14 @@ import {
 } from './cart-provider'
 import type { StoreProduct } from '@/lib/store'
 import { ProductCard } from './product-card'
+import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
+import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
 
 type StoreFrontProps = {
   slug: string
   storeName: string
   products: StoreProduct[]
+  shipping?: ShippingSettings
 }
 
 export function StoreFront(props: StoreFrontProps) {
@@ -26,7 +29,12 @@ export function StoreFront(props: StoreFrontProps) {
   )
 }
 
-function StoreFrontInner({ slug, storeName, products }: StoreFrontProps) {
+function StoreFrontInner({
+  slug,
+  storeName,
+  products,
+  shipping = DEFAULT_SHIPPING_SETTINGS,
+}: StoreFrontProps) {
   const cart = useCart()
   const [cartOpen, setCartOpen] = useState(false)
 
@@ -87,21 +95,25 @@ function StoreFrontInner({ slug, storeName, products }: StoreFrontProps) {
         )}
       </main>
 
-      <CartDrawer slug={slug} open={cartOpen} onClose={() => setCartOpen(false)} />
+      <CartDrawer slug={slug} shipping={shipping} open={cartOpen} onClose={() => setCartOpen(false)} />
     </div>
   )
 }
 
 function CartDrawer({
   slug,
+  shipping,
   open,
   onClose,
 }: {
   slug: string
+  shipping: ShippingSettings
   open: boolean
   onClose: () => void
 }) {
   const cart = useCart()
+  const shippingView = buildShippingView(cart.subtotalCents, shipping)
+  const showShipping = shipping.feeCents > 0
 
   if (!open) return null
 
@@ -189,10 +201,45 @@ function CartDrawer({
               ))}
             </ul>
             <div className="border-t border-border px-5 py-4">
+              {showShipping && shippingView.hint && (
+                <div className="mb-3">
+                  <p className="text-xs text-muted-foreground">{shippingView.hint}</p>
+                  {shippingView.progress !== null && (
+                    <div
+                      className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(shippingView.progress * 100)}
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${Math.round(shippingView.progress * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              {showShipping && (
+                <>
+                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Ara toplam</span>
+                    <span>{formatPrice(cart.subtotalCents, cart.currency)}</span>
+                  </div>
+                  <div className="mb-3 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{SHIPPING_COPY.tr.label}</span>
+                    <span>
+                      {shippingView.free
+                        ? SHIPPING_COPY.tr.free
+                        : formatPrice(shippingView.shippingCents, cart.currency)}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-muted-foreground">Ara toplam</span>
+                <span className="text-muted-foreground">{showShipping ? 'Toplam' : 'Ara toplam'}</span>
                 <span className="font-display text-lg font-bold">
-                  {formatPrice(cart.subtotalCents, cart.currency)}
+                  {formatPrice(cartTotalCents(cart.subtotalCents, shipping), cart.currency)}
                 </span>
               </div>
               <Link href={`/site/${slug}/checkout`} onClick={onClose}>
