@@ -2,7 +2,10 @@
 --
 -- Deleting a customer ANONYMIZES the row instead of removing it: orders keep
 -- pointing at it (accounting/shipping need them), but every personal field is
--- wiped. Idempotent: safe to run more than once.
+-- wiped. Idempotent: safe to run more than once. Runs as a single transaction,
+-- so a failure leaves the schema untouched.
+
+begin;
 
 alter table public.store_customers
   add column if not exists deleted_at timestamptz,
@@ -33,6 +36,8 @@ create index if not exists store_customer_events_project_idx
 
 alter table public.store_customer_events enable row level security;
 -- No policies: deny-by-default, only the service role reads/writes.
+revoke all on public.store_customer_events from public, anon, authenticated;
+grant select, insert on public.store_customer_events to service_role;
 
 -- Owner directory: one row per live customer with order aggregates, filtered,
 -- sorted and paginated in SQL. `total_count` is the full match count.
@@ -114,3 +119,5 @@ $$;
 
 revoke all on function public.store_owner_customers(uuid, text, text, integer, integer) from public, anon, authenticated;
 grant execute on function public.store_owner_customers(uuid, text, text, integer, integer) to service_role;
+
+commit;
