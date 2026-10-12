@@ -23,7 +23,7 @@ import {
 } from '@/components/website-renderer/store-catalog-context'
 import { ProductCard as StoreProductCard } from '@/components/store/product-card'
 import type { StoreProduct } from '@/lib/store'
-import { resolveShowcaseSettings, selectShowcaseProducts } from '@/lib/store-showcase'
+import { resolveShowcaseSettings, selectShowcase } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { resolveViewAllLabel, storeListHref } from '@/lib/store-header-links'
 
@@ -73,7 +73,7 @@ function CatalogShowcase({
   products: StoreProduct[]
 }) {
   const settings = resolveShowcaseSettings(data)
-  const selected = selectShowcaseProducts(products, settings)
+  const { products: selected } = selectShowcase(products, catalog.collections, data)
   const carousel = data.layout === 'carousel'
   const nav = useSiteNav()
   const viewAllLabel = resolveViewAllLabel(data.viewAllLabel)

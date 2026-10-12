@@ -1,6 +1,6 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
-import type { ShowcaseLimit, ShowcaseSource } from '@/lib/store-showcase'
+import { resolveShowcaseCollection, type ShowcaseLimit, type ShowcaseSource } from '@/lib/store-showcase'
 
 /* -------------------------------------------------------------------------- */
 /*  Typed edit operations                                                     */
@@ -109,6 +109,8 @@ export type EditOperation =
       index: number
       source?: ShowcaseSource
       limit?: ShowcaseLimit
+      /** Collection slug to show; `null` or an empty string unbinds the section. */
+      collection?: string | null
       /** Label of the "view all products" link; an empty string hides it. */
       viewAllLabel?: string
     }
@@ -192,6 +194,11 @@ export function applyOperation(
       if (section?.type === 'products') {
         if (operation.source !== undefined) section.source = operation.source
         if (operation.limit !== undefined) section.limit = operation.limit
+        if (operation.collection !== undefined) {
+          const slug = resolveShowcaseCollection({ collection: operation.collection })
+          if (slug) section.collection = slug
+          else delete section.collection
+        }
         if (operation.viewAllLabel !== undefined) section.viewAllLabel = operation.viewAllLabel
       }
       return next

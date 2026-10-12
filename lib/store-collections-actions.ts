@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
 import { isMissingTableError } from '@/lib/store-schema-compat'
+import { revalidateStorefront } from '@/lib/store-revalidate'
 import {
   CollectionStoreError,
   createCollectionsService,
@@ -194,16 +195,22 @@ async function authorized(projectId: string): Promise<boolean> {
   }
 }
 
-async function refreshSite(projectId: string) {
-  const { data } = await createAdminClient()
-    .from('projects')
-    .select('slug')
-    .eq('id', projectId)
-    .maybeSingle()
-  const slug = typeof data?.slug === 'string' && data.slug ? data.slug : null
-  if (!slug) return
-  revalidatePath(`/site/${slug}`)
-  revalidatePath(`/site/${slug}/store`)
+/** Home showcase, store list and product pages all read collections; refresh the whole tree. */
+function refreshSite(projectId: string) {
+  return revalidateStorefront(
+    {
+      findSlug: async (id) => {
+        const { data } = await createAdminClient()
+          .from('projects')
+          .select('slug')
+          .eq('id', id)
+          .maybeSingle()
+        return typeof data?.slug === 'string' && data.slug ? data.slug : null
+      },
+      revalidatePath,
+    },
+    projectId,
+  )
 }
 
 async function mutate<T extends object>(
