@@ -1,5 +1,6 @@
 import {
   STORE_AI_COSTS,
+  STORE_AI_KIND_LIMITS,
   describeNextAttempt,
   type StoreAiKind,
   type StoreAiNextAttempt,
@@ -43,6 +44,8 @@ export interface StoreAiPort {
   finish(attemptId: string, success: boolean): Promise<FinishStatus>
   resetSeries(projectId: string, productKey: string, kind: StoreAiKind): Promise<void>
   readSucceededCount(projectId: string, productKey: string, kind: StoreAiKind): Promise<number>
+  /** Attempts of this kind the user started within the last `windowMs`. */
+  recentCount(userId: string, kind: StoreAiKind, windowMs: number): Promise<number>
   balance(userId: string): Promise<number>
   /** Project that owns a product with this id, or null when no such product exists. */
   findProductProject(productKey: string): Promise<string | null>
@@ -126,6 +129,24 @@ export async function runMeteredStoreAi<T>(
 ): Promise<MeteredResult<T>> {
   if (!(await authorizeProductKey(port, input.projectId, input.productKey))) {
     return { ok: false, error: 'forbidden_product', refunded: 0 }
+  }
+
+  const kindLimits = STORE_AI_KIND_LIMITS[input.kind]
+  if (kindLimits) {
+    try {
+      const [minute, day] = await Promise.all([
+        port.recentCount(input.userId, input.kind, 60_000),
+        port.recentCount(input.userId, input.kind, 24 * 60 * 60 * 1000),
+      ])
+      if (minute >= kindLimits.perMinute) return { ok: false, error: 'rate_limited_minute', refunded: 0 }
+      if (day >= kindLimits.daily) return { ok: false, error: 'rate_limited_daily', refunded: 0 }
+    } catch (error) {
+      console.error('[store-ai] kind limit check failed', {
+        kind: input.kind,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { ok: false, error: 'generation_failed', refunded: 0 }
+    }
   }
 
   let begun: BeginResult

@@ -102,6 +102,8 @@ function createFakePort(opts: { balance?: number; productOwners?: Record<string,
       series.set(keyOf(projectId, productKey, kind), 0)
     },
     readSucceededCount: async (projectId, productKey, kind) => series.get(keyOf(projectId, productKey, kind)) ?? 0,
+    recentCount: async (_userId, kind, windowMs) =>
+      attempts.filter((a) => a.kind === kind && now - a.at < windowMs).length,
     balance: async () => sum(),
     findProductProject: async (productKey) => opts.productOwners?.[productKey] ?? null,
   }
@@ -129,7 +131,7 @@ describe('constants', () => {
   it('charges attempts 1, 4, 7 and leaves 2, 3, 5, 6, 8, 9 free', () => {
     const charged = Array.from({ length: 9 }, (_, i) => costForAttempt('text', i + 1))
     expect(charged).toEqual([1, 0, 0, 1, 0, 0, 1, 0, 0])
-    expect(STORE_AI_FREE_CYCLE).toBe(3)
+    expect(STORE_AI_FREE_CYCLE).toEqual({ text: 3, image: 2 })
   })
 
   it('image attempts use the image price on the same cycle', () => {
