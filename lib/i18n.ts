@@ -330,6 +330,12 @@ const dict = {
         showcaseManaged:
           'Ürünler mağaza panelinden yönetilir. Ad, fiyat, görsel ve indirim burada düzenlenmez.',
         manageProducts: 'Ürünleri yönet',
+        showcaseCollection: 'Koleksiyon',
+        showcaseCollectionNone: 'Koleksiyon kullanma',
+        showcaseCollectionHint:
+          'Bir koleksiyon seçersen bu bölüm yalnızca onun ürünlerini gösterir. Koleksiyon boşalırsa son eklenenler görünür.',
+        showcaseCollectionMissing:
+          'Bu koleksiyon silinmiş veya boş. Şimdilik son eklenen ürünler gösteriliyor.',
         showcaseSource: 'Hangi ürünler',
         showcaseLimit: 'Ürün sayısı',
         showcaseViewAll: '"Tümünü gör" bağlantı metni',
@@ -1768,6 +1774,12 @@ const dict = {
       showcaseManaged:
         'Products are managed from the store panel. Name, price, images and discounts are not edited here.',
       manageProducts: 'Manage products',
+      showcaseCollection: 'Collection',
+      showcaseCollectionNone: 'Do not use a collection',
+      showcaseCollectionHint:
+        'Pick a collection to show only its products here. If it becomes empty, the latest products show instead.',
+      showcaseCollectionMissing:
+        'This collection was deleted or is empty. Showing the latest products for now.',
       showcaseSource: 'Which products',
       showcaseLimit: 'Number of products',
       showcaseViewAll: '"View all" link text',

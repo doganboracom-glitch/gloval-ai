@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
-import { getStoreProducts } from '@/lib/store'
+import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import type { StoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
@@ -45,12 +45,13 @@ export default async function PublicSitePage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const [site, brandingRemoved, products, shipping] = await Promise.all([
+  const [site, brandingRemoved, products, collections, shipping] = await Promise.all([
     getPublishedSite(slug),
     isSiteBrandingRemoved(slug),
     // Real catalog for this store. Empty for corporate sites — then the site
     // renders exactly as before (no cart, display-only sections).
     getStoreProducts(slug),
+    getStoreCollections(slug),
     getStoreShippingInfo(slug),
   ])
   if (!site) notFound()
@@ -63,6 +64,11 @@ export default async function PublicSitePage({
       ? {
           slug,
           products,
+          collections: collections.map((c) => ({
+            slug: c.slug,
+            name: c.name,
+            product_ids: c.product_ids,
+          })),
           shipping,
           bySlug: Object.fromEntries(
             products.map((p) => [

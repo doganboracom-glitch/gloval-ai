@@ -31,6 +31,8 @@ export type StoreCatalog = {
    * schema's own items. Absent on legacy/display-only catalogs.
    */
   products?: StoreProduct[]
+  /** Store collections (published stores only); product sections can be bound to one by slug. */
+  collections?: Array<{ slug: string; name: string; product_ids: string[] }>
   /** Display-only shipping rules for the cart drawer; createOrder recomputes the real charge. */
   shipping?: ShippingSettings
   /** True for the editor preview, which shows owner hints and has no cart. */

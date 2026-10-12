@@ -325,6 +325,12 @@ export const productsSection = z.object({
     .enum(['latest', 'sale', 'manual'])
     .optional()
     .describe('"latest" (newest products), "sale" (discounted products) or "manual" (owner-selected products)'),
+  /** Slug of a store collection this section shows. Unset, deleted or empty collections fall back to the newest products. */
+  collection: z
+    .string()
+    .regex(/^[a-z0-9-]{1,60}$/)
+    .optional()
+    .describe('Slug of the store collection shown here. Unset shows the products picked by "source".'),
   /** How many catalog products a storefront shows here. */
   limit: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional().describe('Number of products: 4, 8 or 12'),
   /** Label of the "view all products" link on a storefront. Unset = default text; empty string = hidden. */

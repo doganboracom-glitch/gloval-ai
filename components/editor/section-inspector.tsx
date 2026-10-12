@@ -2,11 +2,14 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import useSWR from 'swr'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { VIEW_ALL_DEFAULT } from '@/lib/store-header-links'
+import { listOwnerCollections } from '@/lib/store-collections-actions'
 import {
+  resolveShowcaseCollection,
   resolveShowcaseSettings,
   SHOWCASE_LIMITS,
   SHOWCASE_SOURCES,
@@ -230,15 +233,48 @@ function ProductsShowcaseSettings({
   const viewAllLang = lang === 'tr' ? 'tr' : 'en'
   const selectClass =
     'h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground'
+  const { data: collectionData } = useSWR(
+    projectId ? ['owner-collections', projectId] : null,
+    ([, id]) => listOwnerCollections(id),
+    { revalidateOnFocus: false },
+  )
+  const collections = collectionData?.collections ?? []
+  const boundSlug = resolveShowcaseCollection(section)
+  const boundMissing = boundSlug !== null && !collections.some((c) => c.slug === boundSlug)
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-2">
       <p className="text-xs leading-relaxed text-muted-foreground">{ui.showcaseManaged}</p>
 
+      {(collections.length > 0 || boundSlug) && (
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          {ui.showcaseCollection}
+          <select
+            className={selectClass}
+            value={boundSlug ?? ''}
+            onChange={(e) =>
+              onDispatch({ op: 'updateProductsShowcase', index, collection: e.target.value || null })
+            }
+          >
+            <option value="">{ui.showcaseCollectionNone}</option>
+            {boundMissing && boundSlug && <option value={boundSlug}>{boundSlug}</option>}
+            {collections.map((c) => (
+              <option key={c.id} value={c.slug}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <span className="font-normal">
+            {boundMissing ? ui.showcaseCollectionMissing : ui.showcaseCollectionHint}
+          </span>
+        </label>
+      )}
+
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         {ui.showcaseSource}
         <select
           className={selectClass}
+          disabled={boundSlug !== null}
           value={settings.source}
           onChange={(e) =>
             onDispatch({
