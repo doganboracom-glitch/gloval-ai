@@ -60,6 +60,31 @@ export function buildAnonymizePatch(customerId: string, nowIso: string) {
   }
 }
 
+/**
+ * Patch applied to a deleted customer's notification log rows. ONLY the free-text
+ * `body` is cleared. `dedupe_key`, `type`, `status`, `created_at` and `user_id`
+ * must never appear here: the unique `dedupe_key` is what stops an order e-mail
+ * from being sent twice, and the row itself stays as the audit record.
+ */
+export function buildNotificationScrubPatch() {
+  return { body: null }
+}
+
+/** `store-order:<orderId>:<role>` keys of one order, as a PostgREST `like` prefix. */
+export function orderDedupePrefix(orderId: string): string {
+  return `store-order:${orderId}:`
+}
+
+/** PostgREST `or()` filter matching every notification key that belongs to the given orders. */
+export function orderNotificationOrFilter(orderIds: readonly string[]): string {
+  return orderIds.map((id) => `dedupe_key.like.${orderDedupePrefix(id)}*`).join(',')
+}
+
+/** Order ids are UUIDs; anything else is dropped so it can never alter the filter string. */
+export function isSafeOrderId(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
 /** Accepts SİL / SIL / sil / DELETE (Turkish dotted/dotless i folded). */
 export function confirmPhraseMatches(input: unknown): boolean {
   if (typeof input !== 'string') return false

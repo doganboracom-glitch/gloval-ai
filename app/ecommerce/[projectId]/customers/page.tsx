@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
+import { resolveCustomersPageAccess } from '@/lib/store-customers-page-access'
 import { listOwnerCustomers } from '@/lib/store-owner-customers'
 import { CustomersClient } from '@/components/ecommerce/customers-client'
 
@@ -17,11 +17,9 @@ export default async function CustomersPage({
   const { projectId } = await params
   const query = await searchParams
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=/ecommerce/${projectId}/customers`)
+  const access = await resolveCustomersPageAccess(projectId)
+  if (access === 'login') redirect(`/auth/login?next=/ecommerce/${projectId}/customers`)
+  if (access === 'not_found') notFound()
 
   const project = await getProject(projectId)
   if (!project) notFound()
