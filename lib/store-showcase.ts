@@ -34,6 +34,24 @@ export function resolveShowcaseCollection(section: { collection?: unknown }): st
 }
 
 /**
+ * What the editor's showcase panel shows for a section: whether the collection
+ * picker appears, whether the bound slug no longer exists, and whether the
+ * "source" field is locked because a collection already decides the products.
+ */
+export function showcaseEditorState(
+  section: { collection?: unknown },
+  collections: readonly { slug: string }[],
+): { boundSlug: string | null; boundMissing: boolean; showPicker: boolean; sourceDisabled: boolean } {
+  const boundSlug = resolveShowcaseCollection(section)
+  return {
+    boundSlug,
+    boundMissing: boundSlug !== null && !collections.some((c) => c.slug === boundSlug),
+    showPicker: collections.length > 0 || boundSlug !== null,
+    sourceDisabled: boundSlug !== null,
+  }
+}
+
+/**
  * Picks the products a home-page showcase shows. A section bound to a
  * collection shows that collection (owner order, capped by `limit`); a
  * deleted, emptied or unknown collection falls back to the newest products so

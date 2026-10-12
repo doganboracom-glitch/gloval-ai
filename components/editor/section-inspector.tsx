@@ -9,10 +9,10 @@ import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { VIEW_ALL_DEFAULT } from '@/lib/store-header-links'
 import { listOwnerCollections } from '@/lib/store-collections-actions'
 import {
-  resolveShowcaseCollection,
   resolveShowcaseSettings,
   SHOWCASE_LIMITS,
   SHOWCASE_SOURCES,
+  showcaseEditorState,
 } from '@/lib/store-showcase'
 import {
   collectionOf,
@@ -239,14 +239,16 @@ function ProductsShowcaseSettings({
     { revalidateOnFocus: false },
   )
   const collections = collectionData?.collections ?? []
-  const boundSlug = resolveShowcaseCollection(section)
-  const boundMissing = boundSlug !== null && !collections.some((c) => c.slug === boundSlug)
+  const { boundSlug, boundMissing, showPicker, sourceDisabled } = showcaseEditorState(
+    section,
+    collections,
+  )
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/60 p-2">
       <p className="text-xs leading-relaxed text-muted-foreground">{ui.showcaseManaged}</p>
 
-      {(collections.length > 0 || boundSlug) && (
+      {showPicker && (
         <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
           {ui.showcaseCollection}
           <select
@@ -274,7 +276,7 @@ function ProductsShowcaseSettings({
         {ui.showcaseSource}
         <select
           className={selectClass}
-          disabled={boundSlug !== null}
+          disabled={sourceDisabled}
           value={settings.source}
           onChange={(e) =>
             onDispatch({

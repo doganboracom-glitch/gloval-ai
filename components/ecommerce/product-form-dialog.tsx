@@ -21,6 +21,7 @@ import {
 } from '@/lib/ecommerce'
 import { PRODUCT_LIMITS, type ProductStatus } from '@/lib/product-input'
 import { setProductCollections } from '@/lib/store-collections-actions'
+import { syncProductCollectionsAfterSave } from '@/lib/product-collection-sync'
 import type { OwnerCollection } from '@/lib/store-collections-core'
 import {
   DEFAULT_OPEN_SECTIONS,
@@ -261,14 +262,12 @@ export function ProductFormDialog({
 
       if (result.ok) {
         discardOrphans(form.images)
-        if (collections.length > 0 && collectionsChanged) {
-          try {
-            const synced = await setProductCollections(projectId, result.product.id, collectionIds)
-            if (!synced.ok) window.alert('Ürün kaydedildi ancak koleksiyon seçimi güncellenemedi. Koleksiyonlar panelinden tekrar deneyin.')
-          } catch {
-            window.alert('Ürün kaydedildi ancak koleksiyon seçimi güncellenemedi. Koleksiyonlar panelinden tekrar deneyin.')
-          }
-        }
+        const { warning } = await syncProductCollectionsAfterSave({
+          hasCollections: collections.length > 0,
+          changed: collectionsChanged,
+          sync: () => setProductCollections(projectId, result.product.id, collectionIds),
+        })
+        if (warning) window.alert(warning)
         onSaved(result.product, product ? 'updated' : 'created')
         return
       }
