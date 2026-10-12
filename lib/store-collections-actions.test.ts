@@ -132,8 +132,7 @@ describe('collection actions: project scoping and revalidation', () => {
     const result = await createCollection(PROJECT, 'Yaz')
     expect(result.ok).toBe(true)
     expect(h.revalidatePath).toHaveBeenCalledWith(`/ecommerce/${PROJECT}`)
-    expect(h.revalidatePath).toHaveBeenCalledWith('/site/luna', 'page')
-    expect(h.revalidatePath).toHaveBeenCalledWith('/site/luna/store', 'layout')
+    expect(h.revalidatePath).toHaveBeenCalledWith('/site/luna', 'layout')
   })
 
   it('refreshes after assigning a product to collections', async () => {
@@ -146,7 +145,7 @@ describe('collection actions: project scoping and revalidation', () => {
         : happyDb(call)
     const result = await setProductCollections(PROJECT, PRODUCT, ['c1'])
     expect(result.ok).toBe(true)
-    expect(h.revalidatePath).toHaveBeenCalledWith('/site/luna/store', 'layout')
+    expect(h.revalidatePath).toHaveBeenCalledWith('/site/luna', 'layout')
   })
 
   it('does not break a successful change when the slug lookup fails', async () => {

@@ -62,18 +62,6 @@ export function buildSyncedProductInsert(
   }
 }
 
-/** Presentation fields only; owner-managed panel fields are never in the patch. */
-export function buildSyncedProductUpdate(p: ProductSeed, categoryId: string | null) {
-  return {
-    name: p.name,
-    description: p.description,
-    price_cents: p.priceCents,
-    currency: p.currency,
-    images: p.images,
-    category_id: categoryId,
-  }
-}
-
 function collectSeeds(schema: WebsiteSchema): {
   categories: CategorySeed[]
   products: ProductSeed[]
@@ -154,7 +142,7 @@ export async function syncStoreFromSchema(
 
   if (products.length === 0) return
 
-  // --- Products: update presentation of existing, insert the rest. --------
+  // --- Products: insert the missing ones, leave existing rows untouched. ---
   const { data: existingProducts } = await admin
     .from('ecommerce_products')
     .select('id, slug')
@@ -171,7 +159,6 @@ export async function syncStoreFromSchema(
       .eq('owner_id', ownerId)
     toInsert = toInsert.slice(0, Math.max(0, options.productLimit - (count ?? 0)))
   }
-  const toUpdate = products.filter((p) => existingSlugs.has(p.slug))
 
   if (toInsert.length > 0) {
     // Synced products start with stock tracking OFF (always purchasable); the
@@ -191,13 +178,7 @@ export async function syncStoreFromSchema(
     }
   }
 
-  // Refresh presentation fields only — never touch owner-managed stock, sku,
-  // sort order or status (so an archived product stays archived on republish).
-  for (const p of toUpdate) {
-    await admin
-      .from('ecommerce_products')
-      .update(buildSyncedProductUpdate(p, p.categorySlug ? catIdBySlug.get(p.categorySlug) ?? null : null))
-      .eq('project_id', projectId)
-      .eq('slug', p.slug)
-  }
+  // Existing rows are never written here: once a product is in the catalog the
+  // "Ürünleri yönet" panel is its only source. Re-applying the (stale) schema
+  // item on every publish used to revert renamed names, prices and images.
 }

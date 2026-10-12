@@ -425,7 +425,7 @@ export async function publishProject(input: {
   }
 
   revalidatePath('/dashboard')
-  if (slug) revalidatePath(`/site/${slug}`)
+  if (slug) revalidatePath(`/site/${slug}`, 'layout')
   return { ok: true, slug: slug as string, publishedAt }
 }
 
@@ -440,7 +440,7 @@ export async function unpublishProject(id: string): Promise<void> {
     .maybeSingle()
   if (error) throw error
   revalidatePath('/dashboard')
-  if (data?.slug) revalidatePath(`/site/${data.slug}`)
+  if (data?.slug) revalidatePath(`/site/${data.slug}`, 'layout')
 }
 
 export type PublishedSite = {
