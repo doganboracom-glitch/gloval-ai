@@ -1,10 +1,18 @@
 export const storeHomeHref = (slug: string) => `/site/${slug}`
 export const storeListHref = (slug: string) => `/site/${slug}/store`
-export const storeCartHref = (slug: string) => `/site/${slug}/checkout`
+/** Checkout is only reached from the cart drawer's "Ödemeye geç" and the product page's "Hemen al". */
+export const storeCheckoutHref = (slug: string) => `/site/${slug}/checkout`
 
 export const storeAccountHref = (slug: string) => `/site/${slug}/hesap`
 export const storeSessionApiHref = (slug: string) =>
   `/api/store/session?slug=${encodeURIComponent(slug)}`
+
+/** Anything that is not an explicit `{ loggedIn: true }` counts as signed out. */
+export function normalizeSessionPayload(data: unknown): { loggedIn: boolean } {
+  const loggedIn =
+    typeof data === 'object' && data !== null && (data as { loggedIn?: unknown }).loggedIn === true
+  return { loggedIn }
+}
 
 export const ACCOUNT_LABELS = {
   tr: { signIn: 'Giriş yap', account: 'Hesabım' },

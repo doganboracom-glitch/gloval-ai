@@ -163,6 +163,18 @@ export function getTenantSlugFromHost(hostHeader: string | null | undefined): st
  * no access by itself, it only avoids a pointless lookup on every ordinary
  * platform request.
  */
+/**
+ * API routes a storefront calls from its OWN host (`<slug>.gloval.site` or a
+ * custom domain). The tenant rewrite would otherwise turn them into
+ * `/site/<slug>/api/...` (a 404 page), so they are served as-is. Kept to an
+ * explicit allow-list: the rest of `/api` is never exposed on tenant hosts.
+ */
+const TENANT_PASSTHROUGH_PATHS = new Set(['/api/store/session'])
+
+export function isTenantPassthroughPath(pathname: string): boolean {
+  return TENANT_PASSTHROUGH_PATHS.has(pathname)
+}
+
 export function isForeignHost(hostHeader: string | null | undefined): boolean {
   if (!hostHeader) return false
   const host = hostHeader.split(':')[0].toLowerCase().trim()

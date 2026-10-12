@@ -11,10 +11,19 @@ import {
 import {
   isCartCta,
   isProductsLink,
+  accountLinkLabel,
+  normalizeSessionPayload,
   resolveViewAllLabel,
-  storeCartHref,
+  shouldShowAccountLink,
+  storeCheckoutHref,
   storeListHref,
 } from './store-header-links'
+import {
+  authenticateSessionToken,
+  makeToken,
+  parseToken,
+  sessionVersion,
+} from './store-session-token'
 
 const root = join(__dirname, '..')
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
@@ -50,7 +59,28 @@ describe('cart feedback', () => {
 describe('header links', () => {
   it('builds tenant-relative store hrefs', () => {
     expect(storeListHref('demo')).toBe('/site/demo/store')
-    expect(storeCartHref('demo')).toBe('/site/demo/checkout')
+    expect(storeCheckoutHref('demo')).toBe('/site/demo/checkout')
+  })
+
+  it('shows the account link only on storefronts and labels it by session', () => {
+    expect(shouldShowAccountLink('demo')).toBe(true)
+    expect(shouldShowAccountLink(undefined)).toBe(false)
+    expect(accountLinkLabel(false)).toBe('Giriş yap')
+    expect(accountLinkLabel(true)).toBe('Hesabım')
+    expect(accountLinkLabel(true, 'en')).toBe('My account')
+  })
+
+  it('treats anything but an explicit loggedIn:true as signed out', () => {
+    expect(normalizeSessionPayload({ loggedIn: true })).toEqual({ loggedIn: true })
+    expect(normalizeSessionPayload({ loggedIn: 'yes' })).toEqual({ loggedIn: false })
+    expect(normalizeSessionPayload(null)).toEqual({ loggedIn: false })
+  })
+
+  it('header cart button opens the drawer instead of navigating to checkout', () => {
+    const src = read('components/website-renderer/sections/website-header.tsx')
+    expect(src).toContain('requestOpenCart()')
+    expect(src).not.toContain('storeCartHref')
+    expect(src).toContain('--site-header-h')
   })
 
   it('detects cart CTAs and product links', () => {
@@ -66,6 +96,27 @@ describe('header links', () => {
     expect(resolveViewAllLabel(undefined)).toBe('Tüm ürünleri gör')
     expect(resolveViewAllLabel('  ')).toBeNull()
     expect(resolveViewAllLabel('Hepsi')).toBe('Hepsi')
+  })
+})
+
+describe('store customer session token', () => {
+  process.env.STORE_CUSTOMER_AUTH_SECRET = 'test-secret'
+  const row = { password_changed_at: '2024-01-01T00:00:00.000Z' }
+  const find = async () => row
+
+  it('accepts a token issued for the project with the current password version', async () => {
+    const token = makeToken('c1', 'p1', sessionVersion(row))
+    expect(parseToken(token)).toMatchObject({ customerId: 'c1', projectId: 'p1' })
+    expect(await authenticateSessionToken(token, 'p1', find)).toBe(row)
+  })
+
+  it('rejects other projects, stale versions, tampering and missing tokens', async () => {
+    const token = makeToken('c1', 'p1', sessionVersion(row))
+    expect(await authenticateSessionToken(token, 'p2', find)).toBeNull()
+    expect(await authenticateSessionToken(makeToken('c1', 'p1', 1), 'p1', find)).toBeNull()
+    expect(await authenticateSessionToken(`${token}x`, 'p1', find)).toBeNull()
+    expect(await authenticateSessionToken(undefined, 'p1', find)).toBeNull()
+    expect(await authenticateSessionToken(token, 'p1', async () => null)).toBeNull()
   })
 })
 

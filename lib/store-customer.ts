@@ -7,7 +7,14 @@ import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTransactionalEmail } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
-import { hmacBase64Url, hmacHex } from '@/lib/store-customer-keys'
+import { hmacHex } from '@/lib/store-customer-keys'
+import {
+  SESSION_TTL_DAYS,
+  authenticateSessionToken,
+  cookieName,
+  makeToken,
+  sessionVersion,
+} from '@/lib/store-session-token'
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
@@ -71,9 +78,6 @@ export type StoreCustomer = {
 export type CustomerResult =
   | { ok: true; customer: StoreCustomer }
   | { ok: false; error: string }
-
-const COOKIE_PREFIX = 'store_customer_'
-const SESSION_TTL_DAYS = 30
 
 const LIMITS = {
   email: 254,
@@ -150,45 +154,6 @@ async function burnPasswordCheck(password: string): Promise<void> {
 }
 
 /* ------------------------------ session cookie ------------------------------ */
-
-function sign(value: string): string {
-  return hmacBase64Url('session', `session|${value}`)
-}
-
-/** Session version derived from the row's `password_changed_at` (0 if unset). */
-function sessionVersion(row: { password_changed_at?: string | null }): number {
-  const t = row.password_changed_at ? Date.parse(row.password_changed_at) : NaN
-  return Number.isFinite(t) ? t : 0
-}
-
-function makeToken(customerId: string, projectId: string, version: number): string {
-  const exp = Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
-  const payload = `${customerId}.${projectId}.${exp}.${version}`
-  return `${payload}.${sign(payload)}`
-}
-
-function parseToken(
-  token: string | undefined,
-): { customerId: string; projectId: string; version: number } | null {
-  if (!token) return null
-  const parts = token.split('.')
-  if (parts.length !== 5) return null
-  const [customerId, projectId, expStr, versionStr, sig] = parts
-  const payload = `${customerId}.${projectId}.${expStr}.${versionStr}`
-  const expected = Buffer.from(sign(payload))
-  const actual = Buffer.from(sig)
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-    return null
-  }
-  if (!(Number(expStr) >= Date.now())) return null
-  const version = Number(versionStr)
-  if (!Number.isFinite(version)) return null
-  return { customerId, projectId, version }
-}
-
-function cookieName(projectId: string): string {
-  return `${COOKIE_PREFIX}${projectId.slice(0, 8)}`
-}
 
 async function setSession(projectId: string, customerId: string, version: number) {
   const jar = await cookies()
@@ -310,11 +275,11 @@ async function findCustomerById(
  */
 async function authenticate(projectId: string): Promise<CustomerRow | null> {
   const jar = await cookies()
-  const parsed = parseToken(jar.get(cookieName(projectId))?.value)
-  if (!parsed || parsed.projectId !== projectId) return null
-  const row = await findCustomerById(projectId, parsed.customerId)
-  if (!row || sessionVersion(row) !== parsed.version) return null
-  return row
+  return authenticateSessionToken(
+    jar.get(cookieName(projectId))?.value,
+    projectId,
+    findCustomerById,
+  )
 }
 
 function isMissingColumn(error: DbError): boolean {

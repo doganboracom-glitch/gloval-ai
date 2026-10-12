@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/proxy'
-import { getTenantSlugFromHost, getPlatformRedirectUrl, isForeignHost } from '@/lib/domains'
+import {
+  getTenantSlugFromHost,
+  getPlatformRedirectUrl,
+  isForeignHost,
+  isTenantPassthroughPath,
+} from '@/lib/domains'
 import {
   getPublishedSlugForProjectId,
   resolveActiveDomainForHost,
@@ -14,6 +19,9 @@ export async function middleware(request: NextRequest) {
   // existing `/site/[slug]` routes via an internal rewrite (the URL stays on
   // the subdomain).
   const slug = getTenantSlugFromHost(host)
+  if (slug && isTenantPassthroughPath(request.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
   if (slug && !request.nextUrl.pathname.startsWith('/site/')) {
     const url = request.nextUrl.clone()
     const rest = request.nextUrl.pathname === '/' ? '' : request.nextUrl.pathname
@@ -30,6 +38,7 @@ export async function middleware(request: NextRequest) {
   // `resolveActiveDomainForHost` requiring `active` + a bound project, and
   // `getPublishedSlugForProjectId` requiring that project still be published.
   if (host && !slug && !request.nextUrl.pathname.startsWith('/site/') && isForeignHost(host)) {
+    if (isTenantPassthroughPath(request.nextUrl.pathname)) return NextResponse.next()
     const bound = await resolveActiveDomainForHost(host)
     const targetSlug = bound?.websiteProjectId
       ? await getPublishedSlugForProjectId(bound.websiteProjectId)

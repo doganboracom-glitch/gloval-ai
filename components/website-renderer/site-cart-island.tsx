@@ -10,6 +10,7 @@ import {
   type CartToastDetail,
 } from '@/components/store/cart-provider'
 import { CART_TOAST_DURATION_MS, cartToastMessage } from '@/lib/store-cart-feedback'
+import { storeCheckoutHref, storeListHref } from '@/lib/store-header-links'
 import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
 import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
 
@@ -47,6 +48,15 @@ export function SiteCartIsland({
   }, [])
 
   useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  useEffect(() => {
     const onToast = (e: Event) => {
       const detail = (e as CustomEvent<CartToastDetail>).detail
       if (!detail) return
@@ -69,6 +79,7 @@ export function SiteCartIsland({
           openCart: 'Open cart',
           cart: 'Cart',
           empty: 'Your cart is empty.',
+          backToStore: 'Back to store',
           subtotal: 'Subtotal',
           total: 'Total',
           checkout: 'Checkout',
@@ -81,7 +92,8 @@ export function SiteCartIsland({
           goToCart: 'Sepete git',
           openCart: 'Sepeti aç',
           cart: 'Sepetim',
-          empty: 'Sepetin boş.',
+          empty: 'Sepetiniz boş.',
+          backToStore: 'Mağazaya dön',
           subtotal: 'Ara toplam',
           total: 'Toplam',
           checkout: 'Ödemeye geç',
@@ -133,9 +145,14 @@ export function SiteCartIsland({
               <Check className="size-4 shrink-0" style={{ color: 'var(--site-primary)' }} aria-hidden />
               {toast.message}
             </span>
-            <a
-              href={`/site/${slug}/checkout`}
-              className="shrink-0 px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-90"
+            <button
+              type="button"
+              data-cart-toast-open
+              onClick={() => {
+                setToast(null)
+                setOpen(true)
+              }}
+              className="shrink-0 cursor-pointer px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-90"
               style={{
                 borderRadius: 'var(--site-radius)',
                 backgroundColor: 'var(--site-primary)',
@@ -143,7 +160,7 @@ export function SiteCartIsland({
               }}
             >
               {t.goToCart}
-            </a>
+            </button>
           </div>
         )}
       </div>
@@ -184,6 +201,18 @@ export function SiteCartIsland({
               <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
                 <ShoppingCart className="h-10 w-10" style={{ color: 'var(--site-muted-fg)' }} />
                 <p style={{ color: 'var(--site-muted-fg)' }}>{t.empty}</p>
+                <a
+                  href={storeListHref(slug)}
+                  onClick={() => setOpen(false)}
+                  className="mt-2 px-4 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+                  style={{
+                    borderRadius: 'var(--site-radius)',
+                    backgroundColor: 'var(--site-primary)',
+                    color: 'var(--site-primary-fg)',
+                  }}
+                >
+                  {t.backToStore}
+                </a>
               </div>
             ) : (
               <>
@@ -271,30 +300,27 @@ export function SiteCartIsland({
                       )}
                     </div>
                   )}
-                  {showShipping && (
-                    <>
-                      <div className="mb-1.5 flex items-center justify-between text-sm">
-                        <span style={{ color: 'var(--site-muted-fg)' }}>{t.subtotal}</span>
-                        <span>{formatPrice(cart.subtotalCents, cart.currency)}</span>
-                      </div>
-                      <div className="mb-3 flex items-center justify-between text-sm">
-                        <span style={{ color: 'var(--site-muted-fg)' }}>{SHIPPING_COPY[lang].label}</span>
-                        <span>
-                          {shippingView.free
-                            ? SHIPPING_COPY[lang].free
-                            : formatPrice(shippingView.shippingCents, cart.currency)}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                    <span style={{ color: 'var(--site-muted-fg)' }}>{t.subtotal}</span>
+                    <span>{formatPrice(cart.subtotalCents, cart.currency)}</span>
+                  </div>
+                  <div className="mb-3 flex items-center justify-between text-sm">
+                    <span style={{ color: 'var(--site-muted-fg)' }}>{SHIPPING_COPY[lang].label}</span>
+                    <span>
+                      {shippingView.free
+                        ? SHIPPING_COPY[lang].free
+                        : formatPrice(shippingView.shippingCents, cart.currency)}
+                    </span>
+                  </div>
                   <div className="mb-3 flex items-center justify-between">
-                    <span style={{ color: 'var(--site-muted-fg)' }}>{showShipping ? t.total : t.subtotal}</span>
+                    <span style={{ color: 'var(--site-muted-fg)' }}>{t.total}</span>
                     <span className="text-lg font-bold" style={{ fontFamily: 'var(--site-heading-font)' }}>
                       {formatPrice(cartTotalCents(cart.subtotalCents, shipping), cart.currency)}
                     </span>
                   </div>
                   <a
-                    href={`/site/${slug}/checkout`}
+                    href={storeCheckoutHref(slug)}
+                    data-cart-checkout
                     className="flex w-full items-center justify-center px-4 py-3 text-sm font-semibold transition-opacity hover:opacity-90"
                     style={{
                       borderRadius: 'var(--site-radius)',
