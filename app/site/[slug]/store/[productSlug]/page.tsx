@@ -4,6 +4,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { getStoreProductBySlug } from '@/lib/store'
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
 import { ProductDetail } from '@/components/store/product-detail'
+import { StoreSiteShell } from '@/components/store/store-site-shell'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
@@ -41,12 +42,14 @@ export default async function ProductPage({
   ])
 
   return (
-    <ProductDetail
-      slug={slug}
-      shipping={shipping}
-      storeName={site.name}
-      product={product}
-      enableTryOn={tryOnConfig !== null}
-    />
+    <StoreSiteShell site={site.schema}>
+      <ProductDetail
+        slug={slug}
+        shipping={shipping}
+        storeName={site.name}
+        product={product}
+        enableTryOn={tryOnConfig !== null}
+      />
+    </StoreSiteShell>
   )
 }

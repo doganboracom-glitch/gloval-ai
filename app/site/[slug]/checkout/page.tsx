@@ -5,6 +5,7 @@ import { CheckoutForm } from '@/components/store/checkout-form'
 import { getStorePaymentMethods } from '@/lib/store'
 import { getCurrentStoreCustomer } from '@/lib/store-customer'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
+import { StoreSiteShell } from '@/components/store/store-site-shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,28 +25,30 @@ export default async function CheckoutPage({
   const shipping = await getStoreShippingInfo(slug)
 
   return (
-    <CheckoutForm
-      slug={slug}
-      shipping={shipping}
-      storeName={site.name}
-      paymentUnavailableReason={available ? null : (reason ?? 'not_configured')}
-      methods={methods}
-      publicConfig={publicConfig}
-      demo={demo}
-      guestCheckout={guestCheckout}
-      codFeeCents={codFeeCents}
-      customer={
-        customer
-          ? {
-              name: customer.name,
-              email: customer.email,
-              phone: customer.phone,
-              city: customer.city,
-              address: customer.address,
-              invoice: customer.invoice,
-            }
-          : null
-      }
-    />
+    <StoreSiteShell site={site.schema}>
+      <CheckoutForm
+        slug={slug}
+        shipping={shipping}
+        storeName={site.name}
+        paymentUnavailableReason={available ? null : (reason ?? 'not_configured')}
+        methods={methods}
+        publicConfig={publicConfig}
+        demo={demo}
+        guestCheckout={guestCheckout}
+        codFeeCents={codFeeCents}
+        customer={
+          customer
+            ? {
+                name: customer.name,
+                email: customer.email,
+                phone: customer.phone,
+                city: customer.city,
+                address: customer.address,
+                invoice: customer.invoice,
+              }
+            : null
+        }
+      />
+    </StoreSiteShell>
   )
 }
