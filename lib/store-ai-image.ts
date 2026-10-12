@@ -58,7 +58,19 @@ export function estimateImageCost(usage: ImageUsage) {
 /*  Model call                                                                */
 /* -------------------------------------------------------------------------- */
 
-export type ImageModelOutput = { bytes: Buffer; mediaType: string; usage?: ImageUsage }
+export type ImageModelOutput = {
+  bytes: Buffer
+  mediaType: string
+  usage?: ImageUsage
+  /** Charge the gateway reports for the call, when it does (USD). */
+  gatewayCostUsd?: number
+}
+
+function readGatewayCost(metadata: unknown): number | undefined {
+  const gateway = (metadata as { gateway?: { cost?: unknown } } | undefined)?.gateway
+  const cost = typeof gateway?.cost === 'string' ? Number(gateway.cost) : gateway?.cost
+  return typeof cost === 'number' && Number.isFinite(cost) ? cost : undefined
+}
 export type ImageModelFn = (args: { prompt: string; sourceDataUrl: string; signal: AbortSignal }) => Promise<ImageModelOutput>
 
 const REFUSAL_PATTERN = /safety|moderation|content[_\s-]?policy|policy violation|not allowed/i
@@ -81,6 +93,7 @@ export const generateWithGateway: ImageModelFn = async ({ prompt, sourceDataUrl,
       bytes: Buffer.from(result.image.base64 ?? '', 'base64'),
       mediaType: result.image.mediaType || 'image/png',
       usage: result.usage,
+      gatewayCostUsd: readGatewayCost(result.providerMetadata),
     }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error
@@ -199,5 +212,17 @@ export async function generateImageCandidate(
   if (error) throw new Error('candidate_store_failed')
 
   const cost = estimateImageCost(output.usage)
+  console.info('[store-ai] image usage', {
+    model: STORE_AI_IMAGE.model,
+    quality: STORE_AI_IMAGE.quality,
+    size: STORE_AI_IMAGE.size,
+    inputTokens: output.usage?.inputTokens ?? null,
+    outputTokens: output.usage?.outputTokens ?? null,
+    gatewayCostUsd: output.gatewayCostUsd ?? null,
+    estimatedUsd: cost.usd,
+    estimatedTry: cost.try,
+    measured: cost.measured,
+    overBreakEven: cost.overBreakEven,
+  })
   return { file, url: deps.store.publicUrl(path), cost }
 }
