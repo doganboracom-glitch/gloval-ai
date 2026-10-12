@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/notify', () => ({ claimNotification: vi.fn(), sendTransactionalEmail: vi.fn() }))
 vi.mock('@/lib/store-order-notifications', () => ({ findContactEmail: vi.fn(() => '') }))
+const scrub = vi.fn()
+vi.mock('@/lib/store-customer-notification-scrub', () => ({
+  scrubCustomerNotificationLogs: (...args: unknown[]) => scrub(...args),
+}))
 
 type Result = { data?: unknown; error?: { code?: string; message?: string } | null }
 type Call = { table: string; op: string; payload?: unknown }
@@ -48,6 +52,8 @@ const input = { projectId: 'p1', customerId: 'c1', event: 'deleted_by_customer' 
 beforeEach(() => {
   calls.length = 0
   handler = () => ({ data: [], error: null })
+  scrub.mockReset()
+  scrub.mockResolvedValue({ ok: true, scrubbed: 0 })
 })
 
 describe('anonymizeStoreCustomer', () => {
@@ -60,6 +66,7 @@ describe('anonymizeStoreCustomer', () => {
     handler = () => ({ data: { id: 'c1', email: 'x', name: 'y', deleted_at: '2026-01-01' }, error: null })
     expect(await anonymizeStoreCustomer(input)).toEqual({ ok: false, reason: 'already_deleted' })
     expect(calls.some((c) => c.op === 'update')).toBe(false)
+    expect(scrub).toHaveBeenCalledWith('p1', 'c1')
   })
 
   it('refuses while an order is in flight and writes nothing', async () => {
@@ -70,6 +77,7 @@ describe('anonymizeStoreCustomer', () => {
     }
     expect(await anonymizeStoreCustomer(input)).toEqual({ ok: false, reason: 'blocked' })
     expect(calls.some((c) => c.op === 'update' || c.op === 'insert')).toBe(false)
+    expect(scrub).not.toHaveBeenCalled()
   })
 
   it('reports migration_pending when the schema is missing', async () => {
@@ -86,7 +94,8 @@ describe('anonymizeStoreCustomer', () => {
       return { data: null, error: null }
     }
     const res = await anonymizeStoreCustomer({ ...input, actorUserId: 'owner-1' })
-    expect(res).toEqual({ ok: true, previousEmail: 'a@b.com', previousName: 'Ayşe' })
+    expect(res).toEqual({ ok: true, previousEmail: 'a@b.com', previousName: 'Ayşe', notificationsScrubbed: true })
+    expect(scrub).toHaveBeenCalledWith('p1', 'c1')
     const update = calls.find((c) => c.op === 'update')?.payload as Record<string, unknown>
     expect(update.email).toBe('deleted+c1@invalid.local')
     expect(update.password_hash).toBe('')
@@ -94,6 +103,23 @@ describe('anonymizeStoreCustomer', () => {
     const event = calls.find((c) => c.table === 'store_customer_events')?.payload as Record<string, unknown>
     expect(event).toMatchObject({ project_id: 'p1', customer_id: 'c1', event: 'deleted_by_customer', actor_user_id: 'owner-1' })
     expect(JSON.stringify(event)).not.toContain('a@b.com')
+  })
+
+  it('still succeeds, and reports it, when the notification scrub fails', async () => {
+    handler = (t, op) => {
+      if (t === 'store_customers' && op === 'select')
+        return { data: { id: 'c1', email: 'a@b.com', name: 'A', deleted_at: null }, error: null }
+      if (t === 'store_customers' && op === 'update') return { data: [{ id: 'c1' }], error: null }
+      if (t === 'ecommerce_orders') return { data: [{ status: 'completed', payment_status: 'paid' }], error: null }
+      return { data: null, error: null }
+    }
+    scrub.mockResolvedValue({ ok: false })
+    expect(await anonymizeStoreCustomer(input)).toEqual({
+      ok: true,
+      previousEmail: 'a@b.com',
+      previousName: 'A',
+      notificationsScrubbed: false,
+    })
   })
 
   it('treats a lost race (no row updated) as already_deleted', async () => {

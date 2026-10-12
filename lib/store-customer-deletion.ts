@@ -4,6 +4,7 @@ import { claimNotification, sendTransactionalEmail } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { findContactEmail } from '@/lib/store-order-notifications'
 import { renderStoreAccountDeletedEmail } from '@/lib/store-customer-email'
+import { scrubCustomerNotificationLogs } from '@/lib/store-customer-notification-scrub'
 import {
   buildAnonymizePatch,
   hasBlockingOrders,
@@ -20,7 +21,7 @@ import {
 export type DeletionEvent = 'deleted_by_customer' | 'anonymized_by_owner'
 
 export type AnonymizeResult =
-  | { ok: true; previousEmail: string; previousName: string }
+  | { ok: true; previousEmail: string; previousName: string; notificationsScrubbed: boolean }
   | { ok: false; reason: 'not_found' | 'already_deleted' | 'blocked' | 'migration_pending' | 'failed' }
 
 /** Loads the order states of one customer; falls back when `shipping_status` is absent. */
@@ -72,7 +73,11 @@ export async function anonymizeStoreCustomer(input: {
     .maybeSingle()
   if (readError) return { ok: false, reason: isMissingDeletionSchema(readError) ? 'migration_pending' : 'failed' }
   if (!existing) return { ok: false, reason: 'not_found' }
-  if (existing.deleted_at) return { ok: false, reason: 'already_deleted' }
+  if (existing.deleted_at) {
+    // Re-running the id-keyed scrub is the retry path for a deletion whose first scrub failed.
+    await scrubCustomerNotificationLogs(input.projectId, input.customerId)
+    return { ok: false, reason: 'already_deleted' }
+  }
 
   const blocked = await customerHasBlockingOrders(input.projectId, input.customerId)
   if (blocked === null) return { ok: false, reason: 'failed' }
@@ -96,10 +101,15 @@ export async function anonymizeStoreCustomer(input: {
   })
   if (eventError) console.log('[v0] customer deletion event not recorded:', eventError.code ?? 'unknown')
 
+  // Second, failure-tolerant step: the account is already anonymized, so a scrub
+  // failure is logged and reported but never undoes or fails the deletion.
+  const scrub = await scrubCustomerNotificationLogs(input.projectId, input.customerId)
+
   return {
     ok: true,
     previousEmail: String(existing.email ?? ''),
     previousName: String(existing.name ?? ''),
+    notificationsScrubbed: scrub.ok,
   }
 }
 
