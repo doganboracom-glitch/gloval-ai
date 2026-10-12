@@ -2,6 +2,7 @@ import 'server-only'
 import { escape, renderEmailLayout } from '@/lib/email/layout'
 import type { EmailLang } from '@/lib/email/lang'
 import { tenantUrl } from '@/lib/domains'
+import { ACCOUNT_DELETED_EMAIL_COPY } from '@/lib/store-account-copy'
 
 export const RESET_TOKEN_TTL_MINUTES = 30
 
@@ -69,4 +70,35 @@ export function renderStoreResetEmail(input: {
   })
   const text = `${c.hello(input.customerName)}\n\n${c.intro(input.storeName)}\n\n${c.textLead} (${c.validity}):\n${input.url}\n\n${c.footer}`
   return { subject: c.subject, html, text }
+}
+
+/** Notice sent to the address the account had BEFORE it was anonymized. */
+export function renderStoreAccountDeletedEmail(input: {
+  lang: EmailLang
+  storeName: string
+  storeSlug: string
+  customerName: string
+  byOwner: boolean
+  contactEmail: string
+}): { subject: string; html: string; text: string } {
+  const c = ACCOUNT_DELETED_EMAIL_COPY[input.lang]
+  const intro = input.byOwner ? c.introByOwner(input.storeName) : c.introByCustomer(input.storeName)
+  const contact = c.contact(input.contactEmail)
+  const body =
+    `<p style="margin:0 0 14px;">${escape(c.hello(input.customerName))}</p>` +
+    `<p style="margin:0 0 14px;">${escape(intro)}</p>` +
+    `<p style="margin:0 0 14px;">${escape(c.removed)}</p>` +
+    `<p style="margin:0 0 14px;">${escape(c.kept)}</p>` +
+    `<p style="margin:0;">${escape(contact)}</p>`
+
+  const html = renderEmailLayout({
+    lang: input.lang,
+    previewText: c.preview,
+    title: c.title,
+    body,
+    footer: c.footer,
+    homeUrl: tenantUrl(input.storeSlug),
+  })
+  const text = `${c.hello(input.customerName)}\n\n${intro}\n\n${c.removed}\n${c.kept}\n\n${contact}\n\n${c.footer}`
+  return { subject: c.subject(input.storeName), html, text }
 }

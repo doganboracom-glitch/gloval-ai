@@ -31,12 +31,15 @@ export function OrdersClient({
   projectName,
   initialOrders,
   defaultCarrier = null,
+  deletedOrderIds = [],
 }: {
   projectId: string
   projectName: string
   initialOrders: OrderWithItems[]
   defaultCarrier?: string | null
+  deletedOrderIds?: string[]
 }) {
+  const deletedOrders = useMemo(() => new Set(deletedOrderIds), [deletedOrderIds])
   const { t, lang } = useLanguage()
   const router = useRouter()
   const [orders, setOrders] = useState<OrderWithItems[]>(initialOrders)
@@ -213,12 +216,18 @@ export function OrdersClient({
             {orders.map((o) => (
               <li
                 key={o.id}
-                className="rounded-xl border border-border bg-card/70 p-4 transition-colors hover:border-primary/40 sm:p-5"
+                id={`order-${o.id}`}
+                className="scroll-mt-24 rounded-xl border border-border bg-card/70 p-4 transition-colors hover:border-primary/40 sm:p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="truncate font-medium">{o.customer_name}</h2>
+                      {deletedOrders.has(o.id) && (
+                        <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                          Silinmiş müşteri
+                        </span>
+                      )}
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusClass(o.status)}`}
                       >

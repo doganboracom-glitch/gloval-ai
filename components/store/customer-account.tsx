@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   FileText,
   KeyRound,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { markStoreSessionLoggedIn, markStoreSessionLoggedOut } from '@/lib/store-session-client'
@@ -26,12 +27,15 @@ import {
   updateStoreCustomerProfile,
   changeStoreCustomerPassword,
   sendStoreCustomerPasswordReset,
+  deleteOwnStoreAccount,
   type StoreCustomer,
   type CustomerOrder,
   type ShippingStatus,
   type InvoiceInfo,
 } from '@/lib/store-customer'
 import { InvoiceFields, LabeledInput } from '@/components/store/checkout-extras'
+import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
+import { confirmPhraseMatches, hasBlockingOrders } from '@/lib/store-customer-privacy'
 
 const inputClass =
   'h-11 w-full rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
@@ -112,7 +116,7 @@ export function CustomerAccount({
 
 /* ------------------------------- logged-in view ----------------------------- */
 
-type Tab = 'orders' | 'profile' | 'invoice' | 'password'
+type Tab = 'orders' | 'profile' | 'invoice' | 'password' | 'delete'
 
 function AccountView({
   slug,
@@ -140,6 +144,7 @@ function AccountView({
     { id: 'profile', label: 'Profil bilgileri', icon: UserIcon },
     { id: 'invoice', label: 'Fatura bilgileri', icon: FileText },
     { id: 'password', label: 'Şifre', icon: KeyRound },
+    { id: 'delete', label: ACCOUNT_DELETION_COPY.tr.sectionTitle, icon: Trash2 },
   ]
 
   return (
@@ -180,7 +185,7 @@ function AccountView({
               }`}
             >
               <Icon className="size-4" />
-              <span className="hidden sm:inline">{t.label}</span>
+              <span className="sr-only sm:not-sr-only">{t.label}</span>
             </button>
           )
         })}
@@ -190,6 +195,7 @@ function AccountView({
       {tab === 'profile' && <ProfileTab slug={slug} customer={customer} />}
       {tab === 'invoice' && <InvoiceTab slug={slug} customer={customer} />}
       {tab === 'password' && <PasswordTab slug={slug} />}
+      {tab === 'delete' && <DeleteTab slug={slug} orders={orders} />}
     </div>
   )
 }
@@ -436,6 +442,98 @@ function PasswordTab({ slug }: { slug: string }) {
         Şifreyi değiştir
       </Button>
     </form>
+  )
+}
+
+/* ------------------------------ delete account tab --------------------------- */
+
+function DeleteTab({ slug, orders }: { slug: string; orders: CustomerOrder[] }) {
+  const router = useRouter()
+  const copy = ACCOUNT_DELETION_COPY.tr
+  const [pending, startTransition] = useTransition()
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [blocked, setBlocked] = useState(() => hasBlockingOrders(orders))
+  const [form, setForm] = useState({ password: '', confirm: '' })
+  const canSubmit = form.password.length > 0 && confirmPhraseMatches(form.confirm)
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setMsg(null)
+    startTransition(async () => {
+      const res = await deleteOwnStoreAccount({
+        storeSlug: slug,
+        password: form.password,
+        confirm: form.confirm,
+      })
+      if (res.ok) {
+        await markStoreSessionLoggedOut(slug)
+        router.refresh()
+        return
+      }
+      if (res.code === 'blocked') setBlocked(true)
+      setMsg({ tone: 'err', text: res.error })
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-5 rounded-2xl border border-destructive/30 bg-card p-5">
+      <div>
+        <h2 className="font-display text-lg font-bold">{copy.sectionTitle}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{copy.sectionIntro}</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <h3 className="mb-1.5 text-sm font-semibold">{copy.removedTitle}</h3>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+            {copy.removed.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 className="mb-1.5 text-sm font-semibold">{copy.keptTitle}</h3>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted-foreground">
+            {copy.kept.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {blocked ? (
+        <div role="alert" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          <p className="font-semibold">{copy.blockedTitle}</p>
+          <p className="mt-1 text-muted-foreground">{copy.blocked}</p>
+          <p className="mt-1 text-muted-foreground">{copy.blockedContact}</p>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <LabeledInput
+            label={copy.passwordLabel}
+            type="password"
+            value={form.password}
+            onChange={(v) => setForm({ ...form, password: v })}
+          />
+          <LabeledInput
+            label={copy.confirmLabel}
+            value={form.confirm}
+            placeholder={copy.confirmPlaceholder}
+            onChange={(v) => setForm({ ...form, confirm: v })}
+          />
+          <FormMessage msg={msg} />
+          <Button
+            type="submit"
+            variant="destructive"
+            disabled={pending || !canSubmit}
+            className="gap-2 self-start"
+          >
+            {pending && <Loader2 className="size-4 animate-spin" />}
+            {pending ? copy.working : copy.submit}
+          </Button>
+        </form>
+      )}
+    </section>
   )
 }
 

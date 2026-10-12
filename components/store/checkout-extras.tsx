@@ -41,6 +41,7 @@ export function LabeledInput({
   type = 'text',
   inputMode,
   maxLength,
+  placeholder,
 }: {
   label: string
   value: string
@@ -48,6 +49,7 @@ export function LabeledInput({
   type?: string
   inputMode?: 'numeric' | 'text'
   maxLength?: number
+  placeholder?: string
 }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -56,6 +58,7 @@ export function LabeledInput({
         type={type}
         inputMode={inputMode}
         maxLength={maxLength}
+        placeholder={placeholder}
         className={inputClass}
         value={value}
         onChange={(e) => onChange(e.target.value)}

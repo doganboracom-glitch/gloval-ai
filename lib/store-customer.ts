@@ -18,6 +18,9 @@ import {
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
+import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
+import { confirmPhraseMatches } from '@/lib/store-customer-privacy'
+import { anonymizeStoreCustomer, sendAccountDeletedEmail } from '@/lib/store-customer-deletion'
 import {
   RESET_TOKEN_TTL_MINUTES,
   buildPasswordResetUrl,
@@ -448,6 +451,81 @@ export async function logoutStoreCustomer(storeSlug: string): Promise<void> {
   if (!project) return
   const jar = await cookies()
   jar.delete(cookieName(project.id))
+}
+
+export type DeleteAccountResult =
+  | { ok: true }
+  | { ok: false; error: string; code: 'blocked' | 'rate_limited' | 'invalid' | 'failed' }
+
+/**
+ * Self-service account deletion (KVKK/GDPR). Requires the live session, the
+ * current password and the typed confirmation phrase; attempts are rate limited
+ * per IP+account and per account. Personal data is anonymized in one atomic
+ * UPDATE (orders are kept, detached from any identity), the cookie is cleared
+ * and a notice goes to the address the account had before anonymization.
+ */
+export async function deleteOwnStoreAccount(input: {
+  storeSlug: string
+  password: string
+  confirm: string
+}): Promise<DeleteAccountResult> {
+  const copy = ACCOUNT_DELETION_COPY.tr
+  const fail = (code: 'blocked' | 'rate_limited' | 'invalid' | 'failed', error: string): DeleteAccountResult => ({
+    ok: false,
+    code,
+    error,
+  })
+
+  const password = asString(input?.password)
+  if (password.length === 0 || password.length > LIMITS.passwordMax) {
+    return fail('invalid', copy.wrongPassword)
+  }
+
+  const project = await resolveProject(input?.storeSlug)
+  if (!project) return fail('failed', MSG.storeNotFound)
+  const customer = await authenticate(project.id)
+  if (!customer) return fail('failed', MSG.noSession)
+
+  const ip = await clientIp()
+  if (
+    await anyRateLimited([
+      { name: 'account-delete', key: `${project.id}|${ip}|${customer.id}`, limit: 5, windowSeconds: 15 * 60 },
+      { name: 'account-delete-acct', key: `${project.id}|${customer.id}`, limit: 10, windowSeconds: 60 * 60 },
+    ])
+  ) {
+    return fail('rate_limited', MSG.rateLimited)
+  }
+
+  if (!(await verifyPassword(password, customer.password_hash))) {
+    return fail('invalid', copy.wrongPassword)
+  }
+  if (!confirmPhraseMatches(input?.confirm)) return fail('invalid', copy.wrongConfirm)
+
+  const result = await anonymizeStoreCustomer({
+    projectId: project.id,
+    customerId: customer.id,
+    event: 'deleted_by_customer',
+  })
+  if (!result.ok) {
+    if (result.reason === 'blocked') return fail('blocked', copy.blocked)
+    if (result.reason === 'migration_pending') return fail('failed', copy.migrationPending)
+    if (result.reason === 'already_deleted' || result.reason === 'not_found') return fail('failed', MSG.noSession)
+    return fail('failed', copy.failed)
+  }
+
+  const jar = await cookies()
+  jar.delete(cookieName(project.id))
+
+  await runAfterResponse(() =>
+    sendAccountDeletedEmail({
+      projectId: project.id,
+      customerId: customer.id,
+      to: result.previousEmail,
+      customerName: result.previousName,
+      byOwner: false,
+    }),
+  )
+  return { ok: true }
 }
 
 /**
