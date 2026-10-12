@@ -17,6 +17,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { buildTrackingUrl, carrierName } from '@/lib/shipping-carriers'
 import {
   registerStoreCustomer,
   loginStoreCustomer,
@@ -275,8 +276,21 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
         </span>
         {order.tracking_number && (
           <span className="text-xs text-muted-foreground">
-            {order.tracking_carrier ? `${order.tracking_carrier} · ` : ''}
+            {order.tracking_carrier ? `${carrierName(order.tracking_carrier)} · ` : ''}
             Takip: <span className="font-mono text-foreground">{order.tracking_number}</span>
+            {buildTrackingUrl(order.tracking_carrier, order.tracking_number) && (
+              <>
+                {' · '}
+                <a
+                  href={buildTrackingUrl(order.tracking_carrier, order.tracking_number) ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand underline-offset-2 hover:underline"
+                >
+                  Kargoyu takip et
+                </a>
+              </>
+            )}
           </span>
         )}
         {order.shipping_status === 'delivered' && order.delivered_at && (

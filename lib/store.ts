@@ -42,6 +42,8 @@ import {
   reserveOrderStock,
 } from "@/lib/store-order-stock";
 import { isMissingColumnError } from "@/lib/store-schema-compat";
+import { loadShippingSettings } from "@/lib/store-shipping-settings";
+import { computeShippingCents } from "@/lib/store-shipping-rules";
 import { normalizeProductImages, type ProductImage } from "@/lib/product-images";
 import {
   computeOrderTotals,
@@ -311,7 +313,12 @@ export async function createOrder(
 
   const { lines: orderItems, subtotalCents: subtotal, currency } = built;
 
-  const shipping = 0;
+  // Shipping is authoritative server-side: the owner's flat fee, waived above
+  // their free-shipping threshold. An unreadable setting must not silently
+  // give away shipping, so it refuses the order instead.
+  const shippingSettings = await loadShippingSettings(admin, project.id);
+  if (!shippingSettings.ok) return { ok: false, error: "order_failed" };
+  const shipping = computeShippingCents(subtotal, shippingSettings.settings);
 
   // The owner's default method (used when the buyer sends nothing or a method
   // that is not permitted) and the authoritative allow-list. The client's

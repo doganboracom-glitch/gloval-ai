@@ -228,7 +228,7 @@ export function WebsiteEditorPanel({
         {payments && (
           <TabButton active={tab === 'payments'} onClick={() => setTab('payments')}>
             <CreditCard className="h-4 w-4 shrink-0" />
-            <span className="truncate">{lang === 'en' ? 'Card POS' : 'Sanal Poslar'}</span>
+            <span className="truncate">{lang === 'en' ? 'Payment & Shipping' : 'Ödeme ve Kargo'}</span>
             {paySummary && (
               <span
                 role="status"

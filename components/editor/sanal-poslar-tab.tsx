@@ -9,8 +9,8 @@ import { PaymentModuleBadges, closedReasonText, formatTry } from '@/components/e
 
 const copy = {
   tr: {
-    title: 'Sanal Poslar',
-    open: 'Ödeme ayarlarını aç',
+    title: 'Ödeme ve Kargo',
+    open: 'Ödeme ve kargo ayarlarını aç',
     on: 'Ödeme açık',
     off: 'Ödeme kapalı',
     unknown: 'Ödeme durumu okunamadı',
@@ -24,8 +24,8 @@ const copy = {
       'Ödeme ayarları site yayınından bağımsızdır, kaydedince hemen geçerli olur.',
   },
   en: {
-    title: 'Card POS',
-    open: 'Open payment settings',
+    title: 'Payment & Shipping',
+    open: 'Open payment and shipping settings',
     on: 'Payments on',
     off: 'Payments off',
     unknown: 'Payment status unavailable',

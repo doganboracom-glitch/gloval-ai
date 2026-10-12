@@ -14,12 +14,15 @@ import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { GeneralPaymentSettings } from '@/components/ecommerce/general-payment-settings'
 import { PaymentSettingsClient } from '@/components/ecommerce/payment-settings-client'
 import { PaytrPanel } from '@/components/ecommerce/paytr-panel'
+import { ShippingSettingsPanel } from '@/components/ecommerce/shipping-settings-panel'
+import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
 
-type TabId = 'general' | 'paytr' | 'iyzico'
+type TabId = 'general' | 'shipping' | 'paytr' | 'iyzico'
 
 const copy = {
   tr: {
-    title: 'Ödeme ayarları',
+    title: 'Ödeme ve kargo ayarları',
+    shipping: 'Kargo',
     close: 'Kapat',
     general: 'Genel Ödeme Ayarları',
     soon: 'Yakında',
@@ -31,7 +34,8 @@ const copy = {
     iyzicoSoon: 'iyzico entegrasyonu yakında eklenecek.',
   },
   en: {
-    title: 'Payment settings',
+    title: 'Payment and shipping settings',
+    shipping: 'Shipping',
     close: 'Close',
     general: 'General Payment Settings',
     soon: 'Soon',
@@ -45,12 +49,13 @@ const copy = {
 }
 
 async function loadAll(projectId: string) {
-  const [general, bank, paytr] = await Promise.all([
+  const [general, bank, paytr, shipping] = await Promise.all([
     getGeneralPaymentSettings(projectId),
     getPaymentSettingsForOwner(projectId),
     getPaytrSettings(projectId),
+    getShippingSettings(projectId),
   ])
-  return { general, bank, paytr }
+  return { general, bank, paytr, shipping }
 }
 
 /**
@@ -120,6 +125,7 @@ export function PaymentSettingsDialog({
 
   const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
     { id: 'general', label: c.general },
+    { id: 'shipping', label: c.shipping },
     { id: 'paytr', label: 'PayTR' },
     { id: 'iyzico', label: 'iyzico', disabled: true },
   ]
@@ -228,6 +234,19 @@ export function PaymentSettingsDialog({
                 }}
               />
             </div>
+          )}
+
+          {data && tab === 'shipping' && (
+            <ShippingSettingsPanel
+              key={`shipping-${version}`}
+              projectId={projectId}
+              initial={data.shipping}
+              onSaved={(view) =>
+                void mutate((prev) => (prev ? { ...prev, shipping: view } : prev), {
+                  revalidate: false,
+                })
+              }
+            />
           )}
 
           {data && tab === 'paytr' && (

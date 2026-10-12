@@ -15,6 +15,7 @@ import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { readOrderItems } from '@/lib/store-order-items'
 import { loadDemoStoreIds } from '@/lib/store-demo'
+import { buildTrackingUrl, carrierName } from '@/lib/shipping-carriers'
 import { firstNameOf } from '@/lib/store-order-privacy'
 import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
 import {
@@ -246,6 +247,99 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
     }
   } catch (error) {
     console.log('[v0] store order owner email failed:', order.id, (error as Error).message)
+  }
+}
+
+/**
+ * E-mails the buyer that the order is on its way. At most once per distinct
+ * carrier + tracking code (the dedupe key contains both), so a double click
+ * never sends twice while a corrected code can be announced again. Sends
+ * nothing for orders without an e-mail address, demo stores, or orders that
+ * are not shipped. Logs ids only, never PII.
+ */
+export async function notifyOrderShipped(orderId: string): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: order } = await admin
+    .from('ecommerce_orders')
+    .select(
+      'id, project_id, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number',
+    )
+    .eq('id', orderId)
+    .maybeSingle()
+  if (!order) return
+
+  const buyerTo = (order.customer_email ?? '').trim()
+  const carrier = (order.tracking_carrier as string | null) ?? ''
+  const code = (order.tracking_number as string | null) ?? ''
+  if (!buyerTo || !carrier || !code) return
+  if (order.shipping_status !== 'shipped' && order.shipping_status !== 'in_transit' && order.shipping_status !== 'delivered') {
+    return
+  }
+
+  const { data: project } = await admin
+    .from('projects')
+    .select('id, slug, name, owner_id, schema_data')
+    .eq('id', order.project_id)
+    .maybeSingle()
+  if (!project) return
+  if (isDemoStore(project.id, await loadDemoStoreIds(admin, project.id))) return
+
+  const items = await readOrderItems<{ name: string; quantity: number; line_total_cents: number }>(
+    admin,
+    order.id,
+    'name, quantity, line_total_cents',
+  )
+
+  const schema = project.schema_data as { meta?: { language?: unknown } } | null
+  const lang = resolveEmailLang(schema?.meta?.language)
+  const storeName = project.name || project.slug
+  const token = issueOrderAccessToken(order.id)
+  const orderUrl = `${tenantUrl(project.slug)}${buildOrderPath(project.slug, order.id, token).replace(`/site/${project.slug}`, '')}`
+
+  const email = renderOrderEmail({
+    kind: 'buyer-shipped',
+    lang,
+    storeName,
+    orderNumber: order.id.slice(0, 8).toUpperCase(),
+    items,
+    subtotalCents: order.subtotal_cents,
+    shippingCents: order.shipping_cents,
+    codFeeCents: orderCodFeeCents(order),
+    totalCents: order.total_cents,
+    currency: order.currency,
+    paymentLabel: buyerMethodName(order.payment_provider, lang),
+    customerName: firstNameOf(order.customer_name),
+    orderUrl,
+    carrierName: carrierName(carrier),
+    trackingNumber: code,
+    trackingUrl: buildTrackingUrl(carrier, code),
+  })
+
+  await sendOnce({
+    ownerId: project.owner_id,
+    dedupeKey: `store-order:${order.id}:shipped:${carrier}:${code}`,
+    type: 'store_order_shipped',
+    to: buyerTo,
+    fromName: storeName,
+    replyTo: findContactEmail(project.schema_data),
+    email,
+  })
+}
+
+/** Fire-and-forget wrapper: never delays or fails the owner's click. */
+export function scheduleShippedNotification(orderId: string): void {
+  const run = async () => {
+    try {
+      await notifyOrderShipped(orderId)
+    } catch (error) {
+      console.log('[v0] store shipped notification failed:', orderId, (error as Error).message)
+    }
+  }
+  try {
+    after(run)
+  } catch {
+    void run()
   }
 }
 
