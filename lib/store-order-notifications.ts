@@ -4,7 +4,6 @@ import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   claimNotification,
-  releaseNotificationClaim,
   sendTransactionalEmail,
 } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
@@ -125,7 +124,6 @@ async function sendOnce(input: {
     replyTo: input.replyTo,
     fromName: input.fromName,
   })
-  if (!sent) await releaseNotificationClaim(input.dedupeKey)
 }
 
 /**

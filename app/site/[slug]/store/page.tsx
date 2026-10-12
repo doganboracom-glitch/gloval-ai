@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
+import { StoreSiteShell } from '@/components/store/store-site-shell'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
@@ -31,5 +32,9 @@ export default async function StorePage({
     getStoreShippingInfo(slug),
   ])
 
-  return <StoreFront slug={slug} storeName={site.name} products={products} shipping={shipping} />
+  return (
+    <StoreSiteShell site={site.schema}>
+      <StoreFront slug={slug} storeName={site.name} products={products} shipping={shipping} />
+    </StoreSiteShell>
+  )
 }
