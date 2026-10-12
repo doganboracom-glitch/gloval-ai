@@ -9,6 +9,8 @@ import { formFromProduct, toProductInput } from '@/lib/product-form'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from './form-parts'
+import type { OwnerCollection } from '@/lib/store-collections-core'
+import { CollectionsPanel } from './collections-panel'
 import { ProductFormDialog } from './product-form-dialog'
 import { ProductList } from './product-list'
 
@@ -19,6 +21,8 @@ export function EcommerceClient({
   projectName,
   initialProducts,
   initialCategories,
+  initialCollections,
+  collectionsAvailable,
   storeSlug,
   published,
 }: {
@@ -26,6 +30,8 @@ export function EcommerceClient({
   projectName: string
   initialProducts: ProductRow[]
   initialCategories: CategoryRow[]
+  initialCollections: OwnerCollection[]
+  collectionsAvailable: boolean
   storeSlug?: string | null
   published?: boolean
 }) {
@@ -187,6 +193,13 @@ export function EcommerceClient({
           onRemove={setRemoveTarget}
           onPublish={handlePublish}
         />
+
+        <CollectionsPanel
+          projectId={projectId}
+          collections={initialCollections}
+          products={products}
+          available={collectionsAvailable}
+        />
       </div>
 
       {formTarget && (
@@ -195,6 +208,7 @@ export function EcommerceClient({
           projectId={projectId}
           product={formTarget.product}
           categories={initialCategories}
+          collections={collectionsAvailable ? initialCollections : []}
           onClose={() => setFormTarget(null)}
           onSaved={handleSaved}
         />

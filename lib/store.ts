@@ -50,6 +50,15 @@ import {
   isCheckoutAllowed,
 } from "@/lib/store-checkout-rules";
 
+export type StoreCollection = {
+  id: string
+  name: string
+  slug: string
+  sort_order: number
+  auto_best_sellers: boolean
+  product_ids: string[]
+}
+
 export type StoreProduct = {
   id: string;
   project_id: string;
@@ -66,7 +75,18 @@ export type StoreProduct = {
   track_stock?: boolean;
   /** Camel-case alias used by renderer catalog entries. */
   trackStock?: boolean;
+  created_at?: string
+  compare_at_price_cents?: number | null
+  category_name?: string | null
+  sku?: string | null
 } & Partial<StoreProductExtras>;
+
+export async function getStoreCollections(slug: string): Promise<StoreCollection[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_store_collections', { p_slug: slug })
+  if (error || !data) return []
+  return data as StoreCollection[]
+}
 
 /**
  * Public catalog read for a PUBLISHED store, via the SECURITY DEFINER RPC.
