@@ -7,6 +7,7 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { EditorClient } from '@/components/editor/editor-client'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPaymentSummary } from '@/lib/store-payments/general-settings'
+import { getEditorCatalog } from '@/lib/store-editor-catalog'
 
 export default async function EditorPage({
   params,
@@ -54,6 +55,11 @@ export default async function EditorPage({
     ? await getPaymentSummary(projectId).catch(() => null)
     : null
 
+  // Owner-verified, project_id-keyed read that also works before first publish
+  // (the public RPCs only serve published stores). A failure only empties the preview.
+  const catalog =
+    project.project_type === 'ecommerce' ? await getEditorCatalog(projectId) : null
+
   return (
     <EditorClient
       projectId={projectId}
@@ -65,6 +71,7 @@ export default async function EditorPage({
       planCode={planCode}
       autoPublish={autopublish === '1'}
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
+      catalog={catalog}
     />
   )
 }

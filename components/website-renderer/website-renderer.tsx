@@ -79,6 +79,7 @@ export function WebsiteRenderer({
   planCode,
   store = null,
   previewProducts,
+  previewCollections,
   preview = null,
   editSelection = null,
 }: {
@@ -106,6 +107,8 @@ export function WebsiteRenderer({
    * showcase sections. Display-only (no cart).
    */
   previewProducts?: StoreProduct[]
+  /** Editor preview only: the owner's collections, so a collection-bound showcase resolves its products. */
+  previewCollections?: Array<{ slug: string; name: string; product_ids: string[] }>
   /**
    * Set to false when the surrounding page already renders its own phone /
    * WhatsApp buttons (the demo routes do, from their catalog), so they never
@@ -187,8 +190,13 @@ export function WebsiteRenderer({
     const catalog = buildPreviewCatalog(parsed.data, preview.slug ?? 'preview')
     // Real catalog (read-only, owner's active products) so the preview shows the
     // same product showcase the published site will.
-    return { ...catalog, products: previewProducts ?? [], isPreview: true }
-  }, [preview, parsed, previewProducts])
+    return {
+      ...catalog,
+      products: previewProducts ?? [],
+      collections: previewCollections ?? [],
+      isPreview: true,
+    }
+  }, [preview, parsed, previewProducts, previewCollections])
 
   if (!parsed.success) {
     return <RendererError />

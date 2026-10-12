@@ -15,6 +15,7 @@ import { tenantUrl } from '@/lib/domains'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
+import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
 
 /**
  * Editor route wrapper. Reuses the full WebsitePreview editor and connects its
@@ -31,6 +32,7 @@ export function EditorClient({
   planCode,
   autoPublish,
   payments,
+  catalog,
 }: {
   projectId: string
   schema: WebsiteSchema
@@ -51,6 +53,8 @@ export function EditorClient({
   autoPublish?: boolean
   /** Non-null only for a store's owner/admin: enables the Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
+  /** Owner-verified store catalog for the live preview (store sites only). */
+  catalog?: EditorCatalog | null
 }) {
   const router = useRouter()
   const { t } = useLanguage()
@@ -63,6 +67,7 @@ export function EditorClient({
       planCode={planCode}
       autoPublish={autoPublish}
       payments={payments ?? null}
+      catalog={catalog ?? null}
       onClose={() => {
         // Bust the client Router Cache so the dashboard reflects this project's
         // latest state (name, updated_at, publish status) instead of a stale

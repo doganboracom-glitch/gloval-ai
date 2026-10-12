@@ -26,6 +26,7 @@ import { fitLogoToCanvas } from '@/lib/logo-mark'
 import type { ProjectVersionItem } from '@/lib/projects'
 import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
+import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
 
@@ -127,6 +128,7 @@ export function WebsitePreview({
   initialEditorOpen = false,
   planCode = 'free',
   payments = null,
+  catalog = null,
   persist,
   autoPublish = false,
   onAuthenticatedPublish,
@@ -145,6 +147,11 @@ export function WebsitePreview({
   planCode?: PlanCode
   /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
+  /**
+   * Store owner's active products + collections (loaded server-side), shown by
+   * product showcase sections in the preview. Null: no data, empty-state message.
+   */
+  catalog?: EditorCatalog | null
   /**
    * Optional persistence. When provided (editor route), the live schema is
    * debounce-autosaved and a manual "Save" button records a version snapshot.
@@ -1409,6 +1416,8 @@ export function WebsitePreview({
                     site={pendingAiEdit ? pendingAiEdit.after : currentSite}
                     planCode={planCode}
                     preview={previewNav}
+                    previewProducts={catalog?.products}
+                    previewCollections={catalog?.collections}
                     editSelection={
                       showEdit
                         ? { index: selectedSectionIndex, onSelect: setSelectedSectionIndex }
