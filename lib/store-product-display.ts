@@ -18,6 +18,7 @@ export type StoreProductExtras = {
   shipping_note: string | null
   seo_title: string | null
   seo_description: string | null
+  sku: string | null
   /** Owner picked this product for the home-page showcase. False before SQL 038. */
   show_on_home: boolean
 }
@@ -60,6 +61,7 @@ export function readProductExtras(row: Record<string, unknown>, priceCents: numb
     shipping_note: text(row.shipping_note),
     seo_title: text(row.seo_title),
     seo_description: text(row.seo_description),
+    sku: text(row.sku),
     show_on_home: row.show_on_home === true,
   }
 }

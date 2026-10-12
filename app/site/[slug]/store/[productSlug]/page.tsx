@@ -1,8 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
-import { getStoreProductBySlug, getStoreProducts } from '@/lib/store'
+import { getStoreProductBySlug, getStoreProducts, getStorePaymentMethods } from '@/lib/store'
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
+import { isCardProviderMethod } from '@/lib/payments/methods'
+import { tenantUrl } from '@/lib/domains'
+import { productJsonLdScript } from '@/lib/product-json-ld'
 import { ProductDetail } from '@/components/store/product-detail'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
@@ -15,12 +18,23 @@ export async function generateMetadata({
   params: Promise<{ slug: string; productSlug: string }>
 }): Promise<Metadata> {
   const { slug, productSlug } = await params
+  const site = await getPublishedSite(slug)
+  if (!site) notFound()
   const product = await getStoreProductBySlug(slug, productSlug)
-  if (!product) return { title: 'Ürün' }
+  if (!product) notFound()
   const description = product.seo_description ?? product.description ?? undefined
+  const image = product.images[0]?.url
   return {
     title: product.seo_title ?? product.name,
     ...(description ? { description } : {}),
+    alternates: { canonical: `${tenantUrl(slug)}/store/${productSlug}` },
+    openGraph: {
+      title: product.seo_title ?? product.name,
+      ...(description ? { description } : {}),
+      url: `${tenantUrl(slug)}/store/${productSlug}`,
+      type: 'website' as const,
+      ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
+    },
   }
 }
 
@@ -36,13 +50,12 @@ export default async function ProductPage({
   const product = await getStoreProductBySlug(slug, productSlug)
   if (!product) notFound()
 
-  const [tryOnConfig, shipping, products] = await Promise.all([
+  const [tryOnConfig, shipping, products, payments] = await Promise.all([
     getTryOnConfigForStore(slug),
     getStoreShippingInfo(slug),
     getStoreProducts(slug),
+    getStorePaymentMethods(slug),
   ])
-  const images = product.images.map((image) => image.url)
-  const availability = product.track_stock === false ? 'https://schema.org/InStock' : product.stock <= 0 ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'
 
   return (
     <StoreSiteShell site={site.schema}>
@@ -52,14 +65,12 @@ export default async function ProductPage({
         storeName={site.name}
         product={product}
         relatedProducts={products.filter((item) => item.id !== product.id && item.category_id === product.category_id).slice(0, 4)}
-        whatsapp={site.schema.contactActions?.whatsapp ? { href: `https://wa.me/${site.schema.contactActions.whatsapp.replace(/\D/g, '')}`, display: site.schema.contactActions.whatsapp } : null}
+        whatsapp={site.schema.contactActions?.whatsapp && /\d/.test(site.schema.contactActions.whatsapp) ? { href: `https://wa.me/${site.schema.contactActions.whatsapp.replace(/\D/g, '')}`, display: site.schema.contactActions.whatsapp } : null}
         enableTryOn={tryOnConfig !== null}
+        cardPaymentEnabled={payments.available && payments.methods.some(isCardProviderMethod)}
+        codEnabled={payments.available && payments.methods.includes('cash_on_delivery')}
       />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
-        '@context': 'https://schema.org', '@type': 'Product', name: product.name,
-        image: images, description: product.description ?? undefined, sku: product.id,
-        offers: { '@type': 'Offer', price: (product.price_cents / 100).toFixed(2), priceCurrency: product.currency, availability },
-      }) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: productJsonLdScript(product) }} />
     </StoreSiteShell>
   )
 }
