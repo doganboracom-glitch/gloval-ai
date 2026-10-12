@@ -39,6 +39,10 @@ export interface ShippingOrderStore {
   ): Promise<UpdateResult>
 }
 
+export function orderNotificationDedupeKey(orderId: string, kind: 'buyer-shipped' | 'buyer-delivered'): string {
+  return `store-order:${orderId}:${kind === 'buyer-delivered' ? 'delivered' : 'shipped'}`
+}
+
 export type ShipInput = {
   carrier: unknown
   trackingNumber: unknown
@@ -124,6 +128,29 @@ export async function markOrderDelivered(
     input.orderId,
     { shipping_status: 'delivered', status: 'completed', delivered_at: now() },
     ['shipped', 'in_transit'],
+  )
+  if (result === 'error') return { ok: false, error: 'failed' }
+  if (result === 'lost') return { ok: false, error: 'conflict' }
+  return { ok: true }
+}
+
+export type UndeliverOutcome =
+  | { ok: true }
+  | { ok: false; error: 'not_delivered' | 'cancelled' | 'conflict' | 'failed' | 'not_found' }
+
+export async function markOrderUndelivered(
+  store: ShippingOrderStore,
+  input: { projectId: string; orderId: string },
+): Promise<UndeliverOutcome> {
+  const order = await store.find(input.projectId, input.orderId)
+  if (!order) return { ok: false, error: 'not_found' }
+  if (['cancelled', 'failed', 'refunded'].includes(order.status)) return { ok: false, error: 'cancelled' }
+  if (order.shipping_status !== 'delivered') return { ok: false, error: 'not_delivered' }
+  const result = await store.update(
+    input.projectId,
+    input.orderId,
+    { shipping_status: 'shipped', status: 'shipped', delivered_at: null },
+    ['delivered'],
   )
   if (result === 'error') return { ok: false, error: 'failed' }
   if (result === 'lost') return { ok: false, error: 'conflict' }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { Check, ExternalLink, Loader2, Pencil, Truck } from 'lucide-react'
-import { markStoreOrderDelivered, shipStoreOrder } from '@/lib/store-shipping-actions'
+import { markStoreOrderDelivered, markStoreOrderUndelivered, shipStoreOrder } from '@/lib/store-shipping-actions'
 import { buildTrackingUrl, carrierName, CARRIERS, isCarrierId } from '@/lib/shipping-carriers'
 import { shipGate } from '@/lib/store-shipping-rules'
 import type { OrderWithItems } from '@/lib/ecommerce'
@@ -22,6 +22,14 @@ const shipErrors: Record<string, string> = {
   conflict: 'Sipariş zaten güncellendi. Sayfayı yenileyin.',
   not_found: 'Sipariş bulunamadı.',
   failed: 'Kargo bilgisi kaydedilemedi. Tekrar deneyin.',
+}
+
+const undeliverErrors: Record<string, string> = {
+  not_delivered: 'Sipariş teslim edilmiş değil.',
+  cancelled: 'İptal edilmiş sipariş güncellenemez.',
+  conflict: 'Sipariş zaten güncellendi. Sayfayı yenileyin.',
+  not_found: 'Sipariş bulunamadı.',
+  failed: 'Teslim durumu geri alınamadı. Tekrar deneyin.',
 }
 
 const deliverErrors: Record<string, string> = {
@@ -104,6 +112,23 @@ export function OrderShippingControls({
     })
   }
 
+  function undeliver() {
+    if (!window.confirm('Teslim durumu geri alınsın mı?')) return
+    setMessage(null)
+    startTransition(async () => {
+      try {
+        const result = await markStoreOrderUndelivered(projectId, order.id)
+        if (!result.ok) {
+          setMessage(undeliverErrors[result.error] ?? undeliverErrors.failed)
+          return
+        }
+        onChange({ status: 'shipped', shipping_status: 'shipped', delivered_at: null })
+      } catch {
+        setMessage(undeliverErrors.failed)
+      }
+    })
+  }
+
   function deliver() {
     if (!window.confirm('Sipariş teslim edildi olarak işaretlensin mi?')) return
     setMessage(null)
@@ -155,10 +180,14 @@ export function OrderShippingControls({
           </div>
           <div className="flex items-center gap-2">
             {delivered ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
-                <Check className="size-3" aria-hidden />
-                Teslim edildi
-              </span>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={undeliver}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-input px-3 text-sm transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                Teslim durumunu geri al
+              </button>
             ) : (
               <button
                 type="button"

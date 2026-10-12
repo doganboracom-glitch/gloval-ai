@@ -3,9 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
-import { scheduleShippedNotification } from '@/lib/store-order-notifications'
+import { scheduleDeliveredNotification, scheduleShippedNotification } from '@/lib/store-order-notifications'
 import {
   markOrderDelivered,
+  markOrderUndelivered,
   shipOrder,
   type DeliverOutcome,
   type ShipOutcome,
@@ -72,12 +73,22 @@ export async function shipStoreOrder(
   return result
 }
 
+export async function markStoreOrderUndelivered(projectId: string, orderId: string) {
+  await requireOwnedEcommerceProject(projectId)
+  const result = await markOrderUndelivered(supabaseShippingStore(), { projectId, orderId })
+  if (result.ok) revalidatePath(`/ecommerce/${projectId}/orders`)
+  return result
+}
+
 export async function markStoreOrderDelivered(
   projectId: string,
   orderId: string,
 ): Promise<DeliverOutcome> {
   await requireOwnedEcommerceProject(projectId)
   const result = await markOrderDelivered(supabaseShippingStore(), { projectId, orderId })
-  if (result.ok) revalidatePath(`/ecommerce/${projectId}/orders`)
+  if (result.ok) {
+    scheduleDeliveredNotification(orderId)
+    revalidatePath(`/ecommerce/${projectId}/orders`)
+  }
   return result
 }
