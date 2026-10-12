@@ -9,7 +9,7 @@ import { mailSetupSubject, renderMailSetupHtml, renderMailSetupText } from '@/li
 export const dynamic = 'force-dynamic'
 
 const SAMPLE_ADDRESS = 'ornek@alanadiniz.com'
-const TEMPLATES = ['mailbox-setup'] as const
+const TEMPLATES = ['mailbox-setup', 'order-delivered'] as const
 
 export default async function AdminEmailPreviewPage({
   searchParams,

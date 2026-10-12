@@ -11,7 +11,7 @@ import type { EmailLang } from '@/lib/email/lang'
 import { formatPrice } from '@/lib/format'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 
-export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'buyer-shipped' | 'owner'
+export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'buyer-shipped' | 'buyer-delivered' | 'owner'
 
 export type OrderEmailItem = {
   name: string
@@ -142,6 +142,25 @@ const BUYER_SHIPPED: Record<EmailLang, Copy> = {
   },
 }
 
+const BUYER_DELIVERED: Record<EmailLang, Copy> = {
+  tr: {
+    ...BUYER_SHIPPED.tr,
+    subject: (s, n) => `${s} siparişiniz teslim edildi (#${n})`,
+    title: 'Siparişiniz teslim edildi',
+    preview: (s, n) => `${s} - #${n} numaralı siparişiniz teslim edildi.`,
+    intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişiniz teslim edildi.`,
+    cta: 'Siparişi görüntüle',
+  },
+  en: {
+    ...BUYER_SHIPPED.en,
+    subject: (s, n) => `${s}: your order was delivered (#${n})`,
+    title: 'Your order was delivered',
+    preview: (s, n) => `${s} - order #${n} was delivered.`,
+    intro: (name, s) => `Hi ${name}, your order at ${s} was delivered.`,
+    cta: 'View order',
+  },
+}
+
 const BUYER_PENDING: Record<EmailLang, Copy> = {
   tr: {
     ...BUYER_PAID.tr,
@@ -224,6 +243,7 @@ function copyFor(data: OrderEmailData): Copy {
   const { kind, lang } = data
   if (kind === 'owner') return (data.paymentPending ? OWNER_PENDING : OWNER)[lang]
   if (kind === 'buyer-shipped') return BUYER_SHIPPED[lang]
+  if (kind === 'buyer-delivered') return BUYER_DELIVERED[lang]
   if (kind === 'buyer-pending') return (data.cashOnDelivery ? BUYER_COD : BUYER_PENDING)[lang]
   return BUYER_PAID[lang]
 }
@@ -273,7 +293,7 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
   }
 
   const shippedRows: Array<[string, string]> = []
-  if (data.kind === 'buyer-shipped') {
+  if (data.kind === 'buyer-shipped' || data.kind === 'buyer-delivered') {
     if (data.carrierName) shippedRows.push([c.shippedRows.carrier, data.carrierName])
     if (data.trackingNumber) shippedRows.push([c.shippedRows.code, data.trackingNumber])
   }

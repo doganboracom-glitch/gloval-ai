@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { markOrderDelivered, shipOrder, type ShippingOrderRow, type ShippingOrderStore } from './store-shipping-core'
+import { markOrderDelivered, markOrderUndelivered, shipOrder, type ShippingOrderRow, type ShippingOrderStore } from './store-shipping-core'
 
 function store(row: Partial<ShippingOrderRow> = {}, updateResult: 'moved' | 'lost' | 'error' = 'moved') {
   const order: ShippingOrderRow = {
@@ -49,6 +49,17 @@ describe('shipOrder', () => {
   it('does not duplicate the transition after a race', async () => {
     const { db } = store({}, 'lost')
     expect(await shipOrder(db, { projectId: 'shop-a', orderId: 'o1', ...valid })).toEqual({ ok: false, error: 'conflict' })
+  })
+
+  it('covers preparing to shipped to delivered and back to shipped to delivered', async () => {
+    const first = store()
+    expect(await shipOrder(first.db, { projectId: 'shop-a', orderId: 'o1', ...valid })).toMatchObject({ ok: true, kind: 'shipped' })
+    const second = store({ shipping_status: 'shipped', shipped_at: '2026-01-01T00:00:00.000Z' })
+    expect(await markOrderDelivered(second.db, { projectId: 'shop-a', orderId: 'o1' })).toEqual({ ok: true })
+    const third = store({ shipping_status: 'delivered', shipped_at: '2026-01-01T00:00:00.000Z' })
+    await expect(markOrderUndelivered(third.db, { projectId: 'shop-a', orderId: 'o1' })).resolves.toEqual({ ok: true })
+    const fourth = store({ shipping_status: 'shipped', shipped_at: '2026-01-01T00:00:00.000Z' })
+    expect(await markOrderDelivered(fourth.db, { projectId: 'shop-a', orderId: 'o1' })).toEqual({ ok: true })
   })
 
   it('delivers only shipped orders and is idempotence-safe', async () => {

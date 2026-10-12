@@ -257,7 +257,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
  * nothing for orders without an e-mail address, demo stores, or orders that
  * are not shipped. Logs ids only, never PII.
  */
-export async function notifyOrderShipped(orderId: string): Promise<void> {
+export async function notifyOrderShipped(orderId: string, kind: 'buyer-shipped' | 'buyer-delivered' = 'buyer-shipped'): Promise<void> {
   const admin = createAdminClient()
 
   const { data: order } = await admin
@@ -298,7 +298,7 @@ export async function notifyOrderShipped(orderId: string): Promise<void> {
   const orderUrl = `${tenantUrl(project.slug)}${buildOrderPath(project.slug, order.id, token).replace(`/site/${project.slug}`, '')}`
 
   const email = renderOrderEmail({
-    kind: 'buyer-shipped',
+    kind,
     lang,
     storeName,
     orderNumber: order.id.slice(0, 8).toUpperCase(),
@@ -318,8 +318,8 @@ export async function notifyOrderShipped(orderId: string): Promise<void> {
 
   await sendOnce({
     ownerId: project.owner_id,
-    dedupeKey: `store-order:${order.id}:shipped:${carrier}:${code}`,
-    type: 'store_order_shipped',
+    dedupeKey: `store-order:${order.id}:${kind === 'buyer-delivered' ? 'delivered' : 'shipped'}`,
+    type: kind === 'buyer-delivered' ? 'store_order_delivered' : 'store_order_shipped',
     to: buyerTo,
     fromName: storeName,
     replyTo: findContactEmail(project.schema_data),
@@ -328,6 +328,17 @@ export async function notifyOrderShipped(orderId: string): Promise<void> {
 }
 
 /** Fire-and-forget wrapper: never delays or fails the owner's click. */
+export function scheduleDeliveredNotification(orderId: string): void {
+  const run = async () => {
+    try {
+      await notifyOrderShipped(orderId, 'buyer-delivered')
+    } catch (error) {
+      console.log('[v0] store delivered notification failed:', orderId, (error as Error).message)
+    }
+  }
+  try { after(run) } catch { void run() }
+}
+
 export function scheduleShippedNotification(orderId: string): void {
   const run = async () => {
     try {
