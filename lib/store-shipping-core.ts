@@ -39,6 +39,10 @@ export interface ShippingOrderStore {
   ): Promise<UpdateResult>
 }
 
+export function orderNotificationDedupeKey(orderId: string, kind: 'buyer-shipped' | 'buyer-delivered'): string {
+  return `store-order:${orderId}:${kind === 'buyer-delivered' ? 'delivered' : 'shipped'}`
+}
+
 export type ShipInput = {
   carrier: unknown
   trackingNumber: unknown
