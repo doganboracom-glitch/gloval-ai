@@ -20,10 +20,12 @@ export async function generateMetadata({
 
 export default async function StorePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { slug } = await params
+  const [{ slug }, initialParams] = await Promise.all([params, searchParams])
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
@@ -35,7 +37,14 @@ export default async function StorePage({
 
   return (
     <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
-      <StoreFront slug={slug} storeName={site.name} products={products} collections={collections} shipping={shipping} />
+      <StoreFront
+        slug={slug}
+        storeName={site.name}
+        products={products}
+        collections={collections}
+        shipping={shipping}
+        initialParams={initialParams}
+      />
     </StoreSiteShell>
   )
 }

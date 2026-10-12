@@ -11,6 +11,12 @@ export function isMissingColumnError(error: DbError): boolean {
   return /column .* does not exist|could not find the .* column/i.test(error.message ?? '')
 }
 
+export function isMissingTableError(error: DbError): boolean {
+  if (!error) return false
+  if (error.code === '42P01' || error.code === 'PGRST205') return true
+  return /relation .* does not exist|could not find the table/i.test(error.message ?? '')
+}
+
 export function isMissingFunctionError(error: DbError): boolean {
   if (!error) return false
   if (error.code === '42883' || error.code === 'PGRST202') return true

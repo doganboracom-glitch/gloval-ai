@@ -3,8 +3,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { PackageOpen, Search, SlidersHorizontal, X } from 'lucide-react'
 import type { StoreCollection, StoreProduct } from '@/lib/store'
-import { ProductCard } from './product-card'
 import type { ShippingSettings } from '@/lib/store-shipping-rules'
+import {
+  DEFAULT_FILTERS,
+  MAX_CLIENT_PRODUCTS,
+  MAX_QUERY_LENGTH,
+  PAGE_SIZE,
+  applyDiscovery,
+  categoryNames,
+  hasActiveFilters,
+  parseFilters,
+  serializeFilters,
+  type DiscoveryFilters,
+} from '@/lib/store-discovery'
+import { ProductCard } from './product-card'
 
 type StoreFrontProps = {
   slug: string
@@ -12,78 +24,278 @@ type StoreFrontProps = {
   products: StoreProduct[]
   collections?: StoreCollection[]
   shipping?: ShippingSettings
+  /** Query params from the request, so server and client first paint match. */
+  initialParams?: Record<string, string | string[] | undefined>
 }
 
-const MAX_CLIENT_PRODUCTS = 500
-const PAGE_SIZE = 24
+const chipBase =
+  'shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2'
+const chipOff = 'border-border bg-background text-foreground hover:bg-muted'
+const chipOn = 'border-foreground bg-foreground text-background'
+const fieldClass =
+  'rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground'
 
-type Filters = { q: string; kategori: string; koleksiyon: string; sirala: string; min: string; max: string; indirim: boolean; stok: boolean }
-const defaults: Filters = { q: '', kategori: '', koleksiyon: '', sirala: '', min: '', max: '', indirim: false, stok: false }
+function Chips({
+  label,
+  allLabel,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  allLabel: string
+  options: { value: string; label: string }[]
+  value: string
+  onChange: (value: string) => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <div role="group" aria-label={label} className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <button
+        type="button"
+        aria-pressed={value === ''}
+        onClick={() => onChange('')}
+        className={`${chipBase} ${value === '' ? chipOn : chipOff}`}
+      >
+        {allLabel}
+      </button>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(value === option.value ? '' : option.value)}
+          className={`${chipBase} ${value === option.value ? chipOn : chipOff}`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
 
-function fold(value: string) {
-  return value.toLocaleLowerCase('tr').replace(/ı/g, 'i').replace(/İ/g, 'i').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-}
-function readFilters(): Filters {
-  if (typeof window === 'undefined') return defaults
-  const p = new URLSearchParams(window.location.search)
-  return { q: p.get('q') ?? '', kategori: p.get('kategori') ?? '', koleksiyon: p.get('koleksiyon') ?? '', sirala: p.get('sirala') ?? '', min: p.get('min') ?? '', max: p.get('max') ?? '', indirim: p.get('indirim') === '1', stok: p.get('stok') === '1' }
-}
-function writeFilters(filters: Filters) {
-  const p = new URLSearchParams()
-  for (const [key, value] of Object.entries(filters)) if (value) p.set(key, value === true ? '1' : String(value).slice(0, 80))
-  const url = `${window.location.pathname}${p.toString() ? `?${p}` : ''}`
-  window.history.replaceState(null, '', url)
+function PriceField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        placeholder="TL"
+        value={value}
+        onChange={(e) =>
+          onChange(e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.').slice(0, 11))
+        }
+        className={`${fieldClass} w-24`}
+      />
+    </label>
+  )
 }
 
-export function StoreFront({ slug, storeName, products, collections = [] }: StoreFrontProps) {
-  const [filters, setFilters] = useState<Filters>(readFilters)
+export function StoreFront({
+  slug,
+  storeName,
+  products,
+  collections = [],
+  initialParams = {},
+}: StoreFrontProps) {
+  const catalog = useMemo(() => products.slice(0, MAX_CLIENT_PRODUCTS), [products])
+  const categories = useMemo(() => categoryNames(catalog), [catalog])
+  const known = useMemo(
+    () => ({ categories, collections: collections.map((c) => c.slug) }),
+    [categories, collections],
+  )
+
+  const [filters, setFilters] = useState<DiscoveryFilters>(() => parseFilters(initialParams, known))
   const [visible, setVisible] = useState(PAGE_SIZE)
-  const [drawer, setDrawer] = useState(false)
-  const safeProducts = products.slice(0, MAX_CLIENT_PRODUCTS)
-  const categories = useMemo(() => Array.from(new Set(safeProducts.map((p) => (p as StoreProduct & { category_name?: string }).category_name).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b, 'tr')), [safeProducts])
-  const collection = collections.find((c) => c.slug === filters.koleksiyon)
-  const collectionIds = collection ? new Set(collection.product_ids) : null
+  const [panelOpen, setPanelOpen] = useState(false)
 
-  useEffect(() => { writeFilters(filters); setVisible(PAGE_SIZE) }, [filters])
-  useEffect(() => { const onPop = () => setFilters(readFilters()); window.addEventListener('popstate', onPop); return () => window.removeEventListener('popstate', onPop) }, [])
+  useEffect(() => {
+    const query = serializeFilters(filters)
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`)
+  }, [filters])
 
-  const filtered = useMemo(() => {
-    const query = fold(filters.q.trim())
-    const min = Number(filters.min) || 0
-    const max = Number(filters.max) || Number.POSITIVE_INFINITY
-    const result = safeProducts.filter((p) => {
-      const row = p as StoreProduct & { category_name?: string; sku?: string | null }
-      const haystack = fold([p.name, p.description ?? '', row.category_name ?? '', row.sku ?? ''].join(' '))
-      const discount = p.compare_at_price_cents && p.compare_at_price_cents > p.price_cents
-      return (!query || haystack.includes(query)) && (!filters.kategori || row.category_name === filters.kategori) && (!collectionIds || collectionIds.has(p.id)) && p.price_cents >= min * 100 && p.price_cents <= max * 100 && (!filters.indirim || discount) && (!filters.stok || p.stock > 0) 
-    })
-    return result.sort((a, b) => {
-      if (filters.sirala === 'yeni') return (b.created_at ?? '').localeCompare(a.created_at ?? '')
-      if (filters.sirala === 'artan') return a.price_cents - b.price_cents
-      if (filters.sirala === 'azalan') return b.price_cents - a.price_cents
-      if (filters.sirala === 'indirim') return ((b.compare_at_price_cents ?? b.price_cents) - b.price_cents) / (b.compare_at_price_cents || 1) - ((a.compare_at_price_cents ?? a.price_cents) - a.price_cents) / (a.compare_at_price_cents || 1)
-      return 0
-    })
-  }, [safeProducts, filters, collectionIds])
+  useEffect(() => {
+    const onPopState = () => {
+      setFilters(parseFilters(new URLSearchParams(window.location.search), known))
+      setVisible(PAGE_SIZE)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [known])
 
-  const clear = () => setFilters(defaults)
-  const update = (patch: Partial<Filters>) => setFilters((current) => ({ ...current, ...patch }))
-  const controls = <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Mağaza filtreleri">
-    <select aria-label="Kategori" value={filters.kategori} onChange={(e) => update({ kategori: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="">Tüm kategoriler</option>{categories.map((c) => <option key={c}>{c}</option>)}</select>
-    <select aria-label="Koleksiyon" value={filters.koleksiyon} onChange={(e) => update({ koleksiyon: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="">Tüm koleksiyonlar</option>{collections.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}</select>
-    <select aria-label="Sıralama" value={filters.sirala} onChange={(e) => update({ sirala: e.target.value })} className="rounded-lg border border-border bg-background px-3 py-2 text-sm"><option value="">Önerilen</option><option value="yeni">En yeniler</option><option value="artan">Fiyat: artan</option><option value="azalan">Fiyat: azalan</option><option value="indirim">İndirim oranı</option></select>
-    <input aria-label="En düşük fiyat" inputMode="decimal" placeholder="Min TL" value={filters.min} onChange={(e) => update({ min: e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.') })} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-    <input aria-label="En yüksek fiyat" inputMode="decimal" placeholder="Max TL" value={filters.max} onChange={(e) => update({ max: e.target.value.replace(/[^0-9.,]/g, '').replace(',', '.') })} className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.indirim} onChange={(e) => update({ indirim: e.target.checked })} /> İndirimde</label>
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.stok} onChange={(e) => update({ stok: e.target.checked })} /> Stokta</label>
-  </div>
+  const results = useMemo(
+    () => applyDiscovery(catalog, filters, collections),
+    [catalog, filters, collections],
+  )
 
-  return <div className="bg-background text-foreground"><div className="mx-auto max-w-6xl px-4 py-10">
-    <h1 className="mb-6 font-display text-2xl font-bold sm:text-3xl">{storeName}<span className="sr-only"> - Ürünler</span></h1>
-    <div className="mb-6 flex gap-2"><div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden /><input aria-label="Ürünlerde ara" value={filters.q} onChange={(e) => update({ q: e.target.value })} placeholder="Ürün, açıklama, kategori veya SKU ara" className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-10 text-sm" />{filters.q && <button aria-label="Aramayı temizle" onClick={() => update({ q: '' })} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="size-4" /></button>}</div><button type="button" onClick={() => setDrawer(!drawer)} className="inline-flex items-center gap-2 rounded-xl border border-border px-3 text-sm lg:hidden"><SlidersHorizontal className="size-4" /> Filtrele</button></div>
-    <div className={`${drawer ? 'block' : 'hidden'} mb-6 lg:block`}>{controls}</div>
-    <div className="mb-5 flex items-center justify-between text-sm text-muted-foreground"><span aria-live="polite">{filtered.length} ürün</span>{(filters.q || filters.kategori || filters.koleksiyon || filters.min || filters.max || filters.indirim || filters.stok) && <button onClick={clear} className="font-medium text-foreground underline">Filtreleri temizle</button>}</div>
-    {filtered.length === 0 ? <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-24 text-center"><PackageOpen className="size-10 text-muted-foreground" aria-hidden /><p className="text-lg font-medium">Aradığınız ürün bulunamadı</p><button onClick={clear} className="text-sm underline">Filtreleri temizle</button></div> : <><div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">{filtered.slice(0, visible).map((p) => <ProductCard key={p.id} slug={slug} product={p} categoryName={(p as StoreProduct & { category_name?: string }).category_name} />)}</div>{visible < filtered.length && <button onClick={() => setVisible((v) => v + PAGE_SIZE)} className="mx-auto mt-8 block rounded-xl border border-border px-5 py-3 text-sm font-medium">Daha fazla göster</button>}</>}
-    {products.length > MAX_CLIENT_PRODUCTS && <p className="mt-6 text-center text-xs text-muted-foreground">İlk {MAX_CLIENT_PRODUCTS} ürün gösteriliyor.</p>}
-  </div></div>
+  const update = (patch: Partial<DiscoveryFilters>) => {
+    setFilters((current) => ({ ...current, ...patch }))
+    setVisible(PAGE_SIZE)
+  }
+  const clear = () => {
+    setFilters(DEFAULT_FILTERS)
+    setVisible(PAGE_SIZE)
+  }
+
+  return (
+    <div className="bg-background text-foreground">
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <h1 className="mb-6 font-display text-2xl font-bold sm:text-3xl">
+          {storeName}
+          <span className="sr-only"> - Ürünler</span>
+        </h1>
+
+        <div className="mb-4 flex gap-2">
+          <div className="relative flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <input
+              type="search"
+              aria-label="Ürünlerde ara"
+              value={filters.q}
+              maxLength={MAX_QUERY_LENGTH}
+              onChange={(e) => update({ q: e.target.value })}
+              placeholder="Ürün, açıklama, kategori veya SKU ara"
+              className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-10 text-sm"
+            />
+            {filters.q && (
+              <button
+                type="button"
+                aria-label="Aramayı temizle"
+                onClick={() => update({ q: '' })}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-expanded={panelOpen}
+            onClick={() => setPanelOpen((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-3 text-sm lg:hidden"
+          >
+            <SlidersHorizontal className="size-4" aria-hidden /> Filtrele
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-2">
+          <Chips
+            label="Kategori"
+            allLabel="Tümü"
+            options={categories.map((name) => ({ value: name, label: name }))}
+            value={filters.kategori}
+            onChange={(kategori) => update({ kategori })}
+          />
+          <Chips
+            label="Koleksiyon"
+            allLabel="Tüm koleksiyonlar"
+            options={collections.map((c) => ({ value: c.slug, label: c.name }))}
+            value={filters.koleksiyon}
+            onChange={(koleksiyon) => update({ koleksiyon })}
+          />
+        </div>
+
+        <div
+          role="group"
+          aria-label="Fiyat ve sıralama"
+          className={`${panelOpen ? 'flex' : 'hidden'} mb-6 flex-wrap items-center gap-3 lg:flex`}
+        >
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Sırala</span>
+            <select
+              value={filters.sirala}
+              onChange={(e) => update({ sirala: e.target.value as DiscoveryFilters['sirala'] })}
+              className={fieldClass}
+            >
+              <option value="">Önerilen</option>
+              <option value="yeni">En yeniler</option>
+              <option value="artan">Fiyat: artan</option>
+              <option value="azalan">Fiyat: azalan</option>
+              <option value="indirim">İndirim oranı</option>
+            </select>
+          </label>
+          <PriceField label="En düşük fiyat" value={filters.min} onChange={(min) => update({ min })} />
+          <PriceField label="En yüksek fiyat" value={filters.max} onChange={(max) => update({ max })} />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={filters.indirim}
+              onChange={(e) => update({ indirim: e.target.checked })}
+            />
+            İndirimde
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={filters.stok}
+              onChange={(e) => update({ stok: e.target.checked })}
+            />
+            Stokta
+          </label>
+        </div>
+
+        <div className="mb-5 flex items-center justify-between text-sm text-muted-foreground">
+          <span aria-live="polite">{results.length} ürün</span>
+          {hasActiveFilters(filters) && (
+            <button type="button" onClick={clear} className="font-medium text-foreground underline">
+              Filtreleri temizle
+            </button>
+          )}
+        </div>
+
+        {results.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-24 text-center">
+            <PackageOpen className="size-10 text-muted-foreground" aria-hidden />
+            <p className="text-lg font-medium">Aradığınız ürün bulunamadı</p>
+            {hasActiveFilters(filters) && (
+              <button type="button" onClick={clear} className="text-sm underline">
+                Filtreleri temizle
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {results.slice(0, visible).map((product) => (
+                <ProductCard
+                  key={product.id}
+                  slug={slug}
+                  product={product}
+                  categoryName={product.category_name ?? undefined}
+                />
+              ))}
+            </div>
+            {visible < results.length && (
+              <button
+                type="button"
+                onClick={() => setVisible((v) => v + PAGE_SIZE)}
+                className="mx-auto mt-8 block rounded-xl border border-border px-5 py-3 text-sm font-medium"
+              >
+                Daha fazla göster
+              </button>
+            )}
+          </>
+        )}
+
+        {products.length > MAX_CLIENT_PRODUCTS && (
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            İlk {MAX_CLIENT_PRODUCTS} ürün gösteriliyor.
+          </p>
+        )}
+      </div>
+    </div>
+  )
 }

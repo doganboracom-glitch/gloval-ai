@@ -20,6 +20,8 @@ import {
   type SaveProductResult,
 } from '@/lib/ecommerce'
 import { PRODUCT_LIMITS, type ProductStatus } from '@/lib/product-input'
+import { setProductCollections } from '@/lib/store-collections-actions'
+import type { OwnerCollection } from '@/lib/store-collections-core'
 import {
   DEFAULT_OPEN_SECTIONS,
   SECTION_IDS,
@@ -54,6 +56,7 @@ type Props = {
   projectId: string
   product: ProductRow | null
   categories: CategoryRow[]
+  collections?: OwnerCollection[]
   onClose: () => void
   onSaved: (product: ProductRow, mode: 'created' | 'updated') => void
   formRef?: Ref<ProductFormHandle>
@@ -94,8 +97,20 @@ function fieldLabel(field: string): string {
   }
 }
 
-export function ProductFormDialog({ projectId, product, categories, onClose, onSaved, formRef }: Props) {
+export function ProductFormDialog({
+  projectId,
+  product,
+  categories,
+  collections = [],
+  onClose,
+  onSaved,
+  formRef,
+}: Props) {
   const [initial] = useState(() => formFromProduct(product))
+  const [initialCollectionIds] = useState(() =>
+    product ? collections.filter((c) => c.product_ids.includes(product.id)).map((c) => c.id) : [],
+  )
+  const [collectionIds, setCollectionIds] = useState<string[]>(initialCollectionIds)
   // Drafts get a client-made id so retries of the same new product share one AI series.
   const [aiProductKey] = useState(() => product?.id ?? crypto.randomUUID())
   const [form, setForm] = useState<ProductFormState>(initial)
@@ -110,7 +125,10 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
   const dialogRef = useRef<HTMLDivElement>(null)
   const returnFocusTo = useRef<Element | null>(null)
 
-  const dirty = isFormDirty(initial, form)
+  const collectionsChanged =
+    collectionIds.length !== initialCollectionIds.length ||
+    collectionIds.some((id) => !initialCollectionIds.includes(id))
+  const dirty = isFormDirty(initial, form) || collectionsChanged
   const counts = errorCountBySection(errors)
   const errorFields = sortFieldsByForm(Object.keys(errors))
 
@@ -243,6 +261,14 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
 
       if (result.ok) {
         discardOrphans(form.images)
+        if (collections.length > 0 && collectionsChanged) {
+          try {
+            const synced = await setProductCollections(projectId, result.product.id, collectionIds)
+            if (!synced.ok) window.alert('Ürün kaydedildi ancak koleksiyon seçimi güncellenemedi. Koleksiyonlar panelinden tekrar deneyin.')
+          } catch {
+            window.alert('Ürün kaydedildi ancak koleksiyon seçimi güncellenemedi. Koleksiyonlar panelinden tekrar deneyin.')
+          }
+        }
         onSaved(result.product, product ? 'updated' : 'created')
         return
       }
@@ -374,6 +400,36 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
                     ))}
                   </select>
                 </Field>
+              )}
+              {collections.length > 0 && (
+                <fieldset className="flex flex-col gap-2 text-sm">
+                  <legend className="mb-1.5 font-medium">Koleksiyonlar</legend>
+                  <div className="flex flex-wrap gap-2">
+                    {collections.map((collection) => {
+                      const checked = collectionIds.includes(collection.id)
+                      return (
+                        <label
+                          key={collection.id}
+                          className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                            checked ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-3.5"
+                            checked={checked}
+                            onChange={() =>
+                              setCollectionIds((current) =>
+                                checked ? current.filter((id) => id !== collection.id) : [...current, collection.id],
+                              )
+                            }
+                          />
+                          {collection.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </fieldset>
               )}
             </FormSection>
 

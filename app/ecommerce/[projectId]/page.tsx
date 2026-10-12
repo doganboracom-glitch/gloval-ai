@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { listProducts, listCategories } from '@/lib/ecommerce'
+import { listOwnerCollections } from '@/lib/store-collections-actions'
 import { EcommerceClient } from '@/components/ecommerce/ecommerce-client'
 
 // Per-user, auth-gated management data — never serve from a stale cache.
@@ -26,9 +27,10 @@ export default async function EcommercePage({
   // Only e-commerce projects have a product catalog.
   if (project.project_type !== 'ecommerce') notFound()
 
-  const [products, categories] = await Promise.all([
+  const [products, categories, owned] = await Promise.all([
     listProducts(projectId),
     listCategories(projectId),
+    listOwnerCollections(projectId),
   ])
 
   return (
@@ -37,6 +39,8 @@ export default async function EcommercePage({
       projectName={project.name}
       initialProducts={products}
       initialCategories={categories}
+      initialCollections={owned.collections}
+      collectionsAvailable={owned.available}
       storeSlug={project.slug}
       published={project.published}
     />
