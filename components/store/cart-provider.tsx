@@ -129,42 +129,17 @@ export function useOptionalCart() {
   return useContext(CartContext)
 }
 
-export type PendingAdd = {
-  item: Omit<CartItem, 'quantity'>
-  qty: number
-}
-
 /**
- * Add-to-cart flow with a duplicate confirmation step. When the product is
- * already in the cart, `requestAdd` does NOT add immediately — it stores the
- * pending add so the caller can render a themed "already in your cart, add
- * another?" dialog and then call `confirm()` (which increments the existing
- * line's quantity) or `cancel()`.
- *
- * Accepts the cart value (from `useCart` or `useOptionalCart`) so it works in
- * both the real store and the optional-cart demo/marketing contexts.
+ * Adds immediately and increments an existing line item without confirmation.
+ * Quantity controls and the cart drawer remain the place where buyers review
+ * or correct the quantity before checkout.
  */
 export function useAddWithConfirm(cart: CartContextValue | null) {
-  const [pending, setPending] = useState<PendingAdd | null>(null)
-
   const requestAdd = (item: Omit<CartItem, 'quantity'>, qty = 1) => {
-    if (!cart) return
-    const already = cart.items.some((i) => i.productId === item.productId)
-    if (already) {
-      setPending({ item, qty })
-    } else {
-      cart.add(item, qty)
-    }
+    cart?.add(item, qty)
   }
 
-  const confirm = () => {
-    if (cart && pending) cart.add(pending.item, pending.qty)
-    setPending(null)
-  }
-
-  const cancel = () => setPending(null)
-
-  return { requestAdd, pending, confirm, cancel }
+  return { requestAdd }
 }
 
 /**

@@ -25,7 +25,6 @@ import { ProductCard as StoreProductCard } from '@/components/store/product-card
 import type { StoreProduct } from '@/lib/store'
 import { resolveShowcaseSettings, selectShowcaseProducts } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
-import { SiteConfirmDialog } from '@/components/website-renderer/site-confirm-dialog'
 
 type ProductsData = Extract<Section, { type: 'products' }>
 type ProductItem = ProductsData['items'][number]
@@ -153,7 +152,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
   // product, so add-to-cart carries the true product id/price/stock into the
   // existing checkout and the card links to the live detail page.
   const entry = resolveCatalogEntry(catalog, item.name)
-  const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
+  const { requestAdd } = useAddWithConfirm(cart)
   const [added, setAdded] = useState(false)
 
   // Prefer the real product detail route; fall back to the schema's own href.
@@ -329,18 +328,6 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
       </div>
     </article>
 
-    <SiteConfirmDialog
-      open={pending !== null}
-      title="Ürün zaten sepetinizde"
-      description={`"${item.name}" sepetinizde bulunuyor. Bir adet daha eklensin mi?`}
-      confirmLabel="Evet, ekle"
-      cancelLabel="Vazgeç"
-      onConfirm={() => {
-        confirm()
-        flashAdded()
-      }}
-      onCancel={cancel}
-    />
     </>
   )
 }

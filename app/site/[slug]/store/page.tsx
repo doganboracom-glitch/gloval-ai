@@ -33,7 +33,7 @@ export default async function StorePage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
       <StoreFront slug={slug} storeName={site.name} products={products} shipping={shipping} />
     </StoreSiteShell>
   )

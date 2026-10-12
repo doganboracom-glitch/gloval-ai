@@ -61,7 +61,7 @@ export type ProductCardProps = {
 export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
   const nav = useSiteNav()
   const cart = useOptionalCart()
-  const { requestAdd, pending, confirm, cancel } = useAddWithConfirm(cart)
+  const { requestAdd } = useAddWithConfirm(cart)
   const [added, setAdded] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [activated, setActivated] = useState(false)
@@ -250,18 +250,7 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
         </div>
       </article>
 
-      <SiteConfirmDialog
-        open={pending !== null}
-        title="Ürün zaten sepetinizde"
-        description={`"${product.name}" sepetinizde bulunuyor. Bir adet daha eklensin mi?`}
-        confirmLabel="Evet, ekle"
-        cancelLabel="Vazgeç"
-        onConfirm={() => {
-          confirm()
-          flashAdded()
-        }}
-        onCancel={cancel}
-      />
+
     </>
   )
 }

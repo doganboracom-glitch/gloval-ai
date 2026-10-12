@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Loader2, Lock, PackageOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { CartProvider, useCart, formatPrice } from './cart-provider'
+import { useCart, formatPrice } from './cart-provider'
 import { createOrder } from '@/lib/store'
 import type { PaymentProviderId } from '@/lib/payments/types'
 import { PaymentMethodSelect, normalizeMethods } from './payment-method-select'
@@ -57,20 +57,18 @@ export function CheckoutForm({
   shipping?: ShippingSettings
 }) {
   return (
-    <CartProvider slug={slug}>
-      <CheckoutInner
-        slug={slug}
-        storeName={storeName}
-        methods={paymentUnavailableReason ? [] : normalizeMethods(methods)}
-        publicConfig={publicConfig}
-        customer={customer}
-        paymentUnavailableReason={paymentUnavailableReason}
-        demo={demo}
-        guestCheckout={guestCheckout}
-        codFeeCents={codFeeCents}
-        shipping={shipping}
-      />
-    </CartProvider>
+    <CheckoutInner
+      slug={slug}
+      storeName={storeName}
+      methods={paymentUnavailableReason ? [] : normalizeMethods(methods)}
+      publicConfig={publicConfig}
+      customer={customer}
+      paymentUnavailableReason={paymentUnavailableReason}
+      demo={demo}
+      guestCheckout={guestCheckout}
+      codFeeCents={codFeeCents}
+      shipping={shipping}
+    />
   )
 }
 

@@ -12,7 +12,10 @@ export function ProductGallery({ images, name }: { images: ProductImage[]; name:
   const closeRef = useRef<HTMLButtonElement>(null)
   const count = visible.length
   const current = visible[Math.min(active, Math.max(count - 1, 0))] ?? null
-  const go = (delta: number) => setActive((i) => (i + delta + count) % count)
+  const go = (delta: number) => {
+    if (count < 2) return
+    setActive((i) => (i + delta + count) % count)
+  }
 
   useEffect(() => {
     if (!lightbox) return
