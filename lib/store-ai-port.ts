@@ -2,7 +2,7 @@ import 'server-only'
 
 import { getCreditBalance } from '@/lib/ai-credits'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { STORE_AI_COSTS, STORE_AI_FREE_CYCLE, STORE_AI_LIMITS } from '@/lib/store-ai-constants'
+import { STORE_AI_COSTS, STORE_AI_LIMITS, freeCycleFor } from '@/lib/store-ai-constants'
 import type { BeginOutcome, BeginResult, FinishStatus, StoreAiPort } from '@/lib/store-ai-engine'
 
 const OUTCOMES: readonly BeginOutcome[] = ['started', 'replay', 'busy', 'rate_minute', 'rate_daily', 'insufficient']
@@ -32,7 +32,7 @@ export function createStoreAiPort(): StoreAiPort {
           p_kind: input.kind,
           p_request_id: input.requestId,
           p_cost: STORE_AI_COSTS[input.kind],
-          p_free_cycle: STORE_AI_FREE_CYCLE,
+          p_free_cycle: freeCycleFor(input.kind),
           p_per_minute: STORE_AI_LIMITS.perMinute,
           p_concurrent: STORE_AI_LIMITS.concurrent,
           p_daily: STORE_AI_LIMITS.daily,
@@ -78,6 +78,18 @@ export function createStoreAiPort(): StoreAiPort {
       // Missing tables (script not applied yet) read as "no history" so the UI still loads.
       if (error || !data) return 0
       return (data.succeeded_count as number) ?? 0
+    },
+
+    async recentCount(userId, kind, windowMs) {
+      const since = new Date(Date.now() - windowMs).toISOString()
+      const { count, error } = await admin
+        .from('store_ai_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('kind', kind)
+        .gt('created_at', since)
+      if (error) throw new Error(error.message)
+      return count ?? 0
     },
 
     balance: (userId) => getCreditBalance(userId),

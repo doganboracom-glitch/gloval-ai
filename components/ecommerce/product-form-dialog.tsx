@@ -43,6 +43,7 @@ import {
 import { ConfirmDialog, Field, FormSection, controlProps, inputClass, trapTab } from './form-parts'
 import { ProductImageEditor } from './product-image-editor'
 import { ProductAiAssistant, type AiApplyChange } from './product-ai-assistant'
+import { ProductAiImageAssistant } from './product-ai-image-assistant'
 
 export type ProductFormHandle = {
   /** Fills fields from outside (e.g. an AI assistant). Marks the form dirty, never saves. */
@@ -385,6 +386,18 @@ export function ProductFormDialog({ projectId, product, categories, onClose, onS
                   onChange={(images) => patch({ images }, 'images')}
                   onUploaded={(url) => sessionUploads.current.add(url)}
                   onBusyChange={setImagesBusy}
+                />
+                <ProductAiImageAssistant
+                  projectId={projectId}
+                  productKey={aiProductKey}
+                  name={form.name}
+                  images={form.images}
+                  disabled={busy || imagesBusy}
+                  onAdd={(image) => {
+                    sessionUploads.current.add(image.url)
+                    setForm((current) => ({ ...current, images: [...current.images, image] }))
+                    clearErrors('images')
+                  }}
                 />
                 {errors.images && (
                   <p id={`${fieldDomId('images')}-error`} className="mt-2 text-xs font-medium text-destructive">

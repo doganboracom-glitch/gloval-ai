@@ -8,6 +8,8 @@ import { syncAllMailAccess } from '@/lib/mail/access-sync'
 import { runPlanCreditSweep } from '@/lib/plan-credit-sweep-store'
 import { releaseOrderStock, releaseStaleOrderStock } from '@/lib/store-order-stock'
 import { expireStaleManualOrders } from '@/lib/store-manual-orders'
+import { sweepExpiredCandidates } from '@/lib/store-ai-image'
+import { createCandidateStore } from '@/lib/store-ai-image-store'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -73,6 +75,9 @@ export async function GET(request: Request) {
     console.log('[store-stock] stale sweep failed:', error instanceof Error ? error.message : 'unknown')
     storeStock = { error: 'store_stock_sweep_failed' }
   }
+
+  // Expired, never-accepted AI image candidates (also swept lazily per project on each generation).
+  const aiImageCandidates = await sweepExpiredCandidates(createCandidateStore(), Date.now())
 
   try {
     const sweptOrders = await sweepStaleOrders()
