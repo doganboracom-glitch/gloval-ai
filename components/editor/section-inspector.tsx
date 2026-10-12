@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { VIEW_ALL_DEFAULT } from '@/lib/store-header-links'
 import {
   resolveShowcaseSettings,
   SHOWCASE_LIMITS,
@@ -223,9 +224,10 @@ function ProductsShowcaseSettings({
   projectId: string | null
   onDispatch: (op: EditOperation) => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const ui = t.editor.ui
   const settings = resolveShowcaseSettings(section)
+  const viewAllLang = lang === 'tr' ? 'tr' : 'en'
   const selectClass =
     'h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground'
 
@@ -276,6 +278,23 @@ function ProductsShowcaseSettings({
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        {ui.showcaseViewAll}
+        <input
+          type="text"
+          className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          value={
+            typeof section.viewAllLabel === 'string'
+              ? section.viewAllLabel
+              : VIEW_ALL_DEFAULT[viewAllLang]
+          }
+          onChange={(e) =>
+            onDispatch({ op: 'updateProductsShowcase', index, viewAllLabel: e.target.value })
+          }
+        />
+        <span className="font-normal">{ui.showcaseViewAllHint}</span>
       </label>
 
       {projectId && (

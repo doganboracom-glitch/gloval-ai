@@ -332,6 +332,8 @@ const dict = {
         manageProducts: 'Ürünleri yönet',
         showcaseSource: 'Hangi ürünler',
         showcaseLimit: 'Ürün sayısı',
+        showcaseViewAll: '"Tümünü gör" bağlantı metni',
+        showcaseViewAllHint: 'Boş bırakırsan bağlantı gizlenir.',
         showcaseSources: {
           latest: 'Son eklenenler',
           sale: 'İndirimdeki ürünler',
@@ -1768,6 +1770,8 @@ const dict = {
       manageProducts: 'Manage products',
       showcaseSource: 'Which products',
       showcaseLimit: 'Number of products',
+      showcaseViewAll: '"View all" link text',
+      showcaseViewAllHint: 'Leave empty to hide the link.',
       showcaseSources: {
         latest: 'Latest products',
         sale: 'Discounted products',

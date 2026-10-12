@@ -5,6 +5,16 @@ import type { PageItem } from '@/lib/website-pages'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
+import { useOptionalCart } from '@/components/store/cart-provider'
+import { StoreAccountLink } from '@/components/website-renderer/store-account-link'
+import {
+  isCartCta,
+  isProductsLink,
+  shouldShowAccountLink,
+  storeCartHref,
+  storeHomeHref,
+  storeListHref,
+} from '@/lib/store-header-links'
 
 export function WebsiteHeader({
   navigation,
@@ -12,14 +22,22 @@ export function WebsiteHeader({
   activeSlug,
   onNavigate,
   storeSlug,
+  cartSlug: cartSlugProp,
+  lang = 'tr',
 }: {
+  lang?: 'tr' | 'en'
   navigation: WebsiteSchema['navigation']
   pages?: PageItem[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
   storeSlug?: string
+  /** Store slug for the cart CTA / product links; set on every storefront page, home included. */
+  cartSlug?: string
 }) {
   const nav = useSiteNav()
+  const cart = useOptionalCart()
+  const cartSlug = cartSlugProp ?? storeSlug
+  const cartCount = cart?.count ?? 0
   // Use real page navigation when the site has more than one page; otherwise
   // fall back to the in-page anchor links from the schema.
   const multiPage = (pages?.length ?? 0) > 1
@@ -35,7 +53,7 @@ export function WebsiteHeader({
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
         {storeSlug ? (
           <a
-            href={`/site/${storeSlug}`}
+            href={storeHomeHref(storeSlug)}
             aria-label={navigation.logoText}
             className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
             style={{
@@ -115,6 +133,19 @@ export function WebsiteHeader({
           {multiPage
             ? pages!.map((page) => {
                 const isActive = page.slug === activeSlug
+                if (cartSlug && isProductsLink(page.title)) {
+                  return (
+                    <a
+                      key={page.slug}
+                      href={storeListHref(cartSlug)}
+                      onClick={(e) => onSiteNavClick(e, storeListHref(cartSlug), nav)}
+                      className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
+                      style={{ color: 'var(--site-muted-fg)' }}
+                    >
+                      {page.title}
+                    </a>
+                  )
+                }
                 return (
                   <button
                     key={page.slug}
@@ -130,30 +161,48 @@ export function WebsiteHeader({
                   </button>
                 )
               })
-            : navigation.links.map((link) => (
+            : navigation.links.map((link) => {
+                const href =
+                  cartSlug && isProductsLink(link.label, link.href)
+                    ? storeListHref(cartSlug)
+                    : link.href
+                return (
                 <a
                   key={link.label + link.href}
-                  href={link.href || '#'}
-                  onClick={(e) => onSiteNavClick(e, link.href, nav)}
+                  href={href || '#'}
+                  onClick={(e) => onSiteNavClick(e, href, nav)}
                   className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
                   style={{ color: 'var(--site-muted-fg)' }}
                 >
                   {link.label}
                 </a>
-              ))}
+                )
+              })}
         </nav>
 
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
         {navigation.cta ? (
-          storeSlug && /sepete|cart/i.test(navigation.cta.label) ? (
+          cartSlug && isCartCta(navigation.cta) ? (
             <a
-              href={`/site/${storeSlug}/checkout`}
-              className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+              href={storeCartHref(cartSlug)}
+              data-header-cart
+              className="inline-flex cursor-pointer items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
               style={{ borderRadius: 'var(--site-radius)', fontFamily: 'var(--site-body-font)', backgroundColor: 'var(--site-primary)', color: 'var(--site-primary-fg)' }}
             >
               {navigation.cta.label}
+              {cartCount > 0 && (
+                <span
+                  className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-bold"
+                  style={{ backgroundColor: 'var(--site-bg)', color: 'var(--site-fg)' }}
+                >
+                  {cartCount}
+                </span>
+              )}
             </a>
           ) : <SiteButton button={navigation.cta} />
-        ) : <span />}
+        ) : null}
+        </div>
       </div>
     </header>
   )

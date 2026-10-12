@@ -1,17 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { ShoppingCart, Plus, Minus, Trash2, X, ArrowLeft, PackageOpen, User } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  useCart,
-  formatPrice,
-} from './cart-provider'
+import { PackageOpen } from 'lucide-react'
 import type { StoreProduct } from '@/lib/store'
 import { ProductCard } from './product-card'
-import { DEFAULT_SHIPPING_SETTINGS, type ShippingSettings } from '@/lib/store-shipping-rules'
-import { SHIPPING_COPY, buildShippingView, cartTotalCents } from '@/lib/store-shipping-display'
+import type { ShippingSettings } from '@/lib/store-shipping-rules'
 
 type StoreFrontProps = {
   slug: string
@@ -20,64 +12,21 @@ type StoreFrontProps = {
   shipping?: ShippingSettings
 }
 
-export function StoreFront(props: StoreFrontProps) {
-  return <StoreFrontInner {...props} />
-}
-
-function StoreFrontInner({
-  slug,
-  storeName,
-  products,
-  shipping = DEFAULT_SHIPPING_SETTINGS,
-}: StoreFrontProps) {
-  const cart = useCart()
-  const [cartOpen, setCartOpen] = useState(false)
-
+/**
+ * Product list. The site header, cart drawer and footer come from
+ * StoreSiteShell, so this page only renders its own heading and the grid.
+ */
+export function StoreFront({ slug, storeName, products }: StoreFrontProps) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-center gap-3">
-            <Link
-              href={`/site/${slug}`}
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="size-4" />
-              <span className="hidden sm:inline">{storeName}</span>
-            </Link>
-          </div>
-          <h1 className="font-display text-lg font-bold">Mağaza</h1>
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/site/${slug}/hesap`}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              aria-label="Hesabım"
-            >
-              <User className="size-4" />
-              <span className="hidden sm:inline">Hesap</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="relative inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
-              aria-label="Sepeti aç"
-            >
-              <ShoppingCart className="size-4" />
-              <span className="hidden sm:inline">Sepet</span>
-              {cart.count > 0 && (
-                <span className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {cart.count}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-8">
+    <div className="bg-background text-foreground">
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <h1 className="mb-8 font-display text-2xl font-bold sm:text-3xl">
+          {storeName}
+          <span className="sr-only"> - Ürünler</span>
+        </h1>
         {products.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-24 text-center">
-            <PackageOpen className="size-10 text-muted-foreground" />
+            <PackageOpen className="size-10 text-muted-foreground" aria-hidden />
             <p className="text-lg font-medium">Bu mağazada henüz ürün yok.</p>
             <p className="text-sm text-muted-foreground">Yakında tekrar kontrol et.</p>
           </div>
@@ -88,164 +37,7 @@ function StoreFrontInner({
             ))}
           </div>
         )}
-      </main>
-
-      <CartDrawer slug={slug} shipping={shipping} open={cartOpen} onClose={() => setCartOpen(false)} />
-    </div>
-  )
-}
-
-function CartDrawer({
-  slug,
-  shipping,
-  open,
-  onClose,
-}: {
-  slug: string
-  shipping: ShippingSettings
-  open: boolean
-  onClose: () => void
-}) {
-  const cart = useCart()
-  const shippingView = buildShippingView(cart.subtotalCents, shipping)
-  const showShipping = shipping.feeCents > 0
-
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        className="absolute inset-0 bg-background/70 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="font-display text-lg font-bold">Sepetim ({cart.count})</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Kapat"
-          >
-            <X className="size-5" />
-          </button>
-        </div>
-
-        {cart.items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-            <ShoppingCart className="size-10 text-muted-foreground" />
-            <p className="text-muted-foreground">Sepetin boş.</p>
-          </div>
-        ) : (
-          <>
-            <ul className="flex-1 divide-y divide-border overflow-y-auto px-5">
-              {cart.items.map((item) => (
-                <li key={item.productId} className="flex gap-3 py-4">
-                  <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {item.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.image || '/placeholder.svg'}
-                        alt={item.name}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex size-full items-center justify-center text-muted-foreground">
-                        <PackageOpen className="size-6" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1">
-                    <span className="line-clamp-1 text-sm font-medium">{item.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {formatPrice(item.priceCents, item.currency)}
-                    </span>
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="flex items-center rounded-lg border border-border">
-                        <button
-                          type="button"
-                          onClick={() => cart.setQty(item.productId, item.quantity - 1)}
-                          className="p-1.5 text-muted-foreground hover:text-foreground"
-                          aria-label="Azalt"
-                        >
-                          <Minus className="size-3.5" />
-                        </button>
-                        <span className="min-w-8 text-center text-sm">{item.quantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => cart.setQty(item.productId, item.quantity + 1)}
-                          disabled={item.quantity >= item.maxStock}
-                          className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                          aria-label="Artır"
-                        >
-                          <Plus className="size-3.5" />
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => cart.remove(item.productId)}
-                        className="ml-auto rounded-lg p-1.5 text-muted-foreground hover:text-destructive"
-                        aria-label="Kaldır"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t border-border px-5 py-4">
-              {showShipping && shippingView.hint && (
-                <div className="mb-3">
-                  <p className="text-xs text-muted-foreground">{shippingView.hint}</p>
-                  {shippingView.progress !== null && (
-                    <div
-                      className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
-                      role="progressbar"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(shippingView.progress * 100)}
-                    >
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${Math.round(shippingView.progress * 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-              {showShipping && (
-                <>
-                  <div className="mb-1.5 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Ara toplam</span>
-                    <span>{formatPrice(cart.subtotalCents, cart.currency)}</span>
-                  </div>
-                  <div className="mb-3 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{SHIPPING_COPY.tr.label}</span>
-                    <span>
-                      {shippingView.free
-                        ? SHIPPING_COPY.tr.free
-                        : formatPrice(shippingView.shippingCents, cart.currency)}
-                    </span>
-                  </div>
-                </>
-              )}
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-muted-foreground">{showShipping ? 'Toplam' : 'Ara toplam'}</span>
-                <span className="font-display text-lg font-bold">
-                  {formatPrice(cartTotalCents(cart.subtotalCents, shipping), cart.currency)}
-                </span>
-              </div>
-              <Link href={`/site/${slug}/checkout`} onClick={onClose}>
-                <Button className="w-full" size="lg">
-                  Ödemeye geç
-                </Button>
-              </Link>
-            </div>
-          </>
-        )}
-      </aside>
+      </div>
     </div>
   )
 }

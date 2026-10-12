@@ -104,7 +104,14 @@ export type EditOperation =
     }
   | { op: 'addStringListItem'; index: number; field: string; value: string }
   /** Display settings of a storefront's product showcase (the catalog itself lives in the database). */
-  | { op: 'updateProductsShowcase'; index: number; source?: ShowcaseSource; limit?: ShowcaseLimit }
+  | {
+      op: 'updateProductsShowcase'
+      index: number
+      source?: ShowcaseSource
+      limit?: ShowcaseLimit
+      /** Label of the "view all products" link; an empty string hides it. */
+      viewAllLabel?: string
+    }
   /** Navigation links and CTA. */
   | { op: 'updateNavLink'; linkIndex: number; field: 'label' | 'href'; value: string }
   | { op: 'addNavLink'; label: string }
@@ -185,6 +192,7 @@ export function applyOperation(
       if (section?.type === 'products') {
         if (operation.source !== undefined) section.source = operation.source
         if (operation.limit !== undefined) section.limit = operation.limit
+        if (operation.viewAllLabel !== undefined) section.viewAllLabel = operation.viewAllLabel
       }
       return next
     }

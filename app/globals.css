@@ -311,6 +311,62 @@
   }
 }
 
+/* Storefront pages (store list, checkout, account, order result) are built
+   from platform components that read the generic UI tokens. Inside the
+   storefront shell those tokens are remapped to the site's own `--site-*`
+   theme tokens so the pages follow the site's colours, fonts and radius. This
+   is the ONLY scope that does so: the home page and platform UI are untouched.
+   Muted text is an opaque mix of foreground into background (72%) so it keeps
+   >= 4.5:1 on both light and dark site themes. */
+[data-storefront-root] {
+  color-scheme: light dark;
+  --background: var(--site-bg);
+  --foreground: var(--site-fg);
+  --card: var(--site-card);
+  --card-foreground: var(--site-fg);
+  --popover: var(--site-card);
+  --popover-foreground: var(--site-fg);
+  --muted: var(--site-muted);
+  --muted-foreground: color-mix(in srgb, var(--site-fg) 72%, var(--site-bg));
+  --secondary: var(--site-muted);
+  --secondary-foreground: var(--site-fg);
+  --accent: var(--site-muted);
+  --accent-foreground: var(--site-fg);
+  --primary: var(--site-primary);
+  --primary-foreground: var(--site-primary-fg);
+  --border: var(--site-border);
+  --input: color-mix(in srgb, var(--site-fg) 28%, var(--site-bg));
+  --ring: var(--site-primary);
+  --radius: var(--site-radius);
+  --font-geist: var(--site-body-font);
+  --font-space-grotesk: var(--site-heading-font);
+  background-color: var(--site-bg);
+  color: var(--site-fg);
+  font-family: var(--site-body-font);
+}
+
+/* Pointer cursor on every interactive control in the storefront; disabled
+   controls get not-allowed. Scoped so the home page keeps its own styles. */
+[data-storefront-root]
+  :is(
+    button,
+    [role='button'],
+    [role='tab'],
+    a[href],
+    summary,
+    label[for],
+    select,
+    input[type='checkbox'],
+    input[type='radio']
+  ) {
+  cursor: pointer;
+}
+[data-storefront-root]
+  :is(button, select, input, textarea):disabled,
+[data-storefront-root] [aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }

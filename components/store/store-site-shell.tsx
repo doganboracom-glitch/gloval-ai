@@ -28,7 +28,7 @@ export function StoreSiteShell({
   return (
     <CartProvider slug={slug}>
       <div style={themeToCssVars(resolveTheme(site))} data-storefront-root>
-        <WebsiteHeader navigation={site.navigation} pages={pages} storeSlug={slug} />
+        <WebsiteHeader navigation={site.navigation} pages={pages} storeSlug={slug} lang={site.meta.language} />
         <main>{children}</main>
       {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} showBranding /> : null}
         <SiteFloatingActions site={site} />

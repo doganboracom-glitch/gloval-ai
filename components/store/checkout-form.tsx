@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Loader2, Lock, PackageOpen } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Loader2, Lock, PackageOpen, ShoppingBag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useCart, formatPrice } from './cart-provider'
 import { createOrder } from '@/lib/store'
@@ -73,7 +73,7 @@ export function CheckoutForm({
 }
 
 const inputClass =
-  'h-11 w-full rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
+  'h-11 w-full rounded-[var(--site-radius,0.5rem)] border border-input bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
 
 function CheckoutInner({
   slug,
@@ -238,7 +238,7 @@ function CheckoutInner({
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
           <Link
             href={`/site/${slug}/store`}
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 text-sm font-medium text-primary transition-opacity hover:opacity-80"
           >
             <ArrowLeft className="size-4" />
             Mağaza
@@ -246,8 +246,27 @@ function CheckoutInner({
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-5xl gap-8 px-4 py-8 md:grid-cols-[1fr_360px]">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <main className="mx-auto grid max-w-5xl items-start gap-6 px-4 py-8 md:grid-cols-[1fr_380px] md:gap-8">
+        <details className="group overflow-hidden border border-border bg-card md:hidden" style={CARD_STYLE}>
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold">
+            <span className="inline-flex items-center gap-2">
+              <ShoppingBag className="size-4 text-primary" aria-hidden />
+              Sipariş özeti
+              <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden />
+            </span>
+            <span className="font-display text-base">{formatPrice(grandTotalCents, cart.currency)}</span>
+          </summary>
+          <div className="border-t border-border px-4 pb-4">
+            <OrderSummaryBody
+              cart={cart}
+              shippingView={shippingView}
+              codFee={codFee}
+              grandTotalCents={grandTotalCents}
+            />
+          </div>
+        </details>
+
+        <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-5">
           <h1 className="font-display text-2xl font-bold">Ödeme</h1>
 
           {customer ? (
@@ -271,7 +290,7 @@ function CheckoutInner({
             </div>
           )}
 
-          <div className="grid gap-4">
+          <FormSection title="İletişim ve teslimat">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Ad" required>
                 <input
@@ -342,27 +361,27 @@ function CheckoutInner({
                 />
               </Field>
             </div>
-          </div>
+          </FormSection>
 
-          <div className="mt-2 border-t border-border pt-5">
-            <label className="flex items-center gap-2.5 text-sm font-medium">
+          <FormSection title="Fatura bilgisi">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium">
               <input
                 type="checkbox"
-                className="size-4 accent-[var(--site-primary,theme(colors.primary.DEFAULT))]"
+                className="size-4 cursor-pointer accent-primary"
                 checked={wantsInvoice}
                 onChange={(e) => setWantsInvoice(e.target.checked)}
               />
               Fatura bilgisi eklemek istiyorum
             </label>
             {wantsInvoice && (
-              <div className="mt-4">
+              <div className="mt-2">
                 <InvoiceHeading />
                 <InvoiceFields value={invoice} onChange={setInvoice} />
               </div>
             )}
-          </div>
+          </FormSection>
 
-          <div className="mt-2 border-t border-border pt-5">
+          <FormSection title="Ödeme">
             {paymentBlocked ? (
               <p
                 role="alert"
@@ -382,14 +401,14 @@ function CheckoutInner({
                 demo={demo}
               />
             )}
-          </div>
+          </FormSection>
 
-          <div className="border-t border-border pt-5">
+          <FormSection title="Onaylar">
             <LegalConsent storeName={storeName} value={consent} onChange={setConsent} />
-          </div>
+          </FormSection>
 
           {error && (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
           )}
@@ -398,7 +417,8 @@ function CheckoutInner({
             type="submit"
             size="lg"
             disabled={submitting || paymentBlocked}
-            className="gap-2"
+            className="h-12 w-full gap-2 text-base"
+            style={{ borderRadius: 'var(--site-radius, 0.75rem)' }}
           >
             {submitting ? (
               <>
@@ -421,47 +441,86 @@ function CheckoutInner({
           )}
         </form>
 
-        <aside className="h-fit rounded-2xl border border-border bg-card p-5">
+        <aside
+          className="hidden border border-border bg-card p-5 md:sticky md:top-6 md:block"
+          style={CARD_STYLE}
+          aria-label="Sipariş özeti"
+        >
           <h2 className="font-display text-lg font-bold">Sipariş özeti</h2>
-          <ul className="mt-4 divide-y divide-border">
-            {cart.items.map((item) => (
-              <li key={item.productId} className="flex items-center justify-between gap-2 py-3 text-sm">
-                <span className="line-clamp-1">
-                  {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
-                </span>
-                <span className="shrink-0 font-medium">
-                  {formatPrice(item.priceCents * item.quantity, item.currency)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Ara toplam</span>
-            <span className="font-medium">{formatPrice(cart.subtotalCents, cart.currency)}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">{SHIPPING_COPY.tr.label}</span>
-            <span className="font-medium">
-              {shippingView.free
-                ? SHIPPING_COPY.tr.free
-                : formatPrice(shippingView.shippingCents, cart.currency)}
-            </span>
-          </div>
-          {shippingView.hint && <p className="mt-1 text-xs text-muted-foreground">{shippingView.hint}</p>}
-          {codFee > 0 && (
-            <div className="mt-2 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
-              <span className="font-medium">{formatPrice(codFee, cart.currency)}</span>
-            </div>
-          )}
-          <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-            <span className="text-muted-foreground">Toplam</span>
-            <span className="font-display text-xl font-bold">
-              {formatPrice(grandTotalCents, cart.currency)}
-            </span>
-          </div>
+          <OrderSummaryBody
+            cart={cart}
+            shippingView={shippingView}
+            codFee={codFee}
+            grandTotalCents={grandTotalCents}
+          />
         </aside>
       </main>
+    </div>
+  )
+}
+
+const CARD_STYLE = { borderRadius: 'var(--site-radius, 0.75rem)' } as const
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-5" style={CARD_STYLE}>
+      <h2 className="font-display text-lg font-bold">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+function OrderSummaryBody({
+  cart,
+  shippingView,
+  codFee,
+  grandTotalCents,
+}: {
+  cart: ReturnType<typeof useCart>
+  shippingView: ReturnType<typeof buildShippingView>
+  codFee: number
+  grandTotalCents: number
+}) {
+  return (
+    <div>
+      <ul className="mt-2 divide-y divide-border">
+        {cart.items.map((item) => (
+          <li key={item.productId} className="flex items-center justify-between gap-2 py-3 text-sm">
+            <span className="line-clamp-1">
+              {item.name} <span className="text-muted-foreground">× {item.quantity}</span>
+            </span>
+            <span className="shrink-0 font-medium">
+              {formatPrice(item.priceCents * item.quantity, item.currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">Ara toplam</span>
+        <span className="font-medium">{formatPrice(cart.subtotalCents, cart.currency)}</span>
+      </div>
+      <div className="mt-2 flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{SHIPPING_COPY.tr.label}</span>
+        <span className="font-medium">
+          {shippingView.free
+            ? SHIPPING_COPY.tr.free
+            : formatPrice(shippingView.shippingCents, cart.currency)}
+        </span>
+      </div>
+      {shippingView.hint && <p className="mt-1 text-xs text-muted-foreground">{shippingView.hint}</p>}
+      {codFee > 0 && (
+        <div className="mt-2 flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Kapıda ödeme ücreti</span>
+          <span className="font-medium">{formatPrice(codFee, cart.currency)}</span>
+        </div>
+      )}
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+        <span className="font-medium">Toplam</span>
+        <span className="font-display text-xl font-bold">
+          {formatPrice(grandTotalCents, cart.currency)}
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">KDV dahildir.</p>
     </div>
   )
 }
