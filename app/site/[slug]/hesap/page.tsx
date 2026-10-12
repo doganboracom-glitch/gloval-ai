@@ -9,7 +9,11 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = { title: 'Hesabım' }
+export const metadata: Metadata = {
+  title: 'Hesabım',
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
+}
 
 export default async function AccountPage({
   params,

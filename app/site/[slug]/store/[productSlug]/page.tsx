@@ -52,7 +52,7 @@ export default async function ProductPage({
         storeName={site.name}
         product={product}
         relatedProducts={products.filter((item) => item.id !== product.id && item.category_id === product.category_id).slice(0, 4)}
-        whatsapp={site.schema.contactActions?.whatsapp ?? null}
+        whatsapp={site.schema.contactActions?.whatsapp ? { href: `https://wa.me/${site.schema.contactActions.whatsapp.replace(/\D/g, '')}`, display: site.schema.contactActions.whatsapp } : null}
         enableTryOn={tryOnConfig !== null}
       />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({

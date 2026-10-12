@@ -9,7 +9,11 @@ import { StoreSiteShell } from '@/components/store/store-site-shell'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata: Metadata = { title: 'Ödeme' }
+export const metadata: Metadata = {
+  title: 'Ödeme',
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
+}
 
 export default async function CheckoutPage({
   params,
