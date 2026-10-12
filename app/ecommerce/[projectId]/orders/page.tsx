@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { listOrders } from '@/lib/ecommerce'
 import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
+import { deletedCustomerOrderIds } from '@/lib/store-customer-deletion'
 import { OrdersClient } from '@/components/ecommerce/orders-client'
 
 // Per-user, auth-gated order data — never serve from a stale cache.
@@ -26,6 +27,12 @@ export default async function OrdersPage({
   if (project.project_type !== 'ecommerce') notFound()
 
   const orders = await listOrders(projectId)
+  const deletedOrderIds = [
+    ...(await deletedCustomerOrderIds(
+      projectId,
+      orders.map((o) => o.id),
+    )),
+  ]
   const defaultCarrier = await getShippingSettings(projectId)
     .then((view) => view.settings.defaultCarrier)
     .catch(() => null)
@@ -36,6 +43,7 @@ export default async function OrdersPage({
       projectName={project.name}
       initialOrders={orders}
       defaultCarrier={defaultCarrier}
+      deletedOrderIds={deletedOrderIds}
     />
   )
 }

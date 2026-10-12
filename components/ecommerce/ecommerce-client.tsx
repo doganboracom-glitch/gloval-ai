@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Package, ClipboardList, ExternalLink, CreditCard, Loader2, Check } from 'lucide-react'
+import { ArrowLeft, Plus, Package, ClipboardList, ExternalLink, CreditCard, Loader2, Check, Users } from 'lucide-react'
 import { archiveProduct, deleteProduct, saveProduct, type ProductRow, type CategoryRow } from '@/lib/ecommerce'
 import { formFromProduct, toProductInput } from '@/lib/product-form'
 import { useLanguage } from '@/components/language-provider'
@@ -132,6 +132,13 @@ export function EcommerceClient({
             >
               <ClipboardList className="size-4" />
               {t.ecom.orders}
+            </Link>
+            <Link
+              href={`/ecommerce/${projectId}/customers`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40"
+            >
+              <Users className="size-4" />
+              Müşteriler
             </Link>
             <Link
               href={`/ecommerce/${projectId}/odeme`}
