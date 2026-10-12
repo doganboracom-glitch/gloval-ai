@@ -44,7 +44,7 @@ function ProductDetailInner({ slug, storeName, product, relatedProducts = [], en
     <nav aria-label="Kırıntı yolu" className="text-sm text-muted-foreground"><a href={`/site/${slug}`}>Ana sayfa</a><span aria-hidden> › </span><a href={`/site/${slug}/store`}>Ürünler</a><span aria-hidden> › </span><span>{product.name}</span></nav>
     <div className="grid gap-10 md:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] md:items-start">
       <ProductGallery images={product.images} name={product.name} />
-      <section className="flex flex-col gap-5 md:sticky md:top-24">
+      <section className="flex flex-col gap-5 md:sticky md:top-[calc(var(--site-header-h,4rem)+1.5rem)]">
         <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--site-primary, var(--primary))' }}>{storeName}</p>
         <h1 className="text-balance text-3xl font-bold leading-tight md:text-4xl" style={{ fontFamily: 'var(--site-heading-font, inherit)' }}>{product.name}</h1>
         <div className="flex flex-wrap items-end gap-3"><span className="text-3xl font-bold">{formatPrice(product.price_cents, product.currency)}</span>{discount !== null && product.compare_at_price_cents != null && <><span className="text-sm text-muted-foreground line-through">{formatPrice(product.compare_at_price_cents, product.currency)}</span><span className="rounded-full bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">%{discount} indirim</span></>}<span className="w-full text-xs text-muted-foreground">KDV dahil</span></div>

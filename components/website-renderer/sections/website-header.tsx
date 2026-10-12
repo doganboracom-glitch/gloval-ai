@@ -5,13 +5,13 @@ import type { PageItem } from '@/lib/website-pages'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
-import { useOptionalCart } from '@/components/store/cart-provider'
+import { useEffect, useRef } from 'react'
+import { requestOpenCart, useOptionalCart } from '@/components/store/cart-provider'
 import { StoreAccountLink } from '@/components/website-renderer/store-account-link'
 import {
   isCartCta,
   isProductsLink,
   shouldShowAccountLink,
-  storeCartHref,
   storeHomeHref,
   storeListHref,
 } from '@/lib/store-header-links'
@@ -42,8 +42,24 @@ export function WebsiteHeader({
   // fall back to the in-page anchor links from the schema.
   const multiPage = (pages?.length ?? 0) > 1
 
+  const headerRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const root = el.ownerDocument.documentElement
+    const publish = () => root.style.setProperty('--site-header-h', `${el.offsetHeight}px`)
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--site-header-h')
+    }
+  }, [])
+
   return (
     <header
+      ref={headerRef}
       className="sticky top-0 z-20 backdrop-blur"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--site-bg) 82%, transparent)',
@@ -184,8 +200,9 @@ export function WebsiteHeader({
         {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
         {navigation.cta ? (
           cartSlug && isCartCta(navigation.cta) ? (
-            <a
-              href={storeCartHref(cartSlug)}
+            <button
+              type="button"
+              onClick={() => requestOpenCart()}
               data-header-cart
               className="inline-flex cursor-pointer items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
               style={{ borderRadius: 'var(--site-radius)', fontFamily: 'var(--site-body-font)', backgroundColor: 'var(--site-primary)', color: 'var(--site-primary-fg)' }}
@@ -199,7 +216,7 @@ export function WebsiteHeader({
                   {cartCount}
                 </span>
               )}
-            </a>
+            </button>
           ) : <SiteButton button={navigation.cta} />
         ) : null}
         </div>

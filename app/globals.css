@@ -188,8 +188,18 @@
   }
   /* Rendered demo/generated sites: keep anchor targets clear of the sticky
      header when nav links smooth-scroll to a section. */
-  [data-website-root] [id] {
-    scroll-margin-top: 5rem;
+  [data-website-root] [id],
+  [data-storefront-root] [id],
+  [data-storefront-root] nav[aria-label],
+  [data-storefront-root] h1 {
+    scroll-margin-top: calc(var(--site-header-h, 4rem) + 1rem);
+  }
+  html:has([data-storefront-root]),
+  html:has([data-website-root]) {
+    scroll-padding-top: calc(var(--site-header-h, 4rem) + 1rem);
+  }
+  [data-storefront-root] > main {
+    padding-top: 0.5rem;
   }
 }
 

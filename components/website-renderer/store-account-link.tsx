@@ -4,8 +4,7 @@ import useSWR from 'swr'
 import { UserRound } from 'lucide-react'
 import { accountLinkLabel, storeAccountHref, storeSessionApiHref } from '@/lib/store-header-links'
 
-const fetchSession = (url: string): Promise<{ loggedIn: boolean }> =>
-  fetch(url, { credentials: 'same-origin' }).then((res) => res.json())
+import { fetchStoreSession } from '@/lib/store-session-client'
 
 /**
  * Customer-account entry in a storefront header: "Giriş yap" when signed out,
@@ -13,8 +12,9 @@ const fetchSession = (url: string): Promise<{ loggedIn: boolean }> =>
  * to assistive tech), label + icon from `sm` up.
  */
 export function StoreAccountLink({ slug, lang = 'tr' }: { slug: string; lang?: 'tr' | 'en' }) {
-  const { data } = useSWR(storeSessionApiHref(slug), fetchSession, {
+  const { data } = useSWR(storeSessionApiHref(slug), fetchStoreSession, {
     revalidateOnFocus: true,
+    revalidateOnReconnect: true,
     shouldRetryOnError: false,
   })
   const label = accountLinkLabel(Boolean(data?.loggedIn), lang)

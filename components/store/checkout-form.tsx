@@ -442,7 +442,7 @@ function CheckoutInner({
         </form>
 
         <aside
-          className="hidden border border-border bg-card p-5 md:sticky md:top-6 md:block"
+          className="hidden border border-border bg-card p-5 md:sticky md:top-[calc(var(--site-header-h,4rem)+1.5rem)] md:block"
           style={CARD_STYLE}
           aria-label="Sipariş özeti"
         >

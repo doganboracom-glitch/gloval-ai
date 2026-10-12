@@ -17,6 +17,7 @@ import {
   KeyRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { markStoreSessionLoggedIn, markStoreSessionLoggedOut } from '@/lib/store-session-client'
 import { buildTrackingUrl, carrierName } from '@/lib/shipping-carriers'
 import {
   registerStoreCustomer,
@@ -129,6 +130,7 @@ function AccountView({
   function handleLogout() {
     startTransition(async () => {
       await logoutStoreCustomer(slug)
+      await markStoreSessionLoggedOut(slug)
       router.refresh()
     })
   }
@@ -472,6 +474,7 @@ function AuthView({ slug, redirect }: { slug: string; redirect?: string }) {
   })
 
   function onSuccess() {
+    void markStoreSessionLoggedIn(slug)
     if (redirect === 'checkout') router.push(`/site/${slug}/checkout`)
     else router.refresh()
   }
