@@ -12,7 +12,7 @@ export default async function CustomersPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ q?: string; sort?: string; page?: string }>
+  searchParams: Promise<{ q?: string; sort?: string; page?: string; status?: string }>
 }) {
   const { projectId } = await params
   const query = await searchParams
@@ -30,6 +30,7 @@ export default async function CustomersPage({
     q: typeof query.q === 'string' ? query.q : undefined,
     sort: typeof query.sort === 'string' ? query.sort : undefined,
     page: typeof query.page === 'string' ? query.page : undefined,
+    status: typeof query.status === 'string' ? query.status : undefined,
   })
 
   return (
@@ -38,6 +39,7 @@ export default async function CustomersPage({
       result={result}
       q={typeof query.q === 'string' ? query.q.slice(0, 100) : ''}
       sort={typeof query.sort === 'string' ? query.sort : 'newest'}
+      status={result.ok ? result.status : 'active'}
     />
   )
 }

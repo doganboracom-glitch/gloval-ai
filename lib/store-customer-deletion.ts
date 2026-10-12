@@ -18,7 +18,11 @@ import {
  * from a browser; callers authorize first (session + password, or project owner).
  */
 
-export type DeletionEvent = 'deleted_by_customer' | 'anonymized_by_owner'
+export type DeletionEvent =
+  | 'deleted_by_customer'
+  | 'anonymized_by_owner'
+  | 'finalized_after_grace'
+  | 'purged_early_by_owner'
 
 export type AnonymizeResult =
   | { ok: true; previousEmail: string; previousName: string; notificationsScrubbed: boolean }
@@ -62,6 +66,12 @@ export async function anonymizeStoreCustomer(input: {
   customerId: string
   event: DeletionEvent
   actorUserId?: string | null
+  /**
+   * Only wipe an account that is still suspended (and, with `dueBefore`, whose
+   * date has passed). The check lives in the UPDATE itself, so an account the
+   * owner restored a moment earlier is never anonymized by a late sweep.
+   */
+  suspendedOnly?: { dueBefore?: string }
 }): Promise<AnonymizeResult> {
   const admin = createAdminClient()
 
@@ -83,13 +93,17 @@ export async function anonymizeStoreCustomer(input: {
   if (blocked === null) return { ok: false, reason: 'failed' }
   if (blocked) return { ok: false, reason: 'blocked' }
 
-  const { data: updated, error } = await admin
+  let query = admin
     .from('store_customers')
     .update(buildAnonymizePatch(input.customerId, new Date().toISOString()))
     .eq('project_id', input.projectId)
     .eq('id', input.customerId)
     .is('deleted_at', null)
-    .select('id')
+  if (input.suspendedOnly) {
+    query = query.not('deletion_scheduled_at', 'is', null).is('anonymized_at', null)
+    if (input.suspendedOnly.dueBefore) query = query.lte('deletion_scheduled_at', input.suspendedOnly.dueBefore)
+  }
+  const { data: updated, error } = await query.select('id')
   if (error) return { ok: false, reason: isMissingDeletionSchema(error) ? 'migration_pending' : 'failed' }
   if (!updated || updated.length === 0) return { ok: false, reason: 'already_deleted' }
 

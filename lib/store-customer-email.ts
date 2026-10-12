@@ -2,7 +2,11 @@ import 'server-only'
 import { escape, renderEmailLayout } from '@/lib/email/layout'
 import type { EmailLang } from '@/lib/email/lang'
 import { tenantUrl } from '@/lib/domains'
-import { ACCOUNT_DELETED_EMAIL_COPY } from '@/lib/store-account-copy'
+import {
+  ACCOUNT_DELETED_EMAIL_COPY,
+  ACCOUNT_RESTORED_EMAIL_COPY,
+  ACCOUNT_SUSPENDED_EMAIL_COPY,
+} from '@/lib/store-account-copy'
 
 export const RESET_TOKEN_TTL_MINUTES = 30
 
@@ -100,5 +104,62 @@ export function renderStoreAccountDeletedEmail(input: {
     homeUrl: tenantUrl(input.storeSlug),
   })
   const text = `${c.hello(input.customerName)}\n\n${intro}\n\n${c.removed}\n${c.kept}\n\n${contact}\n\n${c.footer}`
+  return { subject: c.subject(input.storeName), html, text }
+}
+
+/** Notice that the store scheduled the account for deletion; sent to the still-intact address. */
+export function renderStoreAccountSuspendedEmail(input: {
+  lang: EmailLang
+  storeName: string
+  storeSlug: string
+  customerName: string
+  scheduledDate: string
+  contactEmail: string
+}): { subject: string; html: string; text: string } {
+  const c = ACCOUNT_SUSPENDED_EMAIL_COPY[input.lang]
+  const intro = c.intro(input.storeName)
+  const schedule = c.schedule(input.scheduledDate)
+  const contact = c.contact(input.contactEmail)
+  const body =
+    `<p style="margin:0 0 14px;">${escape(c.hello(input.customerName))}</p>` +
+    `<p style="margin:0 0 14px;">${escape(intro)}</p>` +
+    `<p style="margin:0 0 14px;">${escape(schedule)}</p>` +
+    `<p style="margin:0;">${escape(contact)}</p>`
+  const html = renderEmailLayout({
+    lang: input.lang,
+    previewText: c.preview,
+    title: c.title,
+    body,
+    footer: c.footer,
+    homeUrl: tenantUrl(input.storeSlug),
+  })
+  const text = `${c.hello(input.customerName)}\n\n${intro}\n${schedule}\n\n${contact}\n\n${c.footer}`
+  return { subject: c.subject(input.storeName), html, text }
+}
+
+export function renderStoreAccountRestoredEmail(input: {
+  lang: EmailLang
+  storeName: string
+  storeSlug: string
+  customerName: string
+  contactEmail: string
+}): { subject: string; html: string; text: string } {
+  const c = ACCOUNT_RESTORED_EMAIL_COPY[input.lang]
+  const intro = c.intro(input.storeName)
+  const contact = c.contact(input.contactEmail)
+  const body =
+    `<p style="margin:0 0 14px;">${escape(c.hello(input.customerName))}</p>` +
+    `<p style="margin:0 0 14px;">${escape(intro)}</p>` +
+    `<p style="margin:0 0 14px;">${escape(c.detail)}</p>` +
+    `<p style="margin:0;">${escape(contact)}</p>`
+  const html = renderEmailLayout({
+    lang: input.lang,
+    previewText: c.preview,
+    title: c.title,
+    body,
+    footer: c.footer,
+    homeUrl: tenantUrl(input.storeSlug),
+  })
+  const text = `${c.hello(input.customerName)}\n\n${intro}\n${c.detail}\n\n${contact}\n\n${c.footer}`
   return { subject: c.subject(input.storeName), html, text }
 }

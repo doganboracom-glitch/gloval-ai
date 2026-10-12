@@ -10,6 +10,7 @@ import { releaseOrderStock, releaseStaleOrderStock } from '@/lib/store-order-sto
 import { expireStaleManualOrders } from '@/lib/store-manual-orders'
 import { sweepExpiredCandidates } from '@/lib/store-ai-image'
 import { createCandidateStore } from '@/lib/store-ai-image-store'
+import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -79,6 +80,15 @@ export async function GET(request: Request) {
   // Expired, never-accepted AI image candidates (also swept lazily per project on each generation).
   const aiImageCandidates = await sweepExpiredCandidates(createCandidateStore(), Date.now())
 
+  // Isolated and time-boxed: finalizes suspended store accounts whose 30-day hold ended.
+  let customerDeletions: Awaited<ReturnType<typeof finalizeDueCustomerDeletions>> | { error: string }
+  try {
+    customerDeletions = await finalizeDueCustomerDeletions()
+  } catch (error) {
+    console.log('[store-customer-deletion] sweep failed:', error instanceof Error ? error.message : 'unknown')
+    customerDeletions = { error: 'customer_deletion_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -93,7 +103,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, storeStock, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

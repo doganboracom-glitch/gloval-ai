@@ -66,7 +66,11 @@ export function cookieName(projectId: string): string {
  * project, and its password version must equal the row's current one.
  */
 export async function authenticateSessionToken<
-  Row extends { password_changed_at?: string | null; deleted_at?: string | null },
+  Row extends {
+    password_changed_at?: string | null
+    deleted_at?: string | null
+    deletion_scheduled_at?: string | null
+  },
 >(
   token: string | undefined,
   projectId: string,
@@ -75,6 +79,7 @@ export async function authenticateSessionToken<
   const parsed = parseToken(token)
   if (!parsed || parsed.projectId !== projectId) return null
   const row = await findCustomerById(projectId, parsed.customerId)
-  if (!row || row.deleted_at || sessionVersion(row) !== parsed.version) return null
+  // A suspended account (deletion scheduled) has no valid sessions, even ones issued earlier.
+  if (!row || row.deleted_at || row.deletion_scheduled_at || sessionVersion(row) !== parsed.version) return null
   return row
 }
