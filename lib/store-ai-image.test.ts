@@ -163,6 +163,31 @@ describe('generateImageCandidate', () => {
     ).rejects.toThrow('candidate_store_failed')
   })
 
+  it('logs gateway usage and cost without prompt, image or user data', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const model: ImageModelFn = async () => ({
+      bytes: bigPng,
+      mediaType: 'image/png',
+      usage: { inputTokens: 603, outputTokens: 1056 },
+      gatewayCostUsd: 0.0097,
+    })
+    await generateImageCandidate({ model, store: fakeStore(), newId: () => FILE_ID, validate: validOk }, input)
+    const call = info.mock.calls.find(([label]) => label === '[store-ai] image usage')
+    info.mockRestore()
+    expect(call?.[1]).toMatchObject({
+      model: STORE_AI_IMAGE.model,
+      quality: 'medium',
+      inputTokens: 603,
+      outputTokens: 1056,
+      gatewayCostUsd: 0.0097,
+      measured: true,
+      overBreakEven: false,
+    })
+    const logged = JSON.stringify(call)
+    expect(logged).not.toContain(PROJECT)
+    expect(logged).not.toContain('data:image')
+  })
+
   it('passes the source image and a style-specific prompt to the model', async () => {
     const model = vi.fn(okModel)
     await generateImageCandidate({ model, store: fakeStore(), newId: () => FILE_ID, validate: validOk }, { ...input, style: 'lifestyle' })
