@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { listOrders } from '@/lib/ecommerce'
+import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
 import { OrdersClient } from '@/components/ecommerce/orders-client'
 
 // Per-user, auth-gated order data — never serve from a stale cache.
@@ -25,12 +26,16 @@ export default async function OrdersPage({
   if (project.project_type !== 'ecommerce') notFound()
 
   const orders = await listOrders(projectId)
+  const defaultCarrier = await getShippingSettings(projectId)
+    .then((view) => view.settings.defaultCarrier)
+    .catch(() => null)
 
   return (
     <OrdersClient
       projectId={projectId}
       projectName={project.name}
       initialOrders={orders}
+      defaultCarrier={defaultCarrier}
     />
   )
 }

@@ -11,7 +11,7 @@ import type { EmailLang } from '@/lib/email/lang'
 import { formatPrice } from '@/lib/format'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 
-export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'owner'
+export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'buyer-shipped' | 'owner'
 
 export type OrderEmailItem = {
   name: string
@@ -56,6 +56,11 @@ export type OrderEmailData = {
   paymentPending?: boolean
   /** Pending buyer mail: payment is made on delivery, no bank details apply. */
   cashOnDelivery?: boolean
+  /** Shipped buyer mail: carrier display name and tracking code. */
+  carrierName?: string
+  trackingNumber?: string
+  /** Carrier tracking page for the code; absent when the carrier has no known link. */
+  trackingUrl?: string | null
 }
 
 export type RenderedOrderEmail = { subject: string; html: string; text: string }
@@ -84,6 +89,8 @@ type Copy = {
   bankTitle: string
   bank: { bank: string; holder: string; iban: string; note: string }
   bankHint: (no: string) => string
+  shippedRows: { carrier: string; code: string }
+  trackCta: string
   footer: (store: string) => string
 }
 
@@ -98,6 +105,8 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', vat: 'KDV', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
     items: 'Ürünler',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
+    shippedRows: { carrier: 'Kargo firması', code: 'Takip numarası' },
+    trackCta: 'Kargoyu takip et',
     footer: (s) => `Bu e-posta, ${s} mağazasında sipariş verdiğiniz için gönderildi.`,
   },
   en: {
@@ -110,7 +119,26 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', vat: 'VAT', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
     items: 'Items',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
+    shippedRows: { carrier: 'Carrier', code: 'Tracking number' },
+    trackCta: 'Track shipment',
     footer: (s) => `This email was sent because you placed an order at ${s}.`,
+  },
+}
+
+const BUYER_SHIPPED: Record<EmailLang, Copy> = {
+  tr: {
+    ...BUYER_PAID.tr,
+    subject: (s, n) => `${s} siparişiniz kargoya verildi (#${n})`,
+    title: 'Siparişiniz kargoya verildi',
+    preview: (s, n) => `${s} - #${n} numaralı siparişiniz kargoya verildi.`,
+    intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişiniz kargoya verildi. Takip bilgileri aşağıdadır.`,
+  },
+  en: {
+    ...BUYER_PAID.en,
+    subject: (s, n) => `${s}: your order has shipped (#${n})`,
+    title: 'Your order has shipped',
+    preview: (s, n) => `${s} - order #${n} is on its way.`,
+    intro: (name, s) => `Hi ${name}, your order at ${s} has shipped. Tracking details are below.`,
   },
 }
 
@@ -195,6 +223,7 @@ const BUYER_COD: Record<EmailLang, Copy> = {
 function copyFor(data: OrderEmailData): Copy {
   const { kind, lang } = data
   if (kind === 'owner') return (data.paymentPending ? OWNER_PENDING : OWNER)[lang]
+  if (kind === 'buyer-shipped') return BUYER_SHIPPED[lang]
   if (kind === 'buyer-pending') return (data.cashOnDelivery ? BUYER_COD : BUYER_PENDING)[lang]
   return BUYER_PAID[lang]
 }
@@ -243,8 +272,15 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     if (data.bank.instructions) bankRows.push([c.bank.note, data.bank.instructions])
   }
 
+  const shippedRows: Array<[string, string]> = []
+  if (data.kind === 'buyer-shipped') {
+    if (data.carrierName) shippedRows.push([c.shippedRows.carrier, data.carrierName])
+    if (data.trackingNumber) shippedRows.push([c.shippedRows.code, data.trackingNumber])
+  }
+
   const body =
     `<p style="margin:0 0 8px;">${escape(c.intro(data.customerName, data.storeName))}</p>` +
+    (shippedRows.length > 0 ? renderTable(shippedRows) : '') +
     renderSection(c.items, itemsTable(data.items, data.currency)) +
     renderTable(summaryRows) +
     (customerRows.length > 0 ? renderTable(customerRows) : '') +
@@ -253,14 +289,16 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
         `<p style="margin:0;font-size:14px;">${escape(c.bankHint(data.orderNumber))}</p>`
       : '')
 
-  const href = isOwner ? data.dashboardUrl : data.orderUrl
+  const trackingHref = data.kind === 'buyer-shipped' ? data.trackingUrl : null
+  const href = isOwner ? data.dashboardUrl : trackingHref || data.orderUrl
+  const ctaLabel = trackingHref ? c.trackCta : c.cta
 
   const html = renderEmailLayout({
     lang: data.lang,
     previewText: c.preview(data.storeName, data.orderNumber),
     title: c.title,
     body,
-    cta: href ? { label: c.cta, href } : undefined,
+    cta: href ? { label: ctaLabel, href } : undefined,
     footer: c.footer(data.storeName),
   })
 
@@ -269,9 +307,9 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     '',
     ...data.items.map((i) => `- ${i.name} x ${i.quantity}: ${money(i.line_total_cents)}`),
     '',
-    ...[...summaryRows, ...customerRows, ...bankRows].map(([k, v]) => `${k}: ${v}`),
+    ...[...shippedRows, ...summaryRows, ...customerRows, ...bankRows].map(([k, v]) => `${k}: ${v}`),
     ...(bankRows.length > 0 ? ['', c.bankHint(data.orderNumber)] : []),
-    ...(href ? ['', `${c.cta}: ${href}`] : []),
+    ...(href ? ['', `${ctaLabel}: ${href}`] : []),
   ]
   const text = renderEmailPlainText(c.title, lines.join('\n'), c.footer(data.storeName))
 

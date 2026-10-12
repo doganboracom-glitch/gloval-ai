@@ -438,6 +438,12 @@ export type OrderRow = {
   payment_provider: string
   payment_status: string
   created_at: string
+  /** Absent until scripts/040 is applied. */
+  shipping_status?: string | null
+  tracking_carrier?: string | null
+  tracking_number?: string | null
+  shipped_at?: string | null
+  delivered_at?: string | null
 }
 
 export type OrderItemRow = {
@@ -456,17 +462,28 @@ export type OrderWithItems = OrderRow & { items: OrderItemRow[] }
 /** Lists a store's orders (newest first). Owner + RLS scoped. */
 export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
   const { supabase } = await requireOwnedEcommerceProject(projectId)
-  const { data: orders, error } = await supabase
+  const orderColumns =
+    'id, project_id, status, customer_name, customer_email, customer_phone, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status, created_at'
+  const withShipping = await supabase
     .from('ecommerce_orders')
-    .select(
-      'id, project_id, status, customer_name, customer_email, customer_phone, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status, created_at',
-    )
+    .select(`${orderColumns}, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at`)
     .eq('project_id', projectId)
     .order('created_at', { ascending: false })
+  let orders: Record<string, unknown>[] | null = withShipping.data as Record<string, unknown>[] | null
+  let error = withShipping.error
+  if (isMissingColumnError(error)) {
+    const legacy = await supabase
+      .from('ecommerce_orders')
+      .select(orderColumns)
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+    orders = legacy.data as Record<string, unknown>[] | null
+    error = legacy.error
+  }
   if (error) throw error
   if (!orders || orders.length === 0) return []
 
-  const orderIds = orders.map((o) => o.id)
+  const orderIds = orders.map((o) => o.id as string)
   const itemColumns = 'id, order_id, name, unit_price_cents, quantity, line_total_cents'
   // vat_rate / vat_cents arrive with scripts/037; read without them until then.
   const withVat = await supabase
@@ -489,7 +506,7 @@ export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
     itemsByOrder.set(it.order_id as string, list)
   }
 
-  return (orders as Omit<OrderRow, 'cod_fee_cents'>[]).map((o) => ({
+  return (orders as unknown as Omit<OrderRow, 'cod_fee_cents'>[]).map((o) => ({
     ...o,
     cod_fee_cents: orderCodFeeCents(o),
     items: itemsByOrder.get(o.id) ?? [],

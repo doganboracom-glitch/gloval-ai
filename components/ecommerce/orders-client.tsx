@@ -14,6 +14,7 @@ import {
 } from '@/lib/ecommerce'
 import { useLanguage } from '@/components/language-provider'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
+import { OrderShippingControls } from '@/components/ecommerce/order-shipping-controls'
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -29,10 +30,12 @@ export function OrdersClient({
   projectId,
   projectName,
   initialOrders,
+  defaultCarrier = null,
 }: {
   projectId: string
   projectName: string
   initialOrders: OrderWithItems[]
+  defaultCarrier?: string | null
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -333,6 +336,17 @@ export function OrdersClient({
                     )}
                   </div>
                 )}
+
+                <OrderShippingControls
+                  key={`${o.id}-${o.shipping_status ?? ''}`}
+                  projectId={projectId}
+                  order={o}
+                  defaultCarrier={defaultCarrier}
+                  onChange={(patch) => {
+                    setOrders((os) => os.map((x) => (x.id === o.id ? { ...x, ...patch } : x)))
+                    router.refresh()
+                  }}
+                />
               </li>
             ))}
           </ul>
