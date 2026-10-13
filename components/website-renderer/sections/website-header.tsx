@@ -87,7 +87,7 @@ export function WebsiteHeader({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={navigation.logo.src} alt={navigation.logo.alt || navigation.logoText} className="[height:var(--logo-h,48px)] [max-width:var(--logo-maxw,200px)] [width:var(--logo-mobile-w,auto)] object-contain md:[height:var(--logo-h,64px)] md:[max-width:var(--logo-maxw,280px)] md:[width:var(--logo-w,auto)]" />
             ) : null}
-            <span>{navigation.logoText}</span>
+            {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
           </a>
         ) : <button
           type="button"
@@ -142,7 +142,7 @@ export function WebsiteHeader({
               }
             />
           ) : null}
-          <span>{navigation.logoText}</span>
+          {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
         </button>}
 
         <nav className="hidden items-center gap-6 md:flex">

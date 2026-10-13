@@ -609,6 +609,10 @@ export const navigationSchema = z.object({
   links: z.array(linkSchema).min(1).max(7),
   cta: buttonSchema.optional(),
   logo: logoSchema.optional().describe('Optional brand mark shown instead of the logo text'),
+  showLogoText: z
+    .boolean()
+    .optional()
+    .describe('false hides the logo text next to the logo (the logo already contains the name). Default: shown'),
   favicon: faviconSchema.optional().describe('Optional browser tab icon, separate from the header logo'),
 })
 

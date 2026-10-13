@@ -49,6 +49,8 @@ export type EditOperation =
       height?: number | null
       mobileWidth?: number | null
       align?: 'left' | 'center' | 'right'
+      /** false hides the logo text next to the mark (the logo already spells the name). */
+      showLogoText?: boolean
     }
   /** The browser-tab favicon. `src: null` removes it (falls back to the platform default). */
   | { op: 'updateFavicon'; src: string | null }
@@ -277,7 +279,11 @@ export function applyOperation(
       // go with it — there is nothing left to size or align).
       if (operation.src === null || operation.src === '') {
         next.navigation.logo = undefined
+        next.navigation.showLogoText = undefined
         return next
+      }
+      if (operation.showLogoText !== undefined) {
+        next.navigation.showLogoText = operation.showLogoText ? undefined : false
       }
       const current = next.navigation.logo
       const src = operation.src ?? current?.src
