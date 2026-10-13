@@ -144,14 +144,25 @@ export function InvoiceFields({
  * store name via `lib/store-legal`) and open in an inline modal — NOT the
  * platform's SaaS legal pages, which don't apply to retail purchases.
  */
+/** Hrefs of the store's own legal pages; a missing key falls back to the inline template. */
+export type LegalConsentLinks = {
+  sales?: string
+  returns?: string
+  kvkk?: string
+}
+
+const linkClass = 'font-medium text-foreground underline underline-offset-2 hover:text-primary'
+
 export function LegalConsent({
   value,
   onChange,
   storeName = '',
+  links,
 }: {
   value: LegalConsentState
   onChange: (v: LegalConsentState) => void
   storeName?: string
+  links?: LegalConsentLinks
 }) {
   const [openDoc, setOpenDoc] = useState<StoreLegalDoc | null>(null)
 
@@ -165,13 +176,27 @@ export function LegalConsent({
           className="mt-0.5 size-4 shrink-0 accent-[var(--site-primary,#7c3aed)]"
         />
         <span className="text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => setOpenDoc(buildDistanceSalesNotice(storeName))}
-            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-          >
-            Ön Bilgilendirme ve Mesafeli Satış Sözleşmesi
-          </button>
+          {links?.sales ? (
+            <a href={links.sales} target="_blank" rel="noopener noreferrer" className={linkClass}>
+              Ön Bilgilendirme ve Mesafeli Satış Sözleşmesi
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpenDoc(buildDistanceSalesNotice(storeName))}
+              className={linkClass}
+            >
+              Ön Bilgilendirme ve Mesafeli Satış Sözleşmesi
+            </button>
+          )}
+          {links?.returns ? (
+            <>
+              {' '}ve{' '}
+              <a href={links.returns} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                İptal &amp; İade Koşulları
+              </a>
+            </>
+          ) : null}
           &apos;ni okudum ve onaylıyorum.
         </span>
       </label>
@@ -185,13 +210,19 @@ export function LegalConsent({
         />
         <span className="text-muted-foreground">
           Kişisel verilerimin işlenmesine ilişkin{' '}
-          <button
-            type="button"
-            onClick={() => setOpenDoc(buildKvkkNotice(storeName))}
-            className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
-          >
-            KVKK Aydınlatma Metni
-          </button>
+          {links?.kvkk ? (
+            <a href={links.kvkk} target="_blank" rel="noopener noreferrer" className={linkClass}>
+              KVKK Aydınlatma Metni
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpenDoc(buildKvkkNotice(storeName))}
+              className={linkClass}
+            >
+              KVKK Aydınlatma Metni
+            </button>
+          )}
           &apos;ni okudum, onay veriyorum.
         </span>
       </label>

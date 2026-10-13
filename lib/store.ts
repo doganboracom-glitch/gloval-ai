@@ -35,6 +35,8 @@ import {
   reserveOrderStock,
 } from "@/lib/store-order-stock";
 import { isMissingColumnError } from "@/lib/store-schema-compat";
+import { legalVersionStamp } from "@/lib/site-legal-docs";
+import { websiteSchema } from "@/lib/website-schema";
 import { loadShippingSettings } from "@/lib/store-shipping-settings";
 import { computeShippingCents } from "@/lib/store-shipping-rules";
 import { normalizeProductImages, type ProductImage } from "@/lib/product-images";
@@ -198,6 +200,8 @@ export type CheckoutInput = {
     taxNumber?: string;
     address?: string;
   } | null;
+  /** The buyer ticked the distance-sales + KVKK consent boxes. Required. */
+  legalAccepted?: boolean;
 };
 
 export type CheckoutResult =
@@ -232,6 +236,25 @@ function normalizeCheckoutInvoice(
   return result.ok ? result.value : null;
 }
 
+/** "<date>:<template|custom>" of the store's distance-sales contract, or null if unreadable. */
+async function loadLegalStamp(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+): Promise<string | null> {
+  try {
+    const { data } = await admin
+      .from("projects")
+      .select("name, schema_data")
+      .eq("id", projectId)
+      .maybeSingle();
+    const parsed = websiteSchema.safeParse(data?.schema_data);
+    if (!parsed.success) return null;
+    return legalVersionStamp(parsed.data, String(data?.name ?? ""));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Creates an order for an anonymous buyer. All money math is recomputed
  * server-side from authoritative DB prices — the client's prices are ignored.
@@ -250,6 +273,9 @@ export async function createOrder(
   }
   if (!idempotencyKey || idempotencyKey.length < 8) {
     return { ok: false, error: "bad_request" };
+  }
+  if (input.legalAccepted !== true) {
+    return { ok: false, error: "legal_not_accepted" };
   }
 
   const admin = createAdminClient();
@@ -407,11 +433,26 @@ export async function createOrder(
     idempotency_key: idempotencyKey,
     invoice: normalizeCheckoutInvoice(input.invoice),
   };
+  // Proof of consent: when the buyer accepted and which contract wording was
+  // live (migration 049 adds the columns; without it the order is still taken).
+  const legalStamp = await loadLegalStamp(admin, project.id);
+  const legalColumns = {
+    legal_accepted_at: new Date().toISOString(),
+    legal_contract_version: legalStamp,
+  };
+  const withCod = { ...orderRow, cod_fee_cents: totals.codFeeCents };
   let inserted = await admin
     .from("ecommerce_orders")
-    .insert({ ...orderRow, cod_fee_cents: totals.codFeeCents })
+    .insert({ ...withCod, ...legalColumns })
     .select("id")
     .single();
+  if (isMissingColumnError(inserted.error)) {
+    inserted = await admin
+      .from("ecommerce_orders")
+      .insert(withCod)
+      .select("id")
+      .single();
+  }
   if (isMissingColumnError(inserted.error)) {
     inserted = await admin
       .from("ecommerce_orders")

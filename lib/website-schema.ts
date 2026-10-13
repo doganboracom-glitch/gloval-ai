@@ -614,6 +614,41 @@ export const contactActionsSchema = z.object({
     .describe('Prefilled WhatsApp message shown when a visitor opens the chat'),
 })
 
+/**
+ * The owner's legal/company details. They are the SINGLE source for the seller
+ * block in every legal text (distance-sales contract, privacy policy, ...).
+ * Every field is optional so older sites stay valid; values are validated by
+ * `lib/company-profile.ts` and anything invalid is treated as "not provided".
+ */
+export const companyProfileSchema = z.object({
+  businessType: z.enum(['sole', 'limited', 'joint_stock']).optional(),
+  tradeName: z.string().max(200).optional(),
+  city: z.string().max(80).optional(),
+  district: z.string().max(80).optional(),
+  addressLine: z.string().max(300).optional(),
+  taxOffice: z.string().max(100).optional(),
+  taxId: z.string().max(20).optional(),
+  mersis: z.string().max(24).optional(),
+  tradeRegistryNo: z.string().max(40).optional(),
+  phone: z.string().max(30).optional(),
+  email: z.string().max(120).optional(),
+  kepAddress: z.string().max(120).optional(),
+  website: z.string().max(200).optional(),
+  updatedAt: z.string().optional(),
+})
+
+/**
+ * Owner edits of the legal pages. `docs[slug].body` is a tiny, sanitised markup
+ * (`## heading`, `- item`, `**bold**`) — never HTML — so a saved text can't
+ * carry script or markup. `hidden` lists docs the owner turned off.
+ */
+export const legalDocsSchema = z.object({
+  docs: z
+    .record(z.string(), z.object({ body: z.string().max(40000), updatedAt: z.string() }))
+    .optional(),
+  hidden: z.array(z.string()).max(10).optional(),
+})
+
 export const navigationSchema = z.object({
   logoText: z.string(),
   links: z.array(linkSchema).min(1).max(7),
@@ -659,6 +694,8 @@ export const websiteSchema = z.object({
     .max(12)
     .describe('The ordered homepage sections'),
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
+  company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
+  legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
 })
 
 /**
@@ -668,7 +705,7 @@ export const websiteSchema = z.object({
  * fills it in later from the editor).
  */
 export const websiteGenerationSchema = websiteSchema
-  .omit({ tracking: true, contactActions: true })
+  .omit({ tracking: true, contactActions: true, company: true, legalDocs: true })
   .extend({
     meta: siteMetaSchema.extend({
       seoTitle: z
@@ -687,7 +724,9 @@ export const websiteGenerationSchema = websiteSchema
  * logo) so an unrelated edit can never rewrite or drop them — the route merges
  * them back from the current schema instead.
  */
-export const websiteEditSchema = websiteSchema.omit({ tracking: true }).extend({
+export const websiteEditSchema = websiteSchema
+  .omit({ tracking: true, company: true, legalDocs: true })
+  .extend({
   meta: siteMetaSchema.omit({ seoTitle: true }),
   navigation: navigationSchema.omit({ logo: true, favicon: true }),
 })
@@ -706,6 +745,8 @@ export type Section = z.infer<typeof sectionSchema>
 export type SectionType = Section['type']
 export type TrackingCodes = z.infer<typeof trackingSchema>
 export type ContactActions = z.infer<typeof contactActionsSchema>
+export type CompanyProfile = z.infer<typeof companyProfileSchema>
+export type LegalDocsState = z.infer<typeof legalDocsSchema>
 export type WebsiteSchema = z.infer<typeof websiteSchema>
 
 /* -------------------------------------------------------------------------- */

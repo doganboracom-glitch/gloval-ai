@@ -1,12 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
-import {
-  SITE_LEGAL_DISCLAIMER,
-  companyFromSite,
-  getSiteLegalDoc,
-} from '@/lib/site-legal-templates'
+import { SITE_LEGAL_DISCLAIMER } from '@/lib/site-legal-templates'
+import { formatLegalDate, resolveLegalDoc } from '@/lib/site-legal-docs'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { LegalBlocks } from '@/components/legal/legal-blocks'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +15,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, doc } = await params
   const site = await getPublishedSite(slug)
-  const page = site ? getSiteLegalDoc(doc, companyFromSite(site.name, site.schema.sections)) : null
-  return page ? { title: `${page.title} — ${site?.name}` } : { title: 'Sayfa bulunamadı' }
+  const page = site ? resolveLegalDoc(doc, site.schema, site.name) : null
+  // Boilerplate legal text is near-identical across sites, so it stays out of
+  // search results (noindex) while links on the page can still be followed.
+  return page
+    ? { title: `${page.title} — ${site?.name}`, robots: { index: false, follow: true } }
+    : { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
 }
 
 export default async function SiteLegalPage({
@@ -29,7 +31,7 @@ export default async function SiteLegalPage({
   const { slug, doc } = await params
   const site = await getPublishedSite(slug)
   if (!site) notFound()
-  const page = getSiteLegalDoc(doc, companyFromSite(site.name, site.schema.sections))
+  const page = resolveLegalDoc(doc, site.schema, site.name)
   if (!page) notFound()
 
   return (
@@ -44,21 +46,15 @@ export default async function SiteLegalPage({
         >
           {page.title}
         </h1>
-        <div className="mt-8 grid gap-8">
-          {page.sections.map((section) => (
-            <section key={section.heading}>
-              <h2 className="text-lg font-semibold">{section.heading}</h2>
-              {section.paragraphs.map((p) => (
-                <p
-                  key={p}
-                  className="mt-3 text-pretty text-sm leading-relaxed"
-                  style={{ color: 'var(--site-muted-fg)' }}
-                >
-                  {p}
-                </p>
-              ))}
-            </section>
-          ))}
+        <p
+          data-legal-updated
+          className="mt-2 text-xs"
+          style={{ color: 'var(--site-muted-fg)' }}
+        >
+          Son güncelleme: {formatLegalDate(page.updatedAt)}
+        </p>
+        <div className="mt-8">
+          <LegalBlocks blocks={page.blocks} />
         </div>
         <p
           role="note"

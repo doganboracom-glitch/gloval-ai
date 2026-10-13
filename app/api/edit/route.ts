@@ -322,6 +322,9 @@ export async function POST(req: Request) {
       // not silently delete the owner's phone/WhatsApp settings.
       contactActions: nextSite.contactActions ?? original.contactActions,
       tracking: original.tracking,
+      // Legal identity and legal texts are owner-only: the AI never sees or edits them.
+      company: original.company,
+      legalDocs: original.legalDocs,
     }
     // A storefront's catalog lives in the database: any product data the model
     // wrote into the schema is discarded and the user is pointed to the panel.

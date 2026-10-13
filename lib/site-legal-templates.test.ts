@@ -30,22 +30,36 @@ describe('site legal templates', () => {
     expect(getSiteLegalDoc('__proto__', 'Acme')).toBeNull()
   })
 
-  it('fills company details from the contact section and omits unknown fields', () => {
-    const company = companyFromSite('Acme Ltd', [
-      { type: 'hero' },
-      { type: 'contact', address: 'Bağdat Cd. 1, İstanbul', phone: '+90 532 000 00 00', email: 'a@acme.com' },
-    ])
+  it('fills seller details from the profile, falls back to the contact section, and shows placeholders for the rest', () => {
+    const company = companyFromSite(
+      'Acme',
+      [
+        { type: 'hero' },
+        { type: 'contact', address: 'Bağdat Cd. 1, İstanbul', phone: '+90 532 000 00 00', email: 'a@acme.com' },
+      ],
+      { tradeName: 'Acme Ltd. Şti.' },
+    )
     const text = JSON.stringify(getSiteLegalDoc('mesafeli-satis-sozlesmesi', company))
-    expect(text).toContain('Acme Ltd')
+    expect(text).toContain('Acme Ltd. Şti.')
     expect(text).toContain('Bağdat Cd. 1, İstanbul')
     expect(text).toContain('a@acme.com')
-    expect(text).not.toContain('Vergi No')
-    expect(companyDetailsLine({ name: 'X', taxNo: '123', mersis: '456' })).toContain('MERSİS No: 456')
+    expect(text).toContain('[Vergi no]')
   })
 
-  it('falls back to a generic seller line without contact details', () => {
+  it('never renders an invalid tax id or MERSİS into the text', () => {
+    const company = companyFromSite('Acme', [], { tradeName: 'Acme', taxId: '123', mersis: '456' })
+    const line = companyDetailsLine(company)
+    expect(line).not.toContain('123')
+    expect(line).not.toContain('MERSİS No')
+    expect(companyDetailsLine({ name: 'X', seller: { tradeName: 'X', mersis: '0123456789012345' } })).toContain(
+      'MERSİS No: 0123456789012345',
+    )
+  })
+
+  it('uses the site name as seller for a plain-string company', () => {
     const text = JSON.stringify(getSiteLegalDoc('mesafeli-satis-sozlesmesi', 'Acme'))
-    expect(text).toContain('mağazanın iletişim bölümünde')
+    expect(text).toContain('Ünvan: Acme')
+    expect(text).toContain('[Adres]')
   })
 
   it('keeps a permanent template warning rendered on the legal page', () => {
