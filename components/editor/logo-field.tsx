@@ -133,15 +133,17 @@ export function LogoField({
 
       <div className="flex items-center gap-3 rounded-lg border border-border bg-background p-2">
         <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border"
+          className="flex h-16 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border"
           style={{ backgroundColor: theme.background }}
         >
           {logo?.src ? (
+            // The box is wide so horizontal lockups fill it; the mark takes
+            // ~65% of the height and never exceeds 90% of the width.
             // eslint-disable-next-line @next/next/no-img-element -- data URI preview
             <img
               src={logo.src || '/placeholder.svg'}
               alt={site.navigation.logoText}
-              className="h-full w-full object-contain p-1"
+              className="h-[65%] max-w-[90%] w-auto object-contain"
             />
           ) : (
             <span className="text-[10px] leading-tight text-muted-foreground">—</span>

@@ -12,6 +12,7 @@ import { DEFAULT_FONT_BASE64 } from '@/lib/logo-studio/default-font'
 const FETCH_TIMEOUT_MS = 4000
 const MAX_FONT_BYTES = 2_000_000
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const FAILURE_TTL_MS = 60 * 1000
 
 let bundled: TtfFont | null = null
 const cache = new Map<string, { at: number; font: Promise<TtfFont | null> }>()
@@ -62,8 +63,13 @@ export function loadHeadingFont(family: string): Promise<TtfFont | null> {
   const key = family.trim().toLowerCase()
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.font
-  const font = downloadGoogleFont(family.trim())
+  const font = downloadGoogleFont(family.trim()).catch(() => null)
   cache.set(key, { at: Date.now(), font })
+  // A failed download (offline, Google Fonts blocked) is only remembered
+  // briefly so a transient outage doesn't pin the Poppins fallback for hours.
+  void font.then((f) => {
+    if (!f) cache.set(key, { at: Date.now() - CACHE_TTL_MS + FAILURE_TTL_MS, font })
+  })
   return font
 }
 

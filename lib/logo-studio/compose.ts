@@ -136,7 +136,7 @@ function union(boxes: Box[]): Box {
 /** Wraps placed parts in a tightly-cropped svg with even padding on every side. */
 function finish(layout: LogoLayout, parts: Placed[]): Lockup {
   const content = union(parts.map((p) => p.box))
-  const pad = Math.max(6, Math.min(content.w, content.h) * 0.12)
+  const pad = Math.max(2, Math.min(content.w, content.h) * 0.04)
   const width = content.w + pad * 2
   const height = content.h + pad * 2
   const shift = `translate(${f(pad - content.x)} ${f(pad - content.y)})`

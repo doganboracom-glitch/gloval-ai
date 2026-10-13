@@ -1,9 +1,9 @@
 import { deflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { bundledFont, initialsOf } from '@/lib/logo-studio/font-source'
+import { buildTextAssets, bundledFont, initialsOf, loadHeadingFont } from '@/lib/logo-studio/font-source'
 import { textToPath } from '@/lib/logo-studio/ttf'
 import { buildIcon, buildLockup, type TextAssets } from '@/lib/logo-studio/compose'
-import { localEmblems } from '@/lib/logo-studio/emblem-local'
+import { LOCAL_EMBLEM_COUNT, localEmblems } from '@/lib/logo-studio/emblem-local'
 import { buildPdf } from '@/lib/logo-studio/pdf'
 
 const palette = { primary: '#6d28d9', accent: '#06b6d4', primaryFg: '#ffffff' }
@@ -52,6 +52,47 @@ describe('logo studio', () => {
     const ids = (seed: number) =>
       localEmblems({ count: 2, palette, brand: 'Acme', context: '', seed }).map((e) => e.id).join()
     expect(ids(0)).not.toBe(ids(1))
+  })
+
+  it('ships at least 40 distinct local emblems', () => {
+    expect(LOCAL_EMBLEM_COUNT).toBeGreaterThanOrEqual(40)
+    const seen = new Set<string>()
+    for (let seed = 0; seed < LOCAL_EMBLEM_COUNT; seed++) {
+      for (const e of localEmblems({ count: 1, palette, brand: 'Acme', context: '', seed })) seen.add(e.inner)
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(40)
+  })
+
+  it('gives different brands in the same sector different first suggestions', () => {
+    const brands = ['Yıldız Dental', 'Mavi Klinik', 'Aksoy Diş', 'Güneş Polikliniği', 'Nova Sağlık', 'Dr. Kaya', 'Elit Dental', 'Ada Klinik']
+    const first = new Set(
+      brands.map(
+        (brand) =>
+          localEmblems({ count: 3, palette, brand, context: 'diş kliniği', seed: 0 }).map((e) => e.inner).join('|'),
+      ),
+    )
+    expect(first.size).toBeGreaterThanOrEqual(5)
+  })
+
+  it('is deterministic for the same brand and sector', () => {
+    const run = () => localEmblems({ count: 3, palette, brand: 'Acme', context: 'cafe', seed: 2 }).map((e) => e.id)
+    expect(run()).toEqual(run())
+  })
+
+  it('falls back to the bundled font when Google Fonts is unreachable', async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = (async () => {
+      throw new Error('network down')
+    }) as typeof fetch
+    try {
+      expect(await loadHeadingFont('Unreachable Offline Family')).toBeNull()
+      const { assets, fontName } = await buildTextAssets('Çiğdem Café', 'Unreachable Offline Family')
+      expect(fontName).toMatch(/poppins/i)
+      expect(assets.plain.d.length).toBeGreaterThan(100)
+      expect(assets.plain.missing).toBe(0)
+    } finally {
+      globalThis.fetch = original
+    }
   })
 
   it('writes a structurally valid PDF', async () => {

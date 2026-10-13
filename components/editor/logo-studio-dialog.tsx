@@ -276,19 +276,47 @@ export function LogoStudioDialog({
                     </div>
                   ))}
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] text-muted-foreground">{ui.studioIcon}</span>
+                    <span className="text-[11px] text-muted-foreground">{ui.studioFavicon}</span>
                     <div className="flex h-24 items-center gap-2">
                       {[LIGHT_SURFACE, DARK_SURFACE].map((bg) => (
                         <span
                           key={bg}
-                          className="flex h-full w-20 items-center justify-center rounded-lg border border-border"
+                          className="flex h-full w-20 items-end justify-center gap-1.5 rounded-lg border border-border pb-3"
                           style={{ backgroundColor: bg }}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element -- generated data URI */}
-                          {icon ? <img src={icon} alt="" className="h-12 w-12" /> : null}
+                          {icon
+                            ? [16, 32, 48].map((px) => (
+                                // eslint-disable-next-line @next/next/no-img-element -- generated data URI
+                                <img key={px} src={icon} alt="" width={px} height={px} style={{ width: px, height: px }} />
+                              ))
+                            : null}
                         </span>
                       ))}
                     </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {current ? (
+                <div className={`flex flex-col gap-1.5 ${loading ? 'opacity-50' : ''}`}>
+                  <span className="text-[11px] text-muted-foreground">{ui.studioHeaderPreview}</span>
+                  <div
+                    className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3"
+                    style={{ backgroundColor: theme.background, borderColor: theme.border }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- generated data URI */}
+                    <img
+                      src={svgToDataUri(current.site.svg)}
+                      alt={data.brand}
+                      className="h-12 max-w-[200px] object-contain md:h-16 md:max-w-[280px]"
+                    />
+                    <span className="hidden items-center gap-4 text-xs sm:flex" style={{ color: theme.foreground }} aria-hidden="true">
+                      <span>{ui.studioNavSample1}</span>
+                      <span>{ui.studioNavSample2}</span>
+                      <span className="rounded-md px-3 py-1.5 font-medium" style={{ backgroundColor: theme.primary, color: theme.primaryFg }}>
+                        {ui.studioNavSample3}
+                      </span>
+                    </span>
                   </div>
                 </div>
               ) : null}
@@ -305,6 +333,8 @@ export function LogoStudioDialog({
               {error}
             </p>
           ) : null}
+
+          {hasAi ? <p className="text-[11px] text-muted-foreground">{ui.studioCostNote}</p> : null}
         </div>
 
         <footer className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
