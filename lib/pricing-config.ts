@@ -23,19 +23,6 @@ export type LockedFeatureKey =
   | 'whatsapp'
   | 'customDomain'
   | 'analytics'
-  | 'advancedSeo'
-  | 'aiSiteAudit'
-  | 'googleAds'
-
-export type PlanFeature = {
-  label: string
-  /** Satırın altında gösterilen küçük açıklama. */
-  note?: string
-  /** Pakete özgü, öne çıkarılması gereken satır. */
-  highlight?: boolean
-  /** Yalnızca yıllık ödemede geçerli olan satır (aylıkta gizlenir). */
-  yearlyOnly?: boolean
-}
 
 /* -------------------------------------------------------------------------- */
 /* AI kredi sistemi                                                            */
@@ -124,6 +111,17 @@ export const PAGE_LIMITS: Record<PlanCode, number> = {
 }
 
 /**
+ * Şemanın (`websiteSchema.pages.max(8)`) izin verdiği GERÇEK üst sınır. Bir
+ * paketin limiti bunun üstündeyse kullanıcı yine de bu kadar sayfa
+ * oluşturabilir; kartlarda ve tabloda `effectivePageLimit` gösterilir.
+ */
+export const SITE_PAGE_HARD_CAP = 8
+
+export function effectivePageLimit(code: PlanCode): number {
+  return Math.min(PAGE_LIMITS[code], SITE_PAGE_HARD_CAP)
+}
+
+/**
  * Paket başına temel ürün limiti. `null` = pakette ürün limiti tanımlı değil
  * (FREE/STARTER; mevcut davranış korunur, ürün add-on'u uygulanmaz).
  */
@@ -166,11 +164,13 @@ export type Plan = {
   featured?: boolean
   creditSummary: string
   creditNotes: string[]
-  features: PlanFeature[]
-  /** Kartın en altında gösterilen kapsam dışı bilgisi. */
-  footnote?: string
 }
 
+/**
+ * Paket kartlarındaki ve karşılaştırma tablosundaki özellik satırları bu
+ * dosyada DEĞİL, `lib/plan-copy.ts` içinde tek kaynaktan üretilir; sayı ve
+ * limitler yalnızca bu dosyadaki sabitlerden okunur.
+ */
 export const PLANS: Plan[] = [
   {
     code: 'free',
@@ -180,22 +180,8 @@ export const PLANS: Plan[] = [
     monthlyPrice: 0,
     yearlyPrice: 0,
     cta: 'Ücretsiz Başla',
-    creditSummary: '50 AI işlemi',
+    creditSummary: `${AI_CREDIT_CONFIG.free.credits} AI işlemi`,
     creditNotes: ['Tek seferlik. Aylık yenilenmez.'],
-    // Telefon ve WhatsApp bilinçli olarak YOK: kilitli satır olarak da
-    // gösterilmez. FREE kullanıcı bu özelliklere editörden erişmeye
-    // çalıştığında upgrade mesajı görür (UPGRADE_PROMPTS).
-    features: [
-      { label: '1 site' },
-      { label: '50 AI işlemi', note: 'Tek seferlik', highlight: true },
-      { label: `${PAGE_LIMITS.free} sayfaya kadar` },
-      { label: 'GLOVAL alt alan adı' },
-      { label: 'SSL' },
-      { label: 'Mobil uyumluluk' },
-      { label: 'Temel SEO' },
-      { label: 'İletişim formu' },
-      { label: 'Sosyal medya bağlantıları' },
-    ],
   },
   {
     code: 'starter',
@@ -205,42 +191,14 @@ export const PLANS: Plan[] = [
     monthlyPrice: 399,
     yearlyPrice: 3990,
     cta: 'Starter ile Başla',
-    creditSummary: '150 AI işlemi / 30 gün',
+    creditSummary: `${AI_CREDIT_CONFIG.starter.credits} AI işlemi / ${AI_CREDIT_CONFIG.starter.creditPeriodDays} gün`,
     creditNotes: ['Kullanılmayan AI işlemleri devretmez.'],
-    features: [
-      { label: '1 site' },
-      { label: `${PAGE_LIMITS.starter} sayfaya kadar` },
-      {
-        label: '150 AI işlemi / 30 gün',
-        note: 'Kullanılmayan AI işlemleri devretmez.',
-        highlight: true,
-      },
-      { label: 'Özel domain' },
-      {
-        label: '1 adet .com.tr domain hediyesi',
-        note: 'Yıllık paketlerde geçerli.',
-        highlight: true,
-        yearlyOnly: true,
-      },
-      { label: 'SSL' },
-      { label: 'Mobil uyumluluk' },
-      { label: 'SEO' },
-      { label: 'Google Analytics' },
-      { label: 'Google Search Console' },
-      { label: 'Telefon' },
-      { label: 'WhatsApp' },
-      { label: 'Sosyal medya' },
-      { label: 'İletişim formları' },
-      { label: 'Otomatik yedekleme' },
-      { label: 'Standart destek' },
-    ],
   },
   {
     code: 'pro',
     name: 'PRO',
     headline: 'İşletmeni büyüt',
-    description:
-      'SEO, AI ve büyüme araçlarını aktif olarak kullanmak isteyen işletmeler için.',
+    description: 'Birden fazla site ve daha fazla AI işlemi isteyen işletmeler için.',
     monthlyPrice: 699,
     yearlyPrice: 6990,
     cta: 'PRO ile Büyümeye Başla',
@@ -248,39 +206,8 @@ export const PLANS: Plan[] = [
     featured: true,
     creditSummary: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
     creditNotes: [
-      `Her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
-      'Kullanılmayan AI işlemleri devreder.',
-    ],
-    features: [
-      { label: '3 site' },
-      { label: `${PAGE_LIMITS.pro} sayfaya kadar` },
-      { label: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`, highlight: true },
-      { label: `Her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi`, highlight: true },
-      { label: 'Kullanılmayan AI işlemleri devreder', highlight: true },
-      { label: `Maksimum AI işlem bakiyesi ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)}` },
-      { label: 'Özel domain' },
-      {
-        label: '1 adet .com.tr domain hediyesi',
-        note: 'Yıllık paketlerde geçerli.',
-        highlight: true,
-        yearlyOnly: true,
-      },
-      { label: 'SSL' },
-      { label: 'Mobil uyumluluk' },
-      { label: 'Gelişmiş SEO' },
-      { label: 'AI SEO özellikleri' },
-      { label: 'AI Site Analizi' },
-      { label: 'Rakip analizi' },
-      { label: 'Google Analytics' },
-      { label: 'Google Search Console' },
-      { label: 'Gelişmiş ziyaretçi analizi' },
-      { label: 'Otomatik yedekleme' },
-      { label: 'Versiyon geçmişi' },
-      { label: 'Telefon' },
-      { label: 'WhatsApp' },
-      { label: 'Google Ads özellikleri' },
-      { label: 'Growth özellikleri' },
-      { label: 'Öncelikli destek' },
+      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
+      'Kullanılmayan işlemler devreder.',
     ],
   },
   {
@@ -293,38 +220,9 @@ export const PLANS: Plan[] = [
     cta: 'E-Ticarete Başla',
     creditSummary: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     creditNotes: [
-      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
-      'E-ticaret içeriklerinde kullanılır.',
+      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
+      'Kullanılmayan işlemler devreder.',
     ],
-    features: [
-      {
-        label: '4 site',
-        note: '3 kurumsal site + 1 e-ticaret mağazası.',
-        highlight: true,
-      },
-      { label: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`, highlight: true },
-      { label: `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi`, highlight: true },
-      { label: '150 ürün', highlight: true },
-      { label: 'Ürün yönetimi' },
-      { label: 'Sepet' },
-      { label: 'Sipariş yönetimi' },
-      { label: 'Ödeme altyapısı' },
-      { label: 'iyzico entegrasyonu' },
-      { label: 'Ürün SEO' },
-      { label: 'Mobil uyumlu mağaza' },
-      { label: 'WhatsApp' },
-      { label: 'Sosyal medya' },
-      { label: 'SSL' },
-      { label: 'Google SEO' },
-      {
-        label: '1 adet .com.tr domain hediyesi',
-        note: 'Yıllık paketlerde geçerli.',
-        highlight: true,
-        yearlyOnly: true,
-      },
-    ],
-    footnote:
-      'Kargo entegrasyonu, pazaryeri entegrasyonları ve banka ödeme sistemleri temel pakete dahil değildir. Bu hizmetleri daha sonra ek ücretli olarak satın alabilirsin.',
   },
 ]
 
@@ -366,11 +264,11 @@ export const CREDIT_RULES_BY_PLAN: Array<{
   {
     plan: 'pro',
     name: 'PRO',
-    amount: `${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi ile başlar`,
+    amount: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
     lines: [
-      `Sonraki her ay +${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi kazanır.`,
-      'Kullanılmayan AI işlemleri devreder.',
-      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} AI işlemidir.`,
+      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
+      'Kullanılmayan işlemler devreder.',
+      `En fazla ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} işlem bakiyesi.`,
     ],
   },
   {
@@ -378,35 +276,55 @@ export const CREDIT_RULES_BY_PLAN: Array<{
     name: 'E-TİCARET',
     amount: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     lines: [
-      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi kazanır.`,
-      'Kullanılmayan AI işlemleri devreder.',
-      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} AI işlemidir.`,
-      'E-ticaret içeriklerinde kullanılır.',
+      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
+      'Kullanılmayan işlemler devreder.',
+      `En fazla ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} işlem bakiyesi.`,
     ],
   },
 ]
 
-/** Örnek AI işlem maliyetleri — kredi değeri arttıkça sıralanır. */
+/**
+ * Kredi harcayan GERÇEK eylemler. Değerler sunucudaki sabitlerle aynıdır
+ * (lib/ai-credits.ts `AI_ACTION_COSTS`, lib/store-ai-constants.ts
+ * `STORE_AI_COSTS`, lib/logo-studio/rules.ts `LOGO_EMBLEM_CREDITS`); koddaki
+ * karşılığı olmayan eylem buraya eklenmez.
+ */
 export const CREDIT_COSTS: Array<{ action: string; credits: number }> = [
-  { action: 'Metni düzelt', credits: 1 },
-  { action: 'Metni yeniden yaz', credits: 1 },
-  { action: 'Başlık oluştur', credits: 1 },
-  { action: 'CTA oluştur', credits: 1 },
-  { action: 'SEO açıklaması', credits: 1 },
-  { action: 'Bölüm içeriği oluştur', credits: 2 },
-  { action: 'AI ile logo oluştur (öneri başına)', credits: 2 },
-  { action: 'Bölüm tasarımını değiştir', credits: 3 },
-  { action: 'Blog yazısı oluştur', credits: 5 },
-  { action: 'Sayfa SEO optimizasyonu', credits: 5 },
-  { action: 'Yeni sayfa oluştur', credits: 8 },
-  { action: 'Sayfa + içerik + SEO', credits: 10 },
-  { action: 'Sayfayı tamamen yeniden tasarla', credits: 15 },
-  { action: 'SEO analizi', credits: 15 },
-  { action: 'Rakip analizi', credits: 15 },
-  { action: 'Siteyi AI ile optimize et', credits: 20 },
-  { action: 'Komple site analizi', credits: 25 },
-  { action: 'Yeni site oluştur', credits: 25 },
+  { action: 'Metin veya bölüm düzenleme (AI sohbet)', credits: 1 },
+  { action: 'Ürün metni (AI asistan, ücretli deneme)', credits: 1 },
+  { action: 'AI ile logo önerisi (amblem başına)', credits: 2 },
+  { action: 'Ana sayfa görseli oluştur', credits: 2 },
+  { action: 'Bölüm görseli oluştur', credits: 2 },
+  { action: 'Ürün görseli (AI asistan, ücretli deneme)', credits: 3 },
+  { action: 'Ürün üzerinde sanal deneme (deneme başına)', credits: 5 },
 ]
+
+/** Kredi kuralları penceresindeki "AI işlemleri bittiğinde" bölümü. */
+export const CREDIT_RULES_EMPTY_TITLE = 'AI işlemleri bittiğinde ne olur?'
+
+export const CREDIT_RULES_SUPPORT = {
+  before: 'Ek modül veya özel istekleriniz için ',
+  linkLabel: 'DESTEK',
+  after: "'ten yardım alın. Talebinize göre fiyatlandırma yapılıp uygulanacaktır.",
+  href: '/support/new',
+}
+
+/** "50 işlem 199 TL · 100 işlem 349 TL · 250 işlem 749 TL" — CREDIT_TOPUPS'tan türetilir. */
+export function creditTopUpSummary(): string {
+  return CREDIT_TOPUPS.map(
+    (pack) => `${pack.credits} işlem ${formatTL(pack.priceCents / 100)}`,
+  ).join(' · ')
+}
+
+export function creditRulesWhenEmpty(): string[] {
+  return [
+    'Yapay zekâ işlemleri durur; sitenin yayında kalır ve elle düzenlemeye devam edebilirsin.',
+    `Ek AI işlemi paketi satın alabilirsin (tek seferlik, KDV dahil): ${creditTopUpSummary()}.`,
+    'Satın alma yeri: Abonelikler sayfasındaki "Ek AI işlemi paketleri" bölümü. İşlemlerin bittiği anda açılan pencereden de alabilirsin.',
+    'Satın aldığın işlemler aboneliğe bağlı değildir ve aylık yenilenen işlemlerine eklenir.',
+    'Paketini yükselterek aylık işlem miktarını artırabilirsin.',
+  ]
+}
 
 /* -------------------------------------------------------------------------- */
 /* AI kredileri tükendiğinde                                                   */
@@ -497,260 +415,6 @@ export type ComparisonGroup = {
   }>
 }
 
-export const COMPARISON: ComparisonGroup[] = [
-  {
-    category: 'Site',
-    rows: [
-      {
-        label: 'Site sayısı',
-        free: String(SITE_LIMITS.free),
-        starter: String(SITE_LIMITS.starter),
-        pro: String(SITE_LIMITS.pro),
-        ecommerce: String(SITE_LIMITS.ecommerce),
-      },
-      {
-        label: 'Sayfa limiti',
-        free: String(PAGE_LIMITS.free),
-        starter: String(PAGE_LIMITS.starter),
-        pro: String(PAGE_LIMITS.pro),
-        ecommerce: String(PAGE_LIMITS.ecommerce),
-      },
-      { label: 'SSL', free: true, starter: true, pro: true, ecommerce: true },
-      {
-        label: 'Mobil uyumluluk',
-        free: true,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: 'Otomatik yedekleme',
-        free: false,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: 'Versiyon geçmişi',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-    ],
-  },
-  {
-    category: 'AI',
-    rows: [
-      {
-        label: 'AI işlemi',
-        free: `${AI_CREDIT_CONFIG.free.credits} AI işlemi (tek seferlik)`,
-        starter: `${AI_CREDIT_CONFIG.starter.credits} AI işlemi / ${AI_CREDIT_CONFIG.starter.creditPeriodDays} gün`,
-        pro: `${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi (ilk ay) + her ay ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi`,
-        ecommerce: `${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi (ilk ay) + her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi`,
-      },
-      {
-        label: 'AI işlemi devri',
-        free: AI_CREDIT_CONFIG.free.rollover,
-        starter: AI_CREDIT_CONFIG.starter.rollover,
-        pro: AI_CREDIT_CONFIG.pro.rollover,
-        ecommerce: AI_CREDIT_CONFIG.ecommerce.rollover,
-      },
-      {
-        label: 'Maksimum AI işlem bakiyesi',
-        free: '—',
-        starter: '—',
-        pro: trNumber(AI_CREDIT_CONFIG.pro.maxBalance),
-        ecommerce: trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance),
-      },
-      {
-        label: 'AI SEO özellikleri',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-      {
-        label: 'AI Site Analizi',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-      {
-        label: 'Rakip analizi',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-    ],
-  },
-  {
-    category: 'Domain',
-    rows: [
-      {
-        label: 'GLOVAL alt alan adı',
-        free: true,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: 'Özel domain',
-        free: false,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: '.com.tr domain hediyesi',
-        free: false,
-        starter: 'Yıllık pakette',
-        pro: 'Yıllık pakette',
-        ecommerce: 'Yıllık pakette',
-      },
-    ],
-  },
-  {
-    category: 'SEO',
-    rows: [
-      { label: 'Temel SEO', free: true, starter: true, pro: true, ecommerce: true },
-      {
-        label: 'Gelişmiş SEO',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-      {
-        label: 'Ürün SEO',
-        free: false,
-        starter: false,
-        pro: false,
-        ecommerce: true,
-      },
-    ],
-  },
-  {
-    category: 'Analitik',
-    rows: [
-      {
-        label: 'Google Analytics',
-        free: false,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: 'Google Search Console',
-        free: false,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      {
-        label: 'Gelişmiş ziyaretçi analizi',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-    ],
-  },
-  {
-    category: 'İletişim',
-    rows: [
-      {
-        label: 'İletişim formu',
-        free: true,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-      { label: 'Telefon', free: false, starter: true, pro: true, ecommerce: false },
-      { label: 'WhatsApp', free: false, starter: true, pro: true, ecommerce: true },
-      {
-        label: 'Sosyal medya',
-        free: true,
-        starter: true,
-        pro: true,
-        ecommerce: true,
-      },
-    ],
-  },
-  {
-    category: 'Büyüme',
-    rows: [
-      {
-        label: 'Google Ads özellikleri',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-      {
-        label: 'Growth özellikleri',
-        free: false,
-        starter: false,
-        pro: true,
-        ecommerce: false,
-      },
-    ],
-  },
-  {
-    category: 'Destek',
-    rows: [
-      {
-        label: 'Destek',
-        free: 'Topluluk',
-        starter: 'Standart',
-        pro: 'Öncelikli',
-        ecommerce: 'Standart',
-      },
-    ],
-  },
-  {
-    category: 'E-ticaret',
-    rows: [
-      {
-        label: 'Ürün yönetimi',
-        free: false,
-        starter: false,
-        pro: false,
-        ecommerce: true,
-      },
-      {
-        label: 'Ürün limiti',
-        free: '—',
-        starter: '—',
-        pro: '—',
-        ecommerce: String(PRODUCT_LIMITS.ecommerce ?? '—'),
-      },
-      {
-        label: 'Sepet ve sipariş yönetimi',
-        free: false,
-        starter: false,
-        pro: false,
-        ecommerce: true,
-      },
-      {
-        label: 'Ödeme altyapısı (iyzico — yakında)',
-        free: false,
-        starter: false,
-        pro: false,
-        ecommerce: true,
-      },
-      {
-        label: 'Kargo / pazaryeri / banka entegrasyonu',
-        free: false,
-        starter: false,
-        pro: false,
-        ecommerce: 'Ek ücretli',
-      },
-    ],
-  },
-]
 
 /* -------------------------------------------------------------------------- */
 /* Upgrade deneyimi                                                            */
@@ -791,27 +455,6 @@ export const UPGRADE_PROMPTS: Record<LockedFeatureKey, UpgradePrompt> = {
       'Google Analytics ve Search Console bağlantıları Starter ve PRO paketlerinde kullanılabilir.',
     primaryCta: 'Starter’a Geç',
     secondaryCta: 'PRO’yu İncele',
-  },
-  advancedSeo: {
-    title: 'Gelişmiş SEO araçlarını aç.',
-    description:
-      'Gelişmiş SEO ve AI SEO özellikleri PRO pakette kullanılabilir.',
-    primaryCta: 'PRO’yu İncele',
-    secondaryCta: 'Starter’ı İncele',
-  },
-  aiSiteAudit: {
-    title: 'AI Site Analizi PRO pakette.',
-    description:
-      'Sitenin tamamını analiz eden, rakiplerini karşılaştıran ve iyileştirme önerileri üreten AI araçları PRO pakette kullanılabilir.',
-    primaryCta: 'PRO’yu İncele',
-    secondaryCta: 'Starter’ı İncele',
-  },
-  googleAds: {
-    title: 'Google Ads özellikleri PRO pakette.',
-    description:
-      'Google Ads kurulumu, AI reklam önerileri ve growth araçları PRO paketiyle birlikte gelir.',
-    primaryCta: 'PRO’yu İncele',
-    secondaryCta: 'Starter’ı İncele',
   },
 }
 

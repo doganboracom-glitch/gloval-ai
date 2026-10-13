@@ -2,16 +2,18 @@
 
 import { useState } from 'react'
 import { Check, ChevronDown, Minus } from 'lucide-react'
-import { COMPARISON, type ComparisonValue } from '@/lib/pricing-config'
+import { useLanguage } from '@/components/language-provider'
+import { buildComparison, getComparisonCopy, type ComparisonCopy } from '@/lib/plan-copy'
+import type { ComparisonValue } from '@/lib/pricing-config'
 
 const PLAN_COLUMNS = ['FREE', 'STARTER', 'PRO', 'E-TİCARET'] as const
 
-function Cell({ value }: { value: ComparisonValue }) {
+function Cell({ value, copy }: { value: ComparisonValue; copy: ComparisonCopy }) {
   if (value === true) {
     return (
       <>
         <Check className="mx-auto h-4 w-4 text-brand" aria-hidden />
-        <span className="sr-only">Var</span>
+        <span className="sr-only">{copy.yes}</span>
       </>
     )
   }
@@ -19,7 +21,7 @@ function Cell({ value }: { value: ComparisonValue }) {
     return (
       <>
         <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" aria-hidden />
-        <span className="sr-only">Yok</span>
+        <span className="sr-only">{copy.no}</span>
       </>
     )
   }
@@ -35,6 +37,9 @@ function Cell({ value }: { value: ComparisonValue }) {
  */
 export function ComparisonAccordion() {
   const [open, setOpen] = useState(false)
+  const { lang } = useLanguage()
+  const copy = getComparisonCopy(lang)
+  const comparison = buildComparison(lang)
 
   return (
     <section className="mt-10">
@@ -48,7 +53,7 @@ export function ComparisonAccordion() {
             className="flex w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <span className="font-display text-base font-semibold">
-              Paket özelliklerini karşılaştır
+              {copy.toggle}
             </span>
             <ChevronDown
               className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
@@ -70,7 +75,7 @@ export function ComparisonAccordion() {
                       scope="col"
                       className="w-[30%] px-4 py-3 text-xs font-medium text-muted-foreground"
                     >
-                      Özellik
+                      {copy.featureColumn}
                     </th>
                     {PLAN_COLUMNS.map((name) => (
                       <th
@@ -85,7 +90,7 @@ export function ComparisonAccordion() {
                     ))}
                   </tr>
                 </thead>
-                {COMPARISON.map((group) => (
+                {comparison.map((group) => (
                   <tbody key={group.category}>
                     <tr>
                       <th
@@ -105,16 +110,16 @@ export function ComparisonAccordion() {
                           {row.label}
                         </th>
                         <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.free} />
+                          <Cell value={row.free} copy={copy} />
                         </td>
                         <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.starter} />
+                          <Cell value={row.starter} copy={copy} />
                         </td>
                         <td className="border-t border-border/60 bg-brand/5 px-2 py-3 text-center font-medium">
-                          <Cell value={row.pro} />
+                          <Cell value={row.pro} copy={copy} />
                         </td>
                         <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.ecommerce} />
+                          <Cell value={row.ecommerce} copy={copy} />
                         </td>
                       </tr>
                     ))}
