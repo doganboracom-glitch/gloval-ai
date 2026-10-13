@@ -4,6 +4,7 @@
  *   ## Heading        -> heading
  *   - item            -> bullet list item
  *   **bold**          -> bold run
+ *   [text](https://x) -> link (http/https/mailto/tel/same-site only)
  *   (blank line)      -> paragraph break
  *
  * Raw HTML is never stored or rendered: `sanitizeLegalMarkup` strips every tag
@@ -13,7 +14,7 @@
 
 export const LEGAL_BODY_MAX = 40000
 
-export type LegalInline = { text: string; bold: boolean }
+export type LegalInline = { text: string; bold: boolean; href?: string }
 export type LegalBlock =
   | { type: 'heading'; inline: LegalInline[] }
   | { type: 'paragraph'; inline: LegalInline[] }
@@ -36,10 +37,34 @@ export function sanitizeLegalMarkup(raw: string): string {
   return text.slice(0, LEGAL_BODY_MAX)
 }
 
+/** Only web, mail, phone and same-site links survive; anything else is plain text. */
+export function isSafeLegalHref(href: string): boolean {
+  const h = href.trim()
+  if (!h || /[\s\u0000-\u001F]/.test(h)) return false
+  if (h.startsWith('/') && !h.startsWith('//')) return true
+  return /^(https?:\/\/[^\s/]+|mailto:[^\s@]+@[^\s@]+|tel:\+?[\d\s()-]+)/i.test(h)
+}
+
+const LINK_RE = /\[([^\]]+)\]\(([^)\s]+)\)/g
+
+function splitLinks(text: string, bold: boolean): LegalInline[] {
+  const runs: LegalInline[] = []
+  let last = 0
+  for (const m of text.matchAll(LINK_RE)) {
+    const start = m.index ?? 0
+    if (start > last) runs.push({ text: text.slice(last, start), bold })
+    if (isSafeLegalHref(m[2])) runs.push({ text: m[1], bold, href: m[2].trim() })
+    else runs.push({ text: m[1], bold })
+    last = start + m[0].length
+  }
+  if (last < text.length) runs.push({ text: text.slice(last), bold })
+  return runs
+}
+
 export function parseInline(text: string): LegalInline[] {
   return text
     .split('**')
-    .map((part, i) => ({ text: part, bold: i % 2 === 1 }))
+    .flatMap((part, i) => splitLinks(part, i % 2 === 1))
     .filter((r) => r.text !== '')
 }
 

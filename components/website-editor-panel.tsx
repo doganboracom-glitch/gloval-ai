@@ -37,6 +37,12 @@ import { LogoField } from '@/components/editor/logo-field'
 import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
+import {
+  COMPANY_GROUP_ID,
+  CompanyFields,
+  SellerWarningBanner,
+} from '@/components/editor/company-fields'
+import { LegalDocsFields } from '@/components/editor/legal-docs-fields'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
@@ -89,8 +95,11 @@ export function WebsiteEditorPanel({
   onRejectAiEdit,
   onBeforeUpgrade,
   payments = null,
+  publicSlug = null,
 }: {
   site: WebsiteSchema
+  /** Live subdomain slug (null before the first publish), for "Sayfayı aç" links. */
+  publicSlug?: string | null
   /** Store owner/admin only: shows the Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Anonim ziyaretçi yükseltme için girişe giderken taslağı saklar. */
@@ -262,6 +271,7 @@ export function WebsiteEditorPanel({
             onOpenIndexChange={onSelectIndex}
             locked={locked}
             onBeforeUpgrade={onBeforeUpgrade}
+            publicSlug={publicSlug}
           />
         )}
         {tab === 'ai' && (
@@ -308,8 +318,10 @@ function DesignTab({
   onOpenIndexChange,
   locked = false,
   onBeforeUpgrade,
+  publicSlug = null,
 }: {
   site: WebsiteSchema
+  publicSlug?: string | null
   planCode: PlanCode
   onDispatch: (op: EditOperation) => void
   /** Saves/stashes the draft before an anonymous visitor leaves for login. */
@@ -345,6 +357,7 @@ function DesignTab({
       </p>
     )}
     <div className="flex flex-col gap-5 p-4">
+      <SellerWarningBanner site={site} />
       <Group title={ui.groupSite}>
         <TextField
           label={ui.siteName}
@@ -533,6 +546,16 @@ function DesignTab({
           onDispatch={onDispatch}
           onBeforeUpgrade={onBeforeUpgrade}
         />
+      </Group>
+
+      <div id={COMPANY_GROUP_ID} className="scroll-mt-4">
+        <Group title="Firma bilgileri">
+          <CompanyFields site={site} onDispatch={onDispatch} />
+        </Group>
+      </div>
+
+      <Group title="Resmi metinler">
+        <LegalDocsFields site={site} publicSlug={publicSlug} onDispatch={onDispatch} />
       </Group>
 
       <Group title={ui.groupCode}>
