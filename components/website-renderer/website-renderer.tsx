@@ -10,6 +10,7 @@ import {
   themeToCssVars,
 } from '@/components/website-renderer/theme'
 import { SectionRenderer } from '@/components/website-renderer/section-renderer'
+import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { WebsiteHeader } from '@/components/website-renderer/sections/website-header'
 import { BackToTop, scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
@@ -82,8 +83,15 @@ export function WebsiteRenderer({
   previewCollections,
   preview = null,
   editSelection = null,
+  paymentBadges = null,
 }: {
   site: unknown
+  /**
+   * Set only by the published store page, resolved server-side from the store's
+   * real payment settings. Omitted (null) for corporate sites, the editor
+   * preview and demos, so no payment strip is shown there.
+   */
+  paymentBadges?: PaymentBadgeSet | null
   showBranding?: boolean
   /**
    * Set by the editor/landing preview, which renders inside a `src`-less iframe
@@ -232,6 +240,7 @@ export function WebsiteRenderer({
             section={section}
             meta={data.meta}
             showBranding={showBranding}
+            paymentBadges={paymentBadges}
           />
         )
         if (!editSelection) return rendered

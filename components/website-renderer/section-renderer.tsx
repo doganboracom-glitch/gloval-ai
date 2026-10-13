@@ -1,6 +1,7 @@
 'use client'
 
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
 import { AboutSection } from '@/components/website-renderer/sections/about-section'
@@ -29,11 +30,14 @@ export function SectionRenderer({
   section,
   meta,
   showBranding = true,
+  paymentBadges = null,
 }: {
   section: Section
   meta: WebsiteSchema['meta']
   /** Forwarded to the footer, which hosts the platform credit. */
   showBranding?: boolean
+  /** Forwarded to the footer: payment marks of a published store. */
+  paymentBadges?: PaymentBadgeSet | null
 }) {
   switch (section.type) {
     case 'hero':
@@ -87,6 +91,7 @@ export function SectionRenderer({
           logoText={meta.name}
           lang={meta.language}
           showBranding={showBranding}
+          paymentBadges={paymentBadges}
         />
       )
     default:

@@ -16,7 +16,10 @@ describe('footer copy', () => {
   it('does not render a "secure payment" label above the payment logos', () => {
     const footer = read('components/site-footer.tsx')
     expect(footer).not.toContain('footer.securePayment')
-    expect(footer).toContain('/payment/iyzico-logo-band.svg')
+    expect(footer).toContain('PLATFORM_PAYMENT_BADGES')
+    const badges = read('components/payment-badges.tsx')
+    expect(badges).toContain('/payment/iyzico-logo.svg')
+    expect(badges).toContain('/payment/card-logos.svg')
   })
 })
 
