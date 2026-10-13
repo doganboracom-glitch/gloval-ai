@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { PackageOpen, ShoppingCart } from 'lucide-react'
+import { ShoppingCart } from 'lucide-react'
+import { ProductImagePlaceholder } from '@/components/store/product-image-placeholder'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { SiteConfirmDialog } from '@/components/website-renderer/site-confirm-dialog'
@@ -148,12 +149,7 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
               className="absolute inset-0 size-full object-cover"
             />
           ) : (
-            <span
-              className="flex size-full items-center justify-center"
-              style={{ color: 'var(--site-muted-fg, var(--muted-foreground))' }}
-            >
-              <PackageOpen className="size-10" aria-hidden />
-            </span>
+            <ProductImagePlaceholder name={product.name} />
           )}
           {galleryAllowed && activated
             ? images.slice(1).map((img, i) => (

@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Loader2, Package, Pencil, Plus, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, ImagePlus, Loader2, Package, Pencil, Plus, Search } from 'lucide-react'
 import type { CategoryRow, ProductRow, ProductStatus } from '@/lib/ecommerce'
+import { lacksImage } from '@/lib/product-image-placeholder'
 import { formatTry } from '@/lib/product-form'
 import { countByStatus, matchesSearch, matchesStatus, STATUS_FILTERS, stockLabel, type StatusFilter } from '@/lib/product-list'
 import { Button } from '@/components/ui/button'
@@ -139,6 +140,17 @@ export function ProductList({ products, categories, publishingId = null, onAdd, 
                       {categoryName(p.category_id)}
                       {p.sku ? ` · ${p.sku}` : ''}
                     </p>
+                    {lacksImage(p) && (
+                      <button
+                        type="button"
+                        onClick={() => onEdit(p)}
+                        aria-label={`${p.name} için görsel ekle`}
+                        className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-dashed border-primary/50 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary outline-none transition-colors hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-primary/60"
+                      >
+                        <ImagePlus aria-hidden className="size-3" />
+                        Görsel ekle
+                      </button>
+                    )}
                   </div>
                 </div>
 

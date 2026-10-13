@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, PackageOpen, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ProductImagePlaceholder } from '@/components/store/product-image-placeholder'
 import type { ProductImage } from '@/lib/product-images'
 import { galleryView, stepGalleryIndex } from '@/lib/product-gallery-view'
 
@@ -36,7 +37,7 @@ export function ProductGallery({ images, name }: { images: ProductImage[]; name:
   }, [lightbox, count])
 
   useEffect(() => { if (!lightbox) triggerRef.current?.focus() }, [lightbox])
-  if (!current) return <div className="flex aspect-square items-center justify-center rounded-[var(--site-radius,1rem)] border border-border bg-muted text-muted-foreground"><PackageOpen className="size-16" /></div>
+  if (!current) return <div className="aspect-square overflow-hidden rounded-[var(--site-radius,1rem)] border border-border"><ProductImagePlaceholder name={name} /></div>
   return <>
     <div className="flex flex-col gap-3">
       <div className="group relative aspect-square overflow-hidden rounded-[var(--site-radius,1rem)] border border-border bg-muted" onTouchStart={(e) => { (e.currentTarget as HTMLElement).dataset.touchX = String(e.touches[0].clientX) }} onTouchEnd={(e) => { const start = Number((e.currentTarget as HTMLElement).dataset.touchX); const delta = e.changedTouches[0].clientX - start; if (count > 1 && Math.abs(delta) > 40) go(delta < 0 ? 1 : -1) }}>
