@@ -54,6 +54,8 @@ export type PlanCopyItem = {
   value?: string
   /** Feature is announced but not live yet; the table shows "Soon". */
   soon?: boolean
+  /** Faded pill rendered next to the card label (e.g. "Yakında"). */
+  badge?: string
 }
 
 export type PlanCopyGroup = {
@@ -83,8 +85,8 @@ export type CommonPlanCopy = {
   domainGift: string
   perMonth: string
   perYear: string
-  maxBalanceLabel: string
-  maxBalanceAria: string
+  /** Tooltip of the "i" icon in the credit box (rollover + balance cap). */
+  maxBalanceTip: (maxBalance: string) => string
   saving: (amountTL: string) => string
 }
 
@@ -131,7 +133,6 @@ type Strings = {
     firstPeriod: (n: string) => string
     following: (n: string) => string
     rollover: string
-    max: (n: string) => string
   }
   f: {
     sites: (n: number) => string
@@ -201,8 +202,8 @@ const TR: Strings = {
     domainGift: '.com.tr alan adı hediye',
     perMonth: '/ ay',
     perYear: '/ yıl',
-    maxBalanceLabel: 'Maksimum bakiye',
-    maxBalanceAria: 'Maksimum yapay zeka işlemi bakiyesi',
+    maxBalanceTip: (n) =>
+      `Kullanılmayan işlemler devreder; en fazla ${n} işlem bakiyesi birikebilir`,
     saving: (amount) => `Yıllık ödemede ${amount} avantaj`,
   },
   comparison: {
@@ -278,7 +279,6 @@ const TR: Strings = {
     firstPeriod: (n) => `İlk ay ${n} yapay zeka işlemi`,
     following: (n) => `Sonraki dönemlerde ${n} yapay zeka işlemi.`,
     rollover: 'Kullanılmayan işlemler devreder.',
-    max: (n) => `En fazla ${n} işlem bakiyesi.`,
   },
   f: {
     sites: (n) => `${n} site`,
@@ -349,8 +349,8 @@ const EN: Strings = {
     domainGift: 'Free .com.tr domain',
     perMonth: '/ month',
     perYear: '/ year',
-    maxBalanceLabel: 'Maximum balance',
-    maxBalanceAria: 'Maximum AI action balance',
+    maxBalanceTip: (n) =>
+      `Unused actions carry over; up to ${n} actions can accumulate`,
     saving: (amount) => `Save ${amount} with yearly billing`,
   },
   comparison: {
@@ -426,7 +426,6 @@ const EN: Strings = {
     firstPeriod: (n) => `${n} AI actions in the first month`,
     following: (n) => `${n} AI actions in following periods.`,
     rollover: 'Unused actions carry over.',
-    max: (n) => `Balance capped at ${n} actions.`,
   },
   f: {
     sites: (n) => `${n} ${n === 1 ? 'site' : 'sites'}`,
@@ -566,6 +565,15 @@ export function buildPlanView(
     value: String(effectivePageLimit(code)),
   })
 
+  // Announced, not built yet: faded row with a "Yakında" pill, never a link.
+  const glovalAdsItem = (): PlanCopyItem => ({
+    id: 'glovalAds',
+    label: GLOVAL_ADS_LABEL,
+    badge: s.comparison.soon,
+    excluded: true,
+    soon: true,
+  })
+
   if (code === 'free') {
     return {
       ...head,
@@ -642,13 +650,16 @@ export function buildPlanView(
       creditNotes: [
         s.credits.following(nf.format(AI_CREDIT_CONFIG.pro.monthlyCredits)),
         s.credits.rollover,
-        s.credits.max(nf.format(AI_CREDIT_CONFIG.pro.maxBalance)),
       ],
       groups: [
         {
           key: 'site',
           title: g.site,
-          items: [sitesItem(f.sitesRight(SITE_LIMITS.pro), true), ...pageItems],
+          items: [
+            sitesItem(f.sitesRight(SITE_LIMITS.pro), true),
+            ...pageItems,
+            glovalAdsItem(),
+          ],
         },
         ...mailGroup(s, code),
         {
@@ -678,7 +689,6 @@ export function buildPlanView(
     creditNotes: [
       s.credits.following(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits)),
       s.credits.rollover,
-      s.credits.max(nf.format(AI_CREDIT_CONFIG.ecommerce.maxBalance)),
     ],
     groups: [
       {
@@ -687,6 +697,7 @@ export function buildPlanView(
         items: [
           sitesItem(f.ecomSites(corporateSites, ECOMMERCE_SITE_LIMITS.ecommerce), true),
           ...pageItems,
+          glovalAdsItem(),
         ],
       },
       {
@@ -720,6 +731,8 @@ export function buildPlanView(
     ],
   }
 }
+
+export const GLOVAL_ADS_LABEL = 'GLOVAL ADS'
 
 const PLAN_ORDER: PlanCode[] = ['free', 'starter', 'pro', 'ecommerce']
 

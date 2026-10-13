@@ -1,8 +1,9 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Check, Info, Minus, Sparkles } from 'lucide-react'
+import { Check, Minus, Sparkles } from 'lucide-react'
 import { LinkButton } from '@/components/link-button'
+import { CreditInfoTip } from '@/components/pricing/credit-info-tip'
 import { useLanguage } from '@/components/language-provider'
 import {
   buildPlanView,
@@ -48,9 +49,12 @@ export function PlanCard({
       ? copy.perYear
       : copy.perMonth
     : null
-  const maxBalance = AI_CREDIT_CONFIG.pro.maxBalance.toLocaleString(
-    lang === 'tr' ? 'tr-TR' : 'en-US',
-  )
+  const maxBalance =
+    plan.code === 'pro' || plan.code === 'ecommerce'
+      ? AI_CREDIT_CONFIG[plan.code].maxBalance.toLocaleString(
+          lang === 'tr' ? 'tr-TR' : 'en-US',
+        )
+      : null
   const saving = cycle === 'yearly' ? yearlySavingText(plan, lang) : null
   const { groups } = view
 
@@ -118,20 +122,7 @@ export function PlanCard({
       >
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold">{view.creditSummary}</p>
-          {plan.code === 'pro' && (
-            <span
-              className="group relative shrink-0 text-muted-foreground"
-              tabIndex={0}
-              role="note"
-              aria-label={`${copy.maxBalanceAria}: ${maxBalance}`}
-            >
-              <Info className="h-4 w-4" />
-              <span className="pointer-events-none absolute right-0 top-6 z-10 w-44 rounded-lg border border-border bg-popover p-2 text-xs leading-relaxed text-muted-foreground opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100">
-                {copy.maxBalanceLabel}:{' '}
-                <strong className="text-foreground">{maxBalance}</strong>
-              </span>
-            </span>
-          )}
+          {maxBalance && <CreditInfoTip text={copy.maxBalanceTip(maxBalance)} />}
         </div>
         <ul className="mt-1.5 space-y-0.5">
           {view.creditNotes.map((note) => (
@@ -196,6 +187,11 @@ export function PlanCard({
                     >
                       {item.label}
                     </span>
+                    {item.badge && (
+                      <span className="ml-2 inline-flex items-center rounded-full border border-border bg-secondary/40 px-2 py-0.5 align-middle text-xs font-medium text-muted-foreground/70">
+                        {item.badge}
+                      </span>
+                    )}
                     {item.note && (
                       <span className="block text-xs text-muted-foreground/70">
                         {item.note}
