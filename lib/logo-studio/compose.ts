@@ -1,9 +1,11 @@
 import type { Box, TextPath } from '@/lib/logo-studio/ttf'
+import { PROPORTIONS, styleSpec, type LogoColors, type LogoStyleId } from '@/lib/logo-studio/rules'
 
 /**
  * Pure logo composition. Takes ready-made pieces (an emblem WITHOUT text, and
  * the brand name already converted to vector outlines) and lays them out as
- * three different lockups, each tightly cropped with even padding.
+ * three different lockups, each tightly cropped with even padding. All
+ * proportion and alignment numbers come from `rules.ts`.
  *
  * Everything here is deterministic string/number work so it can be unit tested
  * and re-run in the browser to recolour a logo for a light or dark surface.
@@ -19,19 +21,26 @@ export type EmblemAsset = {
   viewBox: { w: number; h: number }
   /** Content bounds in viewBox space. Measured in the browser for AI emblems. */
   bbox?: Box
+  /** Round silhouettes get an optical size boost so they match squares. */
+  round?: boolean
+  /** Simplified, badge-like markup (100x100) that stays legible at 16-32 px. */
+  simple?: string
 }
 
 export type TextAssets = {
   /** The brand name as typed. */
   plain: TextPath
-  /** Upper-case, letter-spaced variant (used by the stacked layout). */
+  /** Upper-case, letter-spaced variant (stacked layout, luxury style). */
   caps: TextPath
-  /** One or two initials for the square icon. */
+  /** One or two initials for the monogram. */
   mono: TextPath
+  /** The first letter only (favicon monogram). */
+  initial: TextPath
   /** Variable fonts only give Regular outlines; emulate bold with a stroke. */
   fauxBold: boolean
 }
 
+/** The site's own palette, as sent to the AI prompt. */
 export type LogoPalette = { primary: string; accent: string; primaryFg: string }
 
 export type Lockup = {
@@ -39,29 +48,15 @@ export type Lockup = {
   svg: string
   width: number
   height: number
+  /** Placed emblem / text cap-height boxes in svg coordinates (for alignment checks). */
+  emblemBox?: Box
+  textCapBox?: Box
 }
 
 const f = (n: number) => String(Math.round(n * 100) / 100)
 const FAUX_BOLD_STROKE = 2.4
 
-export function hexLuminance(hex: string): number {
-  const h = hex.replace('#', '')
-  const full = h.length === 3 ? h.replace(/./g, (c) => c + c) : h
-  const [r, g, b] = [0, 2, 4].map((i) => {
-    const v = parseInt(full.slice(i, i + 2), 16) / 255
-    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-/** Ink (wordmark colour) that stays readable on the given preview surface. */
-export function inkForSurface(
-  surface: 'light' | 'dark',
-  siteForeground: string,
-): string {
-  if (surface === 'dark') return '#f8fafc'
-  return hexLuminance(siteForeground) < 0.35 ? siteForeground : '#111827'
-}
+export { hexLuminance } from '@/lib/logo-studio/rules'
 
 export function svgToDataUri(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
@@ -89,6 +84,16 @@ export function emblemBounds(e: EmblemAsset): Box {
   const base = e.bbox && e.bbox.w > 0 && e.bbox.h > 0 ? e.bbox : { x: 0, y: 0, w: e.viewBox.w, h: e.viewBox.h }
   const pad = e.source === 'ai' ? maxStrokeWidth(e.inner) / 2 : 0
   return { x: base.x - pad, y: base.y - pad, w: base.w + 2 * pad, h: base.h + 2 * pad }
+}
+
+/**
+ * Re-colours an AI emblem by swapping exact hex values (single pass, so a->b
+ * and b->a swaps never chain). Local emblems are redrawn instead.
+ */
+export function recolorEmblem(e: EmblemAsset, map: Record<string, string>): EmblemAsset {
+  const lower = Object.fromEntries(Object.entries(map).map(([k, v]) => [k.toLowerCase(), v]))
+  const inner = e.inner.replace(/#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g, (m) => lower[m.toLowerCase()] ?? m)
+  return { ...e, inner }
 }
 
 type Placed = { markup: string; box: Box }
@@ -134,100 +139,127 @@ function union(boxes: Box[]): Box {
 }
 
 /** Wraps placed parts in a tightly-cropped svg with even padding on every side. */
-function finish(layout: LogoLayout, parts: Placed[]): Lockup {
+function finish(
+  layout: LogoLayout,
+  parts: Placed[],
+  meta: { emblem?: Box; textCap?: Box } = {},
+): Lockup {
   const content = union(parts.map((p) => p.box))
-  const pad = Math.max(2, Math.min(content.w, content.h) * 0.04)
+  const pad = Math.max(PROPORTIONS.padMin, Math.min(content.w, content.h) * PROPORTIONS.padRatio)
   const width = content.w + pad * 2
   const height = content.h + pad * 2
-  const shift = `translate(${f(pad - content.x)} ${f(pad - content.y)})`
+  const dx = pad - content.x
+  const dy = pad - content.y
+  const move = (b?: Box): Box | undefined => (b ? { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h } : undefined)
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f(width)} ${f(height)}" width="${f(width)}" height="${f(height)}">` +
-    `<g transform="${shift}">${parts.map((p) => p.markup).join('')}</g></svg>`
-  return { layout, svg, width, height }
+    `<g transform="translate(${f(dx)} ${f(dy)})">${parts.map((p) => p.markup).join('')}</g></svg>`
+  return { layout, svg, width, height, emblemBox: move(meta.emblem), textCapBox: move(meta.textCap) }
 }
 
 export type BuildLockupInput = {
   layout: LogoLayout
   emblem: EmblemAsset | null
   text: TextAssets
-  ink: string
-  palette: LogoPalette
+  colors: LogoColors
+  style: LogoStyleId
 }
 
-export function buildLockup({ layout, emblem, text, ink, palette }: BuildLockupInput): Lockup {
-  const capH = text.plain.capHeight
+export function buildLockup({ layout, emblem, text, colors, style }: BuildLockupInput): Lockup {
+  const spec = styleSpec(style)
+  const P = PROPORTIONS
+  const ink = colors.ink
+  const label = spec.textCase === 'caps' ? text.caps : text.plain
+  const capH = label.capHeight
+  const overshoot = (e: EmblemAsset) => (e.round ? P.roundOvershoot : 1)
 
   if (layout === 'horizontal' && emblem) {
     const eb = emblemBounds(emblem)
-    const targetH = capH * 2.3
-    const scale = Math.min(targetH / eb.h, (targetH * 1.5) / eb.w)
+    const targetH = capH * P.horizontal.emblemToCap * spec.emblemScale
+    const scale =
+      Math.min(targetH / eb.h, (targetH * P.horizontal.maxEmblemAspect) / eb.w) * overshoot(emblem)
     const ph = eb.h * scale
     const pw = eb.w * scale
-    const e = placeEmblem(emblem, 0, (targetH - ph) / 2, scale)
-    const gap = capH * 0.6
-    const t = placeText(text.plain, text.fauxBold, ink, pw + gap, targetH / 2 + capH / 2, 1)
-    return finish(layout, [e, t])
+    const H = Math.max(targetH, ph)
+    const cy = H / 2
+    const e = placeEmblem(emblem, 0, cy - ph / 2, scale)
+    const gap = capH * P.horizontal.gapToCap * spec.gapScale
+    const baseline = cy + capH / 2
+    const t = placeText(label, text.fauxBold, ink, pw + gap, baseline, 1)
+    return finish(layout, [e, t], { emblem: e.box, textCap: { x: pw + gap, y: baseline - capH, w: label.bbox.w, h: capH } })
   }
 
   if (layout === 'vertical' && emblem) {
-    const ts = 0.62
-    const tcap = capH * ts
+    const ts = P.vertical.textScale
+    const tcap = text.caps.capHeight * ts
     const eb = emblemBounds(emblem)
-    const targetH = tcap * 4.6
-    const scale = Math.min(targetH / eb.h, (targetH * 1.3) / eb.w)
+    const targetH = tcap * P.vertical.emblemToTextCap * spec.emblemScale
+    const scale =
+      Math.min(targetH / eb.h, (targetH * P.vertical.maxEmblemAspect) / eb.w) * overshoot(emblem)
     const ph = eb.h * scale
     const pw = eb.w * scale
     const textW = text.caps.bbox.w * ts
     const W = Math.max(pw, textW)
-    const e = placeEmblem(emblem, (W - pw) / 2, (targetH - ph) / 2, scale)
-    const baseline = targetH + tcap * 1.15 + tcap
+    const H = Math.max(targetH, ph)
+    const e = placeEmblem(emblem, (W - pw) / 2, (H - ph) / 2, scale)
+    const baseline = H + tcap * P.vertical.gapToTextCap * spec.gapScale + tcap
     const t = placeText(text.caps, text.fauxBold, ink, (W - textW) / 2, baseline, ts)
-    return finish(layout, [e, t])
+    return finish(layout, [e, t], { emblem: e.box, textCap: { x: (W - textW) / 2, y: baseline - tcap, w: textW, h: tcap } })
   }
 
   // Wordmark: typography plus a short accent bar; also the fallback when a
   // lockup that needs an emblem was requested without one.
-  const t = placeText(text.plain, text.fauxBold, ink, 0, capH, 1)
-  const barW = Math.max(24, text.plain.bbox.w * 0.2)
-  const barH = Math.max(4, capH * 0.1)
-  const barY = capH + capH * 0.42
+  const W = P.wordmark
+  const t = placeText(label, text.fauxBold, ink, 0, capH, 1)
+  const barW = Math.max(W.barMinWidth, label.bbox.w * W.barWidthRatio)
+  const barH = Math.max(4, capH * W.barHeightToCap)
+  const barY = capH + capH * W.barGapToCap
   const bar: Placed = {
-    markup: `<rect x="0" y="${f(barY)}" width="${f(barW)}" height="${f(barH)}" rx="${f(barH / 2)}" fill="${palette.accent}"/>`,
+    markup: `<rect x="0" y="${f(barY)}" width="${f(barW)}" height="${f(barH)}" rx="${f(barH / 2)}" fill="${colors.b}"/>`,
     box: { x: 0, y: barY, w: barW, h: barH },
   }
-  return finish('wordmark', [t, bar])
+  return finish('wordmark', [t, bar], { textCap: { x: 0, y: 0, w: label.bbox.w, h: capH } })
 }
 
-/** Square icon (favicon-style): the emblem, or an initials badge for wordmarks. */
-export function buildIcon({
-  layout,
-  emblem,
-  text,
-  palette,
-}: Omit<BuildLockupInput, 'ink'>): string {
-  const size = 100
-  let body: string
-  if (layout !== 'wordmark' && emblem) {
-    const eb = emblemBounds(emblem)
-    const box = size * 0.84
-    const scale = Math.min(box / eb.w, box / eb.h)
-    const placed = placeEmblem(
-      emblem,
-      (size - eb.w * scale) / 2,
-      (size - eb.h * scale) / 2,
-      scale,
-    )
-    body = placed.markup
-  } else {
-    const m = text.mono
-    const maxW = size * 0.6
-    const maxH = size * 0.42
-    const scale = Math.min(maxW / Math.max(m.bbox.w, 1), maxH / Math.max(m.bbox.h, 1))
-    const cx = size / 2 - (m.bbox.x + m.bbox.w / 2) * scale
-    const cy = size / 2 - (m.bbox.y + m.bbox.h / 2) * scale
-    body =
-      `<rect width="${size}" height="${size}" rx="22" fill="${palette.primary}"/>` +
-      `<path d="${m.d}" fill="${palette.primaryFg}" transform="translate(${f(cx)} ${f(cy)}) scale(${f(scale)})"/>`
+/**
+ * Monogram emblem: initials inside a circle or square badge. Filled for the
+ * modern/classic styles, outlined for minimal/luxury.
+ */
+export function monogramEmblem({
+  mono,
+  shape,
+  colors,
+  style,
+}: {
+  mono: TextPath
+  shape: 'circle' | 'square'
+  colors: LogoColors
+  style: LogoStyleId
+}): EmblemAsset {
+  const spec = styleSpec(style)
+  const w = spec.ringWeight
+  const filled = spec.monogramFilled
+  const badge =
+    shape === 'circle'
+      ? filled
+        ? `<circle cx="50" cy="50" r="50" fill="${colors.a}"/>`
+        : `<circle cx="50" cy="50" r="${f(50 - w / 2)}" fill="none" stroke="${colors.a}" stroke-width="${w}"/>`
+      : filled
+        ? `<rect width="100" height="100" rx="14" fill="${colors.a}"/>`
+        : `<rect x="${f(w / 2)}" y="${f(w / 2)}" width="${f(100 - w)}" height="${f(100 - w)}" rx="10" fill="none" stroke="${colors.a}" stroke-width="${w}"/>`
+  const letterColor = filled ? colors.fg : colors.a
+  const maxW = 60
+  const maxH = 38
+  const scale = Math.min(maxW / Math.max(mono.bbox.w, 1), maxH / Math.max(mono.bbox.h, 1))
+  const cx = 50 - (mono.bbox.x + mono.bbox.w / 2) * scale
+  const cy = 50 - (mono.bbox.y + mono.bbox.h / 2) * scale
+  const letters = `<path d="${mono.d}" fill="${letterColor}" transform="translate(${f(cx)} ${f(cy)}) scale(${f(scale)})"/>`
+  return {
+    id: `monogram-${shape}`,
+    source: 'local',
+    inner: badge + letters,
+    viewBox: { w: 100, h: 100 },
+    bbox: { x: 0, y: 0, w: 100, h: 100 },
+    round: shape === 'circle',
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">${body}</svg>`
 }

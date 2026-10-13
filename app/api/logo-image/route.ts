@@ -6,25 +6,16 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { buildTextAssets } from '@/lib/logo-studio/font-source'
-import { localEmblems } from '@/lib/logo-studio/emblem-local'
 import { aiEmblemAvailable, generateEmblem, EMBLEM_CONCEPTS } from '@/lib/logo-studio/emblem-ai'
 import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
+import { AI_EMBLEMS_PER_ROUND, LOGO_STYLE_IDS, type LogoStyleId } from '@/lib/logo-studio/rules'
 
 // Two emblems are drawn in parallel; each Claude call has its own 25s timeout.
 export const maxDuration = 60
 
-const EMBLEM_COUNT = 2
-const STYLES = ['modern', 'classic', 'minimal', 'playful', 'luxury', 'tech'] as const
-type LogoStyle = (typeof STYLES)[number]
-
-const STYLE_HINT: Record<LogoStyle, string> = {
-  modern: 'clean geometric shapes, confident, contemporary',
-  classic: 'timeless, balanced proportions, traditional emblem feel',
-  minimal: 'extremely simple, one or two shapes, generous negative space',
-  playful: 'rounded friendly shapes, approachable, lightly whimsical',
-  luxury: 'refined, elegant, premium, precise geometry',
-  tech: 'sharp geometric lines, precise angles, digital-native feel',
-}
+const EMBLEM_COUNT = AI_EMBLEMS_PER_ROUND
+const STYLES = LOGO_STYLE_IDS
+type LogoStyle = LogoStyleId
 
 function distinctAccent(primary: string, accent: string, foreground: string): string {
   return primary.toLowerCase() === accent.toLowerCase() ? foreground : accent
@@ -59,6 +50,9 @@ export async function POST(req: Request) {
     request?: string
     mode?: string
     seed?: number
+    /** Only re-typeset the name for another style: free, no emblems, no sign-in. */
+    textOnly?: boolean
+    colorMode?: string
   }
 
   const parsed = websiteSchema.safeParse(body.schema)
@@ -66,7 +60,8 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid site schema' }, { status: 400 })
   }
   const site = parsed.data
-  const mode = body.mode === 'local' ? 'local' : 'ai'
+  const textOnly = body.textOnly === true
+  const mode = body.mode === 'local' || textOnly ? 'local' : 'ai'
   const seed = Math.max(0, Math.trunc(Number(body.seed) || 0))
 
   let userId: string | null = null
@@ -89,9 +84,8 @@ export async function POST(req: Request) {
   if (!brand) return Response.json({ error: 'Missing brand name' }, { status: 400 })
   const sector = (body.sector || site.meta.audience || '').trim()
   const description = (body.description || site.meta.tagline || '').trim()
-  const style: LogoStyle = STYLES.includes(body.style as LogoStyle)
-    ? (body.style as LogoStyle)
-    : 'modern'
+  const style: LogoStyle = STYLES.includes(body.style as LogoStyle) ? (body.style as LogoStyle) : 'modern'
+  const colorMode = body.colorMode === 'mono' ? 'mono' : 'duo'
   const symbol = `${body.symbol ?? ''} ${body.request ?? ''}`.trim().slice(0, 200)
 
   const theme = resolveTheme(site)
@@ -102,7 +96,7 @@ export async function POST(req: Request) {
   }
 
   const cost = AI_ACTION_COSTS.logoImage
-  const useAi = mode === 'ai' && aiEmblemAvailable()
+  const useAi = mode === 'ai' && !textOnly && aiEmblemAvailable()
   if (useAi && userId) {
     const balance = await getCreditBalance(userId)
     if (balance < cost * EMBLEM_COUNT) {
@@ -112,17 +106,18 @@ export async function POST(req: Request) {
 
   try {
     const [{ assets, fontName }, aiResults] = await Promise.all([
-      buildTextAssets(brand, site.typography.headingFont),
-      useAi
+      buildTextAssets(brand, style),
+      useAi && !textOnly
         ? Promise.all(
             Array.from({ length: EMBLEM_COUNT }, (_, i) =>
               generateEmblem({
                 brand,
                 sector,
                 description,
-                styleHint: STYLE_HINT[style],
+                style,
+                colorMode,
                 symbol,
-                colors: [palette.primary, palette.accent],
+                colors: colorMode === 'mono' ? [palette.primary] : [palette.primary, palette.accent],
                 concept: EMBLEM_CONCEPTS[(seed * EMBLEM_COUNT + i) % EMBLEM_CONCEPTS.length],
                 idPrefix: `ai-${seed}-${i}`,
               }),
@@ -131,15 +126,8 @@ export async function POST(req: Request) {
         : Promise.resolve([] as (EmblemAsset | null)[]),
     ])
 
-    const fallback = localEmblems({
-      count: EMBLEM_COUNT,
-      palette,
-      brand,
-      context: `${sector} ${description} ${symbol}`,
-      seed,
-    })
-    const emblems = Array.from({ length: EMBLEM_COUNT }, (_, i) => aiResults[i] ?? fallback[i])
-    const aiCount = emblems.filter((e) => e.source === 'ai').length
+    const aiEmblems = aiResults.filter((e): e is EmblemAsset => e?.source === 'ai')
+    const aiCount = aiEmblems.length
 
     let balance: number | undefined
     if (aiCount > 0 && userId) {
@@ -156,11 +144,12 @@ export async function POST(req: Request) {
       brand,
       fontName,
       text: assets,
-      emblems,
+      aiEmblems,
+      context: `${sector} ${description}`.trim(),
       palette,
       foreground: theme.foreground,
       aiCount,
-      aiFallback: mode === 'ai' && aiCount === 0,
+      aiFallback: mode === 'ai' && !textOnly && aiCount === 0,
       balance,
     })
   } catch (err) {

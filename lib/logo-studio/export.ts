@@ -1,6 +1,9 @@
 import { buildPdf } from '@/lib/logo-studio/pdf'
 import { svgToDataUri, type EmblemAsset } from '@/lib/logo-studio/compose'
 import type { Box } from '@/lib/logo-studio/ttf'
+import { buildIco } from '@/lib/logo-studio/ico'
+import type { FaviconVariant } from '@/lib/logo-studio/favicon'
+import type { ZipFile } from '@/lib/logo-studio/zip'
 
 /** Browser-only helpers: measuring emblems and exporting SVG / PNG / PDF. */
 
@@ -29,7 +32,7 @@ export function measureEmblem(e: EmblemAsset): EmblemAsset {
   return { ...e, bbox }
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -63,10 +66,11 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }
 
-export async function svgToPdfBlob(svg: string, w: number, h: number): Promise<Blob> {
-  const pxW = 1600
-  const pxH = Math.round((h / w) * pxW)
-  const { ctx } = await rasterise(svg, pxW, pxH)
+export async function canvasToPdfBlob(canvas: HTMLCanvasElement, pageWidth: number): Promise<Blob> {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('no canvas')
+  const pxW = canvas.width
+  const pxH = canvas.height
   const { data } = ctx.getImageData(0, 0, pxW, pxH)
   const rgb = new Uint8Array(pxW * pxH * 3)
   const alpha = new Uint8Array(pxW * pxH)
@@ -76,17 +80,57 @@ export async function svgToPdfBlob(svg: string, w: number, h: number): Promise<B
     rgb[p++] = data[i + 2]
     alpha[a++] = data[i + 3]
   }
-  const pageWidth = 360
   const bytes = await buildPdf({
     width: pxW,
     height: pxH,
     rgb,
     alpha,
     pageWidth,
-    pageHeight: (h / w) * pageWidth,
+    pageHeight: (pxH / pxW) * pageWidth,
     deflate,
   })
   return new Blob([bytes as BlobPart], { type: 'application/pdf' })
+}
+
+export async function svgToPdfBlob(svg: string, w: number, h: number): Promise<Blob> {
+  const pxW = 1600
+  const { canvas } = await rasterise(svg, pxW, Math.round((h / w) * pxW))
+  return canvasToPdfBlob(canvas, 360)
+}
+
+export async function svgToPngBytes(svg: string, px: number, h = px): Promise<Uint8Array> {
+  const { canvas } = await rasterise(svg, px, h)
+  const blob = await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('png failed'))), 'image/png'),
+  )
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
+export async function blobBytes(blob: Blob): Promise<Uint8Array> {
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
+/** Rasterises the favicon variants and adds a multi-size favicon.ico (16/32/48). */
+export async function renderFaviconFiles(variants: FaviconVariant[]): Promise<ZipFile[]> {
+  const files: ZipFile[] = []
+  const bySize = new Map<number, Uint8Array>()
+  for (const v of variants) {
+    const data = await svgToPngBytes(v.svg, v.size)
+    bySize.set(v.size, data)
+    files.push({ name: v.name, data })
+  }
+  const ico = [16, 32, 48].flatMap((size) => {
+    const png = bySize.get(size)
+    return png ? [{ size, png }] : []
+  })
+  files.push({ name: 'favicon.ico', data: buildIco(ico) })
+  return files
+}
+
+export function bytesToDataUri(bytes: Uint8Array, mime: string): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return `data:${mime};base64,${btoa(bin)}`
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

@@ -1,5 +1,6 @@
 import { parseTtf, textToPath, type TtfFont } from '@/lib/logo-studio/ttf'
 import type { TextAssets } from '@/lib/logo-studio/compose'
+import { styleSpec, type LogoStyleId, type StyleSpec } from '@/lib/logo-studio/rules'
 import { DEFAULT_FONT_BASE64 } from '@/lib/logo-studio/default-font'
 
 /**
@@ -32,10 +33,10 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
   }
 }
 
-async function downloadGoogleFont(family: string): Promise<TtfFont | null> {
+async function downloadGoogleFont(family: string, weights: string[]): Promise<TtfFont | null> {
   if (!/^[A-Za-z0-9 ]{2,40}$/.test(family)) return null
   const slug = family.trim().replace(/\s+/g, '+')
-  for (const weight of ['700', '600', '']) {
+  for (const weight of weights) {
     try {
       const css = await fetchWithTimeout(
         `https://fonts.googleapis.com/css2?family=${slug}${weight ? `:wght@${weight}` : ''}`,
@@ -59,11 +60,11 @@ async function downloadGoogleFont(family: string): Promise<TtfFont | null> {
 }
 
 /** The site's heading font when obtainable, otherwise `null`. */
-export function loadHeadingFont(family: string): Promise<TtfFont | null> {
-  const key = family.trim().toLowerCase()
+export function loadHeadingFont(family: string, weights: string[] = ['700', '600', '']): Promise<TtfFont | null> {
+  const key = `${family.trim().toLowerCase()}|${weights.join(',')}`
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.font
-  const font = downloadGoogleFont(family.trim()).catch(() => null)
+  const font = downloadGoogleFont(family.trim(), weights).catch(() => null)
   cache.set(key, { at: Date.now(), font })
   // A failed download (offline, Google Fonts blocked) is only remembered
   // briefly so a transient outage doesn't pin the Poppins fallback for hours.
@@ -88,28 +89,31 @@ export function initialsOf(name: string): string {
   return out.toLocaleUpperCase('tr')
 }
 
-function assetsFor(font: TtfFont, name: string) {
-  const plain = textToPath(font, name, { size: 100, letterSpacing: 0.01 })
-  const caps = textToPath(font, name.toLocaleUpperCase('tr'), { size: 100, letterSpacing: 0.14 })
+function assetsFor(font: TtfFont, name: string, spec: StyleSpec) {
+  const plain = textToPath(font, name, { size: 100, letterSpacing: spec.letterSpacing })
+  const caps = textToPath(font, name.toLocaleUpperCase('tr'), { size: 100, letterSpacing: spec.capsSpacing })
   const mono = textToPath(font, initialsOf(name), { size: 100, letterSpacing: 0.02 })
-  return { plain, caps, mono }
+  const initial = textToPath(font, Array.from(initialsOf(name))[0] ?? '?', { size: 100 })
+  return { plain, caps, mono, initial }
 }
 
 /**
- * Builds the vector text pieces for a brand name. When the preferred font is
- * missing a glyph the name needs, the bundled font is used for everything so
- * the wordmark never renders with holes.
+ * Builds the vector text pieces for a brand name in the given style's type
+ * pairing. When that font is missing a glyph the name needs (or cannot be
+ * downloaded), the bundled font is used for everything so the wordmark never
+ * renders with holes.
  */
 export async function buildTextAssets(
   name: string,
-  headingFont: string,
+  style: LogoStyleId,
 ): Promise<{ assets: TextAssets; fontName: string }> {
-  const heading = await loadHeadingFont(headingFont)
+  const spec = styleSpec(style)
+  const heading = await loadHeadingFont(spec.fontFamily, spec.weights)
   if (heading) {
-    const a = assetsFor(heading, name)
-    if (a.plain.missing === 0 && a.caps.missing === 0 && a.plain.d) {
-      return { assets: { ...a, fauxBold: heading.isVariable }, fontName: headingFont }
+    const a = assetsFor(heading, name, spec)
+    if (a.plain.missing === 0 && a.caps.missing === 0 && a.initial.missing === 0 && a.plain.d) {
+      return { assets: { ...a, fauxBold: heading.isVariable && spec.emulateBold }, fontName: spec.fontFamily }
     }
   }
-  return { assets: { ...assetsFor(bundledFont(), name), fauxBold: false }, fontName: 'Poppins' }
+  return { assets: { ...assetsFor(bundledFont(), name, spec), fauxBold: false }, fontName: 'Poppins' }
 }
