@@ -6,6 +6,7 @@ import {
   type ImageAspect,
 } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
+import { IMAGE_PROMPT_RULES } from '@/lib/image-prompt-rules'
 import { describeVisualRequest, resolveVisualTopic } from '@/lib/visual-subjects'
 
 /**
@@ -133,7 +134,8 @@ export function buildHeroImagePrompt(brief: Brief, extra?: string): string {
     extra ? `Context: ${extra}.` : '',
     'Wide cinematic composition with clear negative space for overlaid text,',
     'high resolution, sharp focus, realistic documentary photography,',
-    'no text, no watermark, no logos, no collage, not an empty landscape.',
+    'Not an empty landscape.',
+    IMAGE_PROMPT_RULES,
   ]
   return bits.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
@@ -157,7 +159,8 @@ export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema)
     `Style: ${brief.style}.`,
     'Wide cinematic composition with clear negative space for overlaid text,',
     'high resolution, sharp focus, realistic documentary photography,',
-    'no text, no watermark, no logos, no collage, not an empty landscape.',
+    'Not an empty landscape.',
+    IMAGE_PROMPT_RULES,
   ]
     .join(' ')
     .replace(/\s+/g, ' ')

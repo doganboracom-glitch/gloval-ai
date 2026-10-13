@@ -14,11 +14,16 @@
  *    and turned into a controlled `null` fallback.
  */
 
+import { withImagePromptRules } from './image-prompt-rules'
+import { generateWithTextGuard } from './image-text-guard'
+
 export type ImageAspect = '1:1' | '4:3' | '3:2' | '16:9' | '3:4' | '9:16'
 
 export type ImageRequest = {
   prompt: string
   aspectRatio?: ImageAspect
+  /** Logos/wordmarks only: skips the no-text rules and the text guard. */
+  allowText?: boolean
 }
 
 export type ImageResult = { src: string; provider: string } | null
@@ -332,11 +337,21 @@ export async function generateSiteImage(
   const provider = getImageProvider()
   if (!provider.isConfigured()) return null
 
-  try {
-    return await Promise.race([
-      provider.generate(req),
+  // Photographic prompts always carry the shared no-text rules and are
+  // text-checked afterwards; logos legitimately contain a wordmark.
+  const guarded = !req.allowText
+  const finalReq: ImageRequest = guarded
+    ? { ...req, prompt: withImagePromptRules(req.prompt) }
+    : req
+
+  const generateOnce = async (): Promise<ImageResult> =>
+    Promise.race([
+      provider.generate(finalReq),
       new Promise<ImageResult>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
     ])
+
+  try {
+    return guarded ? await generateWithTextGuard(generateOnce) : await generateOnce()
   } catch (err) {
     console.log(
       '[v0] generateSiteImage error:',
