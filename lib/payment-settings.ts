@@ -10,6 +10,7 @@ import { loadStorePaymentConfig } from '@/lib/store-payment-config'
 import { CARD_PROVIDER_IDS } from '@/lib/payments/card-providers'
 import { isValidTurkishIban, normalizeIban } from '@/lib/iban'
 import { parsePaymentTermDays } from '@/lib/store-payment-policy'
+import { revalidateStorefront } from '@/lib/store-revalidate'
 
 /**
  * Owner-facing payment configuration for an e-commerce project.
@@ -245,5 +246,20 @@ export async function savePaymentSettings(
 
   revalidatePath(`/ecommerce/${projectId}`)
   revalidatePath(`/ecommerce/${projectId}/odeme`)
+  await refreshStorefrontFooter(admin, projectId)
   return { ok: true }
+}
+
+/** The published store footer shows the accepted payment marks, so refresh it. */
+async function refreshStorefrontFooter(admin: ReturnType<typeof createAdminClient>, projectId: string) {
+  await revalidateStorefront(
+    {
+      findSlug: async (id) => {
+        const { data } = await admin.from('projects').select('slug').eq('id', id).maybeSingle()
+        return typeof data?.slug === 'string' && data.slug ? data.slug : null
+      },
+      revalidatePath,
+    },
+    projectId,
+  )
 }

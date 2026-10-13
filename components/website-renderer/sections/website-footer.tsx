@@ -2,6 +2,8 @@
 
 import type { Section } from '@/lib/website-schema'
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
+import { PaymentBadges } from '@/components/payment-badges'
+import { hasAnyPaymentBadge, type PaymentBadgeSet } from '@/lib/payment-badges'
 
 type FooterData = Extract<Section, { type: 'footer' }>
 
@@ -10,11 +12,14 @@ export function WebsiteFooter({
   logoText,
   lang = 'tr',
   showBranding = true,
+  paymentBadges = null,
 }: {
   data: FooterData
   logoText: string
   lang?: 'tr' | 'en'
   showBranding?: boolean
+  /** Published store only: the payment marks the store really accepts. */
+  paymentBadges?: PaymentBadgeSet | null
 }) {
   return (
     <footer
@@ -87,6 +92,9 @@ export function WebsiteFooter({
               removed from the editor. */}
           {showBranding ? <GlovalBadge lang={lang} /> : null}
         </div>
+        {hasAnyPaymentBadge(paymentBadges) ? (
+          <PaymentBadges badges={paymentBadges} variant="site" lang={lang} className="mt-6" />
+        ) : null}
       </div>
     </footer>
   )

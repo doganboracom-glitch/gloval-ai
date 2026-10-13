@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { revalidateStorefront } from '@/lib/store-revalidate'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
 import { isCardProviderReady, readStorePaymentRow } from '@/lib/store-payment-config'
@@ -223,5 +224,15 @@ export async function saveGeneralPaymentSettings(
 
   revalidatePath(`/ecommerce/${projectId}`)
   revalidatePath(`/ecommerce/${projectId}/odeme`)
+  await revalidateStorefront(
+    {
+      findSlug: async (id) => {
+        const { data } = await admin.from('projects').select('slug').eq('id', id).maybeSingle()
+        return typeof data?.slug === 'string' && data.slug ? data.slug : null
+      },
+      revalidatePath,
+    },
+    projectId,
+  )
   return { ok: true, view: await buildView(projectId) }
 }

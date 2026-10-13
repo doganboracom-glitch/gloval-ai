@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useLanguage } from '@/components/language-provider'
 import { BrandLogo } from '@/components/brand-logo'
 import { openCookiePreferences } from '@/components/cookie-consent'
+import { PaymentBadges } from '@/components/payment-badges'
+import { PLATFORM_PAYMENT_BADGES } from '@/lib/payment-badges'
 
 export function SiteFooter() {
   const { t } = useLanguage()
@@ -90,15 +92,7 @@ export function SiteFooter() {
             © {new Date().getFullYear()} GLOVAL AI — {t.footer.rights}
           </p>
           <div className="flex justify-center sm:justify-end">
-            <img
-              src="/payment/iyzico-logo-band.svg"
-              alt="iyzico, Mastercard, Visa, Amex, Troy"
-              width={429}
-              height={32}
-              loading="lazy"
-              decoding="async"
-              className="h-5 w-auto max-w-full"
-            />
+            <PaymentBadges badges={PLATFORM_PAYMENT_BADGES} className="justify-center sm:justify-end" />
           </div>
         </div>
       </div>

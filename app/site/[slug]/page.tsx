@@ -7,6 +7,8 @@ import type { StoreCatalog } from '@/components/website-renderer/store-catalog-c
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 import { isSiteBrandingRemoved } from '@/lib/project-entitlements'
 import { tenantUrl } from '@/lib/domains'
+import { isStorefront } from '@/lib/website-schema'
+import { getStorePaymentBadges } from '@/lib/store-payment-badges'
 
 // Published sites are dynamic (content can change on republish/unpublish).
 export const dynamic = 'force-dynamic'
@@ -56,6 +58,10 @@ export default async function PublicSitePage({
   ])
   if (!site) notFound()
 
+  // Footer payment marks: storefronts only, and only for what the store's
+  // payment settings really accept. Corporate sites never get the strip.
+  const paymentBadges = isStorefront(site.schema) ? await getStorePaymentBadges(slug) : null
+
   // Only wire the storefront (cart + clickable product cards) when the site
   // actually has synced products. Keyed by product slug so the schema cards can
   // resolve their live product by name.
@@ -95,6 +101,7 @@ export default async function PublicSitePage({
         showBranding={!brandingRemoved}
         planCode={site.ownerPlanCode}
         store={store}
+        paymentBadges={paymentBadges}
       />
     </main>
   )
