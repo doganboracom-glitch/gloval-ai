@@ -1,7 +1,11 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
-import { getStoreLegalPage } from '@/lib/store-legal-pages'
+import {
+  SITE_LEGAL_DISCLAIMER,
+  companyFromSite,
+  getSiteLegalDoc,
+} from '@/lib/site-legal-templates'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +17,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, doc } = await params
   const site = await getPublishedSite(slug)
-  const page = site ? getStoreLegalPage(doc, site.name) : null
+  const page = site ? getSiteLegalDoc(doc, companyFromSite(site.name, site.schema.sections)) : null
   return page ? { title: `${page.title} — ${site?.name}` } : { title: 'Sayfa bulunamadı' }
 }
 
@@ -25,7 +29,7 @@ export default async function SiteLegalPage({
   const { slug, doc } = await params
   const site = await getPublishedSite(slug)
   if (!site) notFound()
-  const page = getStoreLegalPage(doc, site.name)
+  const page = getSiteLegalDoc(doc, companyFromSite(site.name, site.schema.sections))
   if (!page) notFound()
 
   return (
@@ -56,6 +60,14 @@ export default async function SiteLegalPage({
             </section>
           ))}
         </div>
+        <p
+          role="note"
+          data-legal-disclaimer
+          className="mt-12 rounded-lg border px-4 py-3 text-pretty text-xs leading-relaxed"
+          style={{ borderColor: 'var(--site-border)', color: 'var(--site-muted-fg)' }}
+        >
+          {SITE_LEGAL_DISCLAIMER}
+        </p>
       </article>
     </StoreSiteShell>
   )
