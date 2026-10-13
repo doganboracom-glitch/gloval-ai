@@ -24,6 +24,16 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Demo images (cache busting)
+
+Images under `public/demos/` are named `<name>.<sha8>.webp`, where `<sha8>` is the first 8 hex chars of the file's SHA-256, and are served with `immutable` year-long caching (see `next.config.mjs`). Never replace an image under the same name: after adding or changing one, run
+
+```bash
+node scripts/hash-demo-assets.mjs
+```
+
+It renames every file to match its content and rewrites all references in `app/`, `components/` and `lib/`. `lib/demo-assets.test.ts` fails if a hash is stale or a reference is broken.
+
 ## Learn More
 
 To learn more, take a look at the following resources:

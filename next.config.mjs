@@ -34,6 +34,19 @@ const nextConfig = {
         source: '/:path*',
         headers: baseSecurityHeaders,
       },
+      // Demo imagery. Anything under a stable url may be replaced later, so it
+      // gets a short, revalidated cache; files carrying a content hash
+      // (`name.<sha8>.webp`, see scripts/hash-demo-assets.mjs) can never change
+      // under the same url and are cached for a year. Order matters: the later
+      // rule overrides Cache-Control for hashed files.
+      {
+        source: '/demos/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=300, must-revalidate' }],
+      },
+      {
+        source: '/demos/:dir*/:file([\\w-]+\\.[0-9a-f]{8}\\.webp)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
       // Clickjacking protection for the platform's authenticated / stateful
       // surfaces. Tenant sites (/site/*) and demo pages (/demo/*) are
       // intentionally NOT framed-locked so they can be embedded/previewed.
