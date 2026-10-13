@@ -18,6 +18,7 @@ import { ProcessSection } from '@/components/website-renderer/sections/process-s
 import { TeamSection } from '@/components/website-renderer/sections/team-section'
 import { FaqSection } from '@/components/website-renderer/sections/faq-section'
 import { ContactSection } from '@/components/website-renderer/sections/contact-section'
+import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import { CtaSection } from '@/components/website-renderer/sections/cta-section'
 import { WebsiteFooter } from '@/components/website-renderer/sections/website-footer'
 
@@ -32,7 +33,10 @@ export function SectionRenderer({
   showBranding = true,
   paymentBadges = null,
   site = null,
+  contactForm = null,
 }: {
+  /** Live form wiring (slug + signed token); null in preview/demo, where the form is inert. */
+  contactForm?: ContactFormLive | null
   section: Section
   meta: WebsiteSchema['meta']
   /** Whole site, so the footer can verify its link targets. */
@@ -79,12 +83,7 @@ export function SectionRenderer({
     case 'faq':
       return <FaqSection data={section} />
     case 'contact':
-      return (
-        <ContactSection
-          data={section}
-          submitLabel={meta.language === 'tr' ? 'Gönder' : 'Send'}
-        />
-      )
+      return <ContactSection data={section} lang={meta.language} live={contactForm} />
     case 'cta':
       return <CtaSection data={section} />
     case 'footer':

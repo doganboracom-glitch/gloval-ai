@@ -10,6 +10,7 @@ import {
   themeToCssVars,
 } from '@/components/website-renderer/theme'
 import { SectionRenderer } from '@/components/website-renderer/section-renderer'
+import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { WebsiteHeader } from '@/components/website-renderer/sections/website-header'
 import { BackToTop, scrollSiteToTop } from '@/components/website-renderer/back-to-top'
@@ -86,8 +87,11 @@ export function WebsiteRenderer({
   editSelection = null,
   paymentBadges = null,
   headerActions,
+  contactForm = null,
 }: {
   site: unknown
+  /** Published site only: slug + signed render token that make the contact form submit for real. */
+  contactForm?: ContactFormLive | null
   /** Demo pages only: extra header controls (demo cart/account), rendered before the CTA. */
   headerActions?: React.ReactNode
   /**
@@ -247,6 +251,7 @@ export function WebsiteRenderer({
             site={data}
             showBranding={showBranding}
             paymentBadges={paymentBadges}
+            contactForm={contactForm}
           />
         )
         if (!editSelection) return rendered

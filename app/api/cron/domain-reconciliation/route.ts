@@ -11,6 +11,7 @@ import { expireStaleManualOrders } from '@/lib/store-manual-orders'
 import { sweepExpiredCandidates } from '@/lib/store-ai-image'
 import { createCandidateStore } from '@/lib/store-ai-image-store'
 import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
+import { sweepOldContactMessages } from '@/lib/site-contact-store'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -89,6 +90,15 @@ export async function GET(request: Request) {
     customerDeletions = { error: 'customer_deletion_sweep_failed' }
   }
 
+  // Isolated: deletes visitor contact-form messages past the retention window.
+  let contactMessages: { deleted: number } | { error: string }
+  try {
+    contactMessages = { deleted: await sweepOldContactMessages(createAdminClient(), Date.now()) }
+  } catch (error) {
+    console.log('[site-contact] retention sweep failed:', error instanceof Error ? error.message : 'unknown')
+    contactMessages = { error: 'contact_message_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -103,7 +113,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, contactMessages, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

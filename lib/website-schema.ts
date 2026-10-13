@@ -437,6 +437,10 @@ export const contactSection = z.object({
   title: z.string(),
   description: z.string().optional(),
   email: z.string().optional(),
+  recipientEmail: z
+    .string()
+    .optional()
+    .describe('Where contact-form messages are e-mailed; empty = the contact e-mail, then the account e-mail'),
   phone: z.string().optional(),
   address: z.string().optional(),
   fields: z
