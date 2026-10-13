@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { Sparkles, X } from 'lucide-react'
 import {
   CREDIT_COSTS,
   CREDIT_RULES_BY_PLAN,
   CREDIT_RULES_DESCRIPTION,
+  CREDIT_RULES_EMPTY_TITLE,
+  CREDIT_RULES_SUPPORT,
   CREDIT_RULES_TITLE,
+  creditRulesWhenEmpty,
 } from '@/lib/pricing-config'
 
 /**
@@ -76,6 +80,27 @@ export function CreditRulesContent() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section>
+        <h3 className="font-display text-sm font-semibold">{CREDIT_RULES_EMPTY_TITLE}</h3>
+        <ul className="mt-3 list-disc space-y-1.5 pl-5">
+          {creditRulesWhenEmpty().map((line) => (
+            <li key={line} className="text-sm leading-relaxed text-muted-foreground">
+              {line}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+          {CREDIT_RULES_SUPPORT.before}
+          <Link
+            href={CREDIT_RULES_SUPPORT.href}
+            className="font-semibold text-brand underline decoration-brand/40 underline-offset-4 hover:decoration-brand"
+          >
+            {CREDIT_RULES_SUPPORT.linkLabel}
+          </Link>
+          {CREDIT_RULES_SUPPORT.after}
+        </p>
       </section>
     </div>
   )

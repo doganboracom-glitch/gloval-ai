@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
+import { websiteSchema } from './website-schema'
 import {
+  buildComparison,
   buildPlanView,
   copyLang,
   getCommonPlanCopy,
@@ -8,8 +10,14 @@ import {
 } from './plan-copy'
 import {
   AI_CREDIT_CONFIG,
+  CREDIT_COSTS,
+  CREDIT_RULES_SUPPORT,
   PAGE_LIMITS,
   PLANS,
+  SITE_PAGE_HARD_CAP,
+  UPGRADE_PROMPTS,
+  creditRulesWhenEmpty,
+  effectivePageLimit,
   type BillingCycle,
   type PlanCode,
 } from './pricing-config'
@@ -125,18 +133,28 @@ describe('plan copy follows the configuration', () => {
     const proLabels = buildPlanView('pro', 'yearly', 'en').groups.flatMap((g) =>
       g.items.map((i) => i.label),
     )
-    for (const inherited of ['SSL', 'Mobile friendly', 'Google Analytics']) {
+    for (const inherited of ['SSL', 'Mobile friendly', 'Version history']) {
       expect(proLabels).not.toContain(inherited)
     }
   })
 
-  it('page limits shown on the cards come from PAGE_LIMITS', () => {
-    for (const code of ['free', 'starter', 'pro'] as const) {
+  it('page limits shown on the cards are the limits users can really reach', () => {
+    for (const code of ['free', 'starter'] as const) {
       const labels = buildPlanView(code, 'yearly', 'en').groups.flatMap((g) =>
         g.items.map((i) => i.label),
       )
-      expect(labels).toContain(`Up to ${PAGE_LIMITS[code]} pages`)
+      expect(labels).toContain(`Up to ${effectivePageLimit(code)} pages`)
     }
+    for (const code of CODES) {
+      expect(effectivePageLimit(code)).toBe(Math.min(PAGE_LIMITS[code], SITE_PAGE_HARD_CAP))
+    }
+  })
+
+  it('SITE_PAGE_HARD_CAP matches what the site schema really accepts', () => {
+    const page = (n: number) => ({ slug: `p${n}`, title: `P${n}` })
+    const pages = websiteSchema.shape.pages
+    expect(pages.safeParse(Array.from({ length: SITE_PAGE_HARD_CAP }, (_, i) => page(i))).success).toBe(true)
+    expect(pages.safeParse(Array.from({ length: SITE_PAGE_HARD_CAP + 1 }, (_, i) => page(i))).success).toBe(false)
   })
 
   it('PRO credits are identical for monthly and yearly billing', () => {
@@ -162,6 +180,100 @@ describe('plan copy follows the configuration', () => {
     )
     expect(view.creditNotes[0]).toContain(
       String(AI_CREDIT_CONFIG.ecommerce.monthlyCredits),
+    )
+  })
+})
+
+const REMOVED_CLAIMS = [
+  'Sosyal medya',
+  'Social media',
+  'yedekleme',
+  'backup',
+  'Google Ads',
+  'Growth',
+  'Rakip analizi',
+  'AI Site Analizi',
+  'Gelişmiş SEO',
+  'ziyaretçi analizi',
+  'iyzico',
+  'İletişim formu',
+  'Contact form',
+]
+
+describe('pricing copy only describes features that exist', () => {
+  it('cards and comparison table never mention removed or unbuilt features', () => {
+    for (const lang of ['tr', 'en']) {
+      const texts = [
+        ...CODES.flatMap((code) =>
+          buildPlanView(code, 'yearly', lang).groups.flatMap((g) =>
+            g.items.flatMap((i) => [i.label, i.note ?? '']),
+          ),
+        ),
+        ...buildComparison(lang).flatMap((g) => g.rows.map((r) => r.label)),
+        ...CREDIT_COSTS.map((c) => c.action),
+      ].join('\n')
+      for (const claim of REMOVED_CLAIMS) expect(texts).not.toContain(claim)
+    }
+    expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
+      ['analytics', 'customDomain', 'phone', 'whatsapp'].sort(),
+    )
+  })
+
+  it('credit cost table lists only real actions with the real prices', () => {
+    expect(CREDIT_COSTS.map((c) => c.credits)).toEqual([1, 1, 2, 2, 2, 3, 5])
+  })
+})
+
+describe('comparison table is derived from the cards', () => {
+  const listed = (lang: string) =>
+    buildComparison(lang)
+      .filter((g) => g.category !== (lang === 'tr' ? 'Yapay zeka işlemleri' : 'AI actions'))
+      .flatMap((g) => g.rows)
+
+  it('has the same rows in TR and EN', () => {
+    expect(listed('tr').length).toBe(listed('en').length)
+    expect(buildComparison('tr').map((g) => g.rows.length)).toEqual(
+      buildComparison('en').map((g) => g.rows.length),
+    )
+  })
+
+  it('every feature on a card is ticked for that plan in the table', () => {
+    const rows = buildComparison('en').flatMap((g) => g.rows)
+    for (const code of CODES) {
+      const view = buildPlanView(code, 'yearly', 'en')
+      for (const item of view.groups.flatMap((g) => g.items)) {
+        if (item.excluded) continue
+        const row = rows.find((r) => r.label === (item.rowLabel ?? item.label))
+        expect(row, item.label).toBeDefined()
+        expect(row![code], `${code}: ${item.label}`).not.toBe(false)
+      }
+    }
+  })
+
+  it('plans inherit from the plan below (phone/WhatsApp reach e-commerce)', () => {
+    const row = buildComparison('tr')
+      .flatMap((g) => g.rows)
+      .find((r) => r.label === 'Telefon ve WhatsApp butonları')!
+    expect([row.free, row.starter, row.pro, row.ecommerce]).toEqual([false, true, true, true])
+  })
+
+  it('limit rows show the real configured values', () => {
+    const rows = buildComparison('en').flatMap((g) => g.rows)
+    const pages = rows.find((r) => r.label.startsWith('Page limit'))!
+    expect(pages.free).toBe(String(effectivePageLimit('free')))
+    expect(pages.ecommerce).toBe(String(effectivePageLimit('pro')))
+    expect(rows.find((r) => r.label === 'Sites')!.ecommerce).toBe('4')
+  })
+})
+
+describe('AI credit rules copy', () => {
+  it('explains the empty-balance flow with real prices and the support sentence', () => {
+    const text = creditRulesWhenEmpty().join(' ')
+    for (const price of ['50 işlem', '100 işlem', '250 işlem']) expect(text).toContain(price)
+    expect(text).toContain('Ek AI işlemi paketleri')
+    const { before, linkLabel, after } = CREDIT_RULES_SUPPORT
+    expect(`${before}${linkLabel}${after}`).toBe(
+      "Ek modül veya özel istekleriniz için DESTEK'ten yardım alın. Talebinize göre fiyatlandırma yapılıp uygulanacaktır.",
     )
   })
 })
