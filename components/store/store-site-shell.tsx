@@ -30,7 +30,7 @@ export function StoreSiteShell({
       <div style={themeToCssVars(resolveTheme(site))} data-storefront-root>
         <WebsiteHeader navigation={site.navigation} pages={pages} storeSlug={slug} lang={site.meta.language} />
         <main>{children}</main>
-      {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} showBranding /> : null}
+      {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={site.meta.language} showBranding site={site} /> : null}
         <SiteFloatingActions site={site} />
         <SiteCartIsland slug={slug} lang={site.meta.language} shipping={shipping} />
       </div>

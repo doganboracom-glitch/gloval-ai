@@ -40,7 +40,7 @@ export function DemoSubpageFrame({
       />
       <main>{children}</main>
       {footer && footer.type === 'footer' ? (
-        <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={lang} />
+        <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={lang} site={site} />
       ) : null}
       <BackToTop anchorRef={rootRef} lang={lang} />
     </div>

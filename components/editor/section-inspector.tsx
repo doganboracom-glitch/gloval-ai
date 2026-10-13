@@ -20,6 +20,7 @@ import {
   type EditOperation,
 } from '@/lib/website-edit-operations'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
  * SectionInspector
@@ -190,7 +191,11 @@ export function SectionInspector({
         />
       )}
 
-      {!managedProducts && items.length > 0 && (
+      {section.type === 'footer' && (
+        <FooterLinksEditor site={site} index={index} onDispatch={onDispatch} />
+      )}
+
+      {!managedProducts && section.type !== 'footer' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (

@@ -31,9 +31,12 @@ export function SectionRenderer({
   meta,
   showBranding = true,
   paymentBadges = null,
+  site = null,
 }: {
   section: Section
   meta: WebsiteSchema['meta']
+  /** Whole site, so the footer can verify its link targets. */
+  site?: WebsiteSchema | null
   /** Forwarded to the footer, which hosts the platform credit. */
   showBranding?: boolean
   /** Forwarded to the footer: payment marks of a published store. */
@@ -92,6 +95,7 @@ export function SectionRenderer({
           lang={meta.language}
           showBranding={showBranding}
           paymentBadges={paymentBadges}
+          site={site}
         />
       )
     default:

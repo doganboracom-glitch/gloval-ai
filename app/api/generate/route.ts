@@ -2,6 +2,7 @@ import { generateObject } from 'ai'
 import { z } from 'zod'
 import { websiteGenerationSchema, fallbackWebsite } from '@/lib/website-schema'
 import { seedContactActions } from '@/lib/site-contact-actions'
+import { seedFooterColumns } from '@/lib/footer-links'
 import { normalizeCorporateSectionOrder } from '@/lib/section-order'
 import { sectorPromptHint, deriveSeoTitle, detectSector, isEcommerceIntent } from '@/lib/sector-profiles'
 import { attachHeroImage } from '@/lib/hero-image'
@@ -215,7 +216,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
         // Seeds the floating phone + WhatsApp buttons from the site's own
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
-        website: seedContactActions(normalizeCorporateSectionOrder(object)),
+        website: seedFooterColumns(
+          seedContactActions(normalizeCorporateSectionOrder(object)),
+          normalizedLang,
+        ),
         source: 'ai',
         sectionImages,
         image: {
@@ -237,7 +241,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
         attachSectionImages(website, prompt),
       ])
       return Response.json({
-        website: seedContactActions(normalizeCorporateSectionOrder(website)),
+        website: seedFooterColumns(
+          seedContactActions(normalizeCorporateSectionOrder(website)),
+          normalizedLang,
+        ),
         source: 'fallback',
         sectionImages,
         image: {

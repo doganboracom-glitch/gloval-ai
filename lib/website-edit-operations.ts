@@ -1,5 +1,6 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
+import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { resolveShowcaseCollection, type ShowcaseLimit, type ShowcaseSource } from '@/lib/store-showcase'
 
 /* -------------------------------------------------------------------------- */
@@ -128,6 +129,16 @@ export type EditOperation =
    */
   | { op: 'updatePageTitle'; pageIndex: number; title: string }
   | { op: 'removePage'; pageIndex: number }
+  /**
+   * Replaces a footer's link columns and/or official-text bar. Entries with an
+   * empty label or an invalid target are NOT saved (no dead links).
+   */
+  | {
+      op: 'updateFooterLinks'
+      index: number
+      columns?: Array<{ title: string; links: Array<{ label: string; href: string }> }>
+      legal?: { hidden?: boolean; links?: Array<{ label: string; href: string }> }
+    }
   | { op: 'setSectionHidden'; index: number; hidden: boolean }
   | { op: 'moveSection'; index: number; direction: 'up' | 'down' }
   | { op: 'removeSection'; index: number }
@@ -562,6 +573,23 @@ export function applyOperation(
     case 'setSectionHidden': {
       const section = next.sections[operation.index]
       if (section) section.hidden = operation.hidden
+      return next
+    }
+
+    case 'updateFooterLinks': {
+      const section = next.sections[operation.index]
+      if (section?.type !== 'footer') return next
+      if (operation.columns) {
+        section.columns = sanitizeFooterColumns(operation.columns, next)
+      }
+      if (operation.legal) {
+        section.legal = {
+          hidden: operation.legal.hidden === true ? true : undefined,
+          links: operation.legal.links
+            ? sanitizeFooterLegalLinks(operation.legal.links, next)
+            : undefined,
+        }
+      }
       return next
     }
 
