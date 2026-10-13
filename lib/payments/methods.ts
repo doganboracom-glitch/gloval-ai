@@ -1,5 +1,6 @@
 import type { PaymentProviderId } from '@/lib/payments/types'
 import { pickLang, type Lang } from '@/lib/i18n'
+import { CARD_PROVIDER_IDS } from '@/lib/payments/card-providers'
 
 /**
  * Buyer-facing + owner-facing metadata for the payment methods a Turkish
@@ -11,7 +12,7 @@ import { pickLang, type Lang } from '@/lib/i18n'
 
 export type PaymentMethodId = Extract<
   PaymentProviderId,
-  'paytr' | 'iyzico' | 'bank_transfer' | 'cash_on_delivery'
+  'iyzico' | 'bank_transfer' | 'cash_on_delivery'
 >
 
 export type PaymentConfigField = {
@@ -39,20 +40,6 @@ export type PaymentMethodMeta = {
 }
 
 export const PAYMENT_METHODS: PaymentMethodMeta[] = [
-  {
-    id: 'paytr',
-    name: { tr: 'PayTR ile Öde', en: 'Pay with PayTR' },
-    blurb: {
-      tr: 'Kredi/banka kartı ile güvenli 3D ödeme (PayTR).',
-      en: 'Secure 3D card payment via PayTR.',
-    },
-    manual: false,
-    fields: [
-      { key: 'merchant_id', label: { tr: 'Mağaza No (Merchant ID)', en: 'Merchant ID' }, kind: 'text', required: true, placeholder: '123456' },
-      { key: 'merchant_key', label: { tr: 'Merchant Key', en: 'Merchant Key' }, kind: 'secret', required: true },
-      { key: 'merchant_salt', label: { tr: 'Merchant Salt', en: 'Merchant Salt' }, kind: 'secret', required: true },
-    ],
-  },
   {
     id: 'iyzico',
     name: { tr: 'iyzico ile Öde', en: 'Pay with iyzico' },
@@ -99,14 +86,28 @@ export function getPaymentMethod(id: string): PaymentMethodMeta | undefined {
 }
 
 /**
- * Owner-facing name (e.g. "PayTR ile Öde"). Used in the settings screen and
+ * Label for a stored `payment_provider` value that no longer maps to a method
+ * (a provider removed from the platform). Old orders keep their value as an
+ * audit record; this keeps them readable without naming the provider.
+ */
+const REMOVED_METHOD_LABEL = { tr: 'Kaldırılmış ödeme yöntemi', en: 'Removed payment method' }
+
+/** Provider ids that are valid stored values but not owner-selectable methods. */
+const INTERNAL_PROVIDER_IDS = ['mock', 'stripe']
+
+function unknownMethodLabel(id: string, lang: Lang): string {
+  return INTERNAL_PROVIDER_IDS.includes(id) ? id : pickLang(REMOVED_METHOD_LABEL, lang)
+}
+
+/**
+ * Owner-facing name (e.g. "iyzico ile Öde"). Used in the settings screen and
  * anywhere else the store OWNER needs to know which PSP is configured. Never
  * use this for buyer-facing checkout copy — see `buyerMethodName` below.
  */
-  export function methodName(id: string, lang: Lang): string {
+export function methodName(id: string, lang: Lang): string {
   const method = getPaymentMethod(id)
-  return method ? pickLang(method.name, lang) : id
-  }
+  return method ? pickLang(method.name, lang) : unknownMethodLabel(id, lang)
+}
 
 /**
  * Card-based PSPs whose brand must never be shown to the buyer. The buyer
@@ -114,8 +115,6 @@ export function getPaymentMethod(id: string): PaymentMethodMeta | undefined {
  * which of these is actually configured behind the scenes; only the owner's
  * settings screen (and server-side routing) knows which one it is.
  */
-const CARD_PROVIDER_IDS: readonly PaymentMethodId[] = ['paytr', 'iyzico']
-
 export function isCardProviderMethod(id: string): boolean {
   return (CARD_PROVIDER_IDS as readonly string[]).includes(id)
 }
@@ -137,14 +136,14 @@ export const CREDIT_CARD_BUYER_BLURB: { tr: string; en: string } = {
  * transfer) keep their own already-generic name. This is the ONLY function
  * checkout UI should use to label a payment option shown to a buyer.
  */
-  export function buyerMethodName(id: string, lang: Lang): string {
+export function buyerMethodName(id: string, lang: Lang): string {
   if (isCardProviderMethod(id)) return pickLang(CREDIT_CARD_BUYER_LABEL, lang)
   const method = getPaymentMethod(id)
-  return method ? pickLang(method.name, lang) : id
-  }
-  
-  export function buyerMethodBlurb(id: string, lang: Lang): string {
+  return method ? pickLang(method.name, lang) : unknownMethodLabel(id, lang)
+}
+
+export function buyerMethodBlurb(id: string, lang: Lang): string {
   if (isCardProviderMethod(id)) return pickLang(CREDIT_CARD_BUYER_BLURB, lang)
   const method = getPaymentMethod(id)
   return method ? pickLang(method.blurb, lang) : ''
-  }
+}

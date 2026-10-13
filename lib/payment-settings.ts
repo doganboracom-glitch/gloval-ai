@@ -7,13 +7,14 @@ import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
 import { readStoredSecrets, type StoredSecrets } from '@/lib/store-payments/secrets-store'
 import { PAYMENT_METHODS, type PaymentMethodId } from '@/lib/payments/methods'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
+import { CARD_PROVIDER_IDS } from '@/lib/payments/card-providers'
 import { isValidTurkishIban, normalizeIban } from '@/lib/iban'
 import { parsePaymentTermDays } from '@/lib/store-payment-policy'
 
 /**
  * Owner-facing payment configuration for an e-commerce project.
  *
- * A store owner chooses which methods to offer (PayTR / iyzico / Havale-EFT)
+ * A store owner chooses which methods to offer (iyzico / Havale-EFT)
  * and fills in their own credentials. Non-secret fields (merchant id, IBAN,
  * bank instructions) live in `public_config`; secret credentials (keys, salts)
  * are AES-encrypted into `secret_encrypted` and NEVER returned to the client.
@@ -26,12 +27,11 @@ import { parsePaymentTermDays } from '@/lib/store-payment-policy'
 const VALID_METHODS = new Set<PaymentMethodId>(PAYMENT_METHODS.map((m) => m.id))
 
 /**
- * Card providers are configured through their own dialog/actions
- * (`lib/store-payments/paytr-settings.ts`), which validate and connection-test
- * credentials. This generic save must carry their stored state through
- * untouched instead of dropping or re-validating it.
+ * Card providers are configured through their own dialog/actions, which
+ * validate and connection-test credentials. This generic save must carry
+ * their stored state through untouched instead of dropping or re-validating it.
  */
-const CARD_MANAGED = new Set<string>(['paytr', 'iyzico'])
+const CARD_MANAGED = new Set<string>(CARD_PROVIDER_IDS)
 
 export type PaymentSettingsView = {
   /** Methods the owner has enabled (buyer-selectable at checkout). */

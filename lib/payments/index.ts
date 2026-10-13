@@ -1,6 +1,5 @@
 import { mockProvider } from './mock'
 import { stripeProvider } from './stripe'
-import { paytrProvider } from './paytr'
 import { iyzicoProvider } from './iyzico'
 import { PaymentConfigError, type PaymentProvider, type PaymentProviderId } from './types'
 
@@ -14,7 +13,6 @@ export * from './types'
 const providers: Partial<Record<PaymentProviderId, PaymentProvider>> = {
   mock: mockProvider,
   stripe: stripeProvider,
-  paytr: paytrProvider,
   iyzico: iyzicoProvider,
 }
 
@@ -32,11 +30,6 @@ export function getProviderWebhookSecret(id: PaymentProviderId): string | null {
   switch (id) {
     case 'stripe':
       return process.env.STRIPE_WEBHOOK_SECRET ?? null
-    case 'paytr':
-      // PayTR verifies callbacks with the merchant key + salt, which the
-      // adapter reads from env itself. Returning the key here just signals
-      // "configured" to callers; a null means verification will fail closed.
-      return process.env.PAYTR_MERCHANT_KEY ?? null
     default:
       return null
   }
@@ -59,8 +52,7 @@ export function getPaymentProvider(id: PaymentProviderId): PaymentProvider {
  *   1. Explicit `PLATFORM_PAYMENTS_PROVIDER` override (e.g. to force 'mock').
  *   2. 'iyzico' when the iyzico API credentials are present (current platform
  *      PSP — sandbox or live depending on `IYZICO_BASE_URL`).
- *   3. 'paytr' when the PayTR merchant credentials are present.
- *   4. 'mock' otherwise — keeps local/dev and previews fully functional without
+ *   3. 'mock' otherwise — keeps local/dev and previews fully functional without
  *      any real PSP keys.
  */
 export function getPlatformPaymentProviderId(): PaymentProviderId {
@@ -78,13 +70,6 @@ function resolvePlatformPaymentProviderId(): PaymentProviderId {
   if (explicit && providers[explicit]) return explicit
   if (process.env.IYZICO_API_KEY && process.env.IYZICO_SECRET_KEY) {
     return 'iyzico'
-  }
-  if (
-    process.env.PAYTR_MERCHANT_ID &&
-    process.env.PAYTR_MERCHANT_KEY &&
-    process.env.PAYTR_MERCHANT_SALT
-  ) {
-    return 'paytr'
   }
   return 'mock'
 }

@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  *  2. Live tests against a real database (skipped unless RUN_DB_TESTS=1 AND
  *     migration 013 has been applied). Concurrency uses real parallel RPC calls.
  *     They need a throwaway user with an iyzico-like row, supplied via env, and
- *     never contact iyzico/PayTR.
+ *     never contact iyzico.
  */
 
 const sql = readFileSync(join(process.cwd(), 'scripts/013-admin-plan-change-payment-guard.sql'), 'utf8')

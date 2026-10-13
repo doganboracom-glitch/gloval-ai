@@ -55,8 +55,7 @@ export function SanalPoslarTab({
   const [open, setOpen] = useState(false)
 
   const cardModule = summary?.modules.find((m) => m.id === 'card')
-  const activeProvider =
-    cardModule?.enabled ? (summary!.activeCardProvider === 'iyzico' ? 'iyzico' : 'PayTR') : c.none
+  const activeProvider = cardModule?.enabled ? 'iyzico' : c.none
 
   return (
     <div className="flex flex-col gap-4 p-4">

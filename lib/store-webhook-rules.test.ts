@@ -4,11 +4,11 @@ import { checkPaidAmount, isStoreWebhookProvider } from '@/lib/store-webhook-rul
 const order = { total_cents: 5000, currency: 'TRY' }
 
 describe('isStoreWebhookProvider', () => {
-  it.each(['stripe', 'paytr', 'iyzico'])('allows %s', (id) => {
+  it.each(['stripe', 'iyzico'])('allows %s', (id) => {
     expect(isStoreWebhookProvider(id)).toBe(true)
   })
 
-  it.each(['mock', 'bank_transfer', 'unknown', ''])('rejects %s', (id) => {
+  it.each(['mock', 'bank_transfer', 'paytr', 'unknown', ''])('rejects %s', (id) => {
     expect(isStoreWebhookProvider(id)).toBe(false)
   })
 })

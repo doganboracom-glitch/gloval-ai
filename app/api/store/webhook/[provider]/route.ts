@@ -8,52 +8,10 @@ import {
 } from '@/lib/payments'
 import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
 import { applyStorePaymentWebhook } from '@/lib/store-webhook-handler'
-import { loadStorePaytr } from '@/lib/store-payments/paytr-credentials'
-import { PAYTR_WEBHOOK_MAX_BYTES, processPaytrCallback } from '@/lib/store-payments/paytr-webhook'
-import { parsePaytrCallbackBody } from '@/lib/store-payments/paytr-core'
 import { isStoreWebhookProvider } from '@/lib/store-webhook-rules'
 
 /**
- * PayTR callbacks carry no store identifier, so the store is resolved from the
- * order that owns `merchant_oid`. The hash is then verified with THAT store's
- * own Merchant Key/Salt before anything changes. PayTR requires a plain `OK`
- * for every callback it should stop retrying; anything unverified is also
- * answered `OK` (a retry cannot fix it) but never alters an order.
- */
-async function handlePaytr(request: Request): Promise<Response> {
-  const ok = () => new Response('OK')
-  const declared = Number(request.headers.get('content-length') ?? 0)
-  if (declared > PAYTR_WEBHOOK_MAX_BYTES) return ok()
-  const rawBody = await request.text()
-  if (rawBody.length > PAYTR_WEBHOOK_MAX_BYTES) return ok()
-
-  const callback = parsePaytrCallbackBody(rawBody)
-  if (!callback) return ok()
-
-  const admin = createAdminClient()
-  const { data: order } = await admin
-    .from('ecommerce_orders')
-    .select('project_id')
-    .eq('payment_provider', 'paytr')
-    .eq('payment_ref', callback.merchantOid)
-    .maybeSingle()
-  if (!order?.project_id) return ok()
-
-  const outcome = await processPaytrCallback(
-    admin,
-    order.project_id as string,
-    rawBody,
-    async (projectId) => (await loadStorePaytr(admin, projectId)).credentials,
-    { finalizePaidStock, releaseOrderStock, notifyOrder: scheduleOrderNotification },
-  )
-  if (outcome.outcome === 'bad_hash' || outcome.outcome === 'no_credentials') {
-    console.error('[store-paytr] callback not verified', { reason: outcome.outcome })
-  }
-  return ok()
-}
-
-/**
- * Generic payment webhook endpoint. Async providers (Stripe, iyzico, PayTR)
+ * Generic payment webhook endpoint. Async providers (Stripe, iyzico)
  * POST here; the matching provider verifies and normalizes the payload, and
  * `applyStorePaymentWebhook` updates the order idempotently (amount/currency
  * check, conditional transitions, stock and email only on the first paid).
@@ -71,8 +29,6 @@ export async function POST(
     return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
   }
   const providerId = providerParam
-
-  if (providerId === 'paytr') return handlePaytr(request)
 
   const provider = getPaymentProvider(providerId)
   if (!provider) {

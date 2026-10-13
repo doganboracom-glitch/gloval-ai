@@ -4,7 +4,7 @@ import { markOrderDelivered, markOrderUndelivered, orderNotificationDedupeKey, s
 function store(row: Partial<ShippingOrderRow> = {}, updateResult: 'moved' | 'lost' | 'error' = 'moved') {
   const order: ShippingOrderRow = {
     id: 'o1', project_id: 'shop-a', status: 'processing', payment_status: 'paid',
-    payment_provider: 'paytr', shipping_status: 'preparing', shipped_at: null, ...row,
+    payment_provider: 'iyzico', shipping_status: 'preparing', shipped_at: null, ...row,
   }
   const updates: Record<string, unknown>[] = []
   const db: ShippingOrderStore = {
@@ -23,7 +23,7 @@ const valid = { carrier: 'ups', trackingNumber: 'AB-123456' }
 describe('shipOrder', () => {
   it.each([
     [{ payment_status: 'pending', payment_provider: 'bank_transfer' }, 'payment_pending'],
-    [{ payment_status: 'failed', payment_provider: 'paytr' }, 'payment_pending'],
+    [{ payment_status: 'failed', payment_provider: 'iyzico' }, 'payment_pending'],
     [{ status: 'cancelled' }, 'cancelled'],
     [{ status: 'failed' }, 'cancelled'],
   ] as const)('rejects unsafe order %j', async (row, error) => {
@@ -33,7 +33,7 @@ describe('shipOrder', () => {
 
   it.each([
     [{ payment_status: 'pending', payment_provider: 'cash_on_delivery' }],
-    [{ payment_status: 'paid', payment_provider: 'paytr' }],
+    [{ payment_status: 'paid', payment_provider: 'iyzico' }],
   ] as const)('ships allowed order %j', async (row) => {
     const { db, updates } = store(row)
     expect(await shipOrder(db, { projectId: 'shop-a', orderId: 'o1', ...valid }, () => '2026-01-01T00:00:00.000Z')).toMatchObject({ ok: true, kind: 'shipped', notify: true })

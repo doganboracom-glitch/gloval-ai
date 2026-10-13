@@ -51,7 +51,7 @@ export async function applyStorePaymentWebhook(
     .select('id, payment_status, total_cents, currency')
     .eq('payment_ref', result.reference)
     .eq('payment_provider', providerId)
-  // Per-store callbacks (PayTR with the owner's own keys) must only ever
+  // Per-store callbacks (a provider using the owner's own keys) must only ever
   // settle an order of THAT store.
   if (scope.projectId) lookup = lookup.eq('project_id', scope.projectId)
   const { data: order } = await lookup.maybeSingle()

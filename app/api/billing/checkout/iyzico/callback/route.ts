@@ -5,7 +5,7 @@ import { retrieveIyzicoCheckoutForm } from '@/lib/payments/iyzico'
 import { settlePaymentResult } from '@/lib/payments/settle'
 
 /**
- * iyzico Checkout Form callback. Unlike Stripe/PayTR, Checkout Form has no
+ * iyzico Checkout Form callback. Unlike Stripe, Checkout Form has no
  * signed push webhook — after the buyer finishes on iyzico's hosted page,
  * their BROWSER is redirected here (a real navigation, not a background
  * server-to-server call) carrying only the CF `token`.

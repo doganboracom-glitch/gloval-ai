@@ -8,12 +8,17 @@ import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { isValidTurkishIban } from '@/lib/iban'
 import {
   buildPaymentSummary,
-  isSelectableCardProvider,
   isValidCodFeeCents,
   parseCodFeeInput,
   type CardProviderChoice,
   type PaymentSummary,
 } from '@/lib/store-checkout-rules'
+import {
+  DEFAULT_CARD_PROVIDER,
+  isCardProviderId,
+  isCardProviderIntegrated,
+  normalizeCardProvider,
+} from '@/lib/payments/card-providers'
 
 /**
  * Owner-facing general checkout settings (guest checkout, module switches,
@@ -80,15 +85,15 @@ async function buildView(projectId: string): Promise<GeneralPaymentView> {
   const row = (data as Row | null) ?? null
 
   const providers = Array.isArray(row?.enabled_providers) ? row!.enabled_providers! : []
-  const cardEnabled = providers.includes('paytr')
+  const cardEnabled = providers.some(isCardProviderId)
   const bankEnabled = providers.includes('bank_transfer')
   const codEnabled = providers.includes('cash_on_delivery')
   const guestCheckout = row?.guest_checkout !== false
-  const activeCardProvider: CardProviderChoice =
-    row?.active_card_provider === 'iyzico' ? 'iyzico' : 'paytr'
+  const activeCardProvider: CardProviderChoice = normalizeCardProvider(row?.active_card_provider)
   const codFeeCents = isValidCodFeeCents(row?.cod_fee_cents) ? row!.cod_fee_cents! : 0
 
-  const card = await isCardProviderReady(admin, projectId)
+  const cardIntegrated = isCardProviderIntegrated(activeCardProvider)
+  const card = await isCardProviderReady(admin, projectId, activeCardProvider)
   const bankIbanValid = isValidTurkishIban(row?.public_config?.bank_transfer?.iban ?? '')
 
   const probe = await admin.from('ecommerce_payment_settings').select('guest_checkout').limit(1)
@@ -107,7 +112,8 @@ async function buildView(projectId: string): Promise<GeneralPaymentView> {
     migrationApplied,
     summary: buildPaymentSummary({
       cardEnabled,
-      cardReady: card.ready && activeCardProvider === 'paytr',
+      cardIntegrated,
+      cardReady: card.ready,
       cardUnreadable: card.unreadable,
       bankEnabled,
       bankIbanValid,
@@ -143,10 +149,13 @@ export async function saveGeneralPaymentSettings(
 
   const feeCents = parseCodFeeInput(input.codFee)
   if (feeCents === null) return { ok: false, error: 'invalid_fee' }
-  if (!isSelectableCardProvider(input.activeCardProvider)) {
+  if (!isCardProviderId(input.activeCardProvider)) {
     return { ok: false, error: 'provider_unavailable' }
   }
   const activeCardProvider = input.activeCardProvider
+  if (input.cardEnabled && !isCardProviderIntegrated(activeCardProvider)) {
+    return { ok: false, error: 'provider_unavailable' }
+  }
 
   const { data, error: readError } = await readStorePaymentRow(admin, projectId)
   if (readError) {
@@ -155,7 +164,10 @@ export async function saveGeneralPaymentSettings(
   }
   const row = (data as Row | null) ?? null
 
-  if (input.cardEnabled && !(await isCardProviderReady(admin, projectId)).ready) {
+  if (
+    input.cardEnabled &&
+    !(await isCardProviderReady(admin, projectId, activeCardProvider)).ready
+  ) {
     return { ok: false, error: 'card_not_ready' }
   }
   if (
@@ -167,12 +179,15 @@ export async function saveGeneralPaymentSettings(
 
   const prior = Array.isArray(row?.enabled_providers) ? row!.enabled_providers! : []
   const wanted: Record<string, boolean> = {
-    paytr: input.cardEnabled,
     bank_transfer: input.bankEnabled,
     cash_on_delivery: input.codEnabled,
   }
+  // The card entry is always the active card provider; any previously stored
+  // card id (including a provider that has since been removed) is dropped.
+  const isStaleCardEntry = (p: string) => isCardProviderId(p) || p === 'paytr'
   const providers = [
-    ...prior.filter((p) => !(p in wanted) || wanted[p]),
+    ...prior.filter((p) => !isStaleCardEntry(p) && (!(p in wanted) || wanted[p])),
+    ...(input.cardEnabled ? [activeCardProvider] : []),
     ...Object.keys(wanted).filter((p) => wanted[p] && !prior.includes(p)),
   ]
 
@@ -195,7 +210,7 @@ export async function saveGeneralPaymentSettings(
     .upsert({ ...base, ...checkoutColumns }, { onConflict: 'project_id' })
 
   if (isMissingColumnError(error)) {
-    const nonDefault = !input.guestCheckout || feeCents > 0 || activeCardProvider !== 'paytr'
+    const nonDefault = !input.guestCheckout || feeCents > 0 || activeCardProvider !== DEFAULT_CARD_PROVIDER
     if (nonDefault) return { ok: false, error: 'migration_pending' }
     ;({ error } = await admin
       .from('ecommerce_payment_settings')

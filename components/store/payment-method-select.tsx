@@ -7,8 +7,8 @@ import { formatIban } from '@/lib/iban'
 
 /**
  * Buyer-facing payment-method picker for the real store checkout. Renders only
- * the methods the owner enabled, COLLAPSING every card-based PSP (PayTR,
- * iyzico, ...) into a single provider-agnostic "Kredi Kartı" option — the
+ * the methods the owner enabled, COLLAPSING every card-based PSP
+ * (iyzico, ...) into a single provider-agnostic "Kredi Kartı" option — the
  * buyer must never see which PSP a store actually uses, only the owner's
  * settings screen does. `mock` (the built-in test provider) is shown as a
  * single "test payment" option so a store with no real provider still has a
@@ -128,7 +128,7 @@ function BankDetails({ config }: { config: Record<string, unknown> }) {
 
 /** Ordered, de-duplicated list with a sensible default selection. */
 export function normalizeMethods(methods: PaymentProviderId[]): PaymentProviderId[] {
-  const order: PaymentProviderId[] = ['paytr', 'iyzico', 'bank_transfer', 'cash_on_delivery', 'stripe', 'mock']
+  const order: PaymentProviderId[] = ['iyzico', 'bank_transfer', 'cash_on_delivery', 'stripe', 'mock']
   const set = new Set(methods.length > 0 ? methods : (['mock'] as PaymentProviderId[]))
   return order.filter((id) => set.has(id))
 }

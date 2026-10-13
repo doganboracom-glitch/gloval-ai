@@ -12,8 +12,6 @@ import {
   type PaymentSettingsView,
 } from '@/lib/payment-settings'
 import { setTryOnEnabled } from '@/lib/try-on-settings'
-import { PaytrPanel } from '@/components/ecommerce/paytr-panel'
-import type { PaytrSettingsView } from '@/lib/store-payments/paytr-settings'
 
 const copy = {
   tr: {
@@ -61,7 +59,6 @@ const copy = {
 }
 
 const ICONS: Record<PaymentMethodId, typeof CreditCard> = {
-  paytr: CreditCard,
   iyzico: CreditCard,
   bank_transfer: Landmark,
   cash_on_delivery: Truck,
@@ -72,14 +69,12 @@ export function PaymentSettingsClient({
   projectName,
   initial,
   initialTryOnEnabled = false,
-  initialPaytr,
   embedded = false,
   onlyMethods,
   onSaved,
 }: {
   projectId: string
   projectName: string
-  initialPaytr: PaytrSettingsView
   initial: PaymentSettingsView
   initialTryOnEnabled?: boolean
   /** Renders just the form (no page chrome) so the editor dialog can reuse it. */
@@ -244,9 +239,6 @@ export function PaymentSettingsClient({
 
         <div className={`${embedded ? '' : 'mt-8 '}flex flex-col gap-4`}>
           {PAYMENT_METHODS.filter((m) => !onlyMethods || onlyMethods.includes(m.id)).map((method) => {
-            if (method.id === 'paytr') {
-              return <PaytrPanel key="paytr" projectId={projectId} initial={initialPaytr} />
-            }
             const Icon = ICONS[method.id]
             const on = enabled.has(method.id)
             return (
