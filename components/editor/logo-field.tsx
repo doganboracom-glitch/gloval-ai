@@ -217,8 +217,9 @@ export function LogoField({
           mode={studio}
           onClose={() => setStudio(null)}
           onFail={handleStudioFail}
-          onApply={(src, source) => {
-            onDispatch({ op: 'updateNavLogo', src, source, showLogoText: false })
+          onApply={({ logo: applied, favicon }) => {
+            if (applied) onDispatch({ op: 'updateNavLogo', src: applied.src, source: applied.source, showLogoText: false })
+            if (favicon) onDispatch({ op: 'updateFavicon', src: favicon })
             setStudio(null)
           }}
         />
