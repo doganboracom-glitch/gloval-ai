@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 import { websiteSchema } from './website-schema'
 import {
+  GLOVAL_ADS_LABEL,
   buildComparison,
   buildPlanView,
   copyLang,
@@ -263,6 +264,61 @@ describe('comparison table is derived from the cards', () => {
     expect(pages.free).toBe(String(effectivePageLimit('free')))
     expect(pages.ecommerce).toBe(String(effectivePageLimit('pro')))
     expect(rows.find((r) => r.label === 'Sites')!.ecommerce).toBe('4')
+  })
+})
+
+describe('credit box and GLOVAL ADS announcement (N1)', () => {
+  const adsItems = (code: PlanCode, lang: string) =>
+    buildPlanView(code, 'yearly', lang)
+      .groups.flatMap((g) => g.items)
+      .filter((i) => i.label === GLOVAL_ADS_LABEL)
+
+  it('keeps the balance cap out of the visible credit notes', () => {
+    for (const lang of ['tr', 'en']) {
+      for (const code of ['pro', 'ecommerce'] as const) {
+        const notes = buildPlanView(code, 'yearly', lang).creditNotes.join(' ')
+        expect(notes).not.toContain('1.500')
+        expect(notes).not.toContain('1,500')
+        expect(notes).not.toMatch(/bakiye|capped/i)
+      }
+    }
+  })
+
+  it('moves rollover and cap into the "i" tooltip with the configured value', () => {
+    const cap = AI_CREDIT_CONFIG.pro.maxBalance.toLocaleString('tr-TR')
+    const tr = getCommonPlanCopy('tr').maxBalanceTip(cap)
+    expect(tr).toContain(cap)
+    expect(tr).toContain('devreder')
+    const en = getCommonPlanCopy('en').maxBalanceTip(
+      AI_CREDIT_CONFIG.pro.maxBalance.toLocaleString('en-US'),
+    )
+    expect(en).toContain('carry over')
+    expect(en).toContain('1,500')
+  })
+
+  it('shows GLOVAL ADS with a "soon" pill on PRO and e-commerce only', () => {
+    for (const lang of ['tr', 'en']) {
+      const soon = lang === 'tr' ? 'Yakında' : 'Soon'
+      for (const code of ['pro', 'ecommerce'] as const) {
+        const items = adsItems(code, lang)
+        expect(items).toHaveLength(1)
+        expect(items[0].badge).toBe(soon)
+        expect(items[0].excluded).toBe(true)
+      }
+      for (const code of ['free', 'starter'] as const) {
+        expect(adsItems(code, lang)).toHaveLength(0)
+      }
+    }
+  })
+
+  it('lists GLOVAL ADS in the comparison table as soon, never as included', () => {
+    const row = buildComparison('tr')
+      .flatMap((g) => g.rows)
+      .find((r) => r.label === GLOVAL_ADS_LABEL)!
+    expect(row).toBeDefined()
+    expect([row.free, row.starter]).toEqual([false, false])
+    expect(row.pro).toBe('Yakında')
+    expect(row.ecommerce).toBe('Yakında')
   })
 })
 
