@@ -2,11 +2,13 @@ import { deflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { buildTextAssets, bundledFont, initialsOf, loadHeadingFont } from '@/lib/logo-studio/font-source'
 import { textToPath } from '@/lib/logo-studio/ttf'
-import { buildIcon, buildLockup, type TextAssets } from '@/lib/logo-studio/compose'
+import { buildLockup, type TextAssets } from '@/lib/logo-studio/compose'
 import { LOCAL_EMBLEM_COUNT, localEmblems } from '@/lib/logo-studio/emblem-local'
 import { buildPdf } from '@/lib/logo-studio/pdf'
+import { resolveColorway } from '@/lib/logo-studio/rules'
 
 const palette = { primary: '#6d28d9', accent: '#06b6d4', primaryFg: '#ffffff' }
+const siteColors = { primary: '#6d28d9', primaryFg: '#ffffff', accent: '#06b6d4', foreground: '#111111', background: '#ffffff' }
 
 function assetsFor(name: string): TextAssets {
   const font = bundledFont()
@@ -14,6 +16,7 @@ function assetsFor(name: string): TextAssets {
     plain: textToPath(font, name, { size: 100 }),
     caps: textToPath(font, name.toLocaleUpperCase('tr'), { size: 100, letterSpacing: 0.14 }),
     mono: textToPath(font, initialsOf(name), { size: 100 }),
+    initial: textToPath(font, name.slice(0, 1).toLocaleUpperCase('tr'), { size: 100 }),
     fauxBold: false,
   }
 }
@@ -39,13 +42,14 @@ describe('logo studio', () => {
       ['vertical', b],
       ['wordmark', null],
     ] as const) {
-      const l = buildLockup({ layout, emblem, text, ink: '#111111', palette })
-      expect(l.svg.startsWith('<svg')).toBe(true)
-      expect(l.svg).not.toMatch(/<text\b/i)
-      expect(l.width).toBeGreaterThan(0)
-      expect(l.height).toBeGreaterThan(0)
+      for (const style of ['modern', 'classic', 'minimal', 'luxury'] as const) {
+        const l = buildLockup({ layout, emblem, text, colors: resolveColorway('brand', siteColors), style })
+        expect(l.svg.startsWith('<svg')).toBe(true)
+        expect(l.svg).not.toMatch(/<text\b/i)
+        expect(l.width).toBeGreaterThan(0)
+        expect(l.height).toBeGreaterThan(0)
+      }
     }
-    expect(buildIcon({ layout: 'horizontal', emblem: a, text, palette })).toContain('<svg')
   })
 
   it('rotates local emblems with the seed', () => {
@@ -86,7 +90,7 @@ describe('logo studio', () => {
     }) as typeof fetch
     try {
       expect(await loadHeadingFont('Unreachable Offline Family')).toBeNull()
-      const { assets, fontName } = await buildTextAssets('Çiğdem Café', 'Unreachable Offline Family')
+      const { assets, fontName } = await buildTextAssets('Çiğdem Café', 'luxury')
       expect(fontName).toMatch(/poppins/i)
       expect(assets.plain.d.length).toBeGreaterThan(100)
       expect(assets.plain.missing).toBe(0)
