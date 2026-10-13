@@ -469,6 +469,16 @@ export const footerSection = z.object({
     .max(5)
     .optional(),
   copyright: z.string().optional(),
+  /**
+   * Official-text links shown in the footer's bottom bar (privacy, distance
+   * sales, ...). Unset => defaults for the site kind; `hidden` hides the bar.
+   */
+  legal: z
+    .object({
+      hidden: z.boolean().optional(),
+      links: z.array(linkSchema).max(8).optional(),
+    })
+    .optional(),
 })
 
 export const sectionSchema = z.discriminatedUnion('type', [

@@ -186,7 +186,7 @@ export function WebsiteRenderer({
         handleNavigate(pageSlug)
         return true
       }
-      if (isStorefront(parsed.data)) {
+      if (isStorefront(parsed.data) || href.startsWith('/yasal/')) {
         preview.onStoreRoute(hrefToTenantPath(href, preview.slug))
       }
       return true
@@ -244,6 +244,7 @@ export function WebsiteRenderer({
             key={`${active}-${section.type}-${i}`}
             section={section}
             meta={data.meta}
+            site={data}
             showBranding={showBranding}
             paymentBadges={paymentBadges}
           />
