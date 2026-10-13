@@ -3,6 +3,7 @@
 import type { CTAButton, SiteImageRef } from '@/lib/website-schema'
 import { useSiteNav, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { canonicalSectionAnchor } from '@/lib/website-pages'
+import { ThemedImagePlaceholder } from '@/components/themed-image-placeholder'
 
 /**
  * Small presentational primitives shared by every generated section. They read
@@ -188,9 +189,9 @@ export function ImagePlaceholder({
  */
 export function SiteImage({
   image,
-  seed = 0,
   className = '',
   rounded = true,
+  name,
 }: {
   image?:
     | SiteImageRef
@@ -199,16 +200,18 @@ export function SiteImage({
   seed?: number
   className?: string
   rounded?: boolean
+  /** Item name; its first letter is shown on the placeholder when there is no image. */
+  name?: string
 }) {
   const aspect = (image && 'aspectRatio' in image && image.aspectRatio) || undefined
   const src = (image && 'src' in image && image.src) || undefined
-  const hue = (seed * 47) % 360
 
   return (
     <div
       className={`relative flex items-center justify-center overflow-hidden ${className}`}
       style={{
         aspectRatio: aspect,
+        minHeight: !src && !aspect ? 96 : undefined,
         borderRadius: rounded ? 'var(--site-radius)' : 0,
         border: '1px solid var(--site-border)',
         background:
@@ -227,21 +230,9 @@ export function SiteImage({
           decoding="async"
         />
       ) : (
-        /* Subtle decorative mark so empty placeholders never look broken */
-        <svg
-          width="34"
-          height="34"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          style={{ color: `hsl(${hue} 55% 62% / 0.55)` }}
-          aria-hidden="true"
-        >
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <path d="m21 15-5-5L5 21" />
-        </svg>
+        <div className="absolute inset-0">
+          <ThemedImagePlaceholder name={name} />
+        </div>
       )}
     </div>
   )

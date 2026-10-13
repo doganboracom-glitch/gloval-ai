@@ -24,6 +24,7 @@ export function GallerySection({ data }: { data: GalleryData }) {
                 aspectRatio: item.aspectRatio ?? '4/3',
               }}
               seed={i + 1}
+              name={item.caption}
               className="w-full"
             />
             {item.caption ? (

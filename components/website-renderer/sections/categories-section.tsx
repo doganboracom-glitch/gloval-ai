@@ -7,6 +7,7 @@ import {
   onSiteNavClick,
 } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { ThemedImagePlaceholder } from '@/components/themed-image-placeholder'
 
 type CategoriesData = Extract<Section, { type: 'categories' }>
 type CategoryItem = CategoriesData['items'][number]
@@ -40,7 +41,6 @@ function CategoryTile({
   featured: boolean
 }) {
   const nav = useSiteNav()
-  const hue = (seed * 47) % 360
   return (
     <a
       href={item.href || '#'}
@@ -54,7 +54,7 @@ function CategoryTile({
       }}
       aria-label={item.name}
     >
-      {/* Image (or themed gradient fallback) */}
+      {/* Image, or the shared themed placeholder (initial of the category name) */}
       {item.src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -65,38 +65,47 @@ function CategoryTile({
           decoding="async"
         />
       ) : (
+        <div className="absolute inset-0">
+          <ThemedImagePlaceholder name={item.name} />
+        </div>
+      )}
+
+      {/* Legibility overlay: only needed over photos, the placeholder is already a light tint */}
+      {item.src ? (
         <div
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(135deg, hsl(${hue} 55% 55% / 0.55), color-mix(in srgb, var(--site-accent) 40%, var(--site-card)))`,
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.05) 100%)',
           }}
           aria-hidden="true"
         />
-      )}
-
-      {/* Legibility overlay */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.05) 100%)',
-        }}
-        aria-hidden="true"
-      />
+      ) : null}
 
       <div className="relative z-10 p-4">
         <h3
-          className="text-pretty text-base font-semibold text-white sm:text-lg"
-          style={{ fontFamily: 'var(--site-heading-font)' }}
+          className={`text-pretty text-base font-semibold sm:text-lg ${item.src ? 'text-white' : ''}`}
+          style={{
+            fontFamily: 'var(--site-heading-font)',
+            color: item.src ? undefined : 'var(--site-fg)',
+          }}
         >
           {item.name}
         </h3>
         {item.count ? (
-          <span className="mt-0.5 block text-xs font-medium text-white/80">
+          <span
+            className={`mt-0.5 block text-xs font-medium ${item.src ? 'text-white/80' : ''}`}
+            style={{ color: item.src ? undefined : 'var(--site-muted-fg)' }}
+          >
             {item.count}
           </span>
         ) : item.description ? (
-          <span className="mt-0.5 block text-xs text-white/80">{item.description}</span>
+          <span
+            className={`mt-0.5 block text-xs ${item.src ? 'text-white/80' : ''}`}
+            style={{ color: item.src ? undefined : 'var(--site-muted-fg)' }}
+          >
+            {item.description}
+          </span>
         ) : null}
       </div>
     </a>

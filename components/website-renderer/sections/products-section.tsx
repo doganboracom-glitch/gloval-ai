@@ -226,6 +226,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
           aspectRatio: '1/1',
         }}
         seed={seed}
+        name={item.name}
         rounded={false}
         className="w-full"
       />

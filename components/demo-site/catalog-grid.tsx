@@ -3,6 +3,7 @@ import Image from 'next/image'
 import { ArrowUpRight } from 'lucide-react'
 import { pickLang, type Lang } from '@/lib/i18n'
 import type { CatalogItem } from '@/lib/demo-catalog'
+import { ThemedImagePlaceholder } from '@/components/themed-image-placeholder'
 
 /**
  * CatalogGrid
@@ -53,13 +54,17 @@ export function CatalogGrid({
             }}
           >
             <div className="relative aspect-[4/3] overflow-hidden">
-              <Image
-                src={item.image || '/placeholder.svg'}
-                alt={pickLang(item.name, lang)}
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
-              />
+              {item.image ? (
+                <Image
+                  src={item.image}
+                  alt={pickLang(item.name, lang)}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              ) : (
+                <ThemedImagePlaceholder name={pickLang(item.name, lang)} />
+              )}
               {item.category ? (
                 <span
                   className="absolute left-3 top-3 rounded-full px-2.5 py-1 text-xs font-medium backdrop-blur"
