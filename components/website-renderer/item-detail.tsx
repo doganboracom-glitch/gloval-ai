@@ -84,6 +84,7 @@ export function ItemDetailDialog({
               aspectRatio: detail.aspectRatio ?? '16/9',
             }}
             seed={detail.seed ?? 1}
+            name={detail.title}
             className="w-full"
           />
         ) : null}

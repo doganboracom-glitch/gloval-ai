@@ -48,14 +48,14 @@ describe('ProductGallery', () => {
 
   it('shows the placeholder (no img, no strip) with zero images', () => {
     const html = renderToStaticMarkup(createElement(ProductGallery, { images: [], name: 'Zincir' }))
-    expect(html).toContain('data-product-placeholder')
+    expect(html).toContain('data-image-placeholder')
     expect(html).not.toContain('<img')
   })
 
   it('shows a single image without strip, arrows or counter', () => {
     const html = renderToStaticMarkup(createElement(ProductGallery, { images: [image(1)], name: 'Zincir' }))
     expect(html).toContain('/img-1.png')
-    expect(html).not.toContain('data-product-placeholder')
+    expect(html).not.toContain('data-image-placeholder')
     expect(html).not.toContain('1 / 1')
     expect(galleryView(1, 0)).toMatchObject({ showStrip: false, showArrows: false, counter: null })
   })

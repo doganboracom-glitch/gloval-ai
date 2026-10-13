@@ -39,6 +39,7 @@ export function TeamSection({ data, lang }: { data: TeamData; lang?: string }) {
               <SiteImage
                 image={{ imagePrompt, src: member.src, alt: member.name, aspectRatio: '1/1' }}
                 seed={i + 5}
+                name={member.name}
                 className="mx-auto w-full max-w-[180px]"
               />
               <span

@@ -37,6 +37,7 @@ export function PortfolioSection({ data, lang }: { data: PortfolioData; lang?: s
             <SiteImage
               image={{ imagePrompt: item.imagePrompt, src: item.src, alt: item.alt, aspectRatio: '4/3' }}
               seed={i + 3}
+              name={item.title}
               className="w-full transition-transform duration-300 group-hover:scale-[1.02]"
             />
             <span className="mt-3 block">
