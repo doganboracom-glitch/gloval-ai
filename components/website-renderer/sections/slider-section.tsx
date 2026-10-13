@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Section } from '@/lib/website-schema'
 import { onSiteNavClick, SectionHeading } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useCarouselGestures } from '@/components/website-renderer/use-carousel-gestures'
+import { KEEP_INTERACTIVE_PROPS } from '@/lib/preview-interactive'
 
 type SliderData = Extract<Section, { type: 'slider' }>
 type SliderSlide = SliderData['slides'][number]
@@ -45,6 +47,8 @@ export function SliderSection({ data }: { data: SliderData }) {
     if (index > count - 1) setIndex(Math.max(0, count - 1))
   }, [count, index])
 
+  const gestures = useCarouselGestures((dir) => go(index + dir), count > 1)
+
   if (count === 0) return null
 
   const rounded = variant === 'card'
@@ -74,6 +78,7 @@ export function SliderSection({ data }: { data: SliderData }) {
           onMouseLeave={() => setPaused(false)}
           onFocusCapture={() => setPaused(true)}
           onBlurCapture={() => setPaused(false)}
+          {...gestures}
         >
           {slides.map((slide, i) => (
             <SlideView key={i} slide={slide} active={i === index} seed={i + 1} total={count} order={i} />
@@ -83,6 +88,7 @@ export function SliderSection({ data }: { data: SliderData }) {
             <>
               <button
                 type="button"
+                {...KEEP_INTERACTIVE_PROPS}
                 onClick={() => go(index - 1)}
                 aria-label="Previous slide"
                 className="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white transition-opacity hover:opacity-80"
@@ -92,6 +98,7 @@ export function SliderSection({ data }: { data: SliderData }) {
               </button>
               <button
                 type="button"
+                {...KEEP_INTERACTIVE_PROPS}
                 onClick={() => go(index + 1)}
                 aria-label="Next slide"
                 className="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white transition-opacity hover:opacity-80"
@@ -105,6 +112,7 @@ export function SliderSection({ data }: { data: SliderData }) {
                   <button
                     key={i}
                     type="button"
+                    {...KEEP_INTERACTIVE_PROPS}
                     onClick={() => setIndex(i)}
                     aria-label={`Go to slide ${i + 1}`}
                     aria-current={i === index}

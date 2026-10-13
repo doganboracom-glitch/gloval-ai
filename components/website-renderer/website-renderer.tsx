@@ -23,6 +23,7 @@ import {
   type StoreCatalog,
 } from '@/components/website-renderer/store-catalog-context'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
+import { isKeepInteractiveTarget } from '@/lib/preview-interactive'
 
 /**
  * Preview navigation context, passed only by the editor/landing preview (whose
@@ -249,7 +250,10 @@ export function WebsiteRenderer({
         // capture-phase handler intercepts the click before it reaches any
         // descendant, so real interactive elements inside the section are
         // inert while the canvas is in selection mode.
+        // Carousel controls (arrows/dots) are the exception: they opt out via
+        // `data-gv-keep-interactive` so sliders stay operable in the editor.
         const handleSelect = (e: MouseEvent<HTMLDivElement>) => {
+          if (isKeepInteractiveTarget(e.target)) return
           e.preventDefault()
           e.stopPropagation()
           editSelection.onSelect(i)
