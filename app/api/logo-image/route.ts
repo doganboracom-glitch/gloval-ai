@@ -1,62 +1,52 @@
 import { websiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
-import { generateSiteImage, type ImageAspect } from '@/lib/image-provider'
-import { claudeLogoAvailable, generateLogoSvg } from '@/lib/logo-svg'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
+import { resolveTheme } from '@/components/website-renderer/theme'
+import { buildTextAssets } from '@/lib/logo-studio/font-source'
+import { localEmblems } from '@/lib/logo-studio/emblem-local'
+import { aiEmblemAvailable, generateEmblem, EMBLEM_CONCEPTS } from '@/lib/logo-studio/emblem-ai'
+import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
 
-// Several logo alternatives are generated in parallel; each call is already
-// bounded by its own ~25s timeout (`generateLogoSvg` / `generateSiteImage`).
-// A Claude attempt that fails falls back to the image model, so the worst case
-// is two sequential 25s attempts — 60s still leaves headroom for most runs.
+// Two emblems are drawn in parallel; each Claude call has its own 25s timeout.
 export const maxDuration = 60
 
-const MAX_ALTERNATIVES = 4
+const EMBLEM_COUNT = 2
 const STYLES = ['modern', 'classic', 'minimal', 'playful', 'luxury', 'tech'] as const
-const FORMATS = ['horizontal', 'square', 'vertical'] as const
-
 type LogoStyle = (typeof STYLES)[number]
-type LogoFormat = (typeof FORMATS)[number]
-
-const FORMAT_ASPECT: Record<LogoFormat, ImageAspect> = {
-  square: '1:1',
-  horizontal: '16:9',
-  vertical: '9:16',
-}
 
 const STYLE_HINT: Record<LogoStyle, string> = {
-  modern: 'clean geometric shapes, confident sans-serif feel, contemporary',
+  modern: 'clean geometric shapes, confident, contemporary',
   classic: 'timeless, balanced proportions, traditional emblem feel',
   minimal: 'extremely simple, one or two shapes, generous negative space',
   playful: 'rounded friendly shapes, approachable, lightly whimsical',
-  luxury: 'refined, elegant, premium, subtle metallic or monoline feel',
+  luxury: 'refined, elegant, premium, precise geometry',
   tech: 'sharp geometric lines, precise angles, digital-native feel',
 }
 
-const VARIATION_HINTS = [
-  'a bold abstract mark',
-  'a badge or emblem composition',
-  'a simple geometric monogram',
-  'a friendly rounded icon',
-]
+function distinctAccent(primary: string, accent: string, foreground: string): string {
+  return primary.toLowerCase() === accent.toLowerCase() ? foreground : accent
+}
 
 /**
  * POST /api/logo-image
  * ---------------------
- * Generates 1-4 REAL logo alternatives — distinct from the deterministic, free
- * `buildLogoMark` initials generator in `lib/logo-mark.ts`. When
- * `ANTHROPIC_API_KEY` is configured each alternative is first written as an
- * editable SVG by Claude (`lib/logo-svg.ts`); if that is unavailable or fails,
- * the AI Gateway image model produces a raster logo instead. Every candidate is
- * built from the site's OWN palette so the result always matches the brand's
- * existing colors; the caller previews the alternatives and applies one
- * explicitly (see `logo-field.tsx`) — nothing here writes to the schema.
+ * Logo Studio backend. The logo is assembled from three separately produced
+ * parts so the brand name is ALWAYS spelled correctly and perfectly sharp:
  *
- * Credits are charged per alternative that actually generated (never for a
- * failed/timed-out one), mirroring `/api/hero-image`'s "pay only for what you
- * got" rule.
+ *  1. TEXT  — the brand name converted to vector outlines from the site's own
+ *     heading font (or a bundled fallback). Never drawn by an AI model.
+ *  2. EMBLEM — a text-free symbol: written by Claude in `mode: 'ai'`, or taken
+ *     from the deterministic local library in `mode: 'local'` (free) and as the
+ *     fallback when Claude is unavailable or fails.
+ *  3. COMPOSITION — done by the client (`lib/logo-studio/compose.ts`), which can
+ *     measure the emblem's real bounds and crop exactly.
+ *
+ * `mode: 'local'` needs no sign-in and costs nothing. `mode: 'ai'` requires
+ * sign-in and charges `AI_ACTION_COSTS.logoImage` per emblem Claude actually
+ * delivered (never for a failure or a local fallback).
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
@@ -66,8 +56,9 @@ export async function POST(req: Request) {
     description?: string
     style?: string
     symbol?: string
-    format?: string
-    count?: number
+    request?: string
+    mode?: string
+    seed?: number
   }
 
   const parsed = websiteSchema.safeParse(body.schema)
@@ -75,107 +66,103 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid site schema' }, { status: 400 })
   }
   const site = parsed.data
+  const mode = body.mode === 'local' ? 'local' : 'ai'
+  const seed = Math.max(0, Math.trunc(Number(body.seed) || 0))
 
-  const supabase = await createClient()
-  const { data: userData, error: authError } = await supabase.auth.getUser()
-  if (authError || !userData?.user) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  let userId: string | null = null
+  if (mode === 'ai') {
+    const supabase = await createClient()
+    const { data: userData, error: authError } = await supabase.auth.getUser()
+    if (authError || !userData?.user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    userId = userData.user.id
+
+    const planCode = toPlanCode(await getPlanCodeForUser(userId))
+    const dailyLimit = await checkFreeDailyActionLimit(userId, planCode)
+    if (!dailyLimit.allowed) {
+      return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
+    }
   }
-  const userId = userData.user.id
 
-  // FREE-plan daily action gate — independent from and checked BEFORE the AI
-  // credit balance below. See lib/free-daily-limit.ts.
-  const planCode = toPlanCode(await getPlanCodeForUser(userId))
-  const dailyLimit = await checkFreeDailyActionLimit(userId, planCode)
-  if (!dailyLimit.allowed) {
-    return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
-  }
-
-  const companyName = (body.companyName || site.navigation.logoText || site.meta.name).trim()
+  const brand = (body.companyName || site.navigation.logoText || site.meta.name).trim().slice(0, 60)
+  if (!brand) return Response.json({ error: 'Missing brand name' }, { status: 400 })
   const sector = (body.sector || site.meta.audience || '').trim()
   const description = (body.description || site.meta.tagline || '').trim()
   const style: LogoStyle = STYLES.includes(body.style as LogoStyle)
     ? (body.style as LogoStyle)
     : 'modern'
-  const format: LogoFormat = FORMATS.includes(body.format as LogoFormat)
-    ? (body.format as LogoFormat)
-    : 'square'
-  const symbol = (body.symbol || '').trim()
-  const count = Math.min(Math.max(Math.trunc(body.count ?? 3), 1), MAX_ALTERNATIVES)
+  const symbol = `${body.symbol ?? ''} ${body.request ?? ''}`.trim().slice(0, 200)
 
-  // The brand's own palette, so every alternative actually matches the site
-  // instead of the model guessing new colors.
-  const colors = site.theme.palette.slice(0, 4).map((c) => c.hex)
-
-  const cost = AI_ACTION_COSTS.logoImage
-  const balance = await getCreditBalance(userId)
-  if (balance < cost * count) {
-    return Response.json({ error: 'Out of credits', balance }, { status: 402 })
+  const theme = resolveTheme(site)
+  const palette: LogoPalette = {
+    primary: theme.primary,
+    accent: distinctAccent(theme.primary, theme.accent, theme.foreground),
+    primaryFg: theme.primaryFg,
   }
 
-  const basePrompt = [
-    `Professional vector logo${symbol ? ` featuring ${symbol}` : ''} for a brand named "${companyName}"${sector ? ` in the ${sector} industry` : ''}.`,
-    description ? `Brand description: ${description}.` : '',
-    `Visual style: ${STYLE_HINT[style]}.`,
-    `Use ONLY this exact color palette: ${colors.join(', ')}.`,
-    format === 'horizontal'
-      ? 'Horizontal lockup: icon plus clean wordmark side by side.'
-      : format === 'vertical'
-        ? 'Vertical lockup: icon stacked above a short wordmark.'
-        : 'Standalone square icon mark, no wordmark.',
-    'Flat vector illustration on a plain solid single-color background, logo tightly cropped with minimal margins, high contrast, print-ready branding asset, no mockup, no photo, no shadow, no border.',
-  ]
-    .filter(Boolean)
-    .join(' ')
-
-  const useClaude = claudeLogoAvailable()
-
-  // One alternative: Claude SVG first (when configured), image model second.
-  const generateAlternative = async (i: number) => {
-    const variationHint = VARIATION_HINTS[i % VARIATION_HINTS.length]
-    if (useClaude) {
-      const svg = await generateLogoSvg({
-        companyName,
-        sector,
-        description,
-        styleHint: STYLE_HINT[style],
-        symbol,
-        format,
-        colors,
-        variationHint,
-      })
-      if (svg) return svg
+  const cost = AI_ACTION_COSTS.logoImage
+  const useAi = mode === 'ai' && aiEmblemAvailable()
+  if (useAi && userId) {
+    const balance = await getCreditBalance(userId)
+    if (balance < cost * EMBLEM_COUNT) {
+      return Response.json({ error: 'Out of credits', balance }, { status: 402 })
     }
-    return generateSiteImage({
-      prompt: `${basePrompt} Variation: ${variationHint}.`,
-      aspectRatio: FORMAT_ASPECT[format],
-      allowText: true,
-    })
   }
 
   try {
-    const results = await Promise.all(Array.from({ length: count }, (_, i) => generateAlternative(i)))
+    const [{ assets, fontName }, aiResults] = await Promise.all([
+      buildTextAssets(brand, site.typography.headingFont),
+      useAi
+        ? Promise.all(
+            Array.from({ length: EMBLEM_COUNT }, (_, i) =>
+              generateEmblem({
+                brand,
+                sector,
+                description,
+                styleHint: STYLE_HINT[style],
+                symbol,
+                colors: [palette.primary, palette.accent],
+                concept: EMBLEM_CONCEPTS[(seed * EMBLEM_COUNT + i) % EMBLEM_CONCEPTS.length],
+                idPrefix: `ai-${seed}-${i}`,
+              }),
+            ),
+          )
+        : Promise.resolve([] as (EmblemAsset | null)[]),
+    ])
 
-    const alternatives = results
-      .filter((r): r is NonNullable<typeof r> => Boolean(r?.src))
-      .map((r) => ({ src: r.src }))
+    const fallback = localEmblems({
+      count: EMBLEM_COUNT,
+      palette,
+      brand,
+      context: `${sector} ${description} ${symbol}`,
+      seed,
+    })
+    const emblems = Array.from({ length: EMBLEM_COUNT }, (_, i) => aiResults[i] ?? fallback[i])
+    const aiCount = emblems.filter((e) => e.source === 'ai').length
 
-    if (alternatives.length === 0) {
-      return Response.json(
-        { error: 'Logo generation failed', alternatives: [] },
-        { status: 502 },
-      )
+    let balance: number | undefined
+    if (aiCount > 0 && userId) {
+      const charge = await consumeCredits(userId, cost * aiCount, 'logoImage')
+      if (!charge.ok) {
+        return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
+      }
+      balance = charge.balance
     }
 
-    const charge = await consumeCredits(userId, cost * alternatives.length, 'logoImage')
-    if (!charge.ok) {
-      // The balance check above already passed, so this only fires on a rare
-      // race between two simultaneous requests — fail closed rather than
-      // handing back free logos.
-      return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
-    }
-
-    return Response.json({ alternatives, balance: charge.balance, format })
+    return Response.json({
+      mode,
+      seed,
+      brand,
+      fontName,
+      text: assets,
+      emblems,
+      palette,
+      foreground: theme.foreground,
+      aiCount,
+      aiFallback: mode === 'ai' && aiCount === 0,
+      balance,
+    })
   } catch (err) {
     console.log('[v0] logo-image error:', err instanceof Error ? err.message : err)
     return Response.json({ error: 'Logo generation failed' }, { status: 500 })

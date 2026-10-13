@@ -7,9 +7,9 @@ import { useLanguage } from '@/components/language-provider'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { resolveTheme } from '@/components/website-renderer/theme'
-import { buildLogoMark, scaleLogoUpload, fitLogoToCanvas, LOGO_VARIANT_COUNT } from '@/lib/logo-mark'
+import { scaleLogoUpload } from '@/lib/logo-mark'
+import { LogoStudioDialog, type LogoStudioFailure } from '@/components/editor/logo-studio-dialog'
 import { GhostButton, IconBtn } from '@/components/editor/editor-fields'
-import { classifyLogoGenerateStatus } from '@/lib/logo-generate-status'
 import { peekPendingProject } from '@/lib/pending-project'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 
@@ -60,26 +60,24 @@ export function LogoField({
   const [leaving, setLeaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [generating, setGenerating] = useState(false)
+  const [studio, setStudio] = useState<'local' | 'ai' | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const [alternatives, setAlternatives] = useState<string[]>([])
 
   const logo = site.navigation.logo
   const theme = resolveTheme(site)
 
-  function regenerate() {
+  function openStudio(mode: 'local' | 'ai') {
     setError(null)
-    const nextVariant =
-      logo?.source === 'generated' && typeof logo.variant === 'number'
-        ? (logo.variant + 1) % LOGO_VARIANT_COUNT
-        : 0
-    const src = buildLogoMark({
-      name: site.navigation.logoText || site.meta.name,
-      primary: theme.primary,
-      accent: theme.accent,
-      variant: nextVariant,
-    })
-    onDispatch({ op: 'updateNavLogo', src, variant: nextVariant, source: 'generated' })
+    setGenError(null)
+    setLoginRequired(false)
+    setStudio(mode)
+  }
+
+  function handleStudioFail(kind: LogoStudioFailure) {
+    if (kind === 'auth') setLoginRequired(true)
+    else if (kind === 'credits') setGenError(ui.logoGenerateOutOfCredits)
+    else if (kind === 'dailyLimit') setGenError(ui.logoGenerateDailyLimit)
+    else setGenError(ui.logoGenerateFailed)
   }
 
   async function handleFile(file: File) {
@@ -98,49 +96,11 @@ export function LogoField({
       // Auto-scale into the recommended box (preserving aspect ratio) so the
       // stored schema stays small — the owner's original crop is untouched.
       const scaled = await scaleLogoUpload(dataUri)
-      onDispatch({ op: 'updateNavLogo', src: scaled, source: 'upload' })
+      onDispatch({ op: 'updateNavLogo', src: scaled, source: 'upload', showLogoText: true })
     } catch {
       setError(ui.logoBadType)
     } finally {
       setBusy(false)
-    }
-  }
-
-  async function generateWithAi() {
-    setGenError(null)
-    setLoginRequired(false)
-    setGenerating(true)
-    setAlternatives([])
-    try {
-      const res = await fetch('/api/logo-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          schema: site,
-          companyName: site.navigation.logoText || site.meta.name,
-          format: 'horizontal',
-          count: 3,
-        }),
-      })
-      if (!res.ok) {
-        const kind = classifyLogoGenerateStatus(res.status)
-        if (kind === 'auth') setLoginRequired(true)
-        else if (kind === 'credits') setGenError(ui.logoGenerateOutOfCredits)
-        else if (kind === 'dailyLimit') setGenError(ui.logoGenerateDailyLimit)
-        else setGenError(ui.logoGenerateFailed)
-        return
-      }
-      const data = (await res.json()) as { alternatives?: { src: string }[] }
-      const srcs = (data.alternatives ?? []).map((a) => a.src).filter(Boolean)
-      if (srcs.length === 0) {
-        setGenError(ui.logoGenerateFailed)
-        return
-      }
-      setAlternatives(srcs)
-    } catch {
-      setGenError(ui.logoGenerateFailed)
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -162,18 +122,6 @@ export function LogoField({
       router.push(`/auth/${page}?next=${encodeURIComponent(next)}`)
     } finally {
       setLeaving(false)
-    }
-  }
-
-  async function applyAlternative(src: string) {
-    setGenError(null)
-    try {
-      const fitted = await fitLogoToCanvas(src)
-      setAlternatives([])
-      onDispatch({ op: 'updateNavLogo', src: fitted, source: 'ai' })
-    } catch (err) {
-      console.log('[v0] logo fit failed:', err instanceof Error ? err.message : err)
-      setGenError(ui.logoGenerateFailed)
     }
   }
 
@@ -223,19 +171,19 @@ export function LogoField({
       </div>
 
       <div className="grid grid-cols-2 gap-1.5">
-        <GhostButton onClick={regenerate} disabled={busy || generating}>
+        <GhostButton onClick={() => openStudio('local')} disabled={busy}>
           <RefreshCw className="h-3.5 w-3.5" />
           {ui.logoRegenerate}
         </GhostButton>
-        <GhostButton onClick={() => inputRef.current?.click()} disabled={busy || generating}>
+        <GhostButton onClick={() => inputRef.current?.click()} disabled={busy}>
           <Upload className="h-3.5 w-3.5" />
           {ui.logoUpload}
         </GhostButton>
       </div>
 
-      <GhostButton onClick={generateWithAi} disabled={busy || generating}>
+      <GhostButton onClick={() => openStudio('ai')} disabled={busy}>
         <Sparkles className="h-3.5 w-3.5" />
-        {generating ? ui.logoGenerating : ui.logoGenerateAi}
+        {ui.logoGenerateAi}
       </GhostButton>
 
       {loginRequired ? (
@@ -261,27 +209,17 @@ export function LogoField({
         </p>
       ) : null}
 
-      {alternatives.length > 0 ? (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-2">
-          <span className="text-[11px] leading-snug text-muted-foreground">
-            {ui.logoChooseAlternative}
-          </span>
-          <div className="grid grid-cols-3 gap-1.5">
-            {alternatives.map((src, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => applyAlternative(src)}
-                title={ui.logoApplyAlternative}
-                className="flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-border p-1.5 transition-colors hover:border-primary"
-                style={{ backgroundColor: theme.background }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- data URI preview */}
-                <img src={src || '/placeholder.svg'} alt="" className="h-full w-full object-contain" />
-              </button>
-            ))}
-          </div>
-        </div>
+      {studio ? (
+        <LogoStudioDialog
+          site={site}
+          mode={studio}
+          onClose={() => setStudio(null)}
+          onFail={handleStudioFail}
+          onApply={(src, source) => {
+            onDispatch({ op: 'updateNavLogo', src, source, showLogoText: false })
+            setStudio(null)
+          }}
+        />
       ) : null}
 
       <input
@@ -298,6 +236,18 @@ export function LogoField({
 
       {logo?.src ? (
         <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-background p-2">
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={site.navigation.showLogoText !== false}
+              onChange={(e) => onDispatch({ op: 'updateNavLogo', showLogoText: e.target.checked })}
+              className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-brand)]"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-xs font-medium">{ui.studioShowText}</span>
+              <span className="text-[11px] leading-snug text-muted-foreground">{ui.studioShowTextHint}</span>
+            </span>
+          </label>
           <div className="grid grid-cols-3 gap-1.5">
             <NumberField
               label={ui.logoWidth}

@@ -182,11 +182,21 @@ function parseViewBox(value: string | undefined): [number, number] | null {
  * is not usable (no svg, malformed nesting, nothing drawn, oversized).
  * Exported for tests.
  */
-export function sanitizeLogoSvg(raw: string, format: LogoSvgFormat = 'square'): string | null {
+export function sanitizeLogoSvg(
+  raw: string,
+  format: LogoSvgFormat = 'square',
+  { allowText = true }: { allowText?: boolean } = {},
+): string | null {
   const found = raw.match(/<svg[\s\S]*<\/svg\s*>/i)
   if (!found) return null
 
-  const source = found[0]
+  // Emblem-only callers: any <text> is removed together with its content, so a
+  // model that ignores the "no lettering" rule cannot smuggle the brand name in.
+  const withoutText = allowText
+    ? found[0]
+    : found[0].replace(/<text\b[\s\S]*?<\/text\s*>/gi, '').replace(/<text\b[^>]*\/>/gi, '')
+
+  const source = withoutText
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '')
     .replace(/<![^>]*>/g, '')

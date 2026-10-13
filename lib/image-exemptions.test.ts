@@ -85,9 +85,9 @@ describe('logo flow is exempt from the text rules and the text guard', () => {
     expect(generateImage).toHaveBeenCalledTimes(2)
   })
 
-  it('the logo route opts out via allowText and never imports the prompt rules or guard', () => {
+  it('the logo route no longer asks an image model to draw lettering and never imports the prompt rules or guard', () => {
     const src = readFileSync(join(process.cwd(), 'app/api/logo-image/route.ts'), 'utf8')
-    expect(src).toMatch(/generateSiteImage\(\{[\s\S]*?allowText:\s*true[\s\S]*?\}\)/)
+    expect(src).not.toContain('generateSiteImage')
     expect(src).not.toContain('image-prompt-rules')
     expect(src).not.toContain('image-text-guard')
     expect(src).not.toMatch(/NO_TEXT_RULE|IMAGE_PROMPT_RULES|withImagePromptRules/)
