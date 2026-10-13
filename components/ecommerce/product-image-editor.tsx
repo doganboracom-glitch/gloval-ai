@@ -208,12 +208,21 @@ export function ProductImageEditor({ projectId, productName = '', images, onChan
         <label
           htmlFor={inputId}
           aria-disabled={remaining <= 0}
-          className={`flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-medium transition-colors hover:border-primary hover:text-primary ${
-            remaining <= 0 ? 'pointer-events-none opacity-50' : ''
-          }`}
+          className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border text-sm font-medium transition-colors hover:border-primary hover:text-primary ${
+            images.length === 0 && uploading === 0 ? 'min-h-28 flex-col px-4 py-5 text-center' : 'h-11'
+          } ${remaining <= 0 ? 'pointer-events-none opacity-50' : ''}`}
         >
-          {uploading > 0 ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-          {uploading > 0 ? 'Yükleniyor…' : 'Görsel ekle'}
+          {uploading > 0 ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ImagePlus className={images.length === 0 ? 'size-6' : 'size-4'} />
+          )}
+          {uploading > 0 ? 'Yükleniyor…' : images.length === 0 ? 'Görsel yükleyin' : 'Görsel ekle'}
+          {images.length === 0 && uploading === 0 && (
+            <span className="text-xs font-normal text-muted-foreground">
+              Ürününüzü gösteren en az bir fotoğraf ekleyin. Görselsiz ürünler mağazada boş görünür.
+            </span>
+          )}
         </label>
         <p className="mt-1.5 text-xs text-muted-foreground">
           {images.length}/{PRODUCT_IMAGE_LIMITS.maxCount} görsel. JPG, PNG veya WebP, görsel başına en fazla {PRODUCT_IMAGE_MAX_MB} MB.

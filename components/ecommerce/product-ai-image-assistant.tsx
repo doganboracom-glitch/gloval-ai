@@ -124,7 +124,7 @@ export function ProductAiImageAssistant({ projectId, productKey, name, images, d
   if (images.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-        Yapay zekâ ile alternatif görsel üretmek için önce bir ürün görseli yükleyin.
+        Önce bir fotoğraf yükleyin. Yapay zekâ ile alternatif görsel üretimi, yüklediğiniz fotoğrafı kaynak alır.
       </p>
     )
   }
