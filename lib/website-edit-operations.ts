@@ -1,6 +1,25 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
+import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
+import { sanitizeLegalMarkup } from '@/lib/legal-markup'
+import { canHideLegalDoc, isSiteLegalSlug } from '@/lib/site-legal-docs'
+
+const COMPANY_FIELDS: readonly CompanyField[] = [
+  'businessType',
+  'tradeName',
+  'city',
+  'district',
+  'addressLine',
+  'taxOffice',
+  'taxId',
+  'mersis',
+  'tradeRegistryNo',
+  'phone',
+  'email',
+  'kepAddress',
+  'website',
+]
 import { resolveShowcaseCollection, type ShowcaseLimit, type ShowcaseSource } from '@/lib/store-showcase'
 
 /* -------------------------------------------------------------------------- */
@@ -31,6 +50,12 @@ export type EditOperation =
       whatsapp?: string
       whatsappMessage?: string
     }
+  /** Owner company details (legal identity). Empty string removes a field. */
+  | { op: 'updateCompany'; patch: Partial<Record<CompanyField, string>> }
+  /** Saves an owner-edited legal text (sanitised markup). Empty body = back to the template. */
+  | { op: 'updateLegalDoc'; slug: string; body: string }
+  | { op: 'resetLegalDoc'; slug: string }
+  | { op: 'setLegalDocHidden'; slug: string; hidden: boolean }
   | { op: 'updatePalette'; role: string; hex: string }
   | { op: 'updateTypography'; headingFont?: string; bodyFont?: string }
   | { op: 'updateNavigation'; logoText?: string }
@@ -245,6 +270,47 @@ export function applyOperation(
       const current = next.tracking ?? {}
       const value = operation.value
       next.tracking = { ...current, [operation.field]: value.trim() ? value : undefined }
+      return next
+    }
+
+    case 'updateCompany': {
+      const company = { ...(next.company ?? {}) } as Record<string, string | undefined>
+      for (const [field, raw] of Object.entries(operation.patch)) {
+        if (!COMPANY_FIELDS.includes(field as CompanyField) || typeof raw !== 'string') continue
+        const value = normalizeCompanyValue(raw)
+        if (field === 'businessType' && value !== undefined && !isBusinessType(value)) continue
+        if (value === undefined) delete company[field]
+        else company[field] = value
+      }
+      company.updatedAt = new Date().toISOString()
+      next.company = company as WebsiteSchema['company']
+      return next
+    }
+
+    case 'updateLegalDoc': {
+      if (!isSiteLegalSlug(operation.slug)) return next
+      const body = sanitizeLegalMarkup(operation.body)
+      const docs = { ...(next.legalDocs?.docs ?? {}) }
+      if (body) docs[operation.slug] = { body, updatedAt: new Date().toISOString() }
+      else delete docs[operation.slug]
+      next.legalDocs = { ...next.legalDocs, docs }
+      return next
+    }
+
+    case 'resetLegalDoc': {
+      if (!isSiteLegalSlug(operation.slug) || !next.legalDocs?.docs) return next
+      const docs = { ...next.legalDocs.docs }
+      delete docs[operation.slug]
+      next.legalDocs = { ...next.legalDocs, docs }
+      return next
+    }
+
+    case 'setLegalDocHidden': {
+      if (!canHideLegalDoc(next, operation.slug)) return next
+      const hidden = new Set(next.legalDocs?.hidden ?? [])
+      if (operation.hidden) hidden.add(operation.slug)
+      else hidden.delete(operation.slug)
+      next.legalDocs = { ...next.legalDocs, hidden: [...hidden] }
       return next
     }
 

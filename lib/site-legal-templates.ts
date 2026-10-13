@@ -10,61 +10,74 @@
  * These are DISTINCT from the platform's own SaaS documents (`lib/legal/*`,
  * served at gloval.ai `/yasal/*`), which describe GLOVAL AI's software service.
  *
- * Company details come from the site's contact section (title, address,
- * phone, e-mail). The schema has no tax number / MERSİS field yet; they are
- * supported here (`taxNo`, `mersis`) and appear automatically once provided.
+ * Seller details come from the owner's company profile (`schema.company`,
+ * see `lib/company-profile.ts`), falling back to the contact section for
+ * address / phone / e-mail. Required details that are still unknown render as
+ * visible `[Placeholder]` text.
  */
+
+import { mersisRequired, sellerFromProfile, type SellerView } from '@/lib/company-profile'
+import type { CompanyProfile } from '@/lib/website-schema'
 
 export type StoreLegalSection = { heading: string; paragraphs: string[] }
 export type StoreLegalDoc = { title: string; sections: StoreLegalSection[] }
 
 export type SiteLegalCompany = {
-  /** Trade name shown as seller / data controller (site name). */
+  /** Site name, used in generic intros ("X sitesi"). */
   name: string
-  address?: string
-  phone?: string
-  email?: string
-  taxNo?: string
-  mersis?: string
+  /** Validated seller details; every missing field renders as `[Placeholder]`. */
+  seller: SellerView
 }
 
-/** Shown permanently at the bottom of every legal page. */
+/** Date the template wording was last revised (ISO yyyy-mm-dd). */
+export const LEGAL_TEMPLATE_VERSION = '2026-10-13'
+
+/** Shown permanently at the bottom of every legal page, edited or not. */
 export const SITE_LEGAL_DISCLAIMER =
-  'Bu metin şablondur, sitenizin yasal gerekliliklerine uygun şekilde gözden geçirin. Gloval AI hukuki danışmanlık vermez; işletme sahibi bu metnin faaliyetine uygunluğundan sorumludur.'
+  'Bu metin şablondur. Bu metni yasal gerekliliklere uygun olarak gözden geçirmek sizin sorumluluğunuzdadır. Gloval AI hukuki danışmanlık vermez; işletme sahibi metnin faaliyetine uygunluğundan sorumludur.'
 
 type CompanyInput = string | SiteLegalCompany
 
 function company(input: CompanyInput): SiteLegalCompany {
-  const c = typeof input === 'string' ? { name: input } : input
-  const clean = (v?: string) => (v && v.trim() ? v.trim() : undefined)
-  return {
-    name: clean(c.name) ?? 'Satıcı',
-    address: clean(c.address),
-    phone: clean(c.phone),
-    email: clean(c.email),
-    taxNo: clean(c.taxNo),
-    mersis: clean(c.mersis),
+  if (typeof input === 'string') {
+    const name = input.trim() || 'Satıcı'
+    return { name, seller: { tradeName: name } }
   }
+  return { name: input.name.trim() || 'Satıcı', seller: input.seller ?? {} }
 }
 
-/** "Ünvan: X. Adres: Y. ..." with only the fields that are actually known. */
+const ph = (label: string) => `[${label}]`
+
+/** The ticari ünvan, or a visible placeholder when the owner hasn't set it. */
+function legalName(c: SiteLegalCompany): string {
+  return c.seller.tradeName ?? ph('Ticari ünvan')
+}
+
+/**
+ * "Ünvan: X. Adres: Y. ..." Required seller fields that are still unknown show
+ * as `[Placeholder]`, so an incomplete contract is visibly incomplete instead of
+ * silently vague. Optional fields appear only when provided.
+ */
 export function companyDetailsLine(input: CompanyInput): string {
-  const c = company(input)
-  const parts = [`Ünvan: ${c.name}`]
-  if (c.address) parts.push(`Adres: ${c.address}`)
-  if (c.phone) parts.push(`Telefon: ${c.phone}`)
-  if (c.email) parts.push(`E-posta: ${c.email}`)
-  if (c.taxNo) parts.push(`Vergi No: ${c.taxNo}`)
-  if (c.mersis) parts.push(`MERSİS No: ${c.mersis}`)
+  const { seller: s } = company(input)
+  const parts = [
+    `Ünvan: ${s.tradeName ?? ph('Ticari ünvan')}`,
+    `Adres: ${s.address ?? ph('Adres')}`,
+    `Vergi Dairesi: ${s.taxOffice ?? ph('Vergi dairesi')}`,
+    `Vergi No / TCKN: ${s.taxId ?? ph('Vergi no')}`,
+  ]
+  if (s.mersis) parts.push(`MERSİS No: ${s.mersis}`)
+  else if (mersisRequired(s)) parts.push(`MERSİS No: ${ph('MERSİS no')}`)
+  if (s.tradeRegistryNo) parts.push(`Ticaret Sicil No: ${s.tradeRegistryNo}`)
+  parts.push(`Telefon: ${s.phone ?? ph('Telefon')}`)
+  parts.push(`E-posta: ${s.email ?? ph('E-posta')}`)
+  if (s.kepAddress) parts.push(`KEP Adresi: ${s.kepAddress}`)
+  if (s.website) parts.push(`Web Sitesi: ${s.website}`)
   return parts.join('. ') + '.'
 }
 
-function hasContactDetails(c: SiteLegalCompany): boolean {
-  return Boolean(c.address || c.phone || c.email)
-}
-
 function contactChannels(c: SiteLegalCompany): string {
-  const channels = [c.email, c.phone].filter(Boolean).join(' / ')
+  const channels = [c.seller.email, c.seller.phone].filter(Boolean).join(' / ')
   return channels ? `iletişim bilgileri (${channels})` : 'sitedeki iletişim bilgileri'
 }
 
@@ -81,16 +94,14 @@ export function buildDistanceSalesNotice(input: CompanyInput): StoreLegalDoc {
       {
         heading: '1. Taraflar ve Konu',
         paragraphs: [
-          `İşbu sözleşme, bir tarafta satıcı "${c.name}" ile diğer tarafta siparişi veren alıcı arasında, 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümleri uyarınca elektronik ortamda kurulur.`,
+          `İşbu sözleşme, bir tarafta satıcı "${legalName(c)}" ile diğer tarafta siparişi veren alıcı arasında, 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümleri uyarınca elektronik ortamda kurulur.`,
           'Sözleşmenin konusu, alıcının elektronik ortamda sipariş verdiği ürünlerin satışı ve teslimidir. Sipariş özeti, ürün adı, adedi ve toplam bedeli ödeme adımında alıcıya gösterilir.',
         ],
       },
       {
         heading: '2. Satıcı Bilgileri',
         paragraphs: [
-          hasContactDetails(c) || c.taxNo || c.mersis
-            ? companyDetailsLine(c)
-            : `Satıcı unvanı: ${c.name}. Satıcının açık adres, telefon ve e-posta bilgileri, mağazanın iletişim bölümünde ve sipariş onay e-postasında yer alır.`,
+          companyDetailsLine(c),
         ],
       },
       {
@@ -126,8 +137,8 @@ export function buildKvkkNotice(input: CompanyInput): StoreLegalDoc {
       {
         heading: 'Veri Sorumlusu',
         paragraphs: [
-          `Kişisel verileriniz, veri sorumlusu sıfatıyla "${c.name}" tarafından 6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında işlenmektedir.`,
-          ...(hasContactDetails(c) || c.taxNo || c.mersis ? [companyDetailsLine(c)] : []),
+          `Kişisel verileriniz, veri sorumlusu sıfatıyla "${legalName(c)}" tarafından 6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında işlenmektedir.`,
+          companyDetailsLine(c),
         ],
       },
       {
@@ -228,8 +239,8 @@ export function buildCancellationAndRefund(input: CompanyInput): StoreLegalDoc {
       {
         heading: 'İade Süreci',
         paragraphs: [
-          `İade talebinizi "${c.name}" ile ${contactChannels(c)} üzerinden bildirmeniz yeterlidir. Ürün, kullanılmamış ve ambalajı bozulmamış şekilde gönderilmelidir.`,
-          ...(c.address ? [`İade adresi: ${c.address}.`] : []),
+          `İade talebinizi "${legalName(c)}" ile ${contactChannels(c)} üzerinden bildirmeniz yeterlidir. Ürün, kullanılmamış ve ambalajı bozulmamış şekilde gönderilmelidir.`,
+          ...(c.seller.address ? [`İade adresi: ${c.seller.address}.`] : []),
           'Ürünün iade alınmasından sonra ödeme, kullandığınız ödeme yöntemiyle en geç 14 gün içinde iade edilir.',
         ],
       },
@@ -287,18 +298,17 @@ export function getSiteLegalDoc(slug: string, input: CompanyInput): StoreLegalDo
   return SITE_LEGAL_BUILDERS[slug as SiteLegalSlug](input)
 }
 
-/** Builds the company details from a site name and its (optional) contact section. */
+/**
+ * Builds the company details from a site name, the owner's company profile and
+ * (as a fallback for address / phone / e-mail) the site's contact section.
+ */
 export function companyFromSite(
   name: string,
   sections: ReadonlyArray<{ type: string; [k: string]: unknown }>,
+  profile?: CompanyProfile,
 ): SiteLegalCompany {
   const contact = sections.find((s) => s.type === 'contact') as
     | { address?: string; phone?: string; email?: string }
     | undefined
-  return {
-    name,
-    address: contact?.address,
-    phone: contact?.phone,
-    email: contact?.email,
-  }
+  return { name, seller: sellerFromProfile(profile, contact) }
 }

@@ -18,6 +18,7 @@ import {
   InvoiceFields,
   InvoiceHeading,
   LegalConsent,
+  type LegalConsentLinks,
   type InvoiceInput,
   type LegalConsentState,
 } from './checkout-extras'
@@ -44,9 +45,13 @@ export function CheckoutForm({
   guestCheckout = true,
   codFeeCents = 0,
   shipping = DEFAULT_SHIPPING_SETTINGS,
+  legalLinks,
+  seller = null,
 }: {
   slug: string
   storeName: string
+  legalLinks?: LegalConsentLinks
+  seller?: string | null
   methods?: PaymentProviderId[]
   publicConfig?: Record<string, unknown>
   customer?: CheckoutCustomer
@@ -68,6 +73,8 @@ export function CheckoutForm({
       guestCheckout={guestCheckout}
       codFeeCents={codFeeCents}
       shipping={shipping}
+      legalLinks={legalLinks}
+      seller={seller}
     />
   )
 }
@@ -86,9 +93,13 @@ function CheckoutInner({
   guestCheckout,
   codFeeCents,
   shipping,
+  legalLinks,
+  seller,
 }: {
   slug: string
   storeName: string
+  legalLinks?: LegalConsentLinks
+  seller: string | null
   methods: PaymentProviderId[]
   publicConfig: Record<string, unknown>
   customer: CheckoutCustomer
@@ -149,6 +160,7 @@ function CheckoutInner({
     payment_not_configured: STORE_PAYMENT_UNAVAILABLE_MESSAGE.not_configured.tr,
     payment_config_unreadable: STORE_PAYMENT_UNAVAILABLE_MESSAGE.config_unreadable.tr,
     bad_request: 'Bir hata oluştu. Lütfen tekrar dene.',
+    legal_not_accepted: 'Devam etmek için sözleşmeleri ve KVKK metnini onaylamalısınız.',
     payment_init_failed: 'Ödeme sayfası başlatılamadı. Lütfen tekrar dene veya başka bir ödeme yöntemi seç.',
   }
 
@@ -186,6 +198,7 @@ function CheckoutInner({
       items: cart.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       paymentMethod,
       invoice: wantsInvoice ? invoice : null,
+      legalAccepted: consent.sales && consent.kvkk,
     })
 
     if (result.ok) {
@@ -404,7 +417,17 @@ function CheckoutInner({
           </FormSection>
 
           <FormSection title="Onaylar">
-            <LegalConsent storeName={storeName} value={consent} onChange={setConsent} />
+            {seller && (
+              <p className="mb-3 text-pretty text-xs leading-relaxed text-muted-foreground">
+                <span className="font-semibold text-foreground">Satıcı:</span> {seller}
+              </p>
+            )}
+            <LegalConsent
+              storeName={storeName}
+              value={consent}
+              onChange={setConsent}
+              links={legalLinks}
+            />
           </FormSection>
 
           {error && (

@@ -1,3 +1,4 @@
+import { isLegalDocHidden } from '@/lib/site-legal-docs'
 import { canonicalSectionAnchor, resolveHrefToPageSlug } from '@/lib/website-pages'
 import { isStorefront, type NavLink, type WebsiteSchema } from '@/lib/website-schema'
 
@@ -197,7 +198,11 @@ export function resolveFooterLegal(
   if (legal?.hidden) return []
   const kind = site && isStorefront(site) ? 'ecommerce' : 'corporate'
   const links = legal?.links ?? defaultLegalLinks(kind, lang)
-  return links.filter((l) => l.label.trim() !== '' && isValidFooterHref(l.href, site))
+  return links.filter((l) => {
+    if (l.label.trim() === '' || !isValidFooterHref(l.href, site)) return false
+    const legalSlug = /\/yasal\/([^/?#]+)/.exec(l.href)?.[1]
+    return !(site && legalSlug && isLegalDocHidden(site, legalSlug))
+  })
 }
 
 /**

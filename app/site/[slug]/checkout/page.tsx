@@ -6,6 +6,8 @@ import { getStorePaymentMethods } from '@/lib/store'
 import { getCurrentStoreCustomer } from '@/lib/store-customer'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { companyForSite, resolveLegalDoc } from '@/lib/site-legal-docs'
+import { sellerSummary } from '@/lib/company-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,12 +30,23 @@ export default async function CheckoutPage({
   const customer = await getCurrentStoreCustomer(slug)
   const shipping = await getStoreShippingInfo(slug)
 
+  const docHref = (doc: string) =>
+    resolveLegalDoc(doc, site.schema, site.name) ? `/site/${slug}/yasal/${doc}` : undefined
+  const legalLinks = {
+    sales: docHref('mesafeli-satis-sozlesmesi'),
+    returns: docHref('iptal-ve-iade'),
+    kvkk: docHref('gizlilik-politikasi'),
+  }
+  const seller = sellerSummary(companyForSite(site.schema, site.name).seller)
+
   return (
     <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
       <CheckoutForm
         slug={slug}
         shipping={shipping}
         storeName={site.name}
+        legalLinks={legalLinks}
+        seller={seller}
         paymentUnavailableReason={available ? null : (reason ?? 'not_configured')}
         methods={methods}
         publicConfig={publicConfig}
