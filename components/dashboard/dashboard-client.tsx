@@ -15,6 +15,7 @@ import {
   CreditCard,
   LifeBuoy,
   Mail,
+  Inbox,
   Globe,
   Settings,
 } from 'lucide-react'
@@ -173,6 +174,13 @@ export function DashboardClient({
             >
               <Mail className="size-4" />
               <span className="hidden sm:inline">{t.mail.navLabel}</span>
+            </Link>
+            <Link
+              href="/dashboard/messages"
+              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Inbox className="size-4" />
+              <span className="hidden sm:inline">{lang === 'tr' ? 'Mesajlar' : 'Messages'}</span>
             </Link>
             <Link
               href="/billing"

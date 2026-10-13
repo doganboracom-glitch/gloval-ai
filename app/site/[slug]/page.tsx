@@ -9,6 +9,7 @@ import { isSiteBrandingRemoved } from '@/lib/project-entitlements'
 import { tenantUrl } from '@/lib/domains'
 import { isStorefront } from '@/lib/website-schema'
 import { getStorePaymentBadges } from '@/lib/store-payment-badges'
+import { contactSecret, signContactToken } from '@/lib/site-contact-guard'
 
 // Published sites are dynamic (content can change on republish/unpublish).
 export const dynamic = 'force-dynamic'
@@ -92,6 +93,10 @@ export default async function PublicSitePage({
         }
       : null
 
+  // Without the server secret the form stays inert instead of accepting unsigned posts.
+  const secret = contactSecret()
+  const contactForm = secret ? { slug, token: signContactToken(secret, slug, Date.now()) } : null
+
   return (
     <main className="min-h-svh bg-white text-black">
       {/* The "Gloval AI ile oluşturuldu." credit is on unless this specific
@@ -102,6 +107,7 @@ export default async function PublicSitePage({
         planCode={site.ownerPlanCode}
         store={store}
         paymentBadges={paymentBadges}
+        contactForm={contactForm}
       />
     </main>
   )

@@ -120,6 +120,14 @@ export function SectionInspector({
         />
       ))}
 
+      {section.type === 'contact' && (
+        <TextField
+          label={label('recipientEmail')}
+          value={String(record.recipientEmail ?? '')}
+          onCommit={(v) => onDispatch({ op: 'updateSectionValue', index, field: 'recipientEmail', value: v.trim() })}
+        />
+      )}
+
       {(['primary', 'secondary'] as const).map((which) => {
         const key = which === 'primary' ? 'primaryButton' : 'secondaryButton'
         const button = record[key] as { label?: string; href?: string } | undefined

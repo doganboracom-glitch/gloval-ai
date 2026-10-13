@@ -2,6 +2,7 @@
 
 import { Mail, Phone, MapPin } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
+import { ContactForm, type ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import {
   SectionShell,
   SectionHeading,
@@ -11,13 +12,13 @@ type ContactData = Extract<Section, { type: 'contact' }>
 
 export function ContactSection({
   data,
-  submitLabel = 'Send',
+  lang,
+  live = null,
 }: {
   data: ContactData
-  submitLabel?: string
+  lang: string
+  live?: ContactFormLive | null
 }) {
-  const fields = data.fields && data.fields.length > 0 ? data.fields : ['Name', 'Email', 'Message']
-
   return (
     <SectionShell id="contact" tinted>
       <div className="grid gap-10 lg:grid-cols-2">
@@ -36,59 +37,10 @@ export function ContactSection({
           </div>
         </div>
 
-        <form
-          className="grid gap-3"
-          onSubmit={(e) => e.preventDefault()}
-          style={{
-            backgroundColor: 'var(--site-bg)',
-            border: '1px solid var(--site-border)',
-            borderRadius: 'var(--site-radius)',
-            padding: '1.25rem',
-          }}
-        >
-          {fields.map((label) => {
-            const isMessage = /message|mesaj/i.test(label)
-            return (
-              <label key={label} className="grid gap-1.5 text-xs font-medium" style={{ color: 'var(--site-muted-fg)' }}>
-                {label}
-                {isMessage ? (
-                  <textarea
-                    rows={3}
-                    className="resize-none px-3 py-2 text-sm outline-none"
-                    style={fieldStyle}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    className="px-3 py-2 text-sm outline-none"
-                    style={fieldStyle}
-                  />
-                )}
-              </label>
-            )
-          })}
-          <button
-            type="submit"
-            className="mt-1 px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
-            style={{
-              backgroundColor: 'var(--site-primary)',
-              color: 'var(--site-primary-fg)',
-              borderRadius: 'var(--site-radius)',
-            }}
-          >
-            {submitLabel}
-          </button>
-        </form>
+        <ContactForm labels={data.fields} lang={lang} live={live} />
       </div>
     </SectionShell>
   )
-}
-
-const fieldStyle: React.CSSProperties = {
-  backgroundColor: 'var(--site-card)',
-  border: '1px solid var(--site-border)',
-  borderRadius: 'var(--site-radius)',
-  color: 'var(--site-fg)',
 }
 
 function ContactRow({
