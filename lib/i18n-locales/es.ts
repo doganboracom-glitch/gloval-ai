@@ -1226,7 +1226,7 @@ const es: DeepPartial<Dict> = {
     mgNsHelp: 'Un servidor de nombres por línea (al menos 2, como máximo 13).',
     mgNsWarn: 'Tras cambiar los servidores de nombres, los registros DNS de tu sitio y de tu correo se leen desde los nuevos servidores. Un valor incorrecto puede dejar el sitio inaccesible.',
     mgNsSave: 'Guardar servidores de nombres',
-    mgNsConfirm: 'S��, cambiarlos',
+    mgNsConfirm: 'Sí, cambiarlos',
     mgNsUnsupported: 'El registrador no admite actualmente el cambio de servidores de nombres. Los servidores actuales se muestran solo como referencia.',
     mgLockUnsupported: 'El registrador no admite actualmente el cambio del bloqueo de transferencia.',
     outLockUnsupported: 'Actualmente no se admite el cambio del bloqueo de transferencia. Si necesitas un código de transferencia, contacta con nuestro equipo de soporte.',

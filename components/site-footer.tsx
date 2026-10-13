@@ -89,13 +89,10 @@ export function SiteFooter() {
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} GLOVAL AI — {t.footer.rights}
           </p>
-          <div className="flex flex-col items-center gap-1.5 sm:items-end">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {t.footer.securePayment}
-            </span>
+          <div className="flex justify-center sm:justify-end">
             <img
               src="/payment/iyzico-logo-band.svg"
-              alt="iyzico ile güvenli ödeme — Visa, Mastercard"
+              alt="iyzico, Mastercard, Visa, Amex, Troy"
               width={429}
               height={32}
               loading="lazy"

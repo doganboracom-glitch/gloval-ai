@@ -579,7 +579,7 @@ const dict = {
       publish: 'Yayınla',
       republish: 'Yeniden yayınla',
       publishing: 'Yayınlanıyor...',
-      published: 'Yay��nlandı',
+      published: 'Yayınlandı',
       liveAt: 'Siten yayında:',
       unpublish: 'Yayından kaldır',
       unpublishing: 'Kaldırılıyor...',
@@ -703,7 +703,7 @@ const dict = {
       related: 'İlgili İçerikler',
       backToBlog: 'Bloga geri dön',
       empty: 'Bu kategoride henüz içerik yok.',
-      notFound: 'Aradığ������nız içerik bulunamadı.',
+      notFound: 'Aradığınız içerik bulunamadı.',
     },
     finalCta: {
       title: 'Bir sonraki sitesi bir cümle uzağında.',
@@ -727,7 +727,7 @@ const dict = {
         privacy: 'Gizlilik Politikası',
         terms: 'Kullanım Koşulları',
         kvkk: 'KVKK Aydınlatma Metni',
-        cookies: 'Çerez Politikas��',
+        cookies: 'Çerez Politikası',
         cookiePrefs: 'Çerez tercihleri',
         distanceSales: 'Mesafeli Satış Sözleşmesi',
         preInfo: 'Ön Bilgilendirme Formu',
@@ -896,7 +896,7 @@ const dict = {
       errNoSubscription: 'Ek hizmet satın almak için aktif bir aboneliğin olmalı.',
       errSubscriptionInactive: 'Aboneliğin şu an aktif olmadığı için ek hizmet satın alınamıyor.',
       errInvalidAddon: 'Seçtiğin ek hizmet geçerli değil.',
-      errNotAvailable: 'Bu ek hizmet şu an sat��şta değil.',
+      errNotAvailable: 'Bu ek hizmet şu an satışta değil.',
       errNotEligible: 'Mevcut planın bu ek hizmeti desteklemiyor.',
       awaitingTitle: 'Ödeme penceresi açıldı',
       awaitingBody: 'Ödemeyi açılan sekmede tamamla. Bittiğinde sonuç burada otomatik görünür.',
@@ -978,7 +978,7 @@ const dict = {
       noDomainBody:
         'Kurumsal e-posta için önce kendi alan adını bağlaman gerekiyor. Alan adı bağlandıktan sonra posta kutularını buradan yönetebilirsin.',
       noDomainCta: 'Domain bağla',
-      noDomainPending: 'Alan adı bağlama özelliği henüz hazır de����il.',
+      noDomainPending: 'Alan adı bağlama özelliği henüz hazır değil.',
       dnsExplainTitle: 'Alan adı bağlandığında ne olacak?',
       dnsExplainBody:
         'Sana MX, SPF, DKIM ve DMARC kayıtlarını vereceğiz. Bu kayıtları alan adı sağlayıcında yayınladıktan sonra e-posta trafiği başlar.',
@@ -1052,7 +1052,7 @@ const dict = {
       errGeneric: 'Bir hata oluştu. Lütfen tekrar dene.',
 
       mockNotice:
-        'Şu anda test (mock) posta sağlayıcısı kullanılıyor; veriler sunucu yeniden başladığında s��fırlanır.',
+        'Şu anda test (mock) posta sağlayıcısı kullanılıyor; veriler sunucu yeniden başladığında sıfırlanır.',
 
       // Admin
       adminTitle: 'Mail Yönetimi',
@@ -1123,7 +1123,7 @@ const dict = {
       transferErrInvalidAuth: 'Transfer kodu geçersiz.',
       transferErrLocked: 'Alan adı kilitli. Mevcut firmanızda kilidi kapatın.',
       transferErrPending: 'Bu alan adı için devam eden bir transfer var.',
-      transferErrPricing: 'Transfer fiyatı ��u anda hesaplanamıyor.',
+      transferErrPricing: 'Transfer fiyatı şu anda hesaplanamıyor.',
       transferErrProvider: 'Kayıt kuruluşuna ulaşılamadı. Lütfen tekrar deneyin.',
       transferErrFailed: 'Transfer başlatılamadı. Lütfen tekrar deneyin.',
       transferStatusPendingPayment: 'Ödeme bekleniyor',
@@ -1268,7 +1268,7 @@ const dict = {
       buyErrInvalidDomain: 'Geçerli bir alan adı girin.',
       buyErrUnavailable: 'Bu alan adı artık uygun değil.',
       buyErrAlreadyOwned: 'Bu alan adı zaten hesabınızda bağlı.',
-      buyErrLimitReached: 'Paketinizdeki alan adı sınırına ulaşt��nız.',
+      buyErrLimitReached: 'Paketinizdeki alan adı sınırına ulaştınız.',
       buyErrNotEntitled: 'Paketiniz özel alan adı içermiyor.',
       buyErrFailed: 'Satın alma başlatılamadı. Lütfen tekrar deneyin.',
     buyErrPaymentUnavailable:
@@ -1303,7 +1303,7 @@ const dict = {
   errRegistrarUnavailable: 'Alan adı hizmeti şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
   errInvalidInput: 'Girilen bilgiler geçersiz. Alanları kontrol edip tekrar deneyin.',
   errProviderRefused: 'Kayıt kuruluşu bu değişikliği reddetti. Alan adı kilitli veya geçici olarak değiştirilemiyor olabilir.',
-    errOutcomeUnknown: 'De��işikliğin uygulanıp uygulanmadığı doğrulanamadı. Tekrar denemeden önce sayfayı yenileyip güncel durumu kontrol edin.',
+    errOutcomeUnknown: 'Değişikliğin uygulanıp uygulanmadığı doğrulanamadı. Tekrar denemeden önce sayfayı yenileyip güncel durumu kontrol edin.',
     errPricingUnavailable: 'Bu uzantı için güncel yenileme fiyatı şu an alınamıyor. Lütfen daha sonra tekrar deneyin.',
     errRenewalInProgress: 'Bu alan adı için devam eden bir yenileme var. Tamamlanmasını bekleyin.',
       connectProjectTitle: 'Hangi projeye bağlansın?',
@@ -1369,7 +1369,7 @@ const dict = {
           'Son kontrol tamamlanamadı; bu yüzden son başarılı durum gösteriliyor. Sonuç kesin değil, kısa süre içinde yeniden denenecek.',
         errInconclusive: 'Son kontrol tamamlanamadı (geçici bir sorun olabilir). Otomatik olarak yeniden denenecek.',
         errChallengeMissing:
-          'Barındırma sağlayıc��sı ek doğrulama istiyor ancak hangi kaydı eklemeniz gerektiğini bildirmedi. Birazdan tekrar "Doğrula" deneyin.',
+          'Barındırma sağlayıcısı ek doğrulama istiyor ancak hangi kaydı eklemeniz gerektiğini bildirmedi. Birazdan tekrar "Doğrula" deneyin.',
         errInUse:
           'Bu alan adı başka bir hesapta veya projede kullanılıyor. Sahibi olduğunuzu kanıtlayan ek TXT kaydı gerekebilir.',
         errAuth: 'Barındırma sağlayıcısı isteği reddetti (yetki/erişim). Bu bir DNS sorunu değil; yöneticiye bildirin.',
@@ -1424,14 +1424,14 @@ const dict = {
       verifyRetry: 'Doğrulamayı Tekrar Kontrol Et',
       verifyIntroTitle: 'Alan adı doğrulaması',
       verifyIntroBody:
-        'Bu alan adının size ait olduğunu doğrulamamız gerekiyor. Başlattığınızda DNS kay��tlarını burada göstereceğiz.',
+        'Bu alan adının size ait olduğunu doğrulamamız gerekiyor. Başlattığınızda DNS kayıtlarını burada göstereceğiz.',
       verifyFailedTitle: 'Doğrulanamadı',
       verifyFailedBody:
         'Doğrulama kaydı henüz bulunamadı. Kayıtları DNS panelinizde oluşturduğunuzdan emin olun; yayılması birkaç dakika sürebilir, ardından tekrar kontrol edin.',
       errVerifyNotFound:
         'Doğrulama kaydı henüz bulunamadı. DNS yayılması zaman alabilir; birkaç dakika sonra tekrar deneyin.',
       errVerifyTemporary: 'DNS sorgusu şu anda yapılamadı. Lütfen biraz sonra tekrar deneyin.',
-      verificationRequiredTitle: 'Domain doğrulamas�� gerekiyor',
+      verificationRequiredTitle: 'Domain doğrulaması gerekiyor',
       verificationRequiredBody:
         'Aşağıdaki kayıtları alan adı sağlayıcınızın DNS panelinde oluşturun, ardından doğrulamayı başlatın.',
       verifiedAt: '{date} tarihinde doğrulandı',
@@ -1485,7 +1485,7 @@ const dict = {
     settings: {
       navLabel: 'Ayarlar',
       title: 'Hesap Ayarları',
-      subtitle: 'Hesabınla ilgili bilgileri ve tercihlerini y��net.',
+      subtitle: 'Hesabınla ilgili bilgileri ve tercihlerini yönet.',
       backToDashboard: 'Panele dön',
       accountTitle: 'Hesap',
       emailLabel: 'E-posta',

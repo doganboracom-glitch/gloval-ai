@@ -309,7 +309,7 @@ export const PLANS: Plan[] = [
       { label: 'Sepet' },
       { label: 'Sipariş yönetimi' },
       { label: 'Ödeme altyapısı' },
-      { label: 'PayTR / iyzico entegrasyonu' },
+      { label: 'iyzico entegrasyonu' },
       { label: 'Ürün SEO' },
       { label: 'Mobil uyumlu mağaza' },
       { label: 'WhatsApp' },
@@ -735,7 +735,7 @@ export const COMPARISON: ComparisonGroup[] = [
         ecommerce: true,
       },
       {
-        label: 'Ödeme altyapısı (PayTR / iyzico — yakında)',
+        label: 'Ödeme altyapısı (iyzico — yakında)',
         free: false,
         starter: false,
         pro: false,
