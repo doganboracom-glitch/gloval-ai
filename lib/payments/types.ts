@@ -1,14 +1,13 @@
 /**
  * Provider-agnostic payment abstraction. Concrete providers (Mock now; Stripe,
- * iyzico, PayTR later) implement this interface so checkout/order code never
- * depends on a specific PSP. Amounts are always integer minor units (cents).
+ * iyzico) implement this interface so checkout/order code never depends on a
+ * specific PSP. Amounts are always integer minor units (cents).
  */
 
 export type PaymentProviderId =
   | 'mock'
   | 'stripe'
   | 'iyzico'
-  | 'paytr'
   | 'bank_transfer'
   | 'cash_on_delivery'
 

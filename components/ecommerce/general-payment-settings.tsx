@@ -33,10 +33,9 @@ const copy = {
     activeProvider: 'Aktif sanal pos',
     soon: 'Yakında',
     cardNotReady:
-      'Seçili sanal posun bağlantı testi geçmedi, bu yüzden kart seçeneği alıcıya gösterilmez. PayTR sekmesinden bilgileri girip testi geçin.',
+      'Seçili sanal pos henüz kullanıma hazır değil, bu yüzden kart seçeneği alıcıya gösterilmez.',
     cardUnreadable:
-      'Kayıtlı kimlik bilgisi okunamadı, kart seçeneği alıcıya gösterilmez. PayTR sekmesinden bilgileri yeniden girin.',
-    goPaytr: 'PayTR sekmesine git',
+      'Kayıtlı kimlik bilgisi okunamadı, kart seçeneği alıcıya gösterilmez.',
     update: 'Güncelle',
     saving: 'Kaydediliyor...',
     saved: 'Güncellendi',
@@ -45,8 +44,7 @@ const copy = {
     errors: {
       invalid_fee: 'Ek ücret 0 ile 1.000 TL arasında, en fazla iki ondalıklı olmalı.',
       provider_unavailable: 'Seçilen sanal pos henüz kullanılamıyor.',
-      card_not_ready:
-        'Kart modülü açılamadı: PayTR bağlantı testi geçmeli. PayTR sekmesini kullanın.',
+      card_not_ready: 'Kart modülü açılamadı: seçili sanal pos henüz hazır değil.',
       iban_required: 'Havale açılamadı: önce geçerli bir IBAN girip havale ayrıntılarını kaydedin.',
       migration_pending: 'Bu ayar için veritabanı güncellemesi gerekli (scripts/036).',
       save_failed: 'Ayarlar kaydedilemedi. Lütfen tekrar deneyin.',
@@ -72,10 +70,9 @@ const copy = {
     activeProvider: 'Active card provider',
     soon: 'Coming soon',
     cardNotReady:
-      "The selected provider's connection test has not passed, so the card option is hidden from buyers. Enter credentials in the PayTR tab and pass the test.",
+      'The selected provider is not ready yet, so the card option is hidden from buyers.',
     cardUnreadable:
-      'Stored credentials could not be read, so the card option is hidden from buyers. Re-enter them in the PayTR tab.',
-    goPaytr: 'Go to PayTR tab',
+      'Stored credentials could not be read, so the card option is hidden from buyers.',
     update: 'Update',
     saving: 'Saving...',
     saved: 'Updated',
@@ -84,7 +81,7 @@ const copy = {
     errors: {
       invalid_fee: 'The fee must be between 0 and 1,000 TRY with at most two decimals.',
       provider_unavailable: 'The selected provider is not available yet.',
-      card_not_ready: 'Could not enable cards: the PayTR connection test must pass first.',
+      card_not_ready: 'Could not enable cards: the selected provider is not ready yet.',
       iban_required: 'Could not enable bank transfer: save a valid IBAN in the details first.',
       migration_pending: 'This setting needs the database update (scripts/036).',
       save_failed: 'Settings could not be saved. Please try again.',
@@ -97,13 +94,11 @@ export function GeneralPaymentSettings({
   initial,
   onSaved,
   onOpenBank,
-  onOpenPaytr,
 }: {
   projectId: string
   initial: GeneralPaymentView
   onSaved: (view: GeneralPaymentView) => void
   onOpenBank: () => void
-  onOpenPaytr: () => void
 }) {
   const { lang } = useLanguage()
   const l = lang === 'en' ? 'en' : 'tr'
@@ -239,10 +234,6 @@ export function GeneralPaymentSettings({
       >
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">{c.activeProvider}</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="radio" name="card-provider" checked readOnly className="accent-primary" />
-            PayTR
-          </label>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input type="radio" name="card-provider" disabled />
             iyzico
@@ -251,10 +242,7 @@ export function GeneralPaymentSettings({
         </fieldset>
         {cardProblem && (
           <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {initial.cardUnreadable ? c.cardUnreadable : c.cardNotReady}{' '}
-            <button type="button" onClick={onOpenPaytr} className="font-medium underline">
-              {c.goPaytr}
-            </button>
+            {initial.cardUnreadable ? c.cardUnreadable : c.cardNotReady}
           </p>
         )}
       </Row>

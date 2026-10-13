@@ -313,7 +313,7 @@ export async function subscribeToPlan(
 
   const providerId = getPlatformPaymentProviderId()
   const provider = getPlatformPaymentProvider()
-  // Redirect-based PSPs (PayTR) settle asynchronously via webhook; the mock
+  // Redirect-based PSPs (iyzico) settle asynchronously via webhook; the mock
   // provider settles synchronously so dev/preview keeps working end to end.
   const settlesAsync = !isFree && !hasTrial && !provider.capabilities.synchronous
 

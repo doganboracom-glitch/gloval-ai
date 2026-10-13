@@ -1,8 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadDemoStoreIds } from '@/lib/store-demo'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
-import { loadStorePaytr } from '@/lib/store-payments/paytr-credentials'
-import { credentialFingerprint } from '@/lib/store-payments/paytr-core'
+import {
+  isCardProviderId,
+  normalizeCardProvider,
+  type CardProviderId,
+} from '@/lib/payments/card-providers'
 import {
   isDemoStore,
   resolveStorePayment,
@@ -18,7 +21,7 @@ type Admin = ReturnType<typeof createAdminClient>
 /**
  * Reads the settings row including the checkout columns from migration 036,
  * falling back to the legacy column set while that migration is not applied
- * (guest checkout then reads as ON, fee as 0, active card as PayTR).
+ * (guest checkout then reads as ON, fee as 0, active card as the default).
  */
 export async function readStorePaymentRow(admin: Admin, projectId: string) {
   const full = await admin
@@ -34,23 +37,31 @@ export async function readStorePaymentRow(admin: Admin, projectId: string) {
     .maybeSingle()
 }
 
+export type CardReadiness = { ready: boolean; unreadable: boolean }
+
 /**
- * True when the store's card provider can take a payment right now: its
- * credentials decrypt, are complete, and passed the connection test. Anything
- * else (including an unreadable secret blob) is NOT ready — fail closed.
+ * Per-provider readiness checkers (credentials present, decryptable and
+ * connection-tested). A provider without an entry here is not integrated and
+ * therefore never ready. The integration phase for a provider adds its checker.
+ */
+const CARD_READINESS_CHECKERS: Partial<
+  Record<CardProviderId, (admin: Admin, projectId: string) => Promise<CardReadiness>>
+> = {}
+
+/**
+ * True when the given card provider can take a payment right now. Anything
+ * else (no checker, incomplete or unreadable credentials) is NOT ready — fail
+ * closed.
  */
 export async function isCardProviderReady(
   admin: Admin,
   projectId: string,
-): Promise<{ ready: boolean; unreadable: boolean }> {
+  providerId: CardProviderId,
+): Promise<CardReadiness> {
+  const check = CARD_READINESS_CHECKERS[providerId]
+  if (!check) return { ready: false, unreadable: false }
   try {
-    const stored = await loadStorePaytr(admin, projectId)
-    const ready = Boolean(
-      stored.credentials &&
-        stored.testedFingerprint &&
-        stored.testedFingerprint === credentialFingerprint(stored.credentials),
-    )
-    return { ready, unreadable: false }
+    return await check(admin, projectId)
   } catch {
     return { ready: false, unreadable: true }
   }
@@ -82,10 +93,13 @@ export async function loadStorePaymentConfig(
     const row = (data as StorePaymentRow | null) ?? null
     const demoIds = await loadDemoStoreIds(admin, projectId)
 
+    const activeCard = normalizeCardProvider(row?.active_card_provider)
     const listsCard = Array.isArray(row?.enabled_providers)
-      ? (row!.enabled_providers as string[]).includes('paytr')
-      : row?.provider === 'paytr'
-    const cardReady = listsCard ? (await isCardProviderReady(admin, projectId)).ready : true
+      ? (row!.enabled_providers as string[]).some(isCardProviderId)
+      : isCardProviderId(row?.provider)
+    const cardReady = listsCard
+      ? (await isCardProviderReady(admin, projectId, activeCard)).ready
+      : true
 
     return resolveStorePayment(
       row,

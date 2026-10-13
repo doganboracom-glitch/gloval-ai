@@ -27,12 +27,12 @@ export interface CheckoutItem {
 
 /**
  * Pre-purchase legal gate required by Turkish distance-selling rules (Mesafeli
- * Sözleşmeler Yönetmeliği) and by PayTR's merchant review:
+ * Sözleşmeler Yönetmeliği) and by the payment provider's merchant review:
  *   1. Buyer/billing info is collected.
  *   2. The Distance Sales Agreement + Pre-Sale Information Form are shown/linked.
  *   3. Three consent checkboxes start UNCHECKED and the pay button stays
  *      disabled until all are ticked. Only then does `onConfirm` fire the real
- *      purchase action (which then redirects to PayTR).
+ *      purchase action (which then redirects to iyzico).
  *
  * The dialog never fakes a payment; it just guarantees informed consent before
  * the existing checkout action runs.

@@ -5,7 +5,6 @@ import useSWR from 'swr'
 import { ArrowLeft, Loader2, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { getPaymentSettingsForOwner } from '@/lib/payment-settings'
-import { getPaytrSettings } from '@/lib/store-payments/paytr-settings'
 import {
   getGeneralPaymentSettings,
   type GeneralPaymentView,
@@ -13,11 +12,10 @@ import {
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { GeneralPaymentSettings } from '@/components/ecommerce/general-payment-settings'
 import { PaymentSettingsClient } from '@/components/ecommerce/payment-settings-client'
-import { PaytrPanel } from '@/components/ecommerce/paytr-panel'
 import { ShippingSettingsPanel } from '@/components/ecommerce/shipping-settings-panel'
 import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
 
-type TabId = 'general' | 'shipping' | 'paytr' | 'iyzico'
+type TabId = 'general' | 'shipping' | 'iyzico'
 
 const copy = {
   tr: {
@@ -49,18 +47,17 @@ const copy = {
 }
 
 async function loadAll(projectId: string) {
-  const [general, bank, paytr, shipping] = await Promise.all([
+  const [general, bank, shipping] = await Promise.all([
     getGeneralPaymentSettings(projectId),
     getPaymentSettingsForOwner(projectId),
-    getPaytrSettings(projectId),
     getShippingSettings(projectId),
   ])
-  return { general, bank, paytr, shipping }
+  return { general, bank, shipping }
 }
 
 /**
  * Wide settings window opened from the editor's Sanal Poslar tab. It reuses the
- * existing payment form components (bank details, PayTR panel) and talks to the
+ * existing payment form components (bank details, shipping) and talks to the
  * server through their own actions, so nothing here touches the site draft,
  * the version history or publishing.
  */
@@ -126,7 +123,6 @@ export function PaymentSettingsDialog({
   const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
     { id: 'general', label: c.general },
     { id: 'shipping', label: c.shipping },
-    { id: 'paytr', label: 'PayTR' },
     { id: 'iyzico', label: 'iyzico', disabled: true },
   ]
 
@@ -207,7 +203,6 @@ export function PaymentSettingsDialog({
               initial={data.general}
               onSaved={handleGeneralSaved}
               onOpenBank={() => setBankOpen(true)}
-              onOpenPaytr={() => selectTab('paytr')}
             />
           )}
 
@@ -228,7 +223,6 @@ export function PaymentSettingsDialog({
                 projectId={projectId}
                 projectName=""
                 initial={data.bank}
-                initialPaytr={data.paytr}
                 onSaved={() => {
                   void mutate()
                 }}
@@ -247,10 +241,6 @@ export function PaymentSettingsDialog({
                 })
               }
             />
-          )}
-
-          {data && tab === 'paytr' && (
-            <PaytrPanel key={`paytr-${version}`} projectId={projectId} initial={data.paytr} />
           )}
 
           {tab === 'iyzico' && <p className="text-sm text-muted-foreground">{c.iyzicoSoon}</p>}

@@ -141,7 +141,7 @@ export function DemoCheckout({
     const orderItems = cart.items.map((i) => ({ name: i.name, quantity: i.quantity }))
     const orderTotal = cart.subtotalCents
     const orderCurrency = cart.items[0]?.currency ?? 'TRY'
-    // Simulate a PSP round-trip; a real store redirects to PayTR/iyzico here.
+    // Simulate a PSP round-trip; a real store redirects to iyzico here.
     window.setTimeout(() => {
       recordDemoOrder(slug, {
         email: form.email,

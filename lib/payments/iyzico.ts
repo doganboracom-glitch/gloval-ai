@@ -18,7 +18,7 @@ import {
 /**
  * iyzico Checkout Form (CF) adapter. Implemented directly against iyzico's
  * REST API using the IYZWSv2 HMAC-SHA256 authorization scheme — no SDK
- * dependency, mirroring the PayTR/Stripe adapters in this folder.
+ * dependency, mirroring the Stripe adapter in this folder.
  *
  * Flow:
  *   1. `createIntent` calls the CF initialize endpoint and returns a redirect
@@ -33,7 +33,7 @@ import {
  *      the callback POST body itself is never trusted for the payment status.
  *
  * Checkout Form settles asynchronously (redirect + callback), so
- * `capabilities.synchronous` is false, exactly like PayTR. There is no signed
+ * `capabilities.synchronous` is false (redirect-based, settled by callback). There is no signed
  * push-webhook product for Checkout Form (that is a separate iyzico product,
  * the recurring Subscription API's notification URL), so `parseWebhook`
  * always returns null — nothing reaches activation through the generic

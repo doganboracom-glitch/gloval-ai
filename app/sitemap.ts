@@ -52,7 +52,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/iletisim', { changeFrequency: 'yearly', priority: 0.5 }),
   ]
 
-  // Legal / corporate pages required for a production SaaS (and PayTR review).
+  // Legal / corporate pages required for a production SaaS (and payment provider review).
   const legal: MetadataRoute.Sitemap = LEGAL_SLUGS.map((slug) =>
     entry(`/yasal/${slug}`, { changeFrequency: 'yearly', priority: 0.4 }),
   )

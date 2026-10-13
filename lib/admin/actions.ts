@@ -261,7 +261,7 @@ function revalidateUserPackage(userId: string) {
 /**
  * Change a user's plan IMMEDIATELY (the subscription model has no scheduled
  * downgrade). This only rewrites our own subscription row — NO charge, refund
- * or provider-side change is made. When the user has a live iyzico/PayTR
+ * or provider-side change is made. When the user has a live iyzico
  * subscription, the provider would keep billing the old plan, so we refuse
  * unless the admin explicitly acknowledges that no payment sync happens.
  */

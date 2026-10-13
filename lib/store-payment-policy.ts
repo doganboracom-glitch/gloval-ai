@@ -1,6 +1,10 @@
 import type { PaymentProviderId } from "@/lib/payments/types";
 import { PAYMENT_METHODS, isCardProviderMethod } from "@/lib/payments/methods";
 import { isValidCodFeeCents } from "@/lib/store-checkout-rules";
+import {
+  isCardProviderIntegrated,
+  normalizeCardProvider,
+} from "@/lib/payments/card-providers";
 
 /**
  * Pure policy for STORE (tenant e-commerce) payments. Deliberately free of
@@ -189,14 +193,15 @@ export function resolveStorePayment(
     if (id === "mock") return mockAllowed || demo;
     if (isCardProviderMethod(id)) {
       if (demo) return false;
-      // Only the owner's active card provider is offered, and only while it
-      // can actually take a payment (fail closed).
-      if (id !== activeCard || !cardReady) return false;
+      // Only the owner's active card provider is offered, and only while it is
+      // integrated and can actually take a payment (fail closed).
+      if (id !== activeCard || !isCardProviderIntegrated(id) || !cardReady) {
+        return false;
+      }
     }
     return OWNER_SELECTABLE.has(id);
   };
-  const activeCard =
-    row?.active_card_provider === "iyzico" ? "iyzico" : "paytr";
+  const activeCard = normalizeCardProvider(row?.active_card_provider);
   const guestCheckout = row?.guest_checkout !== false;
   const codFeeCents = isValidCodFeeCents(row?.cod_fee_cents)
     ? row!.cod_fee_cents!

@@ -19,9 +19,6 @@ function setEnv(env: Record<string, string>) {
     'NEXT_PUBLIC_SITE_URL',
     'NEXT_PUBLIC_APP_URL',
     'VERCEL_URL',
-    'PAYTR_MERCHANT_ID',
-    'PAYTR_MERCHANT_KEY',
-    'PAYTR_MERCHANT_SALT',
   ]) {
     vi.stubEnv(key, env[key] ?? '')
   }

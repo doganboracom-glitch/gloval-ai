@@ -10,6 +10,10 @@ const MODULE_LABEL: Record<PaymentModuleState['id'], Record<Lang, string>> = {
 }
 
 const PROBLEM: Record<NonNullable<PaymentModuleState['problem']>, Record<Lang, string>> = {
+  card_coming_soon: {
+    tr: 'Kart ödemesi yakında',
+    en: 'Card payments coming soon',
+  },
   card_not_tested: {
     tr: 'Bağlantı testi geçmedi',
     en: 'Connection test not passed',

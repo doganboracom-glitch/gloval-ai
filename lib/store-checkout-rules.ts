@@ -1,4 +1,5 @@
 import type { PaymentProviderId } from '@/lib/payments/types'
+import type { CardProviderId } from '@/lib/payments/card-providers'
 
 /**
  * Pure checkout rules shared by the server (createOrder, owner settings) and
@@ -10,14 +11,7 @@ import type { PaymentProviderId } from '@/lib/payments/types'
 /** Upper bound for the cash-on-delivery surcharge: 1.000 TL. */
 export const COD_FEE_MAX_CENTS = 100_000
 
-export type CardProviderChoice = 'paytr' | 'iyzico'
-
-/** Card providers that can currently be made active (iyzico is "coming soon"). */
-export const SELECTABLE_CARD_PROVIDERS: readonly CardProviderChoice[] = ['paytr']
-
-export function isSelectableCardProvider(id: unknown): id is CardProviderChoice {
-  return typeof id === 'string' && (SELECTABLE_CARD_PROVIDERS as readonly string[]).includes(id)
-}
+export type CardProviderChoice = CardProviderId
 
 /**
  * Parses an owner-entered fee in TL ("12", "12,5", "12.50") into integer cents.
@@ -115,7 +109,7 @@ export type PaymentModuleState = {
   /** Enabled AND actually able to take an order right now. */
   ready: boolean
   /** Why an enabled module is not ready. */
-  problem?: 'card_not_tested' | 'card_unreadable' | 'iban_missing'
+  problem?: 'card_coming_soon' | 'card_not_tested' | 'card_unreadable' | 'iban_missing'
 }
 
 export type PaymentSummary = {
@@ -131,6 +125,8 @@ export type PaymentSummary = {
 
 export function buildPaymentSummary(input: {
   cardEnabled: boolean
+  /** The active card provider has a per-store integration at all. */
+  cardIntegrated: boolean
   cardReady: boolean
   cardUnreadable: boolean
   bankEnabled: boolean
@@ -144,12 +140,15 @@ export function buildPaymentSummary(input: {
     {
       id: 'card',
       enabled: input.cardEnabled,
-      ready: input.cardEnabled && input.cardReady,
-      problem: input.cardEnabled && !input.cardReady
-        ? input.cardUnreadable
-          ? 'card_unreadable'
-          : 'card_not_tested'
-        : undefined,
+      ready: input.cardEnabled && input.cardIntegrated && input.cardReady,
+      problem:
+        input.cardEnabled && !input.cardIntegrated
+          ? 'card_coming_soon'
+          : input.cardEnabled && !input.cardReady
+            ? input.cardUnreadable
+              ? 'card_unreadable'
+              : 'card_not_tested'
+            : undefined,
     },
     {
       id: 'bank_transfer',

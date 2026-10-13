@@ -5,7 +5,6 @@ import {
   computeOrderTotals,
   formatCodFeeInput,
   isCheckoutAllowed,
-  isSelectableCardProvider,
   isValidCodFeeCents,
   orderCodFeeCents,
   parseCodFeeInput,
@@ -62,14 +61,6 @@ describe('isValidCodFeeCents / formatCodFeeInput', () => {
   })
 })
 
-describe('isSelectableCardProvider', () => {
-  it('only allows paytr for now', () => {
-    expect(isSelectableCardProvider('paytr')).toBe(true)
-    expect(isSelectableCardProvider('iyzico')).toBe(false)
-    expect(isSelectableCardProvider(undefined)).toBe(false)
-  })
-})
-
 describe('computeOrderTotals', () => {
   const base = { subtotalCents: 10_000, shippingCents: 2_000, codFeeCents: 1_500 }
 
@@ -83,7 +74,7 @@ describe('computeOrderTotals', () => {
   })
 
   it('never charges the fee on card or bank transfer orders', () => {
-    for (const providerId of ['paytr', 'iyzico', 'bank_transfer']) {
+    for (const providerId of ['iyzico', 'bank_transfer']) {
       const totals = computeOrderTotals({ ...base, providerId })
       expect(totals.codFeeCents).toBe(0)
       expect(totals.totalCents).toBe(12_000)
@@ -105,7 +96,7 @@ describe('orderCodFeeCents', () => {
   const order = { subtotal_cents: 10_000, shipping_cents: 2_000, total_cents: 13_500 }
 
   it('is zero for non cash-on-delivery orders', () => {
-    expect(orderCodFeeCents({ ...order, payment_provider: 'paytr' })).toBe(0)
+    expect(orderCodFeeCents({ ...order, payment_provider: 'iyzico' })).toBe(0)
     expect(orderCodFeeCents({ ...order, payment_provider: null })).toBe(0)
   })
 
@@ -134,12 +125,13 @@ describe('isCheckoutAllowed', () => {
 describe('buildPaymentSummary', () => {
   const closed = {
     cardEnabled: false,
+    cardIntegrated: true,
     cardReady: false,
     cardUnreadable: false,
     bankEnabled: false,
     bankIbanValid: false,
     codEnabled: false,
-    activeCardProvider: 'paytr' as const,
+    activeCardProvider: 'iyzico' as const,
     guestCheckout: true,
     codFeeCents: 0,
   }
@@ -156,6 +148,18 @@ describe('buildPaymentSummary', () => {
     expect(s.closedReason).toBe('none_ready')
     expect(s.modules.find((m) => m.id === 'card')?.problem).toBe('card_not_tested')
     expect(s.modules.find((m) => m.id === 'bank_transfer')?.problem).toBe('iban_missing')
+  })
+
+  it('keeps an enabled card method closed while its provider is not integrated', () => {
+    const s = buildPaymentSummary({
+      ...closed,
+      cardEnabled: true,
+      cardIntegrated: false,
+      cardReady: true,
+    })
+    expect(s.ordersOpen).toBe(false)
+    expect(s.modules.find((m) => m.id === 'card')?.ready).toBe(false)
+    expect(s.modules.find((m) => m.id === 'card')?.problem).toBe('card_coming_soon')
   })
 
   it('flags an unreadable card config distinctly', () => {

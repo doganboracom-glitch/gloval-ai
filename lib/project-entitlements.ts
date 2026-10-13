@@ -156,7 +156,7 @@ export async function purchaseBrandingRemoval(
   if (existing) return { ok: false, error: 'already_owned' }
 
   // Settle the one-time charge through the platform provider. The mock provider
-  // completes synchronously; a real PSP (PayTR) returns a redirect URL and the
+  // completes synchronously; a real PSP (iyzico) returns a redirect URL and the
   // right is activated only after a verified callback.
   const providerId = getPlatformPaymentProviderId()
   const provider = getPlatformPaymentProvider()
@@ -199,7 +199,7 @@ export async function purchaseBrandingRemoval(
 
   if (settlesAsync) {
     // Record the right as INACTIVE (pending) and keep a pending ledger row; the
-    // billing webhook flips both to active/succeeded once PayTR confirms. Upsert
+    // billing webhook flips both to active/succeeded once iyzico confirms. Upsert
     // so an abandoned attempt can be retried without a unique-index clash.
     const { error: pendErr } = await admin.from('project_entitlements').upsert(
       {

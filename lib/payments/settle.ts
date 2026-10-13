@@ -21,7 +21,7 @@ export type SettleOutcome =
 
 /**
  * Shared activation logic for an ALREADY-VERIFIED payment result, regardless
- * of how it was verified: a signed push webhook (Stripe, PayTR) or a
+ * of how it was verified: a signed push webhook (Stripe) or a
  * server-side retrieve/detail call (iyzico Checkout Form). Callers MUST have
  * cryptographically verified — or authoritatively retrieved — `result` before
  * calling this; it trusts it completely and will activate real money-gated

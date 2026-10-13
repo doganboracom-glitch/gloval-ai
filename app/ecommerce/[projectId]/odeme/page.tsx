@@ -3,7 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { getPaymentSettingsForOwner } from '@/lib/payment-settings'
 import { getTryOnEnabledForOwner } from '@/lib/try-on-settings'
-import { getPaytrSettings } from '@/lib/store-payments/paytr-settings'
 import { PaymentSettingsClient } from '@/components/ecommerce/payment-settings-client'
 
 // Per-user, auth-gated settings — never serve from a stale cache.
@@ -28,11 +27,9 @@ export default async function PaymentSettingsPage({
 
   const settings = await getPaymentSettingsForOwner(projectId)
   const tryOnEnabled = await getTryOnEnabledForOwner(projectId)
-  const paytr = await getPaytrSettings(projectId)
 
   return (
     <PaymentSettingsClient
-      initialPaytr={paytr}
       projectId={projectId}
       projectName={project.name}
       initial={settings}

@@ -7,7 +7,6 @@ import type { PaymentProviderId, PaymentWebhookResult } from '@/lib/payments/typ
  */
 export const STORE_WEBHOOK_PROVIDERS: ReadonlySet<PaymentProviderId> = new Set<PaymentProviderId>([
   'stripe',
-  'paytr',
   'iyzico',
 ])
 
@@ -21,7 +20,7 @@ export type AmountCheckFailure = 'amount_missing' | 'amount_mismatch' | 'currenc
  * Cross-checks the verified PSP amount against the server-side order total
  * before a payment may fulfil the order. Fails closed when the provider did
  * not report an amount. `at_least` is for PSPs whose signed total may include
- * an installment surcharge (PayTR): underpaying is rejected, overpaying is not.
+ * an installment surcharge: underpaying is rejected, overpaying is not.
  */
 export function checkPaidAmount(
   result: Pick<PaymentWebhookResult, 'paidAmountCents' | 'paidCurrency' | 'amountMatch'>,
