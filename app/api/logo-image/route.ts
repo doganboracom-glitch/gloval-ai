@@ -149,6 +149,7 @@ export async function POST(req: Request) {
     return generateSiteImage({
       prompt: `${basePrompt} Variation: ${variationHint}.`,
       aspectRatio: FORMAT_ASPECT[format],
+      allowText: true,
     })
   }
 

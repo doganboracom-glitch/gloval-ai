@@ -2,6 +2,7 @@ import { processProductImage } from '@/lib/product-image-pipeline'
 import { isUuid } from '@/lib/product-images'
 import { StoreAiInvalidResult, StoreAiRefusal } from '@/lib/store-ai-engine'
 import { STORE_AI_IMAGE } from '@/lib/store-ai-constants'
+import { PRODUCT_EDIT_NO_TEXT_RULE } from '@/lib/image-prompt-rules'
 import { IMAGE_STYLES, type ImageStyleId } from '@/lib/store-ai-image-styles'
 
 /**
@@ -25,7 +26,7 @@ export function buildImagePrompt(style: ImageStyleId, productName: string): stri
     'Product photo edit. Keep the product in the reference image EXACTLY as it is: same shape, proportions, colors, patterns, materials, brand marks, and any text or logos printed on it.',
     'Do not redraw, restyle, add, remove or alter any part of the product. Only replace the background, lighting and surroundings.',
     `Scene: ${scene}.`,
-    'Rules: no people, no faces, no hands, no body parts. No other brands, logos, watermarks or readable text anywhere except what is already printed on the product. One product only, centered, fully in frame, nothing cropped.',
+    `Rules: no people, no faces, no hands, no body parts. No other brands or logos. ${PRODUCT_EDIT_NO_TEXT_RULE} One product only, centered, fully in frame, nothing cropped.`,
     name ? `Product name (context only): ${name}.` : '',
   ]
     .filter(Boolean)

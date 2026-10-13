@@ -6,6 +6,7 @@ import {
   type ImageAspect,
 } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
+import { imagePromptRules, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
 import { describeVisualRequest, resolveVisualTopic } from '@/lib/visual-subjects'
 
 /**
@@ -24,6 +25,8 @@ export type Brief = {
   style: string
   audience: string
   visualNeed: string
+  /** True only when the request explicitly asks for drawn artwork (never for logos). */
+  illustrative?: boolean
 }
 
 /** The concrete subject each sector's hero image should depict. */
@@ -114,7 +117,21 @@ export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
     style: styleDescriptor(prompt, site),
     audience: site?.meta.audience || 'a broad, quality-seeking audience',
     visualNeed: topic?.subject ?? SECTOR_SUBJECT[sector],
+    illustrative: wantsIllustrationStyle(haystack),
   }
+}
+
+/** Medium line: photograph by default, drawn artwork only when explicitly requested. */
+function heroKind(brief: Brief): string {
+  return brief.illustrative
+    ? `Polished hero banner illustration for a ${brief.businessType}.`
+    : `Photorealistic hero banner photograph for a ${brief.businessType}.`
+}
+
+function heroRendering(brief: Brief): string {
+  return brief.illustrative
+    ? 'high resolution, crisp clean artwork, cohesive illustrated style,'
+    : 'high resolution, sharp focus, realistic documentary photography,'
 }
 
 /**
@@ -128,12 +145,13 @@ export function buildHeroImagePrompt(brief: Brief, extra?: string): string {
   // photograph for a …") is what keeps the result on-topic.
   const bits = [
     `${brief.visualNeed}.`,
-    `Photorealistic hero banner photograph for a ${brief.businessType}.`,
+    heroKind(brief),
     `Style: ${brief.style}.`,
     extra ? `Context: ${extra}.` : '',
     'Wide cinematic composition with clear negative space for overlaid text,',
-    'high resolution, sharp focus, realistic documentary photography,',
-    'no text, no watermark, no logos, no collage, not an empty landscape.',
+    heroRendering(brief),
+    'Not an empty landscape.',
+    imagePromptRules(brief.illustrative),
   ]
   return bits.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
 }
@@ -153,11 +171,12 @@ export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema)
   )
   return [
     `${subject}.`,
-    `Photorealistic hero banner photograph for a ${brief.businessType}.`,
+    heroKind(brief),
     `Style: ${brief.style}.`,
     'Wide cinematic composition with clear negative space for overlaid text,',
-    'high resolution, sharp focus, realistic documentary photography,',
-    'no text, no watermark, no logos, no collage, not an empty landscape.',
+    heroRendering(brief),
+    'Not an empty landscape.',
+    imagePromptRules(brief.illustrative),
   ]
     .join(' ')
     .replace(/\s+/g, ' ')
