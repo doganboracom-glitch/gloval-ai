@@ -1,7 +1,7 @@
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { generateSiteImage, imageGenerationAvailable, type ImageAspect } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
-import { IMAGE_PROMPT_RULES } from '@/lib/image-prompt-rules'
+import { imagePromptRules } from '@/lib/image-prompt-rules'
 import { analyzeBrief } from '@/lib/hero-image'
 import { describeVisualRequest } from '@/lib/visual-subjects'
 import { collectionOf, IMAGE_ITEM_SECTIONS } from '@/lib/website-edit-operations'
@@ -69,15 +69,20 @@ export function buildItemImagePrompt(
   const brief = analyzeBrief(`${raw} ${site.meta.name} ${site.meta.tagline}`, site)
   const subject = raw ? describeVisualRequest(raw) : brief.visualNeed
 
+  const rules = imagePromptRules(brief.illustrative)
+
   if (target.section.type === 'team') {
     const role = typeof item.role === 'string' ? item.role : ''
     return [
-      `Professional corporate headshot portrait of a ${role || 'team member'} at a ${brief.businessType}.`,
+      brief.illustrative
+        ? `Friendly portrait illustration of a ${role || 'team member'} at a ${brief.businessType}.`
+        : `Professional corporate headshot portrait of a ${role || 'team member'} at a ${brief.businessType}.`,
       subject ? `Context: ${subject}.` : '',
       `Style: ${brief.style}.`,
-      'Friendly natural expression, shallow depth of field, clean neutral background,',
-      'sharp focus, realistic photography.',
-      IMAGE_PROMPT_RULES,
+      brief.illustrative
+        ? 'Friendly natural expression, clean neutral background, crisp clean artwork.'
+        : 'Friendly natural expression, shallow depth of field, clean neutral background, sharp focus, realistic photography.',
+      rules,
     ]
       .filter(Boolean)
       .join(' ')
@@ -87,10 +92,14 @@ export function buildItemImagePrompt(
 
   return [
     `${subject}.`,
-    `Photorealistic photograph for the ${target.section.type} section of a ${brief.businessType}.`,
+    brief.illustrative
+      ? `Polished illustration for the ${target.section.type} section of a ${brief.businessType}.`
+      : `Photorealistic photograph for the ${target.section.type} section of a ${brief.businessType}.`,
     `Style: ${brief.style}.`,
-    'Well-composed single subject, high resolution, sharp focus, realistic documentary photography,',
-    IMAGE_PROMPT_RULES,
+    brief.illustrative
+      ? 'Well-composed single subject, high resolution, crisp clean artwork, cohesive illustrated style,'
+      : 'Well-composed single subject, high resolution, sharp focus, realistic documentary photography,',
+    rules,
   ]
     .join(' ')
     .replace(/\s+/g, ' ')
