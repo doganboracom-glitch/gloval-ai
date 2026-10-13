@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CTAButton, Section, SiteImageRef } from '@/lib/website-schema'
 import { SiteButton, SiteImage } from '@/components/website-renderer/primitives'
+import { useCarouselGestures } from '@/components/website-renderer/use-carousel-gestures'
+import { KEEP_INTERACTIVE_PROPS } from '@/lib/preview-interactive'
 
 type HeroData = Extract<Section, { type: 'hero' }>
 type HeroSlide = NonNullable<HeroData['slides']>[number]
@@ -392,6 +394,8 @@ function HeroSlider({ slides }: { slides: Slide[] }) {
     return () => window.clearInterval(id)
   }, [count, paused])
 
+  const gestures = useCarouselGestures((dir) => go(index + dir), count > 1)
+
   return (
     <section
       id="hero"
@@ -400,6 +404,7 @@ function HeroSlider({ slides }: { slides: Slide[] }) {
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       aria-roledescription="carousel"
+      {...gestures}
     >
       {slides.map((slide, i) => (
         <div
@@ -423,6 +428,7 @@ function HeroSlider({ slides }: { slides: Slide[] }) {
           {/* Prev / next controls */}
           <button
             type="button"
+            {...KEEP_INTERACTIVE_PROPS}
             onClick={() => go(index - 1)}
             aria-label="Previous slide"
             className="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white transition-opacity hover:opacity-80"
@@ -432,6 +438,7 @@ function HeroSlider({ slides }: { slides: Slide[] }) {
           </button>
           <button
             type="button"
+            {...KEEP_INTERACTIVE_PROPS}
             onClick={() => go(index + 1)}
             aria-label="Next slide"
             className="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white transition-opacity hover:opacity-80"
@@ -446,6 +453,7 @@ function HeroSlider({ slides }: { slides: Slide[] }) {
               <button
                 key={i}
                 type="button"
+                {...KEEP_INTERACTIVE_PROPS}
                 onClick={() => setIndex(i)}
                 aria-label={`Go to slide ${i + 1}`}
                 aria-current={i === index}
