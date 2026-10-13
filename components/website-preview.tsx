@@ -1440,6 +1440,7 @@ export function WebsitePreview({
               <WebsiteEditorPanel
                 site={currentSite}
                 payments={payments}
+                publicSlug={liveSlug}
                 planCode={planCode}
                 onBeforeUpgrade={flushDraft}
                 messages={messages}

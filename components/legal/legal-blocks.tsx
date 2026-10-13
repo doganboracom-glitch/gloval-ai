@@ -3,15 +3,26 @@ import type { LegalBlock, LegalInline } from '@/lib/legal-markup'
 function Inline({ runs }: { runs: LegalInline[] }) {
   return (
     <>
-      {runs.map((run, i) =>
-        run.bold ? (
-          <strong key={i} className="font-semibold">
-            {run.text}
-          </strong>
+      {runs.map((run, i) => {
+        const content = run.bold ? (
+          <strong className="font-semibold">{run.text}</strong>
         ) : (
-          <span key={i}>{run.text}</span>
-        ),
-      )}
+          <span>{run.text}</span>
+        )
+        return run.href ? (
+          <a
+            key={i}
+            href={run.href}
+            target={run.href.startsWith('/') ? undefined : '_blank'}
+            rel="noopener noreferrer nofollow"
+            className="underline underline-offset-2"
+          >
+            {content}
+          </a>
+        ) : (
+          <span key={i}>{content}</span>
+        )
+      })}
     </>
   )
 }
