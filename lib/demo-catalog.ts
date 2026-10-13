@@ -103,7 +103,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'El ile toplanmış', en: 'Hand-picked' },
           { tr: 'Filtre için ideal', en: 'Great for filter' },
         ],
-        image: '/demos/kahve/g3.webp',
+        image: '/demos/kahve/g3.e96921f7.webp',
       },
       {
         slug: 'esmeralda-geisha',
@@ -121,7 +121,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Açık kavrum', en: 'Light roast' },
           { tr: 'Ödüllü çiftlik', en: 'Award-winning farm' },
         ],
-        image: '/demos/kahve/g1.webp',
+        image: '/demos/kahve/g1.e9e9cded.webp',
       },
       {
         slug: 'house-blend',
@@ -139,7 +139,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Orta-koyu kavrum', en: 'Medium-dark roast' },
           { tr: 'Sütle uyumlu', en: 'Pairs with milk' },
         ],
-        image: '/demos/kahve/g4.webp',
+        image: '/demos/kahve/g4.5e182192.webp',
       },
     ],
     services: [
@@ -157,7 +157,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Özelleştirilebilir menü', en: 'Customizable menu' },
           { tr: 'Tüm şehirlerde', en: 'Nationwide' },
         ],
-        image: '/demos/kahve/services/catering.webp',
+        image: '/demos/kahve/services/catering.68a1db76.webp',
       },
       {
         slug: 'kurumsal-kahve-cozumleri',
@@ -173,7 +173,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Bakım & servis', en: 'Maintenance & service' },
           { tr: 'Esnek abonelik', en: 'Flexible subscription' },
         ],
-        image: '/demos/kahve/services/corporate.webp',
+        image: '/demos/kahve/services/corporate.44906ddb.webp',
       },
       {
         slug: 'kahve-egitimi',
@@ -189,7 +189,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Demleme teknikleri', en: 'Brewing techniques' },
           { tr: 'Bireysel & grup', en: 'Individual & group' },
         ],
-        image: '/demos/kahve/services/training.webp',
+        image: '/demos/kahve/services/training.1f350a17.webp',
       },
     ],
     contact: contact(
@@ -226,8 +226,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Peyzaj entegrasyonu', en: 'Landscape integration' },
           { tr: 'Akıllı ev altyapısı', en: 'Smart-home wiring' },
         ],
-        image: '/demos/mimarlik/p1.webp',
-        gallery: ['/demos/mimarlik/p1.webp', '/demos/mimarlik/p2.webp', '/demos/mimarlik/p3.webp'],
+        image: '/demos/mimarlik/p1.effec99e.webp',
+        gallery: ['/demos/mimarlik/p1.effec99e.webp', '/demos/mimarlik/p2.c2160830.webp', '/demos/mimarlik/p3.d039185b.webp'],
       },
       {
         slug: 'ofis-projesi',
@@ -245,8 +245,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Doğal ışık', en: 'Natural light' },
           { tr: 'Marka kimliği', en: 'Brand identity' },
         ],
-        image: '/demos/mimarlik/p2.webp',
-        gallery: ['/demos/mimarlik/p2.webp', '/demos/mimarlik/p4.webp', '/demos/mimarlik/p5.webp'],
+        image: '/demos/mimarlik/p2.c2160830.webp',
+        gallery: ['/demos/mimarlik/p2.c2160830.webp', '/demos/mimarlik/p4.b36867f8.webp', '/demos/mimarlik/p5.9d09f813.webp'],
       },
       {
         slug: 'rezidans-projesi',
@@ -264,8 +264,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Enerji verimli cephe', en: 'Energy-efficient façade' },
           { tr: 'Otopark çözümleri', en: 'Parking solutions' },
         ],
-        image: '/demos/mimarlik/p3.webp',
-        gallery: ['/demos/mimarlik/p3.webp', '/demos/mimarlik/p6.webp', '/demos/mimarlik/p1.webp'],
+        image: '/demos/mimarlik/p3.d039185b.webp',
+        gallery: ['/demos/mimarlik/p3.d039185b.webp', '/demos/mimarlik/p6.07f650d9.webp', '/demos/mimarlik/p1.effec99e.webp'],
       },
     ],
     services: [
@@ -283,7 +283,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Ruhsat desteği', en: 'Permit support' },
           { tr: 'Malzeme seçimi', en: 'Material selection' },
         ],
-        image: '/demos/mimarlik/p4.webp',
+        image: '/demos/mimarlik/p4.b36867f8.webp',
       },
       {
         slug: 'ic-mimarlik',
@@ -299,7 +299,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Malzeme & doku', en: 'Materials & texture' },
           { tr: 'Anahtar teslim', en: 'Turnkey delivery' },
         ],
-        image: '/demos/mimarlik/p5.webp',
+        image: '/demos/mimarlik/p5.9d09f813.webp',
       },
       {
         slug: '3d-gorsellestirme',
@@ -315,7 +315,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Animasyon', en: 'Animation' },
           { tr: 'Hızlı revizyon', en: 'Fast revisions' },
         ],
-        image: '/demos/mimarlik/p6.webp',
+        image: '/demos/mimarlik/p6.07f650d9.webp',
       },
     ],
     contact: contact(
@@ -352,7 +352,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Doğal görünüm', en: 'Natural look' },
           { tr: 'Ömür boyu garanti', en: 'Lifetime warranty' },
         ],
-        image: '/demos/dis-klinigi/products/implant.webp',
+        image: '/demos/dis-klinigi/products/implant.c0a17f6e.webp',
       },
       {
         slug: 'dis-beyazlatma',
@@ -370,7 +370,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Kalıcı sonuç', en: 'Lasting result' },
           { tr: 'Düşük hassasiyet', en: 'Low sensitivity' },
         ],
-        image: '/demos/dis-klinigi/products/whitening.webp',
+        image: '/demos/dis-klinigi/products/whitening.85fac08e.webp',
       },
       {
         slug: 'ortodonti',
@@ -388,7 +388,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Konforlu tedavi', en: 'Comfortable treatment' },
           { tr: 'Takip seansları', en: 'Follow-up visits' },
         ],
-        image: '/demos/dis-klinigi/products/orthodontics.webp',
+        image: '/demos/dis-klinigi/products/orthodontics.a237cd0d.webp',
       },
     ],
     services: [
@@ -406,7 +406,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Tedavi planı', en: 'Treatment plan' },
           { tr: 'Ücretsiz danışmanlık', en: 'Free consultation' },
         ],
-        image: '/demos/dis-klinigi/services/checkup.webp',
+        image: '/demos/dis-klinigi/services/checkup.1ee5531a.webp',
       },
       {
         slug: 'dis-temizligi',
@@ -422,7 +422,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Leke giderme', en: 'Stain removal' },
           { tr: 'Koruyucu öneriler', en: 'Preventive advice' },
         ],
-        image: '/demos/dis-klinigi/services/cleaning.webp',
+        image: '/demos/dis-klinigi/services/cleaning.d292938e.webp',
       },
       {
         slug: 'dis-eti-tedavisi',
@@ -438,7 +438,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Ağrısız uygulama', en: 'Painless procedure' },
           { tr: 'Kişisel bakım planı', en: 'Personal care plan' },
         ],
-        image: '/demos/dis-klinigi/services/gum-care.webp',
+        image: '/demos/dis-klinigi/services/gum-care.4dafd3fa.webp',
       },
     ],
     contact: contact(
@@ -475,7 +475,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Tapu işlemleri', en: 'Title transactions' },
           { tr: 'Pazar analizi', en: 'Market analysis' },
         ],
-        image: '/demos/emlak/services/sales.webp',
+        image: '/demos/emlak/services/sales.3f3fc3cd.webp',
       },
       {
         slug: 'degerleme',
@@ -491,7 +491,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Hızlı sonuç', en: 'Fast turnaround' },
           { tr: 'Tarafsız değerleme', en: 'Independent valuation' },
         ],
-        image: '/demos/emlak/services/valuation.webp',
+        image: '/demos/emlak/services/valuation.3d2a9c5d.webp',
       },
       {
         slug: 'yatirim-danismanligi',
@@ -507,7 +507,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Bölge analizi', en: 'Area analysis' },
           { tr: 'Uzun vadeli plan', en: 'Long-term plan' },
         ],
-        image: '/demos/emlak/services/consulting.webp',
+        image: '/demos/emlak/services/consulting.83eb1f7d.webp',
       },
     ],
     contact: contact(
@@ -544,7 +544,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Kişiye özel', en: 'Personalized' },
           { tr: '4 seans', en: '4 sessions' },
         ],
-        image: '/demos/guzellik/g1.webp',
+        image: '/demos/guzellik/g1.f1d9f8d1.webp',
       },
       {
         slug: 'lazer-epilasyon-paketi',
@@ -562,7 +562,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Tüm vücut', en: 'Full body' },
           { tr: '6 seans', en: '6 sessions' },
         ],
-        image: '/demos/guzellik/g2.webp',
+        image: '/demos/guzellik/g2.2fca69c8.webp',
       },
       {
         slug: 'premium-bakim',
@@ -580,7 +580,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Spa erişimi', en: 'Spa access' },
           { tr: 'Kişisel danışman', en: 'Personal advisor' },
         ],
-        image: '/demos/guzellik/g3.webp',
+        image: '/demos/guzellik/g3.345677e5.webp',
       },
     ],
     services: [
@@ -598,7 +598,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Cilt tipine uygun', en: 'Skin-type matched' },
           { tr: 'Hijyenik ortam', en: 'Hygienic setting' },
         ],
-        image: '/demos/guzellik/services/laser.webp',
+        image: '/demos/guzellik/services/laser.906ae88b.webp',
       },
       {
         slug: 'masaj-terapi',
@@ -614,7 +614,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Uzman terapist', en: 'Expert therapist' },
           { tr: 'Sakin ortam', en: 'Calm environment' },
         ],
-        image: '/demos/guzellik/services/massage.webp',
+        image: '/demos/guzellik/services/massage.32bb5201.webp',
       },
       {
         slug: 'cilt-bakimi',
@@ -630,7 +630,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Peeling & maske', en: 'Peeling & mask' },
           { tr: 'Doğal ürünler', en: 'Natural products' },
         ],
-        image: '/demos/guzellik/services/spa.webp',
+        image: '/demos/guzellik/services/spa.ca5165e0.webp',
       },
     ],
     contact: contact(
@@ -666,7 +666,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Sözleşme yönetimi', en: 'Contract management' },
           { tr: 'Ticari dava', en: 'Commercial litigation' },
         ],
-        image: '/demos/hukuk/products/corporate.webp',
+        image: '/demos/hukuk/products/corporate.acfff458.webp',
       },
       {
         slug: 'aile-hukuku',
@@ -683,7 +683,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Miras hukuku', en: 'Inheritance law' },
           { tr: 'Arabuluculuk', en: 'Mediation' },
         ],
-        image: '/demos/hukuk/products/family.webp',
+        image: '/demos/hukuk/products/family.1af85c6a.webp',
       },
       {
         slug: 'gayrimenkul-hukuku',
@@ -700,7 +700,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Kat mülkiyeti', en: 'Condominium law' },
           { tr: 'Sözleşme denetimi', en: 'Contract review' },
         ],
-        image: '/demos/hukuk/products/property.webp',
+        image: '/demos/hukuk/products/property.7df197d3.webp',
       },
     ],
     services: [
@@ -718,7 +718,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Kurumsal paket', en: 'Corporate package' },
           { tr: 'Hızlı dönüş', en: 'Fast response' },
         ],
-        image: '/demos/hukuk/services/consultation.webp',
+        image: '/demos/hukuk/services/consultation.898daff1.webp',
       },
       {
         slug: 'dava-takibi',
@@ -734,7 +734,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'İcra takibi', en: 'Enforcement' },
           { tr: 'Düzenli raporlama', en: 'Regular reporting' },
         ],
-        image: '/demos/hukuk/services/litigation.webp',
+        image: '/demos/hukuk/services/litigation.222c9599.webp',
       },
       {
         slug: 'sozlesme-hazirlama',
@@ -750,7 +750,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Revizyon desteği', en: 'Revision support' },
           { tr: 'Çok dilli', en: 'Multilingual' },
         ],
-        image: '/demos/hukuk/services/contracts.webp',
+        image: '/demos/hukuk/services/contracts.eef8e327.webp',
       },
     ],
     contact: contact(
@@ -787,7 +787,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Ev yapımı sos', en: 'House-made sauces' },
           { tr: 'Mevsim sebzeleri', en: 'Seasonal vegetables' },
         ],
-        image: '/demos/restoran/g1.webp',
+        image: '/demos/restoran/g1.77b6033a.webp',
       },
       {
         slug: 'burger-menu',
@@ -805,7 +805,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Çıtır patates', en: 'Crispy fries' },
           { tr: 'Özel sos', en: 'Special sauce' },
         ],
-        image: '/demos/restoran/g2.webp',
+        image: '/demos/restoran/g2.2ae429c0.webp',
       },
       {
         slug: 'ozel-kahvalti',
@@ -823,7 +823,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Taze hamur işi', en: 'Fresh pastries' },
           { tr: 'Sınırsız çay', en: 'Unlimited tea' },
         ],
-        image: '/demos/restoran/g4.webp',
+        image: '/demos/restoran/g4.3109bd80.webp',
       },
     ],
     services: [
@@ -841,7 +841,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Esnek kişi sayısı', en: 'Flexible headcount' },
           { tr: 'Sunum & ekipman', en: 'Presentation & equipment' },
         ],
-        image: '/demos/restoran/services/catering.webp',
+        image: '/demos/restoran/services/catering.4b16f4d5.webp',
       },
       {
         slug: 'ozel-etkinlik',
@@ -857,7 +857,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Dekorasyon', en: 'Decoration' },
           { tr: 'Etkinlik planlama', en: 'Event planning' },
         ],
-        image: '/demos/restoran/services/events.webp',
+        image: '/demos/restoran/services/events.087ab429.webp',
       },
       {
         slug: 'sef-masasi',
@@ -873,7 +873,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Şef eşliğinde', en: 'With the chef' },
           { tr: 'Sınırlı kontenjan', en: 'Limited seating' },
         ],
-        image: '/demos/restoran/services/chef-table.webp',
+        image: '/demos/restoran/services/chef-table.9fd04ed3.webp',
       },
     ],
     contact: contact(
@@ -911,8 +911,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Geniş iç hacim', en: 'Spacious interior' },
           { tr: '2 yıl garanti', en: '2-year warranty' },
         ],
-        image: '/demos/eticaret/products/canta.webp',
-        gallery: ['/demos/eticaret/products/canta.webp', '/demos/eticaret/p1.webp'],
+        image: '/demos/eticaret/products/canta.f251daff.webp',
+        gallery: ['/demos/eticaret/products/canta.f251daff.webp', '/demos/eticaret/p1.d84cd720.webp'],
       },
       {
         slug: 'minimal-saat',
@@ -931,8 +931,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: '5 ATM su direnci', en: '5 ATM water resistance' },
           { tr: 'Değişebilir kordon', en: 'Swappable strap' },
         ],
-        image: '/demos/eticaret/products/saat.webp',
-        gallery: ['/demos/eticaret/products/saat.webp', '/demos/eticaret/p2.webp'],
+        image: '/demos/eticaret/products/saat.88d52c83.webp',
+        gallery: ['/demos/eticaret/products/saat.88d52c83.webp', '/demos/eticaret/p2.7491fe55.webp'],
       },
       {
         slug: 'premium-sneaker',
@@ -950,8 +950,8 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Ortopedik iç taban', en: 'Cushioned insole' },
           { tr: 'Kaymaz dış taban', en: 'Non-slip outsole' },
         ],
-        image: '/demos/eticaret/products/sneaker.webp',
-        gallery: ['/demos/eticaret/products/sneaker.webp', '/demos/eticaret/p3.webp'],
+        image: '/demos/eticaret/products/sneaker.47a70fae.webp',
+        gallery: ['/demos/eticaret/products/sneaker.47a70fae.webp', '/demos/eticaret/p3.35593314.webp'],
       },
       {
         slug: 'gunes-gozlugu',
@@ -969,7 +969,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Asetat çerçeve', en: 'Acetate frame' },
           { tr: 'Koruma kılıfı', en: 'Protective case' },
         ],
-        image: '/demos/eticaret/p4.webp',
+        image: '/demos/eticaret/p4.fe9c9b0f.webp',
       },
       {
         slug: 'deri-cuzdan',
@@ -988,7 +988,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: '6 kart bölmesi', en: '6 card slots' },
           { tr: 'İnce profil', en: 'Slim profile' },
         ],
-        image: '/demos/eticaret/p5.webp',
+        image: '/demos/eticaret/p5.024f1ef8.webp',
       },
       {
         slug: 'imza-parfum',
@@ -1006,7 +1006,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: '50 ml', en: '50 ml' },
           { tr: 'Yeniden doldurulabilir', en: 'Refillable' },
         ],
-        image: '/demos/eticaret/p6.webp',
+        image: '/demos/eticaret/p6.63b307f4.webp',
       },
       {
         slug: 'deri-kemer',
@@ -1024,7 +1024,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Ayarlanabilir', en: 'Adjustable' },
           { tr: 'Klasik form', en: 'Classic form' },
         ],
-        image: '/demos/eticaret/p7.webp',
+        image: '/demos/eticaret/p7.83de2a06.webp',
       },
       {
         slug: 'yun-atki',
@@ -1043,7 +1043,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Nötr ton', en: 'Neutral tone' },
           { tr: 'Zamansız', en: 'Timeless' },
         ],
-        image: '/demos/eticaret/p8.webp',
+        image: '/demos/eticaret/p8.bf418c7a.webp',
       },
     ],
     services: [
@@ -1061,7 +1061,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Kargo takibi', en: 'Order tracking' },
           { tr: 'Güvenli paketleme', en: 'Secure packaging' },
         ],
-        image: '/demos/eticaret/services/kargo.webp',
+        image: '/demos/eticaret/services/kargo.934d8e3c.webp',
       },
       {
         slug: 'iade',
@@ -1077,7 +1077,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Tek tıkla iade', en: 'One-click returns' },
           { tr: 'Hızlı geri ödeme', en: 'Fast refunds' },
         ],
-        image: '/demos/eticaret/services/iade.webp',
+        image: '/demos/eticaret/services/iade.1bb3336e.webp',
       },
       {
         slug: 'uyelik',
@@ -1093,7 +1093,7 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Erken erişim', en: 'Early access' },
           { tr: 'Doğum günü hediyesi', en: 'Birthday gift' },
         ],
-        image: '/demos/eticaret/services/uyelik.webp',
+        image: '/demos/eticaret/services/uyelik.7d593e92.webp',
       },
     ],
     contact: contact(

@@ -64,7 +64,7 @@ export async function POST(req: Request) {
   const personPhoto = (body.personPhoto ?? '').trim()
 
   // Demo product images (and some store images) are same-origin relative
-  // paths (e.g. `/demos/eticaret/products/sneaker.webp`), not absolute URLs.
+  // paths (e.g. `/demos/eticaret/products/sneaker.47a70fae.webp`), not absolute URLs.
   // Resolve those against this request's own origin so the gateway model can
   // still fetch them — without this, every relative product image failed
   // validation below and buyers only ever saw the generic error message.

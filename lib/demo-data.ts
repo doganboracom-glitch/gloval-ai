@@ -32,9 +32,9 @@ export type PropertyListing = {
 }
 
 const INTERIORS = [
-  '/demos/emlak/listings/interior-living.webp',
-  '/demos/emlak/listings/interior-kitchen.webp',
-  '/demos/emlak/listings/interior-bedroom.webp',
+  '/demos/emlak/listings/interior-living.655db403.webp',
+  '/demos/emlak/listings/interior-kitchen.3ff13854.webp',
+  '/demos/emlak/listings/interior-bedroom.89aa295c.webp',
 ]
 
 export const emlakListings: PropertyListing[] = [
@@ -50,8 +50,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '365 m²',
     buildingAge: { tr: '2 yıllık', en: '2 years' },
     floor: { tr: 'Müstakil (3 kat)', en: 'Detached (3 floors)' },
-    image: '/demos/emlak/listings/modern-villa.webp',
-    gallery: ['/demos/emlak/listings/modern-villa.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/modern-villa.611666e6.webp',
+    gallery: ['/demos/emlak/listings/modern-villa.611666e6.webp', ...INTERIORS],
     description: {
       tr: 'Geniş bahçesi ve özel havuzuyla modern mimarinin öne çıktığı, doğayla iç içe lüks bir villa. Akıllı ev sistemleri ve yüksek tavanlı ferah yaşam alanları sunar.',
       en: 'A luxury villa where modern architecture meets nature, with a large garden and private pool. Features smart-home systems and airy, high-ceilinged living spaces.',
@@ -77,8 +77,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '160 m²',
     buildingAge: { tr: 'Yeni', en: 'New' },
     floor: { tr: '14. kat', en: '14th floor' },
-    image: '/demos/emlak/listings/deniz-manzarali-rezidans.webp',
-    gallery: ['/demos/emlak/listings/deniz-manzarali-rezidans.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/deniz-manzarali-rezidans.282e115d.webp',
+    gallery: ['/demos/emlak/listings/deniz-manzarali-rezidans.282e115d.webp', ...INTERIORS],
     description: {
       tr: 'Kesintisiz deniz manzarasına sahip, tam donanımlı bir rezidans dairesi. Site içinde havuz, spor salonu ve 7/24 güvenlik hizmeti bulunur.',
       en: 'A fully equipped residence apartment with uninterrupted sea views. The complex offers a pool, fitness center and 24/7 security.',
@@ -104,8 +104,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '105 m²',
     buildingAge: { tr: '5 yıllık', en: '5 years' },
     floor: { tr: '8. kat', en: '8th floor' },
-    image: '/demos/emlak/listings/sehir-merkezinde-luks-daire.webp',
-    gallery: ['/demos/emlak/listings/sehir-merkezinde-luks-daire.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/sehir-merkezinde-luks-daire.6f1f5b9c.webp',
+    gallery: ['/demos/emlak/listings/sehir-merkezinde-luks-daire.6f1f5b9c.webp', ...INTERIORS],
     description: {
       tr: 'Şehrin kalbinde, ulaşım ve sosyal olanaklara yürüme mesafesinde ferah bir daire. Panoramik şehir manzarası ve modern iç tasarım sunar.',
       en: 'A spacious apartment in the heart of the city, within walking distance of transit and amenities. Offers panoramic city views and a modern interior.',
@@ -131,8 +131,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '210 m²',
     buildingAge: { tr: '8 yıllık', en: '8 years' },
     floor: { tr: 'Müstakil (2 kat)', en: 'Detached (2 floors)' },
-    image: '/demos/emlak/listings/bahceli-mustakil-ev.webp',
-    gallery: ['/demos/emlak/listings/bahceli-mustakil-ev.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/bahceli-mustakil-ev.68eccc8c.webp',
+    gallery: ['/demos/emlak/listings/bahceli-mustakil-ev.68eccc8c.webp', ...INTERIORS],
     description: {
       tr: 'Sakin bir mahallede, geniş özel bahçesiyle aileler için ideal müstakil bir ev. Meyve ağaçları, açık teras ve doğal ışık alan iç mekânlar.',
       en: 'A detached house ideal for families, with a large private garden in a quiet neighborhood. Fruit trees, an open terrace and light-filled interiors.',
@@ -158,8 +158,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '230 m²',
     buildingAge: { tr: 'Yeni', en: 'New' },
     floor: { tr: '22. kat (çatı katı)', en: '22nd floor (penthouse)' },
-    image: '/demos/emlak/listings/premium-residence.webp',
-    gallery: ['/demos/emlak/listings/premium-residence.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/premium-residence.2b20cad3.webp',
+    gallery: ['/demos/emlak/listings/premium-residence.2b20cad3.webp', ...INTERIORS],
     description: {
       tr: 'Şehrin en prestijli bölgesinde, panoramik manzaralı bir çatı katı residence. Concierge, valet ve özel sosyal alanlarla üst düzey bir yaşam sunar.',
       en: 'A penthouse residence with panoramic views in the city’s most prestigious district. Offers premium living with concierge, valet and private amenities.',
@@ -185,8 +185,8 @@ export const emlakListings: PropertyListing[] = [
     netArea: '62 m²',
     buildingAge: { tr: 'Proje aşamasında', en: 'Off-plan' },
     floor: { tr: '3. kat', en: '3rd floor' },
-    image: '/demos/emlak/listings/yatirim-firsati.webp',
-    gallery: ['/demos/emlak/listings/yatirim-firsati.webp', ...INTERIORS],
+    image: '/demos/emlak/listings/yatirim-firsati.46421995.webp',
+    gallery: ['/demos/emlak/listings/yatirim-firsati.46421995.webp', ...INTERIORS],
     description: {
       tr: 'Yüksek kira getirisi potansiyeli olan, karma kullanımlı yeni bir projede yatırımlık daire. Üniversite ve iş merkezlerine yakın konumda.',
       en: 'An investment apartment in a new mixed-use project with high rental-yield potential. Located near universities and business districts.',
