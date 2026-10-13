@@ -24,6 +24,8 @@ export function WebsiteHeader({
   storeSlug,
   cartSlug: cartSlugProp,
   lang = 'tr',
+  homeHref,
+  actions,
 }: {
   lang?: 'tr' | 'en'
   navigation: WebsiteSchema['navigation']
@@ -33,6 +35,13 @@ export function WebsiteHeader({
   storeSlug?: string
   /** Store slug for the cart CTA / product links; set on every storefront page, home included. */
   cartSlug?: string
+  /**
+   * Demo sub-pages only: turns the logo into a real link to this href (the demo
+   * home) instead of the in-page scroll-to-top button. Ignored on a storefront.
+   */
+  homeHref?: string
+  /** Extra header controls rendered just before the CTA (demo cart/account buttons). */
+  actions?: React.ReactNode
 }) {
   const nav = useSiteNav()
   const cart = useOptionalCart()
@@ -60,7 +69,7 @@ export function WebsiteHeader({
   return (
     <header
       ref={headerRef}
-      className="sticky top-0 z-20 backdrop-blur"
+      className="sticky top-[var(--site-sticky-offset,0px)] z-20 backdrop-blur"
       style={{
         backgroundColor: 'color-mix(in srgb, var(--site-bg) 82%, transparent)',
         borderBottom: '1px solid var(--site-border)',
@@ -89,6 +98,26 @@ export function WebsiteHeader({
             ) : null}
             {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
           </a>
+        ) : homeHref ? (
+          <a
+            href={homeHref}
+            aria-label={navigation.logoText}
+            data-header-logo
+            className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
+            style={{
+              fontFamily: 'var(--site-heading-font)',
+              color: 'var(--site-fg)',
+              justifyContent:
+                navigation.logo?.align === 'center'
+                  ? 'center'
+                  : navigation.logo?.align === 'right'
+                    ? 'flex-end'
+                    : undefined,
+            }}
+          >
+            <LogoImage navigation={navigation} />
+            {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
+          </a>
         ) : <button
           type="button"
           aria-label={navigation.logoText}
@@ -111,37 +140,7 @@ export function WebsiteHeader({
                   : undefined,
           }}
         >
-          {navigation.logo?.src ? (
-            // eslint-disable-next-line @next/next/no-img-element -- data URI / arbitrary remote logo
-            <img
-              src={navigation.logo.src}
-              alt={navigation.logo.alt || navigation.logoText}
-              // Sizes are driven by CSS custom properties with per-breakpoint
-              // fallbacks (`var(--x, default)`), so a site with none of these
-              // set renders EXACTLY the previous fixed h-12/h-16 + max-w box —
-              // only a site whose owner explicitly resized the logo deviates.
-              className="[height:var(--logo-h,48px)] [max-width:var(--logo-maxw,200px)] [width:var(--logo-mobile-w,auto)] object-contain md:[height:var(--logo-h,64px)] md:[max-width:var(--logo-maxw,280px)] md:[width:var(--logo-w,auto)]"
-              style={
-                {
-                  '--logo-h': navigation.logo.height
-                    ? `${navigation.logo.height}px`
-                    : navigation.logo.width || navigation.logo.mobileWidth
-                      ? 'auto'
-                      : undefined,
-                  '--logo-maxw':
-                    navigation.logo.width || navigation.logo.height || navigation.logo.mobileWidth
-                      ? 'none'
-                      : undefined,
-                  '--logo-w': navigation.logo.width ? `${navigation.logo.width}px` : undefined,
-                  '--logo-mobile-w': navigation.logo.mobileWidth
-                    ? `${navigation.logo.mobileWidth}px`
-                    : navigation.logo.width
-                      ? `${navigation.logo.width}px`
-                      : undefined,
-                } as React.CSSProperties
-              }
-            />
-          ) : null}
+          <LogoImage navigation={navigation} />
           {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
         </button>}
 
@@ -197,6 +196,7 @@ export function WebsiteHeader({
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        {actions}
         {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
         {navigation.cta ? (
           cartSlug && isCartCta(navigation.cta) ? (
@@ -222,5 +222,34 @@ export function WebsiteHeader({
         </div>
       </div>
     </header>
+  )
+}
+
+function LogoImage({ navigation }: { navigation: WebsiteSchema['navigation'] }) {
+  if (!navigation.logo?.src) return null
+  const logo = navigation.logo
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- data URI / arbitrary remote logo
+    <img
+      src={logo.src}
+      alt={logo.alt || navigation.logoText}
+      // Sizes are driven by CSS custom properties with per-breakpoint
+      // fallbacks (`var(--x, default)`), so a site with none of these
+      // set renders EXACTLY the previous fixed h-12/h-16 + max-w box —
+      // only a site whose owner explicitly resized the logo deviates.
+      className="[height:var(--logo-h,48px)] [max-width:var(--logo-maxw,200px)] [width:var(--logo-mobile-w,auto)] object-contain md:[height:var(--logo-h,64px)] md:[max-width:var(--logo-maxw,280px)] md:[width:var(--logo-w,auto)]"
+      style={
+        {
+          '--logo-h': logo.height ? `${logo.height}px` : logo.width || logo.mobileWidth ? 'auto' : undefined,
+          '--logo-maxw': logo.width || logo.height || logo.mobileWidth ? 'none' : undefined,
+          '--logo-w': logo.width ? `${logo.width}px` : undefined,
+          '--logo-mobile-w': logo.mobileWidth
+            ? `${logo.mobileWidth}px`
+            : logo.width
+              ? `${logo.width}px`
+              : undefined,
+        } as React.CSSProperties
+      }
+    />
   )
 }

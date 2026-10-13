@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { demoStickyOffsetVars } from '@/lib/demo-chrome'
+import { DemoBanner } from '@/components/demo-site/demo-banner'
+import { DemoHeaderActions } from '@/components/demo-site/demo-header-actions'
 import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
@@ -76,28 +77,18 @@ export default async function DemoPage({
   const checkoutHref = `/demo/${slug}/odeme?lang=${lang}`
 
   const content = (
-    <div className="min-h-svh bg-white text-black">
+    <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
       {/* Thin demo banner so visitors know this is a generated example. */}
-      {!isPreview && (
-        <div className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b border-black/10 bg-black px-4 py-2.5 text-white">
-          <Link
-            href="/#showcase"
-            className="inline-flex items-center gap-2 text-sm font-medium text-white/90 transition-colors hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {backLabel}
-          </Link>
-          <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden />
-            {demoBadge} · {demo.tag[lang]}
-          </span>
-        </div>
-      )}
+      {!isPreview && <DemoBanner backLabel={backLabel} badge={`${demoBadge} · ${demo.tag[lang]}`} />}
 
       {/* The demo supplies its own phone/WhatsApp buttons below, from the
           authoritative demo catalog, so the renderer's built-in pair is
           suppressed here to avoid rendering them twice. */}
-      <WebsiteRenderer site={site} showContactActions={!catalog} />
+      <WebsiteRenderer
+        site={site}
+        showContactActions={!catalog}
+        headerActions={commerce ? <DemoHeaderActions slug={slug} lang={lang} /> : undefined}
+      />
 
       {!isPreview && catalog && (
         <div style={floatingVars}>

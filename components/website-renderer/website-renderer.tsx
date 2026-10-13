@@ -85,8 +85,11 @@ export function WebsiteRenderer({
   preview = null,
   editSelection = null,
   paymentBadges = null,
+  headerActions,
 }: {
   site: unknown
+  /** Demo pages only: extra header controls (demo cart/account), rendered before the CTA. */
+  headerActions?: React.ReactNode
   /**
    * Set only by the published store page, resolved server-side from the store's
    * real payment settings. Omitted (null) for corporate sites, the editor
@@ -233,6 +236,7 @@ export function WebsiteRenderer({
         onNavigate={handleNavigate}
         cartSlug={store?.slug}
         lang={data.meta.language}
+        actions={headerActions}
       />
       {sections.map((section, i) => {
         const rendered = (
