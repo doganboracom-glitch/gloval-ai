@@ -884,7 +884,7 @@ export function blankSection(type: SectionType, lang: Lang): Section {
       return {
         type: 'portfolio',
         title: pick(lang, 'Portföy', 'Portfolio'),
-        subtitle: pick(lang, 'Se��ili projeler', 'Selected work'),
+        subtitle: pick(lang, 'Seçili projeler', 'Selected work'),
         items: [
           { title: pick(lang, 'Proje 1', 'Project 1'), imagePrompt: pick(lang, 'proje görseli 1', 'project image 1') },
           { title: pick(lang, 'Proje 2', 'Project 2'), imagePrompt: pick(lang, 'proje görseli 2', 'project image 2') },

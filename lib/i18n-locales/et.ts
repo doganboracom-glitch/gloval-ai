@@ -992,7 +992,7 @@ const et: DeepPartial<Dict> = {
       steps: [
         "Logige sisse ettevõttesse, kust domeeni ostsite (registripidaja).",
         "Avage oma domeeni leht „DNS-i haldus“ või „DNS-tsoon“.",
-        "Looge iga ülaltoodud kirje jaoks uus kirje: kopeerige tüüp, nimi ja väärtus täpselt. Nimi „@“ tähendab juurdomeeni; kui paneel „@��� ei aktsepteeri, jätke väli tühjaks või sisestage domeeni enda nimi.",
+        "Looge iga ülaltoodud kirje jaoks uus kirje: kopeerige tüüp, nimi ja väärtus täpselt. Nimi „@“ tähendab juurdomeeni; kui paneel „@“ ei aktsepteeri, jätke väli tühjaks või sisestage domeeni enda nimi.",
         "TTL-i jaoks võite jätta paneeli vaikeväärtuse. Salvestage kirje.",
         "DNS-i levik võib võtta mõne minuti, harva kuni 48 tundi. Seejärel vajutage sellel lehel nuppu „Kontrolli kinnitust“.",
       ],

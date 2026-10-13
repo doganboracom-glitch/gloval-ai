@@ -992,7 +992,7 @@ const pl: DeepPartial<Dict> = {
       steps: [
         "Zaloguj się do firmy, w której kupiono domenę (rejestratora).",
         "Otwórz stronę „Zarządzanie DNS” lub „Strefa DNS” dla swojej domeny.",
-        "Utwórz nowy wpis dla każdego z powyższych: skopiuj dokładnie Typ, Nazw�� i Wartość. Nazwa „@” oznacza domenę główną; jeśli panel nie akceptuje „@”, zostaw pole puste lub wpisz samą domenę.",
+        "Utwórz nowy wpis dla każdego z powyższych: skopiuj dokładnie Typ, Nazwę i Wartość. Nazwa „@” oznacza domenę główną; jeśli panel nie akceptuje „@”, zostaw pole puste lub wpisz samą domenę.",
         "Dla TTL możesz zostawić wartość domyślną panelu. Zapisz wpis.",
         "Propagacja DNS może potrwać kilka minut, rzadko do 48 godzin. Następnie kliknij na tej stronie „Sprawdź weryfikację”.",
       ],

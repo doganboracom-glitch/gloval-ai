@@ -64,7 +64,7 @@ const privacy: LegalDoc = {
             'İletişim ve destek verileri: destek taleplerinizde ilettiğiniz bilgiler.',
             'Oluşturduğunuz içerik: yapay zeka ile ürettiğiniz web sitesi metinleri, sayfa yapıları ve yüklediğiniz görseller.',
             'Alan adı bilgileri: bağladığınız veya talep ettiğiniz alan adlarına ilişkin bilgiler.',
-            'Ödeme ile ilgili bilgiler: paket, tutar, ödeme durumu ve fatura kayıtları. Kart bilgileriniz Platform tarafından SAKLANMAZ; ödeme, lisanslı ödeme kuruluşu (ör. PayTR) altyapısında işlenir.',
+            'Ödeme ile ilgili bilgiler: paket, tutar, ödeme durumu ve fatura kayıtları. Kart bilgileriniz Platform tarafından SAKLANMAZ; ödeme, lisanslı ödeme kuruluşu altyapısında işlenir.',
             'Teknik/log verileri: IP adresi, oturum ve güvenlik kayıtları, tarayıcı/cihaz bilgisi.',
             'Kullanım ve analitik verileri: sayfa görüntüleme ve özellik kullanımı (yalnızca açık rızaya bağlı analitik çerezler etkinse).',
           ]),
@@ -158,7 +158,7 @@ const privacy: LegalDoc = {
             'Contact and support data: information you share in your support requests.',
             'Content you create: website copy, page structures generated with AI, and images you upload.',
             'Domain information: details relating to domains you connect or request.',
-            'Payment-related information: package, amount, payment status and invoice records. Your card details are NOT stored by the Platform; payment is processed on the infrastructure of a licensed payment institution (e.g. PayTR).',
+            'Payment-related information: package, amount, payment status and invoice records. Your card details are NOT stored by the Platform; payment is processed on the infrastructure of a licensed payment institution.',
             'Technical/log data: IP address, session and security logs, browser/device information.',
             'Usage and analytics data: page views and feature usage (only if consent-based analytics cookies are enabled).',
           ]),
@@ -740,7 +740,7 @@ const distanceSales: LegalDoc = {
         blocks: [
           list([
             'Seçilen paketin fiyatı, vergiler dâhil toplam tutar olarak ödeme ekranında gösterilir.',
-            'Ödeme, lisanslı ödeme kuruluşunun (ör. PayTR) güvenli altyapısı üzerinden yapılır; kart bilgileri Satıcı tarafından saklanmaz.',
+            'Ödeme, lisanslı ödeme kuruluşunun güvenli altyapısı üzerinden yapılır; kart bilgileri Satıcı tarafından saklanmaz.',
             'Ödeme onaylanmadan hizmet aktif edilmez.',
           ]),
         ],
@@ -831,7 +831,7 @@ const distanceSales: LegalDoc = {
         blocks: [
           list([
             'The price of the selected package is shown on the payment screen as a total amount including taxes.',
-            'Payment is made through the secure infrastructure of a licensed payment institution (e.g. PayTR); card details are not stored by the Seller.',
+            'Payment is made through the secure infrastructure of a licensed payment institution; card details are not stored by the Seller.',
             'The service is not activated until payment is confirmed.',
           ]),
         ],
@@ -922,7 +922,7 @@ const preInfo: LegalDoc = {
         blocks: [
           list([
             'Seçtiğiniz paketin vergiler dâhil toplam tutarı ödeme ekranında gösterilir.',
-            'Ödeme, lisanslı ödeme kuruluşu (ör. PayTR) üzerinden kredi/banka kartı ile yapılır.',
+            'Ödeme, lisanslı ödeme kuruluşu üzerinden kredi/banka kartı ile yapılır.',
           ]),
         ],
       },
@@ -984,7 +984,7 @@ const preInfo: LegalDoc = {
         blocks: [
           list([
             'The total amount of your selected package, including taxes, is shown on the payment screen.',
-            'Payment is made by credit/debit card through a licensed payment institution (e.g. PayTR).',
+            'Payment is made by credit/debit card through a licensed payment institution.',
           ]),
         ],
       },

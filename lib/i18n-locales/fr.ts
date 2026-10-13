@@ -1233,7 +1233,7 @@ const fr: DeepPartial<Dict> = {
     errRegistrarUnavailable: 'Le service de domaines est indisponible pour le moment. Veuillez réessayer plus tard.',
     errInvalidInput: 'Les valeurs saisies ne sont pas valides. Vérifiez les champs et réessayez.',
     errProviderRefused: "Le bureau d'enregistrement a refusé cette modification. Le domaine est peut-être verrouillé ou temporairement non modifiable.",
-    errOutcomeUnknown: "Nous n'avons pas pu confirmer si la modification a ét�� appliquée. Actualisez la page et vérifiez l'état actuel avant de réessayer.",
+    errOutcomeUnknown: "Nous n'avons pas pu confirmer si la modification a été appliquée. Actualisez la page et vérifiez l'état actuel avant de réessayer.",
     errPricingUnavailable: 'Le prix de renouvellement actuel pour cette extension est indisponible pour le moment. Veuillez réessayer plus tard.',
     errRenewalInProgress: "Un renouvellement est déjà en cours pour ce domaine. Veuillez attendre qu'il se termine.",
   },
