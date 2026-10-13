@@ -8,12 +8,12 @@ import { resolveTheme } from '@/components/website-renderer/theme'
 import { buildTextAssets } from '@/lib/logo-studio/font-source'
 import { aiEmblemAvailable, generateEmblem, EMBLEM_CONCEPTS } from '@/lib/logo-studio/emblem-ai'
 import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
-import { LOGO_STYLE_IDS, type LogoStyleId } from '@/lib/logo-studio/rules'
+import { AI_EMBLEMS_PER_ROUND, LOGO_STYLE_IDS, type LogoStyleId } from '@/lib/logo-studio/rules'
 
 // Two emblems are drawn in parallel; each Claude call has its own 25s timeout.
 export const maxDuration = 60
 
-const EMBLEM_COUNT = 2
+const EMBLEM_COUNT = AI_EMBLEMS_PER_ROUND
 const STYLES = LOGO_STYLE_IDS
 type LogoStyle = LogoStyleId
 

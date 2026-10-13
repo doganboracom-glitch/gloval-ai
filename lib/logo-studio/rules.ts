@@ -6,6 +6,15 @@
  * the AI prompt and the brand kit all read from here so a rule changes once.
  */
 
+/**
+ * Credit rule of the AI emblem flow (single source for the API route, the
+ * credit ledger and the dialog copy). Every AI round draws AI_EMBLEMS_PER_ROUND
+ * emblems and charges LOGO_EMBLEM_CREDITS per emblem actually drawn, so a
+ * "suggest again" costs the same again; the local library is always free.
+ */
+export const AI_EMBLEMS_PER_ROUND = 2
+export const LOGO_EMBLEM_CREDITS = 2
+
 export type LogoStyleId = 'modern' | 'classic' | 'minimal' | 'luxury'
 export const LOGO_STYLE_IDS: LogoStyleId[] = ['modern', 'classic', 'minimal', 'luxury']
 

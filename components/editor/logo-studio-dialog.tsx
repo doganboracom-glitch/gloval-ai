@@ -30,6 +30,8 @@ import {
   COLORWAY_IDS,
   DARK_SURFACE,
   LIGHT_SURFACE,
+  AI_EMBLEMS_PER_ROUND,
+  LOGO_EMBLEM_CREDITS,
   LOGO_STYLE_IDS,
   USAGE_RULES,
   resolveColorway,
@@ -580,7 +582,14 @@ export function LogoStudioDialog({
             </p>
           ) : null}
 
-          {mode === 'ai' ? <p className="text-[11px] text-muted-foreground">{ui.studioCostNote}</p> : null}
+          {mode === 'ai' ? (
+            <p className="text-[11px] text-muted-foreground">
+              {ui.studioCostNote
+                .replace('{count}', String(AI_EMBLEMS_PER_ROUND))
+                .replace('{each}', String(LOGO_EMBLEM_CREDITS))
+                .replace('{max}', String(AI_EMBLEMS_PER_ROUND * LOGO_EMBLEM_CREDITS))}
+            </p>
+          ) : null}
         </div>
 
         <footer className="flex flex-col gap-3 border-t border-border px-5 py-3">

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { LOGO_EMBLEM_CREDITS } from '@/lib/logo-studio/rules'
 
 /**
  * Server-only AI credit helpers.
@@ -25,7 +26,7 @@ export const AI_ACTION_COSTS = {
   heroImage: 2,
   sectionImage: 2,
   /** Per generated logo alternative — see `app/api/logo-image/route.ts`. */
-  logoImage: 2,
+  logoImage: LOGO_EMBLEM_CREDITS,
   /** Per AI "try it on" generation on a store product — see `app/api/try-on/route.ts`.
    *  Priced higher than the other actions: it composites a real customer
    *  photo with a product photo, which is a heavier generation than a plain
