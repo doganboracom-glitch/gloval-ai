@@ -119,6 +119,13 @@ export const PAGE_LIMITS: Record<PlanCode, number> = {
  */
 export const SITE_PAGE_HARD_CAP = 8
 
+/**
+ * Anasayfa bölüm sayısının tek üst sınırı. Şema (`websiteSchema.sections`),
+ * AI istemi (`siteLimitsPromptHint`) ve onarım katmanı (`site-repair`) bunu
+ * kullanır; başka yerde 12 yazılmaz.
+ */
+export const SITE_SECTION_HARD_CAP = 12
+
 export function effectivePageLimit(code: PlanCode): number {
   return Math.min(PAGE_LIMITS[code], SITE_PAGE_HARD_CAP)
 }

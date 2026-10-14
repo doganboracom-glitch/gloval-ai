@@ -158,8 +158,8 @@ Hata: No object generated: response did not match schema.
 10. **contact**
    - `title`: Bize Ulaşın
    - `description`: Sipariş, kişiye özel tasarım veya ölçü danışmanlığı için yazın; en kısa sürede dönüş yapalım.
-   - `email`: merhaba@modaatolyetaki.com
-   - `phone`: +90 216 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Caferağa Mah. Moda Cad., Kadıköy / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -273,8 +273,8 @@ Hata: No object generated: response did not match schema.
 10. **contact**
    - `title`: Bize Ulaşın
    - `description`: Sipariş, ölçü veya özel tasarım talepleriniz için yazın; atölyemizi ziyaret etmek isterseniz randevu alın.
-   - `email`: merhaba@modaatolyetaki.com
-   - `phone`: +90 216 555 42 42
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Caferağa Mah. Moda Cad. No: 42, Kadıköy / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -388,8 +388,8 @@ Hata: No object generated: response did not match schema.
 10. **contact**
    - `title`: Bize Ulaşın
    - `description`: Kişiye özel tasarım, ölçü ya da siparişinizle ilgili sorularınız için yazın; Kadıköy atölyemizi ziyaret etmek için randevu alabilirsiniz.
-   - `email`: merhaba@modaatolyetaki.com
-   - `phone`: +90 216 345 67 89
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Caferağa Mah. Moda Cad. No:42, Kadıköy / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -849,8 +849,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Randevu Al
    - `description`: Formu doldur, deneme dersin veya özel dersin için seni arayalım. Stüdyomuz Beşiktaş Çarşı'ya 3 dakika yürüme mesafesinde.
-   - `email`: merhaba@nefesbesiktas.com
-   - `phone`: +90 212 555 24 24
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Sinanpaşa Mah. Ihlamurdere Cad. No: 24, Beşiktaş / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: Telefon
@@ -974,8 +974,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Randevu Al
    - `description`: Ders, saat ve eğitmen tercihini yaz; en geç 2 saat içinde randevunu onaylayalım.
-   - `email`: merhaba@nefesyoga.com.tr
-   - `phone`: +90 212 555 24 24
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Sinanpaşa Mah. Ihlamurdere Cad. No: 24, Kat 2, Beşiktaş / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: Telefon
@@ -1384,8 +1384,8 @@ Kaymaz Yoga Matı 6 mm, yoga ve esneme çalışmalarınızda size sağlam bir ze
 9. **contact**
    - `title`: İletişim
    - `description`: Projeniz hakkında konuşalım. İhtiyaçlarınızı paylaşın, size özel strateji ve maliyet teklifimizi hazırlayalım.
-   - `email`: iletisim@nexadijital.com
-   - `phone`: +90 212 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Şişli, İstanbul, Türkiye
    - `fields[0]`: Adınız
    - `fields[1]`: E-posta
@@ -1514,8 +1514,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Bizimle İletişime Geçin
    - `description`: Projenizi anlatın, 24 saat içinde size dönüş yapalım.
-   - `email`: merhaba@pikselhane.com
-   - `phone`: +90 212 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Maslak Mah. Büyükdere Cad. No:123, Sarıyer / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1638,8 +1638,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Bizimle İletişime Geçin
    - `description`: Projenizi anlatın, 24 saat içinde size dönüş yapalım.
-   - `email`: merhaba@pikselhane.com
-   - `phone`: +90 212 555 01 02
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Levent Mah. Büyükdere Cad. No: 100, Şişli / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1761,8 +1761,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Bizimle İletişime Geçin
    - `description`: Projenizi anlatın, uzman ekibimiz bir iş günü içinde size dönüş yapsın.
-   - `email`: merhaba@pikselist.com.tr
-   - `phone`: +90 212 555 34 78
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Büyükdere Cad. No: 185, Levent, Şişli / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1884,8 +1884,8 @@ Hata: No object generated: response did not match schema.
 11. **contact**
    - `title`: Projenizi Konuşalım
    - `description`: Hedeflerinizi anlatın, size özel dijital büyüme planını birlikte hazırlayalım. Maslak ofisimizde kahveye de bekleriz.
-   - `email`: merhaba@pikselix.com.tr
-   - `phone`: +90 212 555 48 32
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Büyükdere Cad. No:255, Maslak, Sarıyer / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: Şirket Adı

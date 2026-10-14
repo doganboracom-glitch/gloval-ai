@@ -125,9 +125,9 @@ Maliyet: USD, gateway liste fiyatı (token başına), önbellek/rejyonal ek ücr
 10. **contact**
    - `title`: İletişim
    - `description`: Sipariş, bakım ve özel tasarım talepleriniz için bizimle iletişime geçin. Yanıtlarımız genellikle aynı iş günü içinde gönderilir.
-   - `email`: info@kadikyotaki.com
-   - `recipientEmail`: info@kadikyotaki.com
-   - `phone`: +90 216 000 0000
+   - `email`: <e-posta>
+   - `recipientEmail`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Kadıköy, İstanbul
    - `fields[0]`: İsim
    - `fields[1]`: E-posta
@@ -240,8 +240,8 @@ Maliyet: USD, gateway liste fiyatı (token başına), önbellek/rejyonal ek ücr
 10. **contact**
    - `title`: İletişim
    - `description`: Sipariş, özel tasarım veya atölye randevuları için bize yazın. Yanıt genellikle 24 saat içinde.
-   - `email`: info@kadikyotakim.com
-   - `phone`: +90 216 000 0000
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Kadıköy, İstanbul — Atölye randevuları için lütfen önce mesaj atın
    - `fields[0]`: İsim
    - `fields[1]`: E-posta
@@ -354,8 +354,8 @@ Maliyet: USD, gateway liste fiyatı (token başına), önbellek/rejyonal ek ücr
 10. **contact**
    - `title`: İletişim
    - `description`: Sorularınız veya kişiye özel tasarım talepleriniz için bize yazın. Kadıköy atölyemizde sizi ağırlamaktan memnuniyet duyarız.
-   - `email`: merhaba@kadikoyatolyetaki.com
-   - `phone`: +90 216 000 00 00
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Kadıköy, İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -469,8 +469,8 @@ Maliyet: USD, gateway liste fiyatı (token başına), önbellek/rejyonal ek ücr
 10. **contact**
    - `title`: Bize Ulaşın
    - `description`: Sipariş, kişiye özel tasarım ve ölçü konularında sorularınız için yazın; atölyemizi Kadıköy'de ziyaret edebilirsiniz.
-   - `email`: merhaba@modaatolyetaki.com
-   - `phone`: +90 216 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Caferağa Mah. Moda Cd., Kadıköy / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -788,8 +788,8 @@ Zirkon Taşlı Tektaş Yüzük, sade ve şık tasarımıyla günlük kombinlerin
 10. **contact**
    - `title`: İletişim & Randevu
    - `description`: Ders programı ve bire bir randevu talepleriniz için formu doldurun veya aşağıdaki bilgilerden bize ulaşın.
-   - `email`: info@besiktasyoga.com
-   - `phone`: +90 212 000 0000
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Beşiktaş, İstanbul — Stüdyo Adresi (Randevu ile giriş)
    - `fields[0]`: İsim
    - `fields[1]`: E-posta
@@ -903,8 +903,8 @@ Zirkon Taşlı Tektaş Yüzük, sade ve şık tasarımıyla günlük kombinlerin
 10. **contact**
    - `title`: İletişim & Randevu
    - `description`: Ders programı, özel seans talepleri ve ekipman soruları için bize ulaşın. Randevu formunu doldurun; en kısa sürede geri dönüş yapacağız.
-   - `email`: info@besiktasyoga.com
-   - `phone`: +90 212 000 0000
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Beşiktaş, İstanbul — Çarşı Mahallesi, Örnek Sokak 12
    - `fields[0]`: Adınız
    - `fields[1]`: E-posta
@@ -1018,8 +1018,8 @@ Zirkon Taşlı Tektaş Yüzük, sade ve şık tasarımıyla günlük kombinlerin
 10. **contact**
    - `title`: Randevu Al
    - `description`: Ders programı, eğitmenler veya deneme dersi için formu doldurun; size aynı gün içinde dönelim.
-   - `email`: merhaba@nefesyoga.com
-   - `phone`: +90 212 000 00 00
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Beşiktaş, İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1143,8 +1143,8 @@ Zirkon Taşlı Tektaş Yüzük, sade ve şık tasarımıyla günlük kombinlerin
 11. **contact**
    - `title`: Randevu & İletişim
    - `description`: Ders seçin, uygun saati belirtin; stüdyomuz size en kısa sürede dönüş yapsın.
-   - `email`: merhaba@nefesalanstudyo.com
-   - `phone`: +90 212 000 00 00
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Beşiktaş, İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1458,8 +1458,8 @@ Kaymaz Yoga Matı 6 mm, yoga, pilates ve evde yapılan egzersiz rutinleriniz iç
 9. **contact**
    - `title`: İletişime Geçin
    - `description`: Projelerinizi ve hedeflerinizi konuşalım. İhtiyaçlarınıza göre 48 saat içinde özel teklif hazırlayalım.
-   - `email`: iletisim@novadijital.com
-   - `phone`: +90 212 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: İstiklal Caddesi No:45, Beyoğlu, İstanbul
    - `fields[0]`: Adınız
    - `fields[1]`: E-posta
@@ -1564,8 +1564,8 @@ Kaymaz Yoga Matı 6 mm, yoga, pilates ve evde yapılan egzersiz rutinleriniz iç
 9. **contact**
    - `title`: İletişime Geçin
    - `description`: Projelerinizi konuşmak veya ücretsiz keşif görüşmesi talep etmek için bize ulaşın. 48 saat içinde dönüş sağlıyoruz.
-   - `email`: bilgi@nebuladijital.com
-   - `phone`: +90 212 000 0000
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Bebek, Beşiktaş, İstanbul
    - `fields[0]`: Adınız
    - `fields[1]`: E-posta
@@ -1678,8 +1678,8 @@ Kaymaz Yoga Matı 6 mm, yoga, pilates ve evde yapılan egzersiz rutinleriniz iç
 10. **contact**
    - `title`: Bizimle İletişime Geçin
    - `description`: Projenizi anlatın, 24 saat içinde size dönüş yapalım.
-   - `email`: merhaba@pikselhane.com
-   - `phone`: +90 212 000 00 00
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Levent, Büyükdere Cad., 34394 Şişli / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta
@@ -1802,8 +1802,8 @@ Kaymaz Yoga Matı 6 mm, yoga, pilates ve evde yapılan egzersiz rutinleriniz iç
 11. **contact**
    - `title`: Bizimle İletişime Geçin
    - `description`: Projenizi anlatın, 24 saat içinde size dönüş yapalım.
-   - `email`: merhaba@pikselhane.com
-   - `phone`: +90 212 555 01 23
+   - `email`: <e-posta>
+   - `phone`: <telefon>
    - `address`: Maslak Mah. Büyükdere Cad. No:128, Sarıyer / İstanbul
    - `fields[0]`: Ad Soyad
    - `fields[1]`: E-posta

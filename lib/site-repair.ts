@@ -1,9 +1,9 @@
 import { sectionSchema, type SectionType } from '@/lib/website-schema'
 import type { FieldPath, RepairCode, RepairOptions } from '@/lib/ai-repair'
+import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
-/** The schema's own limit; kept in step with `websiteSchema.sections.max(12)`. */
-export const SITE_SECTION_MAX = 12
-export const SITE_PAGE_MAX = 8
+export const SITE_SECTION_MAX = SITE_SECTION_HARD_CAP
+export const SITE_PAGE_MAX = SITE_PAGE_HARD_CAP
 
 const KNOWN_SECTION_TYPES: ReadonlySet<string> = new Set(
   sectionSchema.options.map((option) => option.shape.type.value as string),

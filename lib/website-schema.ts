@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
+import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
 /**
  * WebsiteSchema
@@ -719,7 +720,7 @@ export const websiteSchema = z.object({
   sections: z
     .array(sectionSchema)
     .min(3)
-    .max(12)
+    .max(SITE_SECTION_HARD_CAP)
     .describe('The ordered homepage sections'),
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),

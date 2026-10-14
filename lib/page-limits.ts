@@ -1,4 +1,4 @@
-import { PAGE_LIMITS, toPlanCode } from '@/lib/pricing-config'
+import { PAGE_LIMITS, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP, toPlanCode } from '@/lib/pricing-config'
 
 /**
  * Single enforcement layer for the per-plan page limit. The numbers themselves
@@ -35,11 +35,19 @@ export function pageLimitMessage(lang: string | null | undefined, limit: number,
   }. Mevcut sayfalarınız olduğu gibi korunur ancak paketinizi yükseltmeden yeni sayfa eklenemez.`
 }
 
-/** Instruction appended to the AI site-generation prompt. */
-export function pageLimitPromptHint(limit: number): string {
+/**
+ * The ONLY place the site-generation prompt states size limits: pages (the
+ * plan limit, bounded by the schema) and homepage sections (the schema cap).
+ * Production and the model comparison script both build their prompt from it.
+ */
+export function siteLimitsPromptHint(pageLimit: number): string {
+  const pages = Math.max(1, Math.min(pageLimit, SITE_PAGE_HARD_CAP))
   return (
-    `The "pages" array MUST contain at most ${limit} entries (the owner's plan limit). ` +
-    `Always keep the home page first and drop the least important pages first. `
+    `HARD LIMITS, never exceed them: the "pages" array has at most ${pages} entries ` +
+    `(the owner's plan limit); keep the home page first and drop the least important pages first. ` +
+    `The homepage "sections" array has at most ${SITE_SECTION_HARD_CAP} entries in total, ` +
+    `counting the hero, contact and footer; aim for 7-10. ` +
+    `Count your sections before answering and merge or drop the least important ones rather than exceeding the limit. `
   )
 }
 

@@ -28,6 +28,9 @@ import {
 import { fallbackWebsite, sectionSchema, type Section, type WebsiteSchema } from '@/lib/website-schema'
 import { AI_TIER_MODELS, resolveAiModel } from '@/lib/ai-models'
 
+// Benchmark runs must never write to the production outcome counter.
+process.env.AI_EVENTS_DISABLED = '1'
+
 if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
   console.error('Refusing to run: this tool is for development only.')
   process.exit(1)

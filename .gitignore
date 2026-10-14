@@ -11,4 +11,3 @@ node_modules
 # model comparison raw dumps
 reports/*.raw.json
 
-reports/*.raw.json

@@ -25,13 +25,13 @@ export type AiFlow =
 
 const STANDARD_MODEL = 'openai/gpt-5-mini'
 
-/**
- * Change the `advanced` line to switch every eligible flow for PRO+ at once.
- * It equals the standard model until the product owner approves a model.
- */
+/** Approved after the model comparison (see reports/ai-model-compare-pipeline.md). */
+const ADVANCED_MODEL = 'anthropic/claude-sonnet-5.5'
+
+/** Change the `advanced` line to switch every eligible flow for PRO+ at once. */
 export const AI_TIER_MODELS: Record<AiTier, string> = {
   standard: STANDARD_MODEL,
-  advanced: STANDARD_MODEL,
+  advanced: ADVANCED_MODEL,
 }
 
 /**

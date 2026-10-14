@@ -1,5 +1,5 @@
 import { sectorPromptHint, isEcommerceIntent } from '@/lib/sector-profiles'
-import { pageLimitPromptHint } from '@/lib/page-limits'
+import { siteLimitsPromptHint } from '@/lib/page-limits'
 
 /**
  * System prompt of the full-website generation call (`/api/generate`,
@@ -19,7 +19,7 @@ export function buildSiteGenerateSystem(
     `Respond with all human-readable text written in ${language}. ` +
     `Set meta.language to "${lang}". Choose a cohesive palette with valid hex colors and ` +
     `real Google Font names. Order the homepage sections sensibly, always starting with a hero and ` +
-    `ending with a footer. Aim for 7-10 well-chosen sections. ` +
+    `ending with a footer. ` +
     `This looks like ${sectorPromptHint(prompt)} ` +
     (ecommerce
       ? `IMPORTANT: the user explicitly wants an ONLINE STORE. This MUST be a complete e-commerce ` +
@@ -28,7 +28,7 @@ export function buildSiteGenerateSystem(
         `Cart" buttonText; add oldPrice + a discount badge on sale items) and a "products" page in ` +
         `pages. Prefer a "slider" hero for campaign slides. `
       : '') +
-    pageLimitPromptHint(pageLimit) +
+    siteLimitsPromptHint(pageLimit) +
     `ALWAYS include exactly one "contact" section just before the footer (also on online stores), ` +
     `with a title, a short description, and form field labels; leave mapEmbed unset. ` +
     `Use the available section types richly and appropriately: hero, about, services, features, ` +

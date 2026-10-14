@@ -9,6 +9,7 @@ import {
   type RepairStep,
 } from '@/lib/ai-repair'
 import { logAiUsage, type AiModelSelection } from '@/lib/ai-models'
+import { recordAiGenerationEvent, type AiEventOutcome } from '@/lib/ai-generation-events'
 
 /**
  * The ONE entry point for "ask a model for JSON that matches a schema".
@@ -67,6 +68,8 @@ export type StructuredRequest<T> = {
   imageUrls?: readonly string[]
   abortSignal?: AbortSignal
   repair?: RepairOptions
+  /** `false` skips the persistent outcome counter (benchmarks). Default: record. */
+  recordEvent?: false
   /** Test seam: replaces the network call. */
   generate?: GenerateFn
 }
@@ -198,12 +201,22 @@ function sumUsage(...parts: Usage[]): TokenUsage {
   }
 }
 
+/**
+ * Persists the outcome counter (no user data, see `lib/ai-generation-events.ts`).
+ * A request the caller cancelled says nothing about the model, so it is skipped.
+ */
+async function recordOutcome(request: StructuredRequest<unknown>, outcome: AiEventOutcome): Promise<void> {
+  if (request.recordEvent === false || request.abortSignal?.aborted) return
+  await recordAiGenerationEvent(request.ai, outcome)
+}
+
 export async function generateStructured<T>(request: StructuredRequest<T>): Promise<StructuredResult<T>> {
   const first = await attempt(request, request.prompt)
   if (first.ok) {
     logAiUsage(request.ai, 'ok', first.usage, 'first')
     const outcome: StructuredOutcome = first.repairs.length ? 'repaired' : 'first_try'
     logRepair(request.ai, outcome, 1, first.repairs, [])
+    await recordOutcome(request, outcome === 'first_try' ? 'ok' : 'repaired')
     return { object: first.object, outcome, attempts: 1, repairs: first.repairs, usage: sumUsage(first.usage) }
   }
 
@@ -214,6 +227,7 @@ export async function generateStructured<T>(request: StructuredRequest<T>): Prom
   const retryable = NoObjectGeneratedError.isInstance(first.error) && !request.abortSignal?.aborted
   if (!retryable) {
     logRepair(request.ai, 'failed', 1, first.repairs, first.issues)
+    await recordOutcome(request, 'fallback')
     throw new StructuredGenerationError('structured generation failed', 1, first.error, sumUsage(first.usage))
   }
 
@@ -222,6 +236,7 @@ export async function generateStructured<T>(request: StructuredRequest<T>): Prom
   if (second.ok) {
     logAiUsage(request.ai, 'ok', second.usage, 'retry')
     logRepair(request.ai, 'retried', 2, repairs, first.issues)
+    await recordOutcome(request, 'retried')
     return {
       object: second.object,
       outcome: 'retried',
@@ -233,6 +248,7 @@ export async function generateStructured<T>(request: StructuredRequest<T>): Prom
 
   logAiUsage(request.ai, 'error', second.usage, 'retry')
   logRepair(request.ai, 'failed', 2, repairs, second.issues)
+  await recordOutcome(request, 'fallback')
   throw new StructuredGenerationError(
     'structured generation failed after retry',
     2,
