@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 import { CheckCircle2, Clock, XCircle, Mail, Store } from 'lucide-react'
 import { formatIban } from '@/lib/iban'
 import { getOrderConfirmation } from '@/lib/store-order-access'
@@ -28,7 +27,21 @@ export default async function OrderConfirmationPage({
   const { slug, orderId } = await params
   const { t } = await searchParams
   const order = await getOrderConfirmation(orderId, slug, Array.isArray(t) ? t[0] : t)
-  if (!order) notFound()
+  if (!order) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">
+        <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 py-12 text-center">
+          <h1 className="font-display text-2xl font-bold text-balance">Bağlantı geçersiz</h1>
+          <p className="mt-3 text-muted-foreground">
+            Bu sipariş bağlantısı geçersiz veya süresi dolmuş olabilir. Mağazaya dönüp yeni bir bağlantı isteyin.
+          </p>
+          <Link href={`/site/${slug}/store`} className="mt-6">
+            <Button variant="outline">Mağazaya dön</Button>
+          </Link>
+        </main>
+      </div>
+    )
+  }
 
   const vatLine = formatVatLine(summarizeVat(order.items), (cents) => formatPrice(cents, order.currency))
   const paid = order.payment_status === 'paid'

@@ -60,6 +60,8 @@ export default async function CheckoutPage({
                 email: customer.email,
                 phone: customer.phone,
                 city: customer.city,
+                district: customer.district,
+                postalCode: customer.postalCode,
                 address: customer.address,
                 invoice: customer.invoice,
               }

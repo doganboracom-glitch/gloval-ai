@@ -74,6 +74,8 @@ export type StoreCustomer = {
   name: string
   phone: string
   city: string
+  district?: string
+  postalCode?: string
   address: string
   invoice: InvoiceInfo | null
 }
@@ -226,6 +228,8 @@ function toCustomer(row: {
     name: row.name ?? '',
     phone: row.phone ?? '',
     city: row.city ?? '',
+    district: (row as { district?: string | null }).district ?? '',
+    postalCode: (row as { postal_code?: string | null; postalCode?: string | null }).postal_code ?? (row as { postalCode?: string | null }).postalCode ?? '',
     address: row.address ?? '',
     invoice: normalizeInvoice(row.invoice),
   }
