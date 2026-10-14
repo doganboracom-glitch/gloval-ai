@@ -1,5 +1,6 @@
 import { generateObject } from 'ai'
 import { z } from 'zod'
+import { resolveAiModel } from '@/lib/ai-models'
 import { PRODUCT_IMAGE_LIMITS } from '@/lib/product-images'
 import { PRODUCT_LIMITS, type ProductSpec } from '@/lib/product-input'
 import { StoreAiInvalidResult, StoreAiRefusal } from '@/lib/store-ai-engine'
@@ -8,7 +9,6 @@ import { wordIncludes } from '@/lib/visual-subjects'
 /** The model sees at most this many product images. */
 export const STORE_AI_MAX_IMAGES = 4
 export const STORE_AI_DESCRIPTION_MAX = 2000
-export const STORE_AI_MODEL = 'openai/gpt-5-mini'
 
 export type StoreAiTextInput = {
   name: string
@@ -197,12 +197,19 @@ export function buildUserPrompt(input: StoreAiTextInput): string {
     .join('\n\n')
 }
 
-export type StoreAiGenerateArgs = { system: string; prompt: string; imageUrls: string[]; signal: AbortSignal }
+export type StoreAiGenerateArgs = {
+  system: string
+  prompt: string
+  imageUrls: string[]
+  signal: AbortSignal
+  /** Gateway model id picked by `resolveAiModel('productText', plan)`. */
+  model?: string
+}
 export type StoreAiGenerateFn = (args: StoreAiGenerateArgs) => Promise<unknown>
 
-export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal }) => {
+export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal, model }) => {
   const { object } = await generateObject({
-    model: STORE_AI_MODEL,
+    model: model ?? resolveAiModel('productText', null).model,
     schema: generatedSchema,
     providerOptions: { openai: { strictJsonSchema: false } },
     system,
@@ -224,6 +231,7 @@ export async function generateStoreAiText(
   input: StoreAiTextInput,
   signal: AbortSignal,
   generate: StoreAiGenerateFn = generateWithGateway,
+  model?: string,
 ): Promise<StoreAiTextResult> {
   const imageUrls = input.imageUrls.slice(0, STORE_AI_MAX_IMAGES)
   const raw = await generate({
@@ -231,6 +239,7 @@ export async function generateStoreAiText(
     prompt: buildUserPrompt(input),
     imageUrls,
     signal,
+    model,
   })
   return normalizeGenerated(raw, input)
 }

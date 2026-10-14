@@ -18,6 +18,7 @@ import { preserveResolvedImages } from '@/lib/hero-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
+import { logAiUsage, resolveAiModel } from '@/lib/ai-models'
 import {
   PAGE_LIMIT_ERROR,
   isPageGrowthBlocked,
@@ -235,6 +236,9 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Out of credits', balance }, { status: 402 })
   }
 
+  // Tier comes from the plan looked up above on the server, never from the request.
+  const ai = resolveAiModel(hasValidScope ? 'sectionEdit' : 'siteEdit', planCode)
+
   try {
     let aiSection: Section | null = null
     let aiSite: WebsiteSchema | null = null
@@ -247,8 +251,8 @@ export async function POST(req: Request) {
       // silently fell back to the scope-blind command parser. Wrapping the union
       // in an object property keeps the root an object while still constraining
       // the value to a valid section.
-      const { object } = await generateObject({
-        model: 'openai/gpt-5-mini',
+      const { object, usage } = await generateObject({
+        model: ai.model,
         schema: z.object({ section: sectionSchema }),
         providerOptions: { openai: { strictJsonSchema: false } },
         system: sectionSystemPrompt(normalizedLang, language),
@@ -257,13 +261,14 @@ export async function POST(req: Request) {
           `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
           `Return the full updated section JSON now, as {"section": <the updated section>}.`,
       })
+      logAiUsage(ai, 'ok', usage)
       const validatedSection = sectionSchema.safeParse(object.section)
       if (validatedSection.success && validatedSection.data.type === targetSection.type) {
         aiSection = validatedSection.data
       }
     } else {
-      const { object } = await generateObject({
-        model: 'openai/gpt-5-mini',
+      const { object, usage } = await generateObject({
+        model: ai.model,
         // Owner-authored fields (custom code snippets, SEO title) are excluded
         // from the model's schema so an unrelated edit can never rewrite or drop
         // them; they are merged back from the current schema below.
@@ -279,6 +284,7 @@ export async function POST(req: Request) {
           `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
           `Return the full updated website JSON now.`,
       })
+      logAiUsage(ai, 'ok', usage)
       // generateObject already validates against websiteSchema, but re-parse
       // defensively so a malformed result can never reach the client.
       const validated = websiteSchema.safeParse(object)
@@ -368,6 +374,7 @@ export async function POST(req: Request) {
     // AI Gateway unavailable or generation failed. Fall back to the offline
     // deterministic command parser so common edits still work; never destroy
     // the site. No credit is spent on this path.
+    logAiUsage(ai, 'error')
     console.log('[v0] edit error, trying command parser:', err instanceof Error ? err.message : err)
     // Scoped edits must never fall back to the scope-blind whole-site parser.
     if (!hasValidScope) {

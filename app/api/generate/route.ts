@@ -11,6 +11,7 @@ import { attachHeroImage } from '@/lib/hero-image'
 import { attachSectionImages } from '@/lib/section-images'
 import { createClient } from '@/lib/supabase/server'
 import { getPlanCodeForUser } from '@/lib/billing'
+import { logAiUsage, resolveAiModel } from '@/lib/ai-models'
 import { capPagesToLimit, pageLimitForPlan, pageLimitPromptHint } from '@/lib/page-limits'
 import {
   ANON_AI_LIMIT_ERROR,
@@ -110,8 +111,9 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: userData } = await supabase.auth.getUser()
   if (userData?.user) {
-    const pageLimit = pageLimitForPlan(await getPlanCodeForUser(userData.user.id))
-    return runGenerate(body, pageLimit)
+    // Resolved on the server per request: the client never says which plan it is on.
+    const planCode = await getPlanCodeForUser(userData.user.id)
+    return runGenerate(body, pageLimitForPlan(planCode), planCode)
   }
 
   const pageLimit = pageLimitForPlan(null)
@@ -129,7 +131,7 @@ export async function POST(req: Request) {
 
   let counted = false
   try {
-    const res = await runGenerate(body, pageLimit)
+    const res = await runGenerate(body, pageLimit, null)
     if (res.ok) {
       const data = (await res.clone().json().catch(() => null)) as { source?: string } | null
       counted = data?.source === 'ai'
@@ -140,7 +142,11 @@ export async function POST(req: Request) {
   }
 }
 
-async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: number) {
+async function runGenerate(
+  { prompt, lang, mode }: GenerateBody,
+  pageLimit: number,
+  planCode: string | null,
+) {
   if (!prompt) return Response.json({ error: 'Prompt too short' }, { status: 400 })
 
   const normalizedLang: 'tr' | 'en' = lang === 'en' ? 'en' : 'tr'
@@ -150,9 +156,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
 
   /* ---- Website mode: produce a full structured WebsiteSchema ---- */
   if (mode === 'website') {
+    const ai = resolveAiModel('siteGenerate', planCode)
     try {
-      const { object: generated } = await generateObject({
-        model: 'openai/gpt-5-mini',
+      const { object: generated, usage } = await generateObject({
+        model: ai.model,
         // Includes meta.seoTitle (auto-generated on creation) but excludes the
         // owner-only `tracking` snippets.
         schema: websiteGenerationSchema,
@@ -193,6 +200,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
           `Do NOT output any HTML, React, or code; only structured content.`,
         prompt: prompt.slice(0, 800),
       })
+      logAiUsage(ai, 'ok', usage)
 
       // The prompt asks for at most `pageLimit` pages, but the model can still
       // overshoot; hard-cap the generated site so it never exceeds the plan.
@@ -238,6 +246,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
     } catch (err) {
       // AI Gateway may be unavailable (e.g. no billing configured). Fall back to
       // a deterministic website so the pipeline still produces valid schema.
+      logAiUsage(ai, 'error')
       console.log('[v0] generate(website) error:', err instanceof Error ? err.message : err)
       const website = capPagesToLimit(fallbackWebsite(prompt, normalizedLang), pageLimit)
       const [img, sectionImages] = await Promise.all([
@@ -262,9 +271,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
   }
 
   /* ---- Plan mode (default): unchanged, powers the landing hero ---- */
+  const planAi = resolveAiModel('sitePlan', planCode)
   try {
-    const { object } = await generateObject({
-      model: 'openai/gpt-5-mini',
+    const { object, usage } = await generateObject({
+      model: planAi.model,
       schema: planSchema,
       system:
         `You are GLOVAL AI (gloval.ai), an AI website builder. Given a user's description of the website they want, ` +
@@ -273,8 +283,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
       prompt: prompt.slice(0, 600),
     })
 
+    logAiUsage(planAi, 'ok', usage)
     return Response.json({ plan: object, source: 'ai' })
   } catch (err) {
+    logAiUsage(planAi, 'error')
     // AI Gateway may be unavailable (e.g. no billing configured). Fall back to a
     // deterministic plan so the demo still works, and flag it for the client.
     console.log('[v0] generate error:', err instanceof Error ? err.message : err)
