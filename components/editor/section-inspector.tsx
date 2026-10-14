@@ -101,7 +101,10 @@ export function SectionInspector({
   if (!section) return null
 
   const record = section as unknown as Record<string, unknown>
-  const scalars = SCALAR_FIELDS.filter((f) => typeof record[f] === 'string')
+  const isContact = section.type === 'contact'
+  const scalars = SCALAR_FIELDS.filter(
+    (f) => typeof record[f] === 'string' && !(isContact && f === 'address'),
+  )
   const items = collectionOf(section) ?? []
   const hasImages = IMAGE_ITEM_SECTIONS.includes(section.type)
   const label = (field: string) => ui.fieldLabels[field] ?? field
@@ -120,6 +123,16 @@ export function SectionInspector({
           onCommit={(v) => onDispatch({ op: 'updateSectionValue', index, field, value: v })}
         />
       ))}
+
+      {isContact && (
+        <TextField
+          label={label('contactAddress')}
+          hint={label('contactAddressHint')}
+          placeholder={site.meta.language === 'tr' ? 'Örn. Luna Mücevher, Kadıköy İstanbul' : 'e.g. Luna Jewelry, Brooklyn New York'}
+          value={String(record.address ?? '')}
+          onCommit={(v) => onDispatch({ op: 'updateSectionValue', index, field: 'address', value: v.trim() })}
+        />
+      )}
 
       {section.type === 'contact' && (
         <TextField

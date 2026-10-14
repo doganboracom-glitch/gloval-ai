@@ -86,7 +86,11 @@ export function createContactDeps(admin: SupabaseClient = createAdminClient()): 
         })
         .select('id')
         .single()
-      if (error || !data) return null
+      if (error || !data) {
+        // Postgres error code only (e.g. 42P01 missing table, 23514 check violation): no visitor data.
+        console.log('[site-contact] E_INSERT pg=', error?.code ?? 'none')
+        return null
+      }
       return { id: data.id as string }
     },
     setEmailStatus: async (id, status) => {

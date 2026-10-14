@@ -41,12 +41,17 @@ export type ContactDeps = {
   rateLimit: (key: string, limit: number, windowMs: number) => { allowed: boolean }
 }
 
+/** Why a submission was refused before storing. Safe to show: none of these reveal how spam is detected beyond timing/limits. */
+export type ContactBlockReason = 'too_fast' | 'expired' | 'invalid_token' | 'rate_limited' | 'unknown_site'
+
+/** Server-side failure stage. Contains no personal data, so it is safe to log and to return. */
+export type ContactServerCode = 'E_NO_SECRET' | 'E_LOAD_SITE' | 'E_RATE_COUNT' | 'E_INSERT'
+
 export type ContactResult =
   | { ok: true }
   | { ok: false; kind: 'validation'; errors: ContactFieldErrors }
-  /** Spam, expired form, rate limit, unknown site: one deliberately vague answer. */
-  | { ok: false; kind: 'blocked' }
-  | { ok: false; kind: 'unavailable' }
+  | { ok: false; kind: 'blocked'; reason: ContactBlockReason }
+  | { ok: false; kind: 'unavailable'; code: ContactServerCode }
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
@@ -71,44 +76,63 @@ export async function submitSiteContact(
   deps: ContactDeps,
 ): Promise<ContactResult> {
   const secret = deps.secret()
-  if (!secret) return { ok: false, kind: 'unavailable' }
+  if (!secret) return { ok: false, kind: 'unavailable', code: 'E_NO_SECRET' }
 
   const slug = typeof input.slug === 'string' ? input.slug.trim().toLowerCase() : ''
   const body = (input.body && typeof input.body === 'object' ? input.body : {}) as Record<string, unknown>
-  if (!slug || slug.length > 63) return { ok: false, kind: 'blocked' }
+  if (!slug || slug.length > 63) return { ok: false, kind: 'blocked', reason: 'unknown_site' }
 
   // A filled decoy means a bot. Answer with success so it learns nothing; store nothing.
   const decoy = body[CONTACT_HONEYPOT_FIELD]
   if (typeof decoy === 'string' && decoy.trim() !== '') return { ok: true }
 
   const now = deps.now()
-  if (verifyContactToken(secret, slug, body.token, now) !== 'ok') return { ok: false, kind: 'blocked' }
+  const tokenCheck = verifyContactToken(secret, slug, body.token, now)
+  if (tokenCheck === 'too_fast') return { ok: false, kind: 'blocked', reason: 'too_fast' }
+  if (tokenCheck === 'expired') return { ok: false, kind: 'blocked', reason: 'expired' }
+  if (tokenCheck !== 'ok') return { ok: false, kind: 'blocked', reason: 'invalid_token' }
 
   const parsed = validateContactInput(body)
   if (!parsed.ok) return { ok: false, kind: 'validation', errors: parsed.errors }
 
   const ipHash = hashContactIp(secret, input.ip)
   if (!deps.rateLimit(`site-contact:min:${ipHash}`, CONTACT_RATE.perMinute, MINUTE).allowed) {
-    return { ok: false, kind: 'blocked' }
+    return { ok: false, kind: 'blocked', reason: 'rate_limited' }
   }
   if (!deps.rateLimit(`site-contact:hour:${ipHash}`, CONTACT_RATE.perHour, HOUR).allowed) {
-    return { ok: false, kind: 'blocked' }
+    return { ok: false, kind: 'blocked', reason: 'rate_limited' }
   }
 
-  const site = await deps.loadSite(slug)
-  if (!site) return { ok: false, kind: 'blocked' }
+  let site: ContactSite | null
+  try {
+    site = await deps.loadSite(slug)
+  } catch {
+    return { ok: false, kind: 'unavailable', code: 'E_LOAD_SITE' }
+  }
+  if (!site) return { ok: false, kind: 'blocked', reason: 'unknown_site' }
 
   // Database counts back up the per-instance limiter across serverless instances.
-  const [fromIp, forSite] = await Promise.all([
-    deps.countRecent({ ipHash }, now - HOUR),
-    deps.countRecent({ projectId: site.projectId }, now - DAY),
-  ])
+  let fromIp: number
+  let forSite: number
+  try {
+    ;[fromIp, forSite] = await Promise.all([
+      deps.countRecent({ ipHash }, now - HOUR),
+      deps.countRecent({ projectId: site.projectId }, now - DAY),
+    ])
+  } catch {
+    return { ok: false, kind: 'unavailable', code: 'E_RATE_COUNT' }
+  }
   if (fromIp >= CONTACT_RATE.perHour || forSite >= CONTACT_RATE.siteDaily) {
-    return { ok: false, kind: 'blocked' }
+    return { ok: false, kind: 'blocked', reason: 'rate_limited' }
   }
 
-  const saved = await deps.insert({ ...parsed.value, projectId: site.projectId, ipHash })
-  if (!saved) return { ok: false, kind: 'unavailable' }
+  let saved: { id: string } | null
+  try {
+    saved = await deps.insert({ ...parsed.value, projectId: site.projectId, ipHash })
+  } catch {
+    saved = null
+  }
+  if (!saved) return { ok: false, kind: 'unavailable', code: 'E_INSERT' }
 
   // From here on the message is safe in the database; notification trouble never loses it.
   let status: ContactEmailStatus = 'failed'
