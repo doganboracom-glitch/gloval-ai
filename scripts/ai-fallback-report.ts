@@ -5,7 +5,7 @@
  *   npx tsx scripts/ai-fallback-report.ts [--weeks=8]
  *
  * Read-only, developer-only (not a route). Needs the service-role key and the
- * table from scripts/054-ai-generation-events.sql.
+ * table from scripts/056-ai-generation-events.sql.
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import { readAiWeeklyReport } from '@/lib/ai-generation-events'
