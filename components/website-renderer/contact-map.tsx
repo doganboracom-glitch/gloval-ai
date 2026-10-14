@@ -7,6 +7,7 @@ import { getAddressMapSrcAction } from '@/lib/map-embed-actions'
 import { mapCopy } from '@/lib/map-embed-copy'
 import { CONSENT_CHANGE_EVENT, thirdPartyContentAllowed } from '@/lib/cookie-consent-storage'
 import { KEEP_INTERACTIVE_PROPS } from '@/lib/preview-interactive'
+import { useIsSitePreview } from '@/components/website-renderer/site-nav-context'
 
 const SESSION_KEY = 'gloval_map_consent'
 
@@ -36,6 +37,8 @@ export function ContactMap({
   const [src, setSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const isPreview = useIsSitePreview()
+
   const hasMap = explicitSrc !== null || cleanAddress.length > 0
 
   const load = useCallback(async () => {
@@ -54,6 +57,11 @@ export function ContactMap({
   // A map is allowed without a click only when the visitor already agreed.
   useEffect(() => {
     if (!hasMap) return
+    // The owner is editing their own site: no visitor consent applies there.
+    if (isPreview) {
+      setConsented(true)
+      return
+    }
     const doc = rootRef.current?.ownerDocument
     const check = () => {
       let remembered = false
@@ -67,7 +75,7 @@ export function ContactMap({
     check()
     window.addEventListener(CONSENT_CHANGE_EVENT, check)
     return () => window.removeEventListener(CONSENT_CHANGE_EVENT, check)
-  }, [hasMap])
+  }, [hasMap, isPreview])
 
   useEffect(() => {
     if (consented && hasMap && !src) void load()
