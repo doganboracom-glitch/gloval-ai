@@ -7,6 +7,7 @@ import {
   checkBuyer,
   initializeCheckoutForm,
   type BuyerCheck,
+  type BuyerIssue,
   type IyzicoBasketLine,
   type IyzicoCredentials,
 } from '@/lib/store-payments/iyzico'
@@ -23,7 +24,7 @@ export const CARD_ERROR = {
 
 export type PrepareResult =
   | { ok: true; creds: IyzicoCredentials; buyer: Buyer }
-  | { ok: false; error: string; missing?: string[] }
+  | { ok: false; error: string; missing?: string[]; issues?: BuyerIssue[] }
 
 /**
  * Everything that can be checked BEFORE an order and its stock reservation
@@ -63,7 +64,14 @@ export async function prepareIyzicoCheckout(
     ip,
     identityNumber: invoiceTckn,
   })
-  if (!check.ok) return { ok: false, error: CARD_ERROR.buyerInfoMissing, missing: check.missing }
+  if (!check.ok) {
+    console.warn('[store-iyzico] buyer data rejected', {
+      projectId,
+      code: CARD_ERROR.buyerInfoMissing,
+      fields: check.issues.map((i) => `${i.field}:${i.problem}`),
+    })
+    return { ok: false, error: CARD_ERROR.buyerInfoMissing, missing: check.missing, issues: check.issues }
+  }
   return { ok: true, creds: loaded.creds, buyer: check.buyer }
 }
 

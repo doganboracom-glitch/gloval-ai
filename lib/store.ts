@@ -5,6 +5,7 @@ import {
   prepareIyzicoCheckout,
   startIyzicoPayment,
 } from "@/lib/store-payments/iyzico-checkout";
+import type { BuyerIssueView } from "@/lib/store-payments/buyer-messages";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaymentProvider, type PaymentProviderId } from "@/lib/payments";
@@ -229,6 +230,8 @@ export type CheckoutResult =
       available?: number;
       /** Set when card checkout needs buyer fields that are missing (labels). */
       missing?: string[];
+      /** Field-level buyer problems for card checkout (drives per-field messages). */
+      issues?: { field: BuyerIssueView["field"]; problem: BuyerIssueView["problem"] }[];
     };
 
 /**
@@ -416,7 +419,12 @@ export async function createOrder(
       ip,
     );
     if (!prepared.ok) {
-      return { ok: false, error: prepared.error, missing: prepared.missing };
+      return {
+        ok: false,
+        error: prepared.error,
+        missing: prepared.missing,
+        issues: prepared.issues,
+      };
     }
     card = prepared;
   } else if (!isManualStoreProvider(providerId) && providerId !== "mock") {

@@ -13,6 +13,15 @@
  */
 export const IYZICO_PAYMENT_SOURCE = 'GLOVAL'
 
+/**
+ * `buyer.identityNumber` is a required field of the Checkout Form initialize
+ * request, but a store must not collect a national ID just to take a card
+ * payment. iyzico's own request samples (docs.iyzico.com) send this value, and
+ * the sandbox accepts it. A buyer's real TCKN is only sent when they entered a
+ * valid one in their invoice details.
+ */
+export const IYZICO_BUYER_IDENTITY_PLACEHOLDER = '11111111111'
+
 export const IYZICO_ENVIRONMENTS = ['sandbox', 'live'] as const
 export type IyzicoEnvironment = (typeof IYZICO_ENVIRONMENTS)[number]
 

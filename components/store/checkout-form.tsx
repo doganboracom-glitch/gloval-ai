@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronDown, Loader2, Lock, PackageOpen, ShoppingBag } from 
 import { Button } from '@/components/ui/button'
 import { useCart, formatPrice } from './cart-provider'
 import { createOrder } from '@/lib/store'
+import { buyerIssuesMessage } from '@/lib/store-payments/buyer-messages'
 import type { PaymentProviderId } from '@/lib/payments/types'
 import { PaymentMethodSelect, normalizeMethods } from './payment-method-select'
 import {
@@ -212,7 +213,11 @@ function CheckoutInner({
       }
       router.push(result.orderPath)
     } else {
-      setError(errorMessages[result.error] ?? errorMessages.order_failed)
+      setError(
+        result.error === 'card_buyer_info_missing'
+          ? buyerIssuesMessage(result.issues)
+          : (errorMessages[result.error] ?? errorMessages.order_failed),
+      )
       setSubmitting(false)
     }
   }
