@@ -27,24 +27,40 @@ export type Attribution = {
   captured_at: number
 }
 
-const MAX_VALUE_LENGTH = 200
+/** Mirrors the `char_length` CHECK constraints in scripts/055-signup-attribution.sql. */
+export const ATTRIBUTION_LIMITS = {
+  utm: 200,
+  clickId: 500,
+  landingPath: 300,
+  referrerDomain: 255,
+} as const
+
 const TTL_MS = ATTRIBUTION_TTL_DAYS * 24 * 60 * 60 * 1000
 
-function cleanValue(value: unknown): string | null {
+function maxLengthFor(key: AttributionKey): number {
+  return key === 'gclid' || key === 'fbclid' ? ATTRIBUTION_LIMITS.clickId : ATTRIBUTION_LIMITS.utm
+}
+
+function cleanValue(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null
   // eslint-disable-next-line no-control-regex
-  const trimmed = value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_VALUE_LENGTH)
+  const trimmed = value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, maxLength)
   return trimmed || null
 }
 
 function cleanHostname(value: unknown): string | null {
-  const v = cleanValue(value)?.toLowerCase()
-  return v && /^[a-z0-9.-]{1,100}$/.test(v) ? v : null
+  // Never truncate: a clipped hostname would be a different, misleading domain.
+  const v = cleanValue(value, Number.MAX_SAFE_INTEGER)?.toLowerCase()
+  if (!v || v.length > ATTRIBUTION_LIMITS.referrerDomain) return null
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(v) ? v : null
 }
 
+/** Keeps the pathname only: the query string and fragment are cut off, never stored. */
 function cleanPath(value: unknown): string | null {
-  const v = cleanValue(value)
-  return v && v.startsWith('/') && !v.includes('?') && !v.includes('#') ? v : null
+  if (typeof value !== 'string') return null
+  const pathOnly = value.split(/[?#]/, 1)[0]
+  const v = cleanValue(pathOnly, ATTRIBUTION_LIMITS.landingPath)
+  return v && v.startsWith('/') ? v : null
 }
 
 /** Validates untrusted input (cookie contents or a client payload) into a safe Attribution. */
@@ -54,7 +70,7 @@ export function sanitizeAttribution(input: unknown): Attribution | null {
   const rawParams = raw.params && typeof raw.params === 'object' ? (raw.params as Record<string, unknown>) : {}
   const params: Attribution['params'] = {}
   for (const key of ATTRIBUTION_KEYS) {
-    const value = cleanValue(rawParams[key])
+    const value = cleanValue(rawParams[key], maxLengthFor(key))
     if (value) params[key] = value
   }
   const capturedAt = Number(raw.captured_at)
@@ -90,7 +106,7 @@ export function snapshotFromLocation(): Attribution | null {
   const search = new URLSearchParams(window.location.search)
   const params: Attribution['params'] = {}
   for (const key of ATTRIBUTION_KEYS) {
-    const value = cleanValue(search.get(key))
+    const value = cleanValue(search.get(key), maxLengthFor(key))
     if (value) params[key] = value
   }
 
