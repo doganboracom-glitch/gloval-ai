@@ -68,6 +68,18 @@ export const imageSchema = z.object({
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Marks a section or an item as an illustrative EXAMPLE the owner has not
+ * confirmed (a sample price, a placeholder plan, ...). It is how generated
+ * content that could pass for a real claim stays honest: the post-processing
+ * pass in `lib/proof-content.ts` sets it, the owner clears it by editing the
+ * content. Optional, so every previously generated schema stays valid.
+ */
+const sampleFlag = z
+  .boolean()
+  .optional()
+  .describe('Never set this yourself. true = illustrative example content the owner has not confirmed')
+
+/**
  * Optional editor metadata carried by every section. `hidden` lets the visual
  * editor hide a section non-destructively (so it can be shown again and the
  * change is captured by undo/redo). It is optional so every previously
@@ -75,6 +87,7 @@ export const imageSchema = z.object({
  */
 const sectionEditorMeta = {
   hidden: z.boolean().optional().describe('If true, the section is hidden in the preview'),
+  sample: sampleFlag,
 } as const
 
 /**
@@ -116,7 +129,7 @@ export const heroSection = z.object({
   trustText: z
     .string()
     .optional()
-    .describe('A short trust line below the buttons, e.g. "Trusted by 500+ clients"'),
+    .describe('A short neutral line below the buttons, e.g. "Randevu alın". Never an invented figure, award or client count.'),
   image: imageSchema.optional().describe('The structured hero image reference'),
   imagePrompt: z
     .string()
@@ -220,9 +233,10 @@ export const statsSection = z.object({
   items: z
     .array(
       z.object({
-        value: z.string().describe('The headline figure, e.g. "10K+", "%98", "24/7"'),
+        value: z.string().describe('A real figure the user provided, e.g. "10 yıl", "24/7". Never invent one.'),
         label: z.string(),
         icon: z.string().optional().describe('A lucide-react icon name'),
+        sample: sampleFlag,
       }),
     )
     .min(2)
@@ -244,6 +258,7 @@ export const pricingSection = z.object({
         features: z.array(z.string()).min(1).max(10),
         highlighted: z.boolean().optional().describe('Marks the recommended plan'),
         buttonText: z.string().optional(),
+        sample: sampleFlag,
       }),
     )
     .min(1)
@@ -257,9 +272,10 @@ export const testimonialsSection = z.object({
   items: z
     .array(
       z.object({
-        quote: z.string(),
+        quote: z.string().describe('A real customer quote the user provided. Never invent one.'),
         author: z.string(),
         role: z.string().optional(),
+        sample: sampleFlag,
       }),
     )
     .min(1)
@@ -341,8 +357,9 @@ export const productsSection = z.object({
       z.object({
         name: z.string(),
         price: z.string().describe('Display price, e.g. "₺899", "$29"'),
-        oldPrice: z.string().optional().describe('Original price shown struck through, e.g. "₺1.299"'),
-        badge: z.string().optional().describe('Corner badge, e.g. "Yeni", "%20", "Çok Satan"'),
+        oldPrice: z.string().optional().describe('Previous price shown struck through. Only when the user gave one; never invent a discount.'),
+        badge: z.string().optional().describe('Corner badge. Only a fact the user gave; never "Çok Satan", a discount % or urgency.'),
+        sample: sampleFlag,
         category: z.string().optional().describe('Short category/tag label'),
         description: z.string().optional().describe('A very short one-line product note'),
         imagePrompt: z.string().describe('A prompt describing this product photo'),
@@ -370,7 +387,7 @@ export const categoriesSection = z.object({
       z.object({
         name: z.string(),
         description: z.string().optional(),
-        count: z.string().optional().describe('Item-count label, e.g. "48 ürün", "24 products"'),
+        count: z.string().optional().describe('Item-count label. Leave unset unless the user gave the real number.'),
         imagePrompt: z.string().describe('A prompt describing this category image'),
         src: z.string().optional().describe('A resolved image URL or path, if available'),
         alt: z.string().optional(),
