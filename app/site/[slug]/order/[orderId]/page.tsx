@@ -47,7 +47,7 @@ export default async function OrderConfirmationPage({
   const paid = order.payment_status === 'paid'
   const failed = order.payment_status === 'failed'
   const cancelled = order.status === 'cancelled'
-  const copy = orderStatusCopy({ status: order.status, paymentStatus: order.payment_status, shippingStatus: order.shipping_status, carrier: order.carrier, trackingNumber: order.tracking_number }, order.language)
+  const copy = orderStatusCopy({ status: order.status, paymentStatus: order.payment_status, shippingStatus: order.shipping_status, carrier: order.carrier, trackingNumber: order.tracking_number, attention: order.attention }, order.language)
   const contactHref = safeStoreContactHref(order.store_base_url, order.has_contact_section, order.contact_email, slug)
   const awaitingTransfer = order.bank !== null
   const awaitingDelivery =

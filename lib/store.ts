@@ -1,5 +1,6 @@
 "use server";
 
+import { persistPaymentIntent, voidOrder } from "@/lib/store-order-intent";
 import { headers } from "next/headers";
 import {
   prepareIyzicoCheckout,
@@ -37,6 +38,7 @@ import {
 import {
   finalizePaidStock,
   releaseOrderStock,
+  releaseOrderStockSafely,
   releaseStaleOrderStock,
   reserveOrderStock,
 } from "@/lib/store-order-stock";
@@ -610,7 +612,7 @@ export async function createOrder(
       buyer: card.buyer,
     });
     if (!started.ok) {
-      await releaseOrderStock(admin, order.id);
+      await releaseOrderStockSafely(admin, order.id);
       await voidOrder(admin, order.id, idempotencyKey);
       return { ok: false, error: started.error };
     }
@@ -644,33 +646,23 @@ export async function createOrder(
       provider: providerId,
       message: err instanceof Error ? err.message : "unknown",
     });
-    await releaseOrderStock(admin, order.id);
-    await admin
+    await releaseOrderStockSafely(admin, order.id);
+    const { error: failError } = await admin
       .from("ecommerce_orders")
       .update({ status: "failed", payment_status: "failed" })
       .eq("id", order.id);
+    if (failError) {
+      console.error("[store-order] mark failed did not save", { orderId: order.id, code: failError.code });
+    }
     return { ok: false, error: "order_failed" };
   }
 
-  // Only the mock provider settles synchronously (and only where explicitly
-  // allowed). Its stock is already reserved above; finalizing is a no-op there
-  // and only does work on a database without the stock functions.
-  if (intent.action === "completed" && intent.status === "paid") {
-    await admin
-      .from("ecommerce_orders")
-      .update({
-        status: "paid",
-        payment_status: "paid",
-        payment_ref: intent.reference,
-      })
-      .eq("id", order.id);
-    await finalizePaidStock(admin, order.id);
-  } else {
-    await admin
-      .from("ecommerce_orders")
-      .update({ payment_ref: intent.reference, payment_status: intent.status })
-      .eq("id", order.id);
-  }
+  const persisted = await persistPaymentIntent(
+    admin,
+    { orderId: order.id, idempotencyKey, intent },
+    { finalizePaidStock, releaseOrderStockSafely },
+  );
+  if (!persisted.ok) return { ok: false, error: persisted.error };
 
   scheduleOrderNotification(order.id);
 
@@ -741,24 +733,4 @@ async function loadOrderProducts(
     return null;
   }
   return (legacy.data ?? []) as unknown as OrderProductRow[];
-}
-
-/**
- * Discards an order that never became valid. The idempotency key is retired so
- * a retry of the same checkout creates a fresh order instead of resolving to
- * this cancelled one.
- */
-async function voidOrder(
-  admin: ReturnType<typeof createAdminClient>,
-  orderId: string,
-  idempotencyKey: string,
-): Promise<void> {
-  await admin
-    .from("ecommerce_orders")
-    .update({
-      status: "cancelled",
-      payment_status: "failed",
-      idempotency_key: `${idempotencyKey}#void-${orderId}`,
-    })
-    .eq("id", orderId);
 }

@@ -4,6 +4,7 @@ import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   claimNotification,
+  releaseNotificationClaim,
   sendTransactionalEmail,
 } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
@@ -97,7 +98,7 @@ function readBank(config: unknown): BankTransferInfo | undefined {
   return Object.values(bank).some(Boolean) ? bank : undefined
 }
 
-async function sendOnce(input: {
+export async function sendOnce(input: {
   ownerId: string
   dedupeKey: string
   type: string
@@ -123,6 +124,11 @@ async function sendOnce(input: {
     replyTo: input.replyTo,
     fromName: input.fromName,
   })
+  // A failed send must not keep the claim, or no later call could ever deliver it.
+  if (!sent) {
+    console.error('[store-notify] email send failed, claim released', { key: input.dedupeKey })
+    await releaseNotificationClaim(input.dedupeKey)
+  }
 }
 
 /**
@@ -135,23 +141,31 @@ async function sendOnce(input: {
 export async function notifyOrderPlaced(orderId: string): Promise<void> {
   const admin = createAdminClient()
 
-  const { data: order } = await admin
+  const { data: order, error: orderError } = await admin
     .from('ecommerce_orders')
     .select(
       'id, project_id, customer_name, customer_email, customer_phone, shipping_address, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status',
     )
     .eq('id', orderId)
     .maybeSingle<OrderRow>()
+  if (orderError) {
+    console.error('[store-notify] order lookup failed', { orderId, code: orderError.code })
+    return
+  }
   if (!order) return
 
   const buyerKind = buyerKindFor(order.payment_status, order.payment_provider)
   if (!buyerKind) return
 
-  const { data: project } = await admin
+  const { data: project, error: projectError } = await admin
     .from('projects')
     .select('id, slug, name, owner_id, schema_data')
     .eq('id', order.project_id)
     .maybeSingle()
+  if (projectError) {
+    console.error('[store-notify] project lookup failed', { orderId, code: projectError.code })
+    return
+  }
   if (!project) return
 
   // Demo stores never e-mail anyone (neither buyer nor owner): their orders are
@@ -247,6 +261,77 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * Tells the store owner, once per order, that a payment was received but the
+ * order could not be completed (flagged by `recordSettleFailure`). The dedupe
+ * key makes repeated calls harmless; a failed send releases its claim so the
+ * next call retries. Logs ids only, never PII.
+ */
+export async function notifyOrderAttention(orderId: string): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: order, error: orderError } = await admin
+    .from('ecommerce_orders')
+    .select('id, project_id, total_cents, currency, provider_payment_id')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (orderError) {
+    console.error('[store-notify] attention order lookup failed', { orderId, code: orderError.code })
+    return
+  }
+  if (!order) return
+
+  const { data: project, error: projectError } = await admin
+    .from('projects')
+    .select('id, slug, name, owner_id')
+    .eq('id', order.project_id)
+    .maybeSingle()
+  if (projectError || !project) {
+    if (projectError) console.error('[store-notify] attention project lookup failed', { orderId, code: projectError.code })
+    return
+  }
+
+  const ownerRes = await admin.auth.admin.getUserById(project.owner_id)
+  const ownerEmail = ownerRes.data?.user?.email ?? ''
+  if (!ownerEmail) return
+
+  const storeName = project.name || project.slug
+  const number = order.id.slice(0, 8).toUpperCase()
+  const paymentId = order.provider_payment_id ? String(order.provider_payment_id) : ''
+  const amount = `${(order.total_cents / 100).toFixed(2)} ${order.currency}`
+  const url = `${DASHBOARD_ORIGIN}/ecommerce/${project.id}/orders`
+
+  const text = [
+    `${storeName}: #${number} numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.`,
+    `Tutar: ${amount}`,
+    paymentId ? `iyzico paymentId: ${paymentId}` : '',
+    'Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse Siparişler panelinden kontrol edin.',
+    url,
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const html = `<p><strong>Dikkat gerekiyor:</strong> ${escapeHtml(storeName)} mağazanızda <strong>#${number}</strong> numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.</p>
+<p>Tutar: ${escapeHtml(amount)}${paymentId ? `<br>iyzico paymentId: <code>${escapeHtml(paymentId)}</code>` : ''}</p>
+<p>Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse <a href="${url}">Siparişler panelinden</a> kontrol edin.</p>`
+
+  await sendOnce({
+    ownerId: project.owner_id,
+    dedupeKey: `store-order:${order.id}:owner-attention`,
+    type: 'store_order_attention',
+    to: ownerEmail,
+    fromName: storeName,
+    email: { subject: `Dikkat: #${number} siparişinin ödemesi alındı, işlem tamamlanamadı`, html, text },
+  })
+}
+
 /**
  * E-mails the buyer that the order is on its way. At most once per distinct
  * carrier + tracking code (the dedupe key contains both), so a double click
@@ -257,13 +342,17 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
 export async function notifyOrderShipped(orderId: string, kind: 'buyer-shipped' | 'buyer-delivered' = 'buyer-shipped'): Promise<void> {
   const admin = createAdminClient()
 
-  const { data: order } = await admin
+  const { data: order, error: orderError } = await admin
     .from('ecommerce_orders')
     .select(
       'id, project_id, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number',
     )
     .eq('id', orderId)
     .maybeSingle()
+  if (orderError) {
+    console.error('[store-notify] order lookup failed', { orderId, code: orderError.code })
+    return
+  }
   if (!order) return
 
   const buyerTo = (order.customer_email ?? '').trim()
@@ -274,11 +363,15 @@ export async function notifyOrderShipped(orderId: string, kind: 'buyer-shipped' 
     return
   }
 
-  const { data: project } = await admin
+  const { data: project, error: projectError } = await admin
     .from('projects')
     .select('id, slug, name, owner_id, schema_data')
     .eq('id', order.project_id)
     .maybeSingle()
+  if (projectError) {
+    console.error('[store-notify] project lookup failed', { orderId, code: projectError.code })
+    return
+  }
   if (!project) return
   if (isDemoStore(project.id, await loadDemoStoreIds(admin, project.id))) return
 

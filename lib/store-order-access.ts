@@ -9,6 +9,8 @@ import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payme
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { readOrderItems } from '@/lib/store-order-items'
 import { carrierName } from '@/lib/shipping-carriers'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
+import { needsAttention } from '@/lib/store-order-attention'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -60,6 +62,8 @@ export type OrderConfirmation = {
   shipping_status: string | null
   carrier: string | null
   tracking_number: string | null
+  /** Payment received but the order is still being completed (shown as processing, never as failed). */
+  attention: boolean
   language: 'tr' | 'en'
   store_base_url: string | null
   contact_email: string | null
@@ -144,6 +148,21 @@ export async function getOrderConfirmation(
     'name, unit_price_cents, quantity, line_total_cents',
   )
 
+  // Separate read: the column only exists once scripts/053 is applied.
+  const { data: flag, error: flagError } = await admin
+    .from('ecommerce_orders')
+    .select('attention_at')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (flagError && !isMissingColumnError(flagError)) {
+    console.error('[store-order-access] attention read failed', { orderId, code: flagError.code })
+  }
+  const attention = needsAttention({
+    attention_at: (flag as { attention_at?: string | null } | null)?.attention_at ?? null,
+    status: order.status,
+    payment_status: order.payment_status,
+  })
+
   let bank: OrderConfirmation['bank'] = null
   const provider = (order.payment_provider as string | null) ?? null
   if (
@@ -186,6 +205,7 @@ export async function getOrderConfirmation(
     shipping_status: (order.shipping_status as string | null) ?? null,
     carrier: carrierName(order.tracking_carrier as string | null) || null,
     tracking_number: (order.tracking_number as string | null) ?? null,
+    attention,
     payment_provider: provider,
     language: schema.meta?.language === 'en' ? 'en' : 'tr',
     store_base_url: domain?.domain ? `https://${domain.domain}` : null,

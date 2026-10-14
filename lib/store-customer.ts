@@ -204,12 +204,13 @@ async function resolveProject(
   const slug = asString(storeSlug)
   if (!slug || slug.length > 100) return null
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('projects')
     .select('id, name')
     .eq('slug', slug)
     .eq('published', true)
     .maybeSingle()
+  if (error) console.error('[store-customer] project lookup failed', { code: error.code })
   return data ? { id: data.id, name: asString(data.name) } : null
 }
 
@@ -256,12 +257,13 @@ async function findCustomerByEmail(
   email: string,
 ): Promise<CustomerRow | null> {
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('store_customers')
     .select('*')
     .eq('project_id', projectId)
     .eq('email', email)
     .limit(1)
+  if (error) console.error('[store-customer] email lookup failed', { code: error.code })
   const rows = (data ?? []) as CustomerRow[]
   return rows[0] ?? null
 }
@@ -271,12 +273,13 @@ async function findCustomerById(
   customerId: string,
 ): Promise<CustomerRow | null> {
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('store_customers')
     .select('*')
     .eq('project_id', projectId)
     .eq('id', customerId)
     .maybeSingle()
+  if (error) console.error('[store-customer] id lookup failed', { code: error.code })
   return (data as CustomerRow | null) ?? null
 }
 
@@ -601,17 +604,21 @@ function toShippingStatus(v: unknown): ShippingStatus {
     : 'preparing'
 }
 
-/** Order history (with shipping/tracking) for the logged-in store customer. */
+/**
+ * Order history (with shipping/tracking) for the logged-in store customer.
+ * Returns `null` when the database read failed, so the page can say the orders
+ * could not be loaded instead of showing an empty history.
+ */
 export async function getStoreCustomerOrders(
   storeSlug: string,
-): Promise<CustomerOrder[]> {
+): Promise<CustomerOrder[] | null> {
   const project = await resolveProject(storeSlug)
   if (!project) return []
   const customer = await authenticate(project.id)
   if (!customer) return []
 
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error: ordersError } = await admin
     .from('ecommerce_orders')
     .select(
       'id, created_at, status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
@@ -621,6 +628,10 @@ export async function getStoreCustomerOrders(
     .order('created_at', { ascending: false })
     .limit(50)
 
+  if (ordersError) {
+    console.error('[store-customer] order list failed', { code: ordersError.code })
+    return null
+  }
   if (!data) return []
   return data.map((o) => {
     const rel = (o as { ecommerce_order_items?: { count: number }[] })
@@ -887,12 +898,13 @@ export async function resetStoreCustomerPassword(input: {
   const admin = createAdminClient()
 
   // Suspension clears reset tokens; this also covers a link issued at the same instant.
-  const { data: tokenRows } = await admin
+  const { data: tokenRows, error: tokenError } = await admin
     .from('store_customers')
     .select('*')
     .eq('project_id', project.id)
     .eq('reset_token_hash', hashResetToken(token))
     .limit(1)
+  if (tokenError) console.error('[store-customer] reset token lookup failed', { code: tokenError.code })
   if (isPendingDeletion((tokenRows?.[0] as CustomerRow | undefined) ?? null)) {
     return { ok: false, error: MSG.accountPendingDeletion }
   }

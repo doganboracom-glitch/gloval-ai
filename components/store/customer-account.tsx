@@ -81,12 +81,14 @@ export function CustomerAccount({
   storeName,
   customer,
   orders,
+  ordersFailed = false,
   redirect,
 }: {
   slug: string
   storeName: string
   customer: StoreCustomer | null
   orders: CustomerOrder[]
+  ordersFailed?: boolean
   redirect?: string
 }) {
   return (
@@ -105,7 +107,7 @@ export function CustomerAccount({
 
       <main className="mx-auto max-w-3xl px-4 py-8">
         {customer ? (
-          <AccountView slug={slug} customer={customer} orders={orders} />
+          <AccountView slug={slug} customer={customer} orders={orders} ordersFailed={ordersFailed} />
         ) : (
           <AuthView slug={slug} redirect={redirect} />
         )}
@@ -122,10 +124,12 @@ function AccountView({
   slug,
   customer,
   orders,
+  ordersFailed,
 }: {
   slug: string
   customer: StoreCustomer
   orders: CustomerOrder[]
+  ordersFailed: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -191,7 +195,8 @@ function AccountView({
         })}
       </nav>
 
-      {tab === 'orders' && <OrdersTab slug={slug} orders={orders} />}
+      {tab === 'orders' &&
+        (ordersFailed ? <OrdersLoadError /> : <OrdersTab slug={slug} orders={orders} />)}
       {tab === 'profile' && <ProfileTab slug={slug} customer={customer} />}
       {tab === 'invoice' && <InvoiceTab slug={slug} customer={customer} />}
       {tab === 'password' && <PasswordTab slug={slug} />}
@@ -201,6 +206,20 @@ function AccountView({
 }
 
 /* --------------------------------- orders tab -------------------------------- */
+
+export const ORDERS_LOAD_ERROR = 'Siparişler yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin.'
+
+function OrdersLoadError() {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-12 text-center"
+    >
+      <Package className="size-8 text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{ORDERS_LOAD_ERROR}</p>
+    </div>
+  )
+}
 
 function OrdersTab({ slug, orders }: { slug: string; orders: CustomerOrder[] }) {
   if (orders.length === 0) {

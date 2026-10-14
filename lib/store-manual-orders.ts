@@ -24,7 +24,10 @@ type Admin = ReturnType<typeof createAdminClient>
  */
 
 export type ManualOrderDeps = {
-  finalizePaidStock: (admin: Admin, orderId: string) => Promise<{ oversold: boolean }>
+  finalizePaidStock: (
+    admin: Admin,
+    orderId: string,
+  ) => Promise<{ oversold: boolean; stockFailed?: boolean }>
   releaseOrderStock: (
     admin: Admin,
     orderId: string,
@@ -49,14 +52,21 @@ export type ManualOrderOutcome =
 
 type OrderLookup = { id: string; payment_provider: string; payment_status: string; status: string }
 
-async function lookup(admin: Admin, projectId: string, orderId: string): Promise<OrderLookup | null> {
-  const { data } = await admin
+type LookupResult = { ok: true; order: OrderLookup | null } | { ok: false }
+
+async function lookup(admin: Admin, projectId: string, orderId: string): Promise<LookupResult> {
+  const { data, error } = await admin
     .from('ecommerce_orders')
     .select('id, payment_provider, payment_status, status')
     .eq('id', orderId)
     .eq('project_id', projectId)
     .maybeSingle()
-  return (data as OrderLookup | null) ?? null
+  // A failed read is not "not found": the owner must see a retryable error.
+  if (error) {
+    console.error('[store-manual] order lookup failed', { orderId, code: error.code })
+    return { ok: false }
+  }
+  return { ok: true, order: (data as OrderLookup | null) ?? null }
 }
 
 /**
@@ -100,7 +110,9 @@ export async function confirmManualPayment(
   input: { projectId: string; orderId: string; actorId: string },
   deps: ManualOrderDeps,
 ): Promise<ManualOrderOutcome> {
-  const order = await lookup(admin, input.projectId, input.orderId)
+  const found = await lookup(admin, input.projectId, input.orderId)
+  if (!found.ok) return { outcome: 'failed' }
+  const order = found.order
   if (!order) return { outcome: 'not_found' }
   if (!(MANUAL_STORE_PROVIDERS as readonly string[]).includes(order.payment_provider)) {
     return { outcome: 'not_manual' }
@@ -116,9 +128,30 @@ export async function confirmManualPayment(
   if (result.error) return { outcome: 'failed' }
   if (!result.moved) return { outcome: 'not_pending' }
 
-  const { oversold } = await deps.finalizePaidStock(admin, input.orderId)
+  let stock: { oversold: boolean; stockFailed?: boolean }
+  try {
+    stock = await deps.finalizePaidStock(admin, input.orderId)
+  } catch {
+    stock = { oversold: false, stockFailed: true }
+  }
+  if (stock.stockFailed) {
+    // Back to pending so the owner can confirm again (the stock step is idempotent per order).
+    const { error: revertError } = await admin
+      .from('ecommerce_orders')
+      .update({ payment_status: 'pending', status: 'pending' })
+      .eq('id', input.orderId)
+      .eq('project_id', input.projectId)
+      .eq('payment_status', 'paid')
+    if (revertError) {
+      console.error('[store-manual] revert after stock failure failed', {
+        orderId: input.orderId,
+        code: revertError.code,
+      })
+    }
+    return { outcome: 'failed' }
+  }
   deps.notifyPaid(input.orderId)
-  return { outcome: 'confirmed', oversold }
+  return { outcome: 'confirmed', oversold: stock.oversold }
 }
 
 /** Cancels a pending manual order and gives its reserved stock back. */
@@ -127,7 +160,9 @@ export async function cancelManualOrder(
   input: { projectId: string; orderId: string; actorId: string | null },
   deps: Pick<ManualOrderDeps, 'releaseOrderStock'>,
 ): Promise<ManualOrderOutcome> {
-  const order = await lookup(admin, input.projectId, input.orderId)
+  const found = await lookup(admin, input.projectId, input.orderId)
+  if (!found.ok) return { outcome: 'failed' }
+  const order = found.order
   if (!order) return { outcome: 'not_found' }
   if (!(MANUAL_STORE_PROVIDERS as readonly string[]).includes(order.payment_provider)) {
     return { outcome: 'not_manual' }
@@ -143,7 +178,11 @@ export async function cancelManualOrder(
   if (result.error) return { outcome: 'failed' }
   if (!result.moved) return { outcome: 'not_pending' }
 
-  await deps.releaseOrderStock(admin, input.orderId, { onlyUnpaid: true })
+  try {
+    await deps.releaseOrderStock(admin, input.orderId, { onlyUnpaid: true })
+  } catch {
+    // The order is cancelled; the orphan sweep returns the stock on the next checkout/cron run.
+  }
   return { outcome: 'cancelled' }
 }
 

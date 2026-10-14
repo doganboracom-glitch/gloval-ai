@@ -446,6 +446,11 @@ export type OrderRow = {
   tracking_number?: string | null
   shipped_at?: string | null
   delivered_at?: string | null
+  /** iyzico paymentId, kept for support requests; absent before it was recorded. */
+  provider_payment_id?: string | null
+  /** Set by the paid-but-unfinished safety net (scripts/053); null/absent otherwise. */
+  attention_at?: string | null
+  attention_reason?: string | null
 }
 
 export type OrderItemRow = {
@@ -486,6 +491,26 @@ export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
   if (!orders || orders.length === 0) return []
 
   const orderIds = orders.map((o) => o.id as string)
+
+  // Separate, failure-tolerant read: these columns arrive with scripts/052 and /053.
+  const flagById = new Map<string, Record<string, unknown>>()
+  for (const columns of ['provider_payment_id, attention_at, attention_reason', 'provider_payment_id']) {
+    const flags = await supabase.from('ecommerce_orders').select(`id, ${columns}`).in('id', orderIds)
+    if (isMissingColumnError(flags.error)) continue
+    if (flags.error) {
+      console.error('[ecommerce] order flags read failed', { code: flags.error.code })
+      break
+    }
+    for (const row of (flags.data ?? []) as unknown as Record<string, unknown>[]) {
+      flagById.set(row.id as string, row)
+    }
+    break
+  }
+  for (const o of orders) {
+    const extra = flagById.get(o.id as string)
+    if (extra) Object.assign(o, extra)
+  }
+
   const itemColumns = 'id, order_id, name, unit_price_cents, quantity, line_total_cents'
   // vat_rate / vat_cents arrive with scripts/037; read without them until then.
   const withVat = await supabase

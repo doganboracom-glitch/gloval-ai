@@ -28,14 +28,15 @@ export default async function AccountPage({
   if (!site) notFound()
 
   const customer = await getCurrentStoreCustomer(slug)
-  const orders = customer ? await getStoreCustomerOrders(slug) : []
+  const loaded = customer ? await getStoreCustomerOrders(slug) : []
 
   return (
     <CustomerAccount
       slug={slug}
       storeName={site.name}
       customer={customer}
-      orders={orders}
+      orders={loaded ?? []}
+      ordersFailed={loaded === null}
       redirect={redirect}
     />
   )
