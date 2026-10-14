@@ -20,6 +20,7 @@ import {
   type EditOperation,
 } from '@/lib/website-edit-operations'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { MapEmbedField } from '@/components/editor/map-embed-field'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -125,6 +126,14 @@ export function SectionInspector({
           label={label('recipientEmail')}
           value={String(record.recipientEmail ?? '')}
           onCommit={(v) => onDispatch({ op: 'updateSectionValue', index, field: 'recipientEmail', value: v.trim() })}
+        />
+      )}
+
+      {section.type === 'contact' && (
+        <MapEmbedField
+          value={String(record.mapEmbed ?? '')}
+          lang={site.meta.language}
+          onCommit={(src) => onDispatch({ op: 'updateSectionValue', index, field: 'mapEmbed', value: src })}
         />
       )}
 

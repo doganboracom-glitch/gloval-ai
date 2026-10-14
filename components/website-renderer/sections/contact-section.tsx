@@ -2,6 +2,7 @@
 
 import { Mail, Phone, MapPin } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
+import { ContactMap } from '@/components/website-renderer/contact-map'
 import { ContactForm, type ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import {
   SectionShell,
@@ -39,6 +40,7 @@ export function ContactSection({
 
         <ContactForm labels={data.fields} lang={lang} live={live} />
       </div>
+      <ContactMap mapEmbed={data.mapEmbed} address={data.address} lang={lang} />
     </SectionShell>
   )
 }

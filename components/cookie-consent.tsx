@@ -5,6 +5,14 @@ import Link from 'next/link'
 import { Analytics } from '@vercel/analytics/next'
 import { Cookie, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import {
+  CONSENT_CHANGE_EVENT,
+  CONSENT_COOKIE,
+  CONSENT_OPEN_EVENT,
+  CONSENT_VERSION,
+  readConsent,
+  type CookieConsent as ConsentChoice,
+} from '@/lib/cookie-consent-storage'
 
 /**
  * Gerçekten işleyen çerez onay sistemi.
@@ -19,41 +27,11 @@ import { useLanguage } from '@/components/language-provider'
  *   paneli yeniden açar.
  */
 
-export type CookieConsent = {
-  necessary: true
-  analytics: boolean
-  marketing: boolean
-}
+const OPEN_EVENT = CONSENT_OPEN_EVENT
+const CHANGE_EVENT = CONSENT_CHANGE_EVENT
 
-const CONSENT_COOKIE = 'gloval_cookie_consent'
-const CONSENT_VERSION = 1
-const OPEN_EVENT = 'gloval:open-cookie-preferences'
-const CHANGE_EVENT = 'gloval:cookie-consent-changed'
-
-type StoredConsent = CookieConsent & { v: number }
-
-function readConsent(): CookieConsent | null {
-  if (typeof document === 'undefined') return null
-  try {
-    const raw = document.cookie
-      .split('; ')
-      .find((entry) => entry.startsWith(`${CONSENT_COOKIE}=`))
-      ?.split('=')[1]
-    if (!raw) return null
-    const parsed = JSON.parse(decodeURIComponent(raw)) as StoredConsent
-    if (parsed.v !== CONSENT_VERSION) return null
-    return {
-      necessary: true,
-      analytics: Boolean(parsed.analytics),
-      marketing: Boolean(parsed.marketing),
-    }
-  } catch {
-    return null
-  }
-}
-
-function writeConsent(consent: CookieConsent) {
-  const payload: StoredConsent = { ...consent, v: CONSENT_VERSION }
+function writeConsent(consent: ConsentChoice) {
+  const payload = { ...consent, v: CONSENT_VERSION }
   const value = encodeURIComponent(JSON.stringify(payload))
   // 6 ay, site geneli. HttpOnly değil: tercih istemci tarafında okunmalı.
   document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=15552000; samesite=lax`
@@ -104,7 +82,7 @@ export function CookieConsent() {
   const { t } = useLanguage()
   const c = t.cookie
 
-  const [consent, setConsent] = useState<CookieConsent | null>(null)
+  const [consent, setConsent] = useState<ConsentChoice | null>(null)
   const [ready, setReady] = useState(false)
   const [open, setOpen] = useState(false)
   const [customize, setCustomize] = useState(false)
@@ -132,7 +110,7 @@ export function CookieConsent() {
     return () => window.removeEventListener(OPEN_EVENT, onOpen)
   }, [])
 
-  const persist = useCallback((next: CookieConsent) => {
+  const persist = useCallback((next: ConsentChoice) => {
     writeConsent(next)
     setConsent(next)
     setOpen(false)
