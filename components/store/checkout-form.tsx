@@ -31,6 +31,8 @@ export type CheckoutCustomer = {
   email: string
   phone: string
   city: string
+  district?: string
+  postalCode?: string
   address: string
   invoice?: InvoiceInput | null
 } | null
@@ -116,17 +118,21 @@ function CheckoutInner({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentProviderId>(methods[0] ?? 'mock')
-  // Prefill from the logged-in customer's saved profile. Name is stored as a
-  // single field on the account, so it maps to the first-name box.
+  // Prefill from the logged-in customer's saved profile. Legacy accounts keep
+  // one name field, so split at the final space without losing compound names.
+  const savedName = customer?.name?.trim() ?? ''
+  const nameBreak = savedName.lastIndexOf(' ')
+  const savedFirstName = nameBreak > 0 ? savedName.slice(0, nameBreak) : savedName
+  const savedLastName = nameBreak > 0 ? savedName.slice(nameBreak + 1) : ''
   const [form, setForm] = useState({
-    name: customer?.name ?? '',
-    lastName: '',
+    name: savedFirstName,
+    lastName: savedLastName,
     email: customer?.email ?? '',
     phone: customer?.phone ?? '',
     address: customer?.address ?? '',
-    district: '',
+    district: customer?.district ?? '',
     city: customer?.city ?? '',
-    postalCode: '',
+    postalCode: customer?.postalCode ?? '',
   })
   // Optional invoice — prefilled from the account's saved invoice profile.
   const [wantsInvoice, setWantsInvoice] = useState<boolean>(Boolean(customer?.invoice))

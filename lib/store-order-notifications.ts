@@ -8,7 +8,6 @@ import {
 } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { sanitizeReplyTo } from '@/lib/email/from'
-import { tenantUrl } from '@/lib/domains'
 import { buyerMethodName } from '@/lib/payments/methods'
 import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
@@ -17,7 +16,7 @@ import { readOrderItems } from '@/lib/store-order-items'
 import { loadDemoStoreIds } from '@/lib/store-demo'
 import { buildTrackingUrl, carrierName } from '@/lib/shipping-carriers'
 import { firstNameOf } from '@/lib/store-order-privacy'
-import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-access'
+import { orderStatusUrl } from '@/lib/store-order-access'
 import {
   renderOrderEmail,
   type BankTransferInfo,
@@ -196,8 +195,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
   try {
     const buyerTo = (order.customer_email ?? '').trim()
     if (buyerTo) {
-      const token = issueOrderAccessToken(order.id)
-      const orderUrl = `${tenantUrl(project.slug)}${buildOrderPath(project.slug, order.id, token).replace(`/site/${project.slug}`, '')}`
+      const orderUrl = orderStatusUrl(project.slug, order.id)
       const email = renderOrderEmail({
         ...base,
         kind: buyerKind,
@@ -293,8 +291,7 @@ export async function notifyOrderShipped(orderId: string, kind: 'buyer-shipped' 
   const schema = project.schema_data as { meta?: { language?: unknown } } | null
   const lang = resolveEmailLang(schema?.meta?.language)
   const storeName = project.name || project.slug
-  const token = issueOrderAccessToken(order.id)
-  const orderUrl = `${tenantUrl(project.slug)}${buildOrderPath(project.slug, order.id, token).replace(`/site/${project.slug}`, '')}`
+  const orderUrl = orderStatusUrl(project.slug, order.id)
 
   const email = renderOrderEmail({
     kind,

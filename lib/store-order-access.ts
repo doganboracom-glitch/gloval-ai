@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { platformUrl } from '@/lib/domains'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
 import { signOrderToken, verifyOrderToken } from '@/lib/store-order-token'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
@@ -29,6 +30,11 @@ export function issueOrderAccessToken(orderId: string): string {
 export function buildOrderPath(storeSlug: string, orderId: string, token: string): string {
   const base = `/site/${storeSlug}/order/${orderId}`
   return token ? `${base}?t=${encodeURIComponent(token)}` : base
+}
+
+/** Canonical absolute order URL. The platform route works on every host and preserves the signed token. */
+export function orderStatusUrl(storeSlug: string, orderId: string, token = issueOrderAccessToken(orderId)): string {
+  return platformUrl(buildOrderPath(storeSlug, orderId, token))
 }
 
 export type OrderConfirmation = {

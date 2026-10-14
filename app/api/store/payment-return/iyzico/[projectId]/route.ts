@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { tenantUrl } from '@/lib/domains'
-import { buildOrderPath, issueOrderAccessToken, tokenSecret } from '@/lib/store-order-access'
+import { orderStatusUrl, tokenSecret } from '@/lib/store-order-access'
 import { nonceMatches, verifyReturnParams } from '@/lib/store-payments/iyzico-callback'
 import { loadIyzicoCredentials } from '@/lib/store-payments/iyzico-credentials'
 import { settleIyzicoOrder } from '@/lib/store-payments/iyzico-settle'
@@ -66,11 +65,7 @@ async function handle(request: Request, projectId: string) {
     }
   }
 
-  const orderPath = buildOrderPath(project.slug, order.id, issueOrderAccessToken(order.id)).replace(
-    `/site/${project.slug}`,
-    '',
-  )
-  return NextResponse.redirect(`${tenantUrl(project.slug)}${orderPath}`, 303)
+  return NextResponse.redirect(orderStatusUrl(project.slug, order.id), 303)
 }
 
 export async function POST(request: Request, ctx: { params: Promise<{ projectId: string }> }) {
