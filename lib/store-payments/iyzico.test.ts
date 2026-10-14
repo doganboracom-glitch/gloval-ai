@@ -8,6 +8,7 @@ import {
   evaluateRetrieve,
   initializeCheckoutForm,
   iyzicoPriceToCents,
+  normalizeBuyerPhone,
   retrieveCheckoutForm,
   signIyzicoRequest,
   testIyzicoConnection,
@@ -17,6 +18,7 @@ import {
   type RetrieveResult,
 } from '@/lib/store-payments/iyzico'
 import {
+  IYZICO_BUYER_IDENTITY_PLACEHOLDER,
   IYZICO_BASE_URLS,
   IYZICO_ENVIRONMENTS,
   IYZICO_PAYMENT_SOURCE,
@@ -122,14 +124,71 @@ describe('price conversion', () => {
 })
 
 describe('buyer check', () => {
-  it('names the missing required fields', () => {
+  it('names the missing or malformed fields, separating empty from invalid', () => {
     const res = checkBuyer({ name: '', lastName: 'X', email: 'bad', phone: '123', address: '', city: '', ip: '' })
     expect(res.ok).toBe(false)
-    if (!res.ok) expect(res.missing).toEqual(['Ad', 'E-posta', 'Telefon', 'Adres', 'Şehir', 'IP'])
+    if (!res.ok) {
+      expect(res.missing).toEqual(['Ad', 'E-posta', 'Telefon', 'Adres', 'Şehir'])
+      expect(res.issues).toEqual([
+        { field: 'name', problem: 'missing' },
+        { field: 'email', problem: 'invalid' },
+        { field: 'phone', problem: 'invalid' },
+        { field: 'address', problem: 'missing' },
+        { field: 'city', problem: 'missing' },
+      ])
+    }
+  })
+
+  it('an empty phone is "missing", not "invalid"', () => {
+    const res = checkBuyer({ name: 'A', lastName: 'B', email: 'a@b.co', phone: '  ', address: 'x', city: 'y', ip: '' })
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.issues).toEqual([{ field: 'phone', problem: 'missing' }])
+  })
+
+  it('does not require an IP address', () => {
+    const res = checkBuyer({ name: 'A', lastName: 'B', email: 'a@b.co', phone: '0532 111 22 33', address: 'x', city: 'y', ip: '' })
+    expect(res.ok).toBe(true)
+  })
+
+  it('rejects a malformed postal code but allows an empty one', () => {
+    const base = { name: 'A', lastName: 'B', email: 'a@b.co', phone: '5321112233', address: 'x', city: 'y', ip: '' }
+    const bad = checkBuyer({ ...base, postalCode: '123' })
+    expect(bad.ok).toBe(false)
+    if (!bad.ok) expect(bad.issues).toEqual([{ field: 'postalCode', problem: 'invalid' }])
+    expect(checkBuyer({ ...base, postalCode: '' }).ok).toBe(true)
+    expect(checkBuyer({ ...base, postalCode: '34000' }).ok).toBe(true)
+  })
+
+  it('never asks for a national ID: sends iyzico\'s documented placeholder unless a valid TCKN was given', () => {
+    expect(buyer.identityNumber).toBe(IYZICO_BUYER_IDENTITY_PLACEHOLDER)
+    const withTckn = checkBuyer({
+      name: 'A', lastName: 'B', email: 'a@b.co', phone: '5321112233', address: 'x', city: 'y', ip: '', identityNumber: '12345678901',
+    })
+    expect(withTckn.ok && withTckn.buyer.identityNumber).toBe('12345678901')
   })
 
   it('normalizes a Turkish mobile number to +90', () => {
     expect(buyer.phone).toBe('+905321112233')
+  })
+
+  it('accepts every common way of typing a Turkish number, including landlines', () => {
+    for (const raw of ['0532 111 22 33', '532-111-22-33', '(0532) 111 22 33', '+90 532 111 22 33', '905321112233', '00905321112233']) {
+      expect(normalizeBuyerPhone(raw)).toBe('+905321112233')
+    }
+    expect(normalizeBuyerPhone('0212 555 11 22')).toBe('+902125551122')
+    expect(normalizeBuyerPhone('0850 222 33 44')).toBe('+908502223344')
+  })
+
+  it('rejects numbers that are too short, too long, or not Turkish', () => {
+    for (const raw of ['', '123', '053211122', '0532111223344', '+1 415 555 0100', '1112223344']) {
+      expect(normalizeBuyerPhone(raw)).toBeNull()
+    }
+  })
+
+  it('omits the ip field from the initialize body when unknown', () => {
+    const body = buildInitializeBody({ ...initInput, buyer: { ...buyer, ip: '' } })
+    expect((body.buyer as Record<string, unknown>).ip).toBeUndefined()
+    expect((buildInitializeBody(initInput).buyer as Record<string, unknown>).ip).toBe('85.1.2.3')
   })
 })
 

@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import {
+  IYZICO_BUYER_IDENTITY_PLACEHOLDER,
   IYZICO_PAYMENT_SOURCE,
   iyzicoBaseUrl,
   type IyzicoEnvironment,
@@ -70,13 +71,23 @@ export function iyzicoPriceToCents(value: unknown): number | null {
   return Number(match[1]) * 100 + Number(decimals.slice(0, 2))
 }
 
-/** Normalizes a Turkish mobile number to +90XXXXXXXXXX, or null. */
+/**
+ * Normalizes a Turkish phone number (spaces, dashes, parentheses, a leading 0,
+ * 90 or 0090 are all accepted) to +90XXXXXXXXXX, or null. Mobile (5xx),
+ * landline (2xx/3xx/4xx) and 0850/0800 service numbers are valid: iyzico accepts
+ * them as `gsmNumber`, so a store must not turn such a buyer away.
+ */
 export function normalizeBuyerPhone(raw: string | null | undefined): string | null {
-  const digits = (raw ?? '').replace(/\D/g, '')
-  let national = digits
-  if (national.startsWith('90') && national.length === 12) national = national.slice(2)
+  let national = (raw ?? '').replace(/\D/g, '')
+  if (national.startsWith('0090') && national.length === 14) national = national.slice(4)
+  else if (national.startsWith('90') && national.length === 12) national = national.slice(2)
   else if (national.startsWith('0') && national.length === 11) national = national.slice(1)
-  return /^5\d{9}$/.test(national) ? `+90${national}` : null
+  return /^[2-58]\d{9}$/.test(national) ? `+90${national}` : null
+}
+
+/** A Turkish postal code is exactly five digits. */
+export function isValidPostalCode(raw: string | null | undefined): boolean {
+  return /^\d{5}$/.test((raw ?? '').trim())
 }
 
 export type IyzicoBuyerInput = {
@@ -93,33 +104,55 @@ export type IyzicoBuyerInput = {
   identityNumber?: string
 }
 
+export type BuyerField = 'name' | 'lastName' | 'email' | 'phone' | 'address' | 'city' | 'postalCode'
+export type BuyerIssue = { field: BuyerField; problem: 'missing' | 'invalid' }
+
 export type BuyerCheck =
   | { ok: true; buyer: Required<Omit<IyzicoBuyerInput, 'district' | 'postalCode' | 'identityNumber'>> & { phone: string; zipCode: string; identityNumber: string } }
-  | { ok: false; missing: string[] }
+  | { ok: false; missing: string[]; issues: BuyerIssue[] }
 
-const FALLBACK_IDENTITY_NUMBER = '11111111111'
 const FALLBACK_ZIP = '34000'
 
-/** Required buyer data for an iyzico checkout; names the missing fields (Turkish labels). */
+const BUYER_FIELD_LABELS: Record<BuyerField, string> = {
+  name: 'Ad',
+  lastName: 'Soyad',
+  email: 'E-posta',
+  phone: 'Telefon',
+  address: 'Adres',
+  city: 'Şehir',
+  postalCode: 'Posta kodu',
+}
+
+/**
+ * Buyer data for an iyzico checkout. Names every field that is empty or
+ * malformed (`issues`, with Turkish `missing` labels for display). The IP is
+ * optional for iyzico, so it never blocks an order; the national ID is never
+ * asked of the buyer (see `IYZICO_BUYER_IDENTITY_PLACEHOLDER`).
+ */
 export function checkBuyer(input: IyzicoBuyerInput): BuyerCheck {
-  const missing: string[] = []
+  const issues: BuyerIssue[] = []
   const clean = (v: string | undefined) => (v ?? '').trim()
   const name = clean(input.name)
   const lastName = clean(input.lastName)
   const email = clean(input.email)
   const address = clean(input.address)
   const city = clean(input.city)
-  const phone = normalizeBuyerPhone(input.phone)
-  const ip = clean(input.ip)
+  const rawPhone = clean(input.phone)
+  const phone = normalizeBuyerPhone(rawPhone)
+  const postalCode = clean(input.postalCode)
 
-  if (!name) missing.push('Ad')
-  if (!lastName) missing.push('Soyad')
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) missing.push('E-posta')
-  if (!phone) missing.push('Telefon')
-  if (!address) missing.push('Adres')
-  if (!city) missing.push('Şehir')
-  if (!ip) missing.push('IP')
-  if (missing.length > 0 || !phone) return { ok: false, missing }
+  if (!name) issues.push({ field: 'name', problem: 'missing' })
+  if (!lastName) issues.push({ field: 'lastName', problem: 'missing' })
+  if (!email) issues.push({ field: 'email', problem: 'missing' })
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) issues.push({ field: 'email', problem: 'invalid' })
+  if (!rawPhone) issues.push({ field: 'phone', problem: 'missing' })
+  else if (!phone) issues.push({ field: 'phone', problem: 'invalid' })
+  if (!address) issues.push({ field: 'address', problem: 'missing' })
+  if (!city) issues.push({ field: 'city', problem: 'missing' })
+  if (postalCode && !isValidPostalCode(postalCode)) issues.push({ field: 'postalCode', problem: 'invalid' })
+  if (issues.length > 0 || !phone) {
+    return { ok: false, missing: issues.map((i) => BUYER_FIELD_LABELS[i.field]), issues }
+  }
 
   const tckn = clean(input.identityNumber)
   return {
@@ -131,9 +164,9 @@ export function checkBuyer(input: IyzicoBuyerInput): BuyerCheck {
       phone,
       address,
       city,
-      ip,
-      zipCode: clean(input.postalCode) || FALLBACK_ZIP,
-      identityNumber: /^\d{11}$/.test(tckn) ? tckn : FALLBACK_IDENTITY_NUMBER,
+      ip: clean(input.ip),
+      zipCode: postalCode || FALLBACK_ZIP,
+      identityNumber: /^\d{11}$/.test(tckn) ? tckn : IYZICO_BUYER_IDENTITY_PLACEHOLDER,
     },
   }
 }
@@ -205,7 +238,7 @@ export function buildInitializeBody(input: InitializeInput): Record<string, unkn
       email: b.email,
       identityNumber: b.identityNumber,
       registrationAddress: b.address,
-      ip: b.ip,
+      ...(b.ip ? { ip: b.ip } : {}),
       city: b.city,
       country: 'Turkey',
       zipCode: b.zipCode,
@@ -405,7 +438,7 @@ export async function testIyzicoConnection(
       city: 'Istanbul',
       ip: '85.34.78.112',
       zipCode: FALLBACK_ZIP,
-      identityNumber: FALLBACK_IDENTITY_NUMBER,
+      identityNumber: IYZICO_BUYER_IDENTITY_PLACEHOLDER,
     },
     callbackUrl,
   })
