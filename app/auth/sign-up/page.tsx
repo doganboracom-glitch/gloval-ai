@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import { trackSignUp } from '@/lib/analytics'
+import { readAttribution } from '@/lib/attribution'
+import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
@@ -59,6 +62,12 @@ function SignUpForm() {
       setLoading(false)
       return
     }
+    // Fire-and-forget: attribution and measurement must never block sign-up.
+    if (data.user?.id) {
+      const attribution = readAttribution()
+      if (attribution) void saveSignupAttribution({ userId: data.user.id, attribution })
+    }
+    trackSignUp('email')
     // If email confirmation is off, a session already exists → go to dashboard.
     if (data.session) {
       router.push(next)

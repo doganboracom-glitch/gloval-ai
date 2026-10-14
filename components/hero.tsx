@@ -10,6 +10,7 @@ import { WebsitePreview } from '@/components/website-preview'
 import { websiteToPlan, type WebsiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/client'
 import { createProject } from '@/lib/projects'
+import { trackGenerateSiteStarted, trackGenerateSiteCompleted } from '@/lib/analytics'
 import {
   stashPendingProject,
   peekPendingProject,
@@ -223,6 +224,7 @@ export function Hero() {
     setWebsite(null)
     setSource(null)
     setImageStatus(null)
+    trackGenerateSiteStarted()
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -248,6 +250,7 @@ export function Hero() {
       setPlan(websiteToPlan(site))
       setSource(data.source === 'fallback' ? 'fallback' : 'ai')
       setImageStatus(data.image?.status ?? null)
+      trackGenerateSiteCompleted(data.source === 'fallback' ? 'fallback' : 'ai')
     } catch {
       setError(true)
     } finally {

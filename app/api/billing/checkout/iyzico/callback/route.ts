@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isDomainE2ETestModeEnabled } from '@/lib/payments/domain-e2e-mode'
 import { retrieveIyzicoCheckoutForm } from '@/lib/payments/iyzico'
-import { settlePaymentResult } from '@/lib/payments/settle'
+import { createHash } from 'node:crypto'
+import { settlePaymentResult, type SettleOutcome } from '@/lib/payments/settle'
 
 /**
  * iyzico Checkout Form callback. Unlike Stripe, Checkout Form has no
@@ -22,21 +23,72 @@ import { settlePaymentResult } from '@/lib/payments/settle'
  * public payment-result screen.
  */
 
+type PurchaseSignal = { id: string; value: number; currency: string; kind: string }
+
+const PURCHASE_KIND_BY_OUTCOME: Partial<Record<SettleOutcome, string>> = {
+  subscription: 'subscription',
+  entitlement: 'branding_removal',
+  credit_topup: 'credit_topup',
+  addon_purchase: 'addon',
+  domain_purchase: 'domain',
+}
+
+/**
+ * Purchase details for marketing measurement. Built ONLY from iyzico's
+ * retrieved (authoritative) paid response and a settled outcome — never from
+ * anything the browser sent.
+ */
+function buildPurchaseSignal(
+  outcome: SettleOutcome,
+  details: ReturnType<typeof extractPaidDetails>,
+  token: string,
+): PurchaseSignal | undefined {
+  const kind = PURCHASE_KIND_BY_OUTCOME[outcome]
+  if (!kind || !details.paidAmountCents || details.paidAmountCents <= 0) return undefined
+  const id = details.orderRef
+    ? details.orderRef.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64)
+    : createHash('sha256').update(token).digest('hex').slice(0, 32)
+  if (id.length < 6) return undefined
+  return {
+    id,
+    value: details.paidAmountCents / 100,
+    currency: details.paidCurrency && /^[A-Z]{3}$/.test(details.paidCurrency) ? details.paidCurrency : 'TRY',
+    kind,
+  }
+}
+
+function withPurchaseParams(url: string, purchase?: PurchaseSignal) {
+  if (!purchase) return url
+  const target = new URL(url)
+  target.searchParams.set('gl_tx', purchase.id)
+  target.searchParams.set('gl_v', String(purchase.value))
+  target.searchParams.set('gl_c', purchase.currency)
+  target.searchParams.set('gl_k', purchase.kind)
+  return target.toString()
+}
+
 function callbackResponse(
   request: Request,
   status: 'success' | 'failed' | 'error',
   destination: 'billing' | 'domains' | 'addons' = 'billing',
+  purchase?: PurchaseSignal,
 ) {
   const origin = new URL(request.url).origin
-  const payload = JSON.stringify({ source: 'gloval-payment', status, destination })
+  const payload = JSON.stringify({
+    source: 'gloval-payment',
+    status,
+    destination,
+    ...(status === 'success' && purchase ? { purchase } : {}),
+  })
   // Add-on results are read back from the stored purchase, so that page only
   // needs to be told to look (`payment=return`), not what the result was.
-  const fallback =
+  const baseFallback =
     destination === 'domains'
       ? `${origin}/dashboard/domains?payment=${status}`
       : destination === 'addons'
         ? `${origin}/billing/add-ons?payment=return`
         : `${origin}/payment-result?checkout=${status}`
+  const fallback = status === 'success' ? withPurchaseParams(baseFallback, purchase) : baseFallback
   const html = `<!doctype html><title>Ödeme sonucu</title><script>
     const message = ${payload};
     const target = window.opener && !window.opener.closed ? window.opener : null;
@@ -161,11 +213,12 @@ async function handle(request: Request) {
     status: retrieved.status,
   })
 
+  const paidDetails = extractPaidDetails(retrieved.raw)
   const outcome = await settlePaymentResult('iyzico', {
     kind: 'payment',
     reference: token,
     status: retrieved.paid ? 'paid' : 'failed',
-    ...extractPaidDetails(retrieved.raw),
+    ...paidDetails,
   })
 
   console.log('[v0] iyzico callback: settle outcome', { outcome })
@@ -174,6 +227,7 @@ async function handle(request: Request) {
     request,
     retrieved.paid ? 'success' : 'failed',
     destination ?? (domainPurchase ? 'domains' : 'billing'),
+    retrieved.paid ? buildPurchaseSignal(outcome, paidDetails, token) : undefined,
   )
 }
 

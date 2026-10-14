@@ -12,6 +12,7 @@ import {
 import type { ProjectVersionItem } from '@/lib/projects'
 import { useLanguage } from '@/components/language-provider'
 import { tenantUrl } from '@/lib/domains'
+import { trackPublishSite } from '@/lib/analytics'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
@@ -100,6 +101,7 @@ export function EditorClient({
           // Canonical public address of a published site is always its own
           // tenant subdomain (e.g. nakliyat.gloval.site), never the platform
           // host + /site/<slug> internal rewrite path.
+          trackPublishSite()
           return { url: tenantUrl(result.slug) }
         },
         unpublish: async () => {
