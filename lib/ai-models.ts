@@ -35,6 +35,25 @@ export const AI_TIER_MODELS: Record<AiTier, string> = {
 }
 
 /**
+ * The single switch for every "Gelişmiş AI" promise (pricing rows, editor and
+ * create-screen badge). It is on only while the advanced model really differs
+ * from the standard one, so the product never advertises a difference that
+ * does not exist.
+ */
+export const ADVANCED_AI_DISTINCT = AI_TIER_MODELS.advanced !== AI_TIER_MODELS.standard
+
+/**
+ * Whether the advanced-AI promise should be visible for a plan. `distinct`
+ * defaults to the live flag and is only passed explicitly by tests.
+ */
+export function advancedAiVisibleFor(
+  plan: string | null | undefined,
+  distinct: boolean = ADVANCED_AI_DISTINCT,
+): boolean {
+  return distinct && tierForPlan(plan) === 'advanced'
+}
+
+/**
  * Whether a flow may use the advanced tier. `sitePlan` is the cheap landing
  * page sketch and stays on the standard tier. `blogWrite` is reserved for the
  * upcoming blog writer and has no caller yet.
