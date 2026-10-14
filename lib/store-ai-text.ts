@@ -103,7 +103,7 @@ function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max).trimEnd() : text
 }
 
-const generatedSchema = z.object({
+export const generatedSchema = z.object({
   refused: z.boolean(),
   intro: z.string().default(''),
   benefits: z.array(z.string()).default([]),

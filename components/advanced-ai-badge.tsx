@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Lock, Sparkles } from 'lucide-react'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
-import { ADVANCED_AI_DISTINCT, advancedAiVisibleFor } from '@/lib/ai-models'
+import { advancedAiBadgeState } from '@/lib/ai-models'
 import { cn } from '@/lib/utils'
 import type { PlanCode } from '@/lib/pricing-config'
 
@@ -15,8 +15,8 @@ const COPY = {
 /**
  * PRO / E-Ticaret see a quiet "Gelişmiş AI" mark; FREE / STARTER / anonymous
  * see the same mark locked, which opens the upgrade prompt. Renders nothing
- * while the plan is unknown or while the advanced model is not actually
- * different from the standard one.
+ * (neither mark) while the plan is unknown or while the advanced model is not
+ * actually different from the standard one; see `advancedAiBadgeState`.
  */
 export function AdvancedAiBadge({
   planCode,
@@ -30,10 +30,11 @@ export function AdvancedAiBadge({
   onBeforeUpgrade?: () => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
-  if (!ADVANCED_AI_DISTINCT || !planCode) return null
+  const state = advancedAiBadgeState(planCode)
+  if (!state) return null
   const copy = COPY[lang]
 
-  if (advancedAiVisibleFor(planCode)) {
+  if (state === 'active') {
     return (
       <span
         title={copy.title}

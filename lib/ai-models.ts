@@ -42,15 +42,20 @@ export const AI_TIER_MODELS: Record<AiTier, string> = {
  */
 export const ADVANCED_AI_DISTINCT = AI_TIER_MODELS.advanced !== AI_TIER_MODELS.standard
 
+export type AdvancedAiBadgeState = 'active' | 'locked' | null
+
 /**
- * Whether the advanced-AI promise should be visible for a plan. `distinct`
- * defaults to the live flag and is only passed explicitly by tests.
+ * What the editor badge shows. Both the "active" mark (PRO+) and the "locked"
+ * mark (everyone else) are gated by the one `distinct` flag: while the advanced
+ * model equals the standard one nothing is shown at all, not even a lock.
+ * `distinct` defaults to the live flag and is only passed explicitly by tests.
  */
-export function advancedAiVisibleFor(
+export function advancedAiBadgeState(
   plan: string | null | undefined,
   distinct: boolean = ADVANCED_AI_DISTINCT,
-): boolean {
-  return distinct && tierForPlan(plan) === 'advanced'
+): AdvancedAiBadgeState {
+  if (!distinct || !plan) return null
+  return tierForPlan(plan) === 'advanced' ? 'active' : 'locked'
 }
 
 /**
