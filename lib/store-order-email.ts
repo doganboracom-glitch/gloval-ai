@@ -10,6 +10,7 @@ import {
 import type { EmailLang } from '@/lib/email/lang'
 import { formatPrice } from '@/lib/format'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
+import { COD_RECEIVED_COPY } from '@/lib/customer-order-status'
 
 export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'buyer-shipped' | 'buyer-delivered' | 'owner'
 
@@ -26,6 +27,10 @@ export type BankTransferInfo = {
   accountHolder?: string
   iban?: string
   instructions?: string
+  /** Order number to put in the transfer description. */
+  reference?: string
+  /** Last day to pay, already formatted for the e-mail language. */
+  dueDate?: string
 }
 
 export type OrderEmailData = {
@@ -87,7 +92,8 @@ type Copy = {
   }
   items: string
   bankTitle: string
-  bank: { bank: string; holder: string; iban: string; note: string }
+  bank: { bank: string; holder: string; iban: string; note: string; ref: string; due: string }
+  ctaBank: string
   bankHint: (no: string) => string
   shippedRows: { carrier: string; code: string }
   trackCta: string
@@ -104,7 +110,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     summary: 'Sipariş özeti',
     rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', vat: 'KDV', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
     items: 'Ürünler',
-    bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
+    bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '', ref: '', due: '' }, ctaBank: '', bankHint: () => '',
     shippedRows: { carrier: 'Kargo firması', code: 'Takip numarası' },
     trackCta: 'Kargoyu takip et',
     footer: (s) => `Bu e-posta, ${s} mağazasında sipariş verdiğiniz için gönderildi.`,
@@ -118,7 +124,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     summary: 'Order summary',
     rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', vat: 'VAT', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
     items: 'Items',
-    bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '' }, bankHint: () => '',
+    bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '', ref: '', due: '' }, ctaBank: '', bankHint: () => '',
     shippedRows: { carrier: 'Carrier', code: 'Tracking number' },
     trackCta: 'Track shipment',
     footer: (s) => `This email was sent because you placed an order at ${s}.`,
@@ -169,8 +175,9 @@ const BUYER_PENDING: Record<EmailLang, Copy> = {
     preview: (s, n) => `${s} - #${n} numaralı sipariş için havale/EFT bekleniyor.`,
     intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişinizi aldık. Ödemeniz onaylandığında siparişinizi hazırlamaya başlayacağız.`,
     bankTitle: 'Havale / EFT bilgileri',
-    bank: { bank: 'Banka', holder: 'Hesap sahibi', iban: 'IBAN', note: 'Açıklama' },
-    bankHint: (n) => `Havale açıklamasına sipariş numaranızı (#${n}) yazmanızı rica ederiz.`,
+    bank: { bank: 'Banka', holder: 'Hesap sahibi', iban: 'IBAN', note: 'Not', ref: 'Açıklama', due: 'Son ödeme tarihi' },
+    ctaBank: 'Havale bilgilerini görüntüle',
+    bankHint: (n) => `Havale açıklamasına sipariş numaranızı (#${n}) yazmanızı rica ederiz. Süresi içinde ödenmeyen sipariş otomatik iptal edilir.`,
   },
   en: {
     ...BUYER_PAID.en,
@@ -179,8 +186,9 @@ const BUYER_PENDING: Record<EmailLang, Copy> = {
     preview: (s, n) => `${s} - bank transfer is awaited for order #${n}.`,
     intro: (name, s) => `Hi ${name}, we received your order at ${s}. We will start preparing it once your payment is confirmed.`,
     bankTitle: 'Bank transfer details',
-    bank: { bank: 'Bank', holder: 'Account holder', iban: 'IBAN', note: 'Notes' },
-    bankHint: (n) => `Please include your order number (#${n}) in the transfer description.`,
+    bank: { bank: 'Bank', holder: 'Account holder', iban: 'IBAN', note: 'Note', ref: 'Description', due: 'Payment due by' },
+    ctaBank: 'View bank transfer details',
+    bankHint: (n) => `Please include your order number (#${n}) in the transfer description. An order that is not paid in time is cancelled automatically.`,
   },
 }
 
@@ -227,15 +235,19 @@ const OWNER_PENDING: Record<EmailLang, Copy> = {
 const BUYER_COD: Record<EmailLang, Copy> = {
   tr: {
     ...BUYER_PENDING.tr,
-    preview: (s, n) => `${s} - #${n} numaralı sipariş için ödeme teslimatta alınacak.`,
-    intro: (name, s) =>
-      `Merhaba ${name}, ${s} mağazasındaki siparişinizi aldık. Ödemeyi teslimat sırasında yapacaksınız.`,
+    subject: (s, n) => `${s} siparişiniz alındı (#${n})`,
+    title: COD_RECEIVED_COPY.tr.title,
+    preview: (s, n) => `${s} - #${n} numaralı siparişiniz alındı, ödeme teslimatta alınacak.`,
+    intro: (name, s) => `Merhaba ${name}, ${s} mağazasındaki siparişinizi aldık. ${COD_RECEIVED_COPY.tr.description}`,
+    ctaBank: '',
   },
   en: {
     ...BUYER_PENDING.en,
-    preview: (s, n) => `${s} - payment for order #${n} is due on delivery.`,
-    intro: (name, s) =>
-      `Hi ${name}, we received your order at ${s}. You will pay when it is delivered.`,
+    subject: (s, n) => `${s}: we received your order (#${n})`,
+    title: COD_RECEIVED_COPY.en.title,
+    preview: (s, n) => `${s} - order #${n} was received, payment is due on delivery.`,
+    intro: (name, s) => `Hi ${name}, we received your order at ${s}. ${COD_RECEIVED_COPY.en.description}`,
+    ctaBank: '',
   },
 }
 
@@ -289,6 +301,8 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     if (data.bank.bankName) bankRows.push([c.bank.bank, data.bank.bankName])
     if (data.bank.accountHolder) bankRows.push([c.bank.holder, data.bank.accountHolder])
     if (data.bank.iban) bankRows.push([c.bank.iban, data.bank.iban])
+    if (data.bank.reference) bankRows.push([c.bank.ref, data.bank.reference])
+    if (data.bank.dueDate) bankRows.push([c.bank.due, data.bank.dueDate])
     if (data.bank.instructions) bankRows.push([c.bank.note, data.bank.instructions])
   }
 
@@ -311,7 +325,7 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
 
   const trackingHref = data.kind === 'buyer-shipped' ? data.trackingUrl : null
   const href = isOwner ? data.dashboardUrl : trackingHref || data.orderUrl
-  const ctaLabel = trackingHref ? c.trackCta : c.cta
+  const ctaLabel = trackingHref ? c.trackCta : bankRows.length > 0 && c.ctaBank ? c.ctaBank : c.cta
 
   const html = renderEmailLayout({
     lang: data.lang,

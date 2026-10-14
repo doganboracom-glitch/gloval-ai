@@ -18,6 +18,9 @@ import {
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
+import { buildBankTransferInstructions, type BankTransferInstructionsData } from '@/lib/bank-transfer-instructions'
+import { loadBankTransferConfig } from '@/lib/bank-transfer-instructions-server'
+import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-link'
 import { ACCOUNT_DELETION_COPY, ACCOUNT_SUSPENSION_MESSAGES } from '@/lib/store-account-copy'
 import { confirmPhraseMatches, isPendingDeletion } from '@/lib/store-customer-privacy'
 import { anonymizeStoreCustomer, sendAccountDeletedEmail } from '@/lib/store-customer-deletion'
@@ -588,6 +591,12 @@ export type CustomerOrder = {
   tracking_number: string | null
   shipped_at: string | null
   delivered_at: string | null
+  payment_status: string
+  payment_provider: string | null
+  /** Bank-transfer details, only while this order is a bank-transfer order awaiting payment. */
+  bank: BankTransferInstructionsData | null
+  /** Path of the order page with its access token, so the account can link to the full detail. */
+  order_path: string
 }
 
 const SHIPPING_STATUSES: ShippingStatus[] = [
@@ -621,7 +630,7 @@ export async function getStoreCustomerOrders(
   const { data, error: ordersError } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, created_at, status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
+      'id, created_at, status, payment_status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
     )
     .eq('project_id', project.id)
     .eq('customer_id', customer.id)
@@ -633,6 +642,11 @@ export async function getStoreCustomerOrders(
     return null
   }
   if (!data) return []
+
+  const hasBankOrder = data.some((o) => o.payment_provider === 'bank_transfer')
+  const bankConfig = hasBankOrder ? await loadBankTransferConfig(admin, project.id) : null
+  const slug = asString(storeSlug)
+
   return data.map((o) => {
     const rel = (o as { ecommerce_order_items?: { count: number }[] })
       .ecommerce_order_items
@@ -654,6 +668,17 @@ export async function getStoreCustomerOrders(
       tracking_number: o.tracking_number ?? null,
       shipped_at: o.shipped_at ?? null,
       delivered_at: o.delivered_at ?? null,
+      payment_status: o.payment_status ?? 'pending',
+      payment_provider: o.payment_provider ?? null,
+      bank: buildBankTransferInstructions(bankConfig, {
+        id: o.id,
+        created_at: o.created_at,
+        status: o.status,
+        payment_status: o.payment_status,
+        payment_provider: o.payment_provider,
+        shipping_status: o.shipping_status,
+      }),
+      order_path: buildOrderPath(slug, o.id, issueOrderAccessToken(o.id)),
     }
   })
 }
