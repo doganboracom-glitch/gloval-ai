@@ -476,25 +476,24 @@ export function buildSectorSite(
  * the same intelligence the deterministic fallback uses, shared with the AI.
  */
 const SECTOR_HINTS: Record<Sector, string> = {
-  dental: 'a dental / clinic site: calm clinical blues/teals, reassuring tone. Recommended sections: hero, stats, services, features, team (doctors), testimonials, faq, contact. Add a booking CTA.',
-  food: 'a restaurant / cafe site: warm, appetizing palette, elegant serif headings. Recommended sections: hero, about, gallery (dishes/space), services (menu highlights), stats, testimonials, contact. Add a reservation CTA.',
-  law: 'a law / finance / consulting site: dark, authoritative navy/gold, serious tone. Recommended sections: hero, stats, services (practice areas), process, about, team, testimonials, contact.',
-  architecture: 'an architecture / construction / design studio: minimal, editorial, monochrome with one accent, sharp corners. Recommended sections: hero, portfolio (projects), process, services, about, team, contact.',
-  beauty: 'a beauty / salon / spa site: soft, premium, elegant palette. Recommended sections: hero, services (treatments), gallery, pricing, testimonials, team, contact. Add a booking CTA.',
-  tech: 'a tech / SaaS / agency site: modern, futuristic dark UI with a vivid accent. Recommended sections: hero, features, stats, services, pricing, testimonials, faq, cta.',
+  dental: 'a dental / clinic site: calm clinical blues/teals, reassuring tone. Recommended sections: hero, services, features, process, faq, contact. Add a booking CTA. Add a "team" section only when the user named real staff.',
+  food: 'a restaurant / cafe site: warm, appetizing palette, elegant serif headings. Recommended sections: hero, about, gallery (dishes/space), services (menu highlights), contact. Add a reservation CTA.',
+  law: 'a law / finance / consulting site: dark, authoritative navy/gold, serious tone. Recommended sections: hero, services (practice areas), process, about, contact. Add a "team" section only when the user named real lawyers.',
+  architecture: 'an architecture / construction / design studio: minimal, editorial, monochrome with one accent, sharp corners. Recommended sections: hero, portfolio (projects), process, services, about, contact.',
+  beauty: 'a beauty / salon / spa site: soft, premium, elegant palette. Recommended sections: hero, services (treatments), gallery, faq, contact. Add a booking CTA. Add "pricing" only when the user gave real prices.',
+  tech: 'a tech / SaaS / agency site: modern, futuristic dark UI with a vivid accent. Recommended sections: hero, features, services, faq, cta. Add "pricing" only when the user gave real prices.',
   ecommerce:
     'a real ONLINE STORE / e-commerce site (products + shopping cart + checkout), NOT a corporate brochure. ' +
     'Use a bold, product-forward palette. Produce the full storefront structure IN THIS ORDER: ' +
     'a "slider" hero (rotating campaign/season slides), a "categories" section (shop by category), ' +
-    'a "products" section of featured/best-selling products (real names, prices, an oldPrice + badge on ' +
-    'discounted items, and a "Sepete Ekle" buttonText), a "features" section of trust badges ' +
-    '(fast shipping, easy returns, secure payment, support), a "stats" section, a second "products" ' +
-    'section for weekly deals (layout "carousel"), "testimonials", "faq" (shipping/returns/payment) and a ' +
+    'a "products" section of featured products (plausible product names and example prices, a ' +
+    '"Sepete Ekle" buttonText; NO oldPrice, NO discount or "best seller" badge unless the user gave one), ' +
+    'a "faq" (shipping/returns/payment as questions, never as promised terms) and a ' +
     'closing "cta". Include a "products" page in pages. Every product/category needs a descriptive imagePrompt.',
-  photography: 'a photography / studio site: image-led, minimal, dark or neutral. Recommended sections: hero, portfolio, gallery, about, pricing (packages), testimonials, contact.',
-  automotive: 'a car dealership / auto gallery site: premium, sleek, dark showroom aesthetic with a bold accent. Use a full-bleed hero (showcase or slider) featuring luxury/premium vehicles. Recommended sections: hero, stats, gallery (featured vehicles / stock), services (financing, trade-in, warranty), features (why buy from us), process (buying steps), testimonials, faq, contact, cta. Add a "browse inventory" and "book a test drive" CTA.',
-  realestate: 'a real estate agency site: modern, trustworthy, premium dark palette with a vivid accent. Use a full-bleed hero (showcase) featuring a premium property. Recommended sections: hero, stats, gallery (featured listings with price captions), services (buy, sell, rent, consulting), features (why work with us), testimonials, contact. Add "browse listings" and "book a viewing" CTAs.',
-  default: 'a general business site: modern, clean, trustworthy. Recommended sections: hero, features, stats, services, about, testimonials, faq, contact, cta.',
+  photography: 'a photography / studio site: image-led, minimal, dark or neutral. Recommended sections: hero, portfolio, gallery, about, contact. Add "pricing" (packages) only when the user gave real prices.',
+  automotive: 'a car dealership / auto gallery site: premium, sleek, dark showroom aesthetic with a bold accent. Use a full-bleed hero (showcase or slider) featuring luxury/premium vehicles. Recommended sections: hero, gallery (featured vehicles / stock), services (financing, trade-in, warranty), features (why buy from us), process (buying steps), faq, contact, cta. Add a "browse inventory" and "book a test drive" CTA.',
+  realestate: 'a real estate agency site: modern, trustworthy, premium dark palette with a vivid accent. Use a full-bleed hero (showcase) featuring a premium property. Recommended sections: hero, gallery (featured listings, captions WITHOUT invented prices), services (buy, sell, rent, consulting), features (why work with us), contact. Add "browse listings" and "book a viewing" CTAs.',
+  default: 'a general business site: modern, clean, trustworthy. Recommended sections: hero, features, services, about, faq, contact, cta.',
 }
 
 /**
@@ -532,7 +531,6 @@ const dental: Builder = (name, lang) => {
         { label: pick(lang, 'Ana Sayfa', 'Home'), href: '#hero' },
         { label: pick(lang, 'Hizmetler', 'Services'), href: '#services' },
         { label: pick(lang, 'Hakkımızda', 'About'), href: '#about' },
-        { label: pick(lang, 'Doktorlarımız', 'Our Doctors'), href: '#team' },
         { label: pick(lang, 'İletişim', 'Contact'), href: '#contact' },
       ],
       cta: { label: pick(lang, 'Randevu Al', 'Book Appointment'), href: '#contact' },
@@ -540,7 +538,6 @@ const dental: Builder = (name, lang) => {
     pages: [
       { slug: 'home', title: pick(lang, 'Ana Sayfa', 'Home'), isHome: true },
       { slug: 'services', title: pick(lang, 'Hizmetler', 'Services') },
-      { slug: 'doctors', title: pick(lang, 'Doktorlar', 'Doctors') },
       { slug: 'contact', title: pick(lang, 'İletişim', 'Contact') },
     ],
     sections: [
@@ -556,22 +553,12 @@ const dental: Builder = (name, lang) => {
         ),
         primaryButton: { label: pick(lang, 'Randevu Al', 'Book Appointment'), href: '#contact' },
         secondaryButton: { label: pick(lang, 'Hizmetleri İncele', 'View Services'), href: '#services' },
-        trustText: pick(lang, '15.000+ mutlu hasta • %98 memnuniyet', '15,000+ happy patients • 98% satisfaction'),
+        trustText: pick(lang, 'Ücretsiz ön muayene için randevu alın', 'Book a free initial consultation'),
         image: {
           imagePrompt: 'A bright, modern dental clinic interior with a smiling patient',
           alt: pick(lang, 'Modern diş kliniği', 'Modern dental clinic'),
           aspectRatio: '4/3',
         },
-      },
-      {
-        type: 'stats',
-        title: pick(lang, 'Rakamlarla biz', 'By the numbers'),
-        items: [
-          { value: '20+', label: pick(lang, 'Yıllık deneyim', 'Years of experience'), icon: 'calendar' },
-          { value: '15K+', label: pick(lang, 'Mutlu hasta', 'Happy patients'), icon: 'smile' },
-          { value: '%98', label: pick(lang, 'Memnuniyet', 'Satisfaction'), icon: 'heart' },
-          { value: '8', label: pick(lang, 'Uzman hekim', 'Specialist dentists'), icon: 'stethoscope' },
-        ],
       },
       {
         type: 'services',
@@ -595,24 +582,6 @@ const dental: Builder = (name, lang) => {
           { title: pick(lang, 'Muayene', 'Examination'), description: pick(lang, 'Dijital röntgen ve detaylı ağız içi muayene.', 'Digital X-rays and a detailed oral exam.'), icon: 'search' },
           { title: pick(lang, 'Tedavi Planı', 'Treatment Plan'), description: pick(lang, 'Size özel, şeffaf fiyatlı bir tedavi planı.', 'A personalized plan with transparent pricing.'), icon: 'clipboard-list' },
           { title: pick(lang, 'Tedavi', 'Treatment'), description: pick(lang, 'Konforlu ortamda uzman hekimlerle tedavi.', 'Treatment with expert dentists in comfort.'), icon: 'check-circle' },
-        ],
-      },
-      {
-        type: 'team',
-        title: pick(lang, 'Uzman hekim kadromuz', 'Our specialist dentists'),
-        subtitle: pick(lang, 'Alanında deneyimli, güler yüzlü ekip', 'An experienced, friendly team'),
-        members: [
-          { name: pick(lang, 'Dr. Elif Yılmaz', 'Dr. Elif Yilmaz'), role: pick(lang, 'İmplantoloji', 'Implantology'), imagePrompt: 'Professional female dentist portrait' },
-          { name: pick(lang, 'Dr. Mert Demir', 'Dr. Mert Demir'), role: pick(lang, 'Ortodonti', 'Orthodontics'), imagePrompt: 'Professional male dentist portrait' },
-          { name: pick(lang, 'Dr. Ayşe Kaya', 'Dr. Ayse Kaya'), role: pick(lang, 'Estetik Diş Hekimliği', 'Cosmetic Dentistry'), imagePrompt: 'Professional female dentist portrait smiling' },
-        ],
-      },
-      {
-        type: 'testimonials',
-        title: pick(lang, 'Hastalarımız ne diyor?', 'What our patients say'),
-        items: [
-          { quote: pick(lang, 'İmplant tedavim boyunca hiç ağrı hissetmedim, sonuç mükemmel.', 'I felt no pain during my implant treatment and the result is perfect.'), author: 'Serkan A.', role: pick(lang, 'İmplant hastası', 'Implant patient') },
-          { quote: pick(lang, 'Gülüş tasarımından sonra özgüvenim tamamen değişti.', 'My confidence completely changed after the smile design.'), author: 'Deniz K.', role: pick(lang, 'Gülüş tasarımı', 'Smile design') },
         ],
       },
       {
@@ -683,7 +652,7 @@ const food: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Menüye Göz At', 'View Menu'), href: '#services' },
       secondaryButton: { label: pick(lang, 'Rezervasyon Yap', 'Make a Reservation'), href: '#contact' },
-      trustText: pick(lang, 'Her gün taze kavrum • Kadıköy', 'Roasted fresh daily • Kadikoy'),
+      trustText: pick(lang, 'Masanızı şimdiden ayırtın', 'Reserve your table today'),
       image: {
         imagePrompt: 'A warm, cozy specialty coffee shop interior with latte art on the counter',
         alt: pick(lang, 'Sıcak kahve dükkanı iç mekanı', 'Cozy coffee shop interior'),
@@ -727,22 +696,6 @@ const food: Builder = (name, lang) => ({
       ],
     },
     {
-      type: 'stats',
-      items: [
-        { value: '2019', label: pick(lang, 'Kuruluş', 'Est.'), icon: 'calendar' },
-        { value: '30+', label: pick(lang, 'Kahve çeşidi', 'Coffee varieties'), icon: 'coffee' },
-        { value: '4.9', label: pick(lang, 'Google puanı', 'Google rating'), icon: 'star' },
-      ],
-    },
-    {
-      type: 'testimonials',
-      title: pick(lang, 'Misafirlerimiz', 'Our guests'),
-      items: [
-        { quote: pick(lang, 'Şehrin en iyi flat white\'ı burada. Atmosferi de harika.', 'Best flat white in the city, and the atmosphere is wonderful.'), author: 'Ceren T.' },
-        { quote: pick(lang, 'Çalışmak için ideal, kahvesi bir başka.', 'Perfect for working and the coffee is exceptional.'), author: 'Baran E.' },
-      ],
-    },
-    {
       type: 'contact',
       title: pick(lang, 'Rezervasyon & iletişim', 'Reservations & contact'),
       description: pick(lang, 'Masa ayırtmak veya sorularınız için bize yazın.', 'Reserve a table or reach out with any questions.'),
@@ -769,7 +722,6 @@ const law: Builder = (name, lang) => ({
       { label: pick(lang, 'Ana Sayfa', 'Home'), href: '#hero' },
       { label: pick(lang, 'Hakkımızda', 'About'), href: '#about' },
       { label: pick(lang, 'Çalışma Alanları', 'Practice Areas'), href: '#services' },
-      { label: pick(lang, 'Ekip', 'Team'), href: '#team' },
       { label: pick(lang, 'İletişim', 'Contact'), href: '#contact' },
     ],
     cta: { label: pick(lang, 'Danışmanlık Al', 'Request Consultation'), href: '#contact' },
@@ -777,7 +729,6 @@ const law: Builder = (name, lang) => ({
   pages: [
     { slug: 'home', title: pick(lang, 'Ana Sayfa', 'Home'), isHome: true },
     { slug: 'practice', title: pick(lang, 'Çalışma Alanları', 'Practice Areas') },
-    { slug: 'team', title: pick(lang, 'Ekip', 'Team') },
     { slug: 'contact', title: pick(lang, 'İletişim', 'Contact') },
   ],
   sections: [
@@ -793,21 +744,12 @@ const law: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Danışmanlık Al', 'Request Consultation'), href: '#contact' },
       secondaryButton: { label: pick(lang, 'Çalışma Alanları', 'Practice Areas'), href: '#services' },
-      trustText: pick(lang, '25 yıllık deneyim • 1.200+ dava', '25 years of experience • 1,200+ cases'),
+      trustText: pick(lang, 'İlk görüşme için bize ulaşın', 'Contact us for a first consultation'),
       image: {
         imagePrompt: 'An elegant law office with bookshelves and a city view',
         alt: pick(lang, 'Hukuk bürosu', 'Law office'),
         aspectRatio: '4/3',
       },
-    },
-    {
-      type: 'stats',
-      items: [
-        { value: '25+', label: pick(lang, 'Yıllık deneyim', 'Years of experience'), icon: 'scale' },
-        { value: '1.2K+', label: pick(lang, 'Sonuçlanan dava', 'Resolved cases'), icon: 'gavel' },
-        { value: '%94', label: pick(lang, 'Başarı oranı', 'Success rate'), icon: 'trophy' },
-        { value: '6', label: pick(lang, 'Uzman avukat', 'Expert lawyers'), icon: 'users' },
-      ],
     },
     {
       type: 'services',
@@ -829,23 +771,6 @@ const law: Builder = (name, lang) => ({
         { title: pick(lang, 'İlk Görüşme', 'Initial Meeting'), description: pick(lang, 'Durumunuzu dinler, hukuki değerlendirme yaparız.', 'We listen and provide a legal assessment.'), icon: 'message-square' },
         { title: pick(lang, 'Strateji', 'Strategy'), description: pick(lang, 'Size özel, net bir yol haritası oluştururuz.', 'We build a clear, tailored roadmap.'), icon: 'map' },
         { title: pick(lang, 'Temsil', 'Representation'), description: pick(lang, 'Sürecin her aşamasında yanınızda oluruz.', 'We stand with you at every stage.'), icon: 'scale' },
-      ],
-    },
-    {
-      type: 'team',
-      title: pick(lang, 'Avukatlarımız', 'Our lawyers'),
-      members: [
-        { name: pick(lang, 'Av. Kaan Öztürk', 'Kaan Ozturk, Esq.'), role: pick(lang, 'Kurucu Ortak', 'Founding Partner'), imagePrompt: 'Professional male lawyer portrait in a suit' },
-        { name: pick(lang, 'Av. Selin Aydın', 'Selin Aydin, Esq.'), role: pick(lang, 'Ticaret Hukuku', 'Commercial Law'), imagePrompt: 'Professional female lawyer portrait in a suit' },
-        { name: pick(lang, 'Av. Emre Şahin', 'Emre Sahin, Esq.'), role: pick(lang, 'Ceza Hukuku', 'Criminal Law'), imagePrompt: 'Professional male lawyer portrait' },
-      ],
-    },
-    {
-      type: 'testimonials',
-      title: pick(lang, 'Müvekkillerimiz', 'Our clients'),
-      items: [
-        { quote: pick(lang, 'Ticari davamızı büyük bir titizlikle takip ettiler ve kazandık.', 'They handled our commercial case meticulously and we won.'), author: pick(lang, 'A. Yıldırım', 'A. Yildirim'), role: pick(lang, 'Şirket sahibi', 'Business owner') },
-        { quote: pick(lang, 'Her adımda bilgilendirildim, kendimi güvende hissettim.', 'I was informed at every step and felt secure.'), author: 'M. Demir' },
       ],
     },
     {
@@ -905,20 +830,12 @@ const architecture: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Projeleri Gör', 'View Projects'), href: '#portfolio' },
       secondaryButton: { label: pick(lang, 'Teklif Al', 'Request a Quote'), href: '#contact' },
-      trustText: pick(lang, '120+ tamamlanmış proje • Ulusal ödüller', '120+ completed projects • National awards'),
+      trustText: pick(lang, 'Projeniz için teklif alın', 'Request a proposal for your project'),
       image: {
         imagePrompt: 'A striking modern architectural building with concrete and glass, dramatic light',
         alt: pick(lang, 'Modern mimari yapı', 'Modern architecture'),
         aspectRatio: '16/9',
       },
-    },
-    {
-      type: 'stats',
-      items: [
-        { value: '120+', label: pick(lang, 'Tamamlanan proje', 'Completed projects'), icon: 'building-2' },
-        { value: '18', label: pick(lang, 'Yıllık deneyim', 'Years of experience'), icon: 'ruler' },
-        { value: '9', label: pick(lang, 'Ulusal ödül', 'National awards'), icon: 'award' },
-      ],
     },
     {
       type: 'portfolio',
@@ -1009,7 +926,7 @@ const beauty: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Randevu Al', 'Book Now'), href: '#contact' },
       secondaryButton: { label: pick(lang, 'Hizmetleri Gör', 'View Services'), href: '#services' },
-      trustText: pick(lang, '10.000+ mutlu misafir • Uzman ekip', '10,000+ happy guests • Expert team'),
+      trustText: pick(lang, 'Size uygun bir randevu oluşturun', 'Book a time that suits you'),
       image: {
         imagePrompt: 'An elegant, softly lit beauty salon interior',
         alt: pick(lang, 'Güzellik merkezi', 'Beauty salon'),
@@ -1040,21 +957,14 @@ const beauty: Builder = (name, lang) => ({
       ],
     },
     {
-      type: 'stats',
-      items: [
-        { value: '10K+', label: pick(lang, 'Mutlu misafir', 'Happy guests'), icon: 'users' },
-        { value: '4.9', label: pick(lang, 'Ortalama puan', 'Average rating'), icon: 'star' },
-        { value: '12', label: pick(lang, 'Uzman', 'Specialists'), icon: 'heart' },
-      ],
-    },
-    {
       type: 'pricing',
+      sample: true,
       title: pick(lang, 'Paketlerimiz', 'Our packages'),
-      subtitle: pick(lang, 'Size uygun bakım paketini seçin', 'Choose the care package that suits you'),
+      subtitle: pick(lang, 'Örnek paketler: içeriği ve fiyatları kendinize göre düzenleyin', 'Sample packages: edit the content and prices to match your offer'),
       plans: [
-        { name: pick(lang, 'Bakım', 'Refresh'), price: '₺750', description: pick(lang, 'Temel bakım paketi', 'Essential care package'), features: [pick(lang, 'Cilt bakımı', 'Facial'), pick(lang, 'Manikür', 'Manicure'), pick(lang, 'Fön', 'Blow-dry')] },
-        { name: pick(lang, 'Premium', 'Premium'), price: '₺1.450', highlighted: true, description: pick(lang, 'En çok tercih edilen', 'Most popular'), features: [pick(lang, 'Cilt bakımı & peeling', 'Facial & peel'), pick(lang, 'Saç tasarımı', 'Hair styling'), pick(lang, 'Makyaj', 'Makeup'), pick(lang, 'Masaj', 'Massage')], buttonText: pick(lang, 'Randevu Al', 'Book Now') },
-        { name: pick(lang, 'Gelin', 'Bridal'), price: '₺3.900', description: pick(lang, 'Özel gün paketi', 'Special-day package'), features: [pick(lang, 'Deneme çalışması', 'Trial session'), pick(lang, 'Gelin saçı & makyaj', 'Bridal hair & makeup'), pick(lang, 'Cilt & tırnak', 'Skin & nails')] },
+        { name: pick(lang, 'Bakım', 'Refresh'), price: '₺750', sample: true, description: pick(lang, 'Temel bakım paketi', 'Essential care package'), features: [pick(lang, 'Cilt bakımı', 'Facial'), pick(lang, 'Manikür', 'Manicure'), pick(lang, 'Fön', 'Blow-dry')] },
+        { name: pick(lang, 'Premium', 'Premium'), price: '₺1.450', sample: true, highlighted: true, description: pick(lang, 'Kapsamlı bakım paketi', 'Comprehensive care package'), features: [pick(lang, 'Cilt bakımı & peeling', 'Facial & peel'), pick(lang, 'Saç tasarımı', 'Hair styling'), pick(lang, 'Makyaj', 'Makeup'), pick(lang, 'Masaj', 'Massage')], buttonText: pick(lang, 'Randevu Al', 'Book Now') },
+        { name: pick(lang, 'Gelin', 'Bridal'), price: '₺3.900', sample: true, description: pick(lang, 'Özel gün paketi', 'Special-day package'), features: [pick(lang, 'Deneme çalışması', 'Trial session'), pick(lang, 'Gelin saçı & makyaj', 'Bridal hair & makeup'), pick(lang, 'Cilt & tırnak', 'Skin & nails')] },
       ],
     },
     {
@@ -1107,7 +1017,7 @@ const tech: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Ücretsiz Dene', 'Start Free'), href: '#pricing' },
       secondaryButton: { label: pick(lang, 'Demo İste', 'Request a Demo'), href: '#contact' },
-      trustText: pick(lang, '200+ projede güvenilen ekip', 'Trusted across 200+ projects'),
+      trustText: pick(lang, 'Ücretsiz keşif görüşmesi planlayın', 'Book a free discovery call'),
       image: {
         imagePrompt: 'A sleek software dashboard UI on a laptop, dark theme',
         alt: pick(lang, 'Yazılım arayüzü', 'Software dashboard'),
@@ -1126,14 +1036,6 @@ const tech: Builder = (name, lang) => ({
       ],
     },
     {
-      type: 'stats',
-      items: [
-        { value: '200+', label: pick(lang, 'Tamamlanan proje', 'Projects shipped'), icon: 'rocket' },
-        { value: '%99.9', label: pick(lang, 'Çalışma süresi', 'Uptime'), icon: 'activity' },
-        { value: '4.8', label: pick(lang, 'Müşteri puanı', 'Client rating'), icon: 'star' },
-      ],
-    },
-    {
       type: 'services',
       title: pick(lang, 'Çözümlerimiz', 'Our solutions'),
       items: [
@@ -1144,12 +1046,13 @@ const tech: Builder = (name, lang) => ({
     },
     {
       type: 'pricing',
-      title: pick(lang, 'Basit, şeffaf fiyatlandırma', 'Simple, transparent pricing'),
-      subtitle: pick(lang, 'İhtiyacınıza göre büyüyen planlar', 'Plans that grow with your needs'),
+      sample: true,
+      title: pick(lang, 'Fiyatlandırma', 'Pricing'),
+      subtitle: pick(lang, 'Örnek planlar: içeriği ve fiyatları kendinize göre düzenleyin', 'Sample plans: edit the content and prices to match your offer'),
       plans: [
-        { name: pick(lang, 'Başlangıç', 'Starter'), price: '₺0', period: pick(lang, '/ay', '/mo'), description: pick(lang, 'Denemek için ideal', 'Great to get started'), features: [pick(lang, '1 proje', '1 project'), pick(lang, 'Topluluk desteği', 'Community support'), pick(lang, 'Temel analiz', 'Basic analytics')] },
-        { name: pick(lang, 'Profesyonel', 'Pro'), price: '₺499', period: pick(lang, '/ay', '/mo'), highlighted: true, description: pick(lang, 'Büyüyen ekipler için', 'For growing teams'), features: [pick(lang, 'Sınırsız proje', 'Unlimited projects'), pick(lang, 'Öncelikli destek', 'Priority support'), pick(lang, 'Gelişmiş analiz', 'Advanced analytics'), pick(lang, 'Ekip yönetimi', 'Team management')], buttonText: pick(lang, 'Hemen Başla', 'Get Started') },
-        { name: pick(lang, 'Kurumsal', 'Enterprise'), price: pick(lang, 'Teklif', 'Custom'), description: pick(lang, 'Özel ihtiyaçlar için', 'For custom needs'), features: [pick(lang, 'Özel entegrasyon', 'Custom integrations'), pick(lang, 'SLA garantisi', 'SLA guarantee'), pick(lang, 'Özel destek', 'Dedicated support')] },
+        { name: pick(lang, 'Başlangıç', 'Starter'), sample: true, price: '₺0', period: pick(lang, '/ay', '/mo'), description: pick(lang, 'Denemek için ideal', 'Great to get started'), features: [pick(lang, '1 proje', '1 project'), pick(lang, 'Topluluk desteği', 'Community support'), pick(lang, 'Temel analiz', 'Basic analytics')] },
+        { name: pick(lang, 'Profesyonel', 'Pro'), sample: true, price: '₺499', period: pick(lang, '/ay', '/mo'), highlighted: true, description: pick(lang, 'Büyüyen ekipler için', 'For growing teams'), features: [pick(lang, 'Sınırsız proje', 'Unlimited projects'), pick(lang, 'Öncelikli destek', 'Priority support'), pick(lang, 'Gelişmiş analiz', 'Advanced analytics'), pick(lang, 'Ekip yönetimi', 'Team management')], buttonText: pick(lang, 'Hemen Başla', 'Get Started') },
+        { name: pick(lang, 'Kurumsal', 'Enterprise'), sample: true, price: pick(lang, 'Teklif', 'Custom'), description: pick(lang, 'Özel ihtiyaçlar için', 'For custom needs'), features: [pick(lang, 'Özel entegrasyon', 'Custom integrations'), pick(lang, 'Destek planı', 'Support plan'), pick(lang, 'Özel destek', 'Dedicated support')] },
       ],
     },
     {
@@ -1208,7 +1111,7 @@ const ecommerce: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Ürünleri İncele', 'Browse Products'), href: '#products' },
       secondaryButton: { label: pick(lang, 'Kampanyalar', 'View Deals'), href: '#categories' },
-      trustText: pick(lang, 'Ücretsiz kargo • 14 gün iade', 'Free shipping • 14-day returns'),
+      trustText: pick(lang, 'Güvenli ödeme ile kolay alışveriş', 'Easy shopping with secure checkout'),
       image: {
         imagePrompt: 'A stylish product flat-lay on a clean background',
         alt: pick(lang, 'Ürün vitrini', 'Product showcase'),
@@ -1224,16 +1127,16 @@ const ecommerce: Builder = (name, lang) => ({
           image: { imagePrompt: 'A stylish seasonal product flat-lay on a clean background', aspectRatio: '16/9' },
         },
         {
-          badge: pick(lang, 'Sınırlı Süre', 'Limited Time'),
-          title: pick(lang, 'Sezon sonu indirimleri başladı', 'End-of-season sale is on'),
-          description: pick(lang, 'Seçili ürünlerde %50\'ye varan indirim fırsatı.', 'Up to 50% off on selected products.'),
-          primaryButton: { label: pick(lang, 'Fırsatları Gör', 'Shop Deals'), href: '#products' },
-          image: { imagePrompt: 'A vibrant sale promotion product display', aspectRatio: '16/9' },
+          badge: pick(lang, 'Yeni Eklenenler', 'Just Added'),
+          title: pick(lang, 'Koleksiyona yeni eklenen ürünler', 'New additions to the collection'),
+          description: pick(lang, 'Mağazamıza yeni giren ürünlere göz atın.', 'Take a look at the latest arrivals in our store.'),
+          primaryButton: { label: pick(lang, 'Ürünleri Gör', 'Shop Now'), href: '#products' },
+          image: { imagePrompt: 'A vibrant new arrivals product display', aspectRatio: '16/9' },
         },
         {
-          badge: pick(lang, 'Çok Satanlar', 'Best Sellers'),
-          title: pick(lang, 'En çok tercih edilen ürünler', 'The pieces everyone loves'),
-          description: pick(lang, 'Müşterilerimizin favorileriyle tanışın.', 'Meet our customers\' favorites.'),
+          badge: pick(lang, 'Öne Çıkanlar', 'Featured'),
+          title: pick(lang, 'Öne çıkan ürünler', 'Featured pieces'),
+          description: pick(lang, 'Özenle seçtiğimiz ürünlerle tanışın.', 'Meet the pieces we picked out for you.'),
           primaryButton: { label: pick(lang, 'Keşfet', 'Discover'), href: '#products' },
           image: { imagePrompt: 'A premium best-selling product lifestyle photo', aspectRatio: '16/9' },
         },
@@ -1243,10 +1146,10 @@ const ecommerce: Builder = (name, lang) => ({
       type: 'features',
       title: pick(lang, 'Neden bizden alışveriş?', 'Why shop with us'),
       items: [
-        { title: pick(lang, 'Hızlı Kargo', 'Fast Shipping'), description: pick(lang, 'Aynı gün kargo ve hızlı teslimat.', 'Same-day dispatch and fast delivery.'), icon: 'truck' },
-        { title: pick(lang, 'Kolay İade', 'Easy Returns'), description: pick(lang, '14 gün içinde koşulsuz iade.', 'No-questions returns within 14 days.'), icon: 'rotate-ccw' },
-        { title: pick(lang, 'Güvenli Ödeme', 'Secure Payment'), description: pick(lang, 'Tüm kartlar ve 3D güvenli ödeme.', 'All cards and 3D-secure checkout.'), icon: 'shield-check' },
-        { title: pick(lang, '7/24 Destek', '24/7 Support'), description: pick(lang, 'Her zaman ulaşabileceğiniz destek.', 'Support you can always reach.'), icon: 'headphones' },
+        { title: pick(lang, 'Kargo', 'Shipping'), description: pick(lang, 'Siparişleriniz özenle paketlenip kargoya verilir.', 'Orders are carefully packed and shipped to you.'), icon: 'truck' },
+        { title: pick(lang, 'İade', 'Returns'), description: pick(lang, 'İade koşullarını iletişim sayfamızdan öğrenebilirsiniz.', 'Find our return terms on the contact page.'), icon: 'rotate-ccw' },
+        { title: pick(lang, 'Güvenli Ödeme', 'Secure Payment'), description: pick(lang, 'Kartınızla güvenli ödeme yapın.', 'Pay securely with your card.'), icon: 'shield-check' },
+        { title: pick(lang, 'Destek', 'Support'), description: pick(lang, 'Sorularınız için bize yazın.', 'Write to us with any question.'), icon: 'headphones' },
       ],
     },
     {
@@ -1254,56 +1157,40 @@ const ecommerce: Builder = (name, lang) => ({
       title: pick(lang, 'Kategoriler', 'Shop by category'),
       subtitle: pick(lang, 'Aradığınızı kolayca bulun', 'Find exactly what you need'),
       items: [
-        { name: pick(lang, 'Yeni Gelenler', 'New Arrivals'), count: pick(lang, '64 ürün', '64 products'), imagePrompt: 'New arrivals fashion category flat-lay', href: '#products' },
-        { name: pick(lang, 'Çok Satanlar', 'Best Sellers'), count: pick(lang, '48 ürün', '48 products'), imagePrompt: 'Best selling products display', href: '#products' },
-        { name: pick(lang, 'Aksesuar', 'Accessories'), count: pick(lang, '32 ürün', '32 products'), imagePrompt: 'Premium accessories still life', href: '#products' },
-        { name: pick(lang, 'İndirim', 'Sale'), count: pick(lang, '25 ürün', '25 products'), imagePrompt: 'Sale promotion product arrangement', href: '#products' },
+        { name: pick(lang, 'Yeni Gelenler', 'New Arrivals'), imagePrompt: 'New arrivals fashion category flat-lay', href: '#products' },
+        { name: pick(lang, 'Öne Çıkanlar', 'Featured'), imagePrompt: 'Featured products display', href: '#products' },
+        { name: pick(lang, 'Aksesuar', 'Accessories'), imagePrompt: 'Premium accessories still life', href: '#products' },
+        { name: pick(lang, 'Koleksiyon', 'Collection'), imagePrompt: 'Curated collection product arrangement', href: '#products' },
       ],
     },
     {
       type: 'products',
       title: pick(lang, 'Öne çıkan ürünler', 'Featured products'),
-      subtitle: pick(lang, 'En çok tercih edilenler', 'Our best sellers'),
+      subtitle: pick(lang, 'Örnek ürünler: kendi ürünlerinizle değiştirin', 'Sample products: replace them with your own'),
       layout: 'grid',
       items: [
-        { name: pick(lang, 'İmza Ürün', 'Signature Piece'), price: pick(lang, '₺899', '$29'), badge: pick(lang, 'Çok Satan', 'Bestseller'), category: pick(lang, 'Yeni Sezon', 'New Season'), imagePrompt: 'Premium product photo on neutral studio background', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
-        { name: pick(lang, 'Sezon Favorisi', 'Season Favorite'), price: pick(lang, '₺1.299', '$39'), badge: pick(lang, 'Yeni', 'New'), category: pick(lang, 'Koleksiyon', 'Collection'), imagePrompt: 'Lifestyle product photograph, soft light', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
-        { name: pick(lang, 'Sınırlı Üretim', 'Limited Edition'), price: pick(lang, '₺649', '$19'), oldPrice: pick(lang, '₺899', '$26'), badge: '%28', category: pick(lang, 'İndirim', 'Sale'), imagePrompt: 'Minimal product photo on clean surface', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
-        { name: pick(lang, 'Premium Seçki', 'Premium Select'), price: pick(lang, '₺1.099', '$34'), category: pick(lang, 'Aksesuar', 'Accessories'), imagePrompt: 'Elegant product photo with shadow detail', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
-      ],
-    },
-    {
-      type: 'stats',
-      items: [
-        { value: '50K+', label: pick(lang, 'Mutlu müşteri', 'Happy customers'), icon: 'users' },
-        { value: '4.8', label: pick(lang, 'Ürün puanı', 'Product rating'), icon: 'star' },
-        { value: '48s', label: pick(lang, 'Ortalama teslim', 'Avg. delivery'), icon: 'truck' },
+        { name: pick(lang, 'İmza Ürün', 'Signature Piece'), price: pick(lang, '₺899', '$29'), sample: true, category: pick(lang, 'Yeni Sezon', 'New Season'), imagePrompt: 'Premium product photo on neutral studio background', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
+        { name: pick(lang, 'Sezon Favorisi', 'Season Favorite'), price: pick(lang, '₺1.299', '$39'), sample: true, category: pick(lang, 'Koleksiyon', 'Collection'), imagePrompt: 'Lifestyle product photograph, soft light', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
+        { name: pick(lang, 'Özel Üretim', 'Special Edition'), price: pick(lang, '₺649', '$19'), sample: true, category: pick(lang, 'Koleksiyon', 'Collection'), imagePrompt: 'Minimal product photo on clean surface', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
+        { name: pick(lang, 'Premium Seçki', 'Premium Select'), price: pick(lang, '₺1.099', '$34'), sample: true, category: pick(lang, 'Aksesuar', 'Accessories'), imagePrompt: 'Elegant product photo with shadow detail', buttonText: pick(lang, 'İncele', 'View'), href: '#products' },
       ],
     },
     {
       type: 'products',
-      title: pick(lang, 'Haftanın fırsatları', 'Deals of the week'),
-      subtitle: pick(lang, 'Sınırlı süre, kaçırmayın', 'Limited time — do not miss out'),
+      title: pick(lang, 'Yeni eklenenler', 'New arrivals'),
+      subtitle: pick(lang, 'Örnek ürünler: kendi ürünlerinizle değiştirin', 'Sample products: replace them with your own'),
       layout: 'carousel',
       items: [
-        { name: pick(lang, 'Fırsat Ürünü 1', 'Deal Item 1'), price: pick(lang, '₺449', '$14'), oldPrice: pick(lang, '₺699', '$22'), badge: '%35', imagePrompt: 'Discounted product photo, bright background', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
-        { name: pick(lang, 'Fırsat Ürünü 2', 'Deal Item 2'), price: pick(lang, '₺529', '$17'), oldPrice: pick(lang, '₺799', '$25'), badge: '%33', imagePrompt: 'Product on sale studio photo', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
-        { name: pick(lang, 'Fırsat Ürünü 3', 'Deal Item 3'), price: pick(lang, '₺389', '$12'), oldPrice: pick(lang, '₺599', '$19'), badge: '%35', imagePrompt: 'Minimal discounted product photograph', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
-        { name: pick(lang, 'Fırsat Ürünü 4', 'Deal Item 4'), price: pick(lang, '₺629', '$20'), oldPrice: pick(lang, '₺949', '$30'), badge: '%34', imagePrompt: 'Premium product on promotion, soft shadow', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
-      ],
-    },
-    {
-      type: 'testimonials',
-      title: pick(lang, 'Müşteri yorumları', 'Customer reviews'),
-      items: [
-        { quote: pick(lang, 'Ürün kalitesi beklentimin üzerinde, kargo çok hızlıydı.', 'Product quality exceeded expectations and shipping was fast.'), author: 'Zeynep K.' },
-        { quote: pick(lang, 'İade süreci gerçekten sorunsuz. Kesinlikle tekrar alırım.', 'The return process was truly seamless. Will buy again.'), author: 'Onur B.' },
+        { name: pick(lang, 'Yeni Ürün 1', 'New Item 1'), price: pick(lang, '₺449', '$14'), sample: true, imagePrompt: 'Product photo, bright background', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
+        { name: pick(lang, 'Yeni Ürün 2', 'New Item 2'), price: pick(lang, '₺529', '$17'), sample: true, imagePrompt: 'Product studio photo', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
+        { name: pick(lang, 'Yeni Ürün 3', 'New Item 3'), price: pick(lang, '₺389', '$12'), sample: true, imagePrompt: 'Minimal product photograph', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
+        { name: pick(lang, 'Yeni Ürün 4', 'New Item 4'), price: pick(lang, '₺629', '$20'), sample: true, imagePrompt: 'Premium product, soft shadow', buttonText: pick(lang, 'Sepete Ekle', 'Add to Cart'), href: '#products' },
       ],
     },
     {
       type: 'cta',
-      title: pick(lang, 'Yeni sezonu kaçırmayın', 'Do not miss the new season'),
-      description: pick(lang, 'Üye olun, ilk siparişinize özel indirim kazanın.', 'Sign up and get a discount on your first order.'),
+      title: pick(lang, 'Yeni sezonu keşfedin', 'Discover the new season'),
+      description: pick(lang, 'Koleksiyonumuza göz atın ve beğendiğiniz ürünü sepete ekleyin.', 'Browse our collection and add your favorites to the cart.'),
       primaryButton: { label: pick(lang, 'Alışverişe Başla', 'Shop Now'), href: '#products' },
     },
     {
@@ -1354,7 +1241,7 @@ const photography: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'Portföyü Gör', 'View Portfolio'), href: '#portfolio' },
       secondaryButton: { label: pick(lang, 'Tarih Ayırt', 'Check Availability'), href: '#contact' },
-      trustText: pick(lang, '300+ düğün • 8 yıllık deneyim', '300+ weddings • 8 years of experience'),
+      trustText: pick(lang, 'Çekim tarihiniz için müsaitliği sorun', 'Ask about availability for your date'),
       image: {
         imagePrompt: 'A romantic wedding photograph with soft natural light',
         alt: pick(lang, 'Düğün fotoğrafı', 'Wedding photograph'),
@@ -1415,20 +1302,13 @@ const photography: Builder = (name, lang) => ({
     },
     {
       type: 'pricing',
+      sample: true,
       title: pick(lang, 'Çekim paketleri', 'Photography packages'),
-      subtitle: pick(lang, 'Her bütçeye uygun seçenekler', 'Options for every budget'),
+      subtitle: pick(lang, 'Örnek paketler: içeriği ve fiyatları kendinize göre düzenleyin', 'Sample packages: edit the content and prices to match your offer'),
       plans: [
-        { name: pick(lang, 'Portre', 'Portrait'), price: '₺4.500', description: pick(lang, '1 saatlik çekim', '1-hour session'), features: [pick(lang, '1 saat çekim', '1 hour shoot'), pick(lang, '30 düzenlenmiş foto', '30 edited photos'), pick(lang, 'Online galeri', 'Online gallery')] },
-        { name: pick(lang, 'Nişan', 'Engagement'), price: '₺8.900', highlighted: true, description: pick(lang, 'En çok tercih edilen', 'Most popular'), features: [pick(lang, '3 saat çekim', '3 hour shoot'), pick(lang, '80 düzenlenmiş foto', '80 edited photos'), pick(lang, '2 mekan', '2 locations'), pick(lang, 'Online galeri', 'Online gallery')], buttonText: pick(lang, 'Tarih Ayırt', 'Check Availability') },
-        { name: pick(lang, 'Düğün', 'Wedding'), price: pick(lang, 'Teklif', 'Custom'), description: pick(lang, 'Tam gün hikaye anlatımı', 'Full-day storytelling'), features: [pick(lang, 'Tam gün çekim', 'Full-day coverage'), pick(lang, '500+ düzenlenmiş foto', '500+ edited photos'), pick(lang, 'İkinci fotoğrafçı', 'Second shooter'), pick(lang, 'Albüm', 'Album')] },
-      ],
-    },
-    {
-      type: 'testimonials',
-      title: pick(lang, 'Çiftlerimiz', 'Our couples'),
-      items: [
-        { quote: pick(lang, 'Fotoğraflara her baktığımızda o günü yeniden yaşıyoruz.', 'Every time we look at the photos we relive that day.'), author: 'Elif & Can' },
-        { quote: pick(lang, 'Çok rahat hissettirdi, sonuçlar büyüleyici.', 'Made us feel at ease and the results are magical.'), author: 'Deniz & Mert' },
+        { name: pick(lang, 'Portre', 'Portrait'), price: '₺4.500', sample: true, description: pick(lang, '1 saatlik çekim', '1-hour session'), features: [pick(lang, '1 saat çekim', '1 hour shoot'), pick(lang, '30 düzenlenmiş foto', '30 edited photos'), pick(lang, 'Online galeri', 'Online gallery')] },
+        { name: pick(lang, 'Nişan', 'Engagement'), price: '₺8.900', sample: true, highlighted: true, description: pick(lang, 'Orta kapsamlı paket', 'Mid-size package'), features: [pick(lang, '3 saat çekim', '3 hour shoot'), pick(lang, '80 düzenlenmiş foto', '80 edited photos'), pick(lang, '2 mekan', '2 locations'), pick(lang, 'Online galeri', 'Online gallery')], buttonText: pick(lang, 'Tarih Ayırt', 'Check Availability') },
+        { name: pick(lang, 'Düğün', 'Wedding'), price: pick(lang, 'Teklif', 'Custom'), sample: true, description: pick(lang, 'Tam gün hikaye anlatımı', 'Full-day storytelling'), features: [pick(lang, 'Tam gün çekim', 'Full-day coverage'), pick(lang, '500+ düzenlenmiş foto', '500+ edited photos'), pick(lang, 'İkinci fotoğrafçı', 'Second shooter'), pick(lang, 'Albüm', 'Album')] },
       ],
     },
     {
@@ -1488,14 +1368,6 @@ const generic: Builder = (name, lang) => ({
       ],
     },
     {
-      type: 'stats',
-      items: [
-        { value: '10+', label: pick(lang, 'Yıllık deneyim', 'Years of experience'), icon: 'calendar' },
-        { value: '2K+', label: pick(lang, 'Mutlu müşteri', 'Happy customers'), icon: 'users' },
-        { value: '%98', label: pick(lang, 'Memnuniyet', 'Satisfaction'), icon: 'heart' },
-      ],
-    },
-    {
       type: 'about',
       title: pick(lang, 'Hakkımızda', 'About us'),
       body: pick(lang, `${name}, gerçek değer sunmaya odaklanır.`, `${name} is dedicated to delivering real value.`),
@@ -1550,12 +1422,12 @@ const automotive: Builder = (name, lang) => ({
       title: pick(lang, `${name} ile hayalinizdeki araca ulaşın`, `Reach your dream car with ${name}`),
       description: pick(
         lang,
-        'Özenle seçilmiş, ekspertiz raporlu premium araç filomuzu keşfedin. Şeffaf fiyat, güvenli alım ve esnek finansman.',
-        'Explore our hand-picked, fully inspected fleet of premium vehicles. Transparent pricing, secure purchase and flexible financing.',
+        'Özenle seçilmiş premium araç filomuzu keşfedin. Şeffaf bilgi, güvenli alım ve finansman seçenekleri için bize ulaşın.',
+        'Explore our hand-picked fleet of premium vehicles. Get in touch for transparent information, a secure purchase and financing options.',
       ),
       primaryButton: { label: pick(lang, 'Araçları İncele', 'Browse Vehicles'), href: '#gallery' },
       secondaryButton: { label: pick(lang, 'Test Sürüşü Ayarla', 'Book a Test Drive'), href: '#contact' },
-      trustText: pick(lang, '2.500+ satılan araç • %100 ekspertizli', '2,500+ cars sold • 100% inspected'),
+      trustText: pick(lang, 'Test sürüşü için randevu alın', 'Book a test drive appointment'),
       image: {
         imagePrompt:
           'Premium modern automotive dealership showroom with luxury cars, cinematic lighting, professional automotive photography, wide horizontal composition',
@@ -1564,18 +1436,9 @@ const automotive: Builder = (name, lang) => ({
       },
     },
     {
-      type: 'stats',
-      items: [
-        { value: '2.5K+', label: pick(lang, 'Satılan araç', 'Cars sold'), icon: 'car' },
-        { value: '18', label: pick(lang, 'Yıllık tecrübe', 'Years of experience'), icon: 'calendar' },
-        { value: '%100', label: pick(lang, 'Ekspertizli araç', 'Inspected vehicles'), icon: 'shield-check' },
-        { value: '4.9', label: pick(lang, 'Müşteri puanı', 'Customer rating'), icon: 'star' },
-      ],
-    },
-    {
       type: 'gallery',
       title: pick(lang, 'Öne çıkan araçlar', 'Featured vehicles'),
-      subtitle: pick(lang, 'Galerimizden seçkin modeller', 'Select models from our gallery'),
+      subtitle: pick(lang, 'Örnek görseller: kendi araçlarınızla değiştirin', 'Sample images: replace them with your own vehicles'),
       items: [
         { imagePrompt: 'A luxury black sedan in a modern showroom, professional automotive photography', caption: pick(lang, 'Sedan • 2022', 'Sedan • 2022'), aspectRatio: '4/3' },
         { imagePrompt: 'A premium white SUV parked in a bright showroom, professional automotive photography', caption: pick(lang, 'SUV • 2023', 'SUV • 2023'), aspectRatio: '4/3' },
@@ -1588,10 +1451,10 @@ const automotive: Builder = (name, lang) => ({
       title: pick(lang, 'Hizmetlerimiz', 'Our services'),
       subtitle: pick(lang, 'Alımdan sonra da yanınızdayız', 'We are with you beyond the sale'),
       items: [
-        { title: pick(lang, 'Araç Finansmanı', 'Vehicle Financing'), description: pick(lang, 'Bankalarla anlaşmalı, düşük faizli kredi seçenekleri.', 'Low-interest loan options through our banking partners.'), icon: 'credit-card' },
-        { title: pick(lang, 'Takas', 'Trade-in'), description: pick(lang, 'Mevcut aracınızı değerinde takas edin.', 'Trade in your current car at a fair value.'), icon: 'repeat' },
-        { title: pick(lang, 'Ekspertiz', 'Inspection'), description: pick(lang, 'Her araç 150+ noktada detaylı kontrolden geçer.', 'Every car passes a detailed 150+ point inspection.'), icon: 'search-check' },
-        { title: pick(lang, 'Garanti', 'Warranty'), description: pick(lang, 'Seçili araçlarda 12 aya varan garanti.', 'Up to 12 months warranty on selected vehicles.'), icon: 'shield' },
+        { title: pick(lang, 'Araç Finansmanı', 'Vehicle Financing'), description: pick(lang, 'Size uygun finansman seçeneklerini birlikte değerlendirelim.', 'Let us review the financing options that suit you.'), icon: 'credit-card' },
+        { title: pick(lang, 'Takas', 'Trade-in'), description: pick(lang, 'Mevcut aracınız için takas değerlendirmesi yapıyoruz.', 'We can evaluate your current car for a trade-in.'), icon: 'repeat' },
+        { title: pick(lang, 'Ekspertiz', 'Inspection'), description: pick(lang, 'Araç hakkında detaylı bilgi ve ekspertiz bilgisi paylaşıyoruz.', 'We share detailed vehicle and inspection information.'), icon: 'search-check' },
+        { title: pick(lang, 'Satış Sonrası', 'After-sales'), description: pick(lang, 'Satış sonrası destek için bize ulaşabilirsiniz.', 'Reach out to us for after-sales support.'), icon: 'shield' },
       ],
     },
     {
@@ -1606,20 +1469,12 @@ const automotive: Builder = (name, lang) => ({
       ],
     },
     {
-      type: 'testimonials',
-      title: pick(lang, 'Müşterilerimiz ne diyor?', 'What our customers say'),
-      items: [
-        { quote: pick(lang, 'Aracımı çok şeffaf bir süreçle aldım, ekspertiz raporu tam açıklandı.', 'I bought my car through a very transparent process with a full inspection report.'), author: 'Emre T.', role: pick(lang, 'SUV alıcısı', 'SUV buyer') },
-        { quote: pick(lang, 'Takas değeri gayet adildi, finansman desteği çok işime yaradı.', 'The trade-in value was fair and the financing support was a big help.'), author: 'Selin A.', role: pick(lang, 'Sedan alıcısı', 'Sedan buyer') },
-      ],
-    },
-    {
       type: 'faq',
       title: pick(lang, 'Sıkça sorulan sorular', 'Frequently asked questions'),
       items: [
-        { question: pick(lang, 'Araçlar ekspertizli mi?', 'Are the cars inspected?'), answer: pick(lang, 'Tüm araçlarımız 150+ noktada detaylı ekspertizden geçer ve raporu sizinle paylaşılır.', 'All our cars pass a detailed 150+ point inspection and the report is shared with you.') },
-        { question: pick(lang, 'Takas yapıyor musunuz?', 'Do you accept trade-ins?'), answer: pick(lang, 'Evet, mevcut aracınızı değerinde takas edebilirsiniz.', 'Yes, you can trade in your current vehicle at a fair value.') },
-        { question: pick(lang, 'Finansman desteği var mı?', 'Is financing available?'), answer: pick(lang, 'Anlaşmalı bankalarımızla düşük faizli kredi seçenekleri sunuyoruz.', 'We offer low-interest loan options through our partner banks.') },
+        { question: pick(lang, 'Araç bilgilerine nasıl ulaşırım?', 'How can I get vehicle details?'), answer: pick(lang, 'İlgilendiğiniz araç için bize ulaşın, ekspertiz ve geçmiş bilgilerini sizinle paylaşalım.', 'Contact us about the vehicle you like and we will share its inspection and history details.') },
+        { question: pick(lang, 'Takas yapıyor musunuz?', 'Do you accept trade-ins?'), answer: pick(lang, 'Takas için aracınızın bilgilerini bize iletin, değerlendirelim.', 'Send us your car details for a trade-in evaluation.') },
+        { question: pick(lang, 'Finansman desteği var mı?', 'Is financing available?'), answer: pick(lang, 'Finansman seçenekleri için bizimle iletişime geçin.', 'Contact us to learn about financing options.') },
       ],
     },
     {
@@ -1680,7 +1535,7 @@ const realestate: Builder = (name, lang) => ({
       ),
       primaryButton: { label: pick(lang, 'İlanları Görüntüle', 'Browse Listings'), href: '#gallery' },
       secondaryButton: { label: pick(lang, 'Randevu Al', 'Book a Viewing'), href: '#contact' },
-      trustText: pick(lang, '1.200+ mutlu aile • 3 şehirde ofis', '1,200+ happy families • Offices in 3 cities'),
+      trustText: pick(lang, 'İlanları yerinde görmek için randevu alın', 'Book a viewing to see listings in person'),
       image: {
         imagePrompt: 'A luxury modern house exterior at dusk with warm interior lights',
         alt: pick(lang, 'Lüks modern konut', 'Luxury modern home'),
@@ -1689,18 +1544,9 @@ const realestate: Builder = (name, lang) => ({
       },
     },
     {
-      type: 'stats',
-      items: [
-        { value: '1.200+', label: pick(lang, 'Tamamlanan satış', 'Closed deals'), icon: 'home' },
-        { value: '15', label: pick(lang, 'Yıllık tecrübe', 'Years of experience'), icon: 'award' },
-        { value: '%98', label: pick(lang, 'Müşteri memnuniyeti', 'Client satisfaction'), icon: 'smile' },
-        { value: '3', label: pick(lang, 'Şehirde ofis', 'City offices'), icon: 'map-pin' },
-      ],
-    },
-    {
       type: 'gallery',
       title: pick(lang, 'Öne çıkan ilanlar', 'Featured listings'),
-      subtitle: pick(lang, 'Portföyümüzden seçkin fırsatlar', 'Standout opportunities from our portfolio'),
+      subtitle: pick(lang, 'Örnek ilanlar: kendi ilanlarınızla değiştirin', 'Sample listings: replace them with your own'),
       items: [
         { imagePrompt: 'A modern luxury villa with a pool', caption: pick(lang, 'Deniz Manzaralı Villa • ₺24.500.000', 'Sea-View Villa • $780,000'), aspectRatio: '4/3' },
         { imagePrompt: 'A bright modern apartment living room with city view', caption: pick(lang, 'Merkez 3+1 Daire • ₺8.900.000', 'Central 3+1 Apartment • $285,000'), aspectRatio: '4/3' },
@@ -1725,8 +1571,8 @@ const realestate: Builder = (name, lang) => ({
       items: [
         { title: pick(lang, 'Şeffaf Süreç', 'Transparent Process'), description: pick(lang, 'Her adımda net bilgi ve dürüst iletişim.', 'Clear information and honest communication at every step.'), icon: 'eye' },
         { title: pick(lang, 'Uzman Ekip', 'Expert Team'), description: pick(lang, 'Bölgeyi tanıyan deneyimli danışmanlar.', 'Experienced advisors who know the area.'), icon: 'users' },
-        { title: pick(lang, 'Geniş Portföy', 'Wide Portfolio'), description: pick(lang, 'Bütçenize uygun yüzlerce ilan.', 'Hundreds of listings to fit your budget.'), icon: 'layers' },
-        { title: pick(lang, 'Hukuki Destek', 'Legal Support'), description: pick(lang, 'Tapu ve sözleşme süreçlerinde tam destek.', 'Full support through title deed and contracts.'), icon: 'shield-check' },
+        { title: pick(lang, 'Portföy', 'Portfolio'), description: pick(lang, 'Bütçenize ve ihtiyacınıza uygun ilanları birlikte bulalım.', 'Let us find listings that fit your budget and needs.'), icon: 'layers' },
+        { title: pick(lang, 'Süreç Desteği', 'Process Support'), description: pick(lang, 'Tapu ve sözleşme süreçlerinde yanınızdayız.', 'We stay with you through title deed and contract steps.'), icon: 'shield-check' },
       ],
     },
     {
@@ -1734,21 +1580,13 @@ const realestate: Builder = (name, lang) => ({
       title: pick(lang, 'Hakkımızda', 'About us'),
       body: pick(
         lang,
-        `${name}, 15 yılı aşkın tecrübesiyle ailelerin doğru evi bulmasına yardımcı oluyor. Yerel piyasa bilgimiz ve şeffaf yaklaşımımızla her işlemi güvenle tamamlıyoruz.`,
-        `${name} has helped families find the right home for over 15 years. With deep local market knowledge and a transparent approach, we close every deal with confidence.`,
+        `${name}, ailelerin doğru evi bulmasına yardımcı olmak için çalışıyor. Şeffaf yaklaşımımızla alım, satım ve kiralama süreçlerinde yanınızdayız.`,
+        `${name} works to help families find the right home. With a transparent approach, we support you through buying, selling and renting.`,
       ),
       highlights: [
-        pick(lang, 'Yerel piyasa uzmanlığı', 'Local market expertise'),
+        pick(lang, 'Yerel piyasa bilgisi', 'Local market knowledge'),
         pick(lang, 'Uçtan uca danışmanlık', 'End-to-end advisory'),
-        pick(lang, 'Güvenli işlem güvencesi', 'Secure transaction guarantee'),
-      ],
-    },
-    {
-      type: 'testimonials',
-      title: pick(lang, 'Müşterilerimiz ne diyor?', 'What our clients say'),
-      items: [
-        { quote: pick(lang, 'İlk evimizi almak stresli olabilirdi ama süreç sorunsuz geçti.', 'Buying our first home could have been stressful, but the process was seamless.'), author: 'Merve & Kaan', role: pick(lang, 'Ev sahibi', 'Homeowners') },
-        { quote: pick(lang, 'Yatırım için aldığım daireyi hızlıca ve iyi bir fiyata kiraya verdiler.', 'They rented out my investment apartment quickly at a great price.'), author: 'Serkan A.', role: pick(lang, 'Yatırımcı', 'Investor') },
+        pick(lang, 'Şeffaf süreç', 'Transparent process'),
       ],
     },
     {
