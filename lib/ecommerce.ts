@@ -36,6 +36,10 @@ import {
 } from '@/lib/store-manual-orders'
 import { isManualStoreProvider } from '@/lib/store-payment-policy'
 import { scheduleOrderNotification } from '@/lib/store-order-notifications'
+import { loadIyzicoCredentials } from '@/lib/store-payments/iyzico-credentials'
+import { refundIyzicoOrder } from '@/lib/store-payments/iyzico-refund'
+import { realRefundDeps } from '@/lib/store-payments/iyzico-refund-deps'
+import { refundErrorMessage, type RefundErrorCode } from '@/lib/store-refund-status'
 
 /**
  * Phase 1 e-commerce data layer.
@@ -451,6 +455,13 @@ export type OrderRow = {
   /** Set by the paid-but-unfinished safety net (scripts/053); null/absent otherwise. */
   attention_at?: string | null
   attention_reason?: string | null
+  /** Card refund state (scripts/054); null/absent when never attempted. */
+  refund_status?: 'pending' | 'succeeded' | 'failed' | null
+  /** iyzico reference of the reversal. */
+  refund_ref?: string | null
+  /** Short code of the last failed attempt. */
+  refund_error?: string | null
+  refunded_at?: string | null
 }
 
 export type OrderItemRow = {
@@ -494,7 +505,11 @@ export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
 
   // Separate, failure-tolerant read: these columns arrive with scripts/052 and /053.
   const flagById = new Map<string, Record<string, unknown>>()
-  for (const columns of ['provider_payment_id, attention_at, attention_reason', 'provider_payment_id']) {
+  for (const columns of [
+    'provider_payment_id, attention_at, attention_reason, refund_status, refund_ref, refund_error, refunded_at',
+    'provider_payment_id, attention_at, attention_reason',
+    'provider_payment_id',
+  ]) {
     const flags = await supabase.from('ecommerce_orders').select(`id, ${columns}`).in('id', orderIds)
     if (isMissingColumnError(flags.error)) continue
     if (flags.error) {
@@ -600,6 +615,31 @@ export async function cancelOrderPayment(
   return toActionResult(res)
 }
 
+export type RefundCardOrderResult =
+  | { ok: true; already: boolean; method: 'cancel' | 'refund' | null; followUp: 'done' | 'attention' }
+  | { ok: false; error: RefundErrorCode; message: string }
+
+/**
+ * Owner cancels / refunds a PAID card (iyzico) order. The payment is reversed at
+ * iyzico with the store's own keys FIRST; only when iyzico confirms does the
+ * order become cancelled + refunded and its stock return. A refusal leaves the
+ * order untouched and retryable.
+ */
+export async function refundCardOrder(projectId: string, orderId: string): Promise<RefundCardOrderResult> {
+  await requireOwnedEcommerceProject(projectId)
+  const admin = createAdminClient()
+  const loaded = await loadIyzicoCredentials(admin, projectId)
+  if (!loaded.ok) {
+    return { ok: false, error: 'credentials', message: refundErrorMessage('credentials') }
+  }
+  const res = await refundIyzicoOrder(admin, loaded.creds, { projectId, orderId }, realRefundDeps)
+  revalidatePath(`/ecommerce/${projectId}/orders`)
+  if (!res.ok) {
+    return { ok: false, error: res.error, message: refundErrorMessage(res.error, res.rejectionCode) }
+  }
+  return { ok: true, already: res.already, method: res.method, followUp: res.followUp }
+}
+
 /**
  * Updates an order's fulfilment status. Owner + RLS scoped.
  *
@@ -623,6 +663,17 @@ export async function updateOrderStatus(
     .eq('project_id', projectId)
     .maybeSingle()
   if (!current) throw new Error('NOT_FOUND')
+
+  // A paid card order can only leave the paid state by really reversing the
+  // payment at iyzico; a bare status change would keep the buyer's money.
+  if (current.payment_provider === 'iyzico' && current.payment_status === 'paid') {
+    if (status === 'cancelled' || status === 'refunded') {
+      const r = await refundCardOrder(projectId, orderId)
+      if (!r.ok) throw new Error(r.message)
+      return
+    }
+    if (status === 'failed' || status === 'pending') throw new Error('PAYMENT_PAID')
+  }
 
   if (
     isManualStoreProvider(current.payment_provider as string) &&

@@ -24,6 +24,8 @@ export type IyzicoCredentials = {
 
 export const INITIALIZE_PATH = '/payment/iyzipos/checkoutform/initialize/auth/ecom'
 export const RETRIEVE_PATH = '/payment/iyzipos/checkoutform/auth/ecom/detail'
+export const CANCEL_PATH = '/payment/cancel'
+export const REFUND_PATH = '/payment/refund'
 
 const REQUEST_TIMEOUT_MS = 15_000
 
@@ -333,6 +335,35 @@ export type RetrieveData = {
   currency: string
   priceCents: number | null
   paidPriceCents: number | null
+  /** Per basket item payment transactions: the ids a refund is made against. */
+  items?: RetrieveItem[]
+}
+
+export type RetrieveItem = {
+  itemId: string
+  paymentTransactionId: string
+  /** What the buyer actually paid for this item (price plus any installment fee). */
+  paidPriceCents: number | null
+  priceCents: number | null
+}
+
+function parseItemTransactions(value: unknown): RetrieveItem[] {
+  if (!Array.isArray(value)) return []
+  const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
+  const items: RetrieveItem[] = []
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue
+    const r = raw as Record<string, unknown>
+    const paymentTransactionId = text(r.paymentTransactionId)
+    if (!paymentTransactionId) continue
+    items.push({
+      itemId: text(r.itemId),
+      paymentTransactionId,
+      paidPriceCents: iyzicoPriceToCents(r.paidPrice),
+      priceCents: iyzicoPriceToCents(r.price),
+    })
+  }
+  return items
 }
 
 export type RetrieveResult =
@@ -363,8 +394,77 @@ export async function retrieveCheckoutForm(
       currency: str(d.currency).toUpperCase(),
       priceCents: iyzicoPriceToCents(d.price),
       paidPriceCents: iyzicoPriceToCents(d.paidPrice),
+      items: parseItemTransactions(d.itemTransactions),
     },
   }
+}
+
+export type ReversalResult =
+  | { kind: 'ok'; ref: string }
+  /** iyzico answered and refused. `code` is digits only (or empty), safe to store and show. */
+  | { kind: 'rejected'; code: string }
+  | { kind: 'auth' }
+  /** No usable answer (network, timeout, 5xx): the reversal may or may not have happened. */
+  | { kind: 'unavailable' }
+
+function readReversal(
+  raw: RawResult,
+  refField: string,
+  fallbackField: string,
+): ReversalResult {
+  if (raw.kind === 'unavailable') return { kind: 'unavailable' }
+  if (isAuthFailure(raw)) return { kind: 'auth' }
+  const d = raw.data
+  if (d.status !== 'success') {
+    const code = String(d.errorCode ?? '')
+    return { kind: 'rejected', code: /^\d{1,6}$/.test(code) ? code : '' }
+  }
+  const pick = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim() : '')
+  const ref = (pick(d[refField]) || pick(d[fallbackField])).slice(0, 120)
+  return { kind: 'ok', ref }
+}
+
+/**
+ * Same-day reversal of a whole payment (iyzico "cancel"). Needs the paymentId.
+ * Not idempotent at iyzico: callers guard it with the order's refund state.
+ */
+export async function cancelPayment(
+  creds: IyzicoCredentials,
+  input: { paymentId: string; conversationId: string },
+  fetchImpl: FetchLike = fetch,
+): Promise<ReversalResult> {
+  const raw = await post(
+    creds,
+    CANCEL_PATH,
+    { locale: 'tr', conversationId: input.conversationId, paymentId: input.paymentId },
+    fetchImpl,
+  )
+  return readReversal(raw, 'hostReference', 'paymentId')
+}
+
+/**
+ * Refund of ONE basket item's payment transaction (the day after the payment
+ * or later). `priceCents` must not exceed what that item still has paid.
+ */
+export async function refundItemTransaction(
+  creds: IyzicoCredentials,
+  input: { paymentTransactionId: string; priceCents: number; currency: string; conversationId: string },
+  fetchImpl: FetchLike = fetch,
+): Promise<ReversalResult> {
+  const currency = input.currency.toUpperCase() === 'TL' ? 'TRY' : input.currency.toUpperCase()
+  const raw = await post(
+    creds,
+    REFUND_PATH,
+    {
+      locale: 'tr',
+      conversationId: input.conversationId,
+      paymentTransactionId: input.paymentTransactionId,
+      price: centsToIyzicoPrice(input.priceCents),
+      currency,
+    },
+    fetchImpl,
+  )
+  return readReversal(raw, 'hostReference', 'paymentTransactionId')
 }
 
 export type RetrieveVerdict =
