@@ -4,6 +4,7 @@ import {
   CONTACT_RATE,
   CONTACT_TOKEN_MAX_AGE_MS,
   contactFormCopy,
+  postContactForm,
   resolveContactFormLayout,
   resolveContactSubmitError,
   validateContactInput,
@@ -174,6 +175,36 @@ describe('contact submit error messages', () => {
   })
 })
 
+describe('postContactForm', () => {
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+  it('posts to the relative same-origin route and reports success', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(json({ ok: true }, 200))
+    await expect(postContactForm({ a: 1 }, fetchImpl)).resolves.toEqual({ kind: 'sent' })
+    expect(fetchImpl.mock.calls[0][0]).toBe('/api/site-contact')
+  })
+
+  it('treats a 2xx with an unreadable body as success, never as a network error', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('<html>', { status: 200 }))
+    await expect(postContactForm({}, fetchImpl)).resolves.toEqual({ kind: 'sent' })
+  })
+
+  it('reports a network error only when fetch itself rejects', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(postContactForm({}, fetchImpl)).resolves.toEqual({ kind: 'error', error: 'network' })
+  })
+
+  it('maps an unparseable error body to a server error and 422 to field errors', async () => {
+    const bad = vi.fn().mockResolvedValue(new Response('oops', { status: 503 }))
+    await expect(postContactForm({}, bad)).resolves.toEqual({ kind: 'error', error: 'server' })
+    const invalid = vi.fn().mockResolvedValue(json({ error: 'validation', fields: { email: 'invalid' } }, 422))
+    await expect(postContactForm({}, invalid)).resolves.toEqual({ kind: 'validation', fields: { email: 'invalid' } })
+    const blocked = vi.fn().mockResolvedValue(json({ error: 'rate_limited' }, 429))
+    await expect(postContactForm({}, blocked)).resolves.toEqual({ kind: 'error', error: 'rate_limited' })
+  })
+})
+
 describe('ip helpers', () => {
   it('hashes without exposing the address and is stable', () => {
     const hash = hashContactIp(SECRET, '203.0.113.7')
@@ -207,6 +238,16 @@ describe('buildContactEmail', () => {
     expect(mail.subject).not.toMatch(/[\r\n]/)
     expect(mail.subject).toContain('Nakliyat')
     expect(mail.text).toContain('satır 1')
+  })
+
+  it('links the button and plain text to the real, absolute messages page', () => {
+    for (const lang of ['tr', 'en'] as const) {
+      const mail = buildContactEmail({ siteName: 'Shop', lang, name: 'Jo', email: 'jo@x.com', phone: null, message: 'Hello there, friend.' })
+      expect(mail.html).toContain('href="https://gloval.ai/dashboard/messages"')
+      expect(mail.text).toContain('https://gloval.ai/dashboard/messages')
+      expect(mail.html).not.toContain('mesajlar')
+      expect(mail.text).not.toContain('mesajlar')
+    }
   })
 
   it('omits the phone row when none was given and supports English', () => {

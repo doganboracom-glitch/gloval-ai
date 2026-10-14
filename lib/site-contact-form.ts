@@ -163,6 +163,40 @@ export function resolveContactSubmitError(body: unknown): ContactSubmitError {
   return SUBMIT_ERRORS.find((known) => known === code) ?? 'server'
 }
 
+export type ContactSubmitResult =
+  | { kind: 'sent' }
+  | { kind: 'validation'; fields: ContactFieldErrors }
+  | { kind: 'error'; error: ContactSubmitError }
+
+/**
+ * Posts the form to the site's own origin (relative URL, so tenant hosts and
+ * custom domains never go cross-origin). `network` is returned ONLY when the
+ * request itself is rejected; a 2xx is success without parsing the body, and an
+ * unreadable error body is a server error.
+ */
+export async function postContactForm(
+  payload: unknown,
+  fetchImpl: (input: string, init: RequestInit) => Promise<Response> = fetch,
+): Promise<ContactSubmitResult> {
+  let response: Response
+  try {
+    response = await fetchImpl('/api/site-contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    return { kind: 'error', error: 'network' }
+  }
+  if (response.ok) return { kind: 'sent' }
+  const body = await response.json().catch(() => null)
+  if (response.status === 422) {
+    const fields = body && typeof body === 'object' ? (body as { fields?: ContactFieldErrors }).fields : undefined
+    return { kind: 'validation', fields: fields ?? {} }
+  }
+  return { kind: 'error', error: resolveContactSubmitError(body) }
+}
+
 export type ContactFormCopy = {
   send: string
   sending: string

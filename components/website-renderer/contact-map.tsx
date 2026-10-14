@@ -142,22 +142,19 @@ export function ContactMap({
         )}
       </div>
 
-      {cleanAddress && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
-          <span style={{ color: 'var(--site-fg)' }}>{cleanAddress}</span>
-          {directions && (
-            <a
-              href={directions}
-              target="_blank"
-              rel="noopener noreferrer"
-              {...KEEP_INTERACTIVE_PROPS}
-              className="inline-flex items-center gap-1.5 font-semibold hover:underline"
-              style={{ color: 'var(--site-primary)' }}
-            >
-              <Navigation className="h-4 w-4" aria-hidden />
-              {copy.directions}
-            </a>
-          )}
+      {directions && (
+        <div className="mt-3 text-sm">
+          <a
+            href={directions}
+            target="_blank"
+            rel="noopener noreferrer"
+            {...KEEP_INTERACTIVE_PROPS}
+            className="inline-flex items-center gap-1.5 font-semibold hover:underline"
+            style={{ color: 'var(--site-primary)' }}
+          >
+            <Navigation className="h-4 w-4" aria-hidden />
+            {copy.directions}
+          </a>
         </div>
       )}
     </div>

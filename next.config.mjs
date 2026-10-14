@@ -27,6 +27,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async redirects() {
+    return [{ source: '/dashboard/mesajlar', destination: '/dashboard/messages', permanent: true }]
+  },
   async headers() {
     return [
       // Global baseline for everything.

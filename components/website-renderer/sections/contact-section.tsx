@@ -3,6 +3,7 @@
 import { Mail, Phone, MapPin } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
 import { ContactMap } from '@/components/website-renderer/contact-map'
+import { SocialLinks } from '@/components/website-renderer/social-links'
 import { ContactForm, type ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import {
   SectionShell,
@@ -36,6 +37,7 @@ export function ContactSection({
               <ContactRow icon={<MapPin className="h-4 w-4" />}>{data.address}</ContactRow>
             )}
           </div>
+          <SocialLinks />
         </div>
 
         <ContactForm labels={data.fields} lang={lang} live={live} />
