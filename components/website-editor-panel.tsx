@@ -32,6 +32,7 @@ import type { ProjectVersionItem } from '@/lib/projects'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { type EditOperation, ADDABLE_SECTION_TYPES } from '@/lib/website-edit-operations'
 import { SectionInspector } from '@/components/editor/section-inspector'
+import { contactSectionCopy, hasContactSection } from '@/lib/contact-section'
 import { TextField, IconBtn, UploadButton } from '@/components/editor/editor-fields'
 import { LogoField } from '@/components/editor/logo-field'
 import { FaviconField } from '@/components/editor/favicon-field'
@@ -964,16 +965,37 @@ function SectionManager({
   openIndex?: number | null
   onOpenIndexChange?: (index: number | null) => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const ui = t.editor.ui
+  const contactCopy = contactSectionCopy(lang)
   const [adding, setAdding] = useState(false)
   const [internalOpenIndex, setInternalOpenIndex] = useState<number | null>(null)
   const openIndex = onOpenIndexChange ? controlledOpenIndex : internalOpenIndex
   const setOpenIndex = onOpenIndexChange ?? setInternalOpenIndex
   const sections = site.sections
 
+  const removeSection = (index: number) => {
+    if (sections[index]?.type === 'contact' && !window.confirm(contactCopy.removeWarning)) return
+    onDispatch({ op: 'removeSection', index })
+  }
+
   return (
     <div className="flex flex-col gap-2">
+      {!hasContactSection(site) && (
+        <p
+          role="status"
+          className="rounded-lg border border-border bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground"
+        >
+          {contactCopy.suggestionText}{' '}
+          <button
+            type="button"
+            onClick={() => onDispatch({ op: 'addSection', sectionType: 'contact' })}
+            className="font-medium text-brand underline-offset-2 hover:underline"
+          >
+            {contactCopy.suggestionAction}
+          </button>
+        </p>
+      )}
       <ul className="flex flex-col gap-1.5">
         {sections.map((section, i) => {
           const name = t.editor.sectionNames[section.type] ?? section.type
@@ -1030,7 +1052,7 @@ function SectionManager({
               <IconBtn
                 label={ui.remove}
                 disabled={locked}
-                onClick={() => onDispatch({ op: 'removeSection', index: i })}
+                onClick={() => removeSection(i)}
                 small
               >
                 <Trash2 className="h-3.5 w-3.5" />

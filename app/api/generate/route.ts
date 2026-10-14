@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { websiteGenerationSchema, fallbackWebsite } from '@/lib/website-schema'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns } from '@/lib/footer-links'
+import { ensureContactSection } from '@/lib/contact-section'
 import { normalizeCorporateSectionOrder } from '@/lib/section-order'
 import { sectorPromptHint, deriveSeoTitle, detectSector, isEcommerceIntent } from '@/lib/sector-profiles'
 import { attachHeroImage } from '@/lib/hero-image'
@@ -175,6 +176,8 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
               `pages. Prefer a "slider" hero for campaign slides. `
             : '') +
           pageLimitPromptHint(pageLimit) +
+          `ALWAYS include exactly one "contact" section just before the footer (also on online stores), ` +
+          `with a title, a short description, and form field labels; leave mapEmbed unset. ` +
           `Use the available section types richly and appropriately: hero, about, services, features, ` +
           `stats, testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
           `Set meta.seoTitle to a short, keyword-rich search phrase (3-6 words) that helps this ` +
@@ -217,7 +220,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
         website: seedFooterColumns(
-          seedContactActions(normalizeCorporateSectionOrder(object)),
+          seedContactActions(normalizeCorporateSectionOrder(ensureContactSection(object))),
           normalizedLang,
         ),
         source: 'ai',
@@ -242,7 +245,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
       ])
       return Response.json({
         website: seedFooterColumns(
-          seedContactActions(normalizeCorporateSectionOrder(website)),
+          seedContactActions(normalizeCorporateSectionOrder(ensureContactSection(website))),
           normalizedLang,
         ),
         source: 'fallback',
