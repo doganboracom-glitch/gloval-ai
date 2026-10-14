@@ -136,11 +136,39 @@ export function resolveContactFormLayout(
   }
 }
 
+/** What the form can tell the visitor when a submission fails. */
+export type ContactSubmitError =
+  | 'too_fast'
+  | 'rate_limited'
+  | 'expired'
+  | 'invalid_token'
+  | 'unknown_site'
+  | 'too_large'
+  | 'server'
+  | 'network'
+
+const SUBMIT_ERRORS: readonly ContactSubmitError[] = [
+  'too_fast',
+  'rate_limited',
+  'expired',
+  'invalid_token',
+  'unknown_site',
+  'too_large',
+  'server',
+]
+
+/** Maps the API's `{ error }` code (or a failed request) to a message key. Unknown shapes count as a server error. */
+export function resolveContactSubmitError(body: unknown): ContactSubmitError {
+  const code = body && typeof body === 'object' ? (body as { error?: unknown }).error : undefined
+  return SUBMIT_ERRORS.find((known) => known === code) ?? 'server'
+}
+
 export type ContactFormCopy = {
   send: string
   sending: string
   success: string
   genericError: string
+  submitErrors: Record<ContactSubmitError, string>
   previewNote: string
   consentLead: string
   consentLink: string
@@ -156,8 +184,18 @@ export function contactFormCopy(lang: string): ContactFormCopy {
     return {
       send: 'Gönder',
       sending: 'Gönderiliyor…',
-      success: 'Mesajınız iletildi.',
+      success: 'Mesajınız alındı. En kısa sürede size dönüş yapılacak.',
       genericError: 'Mesajınız şu an gönderilemedi. Lütfen daha sonra tekrar deneyin.',
+      submitErrors: {
+        too_fast: 'Form çok hızlı gönderildi. Birkaç saniye bekleyip tekrar deneyin.',
+        rate_limited: 'Çok fazla deneme yaptınız. Lütfen bir süre sonra tekrar deneyin.',
+        expired: 'Formun süresi doldu. Sayfayı yenileyip tekrar deneyin.',
+        invalid_token: 'Form doğrulanamadı. Sayfayı yenileyip tekrar deneyin.',
+        unknown_site: 'Bu site şu an mesaj kabul etmiyor.',
+        too_large: 'Mesajınız çok uzun. Lütfen kısaltıp tekrar deneyin.',
+        server: 'Sunucu hatası: mesajınız kaydedilemedi. Lütfen daha sonra tekrar deneyin.',
+        network: 'Bağlantı kurulamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.',
+      },
       previewNote: 'Önizlemede gönderilmez.',
       consentLead: 'Kişisel verilerimin işlenmesi hakkında ',
       consentLink: 'Aydınlatma Metni',
@@ -177,8 +215,18 @@ export function contactFormCopy(lang: string): ContactFormCopy {
   return {
     send: 'Send',
     sending: 'Sending…',
-    success: 'Your message has been sent.',
+    success: 'Your message has been received. We will get back to you soon.',
     genericError: 'Your message could not be sent right now. Please try again later.',
+    submitErrors: {
+      too_fast: 'The form was sent too quickly. Wait a few seconds and try again.',
+      rate_limited: 'Too many attempts. Please try again in a while.',
+      expired: 'The form has expired. Reload the page and try again.',
+      invalid_token: 'The form could not be verified. Reload the page and try again.',
+      unknown_site: 'This site is not accepting messages right now.',
+      too_large: 'Your message is too long. Please shorten it and try again.',
+      server: 'Server error: your message could not be saved. Please try again later.',
+      network: 'Could not connect. Check your internet connection and try again.',
+    },
     previewNote: 'Not sent in preview.',
     consentLead: 'I have read the ',
     consentLink: 'Privacy Notice',

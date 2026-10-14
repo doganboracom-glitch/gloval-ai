@@ -169,7 +169,7 @@ export function getTenantSlugFromHost(hostHeader: string | null | undefined): st
  * `/site/<slug>/api/...` (a 404 page), so they are served as-is. Kept to an
  * explicit allow-list: the rest of `/api` is never exposed on tenant hosts.
  */
-const TENANT_PASSTHROUGH_PATHS = new Set(['/api/store/session'])
+const TENANT_PASSTHROUGH_PATHS = new Set(['/api/store/session', '/api/site-contact'])
 
 export function isTenantPassthroughPath(pathname: string): boolean {
   return TENANT_PASSTHROUGH_PATHS.has(pathname)

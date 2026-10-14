@@ -7,7 +7,9 @@ import {
   CONTACT_LIMITS,
   contactFormCopy,
   resolveContactFormLayout,
+  resolveContactSubmitError,
   type ContactFieldErrors,
+  type ContactSubmitError,
 } from '@/lib/site-contact-form'
 
 /** Present only on a published site; the editor preview and demos render the form inert. */
@@ -42,6 +44,7 @@ export function ContactForm({
 
   const [status, setStatus] = useState<Status>('idle')
   const [errors, setErrors] = useState<ContactFieldErrors>({})
+  const [submitError, setSubmitError] = useState<ContactSubmitError>('server')
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -77,8 +80,10 @@ export function ContactForm({
         setStatus('idle')
         return
       }
+      setSubmitError(resolveContactSubmitError(await response.json().catch(() => null)))
       setStatus('error')
     } catch {
+      setSubmitError('network')
       setStatus('error')
     }
   }
@@ -223,7 +228,7 @@ export function ContactForm({
         </p>
       )}
       <p role="status" aria-live="polite" className="text-sm" style={{ color: 'var(--site-fg)' }}>
-        {status === 'sent' ? copy.success : status === 'error' ? copy.genericError : ''}
+        {status === 'sent' ? copy.success : status === 'error' ? copy.submitErrors[submitError] : ''}
       </p>
     </form>
   )

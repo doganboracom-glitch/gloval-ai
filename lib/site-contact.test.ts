@@ -3,9 +3,12 @@ import {
   CONTACT_MIN_FILL_MS,
   CONTACT_RATE,
   CONTACT_TOKEN_MAX_AGE_MS,
+  contactFormCopy,
   resolveContactFormLayout,
+  resolveContactSubmitError,
   validateContactInput,
 } from './site-contact-form'
+import { isTenantPassthroughPath } from './domains'
 import { clientIpFromHeaders, hashContactIp, signContactToken, verifyContactToken } from './site-contact-guard'
 import { buildContactEmail } from './site-contact-email'
 import { pickContactRecipient, submitSiteContact, type ContactDeps, type ContactSite } from './site-contact-service'
@@ -133,6 +136,44 @@ describe('contact token', () => {
   })
 })
 
+describe('tenant host routing', () => {
+  it('serves the contact API as-is on tenant hosts instead of rewriting it to /site/<slug>/api', () => {
+    expect(isTenantPassthroughPath('/api/site-contact')).toBe(true)
+    expect(isTenantPassthroughPath('/api/store/session')).toBe(true)
+  })
+
+  it('does not expose the rest of /api on tenant hosts', () => {
+    for (const path of ['/api/generate', '/api/site-contact/extra', '/api/edit', '/api/cron/domain-reconciliation']) {
+      expect(isTenantPassthroughPath(path)).toBe(false)
+    }
+  })
+})
+
+describe('contact submit error messages', () => {
+  it('maps every API error code to its own Turkish message', () => {
+    const copy = contactFormCopy('tr')
+    const messages = new Set<string>()
+    for (const error of ['too_fast', 'rate_limited', 'expired', 'invalid_token', 'unknown_site', 'too_large', 'server']) {
+      const key = resolveContactSubmitError({ error })
+      expect(key).toBe(error)
+      messages.add(copy.submitErrors[key])
+    }
+    expect(messages.size).toBe(7)
+    expect(copy.submitErrors.too_fast).toContain('çok hızlı')
+    expect(copy.submitErrors.rate_limited).toContain('Çok fazla deneme')
+  })
+
+  it('treats unknown or missing bodies as a server error', () => {
+    for (const body of [null, undefined, 'x', {}, { error: 'nope' }]) {
+      expect(resolveContactSubmitError(body)).toBe('server')
+    }
+  })
+
+  it('tells the visitor the message was received', () => {
+    expect(contactFormCopy('tr').success).toContain('alındı')
+  })
+})
+
 describe('ip helpers', () => {
   it('hashes without exposing the address and is stable', () => {
     const hash = hashContactIp(SECRET, '203.0.113.7')
@@ -234,7 +275,7 @@ describe('submitSiteContact', () => {
 
   it('fails closed without a secret', async () => {
     const deps = makeDeps({ secret: () => null })
-    expect(await submitSiteContact(goodInput(), deps)).toEqual({ ok: false, kind: 'unavailable' })
+    expect(await submitSiteContact(goodInput(), deps)).toEqual({ ok: false, kind: 'unavailable', code: 'E_NO_SECRET' })
     expect(deps.insert).not.toHaveBeenCalled()
   })
 
@@ -249,11 +290,28 @@ describe('submitSiteContact', () => {
   it('blocks missing, forged and too-fast tokens', async () => {
     const deps = makeDeps()
     const input = goodInput()
-    expect(await submitSiteContact({ ...input, body: { ...input.body, token: undefined } }, deps)).toEqual({ ok: false, kind: 'blocked' })
-    expect(await submitSiteContact({ ...input, slug: 'another' }, deps)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact({ ...input, body: { ...input.body, token: undefined } }, deps)).toEqual({ ok: false, kind: 'blocked', reason: 'invalid_token' })
+    expect(await submitSiteContact({ ...input, slug: 'another' }, deps)).toEqual({ ok: false, kind: 'blocked', reason: 'invalid_token' })
     const fast = makeDeps({ now: () => T0 + 100 })
-    expect(await submitSiteContact(input, fast)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact(input, fast)).toEqual({ ok: false, kind: 'blocked', reason: 'too_fast' })
     expect(deps.insert).not.toHaveBeenCalled()
+  })
+
+  it('tells a too-fast submission apart from an expired form', async () => {
+    const input = goodInput()
+    const justUnder = makeDeps({ now: () => T0 + CONTACT_MIN_FILL_MS - 1 })
+    expect(await submitSiteContact(input, justUnder)).toEqual({ ok: false, kind: 'blocked', reason: 'too_fast' })
+    const justOver = makeDeps({ now: () => T0 + CONTACT_MIN_FILL_MS })
+    expect(await submitSiteContact(input, justOver)).toEqual({ ok: true })
+    const stale = makeDeps({ now: () => T0 + CONTACT_TOKEN_MAX_AGE_MS + 1 })
+    expect(await submitSiteContact(input, stale)).toEqual({ ok: false, kind: 'blocked', reason: 'expired' })
+  })
+
+  it('accepts the form on a tenant host: the slug, not the host, is what the token is bound to', async () => {
+    const deps = makeDeps()
+    const body = { ...validBody, token: signContactToken(SECRET, 'luna-mucevher', T0) }
+    expect(await submitSiteContact({ slug: 'Luna-Mucevher', ip: '203.0.113.7', body }, deps)).toEqual({ ok: true })
+    expect(deps.loadSite).toHaveBeenCalledWith('luna-mucevher')
   })
 
   it('returns field errors for invalid input without touching the database', async () => {
@@ -266,23 +324,51 @@ describe('submitSiteContact', () => {
 
   it('blocks unknown sites and exceeded limits', async () => {
     const unknown = makeDeps({ loadSite: vi.fn(async () => null) })
-    expect(await submitSiteContact(goodInput(), unknown)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact(goodInput(), unknown)).toEqual({ ok: false, kind: 'blocked', reason: 'unknown_site' })
 
     const limited = makeDeps({ rateLimit: vi.fn(() => ({ allowed: false })) })
-    expect(await submitSiteContact(goodInput(), limited)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact(goodInput(), limited)).toEqual({ ok: false, kind: 'blocked', reason: 'rate_limited' })
 
     const ipFlood = makeDeps({ countRecent: vi.fn(async (f) => (f.ipHash ? CONTACT_RATE.perHour : 0)) })
-    expect(await submitSiteContact(goodInput(), ipFlood)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact(goodInput(), ipFlood)).toEqual({ ok: false, kind: 'blocked', reason: 'rate_limited' })
 
     const siteFlood = makeDeps({ countRecent: vi.fn(async (f) => (f.projectId ? CONTACT_RATE.siteDaily : 0)) })
-    expect(await submitSiteContact(goodInput(), siteFlood)).toEqual({ ok: false, kind: 'blocked' })
+    expect(await submitSiteContact(goodInput(), siteFlood)).toEqual({ ok: false, kind: 'blocked', reason: 'rate_limited' })
     expect(siteFlood.insert).not.toHaveBeenCalled()
   })
 
-  it('reports unavailable when the insert fails', async () => {
-    const deps = makeDeps({ insert: vi.fn(async () => null) })
-    expect(await submitSiteContact(goodInput(), deps)).toEqual({ ok: false, kind: 'unavailable' })
-    expect(deps.sendEmail).not.toHaveBeenCalled()
+  it('reports a stage code when the database fails, and only fails when nothing was stored', async () => {
+    const insertNull = makeDeps({ insert: vi.fn(async () => null) })
+    expect(await submitSiteContact(goodInput(), insertNull)).toEqual({ ok: false, kind: 'unavailable', code: 'E_INSERT' })
+    expect(insertNull.sendEmail).not.toHaveBeenCalled()
+
+    const insertThrows = makeDeps({
+      insert: vi.fn(async () => {
+        throw new Error('db down')
+      }),
+    })
+    expect(await submitSiteContact(goodInput(), insertThrows)).toEqual({ ok: false, kind: 'unavailable', code: 'E_INSERT' })
+
+    const loadThrows = makeDeps({
+      loadSite: vi.fn(async () => {
+        throw new Error('db down')
+      }),
+    })
+    expect(await submitSiteContact(goodInput(), loadThrows)).toEqual({ ok: false, kind: 'unavailable', code: 'E_LOAD_SITE' })
+
+    const countThrows = makeDeps({
+      countRecent: vi.fn(async () => {
+        throw new Error('db down')
+      }),
+    })
+    expect(await submitSiteContact(goodInput(), countThrows)).toEqual({ ok: false, kind: 'unavailable', code: 'E_RATE_COUNT' })
+  })
+
+  it('still succeeds, with the message stored, when e-mail sending fails', async () => {
+    const deps = makeDeps({ sendEmail: vi.fn(async () => false) })
+    expect(await submitSiteContact(goodInput(), deps)).toEqual({ ok: true })
+    expect(deps.insert).toHaveBeenCalledTimes(1)
+    expect(deps.setEmailStatus).toHaveBeenCalledWith('m1', 'failed')
   })
 
   it('keeps the stored message when e-mail fails or throws', async () => {
