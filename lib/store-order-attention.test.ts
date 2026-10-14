@@ -4,6 +4,7 @@ import {
   clearOrderAttention,
   needsAttention,
   recordSettleFailure,
+  toAttentionReason,
 } from '@/lib/store-order-attention'
 import { createQueryFake, type QueryCall, type QueryResult } from '@/lib/test-support/query-fake'
 
@@ -16,7 +17,7 @@ function setup(row: Record<string, unknown> | null, update?: (c: QueryCall) => Q
   return { ...fake, deps }
 }
 
-const input = { orderId: 'o1', projectId: 'p1', step: 'mark_paid' }
+const input = { orderId: 'o1', projectId: 'p1', step: 'mark_paid' as const }
 
 describe('recordSettleFailure', () => {
   it('counts a failure below the threshold without flagging or mailing', async () => {
@@ -97,5 +98,14 @@ describe('needsAttention', () => {
     expect(needsAttention({ ...flagged, payment_status: 'paid' })).toBe(false)
     expect(needsAttention({ ...flagged, status: 'cancelled' })).toBe(false)
     expect(needsAttention({ ...flagged, attention_at: null })).toBe(false)
+  })
+})
+
+describe('toAttentionReason', () => {
+  it('keeps known step codes and collapses anything else to "unknown"', () => {
+    expect(toAttentionReason('take_stock')).toBe('take_stock')
+    expect(toAttentionReason('jane@example.com paid 1200 TRY')).toBe('unknown')
+    expect(toAttentionReason('{"errorMessage":"card declined"}')).toBe('unknown')
+    expect(toAttentionReason(undefined)).toBe('unknown')
   })
 })
