@@ -12,11 +12,7 @@ import {
   LayoutGrid,
   ExternalLink,
   Package,
-  CreditCard,
   LifeBuoy,
-  Mail,
-  Inbox,
-  Globe,
   Settings,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -32,6 +28,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import type { PlanCode } from '@/lib/pricing-config'
 import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
+import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
 
 const headerActionClass =
   'h-11 gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted hover:text-foreground'
@@ -42,6 +39,7 @@ export function DashboardClient({
   planCode,
   billingAlert = null,
   showBillingProfileReminder = false,
+  unreadMessages = 0,
 }: {
   projects: ProjectListItem[]
   userEmail: string
@@ -50,6 +48,8 @@ export function DashboardClient({
   /** Ödeme gerektiren abonelik durumu; yoksa uyarı gösterilmez. */
   billingAlert?: 'past_due' | 'suspended' | null
   showBillingProfileReminder?: boolean
+  /** Okunmamış iletişim mesajı sayısı; 0 ise rozet gösterilmez. */
+  unreadMessages?: number
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -162,34 +162,6 @@ export function DashboardClient({
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
             <Link
-              href="/dashboard/domains"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Globe className="size-4" />
-              <span className="hidden sm:inline">{t.domains.navLabel}</span>
-            </Link>
-            <Link
-              href="/dashboard/email"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Mail className="size-4" />
-              <span className="hidden sm:inline">{t.mail.navLabel}</span>
-            </Link>
-            <Link
-              href="/dashboard/messages"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Inbox className="size-4" />
-              <span className="hidden sm:inline">{lang === 'tr' ? 'Mesajlar' : 'Messages'}</span>
-            </Link>
-            <Link
-              href="/billing"
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <CreditCard className="size-4" />
-              <span className="hidden sm:inline">{t.dash.billing}</span>
-            </Link>
-            <Link
               href="/settings"
               className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -267,6 +239,10 @@ export function DashboardClient({
               {lang === 'tr' ? 'Destek' : 'Support'}
             </Link>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <DashboardQuickLinks unreadMessages={unreadMessages} />
         </div>
 
         {projects.length === 0 ? (

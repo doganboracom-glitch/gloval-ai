@@ -6,6 +6,8 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
 // stale full-route cache — always render it dynamically so a project created
@@ -25,7 +27,10 @@ export default async function DashboardPage() {
     redirect(`/auth/verify-email?email=${encodeURIComponent(user.email ?? '')}`)
   }
 
-  const projects = await listProjects()
+  const [projects, unreadMessages] = await Promise.all([
+    listProjects(),
+    countOwnerUnreadContactMessages(createAdminClient(), user.id),
+  ])
   // Aktif abonelik yoksa kullanıcı FREE sayılır. Faturalama sorgusu panelin
   // açılmasını engellememeli, bu yüzden hata durumunda güvenli tarafa düşer.
   const currentPlan = await getMyCurrentPlan().catch(() => null)
@@ -50,6 +55,7 @@ export default async function DashboardPage() {
       <DashboardClient
         projects={projects}
         userEmail={user.email ?? ''}
+        unreadMessages={unreadMessages}
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}
         showBillingProfileReminder={showBillingProfileReminder}

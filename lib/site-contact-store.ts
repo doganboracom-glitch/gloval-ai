@@ -148,6 +148,48 @@ export async function listOwnerContactMessages(
   }))
 }
 
+/**
+ * Unread messages across the owner's own sites, for the dashboard badge.
+ * Two cheap queries (owner's project ids, then a head-only count on the partial
+ * index). Any failure, including the `read_at` column not existing yet, yields 0
+ * so the badge simply stays hidden.
+ */
+export async function countOwnerUnreadContactMessages(
+  admin: SupabaseClient,
+  ownerId: string,
+): Promise<number> {
+  try {
+    const { data: projects } = await admin.from('projects').select('id').eq('owner_id', ownerId)
+    const ids = (projects ?? []).map((p) => p.id as string)
+    if (ids.length === 0) return 0
+    const { count, error } = await admin
+      .from(TABLE)
+      .select('id', { count: 'exact', head: true })
+      .in('project_id', ids)
+      .is('read_at', null)
+    if (error) return 0
+    return count ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/** Marks every unread message on the owner's sites as read (ownership re-checked). */
+export async function markOwnerContactMessagesRead(
+  admin: SupabaseClient,
+  ownerId: string,
+  nowIso: string = new Date().toISOString(),
+): Promise<void> {
+  try {
+    const { data: projects } = await admin.from('projects').select('id').eq('owner_id', ownerId)
+    const ids = (projects ?? []).map((p) => p.id as string)
+    if (ids.length === 0) return
+    await admin.from(TABLE).update({ read_at: nowIso }).in('project_id', ids).is('read_at', null)
+  } catch {
+    // Read state is a convenience; never break the messages page over it.
+  }
+}
+
 /** Deletes one message, but only when it belongs to one of the owner's projects. */
 export async function deleteOwnerContactMessage(
   admin: SupabaseClient,
