@@ -67,3 +67,19 @@ export async function orderColumnsReady(admin: Admin): Promise<boolean> {
   const { error } = await admin.from('ecommerce_orders').select('payment_nonce, provider_payment_id').limit(1)
   return !error
 }
+
+/**
+ * Same probe as `orderColumnsReady`, but writes the database error code to the
+ * server log (never to the owner UI) when the columns are not usable.
+ */
+export async function orderColumnsReadyLogged(admin: Admin, projectId: string): Promise<boolean> {
+  const { error } = await admin.from('ecommerce_orders').select('payment_nonce, provider_payment_id').limit(1)
+  if (error) {
+    console.error('[store-payments] order columns not ready (apply scripts/052)', {
+      projectId,
+      code: error.code,
+      message: error.message,
+    })
+  }
+  return !error
+}

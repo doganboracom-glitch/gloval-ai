@@ -167,6 +167,24 @@ describe('buildPaymentSummary', () => {
     expect(s.modules.find((m) => m.id === 'card')?.problem).toBe('card_unreadable')
   })
 
+  it('flags a missing payment infrastructure distinctly from an untested connection', () => {
+    const infra = buildPaymentSummary({ ...closed, cardEnabled: true, cardInfrastructure: true })
+    expect(infra.modules.find((m) => m.id === 'card')?.problem).toBe('card_infrastructure')
+    expect(infra.ordersOpen).toBe(false)
+    const untested = buildPaymentSummary({ ...closed, cardEnabled: true })
+    expect(untested.modules.find((m) => m.id === 'card')?.problem).toBe('card_not_tested')
+  })
+
+  it('prefers unreadable credentials over the infrastructure flag', () => {
+    const s = buildPaymentSummary({
+      ...closed,
+      cardEnabled: true,
+      cardUnreadable: true,
+      cardInfrastructure: true,
+    })
+    expect(s.modules.find((m) => m.id === 'card')?.problem).toBe('card_unreadable')
+  })
+
   it('opens orders as soon as one method is ready', () => {
     const s = buildPaymentSummary({ ...closed, codEnabled: true, codFeeCents: 1_500 })
     expect(s.ordersOpen).toBe(true)

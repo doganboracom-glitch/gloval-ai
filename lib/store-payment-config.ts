@@ -6,7 +6,8 @@ import {
   normalizeCardProvider,
   type CardProviderId,
 } from '@/lib/payments/card-providers'
-import { loadIyzicoCredentials, orderColumnsReady } from '@/lib/store-payments/iyzico-credentials'
+import { loadIyzicoCredentials, orderColumnsReadyLogged } from '@/lib/store-payments/iyzico-credentials'
+import { resolveIyzicoReadiness, type CardReadiness } from '@/lib/store-payments/card-readiness'
 import {
   isDemoStore,
   resolveStorePayment,
@@ -38,7 +39,7 @@ export async function readStorePaymentRow(admin: Admin, projectId: string) {
     .maybeSingle()
 }
 
-export type CardReadiness = { ready: boolean; unreadable: boolean }
+export type { CardReadiness }
 
 /**
  * Per-provider readiness checkers (credentials present, decryptable and
@@ -48,13 +49,10 @@ export type CardReadiness = { ready: boolean; unreadable: boolean }
 const CARD_READINESS_CHECKERS: Partial<
   Record<CardProviderId, (admin: Admin, projectId: string) => Promise<CardReadiness>>
 > = {
-  iyzico: async (admin, projectId) => {
-    const loaded = await loadIyzicoCredentials(admin, projectId)
-    if (!loaded.ok) {
-      return { ready: false, unreadable: loaded.reason === 'unreadable' }
-    }
-    return { ready: loaded.tested && (await orderColumnsReady(admin)), unreadable: false }
-  },
+  iyzico: async (admin, projectId) =>
+    resolveIyzicoReadiness(await loadIyzicoCredentials(admin, projectId), () =>
+      orderColumnsReadyLogged(admin, projectId),
+    ),
 }
 
 /**
@@ -68,11 +66,11 @@ export async function isCardProviderReady(
   providerId: CardProviderId,
 ): Promise<CardReadiness> {
   const check = CARD_READINESS_CHECKERS[providerId]
-  if (!check) return { ready: false, unreadable: false }
+  if (!check) return { ready: false, unreadable: false, infrastructure: false }
   try {
     return await check(admin, projectId)
   } catch {
-    return { ready: false, unreadable: true }
+    return { ready: false, unreadable: true, infrastructure: false }
   }
 }
 

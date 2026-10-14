@@ -109,7 +109,12 @@ export type PaymentModuleState = {
   /** Enabled AND actually able to take an order right now. */
   ready: boolean
   /** Why an enabled module is not ready. */
-  problem?: 'card_coming_soon' | 'card_not_tested' | 'card_unreadable' | 'iban_missing'
+  problem?:
+    | 'card_coming_soon'
+    | 'card_not_tested'
+    | 'card_unreadable'
+    | 'card_infrastructure'
+    | 'iban_missing'
 }
 
 export type PaymentSummary = {
@@ -129,6 +134,8 @@ export function buildPaymentSummary(input: {
   cardIntegrated: boolean
   cardReady: boolean
   cardUnreadable: boolean
+  /** Tested connection, but the platform database cannot hold card orders. */
+  cardInfrastructure?: boolean
   bankEnabled: boolean
   bankIbanValid: boolean
   codEnabled: boolean
@@ -147,7 +154,9 @@ export function buildPaymentSummary(input: {
           : input.cardEnabled && !input.cardReady
             ? input.cardUnreadable
               ? 'card_unreadable'
-              : 'card_not_tested'
+              : input.cardInfrastructure
+                ? 'card_infrastructure'
+                : 'card_not_tested'
             : undefined,
     },
     {

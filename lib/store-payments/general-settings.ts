@@ -40,6 +40,8 @@ export type GeneralPaymentView = {
   /** Card provider has tested, readable credentials (can take a payment). */
   cardReady: boolean
   cardUnreadable: boolean
+  /** Connection tested, but the platform database is not ready for card orders. */
+  cardInfrastructure: boolean
   bankIbanValid: boolean
   /** False until scripts/036 is applied; non-default values cannot be saved. */
   migrationApplied: boolean
@@ -64,6 +66,7 @@ export type SaveGeneralResult =
         | 'invalid_fee'
         | 'provider_unavailable'
         | 'card_not_ready'
+        | 'card_infrastructure'
         | 'iban_required'
         | 'migration_pending'
         | 'save_failed'
@@ -109,6 +112,7 @@ async function buildView(projectId: string): Promise<GeneralPaymentView> {
     codFeeCents,
     cardReady: card.ready,
     cardUnreadable: card.unreadable,
+    cardInfrastructure: card.infrastructure,
     bankIbanValid,
     migrationApplied,
     summary: buildPaymentSummary({
@@ -116,6 +120,7 @@ async function buildView(projectId: string): Promise<GeneralPaymentView> {
       cardIntegrated,
       cardReady: card.ready,
       cardUnreadable: card.unreadable,
+      cardInfrastructure: card.infrastructure,
       bankEnabled,
       bankIbanValid,
       codEnabled,
@@ -165,11 +170,11 @@ export async function saveGeneralPaymentSettings(
   }
   const row = (data as Row | null) ?? null
 
-  if (
-    input.cardEnabled &&
-    !(await isCardProviderReady(admin, projectId, activeCardProvider)).ready
-  ) {
-    return { ok: false, error: 'card_not_ready' }
+  if (input.cardEnabled) {
+    const card = await isCardProviderReady(admin, projectId, activeCardProvider)
+    if (!card.ready) {
+      return { ok: false, error: card.infrastructure ? 'card_infrastructure' : 'card_not_ready' }
+    }
   }
   if (
     input.bankEnabled &&

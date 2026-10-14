@@ -35,8 +35,8 @@ const copy = {
     providerNeedsTest: 'Bağlantı testi gerekli',
     enableWarning:
       'iyzico bağlantısı henüz test edilmedi. Önce iyzico sekmesinde anahtarlarınızı kaydedip bağlantıyı test edin; aksi halde kart ödemesi açılamaz.',
-    cardNotReady:
-      'Seçili sanal pos henüz kullanıma hazır değil, bu yüzden kart seçeneği alıcıya gösterilmez.',
+    providerInfrastructure: 'Altyapı hazır değil',
+    cardInfrastructure: 'Ödeme altyapısı hazır değil, destekle iletişime geçin.',
     cardUnreadable:
       'Kayıtlı kimlik bilgisi okunamadı, kart seçeneği alıcıya gösterilmez.',
     update: 'Güncelle',
@@ -47,7 +47,8 @@ const copy = {
     errors: {
       invalid_fee: 'Ek ücret 0 ile 1.000 TL arasında, en fazla iki ondalıklı olmalı.',
       provider_unavailable: 'Seçilen sanal pos henüz kullanılamıyor.',
-      card_not_ready: 'Kart modülü açılamadı: seçili sanal pos henüz hazır değil.',
+      card_not_ready: 'Kart modülü açılamadı: iyzico bağlantısı henüz test edilmedi.',
+      card_infrastructure: 'Kart modülü açılamadı: ödeme altyapısı hazır değil, destekle iletişime geçin.',
       iban_required: 'Havale açılamadı: önce geçerli bir IBAN girip havale ayrıntılarını kaydedin.',
       migration_pending: 'Bu ayar için veritabanı güncellemesi gerekli (scripts/036).',
       save_failed: 'Ayarlar kaydedilemedi. Lütfen tekrar deneyin.',
@@ -75,8 +76,8 @@ const copy = {
     providerNeedsTest: 'Connection test required',
     enableWarning:
       'The iyzico connection has not been tested yet. Save your keys in the iyzico tab and test the connection first; otherwise card payments cannot be enabled.',
-    cardNotReady:
-      'The selected provider is not ready yet, so the card option is hidden from buyers.',
+    providerInfrastructure: 'Infrastructure not ready',
+    cardInfrastructure: 'Payment infrastructure is not ready. Please contact support.',
     cardUnreadable:
       'Stored credentials could not be read, so the card option is hidden from buyers.',
     update: 'Update',
@@ -87,7 +88,8 @@ const copy = {
     errors: {
       invalid_fee: 'The fee must be between 0 and 1,000 TRY with at most two decimals.',
       provider_unavailable: 'The selected provider is not available yet.',
-      card_not_ready: 'Could not enable cards: the selected provider is not ready yet.',
+      card_not_ready: 'Could not enable cards: the iyzico connection has not been tested yet.',
+      card_infrastructure: 'Could not enable cards: payment infrastructure is not ready. Please contact support.',
       iban_required: 'Could not enable bank transfer: save a valid IBAN in the details first.',
       migration_pending: 'This setting needs the database update (scripts/036).',
       save_failed: 'Settings could not be saved. Please try again.',
@@ -250,18 +252,26 @@ export function GeneralPaymentSettings({
                   : 'bg-muted text-muted-foreground'
               }`}
             >
-              {initial.cardReady ? c.providerReady : c.providerNeedsTest}
+              {initial.cardReady
+                ? c.providerReady
+                : initial.cardInfrastructure
+                  ? c.providerInfrastructure
+                  : c.providerNeedsTest}
             </span>
           </label>
         </fieldset>
         {card && !initial.cardReady && !cardProblem && (
           <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-            {c.enableWarning}
+            {initial.cardInfrastructure ? c.cardInfrastructure : initial.cardUnreadable ? c.cardUnreadable : c.enableWarning}
           </p>
         )}
         {cardProblem && (
           <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {initial.cardUnreadable ? c.cardUnreadable : c.cardNotReady}
+            {initial.cardInfrastructure
+              ? c.cardInfrastructure
+              : initial.cardUnreadable
+                ? c.cardUnreadable
+                : c.enableWarning}
           </p>
         )}
       </Row>

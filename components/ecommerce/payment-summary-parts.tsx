@@ -22,6 +22,10 @@ const PROBLEM: Record<NonNullable<PaymentModuleState['problem']>, Record<Lang, s
     tr: 'Kimlik bilgisi okunamadı',
     en: 'Credentials unreadable',
   },
+  card_infrastructure: {
+    tr: 'Ödeme altyapısı hazır değil',
+    en: 'Payment infrastructure not ready',
+  },
   iban_missing: { tr: 'IBAN eksik', en: 'IBAN missing' },
 }
 
