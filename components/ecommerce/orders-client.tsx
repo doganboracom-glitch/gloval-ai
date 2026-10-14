@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useCallback, useMemo, useReducer, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Check, ClipboardList, Loader2, Package, Undo2, X } from 'lucide-react'
@@ -20,22 +20,21 @@ import { OrderShippingControls } from '@/components/ecommerce/order-shipping-con
 import { OwnerPaymentId } from '@/components/ecommerce/owner-payment-id'
 import { ownerPaymentId } from '@/lib/owner-payment-id'
 import { needsAttention } from '@/lib/store-order-attention'
+import { REFUND_DISPLAY_LABEL, refundDisplay, refundErrorMessage } from '@/lib/store-refund-status'
+import { OrderActionConfirmDialog } from '@/components/ecommerce/order-action-confirm-dialog'
 import {
-  REFUND_DISPLAY_LABEL,
-  canRefundCardOrder,
-  refundDisplay,
-  refundErrorMessage,
-} from '@/lib/store-refund-status'
-
-const ORDER_STATUSES: OrderStatus[] = [
-  'pending',
-  'paid',
-  'processing',
-  'shipped',
-  'completed',
-  'cancelled',
-  'refunded',
-]
+  INITIAL_CONFIRM_STATE,
+  confirmCopy,
+  confirmReducer,
+  isAwaitingManualPayment,
+  requiresConfirmation,
+  runStatusChange,
+  showRetryRefund,
+  statusOptionsFor,
+  type OrderPatch,
+  type StatusChangeDeps,
+  type StatusChangeResult,
+} from '@/lib/order-status-flow'
 
 export function OrdersClient({
   projectId,
@@ -98,11 +97,6 @@ export function OrdersClient({
   }
 
   const tr = lang === 'tr'
-  const isAwaitingManualPayment = (o: OrderWithItems) =>
-    (o.payment_provider === 'bank_transfer' || o.payment_provider === 'cash_on_delivery') &&
-    o.payment_status === 'pending' &&
-    o.status === 'pending'
-
   const providerLabel = (id: string) =>
     id === 'bank_transfer'
       ? tr ? 'Havale/EFT' : 'Bank transfer'
@@ -110,8 +104,8 @@ export function OrdersClient({
         ? tr ? 'Kapıda ödeme' : 'Cash on delivery'
         : id
 
-  const manualErrorMessage = (r: Extract<ManualOrderActionResult, { ok: false }>) =>
-    r.error === 'not_pending'
+  const manualErrorMessage = (error: string) =>
+    error === 'not_pending'
       ? tr ? 'Bu sipariş artık beklemede değil. Sayfa yenileniyor.' : 'This order is no longer pending. Refreshing.'
       : t.ecom.statusUpdateError
 
@@ -133,7 +127,7 @@ export function OrdersClient({
           action === 'confirm'
             ? await confirmOrderPayment(projectId, orderId)
             : await cancelOrderPayment(projectId, orderId)
-        if (!result.ok) setError(manualErrorMessage(result))
+        if (!result.ok) setError(manualErrorMessage(result.error))
         else if (result.ok && result.oversold) {
           setError(
             tr
@@ -161,61 +155,97 @@ export function OrdersClient({
     })
   }
 
-  function handleRefund(orderId: string) {
-    const message = tr
-      ? 'Bu siparişi iptal edip kart ödemesini müşteriye iade etmek istiyor musunuz? İade iyzico üzerinden yapılır ve geri alınamaz.'
-      : 'Cancel this order and refund the card payment to the buyer? The refund is made through iyzico and cannot be undone.'
-    if (!window.confirm(message)) return
+  const [confirmState, dispatchConfirm] = useReducer(confirmReducer, INITIAL_CONFIRM_STATE)
+  // Synchronous guard: state updates land on the next render, so two fast clicks could both start a request.
+  const inFlight = useRef(false)
+  const dismissConfirm = useCallback(() => dispatchConfirm({ type: 'dismiss' }), [])
+
+  const flowDeps: StatusChangeDeps = {
+    refundCardOrder: (id) => refundCardOrder(projectId, id),
+    cancelOrderPayment: (id) => cancelOrderPayment(projectId, id),
+    updateOrderStatus: (id, status) => updateOrderStatus(projectId, id, status),
+    manualErrorMessage,
+    statusUpdateError: t.ecom.statusUpdateError,
+  }
+
+  function applyPatch(orderId: string, patch: OrderPatch) {
+    setOrders((os) => os.map((o) => (o.id === orderId ? { ...o, ...patch } : o)))
+  }
+
+  function applyNotice(result: Extract<StatusChangeResult, { ok: true }>) {
+    if (result.notice === 'attention') {
+      setError(
+        tr
+          ? 'İade yapıldı; stok veya müşteri bildirimi tamamlanamadı, sistem otomatik tekrar deneyecek.'
+          : 'Refund done; stock or the buyer e-mail did not finish, the system will retry automatically.',
+      )
+    }
+  }
+
+  function handleStatusChange(orderId: string, next: OrderStatus) {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order || inFlight.current) return
+    // Cancel / refund never run straight from the dropdown; the select stays on the old value until confirmed.
+    if (requiresConfirmation(order, next)) {
+      dispatchConfirm({ type: 'open', orderId, next })
+      return
+    }
+    inFlight.current = true
     setError(null)
     setPendingId(orderId)
+    const prev = orders
+    // Optimistic update; revert on failure.
+    applyPatch(orderId, { status: next })
     startTransition(async () => {
       try {
-        const result = await refundCardOrder(projectId, orderId)
+        const result = await runStatusChange(order, next, flowDeps)
         if (!result.ok) {
+          setOrders(prev)
           setError(result.message)
         } else {
-          setOrders((os) =>
-            os.map((o) =>
-              o.id === orderId
-                ? { ...o, status: 'cancelled', payment_status: 'refunded', refund_status: 'succeeded' }
-                : o,
-            ),
-          )
-          if (result.followUp === 'attention') {
-            setError(
-              tr
-                ? 'İade yapıldı; stok veya müşteri bildirimi tamamlanamadı, sistem otomatik tekrar deneyecek.'
-                : 'Refund done; stock or the buyer e-mail did not finish, the system will retry automatically.',
-            )
-          }
+          applyNotice(result)
         }
         router.refresh()
-      } catch {
-        setError(refundErrorMessage('unavailable'))
       } finally {
+        inFlight.current = false
         setPendingId(null)
       }
     })
   }
 
-  function handleStatusChange(orderId: string, next: OrderStatus) {
+  function handleConfirm() {
+    const target = confirmState.target
+    if (!target || inFlight.current) return
+    const order = orders.find((o) => o.id === target.orderId)
+    if (!order) {
+      dispatchConfirm({ type: 'dismiss' })
+      return
+    }
+    inFlight.current = true
+    dispatchConfirm({ type: 'start' })
     setError(null)
-    setPendingId(orderId)
-    const prev = orders
-    // Optimistic update; revert on failure.
-    setOrders((os) => os.map((o) => (o.id === orderId ? { ...o, status: next } : o)))
+    setPendingId(order.id)
     startTransition(async () => {
       try {
-        await updateOrderStatus(projectId, orderId, next)
+        const result = await runStatusChange(order, target.next, flowDeps)
+        if (!result.ok) {
+          dispatchConfirm({ type: 'fail', message: result.message })
+        } else {
+          applyPatch(order.id, result.patch)
+          applyNotice(result)
+          dispatchConfirm({ type: 'done' })
+        }
         router.refresh()
-      } catch {
-        setOrders(prev)
-        setError(t.ecom.statusUpdateError)
       } finally {
+        inFlight.current = false
         setPendingId(null)
       }
     })
   }
+
+  const confirmOrder = confirmState.target
+    ? orders.find((o) => o.id === confirmState.target?.orderId)
+    : undefined
 
   return (
     <div className="relative min-h-svh">
@@ -359,44 +389,40 @@ export function OrdersClient({
                           <Loader2 className="size-4 animate-spin text-muted-foreground" />
                         )}
                       </div>
-                    ) : canRefundCardOrder(o) ? (
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          disabled={isPending && pendingId === o.id}
-                          onClick={() => handleRefund(o.id)}
-                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                        >
-                          <Undo2 className="size-4" aria-hidden />
-                          {o.refund_status
-                            ? tr ? 'İadeyi yeniden dene' : 'Retry refund'
-                            : tr ? 'İptal et ve iade et' : 'Cancel and refund'}
-                        </button>
-                        {isPending && pendingId === o.id && (
-                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                        )}
-                      </div>
                     ) : (
-                    <label className="flex items-center gap-1.5">
-                      <span className="sr-only">{t.ecom.orderStatus}</span>
-                      <select
-                        value={o.status}
-                        disabled={isPending && pendingId === o.id}
-                        onChange={(e) =>
-                          handleStatusChange(o.id, e.target.value as OrderStatus)
-                        }
-                        className="h-9 rounded-lg border border-input bg-background/60 px-2 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
-                      >
-                        {ORDER_STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {statusLabel(s)}
-                          </option>
-                        ))}
-                      </select>
-                      {isPending && pendingId === o.id && (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                      )}
-                    </label>
+                      <>
+                        <label className="flex items-center gap-1.5">
+                          <span className="sr-only">{t.ecom.orderStatus}</span>
+                          <select
+                            value={o.status}
+                            disabled={pendingId === o.id}
+                            onChange={(e) =>
+                              handleStatusChange(o.id, e.target.value as OrderStatus)
+                            }
+                            className="h-9 rounded-lg border border-input bg-background/60 px-2 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
+                          >
+                            {statusOptionsFor(o).map((s) => (
+                              <option key={s} value={s}>
+                                {statusLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                          {pendingId === o.id && (
+                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                          )}
+                        </label>
+                        {showRetryRefund(o) && (
+                          <button
+                            type="button"
+                            disabled={pendingId === o.id}
+                            onClick={() => dispatchConfirm({ type: 'open', orderId: o.id, next: 'refunded' })}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                          >
+                            <Undo2 className="size-4" aria-hidden />
+                            {tr ? 'İadeyi yeniden dene' : 'Retry refund'}
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -463,6 +489,24 @@ export function OrdersClient({
           </ul>
         )}
       </div>
+
+      {confirmOrder && confirmState.target && (
+        <OrderActionConfirmDialog
+          {...(() => {
+            const copy = confirmCopy(confirmOrder, confirmState.target.next, tr ? 'tr' : 'en')
+            return {
+              title: copy.title,
+              description: copy.body,
+              cancelLabel: copy.cancelLabel,
+              confirmLabel: copy.confirmLabel,
+            }
+          })()}
+          busy={confirmState.busy}
+          error={confirmState.error}
+          onConfirm={handleConfirm}
+          onDismiss={dismissConfirm}
+        />
+      )}
     </div>
   )
 }
