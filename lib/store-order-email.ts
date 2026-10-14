@@ -11,6 +11,7 @@ import type { EmailLang } from '@/lib/email/lang'
 import { formatPrice } from '@/lib/format'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { COD_RECEIVED_COPY } from '@/lib/customer-order-status'
+import { BANK_DETAILS_MISSING_COPY } from '@/lib/bank-transfer-instructions'
 
 export type OrderEmailKind = 'buyer-paid' | 'buyer-pending' | 'buyer-shipped' | 'buyer-delivered' | 'owner'
 
@@ -57,6 +58,8 @@ export type OrderEmailData = {
   /** Owner: link to the order list in the dashboard. */
   dashboardUrl?: string
   bank?: BankTransferInfo
+  /** Pending buyer mail for a bank-transfer order; with no `bank` the mail tells the buyer to contact the store. */
+  bankTransfer?: boolean
   /** Owner mail: the order is placed but not yet paid (bank transfer / COD). */
   paymentPending?: boolean
   /** Pending buyer mail: payment is made on delivery, no bank details apply. */
@@ -95,6 +98,7 @@ type Copy = {
   bank: { bank: string; holder: string; iban: string; note: string; ref: string; due: string }
   ctaBank: string
   bankHint: (no: string) => string
+  bankMissing: string
   shippedRows: { carrier: string; code: string }
   trackCta: string
   footer: (store: string) => string
@@ -111,6 +115,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     rows: { order: 'Sipariş no', payment: 'Ödeme', subtotal: 'Ara toplam', shipping: 'Kargo', codFee: 'Kapıda ödeme ücreti', total: 'Toplam', vat: 'KDV', customer: 'Müşteri', email: 'E-posta', phone: 'Telefon', address: 'Teslimat adresi' },
     items: 'Ürünler',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '', ref: '', due: '' }, ctaBank: '', bankHint: () => '',
+    bankMissing: BANK_DETAILS_MISSING_COPY.tr.body,
     shippedRows: { carrier: 'Kargo firması', code: 'Takip numarası' },
     trackCta: 'Kargoyu takip et',
     footer: (s) => `Bu e-posta, ${s} mağazasında sipariş verdiğiniz için gönderildi.`,
@@ -125,6 +130,7 @@ const BUYER_PAID: Record<EmailLang, Copy> = {
     rows: { order: 'Order no', payment: 'Payment', subtotal: 'Subtotal', shipping: 'Shipping', codFee: 'Cash on delivery fee', total: 'Total', vat: 'VAT', customer: 'Customer', email: 'Email', phone: 'Phone', address: 'Shipping address' },
     items: 'Items',
     bankTitle: '', bank: { bank: '', holder: '', iban: '', note: '', ref: '', due: '' }, ctaBank: '', bankHint: () => '',
+    bankMissing: BANK_DETAILS_MISSING_COPY.en.body,
     shippedRows: { carrier: 'Carrier', code: 'Tracking number' },
     trackCta: 'Track shipment',
     footer: (s) => `This email was sent because you placed an order at ${s}.`,
@@ -306,6 +312,8 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     if (data.bank.instructions) bankRows.push([c.bank.note, data.bank.instructions])
   }
 
+  const bankMissing = data.kind === 'buyer-pending' && data.bankTransfer === true && bankRows.length === 0
+
   const shippedRows: Array<[string, string]> = []
   if (data.kind === 'buyer-shipped' || data.kind === 'buyer-delivered') {
     if (data.carrierName) shippedRows.push([c.shippedRows.carrier, data.carrierName])
@@ -321,6 +329,9 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     (bankRows.length > 0
       ? renderSection(c.bankTitle, renderTable(bankRows)) +
         `<p style="margin:0;font-size:14px;">${escape(c.bankHint(data.orderNumber))}</p>`
+      : '') +
+    (bankMissing
+      ? renderSection(c.bankTitle, `<p style="margin:0;font-size:14px;">${escape(c.bankMissing)}</p>`)
       : '')
 
   const trackingHref = data.kind === 'buyer-shipped' ? data.trackingUrl : null
@@ -343,6 +354,7 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
     '',
     ...[...shippedRows, ...summaryRows, ...customerRows, ...bankRows].map(([k, v]) => `${k}: ${v}`),
     ...(bankRows.length > 0 ? ['', c.bankHint(data.orderNumber)] : []),
+    ...(bankMissing ? ['', c.bankMissing] : []),
     ...(href ? ['', `${ctaLabel}: ${href}`] : []),
   ]
   const text = renderEmailPlainText(c.title, lines.join('\n'), c.footer(data.storeName))

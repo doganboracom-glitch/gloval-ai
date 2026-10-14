@@ -233,6 +233,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
           buyerKind === 'buyer-pending' && order.payment_provider === 'bank_transfer'
             ? toEmailBank(readBankTransferConfig(pay?.public_config), order, lang === 'en' ? 'en' : 'tr')
             : undefined,
+        bankTransfer: order.payment_provider === 'bank_transfer',
         cashOnDelivery: order.payment_provider === 'cash_on_delivery',
       })
       await sendOnce({

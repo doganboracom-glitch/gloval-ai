@@ -35,7 +35,8 @@ import {
 } from '@/lib/store-customer'
 import { InvoiceFields, LabeledInput } from '@/components/store/checkout-extras'
 import { customerOrderStatus } from '@/lib/customer-order-status'
-import { BankTransferInstructions } from '@/components/store/bank-transfer-instructions'
+import { BankTransferInstructions, BankTransferMissing } from '@/components/store/bank-transfer-instructions'
+import { orderPaymentMethodLabel } from '@/lib/customer-order-detail'
 import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
 import { confirmPhraseMatches, hasBlockingOrders } from '@/lib/store-customer-privacy'
 
@@ -352,7 +353,62 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
           className="bg-background/40"
         />
       )}
+      {order.bank_missing && (
+        <BankTransferMissing headingId={`bank-missing-${order.id}`} className="bg-background/40" />
+      )}
+
+      <OrderDetails order={order} />
     </li>
+  )
+}
+
+function OrderDetails({ order }: { order: CustomerOrder }) {
+  const method = orderPaymentMethodLabel(order.payment_provider)
+  return (
+    <details className="group border-t border-border/60 pt-3 text-sm">
+      <summary className="cursor-pointer select-none text-brand underline-offset-2 hover:underline">
+        Ürünleri ve ödeme bilgisini göster
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">
+        {order.items.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {order.items.map((item, i) => (
+              <li key={`${item.name}-${i}`} className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  {item.name}
+                  <span className="text-muted-foreground"> × {item.quantity}</span>
+                </span>
+                <span className="shrink-0 font-medium">
+                  {formatPrice(item.line_total_cents, order.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <dl className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+          <DetailRow label="Ara toplam" value={formatPrice(order.subtotal_cents, order.currency)} />
+          <DetailRow
+            label="Kargo"
+            value={order.shipping_cents > 0 ? formatPrice(order.shipping_cents, order.currency) : 'Ücretsiz'}
+          />
+          {order.cod_fee_cents > 0 && (
+            <DetailRow label="Kapıda ödeme ücreti" value={formatPrice(order.cod_fee_cents, order.currency)} />
+          )}
+          <DetailRow label="Toplam" value={formatPrice(order.total_cents, order.currency)} strong />
+          {method && <DetailRow label="Ödeme yöntemi" value={method} />}
+          {order.shipping_address && <DetailRow label="Teslimat adresi" value={order.shipping_address} />}
+        </dl>
+      </div>
+    </details>
+  )
+}
+
+function DetailRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={`text-right ${strong ? 'font-display font-bold' : 'font-medium'}`}>{value}</dd>
+    </div>
   )
 }
 

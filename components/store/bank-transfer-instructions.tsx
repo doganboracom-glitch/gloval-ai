@@ -1,5 +1,9 @@
 import { formatIban } from '@/lib/iban'
-import { formatBankDueDate, type BankTransferInstructionsData } from '@/lib/bank-transfer-instructions'
+import {
+  BANK_DETAILS_MISSING_COPY,
+  formatBankDueDate,
+  type BankTransferInstructionsData,
+} from '@/lib/bank-transfer-instructions'
 
 const COPY = {
   tr: {
@@ -56,6 +60,29 @@ export function BankTransferInstructions({
         <Row label={t.due} value={due} />
         {data.instructions && <Row label={t.note} value={data.instructions} />}
       </dl>
+    </section>
+  )
+}
+
+export function BankTransferMissing({
+  language = 'tr',
+  headingId = 'bank-missing-heading',
+  className = '',
+}: {
+  language?: 'tr' | 'en'
+  headingId?: string
+  className?: string
+}) {
+  const t = BANK_DETAILS_MISSING_COPY[language]
+  return (
+    <section
+      aria-labelledby={headingId}
+      className={`rounded-2xl border border-border bg-card p-5 ${className}`}
+    >
+      <h2 id={headingId} className="font-display text-lg font-bold">
+        {t.title}
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t.body}</p>
     </section>
   )
 }

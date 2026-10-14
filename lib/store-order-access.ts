@@ -7,7 +7,11 @@ import { verifyOrderToken } from '@/lib/store-order-token'
 import { buildOrderPath, issueOrderAccessToken, tokenSecret } from '@/lib/store-order-link'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
 import { isManualStoreProvider } from '@/lib/store-payment-policy'
-import { buildBankTransferInstructions, type BankTransferInstructionsData } from '@/lib/bank-transfer-instructions'
+import {
+  buildBankTransferInstructions,
+  isAwaitingBankTransfer,
+  type BankTransferInstructionsData,
+} from '@/lib/bank-transfer-instructions'
 import { loadBankTransferConfig } from '@/lib/bank-transfer-instructions-server'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { readOrderItems } from '@/lib/store-order-items'
@@ -54,6 +58,8 @@ export type OrderConfirmation = {
   has_contact_section: boolean
   /** Non-secret bank details, only for a bank-transfer order still awaiting payment. */
   bank: BankTransferInstructionsData | null
+  /** Bank-transfer order still awaiting payment but the store has no IBAN on file. */
+  bank_missing: boolean
   items: {
     name: string
     unit_price_cents: number
@@ -141,17 +147,19 @@ export async function getOrderConfirmation(
   })
 
   const provider = (order.payment_provider as string | null) ?? null
-  const bank =
-    provider === 'bank_transfer' && isManualStoreProvider(provider)
-      ? buildBankTransferInstructions(await loadBankTransferConfig(admin, project.id), {
-          id: order.id,
-          created_at: order.created_at,
-          status: order.status,
-          payment_status: order.payment_status,
-          payment_provider: provider,
-          shipping_status: (order.shipping_status as string | null) ?? null,
-        })
-      : null
+  const bankInput = {
+    id: order.id,
+    created_at: order.created_at,
+    status: order.status,
+    payment_status: order.payment_status,
+    payment_provider: provider,
+    shipping_status: (order.shipping_status as string | null) ?? null,
+  }
+  const bankApplies = provider === 'bank_transfer' && isManualStoreProvider(provider)
+  const bank = bankApplies
+    ? buildBankTransferInstructions(await loadBankTransferConfig(admin, project.id), bankInput)
+    : null
+  const bankMissing = bankApplies && !bank && isAwaitingBankTransfer(bankInput)
 
   const schema = (project.schema_data ?? {}) as { meta?: { language?: 'tr' | 'en' }; sections?: Array<{ type?: string; email?: string; hidden?: boolean }> }
   const contact = schema.sections?.find((section) => section.type === 'contact' && section.hidden !== true)
@@ -175,6 +183,7 @@ export async function getOrderConfirmation(
     contact_email: contact?.email ?? null,
     has_contact_section: !!contact,
     bank,
+    bank_missing: bankMissing,
     payment_status: order.payment_status,
     first_name: firstNameOf(order.customer_name),
     masked_email: maskEmail(order.customer_email),

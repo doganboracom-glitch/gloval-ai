@@ -7,7 +7,7 @@ import { shippingRowValue } from '@/lib/store-shipping-display'
 import { orderStatusCopy, safeStoreContactHref } from '@/lib/store-order-status'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { Button } from '@/components/ui/button'
-import { BankTransferInstructions } from '@/components/store/bank-transfer-instructions'
+import { BankTransferInstructions, BankTransferMissing } from '@/components/store/bank-transfer-instructions'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +73,7 @@ export default async function OrderConfirmationPage({
         </div>
 
         {order.bank && <BankTransferInstructions data={order.bank} language={order.language} className="mt-8 p-6" />}
+      {order.bank_missing && <BankTransferMissing language={order.language} className="mt-8 p-6" />}
 
         <div className="mt-8 rounded-2xl border border-border bg-card p-6">
           <h2 className="font-display text-lg font-bold">Sipariş detayı</h2>

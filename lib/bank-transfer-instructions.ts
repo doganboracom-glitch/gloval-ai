@@ -31,6 +31,29 @@ export type BankTransferOrderInput = {
   shipping_status?: string | null
 }
 
+/** Shown when the store has no IBAN on file, so the buyer is never left with an empty payment block. */
+export const BANK_DETAILS_MISSING_COPY = {
+  tr: {
+    title: 'Havale / EFT bilgileri',
+    body: 'Mağaza henüz havale bilgilerini paylaşmadı. Ödeme için lütfen mağaza sahibiyle iletişime geçin.',
+  },
+  en: {
+    title: 'Bank transfer details',
+    body: 'The store has not shared its bank transfer details yet. Please contact the store owner to pay.',
+  },
+} as const
+
+/** True while this is a bank-transfer order that still awaits payment. */
+export function isAwaitingBankTransfer(order: BankTransferOrderInput): boolean {
+  if (order.payment_provider !== 'bank_transfer') return false
+  return isAwaitingCustomerPayment({
+    status: order.status,
+    paymentStatus: order.payment_status,
+    paymentProvider: order.payment_provider,
+    shippingStatus: order.shipping_status,
+  })
+}
+
 export function orderReference(orderId: string): string {
   return orderId.slice(0, 8).toUpperCase()
 }
