@@ -32,6 +32,7 @@ type ProductSeed = {
   currency: string
   images: string[]
   categorySlug: string | null
+  sample: boolean
 }
 
 type CategorySeed = { name: string; slug: string }
@@ -56,7 +57,7 @@ export function buildSyncedProductInsert(
     currency: p.currency,
     stock: 0,
     track_stock: false,
-    status: 'active',
+    status: p.sample ? 'draft' : 'active',
     images: p.images,
     sort_order: ctx.sortOrder,
   }
@@ -94,6 +95,7 @@ function collectSeeds(schema: WebsiteSchema): {
           currency: inferCurrency(item.price),
           images: item.src ? [item.src] : [],
           categorySlug: item.category ? slugify(item.category) : null,
+          sample: Boolean(item.sample || item.oldPrice || item.badge),
         })
       }
     }

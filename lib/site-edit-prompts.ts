@@ -20,6 +20,7 @@ export function sectionSystemPrompt(normalizedLang: 'tr' | 'en', language: strin
     `If the user asks for a different image, only rewrite its "imagePrompt" and leave "src" as-is. ` +
     `Write any new human-readable text in ${language} (site language is "${normalizedLang}"). ` +
     `To hide this section rather than delete it, set its "hidden" field to true (and false to show it again). ` +
+    `Never invent proof or commercial claims: no fake customer reviews, names or roles, customer counts, satisfaction or success percentages, years of experience, awards, certifications, press mentions, comparative old prices, discount percentages, stock scarcity, or urgency claims. If the user did not provide the fact, leave it empty or omit the section/item; mark illustrative values only as sample. ` +
     `Use valid hex colors, real Google Font names, and lowercase lucide-react icon names. ` +
     `Do NOT output HTML, React, CSS or code of any kind — only the structured section JSON.`
   )
@@ -64,6 +65,7 @@ export function siteSystemPrompt(normalizedLang: 'tr' | 'en', language: string):
     `The header menu is built from "pages" (titles) when there is more than one page, otherwise from ` +
     `"navigation.links". To remove ONE menu item, delete only that entry from "pages" (never the home page) ` +
     `and/or from "navigation.links" (keep at least one link) and DO NOT delete or hide any section. ` +
+    `Never invent proof or commercial claims: no fake customer reviews, names or roles, customer counts, satisfaction or success percentages, years of experience, awards, certifications, press mentions, comparative old prices, discount percentages, stock scarcity, or urgency claims. If the user did not provide the fact, leave it empty or omit the section/item; mark illustrative values only as sample. ` +
     `Use valid hex colors, real Google Font names, and lowercase lucide-react icon names. ` +
     `Do NOT output HTML, React, CSS or code of any kind — only the structured website JSON.`
   )

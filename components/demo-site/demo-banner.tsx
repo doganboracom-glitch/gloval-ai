@@ -21,6 +21,7 @@ export function DemoBanner({ backLabel, badge }: { backLabel: string; badge: str
         <ArrowLeft className="h-4 w-4" />
         {backLabel}
       </Link>
+      <span className="sr-only">Örnek içerik: gerçek müşteri yorumu veya veri değildir.</span>
       <span className="inline-flex min-w-0 items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden />
         <span className="truncate">{badge}</span>
