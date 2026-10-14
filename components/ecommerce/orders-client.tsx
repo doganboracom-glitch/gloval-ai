@@ -14,6 +14,7 @@ import {
 } from '@/lib/ecommerce'
 import { useLanguage } from '@/components/language-provider'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
+import { paymentStatusLabel } from '@/lib/payment-status-label'
 import { OrderShippingControls } from '@/components/ecommerce/order-shipping-controls'
 
 const ORDER_STATUSES: OrderStatus[] = [
@@ -240,7 +241,7 @@ export function OrdersClient({
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {t.ecom.orderDate}: {dateFmt.format(new Date(o.created_at))} ·{' '}
-                      {t.ecom.payment}: {providerLabel(o.payment_provider)} ({o.payment_status})
+                      {t.ecom.payment}: {providerLabel(o.payment_provider)} ({paymentStatusLabel(o.payment_status, lang === 'tr' ? 'tr' : 'en')})
                     </p>
                     {o.attention_at && o.status === 'pending' && o.payment_status === 'pending' && (
                       <p

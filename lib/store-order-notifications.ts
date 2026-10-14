@@ -10,7 +10,14 @@ import {
 import { resolveEmailLang } from '@/lib/email/lang'
 import { sanitizeReplyTo } from '@/lib/email/from'
 import { buyerMethodName } from '@/lib/payments/methods'
-import { isDemoStore, isManualStoreProvider } from '@/lib/store-payment-policy'
+import {
+  isDemoStore,
+  isManualStoreProvider,
+  readBankTransferConfig,
+  type BankTransferConfig,
+} from '@/lib/store-payment-policy'
+import { buildBankTransferInstructions, formatBankDueDate } from '@/lib/bank-transfer-instructions'
+import { formatIban } from '@/lib/iban'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { orderNotificationDedupeKey } from '@/lib/store-shipping-core'
 import { readOrderItems } from '@/lib/store-order-items'
@@ -41,6 +48,8 @@ type OrderRow = {
   currency: string
   payment_provider: string
   payment_status: string
+  status: string
+  created_at: string
 }
 
 /** Which buyer email an order is entitled to right now, if any. */
@@ -86,16 +95,21 @@ export function findContactEmail(schema: unknown): string | undefined {
   return undefined
 }
 
-function readBank(config: unknown): BankTransferInfo | undefined {
-  if (!config || typeof config !== 'object') return undefined
-  const c = config as Record<string, unknown>
-  const bank: BankTransferInfo = {
-    bankName: str(c.bank_name) || undefined,
-    accountHolder: str(c.account_holder) || undefined,
-    iban: str(c.iban) || undefined,
-    instructions: str(c.instructions) || undefined,
+function toEmailBank(
+  config: BankTransferConfig | null,
+  order: OrderRow,
+  lang: 'tr' | 'en',
+): BankTransferInfo | undefined {
+  const data = buildBankTransferInstructions(config, order)
+  if (!data) return undefined
+  return {
+    bankName: data.bankName || undefined,
+    accountHolder: data.accountHolder || undefined,
+    iban: formatIban(data.iban),
+    instructions: data.instructions || undefined,
+    reference: `#${data.reference}`,
+    dueDate: formatBankDueDate(data.dueAt, lang),
   }
-  return Object.values(bank).some(Boolean) ? bank : undefined
 }
 
 export async function sendOnce(input: {
@@ -144,7 +158,7 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
   const { data: order, error: orderError } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, project_id, customer_name, customer_email, customer_phone, shipping_address, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status',
+      'id, project_id, customer_name, customer_email, customer_phone, shipping_address, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status, status, created_at',
     )
     .eq('id', orderId)
     .maybeSingle<OrderRow>()
@@ -217,8 +231,9 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
         orderUrl,
         bank:
           buyerKind === 'buyer-pending' && order.payment_provider === 'bank_transfer'
-            ? readBank(pay?.public_config)
+            ? toEmailBank(readBankTransferConfig(pay?.public_config), order, lang === 'en' ? 'en' : 'tr')
             : undefined,
+        bankTransfer: order.payment_provider === 'bank_transfer',
         cashOnDelivery: order.payment_provider === 'cash_on_delivery',
       })
       await sendOnce({

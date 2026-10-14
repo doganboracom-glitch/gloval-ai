@@ -16,6 +16,7 @@ import {
   FileText,
   KeyRound,
   Trash2,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { markStoreSessionLoggedIn, markStoreSessionLoggedOut } from '@/lib/store-session-client'
@@ -30,34 +31,47 @@ import {
   deleteOwnStoreAccount,
   type StoreCustomer,
   type CustomerOrder,
-  type ShippingStatus,
   type InvoiceInfo,
 } from '@/lib/store-customer'
 import { InvoiceFields, LabeledInput } from '@/components/store/checkout-extras'
+import { customerOrderStatus } from '@/lib/customer-order-status'
+import { BankTransferInstructions, BankTransferMissing } from '@/components/store/bank-transfer-instructions'
+import { orderPaymentMethodLabel } from '@/lib/customer-order-detail'
 import { ACCOUNT_DELETION_COPY } from '@/lib/store-account-copy'
 import { confirmPhraseMatches, hasBlockingOrders } from '@/lib/store-customer-privacy'
 
 const inputClass =
   'h-11 w-full rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30'
 
-const orderStatusLabels: Record<string, string> = {
-  pending: 'Beklemede',
-  paid: 'Ödendi',
-  processing: 'Hazırlanıyor',
-  shipped: 'Kargoda',
-  delivered: 'Teslim edildi',
-  cancelled: 'İptal edildi',
-}
+const STATUS_ICON = {
+  awaiting_payment: Clock,
+  received: Package,
+  preparing: Clock,
+  processing: Clock,
+  shipped: Truck,
+  delivered: CheckCircle2,
+  cancelled: XCircle,
+  refunded: XCircle,
+  failed: XCircle,
+} as const
 
-const shipping: Record<
-  ShippingStatus,
-  { label: string; icon: typeof Truck; tone: string }
-> = {
-  preparing: { label: 'Hazırlanıyor', icon: Clock, tone: 'text-amber-500 bg-amber-500/10' },
-  shipped: { label: 'Kargoya verildi', icon: Package, tone: 'text-blue-500 bg-blue-500/10' },
-  in_transit: { label: 'Kargoda', icon: Truck, tone: 'text-blue-500 bg-blue-500/10' },
-  delivered: { label: 'Teslim edildi', icon: CheckCircle2, tone: 'text-green-500 bg-green-500/10' },
-  cancelled: { label: 'İptal edildi', icon: Clock, tone: 'text-muted-foreground bg-muted' },
+const STATUS_TONE = {
+  success: 'text-green-500 bg-green-500/10',
+  pending: 'text-amber-500 bg-amber-500/10',
+  info: 'text-blue-500 bg-blue-500/10',
+  danger: 'text-red-500 bg-red-500/10',
+  muted: 'text-muted-foreground bg-muted',
+} as const
+
+function statusOf(order: CustomerOrder) {
+  return customerOrderStatus({
+    status: order.status,
+    paymentStatus: order.payment_status,
+    paymentProvider: order.payment_provider,
+    shippingStatus: order.shipping_status,
+    carrier: order.tracking_carrier,
+    trackingNumber: order.tracking_number,
+  })
 }
 
 function formatPrice(cents: number, currency: string) {
@@ -234,9 +248,7 @@ function OrdersTab({ slug, orders }: { slug: string; orders: CustomerOrder[] }) 
     )
   }
 
-  const active = orders.filter(
-    (o) => o.shipping_status === 'shipped' || o.shipping_status === 'in_transit',
-  )
+  const active = orders.filter((o) => statusOf(o).key === 'shipped')
 
   return (
     <div className="flex flex-col gap-6">
@@ -267,8 +279,9 @@ function OrdersTab({ slug, orders }: { slug: string; orders: CustomerOrder[] }) 
 }
 
 function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boolean }) {
-  const s = shipping[order.shipping_status]
-  const Icon = s.icon
+  const s = statusOf(order)
+  const Icon = STATUS_ICON[s.key]
+  const showTracking = s.key === 'shipped' || s.key === 'delivered'
   return (
     <li
       className={`flex flex-col gap-3 rounded-xl border bg-card px-4 py-3 ${
@@ -279,7 +292,7 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
         <div className="min-w-0">
           <p className="font-medium">{formatDate(order.created_at)}</p>
           <p className="text-sm text-muted-foreground">
-            {order.item_count} ürün · {orderStatusLabels[order.status] ?? order.status}
+            {order.item_count} ürün
           </p>
         </div>
         <span className="shrink-0 font-display font-bold">
@@ -296,12 +309,12 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.tone}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_TONE[s.tone]}`}
         >
           <Icon className="size-3.5" />
           {s.label}
         </span>
-        {order.tracking_number && (
+        {showTracking && order.tracking_number && (
           <span className="text-xs text-muted-foreground">
             {order.tracking_carrier ? `${carrierName(order.tracking_carrier)} · ` : ''}
             Takip: <span className="font-mono text-foreground">{order.tracking_number}</span>
@@ -320,13 +333,82 @@ function OrderCard({ order, highlight }: { order: CustomerOrder; highlight?: boo
             )}
           </span>
         )}
-        {order.shipping_status === 'delivered' && order.delivered_at && (
+        {s.key === 'delivered' && order.delivered_at && (
           <span className="text-xs text-muted-foreground">
             {formatDate(order.delivered_at)} tarihinde teslim edildi
           </span>
         )}
+        <Link
+          href={order.order_path}
+          className="ml-auto text-xs text-brand underline-offset-2 hover:underline"
+        >
+          Sipariş detayı
+        </Link>
       </div>
+
+      {order.bank && (
+        <BankTransferInstructions
+          data={order.bank}
+          headingId={`bank-${order.id}`}
+          className="bg-background/40"
+        />
+      )}
+      {order.bank_missing && (
+        <BankTransferMissing headingId={`bank-missing-${order.id}`} className="bg-background/40" />
+      )}
+
+      <OrderDetails order={order} />
     </li>
+  )
+}
+
+function OrderDetails({ order }: { order: CustomerOrder }) {
+  const method = orderPaymentMethodLabel(order.payment_provider)
+  return (
+    <details className="group border-t border-border/60 pt-3 text-sm">
+      <summary className="cursor-pointer select-none text-brand underline-offset-2 hover:underline">
+        Ürünleri ve ödeme bilgisini göster
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">
+        {order.items.length > 0 && (
+          <ul className="flex flex-col gap-1.5">
+            {order.items.map((item, i) => (
+              <li key={`${item.name}-${i}`} className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  {item.name}
+                  <span className="text-muted-foreground"> × {item.quantity}</span>
+                </span>
+                <span className="shrink-0 font-medium">
+                  {formatPrice(item.line_total_cents, order.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <dl className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+          <DetailRow label="Ara toplam" value={formatPrice(order.subtotal_cents, order.currency)} />
+          <DetailRow
+            label="Kargo"
+            value={order.shipping_cents > 0 ? formatPrice(order.shipping_cents, order.currency) : 'Ücretsiz'}
+          />
+          {order.cod_fee_cents > 0 && (
+            <DetailRow label="Kapıda ödeme ücreti" value={formatPrice(order.cod_fee_cents, order.currency)} />
+          )}
+          <DetailRow label="Toplam" value={formatPrice(order.total_cents, order.currency)} strong />
+          {method && <DetailRow label="Ödeme yöntemi" value={method} />}
+          {order.shipping_address && <DetailRow label="Teslimat adresi" value={order.shipping_address} />}
+        </dl>
+      </div>
+    </details>
+  )
+}
+
+function DetailRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={`text-right ${strong ? 'font-display font-bold' : 'font-medium'}`}>{value}</dd>
+    </div>
   )
 }
 

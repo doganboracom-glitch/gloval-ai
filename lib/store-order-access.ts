@@ -3,9 +3,16 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { platformUrl } from '@/lib/domains'
 import { getCurrentCustomerIdForProject } from '@/lib/store-customer'
-import { signOrderToken, verifyOrderToken } from '@/lib/store-order-token'
+import { verifyOrderToken } from '@/lib/store-order-token'
+import { buildOrderPath, issueOrderAccessToken, tokenSecret } from '@/lib/store-order-link'
 import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privacy'
-import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payment-policy'
+import { isManualStoreProvider } from '@/lib/store-payment-policy'
+import {
+  buildBankTransferInstructions,
+  isAwaitingBankTransfer,
+  type BankTransferInstructionsData,
+} from '@/lib/bank-transfer-instructions'
+import { loadBankTransferConfig } from '@/lib/bank-transfer-instructions-server'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { readOrderItems } from '@/lib/store-order-items'
 import { carrierName } from '@/lib/shipping-carriers'
@@ -18,26 +25,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const ORDER_CONFIRMATION_COLUMNS =
   'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider, shipping_status, tracking_carrier, tracking_number'
 
-export function tokenSecret(): string {
-  return (
-    process.env.STORE_ORDER_TOKEN_SECRET ||
-    process.env.SUPABASE_JWT_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    ''
-  )
-}
-
-/** Signed 30-day token for one order, or '' when no secret is configured. */
-export function issueOrderAccessToken(orderId: string): string {
-  const secret = tokenSecret()
-  return secret ? signOrderToken(orderId, secret) : ''
-}
-
-/** Path (no origin) of the order page, carrying the access token as `?t=`. */
-export function buildOrderPath(storeSlug: string, orderId: string, token: string): string {
-  const base = `/site/${storeSlug}/order/${orderId}`
-  return token ? `${base}?t=${encodeURIComponent(token)}` : base
-}
+export { tokenSecret, issueOrderAccessToken, buildOrderPath }
 
 /** Canonical absolute order URL. The platform route works on every host and preserves the signed token. */
 export function orderStatusUrl(storeSlug: string, orderId: string, token = issueOrderAccessToken(orderId)): string {
@@ -69,14 +57,9 @@ export type OrderConfirmation = {
   contact_email: string | null
   has_contact_section: boolean
   /** Non-secret bank details, only for a bank-transfer order still awaiting payment. */
-  bank: {
-    bankName: string
-    accountHolder: string
-    iban: string
-    instructions: string
-    /** ISO time after which the unpaid order is cancelled automatically. */
-    dueAt: string
-  } | null
+  bank: BankTransferInstructionsData | null
+  /** Bank-transfer order still awaiting payment but the store has no IBAN on file. */
+  bank_missing: boolean
   items: {
     name: string
     unit_price_cents: number
@@ -163,32 +146,20 @@ export async function getOrderConfirmation(
     payment_status: order.payment_status,
   })
 
-  let bank: OrderConfirmation['bank'] = null
   const provider = (order.payment_provider as string | null) ?? null
-  if (
-    provider === 'bank_transfer' &&
-    isManualStoreProvider(provider) &&
-    order.payment_status === 'pending' &&
-    order.status === 'pending'
-  ) {
-    const { data: settings } = await admin
-      .from('ecommerce_payment_settings')
-      .select('public_config')
-      .eq('project_id', project.id)
-      .maybeSingle()
-    const cfg = readBankTransferConfig(settings?.public_config)
-    if (cfg.iban) {
-      bank = {
-        bankName: cfg.bankName,
-        accountHolder: cfg.accountHolder,
-        iban: cfg.iban,
-        instructions: cfg.instructions,
-        dueAt: new Date(
-          new Date(order.created_at).getTime() + cfg.termDays * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-      }
-    }
+  const bankInput = {
+    id: order.id,
+    created_at: order.created_at,
+    status: order.status,
+    payment_status: order.payment_status,
+    payment_provider: provider,
+    shipping_status: (order.shipping_status as string | null) ?? null,
   }
+  const bankApplies = provider === 'bank_transfer' && isManualStoreProvider(provider)
+  const bank = bankApplies
+    ? buildBankTransferInstructions(await loadBankTransferConfig(admin, project.id), bankInput)
+    : null
+  const bankMissing = bankApplies && !bank && isAwaitingBankTransfer(bankInput)
 
   const schema = (project.schema_data ?? {}) as { meta?: { language?: 'tr' | 'en' }; sections?: Array<{ type?: string; email?: string; hidden?: boolean }> }
   const contact = schema.sections?.find((section) => section.type === 'contact' && section.hidden !== true)
@@ -212,6 +183,7 @@ export async function getOrderConfirmation(
     contact_email: contact?.email ?? null,
     has_contact_section: !!contact,
     bank,
+    bank_missing: bankMissing,
     payment_status: order.payment_status,
     first_name: firstNameOf(order.customer_name),
     masked_email: maskEmail(order.customer_email),

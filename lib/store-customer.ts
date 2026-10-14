@@ -18,6 +18,18 @@ import {
 import { anyRateLimited, type RateLimitRule } from '@/lib/store-auth-rate-limit'
 import { sanitizeInvoice } from '@/lib/store-invoice'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
+import {
+  buildBankTransferInstructions,
+  isAwaitingBankTransfer,
+  type BankTransferInstructionsData,
+} from '@/lib/bank-transfer-instructions'
+import {
+  formatOrderAddress,
+  toCustomerOrderItems,
+  type CustomerOrderItem,
+} from '@/lib/customer-order-detail'
+import { loadBankTransferConfig } from '@/lib/bank-transfer-instructions-server'
+import { buildOrderPath, issueOrderAccessToken } from '@/lib/store-order-link'
 import { ACCOUNT_DELETION_COPY, ACCOUNT_SUSPENSION_MESSAGES } from '@/lib/store-account-copy'
 import { confirmPhraseMatches, isPendingDeletion } from '@/lib/store-customer-privacy'
 import { anonymizeStoreCustomer, sendAccountDeletedEmail } from '@/lib/store-customer-deletion'
@@ -583,11 +595,24 @@ export type CustomerOrder = {
   cod_fee_cents: number
   currency: string
   item_count: number
+  items: CustomerOrderItem[]
+  subtotal_cents: number
+  shipping_cents: number
+  /** Delivery address as one line; empty when none is stored. */
+  shipping_address: string
+  /** Bank-transfer order awaiting payment but the store has no IBAN on file. */
+  bank_missing: boolean
   shipping_status: ShippingStatus
   tracking_carrier: string | null
   tracking_number: string | null
   shipped_at: string | null
   delivered_at: string | null
+  payment_status: string
+  payment_provider: string | null
+  /** Bank-transfer details, only while this order is a bank-transfer order awaiting payment. */
+  bank: BankTransferInstructionsData | null
+  /** Path of the order page with its access token, so the account can link to the full detail. */
+  order_path: string
 }
 
 const SHIPPING_STATUSES: ShippingStatus[] = [
@@ -621,7 +646,7 @@ export async function getStoreCustomerOrders(
   const { data, error: ordersError } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, created_at, status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, ecommerce_order_items(count)',
+      'id, created_at, status, payment_status, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, shipping_status, tracking_carrier, tracking_number, shipped_at, delivered_at, shipping_address, ecommerce_order_items(name, quantity, unit_price_cents, line_total_cents)',
     )
     .eq('project_id', project.id)
     .eq('customer_id', customer.id)
@@ -633,9 +658,22 @@ export async function getStoreCustomerOrders(
     return null
   }
   if (!data) return []
+
+  const hasBankOrder = data.some((o) => o.payment_provider === 'bank_transfer')
+  const bankConfig = hasBankOrder ? await loadBankTransferConfig(admin, project.id) : null
+  const slug = asString(storeSlug)
+
   return data.map((o) => {
-    const rel = (o as { ecommerce_order_items?: { count: number }[] })
-      .ecommerce_order_items
+    const items = toCustomerOrderItems((o as { ecommerce_order_items?: unknown }).ecommerce_order_items)
+    const bankInput = {
+      id: o.id,
+      created_at: o.created_at,
+      status: o.status,
+      payment_status: o.payment_status,
+      payment_provider: o.payment_provider,
+      shipping_status: o.shipping_status,
+    }
+    const bank = buildBankTransferInstructions(bankConfig, bankInput)
     return {
       id: o.id,
       created_at: o.created_at,
@@ -648,12 +686,21 @@ export async function getStoreCustomerOrders(
         total_cents: o.total_cents ?? 0,
       }),
       currency: o.currency ?? 'TRY',
-      item_count: Array.isArray(rel) && rel[0] ? rel[0].count : 0,
+      item_count: items.reduce((n, i) => n + i.quantity, 0),
+      items,
+      subtotal_cents: o.subtotal_cents ?? 0,
+      shipping_cents: o.shipping_cents ?? 0,
+      shipping_address: formatOrderAddress(o.shipping_address),
+      bank_missing: !bank && isAwaitingBankTransfer(bankInput),
       shipping_status: toShippingStatus(o.shipping_status),
       tracking_carrier: o.tracking_carrier ?? null,
       tracking_number: o.tracking_number ?? null,
       shipped_at: o.shipped_at ?? null,
       delivered_at: o.delivered_at ?? null,
+      payment_status: o.payment_status ?? 'pending',
+      payment_provider: o.payment_provider ?? null,
+      bank,
+      order_path: buildOrderPath(slug, o.id, issueOrderAccessToken(o.id)),
     }
   })
 }
