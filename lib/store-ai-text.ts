@@ -1,6 +1,6 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import { resolveAiModel } from '@/lib/ai-models'
+import { generateStructured } from '@/lib/ai-structured'
 import { PRODUCT_IMAGE_LIMITS } from '@/lib/product-images'
 import { PRODUCT_LIMITS, type ProductSpec } from '@/lib/product-input'
 import { StoreAiInvalidResult, StoreAiRefusal } from '@/lib/store-ai-engine'
@@ -204,25 +204,20 @@ export type StoreAiGenerateArgs = {
   signal: AbortSignal
   /** Gateway model id picked by `resolveAiModel('productText', plan)`. */
   model?: string
+  /** Plan code of the caller, used only for the usage/repair log lines. */
+  plan?: string | null
 }
 export type StoreAiGenerateFn = (args: StoreAiGenerateArgs) => Promise<unknown>
 
-export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal, model }) => {
-  const { object } = await generateObject({
-    model: model ?? resolveAiModel('productText', null).model,
+export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal, model, plan }) => {
+  const resolved = resolveAiModel('productText', plan ?? null)
+  const { object } = await generateStructured({
+    ai: model ? { ...resolved, model } : resolved,
     schema: generatedSchema,
-    providerOptions: { openai: { strictJsonSchema: false } },
     system,
+    prompt,
+    imageUrls,
     abortSignal: signal,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          ...imageUrls.map((url) => ({ type: 'image' as const, image: new URL(url) })),
-        ],
-      },
-    ],
   })
   return object
 }
@@ -232,6 +227,7 @@ export async function generateStoreAiText(
   signal: AbortSignal,
   generate: StoreAiGenerateFn = generateWithGateway,
   model?: string,
+  plan?: string | null,
 ): Promise<StoreAiTextResult> {
   const imageUrls = input.imageUrls.slice(0, STORE_AI_MAX_IMAGES)
   const raw = await generate({
@@ -240,6 +236,7 @@ export async function generateStoreAiText(
     imageUrls,
     signal,
     model,
+    plan,
   })
   return normalizeGenerated(raw, input)
 }

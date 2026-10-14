@@ -107,6 +107,7 @@ export function logAiUsage(
   selection: AiModelSelection,
   outcome: 'ok' | 'error',
   usage?: UsageLike,
+  attempt: 'first' | 'retry' = 'first',
 ): void {
   console.info('[ai-usage]', {
     flow: selection.flow,
@@ -114,6 +115,7 @@ export function logAiUsage(
     model: selection.model,
     plan: selection.plan,
     outcome,
+    attempt,
     inputTokens: usage?.inputTokens ?? null,
     outputTokens: usage?.outputTokens ?? null,
   })

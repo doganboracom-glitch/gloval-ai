@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { logAiUsage, resolveAiModel } from '@/lib/ai-models'
+import { resolveAiModel } from '@/lib/ai-models'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { listCategories } from '@/lib/ecommerce'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
@@ -96,9 +96,8 @@ export async function POST(request: Request) {
   const result = await runMeteredStoreAi(
     port,
     { userId, projectId, productKey, kind: 'text', requestId, signal },
-    () => generateStoreAiText(input, signal, undefined, ai.model),
+    () => generateStoreAiText(input, signal, undefined, ai.model, ai.plan),
   )
-  logAiUsage(ai, result.ok ? 'ok' : 'error')
 
   // Ids, kind, outcome and cost only; prompts and generated text are never logged.
   console.info('[store-ai] text attempt', {

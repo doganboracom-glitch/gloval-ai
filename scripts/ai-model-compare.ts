@@ -11,11 +11,12 @@
  * text) against several gateway models and writes a side-by-side markdown
  * report. It never touches AI_TIER_MODELS.
  */
-import { generateObject } from 'ai'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { z } from 'zod'
-import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
+import { generateStructured } from '@/lib/ai-structured'
+import { generateSiteObject } from '@/lib/site-generate'
+import { pageLimitForPlan } from '@/lib/page-limits'
 import { sectionSystemPrompt, sectionUserPrompt } from '@/lib/site-edit-prompts'
 import {
   buildSystemPrompt,
@@ -24,14 +25,8 @@ import {
   normalizeGenerated,
   type StoreAiTextInput,
 } from '@/lib/store-ai-text'
-import {
-  fallbackWebsite,
-  sectionSchema,
-  websiteGenerationSchema,
-  type Section,
-  type WebsiteSchema,
-} from '@/lib/website-schema'
-import { AI_TIER_MODELS } from '@/lib/ai-models'
+import { fallbackWebsite, sectionSchema, type Section, type WebsiteSchema } from '@/lib/website-schema'
+import { AI_TIER_MODELS, resolveAiModel } from '@/lib/ai-models'
 
 if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
   console.error('Refusing to run: this tool is for development only.')
@@ -153,6 +148,8 @@ type Result = {
   outputTokens: number
   costUsd: number
   output?: unknown
+  /** How the shared production pipeline got (or failed to get) the answer. */
+  pipeline?: { outcome: 'first_try' | 'repaired' | 'retried' | 'failed'; attempts: number; repairs: string[] }
   /** Heuristic Turkish-quality signals. */
   englishLeaks: number
   turkishChars: number
@@ -195,35 +192,36 @@ async function runCell(
   const signal = AbortSignal.timeout(TIMEOUT_MS)
   const base = { brief: brief.id, op, model, run }
   let usage: Usage
+  let pipeline: Result['pipeline']
   try {
     let output: unknown
     const violations: string[] = []
 
     if (op === 'siteGenerate') {
-      const r = await generateObject({
-        model,
-        schema: websiteGenerationSchema,
-        providerOptions: { openai: { strictJsonSchema: false } },
-        system: buildSiteGenerateSystem(brief.prompt, 'tr', 6),
-        prompt: brief.prompt.slice(0, 800),
+      const r = await generateSiteObject({
+        ai: { ...resolveAiModel('siteGenerate', 'free'), model },
+        prompt: brief.prompt,
+        lang: 'tr',
+        pageLimit: pageLimitForPlan('free'),
         abortSignal: signal,
       })
       usage = r.usage
-      output = r.object
-      violations.push(...checkSite(r.object as WebsiteSchema, brief))
+      output = r.site
+      pipeline = { outcome: r.outcome, attempts: r.attempts, repairs: r.repairs.map((s) => s.code) }
+      violations.push(...checkSite(r.site, brief))
     } else if (op === 'sectionEdit') {
       const site = fallbackWebsite(brief.prompt, 'tr')
       const target = site.sections[0] as Section
-      const r = await generateObject({
-        model,
+      const r = await generateStructured({
+        ai: { ...resolveAiModel('sectionEdit', 'free'), model },
         schema: z.object({ section: sectionSchema }),
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: sectionSystemPrompt('tr', 'Turkish'),
         prompt: sectionUserPrompt(target, brief.editInstruction),
         abortSignal: signal,
       })
       usage = r.usage
       output = r.object.section
+      pipeline = { outcome: r.outcome, attempts: r.attempts, repairs: r.repairs.map((s) => s.code) }
       violations.push(...checkSectionEdit(target, r.object.section as Section, brief))
     } else {
       const input: StoreAiTextInput = {
@@ -237,15 +235,15 @@ async function runCell(
         imageUrls: [],
         lang: 'tr',
       }
-      const r = await generateObject({
-        model,
+      const r = await generateStructured({
+        ai: { ...resolveAiModel('productText', 'free'), model },
         schema: generatedSchema,
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: buildSystemPrompt('tr'),
         prompt: buildUserPrompt(input),
         abortSignal: signal,
       })
       usage = r.usage
+      pipeline = { outcome: r.outcome, attempts: r.attempts, repairs: r.repairs.map((s) => s.code) }
       const normalized = normalizeGenerated(r.object, input)
       output = { raw: r.object, normalized }
       violations.push(...checkProduct(r.object, normalized, brief))
@@ -263,19 +261,24 @@ async function runCell(
       outputTokens,
       costUsd: price ? inputTokens * price.input + outputTokens * price.output : 0,
       output,
+      pipeline,
       ...languageSignals(op === 'productText' ? (output as { normalized: unknown }).normalized : output),
     }
   } catch (err) {
-    const e = err as { message?: string; usage?: Usage }
+    const e = err as { message?: string; usage?: Usage; attempts?: number }
+    const inputTokens = e?.usage?.inputTokens ?? 0
+    const outputTokens = e?.usage?.outputTokens ?? 0
+    const price = prices[model]
     return {
       ...base,
       ok: false,
       error: (e?.message ?? String(err)).split('\n')[0].slice(0, 300),
       violations: [],
       ms: Date.now() - started,
-      inputTokens: e?.usage?.inputTokens ?? 0,
-      outputTokens: e?.usage?.outputTokens ?? 0,
-      costUsd: 0,
+      inputTokens,
+      outputTokens,
+      costUsd: price ? inputTokens * price.input + outputTokens * price.output : 0,
+      pipeline: { outcome: 'failed', attempts: e?.attempts ?? 1, repairs: [] },
       englishLeaks: 0,
       turkishChars: 0,
     }

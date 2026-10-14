@@ -1,6 +1,7 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
-import { websiteGenerationSchema, fallbackWebsite } from '@/lib/website-schema'
+import { fallbackWebsite } from '@/lib/website-schema'
+import { generateSiteObject } from '@/lib/site-generate'
+import { generateStructured } from '@/lib/ai-structured'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns } from '@/lib/footer-links'
 import { ensureContactSection } from '@/lib/contact-section'
@@ -157,31 +158,16 @@ async function runGenerate(
   if (mode === 'website') {
     const ai = resolveAiModel('siteGenerate', planCode)
     try {
-      const { object: generated, usage } = await generateObject({
-        model: ai.model,
-        // Includes meta.seoTitle (auto-generated on creation) but excludes the
-        // owner-only `tracking` snippets.
-        schema: websiteGenerationSchema,
-        // websiteSchema has optional fields (e.g. navigation.cta). ai@7 sets
-        // strictJsonSchema=true by default, so OpenAI 400s on optional keys not
-        // in `required`. Relax strict mode so AI website generation succeeds
-        // instead of always falling back to the deterministic template.
-        providerOptions: { openai: { strictJsonSchema: false } },
-        system: buildSiteGenerateSystem(prompt, normalizedLang, pageLimit),
-        prompt: prompt.slice(0, 800),
+      // Model call + deterministic repair + at most one same-model retry +
+      // page cap + SEO title all live in `generateSiteObject`, shared with the
+      // comparison script. It logs usage/repair itself and throws once the AI
+      // path is exhausted, which lands in the fallback below.
+      const { site: object } = await generateSiteObject({
+        ai,
+        prompt,
+        lang: normalizedLang,
+        pageLimit,
       })
-      logAiUsage(ai, 'ok', usage)
-
-      // The prompt asks for at most `pageLimit` pages, but the model can still
-      // overshoot; hard-cap the generated site so it never exceeds the plan.
-      const object = capPagesToLimit(generated, pageLimit)
-
-      // If the model skipped or blanked the SEO title, fall back to the
-      // deterministic keyword derivation so a new site is never published
-      // without one.
-      if (!object.meta.seoTitle?.trim()) {
-        object.meta.seoTitle = deriveSeoTitle(prompt, detectSector(prompt), normalizedLang)
-      }
 
       // Attach a dynamic, brief-derived hero/slider image AND every other
       // visual (gallery / portfolio / team) — concurrently. They mutate
@@ -216,8 +202,7 @@ async function runGenerate(
     } catch (err) {
       // AI Gateway may be unavailable (e.g. no billing configured). Fall back to
       // a deterministic website so the pipeline still produces valid schema.
-      logAiUsage(ai, 'error')
-      console.log('[v0] generate(website) error:', err instanceof Error ? err.message : err)
+      console.info('[ai-fallback]', { flow: ai.flow, model: ai.model, reason: err instanceof Error ? err.name : 'unknown' })
       const website = capPagesToLimit(fallbackWebsite(prompt, normalizedLang), pageLimit)
       const [img, sectionImages] = await Promise.all([
         attachHeroImage(website, prompt),
@@ -243,8 +228,8 @@ async function runGenerate(
   /* ---- Plan mode (default): unchanged, powers the landing hero ---- */
   const planAi = resolveAiModel('sitePlan', planCode)
   try {
-    const { object, usage } = await generateObject({
-      model: planAi.model,
+    const { object } = await generateStructured({
+      ai: planAi,
       schema: planSchema,
       system:
         `You are GLOVAL AI (gloval.ai), an AI website builder. Given a user's description of the website they want, ` +
@@ -252,14 +237,11 @@ async function runGenerate(
         `Keep hex colors valid and the palette cohesive and modern. Be specific to the user's idea, not generic.`,
       prompt: prompt.slice(0, 600),
     })
-
-    logAiUsage(planAi, 'ok', usage)
     return Response.json({ plan: object, source: 'ai' })
   } catch (err) {
-    logAiUsage(planAi, 'error')
     // AI Gateway may be unavailable (e.g. no billing configured). Fall back to a
     // deterministic plan so the demo still works, and flag it for the client.
-    console.log('[v0] generate error:', err instanceof Error ? err.message : err)
+    console.info('[ai-fallback]', { flow: planAi.flow, model: planAi.model, reason: err instanceof Error ? err.name : 'unknown' })
     return Response.json({
       plan: fallbackPlan(prompt, normalizedLang),
       source: 'fallback',

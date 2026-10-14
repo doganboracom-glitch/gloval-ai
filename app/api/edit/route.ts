@@ -1,5 +1,6 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
+import { generateStructured } from '@/lib/ai-structured'
+import { siteRepairOptions } from '@/lib/site-repair'
 import {
   sectionSchema,
   websiteEditSchema,
@@ -197,37 +198,33 @@ export async function POST(req: Request) {
       // silently fell back to the scope-blind command parser. Wrapping the union
       // in an object property keeps the root an object while still constraining
       // the value to a valid section.
-      const { object, usage } = await generateObject({
-        model: ai.model,
+      const { object } = await generateStructured({
+        ai,
         schema: z.object({ section: sectionSchema }),
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: sectionSystemPrompt(normalizedLang, language),
         prompt: sectionUserPrompt(stripSectionImagePayload(targetSection), instruction),
       })
-      logAiUsage(ai, 'ok', usage)
       const validatedSection = sectionSchema.safeParse(object.section)
       if (validatedSection.success && validatedSection.data.type === targetSection.type) {
         aiSection = validatedSection.data
       }
     } else {
-      const { object, usage } = await generateObject({
-        model: ai.model,
+      const { object } = await generateStructured({
+        ai,
         // Owner-authored fields (custom code snippets, SEO title) are excluded
         // from the model's schema so an unrelated edit can never rewrite or drop
         // them; they are merged back from the current schema below.
         schema: websiteEditSchema,
-        // The website schema has optional fields (e.g. navigation.cta). In ai@7
-        // strictJsonSchema defaults to true, which makes OpenAI reject schemas
-        // whose optional keys aren't in `required` (400). Relax strict mode so
-        // the AI edit path actually runs instead of always falling back.
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: siteSystemPrompt(normalizedLang, language),
         prompt:
           `CURRENT WEBSITE (JSON):\n${JSON.stringify(stripImagePayloads(original))}\n\n` +
           `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
           `Return the full updated website JSON now.`,
+        // An edit must never silently delete the owner's sections, so surplus
+        // sections are not trimmed here: such an answer is retried once and
+        // otherwise leaves the site unchanged.
+        repair: siteRepairOptions({ lang: normalizedLang, siteName: original.meta.name, trimSections: false }),
       })
-      logAiUsage(ai, 'ok', usage)
       // generateObject already validates against websiteSchema, but re-parse
       // defensively so a malformed result can never reach the client.
       const validated = websiteSchema.safeParse(object)
@@ -317,8 +314,7 @@ export async function POST(req: Request) {
     // AI Gateway unavailable or generation failed. Fall back to the offline
     // deterministic command parser so common edits still work; never destroy
     // the site. No credit is spent on this path.
-    logAiUsage(ai, 'error')
-    console.log('[v0] edit error, trying command parser:', err instanceof Error ? err.message : err)
+    console.info('[ai-fallback]', { flow: ai.flow, model: ai.model, reason: err instanceof Error ? err.name : 'unknown' })
     // Scoped edits must never fall back to the scope-blind whole-site parser.
     if (!hasValidScope) {
       const command = tryCommandParser(original, instruction)
