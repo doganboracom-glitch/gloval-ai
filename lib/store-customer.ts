@@ -604,10 +604,14 @@ function toShippingStatus(v: unknown): ShippingStatus {
     : 'preparing'
 }
 
-/** Order history (with shipping/tracking) for the logged-in store customer. */
+/**
+ * Order history (with shipping/tracking) for the logged-in store customer.
+ * Returns `null` when the database read failed, so the page can say the orders
+ * could not be loaded instead of showing an empty history.
+ */
 export async function getStoreCustomerOrders(
   storeSlug: string,
-): Promise<CustomerOrder[]> {
+): Promise<CustomerOrder[] | null> {
   const project = await resolveProject(storeSlug)
   if (!project) return []
   const customer = await authenticate(project.id)
@@ -626,7 +630,7 @@ export async function getStoreCustomerOrders(
 
   if (ordersError) {
     console.error('[store-customer] order list failed', { code: ordersError.code })
-    return []
+    return null
   }
   if (!data) return []
   return data.map((o) => {

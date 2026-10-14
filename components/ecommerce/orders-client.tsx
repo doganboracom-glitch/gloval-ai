@@ -242,6 +242,26 @@ export function OrdersClient({
                       {t.ecom.orderDate}: {dateFmt.format(new Date(o.created_at))} ·{' '}
                       {t.ecom.payment}: {providerLabel(o.payment_provider)} ({o.payment_status})
                     </p>
+                    {o.attention_at && o.status === 'pending' && o.payment_status === 'pending' && (
+                      <p
+                        role="alert"
+                        className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                      >
+                        <span className="font-medium">
+                          {tr
+                            ? 'Dikkat gerekiyor: ödeme alındı, işlem tamamlanamadı.'
+                            : 'Needs attention: payment received, order could not be completed.'}
+                        </span>{' '}
+                        {tr
+                          ? 'Sistem otomatik olarak tekrar deniyor; çözülmezse iyzico paymentId ile destek isteyin.'
+                          : 'The system keeps retrying; if it persists, contact support with the iyzico paymentId.'}
+                      </p>
+                    )}
+                    {o.payment_provider === 'iyzico' && o.provider_payment_id && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        iyzico paymentId: <span className="font-mono select-all">{o.provider_payment_id}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-end gap-2">

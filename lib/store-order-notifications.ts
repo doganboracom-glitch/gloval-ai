@@ -98,7 +98,7 @@ function readBank(config: unknown): BankTransferInfo | undefined {
   return Object.values(bank).some(Boolean) ? bank : undefined
 }
 
-async function sendOnce(input: {
+export async function sendOnce(input: {
   ownerId: string
   dedupeKey: string
   type: string
@@ -259,6 +259,77 @@ export async function notifyOrderPlaced(orderId: string): Promise<void> {
   } catch (error) {
     console.log('[v0] store order owner email failed:', order.id, (error as Error).message)
   }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/**
+ * Tells the store owner, once per order, that a payment was received but the
+ * order could not be completed (flagged by `recordSettleFailure`). The dedupe
+ * key makes repeated calls harmless; a failed send releases its claim so the
+ * next call retries. Logs ids only, never PII.
+ */
+export async function notifyOrderAttention(orderId: string): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: order, error: orderError } = await admin
+    .from('ecommerce_orders')
+    .select('id, project_id, total_cents, currency, provider_payment_id')
+    .eq('id', orderId)
+    .maybeSingle()
+  if (orderError) {
+    console.error('[store-notify] attention order lookup failed', { orderId, code: orderError.code })
+    return
+  }
+  if (!order) return
+
+  const { data: project, error: projectError } = await admin
+    .from('projects')
+    .select('id, slug, name, owner_id')
+    .eq('id', order.project_id)
+    .maybeSingle()
+  if (projectError || !project) {
+    if (projectError) console.error('[store-notify] attention project lookup failed', { orderId, code: projectError.code })
+    return
+  }
+
+  const ownerRes = await admin.auth.admin.getUserById(project.owner_id)
+  const ownerEmail = ownerRes.data?.user?.email ?? ''
+  if (!ownerEmail) return
+
+  const storeName = project.name || project.slug
+  const number = order.id.slice(0, 8).toUpperCase()
+  const paymentId = order.provider_payment_id ? String(order.provider_payment_id) : ''
+  const amount = `${(order.total_cents / 100).toFixed(2)} ${order.currency}`
+  const url = `${DASHBOARD_ORIGIN}/ecommerce/${project.id}/orders`
+
+  const text = [
+    `${storeName}: #${number} numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.`,
+    `Tutar: ${amount}`,
+    paymentId ? `iyzico paymentId: ${paymentId}` : '',
+    'Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse Siparişler panelinden kontrol edin.',
+    url,
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const html = `<p><strong>Dikkat gerekiyor:</strong> ${escapeHtml(storeName)} mağazanızda <strong>#${number}</strong> numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.</p>
+<p>Tutar: ${escapeHtml(amount)}${paymentId ? `<br>iyzico paymentId: <code>${escapeHtml(paymentId)}</code>` : ''}</p>
+<p>Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse <a href="${url}">Siparişler panelinden</a> kontrol edin.</p>`
+
+  await sendOnce({
+    ownerId: project.owner_id,
+    dedupeKey: `store-order:${order.id}:owner-attention`,
+    type: 'store_order_attention',
+    to: ownerEmail,
+    fromName: storeName,
+    email: { subject: `Dikkat: #${number} siparişinin ödemesi alındı, işlem tamamlanamadı`, html, text },
+  })
 }
 
 /**

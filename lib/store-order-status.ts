@@ -4,6 +4,8 @@ export type OrderStatusInput = {
   shippingStatus?: string | null
   carrier?: string | null
   trackingNumber?: string | null
+  /** Payment received but the order could not be completed yet (safety net); still being processed. */
+  attention?: boolean
 }
 
 export type OrderStatusCopy = {
@@ -33,6 +35,11 @@ export function orderStatusCopy(input: OrderStatusInput, language: 'tr' | 'en' =
     return language === 'en'
       ? { title: 'Payment failed', description: 'The payment for this order could not be completed.', icon: 'failed' }
       : { title: 'Ödeme başarısız', description: 'Bu siparişin ödemesi tamamlanamadı.', icon: 'failed' }
+  }
+  if (input.attention && payment === 'pending') {
+    return language === 'en'
+      ? { title: 'Your payment was received, your order is being processed', description: 'We received your payment and are finishing your order. You do not need to pay again.', icon: 'pending' }
+      : { title: 'Ödemeniz alındı, siparişiniz işleniyor', description: 'Ödemeniz bize ulaştı, siparişinizi tamamlıyoruz. Tekrar ödeme yapmanıza gerek yok.', icon: 'pending' }
   }
   if (shipping === 'delivered' || status === 'delivered') {
     return language === 'en'

@@ -2,13 +2,15 @@ import 'server-only'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { applyStorePaymentWebhook, type StoreWebhookDeps } from '@/lib/store-webhook-handler'
 import { finalizePaidStock, releaseOrderStock, releaseOrderStockSafely } from '@/lib/store-order-stock'
-import { scheduleOrderNotification } from '@/lib/store-order-notifications'
+import { notifyOrderAttention, scheduleOrderNotification } from '@/lib/store-order-notifications'
+import { clearOrderAttention, recordSettleFailure, type AttentionDeps } from '@/lib/store-order-attention'
 import {
   evaluateRetrieve,
   retrieveCheckoutForm,
   type FetchLike,
   type IyzicoCredentials,
 } from '@/lib/store-payments/iyzico'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { loadIyzicoCredentials } from '@/lib/store-payments/iyzico-credentials'
 
 type Admin = ReturnType<typeof createAdminClient>
@@ -21,6 +23,8 @@ export type SettleOrder = {
   total_cents: number
   currency: string
   created_at?: string
+  /** Set when the paid-but-unfinished safety net flagged this order. */
+  attention_at?: string | null
 }
 
 /**
@@ -36,6 +40,10 @@ const realDeps: StoreWebhookDeps = {
   finalizePaidStock,
   releaseOrderStock,
   notifyOrder: scheduleOrderNotification,
+}
+
+const realAttention: AttentionDeps = {
+  notifyAttention: (orderId) => notifyOrderAttention(orderId),
 }
 
 async function clearNonce(admin: Admin, orderId: string) {
@@ -55,10 +63,11 @@ export async function settleIyzicoOrder(
   admin: Admin,
   creds: IyzicoCredentials,
   order: SettleOrder,
-  options: { fetchImpl?: FetchLike; deps?: StoreWebhookDeps } = {},
+  options: { fetchImpl?: FetchLike; deps?: StoreWebhookDeps; attention?: AttentionDeps } = {},
 ): Promise<SettleOutcome> {
   if (order.payment_status === 'paid') {
     await clearNonce(admin, order.id)
+    if (order.attention_at) await clearOrderAttention(admin, order.id)
     return 'paid'
   }
   const token = order.payment_ref
@@ -127,9 +136,18 @@ export async function settleIyzicoOrder(
         deps,
         scope,
       )
-      if (res.outcome === 'error') return 'unavailable'
+      if (res.outcome === 'error') {
+        // The provider has the money: count the failure so a persistent one is flagged, not lost.
+        await recordSettleFailure(
+          admin,
+          { orderId: order.id, projectId: order.project_id, step: res.step },
+          options.attention ?? realAttention,
+        )
+        return 'unavailable'
+      }
       if (res.outcome === 'paid' || res.outcome === 'duplicate') {
         await clearNonce(admin, order.id)
+        if (order.attention_at) await clearOrderAttention(admin, order.id)
         return 'paid'
       }
       return 'mismatch'
@@ -159,7 +177,13 @@ export type ReconcileSummary = {
  */
 export async function reconcileIyzicoOrders(
   admin: Admin,
-  options: { deadlineMs: number; now?: number; fetchImpl?: FetchLike; deps?: StoreWebhookDeps } = {
+  options: {
+    deadlineMs: number
+    now?: number
+    fetchImpl?: FetchLike
+    deps?: StoreWebhookDeps
+    attention?: AttentionDeps
+  } = {
     deadlineMs: Date.now() + 40_000,
   },
 ): Promise<ReconcileSummary> {
@@ -181,10 +205,31 @@ export async function reconcileIyzicoOrders(
     return summary
   }
 
+  // Orders flagged by the safety net are retried first and regardless of age or batch
+  // position. Before scripts/053 the column is missing and this lookup is skipped.
+  const { data: flagged, error: flaggedError } = await admin
+    .from('ecommerce_orders')
+    .select('id, project_id, payment_status, payment_ref, total_cents, currency, created_at, attention_at')
+    .eq('status', 'pending')
+    .eq('payment_status', 'pending')
+    .eq('payment_provider', 'iyzico')
+    .not('attention_at', 'is', null)
+    .order('attention_at', { ascending: true })
+    .limit(IYZICO_RECONCILE_BATCH)
+  if (flaggedError && !isMissingColumnError(flaggedError)) {
+    console.error('[store-iyzico] reconcile flagged lookup failed', { code: flaggedError.code })
+  }
+  const flaggedRows = ((flaggedError ? [] : flagged) ?? []) as SettleOrder[]
+  const flaggedIds = new Set(flaggedRows.map((o) => o.id))
+  const queue: SettleOrder[] = [
+    ...flaggedRows,
+    ...((data ?? []) as SettleOrder[]).filter((o) => !flaggedIds.has(o.id)),
+  ]
+
   const credsByProject = new Map<string, Awaited<ReturnType<typeof loadIyzicoCredentials>>>()
   const deps = options.deps ?? realDeps
 
-  for (const order of (data ?? []) as SettleOrder[]) {
+  for (const order of queue) {
     if (Date.now() >= options.deadlineMs) break
     summary.checked += 1
 
@@ -201,13 +246,15 @@ export async function reconcileIyzicoOrders(
     const outcome = await settleIyzicoOrder(admin, loaded.creds, order, {
       fetchImpl: options.fetchImpl,
       deps,
+      attention: options.attention,
     })
 
     if (outcome === 'paid') summary.paid += 1
     else if (outcome === 'failed') summary.failed += 1
     else if (outcome === 'no_token' || outcome === 'pending') {
       const age = now - new Date(order.created_at ?? now).getTime()
-      if (outcome === 'no_token' || age >= IYZICO_ABANDON_AFTER_MS) {
+      // A flagged order was paid at the provider: never abandon it.
+      if (!flaggedIds.has(order.id) && (outcome === 'no_token' || age >= IYZICO_ABANDON_AFTER_MS)) {
         const { data: moved, error: cancelError } = await admin
           .from('ecommerce_orders')
           .update({ status: 'cancelled', payment_status: 'failed', payment_nonce: null })
