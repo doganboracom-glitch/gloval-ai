@@ -1,7 +1,6 @@
 import { escape, renderEmailLayout, renderEmailPlainText, renderSection, renderTable } from '@/lib/email/layout'
 import type { EmailLang } from '@/lib/email/lang'
-
-const MESSAGES_URL = 'https://gloval.ai/dashboard/mesajlar'
+import { dashboardMessagesUrl } from '@/lib/site-url'
 
 export type ContactEmailInput = {
   siteName: string
@@ -25,6 +24,7 @@ function cleanSiteName(value: string): string {
  * become <br>, so no visitor markup can ever reach the HTML.
  */
 export function buildContactEmail(input: ContactEmailInput) {
+  const messagesUrl = dashboardMessagesUrl()
   const siteName = cleanSiteName(input.siteName)
   const tr = input.lang === 'tr'
   const subject = tr
@@ -55,14 +55,14 @@ export function buildContactEmail(input: ContactEmailInput) {
     previewText: intro,
     title: subject,
     body: `<p style="margin:0 0 4px;">${escape(intro)}</p>${renderTable(rows)}${renderSection(labels.message, messageHtml)}`,
-    cta: { label: labels.cta, href: MESSAGES_URL },
+    cta: { label: labels.cta, href: messagesUrl },
     footer,
   })
 
   const textRows = rows.map(([label, value]) => `${label}: ${value}`).join('\n')
   const text = renderEmailPlainText(
     subject,
-    `${intro}\n\n${textRows}\n\n${labels.message}:\n${input.message}\n\n${MESSAGES_URL}`,
+    `${intro}\n\n${textRows}\n\n${labels.message}:\n${input.message}\n\n${messagesUrl}`,
     footer,
   )
 

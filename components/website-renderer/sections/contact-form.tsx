@@ -6,8 +6,8 @@ import {
   CONTACT_HONEYPOT_FIELD,
   CONTACT_LIMITS,
   contactFormCopy,
+  postContactForm,
   resolveContactFormLayout,
-  resolveContactSubmitError,
   type ContactFieldErrors,
   type ContactSubmitError,
 } from '@/lib/site-contact-form'
@@ -49,41 +49,32 @@ export function ContactForm({
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!live || status === 'sending') return
-    const form = new FormData(event.currentTarget)
+    // React clears `event.currentTarget` once the handler yields, so keep the element.
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const text = (key: string) => String(form.get(key) ?? '')
 
     setStatus('sending')
     setErrors({})
-    try {
-      const response = await fetch('/api/site-contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: live.slug,
-          token: live.token,
-          name: text('name'),
-          email: text('email'),
-          phone: text('phone'),
-          message: text('message'),
-          consent: form.get('consent') === 'on',
-          [CONTACT_HONEYPOT_FIELD]: text(CONTACT_HONEYPOT_FIELD),
-        }),
-      })
-      if (response.ok) {
-        event.currentTarget.reset()
-        setStatus('sent')
-        return
-      }
-      if (response.status === 422) {
-        const body = (await response.json().catch(() => null)) as { fields?: ContactFieldErrors } | null
-        setErrors(body?.fields ?? {})
-        setStatus('idle')
-        return
-      }
-      setSubmitError(resolveContactSubmitError(await response.json().catch(() => null)))
-      setStatus('error')
-    } catch {
-      setSubmitError('network')
+    const result = await postContactForm({
+      slug: live.slug,
+      token: live.token,
+      name: text('name'),
+      email: text('email'),
+      phone: text('phone'),
+      message: text('message'),
+      consent: form.get('consent') === 'on',
+      [CONTACT_HONEYPOT_FIELD]: text(CONTACT_HONEYPOT_FIELD),
+    })
+
+    if (result.kind === 'sent') {
+      formElement.reset()
+      setStatus('sent')
+    } else if (result.kind === 'validation') {
+      setErrors(result.fields)
+      setStatus('idle')
+    } else {
+      setSubmitError(result.error)
       setStatus('error')
     }
   }
