@@ -6,6 +6,7 @@ import { X, Loader2, ArrowLeft, CheckCircle2, CircleX, ExternalLink } from 'luci
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
+import { trackBeginCheckout } from '@/lib/analytics'
 import { legalPath } from '@/lib/legal/documents'
 
 export interface CheckoutBuyerInfo {
@@ -149,6 +150,13 @@ export function CheckoutConfirmDialog({
         '<body><div class="wrap"><div class="spinner"></div><p>Ödeme sayfası hazırlanıyor, lütfen bekleyin&hellip;</p></div></body></html>',
     )
     paymentWindow?.document.close()
+    if (item) {
+      trackBeginCheckout({
+        value: item.priceCents / 100,
+        currency: item.currency,
+        item_category: item.recurring ? 'subscription' : 'one_time',
+      })
+    }
     onConfirm({ buyerType, fullName, email, phone, address, taxId }, paymentWindow)
   }
 

@@ -1,4 +1,5 @@
 import { CookieConsent } from '@/components/cookie-consent'
+import { AnalyticsLoader } from '@/components/analytics/analytics-loader'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Noto_Sans_Arabic, Space_Grotesk } from 'next/font/google'
 import './globals.css'
@@ -111,6 +112,7 @@ export default async function RootLayout({
           {/* Consent-gated: CookieConsent renders Vercel Analytics only after
               the visitor grants analytics consent (and only in production). */}
           <CookieConsent />
+          <AnalyticsLoader />
         </LanguageProvider>
       </body>
     </html>
