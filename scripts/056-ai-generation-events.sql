@@ -1,4 +1,4 @@
--- 054: yapay zekâ üretim gözlemi (küçük, kalıcı sayaç).
+-- 056: yapay zekâ üretim gözlemi (küçük, kalıcı sayaç).
 -- Idempotent. Otomatik UYGULANMAZ; elle çalıştırın.
 -- Uygulama bu tablo olmadan da çalışır: kayıt sessizce atlanır, üretim etkilenmez.
 --

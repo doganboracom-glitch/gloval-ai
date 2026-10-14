@@ -4,7 +4,7 @@ import type { AiModelSelection } from '@/lib/ai-models'
 
 /**
  * Small persistent counter for AI generation outcomes (table
- * `ai_generation_events`, see scripts/054-ai-generation-events.sql).
+ * `ai_generation_events`, see scripts/056-ai-generation-events.sql).
  *
  * It stores flow, tier, model, outcome, plan code and a timestamp. It never
  * stores a user id, prompt, site content or model output. Recording is
