@@ -5,7 +5,10 @@ import { checkPaidAmount, type AmountCheckFailure } from '@/lib/store-webhook-ru
 type Admin = ReturnType<typeof createAdminClient>
 
 export type StoreWebhookDeps = {
-  finalizePaidStock: (admin: Admin, orderId: string) => Promise<{ oversold: boolean }>
+  finalizePaidStock: (
+    admin: Admin,
+    orderId: string,
+  ) => Promise<{ oversold: boolean; stockFailed?: boolean }>
   releaseOrderStock: (
     admin: Admin,
     orderId: string,
@@ -22,6 +25,30 @@ export type StoreWebhookOutcome =
   | { outcome: 'paid'; oversold: boolean }
   | { outcome: 'failed' }
   | { outcome: 'refunded' }
+  /**
+   * A database call failed. NOTHING was silently skipped: the caller must
+   * answer with a retryable failure so the provider redelivers (or the
+   * reconciliation picks the order up again).
+   */
+  | { outcome: 'error'; step: StoreWebhookErrorStep }
+
+export type StoreWebhookErrorStep =
+  | 'lookup'
+  | 'mark_paid'
+  | 'take_stock'
+  | 'mark_failed'
+  | 'release_stock'
+  | 'mark_refunded'
+
+function failedStep(
+  providerId: string,
+  orderId: string | null,
+  step: StoreWebhookErrorStep,
+  code: string | undefined,
+): StoreWebhookOutcome {
+  console.error('[store-webhook] database step failed', { provider: providerId, orderId, step, code })
+  return { outcome: 'error', step }
+}
 
 /**
  * Applies a VERIFIED provider callback to a store order.
@@ -48,13 +75,15 @@ export async function applyStorePaymentWebhook(
 ): Promise<StoreWebhookOutcome> {
   let lookup = admin
     .from('ecommerce_orders')
-    .select('id, payment_status, total_cents, currency')
+    .select('id, payment_status, status, total_cents, currency')
     .eq('payment_ref', result.reference)
     .eq('payment_provider', providerId)
   // Per-store callbacks (a provider using the owner's own keys) must only ever
   // settle an order of THAT store.
   if (scope.projectId) lookup = lookup.eq('project_id', scope.projectId)
-  const { data: order } = await lookup.maybeSingle()
+  const { data: order, error: lookupError } = await lookup.maybeSingle()
+  // A failed lookup is not "no such order": answering 404 would stop the provider retrying.
+  if (lookupError) return failedStep(providerId, null, 'lookup', lookupError.code)
 
   if (!order) return { outcome: 'order_not_found' }
 
@@ -77,20 +106,47 @@ export async function applyStorePaymentWebhook(
       return { outcome: 'rejected', reason: failure }
     }
 
-    const { data: moved } = await admin
+    const { data: moved, error: paidError } = await admin
       .from('ecommerce_orders')
       .update({ payment_status: 'paid', status: 'paid' })
       .eq('id', order.id)
       .neq('payment_status', 'paid')
       .neq('payment_status', 'refunded')
       .select('id')
+    // The order stays as it was (pending), so a redelivery or the reconciliation settles it.
+    if (paidError) return failedStep(providerId, order.id, 'mark_paid', paidError.code)
 
     // Another delivery won the race: it owns the side effects.
     if (!moved || moved.length === 0) return { outcome: 'duplicate' }
 
-    const { oversold } = await deps.finalizePaidStock(admin, order.id)
+    let stock: { oversold: boolean; stockFailed?: boolean }
+    try {
+      stock = await deps.finalizePaidStock(admin, order.id)
+    } catch (err) {
+      stock = { oversold: false, stockFailed: true }
+      console.error('[store-webhook] take stock threw', {
+        orderId: order.id,
+        message: err instanceof Error ? err.name : 'unknown',
+      })
+    }
+    if (stock.stockFailed) {
+      // Hand the order back to the retry path: no email, and the next delivery
+      // re-runs the (per-order idempotent) stock step instead of seeing "duplicate".
+      const { error: revertError } = await admin
+        .from('ecommerce_orders')
+        .update({ payment_status: order.payment_status, status: order.status })
+        .eq('id', order.id)
+        .eq('payment_status', 'paid')
+      if (revertError) {
+        console.error('[store-webhook] revert after stock failure failed', {
+          orderId: order.id,
+          code: revertError.code,
+        })
+      }
+      return failedStep(providerId, order.id, 'take_stock', undefined)
+    }
     deps.notifyOrder(order.id)
-    return { outcome: 'paid', oversold }
+    return { outcome: 'paid', oversold: stock.oversold }
   }
 
   if (result.status === 'failed') {
@@ -101,7 +157,7 @@ export async function applyStorePaymentWebhook(
 
     if (order.payment_status === 'failed') return { outcome: 'duplicate' }
 
-    const { data: moved } = await admin
+    const { data: moved, error: failError } = await admin
       .from('ecommerce_orders')
       .update({ payment_status: 'failed', status: 'failed' })
       .eq('id', order.id)
@@ -109,10 +165,21 @@ export async function applyStorePaymentWebhook(
       .neq('payment_status', 'refunded')
       .neq('payment_status', 'failed')
       .select('id')
+    if (failError) return failedStep(providerId, order.id, 'mark_failed', failError.code)
 
     if (!moved || moved.length === 0) return { outcome: 'duplicate' }
 
-    await deps.releaseOrderStock(admin, order.id, { onlyUnpaid: true })
+    try {
+      await deps.releaseOrderStock(admin, order.id, { onlyUnpaid: true })
+    } catch (err) {
+      // The order is already failed; the orphan sweep returns the reserved stock.
+      return failedStep(
+        providerId,
+        order.id,
+        'release_stock',
+        err instanceof Error ? err.message : undefined,
+      )
+    }
     return { outcome: 'failed' }
   }
 
@@ -120,12 +187,13 @@ export async function applyStorePaymentWebhook(
   if (order.payment_status === 'refunded') return { outcome: 'duplicate' }
   if (order.payment_status !== 'paid') return { outcome: 'ignored', reason: 'not_paid' }
 
-  const { data: moved } = await admin
+  const { data: moved, error: refundError } = await admin
     .from('ecommerce_orders')
     .update({ payment_status: 'refunded', status: 'refunded' })
     .eq('id', order.id)
     .eq('payment_status', 'paid')
     .select('id')
+  if (refundError) return failedStep(providerId, order.id, 'mark_refunded', refundError.code)
 
   if (!moved || moved.length === 0) return { outcome: 'duplicate' }
   return { outcome: 'refunded' }

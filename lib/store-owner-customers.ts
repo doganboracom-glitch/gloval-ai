@@ -209,13 +209,18 @@ export async function getOwnerCustomerDetail(
   const c = found.data as Record<string, unknown> | null
   if (found.error || !c) return { ok: false, error: 'Müşteri bulunamadı.' }
 
-  const { data: orders } = await admin
+  const { data: orders, error: ordersError } = await admin
     .from('ecommerce_orders')
     .select('id, created_at, total_cents, currency, status, payment_status')
     .eq('project_id', projectId)
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
     .limit(200)
+  // Showing an empty history (and a zero total) for a failed read would be wrong data.
+  if (ordersError) {
+    console.error('[store-owner-customers] order history failed', { code: ordersError.code })
+    return { ok: false, error: 'Siparişler yüklenemedi. Lütfen tekrar deneyin.' }
+  }
   const list = (orders ?? []).map((o) => ({
     id: String(o.id),
     created_at: String(o.created_at),

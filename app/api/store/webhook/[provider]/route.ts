@@ -78,6 +78,9 @@ export async function POST(
       return ack({ idempotent: true })
     case 'ignored':
       return ack({ ignored: outcome.reason })
+    case 'error':
+      // Retryable: the provider redelivers until the database step succeeds.
+      return NextResponse.json({ error: 'processing_failed' }, { status: 500 })
     default:
       return ack()
   }

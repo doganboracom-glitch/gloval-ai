@@ -1,7 +1,7 @@
 import 'server-only'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { applyStorePaymentWebhook, type StoreWebhookDeps } from '@/lib/store-webhook-handler'
-import { finalizePaidStock, releaseOrderStock } from '@/lib/store-order-stock'
+import { finalizePaidStock, releaseOrderStock, releaseOrderStockSafely } from '@/lib/store-order-stock'
 import { scheduleOrderNotification } from '@/lib/store-order-notifications'
 import {
   evaluateRetrieve,
@@ -26,7 +26,8 @@ export type SettleOrder = {
 /**
  * - `paid` / `failed`: the order is now in that state (this call or an earlier one).
  * - `pending`: iyzico has no final answer yet.
- * - `unavailable`: iyzico could not be reached / refused our keys; nothing changed.
+ * - `unavailable`: iyzico could not be reached / refused our keys, or a database step failed
+ *   (order left pending, nonce kept); nothing was lost and the next attempt settles it.
  * - `mismatch`: iyzico reported a payment that does not match the order; nothing changed.
  */
 export type SettleOutcome = 'paid' | 'failed' | 'pending' | 'unavailable' | 'mismatch' | 'no_token'
@@ -38,7 +39,9 @@ const realDeps: StoreWebhookDeps = {
 }
 
 async function clearNonce(admin: Admin, orderId: string) {
-  await admin.from('ecommerce_orders').update({ payment_nonce: null }).eq('id', orderId)
+  const { error } = await admin.from('ecommerce_orders').update({ payment_nonce: null }).eq('id', orderId)
+  // Harmless to repeat (settling is idempotent), but worth a trace.
+  if (error) console.error('[store-iyzico] nonce clear failed', { orderId, code: error.code })
 }
 
 /**
@@ -89,6 +92,7 @@ export async function settleIyzicoOrder(
         deps,
         scope,
       )
+      if (res.outcome === 'error') return 'unavailable'
       if (res.outcome === 'ignored' && res.reason === 'already_paid') {
         await clearNonce(admin, order.id)
         return 'paid'
@@ -98,11 +102,17 @@ export async function settleIyzicoOrder(
     }
     case 'paid': {
       // Kept for the owner (shared with iyzico support); the order stays valid without it.
-      await admin
+      const { error: paymentIdError } = await admin
         .from('ecommerce_orders')
         .update({ provider_payment_id: verdict.paymentId })
         .eq('id', order.id)
         .eq('project_id', order.project_id)
+      if (paymentIdError) {
+        console.error('[store-iyzico] provider payment id not saved', {
+          orderId: order.id,
+          code: paymentIdError.code,
+        })
+      }
 
       const res = await applyStorePaymentWebhook(
         admin,
@@ -117,6 +127,7 @@ export async function settleIyzicoOrder(
         deps,
         scope,
       )
+      if (res.outcome === 'error') return 'unavailable'
       if (res.outcome === 'paid' || res.outcome === 'duplicate') {
         await clearNonce(admin, order.id)
         return 'paid'
@@ -197,15 +208,18 @@ export async function reconcileIyzicoOrders(
     else if (outcome === 'no_token' || outcome === 'pending') {
       const age = now - new Date(order.created_at ?? now).getTime()
       if (outcome === 'no_token' || age >= IYZICO_ABANDON_AFTER_MS) {
-        const { data: moved } = await admin
+        const { data: moved, error: cancelError } = await admin
           .from('ecommerce_orders')
           .update({ status: 'cancelled', payment_status: 'failed', payment_nonce: null })
           .eq('id', order.id)
           .eq('status', 'pending')
           .eq('payment_status', 'pending')
           .select('id')
-        if (moved && moved.length > 0) {
-          await releaseOrderStock(admin, order.id, { onlyUnpaid: true })
+        if (cancelError) {
+          console.error('[store-iyzico] abandon cancel failed', { orderId: order.id, code: cancelError.code })
+          summary.skipped += 1
+        } else if (moved && moved.length > 0) {
+          await releaseOrderStockSafely(admin, order.id, { onlyUnpaid: true })
           summary.cancelled += 1
         }
       } else {

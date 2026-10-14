@@ -37,6 +37,7 @@ import {
 import {
   finalizePaidStock,
   releaseOrderStock,
+  releaseOrderStockSafely,
   releaseStaleOrderStock,
   reserveOrderStock,
 } from "@/lib/store-order-stock";
@@ -610,7 +611,7 @@ export async function createOrder(
       buyer: card.buyer,
     });
     if (!started.ok) {
-      await releaseOrderStock(admin, order.id);
+      await releaseOrderStockSafely(admin, order.id);
       await voidOrder(admin, order.id, idempotencyKey);
       return { ok: false, error: started.error };
     }
@@ -644,11 +645,14 @@ export async function createOrder(
       provider: providerId,
       message: err instanceof Error ? err.message : "unknown",
     });
-    await releaseOrderStock(admin, order.id);
-    await admin
+    await releaseOrderStockSafely(admin, order.id);
+    const { error: failError } = await admin
       .from("ecommerce_orders")
       .update({ status: "failed", payment_status: "failed" })
       .eq("id", order.id);
+    if (failError) {
+      console.error("[store-order] mark failed did not save", { orderId: order.id, code: failError.code });
+    }
     return { ok: false, error: "order_failed" };
   }
 
@@ -656,7 +660,7 @@ export async function createOrder(
   // allowed). Its stock is already reserved above; finalizing is a no-op there
   // and only does work on a database without the stock functions.
   if (intent.action === "completed" && intent.status === "paid") {
-    await admin
+    const { error: paidError } = await admin
       .from("ecommerce_orders")
       .update({
         status: "paid",
@@ -664,12 +668,28 @@ export async function createOrder(
         payment_ref: intent.reference,
       })
       .eq("id", order.id);
-    await finalizePaidStock(admin, order.id);
+    if (paidError) {
+      console.error("[store-order] mark paid did not save", { orderId: order.id, code: paidError.code });
+      await releaseOrderStockSafely(admin, order.id);
+      await voidOrder(admin, order.id, idempotencyKey);
+      return { ok: false, error: "order_failed" };
+    }
+    const stock = await finalizePaidStock(admin, order.id);
+    if (stock.stockFailed) {
+      console.error("[store-order] paid order could not take stock", { orderId: order.id });
+    }
   } else {
-    await admin
+    // Without the saved reference a later webhook can never find this order.
+    const { error: refError } = await admin
       .from("ecommerce_orders")
       .update({ payment_ref: intent.reference, payment_status: intent.status })
       .eq("id", order.id);
+    if (refError) {
+      console.error("[store-order] payment ref did not save", { orderId: order.id, code: refError.code });
+      await releaseOrderStockSafely(admin, order.id);
+      await voidOrder(admin, order.id, idempotencyKey);
+      return { ok: false, error: "order_failed" };
+    }
   }
 
   scheduleOrderNotification(order.id);
@@ -753,7 +773,7 @@ async function voidOrder(
   orderId: string,
   idempotencyKey: string,
 ): Promise<void> {
-  await admin
+  const { error } = await admin
     .from("ecommerce_orders")
     .update({
       status: "cancelled",
@@ -761,4 +781,5 @@ async function voidOrder(
       idempotency_key: `${idempotencyKey}#void-${orderId}`,
     })
     .eq("id", orderId);
+  if (error) console.error("[store-order] void did not save", { orderId, code: error.code });
 }

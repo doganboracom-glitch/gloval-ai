@@ -52,23 +52,38 @@ async function anonymizeFinancialRecords(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
 ) {
-  const { data: ownedProjects } = await admin.from('projects').select('id').eq('user_id', userId)
+  const { data: ownedProjects, error: projectsError } = await admin
+    .from('projects')
+    .select('id')
+    .eq('user_id', userId)
+  // Deleting the user cascades through these rows: a detach that silently failed would wipe the orders.
+  if (projectsError) throw new Error(`anonymize_projects_failed:${projectsError.code}`)
   const ownedProjectIds = (ownedProjects ?? []).map((p) => p.id as string)
 
-  await admin
+  const { error: ordersError } = await admin
     .from('ecommerce_orders')
     .update({ owner_id: null, project_id: null })
     .eq('owner_id', userId)
+  if (ordersError) throw new Error(`anonymize_orders_failed:${ordersError.code}`)
 
   if (ownedProjectIds.length > 0) {
-    await admin
+    const { error: itemsError } = await admin
       .from('ecommerce_order_items')
       .update({ project_id: null })
       .in('project_id', ownedProjectIds)
+    if (itemsError) throw new Error(`anonymize_items_failed:${itemsError.code}`)
   }
 
-  await admin.from('billing_subscriptions').update({ user_id: null }).eq('user_id', userId)
-  await admin.from('billing_transactions').update({ user_id: null }).eq('user_id', userId)
+  const { error: subsError } = await admin
+    .from('billing_subscriptions')
+    .update({ user_id: null })
+    .eq('user_id', userId)
+  if (subsError) throw new Error(`anonymize_subscriptions_failed:${subsError.code}`)
+  const { error: txError } = await admin
+    .from('billing_transactions')
+    .update({ user_id: null })
+    .eq('user_id', userId)
+  if (txError) throw new Error(`anonymize_transactions_failed:${txError.code}`)
 }
 
 /**
