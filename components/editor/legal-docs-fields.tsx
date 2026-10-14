@@ -10,6 +10,7 @@ import {
   legalDocStatus,
   legalEditorStartText,
   LEGAL_DOC_ENTRIES,
+  LEGAL_DRAFT_NOTES,
   LEGAL_RESPONSIBILITY_NOTE,
   LEGAL_STATUS_LABEL,
   resetLegalDocOperation,
@@ -115,6 +116,14 @@ export function LegalDocsFields({
               {required ? (
                 <p className="text-[11px] leading-snug text-muted-foreground">
                   Mağaza ödemesi için zorunlu; düzenleyebilirsiniz ama gizleyemezsiniz.
+                </p>
+              ) : null}
+              {status === 'template' && LEGAL_DRAFT_NOTES[slug] ? (
+                <p
+                  role="note"
+                  className="rounded-md border border-border bg-secondary/40 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground"
+                >
+                  {LEGAL_DRAFT_NOTES[slug]}
                 </p>
               ) : null}
             </li>
@@ -281,6 +290,11 @@ function LegalDocEditorModal({
           className="min-h-[40vh] w-full flex-1 resize-y rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus:border-primary"
         />
       )}
+      {LEGAL_DRAFT_NOTES[slug] ? (
+        <p role="note" className="text-[11px] leading-snug text-muted-foreground">
+          {LEGAL_DRAFT_NOTES[slug]}
+        </p>
+      ) : null}
       <p className="text-[11px] leading-snug text-muted-foreground">{LEGAL_RESPONSIBILITY_NOTE}</p>
     </EditorModal>
   )

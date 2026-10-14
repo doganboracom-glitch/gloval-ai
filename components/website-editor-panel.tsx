@@ -34,6 +34,7 @@ import { type EditOperation, ADDABLE_SECTION_TYPES } from '@/lib/website-edit-op
 import { SectionInspector } from '@/components/editor/section-inspector'
 import { contactSectionCopy, hasContactSection } from '@/lib/contact-section'
 import { aboutSectionCopy, hasAboutSection } from '@/lib/about-section'
+import { hiddenStorePageCopy, storeRequiredPageGaps } from '@/lib/store-required-pages'
 import { TextField, IconBtn, UploadButton } from '@/components/editor/editor-fields'
 import { LogoField } from '@/components/editor/logo-field'
 import { FaviconField } from '@/components/editor/favicon-field'
@@ -1008,6 +1009,26 @@ function SectionManager({
           </button>
         </p>
       )}
+      {storeRequiredPageGaps(site).map((gap) => {
+        if (gap.state !== 'hidden') return null
+        const copy = hiddenStorePageCopy(gap.type, site.meta.language)
+        return (
+          <p
+            key={gap.type}
+            role="status"
+            className="rounded-lg border border-border bg-muted/40 px-2.5 py-2 text-xs text-muted-foreground"
+          >
+            {copy.text}{' '}
+            <button
+              type="button"
+              onClick={() => onDispatch({ op: 'setSectionHidden', index: gap.index, hidden: false })}
+              className="font-medium text-brand underline-offset-2 hover:underline"
+            >
+              {copy.action}
+            </button>
+          </p>
+        )
+      })}
       {isStorefront(site) && !hasAboutSection(site) && (
         <p
           role="status"

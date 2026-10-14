@@ -39,6 +39,12 @@ export const LEGAL_STATUS_LABEL: Record<LegalDocStatus, string> = {
 export const LEGAL_RESPONSIBILITY_NOTE =
   'Bu metinleri yasal gerekliliklere uygun olarak gözden geçirmek sizin sorumluluğunuzdadır.'
 
+/** Editor-only notes for texts that are still drafts awaiting legal review. */
+export const LEGAL_DRAFT_NOTES: Partial<Record<LegalDocSlug, string>> = {
+  'iptal-ve-iade':
+    'Taslak: teslimat, kargo ücreti, iade ve değişim metni hukuk ekibi onayı bekliyor. Yayınlamadan önce kendi teslimat süreleriniz, kargo ücretiniz ve iade koşullarınıza göre düzenleyin.',
+}
+
 export const SELLER_WARNING_TEXT = 'Mesafeli satış için satıcı bilgilerinizi tamamlayın'
 
 /** Hidden wins over edited, edited wins over the template. */
