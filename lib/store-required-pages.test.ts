@@ -51,8 +51,8 @@ describe('Teslimat ve İade document', () => {
 
   it('is one combined, editable document with a draft note', () => {
     expect(doc.title).toBe('Teslimat ve İade')
-    expect(LEGAL_DOC_ENTRIES.find((e) => e.slug === 'iptal-ve-iade')?.title).toBe('Teslimat ve İade')
-    expect(LEGAL_DRAFT_NOTES['iptal-ve-iade']).toContain('hukuk ekibi')
+    expect(LEGAL_DOC_ENTRIES.find((e) => e.slug === 'teslimat-ve-iade')?.title).toBe('Teslimat ve İade')
+    expect(LEGAL_DRAFT_NOTES['teslimat-ve-iade']).toContain('hukuk ekibi')
   })
 
   it('covers delivery time, fee, region, damaged delivery, returns and exchange steps', () => {

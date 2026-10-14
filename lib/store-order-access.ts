@@ -10,7 +10,7 @@ import { readOrderItems } from '@/lib/store-order-items'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function tokenSecret(): string {
+export function tokenSecret(): string {
   return (
     process.env.STORE_ORDER_TOKEN_SECRET ||
     process.env.SUPABASE_JWT_SECRET ||

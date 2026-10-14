@@ -12,7 +12,7 @@ export const CARD_PROVIDERS = [
     id: 'iyzico',
     label: 'iyzico',
     /** True once per-store checkout for this provider is implemented. */
-    integrated: false,
+    integrated: true,
   },
 ] as const
 

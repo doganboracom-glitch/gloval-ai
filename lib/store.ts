@@ -1,5 +1,10 @@
 "use server";
 
+import { headers } from "next/headers";
+import {
+  prepareIyzicoCheckout,
+  startIyzicoPayment,
+} from "@/lib/store-payments/iyzico-checkout";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaymentProvider, type PaymentProviderId } from "@/lib/payments";
@@ -222,6 +227,8 @@ export type CheckoutResult =
       productId?: string;
       productName?: string;
       available?: number;
+      /** Set when card checkout needs buyer fields that are missing (labels). */
+      missing?: string[];
     };
 
 /**
@@ -386,11 +393,33 @@ export async function createOrder(
   });
   const total = totals.totalCents;
 
-  // Only manual methods and the (explicitly allowed) mock provider can take an
-  // order. Card providers (e.g. iyzico, which has no per-store credentials yet)
-  // must never fall through to a PLATFORM-keyed adapter: the money would land
-  // in Gloval's account instead of the store's.
-  if (!isManualStoreProvider(providerId) && providerId !== "mock") {
+  // Card payments use the STORE OWNER'S own iyzico keys (never the platform's):
+  // everything that can fail is checked here, before an order or stock exists.
+  // Any other non-manual provider (except the explicitly allowed mock) is
+  // refused: it must never fall through to a PLATFORM-keyed adapter, because
+  // the money would land in Gloval's account instead of the store's.
+  let card: Extract<
+    Awaited<ReturnType<typeof prepareIyzicoCheckout>>,
+    { ok: true }
+  > | null = null;
+  if (providerId === "iyzico") {
+    const h = await headers();
+    const ip =
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      h.get("x-real-ip") ||
+      "";
+    const prepared = await prepareIyzicoCheckout(
+      admin,
+      project.id,
+      customer,
+      input.invoice?.type === "individual" ? input.invoice.tckn : undefined,
+      ip,
+    );
+    if (!prepared.ok) {
+      return { ok: false, error: prepared.error, missing: prepared.missing };
+    }
+    card = prepared;
+  } else if (!isManualStoreProvider(providerId) && providerId !== "mock") {
     return { ok: false, error: STORE_PAYMENT_ERROR_CODE.not_configured };
   }
 
@@ -554,6 +583,36 @@ export async function createOrder(
       totalCents: total,
       currency,
       orderPath,
+    };
+  }
+
+  if (card) {
+    const started = await startIyzicoPayment(admin, {
+      projectId: project.id,
+      orderId: order.id,
+      totalCents: total,
+      currency,
+      lines: orderItems.map((oi) => ({
+        id: oi.product_id ?? oi.name,
+        name: oi.name,
+        totalCents: oi.line_total_cents,
+      })),
+      shippingCents: shipping,
+      creds: card.creds,
+      buyer: card.buyer,
+    });
+    if (!started.ok) {
+      await releaseOrderStock(admin, order.id);
+      await voidOrder(admin, order.id, idempotencyKey);
+      return { ok: false, error: started.error };
+    }
+    return {
+      ok: true,
+      orderId: order.id,
+      totalCents: total,
+      currency,
+      orderPath,
+      paymentUrl: started.paymentUrl,
     };
   }
 

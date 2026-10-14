@@ -201,13 +201,13 @@ describe('store footer required links', () => {
   it('cannot hide the three required documents even when listed as hidden', () => {
     const site = fullStore()
     site.legalDocs = {
-      hidden: ['gizlilik-politikasi', 'iptal-ve-iade', 'mesafeli-satis-sozlesmesi'],
+      hidden: ['gizlilik-politikasi', 'teslimat-ve-iade', 'mesafeli-satis-sozlesmesi'],
     } as never
     expect(barLabels(site)).toEqual(expect.arrayContaining(REQUIRED_LABELS))
   })
 
   it('links the delivery & returns document under its combined name', () => {
-    const link = resolveFooterLegal(undefined, fullStore()).find((l) => l.href === '/yasal/iptal-ve-iade')
+    const link = resolveFooterLegal(undefined, fullStore()).find((l) => l.href === '/yasal/teslimat-ve-iade')
     expect(link?.label).toBe('Teslimat ve İade')
   })
 

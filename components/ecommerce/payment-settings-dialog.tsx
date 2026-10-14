@@ -14,6 +14,8 @@ import { GeneralPaymentSettings } from '@/components/ecommerce/general-payment-s
 import { PaymentSettingsClient } from '@/components/ecommerce/payment-settings-client'
 import { ShippingSettingsPanel } from '@/components/ecommerce/shipping-settings-panel'
 import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
+import { getIyzicoSettings } from '@/lib/store-payments/iyzico-settings'
+import { IyzicoSettingsPanel } from '@/components/ecommerce/iyzico-settings-panel'
 
 type TabId = 'general' | 'shipping' | 'iyzico'
 
@@ -29,8 +31,7 @@ const copy = {
     loadError: 'Ödeme ayarları yüklenemedi. Lütfen tekrar deneyin.',
     retry: 'Tekrar dene',
     back: 'Genel ayarlara dön',
-    iyzicoSoon: 'iyzico entegrasyonu yakında eklenecek.',
-  },
+     },
   en: {
     title: 'Payment and shipping settings',
     shipping: 'Shipping',
@@ -42,17 +43,17 @@ const copy = {
     loadError: 'Payment settings could not be loaded. Please try again.',
     retry: 'Retry',
     back: 'Back to general settings',
-    iyzicoSoon: 'The iyzico integration is coming soon.',
-  },
+     },
 }
 
 async function loadAll(projectId: string) {
-  const [general, bank, shipping] = await Promise.all([
+  const [general, bank, shipping, iyzico] = await Promise.all([
     getGeneralPaymentSettings(projectId),
     getPaymentSettingsForOwner(projectId),
     getShippingSettings(projectId),
+    getIyzicoSettings(projectId),
   ])
-  return { general, bank, shipping }
+  return { general, bank, shipping, iyzico }
 }
 
 /**
@@ -123,7 +124,7 @@ export function PaymentSettingsDialog({
   const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
     { id: 'general', label: c.general },
     { id: 'shipping', label: c.shipping },
-    { id: 'iyzico', label: 'iyzico', disabled: true },
+    { id: 'iyzico', label: 'iyzico' },
   ]
 
   return (
@@ -243,7 +244,18 @@ export function PaymentSettingsDialog({
             />
           )}
 
-          {tab === 'iyzico' && <p className="text-sm text-muted-foreground">{c.iyzicoSoon}</p>}
+          {data && tab === 'iyzico' && (
+            <IyzicoSettingsPanel
+              key={`iyzico-${version}`}
+              projectId={projectId}
+              initial={data.iyzico}
+              onChanged={(view) =>
+                void mutate((prev) => (prev ? { ...prev, iyzico: view } : prev), {
+                  revalidate: true,
+                })
+              }
+            />
+          )}
         </div>
       </div>
     </div>

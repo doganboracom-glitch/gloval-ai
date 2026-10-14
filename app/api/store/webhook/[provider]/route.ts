@@ -22,6 +22,13 @@ export async function POST(
 ) {
   const { provider: providerParam } = await params
 
+  // Store card payments (iyzico) settle ONLY through the signed per-order
+  // return flow, which verifies with the store's own keys. A platform-keyed
+  // webhook here could settle a store's orders with the wrong credentials.
+  if (providerParam === 'iyzico') {
+    return NextResponse.json({ error: 'unknown_provider' }, { status: 404 })
+  }
+
   // Only real, implemented PSPs may settle store orders. The registry falls
   // back to the mock provider (which accepts any payload as "paid") for unknown
   // ids, and `mock`/`bank_transfer` are not webhook providers at all.

@@ -9,7 +9,7 @@ import {
   type SocialData,
   type SocialNetwork,
 } from '@/lib/social-links'
-import { canHideLegalDoc, isSiteLegalSlug } from '@/lib/site-legal-docs'
+import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -303,8 +303,8 @@ export function applyOperation(
       if (!isSiteLegalSlug(operation.slug)) return next
       const body = sanitizeLegalMarkup(operation.body)
       const docs = { ...(next.legalDocs?.docs ?? {}) }
+      for (const key of legalSlugKeys(operation.slug)) delete docs[key]
       if (body) docs[operation.slug] = { body, updatedAt: new Date().toISOString() }
-      else delete docs[operation.slug]
       next.legalDocs = { ...next.legalDocs, docs }
       return next
     }
@@ -312,7 +312,7 @@ export function applyOperation(
     case 'resetLegalDoc': {
       if (!isSiteLegalSlug(operation.slug) || !next.legalDocs?.docs) return next
       const docs = { ...next.legalDocs.docs }
-      delete docs[operation.slug]
+      for (const key of legalSlugKeys(operation.slug)) delete docs[key]
       next.legalDocs = { ...next.legalDocs, docs }
       return next
     }
@@ -320,8 +320,8 @@ export function applyOperation(
     case 'setLegalDocHidden': {
       if (!canHideLegalDoc(next, operation.slug)) return next
       const hidden = new Set(next.legalDocs?.hidden ?? [])
+      for (const key of legalSlugKeys(operation.slug)) hidden.delete(key)
       if (operation.hidden) hidden.add(operation.slug)
-      else hidden.delete(operation.slug)
       next.legalDocs = { ...next.legalDocs, hidden: [...hidden] }
       return next
     }

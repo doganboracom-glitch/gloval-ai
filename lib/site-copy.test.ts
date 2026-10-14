@@ -19,7 +19,8 @@ describe('footer copy', () => {
     expect(footer).toContain('PLATFORM_PAYMENT_BADGES')
     const badges = read('components/payment-badges.tsx')
     expect(badges).toContain('/payment/iyzico-logo.svg')
-    expect(badges).toContain('/payment/card-logos.svg')
+    expect(badges).toContain('/payment/mastercard.svg')
+    expect(badges).toContain('/payment/visa.svg')
   })
 })
 

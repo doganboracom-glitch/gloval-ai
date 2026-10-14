@@ -31,7 +31,10 @@ const copy = {
     card: 'Kredi kartı',
     cardHint: 'Alıcıya tek bir "Kredi/Banka kartı" seçeneği gösterilir.',
     activeProvider: 'Aktif sanal pos',
-    soon: 'Yakında',
+    providerReady: 'Hazır',
+    providerNeedsTest: 'Bağlantı testi gerekli',
+    enableWarning:
+      'iyzico bağlantısı henüz test edilmedi. Önce iyzico sekmesinde anahtarlarınızı kaydedip bağlantıyı test edin; aksi halde kart ödemesi açılamaz.',
     cardNotReady:
       'Seçili sanal pos henüz kullanıma hazır değil, bu yüzden kart seçeneği alıcıya gösterilmez.',
     cardUnreadable:
@@ -68,7 +71,10 @@ const copy = {
     card: 'Credit card',
     cardHint: 'Buyers see a single "Credit/debit card" option.',
     activeProvider: 'Active card provider',
-    soon: 'Coming soon',
+    providerReady: 'Ready',
+    providerNeedsTest: 'Connection test required',
+    enableWarning:
+      'The iyzico connection has not been tested yet. Save your keys in the iyzico tab and test the connection first; otherwise card payments cannot be enabled.',
     cardNotReady:
       'The selected provider is not ready yet, so the card option is hidden from buyers.',
     cardUnreadable:
@@ -234,12 +240,25 @@ export function GeneralPaymentSettings({
       >
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">{c.activeProvider}</legend>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input type="radio" name="card-provider" disabled />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="radio" name="card-provider" checked readOnly />
             iyzico
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{c.soon}</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                initial.cardReady
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {initial.cardReady ? c.providerReady : c.providerNeedsTest}
+            </span>
           </label>
         </fieldset>
+        {card && !initial.cardReady && !cardProblem && (
+          <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+            {c.enableWarning}
+          </p>
+        )}
         {cardProblem && (
           <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {initial.cardUnreadable ? c.cardUnreadable : c.cardNotReady}

@@ -28,7 +28,17 @@ const nextConfig = {
     unoptimized: true,
   },
   async redirects() {
-    return [{ source: '/dashboard/mesajlar', destination: '/dashboard/messages', permanent: true }]
+    return [
+      { source: '/dashboard/mesajlar', destination: '/dashboard/messages', permanent: true },
+      // Store "Teslimat ve İade" moved from iptal-ve-iade. Only the tenant path
+      // is redirected here; the platform's own /yasal/iptal-ve-iade is a
+      // different document, so tenant HOSTS are handled in middleware.
+      {
+        source: '/site/:slug/yasal/iptal-ve-iade',
+        destination: '/site/:slug/yasal/teslimat-ve-iade',
+        permanent: true,
+      },
+    ]
   },
   async headers() {
     return [

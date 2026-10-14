@@ -12,6 +12,14 @@ import {
 } from '@/lib/custom-domains/service'
 import { LANG_COOKIE, normalizeLang, resolveLangFromAcceptLanguage } from '@/lib/i18n'
 
+const LEGACY_TENANT_REFUND_PATH = '/yasal/iptal-ve-iade'
+
+function redirectLegacyRefundPath(request: NextRequest) {
+  const url = request.nextUrl.clone()
+  url.pathname = '/yasal/teslimat-ve-iade'
+  return NextResponse.redirect(url, 308)
+}
+
 export async function middleware(request: NextRequest) {
   const host = request.headers.get('host')
 
@@ -21,6 +29,9 @@ export async function middleware(request: NextRequest) {
   const slug = getTenantSlugFromHost(host)
   if (slug && isTenantPassthroughPath(request.nextUrl.pathname)) {
     return NextResponse.next()
+  }
+  if (slug && request.nextUrl.pathname === LEGACY_TENANT_REFUND_PATH) {
+    return redirectLegacyRefundPath(request)
   }
   if (slug && !request.nextUrl.pathname.startsWith('/site/')) {
     const url = request.nextUrl.clone()
@@ -39,6 +50,7 @@ export async function middleware(request: NextRequest) {
   // `getPublishedSlugForProjectId` requiring that project still be published.
   if (host && !slug && !request.nextUrl.pathname.startsWith('/site/') && isForeignHost(host)) {
     if (isTenantPassthroughPath(request.nextUrl.pathname)) return NextResponse.next()
+    if (request.nextUrl.pathname === LEGACY_TENANT_REFUND_PATH) return redirectLegacyRefundPath(request)
     const bound = await resolveActiveDomainForHost(host)
     const targetSlug = bound?.websiteProjectId
       ? await getPublishedSlugForProjectId(bound.websiteProjectId)

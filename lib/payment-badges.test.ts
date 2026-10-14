@@ -7,8 +7,10 @@ import { PaymentBadges } from '@/components/payment-badges'
 import { resolveStorePayment } from './store-payment-policy'
 import {
   PLATFORM_PAYMENT_BADGES,
+  STORE_BASE_PAYMENT_BADGES,
   hasAnyPaymentBadge,
   resolveStorePaymentBadges,
+  type PaymentBadgeSet,
 } from './payment-badges'
 import type { StorePaymentResolution } from './store-payment-policy'
 
@@ -28,30 +30,34 @@ function ok(
   }
 }
 
+const BASE: PaymentBadgeSet = {
+  iyzico: true,
+  mastercard: true,
+  visa: true,
+  amex: false,
+  troy: false,
+  bankTransfer: false,
+  cashOnDelivery: false,
+}
+
 describe('resolveStorePaymentBadges', () => {
-  it('shows nothing for a missing or failed resolution', () => {
-    expect(resolveStorePaymentBadges(null)).toBeNull()
-    expect(resolveStorePaymentBadges({ ok: false, reason: 'config_unreadable' })).toBeNull()
+  it('always keeps iyzico + Mastercard + Visa, even without a usable resolution', () => {
+    expect(resolveStorePaymentBadges(null)).toEqual(BASE)
+    expect(resolveStorePaymentBadges({ ok: false, reason: 'config_unreadable' })).toEqual(BASE)
   })
 
-  it('shows nothing for demo stores and the mock provider', () => {
-    expect(resolveStorePaymentBadges(ok(['iyzico'], { demo: true }))).toBeNull()
-    expect(resolveStorePaymentBadges(ok(['mock']))).toBeNull()
+  it('keeps only the base logos for demo stores and the mock provider', () => {
+    expect(resolveStorePaymentBadges(ok(['iyzico'], { demo: true }))).toEqual(BASE)
+    expect(resolveStorePaymentBadges(ok(['mock']))).toEqual(BASE)
   })
 
-  it('shows card and iyzico marks when iyzico is live', () => {
-    expect(resolveStorePaymentBadges(ok(['iyzico']))).toEqual({
-      cards: true,
-      iyzico: true,
-      bankTransfer: false,
-      cashOnDelivery: false,
-    })
+  it('adds Amex and Troy only while iyzico is the live card provider', () => {
+    expect(resolveStorePaymentBadges(ok(['iyzico']))).toEqual({ ...BASE, amex: true, troy: true })
   })
 
-  it('shows only chips for manual methods, never card logos', () => {
+  it('adds only chips for manual methods, never Amex/Troy', () => {
     expect(resolveStorePaymentBadges(ok(['bank_transfer', 'cash_on_delivery']))).toEqual({
-      cards: false,
-      iyzico: false,
+      ...BASE,
       bankTransfer: true,
       cashOnDelivery: true,
     })
@@ -59,7 +65,7 @@ describe('resolveStorePaymentBadges', () => {
 })
 
 describe('footer payment strip rules', () => {
-  const html = (badges: Parameters<typeof PaymentBadges>[0]['badges'], variant?: 'platform' | 'site') =>
+  const html = (badges: PaymentBadgeSet | null, variant?: 'platform' | 'site') =>
     renderToStaticMarkup(createElement(PaymentBadges, { badges, variant }))
   const row = (providers: string[], overrides: Record<string, unknown> = {}) => ({
     provider: providers[0],
@@ -68,51 +74,68 @@ describe('footer payment strip rules', () => {
     active_card_provider: 'iyzico',
     ...overrides,
   })
+  const logos = (out: string) => [...out.matchAll(/data-payment-logo="(\w+)"/g)].map((m) => m[1])
 
-  it('(a) hides card and iyzico logos when the card method is not usable', () => {
+  it('(a) iyzico + Mastercard + Visa show whether or not a card provider is active', () => {
     for (const cardReady of [true, false]) {
       const res = resolveStorePayment(row(['iyzico']), false, false, false, cardReady)
-      expect(resolveStorePaymentBadges(res)).toBeNull()
+      expect(logos(html(resolveStorePaymentBadges(res), 'site'))).toEqual(
+        cardReady ? ['iyzico', 'mastercard', 'visa', 'amex', 'troy'] : ['iyzico', 'mastercard', 'visa'],
+      )
     }
     const unconfigured = resolveStorePayment(null, false, false, false, true)
-    expect(resolveStorePaymentBadges(unconfigured)).toBeNull()
-    const out = html(resolveStorePaymentBadges(ok(['bank_transfer'])), 'site')
-    expect(out).not.toContain('iyzico')
-    expect(out).not.toContain('card-logos')
+    expect(logos(html(resolveStorePaymentBadges(unconfigured), 'site'))).toEqual([
+      'iyzico',
+      'mastercard',
+      'visa',
+    ])
+    const manualOnly = html(resolveStorePaymentBadges(ok(['bank_transfer'])), 'site')
+    expect(logos(manualOnly)).toEqual(['iyzico', 'mastercard', 'visa'])
   })
 
-  it('(b) while cards are "coming soon", stores show only the enabled manual labels', () => {
-    const res = resolveStorePayment(
+  it('(b) Amex and Troy are hidden unless iyzico is the live card provider', () => {
+    const cardsNotReady = resolveStorePayment(
       row(['iyzico', 'bank_transfer', 'cash_on_delivery']),
       false,
       false,
       false,
-      true,
+      false,
     )
-    const badges = resolveStorePaymentBadges(res)
-    expect(badges).toEqual({
-      cards: false,
-      iyzico: false,
-      bankTransfer: true,
-      cashOnDelivery: true,
-    })
+    const badges = resolveStorePaymentBadges(cardsNotReady)
+    expect(badges).toEqual({ ...BASE, bankTransfer: true, cashOnDelivery: true })
     const out = html(badges, 'site')
     expect(out).toContain('Havale / EFT')
     expect(out).toContain('Kapıda ödeme')
-    expect(out).not.toContain('<img')
+    expect(out).not.toContain('American Express')
+    expect(out).not.toContain('Troy')
+
+    const live = resolveStorePaymentBadges(
+      resolveStorePayment(row(['iyzico']), false, false, false, true),
+    )
+    expect(live.amex && live.troy).toBe(true)
+  })
+
+  it('(c) manual chips render only when the method is enabled', () => {
     const onlyCod = resolveStorePaymentBadges(
-      resolveStorePayment(row(['iyzico', 'cash_on_delivery']), false, false, false, true),
+      resolveStorePayment(row(['iyzico', 'cash_on_delivery']), false, false, false, false),
     )
     expect(html(onlyCod, 'site')).toContain('Kapıda ödeme')
     expect(html(onlyCod, 'site')).not.toContain('Havale / EFT')
-  })
-
-  it('(c) renders no strip at all when no method is enabled', () => {
-    const disabled = resolveStorePayment(row(['bank_transfer'], { enabled: false }), false, false, false, true)
-    expect(resolveStorePaymentBadges(disabled)).toBeNull()
-    expect(html(resolveStorePaymentBadges(disabled), 'site')).toBe('')
+    const disabled = resolveStorePaymentBadges(
+      resolveStorePayment(row(['bank_transfer'], { enabled: false }), false, false, false, true),
+    )
+    expect(html(disabled, 'site')).not.toContain('Havale / EFT')
+    expect(html(disabled, 'site')).not.toContain('Kapıda ödeme')
     expect(
-      html({ cards: false, iyzico: false, bankTransfer: false, cashOnDelivery: false }),
+      html({
+        iyzico: false,
+        mastercard: false,
+        visa: false,
+        amex: false,
+        troy: false,
+        bankTransfer: false,
+        cashOnDelivery: false,
+      }),
     ).toBe('')
   })
 
@@ -123,14 +146,36 @@ describe('footer payment strip rules', () => {
     )
   })
 
-  it('(e) the gloval.ai footer keeps iyzico + card logos and no "Güvenli Ödeme" text', () => {
+  it('(e) the gloval.ai footer shows all five logos from the shared component, with no caption', () => {
     const out = html(PLATFORM_PAYMENT_BADGES)
-    expect(out).toContain('/payment/iyzico-logo.svg')
-    expect(out).toContain('/payment/card-logos.svg')
-    expect(out).toContain('Mastercard, Visa, American Express, Troy')
+    expect(logos(out)).toEqual(['iyzico', 'mastercard', 'visa', 'amex', 'troy'])
+    for (const file of ['iyzico-logo', 'mastercard', 'visa', 'amex', 'troy']) {
+      expect(out).toContain(`/payment/${file}.svg`)
+    }
     expect(out).not.toMatch(/Güvenli Ödeme|Secure Payment/i)
     expect(out).not.toContain('Havale / EFT')
     expect(out).not.toContain('Kapıda ödeme')
+  })
+
+  it('(f) store and platform strips render the same logo files', () => {
+    const store = html(resolveStorePaymentBadges(ok(['iyzico'])), 'site')
+    const platform = html(PLATFORM_PAYMENT_BADGES)
+    const srcs = (out: string) => [...out.matchAll(/src="([^"]+)"/g)].map((m) => m[1])
+    expect(srcs(store)).toEqual(srcs(platform))
+  })
+
+  it('(g) logo files exist and are not stretched', () => {
+    for (const file of ['iyzico-logo', 'mastercard', 'visa', 'amex', 'troy']) {
+      const svg = readFileSync(path.resolve(__dirname, '..', 'public/payment', `${file}.svg`), 'utf8')
+      expect(svg).toContain('viewBox=')
+    }
+    const out = html(PLATFORM_PAYMENT_BADGES)
+    expect(out).toContain('h-5 w-auto')
+    expect(out).not.toMatch(/object-fill/)
+  })
+
+  it('store base set is exactly iyzico + Mastercard + Visa', () => {
+    expect(STORE_BASE_PAYMENT_BADGES).toEqual(BASE)
   })
 })
 

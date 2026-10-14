@@ -1,58 +1,80 @@
 import type { StorePaymentResolution } from '@/lib/store-payment-policy'
-import { isCardProviderMethod } from '@/lib/payments/methods'
 
 /**
  * Which payment marks a footer strip may show. Pure data, no I/O.
  *
- * - `cards`: Visa / Mastercard / Amex / Troy
- * - `iyzico`: the iyzico mark
+ * - `iyzico` / `mastercard` / `visa`: logos required on every storefront by the
+ *   iyzico partner review, shown whether or not a card provider is live
+ * - `amex` / `troy`: only while iyzico is the live card provider
  * - `bankTransfer` / `cashOnDelivery`: small text chips, not logos
  */
 export type PaymentBadgeSet = {
-  cards: boolean
   iyzico: boolean
+  mastercard: boolean
+  visa: boolean
+  amex: boolean
+  troy: boolean
   bankTransfer: boolean
   cashOnDelivery: boolean
 }
 
 /** The gloval.ai (platform) footer always takes cards through iyzico. */
 export const PLATFORM_PAYMENT_BADGES: PaymentBadgeSet = {
-  cards: true,
   iyzico: true,
+  mastercard: true,
+  visa: true,
+  amex: true,
+  troy: true,
+  bankTransfer: false,
+  cashOnDelivery: false,
+}
+
+/** Logos every storefront footer carries, regardless of payment configuration. */
+export const STORE_BASE_PAYMENT_BADGES: PaymentBadgeSet = {
+  iyzico: true,
+  mastercard: true,
+  visa: true,
+  amex: false,
+  troy: false,
   bankTransfer: false,
   cashOnDelivery: false,
 }
 
 export function hasAnyPaymentBadge(badges: PaymentBadgeSet | null | undefined): boolean {
   return Boolean(
-    badges && (badges.cards || badges.iyzico || badges.bankTransfer || badges.cashOnDelivery),
+    badges &&
+      (badges.iyzico ||
+        badges.mastercard ||
+        badges.visa ||
+        badges.amex ||
+        badges.troy ||
+        badges.bankTransfer ||
+        badges.cashOnDelivery),
   )
 }
 
 /**
- * Derives the strip for a STORE from its resolved payment configuration, so the
- * footer can never advertise something checkout would not accept:
+ * Derives the strip for a STORE footer. The iyzico, Mastercard and Visa logos
+ * are always present. Everything else stays tied to what checkout would accept
+ * (fail closed):
  *
- * - a method only counts when `resolveStorePayment` kept it (card providers are
- *   already filtered by "integrated" and "ready", fail closed);
- * - demo stores and the `mock` provider take no real money, so they show nothing;
- * - an unconfigured or unreadable store shows nothing.
- *
- * Returns `null` when there is nothing to show.
+ * - Amex and Troy appear only when `resolveStorePayment` kept the iyzico card
+ *   method (integrated, tested, readable credentials);
+ * - the manual chips appear only when that method is enabled;
+ * - demo stores, the `mock` provider, and an unconfigured or unreadable store
+ *   show the base logos and nothing else.
  */
 export function resolveStorePaymentBadges(
   resolution: StorePaymentResolution | null | undefined,
-): PaymentBadgeSet | null {
-  if (!resolution || !resolution.ok || resolution.demo) return null
+): PaymentBadgeSet {
+  if (!resolution || !resolution.ok || resolution.demo) return { ...STORE_BASE_PAYMENT_BADGES }
 
-  const cardMethods = resolution.methods.filter((m) => isCardProviderMethod(m))
-  const badges: PaymentBadgeSet = {
-    // Card marks appear only while a card provider is live; the iyzico mark
-    // only when that live provider is iyzico.
-    cards: cardMethods.length > 0,
-    iyzico: cardMethods.includes('iyzico'),
+  const iyzicoLive = resolution.methods.includes('iyzico')
+  return {
+    ...STORE_BASE_PAYMENT_BADGES,
+    amex: iyzicoLive,
+    troy: iyzicoLive,
     bankTransfer: resolution.methods.includes('bank_transfer'),
     cashOnDelivery: resolution.methods.includes('cash_on_delivery'),
   }
-  return hasAnyPaymentBadge(badges) ? badges : null
 }
