@@ -12,6 +12,7 @@ import {
   type PlanCode,
 } from '@/lib/pricing-config'
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
+import { ADVANCED_AI_DISTINCT } from '@/lib/ai-models'
 
 /**
  * User-facing plan copy (TR + EN only; every other language falls back to EN).
@@ -56,6 +57,13 @@ export type PlanCopyItem = {
   soon?: boolean
   /** Faded pill rendered next to the card label (e.g. "Yakında"). */
   badge?: string
+  /** Lists the row under another comparison category than its card group. */
+  tableGroup?: 'ai'
+}
+
+export type PlanCopyOptions = {
+  /** Show the advanced-AI row. Defaults to the live model flag. */
+  advancedAi?: boolean
 }
 
 export type PlanCopyGroup = {
@@ -179,6 +187,8 @@ type Strings = {
     orderMails: string
     aiProduct: string
     aiProductNote: string
+    advancedAi: string
+    advancedAiNote: string
     legalDocs: string
     legalDocsNote: string
     productSeo: string
@@ -327,6 +337,9 @@ const TR: Strings = {
     orderMails: 'Sipariş e-posta bildirimleri',
     aiProduct: 'Yapay zeka ürün asistanı',
     aiProductNote: 'Ürün metni ve görseli üretir (işlem kullanır).',
+    advancedAi: 'Gelişmiş AI işlemleri',
+    advancedAiNote:
+      'Site oluşturma, düzenleme ve ürün metni daha gelişmiş modelle çalışır. Kredi fiyatları değişmez.',
     legalDocs: 'Resmi metin şablonları',
     legalDocsNote: 'Mesafeli satış, iptal ve iade, gizlilik şablonları; düzenlenebilir.',
     productSeo: 'Ürün SEO',
@@ -476,6 +489,9 @@ const EN: Strings = {
     orderMails: 'Order email notifications',
     aiProduct: 'AI product assistant',
     aiProductNote: 'Writes product text and images (uses AI actions).',
+    advancedAi: 'Advanced AI actions',
+    advancedAiNote:
+      'Site creation, editing and product text run on a more advanced model. Credit prices stay the same.',
     legalDocs: 'Legal document templates',
     legalDocsNote: 'Distance sales, cancellation and refund, privacy templates; editable.',
     productSeo: 'Product SEO',
@@ -541,12 +557,17 @@ export function buildPlanView(
   // that the .com.tr gift is only shown under the price.
   _cycle: BillingCycle,
   langInput: string | null | undefined,
+  options: PlanCopyOptions = {},
 ): PlanView {
   const lang = copyLang(langInput)
   const s = STRINGS[lang]
   const nf = numberFormatter(lang)
   const base = s.plans[code]
   const { f, groups: g } = s
+  const advancedAiItems: PlanCopyItem[] =
+    (options.advancedAi ?? ADVANCED_AI_DISTINCT)
+      ? [{ id: 'advancedAi', label: f.advancedAi, note: f.advancedAiNote, tableGroup: 'ai' }]
+      : []
 
   const head = {
     code,
@@ -665,6 +686,7 @@ export function buildPlanView(
           items: [
             sitesItem(f.sitesRight(SITE_LIMITS.pro), true),
             ...pageItems,
+            ...advancedAiItems,
             glovalAdsItem(),
           ],
         },
@@ -704,6 +726,7 @@ export function buildPlanView(
         items: [
           sitesItem(f.ecomSites(corporateSites, ECOMMERCE_SITE_LIMITS.ecommerce), true),
           ...pageItems,
+          ...advancedAiItems,
           glovalAdsItem(),
         ],
       },
@@ -759,13 +782,22 @@ const GROUP_ORDER: GroupKey[] = ['site', 'store', 'email', 'support']
  * products, mailboxes, support) show their value; a plan that does not repeat
  * a row inherits it from the plan below.
  */
-export function buildComparison(langInput: string | null | undefined): ComparisonGroup[] {
+export function buildComparison(
+  langInput: string | null | undefined,
+  options: PlanCopyOptions = {},
+): ComparisonGroup[] {
   const lang = copyLang(langInput)
   const s = STRINGS[lang]
   const nf = numberFormatter(lang)
 
   const rowLabels = new Map<string, string>()
-  const rowOrder: Record<GroupKey, string[]> = { site: [], store: [], email: [], support: [] }
+  const rowOrder: Record<GroupKey | 'ai', string[]> = {
+    site: [],
+    store: [],
+    email: [],
+    support: [],
+    ai: [],
+  }
   const cells: Record<PlanCode, Map<string, ComparisonValue>> = {
     free: new Map(),
     starter: new Map(),
@@ -778,12 +810,13 @@ export function buildComparison(langInput: string | null | undefined): Compariso
     if (parent) {
       for (const [key, value] of cells[parent]) cells[code].set(key, value)
     }
-    for (const group of buildPlanView(code, 'yearly', lang).groups) {
+    for (const group of buildPlanView(code, 'yearly', lang, options).groups) {
       for (const item of group.items) {
-        const key = `${group.key}:${item.id}`
+        const target = item.tableGroup ?? group.key
+        const key = `${target}:${item.id}`
         if (!rowLabels.has(key)) {
           rowLabels.set(key, item.rowLabel ?? item.label)
-          rowOrder[group.key].push(key)
+          rowOrder[target].push(key)
         }
         cells[code].set(key, item.soon ? s.comparison.soon : (item.value ?? true))
       }
@@ -815,6 +848,13 @@ export function buildComparison(langInput: string | null | undefined): Compariso
         pro: nf.format(aiCodes.pro.maxBalance),
         ecommerce: nf.format(aiCodes.ecommerce.maxBalance),
       },
+      ...rowOrder.ai.map((rowKey) => ({
+        label: rowLabels.get(rowKey) ?? rowKey,
+        free: cells.free.get(rowKey) ?? false,
+        starter: cells.starter.get(rowKey) ?? false,
+        pro: cells.pro.get(rowKey) ?? false,
+        ecommerce: cells.ecommerce.get(rowKey) ?? false,
+      })),
     ],
   }
 

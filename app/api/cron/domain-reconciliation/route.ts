@@ -15,6 +15,7 @@ import { sweepExpiredCandidates } from '@/lib/store-ai-image'
 import { createCandidateStore } from '@/lib/store-ai-image-store'
 import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
 import { sweepOldContactMessages } from '@/lib/site-contact-store'
+import { sweepOldAiGenerationEvents } from '@/lib/ai-generation-events'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -128,6 +129,15 @@ export async function GET(request: Request) {
     contactMessages = { error: 'contact_message_sweep_failed' }
   }
 
+  // Isolated: deletes AI outcome counters past the 90-day retention window.
+  let aiEvents: { deleted: number } | { error: string }
+  try {
+    aiEvents = { deleted: await sweepOldAiGenerationEvents(createAdminClient(), Date.now()) }
+  } catch (error) {
+    console.log('[ai-events] retention sweep failed:', error instanceof Error ? error.message : 'unknown')
+    aiEvents = { error: 'ai_events_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -142,7 +152,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

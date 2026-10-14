@@ -145,17 +145,19 @@ export function UpgradeModal({
               >
                 {prompt.primaryCta}
               </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => goToLogin(primaryIsPro ? 'starter' : 'pro')}
-                className={cn(
-                  buttonBase,
-                  'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-                )}
-              >
-                {prompt.secondaryCta}
-              </button>
+              {prompt.secondaryCta && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => goToLogin(primaryIsPro ? 'starter' : 'pro')}
+                  className={cn(
+                    buttonBase,
+                    'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+                  )}
+                >
+                  {prompt.secondaryCta}
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -167,14 +169,16 @@ export function UpgradeModal({
               >
                 {prompt.primaryCta}
               </LinkButton>
-              <LinkButton
-                href={`${linkPrefix}#plan-${primaryIsPro ? 'starter' : 'pro'}`}
-                variant="secondary"
-                onClick={onClose}
-                className="flex-1"
-              >
-                {prompt.secondaryCta}
-              </LinkButton>
+              {prompt.secondaryCta && (
+                <LinkButton
+                  href={`${linkPrefix}#plan-${primaryIsPro ? 'starter' : 'pro'}`}
+                  variant="secondary"
+                  onClick={onClose}
+                  className="flex-1"
+                >
+                  {prompt.secondaryCta}
+                </LinkButton>
+              )}
             </>
           )}
         </div>

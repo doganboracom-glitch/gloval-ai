@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { resolveAiModel } from '@/lib/ai-models'
+import { getPlanCodeForUser } from '@/lib/billing'
 import { listCategories } from '@/lib/ecommerce'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
 import { getProductImageStorageBase } from '@/lib/product-image-store'
@@ -89,10 +91,12 @@ export async function POST(request: Request) {
   const port = createStoreAiPort()
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(STORE_AI_MODEL_TIMEOUT_MS)])
 
+  const ai = resolveAiModel('productText', await getPlanCodeForUser(userId))
+
   const result = await runMeteredStoreAi(
     port,
     { userId, projectId, productKey, kind: 'text', requestId, signal },
-    () => generateStoreAiText(input, signal),
+    () => generateStoreAiText(input, signal, undefined, ai.model, ai.plan),
   )
 
   // Ids, kind, outcome and cost only; prompts and generated text are never logged.

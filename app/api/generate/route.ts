@@ -1,17 +1,20 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
-import { websiteGenerationSchema, fallbackWebsite } from '@/lib/website-schema'
+import { fallbackWebsite } from '@/lib/website-schema'
+import { generateSiteObject } from '@/lib/site-generate'
+import { generateStructured } from '@/lib/ai-structured'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns } from '@/lib/footer-links'
 import { ensureContactSection } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { normalizeCorporateSectionOrder } from '@/lib/section-order'
-import { sectorPromptHint, deriveSeoTitle, detectSector, isEcommerceIntent } from '@/lib/sector-profiles'
+import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
+import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
 import { attachHeroImage } from '@/lib/hero-image'
 import { attachSectionImages } from '@/lib/section-images'
 import { createClient } from '@/lib/supabase/server'
 import { getPlanCodeForUser } from '@/lib/billing'
-import { capPagesToLimit, pageLimitForPlan, pageLimitPromptHint } from '@/lib/page-limits'
+import { logAiUsage, resolveAiModel } from '@/lib/ai-models'
+import { capPagesToLimit, pageLimitForPlan } from '@/lib/page-limits'
 import {
   ANON_AI_LIMIT_ERROR,
   releaseAnonAiActions,
@@ -110,8 +113,9 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: userData } = await supabase.auth.getUser()
   if (userData?.user) {
-    const pageLimit = pageLimitForPlan(await getPlanCodeForUser(userData.user.id))
-    return runGenerate(body, pageLimit)
+    // Resolved on the server per request: the client never says which plan it is on.
+    const planCode = await getPlanCodeForUser(userData.user.id)
+    return runGenerate(body, pageLimitForPlan(planCode), planCode)
   }
 
   const pageLimit = pageLimitForPlan(null)
@@ -129,7 +133,7 @@ export async function POST(req: Request) {
 
   let counted = false
   try {
-    const res = await runGenerate(body, pageLimit)
+    const res = await runGenerate(body, pageLimit, null)
     if (res.ok) {
       const data = (await res.clone().json().catch(() => null)) as { source?: string } | null
       counted = data?.source === 'ai'
@@ -140,70 +144,30 @@ export async function POST(req: Request) {
   }
 }
 
-async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: number) {
+async function runGenerate(
+  { prompt, lang, mode }: GenerateBody,
+  pageLimit: number,
+  planCode: string | null,
+) {
   if (!prompt) return Response.json({ error: 'Prompt too short' }, { status: 400 })
 
   const normalizedLang: 'tr' | 'en' = lang === 'en' ? 'en' : 'tr'
   const language = normalizedLang === 'en' ? 'English' : 'Turkish'
 
-  const ecommerce = isEcommerceIntent(prompt)
-
   /* ---- Website mode: produce a full structured WebsiteSchema ---- */
   if (mode === 'website') {
+    const ai = resolveAiModel('siteGenerate', planCode)
     try {
-      const { object: generated } = await generateObject({
-        model: 'openai/gpt-5-mini',
-        // Includes meta.seoTitle (auto-generated on creation) but excludes the
-        // owner-only `tracking` snippets.
-        schema: websiteGenerationSchema,
-        // websiteSchema has optional fields (e.g. navigation.cta). ai@7 sets
-        // strictJsonSchema=true by default, so OpenAI 400s on optional keys not
-        // in `required`. Relax strict mode so AI website generation succeeds
-        // instead of always falling back to the deterministic template.
-        providerOptions: { openai: { strictJsonSchema: false } },
-        system:
-          `You are GLOVAL AI (gloval.ai), an AI website builder. Given a user's description, ` +
-          `produce a complete, structured website as JSON that matches the provided schema. ` +
-          `Respond with all human-readable text written in ${language}. ` +
-          `Set meta.language to "${normalizedLang}". Choose a cohesive palette with valid hex colors and ` +
-          `real Google Font names. Order the homepage sections sensibly, always starting with a hero and ` +
-          `ending with a footer. Aim for 7-10 well-chosen sections. ` +
-          `This looks like ${sectorPromptHint(prompt)} ` +
-          (ecommerce
-            ? `IMPORTANT: the user explicitly wants an ONLINE STORE. This MUST be a complete e-commerce ` +
-              `site — never a corporate "Home + About" brochure. It MUST include a "categories" section, ` +
-              `at least one "products" section with real products (name, price, and a "Sepete Ekle"/"Add to ` +
-              `Cart" buttonText; add oldPrice + a discount badge on sale items) and a "products" page in ` +
-              `pages. Prefer a "slider" hero for campaign slides. `
-            : '') +
-          pageLimitPromptHint(pageLimit) +
-          `ALWAYS include exactly one "contact" section just before the footer (also on online stores), ` +
-          `with a title, a short description, and form field labels; leave mapEmbed unset. ` +
-          `Use the available section types richly and appropriately: hero, about, services, features, ` +
-          `stats, testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
-          `Set meta.seoTitle to a short, keyword-rich search phrase (3-6 words) that helps this ` +
-          `business rank on Google: lead with the city or district when the brief mentions one, ` +
-          `then the main service keyword a customer would actually search for ` +
-          `(e.g. "İstanbul Evden Eve Nakliyat", "Kadıköy Diş Kliniği", "Ankara Oto Galeri"). ` +
-          `Never repeat the brand name in meta.seoTitle and never add punctuation or a slogan. ` +
-          `Give the hero a badge and a trustText, and write descriptive imagePrompt fields for hero, ` +
-          `gallery, portfolio and team images. ` +
-          `Use lucide-react icon names (lowercase) for any icon fields. ` +
-          `Be specific to the user's idea — never generic placeholder text. ` +
-          `Do NOT output any HTML, React, or code; only structured content.`,
-        prompt: prompt.slice(0, 800),
+      // Model call + deterministic repair + at most one same-model retry +
+      // page cap + SEO title all live in `generateSiteObject`, shared with the
+      // comparison script. It logs usage/repair itself and throws once the AI
+      // path is exhausted, which lands in the fallback below.
+      const { site: object } = await generateSiteObject({
+        ai,
+        prompt,
+        lang: normalizedLang,
+        pageLimit,
       })
-
-      // The prompt asks for at most `pageLimit` pages, but the model can still
-      // overshoot; hard-cap the generated site so it never exceeds the plan.
-      const object = capPagesToLimit(generated, pageLimit)
-
-      // If the model skipped or blanked the SEO title, fall back to the
-      // deterministic keyword derivation so a new site is never published
-      // without one.
-      if (!object.meta.seoTitle?.trim()) {
-        object.meta.seoTitle = deriveSeoTitle(prompt, detectSector(prompt), normalizedLang)
-      }
 
       // Attach a dynamic, brief-derived hero/slider image AND every other
       // visual (gallery / portfolio / team) — concurrently. They mutate
@@ -238,7 +202,7 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
     } catch (err) {
       // AI Gateway may be unavailable (e.g. no billing configured). Fall back to
       // a deterministic website so the pipeline still produces valid schema.
-      console.log('[v0] generate(website) error:', err instanceof Error ? err.message : err)
+      console.info('[ai-fallback]', { flow: ai.flow, model: ai.model, reason: err instanceof Error ? err.name : 'unknown' })
       const website = capPagesToLimit(fallbackWebsite(prompt, normalizedLang), pageLimit)
       const [img, sectionImages] = await Promise.all([
         attachHeroImage(website, prompt),
@@ -262,9 +226,10 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
   }
 
   /* ---- Plan mode (default): unchanged, powers the landing hero ---- */
+  const planAi = resolveAiModel('sitePlan', planCode)
   try {
-    const { object } = await generateObject({
-      model: 'openai/gpt-5-mini',
+    const { object } = await generateStructured({
+      ai: planAi,
       schema: planSchema,
       system:
         `You are GLOVAL AI (gloval.ai), an AI website builder. Given a user's description of the website they want, ` +
@@ -272,12 +237,11 @@ async function runGenerate({ prompt, lang, mode }: GenerateBody, pageLimit: numb
         `Keep hex colors valid and the palette cohesive and modern. Be specific to the user's idea, not generic.`,
       prompt: prompt.slice(0, 600),
     })
-
     return Response.json({ plan: object, source: 'ai' })
   } catch (err) {
     // AI Gateway may be unavailable (e.g. no billing configured). Fall back to a
     // deterministic plan so the demo still works, and flag it for the client.
-    console.log('[v0] generate error:', err instanceof Error ? err.message : err)
+    console.info('[ai-fallback]', { flow: planAi.flow, model: planAi.model, reason: err instanceof Error ? err.name : 'unknown' })
     return Response.json({
       plan: fallbackPlan(prompt, normalizedLang),
       source: 'fallback',

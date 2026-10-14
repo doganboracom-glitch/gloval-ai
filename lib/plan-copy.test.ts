@@ -214,7 +214,7 @@ describe('pricing copy only describes features that exist', () => {
       for (const claim of REMOVED_CLAIMS) expect(texts).not.toContain(claim)
     }
     expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
-      ['analytics', 'customDomain', 'phone', 'social', 'whatsapp'].sort(),
+      ['advancedAi', 'analytics', 'customDomain', 'phone', 'social', 'whatsapp'].sort(),
     )
   })
 
@@ -335,6 +335,33 @@ describe('credit box and GLOVAL ADS announcement (N1)', () => {
     expect([row.free, row.starter]).toEqual([false, false])
     expect(row.pro).toBe('Yakında')
     expect(row.ecommerce).toBe('Yakında')
+  })
+})
+
+describe('advanced AI row', () => {
+  const idsOf = (code: PlanCode, advancedAi: boolean) =>
+    buildPlanView(code, 'yearly', 'tr', { advancedAi }).groups.flatMap((g) =>
+      g.items.map((i) => i.id),
+    )
+
+  it('is listed on PRO and e-commerce cards only, and only when the model differs', () => {
+    for (const code of CODES) {
+      const expected = code === 'pro' || code === 'ecommerce'
+      expect(idsOf(code, true).includes('advancedAi')).toBe(expected)
+      expect(idsOf(code, false).includes('advancedAi')).toBe(false)
+    }
+  })
+
+  it('shows up in the comparison table as an AI row ticked for PRO and e-commerce', () => {
+    for (const lang of ['tr', 'en']) {
+      const rows = buildComparison(lang, { advancedAi: true }).flatMap((g) => g.rows)
+      const labels = rows.map((r) => r.label)
+      expect(labels).toContain(lang === 'tr' ? 'Gelişmiş AI işlemleri' : 'Advanced AI actions')
+      const row = rows.find((r) => r.label.includes(lang === 'tr' ? 'Gelişmiş AI' : 'Advanced AI'))
+      expect(row).toMatchObject({ free: false, starter: false, pro: true, ecommerce: true })
+      const without = buildComparison(lang, { advancedAi: false }).flatMap((g) => g.rows)
+      expect(without.map((r) => r.label)).not.toContain(row?.label)
+    }
   })
 })
 

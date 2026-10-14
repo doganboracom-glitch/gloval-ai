@@ -1,5 +1,6 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
+import { resolveAiModel } from '@/lib/ai-models'
+import { generateStructured } from '@/lib/ai-structured'
 import { PRODUCT_IMAGE_LIMITS } from '@/lib/product-images'
 import { PRODUCT_LIMITS, type ProductSpec } from '@/lib/product-input'
 import { StoreAiInvalidResult, StoreAiRefusal } from '@/lib/store-ai-engine'
@@ -8,7 +9,6 @@ import { wordIncludes } from '@/lib/visual-subjects'
 /** The model sees at most this many product images. */
 export const STORE_AI_MAX_IMAGES = 4
 export const STORE_AI_DESCRIPTION_MAX = 2000
-export const STORE_AI_MODEL = 'openai/gpt-5-mini'
 
 export type StoreAiTextInput = {
   name: string
@@ -103,7 +103,7 @@ function clip(text: string, max: number): string {
   return text.length > max ? text.slice(0, max).trimEnd() : text
 }
 
-const generatedSchema = z.object({
+export const generatedSchema = z.object({
   refused: z.boolean(),
   intro: z.string().default(''),
   benefits: z.array(z.string()).default([]),
@@ -197,25 +197,27 @@ export function buildUserPrompt(input: StoreAiTextInput): string {
     .join('\n\n')
 }
 
-export type StoreAiGenerateArgs = { system: string; prompt: string; imageUrls: string[]; signal: AbortSignal }
+export type StoreAiGenerateArgs = {
+  system: string
+  prompt: string
+  imageUrls: string[]
+  signal: AbortSignal
+  /** Gateway model id picked by `resolveAiModel('productText', plan)`. */
+  model?: string
+  /** Plan code of the caller, used only for the usage/repair log lines. */
+  plan?: string | null
+}
 export type StoreAiGenerateFn = (args: StoreAiGenerateArgs) => Promise<unknown>
 
-export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal }) => {
-  const { object } = await generateObject({
-    model: STORE_AI_MODEL,
+export const generateWithGateway: StoreAiGenerateFn = async ({ system, prompt, imageUrls, signal, model, plan }) => {
+  const resolved = resolveAiModel('productText', plan ?? null)
+  const { object } = await generateStructured({
+    ai: model ? { ...resolved, model } : resolved,
     schema: generatedSchema,
-    providerOptions: { openai: { strictJsonSchema: false } },
     system,
+    prompt,
+    imageUrls,
     abortSignal: signal,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          ...imageUrls.map((url) => ({ type: 'image' as const, image: new URL(url) })),
-        ],
-      },
-    ],
   })
   return object
 }
@@ -224,6 +226,8 @@ export async function generateStoreAiText(
   input: StoreAiTextInput,
   signal: AbortSignal,
   generate: StoreAiGenerateFn = generateWithGateway,
+  model?: string,
+  plan?: string | null,
 ): Promise<StoreAiTextResult> {
   const imageUrls = input.imageUrls.slice(0, STORE_AI_MAX_IMAGES)
   const raw = await generate({
@@ -231,6 +235,8 @@ export async function generateStoreAiText(
     prompt: buildUserPrompt(input),
     imageUrls,
     signal,
+    model,
+    plan,
   })
   return normalizeGenerated(raw, input)
 }

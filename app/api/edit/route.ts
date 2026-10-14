@@ -1,5 +1,6 @@
-import { generateObject } from 'ai'
 import { z } from 'zod'
+import { generateStructured } from '@/lib/ai-structured'
+import { siteRepairOptions } from '@/lib/site-repair'
 import {
   sectionSchema,
   websiteEditSchema,
@@ -8,6 +9,7 @@ import {
   type WebsiteSchema,
 } from '@/lib/website-schema'
 import { applyOperation } from '@/lib/website-edit-operations'
+import { sectionSystemPrompt, sectionUserPrompt, siteSystemPrompt } from '@/lib/site-edit-prompts'
 import { parseCommand } from '@/lib/website-command-parser'
 import {
   PRODUCTS_MANAGED_IN_PANEL,
@@ -18,6 +20,7 @@ import { preserveResolvedImages } from '@/lib/hero-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
+import { logAiUsage, resolveAiModel } from '@/lib/ai-models'
 import {
   PAGE_LIMIT_ERROR,
   isPageGrowthBlocked,
@@ -86,61 +89,6 @@ function stripSectionImagePayload(section: Section): Section {
 }
 
 export const maxDuration = 30
-
-/** Builds the scoped system prompt for a single-section edit. */
-function sectionSystemPrompt(normalizedLang: 'tr' | 'en', language: string): string {
-  return (
-    `You are GLOVAL AI, a professional web designer editing ONE SECTION of an EXISTING website. ` +
-    `You are given the current section as a JSON object that conforms to a strict discriminated-union schema ` +
-    `(the "type" field is fixed and must NOT change), plus a user instruction describing a change to make to ` +
-    `THIS SECTION ONLY. Apply the requested change and return the COMPLETE, updated section JSON — never a ` +
-    `partial patch, and never a different section type. ` +
-    `Make TARGETED edits: change only what the instruction asks for and keep everything else in this section ` +
-    `identical unless the instruction clearly requires otherwise. ` +
-    `CRITICAL: copy every existing image "src" value through UNCHANGED, exactly as given, ` +
-    `including long data: URIs and https URLs. Never blank, shorten, truncate or invent an image "src". ` +
-    `If the user asks for a different image, only rewrite its "imagePrompt" and leave "src" as-is. ` +
-    `Write any new human-readable text in ${language} (site language is "${normalizedLang}"). ` +
-    `To hide this section rather than delete it, set its "hidden" field to true (and false to show it again). ` +
-    `Use valid hex colors, real Google Font names, and lowercase lucide-react icon names. ` +
-    `Do NOT output HTML, React, CSS or code of any kind — only the structured section JSON.`
-  )
-}
-
-/** Builds the full-site system prompt for a whole-website edit. */
-function siteSystemPrompt(normalizedLang: 'tr' | 'en', language: string): string {
-  return (
-    `You are GLOVAL AI, a professional web designer editing an EXISTING website. ` +
-    `You are given the current website as a JSON object that conforms to a strict schema, ` +
-    `plus a user instruction describing a change. ` +
-    `Apply the requested change and return the COMPLETE, updated website JSON — never a partial patch. ` +
-    `Make TARGETED edits: change only what the instruction asks for and keep everything else identical ` +
-    `(same section order, same content, same ids) unless the instruction clearly requires otherwise. ` +
-    `Never remove meta.name, meta.tagline, theme, theme.palette, navigation, sections, or the footer ` +
-    `unless the user explicitly asks to remove them. ` +
-    `CRITICAL: copy every existing image "src" value through UNCHANGED, exactly as given, ` +
-    `including long data: URIs and https URLs. Never blank, shorten, truncate or invent an image "src". ` +
-    `If the user asks for a different image, only rewrite its "imagePrompt" and leave "src" as-is. ` +
-    `Keep meta.language as "${normalizedLang}" and write any new human-readable text in ${language}. ` +
-    `When adding a section, pick the most fitting type from: hero, about, services, features, stats, ` +
-    `testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
-    `To hide a section rather than delete it, set its "hidden" field to true (and false to show it again). ` +
-    `"contactActions" controls the floating phone + WhatsApp buttons pinned to every page. ` +
-    `To change a number, set contactActions.phone or contactActions.whatsapp. ` +
-    `To remove ONE button, set that field to an empty string. ` +
-    `To remove BOTH buttons, set contactActions.enabled to false (and true to bring them back). ` +
-    `Never invent a phone number: only use a number the user gives you or one already in the site. ` +
-    `"social" holds the social media links (instagram, facebook, x, linkedin, youtube, tiktok, pinterest, ` +
-    `telegram, whatsappChannel) as a username or https link; "social.showInHeader" shows small icons in the header. ` +
-    `Clear a network with an empty string. Never invent a profile: only use a username or link the user gives you. ` +
-    `To reorder sections, change their order in the sections array. ` +
-    `The header menu is built from "pages" (titles) when there is more than one page, otherwise from ` +
-    `"navigation.links". To remove ONE menu item, delete only that entry from "pages" (never the home page) ` +
-    `and/or from "navigation.links" (keep at least one link) and DO NOT delete or hide any section. ` +
-    `Use valid hex colors, real Google Font names, and lowercase lucide-react icon names. ` +
-    `Do NOT output HTML, React, CSS or code of any kind — only the structured website JSON.`
-  )
-}
 
 /**
  * POST /api/edit
@@ -235,6 +183,9 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Out of credits', balance }, { status: 402 })
   }
 
+  // Tier comes from the plan looked up above on the server, never from the request.
+  const ai = resolveAiModel(hasValidScope ? 'sectionEdit' : 'siteEdit', planCode)
+
   try {
     let aiSection: Section | null = null
     let aiSite: WebsiteSchema | null = null
@@ -247,37 +198,32 @@ export async function POST(req: Request) {
       // silently fell back to the scope-blind command parser. Wrapping the union
       // in an object property keeps the root an object while still constraining
       // the value to a valid section.
-      const { object } = await generateObject({
-        model: 'openai/gpt-5-mini',
+      const { object } = await generateStructured({
+        ai,
         schema: z.object({ section: sectionSchema }),
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: sectionSystemPrompt(normalizedLang, language),
-        prompt:
-          `CURRENT SECTION (JSON):\n${JSON.stringify(stripSectionImagePayload(targetSection))}\n\n` +
-          `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
-          `Return the full updated section JSON now, as {"section": <the updated section>}.`,
+        prompt: sectionUserPrompt(stripSectionImagePayload(targetSection), instruction),
       })
       const validatedSection = sectionSchema.safeParse(object.section)
       if (validatedSection.success && validatedSection.data.type === targetSection.type) {
         aiSection = validatedSection.data
       }
     } else {
-      const { object } = await generateObject({
-        model: 'openai/gpt-5-mini',
+      const { object } = await generateStructured({
+        ai,
         // Owner-authored fields (custom code snippets, SEO title) are excluded
         // from the model's schema so an unrelated edit can never rewrite or drop
         // them; they are merged back from the current schema below.
         schema: websiteEditSchema,
-        // The website schema has optional fields (e.g. navigation.cta). In ai@7
-        // strictJsonSchema defaults to true, which makes OpenAI reject schemas
-        // whose optional keys aren't in `required` (400). Relax strict mode so
-        // the AI edit path actually runs instead of always falling back.
-        providerOptions: { openai: { strictJsonSchema: false } },
         system: siteSystemPrompt(normalizedLang, language),
         prompt:
           `CURRENT WEBSITE (JSON):\n${JSON.stringify(stripImagePayloads(original))}\n\n` +
           `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
           `Return the full updated website JSON now.`,
+        // An edit must never silently delete the owner's sections, so surplus
+        // sections are not trimmed here: such an answer is retried once and
+        // otherwise leaves the site unchanged.
+        repair: siteRepairOptions({ lang: normalizedLang, siteName: original.meta.name, trimSections: false }),
       })
       // generateObject already validates against websiteSchema, but re-parse
       // defensively so a malformed result can never reach the client.
@@ -368,7 +314,7 @@ export async function POST(req: Request) {
     // AI Gateway unavailable or generation failed. Fall back to the offline
     // deterministic command parser so common edits still work; never destroy
     // the site. No credit is spent on this path.
-    console.log('[v0] edit error, trying command parser:', err instanceof Error ? err.message : err)
+    console.info('[ai-fallback]', { flow: ai.flow, model: ai.model, reason: err instanceof Error ? err.name : 'unknown' })
     // Scoped edits must never fall back to the scope-blind whole-site parser.
     if (!hasValidScope) {
       const command = tryCommandParser(original, instruction)

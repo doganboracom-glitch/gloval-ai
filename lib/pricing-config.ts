@@ -24,6 +24,7 @@ export type LockedFeatureKey =
   | 'customDomain'
   | 'analytics'
   | 'social'
+  | 'advancedAi'
 
 /* -------------------------------------------------------------------------- */
 /* AI kredi sistemi                                                            */
@@ -117,6 +118,13 @@ export const PAGE_LIMITS: Record<PlanCode, number> = {
  * oluşturabilir; kartlarda ve tabloda `effectivePageLimit` gösterilir.
  */
 export const SITE_PAGE_HARD_CAP = 8
+
+/**
+ * Anasayfa bölüm sayısının tek üst sınırı. Şema (`websiteSchema.sections`),
+ * AI istemi (`siteLimitsPromptHint`) ve onarım katmanı (`site-repair`) bunu
+ * kullanır; başka yerde 12 yazılmaz.
+ */
+export const SITE_SECTION_HARD_CAP = 12
 
 export function effectivePageLimit(code: PlanCode): number {
   return Math.min(PAGE_LIMITS[code], SITE_PAGE_HARD_CAP)
@@ -425,7 +433,8 @@ export type UpgradePrompt = {
   title: string
   description: string
   primaryCta: string
-  secondaryCta: string
+  /** Omitted when only one upgrade target makes sense. */
+  secondaryCta?: string
 }
 
 export const UPGRADE_PROMPTS: Record<LockedFeatureKey, UpgradePrompt> = {
@@ -463,6 +472,12 @@ export const UPGRADE_PROMPTS: Record<LockedFeatureKey, UpgradePrompt> = {
       'Instagram, Facebook, LinkedIn gibi hesaplarını sitene ekleyerek ziyaretçilerini takipçine dönüştür.',
     primaryCta: 'Starter’a Geç',
     secondaryCta: 'PRO’yu İncele',
+  },
+  advancedAi: {
+    title: 'Gelişmiş AI, PRO ve üzeri paketlerde kullanılabilir.',
+    description:
+      'Site oluşturma, düzenleme ve ürün metni işlemleri PRO ve E-Ticaret paketlerinde daha gelişmiş yapay zeka modeliyle çalışır. İşlem (kredi) fiyatları değişmez.',
+    primaryCta: 'PRO’yu İncele',
   },
 }
 
