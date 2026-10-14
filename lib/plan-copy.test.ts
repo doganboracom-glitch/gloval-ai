@@ -186,8 +186,6 @@ describe('plan copy follows the configuration', () => {
 })
 
 const REMOVED_CLAIMS = [
-  'Sosyal medya',
-  'Social media',
   'yedekleme',
   'backup',
   'Google Ads',
@@ -216,7 +214,7 @@ describe('pricing copy only describes features that exist', () => {
       for (const claim of REMOVED_CLAIMS) expect(texts).not.toContain(claim)
     }
     expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
-      ['analytics', 'customDomain', 'phone', 'whatsapp'].sort(),
+      ['analytics', 'customDomain', 'phone', 'social', 'whatsapp'].sort(),
     )
   })
 
@@ -256,6 +254,24 @@ describe('comparison table is derived from the cards', () => {
       .flatMap((g) => g.rows)
       .find((r) => r.label === 'Telefon ve WhatsApp butonları')!
     expect([row.free, row.starter, row.pro, row.ecommerce]).toEqual([false, true, true, true])
+  })
+
+  it('social media links: on Starter, PRO and e-commerce, never on FREE (TR and EN)', () => {
+    for (const [lang, label] of [
+      ['tr', 'Sosyal medya bağlantıları'],
+      ['en', 'Social media links'],
+    ] as const) {
+      const row = buildComparison(lang)
+        .flatMap((g) => g.rows)
+        .find((r) => r.label === label)!
+      expect(row, label).toBeDefined()
+      expect([row.free, row.starter, row.pro, row.ecommerce]).toEqual([false, true, true, true])
+
+      const onCard = (code: PlanCode) =>
+        buildPlanView(code, 'yearly', lang).groups.some((g) => g.items.some((i) => i.id === 'socialLinks'))
+      expect(onCard('free')).toBe(false)
+      expect(onCard('starter')).toBe(true)
+    }
   })
 
   it('limit rows show the real configured values', () => {

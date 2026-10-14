@@ -44,6 +44,7 @@ import {
   SellerWarningBanner,
 } from '@/components/editor/company-fields'
 import { LegalDocsFields } from '@/components/editor/legal-docs-fields'
+import { SocialLinksFields } from '@/components/editor/social-links-fields'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
@@ -542,6 +543,15 @@ function DesignTab({
 
       <Group title={ui.groupContact}>
         <ContactActionsFields
+          site={site}
+          planCode={planCode}
+          onDispatch={onDispatch}
+          onBeforeUpgrade={onBeforeUpgrade}
+        />
+      </Group>
+
+      <Group title="Sosyal medya">
+        <SocialLinksFields
           site={site}
           planCode={planCode}
           onDispatch={onDispatch}

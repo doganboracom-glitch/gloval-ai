@@ -25,6 +25,7 @@ import {
   pageLimitMessage,
 } from '@/lib/page-limits'
 import { toPlanCode } from '@/lib/pricing-config'
+import { enforceSocialPlan } from '@/lib/social-links'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 
 /**
@@ -129,6 +130,9 @@ function siteSystemPrompt(normalizedLang: 'tr' | 'en', language: string): string
     `To remove ONE button, set that field to an empty string. ` +
     `To remove BOTH buttons, set contactActions.enabled to false (and true to bring them back). ` +
     `Never invent a phone number: only use a number the user gives you or one already in the site. ` +
+    `"social" holds the social media links (instagram, facebook, x, linkedin, youtube, tiktok, pinterest, ` +
+    `telegram, whatsappChannel) as a username or https link; "social.showInHeader" shows small icons in the header. ` +
+    `Clear a network with an empty string. Never invent a profile: only use a username or link the user gives you. ` +
     `To reorder sections, change their order in the sections array. ` +
     `The header menu is built from "pages" (titles) when there is more than one page, otherwise from ` +
     `"navigation.links". To remove ONE menu item, delete only that entry from "pages" (never the home page) ` +
@@ -311,7 +315,7 @@ export async function POST(req: Request) {
           sections: original.sections.map((s, i) => (i === sectionIndex ? aiSection! : s)),
         }
       : aiSite!
-    const restored: WebsiteSchema = {
+    const restoredBase: WebsiteSchema = {
       ...nextSite,
       meta: { ...nextSite.meta, seoTitle: original.meta.seoTitle },
       // The brand mark is owner-managed (generated locally or uploaded), so it
@@ -321,11 +325,17 @@ export async function POST(req: Request) {
       // wins when present — but an unrelated edit that simply omits the key must
       // not silently delete the owner's phone/WhatsApp settings.
       contactActions: nextSite.contactActions ?? original.contactActions,
+      // Same rule for social links, but the model's value is sanitized and then
+      // gated by the plan below.
+      social: nextSite.social ?? original.social,
       tracking: original.tracking,
       // Legal identity and legal texts are owner-only: the AI never sees or edits them.
       company: original.company,
       legalDocs: original.legalDocs,
     }
+    // Social links are a paid feature: on FREE whatever the model wrote is
+    // discarded and the stored value kept; elsewhere it is validated/normalized.
+    const restored = enforceSocialPlan(restoredBase, original, planCode)
     // A storefront's catalog lives in the database: any product data the model
     // wrote into the schema is discarded and the user is pointed to the panel.
     const locked = lockStorefrontProducts(original, restored)

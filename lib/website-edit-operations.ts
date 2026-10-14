@@ -3,6 +3,12 @@ import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
 import { sanitizeLegalMarkup } from '@/lib/legal-markup'
+import {
+  SOCIAL_NETWORKS,
+  normalizeSocialInput,
+  type SocialData,
+  type SocialNetwork,
+} from '@/lib/social-links'
 import { canHideLegalDoc, isSiteLegalSlug } from '@/lib/site-legal-docs'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
@@ -50,6 +56,12 @@ export type EditOperation =
       whatsapp?: string
       whatsappMessage?: string
     }
+  /**
+   * Social media links. Each network value is a username or full link; it is
+   * validated and normalized to https, an empty string removes that network and
+   * an invalid value is ignored (the previous value is kept).
+   */
+  | { op: 'updateSocialLinks'; patch: Partial<Record<SocialNetwork, string>>; showInHeader?: boolean }
   /** Owner company details (legal identity). Empty string removes a field. */
   | { op: 'updateCompany'; patch: Partial<Record<CompanyField, string>> }
   /** Saves an owner-edited legal text (sanitised markup). Empty body = back to the template. */
@@ -328,6 +340,19 @@ export function applyOperation(
         patch.whatsappMessage = message ? operation.whatsappMessage : undefined
       }
       next.contactActions = patch
+      return next
+    }
+
+    case 'updateSocialLinks': {
+      const social: SocialData = { ...(next.social ?? {}) }
+      for (const network of SOCIAL_NETWORKS) {
+        if (!(network in operation.patch)) continue
+        const result = normalizeSocialInput(network, operation.patch[network])
+        if (result.status === 'ok') social[network] = result.url
+        else if (result.status === 'empty') delete social[network]
+      }
+      if (operation.showInHeader !== undefined) social.showInHeader = operation.showInHeader
+      next.social = social
       return next
     }
 

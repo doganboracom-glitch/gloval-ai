@@ -10,6 +10,7 @@ import { SiteFloatingActions } from '@/components/website-renderer/site-floating
 import { CartProvider } from './cart-provider'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
+import { resolveHeaderSocialLinks } from '@/lib/social-links'
 
 export function StoreSiteShell({
   site,
@@ -28,7 +29,7 @@ export function StoreSiteShell({
   return (
     <CartProvider slug={slug}>
       <div style={themeToCssVars(resolveTheme(site))} data-storefront-root>
-        <WebsiteHeader navigation={site.navigation} pages={pages} storeSlug={slug} lang={site.meta.language} />
+        <WebsiteHeader navigation={site.navigation} pages={pages} storeSlug={slug} lang={site.meta.language} socialLinks={resolveHeaderSocialLinks(site)} />
         <main>{children}</main>
       {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={site.meta.language} showBranding site={site} /> : null}
         <SiteFloatingActions site={site} />

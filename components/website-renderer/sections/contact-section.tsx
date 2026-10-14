@@ -1,7 +1,8 @@
 'use client'
 
 import { Mail, Phone, MapPin } from 'lucide-react'
-import type { Section } from '@/lib/website-schema'
+import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { resolveSocialLinks } from '@/lib/social-links'
 import { ContactMap } from '@/components/website-renderer/contact-map'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { ContactForm, type ContactFormLive } from '@/components/website-renderer/sections/contact-form'
@@ -16,10 +17,13 @@ export function ContactSection({
   data,
   lang,
   live = null,
+  site = null,
 }: {
   data: ContactData
   lang: string
   live?: ContactFormLive | null
+  /** Whole site: the source of the owner's social media links. */
+  site?: WebsiteSchema | null
 }) {
   return (
     <SectionShell id="contact" tinted>
@@ -37,7 +41,11 @@ export function ContactSection({
               <ContactRow icon={<MapPin className="h-4 w-4" />}>{data.address}</ContactRow>
             )}
           </div>
-          <SocialLinks />
+          <SocialLinks
+            links={resolveSocialLinks(site)}
+            variant="contact"
+            label={lang === 'en' ? 'Social media' : 'Sosyal medya'}
+          />
         </div>
 
         <ContactForm labels={data.fields} lang={lang} live={live} />

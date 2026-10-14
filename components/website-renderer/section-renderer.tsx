@@ -83,7 +83,7 @@ export function SectionRenderer({
     case 'faq':
       return <FaqSection data={section} />
     case 'contact':
-      return <ContactSection data={section} lang={meta.language} live={contactForm} />
+      return <ContactSection data={section} lang={meta.language} live={contactForm} site={site} />
     case 'cta':
       return <CtaSection data={section} />
     case 'footer':

@@ -624,6 +624,24 @@ export const contactActionsSchema = z.object({
 })
 
 /**
+ * Social media links. Every field is optional so sites saved before this
+ * existed stay valid. Values are validated and normalized to https URLs by
+ * `lib/social-links.ts`; an empty/absent network is simply not shown.
+ */
+export const socialSchema = z.object({
+  instagram: z.string().max(300).optional(),
+  facebook: z.string().max(300).optional(),
+  x: z.string().max(300).optional(),
+  linkedin: z.string().max(300).optional(),
+  youtube: z.string().max(300).optional(),
+  tiktok: z.string().max(300).optional(),
+  pinterest: z.string().max(300).optional(),
+  telegram: z.string().max(300).optional(),
+  whatsappChannel: z.string().max(300).optional(),
+  showInHeader: z.boolean().optional(),
+})
+
+/**
  * The owner's legal/company details. They are the SINGLE source for the seller
  * block in every legal text (distance-sales contract, privacy policy, ...).
  * Every field is optional so older sites stay valid; values are validated by
@@ -687,6 +705,7 @@ export const websiteSchema = z.object({
   contactActions: contactActionsSchema
     .optional()
     .describe('Floating phone + WhatsApp buttons shown on every page'),
+  social: socialSchema.optional().describe('Owner-supplied social media links'),
   pages: z
     .array(
       z.object({
@@ -714,7 +733,7 @@ export const websiteSchema = z.object({
  * fills it in later from the editor).
  */
 export const websiteGenerationSchema = websiteSchema
-  .omit({ tracking: true, contactActions: true, company: true, legalDocs: true })
+  .omit({ tracking: true, contactActions: true, social: true, company: true, legalDocs: true })
   .extend({
     meta: siteMetaSchema.extend({
       seoTitle: z
@@ -754,6 +773,7 @@ export type Section = z.infer<typeof sectionSchema>
 export type SectionType = Section['type']
 export type TrackingCodes = z.infer<typeof trackingSchema>
 export type ContactActions = z.infer<typeof contactActionsSchema>
+export type SocialLinksState = z.infer<typeof socialSchema>
 export type CompanyProfile = z.infer<typeof companyProfileSchema>
 export type LegalDocsState = z.infer<typeof legalDocsSchema>
 export type WebsiteSchema = z.infer<typeof websiteSchema>
