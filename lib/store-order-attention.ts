@@ -6,6 +6,25 @@ type Admin = ReturnType<typeof createAdminClient>
 /** Failed settle attempts after which a paid-at-the-provider order is flagged. */
 export const MAX_SETTLE_ATTEMPTS = 3
 
+/**
+ * The only values ever stored in `attention_reason`: short step codes, never
+ * personal data, order contents or raw error bodies.
+ */
+export const ATTENTION_REASON_CODES = [
+  'lookup',
+  'mark_paid',
+  'take_stock',
+  'mark_failed',
+  'release_stock',
+  'mark_refunded',
+  'unknown',
+] as const
+export type AttentionReasonCode = (typeof ATTENTION_REASON_CODES)[number]
+
+export function toAttentionReason(step: unknown): AttentionReasonCode {
+  return (ATTENTION_REASON_CODES as readonly unknown[]).includes(step) ? (step as AttentionReasonCode) : 'unknown'
+}
+
 export type AttentionDeps = {
   /** Sends the one-time owner e-mail. Must be safe to call twice (deduped by the sender). */
   notifyAttention: (orderId: string) => void | Promise<void>
@@ -26,7 +45,7 @@ export type SettleFailureResult =
  */
 export async function recordSettleFailure(
   admin: Admin,
-  input: { orderId: string; projectId: string; step: string },
+  input: { orderId: string; projectId: string; step: AttentionReasonCode },
   deps: AttentionDeps,
 ): Promise<SettleFailureResult> {
   const { data: row, error: readError } = await admin
@@ -48,7 +67,7 @@ export async function recordSettleFailure(
   const patch: Record<string, unknown> = { settle_attempts: attempts }
   if (escalate) {
     patch.attention_at = new Date().toISOString()
-    patch.attention_reason = input.step
+    patch.attention_reason = toAttentionReason(input.step)
   }
   const { error: writeError } = await admin
     .from('ecommerce_orders')
