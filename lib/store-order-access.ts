@@ -46,6 +46,13 @@ export type OrderConfirmation = {
   currency: string
   created_at: string
   payment_provider: string | null
+  shipping_status: string | null
+  carrier: string | null
+  tracking_number: string | null
+  language: 'tr' | 'en'
+  store_base_url: string | null
+  contact_email: string | null
+  has_contact_section: boolean
   /** Non-secret bank details, only for a bank-transfer order still awaiting payment. */
   bank: {
     bankName: string
@@ -84,7 +91,7 @@ export async function getOrderConfirmation(
   const admin = createAdminClient()
   const { data: project } = await admin
     .from('projects')
-    .select('id')
+    .select('id, schema_data')
     .eq('slug', storeSlug)
     .eq('published', true)
     .maybeSingle()
@@ -93,7 +100,7 @@ export async function getOrderConfirmation(
   const { data: order } = await admin
     .from('ecommerce_orders')
     .select(
-      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider',
+      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider, shipping_status, carrier, tracking_number',
     )
     .eq('id', orderId)
     .eq('project_id', project.id)
@@ -151,10 +158,26 @@ export async function getOrderConfirmation(
     }
   }
 
+  const schema = (project.schema_data ?? {}) as { meta?: { language?: 'tr' | 'en' }; sections?: Array<{ type?: string; email?: string; hidden?: boolean }> }
+  const contact = schema.sections?.find((section) => section.type === 'contact' && section.hidden !== true)
+  const { data: domain } = await admin
+    .from('custom_domains')
+    .select('domain')
+    .eq('website_project_id', project.id)
+    .eq('status', 'active')
+    .maybeSingle()
+
   return {
     id: order.id,
     status: order.status,
+    shipping_status: (order.shipping_status as string | null) ?? null,
+    carrier: (order.carrier as string | null) ?? null,
+    tracking_number: (order.tracking_number as string | null) ?? null,
     payment_provider: provider,
+    language: schema.meta?.language === 'en' ? 'en' : 'tr',
+    store_base_url: domain?.domain ? `https://${domain.domain}` : null,
+    contact_email: contact?.email ?? null,
+    has_contact_section: !!contact,
     bank,
     payment_status: order.payment_status,
     first_name: firstNameOf(order.customer_name),
