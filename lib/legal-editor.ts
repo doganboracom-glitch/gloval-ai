@@ -26,7 +26,7 @@ export const LEGAL_DOC_ENTRIES: ReadonlyArray<{ slug: LegalDocSlug; title: strin
   { slug: 'gizlilik-politikasi', title: 'Gizlilik Politikası' },
   { slug: 'mesafeli-satis-sozlesmesi', title: 'Mesafeli Satış Sözleşmesi' },
   { slug: 'hizmet-sozlesmesi', title: 'Hizmet Sözleşmesi' },
-  { slug: 'iptal-ve-iade', title: 'Teslimat ve İade' },
+  { slug: 'teslimat-ve-iade', title: 'Teslimat ve İade' },
   { slug: 'uyelik-sozlesmesi', title: 'Üyelik Sözleşmesi' },
 ]
 
@@ -41,7 +41,7 @@ export const LEGAL_RESPONSIBILITY_NOTE =
 
 /** Editor-only notes for texts that are still drafts awaiting legal review. */
 export const LEGAL_DRAFT_NOTES: Partial<Record<LegalDocSlug, string>> = {
-  'iptal-ve-iade':
+  'teslimat-ve-iade':
     'Taslak: teslimat, kargo ücreti, iade ve değişim metni hukuk ekibi onayı bekliyor. Yayınlamadan önce kendi teslimat süreleriniz, kargo ücretiniz ve iade koşullarınıza göre düzenleyin.',
 }
 

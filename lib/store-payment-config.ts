@@ -6,6 +6,7 @@ import {
   normalizeCardProvider,
   type CardProviderId,
 } from '@/lib/payments/card-providers'
+import { loadIyzicoCredentials, orderColumnsReady } from '@/lib/store-payments/iyzico-credentials'
 import {
   isDemoStore,
   resolveStorePayment,
@@ -46,7 +47,15 @@ export type CardReadiness = { ready: boolean; unreadable: boolean }
  */
 const CARD_READINESS_CHECKERS: Partial<
   Record<CardProviderId, (admin: Admin, projectId: string) => Promise<CardReadiness>>
-> = {}
+> = {
+  iyzico: async (admin, projectId) => {
+    const loaded = await loadIyzicoCredentials(admin, projectId)
+    if (!loaded.ok) {
+      return { ready: false, unreadable: loaded.reason === 'unreadable' }
+    }
+    return { ready: loaded.tested && (await orderColumnsReady(admin)), unreadable: false }
+  },
+}
 
 /**
  * True when the given card provider can take a payment right now. Anything

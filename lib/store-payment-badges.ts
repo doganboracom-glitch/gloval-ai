@@ -1,10 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadStorePaymentConfig } from '@/lib/store-payment-config'
-import { resolveStorePaymentBadges, type PaymentBadgeSet } from '@/lib/payment-badges'
+import {
+  resolveStorePaymentBadges,
+  STORE_BASE_PAYMENT_BADGES,
+  type PaymentBadgeSet,
+} from '@/lib/payment-badges'
 
 /**
  * Footer payment marks for a PUBLISHED store, resolved server-side from the same
- * policy checkout uses. Never throws: any failure shows no strip (fail closed).
+ * policy checkout uses. Never throws: if the payment configuration cannot be
+ * read, only the always-on base logos are returned (no card brand or chip that
+ * checkout might not honour).
  */
 export async function getStorePaymentBadges(storeSlug: string): Promise<PaymentBadgeSet | null> {
   try {
@@ -18,6 +24,6 @@ export async function getStorePaymentBadges(storeSlug: string): Promise<PaymentB
     if (!project?.id) return null
     return resolveStorePaymentBadges(await loadStorePaymentConfig(project.id as string))
   } catch {
-    return null
+    return { ...STORE_BASE_PAYMENT_BADGES }
   }
 }

@@ -34,7 +34,7 @@ export default async function CheckoutPage({
     resolveLegalDoc(doc, site.schema, site.name) ? `/site/${slug}/yasal/${doc}` : undefined
   const legalLinks = {
     sales: docHref('mesafeli-satis-sozlesmesi'),
-    returns: docHref('iptal-ve-iade'),
+    returns: docHref('teslimat-ve-iade'),
     kvkk: docHref('gizlilik-politikasi'),
   }
   const seller = sellerSummary(companyForSite(site.schema, site.name).seller)

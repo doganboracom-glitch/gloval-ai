@@ -51,7 +51,7 @@ export const FOOTER_LEGAL_DOCS = [
   { slug: 'gizlilik-politikasi', tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
   { slug: 'mesafeli-satis-sozlesmesi', tr: 'Mesafeli Satış Sözleşmesi', en: 'Distance Sales Agreement' },
   { slug: 'hizmet-sozlesmesi', tr: 'Hizmet Sözleşmesi', en: 'Terms of Service' },
-  { slug: 'iptal-ve-iade', tr: 'Teslimat ve İade', en: 'Delivery & Returns' },
+  { slug: 'teslimat-ve-iade', tr: 'Teslimat ve İade', en: 'Delivery & Returns' },
   { slug: 'uyelik-sozlesmesi', tr: 'Üyelik Sözleşmesi', en: 'Membership Agreement' },
 ] as const
 
@@ -214,7 +214,7 @@ export function resolveFooterLegal(
  */
 export const STORE_ESSENTIAL_LEGAL_SLUGS: readonly FooterLegalSlug[] = [
   'gizlilik-politikasi',
-  'iptal-ve-iade',
+  'teslimat-ve-iade',
   'mesafeli-satis-sozlesmesi',
 ]
 

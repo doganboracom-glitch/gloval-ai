@@ -8,6 +8,7 @@ import { syncAllMailAccess } from '@/lib/mail/access-sync'
 import { runPlanCreditSweep } from '@/lib/plan-credit-sweep-store'
 import { releaseOrderStock, releaseStaleOrderStock } from '@/lib/store-order-stock'
 import { expireStaleManualOrders } from '@/lib/store-manual-orders'
+import { reconcileIyzicoOrders } from '@/lib/store-payments/iyzico-settle'
 import { sweepExpiredCandidates } from '@/lib/store-ai-image'
 import { createCandidateStore } from '@/lib/store-ai-image-store'
 import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
@@ -17,6 +18,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+const IYZICO_RECONCILE_BUDGET_MS = 8_000
 const MAIL_ACCESS_BUDGET_MS = 15_000
 const PLAN_CREDITS_BUDGET_MS = 10_000
 const CONNECTION_BATCH_LIMIT = 25
@@ -78,6 +80,18 @@ export async function GET(request: Request) {
     storeStock = { error: 'store_stock_sweep_failed' }
   }
 
+  // Isolated and time-boxed: card orders whose buyer never came back are settled
+  // by asking iyzico (with each store's own keys); unpaid ones free their stock.
+  let iyzicoOrders: Awaited<ReturnType<typeof reconcileIyzicoOrders>> | { error: string }
+  try {
+    iyzicoOrders = await reconcileIyzicoOrders(createAdminClient(), {
+      deadlineMs: Date.now() + IYZICO_RECONCILE_BUDGET_MS,
+    })
+  } catch (error) {
+    console.log('[store-iyzico] reconcile failed:', error instanceof Error ? error.message : 'unknown')
+    iyzicoOrders = { error: 'iyzico_reconcile_failed' }
+  }
+
   // Expired, never-accepted AI image candidates (also swept lazily per project on each generation).
   const aiImageCandidates = await sweepExpiredCandidates(createCandidateStore(), Date.now())
 
@@ -113,7 +127,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, contactMessages, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, contactMessages, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

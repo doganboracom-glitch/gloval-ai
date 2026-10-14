@@ -20,7 +20,7 @@ export const SITE_LEGAL_SLUGS = Object.keys(SITE_LEGAL_BUILDERS) as SiteLegalSlu
 export const REQUIRED_STORE_LEGAL: readonly SiteLegalSlug[] = [
   'gizlilik-politikasi',
   'mesafeli-satis-sozlesmesi',
-  'iptal-ve-iade',
+  'teslimat-ve-iade',
 ]
 
 export function isSiteLegalSlug(slug: string): slug is SiteLegalSlug {
@@ -32,15 +32,35 @@ export function canHideLegalDoc(site: WebsiteSchema, slug: string): boolean {
   return !(isStorefront(site) && REQUIRED_STORE_LEGAL.includes(slug))
 }
 
+/**
+ * Slugs renamed after owners may already have saved edits or hidden flags under
+ * the old name. Stored data is read through this map so nothing is lost; writes
+ * use the new slug only (and clear the old key, see `legalSlugKeys`).
+ */
+export const LEGACY_LEGAL_SLUGS: Readonly<Record<string, SiteLegalSlug>> = {
+  'iptal-ve-iade': 'teslimat-ve-iade',
+}
+
+/** The slug plus any legacy slug that used to name the same document. */
+export function legalSlugKeys(slug: string): string[] {
+  return [slug, ...Object.entries(LEGACY_LEGAL_SLUGS).filter(([, v]) => v === slug).map(([k]) => k)]
+}
+
 export function isLegalDocHidden(site: WebsiteSchema, slug: string): boolean {
-  return canHideLegalDoc(site, slug) && (site.legalDocs?.hidden ?? []).includes(slug)
+  if (!canHideLegalDoc(site, slug)) return false
+  const hidden = site.legalDocs?.hidden ?? []
+  return legalSlugKeys(slug).some((key) => hidden.includes(key))
 }
 
 export function customLegalBody(site: WebsiteSchema, slug: string) {
   const docs = site.legalDocs?.docs
-  if (!docs || !Object.prototype.hasOwnProperty.call(docs, slug)) return null
-  const entry = docs[slug]
-  return entry.body.trim() ? entry : null
+  if (!docs) return null
+  for (const key of legalSlugKeys(slug)) {
+    if (!Object.prototype.hasOwnProperty.call(docs, key)) continue
+    const entry = docs[key]
+    if (entry.body.trim()) return entry
+  }
+  return null
 }
 
 export function companyForSite(site: WebsiteSchema, siteName: string): SiteLegalCompany {

@@ -115,7 +115,9 @@ export async function releaseStaleOrderStock(
     .select('id')
     .eq('status', 'pending')
     .eq('payment_status', 'pending')
-    .not('payment_provider', 'in', '(bank_transfer,cash_on_delivery)')
+    // iyzico orders are judged by iyzico itself (reconcileIyzicoOrders), never by age alone:
+    // a buyer may have paid and closed the tab.
+    .not('payment_provider', 'in', '(bank_transfer,cash_on_delivery,iyzico)')
     .lt('created_at', cutoff)
     .order('created_at', { ascending: true })
     .limit(200)

@@ -161,6 +161,8 @@ function CheckoutInner({
     payment_config_unreadable: STORE_PAYMENT_UNAVAILABLE_MESSAGE.config_unreadable.tr,
     bad_request: 'Bir hata oluştu. Lütfen tekrar dene.',
     legal_not_accepted: 'Devam etmek için sözleşmeleri ve KVKK metnini onaylamalısınız.',
+    card_payment_unavailable: 'Kart ödemesi şu anda başlatılamadı. Lütfen tekrar dene veya başka bir ödeme yöntemi seç.',
+    card_buyer_info_missing: 'Kart ödemesi için alıcı bilgileri eksik veya geçersiz. Lütfen formu kontrol et.',
     payment_init_failed: 'Ödeme sayfası başlatılamadı. Lütfen tekrar dene veya başka bir ödeme yöntemi seç.',
   }
 

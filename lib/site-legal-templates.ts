@@ -306,7 +306,7 @@ export const SITE_LEGAL_BUILDERS = {
   'gizlilik-politikasi': buildPrivacyPolicy,
   'mesafeli-satis-sozlesmesi': buildDistanceSalesNotice,
   'hizmet-sozlesmesi': buildTermsOfService,
-  'iptal-ve-iade': buildCancellationAndRefund,
+  'teslimat-ve-iade': buildCancellationAndRefund,
   'uyelik-sozlesmesi': buildMembershipAgreement,
 } as const
 
