@@ -16,6 +16,8 @@ import { useLanguage } from '@/components/language-provider'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { paymentStatusLabel } from '@/lib/payment-status-label'
 import { OrderShippingControls } from '@/components/ecommerce/order-shipping-controls'
+import { OwnerPaymentId } from '@/components/ecommerce/owner-payment-id'
+import { ownerPaymentId } from '@/lib/owner-payment-id'
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -258,10 +260,8 @@ export function OrdersClient({
                           : 'The system keeps retrying; if it persists, contact support with the iyzico paymentId.'}
                       </p>
                     )}
-                    {o.payment_provider === 'iyzico' && o.provider_payment_id && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        iyzico paymentId: <span className="font-mono select-all">{o.provider_payment_id}</span>
-                      </p>
+                    {ownerPaymentId(o) && (
+                      <OwnerPaymentId paymentId={ownerPaymentId(o)!} lang={tr ? 'tr' : 'en'} />
                     )}
                   </div>
 
