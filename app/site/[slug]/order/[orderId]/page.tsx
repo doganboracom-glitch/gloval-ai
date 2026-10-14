@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, XCircle, Mail, Store } from 'lucide-react'
 import { formatIban } from '@/lib/iban'
 import { getOrderConfirmation } from '@/lib/store-order-access'
 import { formatPrice } from '@/lib/format'
 import { shippingRowValue } from '@/lib/store-shipping-display'
+import { orderStatusCopy, safeStoreContactHref } from '@/lib/store-order-status'
 import { formatVatLine, summarizeVat } from '@/lib/store-vat'
 import { Button } from '@/components/ui/button'
 
@@ -33,6 +34,8 @@ export default async function OrderConfirmationPage({
   const paid = order.payment_status === 'paid'
   const failed = order.payment_status === 'failed'
   const cancelled = order.status === 'cancelled'
+  const copy = orderStatusCopy({ status: order.status, paymentStatus: order.payment_status, shippingStatus: order.shipping_status, carrier: order.carrier, trackingNumber: order.tracking_number }, order.language)
+  const contactHref = safeStoreContactHref(order.store_base_url, order.has_contact_section, order.contact_email, slug)
   const awaitingTransfer = order.bank !== null
   const awaitingDelivery =
     order.payment_provider === 'cash_on_delivery' &&
@@ -43,32 +46,20 @@ export default async function OrderConfirmationPage({
     <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto max-w-2xl px-4 py-12">
         <div className="flex flex-col items-center gap-3 text-center">
-          {paid ? (
-            <CheckCircle2 className="size-14 text-accent" />
-          ) : failed ? (
-            <XCircle className="size-14 text-destructive" />
+          {copy.icon === 'success' ? (
+            <CheckCircle2 className="size-14 text-accent" aria-hidden="true" />
+          ) : copy.icon === 'failed' ? (
+            <XCircle className="size-14 text-destructive" aria-hidden="true" />
           ) : (
-            <Clock className="size-14 text-muted-foreground" />
+            <Clock className="size-14 text-muted-foreground" aria-hidden="true" />
           )}
-          <h1 className="font-display text-2xl font-bold text-balance">
-            {paid
-              ? 'Siparişin alındı!'
-              : cancelled
-                ? 'Sipariş iptal edildi'
-                : failed
-                  ? 'Ödeme başarısız'
-                  : awaitingTransfer
-                    ? 'Siparişin alındı, havale bekleniyor'
-                    : awaitingDelivery
-                      ? 'Siparişin alındı, kapıda ödeme'
-                      : 'Siparişin işleniyor'}
-          </h1>
-          <p className="text-muted-foreground">
-            {paid
+          <h1 className="font-display text-2xl font-bold text-balance">{copy.title}</h1>
+          <p className="max-w-lg text-muted-foreground">
+            {paid && order.language === 'tr'
               ? `Teşekkürler ${order.first_name}. Onay e-postası ${order.masked_email} adresine gönderilecek.`
-              : awaitingDelivery
-                ? 'Ödemeyi siparişin teslim edilirken yapacaksın.'
-                : 'Sipariş durumunu aşağıda görebilirsin.'}
+              : paid
+                ? `Thank you ${order.first_name}. A confirmation email will be sent to ${order.masked_email}.`
+                : copy.description}
           </p>
           <p className="text-sm text-muted-foreground">
             Sipariş No: <span className="font-mono">{order.id.slice(0, 8).toUpperCase()}</span>
@@ -156,10 +147,15 @@ export default async function OrderConfirmationPage({
           {vatLine && <p className="mt-2 text-right text-xs text-muted-foreground">{vatLine}</p>}
         </div>
 
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href={`/site/${slug}/store`}>
-            <Button variant="outline">Alışverişe devam et</Button>
+            <Button variant="outline"><Store className="mr-2 size-4" aria-hidden="true" />Alışverişe devam et</Button>
           </Link>
+          {contactHref && (
+            <a href={contactHref} target={contactHref.startsWith('mailto:') ? undefined : '_blank'} rel={contactHref.startsWith('mailto:') ? undefined : 'noreferrer'}>
+              <Button><Mail className="mr-2 size-4" aria-hidden="true" />{order.language === 'en' ? 'Contact store' : 'Mağazayla iletişime geç'}</Button>
+            </a>
+          )}
         </div>
       </main>
     </div>
