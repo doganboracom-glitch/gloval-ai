@@ -18,6 +18,7 @@ export const SITE_LEGAL_SLUGS = Object.keys(SITE_LEGAL_BUILDERS) as SiteLegalSlu
 
 /** Required for a store's checkout, so the owner can edit them but never hide them. */
 export const REQUIRED_STORE_LEGAL: readonly SiteLegalSlug[] = [
+  'gizlilik-politikasi',
   'mesafeli-satis-sozlesmesi',
   'iptal-ve-iade',
 ]

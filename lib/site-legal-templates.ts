@@ -226,9 +226,29 @@ export function buildTermsOfService(input: CompanyInput): StoreLegalDoc {
 export function buildCancellationAndRefund(input: CompanyInput): StoreLegalDoc {
   const c = company(input)
   return {
-    title: 'İptal ve İade',
+    title: 'Teslimat ve İade',
     sections: [
       { heading: 'Genel', paragraphs: [intro(c.name)] },
+      {
+        heading: 'Teslimat Süresi ve Yöntemi',
+        paragraphs: [
+          'Siparişler, ödemenin onaylanmasından sonra hazırlanır ve anlaşmalı kargo firması ile alıcının bildirdiği adrese gönderilir. Siparişler, ürün sayfasında aksi belirtilmedikçe en geç 30 gün içinde, genellikle 1-3 iş günü içinde kargoya verilir; kargo teslim süresi bölgeye göre değişebilir.',
+          'Kargoya verilen siparişin takip bilgisi "Hesabım > Siparişlerim" bölümünden izlenebilir.',
+        ],
+      },
+      {
+        heading: 'Teslimat Bölgesi ve Ücretler',
+        paragraphs: [
+          'Teslimat, işletmenin hizmet verdiği bölgelerde yapılır. Teslimat bölgesi ve kargo ücreti, ödeme adımında sipariş özetinde alıcıya gösterilir; belirli bir tutarın üzerindeki siparişlerde işletme ücretsiz kargo uygulayabilir.',
+        ],
+      },
+      {
+        heading: 'Teslim Alma ve Hasarlı Teslimat',
+        paragraphs: [
+          'Alıcı, kargoyu teslim alırken paketi kargo görevlisi huzurunda kontrol etmelidir. Paketin ezik, yırtık, ıslak veya açılmış olması hâlinde durumun kargo görevlisine tutanakla tespit ettirilmesi ve teslim alınmaması gerekir.',
+          `Hasarlı veya eksik teslim fark edilirse, durum teslimattan itibaren 48 saat içinde ${contactChannels(c)} üzerinden fotoğrafla birlikte bildirilmelidir; ürün yenisiyle değiştirilir veya bedeli iade edilir.`,
+        ],
+      },
       {
         heading: 'Cayma Hakkı',
         paragraphs: [

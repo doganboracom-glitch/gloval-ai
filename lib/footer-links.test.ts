@@ -6,6 +6,7 @@ import {
   footerTargetOptions,
   resolveFooterColumns,
   resolveFooterLegal,
+  resolveStoreEssentialPageLinks,
   sanitizeFooterColumns,
   seedFooterColumns,
   validateFooterHref,
@@ -152,6 +153,77 @@ describe('defaults and seeding', () => {
         expect(validateFooterHref(link.href, kind === 'ecommerce' ? store() : corporate()).ok).toBe(true)
       }
     }
+  })
+})
+
+describe('store footer required links', () => {
+  const REQUIRED_LABELS = [
+    'Gizlilik Politikası',
+    'Hakkımızda',
+    'İletişim',
+    'Teslimat ve İade',
+    'Mesafeli Satış Sözleşmesi',
+  ]
+
+  function fullStore(): WebsiteSchema {
+    const site = store()
+    site.sections.splice(site.sections.length - 1, 0, { type: 'contact' } as never)
+    return site
+  }
+
+  /** The links the store footer really shows: columns excluded, essentials + official bar. */
+  function barLabels(site: WebsiteSchema, legal?: { hidden?: boolean; links?: { label: string; href: string }[] }) {
+    const columns = resolveFooterColumns(undefined, site)
+    return [
+      ...resolveStoreEssentialPageLinks(site, columns),
+      ...resolveFooterLegal(legal, site),
+    ].map((l) => l.label)
+  }
+
+  it('shows all five links by default', () => {
+    expect(barLabels(fullStore())).toEqual(expect.arrayContaining(REQUIRED_LABELS))
+  })
+
+  it('keeps all five when the owner hides the bar or empties its links', () => {
+    expect(barLabels(fullStore(), { hidden: true, links: [] })).toEqual(
+      expect.arrayContaining(REQUIRED_LABELS),
+    )
+    expect(barLabels(fullStore(), { links: [] })).toEqual(expect.arrayContaining(REQUIRED_LABELS))
+  })
+
+  it('keeps the legal links when the owner removes them from a custom list', () => {
+    const labels = barLabels(fullStore(), {
+      links: [{ label: 'Üyelik Sözleşmesi', href: '/yasal/uyelik-sozlesmesi' }],
+    })
+    expect(labels).toEqual(expect.arrayContaining(REQUIRED_LABELS))
+  })
+
+  it('cannot hide the three required documents even when listed as hidden', () => {
+    const site = fullStore()
+    site.legalDocs = {
+      hidden: ['gizlilik-politikasi', 'iptal-ve-iade', 'mesafeli-satis-sozlesmesi'],
+    } as never
+    expect(barLabels(site)).toEqual(expect.arrayContaining(REQUIRED_LABELS))
+  })
+
+  it('links the delivery & returns document under its combined name', () => {
+    const link = resolveFooterLegal(undefined, fullStore()).find((l) => l.href === '/yasal/iptal-ve-iade')
+    expect(link?.label).toBe('Teslimat ve İade')
+  })
+
+  it('does not link a hidden about/contact section (no dead links)', () => {
+    const site = fullStore()
+    for (const s of site.sections) if (s.type === 'about' || s.type === 'contact') s.hidden = true
+    const labels = barLabels(site)
+    expect(labels).not.toContain('Hakkımızda')
+    expect(labels).not.toContain('İletişim')
+  })
+
+  it('does not add store essentials to corporate sites', () => {
+    expect(resolveStoreEssentialPageLinks(corporate(), [])).toEqual([])
+    expect(resolveFooterLegal(undefined, corporate()).map((l) => l.label)).not.toContain(
+      'Mesafeli Satış Sözleşmesi',
+    )
   })
 })
 

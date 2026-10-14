@@ -337,11 +337,26 @@ describe('rendered output: contact section, footer, header', () => {
     expect(html).not.toContain('data-social-network="facebook"')
   })
 
-  it('footer shows the same links', () => {
-    const html = footerHtml(withSocial())
-    expect(html).toContain('data-social-links="footer"')
-    expect(html).toContain('data-social-network="instagram"')
-    expect(html).toContain('data-social-network="youtube"')
+  it('footer skips the links while a visible contact section already carries them', () => {
+    expect(footerHtml(withSocial())).not.toContain('data-social-links="footer"')
+  })
+
+  it('footer shows the same links when the contact section is hidden or removed', () => {
+    const base = withSocial()
+    const hidden: WebsiteSchema = {
+      ...base,
+      sections: base.sections.map((s) => (s.type === 'contact' ? { ...s, hidden: true } : s)),
+    }
+    const removed: WebsiteSchema = {
+      ...base,
+      sections: base.sections.filter((s) => s.type !== 'contact'),
+    }
+    for (const site of [hidden, removed]) {
+      const html = footerHtml(site)
+      expect(html).toContain('data-social-links="footer"')
+      expect(html).toContain('data-social-network="instagram"')
+      expect(html).toContain('data-social-network="youtube"')
+    }
   })
 
   it('header shows the icons only when the switch is on', () => {

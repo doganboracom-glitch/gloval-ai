@@ -5,7 +5,7 @@ import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
 import { PaymentBadges } from '@/components/payment-badges'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { SocialLinks } from '@/components/website-renderer/social-links'
-import { resolveSocialLinks } from '@/lib/social-links'
+import { resolveFooterSocialLinks } from '@/lib/social-links'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { OPEN_CART_EVENT } from '@/components/store/cart-provider'
 import { hasAnyPaymentBadge, type PaymentBadgeSet } from '@/lib/payment-badges'
@@ -13,6 +13,7 @@ import {
   FOOTER_CART_HREF,
   resolveFooterColumns,
   resolveFooterLegal,
+  resolveStoreEssentialPageLinks,
   validateFooterHref,
 } from '@/lib/footer-links'
 
@@ -106,7 +107,10 @@ export function WebsiteFooter({
   site?: WebsiteSchema | null
 }) {
   const columns = resolveFooterColumns(data.columns, site)
-  const legal = resolveFooterLegal(data.legal, site, lang)
+  const legal = [
+    ...resolveStoreEssentialPageLinks(site, columns, lang),
+    ...resolveFooterLegal(data.legal, site, lang),
+  ]
   const legalLabel = lang === 'en' ? 'Legal' : 'Resmi yazılar'
 
   return (
@@ -138,7 +142,7 @@ export function WebsiteFooter({
               </p>
             ) : null}
             <SocialLinks
-              links={resolveSocialLinks(site)}
+              links={resolveFooterSocialLinks(site)}
               variant="footer"
               label={lang === 'en' ? 'Social media' : 'Sosyal medya'}
             />
