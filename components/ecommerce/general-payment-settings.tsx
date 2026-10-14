@@ -7,6 +7,7 @@ import {
   saveGeneralPaymentSettings,
   type GeneralPaymentView,
 } from '@/lib/store-payments/general-settings'
+import { runSaveWithFeedback, type SaveFeedback } from '@/lib/store-payments/save-feedback'
 import { COD_FEE_MAX_CENTS, formatCodFeeInput } from '@/lib/store-checkout-rules'
 import {
   PaymentModuleBadges,
@@ -41,7 +42,7 @@ const copy = {
       'Kayıtlı kimlik bilgisi okunamadı, kart seçeneği alıcıya gösterilmez.',
     update: 'Güncelle',
     saving: 'Kaydediliyor...',
-    saved: 'Güncellendi',
+    savedMessage: 'Ayarlar kaydedildi',
     migration:
       'Veritabanı güncellemesi (scripts/036) henüz uygulanmadığı için bu değerler kaydedilemiyor. Misafir alışverişi açık ve ücret 0 kalmalıdır.',
     errors: {
@@ -82,7 +83,7 @@ const copy = {
       'Stored credentials could not be read, so the card option is hidden from buyers.',
     update: 'Update',
     saving: 'Saving...',
-    saved: 'Updated',
+    savedMessage: 'Settings saved',
     migration:
       'The database update (scripts/036) has not been applied, so these values cannot be saved. Keep guest checkout on and the fee at 0.',
     errors: {
@@ -117,37 +118,33 @@ export function GeneralPaymentSettings({
   const [cod, setCod] = useState(initial.codEnabled)
   const [card, setCard] = useState(initial.cardEnabled)
   const [fee, setFee] = useState(formatCodFeeInput(initial.codFeeCents))
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [feedback, setFeedback] = useState<SaveFeedback | null>(null)
   const [pending, startTransition] = useTransition()
 
   function handleSave() {
-    setError(null)
-    setSaved(false)
+    if (pending) return
+    setFeedback(null)
     startTransition(async () => {
-      try {
-        const res = await saveGeneralPaymentSettings(projectId, {
-          guestCheckout: guest,
-          cardEnabled: card,
-          bankEnabled: bank,
-          codEnabled: cod,
-          activeCardProvider: initial.activeCardProvider,
-          codFee: fee,
-        })
-        if (res.ok) {
-          setSaved(true)
-          setGuest(res.view.guestCheckout)
-          setBank(res.view.bankEnabled)
-          setCod(res.view.codEnabled)
-          setCard(res.view.cardEnabled)
-          setFee(formatCodFeeInput(res.view.codFeeCents))
-          onSaved(res.view)
-          window.setTimeout(() => setSaved(false), 2500)
-        } else {
-          setError(c.errors[res.error] ?? c.errors.save_failed)
-        }
-      } catch {
-        setError(c.errors.save_failed)
+      const out = await runSaveWithFeedback(
+        () =>
+          saveGeneralPaymentSettings(projectId, {
+            guestCheckout: guest,
+            cardEnabled: card,
+            bankEnabled: bank,
+            codEnabled: cod,
+            activeCardProvider: initial.activeCardProvider,
+            codFee: fee,
+          }),
+        { saved: c.savedMessage, errors: c.errors, fallbackError: c.errors.save_failed },
+      )
+      setFeedback(out.feedback)
+      if (out.view) {
+        setGuest(out.view.guestCheckout)
+        setBank(out.view.bankEnabled)
+        setCod(out.view.codEnabled)
+        setCard(out.view.cardEnabled)
+        setFee(formatCodFeeInput(out.view.codFeeCents))
+        onSaved(out.view)
       }
     })
   }
@@ -276,9 +273,18 @@ export function GeneralPaymentSettings({
         )}
       </Row>
 
-      {error && (
+      {feedback?.kind === 'error' && (
         <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
+          {feedback.message}
+        </p>
+      )}
+      {feedback?.kind === 'success' && (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400"
+        >
+          <Check className="size-4" />
+          {feedback.message}
         </p>
       )}
 
@@ -287,17 +293,13 @@ export function GeneralPaymentSettings({
           type="button"
           onClick={handleSave}
           disabled={pending}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+          aria-busy={pending}
+          className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? (
             <>
               <Loader2 className="size-4 animate-spin" />
               {c.saving}
-            </>
-          ) : saved ? (
-            <>
-              <Check className="size-4" />
-              {c.saved}
             </>
           ) : (
             c.update
