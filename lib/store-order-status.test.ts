@@ -3,6 +3,60 @@ import { orderStatusCopy, safeStoreContactHref, isSafeStoreBaseUrl } from '@/lib
 import { canAccessOrder } from '@/lib/store-order-privacy'
 
 describe('orderStatusCopy', () => {
+  const cases = [
+    ['pending', 'paid', 'Siparişiniz alındı!', 'Siparişiniz alındı.', 'Your order was received', 'Your order has been received.'],
+    ['preparing', 'paid', 'Siparişiniz hazırlanıyor', 'Siparişiniz hazırlanıyor.', 'Your order is being prepared', 'Your order is being prepared.'],
+    ['shipped', 'paid', 'Siparişiniz kargoda', 'Siparişiniz kargoya verildi.', 'Your order is on its way', 'Your order has been handed to the carrier.'],
+    ['cancelled', 'paid', 'Siparişiniz iptal edildi', 'Bu sipariş artık işleme alınmıyor.', 'Your order was cancelled', 'This order is no longer being processed.'],
+    ['refunded', 'paid', 'Siparişiniz iade edildi', 'Bu siparişin ödemesi iade edildi.', 'Your order was refunded', 'The payment for this order has been refunded.'],
+    ['failed', 'failed', 'Ödeme başarısız', 'Bu siparişin ödemesi tamamlanamadı.', 'Payment failed', 'The payment for this order could not be completed.'],
+  ] as const
+
+  it.each(cases)('returns title and description for %s in Turkish and English', (status, paymentStatus, trTitle, trDescription, enTitle, enDescription) => {
+    expect(orderStatusCopy({ status, paymentStatus }, 'tr')).toMatchObject({ title: trTitle, description: trDescription })
+    expect(orderStatusCopy({ status, paymentStatus }, 'en')).toMatchObject({ title: enTitle, description: enDescription })
+  })
+
+  it('uses the shipping status for delivered orders', () => {
+    expect(orderStatusCopy({ status: 'processing', paymentStatus: 'paid', shippingStatus: 'delivered' }, 'tr')).toMatchObject({
+      title: 'Siparişiniz teslim edildi!',
+      description: 'Siparişiniz teslim edildi.',
+    })
+  })
+
+  it('includes carrier tracking details for shipped orders', () => {
+    expect(orderStatusCopy({ status: 'processing', paymentStatus: 'paid', shippingStatus: 'shipped', carrier: 'Yurtiçi', trackingNumber: '123' }, 'tr').description).toContain('Yurtiçi · 123')
+  })
+
+  it('returns a safe fallback when the status is unknown', () => {
+    expect(orderStatusCopy({ status: 'unknown', paymentStatus: 'paid' }, 'en')).toMatchObject({
+      title: 'Your order was received',
+      description: 'Your order has been received.',
+    })
+  })
+
+  it('returns a contact fallback for a hidden contact section', () => {
+    expect(safeStoreContactHref('https://demo.gloval.site', false, 'store@example.com', 'demo')).toBe('mailto:store@example.com')
+  })
+
+  it('does not use another tenant gloval.site address', () => {
+    expect(safeStoreContactHref('https://other.gloval.site', true, 'store@example.com', 'demo')).toBe('mailto:store@example.com')
+  })
+
+  it('does not create a link when no contact channel exists', () => {
+    expect(safeStoreContactHref('https://other.gloval.site', true, null, 'demo')).toBeNull()
+  })
+
+  it('rejects a missing signed token and non-owner session', () => {
+    expect(canAccessOrder({ orderProjectId: 'p1', slugProjectId: 'p1', tokenValid: false, sessionOwnsOrder: false })).toBe(false)
+  })
+
+  it('rejects another store even with a valid signed token', () => {
+    expect(canAccessOrder({ orderProjectId: 'p1', slugProjectId: 'p2', tokenValid: true, sessionOwnsOrder: false })).toBe(false)
+  })
+})
+
+describe('legacy individual status assertions', () => {
   it('returns Turkish title and description for delivered order', () => {
     expect(orderStatusCopy({ status: 'delivered', paymentStatus: 'paid' }, 'tr')).toMatchObject({
       title: 'Siparişiniz teslim edildi!',

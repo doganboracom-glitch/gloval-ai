@@ -45,7 +45,7 @@ export function orderStatusCopy(input: OrderStatusInput, language: 'tr' | 'en' =
       ? { title: 'Your order is on its way', description: detail || 'Your order has been handed to the carrier.', icon: 'success' }
       : { title: 'Siparişiniz kargoda', description: detail || 'Siparişiniz kargoya verildi.', icon: 'success' }
   }
-  if (payment === 'pending' || status === 'pending' || status === 'awaiting_payment') {
+  if (payment === 'pending' || status === 'awaiting_payment') {
     return language === 'en'
       ? { title: 'Payment is pending', description: 'Your order will be processed after payment is confirmed.', icon: 'pending' }
       : { title: 'Ödemeniz bekleniyor', description: 'Siparişiniz ödeme onayından sonra işleme alınacak.', icon: 'pending' }
@@ -61,7 +61,17 @@ export function orderStatusCopy(input: OrderStatusInput, language: 'tr' | 'en' =
 }
 
 export function safeStoreContactHref(baseUrl: string | null, hasContactSection: boolean, email: string | null, slug: string): string | null {
-  if (hasContactSection && baseUrl) return `${baseUrl.replace(/\/$/, '')}/#contact`
+  if (hasContactSection && baseUrl) {
+    try {
+      const url = new URL(baseUrl)
+      const isGlovalTenant = url.hostname === `${slug}.gloval.site` || url.hostname.endsWith('.gloval.site')
+      if (!isGlovalTenant || isSafeStoreBaseUrl(baseUrl, slug)) {
+        return `${baseUrl.replace(/\/$/, '')}/#contact`
+      }
+    } catch {
+      // Fall through to the store email when the configured URL is malformed.
+    }
+  }
   if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return `mailto:${email}`
   return null
 }
@@ -69,7 +79,7 @@ export function safeStoreContactHref(baseUrl: string | null, hasContactSection: 
 export function isSafeStoreBaseUrl(value: string, slug: string): boolean {
   try {
     const url = new URL(value)
-    return url.protocol === 'https:' && (url.hostname === `${slug}.gloval.site` || url.hostname.endsWith('.gloval.site'))
+    return url.protocol === 'https:' && url.hostname === `${slug}.gloval.site`
   } catch {
     return false
   }
