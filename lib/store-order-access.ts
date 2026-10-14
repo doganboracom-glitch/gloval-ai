@@ -8,8 +8,13 @@ import { canAccessOrder, firstNameOf, maskEmail } from '@/lib/store-order-privac
 import { isManualStoreProvider, readBankTransferConfig } from '@/lib/store-payment-policy'
 import { orderCodFeeCents } from '@/lib/store-checkout-rules'
 import { readOrderItems } from '@/lib/store-order-items'
+import { carrierName } from '@/lib/shipping-carriers'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Every column the public order page reads; each must exist on `ecommerce_orders`. */
+export const ORDER_CONFIRMATION_COLUMNS =
+  'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider, shipping_status, tracking_carrier, tracking_number'
 
 export function tokenSecret(): string {
   return (
@@ -103,14 +108,16 @@ export async function getOrderConfirmation(
     .maybeSingle()
   if (!project) return null
 
-  const { data: order } = await admin
+  const { data: order, error: orderError } = await admin
     .from('ecommerce_orders')
-    .select(
-      'id, project_id, customer_id, status, payment_status, customer_name, customer_email, subtotal_cents, shipping_cents, total_cents, currency, created_at, payment_provider, shipping_status, carrier, tracking_number',
-    )
+    .select(ORDER_CONFIRMATION_COLUMNS)
     .eq('id', orderId)
     .eq('project_id', project.id)
     .maybeSingle()
+  if (orderError) {
+    console.error('[store-order-access] order read failed', { orderId, code: orderError.code, message: orderError.message })
+    return null
+  }
   if (!order) return null
 
   const tokenValid = verifyOrderToken(orderId, accessToken, tokenSecret())
@@ -177,7 +184,7 @@ export async function getOrderConfirmation(
     id: order.id,
     status: order.status,
     shipping_status: (order.shipping_status as string | null) ?? null,
-    carrier: (order.carrier as string | null) ?? null,
+    carrier: carrierName(order.tracking_carrier as string | null) || null,
     tracking_number: (order.tracking_number as string | null) ?? null,
     payment_provider: provider,
     language: schema.meta?.language === 'en' ? 'en' : 'tr',
