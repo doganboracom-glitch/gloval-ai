@@ -290,7 +290,10 @@ function escapeHtml(value: string): string {
  * key makes repeated calls harmless; a failed send releases its claim so the
  * next call retries. Logs ids only, never PII.
  */
-export async function notifyOrderAttention(orderId: string): Promise<void> {
+export async function notifyOrderAttention(
+  orderId: string,
+  kind: 'settle' | 'refund' = 'settle',
+): Promise<void> {
   const admin = createAdminClient()
 
   const { data: order, error: orderError } = await admin
@@ -324,8 +327,17 @@ export async function notifyOrderAttention(orderId: string): Promise<void> {
   const amount = `${(order.total_cents / 100).toFixed(2)} ${order.currency}`
   const url = `${DASHBOARD_ORIGIN}/ecommerce/${project.id}/orders`
 
+  const headline =
+    kind === 'refund'
+      ? `#${number} numaralı siparişin iyzico iadesi yapıldı ancak sipariş kaydı veya stok/bildirim adımı tamamlanamadı.`
+      : `#${number} numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.`
+  const subject =
+    kind === 'refund'
+      ? `Dikkat: #${number} siparişinin iadesi yapıldı, işlem tamamlanamadı`
+      : `Dikkat: #${number} siparişinin ödemesi alındı, işlem tamamlanamadı`
+
   const text = [
-    `${storeName}: #${number} numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.`,
+    `${storeName}: ${headline}`,
     `Tutar: ${amount}`,
     paymentId ? `iyzico paymentId: ${paymentId}` : '',
     'Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse Siparişler panelinden kontrol edin.',
@@ -333,18 +345,109 @@ export async function notifyOrderAttention(orderId: string): Promise<void> {
   ]
     .filter(Boolean)
     .join('\n')
-  const html = `<p><strong>Dikkat gerekiyor:</strong> ${escapeHtml(storeName)} mağazanızda <strong>#${number}</strong> numaralı siparişin ödemesi alındı ancak sipariş tamamlanamadı.</p>
+  const html = `<p><strong>Dikkat gerekiyor:</strong> ${escapeHtml(storeName)} mağazanızda ${escapeHtml(headline)}</p>
 <p>Tutar: ${escapeHtml(amount)}${paymentId ? `<br>iyzico paymentId: <code>${escapeHtml(paymentId)}</code>` : ''}</p>
 <p>Sistem siparişi otomatik olarak tekrar denemeye devam ediyor. Çözülmezse <a href="${url}">Siparişler panelinden</a> kontrol edin.</p>`
 
   await sendOnce({
     ownerId: project.owner_id,
-    dedupeKey: `store-order:${order.id}:owner-attention`,
+    dedupeKey: `store-order:${order.id}:${kind === 'refund' ? 'owner-refund-attention' : 'owner-attention'}`,
     type: 'store_order_attention',
     to: ownerEmail,
     fromName: storeName,
-    email: { subject: `Dikkat: #${number} siparişinin ödemesi alındı, işlem tamamlanamadı`, html, text },
+    email: { subject, html, text },
   })
+}
+
+/**
+ * Tells the buyer, once per order, that their card payment was refunded.
+ * Returns false only when a send was due but failed (the caller flags the order
+ * and the reconciliation retries); true when sent, already sent, or not due
+ * (no address, demo store, order not refunded). Logs ids only, never PII.
+ */
+export async function notifyOrderRefunded(orderId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient()
+    const { data: order, error: orderError } = await admin
+      .from('ecommerce_orders')
+      .select('id, project_id, customer_email, total_cents, currency, payment_status')
+      .eq('id', orderId)
+      .maybeSingle()
+    if (orderError) {
+      console.error('[store-notify] refund order lookup failed', { orderId, code: orderError.code })
+      return false
+    }
+    if (!order || order.payment_status !== 'refunded') return true
+    const to = String(order.customer_email ?? '').trim()
+    if (!to) return true
+
+    const { data: project, error: projectError } = await admin
+      .from('projects')
+      .select('id, slug, name, owner_id, schema_data')
+      .eq('id', order.project_id)
+      .maybeSingle()
+    if (projectError) return false
+    if (!project) return true
+    if (isDemoStore(project.id, await loadDemoStoreIds(admin, project.id))) return true
+
+    const schema = project.schema_data as { meta?: { language?: unknown } } | null
+    const lang = resolveEmailLang(schema?.meta?.language)
+    const storeName = project.name || project.slug
+    const number = order.id.slice(0, 8).toUpperCase()
+    const amount = `${(order.total_cents / 100).toFixed(2)} ${order.currency}`
+    const copy =
+      lang === 'en'
+        ? {
+            subject: `${storeName}: your payment for order #${number} was refunded`,
+            body: `Your card payment of ${amount} for order #${number} at ${storeName} has been refunded. Depending on your bank, it can take a few business days to appear on your statement.`,
+          }
+        : {
+            subject: `${storeName}: #${number} numaralı siparişinizin ödemesi iade edildi`,
+            body: `${storeName} mağazasındaki #${number} numaralı siparişiniz için ${amount} tutarındaki kart ödemeniz iade edildi. Bankanıza bağlı olarak tutarın hesap özetinize yansıması birkaç iş günü sürebilir.`,
+          }
+
+    const before = await sendOnceResult({
+      ownerId: project.owner_id,
+      dedupeKey: `store-order:${order.id}:buyer-refund`,
+      type: 'store_order_buyer',
+      to,
+      fromName: storeName,
+      replyTo: findContactEmail(project.schema_data),
+      email: { subject: copy.subject, html: `<p>${escapeHtml(copy.body)}</p>`, text: copy.body },
+    })
+    return before
+  } catch (error) {
+    console.error('[store-notify] refund e-mail failed', {
+      orderId,
+      message: error instanceof Error ? error.message : 'unknown',
+    })
+    return false
+  }
+}
+
+/** `sendOnce`, reporting whether a due e-mail failed to go out. */
+async function sendOnceResult(input: Parameters<typeof sendOnce>[0]): Promise<boolean> {
+  const claimed = await claimNotification({
+    userId: input.ownerId,
+    type: input.type,
+    subject: 'Store order email',
+    body: null,
+    dedupeKey: input.dedupeKey,
+  })
+  if (!claimed) return true
+  const sent = await sendTransactionalEmail({
+    to: input.to,
+    subject: input.email.subject,
+    html: input.email.html,
+    text: input.email.text,
+    replyTo: input.replyTo,
+    fromName: input.fromName,
+  })
+  if (!sent) {
+    console.error('[store-notify] email send failed, claim released', { key: input.dedupeKey })
+    await releaseNotificationClaim(input.dedupeKey)
+  }
+  return Boolean(sent)
 }
 
 /**

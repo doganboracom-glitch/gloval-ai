@@ -17,6 +17,8 @@ export const ATTENTION_REASON_CODES = [
   'mark_failed',
   'release_stock',
   'mark_refunded',
+  'refund_finalize',
+  'refund_notify',
   'unknown',
 ] as const
 export type AttentionReasonCode = (typeof ATTENTION_REASON_CODES)[number]
@@ -108,15 +110,48 @@ export async function clearOrderAttention(admin: Admin, orderId: string): Promis
   }
 }
 
-/** A flagged order is only "needs attention" while it is still unfinished. */
+/**
+ * A flagged order is only "needs attention" while it is still unfinished: a
+ * paid-but-pending card order, or a card refund whose follow-up steps (final
+ * state, stock, notification) are not done yet.
+ */
 export function needsAttention(order: {
   attention_at?: string | null
   status: string
   payment_status: string
+  refund_status?: string | null
 }): boolean {
-  return (
-    Boolean(order.attention_at) &&
-    order.status === 'pending' &&
-    order.payment_status === 'pending'
-  )
+  if (!order.attention_at) return false
+  if (order.status === 'pending' && order.payment_status === 'pending') return true
+  return order.refund_status === 'pending' || order.refund_status === 'succeeded'
+}
+
+/** Flags an order that needs the owner (idempotent; keeps the first reason). Best effort. */
+export async function flagOrderAttention(
+  admin: Admin,
+  input: { orderId: string; step: AttentionReasonCode },
+  deps: AttentionDeps,
+): Promise<void> {
+  const { data, error } = await admin
+    .from('ecommerce_orders')
+    .update({ attention_at: new Date().toISOString(), attention_reason: toAttentionReason(input.step) })
+    .eq('id', input.orderId)
+    .is('attention_at', null)
+    .select('id')
+  if (error) {
+    if (!isMissingColumnError(error)) {
+      console.error('[store-attention] flag failed', { orderId: input.orderId, code: error.code })
+    }
+    return
+  }
+  if (!data || data.length === 0) return
+  console.error('[store-attention] order flagged', { orderId: input.orderId, step: input.step })
+  try {
+    await deps.notifyAttention(input.orderId)
+  } catch (err) {
+    console.error('[store-attention] owner notification failed', {
+      orderId: input.orderId,
+      message: err instanceof Error ? err.message : 'unknown',
+    })
+  }
 }
