@@ -4,6 +4,8 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import type { PageItem } from '@/lib/website-pages'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { SocialLinks } from '@/components/website-renderer/social-links'
+import type { ResolvedSocialLink } from '@/lib/social-links'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { useEffect, useRef } from 'react'
 import { requestOpenCart, useOptionalCart } from '@/components/store/cart-provider'
@@ -26,7 +28,10 @@ export function WebsiteHeader({
   lang = 'tr',
   homeHref,
   actions,
+  socialLinks,
 }: {
+  /** Small icons next to the CTA; pass `resolveHeaderSocialLinks(site)` (empty hides them). */
+  socialLinks?: ResolvedSocialLink[]
   lang?: 'tr' | 'en'
   navigation: WebsiteSchema['navigation']
   pages?: PageItem[]
@@ -196,6 +201,11 @@ export function WebsiteHeader({
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+        <SocialLinks
+          links={socialLinks}
+          variant="header"
+          label={lang === 'en' ? 'Social media' : 'Sosyal medya'}
+        />
         {actions}
         {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
         {navigation.cta ? (

@@ -4,6 +4,8 @@ import type { NavLink, Section, WebsiteSchema } from '@/lib/website-schema'
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
 import { PaymentBadges } from '@/components/payment-badges'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
+import { SocialLinks } from '@/components/website-renderer/social-links'
+import { resolveSocialLinks } from '@/lib/social-links'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { OPEN_CART_EVENT } from '@/components/store/cart-provider'
 import { hasAnyPaymentBadge, type PaymentBadgeSet } from '@/lib/payment-badges'
@@ -135,6 +137,11 @@ export function WebsiteFooter({
                 {data.tagline}
               </p>
             ) : null}
+            <SocialLinks
+              links={resolveSocialLinks(site)}
+              variant="footer"
+              label={lang === 'en' ? 'Social media' : 'Sosyal medya'}
+            />
           </div>
 
           {columns.length > 0 ? (

@@ -23,6 +23,7 @@ export type LockedFeatureKey =
   | 'whatsapp'
   | 'customDomain'
   | 'analytics'
+  | 'social'
 
 /* -------------------------------------------------------------------------- */
 /* AI kredi sistemi                                                            */
@@ -453,6 +454,13 @@ export const UPGRADE_PROMPTS: Record<LockedFeatureKey, UpgradePrompt> = {
     title: 'Ziyaretçilerini ölçmeye başla.',
     description:
       'Google Analytics ve Search Console bağlantıları Starter ve PRO paketlerinde kullanılabilir.',
+    primaryCta: 'Starter’a Geç',
+    secondaryCta: 'PRO’yu İncele',
+  },
+  social: {
+    title: 'Sosyal medya bağlantıları Starter ve PRO paketlerinde kullanılabilir.',
+    description:
+      'Instagram, Facebook, LinkedIn gibi hesaplarını sitene ekleyerek ziyaretçilerini takipçine dönüştür.',
     primaryCta: 'Starter’a Geç',
     secondaryCta: 'PRO’yu İncele',
   },

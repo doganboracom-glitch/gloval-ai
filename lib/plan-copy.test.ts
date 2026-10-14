@@ -186,8 +186,6 @@ describe('plan copy follows the configuration', () => {
 })
 
 const REMOVED_CLAIMS = [
-  'Sosyal medya',
-  'Social media',
   'yedekleme',
   'backup',
   'Google Ads',
@@ -216,7 +214,7 @@ describe('pricing copy only describes features that exist', () => {
       for (const claim of REMOVED_CLAIMS) expect(texts).not.toContain(claim)
     }
     expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
-      ['analytics', 'customDomain', 'phone', 'whatsapp'].sort(),
+      ['analytics', 'customDomain', 'phone', 'social', 'whatsapp'].sort(),
     )
   })
 

@@ -25,6 +25,7 @@ import {
 } from '@/components/website-renderer/store-catalog-context'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { isKeepInteractiveTarget } from '@/lib/preview-interactive'
+import { resolveHeaderSocialLinks } from '@/lib/social-links'
 
 /**
  * Preview navigation context, passed only by the editor/landing preview (whose
@@ -241,6 +242,7 @@ export function WebsiteRenderer({
         cartSlug={store?.slug}
         lang={data.meta.language}
         actions={headerActions}
+        socialLinks={resolveHeaderSocialLinks(data)}
       />
       {sections.map((section, i) => {
         const rendered = (

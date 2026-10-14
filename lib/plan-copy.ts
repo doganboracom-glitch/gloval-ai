@@ -157,6 +157,8 @@ type Strings = {
     trackingCodes: string
     trackingCodesNote: string
     phoneWhatsapp: string
+    socialLinks: string
+    socialLinksNote: string
     logoStudio: string
     logoStudioNote: string
     products: (n: number) => string
@@ -303,6 +305,8 @@ const TR: Strings = {
     trackingCodes: 'Analytics ve Search Console kodu ekleme',
     trackingCodesNote: 'Takip ve doğrulama kodlarını sitene yapıştır.',
     phoneWhatsapp: 'Telefon ve WhatsApp butonları',
+    socialLinks: 'Sosyal medya bağlantıları',
+    socialLinksNote: 'Instagram, Facebook, LinkedIn ve diğer hesapların sitende görünür.',
     logoStudio: 'AI logo stüdyosu ve marka kiti',
     logoStudioNote: 'Logo önerileri, marka kiti ve favicon.',
     products: (n) => `${n} ürün`,
@@ -450,6 +454,8 @@ const EN: Strings = {
     trackingCodes: 'Add Analytics and Search Console code',
     trackingCodesNote: 'Paste your tracking and verification code into your site.',
     phoneWhatsapp: 'Phone and WhatsApp buttons',
+    socialLinks: 'Social media links',
+    socialLinksNote: 'Show your Instagram, Facebook, LinkedIn and other accounts on your site.',
     logoStudio: 'AI logo studio and brand kit',
     logoStudioNote: 'Logo suggestions, brand kit and favicon.',
     products: (n) => `${n} products`,
@@ -619,6 +625,7 @@ export function buildPlanView(
             { id: 'versionHistory', label: f.versionHistory, note: f.versionHistoryNote },
             { id: 'trackingCodes', label: f.trackingCodes, note: f.trackingCodesNote },
             { id: 'phoneWhatsapp', label: f.phoneWhatsapp },
+            { id: 'socialLinks', label: f.socialLinks, note: f.socialLinksNote },
             { id: 'logoStudio', label: f.logoStudio, note: f.logoStudioNote },
           ],
         },

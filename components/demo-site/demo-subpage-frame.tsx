@@ -6,6 +6,7 @@ import { WebsiteHeader } from '@/components/website-renderer/sections/website-he
 import { WebsiteFooter } from '@/components/website-renderer/sections/website-footer'
 import { BackToTop } from '@/components/website-renderer/back-to-top'
 import { navigationForDemoSubpage, demoHomeHref } from '@/lib/demo-chrome'
+import { resolveHeaderSocialLinks } from '@/lib/social-links'
 
 /**
  * Client frame for a demo sub-page: the REAL `WebsiteHeader` + `WebsiteFooter`
@@ -36,8 +37,9 @@ export function DemoSubpageFrame({
         navigation={navigationForDemoSubpage(site.navigation, slug, lang)}
         homeHref={demoHomeHref(slug, lang)}
         lang={lang}
-        actions={headerActions}
-      />
+  actions={headerActions}
+  socialLinks={resolveHeaderSocialLinks(site)}
+  />
       <main>{children}</main>
       {footer && footer.type === 'footer' ? (
         <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={lang} site={site} />
