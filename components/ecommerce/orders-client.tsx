@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, ClipboardList, Loader2, Package, X } from 'lucide-react'
+import { ArrowLeft, Check, ClipboardList, Loader2, Package, Undo2, X } from 'lucide-react'
 import {
   cancelOrderPayment,
   confirmOrderPayment,
+  refundCardOrder,
   updateOrderStatus,
   type ManualOrderActionResult,
   type OrderWithItems,
@@ -18,6 +19,13 @@ import { paymentStatusLabel } from '@/lib/payment-status-label'
 import { OrderShippingControls } from '@/components/ecommerce/order-shipping-controls'
 import { OwnerPaymentId } from '@/components/ecommerce/owner-payment-id'
 import { ownerPaymentId } from '@/lib/owner-payment-id'
+import { needsAttention } from '@/lib/store-order-attention'
+import {
+  REFUND_DISPLAY_LABEL,
+  canRefundCardOrder,
+  refundDisplay,
+  refundErrorMessage,
+} from '@/lib/store-refund-status'
 
 const ORDER_STATUSES: OrderStatus[] = [
   'pending',
@@ -153,6 +161,43 @@ export function OrdersClient({
     })
   }
 
+  function handleRefund(orderId: string) {
+    const message = tr
+      ? 'Bu siparişi iptal edip kart ödemesini müşteriye iade etmek istiyor musunuz? İade iyzico üzerinden yapılır ve geri alınamaz.'
+      : 'Cancel this order and refund the card payment to the buyer? The refund is made through iyzico and cannot be undone.'
+    if (!window.confirm(message)) return
+    setError(null)
+    setPendingId(orderId)
+    startTransition(async () => {
+      try {
+        const result = await refundCardOrder(projectId, orderId)
+        if (!result.ok) {
+          setError(result.message)
+        } else {
+          setOrders((os) =>
+            os.map((o) =>
+              o.id === orderId
+                ? { ...o, status: 'cancelled', payment_status: 'refunded', refund_status: 'succeeded' }
+                : o,
+            ),
+          )
+          if (result.followUp === 'attention') {
+            setError(
+              tr
+                ? 'İade yapıldı; stok veya müşteri bildirimi tamamlanamadı, sistem otomatik tekrar deneyecek.'
+                : 'Refund done; stock or the buyer e-mail did not finish, the system will retry automatically.',
+            )
+          }
+        }
+        router.refresh()
+      } catch {
+        setError(refundErrorMessage('unavailable'))
+      } finally {
+        setPendingId(null)
+      }
+    })
+  }
+
   function handleStatusChange(orderId: string, next: OrderStatus) {
     setError(null)
     setPendingId(orderId)
@@ -245,19 +290,38 @@ export function OrdersClient({
                       {t.ecom.orderDate}: {dateFmt.format(new Date(o.created_at))} ·{' '}
                       {t.ecom.payment}: {providerLabel(o.payment_provider)} ({paymentStatusLabel(o.payment_status, lang === 'tr' ? 'tr' : 'en')})
                     </p>
-                    {o.attention_at && o.status === 'pending' && o.payment_status === 'pending' && (
+                    {refundDisplay(o) !== 'none' && (
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">
+                        {REFUND_DISPLAY_LABEL[refundDisplay(o) as Exclude<ReturnType<typeof refundDisplay>, 'none'>]}
+                        {o.refund_status === 'failed' && o.refund_error === 'verify'
+                          ? ` · ${refundErrorMessage('verify_manually').replace('İade başarısız: ', '')}`
+                          : ''}
+                      </p>
+                    )}
+                    {needsAttention(o) && (
                       <p
                         role="alert"
                         className="mt-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
                       >
                         <span className="font-medium">
-                          {tr
-                            ? 'Dikkat gerekiyor: ödeme alındı, işlem tamamlanamadı.'
-                            : 'Needs attention: payment received, order could not be completed.'}
+                          {o.refund_status
+                            ? tr
+                              ? 'Dikkat gerekiyor: iade yapıldı, işlem tamamlanamadı.'
+                              : 'Needs attention: refund made, order could not be completed.'
+                            : tr
+                              ? 'Dikkat gerekiyor: ödeme alındı, işlem tamamlanamadı.'
+                              : 'Needs attention: payment received, order could not be completed.'}
                         </span>{' '}
                         {tr
                           ? 'Sistem otomatik olarak tekrar deniyor; çözülmezse iyzico paymentId ile destek isteyin.'
                           : 'The system keeps retrying; if it persists, contact support with the iyzico paymentId.'}
+                      </p>
+                    )}
+                    {o.refund_status === 'pending' && o.payment_status === 'paid' && o.refund_error && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {tr
+                          ? 'Önceki iade denemesinin sonucu belirsiz. iyzico panelinde ödemenin durumunu kontrol edip yeniden deneyin.'
+                          : 'The previous refund attempt has an unknown result. Check the payment in the iyzico panel, then retry.'}
                       </p>
                     )}
                     {ownerPaymentId(o) && (
@@ -290,6 +354,23 @@ export function OrdersClient({
                         >
                           <X className="size-4" aria-hidden />
                           {tr ? 'İptal et' : 'Cancel'}
+                        </button>
+                        {isPending && pendingId === o.id && (
+                          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                    ) : canRefundCardOrder(o) ? (
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          disabled={isPending && pendingId === o.id}
+                          onClick={() => handleRefund(o.id)}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/40 px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                        >
+                          <Undo2 className="size-4" aria-hidden />
+                          {o.refund_status
+                            ? tr ? 'İadeyi yeniden dene' : 'Retry refund'
+                            : tr ? 'İptal et ve iade et' : 'Cancel and refund'}
                         </button>
                         {isPending && pendingId === o.id && (
                           <Loader2 className="size-4 animate-spin text-muted-foreground" />
