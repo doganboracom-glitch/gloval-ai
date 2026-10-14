@@ -231,7 +231,7 @@ export function WebsiteRenderer({
   const hasFooter = sections.some((section) => section.type === 'footer')
 
   const content = (
-    <SiteNavProvider handler={navHandler}>
+    <SiteNavProvider handler={navHandler} preview={Boolean(preview)}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>
       <WebsiteHeader
         navigation={data.navigation}

@@ -1,6 +1,7 @@
 import { Phone, MessageCircle, Mail, MapPin, Clock } from 'lucide-react'
 import { pickLang, type Lang } from '@/lib/i18n'
 import type { DemoContact } from '@/lib/demo-catalog'
+import { ContactMap } from '@/components/website-renderer/contact-map'
 import { telHref, whatsappHref, mailHref } from '@/lib/contact-links'
 
 /**
@@ -98,6 +99,8 @@ export function ContactPanel({
           </div>
         </div>
       </div>
+
+      <ContactMap address={pickLang(contact.address, lang)} lang={lang} />
     </section>
   )
 }

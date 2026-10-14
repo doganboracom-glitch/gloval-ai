@@ -25,15 +25,28 @@ import { createContext, useContext, type ReactNode } from 'react'
 export type SiteNavHandler = (href: string) => boolean
 
 const SiteNavContext = createContext<SiteNavHandler | null>(null)
+const SitePreviewContext = createContext(false)
 
 export function SiteNavProvider({
   handler,
+  preview = false,
   children,
 }: {
   handler: SiteNavHandler
+  /** True only inside the editor/landing preview (never on published or demo pages). */
+  preview?: boolean
   children: ReactNode
 }) {
-  return <SiteNavContext.Provider value={handler}>{children}</SiteNavContext.Provider>
+  return (
+    <SiteNavContext.Provider value={handler}>
+      <SitePreviewContext.Provider value={preview}>{children}</SitePreviewContext.Provider>
+    </SiteNavContext.Provider>
+  )
+}
+
+/** True when the site renders inside the editor preview. */
+export function useIsSitePreview(): boolean {
+  return useContext(SitePreviewContext)
 }
 
 /** The active in-site navigation handler, or null when the site isn't wrapped. */
