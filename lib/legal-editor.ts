@@ -26,7 +26,7 @@ export const LEGAL_DOC_ENTRIES: ReadonlyArray<{ slug: LegalDocSlug; title: strin
   { slug: 'gizlilik-politikasi', title: 'Gizlilik Politikası' },
   { slug: 'mesafeli-satis-sozlesmesi', title: 'Mesafeli Satış Sözleşmesi' },
   { slug: 'hizmet-sozlesmesi', title: 'Hizmet Sözleşmesi' },
-  { slug: 'iptal-ve-iade', title: 'İptal & İade' },
+  { slug: 'iptal-ve-iade', title: 'Teslimat ve İade' },
   { slug: 'uyelik-sozlesmesi', title: 'Üyelik Sözleşmesi' },
 ]
 

@@ -51,7 +51,7 @@ export const FOOTER_LEGAL_DOCS = [
   { slug: 'gizlilik-politikasi', tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
   { slug: 'mesafeli-satis-sozlesmesi', tr: 'Mesafeli Satış Sözleşmesi', en: 'Distance Sales Agreement' },
   { slug: 'hizmet-sozlesmesi', tr: 'Hizmet Sözleşmesi', en: 'Terms of Service' },
-  { slug: 'iptal-ve-iade', tr: 'İptal & İade', en: 'Cancellation & Refunds' },
+  { slug: 'iptal-ve-iade', tr: 'Teslimat ve İade', en: 'Delivery & Returns' },
   { slug: 'uyelik-sozlesmesi', tr: 'Üyelik Sözleşmesi', en: 'Membership Agreement' },
 ] as const
 
@@ -195,14 +195,59 @@ export function resolveFooterLegal(
   site: WebsiteSchema | null | undefined,
   lang: 'tr' | 'en' = 'tr',
 ): NavLink[] {
-  if (legal?.hidden) return []
-  const kind = site && isStorefront(site) ? 'ecommerce' : 'corporate'
-  const links = legal?.links ?? defaultLegalLinks(kind, lang)
+  const store = Boolean(site && isStorefront(site))
+  if (legal?.hidden && !store) return []
+  const kind = store ? 'ecommerce' : 'corporate'
+  const owned = legal?.hidden ? [] : (legal?.links ?? defaultLegalLinks(kind, lang))
+  const links = store ? withStoreEssentialLegal(owned, lang) : owned
   return links.filter((l) => {
     if (l.label.trim() === '' || !isValidFooterHref(l.href, site)) return false
     const legalSlug = /\/yasal\/([^/?#]+)/.exec(l.href)?.[1]
     return !(site && legalSlug && isLegalDocHidden(site, legalSlug))
   })
+}
+
+/**
+ * Official texts a store footer must always carry (payment-provider review and
+ * consumer law): privacy, delivery & returns, distance sales. The owner may
+ * relabel or reorder them, but never remove or hide them.
+ */
+export const STORE_ESSENTIAL_LEGAL_SLUGS: readonly FooterLegalSlug[] = [
+  'gizlilik-politikasi',
+  'iptal-ve-iade',
+  'mesafeli-satis-sozlesmesi',
+]
+
+function withStoreEssentialLegal(owned: NavLink[], lang: 'tr' | 'en'): NavLink[] {
+  const essentialHrefs = new Set(STORE_ESSENTIAL_LEGAL_SLUGS.map(legalDocPath))
+  const essentials = STORE_ESSENTIAL_LEGAL_SLUGS.map((slug) => {
+    const href = legalDocPath(slug)
+    const doc = FOOTER_LEGAL_DOCS.find((d) => d.slug === slug)!
+    const stored = owned.find((l) => l.href.trim() === href && l.label.trim() !== '')
+    return stored ?? { label: doc[lang === 'en' ? 'en' : 'tr'], href }
+  })
+  return [...essentials, ...owned.filter((l) => !essentialHrefs.has(l.href.trim()))]
+}
+
+/**
+ * "Hakkımızda" and "İletişim" links a store footer must always show. A link is
+ * only offered when its section really is visible on the site (no dead links),
+ * and is skipped when the footer's link columns already carry it.
+ */
+export function resolveStoreEssentialPageLinks(
+  site: WebsiteSchema | null | undefined,
+  columns: FooterColumnInput[],
+  lang: 'tr' | 'en' = 'tr',
+): NavLink[] {
+  if (!site || !isStorefront(site)) return []
+  const tr = lang !== 'en'
+  const inColumns = new Set(columns.flatMap((c) => c.links.map((l) => l.href.trim())))
+  const visible = (type: string) => site.sections.some((s) => s.type === type && !s.hidden)
+  const wanted: NavLink[] = [
+    { label: tr ? 'Hakkımızda' : 'About', href: '#about' },
+    { label: tr ? 'İletişim' : 'Contact', href: '#contact' },
+  ]
+  return wanted.filter((l) => visible(l.href.slice(1)) && !inColumns.has(l.href))
 }
 
 /**

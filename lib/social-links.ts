@@ -181,6 +181,19 @@ export function resolveSocialLinks(
   return links
 }
 
+/**
+ * The footer repeats the social icons ONLY when the site has no visible contact
+ * section (deleted or hidden), which otherwise already carries them. That keeps
+ * the owner's links reachable without duplicating them everywhere.
+ */
+export function resolveFooterSocialLinks(
+  site: Pick<WebsiteSchema, 'social' | 'sections'> | null | undefined,
+): ResolvedSocialLink[] {
+  if (!site) return []
+  const hasVisibleContact = site.sections.some((s) => s.type === 'contact' && !s.hidden)
+  return hasVisibleContact ? [] : resolveSocialLinks(site)
+}
+
 /** Header icons need the owner's switch AND at least one link. */
 export function resolveHeaderSocialLinks(
   site: Pick<WebsiteSchema, 'social'> | null | undefined,
