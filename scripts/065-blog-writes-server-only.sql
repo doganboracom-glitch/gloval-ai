@@ -11,3 +11,6 @@ drop policy if exists site_blog_posts_owner_delete on public.site_blog_posts;
 revoke insert, update, delete on public.site_blog_posts from authenticated;
 
 commit;
+
+-- RLS does not cover TRUNCATE; drop the remaining non-read privileges too.
+revoke truncate, references, trigger on public.site_blog_posts from anon, authenticated;
