@@ -21,6 +21,7 @@ import { sweepExpiredRateLimitCounters } from '@/lib/rate-limit-sweep'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { INDEXNOW_BUDGET_MS } from '@/lib/indexnow'
 import { dispatchIndexQueue, enqueueDueScheduledPosts } from '@/lib/indexnow-server'
+import { runBackupSweep } from '@/lib/project-backups'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -30,6 +31,7 @@ const IYZICO_REFUND_BUDGET_MS = 5_000
 const MAIL_ACCESS_BUDGET_MS = 15_000
 const PLAN_CREDITS_BUDGET_MS = 10_000
 const RATE_LIMIT_SWEEP_BUDGET_MS = 5_000
+const PROJECT_BACKUPS_BUDGET_MS = 8_000
 const CONNECTION_BATCH_LIMIT = 25
 const CONNECTION_BUDGET_MS = 40_000
 
@@ -181,6 +183,16 @@ export async function GET(request: Request) {
     indexNow = { error: 'indexnow_dispatch_failed' }
   }
 
+  // Isolated and time-boxed: draft backups (daily PRO/E-Ticaret, weekly Starter),
+  // expired-backup cleanup and stale non-published version pruning.
+  let projectBackups: Awaited<ReturnType<typeof runBackupSweep>> | { error: string }
+  try {
+    projectBackups = await runBackupSweep({ deadlineMs: Date.now() + PROJECT_BACKUPS_BUDGET_MS })
+  } catch (error) {
+    console.log('[project-backups] sweep failed:', error instanceof Error ? error.message : 'unknown')
+    projectBackups = { error: 'project_backups_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -195,7 +207,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, indexNow, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

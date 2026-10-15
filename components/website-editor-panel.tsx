@@ -29,7 +29,8 @@ import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
-import type { ProjectVersionItem } from '@/lib/projects'
+import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
+import type { BackupItem } from '@/lib/project-backups-core'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { type EditOperation, ADDABLE_SECTION_TYPES } from '@/lib/website-edit-operations'
 import { SectionInspector } from '@/components/editor/section-inspector'
@@ -88,6 +89,8 @@ export function WebsiteEditorPanel({
   onRedo,
   onClose,
   versions = null,
+  backups = null,
+  onRestoreBackup,
   saveState = 'idle',
   onRegenerateHeroImage,
   heroImageWorking = false,
@@ -141,6 +144,10 @@ export function WebsiteEditorPanel({
   onClose: () => void
   /** Version snapshots for the change-history tab. null = history disabled. */
   versions?: ProjectVersionItem[] | null
+  /** Draft backups (PRO / E-Ticaret). null = backups section hidden. */
+  backups?: BackupItem[] | null
+  /** Restores into the draft only; the published site is never touched. */
+  onRestoreBackup?: (backupId: string) => Promise<RestoreBackupResult>
   saveState?: 'idle' | 'saving' | 'saved'
   /**
    * Section index selected on the canvas (or via the Design tab's own pencil
@@ -302,7 +309,12 @@ export function WebsiteEditorPanel({
           />
         )}
         {tab === 'history' && historyEnabled && (
-          <HistoryTab versions={versions ?? []} saveState={saveState} />
+          <HistoryTab
+            versions={versions ?? []}
+            backups={backups}
+            onRestoreBackup={onRestoreBackup}
+            saveState={saveState}
+          />
         )}
       </div>
     </div>
@@ -1313,13 +1325,63 @@ function AiTab({
 
 function HistoryTab({
   versions,
+  backups,
+  onRestoreBackup,
   saveState,
 }: {
   versions: ProjectVersionItem[]
+  backups: BackupItem[] | null
+  onRestoreBackup?: (backupId: string) => Promise<RestoreBackupResult>
   saveState: 'idle' | 'saving' | 'saved'
 }) {
   const { t, lang } = useLanguage()
   const h = t.editor.history
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+
+  const restoreErrorText = (r: Extract<RestoreBackupResult, { ok: false }>) => {
+    switch (r.reason) {
+      case 'RATE_LIMITED':
+        return h.restoreRateLimited
+      case 'BACKUP_NOT_FOUND':
+        return h.restoreNotFound
+      case 'INVALID_BACKUP':
+        return h.restoreInvalid
+      case 'PAGE_LIMIT_REACHED':
+        return h.restorePageLimit
+      case 'PRE_RESTORE_FAILED':
+        return h.restorePreFailed
+      case 'HISTORY_PLAN_REQUIRED':
+        return h.historyLockedBody
+      case 'DRAFT_CHANGED':
+        return h.restoreChanged
+    }
+  }
+
+  const runRestore = async (backupId: string) => {
+    if (!onRestoreBackup || restoringId) return
+    setRestoringId(backupId)
+    setNotice(null)
+    try {
+      const result = await onRestoreBackup(backupId)
+      if (result.ok) {
+        setNotice({ tone: 'ok', text: h.restoreDone })
+        // The editor holds the draft in memory, so reload to pick up the restored one.
+        window.setTimeout(() => window.location.reload(), 900)
+        return
+      }
+      setNotice({ tone: 'error', text: restoreErrorText(result) })
+    } catch {
+      setNotice({ tone: 'error', text: h.restoreFailed })
+    } finally {
+      setRestoringId(null)
+      setConfirmId(null)
+    }
+  }
+
+  const backupKindLabel = (kind: BackupItem['kind']) =>
+    kind === 'daily' ? h.backupDaily : kind === 'weekly' ? h.backupWeekly : h.backupPreRestore
   const fmt = new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     day: 'numeric',
     month: 'short',
@@ -1374,6 +1436,100 @@ function HistoryTab({
             </li>
           ))}
         </ul>
+      )}
+
+      {backups !== null && (
+        <section className="mt-2 flex flex-col gap-2.5" aria-labelledby="backups-heading">
+          <h4
+            id="backups-heading"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {h.backupsTitle}
+          </h4>
+          <p className="text-xs text-muted-foreground">{h.backupsDescription}</p>
+
+          {notice && (
+            <p
+              role={notice.tone === 'error' ? 'alert' : 'status'}
+              className={
+                notice.tone === 'error'
+                  ? 'rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'
+                  : 'rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent'
+              }
+            >
+              {notice.text}
+            </p>
+          )}
+
+          {backups.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+              {h.backupsEmpty}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {backups.map((b) => {
+                const confirming = confirmId === b.id
+                const restoring = restoringId === b.id
+                return (
+                  <li
+                    key={b.id}
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-background/50 px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <History className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{backupKindLabel(b.kind)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {fmt.format(new Date(b.created_at))}
+                        </p>
+                      </div>
+                      {!confirming && onRestoreBackup && (
+                        <button
+                          type="button"
+                          disabled={restoringId !== null}
+                          onClick={() => {
+                            setNotice(null)
+                            setConfirmId(b.id)
+                          }}
+                          className="rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                        >
+                          {h.restore}
+                        </button>
+                      )}
+                    </div>
+                    {confirming && (
+                      <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-2.5">
+                        <p className="text-xs font-medium">{h.restoreConfirmTitle}</p>
+                        <p className="text-xs text-muted-foreground">{h.restoreConfirmBody}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={restoring}
+                            onClick={() => runRestore(b.id)}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                          >
+                            {restoring && <Loader2 className="h-3 w-3 animate-spin" />}
+                            {restoring ? h.restoring : h.restoreConfirm}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={restoring}
+                            onClick={() => setConfirmId(null)}
+                            className="rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                          >
+                            {h.restoreCancel}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
       )}
     </div>
   )

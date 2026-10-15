@@ -13,8 +13,12 @@ import {
   SITE_LIMIT_ERROR,
   PLAN_REQUIRED_ERROR,
   SUBSCRIPTION_SUSPENDED_ERROR,
+  canUseVersionHistory,
   toPlanCode,
 } from '@/lib/pricing-config'
+import { backupIfDue, loadBackupSchema, recordBackup } from '@/lib/project-backups'
+import { BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS, type BackupItem } from '@/lib/project-backups-core'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
@@ -131,6 +135,39 @@ async function clientForProject(projectId: string): Promise<{
   return { db: supabase, userId, elevated: false }
 }
 
+const HISTORY_PLAN_REQUIRED_ERROR = 'HISTORY_PLAN_REQUIRED'
+const DRAFT_CONFLICT_ERROR = 'DRAFT_CONFLICT'
+
+/**
+ * Shared server gate for version history and backups: the caller must own the
+ * project (or be an allowlisted admin) AND the OWNER's plan must include
+ * version history. Throws NOT_FOUND / HISTORY_PLAN_REQUIRED otherwise.
+ */
+async function requireHistoryAccess(projectId: string) {
+  const ctx = await clientForProject(projectId)
+  const { data: owned, error } = await ctx.db
+    .from('projects')
+    .select('id, owner_id')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (error) throw error
+  if (!owned) throw new Error('NOT_FOUND')
+  const ownerId = owned.owner_id as string
+  if (!ctx.elevated && ownerId !== ctx.userId) throw new Error('NOT_FOUND')
+  const plan = toPlanCode(await getPlanCodeForUser(ownerId))
+  if (!canUseVersionHistory(plan)) throw new Error(HISTORY_PLAN_REQUIRED_ERROR)
+  return { ...ctx, ownerId }
+}
+
+/** Best-effort opportunistic backup of the draft; never fails the surrounding save or publish. */
+async function backupDraftBestEffort(projectId: string, ownerId: string, schema: WebsiteSchema): Promise<void> {
+  try {
+    await backupIfDue({ projectId, planCode: await getPlanCodeForUser(ownerId), schema })
+  } catch (err) {
+    console.log('[v0] opportunistic backup failed (non-fatal):', err instanceof Error ? err.message : err)
+  }
+}
+
 /** Lists the current user's projects, newest first. RLS scopes to the owner. */
 export async function listProjects(): Promise<ProjectListItem[]> {
   const { supabase } = await requireUser()
@@ -161,21 +198,7 @@ export async function getProject(id: string): Promise<ProjectRow | null> {
  * a user who guesses another user's project id gets nothing.
  */
 export async function listProjectVersions(projectId: string): Promise<ProjectVersionItem[]> {
-  const { db, userId, elevated } = await clientForProject(projectId)
-
-  // Explicit server-side ownership check (never trust the client with the id).
-  // Admins operating on another tenant's project are elevated and skip this —
-  // the service-role client scopes the version list by project_id below.
-  if (!elevated) {
-    const { data: owned, error: ownErr } = await db
-      .from('projects')
-      .select('id')
-      .eq('id', projectId)
-      .eq('owner_id', userId)
-      .maybeSingle()
-    if (ownErr) throw ownErr
-    if (!owned) throw new Error('NOT_FOUND')
-  }
+  const { db } = await requireHistoryAccess(projectId)
 
   const { data, error } = await db
     .from('project_versions')
@@ -237,6 +260,8 @@ export async function saveProjectSchema(input: {
   id: string
   schema: WebsiteSchema
   name?: string
+  /** When set, the write only lands if the draft's updated_at still equals it (restore uses this). */
+  expectedUpdatedAt?: string
 }): Promise<void> {
   const { db, elevated } = await clientForProject(input.id)
   let parsed = websiteSchema.parse(input.schema)
@@ -281,8 +306,11 @@ export async function saveProjectSchema(input: {
   // the type (and its catalog/orders) from a site whose sections were
   // momentarily removed.
   if (isStorefront(parsed)) patch.project_type = 'ecommerce'
-  const { error } = await db.from('projects').update(patch).eq('id', input.id)
+  let update = db.from('projects').update(patch).eq('id', input.id)
+  if (input.expectedUpdatedAt) update = update.eq('updated_at', input.expectedUpdatedAt)
+  const { data: written, error } = await update.select('id')
   if (error) throw error
+  if (input.expectedUpdatedAt && (written?.length ?? 0) === 0) throw new Error(DRAFT_CONFLICT_ERROR)
   revalidatePath('/dashboard')
 }
 
@@ -301,6 +329,125 @@ export async function snapshotProject(input: {
     label: input.label ?? null,
   })
   if (error) throw error
+
+  const { data: owner } = await db.from('projects').select('owner_id').eq('id', input.id).maybeSingle()
+  if (owner?.owner_id) await backupDraftBestEffort(input.id, owner.owner_id as string, parsed)
+}
+
+/** Backups listed in the editor's "Yedekler" section, newest first. Owner + plan gated. */
+export async function listProjectBackups(projectId: string): Promise<BackupItem[]> {
+  const { db } = await requireHistoryAccess(projectId)
+  const { data, error } = await db
+    .from('project_backups')
+    .select('id, kind, created_at')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  if (error) throw error
+  return (data as BackupItem[]) ?? []
+}
+
+export type RestoreBackupResult =
+  | { ok: true }
+  | {
+      ok: false
+      reason:
+        | 'RATE_LIMITED'
+        | 'BACKUP_NOT_FOUND'
+        | 'INVALID_BACKUP'
+        | 'PAGE_LIMIT_REACHED'
+        | 'PRE_RESTORE_FAILED'
+        | 'HISTORY_PLAN_REQUIRED'
+        | 'DRAFT_CHANGED'
+      retryAfterSeconds?: number
+      limit?: number
+    }
+
+/**
+ * Restores a backup into the DRAFT only (`projects.schema_data`). The published
+ * site (published_version_id / project_versions) is never touched: the owner
+ * must publish again to make restored content live. Before overwriting, the
+ * current draft is saved as a `pre_restore` backup; if that fails, nothing is restored.
+ */
+export async function restoreProjectBackup(input: {
+  projectId: string
+  backupId: string
+  /** The draft's updated_at as the editor last saw it; a newer draft aborts the restore. */
+  expectedUpdatedAt?: string
+}): Promise<RestoreBackupResult> {
+  let access: Awaited<ReturnType<typeof requireHistoryAccess>>
+  try {
+    access = await requireHistoryAccess(input.projectId)
+  } catch (err) {
+    if (err instanceof Error && err.message === HISTORY_PLAN_REQUIRED_ERROR) {
+      return { ok: false, reason: 'HISTORY_PLAN_REQUIRED' }
+    }
+    throw err
+  }
+  const { db, userId, elevated } = access
+
+  const limited = checkRateLimit(`backup-restore:${userId}`, BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS)
+  if (!limited.allowed) {
+    return { ok: false, reason: 'RATE_LIMITED', retryAfterSeconds: Math.ceil(limited.retryAfterMs / 1000) }
+  }
+
+  const { data: exists } = await db
+    .from('project_backups')
+    .select('id')
+    .eq('id', input.backupId)
+    .eq('project_id', input.projectId)
+    .maybeSingle()
+  if (!exists) return { ok: false, reason: 'BACKUP_NOT_FOUND' }
+
+  const restored = await loadBackupSchema(input.projectId, input.backupId)
+  if (!restored) return { ok: false, reason: 'INVALID_BACKUP' }
+
+  const { data: current, error: currentErr } = await db
+    .from('projects')
+    .select('schema_data, updated_at')
+    .eq('id', input.projectId)
+    .maybeSingle()
+  if (currentErr || !current) throw currentErr ?? new Error('NOT_FOUND')
+  const draftUpdatedAt = current.updated_at as string
+  if (input.expectedUpdatedAt && input.expectedUpdatedAt !== draftUpdatedAt) {
+    return { ok: false, reason: 'DRAFT_CHANGED' }
+  }
+
+  // Same rule as saving: only GROWTH past the plan's page limit is refused.
+  if (!elevated) {
+    const currentPages = (current.schema_data as { pages?: unknown[] } | null)?.pages?.length ?? 0
+    const limit = pageLimitForPlan(await getPlanCodeForUser(access.ownerId))
+    if (isPageGrowthBlocked(currentPages, restored.pages.length, limit)) {
+      return { ok: false, reason: 'PAGE_LIMIT_REACHED', limit }
+    }
+  }
+
+  const currentParsed = websiteSchema.safeParse(current.schema_data)
+  try {
+    if (currentParsed.success) {
+      await recordBackup({ projectId: input.projectId, kind: 'pre_restore', schema: currentParsed.data })
+    } else {
+      // A draft that no longer parses cannot be restored from, so keep the raw copy out of
+      // the backup and refuse rather than silently lose it.
+      return { ok: false, reason: 'PRE_RESTORE_FAILED' }
+    }
+  } catch (err) {
+    console.log('[v0] pre_restore backup failed, aborting restore:', err instanceof Error ? err.message : err)
+    return { ok: false, reason: 'PRE_RESTORE_FAILED' }
+  }
+
+  try {
+    await saveProjectSchema({ id: input.projectId, schema: restored, expectedUpdatedAt: draftUpdatedAt })
+  } catch (err) {
+    if (err instanceof Error && err.message === PAGE_LIMIT_ERROR) {
+      return { ok: false, reason: 'PAGE_LIMIT_REACHED' }
+    }
+    if (err instanceof Error && err.message === DRAFT_CONFLICT_ERROR) {
+      return { ok: false, reason: 'DRAFT_CHANGED' }
+    }
+    throw err
+  }
+  return { ok: true }
 }
 
 /** Deletes a project (cascades to its versions). */
@@ -522,6 +669,8 @@ export async function publishProject(input: {
     })
     .eq('id', input.id)
   if (pubErr) throw pubErr
+
+  await backupDraftBestEffort(input.id, project.owner_id as string, parsed)
 
   // Bridge the generated storefront into the real catalog: any product/
   // category sections in the schema become purchasable `ecommerce_*` rows, so
