@@ -13,6 +13,9 @@ export const CATALOG_NOT_AVAILABLE = 'CATALOG_NOT_AVAILABLE'
 export const COMMERCE_NOT_AVAILABLE = 'COMMERCE_NOT_AVAILABLE'
 
 /** Catalog product cap, ACCOUNT-WIDE (every site of the owner counts together). */
+/** Public copy (pricing, plan comparison) advertises the catalog only while this is true. */
+export const CATALOG_MODE_LIVE = true
+
 export const CATALOG_PRODUCT_LIMIT: number = PRODUCT_LIMITS.pro ?? 50
 
 export type PriceMode = 'show' | 'ask'
@@ -33,7 +36,7 @@ export function planAllowsCatalog(planCode: string | null | undefined): boolean 
 /**
  * The effective commerce mode of a project.
  *
- * - Uses the stored `commerce_mode`; when that column is absent (migration 062
+ * - Uses the stored `commerce_mode`; when that column is absent (migration 063
  *   not applied) or empty it derives from `project_type`, which keeps every
  *   pre-existing site behaving exactly as before.
  * - A `catalog` site whose owner is not on a catalog-capable plan degrades to
@@ -48,6 +51,47 @@ export function getCommerceMode(
     toStoredMode(project.commerce_mode) ?? (project.project_type === 'ecommerce' ? 'ecommerce' : 'none')
   if (stored === 'catalog' && plan !== undefined && !planAllowsCatalog(plan)) return 'none'
   return stored
+}
+
+/* -------------------------------------------------------------------------- */
+/* What each mode exposes                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** `/store` and `/store/<slug>` exist for stores and catalogs, never for `none`. */
+export function modeHasStoreRoutes(mode: CommerceMode): boolean {
+  return mode !== 'none'
+}
+
+/** Cart, checkout, customer accounts and order pages exist only on a full store. */
+export function modeHasTransactions(mode: CommerceMode): boolean {
+  return mode === 'ecommerce'
+}
+
+/** The WhatsApp order button replaces "add to cart" on a catalog. */
+export function modeUsesWhatsappOrder(mode: CommerceMode): boolean {
+  return mode === 'catalog'
+}
+
+/** Seller panel areas per mode: a catalog only manages products. */
+export type PanelArea = 'products' | 'collections' | 'orders' | 'customers' | 'payments' | 'shipping'
+
+export function panelAreasFor(mode: CommerceMode): PanelArea[] {
+  if (mode === 'ecommerce') return ['products', 'collections', 'orders', 'customers', 'payments', 'shipping']
+  if (mode === 'catalog') return ['products', 'collections']
+  return []
+}
+
+/** Storefront routes that are transactional and never indexed. */
+export const NON_INDEXABLE_STORE_PATHS = ['/checkout', '/hesap', '/order/'] as const
+
+export type StoreSeoPlan = {
+  /** `/store` list page and every `/store/<product-slug>` page go in the sitemap. */
+  indexStore: boolean
+  disallow: string[]
+}
+
+export function storeSeoPlan(mode: CommerceMode): StoreSeoPlan {
+  return { indexStore: modeHasStoreRoutes(mode), disallow: [...NON_INDEXABLE_STORE_PATHS] }
 }
 
 /* -------------------------------------------------------------------------- */

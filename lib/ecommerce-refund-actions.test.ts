@@ -20,6 +20,8 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }))
 vi.mock('@/lib/ecommerce-access', () => ({
   requireOwnedEcommerceProject: mocks.requireOwnedEcommerceProject,
   requireUser: mocks.requireUser,
+  requireEcommerceMode: vi.fn(),
+  requireCatalogCapablePlan: vi.fn(),
 }))
 vi.mock('@/lib/product-image-service', () => ({
   discardProjectImageUrls: vi.fn(),

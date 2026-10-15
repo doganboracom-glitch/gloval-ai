@@ -1,5 +1,6 @@
 import { DEFAULT_VAT_RATE, type ProductSpec, type VatRate } from '@/lib/product-input'
 import { readVatRate } from '@/lib/store-vat'
+import { toPriceMode, type PriceMode } from '@/lib/commerce-mode'
 
 /**
  * Discount badge percent, always computed from the two prices (never typed in):
@@ -21,6 +22,8 @@ export type StoreProductExtras = {
   sku: string | null
   /** Owner picked this product for the home-page showcase. False before SQL 038. */
   show_on_home: boolean
+  /** `ask` hides the price and stock offer ("Fiyat için sor"). `show` before SQL 063. */
+  price_mode: PriceMode
 }
 
 function text(raw: unknown): string | null {
@@ -63,5 +66,6 @@ export function readProductExtras(row: Record<string, unknown>, priceCents: numb
     seo_description: text(row.seo_description),
     sku: text(row.sku),
     show_on_home: row.show_on_home === true,
+    price_mode: toPriceMode(row.price_mode),
   }
 }

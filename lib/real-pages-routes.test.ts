@@ -10,6 +10,11 @@ const state = vi.hoisted(() => ({
   boundSlug: null as null | string,
 }))
 
+vi.mock('server-only', () => ({}))
+vi.mock('@/lib/commerce-mode-server', () => ({
+  getPublishedSiteCommerceMode: async () => 'none',
+  getCatalogContext: async () => ({ mode: 'none', whatsappNumber: null, origin: state.origin }),
+}))
 vi.mock('next/navigation', () => ({
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND')

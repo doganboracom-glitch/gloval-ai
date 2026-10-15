@@ -13,6 +13,7 @@ import {
 } from '@/lib/pricing-config'
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 import { ADVANCED_AI_DISTINCT } from '@/lib/ai-models'
+import { CATALOG_MODE_LIVE, CATALOG_PRODUCT_LIMIT } from '@/lib/commerce-mode'
 
 /**
  * User-facing plan copy (TR + EN only; every other language falls back to EN).
@@ -178,6 +179,7 @@ type Strings = {
     logoStudio: string
     logoStudioNote: string
     products: (n: number) => string
+    catalogOrder: (n: number) => string
     rowProducts: string
     productMgmt: string
     collections: string
@@ -336,6 +338,7 @@ const TR: Strings = {
     logoStudio: 'AI logo stüdyosu ve marka kiti',
     logoStudioNote: 'Logo önerileri, marka kiti ve favicon.',
     products: (n) => `${n} ürün`,
+    catalogOrder: (n) => `Ürün kataloğu (${n} ürüne kadar) ve WhatsApp ile sipariş`,
     rowProducts: 'Ürün limiti',
     productMgmt: 'Ürün yönetimi',
     collections: 'Ürün koleksiyonları',
@@ -496,6 +499,7 @@ const EN: Strings = {
     logoStudio: 'AI logo studio and brand kit',
     logoStudioNote: 'Logo suggestions, brand kit and favicon.',
     products: (n) => `${n} products`,
+    catalogOrder: (n) => `Product catalog (up to ${n} products) and ordering via WhatsApp`,
     rowProducts: 'Product limit',
     productMgmt: 'Product management',
     collections: 'Product collections',
@@ -727,6 +731,9 @@ export function buildPlanView(
             versionHistoryRestoreItem(),
             ...advancedAiItems,
             glovalAdsItem(),
+            ...(CATALOG_MODE_LIVE
+              ? [{ id: 'catalogOrder', label: f.catalogOrder(CATALOG_PRODUCT_LIMIT) } as PlanCopyItem]
+              : []),
           ],
         },
         ...mailGroup(s, code),

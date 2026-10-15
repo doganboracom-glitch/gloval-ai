@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { modeHasTransactions } from '@/lib/commerce-mode'
+import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { ResetPassword } from '@/components/store/reset-password'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +24,7 @@ export default async function ResetPasswordPage({
   const { token } = await searchParams
   const site = await getPublishedSite(slug)
   if (!site) notFound()
+  if (!modeHasTransactions(await getPublishedSiteCommerceMode(slug))) notFound()
 
   return (
     <ResetPassword

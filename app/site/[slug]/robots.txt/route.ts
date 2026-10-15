@@ -1,4 +1,5 @@
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { NON_INDEXABLE_STORE_PATHS } from '@/lib/commerce-mode'
 
 /**
  * robots.txt for a published tenant site.
@@ -20,8 +21,7 @@ export async function GET(
   const body = [
     'User-Agent: *',
     'Allow: /',
-    'Disallow: /checkout',
-    'Disallow: /order/',
+    ...NON_INDEXABLE_STORE_PATHS.map((path) => `Disallow: ${path}`),
     '',
     `Sitemap: ${origin}/sitemap.xml`,
     '',

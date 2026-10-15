@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { modeHasTransactions } from '@/lib/commerce-mode'
+import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { CheckoutForm } from '@/components/store/checkout-form'
 import { getStorePaymentMethods } from '@/lib/store'
 import { getCurrentStoreCustomer } from '@/lib/store-customer'
@@ -25,6 +27,7 @@ export default async function CheckoutPage({
   const { slug } = await params
   const site = await getPublishedSite(slug)
   if (!site) notFound()
+  if (!modeHasTransactions(await getPublishedSiteCommerceMode(slug))) notFound()
 
   const { available, reason, methods, publicConfig, demo, guestCheckout, codFeeCents } = await getStorePaymentMethods(slug)
   const customer = await getCurrentStoreCustomer(slug)

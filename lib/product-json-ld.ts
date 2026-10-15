@@ -17,6 +17,18 @@ export function buildProductJsonLd(product: StoreProduct, url?: string) {
       ? 'https://schema.org/OutOfStock'
       : 'https://schema.org/InStock'
 
+  // "Price on request": no price and no stock claim may be published.
+  const offers =
+    product.price_mode === 'ask'
+      ? null
+      : {
+          '@type': 'Offer',
+          ...(url ? { url } : {}),
+          price: (product.price_cents / 100).toFixed(2),
+          priceCurrency: product.currency,
+          availability,
+        }
+
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -25,13 +37,7 @@ export function buildProductJsonLd(product: StoreProduct, url?: string) {
     description: product.description ?? undefined,
     ...(product.sku ? { sku: product.sku } : {}),
     ...(url ? { url } : {}),
-    offers: {
-      '@type': 'Offer',
-      ...(url ? { url } : {}),
-      price: (product.price_cents / 100).toFixed(2),
-      priceCurrency: product.currency,
-      availability,
-    },
+    ...(offers ? { offers } : {}),
   }
 }
 

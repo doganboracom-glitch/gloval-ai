@@ -1,8 +1,11 @@
 "use server";
 
 import { persistPaymentIntent, voidOrder } from "@/lib/store-order-intent";
-import { COMMERCE_NOT_AVAILABLE } from "@/lib/commerce-mode";
-import { isEcommerceProjectId } from "@/lib/commerce-mode-server";
+import { COMMERCE_NOT_AVAILABLE, modeHasStoreRoutes } from "@/lib/commerce-mode";
+import {
+  getPublishedSiteCommerceMode,
+  isEcommerceProjectId,
+} from "@/lib/commerce-mode-server";
 import { headers } from "next/headers";
 import {
   prepareIyzicoCheckout,
@@ -104,6 +107,9 @@ export async function getStoreCollections(slug: string): Promise<StoreCollection
  * products of published projects.
  */
 export async function getStoreProducts(slug: string): Promise<StoreProduct[]> {
+  // A `none` site (including a catalog whose owner left PRO) shows no products;
+  // the rows stay in the database and return once the plan is restored.
+  if (!modeHasStoreRoutes(await getPublishedSiteCommerceMode(slug))) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_store_products", {
     p_slug: slug,

@@ -87,6 +87,19 @@ export async function isEcommerceSlug(slug: string): Promise<boolean> {
   }
 }
 
+/**
+ * Effective mode of a PUBLISHED site addressed by its public slug. Unpublished
+ * or unknown sites and read errors all read as `none` (fail closed).
+ */
+export async function getPublishedSiteCommerceMode(slug: string): Promise<CommerceMode> {
+  try {
+    const commerce = await loadProjectCommerce({ slug })
+    return commerce?.published ? commerce.mode : 'none'
+  } catch {
+    return 'none'
+  }
+}
+
 export async function isEcommerceProjectId(projectId: string): Promise<boolean> {
   try {
     const commerce = await loadProjectCommerce({ id: projectId })
@@ -104,4 +117,26 @@ export function assertCatalogPlan(commerce: Pick<ProjectCommerce, 'storedMode' |
   if (commerce.storedMode === 'catalog' && !planAllowsCatalog(commerce.ownerPlanCode)) {
     throw new Error(CATALOG_NOT_AVAILABLE)
   }
+}
+
+export type CatalogContext = {
+  mode: CommerceMode
+  /** Real, non-placeholder WhatsApp digits, or null (button hidden). */
+  whatsappNumber: string | null
+  /** Canonical site origin used to build shareable product links. */
+  origin: string
+}
+
+/** Everything the storefront needs to render catalog-mode order buttons. */
+export async function getCatalogContext(
+  slug: string,
+  schema: import('@/lib/website-schema').WebsiteSchema,
+  mode: CommerceMode,
+): Promise<CatalogContext> {
+  const { getSiteSeoContext } = await import('@/lib/seo/site-seo')
+  const { resolveContactActions } = await import('@/lib/site-contact-actions')
+  const { usableWhatsappNumber } = await import('@/lib/commerce-mode')
+  const { origin } = await getSiteSeoContext(slug)
+  const resolved = resolveContactActions(schema)
+  return { mode, whatsappNumber: usableWhatsappNumber(resolved?.whatsapp?.display), origin }
 }
