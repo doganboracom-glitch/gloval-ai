@@ -22,6 +22,7 @@ export type AiFlow =
   | 'sectionEdit'
   | 'productText'
   | 'blogWrite'
+  | 'logoEmblem'
 
 const STANDARD_MODEL = 'openai/gpt-5-mini'
 
@@ -70,6 +71,20 @@ export const AI_FLOW_ADVANCED: Record<AiFlow, boolean> = {
   sectionEdit: true,
   productText: true,
   blogWrite: true,
+  logoEmblem: true,
+}
+
+/**
+ * Flows that do not use the shared tier table. The logo emblem is drawn as SVG
+ * code by an LLM, and the comparison (reports/logo-model-compare.html) showed
+ * the Claude models clearly ahead of the general standard model for that job:
+ * Sonnet for every plan, Opus on the advanced tier (PRO, E-COMMERCE).
+ */
+export const AI_FLOW_TIER_MODELS: Partial<Record<AiFlow, Record<AiTier, string>>> = {
+  logoEmblem: {
+    standard: 'anthropic/claude-sonnet-5.5',
+    advanced: 'anthropic/claude-opus-5.5',
+  },
 }
 
 const ADVANCED_PLANS: ReadonlySet<PlanCode> = new Set<PlanCode>(['pro', 'ecommerce'])
@@ -94,7 +109,7 @@ export type AiModelSelection = {
 export function resolveAiModel(flow: AiFlow, plan: string | null | undefined): AiModelSelection {
   const planCode = toPlanCode(plan)
   const tier: AiTier = AI_FLOW_ADVANCED[flow] ? tierForPlan(planCode) : 'standard'
-  return { flow, tier, model: AI_TIER_MODELS[tier], plan: planCode }
+  return { flow, tier, model: AI_FLOW_TIER_MODELS[flow]?.[tier] ?? AI_TIER_MODELS[tier], plan: planCode }
 }
 
 type UsageLike = { inputTokens?: number; outputTokens?: number } | undefined

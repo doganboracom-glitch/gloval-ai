@@ -82,4 +82,18 @@ describe('model resolution', () => {
     expect(resolveAiModel('sitePlan', 'pro').tier).toBe('standard')
     expect(resolveAiModel('siteGenerate', 'pro').tier).toBe('advanced')
   })
+
+  it('draws logo emblems with Sonnet on every plan and Opus on the advanced tier', () => {
+    for (const plan of ['free', 'starter', null, undefined, 'unknown']) {
+      expect(resolveAiModel('logoEmblem', plan)).toMatchObject({ tier: 'standard', model: 'anthropic/claude-sonnet-5.5' })
+    }
+    for (const plan of ['pro', 'ecommerce']) {
+      expect(resolveAiModel('logoEmblem', plan)).toMatchObject({ tier: 'advanced', model: 'anthropic/claude-opus-5.5' })
+    }
+  })
+
+  it('leaves the other flows on the shared tier table', () => {
+    expect(resolveAiModel('siteEdit', 'pro').model).toBe(AI_TIER_MODELS.advanced)
+    expect(resolveAiModel('siteEdit', 'starter').model).toBe(AI_TIER_MODELS.standard)
+  })
 })

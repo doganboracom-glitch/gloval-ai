@@ -67,7 +67,7 @@ type StudioData = {
   aiEmblems: EmblemAsset[]
   context: string
   palette: LogoPalette
-  aiFallback: boolean
+  aiFailed: boolean
 }
 
 type Choice = { t: 'ai'; i: number } | { t: 'local'; i: number } | { t: 'mono'; shape: 'circle' | 'square' }
@@ -187,7 +187,9 @@ export function LogoStudioDialog({
         }))
         if (!opts.textOnly) {
           setSeed(nextSeed)
-          setChoice(fresh.length > 0 ? { t: 'ai', i: 0 } : { t: 'local', i: 0 })
+          setChoice(
+            fresh.length > 0 ? { t: 'ai', i: 0 } : mode === 'ai' ? { t: 'mono', shape: 'circle' } : { t: 'local', i: 0 },
+          )
         }
       } catch {
         if (id === requestId.current) setError(ui.studioFailed)
@@ -421,7 +423,8 @@ export function LogoStudioDialog({
           const e = emblemFor({ t: 'ai', i }, thumbColors)
           return e ? [{ key: `ai-${i}`, c: { t: 'ai', i } as Choice, svg: emblemThumb(e) }] : []
         }),
-        ...picks.map((_, i) => {
+        // A library symbol would not match the business, so AI mode never shows one.
+        ...(mode === 'local' ? picks : []).map((_, i) => {
           const e = emblemFor({ t: 'local', i }, thumbColors)
           return { key: `local-${i}`, c: { t: 'local', i } as Choice, svg: e ? emblemThumb(e) : '' }
         }),
@@ -468,9 +471,9 @@ export function LogoStudioDialog({
 
           {data && lockups && current ? (
             <>
-              {data.aiFallback ? (
+              {data.aiFailed ? (
                 <p role="status" className="rounded-lg border border-border bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                  {ui.studioAiFallback}
+                  {ui.studioAiFailed}
                 </p>
               ) : null}
 

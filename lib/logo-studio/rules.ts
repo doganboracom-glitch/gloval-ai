@@ -12,7 +12,7 @@
  * emblems and charges LOGO_EMBLEM_CREDITS per emblem actually drawn, so a
  * "suggest again" costs the same again; the local library is always free.
  */
-export const AI_EMBLEMS_PER_ROUND = 2
+export const AI_EMBLEMS_PER_ROUND = 4
 export const LOGO_EMBLEM_CREDITS = 2
 
 export type LogoStyleId = 'modern' | 'classic' | 'minimal' | 'luxury'
