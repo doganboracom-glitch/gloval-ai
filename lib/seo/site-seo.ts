@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getDomainProvider } from '@/lib/custom-domains/provider'
+import { hydrateRedirects } from '@/lib/custom-domains/redirects'
+import { getVercelClient } from '@/lib/custom-domains/vercel'
 import { canonicalOrigin, pickCanonicalDomain } from '@/lib/site-origin'
 
 export type SiteSeoContext = {
@@ -36,7 +38,8 @@ export async function getSiteSeoContext(slug: string): Promise<SiteSeoContext> {
     const lastModified = latest(data.updated_at, data.published_at)
     if (!data.published) return { ...fallback, lastModified }
 
-    const domain = pickCanonicalDomain(await getDomainProvider().listActiveForProject(data.id as string))
+    const bound = await getDomainProvider().listActiveForProject(data.id as string)
+    const domain = pickCanonicalDomain(await hydrateRedirects(bound, getVercelClient()))
     if (!domain) return { ...fallback, lastModified }
 
     const origin = canonicalOrigin(slug, domain.domain)
