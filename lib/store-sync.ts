@@ -3,6 +3,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { slugify, parsePriceToCents, inferCurrency } from '@/lib/slug'
+import { isSampleProduct } from '@/lib/proof-content'
 
 /**
  * Sync the generated site's schema catalog into the REAL e-commerce tables.
@@ -32,6 +33,7 @@ type ProductSeed = {
   currency: string
   images: string[]
   categorySlug: string | null
+  sample: boolean
 }
 
 type CategorySeed = { name: string; slug: string }
@@ -56,7 +58,7 @@ export function buildSyncedProductInsert(
     currency: p.currency,
     stock: 0,
     track_stock: false,
-    status: 'active',
+    status: p.sample ? 'draft' : 'active',
     images: p.images,
     sort_order: ctx.sortOrder,
   }
@@ -94,6 +96,7 @@ function collectSeeds(schema: WebsiteSchema): {
           currency: inferCurrency(item.price),
           images: item.src ? [item.src] : [],
           categorySlug: item.category ? slugify(item.category) : null,
+          sample: isSampleProduct(item),
         })
       }
     }

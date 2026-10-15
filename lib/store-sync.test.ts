@@ -83,7 +83,16 @@ const PROJECT = 'proj-1'
 const OWNER = 'owner-1'
 const OTHER_PROJECT = 'proj-2'
 
-type SchemaItem = { name: string; price: string; description?: string; src?: string; category?: string }
+type SchemaItem = {
+  name: string
+  price: string
+  description?: string
+  src?: string
+  category?: string
+  oldPrice?: string
+  badge?: string
+  sample?: boolean
+}
 
 function schemaOf(items: SchemaItem[], categories: string[] = []): WebsiteSchema {
   const sections: unknown[] = [{ type: 'hero' }]
@@ -280,5 +289,54 @@ describe('syncStoreFromSchema does not revive removed products', () => {
     await syncStoreFromSchema(PROJECT, OWNER, staleSchema())
 
     expect(db.state.tables.ecommerce_products).toEqual([before])
+  })
+})
+
+describe('syncStoreFromSchema keeps sample products out of the live catalog', () => {
+  it('inserts sample products as draft and real ones as active', async () => {
+    const schema = schemaOf([
+      { name: 'Örnek Ürün', price: '₺100', sample: true },
+      { name: 'Gerçek Ürün', price: '₺200' },
+    ])
+
+    await syncStoreFromSchema(PROJECT, OWNER, schema)
+
+    const rows = db.state.tables.ecommerce_products
+    expect(rows.find((r) => r.slug === 'ornek-urun')).toMatchObject({ status: 'draft' })
+    expect(rows.find((r) => r.slug === 'gercek-urun')).toMatchObject({ status: 'active' })
+  })
+
+  it('leaves a legacy schema item with a badge or old price active (no sample flag)', async () => {
+    const schema = schemaOf([{ name: 'Rozetli', price: '₺100', oldPrice: '₺150', badge: 'Yeni' }])
+
+    await syncStoreFromSchema(PROJECT, OWNER, schema)
+
+    expect(db.state.tables.ecommerce_products[0]).toMatchObject({ slug: 'rozetli', status: 'active' })
+  })
+
+  it('never touches an already-live store product, even if the schema now flags it sample', async () => {
+    const before = panelEditedProduct({ status: 'active' })
+    db.state.tables.ecommerce_products = [{ ...before }]
+    const schema = schemaOf([{ name: 'Yüzük', price: '₺10', sample: true }])
+
+    await syncStoreFromSchema(PROJECT, OWNER, schema)
+
+    expect(db.state.tables.ecommerce_products).toEqual([before])
+    expect(db.state.writes.filter((w) => w.table === 'ecommerce_products')).toEqual([])
+  })
+
+  it('republishing an existing store only adds the new sample item as draft', async () => {
+    const live = panelEditedProduct({ status: 'active' })
+    db.state.tables.ecommerce_products = [{ ...live }]
+    const schema = schemaOf([
+      { name: 'Yüzük', price: '₺10' },
+      { name: 'Yeni Örnek', price: '₺5', sample: true },
+    ])
+
+    await syncStoreFromSchema(PROJECT, OWNER, schema)
+
+    const rows = db.state.tables.ecommerce_products
+    expect(rows[0]).toEqual(live)
+    expect(rows[1]).toMatchObject({ slug: 'yeni-ornek', status: 'draft' })
   })
 })
