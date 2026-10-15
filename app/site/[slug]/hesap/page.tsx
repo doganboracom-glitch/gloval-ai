@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { modeHasTransactions } from '@/lib/commerce-mode'
+import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { CustomerAccount } from '@/components/store/customer-account'
 import {
   getCurrentStoreCustomer,
@@ -26,6 +28,7 @@ export default async function AccountPage({
   const { redirect } = await searchParams
   const site = await getPublishedSite(slug)
   if (!site) notFound()
+  if (!modeHasTransactions(await getPublishedSiteCommerceMode(slug))) notFound()
 
   const customer = await getCurrentStoreCustomer(slug)
   const loaded = customer ? await getStoreCustomerOrders(slug) : []

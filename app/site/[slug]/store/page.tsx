@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { modeHasStoreRoutes } from '@/lib/commerce-mode'
+import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
@@ -28,7 +30,10 @@ export default async function StorePage({
   const [{ slug }, initialParams] = await Promise.all([params, searchParams])
   const site = await getPublishedSite(slug)
   if (!site) notFound()
+  const mode = await getPublishedSiteCommerceMode(slug)
+  if (!modeHasStoreRoutes(mode)) notFound()
 
+  const catalog = await getCatalogContext(slug, site.schema, mode)
   const [products, collections, shipping] = await Promise.all([
     getStoreProducts(slug),
     getStoreCollections(slug),
@@ -36,7 +41,7 @@ export default async function StorePage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin}>
       <StoreFront
         slug={slug}
         storeName={site.name}

@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ShoppingCart } from 'lucide-react'
+import { MessageCircle, ShoppingCart } from 'lucide-react'
+import { catalogDisplayPrice, useCatalog, whatsappOrderHref } from '@/components/store/catalog-context'
+import { WHATSAPP_ORDER_LABEL } from '@/lib/commerce-mode'
 import { ProductImagePlaceholder } from '@/components/store/product-image-placeholder'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
@@ -89,7 +91,12 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
   const outOfStock = isSoldOut(product)
   const stockNotice = getStockNotice(product)
   const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
-  const canAdd = !!cart && !outOfStock
+  const catalog = useCatalog()
+  const isCatalog = catalog?.mode === 'catalog'
+  const canAdd = !!cart && !outOfStock && !isCatalog
+  const orderHref = isCatalog ? whatsappOrderHref(catalog, product) : null
+  const priceText = isCatalog ? catalogDisplayPrice(product) : formatPrice(product.price_cents, product.currency)
+  const showCompare = discount !== null && product.compare_at_price_cents != null && !(isCatalog && product.price_mode === 'ask')
 
   const cartItem: Omit<CartItem, 'quantity'> = {
     productId: product.id,
@@ -201,8 +208,8 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
           )}
 
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-base font-bold">{formatPrice(product.price_cents, product.currency)}</span>
-            {discount !== null && product.compare_at_price_cents != null && (
+            <span className="text-base font-bold">{priceText}</span>
+            {showCompare && product.compare_at_price_cents != null && (
               <span
                 className="text-xs line-through"
                 style={{ color: 'var(--site-muted-fg, var(--muted-foreground))' }}
@@ -212,7 +219,24 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
             )}
           </div>
 
-          {canAdd || outOfStock ? (
+          {orderHref ? (
+            <a
+              href={orderHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-whatsapp-order
+              className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+              style={{
+                borderRadius: 'var(--site-radius, 0.75rem)',
+                fontFamily: 'var(--site-body-font, inherit)',
+                backgroundColor: 'var(--site-primary, var(--primary))',
+                color: 'var(--site-primary-fg, var(--primary-foreground))',
+              }}
+            >
+              <MessageCircle className="size-3.5" aria-hidden />
+              {WHATSAPP_ORDER_LABEL}
+            </a>
+          ) : canAdd || (outOfStock && !isCatalog) ? (
             <button
               type="button"
               disabled={outOfStock}

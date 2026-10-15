@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { modeHasTransactions } from '@/lib/commerce-mode'
+import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { CheckCircle2, Clock, XCircle, Mail, Store } from 'lucide-react'
 import { getOrderConfirmation } from '@/lib/store-order-access'
 import { formatPrice } from '@/lib/format'
@@ -26,6 +29,7 @@ export default async function OrderConfirmationPage({
 }) {
   const { slug, orderId } = await params
   const { t } = await searchParams
+  if (!modeHasTransactions(await getPublishedSiteCommerceMode(slug))) notFound()
   const order = await getOrderConfirmation(orderId, slug, Array.isArray(t) ? t[0] : t)
   if (!order) {
     return (
