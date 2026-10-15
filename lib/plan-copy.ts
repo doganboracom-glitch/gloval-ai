@@ -843,10 +843,16 @@ export const PLAN_VISIBLE_ITEM_COUNT = 6
  * sits behind "Show all features". Ids that a plan does not list (or that were
  * de-duplicated away) are simply skipped.
  */
-const PINNED_ITEM_IDS: Record<PlanCode, string[]> = {
+export const PINNED_ITEM_IDS: Record<PlanCode, string[]> = {
+  // FREE: the limits a visitor tries first (sites, pages), then the trust basics.
   free: ['sites', 'pages', 'glovalAddress', 'ssl', 'seo', 'mobile'],
+  // STARTER: the reasons to leave FREE (own domain, backups, a mailbox, support).
   starter: ['sites', 'pages', 'customDomain', 'autoBackup', 'mailboxes', 'support'],
+  // PRO: what it adds over STARTER: more sites, catalog, daily backups, restore,
+  // advanced AI, priority support. Pages and the mailbox count sit behind the toggle.
   pro: ['sites', 'catalogOrder', 'autoBackup', 'versionHistory', 'advancedAi', 'support'],
+  // E-COMMERCE: the store itself first (products, store pages, orders, payments);
+  // the 5 mailboxes close the list.
   ecommerce: ['sites', 'products', 'storePages', 'cartOrders', 'paymentMethods', 'mailboxes'],
 }
 

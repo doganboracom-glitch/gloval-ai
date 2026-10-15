@@ -184,10 +184,12 @@ export function PlanCard({
           ))}
         </ul>
 
-        {/* Kalan satırlar DOM'da kalır (arama motoru ve ekran okuyucu okur);
-            yalnızca grid-rows animasyonuyla görsel olarak kapanır. */}
+        {/* Kalan satırlar DOM'da kalır (arama motoru okur); kapalıyken grid-rows
+            animasyonuyla görsel olarak kapanır, `inert` ise ekran okuyucudan ve
+            klavye sırasından çıkarır. */}
         <div
           id={restId}
+          inert={!isExpanded}
           className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
             isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           }`}
