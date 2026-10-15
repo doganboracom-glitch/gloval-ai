@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
 import type { BlogPost } from '@/lib/blog'
+import { callBlogAi, newRequestId } from '@/lib/blog-client'
+import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import type { BlogProfile } from '@/lib/website-schema'
 
 type Lang = 'tr' | 'en'
@@ -80,9 +82,12 @@ export function BlogAiPanel({
   const [remember, setRemember] = useState(Boolean(profile && Object.keys(profile).length))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const busyRef = useRef(false)
 
   async function generate() {
-    if (topic.trim().length < 3 || busy) return
+    if (topic.trim().length < 3 || busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     const cleaned: BlogProfile = {}
@@ -90,27 +95,25 @@ export function BlogAiPanel({
       const value = answers[key]?.trim()
       if (value) cleaned[key] = value
     }
-    try {
-      const res = await fetch('/api/blog/ai-write', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectId, topic: topic.trim(), answers: cleaned }),
-      })
-      const data = (await res.json().catch(() => null)) as { post?: BlogPost; error?: string } | null
-      if (res.ok && data?.post) {
-        onRememberProfile(remember && Object.keys(cleaned).length ? cleaned : null)
-        onCreated(data.post)
-        return
-      }
-      if (res.status === 402) setError(t.credits)
-      else if (res.status === 409) setError(t.limit)
-      else if (res.status === 429) setError(t.daily)
-      else setError(t.failed)
-    } catch {
-      setError(t.failed)
-    } finally {
-      setBusy(false)
+    const outcome = await callBlogAi('/api/blog/ai-write', {
+      projectId,
+      requestId: newRequestId(),
+      topic: topic.trim(),
+      answers: cleaned,
+    })
+    busyRef.current = false
+    setBusy(false)
+    if (outcome.ok) {
+      onRememberProfile(remember && Object.keys(cleaned).length ? cleaned : null)
+      onCreated(outcome.post)
+      return
     }
+    if (outcome.reason === 'credits') {
+      setError(t.credits)
+      setUpgradeOpen(true)
+    } else if (outcome.reason === 'limit') setError(t.limit)
+    else if (outcome.reason === 'daily') setError(t.daily)
+    else setError(t.failed)
   }
 
   return (
@@ -191,6 +194,7 @@ export function BlogAiPanel({
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
         {t.generate}
       </button>
+      <OutOfCreditsModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   )
 }

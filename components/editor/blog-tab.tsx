@@ -5,16 +5,24 @@ import useSWR from 'swr'
 import { Loader2, Plus, Sparkles } from 'lucide-react'
 import { deleteBlogPostAction, listBlogPostsAction } from '@/lib/blog-actions'
 import type { BlogPost } from '@/lib/blog'
+import { BLOG_CHANGED_EVENT } from '@/lib/blog-client'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import type { BlogProfile } from '@/lib/website-schema'
 import { BlogPostForm } from '@/components/editor/blog-post-form'
 import { BlogAiPanel } from '@/components/editor/blog-ai-panel'
+import { BlogPersonalizePanel } from '@/components/editor/blog-personalize-panel'
 
 type Lang = 'tr' | 'en'
-type View = { kind: 'list' } | { kind: 'ai' } | { kind: 'edit'; post: BlogPost | null }
+type View =
+  | { kind: 'list' }
+  | { kind: 'ai' }
+  | { kind: 'personalize'; post: BlogPost }
+  | { kind: 'edit'; post: BlogPost | null }
 
 const T = {
   tr: {
+    personalizeLabel: 'Firmanıza özelleştirin',
+    personalizeCta: 'AI ile özelleştir',
     title: 'Blog yazıları',
     intro: 'Yazılar sitenizin /blog sayfasında yayınlanır ve site haritasına eklenir.',
     newPost: 'Yeni yazı',
@@ -33,6 +41,8 @@ const T = {
     google: 'Google, IndexNow desteklemez. Yeni yazıların Google\u2019da daha hızlı görünmesi için sitemap adresinizi (/sitemap.xml) Google Search Console\u2019a gönderin.',
   },
   en: {
+    personalizeLabel: 'Personalize for your business',
+    personalizeCta: 'Personalize with AI',
     title: 'Blog posts',
     intro: 'Posts are published at your site\u2019s /blog page and added to the sitemap.',
     newPost: 'New post',
@@ -91,6 +101,12 @@ export function BlogTab({
     if (view.kind === 'list') window.scrollTo?.({ top: 0 })
   }, [view.kind])
 
+  useEffect(() => {
+    const reload = () => void mutate()
+    window.addEventListener(BLOG_CHANGED_EVENT, reload)
+    return () => window.removeEventListener(BLOG_CHANGED_EVENT, reload)
+  }, [mutate])
+
   async function remove(post: BlogPost) {
     if (!window.confirm(t.confirmDelete)) return
     setError(null)
@@ -124,6 +140,25 @@ export function BlogTab({
           onBack={() => setView({ kind: 'list' })}
           onRememberProfile={(next) => onDispatch({ op: 'updateBlogProfile', profile: next })}
           onCreated={(post) => {
+            upsert(post)
+            setView({ kind: 'edit', post })
+          }}
+        />
+      </div>
+    )
+  }
+
+  if (view.kind === 'personalize') {
+    return (
+      <div className="p-4">
+        <BlogPersonalizePanel
+          projectId={projectId}
+          post={view.post}
+          lang={lang}
+          profile={profile}
+          onBack={() => setView({ kind: 'list' })}
+          onRememberProfile={(next) => onDispatch({ op: 'updateBlogProfile', profile: next })}
+          onDone={(post) => {
             upsert(post)
             setView({ kind: 'edit', post })
           }}
@@ -218,6 +253,19 @@ export function BlogTab({
                     {post.aiGenerated && <span className="rounded-full bg-brand/15 px-2 py-0.5 text-brand">{t.aiTag}</span>}
                   </span>
                 </button>
+                {post.sample && (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
+                    <span className="text-xs font-medium text-amber-500">{t.personalizeLabel}</span>
+                    <button
+                      type="button"
+                      onClick={() => setView({ kind: 'personalize', post })}
+                      className="flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90"
+                    >
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                      {t.personalizeCta}
+                    </button>
+                  </div>
+                )}
               </li>
             )
           })}
