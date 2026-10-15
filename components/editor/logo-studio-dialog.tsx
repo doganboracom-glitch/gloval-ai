@@ -123,6 +123,9 @@ export function LogoStudioDialog({
   const [exporting, setExporting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
+  const inflight = useRef<AbortController | null>(null)
+
+  useEffect(() => () => inflight.current?.abort(), [])
 
   const styleLabel: Record<LogoStyleId, string> = {
     modern: ui.studioStyleModern,
@@ -151,13 +154,20 @@ export function LogoStudioDialog({
   const load = useCallback(
     async (nextSeed: number, opts: { style: LogoStyleId; colorway: ColorwayId; textOnly?: boolean }) => {
       const id = ++requestId.current
+      // A superseded request is cancelled so the server can skip charging for
+      // emblems nobody will see.
+      inflight.current?.abort()
+      const controller = new AbortController()
+      inflight.current = controller
       setLoading(true)
       setError(null)
       try {
         const res = await fetch('/api/logo-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
+            requestId: crypto.randomUUID(),
             schema: site,
             companyName: site.navigation.logoText || site.meta.name,
             mode,

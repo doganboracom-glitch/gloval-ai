@@ -164,3 +164,68 @@ describe('emblem round', () => {
     expect(draw).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('emblem round: Opus -> Sonnet fallback', () => {
+  const opus: AiModelSelection = { flow: 'logoEmblem', tier: 'advanced', model: 'anthropic/claude-opus-5.5', plan: 'pro' }
+  const SONNET = 'anthropic/claude-sonnet-5.5'
+  const round = (draw: Drawer, sel = opus) => ({
+    selection: sel,
+    brand: 'Kasap Ahmet',
+    sector: 'Kasap',
+    style: 'modern' as const,
+    colors: PALETTE,
+    count: 1,
+    seed: 0,
+    idPrefix: 'ai-0',
+    draw,
+  })
+
+  it('gives Opus a shorter per-attempt budget than Sonnet', async () => {
+    const seen: Record<string, number> = {}
+    const draw: Drawer = async ({ model, timeoutMs }) => {
+      seen[model] = timeoutMs
+      throw Object.assign(new Error('t'), { name: 'TimeoutError' })
+    }
+    await generateEmblemRound(round(draw))
+    expect(seen['anthropic/claude-opus-5.5']).toBe(45_000)
+    expect(seen[SONNET]).toBe(60_000)
+  })
+
+  it('falls back to Sonnet once in the same round when Opus times out', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const draw = vi
+      .fn<Drawer>()
+      .mockRejectedValueOnce(Object.assign(new Error('t'), { name: 'TimeoutError' }))
+      .mockResolvedValueOnce({ text: GOOD, finishReason: 'stop' })
+    const [o] = await generateEmblemRound(round(draw))
+    expect(o).toMatchObject({ ok: true, attempts: 2, model: SONNET, kind: 'fallback' })
+    expect(draw.mock.calls.map((c) => c[0].model)).toEqual(['anthropic/claude-opus-5.5', SONNET])
+    expect(info).toHaveBeenCalledWith('[logo-emblem] fallback', expect.objectContaining({ cause: 'timeout', to: SONNET }))
+    info.mockRestore()
+  })
+
+  it('falls back to Sonnet when Opus errors, and gives up after that one extra try', async () => {
+    const draw = vi.fn<Drawer>().mockRejectedValue(new Error('gateway 500'))
+    const [o] = await generateEmblemRound(round(draw))
+    expect(o).toMatchObject({ ok: false, attempts: 2 })
+    expect(draw).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a REJECTED Opus draw on Opus itself (kind retried), not on Sonnet', async () => {
+    const draw = vi
+      .fn<Drawer>()
+      .mockResolvedValueOnce({ text: 'no svg', finishReason: 'stop' })
+      .mockResolvedValueOnce({ text: GOOD, finishReason: 'stop' })
+    const [o] = await generateEmblemRound(round(draw))
+    expect(o).toMatchObject({ ok: true, model: 'anthropic/claude-opus-5.5', kind: 'retried' })
+  })
+
+  it('has no fallback for Sonnet: an error is retried on Sonnet (kind retried)', async () => {
+    const draw = vi
+      .fn<Drawer>()
+      .mockRejectedValueOnce(new Error('x'))
+      .mockResolvedValueOnce({ text: GOOD, finishReason: 'stop' })
+    const [o] = await generateEmblemRound(round(draw, selection))
+    expect(o).toMatchObject({ ok: true, model: SONNET, kind: 'retried' })
+  })
+})

@@ -1,6 +1,8 @@
 import { websiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
-import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
+import { AI_ACTION_COSTS, consumeCredits, getCreditBalance, hasLedgerReason, refundCredits } from '@/lib/ai-credits'
+import { recordAiGenerationEvent } from '@/lib/ai-generation-events'
+import { refundRound, runPaidRound, type CreditPort } from '@/lib/logo-studio/paid-round'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
@@ -11,12 +13,19 @@ import { generateEmblemRound } from '@/lib/logo-studio/emblem-ai'
 import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
 import { AI_EMBLEMS_PER_ROUND, LOGO_STYLE_IDS, type LogoStyleId } from '@/lib/logo-studio/rules'
 
-// Four emblems are drawn in parallel with one automatic retry each; Opus can
-// need a while per attempt (see ATTEMPT_TIMEOUT_MS in lib/logo-studio/emblem-ai.ts).
+// Four emblems are drawn in parallel, each with one automatic retry (Opus falls
+// back to Sonnet); per-attempt budgets live in AI_MODEL_ATTEMPT_TIMEOUT_MS.
 export const maxDuration = 300
 
 const EMBLEM_COUNT = AI_EMBLEMS_PER_ROUND
 const STYLES = LOGO_STYLE_IDS
+
+const creditPort: CreditPort = {
+  balance: getCreditBalance,
+  consume: consumeCredits,
+  refund: refundCredits,
+  hasLedgerReason,
+}
 type LogoStyle = LogoStyleId
 
 function distinctAccent(primary: string, accent: string, foreground: string): string {
@@ -41,7 +50,8 @@ function distinctAccent(primary: string, accent: string, foreground: string): st
  *
  * `mode: 'local'` needs no sign-in and costs nothing. `mode: 'ai'` requires
  * sign-in and charges `AI_ACTION_COSTS.logoImage` per emblem that passed the
- * quality gate (never for a failed or rejected one).
+ * quality gate AND is returned (never for a failed, rejected or timed-out one;
+ * see `lib/logo-studio/paid-round.ts`). A `requestId` makes retries idempotent.
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
@@ -57,6 +67,8 @@ export async function POST(req: Request) {
     /** Only re-typeset the name for another style: free, no emblems, no sign-in. */
     textOnly?: boolean
     colorMode?: string
+    /** Client-generated id of this request; makes retries and double clicks charge once. */
+    requestId?: string
   }
 
   const parsed = websiteSchema.safeParse(body.schema)
@@ -102,56 +114,68 @@ export async function POST(req: Request) {
 
   const cost = AI_ACTION_COSTS.logoImage
   const useAi = mode === 'ai' && !textOnly
-  // A user who can afford fewer than a full round still gets as many emblems as
-  // their balance covers; nothing is charged beyond what passes the gate.
-  let emblemCount = EMBLEM_COUNT
-  if (useAi && userId) {
-    const balance = await getCreditBalance(userId)
-    emblemCount = Math.min(EMBLEM_COUNT, Math.floor(balance / cost))
-    if (emblemCount < 1) {
-      return Response.json({ error: 'Out of credits', balance }, { status: 402 })
-    }
-  }
+  const requestId = typeof body.requestId === 'string' && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : undefined
+  const colors = colorMode === 'mono' ? [palette.primary] : [palette.primary, palette.accent]
+  let charged = 0
+  let chargeReason = ''
 
   try {
-    const [{ assets, fontName }, outcomes] = await Promise.all([
-      buildTextAssets(brand, style),
-      useAi
-        ? generateEmblemRound({
-            selection: resolveAiModel('logoEmblem', planCode),
-            brand,
-            sector,
-            description,
-            style,
-            symbol,
-            colors: colorMode === 'mono' ? [palette.primary] : [palette.primary, palette.accent],
-            count: emblemCount,
-            seed,
-            idPrefix: `ai-${seed}`,
-          })
-        : Promise.resolve([]),
-    ])
-
-    const aiEmblems: EmblemAsset[] = []
-    for (const o of outcomes) if (o.ok) aiEmblems.push(o.emblem)
-    const aiCount = aiEmblems.length
-    if (useAi) {
-      console.info('[logo-emblem]', {
-        requested: emblemCount,
-        passed: aiCount,
-        failures: outcomes.flatMap((o) => (o.ok ? [] : [o.reason])),
-      })
-    }
-
+    const textPromise = buildTextAssets(brand, style)
+    let aiEmblems: EmblemAsset[] = []
     let balance: number | undefined
-    if (aiCount > 0 && userId) {
-      const charge = await consumeCredits(userId, cost * aiCount, 'logoImage')
-      if (!charge.ok) {
-        return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
+    let requested = 0
+
+    if (useAi && userId) {
+      // The plan is read on the server above (never from the request body).
+      const selection = resolveAiModel('logoEmblem', planCode)
+      const result = await runPaidRound({
+        userId,
+        requestId,
+        selection,
+        cost,
+        maxCount: EMBLEM_COUNT,
+        round: { brand, sector, description, style, symbol, colors, seed, idPrefix: `ai-${seed}` },
+        credits: creditPort,
+        generate: generateEmblemRound,
+        isAborted: () => req.signal.aborted,
+        record: (delivered) =>
+          Promise.all(
+            delivered.map((d) =>
+              recordAiGenerationEvent({ ...selection, model: d.model }, d.kind, undefined, 'logo'),
+            ),
+          ).then(() => undefined),
+      })
+
+      if (result.status === 'duplicate') {
+        return Response.json({ error: 'Duplicate request' }, { status: 409 })
       }
-      balance = charge.balance
+      if (result.status === 'no_credits') {
+        return Response.json({ error: 'Out of credits', balance: result.balance }, { status: 402 })
+      }
+      if (result.status === 'aborted') {
+        return Response.json({ error: 'Request cancelled' }, { status: 499 })
+      }
+      requested = result.status === 'ok' ? result.requested : 0
+      console.info('[logo-emblem]', {
+        plan: planCode,
+        tier: selection.tier,
+        model: selection.model,
+        status: result.status,
+        passed: result.status === 'ok' ? result.emblems.length : 0,
+        failures: result.failures,
+      })
+      if (result.status === 'ok') {
+        aiEmblems = result.emblems
+        balance = result.balance
+        charged = result.charged
+        chargeReason = result.reason
+      } else {
+        balance = result.balance
+      }
     }
 
+    const { assets, fontName } = await textPromise
+    const aiCount = aiEmblems.length
     return Response.json({
       mode,
       seed,
@@ -163,11 +187,16 @@ export async function POST(req: Request) {
       palette,
       foreground: theme.foreground,
       aiCount,
+      aiRequested: requested,
       aiFailed: useAi && aiCount === 0,
       balance,
     })
   } catch (err) {
     console.log('[v0] logo-image error:', err instanceof Error ? err.message : err)
+    // The emblems were charged but could not be delivered: give the credits back.
+    if (userId && charged > 0) {
+      await refundRound(creditPort, userId, charged, chargeReason).catch(() => undefined)
+    }
     return Response.json({ error: 'Logo generation failed' }, { status: 500 })
   }
 }

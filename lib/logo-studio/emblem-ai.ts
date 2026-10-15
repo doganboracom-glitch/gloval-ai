@@ -1,5 +1,5 @@
 import { generateText } from 'ai'
-import { logAiUsage, type AiModelSelection } from '@/lib/ai-models'
+import { attemptTimeoutMs, fallbackModelFor, logAiUsage, type AiModelSelection } from '@/lib/ai-models'
 import { splitSvg, type EmblemAsset } from '@/lib/logo-studio/compose'
 import { checkEmblemSvg } from '@/lib/logo-studio/emblem-gate'
 import { buildEmblemPrompt } from '@/lib/logo-studio/emblem-prompt'
@@ -11,14 +11,17 @@ import type { LogoStyleId } from '@/lib/logo-studio/rules'
  * shapes. Lettering is forbidden in the prompt and rejected by the gate,
  * because the brand name is typeset separately as real vector outlines.
  *
- * Every candidate gets at most two attempts: a rejected or failed first try is
- * redrawn once with the rejection reason in the brief. A candidate that still
- * fails is reported as failed and is never charged.
+ * Every candidate gets at most two attempts:
+ *  - a rejected or truncated first try is redrawn once on the SAME model with
+ *    the rejection reason in the brief (outcome `retried`);
+ *  - a first try that ERRORED or TIMED OUT on a model that has a fallback (Opus
+ *    -> Sonnet, see `fallbackModelFor`) is redrawn once on the fallback model
+ *    (outcome `fallback`).
+ * A candidate that still fails is reported as failed and is never charged.
  */
 
-const ATTEMPT_TIMEOUT_MS = 80_000
 /** No second attempt is started after this much of the round has elapsed. */
-const RETRY_DEADLINE_MS = 170_000
+const RETRY_DEADLINE_MS = 150_000
 const MAX_OUTPUT_TOKENS = 4_000
 const MAX_INNER_LENGTH = 25_000
 
@@ -28,7 +31,13 @@ export type DrawResult = {
   usage?: { inputTokens?: number; outputTokens?: number }
 }
 
-export type Drawer = (args: { model: string; system: string; prompt: string; signal: AbortSignal }) => Promise<DrawResult>
+export type Drawer = (args: {
+  model: string
+  system: string
+  prompt: string
+  signal: AbortSignal
+  timeoutMs: number
+}) => Promise<DrawResult>
 
 const gatewayDrawer: Drawer = async ({ model, system, prompt, signal }) => {
   const result = await generateText({
@@ -59,22 +68,45 @@ export type EmblemRound = {
   now?: () => number
 }
 
+/** `ok`: first try; `retried`: second try, same model; `fallback`: second try on the fallback model. */
+export type EmblemResultKind = 'ok' | 'retried' | 'fallback'
+
 export type EmblemOutcome =
-  | { ok: true; emblem: EmblemAsset; attempts: number }
+  | { ok: true; emblem: EmblemAsset; attempts: number; model: string; kind: EmblemResultKind }
   | { ok: false; reason: string; attempts: number }
 
-function failureReason(err: unknown): string {
-  if (err instanceof Error) return err.name === 'TimeoutError' || err.name === 'AbortError' ? 'zaman aşımı' : 'model hatası'
-  return 'model hatası'
+type FailureCause = 'timeout' | 'error' | 'rejected'
+
+function failureOf(err: unknown): { reason: string; cause: FailureCause } {
+  if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+    return { reason: 'zaman aşımı', cause: 'timeout' }
+  }
+  return { reason: 'model hatası', cause: 'error' }
 }
 
 async function drawCandidate(round: EmblemRound, index: number, startedAt: number): Promise<EmblemOutcome> {
   const draw = round.draw ?? gatewayDrawer
   const now = round.now ?? Date.now
+  const fallbackModel = fallbackModelFor(round.selection)
   let reason = ''
+  let cause: FailureCause = 'rejected'
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (attempt === 2 && now() - startedAt > RETRY_DEADLINE_MS) return { ok: false, reason, attempts: 1 }
+
+    const useFallback = attempt === 2 && cause !== 'rejected' && fallbackModel !== null
+    const model = useFallback ? fallbackModel : round.selection.model
+    const selection: AiModelSelection = useFallback ? { ...round.selection, model } : round.selection
+    if (useFallback) {
+      console.info('[logo-emblem] fallback', {
+        from: round.selection.model,
+        to: model,
+        tier: round.selection.tier,
+        plan: round.selection.plan,
+        cause,
+      })
+    }
+
     const prompt = buildEmblemPrompt(
       {
         brand: round.brand,
@@ -90,34 +122,42 @@ async function drawCandidate(round: EmblemRound, index: number, startedAt: numbe
       round.count,
     )
     const label = attempt === 1 ? 'first' : 'retry'
+    const kind: EmblemResultKind = attempt === 1 ? 'ok' : useFallback ? 'fallback' : 'retried'
+    const timeoutMs = attemptTimeoutMs(model)
     try {
       const out = await draw({
-        model: round.selection.model,
+        model,
         system: prompt.system,
         prompt: prompt.user,
-        signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
+        timeoutMs,
       })
       if (out.finishReason === 'length') {
         reason = 'çıktı kesildi'
-        logAiUsage(round.selection, 'error', out.usage, label)
+        cause = 'rejected'
+        logAiUsage(selection, 'error', out.usage, label)
         continue
       }
       const verdict = await checkEmblemSvg(out.text, round.colors)
       if (!verdict.ok) {
         reason = verdict.reason
-        logAiUsage(round.selection, 'error', out.usage, label)
+        cause = 'rejected'
+        logAiUsage(selection, 'error', out.usage, label)
         continue
       }
       const parts = splitSvg(verdict.svg)
       if (!parts || parts.inner.length > MAX_INNER_LENGTH) {
         reason = 'boyut/viewBox'
-        logAiUsage(round.selection, 'error', out.usage, label)
+        cause = 'rejected'
+        logAiUsage(selection, 'error', out.usage, label)
         continue
       }
-      logAiUsage(round.selection, 'ok', out.usage, label)
+      logAiUsage(selection, 'ok', out.usage, label)
       return {
         ok: true,
         attempts: attempt,
+        model,
+        kind,
         emblem: {
           id: `${round.idPrefix}-${index}`,
           source: 'ai',
@@ -126,8 +166,8 @@ async function drawCandidate(round: EmblemRound, index: number, startedAt: numbe
         },
       }
     } catch (err) {
-      reason = failureReason(err)
-      logAiUsage(round.selection, 'error', undefined, label)
+      ;({ reason, cause } = failureOf(err))
+      logAiUsage(selection, 'error', undefined, label)
     }
   }
   return { ok: false, reason, attempts: 2 }

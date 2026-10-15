@@ -87,6 +87,37 @@ export const AI_FLOW_TIER_MODELS: Partial<Record<AiFlow, Record<AiTier, string>>
   },
 }
 
+/**
+ * A model that is tried once, in the same round, when the flow's primary model
+ * errors or times out. Only the advanced logo tier has one: Opus drops to Sonnet.
+ */
+export const AI_FLOW_FALLBACK_MODELS: Partial<Record<AiFlow, Partial<Record<AiTier, string>>>> = {
+  logoEmblem: { advanced: 'anthropic/claude-sonnet-5.5' },
+}
+
+/**
+ * Per-attempt time budget. Opus draws a logo in about 14 s, so 45 s leaves room
+ * for a slow call without letting a stuck one eat the round; Sonnet is faster
+ * and gets the longer budget because it is also the retry/fallback model.
+ * Worst case for one emblem is Opus 45 s + Sonnet 60 s, well inside the
+ * route's 300 s limit.
+ */
+export const AI_MODEL_ATTEMPT_TIMEOUT_MS: Record<string, number> = {
+  'anthropic/claude-opus-5.5': 45_000,
+  'anthropic/claude-sonnet-5.5': 60_000,
+}
+export const DEFAULT_ATTEMPT_TIMEOUT_MS = 60_000
+
+export function attemptTimeoutMs(model: string): number {
+  return AI_MODEL_ATTEMPT_TIMEOUT_MS[model] ?? DEFAULT_ATTEMPT_TIMEOUT_MS
+}
+
+/** The same-round fallback model for a selection, or `null` when it has none. */
+export function fallbackModelFor(selection: AiModelSelection): string | null {
+  const model = AI_FLOW_FALLBACK_MODELS[selection.flow]?.[selection.tier]
+  return model && model !== selection.model ? model : null
+}
+
 const ADVANCED_PLANS: ReadonlySet<PlanCode> = new Set<PlanCode>(['pro', 'ecommerce'])
 
 /** Plan -> tier. Unknown, missing or anonymous plans are `standard`. */
