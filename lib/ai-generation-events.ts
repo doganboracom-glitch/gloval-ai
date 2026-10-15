@@ -32,9 +32,9 @@ export function aiEventsDisabled(): boolean {
   return process.env.NODE_ENV === 'test' || process.env.AI_EVENTS_DISABLED === '1'
 }
 
-export function toAiEventRow(selection: AiModelSelection, outcome: AiEventOutcome): AiEventRow {
+export function toAiEventRow(selection: AiModelSelection, outcome: AiEventOutcome, flow?: string): AiEventRow {
   return {
-    flow: selection.flow,
+    flow: flow ?? selection.flow,
     tier: selection.tier,
     model: selection.model,
     outcome,
@@ -46,12 +46,13 @@ export async function recordAiGenerationEvent(
   selection: AiModelSelection,
   outcome: AiEventOutcome,
   client?: SupabaseClient,
+  flow?: string,
 ): Promise<void> {
   if (!client && aiEventsDisabled()) return
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const admin = client ?? createAdminClient()
-    const insert = Promise.resolve(admin.from(TABLE).insert(toAiEventRow(selection, outcome))).then(({ error }) => {
+    const insert = Promise.resolve(admin.from(TABLE).insert(toAiEventRow(selection, outcome, flow))).then(({ error }) => {
       if (error) throw error
     })
     const timeout = new Promise<void>((resolve) => {
