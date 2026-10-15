@@ -67,7 +67,7 @@ type StudioData = {
   aiEmblems: EmblemAsset[]
   context: string
   palette: LogoPalette
-  aiFallback: boolean
+  aiFailed: boolean
 }
 
 type Choice = { t: 'ai'; i: number } | { t: 'local'; i: number } | { t: 'mono'; shape: 'circle' | 'square' }
@@ -123,6 +123,9 @@ export function LogoStudioDialog({
   const [exporting, setExporting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
+  const inflight = useRef<AbortController | null>(null)
+
+  useEffect(() => () => inflight.current?.abort(), [])
 
   const styleLabel: Record<LogoStyleId, string> = {
     modern: ui.studioStyleModern,
@@ -151,13 +154,20 @@ export function LogoStudioDialog({
   const load = useCallback(
     async (nextSeed: number, opts: { style: LogoStyleId; colorway: ColorwayId; textOnly?: boolean }) => {
       const id = ++requestId.current
+      // A superseded request is cancelled so the server can skip charging for
+      // emblems nobody will see.
+      inflight.current?.abort()
+      const controller = new AbortController()
+      inflight.current = controller
       setLoading(true)
       setError(null)
       try {
         const res = await fetch('/api/logo-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
+            requestId: crypto.randomUUID(),
             schema: site,
             companyName: site.navigation.logoText || site.meta.name,
             mode,
@@ -187,7 +197,9 @@ export function LogoStudioDialog({
         }))
         if (!opts.textOnly) {
           setSeed(nextSeed)
-          setChoice(fresh.length > 0 ? { t: 'ai', i: 0 } : { t: 'local', i: 0 })
+          setChoice(
+            fresh.length > 0 ? { t: 'ai', i: 0 } : mode === 'ai' ? { t: 'mono', shape: 'circle' } : { t: 'local', i: 0 },
+          )
         }
       } catch {
         if (id === requestId.current) setError(ui.studioFailed)
@@ -421,7 +433,8 @@ export function LogoStudioDialog({
           const e = emblemFor({ t: 'ai', i }, thumbColors)
           return e ? [{ key: `ai-${i}`, c: { t: 'ai', i } as Choice, svg: emblemThumb(e) }] : []
         }),
-        ...picks.map((_, i) => {
+        // A library symbol would not match the business, so AI mode never shows one.
+        ...(mode === 'local' ? picks : []).map((_, i) => {
           const e = emblemFor({ t: 'local', i }, thumbColors)
           return { key: `local-${i}`, c: { t: 'local', i } as Choice, svg: e ? emblemThumb(e) : '' }
         }),
@@ -468,9 +481,9 @@ export function LogoStudioDialog({
 
           {data && lockups && current ? (
             <>
-              {data.aiFallback ? (
+              {data.aiFailed ? (
                 <p role="status" className="rounded-lg border border-border bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                  {ui.studioAiFallback}
+                  {ui.studioAiFailed}
                 </p>
               ) : null}
 

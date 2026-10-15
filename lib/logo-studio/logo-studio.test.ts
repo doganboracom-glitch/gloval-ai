@@ -190,6 +190,6 @@ describe('logo studio: favicon, styles, kit and credits', () => {
   })
 
   it('charges credits per AI emblem drawn', () => {
-    expect(AI_EMBLEMS_PER_ROUND * LOGO_EMBLEM_CREDITS).toBe(4)
+    expect(AI_EMBLEMS_PER_ROUND * LOGO_EMBLEM_CREDITS).toBe(8)
   })
 })

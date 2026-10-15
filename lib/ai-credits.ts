@@ -78,6 +78,27 @@ export async function getCreditLedger(
   }))
 }
 
+/**
+ * Whether the user's ledger already has a row with exactly this `reason`.
+ * Used as an idempotency check for flows that tag their charge with a request
+ * id. Fails closed (`true`) on a read error so a DB hiccup can never turn into
+ * a second charge.
+ */
+export async function hasLedgerReason(userId: string, reason: string): Promise<boolean> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('ai_credit_transactions')
+    .select('amount')
+    .eq('user_id', userId)
+    .eq('reason', reason)
+    .limit(1)
+  if (error) {
+    console.error('[ai-credits] hasLedgerReason failed:', error.message)
+    return true
+  }
+  return (data?.length ?? 0) > 0
+}
+
 export type ConsumeCreditsResult = { ok: true; balance: number } | { ok: false; balance: number }
 
 /**
