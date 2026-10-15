@@ -186,8 +186,6 @@ describe('plan copy follows the configuration', () => {
 })
 
 const REMOVED_CLAIMS = [
-  'yedekleme',
-  'backup',
   'Google Ads',
   'Growth',
   'Rakip analizi',
@@ -216,6 +214,22 @@ describe('pricing copy only describes features that exist', () => {
     expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
       ['advancedAi', 'analytics', 'customDomain', 'logoStudio', 'phone', 'social', 'whatsapp'].sort(),
     )
+  })
+
+  it('backup and restore claims match what each plan actually gets', () => {
+    const labels = (code: (typeof CODES)[number], lang: string) =>
+      buildPlanView(code, 'yearly', lang)
+        .groups.flatMap((g) => g.items.map((i) => i.id))
+    for (const lang of ['tr', 'en']) {
+      expect(labels('free', lang)).not.toContain('autoBackup')
+      expect(labels('free', lang)).not.toContain('versionHistory')
+      expect(labels('starter', lang)).toContain('autoBackup')
+      expect(labels('starter', lang)).not.toContain('versionHistory')
+      expect(labels('pro', lang)).toContain('autoBackup')
+      expect(labels('pro', lang)).toContain('versionHistory')
+      expect(labels('ecommerce', lang)).toContain('autoBackup')
+      expect(labels('ecommerce', lang)).toContain('versionHistory')
+    }
   })
 
   it('credit cost table lists only real actions with the real prices', () => {
