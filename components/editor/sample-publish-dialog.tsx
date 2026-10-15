@@ -1,0 +1,252 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { AlertTriangle, Check, EyeOff, Loader2, Pencil } from 'lucide-react'
+import { collectSampleFindings, type SampleKind } from '@/lib/sample-content'
+import type { WebsiteSchema } from '@/lib/website-schema'
+
+type Lang = 'tr' | 'en'
+
+const COPY = {
+  tr: {
+    title: 'Yayınlamadan önce örnek içerikleri kontrol edin',
+    body: 'Yapay zekanın hazırladığı aşağıdaki içerikler örnektir; gerçek müşteri yorumu, rakam, indirim veya fiyat olmayabilir. Gerçek değillerse yayınlamayın. Her bölüm için gizleyebilir, düzenleyebilir veya gerçek olduğunu onaylayabilirsiniz.',
+    productsNote:
+      'Örnek ürünler gerçek ürün değildir. Adını ve fiyatını düzenleyerek kendi ürününüz haline getirin ya da gizleyin; onaylarsanız satışa açık ürün olarak yayınlanır.',
+    hide: 'Gizle',
+    edit: 'Düzenle',
+    approve: 'Gerçek, onaylıyorum',
+    approved: 'Onaylandı',
+    cancel: 'Vazgeç',
+    publish: 'Yayınla',
+    approveAndPublish: 'Onayla ve yayınla',
+    hideAllAndPublish: 'Tümünü gizle ve yayınla',
+    statement:
+      'Onayladığım içeriklerin gerçek olduğunu ve yayınlanmasından sorumlu olduğumu beyan ederim.',
+    remaining: 'onay bekliyor',
+    sections: {
+      hero: 'Ana görsel güven satırı',
+      testimonials: 'Müşteri yorumları',
+      stats: 'Rakamlar',
+      pricing: 'Fiyat planları',
+      products: 'Ürünler',
+    } as Record<string, string>,
+    kinds: {
+      testimonials: 'Yorum',
+      stats: 'Rakam',
+      pricing: 'Plan',
+      discount: 'İndirim',
+      badge: 'Rozet',
+      trust: 'Güven satırı',
+      product: 'Ürün',
+    } as Record<SampleKind, string>,
+  },
+  en: {
+    title: 'Review sample content before publishing',
+    body: 'The content below was drafted by AI as a sample; it may not be a real customer review, figure, discount or price. Do not publish it unless it is true. For each section you can hide it, edit it, or confirm it is real.',
+    productsNote:
+      'Sample products are not real products. Edit the name and price to make them yours, or hide them; if you approve them they go live as products for sale.',
+    hide: 'Hide',
+    edit: 'Edit',
+    approve: 'This is real, approve',
+    approved: 'Approved',
+    cancel: 'Cancel',
+    publish: 'Publish',
+    approveAndPublish: 'Approve and publish',
+    hideAllAndPublish: 'Hide all and publish',
+    statement: 'I confirm the content I approve is true and I am responsible for publishing it.',
+    remaining: 'awaiting approval',
+    sections: {
+      hero: 'Hero trust line',
+      testimonials: 'Testimonials',
+      stats: 'Statistics',
+      pricing: 'Pricing plans',
+      products: 'Products',
+    } as Record<string, string>,
+    kinds: {
+      testimonials: 'Testimonial',
+      stats: 'Statistic',
+      pricing: 'Plan',
+      discount: 'Discount',
+      badge: 'Badge',
+      trust: 'Trust line',
+      product: 'Product',
+    } as Record<SampleKind, string>,
+  },
+} as const
+
+export function SamplePublishDialog({
+  lang,
+  site,
+  gateIds,
+  publishing,
+  onHideSections,
+  onEditSection,
+  onPublish,
+  onClose,
+}: {
+  lang: Lang
+  site: WebsiteSchema
+  /** Digests the server reported as unresolved when publishing was refused. */
+  gateIds: ReadonlySet<string>
+  publishing: boolean
+  onHideSections: (sectionIndexes: number[]) => void
+  onEditSection: (sectionIndex: number) => void
+  /** Publishes with the approved digests; `hideAll` also hides the rest first. */
+  onPublish: (approvals: string[], hideSectionIndexes: number[]) => void
+  onClose: () => void
+}) {
+  const c = COPY[lang]
+  const [approved, setApproved] = useState<ReadonlySet<string>>(new Set())
+
+  // Live from the draft, so hiding or editing a section updates the list at once.
+  const sections = useMemo(
+    () =>
+      collectSampleFindings(site)
+        .map((section) => ({ ...section, items: section.items.filter((item) => gateIds.has(item.id)) }))
+        .filter((section) => section.items.length > 0),
+    [site, gateIds],
+  )
+
+  const allIds = sections.flatMap((section) => section.items.map((item) => item.id))
+  const pending = allIds.filter((id) => !approved.has(id)).length
+  const hasProducts = sections.some((section) => section.sectionType === 'products')
+
+  function toggleSection(ids: string[]) {
+    setApproved((prev) => {
+      const next = new Set(prev)
+      const every = ids.every((id) => next.has(id))
+      for (const id of ids) {
+        if (every) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sample-publish-title"
+      aria-describedby="sample-publish-body"
+    >
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-2xl border border-border bg-card shadow-xl">
+        <div className="flex flex-col gap-2 border-b border-border p-6 pb-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+            <h2 id="sample-publish-title" className="text-base font-semibold text-foreground">
+              {c.title}
+            </h2>
+          </div>
+          <p id="sample-publish-body" className="text-sm leading-relaxed text-muted-foreground">
+            {c.body}
+          </p>
+          {hasProducts && (
+            <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+              {c.productsNote}
+            </p>
+          )}
+        </div>
+
+        <ul className="flex flex-1 flex-col gap-3 overflow-y-auto p-6 py-4">
+          {sections.map((section) => {
+            const ids = section.items.map((item) => item.id)
+            const isApproved = ids.every((id) => approved.has(id))
+            return (
+              <li
+                key={section.sectionIndex}
+                className="flex flex-col gap-3 rounded-xl border border-border bg-background/40 p-4"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  {c.sections[section.sectionType] ?? section.sectionType}
+                </p>
+                <ul className="flex flex-col gap-1.5">
+                  {section.items.map((item) => (
+                    <li key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <span className="mt-0.5 shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-foreground">
+                        {c.kinds[item.kind]}
+                      </span>
+                      <span className="min-w-0 break-words">{item.label}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(ids)}
+                    aria-pressed={isApproved}
+                    disabled={publishing}
+                    className={
+                      isApproved
+                        ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand/50 bg-brand/20 px-3 text-xs font-semibold text-brand disabled:opacity-60'
+                        : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60'
+                    }
+                  >
+                    {isApproved && <Check className="h-3.5 w-3.5" aria-hidden />}
+                    {isApproved ? c.approved : c.approve}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEditSection(section.sectionIndex)}
+                    disabled={publishing}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    {c.edit}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onHideSections([section.sectionIndex])}
+                    disabled={publishing}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+                  >
+                    <EyeOff className="h-3.5 w-3.5" aria-hidden />
+                    {c.hide}
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+
+        <div className="flex flex-col gap-3 border-t border-border p-6 pt-4">
+          {sections.length > 0 && (
+            <p className="text-xs leading-relaxed text-muted-foreground">{c.statement}</p>
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              autoFocus
+              onClick={onClose}
+              disabled={publishing}
+              className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
+            >
+              {c.cancel}
+            </button>
+            {sections.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onPublish([], sections.map((s) => s.sectionIndex))}
+                disabled={publishing}
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
+              >
+                {c.hideAllAndPublish}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onPublish([...approved], [])}
+              disabled={publishing || pending > 0}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {publishing && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+              {sections.length === 0 ? c.publish : pending > 0 ? `${pending} ${c.remaining}` : c.approveAndPublish}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

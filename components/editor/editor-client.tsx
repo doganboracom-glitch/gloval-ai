@@ -83,13 +83,17 @@ export function EditorClient({
         snapshot: async (next) => {
           await snapshotProject({ id: projectId, schema: next })
         },
-        publish: async (next) => {
+        publish: async (next, approvals) => {
           const result = await publishProject({
             id: projectId,
             schema: next,
             name: next.meta.name,
+            approvals,
           })
   if (!result.ok) {
+            if (result.reason === 'SAMPLE_CONTENT') {
+              return { error: result.reason, sections: result.sections }
+            }
             if (result.reason === 'PLAN_REQUIRED') {
               router.push(`/billing?publish=${encodeURIComponent(projectId)}`)
             }
