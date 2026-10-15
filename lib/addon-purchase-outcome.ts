@@ -68,6 +68,8 @@ export type PurchaseErrorCopy = {
   notEligible: string
   purchaseInProgress: string
   paymentInitFailed: string
+  paymentNotReady?: string
+  buyerInvalid?: string
   generic: string
 }
 
@@ -89,6 +91,10 @@ export function purchaseErrorMessage(error: PurchaseAddOnError, copy: PurchaseEr
       return copy.purchaseInProgress
     case 'payment_init_failed':
       return copy.paymentInitFailed
+    case 'payment_not_ready':
+      return copy.paymentNotReady ?? copy.paymentInitFailed
+    case 'buyer_invalid':
+      return copy.buyerInvalid ?? copy.paymentInitFailed
     default:
       return copy.generic
   }

@@ -10,6 +10,8 @@ import {
 } from '@/lib/payments'
 import { BRANDING_REMOVAL_CODE } from '@/lib/billing-utils'
 import type { CheckoutBuyer } from '@/lib/billing'
+import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
+import type { BuyerField } from '@/lib/payments/types'
 
 async function resolveClientIp(): Promise<string> {
   try {
@@ -116,7 +118,18 @@ export async function getMyProjectEntitlements(): Promise<ProjectEntitlementItem
 
 export type BuyEntitlementResult =
   | { ok: true; redirectUrl?: string }
-  | { ok: false; error: 'not_found' | 'already_owned' | 'failed' }
+  | {
+      ok: false
+      error:
+        | 'not_found'
+        | 'already_owned'
+        | 'failed'
+        | 'payment_init_failed'
+        | 'payment_not_ready'
+        | 'buyer_invalid'
+      detail?: string
+      field?: BuyerField
+    }
 
 /**
  * Buy the one-time branding-removal right for a single project the caller owns.
@@ -158,8 +171,15 @@ export async function purchaseBrandingRemoval(
   // Settle the one-time charge through the platform provider. The mock provider
   // completes synchronously; a real PSP (iyzico) returns a redirect URL and the
   // right is activated only after a verified callback.
-  const providerId = getPlatformPaymentProviderId()
-  const provider = getPlatformPaymentProvider()
+  let providerId: ReturnType<typeof getPlatformPaymentProviderId>
+  let provider: ReturnType<typeof getPlatformPaymentProvider>
+  try {
+    providerId = getPlatformPaymentProviderId()
+    provider = getPlatformPaymentProvider()
+  } catch (error) {
+    const failure = await reportPaymentInitFailure('branding_removal', error)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+  }
   // Guarded the same way as subscribeToPlan/changePlan in lib/billing.ts: a
   // PSP-side failure here must come back as a controlled `{ ok: false }`
   // instead of an unhandled exception, or the client's already-open payment
@@ -185,12 +205,8 @@ export async function purchaseBrandingRemoval(
         : undefined,
     })
   } catch (error) {
-    console.log('[v0] purchaseBrandingRemoval: payment intent failed', {
-      projectId,
-      providerId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return { ok: false, error: 'failed' }
+    const failure = await reportPaymentInitFailure('branding_removal', error, providerId)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
   if (intent.status === 'failed') return { ok: false, error: 'failed' }
 

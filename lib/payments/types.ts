@@ -26,6 +26,33 @@ export class PaymentConfigError extends Error {
   }
 }
 
+export type BuyerField = 'fullName' | 'phone' | 'address' | 'taxId'
+
+/** The buyer's own input is unusable for the PSP; fixable by the buyer. */
+export class PaymentBuyerError extends Error {
+  constructor(public field: BuyerField) {
+    super(`buyer_invalid_${field.toLowerCase()}`)
+    this.name = 'PaymentBuyerError'
+  }
+}
+
+/**
+ * The PSP could not be reached or answered with a rejection. `message` keeps
+ * the legacy `iyzico_error: ...` shape so older diagnostics keep working;
+ * `kind`, `errorCode` and `httpStatus` carry the structured detail.
+ */
+export class PaymentProviderError extends Error {
+  constructor(
+    message: string,
+    public kind: 'rejected' | 'http' | 'network' | 'timeout',
+    public errorCode?: string,
+    public httpStatus?: number,
+  ) {
+    super(message)
+    this.name = 'PaymentProviderError'
+  }
+}
+
 export interface PaymentIntentInput {
   orderId: string
   amountCents: number
