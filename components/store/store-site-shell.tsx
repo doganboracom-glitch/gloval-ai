@@ -19,8 +19,11 @@ export function StoreSiteShell({
   mode = 'ecommerce',
   whatsappNumber = null,
   origin = '',
+  blogHref = null,
   children,
 }: {
+  /** Menu link to the blog; null hides it (no public posts). */
+  blogHref?: string | null
   site: WebsiteSchema
   slug: string
   shipping?: Parameters<typeof SiteCartIsland>[0]['shipping']
@@ -47,6 +50,7 @@ export function StoreSiteShell({
             lang={site.meta.language}
             socialLinks={resolveHeaderSocialLinks(site)}
             commerce={transactions}
+            blog={blogHref ? { href: blogHref, label: 'Blog' } : null}
           />
           <main>{children}</main>
           {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={site.meta.language} showBranding site={site} /> : null}

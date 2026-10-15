@@ -19,6 +19,8 @@ import { sweepOldAiGenerationEvents } from '@/lib/ai-generation-events'
 import { sweepOldSignupAttribution } from '@/lib/signup-attribution-store'
 import { sweepExpiredRateLimitCounters } from '@/lib/rate-limit-sweep'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { INDEXNOW_BUDGET_MS } from '@/lib/indexnow'
+import { dispatchIndexQueue, enqueueDueScheduledPosts } from '@/lib/indexnow-server'
 import { runBackupSweep } from '@/lib/project-backups'
 
 export const dynamic = 'force-dynamic'
@@ -166,6 +168,21 @@ export async function GET(request: Request) {
     rateLimitCounters = { error: 'rate_limit_sweep_failed' }
   }
 
+  // Isolated and time-boxed: queues scheduled posts that just went live, then
+  // sends due IndexNow URLs. Inert without a secret; failed sends back off.
+  let indexNow: Awaited<ReturnType<typeof dispatchIndexQueue>> | { error: string }
+  try {
+    const admin = createAdminClient()
+    const scheduledQueued = await enqueueDueScheduledPosts(admin)
+    indexNow = {
+      ...(await dispatchIndexQueue(admin, { deadlineMs: Date.now() + INDEXNOW_BUDGET_MS })),
+      ...(scheduledQueued > 0 ? { scheduledQueued } : {}),
+    }
+  } catch (error) {
+    console.log('[indexnow] dispatch failed:', error instanceof Error ? error.message : 'unknown')
+    indexNow = { error: 'indexnow_dispatch_failed' }
+  }
+
   // Isolated and time-boxed: draft backups (daily PRO/E-Ticaret, weekly Starter),
   // expired-backup cleanup and stale non-published version pruning.
   let projectBackups: Awaited<ReturnType<typeof runBackupSweep>> | { error: string }
@@ -190,7 +207,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

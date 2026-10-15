@@ -10,6 +10,7 @@ import {
   getPublishedSlugForProjectId,
   resolveActiveDomainForHost,
 } from '@/lib/custom-domains/service'
+import { tenantRewritePath } from '@/lib/indexnow'
 import { LANG_COOKIE, normalizeLang, resolveLangFromAcceptLanguage } from '@/lib/i18n'
 
 const LEGACY_TENANT_REFUND_PATH = '/yasal/iptal-ve-iade'
@@ -35,8 +36,7 @@ export async function middleware(request: NextRequest) {
   }
   if (slug && !request.nextUrl.pathname.startsWith('/site/')) {
     const url = request.nextUrl.clone()
-    const rest = request.nextUrl.pathname === '/' ? '' : request.nextUrl.pathname
-    url.pathname = `/site/${slug}${rest}`
+    url.pathname = tenantRewritePath(slug, request.nextUrl.pathname)
     return NextResponse.rewrite(url)
   }
 
@@ -57,8 +57,7 @@ export async function middleware(request: NextRequest) {
       : null
     if (targetSlug) {
       const url = request.nextUrl.clone()
-      const rest = request.nextUrl.pathname === '/' ? '' : request.nextUrl.pathname
-      url.pathname = `/site/${targetSlug}${rest}`
+      url.pathname = tenantRewritePath(targetSlug, request.nextUrl.pathname)
       return NextResponse.rewrite(url)
     }
   }

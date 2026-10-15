@@ -21,6 +21,7 @@ import { BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS, type BackupItem } from 
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
+import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { slugifyProjectName } from '@/lib/slug'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
@@ -687,7 +688,12 @@ export async function publishProject(input: {
   }
 
   revalidatePath('/dashboard')
-  if (slug) revalidatePath(`/site/${slug}`, 'layout')
+  if (slug) {
+    revalidatePath(`/site/${slug}`, 'layout')
+    // Queued for the next cron run; never blocks or fails a publish.
+    void enqueueSitePages(input.id, slug, parsed, 'site:publish')
+    void enqueueLiveBlog(input.id, slug, 'site:publish')
+  }
   return { ok: true, slug: slug as string, publishedAt }
 }
 
@@ -698,11 +704,16 @@ export async function unpublishProject(id: string): Promise<void> {
     .from('projects')
     .update({ published: false, status: 'draft' })
     .eq('id', id)
-    .select('slug')
+    .select('slug, schema_data')
     .maybeSingle()
   if (error) throw error
   revalidatePath('/dashboard')
-  if (data?.slug) revalidatePath(`/site/${data.slug}`, 'layout')
+  if (data?.slug) {
+    revalidatePath(`/site/${data.slug}`, 'layout')
+    const schema = websiteSchema.safeParse(data.schema_data)
+    if (schema.success) void enqueueSitePages(id, data.slug as string, schema.data, 'site:unpublish')
+    void enqueueLiveBlog(id, data.slug as string, 'site:unpublish')
+  }
 }
 
 export type PublishedSite = {
