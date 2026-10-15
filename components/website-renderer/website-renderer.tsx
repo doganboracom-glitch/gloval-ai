@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { cn } from '@/lib/utils'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
-import { pageNavItems, sectionsForPage, homeSlug, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
+import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import {
   resolveTheme,
@@ -90,8 +90,17 @@ export function WebsiteRenderer({
   paymentBadges = null,
   headerActions,
   contactForm = null,
+  initialPage = null,
+  pageRouting = false,
 }: {
   site: unknown
+  /** Published site only: the page slug this request is rendering (null = home). */
+  initialPage?: string | null
+  /**
+   * Published site only: page links are real URLs (`/<slug>`), so switching
+   * pages navigates for real instead of swapping sections in memory.
+   */
+  pageRouting?: boolean
   /** Published site only: slug + signed render token that make the contact form submit for real. */
   contactForm?: ContactFormLive | null
   /** Demo pages only: extra header controls (demo cart/account), rendered before the CTA. */
@@ -148,15 +157,23 @@ export function WebsiteRenderer({
   editSelection?: EditSelection | null
 }) {
   const parsed = useMemo(() => websiteSchema.safeParse(site), [site])
-  const [activeSlug, setActiveSlug] = useState<string | null>(null)
+  const [activeSlug, setActiveSlug] = useState<string | null>(initialPage)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Page switches always land at the top of the new page, exactly like a real
-  // navigation would.
-  const handleNavigate = useCallback((slug: string) => {
-    setActiveSlug(slug)
-    scrollSiteToTop(rootRef.current)
-  }, [])
+  // navigation would. On a published site each page has its own URL, so the
+  // switch is a real navigation.
+  const handleNavigate = useCallback(
+    (slug: string) => {
+      if (pageRouting && parsed.success) {
+        window.location.assign(pagePath(parsed.data, slug))
+        return
+      }
+      setActiveSlug(slug)
+      scrollSiteToTop(rootRef.current)
+    },
+    [pageRouting, parsed],
+  )
 
   // Intercepts internal `/route` clicks from links, CTAs and product/category
   // cards — but ONLY in the preview, whose iframe has no router so a real
@@ -177,6 +194,12 @@ export function WebsiteRenderer({
           sectionsForPage(parsed.data, p.slug).some((s) => s.type === id),
         )
         if (!page) return false
+        if (pageRouting) {
+          // Already on the page that owns the section: let the browser scroll to it.
+          if (page.slug === (activeSlug ?? homeSlug(parsed.data))) return false
+          window.location.assign(`${pagePath(parsed.data, page.slug)}#${id}`)
+          return true
+        }
         handleNavigate(page.slug)
         // Wait for the new page's sections to mount before scrolling to the target.
         window.setTimeout(() => {
@@ -197,7 +220,7 @@ export function WebsiteRenderer({
       }
       return true
     },
-    [parsed, handleNavigate, preview],
+    [parsed, handleNavigate, preview, pageRouting, activeSlug],
   )
 
   // Display-only catalog for a storefront preview, so product cards link to the

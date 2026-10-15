@@ -10,6 +10,8 @@ import {
   type SocialNetwork,
 } from '@/lib/social-links'
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
+import { uniquePageSlug } from '@/lib/page-slugs'
+import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -166,6 +168,14 @@ export type EditOperation =
    */
   | { op: 'updatePageTitle'; pageIndex: number; title: string }
   | { op: 'removePage'; pageIndex: number }
+  /**
+   * Real pages: each one is served at its own clean URL. Adding is subject to
+   * the plan page limit, which the server checks on the resulting page count.
+   */
+  | { op: 'addPage'; title: string; slug?: string }
+  | { op: 'renamePage'; pageIndex: number; title: string; slug?: string }
+  | { op: 'setPageSeo'; pageIndex: number; title?: string; description?: string; indexable?: boolean }
+  | { op: 'movePage'; pageIndex: number; direction: 'up' | 'down' }
   /**
    * Replaces a footer's link columns and/or official-text bar. Entries with an
    * empty label or an invalid target are NOT saved (no dead links).
@@ -631,6 +641,44 @@ export function applyOperation(
     case 'updatePageTitle': {
       const page = next.pages[operation.pageIndex]
       if (page && operation.title.trim()) page.title = operation.title
+      return next
+    }
+
+    case 'addPage': {
+      const title = operation.title.trim().slice(0, 60)
+      if (!title || next.pages.length >= SITE_PAGE_HARD_CAP) return next
+      const slug = uniquePageSlug(operation.slug?.trim() || title, next.pages.map((p) => p.slug))
+      next.pages.push({ slug, title, kind: 'custom', sections: [] })
+      return next
+    }
+
+    case 'renamePage': {
+      const page = next.pages[operation.pageIndex]
+      if (!page) return next
+      if (operation.title.trim()) page.title = operation.title.trim().slice(0, 60)
+      if (operation.slug?.trim() && !page.isHome) {
+        const others = next.pages.filter((p) => p !== page).map((p) => p.slug)
+        page.slug = uniquePageSlug(operation.slug, others)
+      }
+      return next
+    }
+
+    case 'movePage': {
+      const target = operation.direction === 'up' ? operation.pageIndex - 1 : operation.pageIndex + 1
+      if (!next.pages[operation.pageIndex] || !next.pages[target]) return next
+      const [moved] = next.pages.splice(operation.pageIndex, 1)
+      next.pages.splice(target, 0, moved)
+      return next
+    }
+
+    case 'setPageSeo': {
+      const page = next.pages[operation.pageIndex]
+      if (!page) return next
+      const seo = { ...(page.seo ?? {}) }
+      if (operation.title !== undefined) seo.title = operation.title.trim().slice(0, 120) || undefined
+      if (operation.description !== undefined) seo.description = operation.description.trim().slice(0, 320) || undefined
+      page.seo = seo.title || seo.description ? seo : undefined
+      if (operation.indexable !== undefined) page.indexable = operation.indexable
       return next
     }
 

@@ -37,6 +37,7 @@ import { aboutSectionCopy, hasAboutSection } from '@/lib/about-section'
 import { hiddenStorePageCopy, storeRequiredPageGaps } from '@/lib/store-required-pages'
 import { TextField, IconBtn, UploadButton } from '@/components/editor/editor-fields'
 import { LogoField } from '@/components/editor/logo-field'
+import { PagesManager } from '@/components/editor/pages-manager'
 import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
@@ -392,32 +393,7 @@ function DesignTab({
         />
         <LogoField site={site} planCode={planCode} onDispatch={onDispatch} onBeforeUpgrade={onBeforeUpgrade} />
         <FaviconField site={site} onDispatch={onDispatch} />
-        {site.pages.length > 1 &&
-          site.pages.map((page, pageIndex) => {
-            const homeIndex = Math.max(
-              0,
-              site.pages.findIndex((p) => p.isHome === true),
-            )
-            return (
-              <div key={`${page.slug}-${pageIndex}`} className="flex items-end gap-1">
-                <div className="flex-1">
-                  <TextField
-                    label={ui.fieldLabels.label}
-                    value={page.title}
-                    onCommit={(v) => onDispatch({ op: 'updatePageTitle', pageIndex, title: v })}
-                  />
-                </div>
-                <IconBtn
-                  label={ui.remove}
-                  small
-                  disabled={pageIndex === homeIndex}
-                  onClick={() => onDispatch({ op: 'removePage', pageIndex })}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </IconBtn>
-              </div>
-            )
-          })}
+        <PagesManager site={site} planCode={planCode} onDispatch={onDispatch} />
         {site.pages.length <= 1 && site.navigation.links.map((link, linkIndex) => (
           <div key={linkIndex} className="flex items-end gap-1">
             <div className="grid flex-1 grid-cols-2 gap-1.5">

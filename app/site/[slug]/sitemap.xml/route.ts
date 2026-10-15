@@ -1,6 +1,7 @@
 import { getPublishedSite } from '@/lib/projects'
 import { getStoreProducts } from '@/lib/store'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 
 /**
  * Per-tenant sitemap for a published site.
@@ -55,6 +56,19 @@ export async function GET(
   const entries: UrlEntry[] = [
     { loc: base, changefreq: 'weekly', priority: '1.0', lastmod: lastModified },
   ]
+
+  // Every real, indexable, non-home page has its own URL and canonical.
+  for (const [i, page] of (site.schema.pages ?? []).entries()) {
+    const pageSlug = page.slug || `page-${i}`
+    const resolved = findPublicPage(site.schema, pageSlug)
+    if (!resolved || !isPageIndexable(resolved)) continue
+    entries.push({
+      loc: `${base}${pagePath(site.schema, pageSlug)}`,
+      changefreq: 'monthly',
+      priority: '0.7',
+      lastmod: lastModified,
+    })
+  }
 
   // Store routes only exist for sites that actually sell something. Checkout
   // and order-confirmation pages are transactional and stay out of the sitemap.

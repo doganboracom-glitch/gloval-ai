@@ -570,7 +570,7 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
  */
 export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
   let changed = false
-  const sections = site.sections.flatMap((section): Section[] => {
+  const stripSection = (section: Section): Section[] => {
     if (section.hidden) return [section]
     if (section.type === 'hero') {
       if (!section.sample) return [section]
@@ -589,8 +589,13 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
     if (kept.length === items.length) return [section]
     changed = true
     return kept.length === 0 ? [] : [withItems(section, spec, kept)]
-  })
-  return changed ? { ...site, sections } : site
+  }
+  const sections = site.sections.flatMap(stripSection)
+  // Pages own their sections, so an unapproved sample on a page never reaches the public site either.
+  const pages = site.pages?.map((page) =>
+    page.sections ? { ...page, sections: page.sections.flatMap(stripSection) } : page,
+  )
+  return changed ? { ...site, sections, ...(pages ? { pages } : {}) } : site
 }
 
 /** Drops every flagged placeholder value from a contact section; the form stays. */

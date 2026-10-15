@@ -105,20 +105,26 @@ export const SITE_LIMITS: Record<PlanCode, number> = {
   ecommerce: 4,
 }
 
-/** Paket başına sayfa limiti. */
+/**
+ * Paket başına GERÇEK sayfa limiti (her sayfa kendi URL'sine sahip). Tek kaynak:
+ * UI, AI, şema ve sunucu kontrolleri buradan okur.
+ */
 export const PAGE_LIMITS: Record<PlanCode, number> = {
   free: 5,
-  starter: 15,
-  pro: 75,
-  ecommerce: 75,
+  starter: 8,
+  pro: 15,
+  ecommerce: 15,
 }
 
 /**
- * Şemanın (`websiteSchema.pages.max(8)`) izin verdiği GERÇEK üst sınır. Bir
+ * Şemanın (`websiteSchema.pages.max(15)`) izin verdiği GERÇEK üst sınır. Bir
  * paketin limiti bunun üstündeyse kullanıcı yine de bu kadar sayfa
  * oluşturabilir; kartlarda ve tabloda `effectivePageLimit` gösterilir.
  */
-export const SITE_PAGE_HARD_CAP = 8
+export const SITE_PAGE_HARD_CAP = 15
+
+/** Üst menüdeki (`navigation.links`) en fazla bağlantı sayısı. */
+export const NAV_LINK_MAX = 10
 
 /**
  * Anasayfa bölüm sayısının tek üst sınırı. Şema (`websiteSchema.sections`),

@@ -1,4 +1,5 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
+import { collectSlugRedirects } from '@/lib/page-slugs'
 
 /**
  * Multi-page preview routing.
@@ -192,9 +193,99 @@ export function resolveHrefToPageSlug(site: WebsiteSchema, href: string): string
   return null
 }
 
+/** URL path of a page on the tenant host: the home page is `/`, others `/<slug>`. */
+export function pagePath(site: WebsiteSchema, slug: string): string {
+  return slug === homeSlug(site) ? '/' : `/${slug}`
+}
+
+/** A page is indexed unless the owner switched it off. */
+export function isPageIndexable(page: { indexable?: boolean }): boolean {
+  return page.indexable !== false
+}
+
+/**
+ * Resolves the first path segment of a tenant URL to a real, non-home page.
+ * The home slug is intentionally NOT resolvable (the home page lives at `/`),
+ * so `/home` stays a 404 instead of duplicating the homepage.
+ */
+export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
+  const wanted = pathSlug.toLowerCase()
+  const home = homeSlug(site)
+  return (
+    (site.pages ?? []).find((p, i) => {
+      const slug = p.slug || `page-${i}`
+      return slug.toLowerCase() === wanted && slug !== home
+    }) ?? null
+  )
+}
+
+/**
+ * One-time upgrade of a schema saved before pages owned their content: every
+ * non-home page gets its own `sections` (copied from what the category rules
+ * used to derive), so editing one page can never change another. Pages that
+ * already own sections are left untouched, so the function is idempotent.
+ */
+export function materializePages(site: WebsiteSchema): WebsiteSchema {
+  const pages = site.pages ?? []
+  if (pages.length === 0) return site
+  const home = homeSlug(site)
+  let changed = false
+  const next = pages.map((page, i) => {
+    const slug = page.slug || `page-${i}`
+    if (slug === home) {
+      if (page.kind) return page
+      changed = true
+      return { ...page, kind: 'home' as const }
+    }
+    if (page.sections && page.sections.length > 0) return page
+    const derived = sectionsForPage({ ...site, pages: pages.map((p) => ({ ...p, sections: undefined })) }, slug)
+      .filter((s) => s.type !== 'footer')
+      .map((s) => JSON.parse(JSON.stringify(s)) as Section)
+    if (derived.length === 0) return page
+    changed = true
+    return { ...page, kind: page.kind ?? ('custom' as const), sections: derived }
+  })
+  return changed ? { ...site, pages: next } : site
+}
+
+const MAX_PAGE_REDIRECTS = 60
+
+/**
+ * Keeps `pageRedirects` in step with page renames: a page whose slug changed
+ * since `previousPages` leaves a permanent redirect behind, older redirects are
+ * retargeted to the newest slug (no chains), and a redirect whose old path is a
+ * live page again is dropped.
+ */
+export function withPageRedirects(
+  next: WebsiteSchema,
+  previousPages: Array<{ slug: string; isHome?: boolean }> | undefined,
+): WebsiteSchema {
+  const pages = next.pages ?? []
+  const created = collectSlugRedirects(previousPages ?? [], pages)
+  const live = new Set(pages.map((p, i) => p.slug || `page-${i}`))
+  const byFrom = new Map<string, string>()
+  for (const r of next.pageRedirects ?? []) byFrom.set(r.from, r.to)
+  for (const r of created) {
+    for (const [from, to] of byFrom) if (to === r.from) byFrom.set(from, r.to)
+    byFrom.set(r.from, r.to)
+  }
+  const merged = Array.from(byFrom, ([from, to]) => ({ from, to }))
+    .filter((r) => r.from !== r.to && !live.has(r.from.replace(/^\//, '')) && live.has(r.to.replace(/^\//, '')))
+    .slice(-MAX_PAGE_REDIRECTS)
+  const unchanged =
+    merged.length === (next.pageRedirects?.length ?? 0) &&
+    merged.every((r, i) => next.pageRedirects?.[i]?.from === r.from && next.pageRedirects?.[i]?.to === r.to)
+  if (unchanged) return next
+  return { ...next, pageRedirects: merged.length > 0 ? merged : undefined }
+}
+
 /**
  * Returns the visible sections to render for the active page. Hidden sections
  * are always filtered out. A trailing footer is always preserved.
+ *
+ * A non-home page that owns `sections` renders exactly those (plus the shared
+ * footer). Pages without their own sections fall back to the category rules,
+ * which keeps schemas saved before real pages existed rendering as before.
  */
 export function sectionsForPage(
   site: WebsiteSchema,
@@ -207,8 +298,14 @@ export function sectionsForPage(
   // Single-page sites, or the home page: show the full homepage unchanged.
   if (items.length <= 1 || !active || active.isHome) return visible
 
-  const category = categoryFor(active)
   const footer = visible.filter((s) => s.type === 'footer')
+
+  const own = (site.pages ?? []).find((p, i) => (p.slug || `page-${i}`) === active.slug)
+  if (own?.sections && own.sections.length > 0) {
+    return [...own.sections.filter((s) => !s.hidden && s.type !== 'footer'), ...footer]
+  }
+
+  const category = categoryFor(active)
 
   if (!category) {
     // Unknown page category: show the full homepage so the page is never empty.
