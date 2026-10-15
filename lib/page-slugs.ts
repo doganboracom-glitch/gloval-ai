@@ -18,6 +18,7 @@ export const RESERVED_PAGE_SLUGS: ReadonlySet<string> = new Set([
   'site',
   'sitemap.xml',
   'robots.txt',
+  'indexnow-key',
 ])
 
 const TURKISH_FOLD: Record<string, string> = {

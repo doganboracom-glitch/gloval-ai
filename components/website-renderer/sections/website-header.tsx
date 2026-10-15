@@ -30,7 +30,10 @@ export function WebsiteHeader({
   actions,
   socialLinks,
   commerce = true,
+  blog,
 }: {
+  /** Real link to the site's blog; pass only when at least one post is public. */
+  blog?: { href: string; label: string } | null
   /** False on a catalog: hides the account link and the cart CTA (no cart exists). */
   commerce?: boolean
   /** Small icons next to the CTA; pass `resolveHeaderSocialLinks(site)` (empty hides them). */
@@ -201,6 +204,15 @@ export function WebsiteHeader({
                 </a>
                 )
               })}
+          {blog ? (
+            <a
+              href={blog.href}
+              className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
+              style={{ color: 'var(--site-muted-fg)' }}
+            >
+              {blog.label}
+            </a>
+          ) : null}
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
