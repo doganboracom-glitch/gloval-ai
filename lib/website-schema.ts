@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
-import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
 /**
  * WebsiteSchema
@@ -703,9 +703,35 @@ export const legalDocsSchema = z.object({
   hidden: z.array(z.string()).max(10).optional(),
 })
 
+export const PAGE_KINDS = ['home', 'custom', 'info', 'legal', 'blog-index'] as const
+export type PageKind = (typeof PAGE_KINDS)[number]
+
+export const pageSeoSchema = z.object({
+  title: z.string().max(120).optional(),
+  description: z.string().max(320).optional(),
+})
+
+/**
+ * One page of the site. Every field after `isHome` is optional so schemas
+ * saved before real pages existed still parse. The home page never stores
+ * `sections`: it keeps using the site-level `sections` array.
+ */
+export const pageSchema = z.object({
+  slug: z.string().describe('URL slug, e.g. "home", "about"'),
+  title: z.string(),
+  isHome: z.boolean().optional(),
+  kind: z.enum(PAGE_KINDS).optional(),
+  sections: z.array(sectionSchema).max(SITE_SECTION_HARD_CAP).optional(),
+  seo: pageSeoSchema.optional(),
+  indexable: z.boolean().optional(),
+})
+
+/** Pages as the AI sees them when generating: structure only, no per-page content. */
+const leanPageSchema = pageSchema.pick({ slug: true, title: true, isHome: true })
+
 export const navigationSchema = z.object({
   logoText: z.string(),
-  links: z.array(linkSchema).min(1).max(7),
+  links: z.array(linkSchema).min(1).max(NAV_LINK_MAX),
   cta: buttonSchema.optional(),
   logo: logoSchema.optional().describe('Optional brand mark shown instead of the logo text'),
   showLogoText: z
@@ -733,16 +759,7 @@ export const websiteSchema = z.object({
     .optional()
     .describe('Floating phone + WhatsApp buttons shown on every page'),
   social: socialSchema.optional().describe('Owner-supplied social media links'),
-  pages: z
-    .array(
-      z.object({
-        slug: z.string().describe('URL slug, e.g. "home", "about"'),
-        title: z.string(),
-        isHome: z.boolean().optional(),
-      }),
-    )
-    .min(1)
-    .max(8),
+  pages: z.array(pageSchema).min(1).max(SITE_PAGE_HARD_CAP),
   sections: z
     .array(sectionSchema)
     .min(3)
@@ -751,6 +768,11 @@ export const websiteSchema = z.object({
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
   legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
+  pageRedirects: z
+    .array(z.object({ from: z.string().max(80), to: z.string().max(80) }))
+    .max(60)
+    .optional()
+    .describe('Old page paths that 308 to the page that replaced them; maintained on save'),
 })
 
 /**
@@ -760,8 +782,9 @@ export const websiteSchema = z.object({
  * fills it in later from the editor).
  */
 export const websiteGenerationSchema = websiteSchema
-  .omit({ tracking: true, contactActions: true, social: true, company: true, legalDocs: true })
+  .omit({ tracking: true, contactActions: true, social: true, company: true, legalDocs: true, pageRedirects: true })
   .extend({
+    pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
     meta: siteMetaSchema.extend({
       seoTitle: z
         .string()
@@ -780,8 +803,9 @@ export const websiteGenerationSchema = websiteSchema
  * them back from the current schema instead.
  */
 export const websiteEditSchema = websiteSchema
-  .omit({ tracking: true, company: true, legalDocs: true })
+  .omit({ tracking: true, company: true, legalDocs: true, pageRedirects: true })
   .extend({
+  pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
   meta: siteMetaSchema.omit({ seoTitle: true }),
   navigation: navigationSchema.omit({ logo: true, favicon: true }),
 })

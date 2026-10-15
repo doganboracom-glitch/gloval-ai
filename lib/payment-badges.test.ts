@@ -140,7 +140,7 @@ describe('footer payment strip rules', () => {
   })
 
   it('(d) corporate (non-store) sites never resolve a strip', () => {
-    const page = readFileSync(path.resolve(__dirname, '..', 'app/site/[slug]/page.tsx'), 'utf8')
+    const page = readFileSync(path.resolve(__dirname, '..', 'components/site/public-site-view.tsx'), 'utf8')
     expect(page).toContain(
       'isStorefront(site.schema) ? await getStorePaymentBadges(slug) : null',
     )

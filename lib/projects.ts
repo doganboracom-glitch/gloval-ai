@@ -7,6 +7,7 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
+import { materializePages, withPageRedirects } from '@/lib/website-pages'
 import { getEffectiveSiteLimit, getEffectiveProductLimit } from '@/lib/effective-limits'
 import {
   SITE_LIMIT_ERROR,
@@ -237,18 +238,23 @@ export async function saveProjectSchema(input: {
   name?: string
 }): Promise<void> {
   const { db, elevated } = await clientForProject(input.id)
-  const parsed = websiteSchema.parse(input.schema)
+  let parsed = websiteSchema.parse(input.schema)
+
+  const { data: existing, error: existingErr } = await db
+    .from('projects')
+    .select('owner_id, schema_data')
+    .eq('id', input.id)
+    .maybeSingle()
+  if (existingErr) throw existingErr
+
+  // A renamed page leaves a permanent redirect behind so its old URL keeps working.
+  const previousPages = (existing?.schema_data as { pages?: Array<{ slug: string; isHome?: boolean }> } | null)?.pages
+  parsed = withPageRedirects(materializePages(parsed), previousPages)
 
   // Server-side backstop for the plan page limit: only GROWTH past the limit is
   // refused, so a site already over its limit (downgrade, limit change) can
   // still be saved and edited. Admins editing a tenant's site are exempt.
   if (!elevated) {
-    const { data: existing, error: existingErr } = await db
-      .from('projects')
-      .select('owner_id, schema_data')
-      .eq('id', input.id)
-      .maybeSingle()
-    if (existingErr) throw existingErr
     if (existing) {
       const currentPages = Array.isArray(
         (existing.schema_data as { pages?: unknown } | null)?.pages,
