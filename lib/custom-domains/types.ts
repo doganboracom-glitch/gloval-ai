@@ -181,6 +181,14 @@ export type CustomDomain = {
   source: DomainSource
   /** Provider-reported expiry (UTC instant), when the registrar named its zone. */
   expiresAt: string | null
+  /**
+   * Hosting-provider redirect for this hostname (Vercel domain redirect, e.g.
+   * `www.firma.com` -> `firma.com`). NOT stored: it is hydrated from the
+   * provider by `lib/custom-domains/redirects.ts` where it is needed.
+   * `undefined` = not looked up / unknown; `null` = looked up, no redirect.
+   * A domain that redirects never serves content, so it can never be canonical.
+   */
+  redirectTo?: string | null
 }
 
 export type AddDomainInput = {

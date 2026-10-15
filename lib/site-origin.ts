@@ -21,13 +21,33 @@ export function siteOrigin(host: string | null | undefined): string | null {
 }
 
 /**
+ * True when the hosting provider reports that this hostname answers with a
+ * redirect to a different host (e.g. `www.firma.com` -> `firma.com`, 308). Such
+ * a host serves no content, so advertising it as canonical would point search
+ * engines at a URL that only redirects.
+ */
+export function redirectsElsewhere(domain: Pick<CustomDomain, 'domain' | 'redirectTo'>): boolean {
+  const target = domain.redirectTo
+  if (!target) return false
+  const host = target
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/[/:].*$/, '')
+    .replace(/\.$/, '')
+  return host !== '' && host !== domain.domain.toLowerCase()
+}
+
+/**
  * The domain a site should treat as its primary public address: only domains
- * that are really live (DNS + Vercel + SSL ready) and bound to a project count.
- * The primary flag wins; otherwise the oldest live domain, so the choice is
- * stable between requests.
+ * that are really live (DNS + Vercel + SSL ready), bound to a project, and that
+ * actually serve content (do not redirect to another host) count. Among those
+ * the primary flag wins; otherwise the oldest, so the choice is stable between
+ * requests. If every live domain redirects, there is no content-serving custom
+ * domain and the caller falls back to the tenant subdomain.
  */
 export function pickCanonicalDomain(domains: readonly CustomDomain[]): CustomDomain | null {
-  const live = domains.filter((d) => d.websiteProjectId && isDomainLive(d))
+  const live = domains.filter((d) => d.websiteProjectId && isDomainLive(d) && !redirectsElsewhere(d))
   if (live.length === 0) return null
   return [...live].sort((a, b) => {
     if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1

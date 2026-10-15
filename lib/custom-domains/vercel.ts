@@ -59,6 +59,8 @@ export interface VercelClient {
   getConfig(domain: string): Promise<VercelDomainConfig | null>
   /** Points an already-attached domain's redirect at `redirectTo` (308). */
   setRedirect(domain: string, redirectTo: string): Promise<VercelAddResult>
+  /** Read-only: the project's entry for `domain`, including its `redirect` target. Optional so test doubles stay valid. */
+  getProjectDomain?(domain: string): Promise<VercelAddResult>
   /** A 404 counts as success (already detached) so a retried delete converges. */
   removeDomain(domain: string): Promise<VercelRemoveResult>
 }
@@ -210,6 +212,18 @@ export class HttpVercelClient implements VercelClient {
         'PATCH',
         this.url(`/v9/projects/${encodeURIComponent(this.project!)}/domains/${encodeURIComponent(domain)}`),
         { redirect: redirectTo, redirectStatusCode: 308 },
+      )
+      return this.toResult(res.status, res.json)
+    } catch (error) {
+      return this.networkFailure(error)
+    }
+  }
+
+  async getProjectDomain(domain: string): Promise<VercelAddResult> {
+    try {
+      const res = await this.request(
+        'GET',
+        this.url(`/v9/projects/${encodeURIComponent(this.project!)}/domains/${encodeURIComponent(domain)}`),
       )
       return this.toResult(res.status, res.json)
     } catch (error) {

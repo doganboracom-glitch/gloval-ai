@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalOrigin, pickCanonicalDomain, siteOrigin } from './site-origin'
+import { canonicalOrigin, pickCanonicalDomain, redirectsElsewhere, siteOrigin } from './site-origin'
 import { tenantUrl } from './domains'
 import type { CustomDomain } from './custom-domains/types'
 
@@ -76,5 +76,52 @@ describe('pickCanonicalDomain', () => {
     const primary = domain({ id: 'c', domain: 'primary.com', isPrimary: true, createdAt: '2026-06-01T00:00:00.000Z' })
     expect(pickCanonicalDomain([newer, older])?.domain).toBe('older.com')
     expect(pickCanonicalDomain([newer, older, primary])?.domain).toBe('primary.com')
+  })
+
+  describe('www + apex where www redirects to the apex (dbajans.com.tr)', () => {
+    const apex = (o: Partial<CustomDomain> = {}) =>
+      domain({ id: 'apex', domain: 'dbajans.com.tr', createdAt: '2026-03-01T00:00:00.000Z', redirectTo: null, ...o })
+    const www = (o: Partial<CustomDomain> = {}) =>
+      domain({ id: 'www', domain: 'www.dbajans.com.tr', createdAt: '2026-01-01T00:00:00.000Z', redirectTo: 'dbajans.com.tr', ...o })
+
+    it('picks the apex even though www is older', () => {
+      expect(pickCanonicalDomain([www(), apex()])?.domain).toBe('dbajans.com.tr')
+      expect(pickCanonicalDomain([apex(), www()])?.domain).toBe('dbajans.com.tr')
+    })
+
+    it('picks the apex even when the redirecting www is the one flagged primary', () => {
+      expect(pickCanonicalDomain([www({ isPrimary: true }), apex()])?.domain).toBe('dbajans.com.tr')
+    })
+
+    it('keeps the primary flag meaningful among content-serving domains', () => {
+      const other = domain({ id: 'o', domain: 'dbajans.net', isPrimary: true, redirectTo: null })
+      expect(pickCanonicalDomain([www(), apex(), other])?.domain).toBe('dbajans.net')
+    })
+
+    it('treats a redirect to its own host, and an unknown redirect, as serving content', () => {
+      expect(pickCanonicalDomain([www({ redirectTo: 'www.dbajans.com.tr' }), apex({ createdAt: '2027-01-01T00:00:00.000Z' })])?.domain).toBe(
+        'www.dbajans.com.tr',
+      )
+      expect(pickCanonicalDomain([www({ redirectTo: undefined })])?.domain).toBe('www.dbajans.com.tr')
+    })
+
+    it('returns null when every live domain redirects, so the tenant origin is used', () => {
+      expect(pickCanonicalDomain([www({ redirectTo: 'elsewhere.com' })])).toBeNull()
+      expect(canonicalOrigin('dbajans', pickCanonicalDomain([www()] )?.domain)).toBe('https://dbajans.gloval.site')
+    })
+
+    it('feeds canonicalOrigin so every SEO surface gets the apex', () => {
+      expect(canonicalOrigin('dbajans', pickCanonicalDomain([www(), apex()])?.domain)).toBe('https://dbajans.com.tr')
+    })
+  })
+})
+
+describe('redirectsElsewhere', () => {
+  it('normalizes scheme, path, port and case of the reported target', () => {
+    expect(redirectsElsewhere({ domain: 'www.a.com', redirectTo: 'A.com' })).toBe(true)
+    expect(redirectsElsewhere({ domain: 'www.a.com', redirectTo: 'https://a.com/' })).toBe(true)
+    expect(redirectsElsewhere({ domain: 'a.com', redirectTo: 'https://A.com:443/x' })).toBe(false)
+    expect(redirectsElsewhere({ domain: 'a.com', redirectTo: null })).toBe(false)
+    expect(redirectsElsewhere({ domain: 'a.com' })).toBe(false)
   })
 })
