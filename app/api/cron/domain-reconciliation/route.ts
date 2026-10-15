@@ -17,6 +17,7 @@ import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
 import { sweepOldContactMessages } from '@/lib/site-contact-store'
 import { sweepOldAiGenerationEvents } from '@/lib/ai-generation-events'
 import { sweepOldSignupAttribution } from '@/lib/signup-attribution-store'
+import { sweepExpiredRateLimitCounters } from '@/lib/rate-limit-sweep'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,7 @@ const IYZICO_RECONCILE_BUDGET_MS = 8_000
 const IYZICO_REFUND_BUDGET_MS = 5_000
 const MAIL_ACCESS_BUDGET_MS = 15_000
 const PLAN_CREDITS_BUDGET_MS = 10_000
+const RATE_LIMIT_SWEEP_BUDGET_MS = 5_000
 const CONNECTION_BATCH_LIMIT = 25
 const CONNECTION_BUDGET_MS = 40_000
 
@@ -148,6 +150,20 @@ export async function GET(request: Request) {
     signupAttribution = { error: 'signup_attribution_sweep_failed' }
   }
 
+  // Isolated and time-boxed: deletes expired voice-dictation rate-limit counters
+  // (at most 5000 rows per run).
+  let rateLimitCounters: { deleted: number } | { error: string }
+  try {
+    rateLimitCounters = {
+      deleted: await sweepExpiredRateLimitCounters(createAdminClient(), Date.now(), {
+        deadlineMs: Date.now() + RATE_LIMIT_SWEEP_BUDGET_MS,
+      }),
+    }
+  } catch (error) {
+    console.log('[rate-limit] counter sweep failed:', error instanceof Error ? error.message : 'unknown')
+    rateLimitCounters = { error: 'rate_limit_sweep_failed' }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -162,7 +178,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }
