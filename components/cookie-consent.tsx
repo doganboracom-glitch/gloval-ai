@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
 import { Cookie, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
@@ -13,6 +14,10 @@ import {
   readConsent,
   type CookieConsent as ConsentChoice,
 } from '@/lib/cookie-consent-storage'
+import {
+  COOKIE_BANNER_HEIGHT_VAR,
+  shouldUseCompactBanner,
+} from '@/lib/cookie-banner-layout'
 
 /**
  * Gerçekten işleyen çerez onay sistemi.
@@ -130,6 +135,42 @@ export function CookieConsent() {
 
   const analyticsAllowed = ready && consent?.analytics === true
 
+  const pathname = usePathname()
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
+  useEffect(() => {
+    const update = () => setViewportHeight(window.innerHeight)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  const compact = shouldUseCompactBanner(pathname, viewportHeight)
+  const sideBySide = compact && !customize
+
+  // Reserve room for the banner at the bottom of the page so the last controls
+  // (sign-up / pay / publish buttons) can always be scrolled above it.
+  const bannerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = document.documentElement
+    const node = bannerRef.current
+    if (!open || !node) {
+      root.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
+      return
+    }
+    const apply = () =>
+      root.style.setProperty(COOKIE_BANNER_HEIGHT_VAR, `${node.offsetHeight}px`)
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
+    }
+  }, [open, compact, customize])
+
+  const buttonSize = compact
+    ? 'h-9 px-3 text-xs sm:px-4 sm:text-sm'
+    : 'h-10 px-5 text-sm'
+
   return (
     <>
       {/* Rıza verildiyse ve production ise analitiği yükle; aksi hâlde hiç mount etme. */}
@@ -137,24 +178,43 @@ export function CookieConsent() {
 
       {open && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[60] px-3 pb-3 sm:px-4 sm:pb-4"
+          ref={bannerRef}
+          className={
+            compact
+              ? 'fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto border-t border-border bg-card shadow-lg shadow-black/20'
+              : 'fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4'
+          }
           role="dialog"
           aria-modal="false"
           aria-labelledby="cookie-title"
         >
-          <div className="mx-auto max-w-3xl rounded-2xl border border-border bg-card p-5 shadow-lg shadow-black/20 sm:p-6">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
-                <Cookie className="h-5 w-5" aria-hidden="true" />
-              </span>
+          <div
+            className={
+              compact
+                ? `mx-auto max-w-5xl px-4 py-3 ${sideBySide ? 'sm:flex sm:items-center sm:gap-4' : ''}`
+                : 'mx-auto max-w-3xl rounded-2xl border border-border bg-card p-5 shadow-lg shadow-black/20 sm:p-6'
+            }
+          >
+            <div className={`flex items-start gap-3 ${sideBySide ? 'sm:min-w-0 sm:flex-1' : ''}`}>
+              {!compact && (
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
+                  <Cookie className="h-5 w-5" aria-hidden="true" />
+                </span>
+              )}
               <div className="min-w-0 flex-1">
                 <h2
                   id="cookie-title"
-                  className="font-display text-base font-semibold"
+                  className={`font-display font-semibold ${compact ? 'text-sm' : 'text-base'}`}
                 >
                   {c.title}
                 </h2>
-                <p className="mt-1 text-pretty text-sm leading-relaxed text-muted-foreground">
+                <p
+                  className={`text-pretty text-muted-foreground ${
+                    compact
+                      ? 'mt-0.5 line-clamp-2 text-xs leading-snug'
+                      : 'mt-1 text-sm leading-relaxed'
+                  }`}
+                >
                   {c.description}{' '}
                   <Link
                     href="/yasal/cerez-politikasi"
@@ -221,12 +281,18 @@ export function CookieConsent() {
               </div>
             )}
 
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <div
+              className={
+                compact
+                  ? `mt-2 flex gap-2 sm:justify-end ${sideBySide ? 'sm:mt-0 sm:shrink-0' : 'sm:mt-3'} ${customize ? '' : 'max-sm:[&>button]:flex-1'}`
+                  : 'mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end'
+              }
+            >
               {customize ? (
                 <button
                   type="button"
                   onClick={saveCustom}
-                  className="inline-flex h-10 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+                  className={`inline-flex items-center justify-center rounded-xl bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 ${buttonSize}`}
                 >
                   {c.save}
                 </button>
@@ -239,21 +305,21 @@ export function CookieConsent() {
                       setDraftMarketing(consent?.marketing ?? false)
                       setCustomize(true)
                     }}
-                    className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-5 text-sm font-semibold transition-colors hover:bg-secondary/60"
+                    className={`inline-flex items-center justify-center rounded-xl border border-border font-semibold transition-colors hover:bg-secondary/60 ${buttonSize}`}
                   >
                     {c.customize}
                   </button>
                   <button
                     type="button"
                     onClick={rejectAll}
-                    className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-5 text-sm font-semibold transition-colors hover:bg-secondary/60"
+                    className={`inline-flex items-center justify-center rounded-xl border border-border font-semibold transition-colors hover:bg-secondary/60 ${buttonSize}`}
                   >
                     {c.rejectAll}
                   </button>
                   <button
                     type="button"
                     onClick={acceptAll}
-                    className="inline-flex h-10 items-center justify-center rounded-xl bg-brand px-5 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+                    className={`inline-flex items-center justify-center rounded-xl bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 ${buttonSize}`}
                   >
                     {c.acceptAll}
                   </button>

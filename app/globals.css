@@ -171,6 +171,8 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    /* Set by the cookie banner while it is open so it never covers page controls. */
+    padding-bottom: var(--cookie-banner-h, 0px);
   }
   /* Geist/Space Grotesk ship no Arabic glyphs, so Arabic text rendered with
      font-sans/font-display falls back to tofu boxes. Tailwind's `@theme

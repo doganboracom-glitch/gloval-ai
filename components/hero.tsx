@@ -118,7 +118,7 @@ export function Hero() {
       const payload = {
         name: website.meta.name,
         sector: website.meta.audience ?? null,
-        language: lang,
+        language: website.meta.language,
         prompt: prompt.trim() || null,
         schema: website,
       }
@@ -153,7 +153,7 @@ export function Hero() {
     stashPendingProject({
       name: website.meta.name,
       sector: website.meta.audience ?? null,
-      language: lang,
+      language: website.meta.language,
       prompt: prompt.trim() || null,
       schema: website,
       token: restoredTokenRef.current ?? undefined,
@@ -172,7 +172,7 @@ export function Hero() {
     stashPendingProject({
       name: schema.meta.name,
       sector: schema.meta.audience ?? null,
-      language: lang,
+      language: schema.meta.language,
       prompt: prompt.trim() || null,
       schema,
       token,
@@ -203,7 +203,7 @@ export function Hero() {
       const id = await createProject({
         name: website.meta.name,
         sector: website.meta.audience ?? null,
-        language: lang,
+        language: website.meta.language,
         prompt: prompt.trim() || null,
         schema: website,
       })

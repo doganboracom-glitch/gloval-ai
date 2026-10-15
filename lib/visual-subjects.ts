@@ -476,7 +476,22 @@ export function describeVisualRequest(request: string): string {
     if (matches && !hits.includes(VISUAL_TERMS[key])) hits.push(VISUAL_TERMS[key])
   }
   if (hits.length === 0) return clean
-  return `${hits.join(', ')} (as requested: "${clean}")`
+  // Only the English vocabulary goes to the image model. The user's own wording
+  // used to be appended as `(as requested: "…")`, which leaked the Turkish brief
+  // into the prompt and made image models draw text/captions from it.
+  return hits.join(', ')
+}
+
+/**
+ * Removes user-brief quotes that older versions of `describeVisualRequest`
+ * stored inside image prompts (`(as requested: "…")`), so already-saved sites
+ * stop leaking them on regenerate.
+ */
+export function stripRequestedQuote(text: string): string {
+  return text
+    .replace(/\s*\(as requested:\s*"[^"]*"\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /**
@@ -488,8 +503,7 @@ export function describeVisualRequest(request: string): string {
  * wording.
  */
 export function stripImagePromptBoilerplate(text: string): string {
-  return text
-    .split(/STRICT RULE:/)[0]
+  return stripRequestedQuote(text.split(/STRICT RULE:/)[0])
     .replace(/(?:Photorealistic|Polished) hero banner (?:photograph|illustration) for a [^.]*\./gi, ' ')
     .replace(/Style: [^.]*\./g, ' ')
     .replace(/Wide cinematic composition[^.]*\./g, ' ')

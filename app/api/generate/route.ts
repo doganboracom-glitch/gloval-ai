@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
+import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns } from '@/lib/footer-links'
 import { ensureContactSection } from '@/lib/contact-section'
@@ -151,7 +152,8 @@ async function runGenerate(
 ) {
   if (!prompt) return Response.json({ error: 'Prompt too short' }, { status: 400 })
 
-  const normalizedLang: 'tr' | 'en' = lang === 'en' ? 'en' : 'tr'
+  // The brief decides the site language; the UI language only breaks ties.
+  const normalizedLang: 'tr' | 'en' = resolveGenerationLanguage(prompt, lang)
   const language = normalizedLang === 'en' ? 'English' : 'Turkish'
 
   /* ---- Website mode: produce a full structured WebsiteSchema ---- */
