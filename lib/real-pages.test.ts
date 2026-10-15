@@ -178,6 +178,50 @@ describe('301 after a slug change', () => {
     expect(second.pageRedirects?.some((r) => r.from === r.to)).toBe(false)
   })
 
+  it('resolves a multi-rename history in one hop from the first slug to the latest slug', () => {
+    const original = materializePages(legacySite(LEGACY_PAGES))
+    const renamedOnce = withPageRedirects(
+      applyOperation(original, { op: 'renamePage', pageIndex: 1, title: 'Biz Kimiz', slug: 'biz-kimiz' }),
+      original.pages,
+    )
+    const renamedTwice = withPageRedirects(
+      applyOperation(renamedOnce, { op: 'renamePage', pageIndex: 1, title: 'Hikayemiz', slug: 'hikayemiz' }),
+      renamedOnce.pages,
+    )
+
+    expect(renamedTwice.pageRedirects).toEqual(
+      expect.arrayContaining([
+        { from: '/hakkimizda', to: '/hikayemiz' },
+        { from: '/biz-kimiz', to: '/hikayemiz' },
+      ]),
+    )
+    expect(renamedTwice.pageRedirects).not.toContain({ from: '/hakkimizda', to: '/biz-kimiz' })
+  })
+
+  it('drops a redirect when its former slug is assigned to another live page', () => {
+    const site = materializePages(legacySite([
+      { slug: 'home', title: 'Ana Sayfa', isHome: true },
+      { slug: 'a', title: 'A' },
+      { slug: 'b', title: 'B' },
+    ]))
+    const withHistory = withPageRedirects(
+      { ...site, pageRedirects: [{ from: '/a', to: '/b' }] },
+      site.pages,
+    )
+    const reused = withPageRedirects(
+      { ...withHistory, pages: [
+        site.pages![0],
+        { ...site.pages![1], slug: 'c' },
+        { ...site.pages![2], slug: 'a' },
+      ] },
+      withHistory.pages,
+    )
+
+    expect(reused.pageRedirects).toEqual([{ from: '/b', to: '/a' }])
+    expect(reused.pageRedirects).not.toContain({ from: '/a', to: '/c' })
+    expect(reused.pageRedirects?.some((redirect) => redirect.from === '/a')).toBe(false)
+  })
+
   it('returns the same object when nothing changed', () => {
     const site = materializePages(legacySite(LEGACY_PAGES))
     expect(withPageRedirects(site, site.pages)).toBe(site)

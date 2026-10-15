@@ -181,6 +181,25 @@ describe('tenant sitemap', () => {
     expect(urls.some((u) => u.endsWith('/gizli'))).toBe(false)
   })
 
+  it('updates page URLs after a slug change and never includes unpublished or noindex pages', async () => {
+    state.site = {
+      name: 'Kahve',
+      schema: publishedSite({
+        pages: [
+          { slug: 'home', title: 'Ana Sayfa', isHome: true },
+          { slug: 'biz-kimiz', title: 'Biz Kimiz', indexable: true },
+          { slug: 'taslak', title: 'Taslak', indexable: false },
+        ] as WebsiteSchema['pages'],
+      }),
+      ownerPlanCode: 'free',
+    }
+    const { locs: urls } = await locs()
+
+    expect(urls).toContain('https://kahve.gloval.site/biz-kimiz')
+    expect(urls).not.toContain('https://kahve.gloval.site/hakkimizda')
+    expect(urls).not.toContain('https://kahve.gloval.site/taslak')
+  })
+
   it('keeps legal pages out of the sitemap', async () => {
     state.site = {
       name: 'Kahve',
