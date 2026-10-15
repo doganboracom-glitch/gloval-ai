@@ -32,6 +32,11 @@ describe('parseOrderQuantity', () => {
 })
 
 describe('buildOrderLines', () => {
+  it.each(['draft', 'archived'])('refuses to order a %s product (synced sample products)', (status) => {
+    const res = build([{ productId: 'p1', quantity: 1 }], product({ status }))
+    expect(res).toMatchObject({ ok: false, error: 'product_unavailable', productId: 'p1' })
+  })
+
   it('prices lines from the authoritative product row', () => {
     const res = build([{ productId: 'p1', quantity: 3 }], product())
     expect(res).toMatchObject({ ok: true, subtotalCents: 3000, currency: 'TRY', totalItems: 3 })

@@ -3,6 +3,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { slugify, parsePriceToCents, inferCurrency } from '@/lib/slug'
+import { isSampleProduct } from '@/lib/proof-content'
 
 /**
  * Sync the generated site's schema catalog into the REAL e-commerce tables.
@@ -95,7 +96,7 @@ function collectSeeds(schema: WebsiteSchema): {
           currency: inferCurrency(item.price),
           images: item.src ? [item.src] : [],
           categorySlug: item.category ? slugify(item.category) : null,
-          sample: Boolean(item.sample || item.oldPrice || item.badge),
+          sample: isSampleProduct(item),
         })
       }
     }

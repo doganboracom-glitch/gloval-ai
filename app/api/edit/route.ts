@@ -287,7 +287,7 @@ export async function POST(req: Request) {
     // wrote into the schema is discarded and the user is pointed to the panel.
     const locked = lockStorefrontProducts(original, restored)
     const notice = locked.touched ? PRODUCTS_MANAGED_IN_PANEL : undefined
-    const finalSchema = sanitizeGeneratedProofContent(preserveResolvedImages(original, locked.schema))
+    const finalSchema = sanitizeGeneratedProofContent(preserveResolvedImages(original, locked.schema), original)
 
     // The model sometimes answers "done" while returning the site untouched.
     // That must surface as a failure (and cost nothing), never as a success.
