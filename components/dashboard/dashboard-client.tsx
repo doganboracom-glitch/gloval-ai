@@ -1,5 +1,6 @@
 'use client'
 
+import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -109,7 +110,7 @@ export function DashboardClient({
       // interface locale falls back to generating the store in English.
       const id = await createEcommerceProject({
         prompt: storePrompt,
-        language: lang === 'tr' ? 'tr' : 'en',
+        language: resolveGenerationLanguage(storePrompt, lang),
       })
       router.refresh()
       router.push(`/ecommerce/${id}`)

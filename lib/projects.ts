@@ -197,7 +197,9 @@ export async function createProject(input: {
       owner_id: userId,
       name: input.name || 'Untitled',
       sector: input.sector ?? null,
-      language: input.language ?? 'tr',
+      // The site's own language wins over the caller's UI language, so an
+      // English site created from the Turkish UI is stored (and edited) as English.
+      language: parsed.meta.language ?? input.language ?? 'tr',
       prompt: input.prompt ?? null,
       schema_data: parsed,
       status: 'draft',
