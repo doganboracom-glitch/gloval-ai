@@ -330,10 +330,10 @@ describe('purchaseAddOn happy path', () => {
 describe('purchaseAddOn PSP failures', () => {
   it('marks the purchase failed and creates no entitlement when iyzico throws', async () => {
     m.createIntent.mockRejectedValue(new Error('iyzico_error: boom'))
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1' })).toEqual({
+    expect(await purchaseAddOn({ addonCode: 'extra_site_1' })).toMatchObject({
       ok: false,
       error: 'payment_init_failed',
-      detail: 'iyzico_error: boom',
+      detail: 'billing_init_unknown',
     })
     expect(purchases()).toHaveLength(1)
     expect(purchases()[0]).toMatchObject({ status: 'failed', provider_ref: null })

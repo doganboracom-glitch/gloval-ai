@@ -79,6 +79,36 @@ function closePaymentWindow(win?: Window | null) {
   }
 }
 
+type PaymentInitErrorCopy = {
+  paymentInitFailed: string
+  paymentNotReady: string
+  buyerInvalidPhone: string
+  buyerInvalidTaxId: string
+  buyerInvalidAddress: string
+  buyerInvalidGeneric: string
+  genericError: string
+}
+
+/** Maps a payment-initialisation failure from a server action to user-facing copy; null if it isn't one. */
+function paymentInitErrorMessage(
+  res: { error?: string; field?: string },
+  copy: PaymentInitErrorCopy,
+): string | null {
+  switch (res.error) {
+    case 'payment_init_failed':
+      return copy.paymentInitFailed
+    case 'payment_not_ready':
+      return copy.paymentNotReady
+    case 'buyer_invalid':
+      if (res.field === 'phone') return copy.buyerInvalidPhone
+      if (res.field === 'taxId') return copy.buyerInvalidTaxId
+      if (res.field === 'address') return copy.buyerInvalidAddress
+      return copy.buyerInvalidGeneric
+    default:
+      return null
+  }
+}
+
 type Usage = { corporate: number; ecommerce: number }
 
 /** Minimal site shape needed to pick a target for a per-site purchase. */
@@ -264,9 +294,7 @@ export function BillingClient({
               ? b.alreadySubscribed
               : res.error === 'payment_pending'
                 ? b.paymentPending
-                : res.error === 'payment_init_failed'
-                  ? b.paymentInitFailed
-                  : b.genericError,
+                : (paymentInitErrorMessage(res, b) ?? b.genericError),
           )
           return
         }
@@ -357,9 +385,7 @@ export function BillingClient({
           setError(
             res.error === 'payment_pending'
               ? b.paymentPending
-              : res.error === 'payment_init_failed'
-                ? b.paymentInitFailed
-                : b.genericError,
+              : (paymentInitErrorMessage(res, b) ?? b.genericError),
           )
           return
         }
@@ -461,7 +487,11 @@ export function BillingClient({
           closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
-          setError(res.error === 'already_owned' ? b.alreadyOwned : b.genericError)
+          setError(
+            res.error === 'already_owned'
+              ? b.alreadyOwned
+              : (paymentInitErrorMessage(res, b) ?? b.genericError),
+          )
           return
         }
         if (res.redirectUrl) {
@@ -524,11 +554,7 @@ export function BillingClient({
           closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
-          setError(
-            res.error === 'payment_init_failed'
-              ? b.paymentInitFailed
-              : b.genericError,
-          )
+          setError(paymentInitErrorMessage(res, b) ?? b.genericError)
           return
         }
         if (res.redirectUrl) {
@@ -614,11 +640,7 @@ export function BillingClient({
           closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
-          setError(
-            res.error === 'payment_init_failed'
-              ? b.paymentInitFailed
-              : b.genericError,
-          )
+          setError(paymentInitErrorMessage(res, b) ?? b.genericError)
           return
         }
         if (res.redirectUrl) {

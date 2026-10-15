@@ -74,6 +74,8 @@ export type VisualTopic = {
   business: string
   /** A concrete, photographable scene for the hero image. */
   subject: string
+  /** Look-alike subjects that must NOT appear (wrong-sector associations). */
+  avoid?: string
 }
 
 type TopicEntry = VisualTopic & { keys: string[] }
@@ -217,8 +219,34 @@ const TOPICS: TopicEntry[] = [
       'a warm bakery display filled with fresh pastries and layered cakes behind glass, morning light',
   },
   {
-    keys: ['market', 'bakkal', 'kasap', 'butcher', 'sarkuteri', 'manav', 'grocery'],
-    business: 'grocery / butcher shop',
+    // MUST stay before the grocery entry: "kasap" (butcher) used to share an
+    // entry with "manav" and rendered a produce-stand hero for a meat shop.
+    // "kasabi" is the possessive form seen in business names ("Mahalle Kasabı");
+    // the town "kasaba" is deliberately NOT a key.
+    keys: [
+      'kasap',
+      'kasaplar',
+      'kasabi',
+      'butcher',
+      'butchery',
+      'butcher shop',
+      'et market',
+      'et urunleri',
+      'et ve et urunleri',
+      'et dukkani',
+      'sarkuteri',
+      'charcuterie',
+      'meat shop',
+    ],
+    business: 'butcher shop',
+    subject:
+      'a traditional butcher shop interior with a glass meat counter full of fresh cuts of red meat on display (beef steaks, lamb chops, ground meat, sausages), a butcher in an apron cutting meat on a wooden block, hanging cuts, clean white tiles and warm lighting',
+    avoid:
+      'fruits, vegetables, fresh produce, greengrocer stalls, supermarket aisles, grocery shelves, baskets of produce',
+  },
+  {
+    keys: ['market', 'bakkal', 'manav', 'grocery', 'greengrocer', 'supermarket'],
+    business: 'grocery store / greengrocer',
     subject:
       'an inviting neighbourhood grocery interior with abundant fresh produce neatly displayed under clean lighting',
   },
@@ -356,7 +384,22 @@ export function resolveVisualTopic(text: string): VisualTopic | null {
     // Word-boundary match: a short key like "tur" must NOT match inside
     // "olustur" (the folded "oluştur" present in nearly every prompt).
     if (entry.keys.some((k) => foldedWordIncludes(t, k))) {
-      return { business: entry.business, subject: entry.subject }
+      return { business: entry.business, subject: entry.subject, avoid: entry.avoid }
+    }
+  }
+  return null
+}
+
+/**
+ * Finds the dictionary topic whose generated scene appears VERBATIM in `text`.
+ * Used to tell a stale system-written prompt (e.g. the old greengrocer scene on
+ * a butcher site) apart from wording the user actually typed: a person never
+ * reproduces a whole dictionary sentence by hand.
+ */
+export function findGeneratedTopic(text: string): VisualTopic | null {
+  for (const entry of TOPICS) {
+    if (text.includes(entry.subject)) {
+      return { business: entry.business, subject: entry.subject, avoid: entry.avoid }
     }
   }
   return null
@@ -419,13 +462,62 @@ const VISUAL_TERMS: Record<string, string> = {
  * nothing the user asked for is lost.
  */
 export function describeVisualRequest(request: string): string {
-  const folded = fold(request)
+  const clean = stripImagePromptBoilerplate(request)
+  const folded = fold(clean)
   const hits: string[] = []
   for (const key of Object.keys(VISUAL_TERMS).sort((a, b) => b.length - a.length)) {
-    if (folded.includes(key) && !hits.includes(VISUAL_TERMS[key])) hits.push(VISUAL_TERMS[key])
+    // Short keys ("ev", "tir", "kar") must match whole words, or they fire inside
+    // English text ("every", "street"). Longer keys are stems that take Turkish
+    // suffixes ("kamyonete"), so they only need a word-START boundary.
+    const matches =
+      key.length <= 3
+        ? foldedWordIncludes(folded, key)
+        : new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(key)}`).test(folded)
+    if (matches && !hits.includes(VISUAL_TERMS[key])) hits.push(VISUAL_TERMS[key])
   }
-  if (hits.length === 0) return request.trim()
-  return `${hits.join(', ')} (as requested: "${request.trim()}")`
+  if (hits.length === 0) return clean
+  return `${hits.join(', ')} (as requested: "${clean}")`
+}
+
+/**
+ * Removes everything the prompt builders append around the real description
+ * (medium line, style, composition, the STRICT RULE / Avoid block, the
+ * negative-subject clause). The editor shows the stored prompt verbatim, so a
+ * "regenerate" request usually carries all of it back; without stripping, the
+ * rules were duplicated and the old boilerplate was re-interpreted as the user's
+ * wording.
+ */
+export function stripImagePromptBoilerplate(text: string): string {
+  return text
+    .split(/STRICT RULE:/)[0]
+    .replace(/(?:Photorealistic|Polished) hero banner (?:photograph|illustration) for a [^.]*\./gi, ' ')
+    .replace(/Style: [^.]*\./g, ' ')
+    .replace(/Wide cinematic composition[^.]*\./g, ' ')
+    .replace(/Do NOT depict: [^.]*\./g, ' ')
+    .replace(/Context: [^.]*\./g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const VARIATION_CUES = [
+  'shot from a low three-quarter angle',
+  'wide establishing shot from eye level',
+  'close-up detail composition with shallow depth of field',
+  'shot from a slightly elevated angle',
+  'symmetrical front-facing composition',
+  'candid mid-shot with natural movement',
+  'golden warm side lighting',
+  'soft diffused daylight',
+]
+
+/**
+ * A short random composition cue appended ONLY to the prompt sent to the image
+ * model (never stored in the editable description), so pressing "regenerate"
+ * with an unchanged description still yields a different picture.
+ */
+export function variationCue(random: () => number = Math.random): string {
+  const pick = VARIATION_CUES[Math.floor(random() * VARIATION_CUES.length)]
+  return `Composition variation: ${pick}.`
 }
 
 /* -------------------------------------------------------------------------- */

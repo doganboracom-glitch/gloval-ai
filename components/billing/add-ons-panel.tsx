@@ -324,6 +324,8 @@ export function AddOnsPanel({
     notEligible: a.errNotEligible,
     purchaseInProgress: t.billing.paymentPending,
     paymentInitFailed: t.billing.paymentInitFailed,
+    paymentNotReady: t.billing.paymentNotReady,
+    buyerInvalid: t.billing.buyerInvalidGeneric,
     generic: t.billing.genericError,
   }
 

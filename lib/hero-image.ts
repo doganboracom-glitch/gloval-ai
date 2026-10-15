@@ -7,7 +7,13 @@ import {
 } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
 import { imagePromptRules, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
-import { describeVisualRequest, resolveVisualTopic } from '@/lib/visual-subjects'
+import {
+  describeVisualRequest,
+  findGeneratedTopic,
+  resolveVisualTopic,
+  stripImagePromptBoilerplate,
+  variationCue,
+} from '@/lib/visual-subjects'
 
 /**
  * Hero image intelligence
@@ -25,6 +31,8 @@ export type Brief = {
   style: string
   audience: string
   visualNeed: string
+  /** Look-alike subjects the image must NOT show (wrong-sector associations). */
+  avoid?: string
   /** True only when the request explicitly asks for drawn artwork (never for logos). */
   illustrative?: boolean
 }
@@ -111,12 +119,23 @@ export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
     .join(' ')
   const topic = resolveVisualTopic(haystack)
 
+  // No keyword matched and the sector is the generic default: describe the
+  // business by its own name instead of the sector's "professional workspace",
+  // which produced an unrelated office for any unlisted trade.
+  const businessName = site?.meta.name?.trim()
+  const visualNeed =
+    topic?.subject ??
+    (sector === 'default' && businessName
+      ? `an authentic, realistic scene that clearly shows the real work, products and people of the business "${businessName}"${site?.meta.tagline ? ` (${site.meta.tagline})` : ''}`
+      : SECTOR_SUBJECT[sector])
+
   return {
     sector,
     businessType: topic?.business ?? SECTOR_BUSINESS[sector],
     style: styleDescriptor(prompt, site),
     audience: site?.meta.audience || 'a broad, quality-seeking audience',
-    visualNeed: topic?.subject ?? SECTOR_SUBJECT[sector],
+    visualNeed,
+    avoid: topic?.avoid,
     illustrative: wantsIllustrationStyle(haystack),
   }
 }
@@ -146,6 +165,7 @@ export function buildHeroImagePrompt(brief: Brief, extra?: string): string {
   const bits = [
     `${brief.visualNeed}.`,
     heroKind(brief),
+    brief.avoid ? `Do NOT depict: ${brief.avoid}.` : '',
     `Style: ${brief.style}.`,
     extra ? `Context: ${extra}.` : '',
     'Wide cinematic composition with clear negative space for overlaid text,',
@@ -164,20 +184,48 @@ export function buildHeroImagePrompt(brief: Brief, extra?: string): string {
  * (see `describeVisualRequest`) because image models are English-centric.
  */
 export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema): string {
-  const subject = describeVisualRequest(request)
+  // The editor shows the stored prompt verbatim, so an unedited "regenerate"
+  // sends all the builder boilerplate back; strip it before re-interpreting.
+  let clean = stripImagePromptBoilerplate(request)
+
+  // A stale SYSTEM-written scene (verbatim dictionary sentence) that contradicts
+  // what the site is — e.g. the old greengrocer scene on a butcher site — is
+  // replaced by the site's own scene. Text the user wrote by hand never contains
+  // a whole dictionary sentence, so genuine edits are left alone.
+  const siteTopic = site
+    ? resolveVisualTopic(
+        [site.meta.name, site.meta.tagline, site.meta.audience, site.navigation?.logoText]
+          .filter(Boolean)
+          .join(' '),
+      )
+    : null
+  const stale = findGeneratedTopic(clean)
+  if (stale && siteTopic && stale.subject !== siteTopic.subject) {
+    clean = clean.replace(stale.subject, siteTopic.subject)
+  }
+
+  const subject = describeVisualRequest(clean)
   const brief = analyzeBrief(
-    `${request} ${site?.meta.name ?? ''} ${site?.meta.tagline ?? ''}`,
+    `${clean} ${site?.meta.name ?? ''} ${site?.meta.tagline ?? ''}`,
     site,
   )
+  // The description itself decides the topic; the site identity is the fallback.
+  const topic = resolveVisualTopic(clean) ?? siteTopic
+  if (topic) {
+    brief.businessType = topic.business
+    brief.avoid = topic.avoid
+  }
   return [
     `${subject}.`,
     heroKind(brief),
+    brief.avoid ? `Do NOT depict: ${brief.avoid}.` : '',
     `Style: ${brief.style}.`,
     'Wide cinematic composition with clear negative space for overlaid text,',
     heroRendering(brief),
     'Not an empty landscape.',
     imagePromptRules(brief.illustrative),
   ]
+    .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -320,7 +368,7 @@ export async function applyHeroImageRequest(
   if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt }
 
   const res = await generateSiteImage({
-    prompt: imagePrompt,
+    prompt: `${imagePrompt} ${variationCue()}`,
     aspectRatio: toProviderAspect(targets[0]?.aspectRatio),
   })
   if (!res) return { status: 'failed', imagePrompt }
@@ -386,7 +434,7 @@ export async function applySlideImageRequest(
   if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt }
 
   const res = await generateSiteImage({
-    prompt: imagePrompt,
+    prompt: `${imagePrompt} ${variationCue()}`,
     aspectRatio: toProviderAspect(targets[0]?.aspectRatio),
   })
   if (!res) return { status: 'failed', imagePrompt }

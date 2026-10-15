@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { resolveVisualTopic } from './visual-subjects'
+import {
+  describeVisualRequest,
+  findGeneratedTopic,
+  resolveVisualTopic,
+  stripImagePromptBoilerplate,
+  variationCue,
+} from './visual-subjects'
 import { analyzeBrief, buildHeroImagePrompt } from './hero-image'
 import { deriveSeoTitle, detectSector } from './sector-profiles'
 
@@ -86,5 +92,32 @@ describe('deriveSeoTitle: yoga / pilates / fitness', () => {
     expect(deriveSeoTitle('Yoga studio site', 'default', 'en')).toBe('Yoga Studio')
     expect(deriveSeoTitle('spor salonu sitesi', 'default', 'tr')).toBe('Spor Salonu')
     expect(deriveSeoTitle('fitness club site', 'default', 'en')).toBe('Fitness Studio')
+  })
+})
+
+describe('butcher vs grocery', () => {
+  it('maps a butcher to a meat counter, not produce', () => {
+    const topic = resolveVisualTopic('Mahalle Kasabı için web sitesi')
+    expect(topic?.business).toBe('butcher shop')
+    expect(topic?.subject).toMatch(/meat/)
+    expect(topic?.avoid).toMatch(/vegetables/)
+    expect(resolveVisualTopic('manav sitesi')?.business).toBe('grocery store / greengrocer')
+  })
+})
+
+describe('image request cleanup', () => {
+  it('strips builder boilerplate from a stored prompt', () => {
+    const topic = resolveVisualTopic('kasap')!
+    const stored = `${topic.subject}. Photorealistic hero banner photograph for a butcher shop. Do NOT depict: fruits. Style: modern. Wide cinematic composition with clear negative space, Not an empty landscape. STRICT RULE: no text.`
+    expect(stripImagePromptBoilerplate(stored)).toBe(`${topic.subject}.`)
+    expect(findGeneratedTopic(stored)?.business).toBe('butcher shop')
+  })
+
+  it('does not match short keys inside English words', () => {
+    expect(describeVisualRequest('every street scene')).toBe('every street scene')
+  })
+
+  it('varies the composition cue', () => {
+    expect(variationCue(() => 0)).not.toBe(variationCue(() => 0.99))
   })
 })
