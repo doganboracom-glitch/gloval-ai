@@ -1,17 +1,14 @@
 import type { Metadata } from 'next'
 import { ContactPageClient } from '@/components/legal/contact-page-client'
+import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
-export const metadata: Metadata = {
-  title: 'İletişim | GLOVAL AI',
-  description:
-    'GLOVAL AI iletişim ve kurumsal bilgileri: destek e-postası, telefon, adres ve yasal şirket bilgileri.',
-  alternates: { canonical: '/iletisim' },
-  openGraph: {
-    type: 'website',
-    url: '/iletisim',
-    title: 'İletişim | GLOVAL AI',
-    description: 'GLOVAL AI ile iletişime geçin.',
-  },
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>
+}): Promise<Metadata> {
+  const { lang } = await searchParams
+  return buildPageMetadata('contact', resolveSeoLang(lang))
 }
 
 export default function ContactPage() {

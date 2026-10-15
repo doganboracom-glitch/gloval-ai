@@ -1,24 +1,19 @@
 import type { Metadata } from 'next'
 import { FaqPageClient } from '@/components/content/faq-page-client'
 import { getFaqItems } from '@/lib/content/faq'
+import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
 /**
  * Metadata is emitted from this server component while the page body renders on
- * the client, because the active language lives in client context. Turkish is
- * used for the crawlable metadata to match the site default (`<html lang="tr">`).
+ * the client. It is Turkish unless the URL carries an explicit `?lang=en`.
  */
-export const metadata: Metadata = {
-  title: 'Sık Sorulan Sorular | GLOVAL AI',
-  description:
-    'GLOVAL AI hakkında sık sorulan sorular: web sitesi oluşturma, alan adı bağlama, kurumsal e-posta, yayınlama ve planlar hakkında merak edilenler.',
-  alternates: { canonical: '/sss' },
-  openGraph: {
-    type: 'website',
-    url: '/sss',
-    title: 'Sık Sorulan Sorular | GLOVAL AI',
-    description:
-      'GLOVAL AI hakkında merak ettiğiniz soruların cevaplarını keşfedin.',
-  },
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>
+}): Promise<Metadata> {
+  const { lang } = await searchParams
+  return buildPageMetadata('faq', resolveSeoLang(lang))
 }
 
 export default function FaqPage() {

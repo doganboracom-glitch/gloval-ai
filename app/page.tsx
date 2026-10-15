@@ -9,11 +9,15 @@ import { BlogPreview } from '@/components/blog-preview'
 import { Faq } from '@/components/faq'
 import { FinalCta } from '@/components/final-cta'
 import { SiteFooter } from '@/components/site-footer'
+import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
-// The homepage inherits title/description/OG from the root layout; it only needs
-// its own canonical so `https://gloval.ai/` is the single indexable home URL.
-export const metadata: Metadata = {
-  alternates: { canonical: '/' },
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ lang?: string | string[] }>
+}): Promise<Metadata> {
+  const { lang } = await searchParams
+  return buildPageMetadata('home', resolveSeoLang(lang))
 }
 
 // Site-wide structured data. Anchored on the homepage because it is the

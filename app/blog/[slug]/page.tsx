@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { BlogPostClient } from '@/components/content/blog-post-client'
 import { getPost, getPosts, getRelatedPosts } from '@/lib/content/blog'
+import { OG_IMAGE_SIZE, ogImageUrlForPost } from '@/lib/seo/page-seo'
 
 /**
  * Pre-renders every post at build time. The content service is currently
@@ -26,6 +27,13 @@ export async function generateMetadata({
   // per request.
   const title = post.seoTitle.tr
   const description = post.seoDescription.tr
+  // A post's own cover wins; otherwise the generated 1200x630 share image
+  // (title on the brand background) is used so every share has a real preview.
+  const image = {
+    url: post.coverImage ?? ogImageUrlForPost(post.slug),
+    ...OG_IMAGE_SIZE,
+    alt: post.coverAlt?.tr ?? title,
+  }
   return {
     title,
     description,
@@ -33,31 +41,20 @@ export async function generateMetadata({
     alternates: { canonical: `/blog/${post.slug}` },
     openGraph: {
       type: 'article',
+      siteName: 'GLOVAL AI',
+      locale: 'tr_TR',
       title,
       description,
       url: `/blog/${post.slug}`,
-      // Only advertise an OG image when the post actually has one; pointing at a
-      // missing file would render a broken preview card on every share.
-      ...(post.coverImage
-        ? {
-            images: [
-              {
-                url: post.coverImage,
-                width: 1200,
-                height: 630,
-                alt: post.coverAlt?.tr ?? title,
-              },
-            ],
-          }
-        : {}),
+      images: [image],
       publishedTime: post.publishedAt,
       modifiedTime: post.updatedAt,
     },
     twitter: {
-      card: post.coverImage ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title,
       description,
-      ...(post.coverImage ? { images: [post.coverImage] } : {}),
+      images: [{ url: image.url, alt: image.alt }],
     },
   }
 }
