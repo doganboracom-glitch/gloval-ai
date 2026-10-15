@@ -134,7 +134,8 @@ async function clientForProject(projectId: string): Promise<{
   return { db: supabase, userId, elevated: false }
 }
 
-export const HISTORY_PLAN_REQUIRED_ERROR = 'HISTORY_PLAN_REQUIRED'
+const HISTORY_PLAN_REQUIRED_ERROR = 'HISTORY_PLAN_REQUIRED'
+const DRAFT_CONFLICT_ERROR = 'DRAFT_CONFLICT'
 
 /**
  * Shared server gate for version history and backups: the caller must own the
@@ -258,6 +259,8 @@ export async function saveProjectSchema(input: {
   id: string
   schema: WebsiteSchema
   name?: string
+  /** When set, the write only lands if the draft's updated_at still equals it (restore uses this). */
+  expectedUpdatedAt?: string
 }): Promise<void> {
   const { db, elevated } = await clientForProject(input.id)
   let parsed = websiteSchema.parse(input.schema)
@@ -302,8 +305,11 @@ export async function saveProjectSchema(input: {
   // the type (and its catalog/orders) from a site whose sections were
   // momentarily removed.
   if (isStorefront(parsed)) patch.project_type = 'ecommerce'
-  const { error } = await db.from('projects').update(patch).eq('id', input.id)
+  let update = db.from('projects').update(patch).eq('id', input.id)
+  if (input.expectedUpdatedAt) update = update.eq('updated_at', input.expectedUpdatedAt)
+  const { data: written, error } = await update.select('id')
   if (error) throw error
+  if (input.expectedUpdatedAt && (written?.length ?? 0) === 0) throw new Error(DRAFT_CONFLICT_ERROR)
   revalidatePath('/dashboard')
 }
 
@@ -351,6 +357,7 @@ export type RestoreBackupResult =
         | 'PAGE_LIMIT_REACHED'
         | 'PRE_RESTORE_FAILED'
         | 'HISTORY_PLAN_REQUIRED'
+        | 'DRAFT_CHANGED'
       retryAfterSeconds?: number
       limit?: number
     }
@@ -364,6 +371,8 @@ export type RestoreBackupResult =
 export async function restoreProjectBackup(input: {
   projectId: string
   backupId: string
+  /** The draft's updated_at as the editor last saw it; a newer draft aborts the restore. */
+  expectedUpdatedAt?: string
 }): Promise<RestoreBackupResult> {
   let access: Awaited<ReturnType<typeof requireHistoryAccess>>
   try {
@@ -394,10 +403,14 @@ export async function restoreProjectBackup(input: {
 
   const { data: current, error: currentErr } = await db
     .from('projects')
-    .select('schema_data')
+    .select('schema_data, updated_at')
     .eq('id', input.projectId)
     .maybeSingle()
   if (currentErr || !current) throw currentErr ?? new Error('NOT_FOUND')
+  const draftUpdatedAt = current.updated_at as string
+  if (input.expectedUpdatedAt && input.expectedUpdatedAt !== draftUpdatedAt) {
+    return { ok: false, reason: 'DRAFT_CHANGED' }
+  }
 
   // Same rule as saving: only GROWTH past the plan's page limit is refused.
   if (!elevated) {
@@ -423,10 +436,13 @@ export async function restoreProjectBackup(input: {
   }
 
   try {
-    await saveProjectSchema({ id: input.projectId, schema: restored })
+    await saveProjectSchema({ id: input.projectId, schema: restored, expectedUpdatedAt: draftUpdatedAt })
   } catch (err) {
     if (err instanceof Error && err.message === PAGE_LIMIT_ERROR) {
       return { ok: false, reason: 'PAGE_LIMIT_REACHED' }
+    }
+    if (err instanceof Error && err.message === DRAFT_CONFLICT_ERROR) {
+      return { ok: false, reason: 'DRAFT_CHANGED' }
     }
     throw err
   }

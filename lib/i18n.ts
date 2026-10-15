@@ -206,6 +206,7 @@ const dict = {
         restoreInvalid: 'Bu yedek okunamadı, geri yüklenemedi.',
         restorePageLimit: 'Bu yedek paketinin sayfa sınırını aşıyor.',
         restorePreFailed: 'Mevcut taslak yedeklenemediği için geri yükleme yapılmadı.',
+        restoreChanged: 'Taslak başka bir yerden değiştirildi. Sayfayı yenileyip tekrar deneyin; geri yükleme yapılmadı.',
         restoreFailed: 'Geri yükleme başarısız oldu. Lütfen tekrar dene.',
         historyLockedTitle: 'Sürüm geçmişi PRO pakette',
         historyLockedBody:
@@ -1746,6 +1747,7 @@ const dict = {
       restoreInvalid: 'This backup could not be read and was not restored.',
       restorePageLimit: 'This backup exceeds your plan\'s page limit.',
       restorePreFailed: 'Your current draft could not be backed up, so nothing was restored.',
+      restoreChanged: 'The draft was changed elsewhere. Reload the page and try again; nothing was restored.',
       restoreFailed: 'Restore failed. Please try again.',
       historyLockedTitle: 'Version history is a PRO feature',
       historyLockedBody: 'Version history and backup restore are included in the PRO and E-Commerce plans.',

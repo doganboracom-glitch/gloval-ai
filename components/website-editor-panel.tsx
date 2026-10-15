@@ -1354,6 +1354,8 @@ function HistoryTab({
         return h.restorePreFailed
       case 'HISTORY_PLAN_REQUIRED':
         return h.historyLockedBody
+      case 'DRAFT_CHANGED':
+        return h.restoreChanged
     }
   }
 
