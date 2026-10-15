@@ -25,6 +25,10 @@ const COPY = {
     publish: 'Yayınla',
     approveAndPublish: 'Onayla ve yayınla',
     hideAllAndPublish: 'Tümünü gizle ve yayınla',
+    contactNote:
+      'İletişim bölümündeki telefon, e-posta, adres veya harita örnek değerdir. Gerçek bilgilerinizi girmediğiniz sürece sitede GÖRÜNMEZ; arama, WhatsApp ve harita düğmeleri de gösterilmez. Form mesajları hesap e-postanıza düşer.',
+    contactEdit: 'İletişim bölümüne git',
+    contactAck: 'Boş bırakarak yayınla',
     statement:
       'Onayladığım içeriklerin gerçek olduğunu ve yayınlanmasından sorumlu olduğumu beyan ederim.',
     remaining: 'onay bekliyor',
@@ -34,8 +38,10 @@ const COPY = {
       stats: 'Rakamlar',
       pricing: 'Fiyat planları',
       products: 'Ürünler',
+      contact: 'İletişim bilgileri',
     } as Record<string, string>,
     kinds: {
+      contact: 'İletişim',
       testimonials: 'Yorum',
       stats: 'Rakam',
       pricing: 'Plan',
@@ -61,6 +67,10 @@ const COPY = {
     publish: 'Publish',
     approveAndPublish: 'Approve and publish',
     hideAllAndPublish: 'Hide all and publish',
+    contactNote:
+      'The phone, email, address or map in the contact section are placeholders. They are NOT shown on your site until you enter real details; call, WhatsApp and map buttons are hidden too. Form messages go to your account email.',
+    contactEdit: 'Go to contact section',
+    contactAck: 'Publish without them',
     statement: 'I confirm the content I approve is true and I am responsible for publishing it.',
     remaining: 'awaiting approval',
     sections: {
@@ -69,8 +79,10 @@ const COPY = {
       stats: 'Statistics',
       pricing: 'Pricing plans',
       products: 'Products',
+      contact: 'Contact details',
     } as Record<string, string>,
     kinds: {
+      contact: 'Contact',
       testimonials: 'Testimonial',
       stats: 'Statistic',
       pricing: 'Plan',
@@ -135,6 +147,7 @@ export function SamplePublishDialog({
   const allIds = sections.flatMap((section) => section.items.map((item) => item.id))
   const pending = allIds.filter((id) => !approved.has(id)).length
   const hasProducts = sections.some((section) => section.sectionType === 'products')
+  const hasContact = sections.some((section) => section.sectionType === 'contact')
 
   function toggleSection(ids: string[]) {
     setApproved((prev) => {
@@ -177,6 +190,11 @@ export function SamplePublishDialog({
               {c.attestationFailed}
             </p>
           )}
+          {hasContact && (
+            <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+              {c.contactNote}
+            </p>
+          )}
           {hasProducts && (
             <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
               {c.productsNote}
@@ -188,6 +206,7 @@ export function SamplePublishDialog({
           {sections.map((section) => {
             const ids = section.items.map((item) => item.id)
             const isApproved = ids.every((id) => approved.has(id))
+            const isContact = section.sectionType === 'contact'
             return (
               <li
                 key={section.sectionIndex}
@@ -231,7 +250,7 @@ export function SamplePublishDialog({
                     }
                   >
                     {isApproved && <Check className="h-3.5 w-3.5" aria-hidden />}
-                    {isApproved ? c.approved : c.approve}
+                    {isContact ? c.contactAck : isApproved ? c.approved : c.approve}
                   </button>
                   <button
                     type="button"
@@ -240,8 +259,9 @@ export function SamplePublishDialog({
                     className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
                   >
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
-                    {c.edit}
+                    {isContact ? c.contactEdit : c.edit}
                   </button>
+                  {!isContact && (
                   <button
                     type="button"
                     onClick={() => onHideSections([section.sectionIndex])}
@@ -251,6 +271,7 @@ export function SamplePublishDialog({
                     <EyeOff className="h-3.5 w-3.5" aria-hidden />
                     {c.hide}
                   </button>
+                  )}
                 </div>
               </li>
             )
@@ -270,10 +291,15 @@ export function SamplePublishDialog({
             >
               {c.cancel}
             </button>
-            {sections.length > 0 && (
+            {sections.some((s) => s.sectionType !== 'contact') && (
               <button
                 type="button"
-                onClick={() => onPublish([], sections.map((s) => s.sectionIndex))}
+                onClick={() =>
+                  onPublish(
+                    sections.filter((s) => s.sectionType === 'contact').flatMap((s) => s.items.map((i) => i.id)),
+                    sections.filter((s) => s.sectionType !== 'contact').map((s) => s.sectionIndex),
+                  )
+                }
                 disabled={publishing}
                 className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
               >

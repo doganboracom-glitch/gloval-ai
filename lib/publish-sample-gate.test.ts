@@ -91,6 +91,28 @@ describe('publishProject sample-content gate', () => {
     expect(published()).toEqual([])
   })
 
+  it('lists contact placeholders and publishes them empty once acknowledged', async () => {
+    const base = buildCleanSite()
+    const site = {
+      ...base,
+      sections: [
+        ...base.sections.filter((s) => s.type !== 'contact'),
+        { type: 'contact', title: 'İletişim', phone: '+90 532 111 22 33', sample: true, sampleFields: ['phone'] },
+      ],
+    } as WebsiteSchema
+
+    const refused = await publishProject({ id: ID, schema: site })
+    expect(refused).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR })
+    if (refused.ok || refused.reason !== SAMPLE_CONTENT_ERROR) throw new Error('expected SAMPLE_CONTENT')
+    expect(refused.sections.map((s) => s.sectionType)).toEqual(['contact'])
+    expect(published()).toEqual([])
+
+    const accepted = await publishProject({ id: ID, schema: site, approvals: ids(site) })
+    expect(accepted).toMatchObject({ ok: true })
+    expect(fakeDb.rows('content_attestations')).toEqual([])
+    expect(JSON.stringify(published()[0].schema_data)).not.toContain('532 111')
+  })
+
   it('publishes once every item is approved and stores flag-free content plus attestations', async () => {
     const site = buildSampleSite()
     const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })

@@ -21,6 +21,7 @@ import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
+  collectBlockingSampleFindings,
   collectSampleFindings,
   stripSampleContent,
   type SampleSectionFinding,
@@ -387,15 +388,23 @@ export async function publishProject(input: {
 
   // Sample-content gate. Runs after the billing checks (so a payment redirect
   // wins) and before anything is persisted or published.
-  const findings = collectSampleFindings(requested)
+  // Contact placeholders are listed here too, but they are never "approved as
+  // real": the owner either fixes them or acknowledges that they publish empty
+  // (their digest in `approvals`). They are stripped from the public site either way.
+  const allFindings = collectSampleFindings(requested)
+  const findings = collectBlockingSampleFindings(requested)
   let parsed = requested
-  if (findings.length > 0) {
-    const attested = await loadAttestedDigests(input.id)
+  if (allFindings.length > 0) {
+    const attested = findings.length > 0 ? await loadAttestedDigests(input.id) : new Set<string>()
     const requestedIds = new Set(input.approvals ?? [])
-    const unresolved = findings
+    const unresolved = allFindings
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) => !attested.has(item.id) && !requestedIds.has(item.id)),
+        items: section.items.filter((item) =>
+          section.sectionType === 'contact'
+            ? !requestedIds.has(item.id)
+            : !attested.has(item.id) && !requestedIds.has(item.id),
+        ),
       }))
       .filter((section) => section.items.length > 0)
     if (unresolved.length > 0) return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: unresolved }
@@ -420,7 +429,9 @@ export async function publishProject(input: {
   // Record the immutable snapshot that the public page will render.
   const { data: version, error: versionErr } = await db
     .from('project_versions')
-    .insert({ project_id: input.id, schema_data: parsed, label: 'published' })
+    // The draft keeps placeholder contact values for the editor; the immutable
+    // public snapshot never carries them.
+    .insert({ project_id: input.id, schema_data: stripSampleContent(parsed), label: 'published' })
     .select('id')
     .single()
   if (versionErr) throw versionErr

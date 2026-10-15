@@ -20,7 +20,42 @@ export const SAMPLE_ATTESTATION_VERSION = 'sample-content-v1'
 /** `publishProject` refusal reason while unapproved sample content remains. */
 export const SAMPLE_CONTENT_ERROR = 'SAMPLE_CONTENT' as const
 
-export type SampleKind = 'testimonials' | 'stats' | 'pricing' | 'discount' | 'badge' | 'trust' | 'product'
+export type SampleKind =
+  | 'testimonials'
+  | 'stats'
+  | 'pricing'
+  | 'discount'
+  | 'badge'
+  | 'trust'
+  | 'product'
+  | 'contact'
+
+/**
+ * Contact-section fields that can hold an unconfirmed placeholder. They are
+ * tracked per field (`contact.sampleFields`) so confirming or editing one never
+ * vouches for the others. Placeholders are stripped from every public render
+ * and never block publishing: the gate only lists them and sends the owner to
+ * the contact section.
+ */
+export const CONTACT_SAMPLE_FIELDS = ['email', 'phone', 'address', 'mapEmbed'] as const
+export type ContactSampleField = (typeof CONTACT_SAMPLE_FIELDS)[number]
+
+type ContactSectionLike = Extract<Section, { type: 'contact' }>
+
+function contactFieldValue(section: ContactSectionLike, field: ContactSampleField): string {
+  return str(section[field]).trim()
+}
+
+function contactDigest(field: ContactSampleField, value: string): string {
+  return sampleDigest('contact', [field, value])
+}
+
+/** Flagged contact fields that still hold a value. */
+export function sampleContactFields(section: Section): ContactSampleField[] {
+  if (section.type !== 'contact') return []
+  const flagged = new Set(section.sampleFields ?? [])
+  return CONTACT_SAMPLE_FIELDS.filter((field) => flagged.has(field) && contactFieldValue(section, field) !== '')
+}
 
 export type SampleItemFinding = {
   /** Content digest. Changes whenever the item's claim text changes. */
@@ -154,6 +189,14 @@ export function collectSampleFindings(site: WebsiteSchema): SampleSectionFinding
       }
       return
     }
+    if (section.type === 'contact') {
+      const items = sampleContactFields(section).map((field): SampleItemFinding => {
+        const value = contactFieldValue(section, field)
+        return { id: contactDigest(field, value), itemIndex: null, kind: 'contact', label: `${field}: ${truncate(value)}` }
+      })
+      if (items.length) findings.push({ sectionIndex, sectionType: 'contact', items })
+      return
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return
     const items: SampleItemFinding[] = []
@@ -169,6 +212,15 @@ export function collectSampleFindings(site: WebsiteSchema): SampleSectionFinding
     if (items.length) findings.push({ sectionIndex, sectionType: section.type, items })
   })
   return findings
+}
+
+/**
+ * Findings that stop a publish until the owner approves, hides or edits them.
+ * Contact placeholders are excluded on purpose: they can never be "approved as
+ * real" and are stripped from the public site instead.
+ */
+export function collectBlockingSampleFindings(site: WebsiteSchema): SampleSectionFinding[] {
+  return collectSampleFindings(site).filter((finding) => finding.sectionType !== 'contact')
 }
 
 /** Findings the owner has neither hidden, edited nor attested (by digest). */
@@ -229,6 +281,14 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
       }
       return section
     }
+    if (section.type === 'contact') {
+      const flagged = sampleContactFields(section)
+      if (flagged.length === 0) return section
+      const kept = flagged.filter((field) => before.has(contactDigest(field, contactFieldValue(section, field))))
+      if (kept.length === flagged.length) return section
+      changed = true
+      return { ...section, sampleFields: kept.length ? kept : undefined, sample: kept.length ? true : undefined }
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)
@@ -261,6 +321,11 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       changed = true
       return [{ ...section, trustText: undefined, sample: undefined }]
     }
+    if (section.type === 'contact') {
+      if (!section.sample && !section.sampleFields?.length) return [section]
+      changed = true
+      return [stripSampleContactFields(section)]
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
     const items = itemsOf(section, spec)
@@ -270,6 +335,13 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
     return kept.length === 0 ? [] : [withItems(section, spec, kept)]
   })
   return changed ? { ...site, sections } : site
+}
+
+/** Drops every flagged placeholder value from a contact section; the form stays. */
+function stripSampleContactFields(section: ContactSectionLike): ContactSectionLike {
+  const next: ContactSectionLike = { ...section, sample: undefined, sampleFields: undefined }
+  for (const field of section.sampleFields ?? []) next[field] = undefined
+  return next
 }
 
 /** Removes one item, refusing when that would leave fewer than the schema's minimum. */
@@ -306,6 +378,7 @@ export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number
 /** True when the section still holds at least one flagged item (drives editor badges). */
 export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
+  if (section.type === 'contact') return sampleContactFields(section).length > 0
   const spec = ITEM_SPECS[section.type]
   return spec ? itemsOf(section, spec).some((item) => item.sample) : false
 }

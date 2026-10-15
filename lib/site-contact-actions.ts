@@ -2,6 +2,7 @@ import type { ContactActions, WebsiteSchema } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
 import { createPhoneUrl, createWhatsAppUrl, generalMessage, DEMO_PHONE } from '@/lib/contact-links'
 import { canUseContactActions, toPlanCode, type PlanCode } from '@/lib/pricing-config'
+import { sampleContactFields } from '@/lib/sample-content'
 
 /**
  * Floating phone + WhatsApp actions for GENERATED sites
@@ -45,7 +46,9 @@ function toWhatsAppDigits(value: string): string {
 /** Pulls the first dialable phone number out of the site's own content. */
 function phoneFromSections(site: WebsiteSchema): string | undefined {
   for (const section of site.sections) {
-    if (section.type === 'contact' && isDialable(section.phone)) return section.phone
+    if (section.type !== 'contact') continue
+    if (sampleContactFields(section).includes('phone')) continue
+    if (isDialable(section.phone)) return section.phone
   }
   // Footer link lists often carry the phone as a plain label on smaller sites.
   for (const section of site.sections) {
@@ -63,18 +66,19 @@ function phoneFromSections(site: WebsiteSchema): string | undefined {
 /**
  * The number the floating buttons fall back to when the owner hasn't set one.
  *
- * Business sites inherit only a real number found in their own content (we
- * never invent one). E-COMMERCE sites, however, must always ship active
- * phone + WhatsApp buttons — a store without a visible contact channel is
- * broken — so when the generated contact section carries no phone we seed the
- * shared placeholder (`+90 850 000 00 00`) that the demo stores use. The owner
- * edits it to their real number in the editor; until then the buttons are
- * present and clearly a placeholder, rather than silently absent.
+ * Only a real, owner-confirmed number found in the site's own content counts:
+ * placeholder contact values are never dialed. Sites generated before
+ * placeholders were retired (`placeholderFallback` unset and no saved
+ * `contactActions`) keep the shared demo number for storefronts so already
+ * published stores are not changed; new sites are seeded with
+ * `placeholderFallback: false` and show no call button until the owner adds a
+ * number.
  */
 function fallbackPhone(site: WebsiteSchema): string | undefined {
   const own = phoneFromSections(site)
   if (own) return own
-  return isStorefront(site) ? DEMO_PHONE.display : undefined
+  const legacyPlaceholder = site.contactActions?.placeholderFallback !== false && !site.contactActions
+  return legacyPlaceholder && isStorefront(site) ? DEMO_PHONE.display : undefined
 }
 
 export type ResolvedContactActions = {
@@ -169,10 +173,15 @@ export function contactActionsForEditor(site: WebsiteSchema): Required<
  */
 export function seedContactActions(site: WebsiteSchema): WebsiteSchema {
   if (site.contactActions) return site
-  // Storefronts fall back to the shared placeholder number, so a freshly
-  // generated store always saves with active phone + WhatsApp buttons even
-  // when the model omitted a phone from the contact section.
-  const phone = fallbackPhone(site)
-  if (!isDialable(phone)) return site
-  return { ...site, contactActions: { enabled: true, phone, whatsapp: phone } }
+  // Never seed a placeholder number: the call/WhatsApp buttons appear once the
+  // owner (or the prompt) supplies a real one.
+  const phone = phoneFromSections(site)
+  return {
+    ...site,
+    contactActions: {
+      enabled: true,
+      placeholderFallback: false,
+      ...(isDialable(phone) ? { phone, whatsapp: phone } : {}),
+    },
+  }
 }

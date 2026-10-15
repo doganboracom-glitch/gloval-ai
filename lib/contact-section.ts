@@ -1,5 +1,6 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import { blankSection } from '@/lib/website-edit-operations'
+import { CONTACT_SAMPLE_FIELDS, type ContactSampleField } from '@/lib/sample-content'
 
 /** True when the site has a contact section, visible or hidden. */
 export function hasContactSection(site: Pick<WebsiteSchema, 'sections'>): boolean {
@@ -27,6 +28,41 @@ export function ensureContactSection<T extends Pick<WebsiteSchema, 'sections' | 
   }
   sections.splice(footerIndex === -1 ? sections.length : footerIndex, 0, contact)
   return { ...site, sections }
+}
+
+const digitsOnly = (value: string) => value.replace(/\D/g, '')
+
+/** True when the owner's own brief contains this exact contact value. */
+function promptContains(prompt: string, field: ContactSampleField, value: string): boolean {
+  if (field === 'phone') {
+    // Compare national digits so "+90 532…" and "0532…" count as the same number.
+    const digits = digitsOnly(value).slice(-10)
+    return digits.length >= 7 && digitsOnly(prompt).includes(digits)
+  }
+  return prompt.toLowerCase().includes(value.trim().toLowerCase())
+}
+
+/**
+ * Marks every contact value of a NEWLY generated site that the owner did not
+ * write in their brief as an unconfirmed placeholder (`sampleFields`). Models
+ * and the deterministic fallbacks fill the contact section with invented
+ * e-mail, phone, address and map values; those must never go live as if real.
+ * Flagged values stay visible in the editor but are stripped from every public
+ * surface until the owner edits them.
+ */
+export function flagPlaceholderContact<T extends Pick<WebsiteSchema, 'sections'>>(site: T, prompt: string): T {
+  return {
+    ...site,
+    sections: site.sections.map((section): Section => {
+      if (section.type !== 'contact') return section
+      const flagged = CONTACT_SAMPLE_FIELDS.filter((field) => {
+        const value = (section[field] ?? '').trim()
+        return value !== '' && !promptContains(prompt, field, value)
+      })
+      if (flagged.length === 0) return section
+      return { ...section, sample: true, sampleFields: flagged }
+    }),
+  }
 }
 
 type Copy = {

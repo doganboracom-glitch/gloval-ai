@@ -7,6 +7,7 @@ import { contactSecret } from '@/lib/site-contact-guard'
 import type { ContactDeps, ContactEmailStatus, ContactSite } from '@/lib/site-contact-service'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { resolveEmailLang } from '@/lib/email/lang'
+import { stripSampleContent } from '@/lib/sample-content'
 import { websiteSchema } from '@/lib/website-schema'
 
 const TABLE = 'site_contact_messages'
@@ -40,7 +41,9 @@ async function loadPublishedContactSite(admin: SupabaseClient, slug: string): Pr
   const parsed = websiteSchema.safeParse(version?.schema_data)
   if (!parsed.success) return null
 
-  const section = parsed.data.sections.find((s) => s.type === 'contact') as
+  // Placeholder contact values must never receive visitor messages.
+  const published = stripSampleContent(parsed.data)
+  const section = published.sections.find((s) => s.type === 'contact') as
     | { email?: string; recipientEmail?: string }
     | undefined
   return {

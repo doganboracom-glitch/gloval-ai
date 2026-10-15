@@ -5,7 +5,7 @@ import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns } from '@/lib/footer-links'
-import { ensureContactSection } from '@/lib/contact-section'
+import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { normalizeCorporateSectionOrder } from '@/lib/section-order'
 import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
@@ -187,7 +187,7 @@ async function runGenerate(
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
         website: seedFooterColumns(
-          seedContactActions(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object)))),
+          seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object))), prompt)),
           normalizedLang,
         ),
         source: 'ai',
@@ -212,7 +212,7 @@ async function runGenerate(
       ])
       return Response.json({
         website: seedFooterColumns(
-          seedContactActions(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website)))),
+          seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website))), prompt)),
           normalizedLang,
         ),
         source: 'fallback',
