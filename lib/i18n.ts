@@ -911,6 +911,11 @@ const dict = {
   paymentPending:
     'Devam eden bir ödeme denemen var. Lütfen ödeme sayfasını tamamla ya da birkaç dakika bekleyip tekrar dene.',
   paymentInitFailed: 'Ödeme işlemi şu anda başlatılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.',
+  paymentNotReady: 'Ödeme altyapısı şu anda hazır değil. Ekibimiz bilgilendirildi; lütfen daha sonra tekrar deneyin.',
+  buyerInvalidPhone: 'Telefon numaranız ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen geçerli bir cep numarası girin.',
+  buyerInvalidTaxId: 'Kimlik / vergi numaranız ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen kontrol edin.',
+  buyerInvalidAddress: 'Fatura adresiniz ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen kontrol edin.',
+  buyerInvalidGeneric: 'Fatura bilgileriniz ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen kontrol edin.',
   renewPastDueBody: 'Ödemeniz alınamadı. Hizmetleriniz geçici olarak aktif tutuluyor.',
   renewPastDueCta: 'Ödemeyi tamamla',
   renewSuspendedBody: 'Ödeme alınamadığı için siteleriniz geçici olarak yayından kaldırıldı.',
@@ -2408,6 +2413,11 @@ const dict = {
   paymentPending:
     'You have a payment already in progress. Please finish that checkout, or wait a few minutes and try again.',
   paymentInitFailed: 'The payment cannot be started right now. Please try again in a few minutes.',
+  paymentNotReady: 'Payments are not available right now. Our team has been notified; please try again later.',
+  buyerInvalidPhone: 'The payment provider did not accept your phone number. Please enter a valid mobile number.',
+  buyerInvalidTaxId: 'The payment provider did not accept your ID / tax number. Please check it.',
+  buyerInvalidAddress: 'The payment provider did not accept your billing address. Please check it.',
+  buyerInvalidGeneric: 'The payment provider did not accept your billing details. Please check them.',
   renewPastDueBody: 'Your payment could not be collected. Your services are temporarily kept active.',
   renewPastDueCta: 'Complete payment',
   renewSuspendedBody: 'Because payment was not received, your sites have been temporarily taken offline.',

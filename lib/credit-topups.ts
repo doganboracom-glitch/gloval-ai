@@ -6,7 +6,8 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
-import { toSafeFailureCode } from '@/lib/payments/failure-code'
+import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
+import type { BuyerField } from '@/lib/payments/types'
 import { grantTopUpCredits } from '@/lib/payments/topup-fulfillment'
 import { buildTopUpOrderRef, getCreditTopUp } from '@/lib/pricing-config'
 import type { CheckoutBuyer } from '@/lib/billing'
@@ -28,8 +29,15 @@ export type PurchaseCreditTopUpResult =
   | { ok: true; redirectUrl?: string }
   | {
       ok: false
-      error: 'unauthenticated' | 'not_found' | 'payment_init_failed' | 'failed'
+      error:
+        | 'unauthenticated'
+        | 'not_found'
+        | 'payment_init_failed'
+        | 'payment_not_ready'
+        | 'buyer_invalid'
+        | 'failed'
       detail?: string
+      field?: BuyerField
     }
 
 /**
@@ -55,8 +63,15 @@ export async function purchaseCreditTopUp(
   if (!user) return { ok: false, error: 'unauthenticated' }
 
   const admin = createAdminClient()
-  const providerId = getPlatformPaymentProviderId()
-  const provider = getPlatformPaymentProvider()
+  let providerId: ReturnType<typeof getPlatformPaymentProviderId>
+  let provider: ReturnType<typeof getPlatformPaymentProvider>
+  try {
+    providerId = getPlatformPaymentProviderId()
+    provider = getPlatformPaymentProvider()
+  } catch (error) {
+    const failure = await reportPaymentInitFailure('topup', error)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+  }
   const orderRef = buildTopUpOrderRef(pack.id, randomUUID())
 
   let intent
@@ -80,12 +95,8 @@ export async function purchaseCreditTopUp(
         : undefined,
     })
   } catch (error) {
-    console.log('[v0] purchaseCreditTopUp: payment intent failed', {
-      packId: pack.id,
-      providerId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return { ok: false, error: 'payment_init_failed', detail: toSafeFailureCode(error) }
+    const failure = await reportPaymentInitFailure('topup', error, providerId)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
   if (intent.status === 'failed') {
     return { ok: false, error: 'payment_init_failed', detail: 'provider_intent_failed' }
