@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useTransition } from 'react'
+import useSWR from 'swr'
 import { CheckCircle2, Loader2, Send } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import {
@@ -52,29 +53,32 @@ const copy = {
   },
 }
 
+type FormField = 'firstName' | 'lastName' | 'email' | 'phone'
+
 export function IyzicoInstantCard({ projectId }: { projectId: string }) {
   const { lang } = useLanguage()
   const c = copy[lang === 'en' ? 'en' : 'tr']
-  const [prefill, setPrefill] = useState<IyzicoInstantPrefill | null>(null)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '' })
+  const { data: prefill } = useSWR<IyzicoInstantPrefill>(
+    ['iyzico-instant-prefill', projectId],
+    () => getIyzicoInstantPrefill(projectId),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  )
+  const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({})
   const [consent, setConsent] = useState(false)
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [sending, startSending] = useTransition()
 
-  useEffect(() => {
-    let active = true
-    void getIyzicoInstantPrefill(projectId).then((value) => {
-      if (!active || !value.enabled) return
-      setPrefill(value)
-      setForm({ firstName: value.firstName, lastName: value.lastName, email: value.email, phone: value.phone })
-    })
-    return () => { active = false }
-  }, [projectId])
+  if (!prefill?.enabled) return null
 
-  if (prefill && !prefill.enabled) return null
+  const form = {
+    firstName: edits.firstName ?? prefill.firstName,
+    lastName: edits.lastName ?? prefill.lastName,
+    email: edits.email ?? prefill.email,
+    phone: edits.phone ?? prefill.phone,
+  }
 
-  function update(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }))
+  function update(field: FormField, value: string) {
+    setEdits((current) => ({ ...current, [field]: value }))
   }
 
   function submit() {
@@ -121,8 +125,4 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
       </button>
     </section>
   )
-}
-
-export function IyzicoInstantCardPlaceholder() {
-  return null
 }

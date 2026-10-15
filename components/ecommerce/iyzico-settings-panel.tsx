@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { IyzicoInstantCard } from '@/components/ecommerce/iyzico-instant-card'
 import {
   saveIyzicoSettings,
   testIyzicoConnectionAction,
@@ -169,6 +170,8 @@ export function IyzicoSettingsPanel({
   return (
     <div className="flex flex-col gap-5">
       <p className="text-sm text-muted-foreground">{c.intro}</p>
+
+      {!view.apiKeyPresent && !view.secretKeyPresent && <IyzicoInstantCard projectId={projectId} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <span
