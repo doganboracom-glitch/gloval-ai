@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowUp, Loader2, Sparkles, AlertCircle, Eye, Wand2, Check, Save, RefreshCw, ShoppingBag } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import { toBilingual } from '@/lib/i18n'
 import { PlanResult, type Plan } from '@/components/plan-result'
 import { WebsitePreview } from '@/components/website-preview'
@@ -335,6 +336,8 @@ export function Hero() {
               <span className="text-xs text-muted-foreground/80">
                 {t.hero.hint}
               </span>
+              <div className="flex items-center gap-2">
+              <VoiceInputButton value={prompt} onText={setPrompt} disabled={loading} />
               <button
                 onClick={() => generate(prompt)}
                 disabled={loading || prompt.trim().length < 3}
@@ -352,6 +355,7 @@ export function Hero() {
                   </>
                 )}
               </button>
+              </div>
             </div>
           </div>
 

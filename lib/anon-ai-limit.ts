@@ -52,7 +52,7 @@ function verifyCookie(raw: string | undefined): string | null {
   return id
 }
 
-function hashedIp(req: Request): string {
+export function hashedIp(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
   const ip = forwarded || req.headers.get('x-real-ip') || 'unknown'
   return createHmac('sha256', secret()).update(`ip:${ip}`).digest('base64url').slice(0, 32)
@@ -85,8 +85,12 @@ export async function releaseAnonAiActions(subjects: string[]): Promise<void> {
   )
 }
 
-/** Reserves one anonymous AI action for this caller (cookie id + IP backstop). */
-export async function reserveAnonAiAction(req: Request): Promise<AnonReservation> {
+/**
+ * The visitor's anonymous id from the signed httpOnly cookie, minting (and
+ * setting) one on first contact. Shared by every anonymous-facing limiter so
+ * they identify the same visitor without sharing counters.
+ */
+export async function getOrCreateAnonId(): Promise<string> {
   const jar = await cookies()
   let id = verifyCookie(jar.get(COOKIE_NAME)?.value)
   if (!id) {
@@ -99,6 +103,12 @@ export async function reserveAnonAiAction(req: Request): Promise<AnonReservation
       maxAge: COOKIE_MAX_AGE,
     })
   }
+  return id
+}
+
+/** Reserves one anonymous AI action for this caller (cookie id + IP backstop). */
+export async function reserveAnonAiAction(req: Request): Promise<AnonReservation> {
+  const id = await getOrCreateAnonId()
 
   const attempts: Array<{ subject: string; limit: number }> = [
     { subject: `anon:${id}`, limit: ANON_AI_ACTION_LIMIT },

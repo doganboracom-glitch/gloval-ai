@@ -11,11 +11,29 @@ const baseSecurityHeaders = [
     value: 'max-age=63072000; includeSubDomains',
   },
   {
-    // The platform uses no camera/microphone/geolocation; deny all three.
+    // Deny camera, microphone and geolocation by default. Customer sites
+    // (<slug>.gloval.site, custom domains, /site/*) keep this policy; the
+    // platform's own pages re-allow only the microphone below.
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=()',
   },
 ]
+
+// Hosts where the platform UI itself is served (voice dictation lives here).
+// Tenant subdomains and customer custom domains never match.
+const platformHostPattern =
+  '(www\\.)?gloval\\.ai|localhost|[a-z0-9-]+\\.vercel\\.app|[a-z0-9.-]+\\.vusercontent\\.net'
+
+// Re-allows ONLY the microphone for the same-origin platform document;
+// camera and geolocation stay denied. Must come after the baseline rule so it
+// overrides that header for matching requests.
+const platformMicrophoneRule = {
+  source: '/:path((?!site(?:/|$)).*)',
+  has: [{ type: 'host', value: platformHostPattern }],
+  headers: [
+    { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
+  ],
+}
 
 const nextConfig = {
   eslint: {
@@ -47,6 +65,7 @@ const nextConfig = {
         source: '/:path*',
         headers: baseSecurityHeaders,
       },
+      platformMicrophoneRule,
       // Demo imagery. Anything under a stable url may be replaced later, so it
       // gets a short, revalidated cache; files carrying a content hash
       // (`name.<sha8>.webp`, see scripts/hash-demo-assets.mjs) can never change
