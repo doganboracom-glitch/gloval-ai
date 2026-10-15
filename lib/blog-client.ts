@@ -59,6 +59,33 @@ const OPERATION_TEXT = {
   },
 } as const
 
+const CONFIRM_TEXT = {
+  tr: {
+    creditsTitle: '3 AI kredisi harcanacak',
+    creditsContinue: 'Devam et',
+    cancel: 'Vazgeç',
+    deleteTitle: 'Yazı silinsin mi?',
+    deleteBody: 'Bu yazı kalıcı olarak silinir ve geri alınamaz.',
+    deleteConfirm: 'Sil',
+    writeBody: 'Yazı yalnızca başarıyla kaydedilirse 3 AI kredisi düşer. Başarısız olursa kredi düşmez.',
+    personalizeBody: 'Özelleştirme yalnızca başarıyla tamamlanırsa 3 AI kredisi düşer. Başarısız olursa kredi düşmez.',
+  },
+  en: {
+    creditsTitle: 'This will use 3 AI credits',
+    creditsContinue: 'Continue',
+    cancel: 'Cancel',
+    deleteTitle: 'Delete this post?',
+    deleteBody: 'The post is deleted permanently and cannot be restored.',
+    deleteConfirm: 'Delete',
+    writeBody: '3 AI credits are used only if the post is saved successfully. Nothing is charged on failure.',
+    personalizeBody: '3 AI credits are used only if the rewrite succeeds. Nothing is charged on failure.',
+  },
+} as const
+
+export function blogConfirmCopy(lang: Lang) {
+  return CONFIRM_TEXT[lang]
+}
+
 export function blogOperationCopy(lang: Lang) {
   return OPERATION_TEXT[lang]
 }

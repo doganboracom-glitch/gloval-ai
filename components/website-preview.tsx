@@ -44,13 +44,15 @@ import { blogOperationSchema } from '@/lib/blog-operations'
 import {
   BLOG_CHANGED_EVENT,
   blogFailureText,
+  blogConfirmCopy,
   blogOperationConfirmText,
-  blogOperationCopy,
+blogOperationCopy,
   blogOperationSuccessText,
   callBlogAi,
   newRequestId,
 } from '@/lib/blog-client'
-import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
+  import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
+  import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type Device = 'desktop' | 'tablet' | 'mobile'
 
@@ -298,6 +300,14 @@ export function WebsitePreview({
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   // AI kredisi tükendiğinde açılan yükseltme / kredi satın alma ekranı.
   const [outOfCredits, setOutOfCredits] = useState(false)
+  // Erişilebilir onay penceresi: blog işlemleri 3 AI kredisi harcamadan önce sorar.
+  const [blogConfirm, setBlogConfirm] = useState<{ text: string; resolve: (ok: boolean) => void } | null>(null)
+  const askBlogConfirm = (text: string) =>
+    new Promise<boolean>((resolve) => setBlogConfirm({ text, resolve }))
+  const answerBlogConfirm = (ok: boolean) => {
+    blogConfirm?.resolve(ok)
+    setBlogConfirm(null)
+  }
   // FREE planın günlük AI işlem limitine ulaşıldığında açılan ekran — bkz.
   // lib/free-daily-limit.ts. resetAt, sunucunun 429 yanıtındaki ISO zaman damgası.
   const [dailyLimitResetAt, setDailyLimitResetAt] = useState<string | null>(null)
@@ -1196,7 +1206,7 @@ export function WebsitePreview({
     const operation = parsedOperation.data
 
     const confirmText = blogOperationConfirmText(lang, operation)
-    if (confirmText && !window.confirm(confirmText)) return say(blogFailureText(lang, 'confirm'), false)
+    if (confirmText && !(await askBlogConfirm(confirmText))) return say(blogFailureText(lang, 'confirm'), false)
 
     const outcome = await callBlogAi('/api/blog/operation', {
       projectId: blog.projectId,
@@ -1629,6 +1639,15 @@ export function WebsitePreview({
 
         {/* AI kredisi tükendiğinde hata yerine gösterilen açıklayıcı ekran. */}
         <OutOfCreditsModal open={outOfCredits} onClose={() => setOutOfCredits(false)} />
+        <ConfirmDialog
+          open={blogConfirm !== null}
+          title={blogConfirmCopy(lang).creditsTitle}
+          description={blogConfirm?.text ?? ''}
+          confirmLabel={blogConfirmCopy(lang).creditsContinue}
+          cancelLabel={blogConfirmCopy(lang).cancel}
+          onConfirm={() => answerBlogConfirm(true)}
+          onCancel={() => answerBlogConfirm(false)}
+        />
         {/* FREE planın günlük AI işlem limitine ulaşıldığında gösterilen ekran. */}
         <DailyLimitModal
           open={dailyLimitResetAt !== null}

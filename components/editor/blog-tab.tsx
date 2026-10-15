@@ -5,7 +5,8 @@ import useSWR from 'swr'
 import { Loader2, Plus, Sparkles } from 'lucide-react'
 import { deleteBlogPostAction, listBlogPostsAction } from '@/lib/blog-actions'
 import type { BlogPost } from '@/lib/blog'
-import { BLOG_CHANGED_EVENT } from '@/lib/blog-client'
+import { BLOG_CHANGED_EVENT, blogConfirmCopy } from '@/lib/blog-client'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import type { BlogProfile } from '@/lib/website-schema'
 import { BlogPostForm } from '@/components/editor/blog-post-form'
@@ -35,7 +36,6 @@ const T = {
     aiTag: 'AI taslağı',
     loadFailed: 'Yazılar yüklenemedi.',
     retry: 'Tekrar dene',
-    confirmDelete: 'Bu yazı kalıcı olarak silinsin mi?',
     deleteFailed: 'Yazı silinemedi.',
     noSlug: 'Site yayınlandığında yazılar herkese açık olur.',
     google: 'Google, IndexNow desteklemez. Yeni yazıların Google\u2019da daha hızlı görünmesi için sitemap adresinizi (/sitemap.xml) Google Search Console\u2019a gönderin.',
@@ -55,7 +55,6 @@ const T = {
     aiTag: 'AI draft',
     loadFailed: 'Could not load posts.',
     retry: 'Try again',
-    confirmDelete: 'Delete this post permanently?',
     deleteFailed: 'Could not delete the post.',
     noSlug: 'Posts become public once the site is published.',
     google: 'Google does not support IndexNow. To get new posts into Google faster, submit your sitemap (/sitemap.xml) in Google Search Console.',
@@ -85,6 +84,8 @@ export function BlogTab({
   const t = T[lang]
   const [view, setView] = useState<View>({ kind: 'list' })
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
+  const confirmCopy = blogConfirmCopy(lang)
 
   const { data, error: loadError, isLoading, mutate } = useSWR(
     ['blog-posts', projectId],
@@ -108,7 +109,7 @@ export function BlogTab({
   }, [mutate])
 
   async function remove(post: BlogPost) {
-    if (!window.confirm(t.confirmDelete)) return
+    setDeleteTarget(null)
     setError(null)
     const result = await deleteBlogPostAction(projectId, post.id).catch(() => null)
     if (!result || !result.ok) {
@@ -128,6 +129,19 @@ export function BlogTab({
       { revalidate: false },
     )
   }
+
+  const deleteDialog = (
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      title={confirmCopy.deleteTitle}
+      description={deleteTarget ? `${deleteTarget.title} — ${confirmCopy.deleteBody}` : confirmCopy.deleteBody}
+      confirmLabel={confirmCopy.deleteConfirm}
+      cancelLabel={confirmCopy.cancel}
+      destructive
+      onConfirm={() => deleteTarget && void remove(deleteTarget)}
+      onCancel={() => setDeleteTarget(null)}
+    />
+  )
 
   if (view.kind === 'ai') {
     return (
@@ -177,8 +191,9 @@ export function BlogTab({
           lang={lang}
           onBack={() => setView({ kind: 'list' })}
           onSaved={upsert}
-          onDelete={view.post ? () => void remove(view.post as BlogPost) : undefined}
+          onDelete={view.post ? () => setDeleteTarget(view.post) : undefined}
         />
+        {deleteDialog}
       </div>
     )
   }

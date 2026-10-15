@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react'
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
 import type { BlogPost } from '@/lib/blog'
-import { callBlogAi, newRequestId } from '@/lib/blog-client'
+import { blogConfirmCopy, callBlogAi, newRequestId } from '@/lib/blog-client'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import type { BlogProfile } from '@/lib/website-schema'
 
@@ -83,9 +84,12 @@ export function BlogAiPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [askConfirm, setAskConfirm] = useState(false)
   const busyRef = useRef(false)
+  const confirmCopy = blogConfirmCopy(lang)
 
   async function generate() {
+    setAskConfirm(false)
     if (topic.trim().length < 3 || busyRef.current) return
     busyRef.current = true
     setBusy(true)
@@ -187,13 +191,22 @@ export function BlogAiPanel({
 
       <button
         type="button"
-        onClick={generate}
+        onClick={() => setAskConfirm(true)}
         disabled={busy || topic.trim().length < 3}
         className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
         {t.generate}
       </button>
+      <ConfirmDialog
+        open={askConfirm}
+        title={confirmCopy.creditsTitle}
+        description={confirmCopy.writeBody}
+        confirmLabel={confirmCopy.creditsContinue}
+        cancelLabel={confirmCopy.cancel}
+        onConfirm={() => void generate()}
+        onCancel={() => setAskConfirm(false)}
+      />
       <OutOfCreditsModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   )

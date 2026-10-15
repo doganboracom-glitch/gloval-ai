@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react'
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
 import type { BlogPost } from '@/lib/blog'
-import { callBlogAi, newRequestId } from '@/lib/blog-client'
+import { blogConfirmCopy, callBlogAi, newRequestId } from '@/lib/blog-client'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import type { BlogProfile } from '@/lib/website-schema'
 
@@ -76,7 +77,9 @@ export function BlogPersonalizePanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [askConfirm, setAskConfirm] = useState(false)
   const busyRef = useRef(false)
+  const confirmCopy = blogConfirmCopy(lang)
 
   const cleaned: BlogProfile = {}
   for (const key of FIELDS) {
@@ -86,6 +89,7 @@ export function BlogPersonalizePanel({
   const hasAnswers = Object.keys(cleaned).length > 0
 
   async function run() {
+    setAskConfirm(false)
     if (busyRef.current || !confirmed || !hasAnswers) return
     busyRef.current = true
     setBusy(true)
@@ -157,13 +161,22 @@ export function BlogPersonalizePanel({
       {busy && <p role="status" className="text-sm text-muted-foreground">{t.working}</p>}
       <button
         type="button"
-        onClick={run}
+        onClick={() => setAskConfirm(true)}
         disabled={busy || !confirmed || !hasAnswers}
         className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
         {t.run}
       </button>
+      <ConfirmDialog
+        open={askConfirm}
+        title={confirmCopy.creditsTitle}
+        description={confirmCopy.personalizeBody}
+        confirmLabel={confirmCopy.creditsContinue}
+        cancelLabel={confirmCopy.cancel}
+        onConfirm={() => void run()}
+        onCancel={() => setAskConfirm(false)}
+      />
       <OutOfCreditsModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   )

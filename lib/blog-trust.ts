@@ -22,6 +22,11 @@ type Rule = { kind: BlogClaimKind; pattern: RegExp }
 const RULES: readonly Rule[] = [
   { kind: 'statistic', pattern: /%\s?\d{1,3}(?:[.,]\d+)?|\d{1,3}(?:[.,]\d+)?\s?%/gu },
   { kind: 'statistic', pattern: /\byüzde\s+\d{1,3}\b/giu },
+  {
+    kind: 'statistic',
+    pattern: /\byüzde\s+(?:sıfır|bir|iki|üç|dört|beş|altı|yedi|sekiz|dokuz|on|yirmi|otuz|kırk|elli|altmış|yetmiş|seksen|doksan|yüz)(?![\p{L}])/giu,
+  },
+  { kind: 'statistic', pattern: /\b\d{1,3}\s+percent\b/giu },
   { kind: 'statistic', pattern: /\b\d{1,3}(?:[.,]\d{3})+\+?\s+(?:müşteri|kullanıcı|hasta|satış|proje|mutlu|customers?|users?|clients?)/giu },
   { kind: 'statistic', pattern: /\b\d{1,2}\s?\/\s?10\b/gu },
   {
