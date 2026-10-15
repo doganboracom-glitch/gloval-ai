@@ -26,6 +26,7 @@ import {
   CreditCard,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
 import type { ProjectVersionItem } from '@/lib/projects'
@@ -1288,6 +1289,7 @@ function AiTab({
             placeholder={ui.aiPlaceholder}
             className="min-h-[3rem] max-h-40 w-full flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/70 disabled:opacity-50"
           />
+          <VoiceInputButton value={value} onText={setValue} disabled={loading || locked} className="mb-0.5" />
           <button
             onClick={() => submit(value)}
             disabled={loading || locked || !value.trim()}
