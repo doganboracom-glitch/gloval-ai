@@ -278,6 +278,8 @@ export interface DomainProvider {
   findActiveByHost(host: string): Promise<CustomDomain | null>
   /** Any active claim on the hostname, regardless of owner or bound project. */
   findActiveByHostname(domain: string): Promise<CustomDomain | null>
+  /** Every `active` domain bound to a project (canonical-origin lookup). */
+  listActiveForProject(projectId: string): Promise<CustomDomain[]>
   addDomain(input: AddDomainInput): Promise<CustomDomain>
   /**
    * Attaches the hostname to the Vercel project and stores the DNS records and

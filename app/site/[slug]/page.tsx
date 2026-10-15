@@ -6,7 +6,7 @@ import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import type { StoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 import { isSiteBrandingRemoved } from '@/lib/project-entitlements'
-import { tenantUrl } from '@/lib/domains'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { isStorefront } from '@/lib/website-schema'
 import { getStorePaymentBadges } from '@/lib/store-payment-badges'
 import { contactSecret, signContactToken } from '@/lib/site-contact-guard'
@@ -29,8 +29,9 @@ export async function generateMetadata({
   // like before.
   const seoTitle = site.schema.meta.seoTitle?.trim()
   const title = seoTitle ? `${site.name} - ${seoTitle}` : site.name
-  // Tenant pages are canonical to their OWN subdomain, never to gloval.ai.
-  const canonical = tenantUrl(slug)
+  // Tenant pages are canonical to their OWN public origin (a live custom
+  // domain when bound, else the subdomain), never to gloval.ai.
+  const { origin: canonical } = await getSiteSeoContext(slug)
   return {
     title,
     description,

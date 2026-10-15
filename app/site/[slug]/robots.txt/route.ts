@@ -1,11 +1,13 @@
-import { tenantUrl } from '@/lib/domains'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
 
 /**
  * robots.txt for a published tenant site.
  *
  * `<slug>.gloval.site/robots.txt` is rewritten onto `/site/<slug>/robots.txt`,
  * so each site advertises its OWN sitemap instead of falling back to the
- * platform's. Checkout and order pages are transactional and excluded.
+ * platform's. The sitemap URL uses the site's canonical origin so it matches
+ * the URLs listed inside it. Checkout and order pages are transactional and
+ * excluded.
  */
 export const dynamic = 'force-dynamic'
 
@@ -14,14 +16,14 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params
-  const base = tenantUrl(slug)
+  const { origin } = await getSiteSeoContext(slug)
   const body = [
     'User-Agent: *',
     'Allow: /',
     'Disallow: /checkout',
     'Disallow: /order/',
     '',
-    `Sitemap: ${base}/sitemap.xml`,
+    `Sitemap: ${origin}/sitemap.xml`,
     '',
   ].join('\n')
 
