@@ -33,7 +33,7 @@ export function planAllowsCatalog(planCode: string | null | undefined): boolean 
 /**
  * The effective commerce mode of a project.
  *
- * - Uses the stored `commerce_mode`; when that column is absent (migration 062
+ * - Uses the stored `commerce_mode`; when that column is absent (migration 063
  *   not applied) or empty it derives from `project_type`, which keeps every
  *   pre-existing site behaving exactly as before.
  * - A `catalog` site whose owner is not on a catalog-capable plan degrades to

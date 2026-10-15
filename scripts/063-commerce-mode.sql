@@ -1,4 +1,4 @@
--- 062: projects.commerce_mode + ecommerce_products.price_mode
+-- 063: projects.commerce_mode + ecommerce_products.price_mode
 --
 -- commerce_mode decides what a site's storefront IS:
 --   'ecommerce' : full store (cart, checkout, orders, customers, payments)
