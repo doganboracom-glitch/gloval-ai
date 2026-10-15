@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { listOrders } from '@/lib/ecommerce'
@@ -24,7 +25,7 @@ export default async function OrdersPage({
 
   const project = await getProject(projectId)
   if (!project) notFound()
-  if (project.project_type !== 'ecommerce') notFound()
+  if ((await loadProjectCommerce({ id: projectId }))?.mode !== 'ecommerce') notFound()
 
   const orders = await listOrders(projectId)
   const deletedOrderIds = [

@@ -29,7 +29,10 @@ export function WebsiteHeader({
   homeHref,
   actions,
   socialLinks,
+  commerce = true,
 }: {
+  /** False on a catalog: hides the account link and the cart CTA (no cart exists). */
+  commerce?: boolean
   /** Small icons next to the CTA; pass `resolveHeaderSocialLinks(site)` (empty hides them). */
   socialLinks?: ResolvedSocialLink[]
   lang?: 'tr' | 'en'
@@ -207,9 +210,9 @@ export function WebsiteHeader({
           label={lang === 'en' ? 'Social media' : 'Sosyal medya'}
         />
         {actions}
-        {shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
-        {navigation.cta ? (
-          cartSlug && isCartCta(navigation.cta) ? (
+        {commerce && shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
+        {navigation.cta && !(!commerce && isCartCta(navigation.cta)) ? (
+          cartSlug && commerce && isCartCta(navigation.cta) ? (
             <button
               type="button"
               onClick={() => requestOpenCart()}

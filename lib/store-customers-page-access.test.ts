@@ -12,6 +12,8 @@ vi.mock('@/lib/store-payments/owner-auth', () => ({
   },
 }))
 
+vi.mock('@/lib/commerce-mode-server', () => ({ isEcommerceProjectId: async () => true }))
+
 import { resolveCustomersPageAccess } from '@/lib/store-customers-page-access'
 
 beforeEach(() => {

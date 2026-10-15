@@ -9,6 +9,8 @@ import { productJsonLdScript } from '@/lib/product-json-ld'
 import { ProductDetail } from '@/components/store/product-detail'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
+import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
+import { modeHasStoreRoutes } from '@/lib/commerce-mode'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,8 +51,13 @@ export default async function ProductPage({
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
+  const mode = await getPublishedSiteCommerceMode(slug)
+  if (!modeHasStoreRoutes(mode)) notFound()
+
   const product = await getStoreProductBySlug(slug, productSlug)
   if (!product) notFound()
+
+  const catalog = await getCatalogContext(slug, site.schema, mode)
 
   const [seo, tryOnConfig, shipping, products, payments] = await Promise.all([
     getSiteSeoContext(slug),
@@ -61,7 +68,7 @@ export default async function ProductPage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin}>
       <ProductDetail
         slug={slug}
         shipping={shipping}

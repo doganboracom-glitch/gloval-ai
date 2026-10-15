@@ -1,6 +1,11 @@
 "use server";
 
 import { persistPaymentIntent, voidOrder } from "@/lib/store-order-intent";
+import { COMMERCE_NOT_AVAILABLE, modeHasStoreRoutes } from "@/lib/commerce-mode";
+import {
+  getPublishedSiteCommerceMode,
+  isEcommerceProjectId,
+} from "@/lib/commerce-mode-server";
 import { headers } from "next/headers";
 import {
   prepareIyzicoCheckout,
@@ -102,6 +107,9 @@ export async function getStoreCollections(slug: string): Promise<StoreCollection
  * products of published projects.
  */
 export async function getStoreProducts(slug: string): Promise<StoreProduct[]> {
+  // A `none` site (including a catalog whose owner left PRO) shows no products;
+  // the rows stay in the database and return once the plan is restored.
+  if (!modeHasStoreRoutes(await getPublishedSiteCommerceMode(slug))) return [];
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_store_products", {
     p_slug: slug,
@@ -301,6 +309,9 @@ export async function createOrder(
     .maybeSingle();
 
   if (!project) return { ok: false, error: "store_not_found" };
+  if (!(await isEcommerceProjectId(project.id))) {
+    return { ok: false, error: COMMERCE_NOT_AVAILABLE };
+  }
 
   // Idempotency: if this key already produced an order, return it.
   const { data: existing } = await admin

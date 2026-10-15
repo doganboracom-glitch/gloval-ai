@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
+import { isEcommerceProjectId } from '@/lib/commerce-mode-server'
 import { hitRateLimit } from '@/lib/store-auth-rate-limit'
 import {
   purgeSuspendedCustomerNow,
@@ -76,7 +77,9 @@ function toRow(r: RpcRow): OwnerCustomerRow {
 
 async function authorize(projectId: string) {
   try {
-    return await authorizeProjectOwner(projectId)
+    const auth = await authorizeProjectOwner(projectId)
+    if (!(await isEcommerceProjectId(projectId))) return null
+    return auth
   } catch {
     return null
   }
