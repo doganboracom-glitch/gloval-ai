@@ -12,13 +12,16 @@ import {
  */
 
 /** Digests already approved for this project under the current statement version. */
-export async function loadAttestedDigests(projectId: string): Promise<Set<string>> {
+export async function loadAttestedDigests(
+  projectId: string,
+  statementVersion: string = SAMPLE_ATTESTATION_VERSION,
+): Promise<Set<string>> {
   try {
     const { data, error } = await createAdminClient()
       .from('content_attestations')
       .select('content_digest')
       .eq('project_id', projectId)
-      .eq('statement_version', SAMPLE_ATTESTATION_VERSION)
+      .eq('statement_version', statementVersion)
     if (error) throw error
     return new Set((data ?? []).map((row) => row.content_digest as string))
   } catch (err) {
@@ -33,15 +36,17 @@ export async function recordAttestations(input: {
   projectId: string
   userId: string
   approvals: Array<{ sectionType: string; item: SampleItemFinding }>
+  /** Defaults to the sample-content statement; detected contact values use their own. */
+  statementVersion?: string
 }): Promise<void> {
   if (input.approvals.length === 0) return
   const rows = input.approvals.map(({ sectionType, item }) => ({
     project_id: input.projectId,
     attested_by: input.userId,
     section_type: sectionType,
-    item_kind: item.kind,
+    item_kind: item.detected ? 'contact' : item.kind,
     content_digest: item.id,
-    statement_version: SAMPLE_ATTESTATION_VERSION,
+    statement_version: input.statementVersion ?? SAMPLE_ATTESTATION_VERSION,
   }))
   const { error } = await createAdminClient()
     .from('content_attestations')

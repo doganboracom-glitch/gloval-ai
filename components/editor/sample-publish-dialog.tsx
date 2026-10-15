@@ -32,7 +32,32 @@ const COPY = {
     statement:
       'Onayladığım içeriklerin gerçek olduğunu ve yayınlanmasından sorumlu olduğumu beyan ederim.',
     remaining: 'onay bekliyor',
+    detectedNote:
+      'İşaretli satırlar sahte veya örnek göründüğü için tespit edildi (ör. 0850 000 00 00, example.com). Her biri için seçin: sitede gizleyin ya da gerçek ve size ait olduğunu onaylayın. Düzenleyerek de düzeltebilirsiniz.',
+    detectedBadge: 'Örnek gibi görünüyor',
+    hideValue: 'Gizle',
+    hiddenValue: 'Gizlenecek',
+    confirmReal: 'Gerçek, bana ait',
+    confirmedReal: 'Gerçek onaylandı',
+    demoLine:
+      'Bu hat tüm demo sitelerde ortaktır ve gerçek olamaz. Kendi numaranızı ekleyin ya da düğmeleri gizleyin.',
+    fields: {
+      phone: 'Telefon',
+      email: 'E-posta',
+      address: 'Adres',
+      mapEmbed: 'Harita',
+      recipientEmail: 'Form alıcısı',
+      'contact.description': 'İletişim açıklaması',
+      'footer.tagline': 'Alt bilgi sloganı',
+      'footer.copyright': 'Telif satırı',
+      'footer.link': 'Alt bilgi bağlantısı',
+      'hero.trustText': 'Güven satırı',
+      'contactActions.phone': 'Arama düğmesi',
+      'contactActions.whatsapp': 'WhatsApp düğmesi',
+      'contactActions.demoFallback': 'Arama ve WhatsApp düğmeleri',
+    } as Record<string, string>,
     sections: {
+      footer: 'Alt bilgi',
       hero: 'Ana görsel güven satırı',
       testimonials: 'Müşteri yorumları',
       stats: 'Rakamlar',
@@ -73,7 +98,32 @@ const COPY = {
     contactAck: 'Publish without them',
     statement: 'I confirm the content I approve is true and I am responsible for publishing it.',
     remaining: 'awaiting approval',
+    detectedNote:
+      'Flagged rows were detected because they look fake or sample (e.g. 0850 000 00 00, example.com). Choose for each: hide it on the site, or confirm it is real and yours. You can also edit it.',
+    detectedBadge: 'Looks like a sample',
+    hideValue: 'Hide',
+    hiddenValue: 'Will be hidden',
+    confirmReal: 'Real, it is mine',
+    confirmedReal: 'Confirmed real',
+    demoLine:
+      'This line is shared by every demo site and cannot be real. Add your own number or hide the buttons.',
+    fields: {
+      phone: 'Phone',
+      email: 'Email',
+      address: 'Address',
+      mapEmbed: 'Map',
+      recipientEmail: 'Form recipient',
+      'contact.description': 'Contact description',
+      'footer.tagline': 'Footer tagline',
+      'footer.copyright': 'Copyright line',
+      'footer.link': 'Footer link',
+      'hero.trustText': 'Trust line',
+      'contactActions.phone': 'Call button',
+      'contactActions.whatsapp': 'WhatsApp button',
+      'contactActions.demoFallback': 'Call and WhatsApp buttons',
+    } as Record<string, string>,
     sections: {
+      footer: 'Footer',
       hero: 'Hero trust line',
       testimonials: 'Testimonials',
       stats: 'Statistics',
@@ -117,12 +167,18 @@ export function SamplePublishDialog({
   /** Deletes one product item (hides the section if it was the last one). */
   onDeleteItem: (sectionIndex: number, itemIndex: number) => void
   onEditSection: (sectionIndex: number) => void
-  /** Publishes with the approved digests; `hideAll` also hides the rest first. */
-  onPublish: (approvals: string[], hideSectionIndexes: number[]) => void
+  /**
+   * Publishes with the owner's choices. `approvals` carries approved sample items
+   * and detected values to hide; `confirmedReal` carries detected values the owner
+   * says are real; `hideSectionIndexes` are sections hidden first.
+   */
+  onPublish: (approvals: string[], hideSectionIndexes: number[], confirmedReal: string[]) => void
   onClose: () => void
 }) {
   const c = COPY[lang]
   const [approved, setApproved] = useState<ReadonlySet<string>>(new Set())
+  const [hiddenValues, setHiddenValues] = useState<ReadonlySet<string>>(new Set())
+  const [realValues, setRealValues] = useState<ReadonlySet<string>>(new Set())
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogFocusTrap(dialogRef)
 
@@ -144,10 +200,35 @@ export function SamplePublishDialog({
     [site, gateIds],
   )
 
-  const allIds = sections.flatMap((section) => section.items.map((item) => item.id))
-  const pending = allIds.filter((id) => !approved.has(id)).length
+  const allItems = sections.flatMap((section) => section.items)
+  const regularIds = allItems.filter((item) => !item.detected).map((item) => item.id)
+  const detectedIds = allItems.filter((item) => item.detected).map((item) => item.id)
+  const pending =
+    regularIds.filter((id) => !approved.has(id)).length +
+    detectedIds.filter((id) => !hiddenValues.has(id) && !realValues.has(id)).length
   const hasProducts = sections.some((section) => section.sectionType === 'products')
   const hasContact = sections.some((section) => section.sectionType === 'contact')
+  const hasDetected = detectedIds.length > 0
+  // Sections made only of regular sample items can be hidden wholesale; anything
+  // holding a detected value (footer, hero, contact) only has the value hidden.
+  const wholesaleHideable = sections.filter(
+    (section) => section.sectionType !== 'contact' && section.items.every((item) => !item.detected),
+  )
+
+  function decideDetected(id: string, decision: 'hide' | 'real' | 'undo') {
+    setHiddenValues((prev) => {
+      const next = new Set(prev)
+      if (decision === 'hide') next.add(id)
+      else next.delete(id)
+      return next
+    })
+    setRealValues((prev) => {
+      const next = new Set(prev)
+      if (decision === 'real') next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
 
   function toggleSection(ids: string[]) {
     setApproved((prev) => {
@@ -195,6 +276,11 @@ export function SamplePublishDialog({
               {c.contactNote}
             </p>
           )}
+          {hasDetected && (
+            <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+              {c.detectedNote}
+            </p>
+          )}
           {hasProducts && (
             <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
               {c.productsNote}
@@ -204,9 +290,10 @@ export function SamplePublishDialog({
 
         <ul className="flex flex-1 flex-col gap-3 overflow-y-auto p-6 py-4">
           {sections.map((section) => {
-            const ids = section.items.map((item) => item.id)
-            const isApproved = ids.every((id) => approved.has(id))
+            const ids = section.items.filter((item) => !item.detected).map((item) => item.id)
+            const isApproved = ids.length > 0 && ids.every((id) => approved.has(id))
             const isContact = section.sectionType === 'contact'
+            const hasDetectedItems = section.items.some((item) => item.detected)
             return (
               <li
                 key={section.sectionIndex}
@@ -216,10 +303,14 @@ export function SamplePublishDialog({
                   {c.sections[section.sectionType] ?? section.sectionType}
                 </p>
                 <ul className="flex flex-col gap-1.5">
-                  {section.items.map((item) => (
-                    <li key={item.id} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  {section.items.map((item) => {
+                    const isHidden = hiddenValues.has(item.id)
+                    const isReal = realValues.has(item.id)
+                    return (
+                    <li key={item.id} className="flex flex-col gap-2 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-2">
                       <span className="mt-0.5 shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-foreground">
-                        {c.kinds[item.kind]}
+                        {item.detected ? (c.fields[item.source ?? ''] ?? c.kinds[item.kind]) : c.kinds[item.kind]}
                       </span>
                       <span className="min-w-0 flex-1 break-words">{item.label}</span>
                       {item.kind === 'product' && item.itemIndex !== null && (
@@ -234,10 +325,52 @@ export function SamplePublishDialog({
                           {c.deleteItem}
                         </button>
                       )}
+                    </div>
+                    {item.detected && (
+                      <div className="flex flex-col gap-2 pl-1">
+                        <p className="text-[11px] leading-relaxed text-amber-400">
+                          {item.confirmable === false ? c.demoLine : c.detectedBadge}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => decideDetected(item.id, isHidden ? 'undo' : 'hide')}
+                            aria-pressed={isHidden}
+                            disabled={publishing}
+                            className={
+                              isHidden
+                                ? 'inline-flex h-7 items-center gap-1.5 rounded-lg border border-brand/50 bg-brand/20 px-2.5 text-[11px] font-semibold text-brand disabled:opacity-60'
+                                : 'inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60'
+                            }
+                          >
+                            {isHidden ? <Check className="h-3 w-3" aria-hidden /> : <EyeOff className="h-3 w-3" aria-hidden />}
+                            {isHidden ? c.hiddenValue : c.hideValue}
+                          </button>
+                          {item.confirmable !== false && (
+                            <button
+                              type="button"
+                              onClick={() => decideDetected(item.id, isReal ? 'undo' : 'real')}
+                              aria-pressed={isReal}
+                              disabled={publishing}
+                              className={
+                                isReal
+                                  ? 'inline-flex h-7 items-center gap-1.5 rounded-lg border border-brand/50 bg-brand/20 px-2.5 text-[11px] font-semibold text-brand disabled:opacity-60'
+                                  : 'inline-flex h-7 items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60'
+                              }
+                            >
+                              {isReal && <Check className="h-3 w-3" aria-hidden />}
+                              {isReal ? c.confirmedReal : c.confirmReal}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
                 <div className="flex flex-wrap gap-2">
+                  {ids.length > 0 && (
                   <button
                     type="button"
                     onClick={() => toggleSection(ids)}
@@ -252,6 +385,7 @@ export function SamplePublishDialog({
                     {isApproved && <Check className="h-3.5 w-3.5" aria-hidden />}
                     {isContact ? c.contactAck : isApproved ? c.approved : c.approve}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => onEditSection(section.sectionIndex)}
@@ -261,7 +395,7 @@ export function SamplePublishDialog({
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
                     {isContact ? c.contactEdit : c.edit}
                   </button>
-                  {!isContact && (
+                  {!isContact && !hasDetectedItems && (
                   <button
                     type="button"
                     onClick={() => onHideSections([section.sectionIndex])}
@@ -291,15 +425,16 @@ export function SamplePublishDialog({
             >
               {c.cancel}
             </button>
-            {sections.some((s) => s.sectionType !== 'contact') && (
+            {(wholesaleHideable.length > 0 || hasDetected || hasContact) && (
               <button
                 type="button"
-                onClick={() =>
-                  onPublish(
-                    sections.filter((s) => s.sectionType === 'contact').flatMap((s) => s.items.map((i) => i.id)),
-                    sections.filter((s) => s.sectionType !== 'contact').map((s) => s.sectionIndex),
-                  )
-                }
+                onClick={() => {
+                  const wholesale = new Set(wholesaleHideable.map((s) => s.sectionIndex))
+                  const valueIds = sections
+                    .filter((s) => !wholesale.has(s.sectionIndex))
+                    .flatMap((s) => s.items.filter((i) => s.sectionType === 'contact' || i.detected).map((i) => i.id))
+                  onPublish(valueIds, [...wholesale], [])
+                }}
                 disabled={publishing}
                 className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
               >
@@ -308,7 +443,7 @@ export function SamplePublishDialog({
             )}
             <button
               type="button"
-              onClick={() => onPublish([...approved], [])}
+              onClick={() => onPublish([...approved, ...hiddenValues], [], [...realValues])}
               disabled={publishing || pending > 0}
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-semibold text-brand-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >

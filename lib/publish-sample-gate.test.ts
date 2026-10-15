@@ -3,6 +3,7 @@ import { fakeDb } from '@/lib/__fixtures__/fake-db'
 import { buildCleanSite, buildSampleSections, buildSampleSite } from '@/lib/__fixtures__/sample-site'
 import { getPublishedSite, publishProject } from '@/lib/projects'
 import {
+  CONTACT_ATTESTATION_VERSION,
   SAMPLE_CONTENT_ERROR,
   collectSampleFindings,
   hideSampleSections,
@@ -222,6 +223,62 @@ describe('publishProject sample-content gate', () => {
     const result = await publishProject({ id: ID, schema: buildCleanSite() })
     expect(result).toMatchObject({ ok: true, slug: 'kahve' })
     expect(fakeDb.reads).not.toContain('content_attestations')
+  })
+})
+
+describe('publishProject confirmed-real detected contact values', () => {
+  const FAKE_PHONE = '+90 850 000 00 00'
+  const siteWithPhone = (phone: string): WebsiteSchema => {
+    const base = buildCleanSite()
+    return {
+      ...base,
+      sections: [...base.sections.filter((s) => s.type !== 'contact'), { type: 'contact', title: 'İletişim', phone } as Section],
+    }
+  }
+  const detectedIds = (site: WebsiteSchema) =>
+    collectSampleFindings(site).flatMap((s) => s.items.filter((i) => i.detected).map((i) => i.id))
+  const contactAttestations = () =>
+    fakeDb.rows('content_attestations').filter((row) => row.statement_version === CONTACT_ATTESTATION_VERSION)
+
+  it('asks once, then does not ask again for the same confirmed value', async () => {
+    const site = siteWithPhone(FAKE_PHONE)
+
+    const asked = await publishProject({ id: ID, schema: site })
+    expect(asked).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR })
+    expect(published()).toEqual([])
+
+    const confirmed = await publishProject({ id: ID, schema: site, confirmedReal: detectedIds(site) })
+    expect(confirmed).toMatchObject({ ok: true })
+    expect(contactAttestations()).toHaveLength(1)
+
+    const again = await publishProject({ id: ID, schema: site })
+    expect(again).toMatchObject({ ok: true })
+    expect(contactAttestations()).toHaveLength(1)
+    expect(JSON.stringify(published().at(-1)?.schema_data)).toContain('850 000 00 00')
+  })
+
+  it('asks again as soon as the confirmed value changes', async () => {
+    const site = siteWithPhone(FAKE_PHONE)
+    await publishProject({ id: ID, schema: site, confirmedReal: detectedIds(site) })
+
+    const changed = siteWithPhone('+90 212 555 01 23')
+    const result = await publishProject({ id: ID, schema: changed })
+    expect(result).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR })
+    if (result.ok || result.reason !== SAMPLE_CONTENT_ERROR) throw new Error('expected SAMPLE_CONTENT')
+    expect(result.sections.flatMap((s) => s.items).every((item) => item.detected)).toBe(true)
+    expect(published()).toHaveLength(1)
+    expect(contactAttestations()).toHaveLength(1)
+
+    expect(await publishProject({ id: ID, schema: changed, confirmedReal: detectedIds(changed) })).toMatchObject({ ok: true })
+    expect(contactAttestations()).toHaveLength(2)
+  })
+
+  it('does not carry a confirmation over to another project', async () => {
+    const site = siteWithPhone(FAKE_PHONE)
+    await publishProject({ id: ID, schema: site, confirmedReal: detectedIds(site) })
+
+    fakeDb.rows('projects').push({ ...project(), id: 'project-2', slug: null, published: false, published_version_id: null })
+    expect(await publishProject({ id: 'project-2', schema: site })).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR })
   })
 })
 

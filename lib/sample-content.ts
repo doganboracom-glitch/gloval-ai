@@ -1,4 +1,13 @@
-import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { DEMO_PHONE } from '@/lib/contact-links'
+import {
+  isPlaceholderAddress,
+  isPlaceholderEmail,
+  isPlaceholderHref,
+  isPlaceholderPhone,
+  isPlaceholderText,
+  type PlaceholderContext,
+} from '@/lib/placeholder-contact'
+import { isStorefront, type Section, type WebsiteSchema } from '@/lib/website-schema'
 
 /**
  * Sample (illustrative) content handling. `lib/proof-content.ts` flags generated
@@ -16,6 +25,18 @@ import type { Section, WebsiteSchema } from '@/lib/website-schema'
 
 /** Version of the approval statement the owner agrees to; stored with each attestation. */
 export const SAMPLE_ATTESTATION_VERSION = 'sample-content-v1'
+
+/**
+ * Statement version of "this detected contact value is real". Kept apart from
+ * `SAMPLE_ATTESTATION_VERSION` so the two statements never vouch for each other.
+ */
+export const CONTACT_ATTESTATION_VERSION = 'contact-real-v1'
+
+/** Extra facts the server knows and the pure schema does not. */
+export type DetectionContext = {
+  /** Hosts connected to the site; e-mail on these is the owner's own, never a placeholder. */
+  ownDomains?: readonly string[]
+}
 
 /** `publishProject` refusal reason while unapproved sample content remains. */
 export const SAMPLE_CONTENT_ERROR = 'SAMPLE_CONTENT' as const
@@ -65,6 +86,16 @@ export type SampleItemFinding = {
   kind: SampleKind
   /** Short human label for the approval modal (never persisted). */
   label: string
+  /**
+   * Found by its content (a known fake pattern), not by a `sample` flag. For these
+   * the owner picks: hide the value (`approvals`), confirm it is real
+   * (`confirmedReal`, stored as an attestation) or edit it.
+   */
+  detected?: boolean
+  /** Field the value lives in, e.g. `phone`, `footer.tagline`, `contactActions.whatsapp` (never the value). */
+  source?: string
+  /** False for values that can never be real (the shared demo line); the owner can only hide or edit. */
+  confirmable?: boolean
 }
 
 export type SampleSectionFinding = {
@@ -172,29 +203,150 @@ function heroTrustDigest(trustText: string | undefined): string {
   return sampleDigest('hero', [trustText ?? ''])
 }
 
-/** Every visible sample section/item of the site, in document order. */
-export function collectSampleFindings(site: WebsiteSchema): SampleSectionFinding[] {
+function placeholderContext(site: WebsiteSchema, context?: DetectionContext): PlaceholderContext {
+  return { siteName: site.meta?.name, ownDomains: context?.ownDomains }
+}
+
+/** Digest of a detected contact value; identical to `contactDigest` for the four contact fields. */
+function detectedDigest(source: string, value: string): string {
+  return sampleDigest('contact', [source, value])
+}
+
+function detectedItem(source: string, value: string, confirmable = true): SampleItemFinding {
+  return {
+    id: detectedDigest(source, value),
+    itemIndex: null,
+    kind: 'contact',
+    label: `${source}: ${truncate(value)}`,
+    source,
+    detected: true,
+    confirmable,
+  }
+}
+
+function contactFieldLooksFake(field: ContactSampleField, value: string, pc: PlaceholderContext): boolean {
+  if (field === 'phone') return isPlaceholderPhone(value)
+  if (field === 'email') return isPlaceholderEmail(value, pc)
+  if (field === 'address') return isPlaceholderAddress(value)
+  return false
+}
+
+/** Contact-section findings: flagged fields plus fields whose value matches a known fake pattern. */
+function contactFindingItems(section: ContactSectionLike, pc: PlaceholderContext): SampleItemFinding[] {
+  const flagged = new Set(section.sampleFields ?? [])
+  const items: SampleItemFinding[] = []
+  for (const field of CONTACT_SAMPLE_FIELDS) {
+    const value = contactFieldValue(section, field)
+    if (value === '') continue
+    const fake = contactFieldLooksFake(field, value, pc)
+    if (fake) items.push(detectedItem(field, value))
+    else if (flagged.has(field)) {
+      items.push({ id: contactDigest(field, value), itemIndex: null, kind: 'contact', label: `${field}: ${truncate(value)}`, source: field })
+    }
+  }
+  const recipient = str(section.recipientEmail).trim()
+  if (recipient && isPlaceholderEmail(recipient, pc)) items.push(detectedItem('recipientEmail', recipient))
+  const description = str(section.description).trim()
+  if (description && isPlaceholderText(description, pc)) items.push(detectedItem('contact.description', description))
+  return items
+}
+
+function footerLinkValue(link: { label: string; href: string }): string {
+  return `${link.label} ${link.href}`
+}
+
+function footerLinkLooksFake(link: { label: string; href: string }, pc: PlaceholderContext): boolean {
+  return isPlaceholderHref(link.href, pc) || isPlaceholderText(link.label, pc)
+}
+
+function footerFindingItems(section: Extract<Section, { type: 'footer' }>, pc: PlaceholderContext): SampleItemFinding[] {
+  const items: SampleItemFinding[] = []
+  const tagline = str(section.tagline).trim()
+  if (tagline && isPlaceholderText(tagline, pc)) items.push(detectedItem('footer.tagline', tagline))
+  const copyright = str(section.copyright).trim()
+  if (copyright && isPlaceholderText(copyright, pc)) items.push(detectedItem('footer.copyright', copyright))
+  for (const column of section.columns ?? []) {
+    for (const link of column.links) {
+      if (footerLinkLooksFake(link, pc)) items.push(detectedItem('footer.link', footerLinkValue(link)))
+    }
+  }
+  return items
+}
+
+function ownDialablePhone(site: WebsiteSchema): boolean {
+  const dialable = (value: string | undefined) => (value ?? '').replace(/\D/g, '').length >= 7
+  return site.sections.some((section) => {
+    if (section.type === 'contact') return !sampleContactFields(section).includes('phone') && dialable(section.phone)
+    if (section.type === 'footer') {
+      return (section.columns ?? []).some((column) =>
+        column.links.some((link) => (link.href.startsWith('tel:') ? dialable(link.href) : /^[\d\s+()-]+$/.test(link.label) && dialable(link.label))),
+      )
+    }
+    return false
+  })
+}
+
+/** Floating-button numbers, including the shared demo line that legacy stores still fall back to. */
+function contactActionItems(site: WebsiteSchema): SampleItemFinding[] {
+  const items: SampleItemFinding[] = []
+  const actions = site.contactActions
+  if (actions) {
+    if (actions.enabled === false) return items
+    const phone = str(actions.phone).trim()
+    if (phone && isPlaceholderPhone(phone)) items.push(detectedItem('contactActions.phone', phone))
+    const whatsapp = str(actions.whatsapp).trim()
+    if (whatsapp && isPlaceholderPhone(whatsapp)) items.push(detectedItem('contactActions.whatsapp', whatsapp))
+    return items
+  }
+  if (isStorefront(site) && !ownDialablePhone(site)) {
+    items.push(detectedItem('contactActions.demoFallback', DEMO_PHONE.display, false))
+  }
+  return items
+}
+
+function contactTargetIndex(site: WebsiteSchema): number {
+  const contact = site.sections.findIndex((s) => s.type === 'contact')
+  if (contact !== -1) return contact
+  const footer = site.sections.findIndex((s) => s.type === 'footer')
+  return footer !== -1 ? footer : Math.max(0, site.sections.length - 1)
+}
+
+/**
+ * Every visible sample section/item of the site, in document order. Flagged
+ * items come from `sample` markers; contact-like values (contact section,
+ * footer, hero trust line, floating buttons) are also matched by content against
+ * the known fake patterns of `lib/placeholder-contact.ts` (`detected: true`).
+ */
+export function collectSampleFindings(site: WebsiteSchema, context?: DetectionContext): SampleSectionFinding[] {
   const findings: SampleSectionFinding[] = []
+  const pc = placeholderContext(site, context)
   site.sections.forEach((section, sectionIndex) => {
     if (section.hidden) return
     if (section.type === 'hero') {
-      if (section.sample && section.trustText?.trim()) {
-        findings.push({
-          sectionIndex,
-          sectionType: 'hero',
-          items: [
-            { id: heroTrustDigest(section.trustText), itemIndex: null, kind: 'trust', label: truncate(section.trustText) },
-          ],
-        })
+      const trust = section.trustText?.trim()
+      if (trust) {
+        const fake = isPlaceholderText(trust, pc)
+        if (section.sample || fake) {
+          const item: SampleItemFinding = {
+            id: heroTrustDigest(section.trustText),
+            itemIndex: null,
+            kind: 'trust',
+            label: truncate(trust),
+            ...(fake ? { source: 'hero.trustText', detected: true, confirmable: true } : {}),
+          }
+          findings.push({ sectionIndex, sectionType: 'hero', items: [item] })
+        }
       }
       return
     }
     if (section.type === 'contact') {
-      const items = sampleContactFields(section).map((field): SampleItemFinding => {
-        const value = contactFieldValue(section, field)
-        return { id: contactDigest(field, value), itemIndex: null, kind: 'contact', label: `${field}: ${truncate(value)}` }
-      })
+      const items = contactFindingItems(section, pc)
       if (items.length) findings.push({ sectionIndex, sectionType: 'contact', items })
+      return
+    }
+    if (section.type === 'footer') {
+      const items = footerFindingItems(section, pc)
+      if (items.length) findings.push({ sectionIndex, sectionType: 'footer', items })
       return
     }
     const spec = ITEM_SPECS[section.type]
@@ -211,16 +363,120 @@ export function collectSampleFindings(site: WebsiteSchema): SampleSectionFinding
     })
     if (items.length) findings.push({ sectionIndex, sectionType: section.type, items })
   })
+  const actionItems = contactActionItems(site)
+  if (actionItems.length > 0 && site.sections.length > 0) {
+    const sectionIndex = contactTargetIndex(site)
+    const existing = findings.find((finding) => finding.sectionIndex === sectionIndex)
+    if (existing) existing.items.push(...actionItems)
+    else {
+      findings.push({ sectionIndex, sectionType: site.sections[sectionIndex].type, items: actionItems })
+      findings.sort((a, b) => a.sectionIndex - b.sectionIndex)
+    }
+  }
   return findings
 }
 
 /**
  * Findings that stop a publish until the owner approves, hides or edits them.
- * Contact placeholders are excluded on purpose: they can never be "approved as
- * real" and are stripped from the public site instead.
+ * Contact values and content-detected placeholders are excluded on purpose: they
+ * can never be "approved as sample"; they are hidden, confirmed real (detected
+ * only) or stripped from the public site instead.
  */
-export function collectBlockingSampleFindings(site: WebsiteSchema): SampleSectionFinding[] {
-  return collectSampleFindings(site).filter((finding) => finding.sectionType !== 'contact')
+export function collectBlockingSampleFindings(site: WebsiteSchema, context?: DetectionContext): SampleSectionFinding[] {
+  return collectSampleFindings(site, context)
+    .filter((finding) => finding.sectionType !== 'contact')
+    .map((finding) => ({ ...finding, items: finding.items.filter((item) => !item.detected) }))
+    .filter((finding) => finding.items.length > 0)
+}
+
+/**
+ * Applies the owner's choice for content-detected placeholders:
+ *  - `hide`: the value is removed from the public site (contact fields are flagged
+ *    so the draft keeps them; text and link values are cleared, buttons emptied);
+ *  - `real`: the owner confirmed it, so any sample flag on it is dropped.
+ * Ids that match nothing are ignored, so a stale client cannot change other content.
+ */
+export function resolveDetectedPlaceholders(
+  site: WebsiteSchema,
+  choice: { hide: ReadonlySet<string>; real: ReadonlySet<string> },
+  context?: DetectionContext,
+): WebsiteSchema {
+  if (choice.hide.size === 0 && choice.real.size === 0) return site
+  const pc = placeholderContext(site, context)
+  const hits = (source: string, value: string, ids: ReadonlySet<string>) => ids.has(detectedDigest(source, value))
+
+  const sections = site.sections.map((section): Section => {
+    if (section.type === 'hero') {
+      const trust = section.trustText?.trim()
+      if (!trust || !isPlaceholderText(trust, pc)) return section
+      const id = heroTrustDigest(section.trustText)
+      if (choice.real.has(id)) return { ...section, sample: undefined }
+      if (choice.hide.has(id)) return { ...section, trustText: undefined, sample: undefined }
+      return section
+    }
+    if (section.type === 'contact') {
+      const flagged = new Set<string>(section.sampleFields ?? [])
+      let next: ContactSectionLike = section
+      for (const field of CONTACT_SAMPLE_FIELDS) {
+        const value = contactFieldValue(section, field)
+        if (value === '' || !contactFieldLooksFake(field, value, pc)) continue
+        if (hits(field, value, choice.real)) flagged.delete(field)
+        else if (hits(field, value, choice.hide)) flagged.add(field)
+      }
+      const nextFlags = CONTACT_SAMPLE_FIELDS.filter((field) => flagged.has(field))
+      next = {
+        ...next,
+        sampleFields: nextFlags.length > 0 ? [...nextFlags] : undefined,
+        sample: nextFlags.length > 0 ? true : undefined,
+      }
+      const recipient = str(section.recipientEmail).trim()
+      if (recipient && isPlaceholderEmail(recipient, pc) && hits('recipientEmail', recipient, choice.hide)) {
+        next = { ...next, recipientEmail: undefined }
+      }
+      const description = str(section.description).trim()
+      if (description && isPlaceholderText(description, pc) && hits('contact.description', description, choice.hide)) {
+        next = { ...next, description: undefined }
+      }
+      return next
+    }
+    if (section.type === 'footer') {
+      const tagline = str(section.tagline).trim()
+      const copyright = str(section.copyright).trim()
+      return {
+        ...section,
+        tagline: tagline && isPlaceholderText(tagline, pc) && hits('footer.tagline', tagline, choice.hide) ? undefined : section.tagline,
+        copyright:
+          copyright && isPlaceholderText(copyright, pc) && hits('footer.copyright', copyright, choice.hide)
+            ? undefined
+            : section.copyright,
+        columns: section.columns?.map((column) => ({
+          ...column,
+          links: column.links.filter(
+            (link) => !(footerLinkLooksFake(link, pc) && hits('footer.link', footerLinkValue(link), choice.hide)),
+          ),
+        })),
+      }
+    }
+    return section
+  })
+
+  let contactActions = site.contactActions
+  if (contactActions) {
+    const phone = str(contactActions.phone).trim()
+    const whatsapp = str(contactActions.whatsapp).trim()
+    contactActions = {
+      ...contactActions,
+      phone: phone && isPlaceholderPhone(phone) && hits('contactActions.phone', phone, choice.hide) ? '' : contactActions.phone,
+      whatsapp:
+        whatsapp && isPlaceholderPhone(whatsapp) && hits('contactActions.whatsapp', whatsapp, choice.hide)
+          ? ''
+          : contactActions.whatsapp,
+    }
+  } else if (isStorefront(site) && !ownDialablePhone(site) && hits('contactActions.demoFallback', DEMO_PHONE.display, choice.hide)) {
+    contactActions = { phone: '', whatsapp: '', placeholderFallback: false }
+  }
+
+  return { ...site, sections, contactActions }
 }
 
 /** Findings the owner has neither hidden, edited nor attested (by digest). */
