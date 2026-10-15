@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, EyeOff, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { collectSampleFindings, type SampleKind } from '@/lib/sample-content'
+import { useDialogFocusTrap } from '@/components/editor/use-dialog-focus-trap'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 type Lang = 'tr' | 'en'
@@ -110,6 +111,8 @@ export function SamplePublishDialog({
 }) {
   const c = COPY[lang]
   const [approved, setApproved] = useState<ReadonlySet<string>>(new Set())
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogFocusTrap(dialogRef)
 
   useEffect(() => {
     if (publishing) return
@@ -147,7 +150,9 @@ export function SamplePublishDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm outline-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="sample-publish-title"
@@ -259,7 +264,6 @@ export function SamplePublishDialog({
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
-              autoFocus
               onClick={onClose}
               disabled={publishing}
               className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"

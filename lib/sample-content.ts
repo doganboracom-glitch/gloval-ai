@@ -43,6 +43,8 @@ type AnyItem = { sample?: boolean } & Record<string, unknown>
 
 type ItemSpec = {
   key: 'items' | 'plans'
+  /** Smallest item count the website schema accepts for this section. */
+  minItems: number
   kind: (item: AnyItem) => SampleKind
   fields: (item: AnyItem) => unknown[]
   label: (item: AnyItem) => string
@@ -58,24 +60,28 @@ function truncate(text: string, max = 70): string {
 const ITEM_SPECS: Partial<Record<Section['type'], ItemSpec>> = {
   testimonials: {
     key: 'items',
+    minItems: 1,
     kind: () => 'testimonials',
     fields: (i) => [i.quote, i.author, i.role],
     label: (i) => truncate(`${str(i.author)}: “${str(i.quote)}”`),
   },
   stats: {
     key: 'items',
+    minItems: 2,
     kind: () => 'stats',
     fields: (i) => [i.value, i.label],
     label: (i) => truncate(`${str(i.value)} ${str(i.label)}`),
   },
   pricing: {
     key: 'plans',
+    minItems: 1,
     kind: () => 'pricing',
     fields: (i) => [i.name, i.price, i.period, i.description, i.features, i.buttonText],
     label: (i) => truncate(`${str(i.name)} ${str(i.price)}${str(i.period)}`),
   },
   products: {
     key: 'items',
+    minItems: 2,
     kind: (i) => (str(i.oldPrice).trim() ? 'discount' : str(i.badge).trim() ? 'badge' : 'product'),
     fields: (i) => [i.name, i.price, i.oldPrice, i.badge, i.category, i.description],
     label: (i) => {
@@ -266,13 +272,13 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
   return changed ? { ...site, sections } : site
 }
 
-/** Removes the flagged items of one section (used by the product "delete" action). */
+/** Removes one item, refusing when that would leave fewer than the schema's minimum. */
 export function removeSampleItem(site: WebsiteSchema, sectionIndex: number, itemIndex: number): WebsiteSchema {
   const section = site.sections[sectionIndex]
   const spec = section && ITEM_SPECS[section.type]
   if (!section || !spec) return site
   const items = itemsOf(section, spec)
-  if (items.length <= 1 || !items[itemIndex]) return site
+  if (items.length - 1 < spec.minItems || !items[itemIndex]) return site
   const next = withItems(
     section,
     spec,
@@ -282,9 +288,10 @@ export function removeSampleItem(site: WebsiteSchema, sectionIndex: number, item
 }
 
 /**
- * Deletes one flagged item. When it is the section's only item the section is
- * hidden instead, so a store never ends up with an empty product grid and
- * nothing the owner may still want is destroyed.
+ * Deletes one flagged item. When removing it would leave fewer items than the
+ * website schema allows (products need at least 2, so a saved site would fail
+ * validation), the section is hidden instead: nothing is destroyed, a store
+ * never ends up with a broken or empty product grid, and the site stays valid.
  */
 export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number, itemIndex: number): WebsiteSchema {
   const section = site.sections[sectionIndex]
@@ -292,7 +299,7 @@ export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number
   if (!section || !spec) return site
   const items = itemsOf(section, spec)
   if (!items[itemIndex]) return site
-  if (items.length <= 1) return hideSampleSections(site, [sectionIndex])
+  if (items.length - 1 < spec.minItems) return hideSampleSections(site, [sectionIndex])
   return removeSampleItem(site, sectionIndex, itemIndex)
 }
 
