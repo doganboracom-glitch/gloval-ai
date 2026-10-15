@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import useSWR from 'swr'
-import { CheckCircle2, Loader2, Send } from 'lucide-react'
+import { CheckCircle2, Info, Loader2, Send } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import {
   getIyzicoInstantPrefill,
@@ -27,7 +27,11 @@ const copy = {
       invalid_name: 'Ad ve soyad gerekli ve çok uzun olamaz.',
       invalid_email: 'Geçerli bir e-posta adresi girin.',
       invalid_phone: 'Geçerli bir Türkiye telefon numarası girin.',
-      rate_limited: 'Çok fazla deneme yaptınız. Lütfen daha sonra tekrar deneyin.',
+      consent_required: 'Göndermek için açık onayınızı vermeniz gerekir.',
+      already_submitted: 'Başvurunuz zaten iletildi, iyzico ekibi sizinle iletişime geçecek.',
+      in_progress: 'Başvurunuz şu anda iletiliyor. Lütfen birkaç dakika bekleyin.',
+      rate_limited: 'Bu mağaza veya hesap için çok fazla başvuru denendi. Lütfen 24 saat sonra tekrar deneyin.',
+      rejected: 'iyzico bilgileri kabul etmedi. Bilgilerinizi kontrol edip tekrar deneyin.',
       unavailable: 'Başvuru şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin.',
     } as Record<string, string>,
   },
@@ -47,7 +51,11 @@ const copy = {
       invalid_name: 'First and last name are required and cannot be too long.',
       invalid_email: 'Enter a valid email address.',
       invalid_phone: 'Enter a valid Turkish phone number.',
-      rate_limited: 'Too many attempts. Please try again later.',
+      consent_required: 'You must give your explicit consent to send.',
+      already_submitted: 'Your application was already sent; the iyzico team will contact you.',
+      in_progress: 'Your application is being sent. Please wait a few minutes.',
+      rate_limited: 'Too many applications were attempted for this store or account. Please try again in 24 hours.',
+      rejected: 'iyzico did not accept the details. Check them and try again.',
       unavailable: 'The application could not be sent. Please try again later.',
     } as Record<string, string>,
   },
@@ -65,7 +73,7 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
   )
   const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({})
   const [consent, setConsent] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
   const [sending, startSending] = useTransition()
 
   if (!prefill?.enabled) return null
@@ -86,11 +94,15 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
     setMessage(null)
     startSending(async () => {
       try {
-        const result = await submitIyzicoInstant(projectId, form)
+        const result = await submitIyzicoInstant(projectId, form, consent)
         if (result.ok) {
           setMessage({ kind: 'success', text: c.success })
         } else {
-          setMessage({ kind: 'error', text: c.errors[result.error] ?? c.errors.unavailable })
+          const informational = result.error === 'already_submitted' || result.error === 'in_progress'
+          setMessage({
+            kind: informational ? 'info' : 'error',
+            text: c.errors[result.error] ?? c.errors.unavailable,
+          })
         }
       } catch {
         setMessage({ kind: 'error', text: c.errors.unavailable })
@@ -118,7 +130,7 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
         <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 size-4 shrink-0 accent-primary" />
         <span>{c.consent}{' '}<a href="/yasal/kvkk" target="_blank" rel="noopener noreferrer" className="font-medium text-foreground underline underline-offset-2">{c.kvkk}</a></span>
       </label>
-      {message && <p role={message.kind === 'error' ? 'alert' : 'status'} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${message.kind === 'error' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>{message.kind === 'success' ? <CheckCircle2 className="size-4 shrink-0" /> : null}{message.text}</p>}
+      {message && <p role={message.kind === 'error' ? 'alert' : 'status'} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${message.kind === 'error' ? 'border-destructive/40 bg-destructive/10 text-destructive' : message.kind === 'info' ? 'border-border bg-muted text-foreground' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>{message.kind === 'success' ? <CheckCircle2 className="size-4 shrink-0" /> : message.kind === 'info' ? <Info className="size-4 shrink-0" /> : null}{message.text}</p>}
       <button type="button" onClick={submit} disabled={!consent || sending} className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
         {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         {sending ? c.sending : c.submit}

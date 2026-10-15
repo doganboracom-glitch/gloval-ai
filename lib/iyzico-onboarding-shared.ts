@@ -6,6 +6,45 @@ export const IYZICO_ONBOARDING_URL = 'https://onboarding.iyzipay.com/api/v1/merc
 export const MAX_NAME_LENGTH = 80
 export const MAX_EMAIL_LENGTH = 254
 
+/** Identifies the exact consent wording shown in the card; recorded with every request. */
+export const IYZICO_INSTANT_CONSENT_VERSION = 'instant-consent-v1'
+
+export const IYZICO_INSTANT_LIMITS = {
+  /** Max submitted + failed attempts per store inside the window. */
+  perProject: 2,
+  /** Max submitted + failed attempts per user inside the window. */
+  perUser: 5,
+  windowMs: 24 * 60 * 60 * 1000,
+  /** A reservation without a final HTTP status younger than this is treated as in flight. */
+  inFlightMs: 2 * 60 * 1000,
+} as const
+
+export type IyzicoInstantError =
+  | 'invalid_name'
+  | 'invalid_email'
+  | 'invalid_phone'
+  | 'consent_required'
+  | 'already_submitted'
+  | 'in_progress'
+  | 'rate_limited'
+  | 'rejected'
+  | 'unavailable'
+
+export type IyzicoHttpOutcome =
+  | { ok: true }
+  | { ok: false; error: 'rejected' | 'unavailable'; code: string }
+
+/**
+ * Classifies an iyzico response by status code ONLY. The body is never read:
+ * it may echo personal data, and nothing from it is shown or logged.
+ */
+export function classifyIyzicoStatus(status: number): IyzicoHttpOutcome {
+  if (status >= 200 && status < 300) return { ok: true }
+  const code = `iyzico_http_${status}`
+  if (status === 400 || status === 409 || status === 422) return { ok: false, error: 'rejected', code }
+  return { ok: false, error: 'unavailable', code }
+}
+
 export type IyzicoInstantInput = {
   firstName: string
   lastName: string

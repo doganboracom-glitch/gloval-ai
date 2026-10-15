@@ -1,23 +1,30 @@
 'use server'
 
-import { checkRateLimit } from '@/lib/rate-limit'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
 import { createClient } from '@/lib/supabase/server'
 import {
+  claimOnboardingSlot,
+  finalizeOnboardingRequest,
+  isOnboardingStoreReady,
+} from '@/lib/iyzico-onboarding-store'
+import {
   IYZICO_ONBOARDING_URL,
   buildIyzicoInstantHeaders,
+  classifyIyzicoStatus,
   cleanName,
   readIyzicoInstantCredentials,
   validateIyzicoInstantInput,
+  type IyzicoInstantError,
   type IyzicoInstantInput,
 } from '@/lib/iyzico-onboarding-shared'
 
 /**
  * iyzico "Instant" pre-application. The three IYZICO_INSTANT_* secrets stay on
- * the server: they never reach the client, a URL, a log line or an error. When
- * any is missing the feature is simply off (prefill reports `enabled: false`).
- * Only { contactName, contactSurname, registrationEmail, gsmNumber } is sent,
- * to one fixed host.
+ * the server: they never reach the client, a URL, a log line or an error. The
+ * feature is off when any secret is missing OR the request table does not exist
+ * yet. Only { contactName, contactSurname, registrationEmail, gsmNumber } is sent,
+ * to one fixed host; none of it is stored, and iyzico's response body is never
+ * read, shown or logged (only a status code is).
  */
 
 export type IyzicoInstantPrefill = {
@@ -28,18 +35,16 @@ export type IyzicoInstantPrefill = {
   lastName: string
 }
 
-export type IyzicoInstantResult =
-  | { ok: true }
-  | {
-      ok: false
-      error: 'invalid_name' | 'invalid_email' | 'invalid_phone' | 'rate_limited' | 'unavailable'
-    }
+export type IyzicoInstantResult = { ok: true } | { ok: false; error: IyzicoInstantError }
 
 const DISABLED: IyzicoInstantPrefill = { enabled: false, email: '', phone: '', firstName: '', lastName: '' }
+
+const REQUEST_TIMEOUT_MS = 15_000
 
 export async function getIyzicoInstantPrefill(projectId: string): Promise<IyzicoInstantPrefill> {
   await authorizeProjectOwner(projectId)
   if (!readIyzicoInstantCredentials()) return DISABLED
+  if (!(await isOnboardingStoreReady())) return DISABLED
 
   const supabase = await createClient()
   const {
@@ -66,18 +71,24 @@ export async function getIyzicoInstantPrefill(projectId: string): Promise<Iyzico
 export async function submitIyzicoInstant(
   projectId: string,
   input: IyzicoInstantInput,
+  consent: boolean,
 ): Promise<IyzicoInstantResult> {
   const { actorId } = await authorizeProjectOwner(projectId)
   const credentials = readIyzicoInstantCredentials()
   if (!credentials) return { ok: false, error: 'unavailable' }
 
+  if (consent !== true) return { ok: false, error: 'consent_required' }
+
   const validation = validateIyzicoInstantInput(input)
   if (!validation.ok) return { ok: false, error: validation.error }
 
-  const hour = 60 * 60 * 1000
-  const byProject = checkRateLimit(`iyzico-instant:project:${projectId}`, 3, hour)
-  const byUser = checkRateLimit(`iyzico-instant:user:${actorId}`, 5, hour)
-  if (!byProject.allowed || !byUser.allowed) return { ok: false, error: 'rate_limited' }
+  const claim = await claimOnboardingSlot(projectId, actorId)
+  if (claim.kind === 'unavailable') return { ok: false, error: 'unavailable' }
+  if (claim.kind === 'blocked') {
+    if (claim.reason === 'already_submitted') return { ok: false, error: 'already_submitted' }
+    if (claim.reason === 'in_progress') return { ok: false, error: 'in_progress' }
+    return { ok: false, error: 'rate_limited' }
+  }
 
   try {
     const response = await fetch(IYZICO_ONBOARDING_URL, {
@@ -86,10 +97,22 @@ export async function submitIyzicoInstant(
       body: JSON.stringify(validation.payload),
       cache: 'no-store',
       redirect: 'error',
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
-    return response.ok ? { ok: true } : { ok: false, error: 'unavailable' }
-  } catch {
+    await response.body?.cancel().catch(() => undefined)
+
+    const outcome = classifyIyzicoStatus(response.status)
+    if (outcome.ok) {
+      await finalizeOnboardingRequest(claim.id, 'submitted', response.status)
+      return { ok: true }
+    }
+    console.error('[iyzico-instant]', outcome.code)
+    await finalizeOnboardingRequest(claim.id, 'failed', response.status)
+    return { ok: false, error: outcome.error }
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === 'TimeoutError'
+    console.error('[iyzico-instant]', timedOut ? 'iyzico_timeout' : 'iyzico_network_error')
+    await finalizeOnboardingRequest(claim.id, 'failed', 0)
     return { ok: false, error: 'unavailable' }
   }
 }
