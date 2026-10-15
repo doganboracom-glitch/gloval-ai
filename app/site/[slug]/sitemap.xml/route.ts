@@ -4,6 +4,8 @@ import { storeSeoPlan } from '@/lib/commerce-mode'
 import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
+import { getLiveBlogPosts } from '@/lib/blog-server'
+import { blogPostPath, indexablePosts } from '@/lib/blog'
 
 /**
  * Per-tenant sitemap for a published site.
@@ -84,6 +86,25 @@ export async function GET(
         changefreq: 'weekly',
         priority: '0.6',
         lastmod: toIso(product.created_at),
+      })
+    }
+  }
+
+  // Only indexable, publicly visible posts; noindex first-setup posts stay out.
+  const blogPosts = indexablePosts(await getLiveBlogPosts(slug))
+  if (blogPosts.length > 0) {
+    entries.push({
+      loc: `${base}/blog`,
+      changefreq: 'weekly',
+      priority: '0.6',
+      lastmod: toIso(blogPosts[0].updatedAt),
+    })
+    for (const post of blogPosts) {
+      entries.push({
+        loc: `${base}${blogPostPath(post.slug)}`,
+        changefreq: 'monthly',
+        priority: '0.6',
+        lastmod: toIso(post.updatedAt),
       })
     }
   }
