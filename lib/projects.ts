@@ -22,6 +22,7 @@ import {
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
   collectSampleFindings,
+  stripSampleContent,
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { loadAttestedDigests, recordAttestations, selectApproved } from '@/lib/content-attestations'
@@ -302,6 +303,8 @@ export type PublishResult =
       ok: false
       reason: typeof SAMPLE_CONTENT_ERROR
       sections: SampleSectionFinding[]
+      /** The owner's approval could not be stored, so nothing was published. */
+      attestationFailed?: boolean
     }
 
 /**
@@ -396,7 +399,15 @@ export async function publishProject(input: {
     if (unresolved.length > 0) return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: unresolved }
 
     const fresh = selectApproved(findings, requestedIds).filter(({ item }) => !attested.has(item.id))
-    await recordAttestations({ projectId: input.id, userId, approvals: fresh })
+    try {
+      await recordAttestations({ projectId: input.id, userId, approvals: fresh })
+    } catch (err) {
+      // Fail closed: an approval that cannot be recorded is not an approval.
+      // Nothing is saved or published; hiding the sections still works because
+      // hidden sections are never findings and need no attestation.
+      console.log('[v0] attestation could not be stored, refusing publish:', err instanceof Error ? err.message : err)
+      return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: findings, attestationFailed: true }
+    }
     // Approved items are the owner's content from here on: drop their flag.
     parsed = approveSampleFindings(requested, new Set([...attested, ...requestedIds]))
   }
@@ -508,7 +519,10 @@ export async function getPublishedSite(slug: string): Promise<PublishedSite | nu
   if (!parsed.success) return null
   return {
     name: row.name as string,
-    schema: parsed.data,
+    // Every public render (tenant subdomain, custom domain, store pages) reads
+    // through here, so unapproved sample content can never reach a visitor.
+    // Sites without sample flags come back untouched (same object).
+    schema: stripSampleContent(parsed.data),
     ownerPlanCode: (row.owner_plan_code as string | null) ?? null,
   }
 }

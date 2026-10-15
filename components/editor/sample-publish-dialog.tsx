@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Check, EyeOff, Loader2, Pencil } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Check, EyeOff, Loader2, Pencil, Trash2 } from 'lucide-react'
 import { collectSampleFindings, type SampleKind } from '@/lib/sample-content'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
@@ -13,6 +13,9 @@ const COPY = {
     body: 'Yapay zekanın hazırladığı aşağıdaki içerikler örnektir; gerçek müşteri yorumu, rakam, indirim veya fiyat olmayabilir. Gerçek değillerse yayınlamayın. Her bölüm için gizleyebilir, düzenleyebilir veya gerçek olduğunu onaylayabilirsiniz.',
     productsNote:
       'Örnek ürünler gerçek ürün değildir. Adını ve fiyatını düzenleyerek kendi ürününüz haline getirin ya da gizleyin; onaylarsanız satışa açık ürün olarak yayınlanır.',
+    attestationFailed:
+      'Onayınız şu an kaydedilemedi, bu yüzden hiçbir şey yayınlanmadı. Tekrar deneyebilir ya da bu içerikleri gizleyerek yayınlayabilirsiniz.',
+    deleteItem: 'Sil',
     hide: 'Gizle',
     edit: 'Düzenle',
     approve: 'Gerçek, onaylıyorum',
@@ -46,6 +49,9 @@ const COPY = {
     body: 'The content below was drafted by AI as a sample; it may not be a real customer review, figure, discount or price. Do not publish it unless it is true. For each section you can hide it, edit it, or confirm it is real.',
     productsNote:
       'Sample products are not real products. Edit the name and price to make them yours, or hide them; if you approve them they go live as products for sale.',
+    attestationFailed:
+      'Your approval could not be saved, so nothing was published. You can try again or hide this content and publish.',
+    deleteItem: 'Delete',
     hide: 'Hide',
     edit: 'Edit',
     approve: 'This is real, approve',
@@ -80,7 +86,9 @@ export function SamplePublishDialog({
   site,
   gateIds,
   publishing,
+  attestationFailed = false,
   onHideSections,
+  onDeleteItem,
   onEditSection,
   onPublish,
   onClose,
@@ -90,7 +98,11 @@ export function SamplePublishDialog({
   /** Digests the server reported as unresolved when publishing was refused. */
   gateIds: ReadonlySet<string>
   publishing: boolean
+  /** The server could not store the approval and published nothing. */
+  attestationFailed?: boolean
   onHideSections: (sectionIndexes: number[]) => void
+  /** Deletes one product item (hides the section if it was the last one). */
+  onDeleteItem: (sectionIndex: number, itemIndex: number) => void
   onEditSection: (sectionIndex: number) => void
   /** Publishes with the approved digests; `hideAll` also hides the rest first. */
   onPublish: (approvals: string[], hideSectionIndexes: number[]) => void
@@ -98,6 +110,15 @@ export function SamplePublishDialog({
 }) {
   const c = COPY[lang]
   const [approved, setApproved] = useState<ReadonlySet<string>>(new Set())
+
+  useEffect(() => {
+    if (publishing) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [publishing, onClose])
 
   // Live from the draft, so hiding or editing a section updates the list at once.
   const sections = useMemo(
@@ -143,6 +164,14 @@ export function SamplePublishDialog({
           <p id="sample-publish-body" className="text-sm leading-relaxed text-muted-foreground">
             {c.body}
           </p>
+          {attestationFailed && (
+            <p
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs leading-relaxed text-foreground"
+            >
+              {c.attestationFailed}
+            </p>
+          )}
           {hasProducts && (
             <p className="rounded-lg border border-border bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
               {c.productsNote}
@@ -168,7 +197,19 @@ export function SamplePublishDialog({
                       <span className="mt-0.5 shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-foreground">
                         {c.kinds[item.kind]}
                       </span>
-                      <span className="min-w-0 break-words">{item.label}</span>
+                      <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                      {item.kind === 'product' && item.itemIndex !== null && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteItem(section.sectionIndex, item.itemIndex as number)}
+                          disabled={publishing}
+                          aria-label={`${c.deleteItem}: ${item.label}`}
+                          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                        >
+                          <Trash2 className="h-3 w-3" aria-hidden />
+                          {c.deleteItem}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

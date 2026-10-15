@@ -12,6 +12,7 @@ import {
   approveSampleFindings,
   clearEditedSampleFlags,
   hideSampleSections,
+  removeOrHideSampleItem,
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
@@ -179,7 +180,13 @@ export function WebsitePreview({
       approvals?: string[],
     ) => Promise<
       | { url: string }
-      | { error: string; used?: number; total?: number; sections?: SampleSectionFinding[] }
+      | {
+          error: string
+          used?: number
+          total?: number
+          sections?: SampleSectionFinding[]
+          attestationFailed?: boolean
+        }
     >
     /** Takes the public site offline. The draft is left untouched. */
     unpublish?: () => Promise<void>
@@ -235,6 +242,7 @@ export function WebsitePreview({
   // Digests of the sample items the server refused to publish without approval.
   // Non-null opens the approval dialog.
   const [sampleGateIds, setSampleGateIds] = useState<ReadonlySet<string> | null>(null)
+  const [sampleAttestationFailed, setSampleAttestationFailed] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
   // The canonical tenant slug may be assigned during the first publish. Keep
   // it in local state so every URL shown by the editor switches to the same
@@ -450,6 +458,7 @@ export function WebsitePreview({
         if (result.error === SAMPLE_CONTENT_ERROR) {
           const ids = (result.sections ?? []).flatMap((section) => section.items.map((item) => item.id))
           setSampleGateIds(new Set(ids))
+          setSampleAttestationFailed(Boolean(result.attestationFailed))
           return
         }
         setSampleGateIds(null)
@@ -1337,7 +1346,11 @@ export function WebsitePreview({
           site={currentSite}
           gateIds={sampleGateIds}
           publishing={publishState === 'publishing'}
+          attestationFailed={sampleAttestationFailed}
           onHideSections={(indexes) => commitSchema(hideSampleSections(currentSite, indexes))}
+          onDeleteItem={(sectionIndex, itemIndex) =>
+            commitSchema(removeOrHideSampleItem(currentSite, sectionIndex, itemIndex))
+          }
           onEditSection={(index) => {
             setSampleGateIds(null)
             setShowEdit(true)

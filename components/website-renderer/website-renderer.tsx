@@ -25,6 +25,7 @@ import {
 } from '@/components/website-renderer/store-catalog-context'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { isKeepInteractiveTarget } from '@/lib/preview-interactive'
+import { sectionHasSample } from '@/lib/sample-content'
 import { resolveHeaderSocialLinks } from '@/lib/social-links'
 
 /**
@@ -256,7 +257,26 @@ export function WebsiteRenderer({
             contactForm={contactForm}
           />
         )
-        if (!editSelection) return rendered
+        // Editor/landing preview only (`preview` is null on published and demo
+        // sites): flags sections still holding unapproved AI sample content.
+        const sampleBadge =
+          preview && sectionHasSample(section) ? (
+            <span
+              className="pointer-events-none absolute right-3 top-3 z-20 rounded-md bg-brand px-2 py-0.5 text-[11px] font-semibold text-brand-foreground shadow-sm"
+              data-gv-sample-badge
+            >
+              {data.meta.language === 'en' ? 'Sample' : 'Örnek'}
+            </span>
+          ) : null
+        if (!editSelection) {
+          if (!sampleBadge) return rendered
+          return (
+            <div key={`sample-${active}-${section.type}-${i}`} className="relative">
+              {rendered}
+              {sampleBadge}
+            </div>
+          )
+        }
         // Selecting a section for the editor must never also trigger the
         // section's own links/buttons (nav CTAs, "Add to cart", etc). The
         // capture-phase handler intercepts the click before it reaches any
@@ -284,6 +304,7 @@ export function WebsiteRenderer({
             )}
           >
             {rendered}
+            {sampleBadge}
           </div>
         )
       })}

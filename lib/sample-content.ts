@@ -281,6 +281,21 @@ export function removeSampleItem(site: WebsiteSchema, sectionIndex: number, item
   return { ...site, sections: site.sections.map((s, i) => (i === sectionIndex ? next : s)) }
 }
 
+/**
+ * Deletes one flagged item. When it is the section's only item the section is
+ * hidden instead, so a store never ends up with an empty product grid and
+ * nothing the owner may still want is destroyed.
+ */
+export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number, itemIndex: number): WebsiteSchema {
+  const section = site.sections[sectionIndex]
+  const spec = section && ITEM_SPECS[section.type]
+  if (!section || !spec) return site
+  const items = itemsOf(section, spec)
+  if (!items[itemIndex]) return site
+  if (items.length <= 1) return hideSampleSections(site, [sectionIndex])
+  return removeSampleItem(site, sectionIndex, itemIndex)
+}
+
 /** True when the section still holds at least one flagged item (drives editor badges). */
 export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
