@@ -60,12 +60,12 @@ describe('advanced AI visibility once the advanced model differs', () => {
     expect(advancedAiBadgeState(undefined, true)).toBeNull()
   })
 
-  it('shows the pricing row on PRO and e-commerce only', () => {
+  it('shows the pricing row on the PRO card, which e-commerce inherits', () => {
     for (const code of CODES) {
       const ids = buildPlanView(code, 'yearly', 'tr', { advancedAi: true }).groups.flatMap((g) =>
         g.items.map((i) => i.id),
       )
-      expect(ids.includes('advancedAi')).toBe(code === 'pro' || code === 'ecommerce')
+      expect(ids.includes('advancedAi')).toBe(code === 'pro')
     }
   })
 })

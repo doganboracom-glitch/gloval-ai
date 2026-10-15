@@ -41,7 +41,7 @@ import type {
 import { tenantHost } from '@/lib/domains'
 import { purchaseBrandingRemoval } from '@/lib/project-entitlements'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
-import { PlanCard } from '@/components/pricing/plan-card'
+import { PlanGrid } from '@/components/pricing/plan-grid'
 import {
   CheckoutConfirmDialog,
   type CheckoutItem,
@@ -1104,17 +1104,11 @@ export function BillingClient({
         {/* Ana sayfadaki paketlerin birebir tasarımı; CTA'lar gerçek abonelik
             aksiyonlarına bağlı. */}
         <section className="mt-8">
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {PLANS.map((plan) => (
-              <PlanCard
-                key={plan.code}
-                plan={plan}
-                cycle={marketingCycle}
-                currentPlanCode={highlightedPlanCode}
-                renderCta={({ code }) => renderPlanCta(code)}
-              />
-            ))}
-          </div>
+          <PlanGrid
+            cycle={marketingCycle}
+            currentPlanCode={highlightedPlanCode}
+            renderCta={({ code }) => renderPlanCta(code)}
+          />
         </section>
 
         {/* Tek seferlik ek AI işlemi paketleri */}

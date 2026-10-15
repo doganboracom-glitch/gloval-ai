@@ -227,8 +227,11 @@ describe('pricing copy only describes features that exist', () => {
       expect(labels('starter', lang)).not.toContain('versionHistory')
       expect(labels('pro', lang)).toContain('autoBackup')
       expect(labels('pro', lang)).toContain('versionHistory')
-      expect(labels('ecommerce', lang)).toContain('autoBackup')
-      expect(labels('ecommerce', lang)).toContain('versionHistory')
+      // The e-commerce card only lists what it adds on top of PRO, so it
+      // inherits both rows instead of repeating them.
+      expect(labels('ecommerce', lang)).not.toContain('autoBackup')
+      expect(labels('ecommerce', lang)).not.toContain('versionHistory')
+      expect(buildPlanView('ecommerce', 'yearly', lang).extendsLabel).toContain('PRO')
     }
   })
 
@@ -329,13 +332,12 @@ describe('credit box and GLOVAL ADS announcement (N1)', () => {
   it('shows GLOVAL ADS with a "soon" pill on PRO and e-commerce only', () => {
     for (const lang of ['tr', 'en']) {
       const soon = lang === 'tr' ? 'Yakında' : 'Soon'
-      for (const code of ['pro', 'ecommerce'] as const) {
-        const items = adsItems(code, lang)
-        expect(items).toHaveLength(1)
-        expect(items[0].badge).toBe(soon)
-        expect(items[0].excluded).toBe(true)
-      }
-      for (const code of ['free', 'starter'] as const) {
+      const items = adsItems('pro', lang)
+      expect(items).toHaveLength(1)
+      expect(items[0].badge).toBe(soon)
+      expect(items[0].excluded).toBe(true)
+      // E-commerce extends PRO, so the row is inherited rather than repeated.
+      for (const code of ['free', 'starter', 'ecommerce'] as const) {
         expect(adsItems(code, lang)).toHaveLength(0)
       }
     }
@@ -358,9 +360,9 @@ describe('advanced AI row', () => {
       g.items.map((i) => i.id),
     )
 
-  it('is listed on PRO and e-commerce cards only, and only when the model differs', () => {
+  it('is listed on the PRO card (inherited by e-commerce), and only when the model differs', () => {
     for (const code of CODES) {
-      const expected = code === 'pro' || code === 'ecommerce'
+      const expected = code === 'pro'
       expect(idsOf(code, true).includes('advancedAi')).toBe(expected)
       expect(idsOf(code, false).includes('advancedAi')).toBe(false)
     }

@@ -60,6 +60,11 @@ export type PlanCopyItem = {
   badge?: string
   /** Lists the row under another comparison category than its card group. */
   tableGroup?: 'ai'
+  /**
+   * Position in the plan's "most valuable" ranking (0 = most valuable). Set by
+   * `buildPlanView` from `PINNED_ITEM_IDS`; the collapsed card shows these first.
+   */
+  pin?: number
 }
 
 export type PlanCopyOptions = {
@@ -94,6 +99,9 @@ export type CommonPlanCopy = {
   domainGift: string
   perMonth: string
   perYear: string
+  /** Feature-list toggle under each plan card. */
+  showAllFeatures: string
+  showFewerFeatures: string
   /** Tooltip of the "i" icon in the credit box (rollover + balance cap). */
   maxBalanceTip: (maxBalance: string) => string
   saving: (amountTL: string) => string
@@ -224,6 +232,8 @@ const TR: Strings = {
     domainGift: '.com.tr alan adı hediye',
     perMonth: '/ ay',
     perYear: '/ yıl',
+    showAllFeatures: 'Tüm özellikleri göster',
+    showFewerFeatures: 'Daha az göster',
     maxBalanceTip: (n) =>
       `Kullanılmayan işlemler devreder; en fazla ${n} işlem bakiyesi birikebilir`,
     saving: (amount) => `Yıllık ödemede ${amount} avantaj`,
@@ -385,6 +395,8 @@ const EN: Strings = {
     domainGift: 'Free .com.tr domain',
     perMonth: '/ month',
     perYear: '/ year',
+    showAllFeatures: 'Show all features',
+    showFewerFeatures: 'Show less',
     maxBalanceTip: (n) =>
       `Unused actions carry over; up to ${n} actions can accumulate`,
     saving: (amount) => `Save ${amount} with yearly billing`,
@@ -576,14 +588,12 @@ function mailGroup(s: Strings, code: PlanCode): PlanCopyGroup[] {
 }
 
 /**
- * Builds the card content for one plan. TR and EN share this single structure,
- * so both languages always list the same groups and items in the same order.
+ * Everything a plan lists on its own, BEFORE de-duplication against the plan
+ * below. TR and EN share this single structure, so both languages always list
+ * the same groups and items in the same order.
  */
-export function buildPlanView(
+function buildRawPlanView(
   code: PlanCode,
-  // Kept so every caller passes the billing cycle; no row depends on it now
-  // that the .com.tr gift is only shown under the price.
-  _cycle: BillingCycle,
   langInput: string | null | undefined,
   options: PlanCopyOptions = {},
 ): PlanView {
@@ -824,6 +834,114 @@ const PARENT_PLAN: Record<PlanCode, PlanCode | null> = {
 
 const GROUP_ORDER: GroupKey[] = ['site', 'store', 'email', 'support']
 
+/** How many feature rows a collapsed plan card shows. */
+export const PLAN_VISIBLE_ITEM_COUNT = 6
+
+/**
+ * The most valuable rows of each plan, best first. The collapsed card shows
+ * these (topped up in list order if a plan has fewer than six); everything else
+ * sits behind "Show all features". Ids that a plan does not list (or that were
+ * de-duplicated away) are simply skipped.
+ */
+export const PINNED_ITEM_IDS: Record<PlanCode, string[]> = {
+  // FREE: the limits a visitor tries first (sites, pages), then the trust basics.
+  free: ['sites', 'pages', 'glovalAddress', 'ssl', 'seo', 'mobile'],
+  // STARTER: the reasons to leave FREE (own domain, backups, a mailbox, support).
+  starter: ['sites', 'pages', 'customDomain', 'autoBackup', 'mailboxes', 'support'],
+  // PRO: what it adds over STARTER: more sites, catalog, daily backups, restore,
+  // advanced AI, priority support. Pages and the mailbox count sit behind the toggle.
+  pro: ['sites', 'catalogOrder', 'autoBackup', 'versionHistory', 'advancedAi', 'support'],
+  // E-COMMERCE: the store itself first (products, store pages, orders, payments);
+  // the 5 mailboxes close the list.
+  ecommerce: ['sites', 'products', 'storePages', 'cartOrders', 'paymentMethods', 'mailboxes'],
+}
+
+/** Two rows are "the same" when a reader would see no difference on the card. */
+function itemSignature(item: PlanCopyItem): string {
+  return [item.label, item.value ?? '', item.excluded ? 1 : 0, item.badge ?? ''].join('|')
+}
+
+/** What a plan has once everything below it is counted (id -> signature). */
+function inheritedSignatures(
+  code: PlanCode,
+  langInput: string | null | undefined,
+  options: PlanCopyOptions,
+): Map<string, string> {
+  const chain: PlanCode[] = []
+  for (let c: PlanCode | null = code; c; c = PARENT_PLAN[c]) chain.unshift(c)
+  const signatures = new Map<string, string>()
+  for (const c of chain) {
+    for (const group of buildRawPlanView(c, langInput, options).groups) {
+      for (const item of group.items) signatures.set(item.id, itemSignature(item))
+    }
+  }
+  return signatures
+}
+
+/**
+ * Builds the card content for one plan. Cards that "extend" a lower plan drop
+ * every row the lower plan already has in identical form; a row that changed
+ * (3 -> 4 sites, 50 -> 150 products, weekly -> daily backups) stays.
+ */
+export function buildPlanView(
+  code: PlanCode,
+  // Kept so every caller passes the billing cycle; no row depends on it now
+  // that the .com.tr gift is only shown under the price.
+  _cycle: BillingCycle,
+  langInput: string | null | undefined,
+  options: PlanCopyOptions = {},
+): PlanView {
+  const raw = buildRawPlanView(code, langInput, options)
+  const parent = PARENT_PLAN[code]
+  const inherited =
+    raw.extendsLabel && parent ? inheritedSignatures(parent, langInput, options) : null
+  const pinOrder = PINNED_ITEM_IDS[code]
+
+  const groups = raw.groups
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !inherited || inherited.get(item.id) !== itemSignature(item))
+        .map((item) => {
+          const pin = pinOrder.indexOf(item.id)
+          return pin === -1 ? item : { ...item, pin }
+        }),
+    }))
+    .filter((group) => group.items.length > 0)
+
+  return { ...raw, groups }
+}
+
+export type PlanItemSplit = {
+  /** The rows shown while the card is collapsed, most valuable first. */
+  featured: PlanCopyItem[]
+  /** Everything else, in the original order, still grouped under its heading. */
+  restGroups: PlanCopyGroup[]
+  hiddenCount: number
+}
+
+/** Splits a plan's rows into the always-visible top rows and the collapsible rest. */
+export function splitPlanItems(
+  view: PlanView,
+  limit: number = PLAN_VISIBLE_ITEM_COUNT,
+): PlanItemSplit {
+  const all = view.groups.flatMap((group) => group.items)
+  const pinned = all
+    .filter((item) => item.pin !== undefined)
+    .sort((a, b) => a.pin! - b.pin!)
+  const featured = pinned.slice(0, limit)
+  if (featured.length < limit) {
+    for (const item of all) {
+      if (featured.length >= limit) break
+      if (!featured.includes(item)) featured.push(item)
+    }
+  }
+  const restGroups = view.groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !featured.includes(item)) }))
+    .filter((group) => group.items.length > 0)
+  return { featured, restGroups, hiddenCount: all.length - featured.length }
+}
+
 /**
  * Comparison table, DERIVED from the card items so it can never list a feature
  * the cards do not (or the other way round). Limit-style rows (sites, pages,
@@ -858,7 +976,7 @@ export function buildComparison(
     if (parent) {
       for (const [key, value] of cells[parent]) cells[code].set(key, value)
     }
-    for (const group of buildPlanView(code, 'yearly', lang, options).groups) {
+    for (const group of buildRawPlanView(code, lang, options).groups) {
       for (const item of group.items) {
         const target = item.tableGroup ?? group.key
         const key = `${target}:${item.id}`

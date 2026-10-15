@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
-import { PlanCard } from '@/components/pricing/plan-card'
+import { PlanGrid } from '@/components/pricing/plan-grid'
 import { ComparisonAccordion } from '@/components/pricing/comparison-accordion'
 import { CreditRulesDialog } from '@/components/pricing/credit-rules-dialog'
 import { useLanguage } from '@/components/language-provider'
 import { getCommonPlanCopy } from '@/lib/plan-copy'
-import { PLANS, type BillingCycle } from '@/lib/pricing-config'
+import type { BillingCycle } from '@/lib/pricing-config'
 
 const CYCLES: Array<{ value: BillingCycle; label: string }> = [
   { value: 'monthly', label: 'Aylık' },
@@ -69,11 +69,7 @@ export function Pricing() {
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {PLANS.map((plan) => (
-            <PlanCard key={plan.code} plan={plan} cycle={cycle} />
-          ))}
-        </div>
+        <PlanGrid className="mt-12" cycle={cycle} />
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
           AI işlemlerin tükendiğinde ne oluyor?{' '}
