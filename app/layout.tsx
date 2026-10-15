@@ -7,6 +7,7 @@ import { cookies } from 'next/headers'
 import { LanguageProvider } from '@/components/language-provider'
 import { DEFAULT_LANG, LANG_COOKIE, normalizeLang } from '@/lib/i18n'
 import { getDirection } from '@/lib/locale-registry'
+import { OG_IMAGE_SIZE, SEO_PAGES, ogImageUrlForPage } from '@/lib/seo/page-seo'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 const spaceGrotesk = Space_Grotesk({
@@ -22,9 +23,11 @@ const notoSansArabic = Noto_Sans_Arabic({
   variable: '--font-noto-arabic',
 })
 
-const siteTitle = 'GLOVAL AI — Yapay zeka ile gerçek web siteleri'
-const siteDescription =
-  'Ne istediğini anlat, GLOVAL AI saniyeler içinde çalışan, gerçek bir web sitesi kursun. Describe your idea, get a real website in seconds.'
+// Fallback for routes without their own metadata; the marketing pages override
+// all of it through buildPageMetadata (lib/seo/page-seo.ts).
+const siteTitle = SEO_PAGES.home.tr.title
+const siteDescription = SEO_PAGES.home.tr.description
+const siteOgImage = ogImageUrlForPage('home', 'tr')
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://gloval.ai'),
@@ -41,18 +44,17 @@ export const metadata: Metadata = {
     locale: 'tr_TR',
     images: [
       {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'GLOVAL AI — Yapay zeka ile gerçek web siteleri',
-      },
-    ],
+      url: siteOgImage,
+      ...OG_IMAGE_SIZE,
+      alt: 'GLOVAL AI — Yapay zekâ ile gerçek web siteleri',
+    },
+  ],
   },
   twitter: {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
-    images: ['/og-image.png'],
+    images: [siteOgImage],
   },
   verification: {
     // Google Search Console ownership proof for the gloval.ai property.

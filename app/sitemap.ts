@@ -29,16 +29,18 @@ function entry(
   options: { lastModified?: string | Date; changeFrequency?: Entry['changeFrequency']; priority?: number } = {},
 ): Entry {
   const url = platformUrl(path)
-  const separator = path.includes('?') ? '&' : '?'
   return {
     url,
-    lastModified: options.lastModified ?? new Date(),
+    // Omitted unless the page has a real modification date: stamping every
+    // entry with "now" on each request teaches crawlers to ignore lastmod.
+    ...(options.lastModified ? { lastModified: options.lastModified } : {}),
     changeFrequency: options.changeFrequency ?? 'monthly',
     priority: options.priority ?? 0.6,
     alternates: {
       languages: {
-        tr: url,
-        en: `${url}${separator}lang=en`,
+        'tr-TR': url,
+        en: `${url}?lang=en`,
+        'x-default': url,
       },
     },
   }
