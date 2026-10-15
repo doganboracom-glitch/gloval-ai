@@ -161,6 +161,12 @@ export class MockDomainProvider implements DomainProvider {
     return null
   }
 
+  async listActiveForProject(projectId: string): Promise<CustomDomain[]> {
+    return [...store.values()]
+      .filter((d) => d.websiteProjectId === projectId && d.status === 'active')
+      .map(clone)
+  }
+
   async findActiveByHostname(domain: string): Promise<CustomDomain | null> {
     for (const d of store.values()) {
       if (d.domain === domain && d.status === 'active') return clone(d)

@@ -328,7 +328,14 @@ export function companyFromSite(
   profile?: CompanyProfile,
 ): SiteLegalCompany {
   const contact = sections.find((s) => s.type === 'contact') as
-    | { address?: string; phone?: string; email?: string }
+    | { address?: string; phone?: string; email?: string; sampleFields?: string[] }
     | undefined
-  return { name, seller: sellerFromProfile(profile, contact) }
+  // Unconfirmed placeholder values must never end up in an official legal text.
+  const flagged = new Set(contact?.sampleFields ?? [])
+  const confirmed = contact && {
+    address: flagged.has('address') ? undefined : contact.address,
+    phone: flagged.has('phone') ? undefined : contact.phone,
+    email: flagged.has('email') ? undefined : contact.email,
+  }
+  return { name, seller: sellerFromProfile(profile, confirmed) }
 }

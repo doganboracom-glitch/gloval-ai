@@ -466,6 +466,11 @@ export const contactSection = z.object({
     .max(2000)
     .optional()
     .describe('Owner-supplied Google Maps embed URL. Never generate this; leave it unset.'),
+  sampleFields: z
+  .array(z.enum(['email', 'phone', 'address', 'mapEmbed']))
+  .max(4)
+  .optional()
+  .describe('Internal: contact fields holding unconfirmed placeholder values. Never set by the model.'),
   fields: z
     .array(z.string())
     .max(6)
@@ -638,8 +643,12 @@ export const contactActionsSchema = z.object({
   whatsappMessage: z
     .string()
     .optional()
-    .describe('Prefilled WhatsApp message shown when a visitor opens the chat'),
-})
+  .describe('Prefilled WhatsApp message shown when a visitor opens the chat'),
+  placeholderFallback: z
+  .boolean()
+  .optional()
+  .describe('Set to false on new sites so the shared placeholder number is never used as a fallback'),
+  })
 
 /**
  * Social media links. Every field is optional so sites saved before this

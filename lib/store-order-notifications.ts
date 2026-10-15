@@ -85,8 +85,10 @@ export function findContactEmail(schema: unknown): string | undefined {
   }
   for (const list of sectionLists) {
     for (const section of list as unknown[]) {
-      const s = section as { type?: unknown; email?: unknown } | null
+      const s = section as { type?: unknown; email?: unknown; sampleFields?: unknown } | null
       if (s?.type === 'contact') {
+        // An unconfirmed placeholder address is never a reply-to.
+        if (Array.isArray(s.sampleFields) && s.sampleFields.includes('email')) continue
         const email = sanitizeReplyTo(typeof s.email === 'string' ? s.email : '')
         if (email) return email
       }

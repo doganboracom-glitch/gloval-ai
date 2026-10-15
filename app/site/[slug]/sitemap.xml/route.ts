@@ -1,32 +1,42 @@
 import { getPublishedSite } from '@/lib/projects'
 import { getStoreProducts } from '@/lib/store'
-import { tenantUrl } from '@/lib/domains'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
 
 /**
  * Per-tenant sitemap for a published site.
  *
  * Requests to `<slug>.gloval.site/sitemap.xml` are rewritten by the middleware
  * onto `/site/<slug>/sitemap.xml`, so every published site serves its own
- * sitemap on its own canonical host.
+ * sitemap on its own host.
  *
  * This is a plain Route Handler rather than Next's `sitemap.ts` metadata
  * convention because that convention does not receive the `[slug]` route
- * param, which is exactly what identifies the tenant here. URLs are always
- * built with `tenantUrl()` — the internal `/site/<slug>` path must never leak
- * into a sitemap.
+ * param, which is exactly what identifies the tenant here. URLs use the site's
+ * canonical origin (a live custom domain when one is bound, otherwise
+ * `<slug>.gloval.site`) — the internal `/site/<slug>` path must never leak into
+ * a sitemap, and the sitemap must not list URLs the pages canonicalise away from.
  */
 
 // Published content changes whenever the owner republishes.
 export const dynamic = 'force-dynamic'
 
-type UrlEntry = { loc: string; changefreq: string; priority: string }
+type UrlEntry = { loc: string; changefreq: string; priority: string; lastmod?: string | null }
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
 
 function toXml(entries: UrlEntry[]): string {
   const urls = entries
-    .map(
-      (e) =>
-        `  <url>\n    <loc>${e.loc}</loc>\n    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`,
-    )
+    .map((e) => {
+      const lastmod = e.lastmod ? `\n    <lastmod>${e.lastmod}</lastmod>` : ''
+      return `  <url>\n    <loc>${escapeXml(e.loc)}</loc>${lastmod}\n    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`
+    })
     .join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
 }
@@ -41,21 +51,22 @@ export async function GET(
     return new Response('Not found', { status: 404 })
   }
 
-  const base = tenantUrl(slug)
+  const { origin: base, lastModified } = await getSiteSeoContext(slug)
   const entries: UrlEntry[] = [
-    { loc: base, changefreq: 'weekly', priority: '1.0' },
+    { loc: base, changefreq: 'weekly', priority: '1.0', lastmod: lastModified },
   ]
 
   // Store routes only exist for sites that actually sell something. Checkout
   // and order-confirmation pages are transactional and stay out of the sitemap.
   const products = await getStoreProducts(slug).catch(() => [])
   if (products.length > 0) {
-    entries.push({ loc: `${base}/store`, changefreq: 'weekly', priority: '0.8' })
+    entries.push({ loc: `${base}/store`, changefreq: 'weekly', priority: '0.8', lastmod: lastModified })
     for (const product of products) {
       entries.push({
         loc: `${base}/store/${product.slug}`,
         changefreq: 'weekly',
         priority: '0.6',
+        lastmod: toIso(product.created_at),
       })
     }
   }
@@ -66,4 +77,9 @@ export async function GET(
       'Cache-Control': 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400',
     },
   })
+}
+
+function toIso(value: string | undefined): string | null {
+  const time = value ? Date.parse(value) : NaN
+  return Number.isNaN(time) ? null : new Date(time).toISOString()
 }

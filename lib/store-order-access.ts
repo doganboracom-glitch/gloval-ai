@@ -161,7 +161,7 @@ export async function getOrderConfirmation(
     : null
   const bankMissing = bankApplies && !bank && isAwaitingBankTransfer(bankInput)
 
-  const schema = (project.schema_data ?? {}) as { meta?: { language?: 'tr' | 'en' }; sections?: Array<{ type?: string; email?: string; hidden?: boolean }> }
+  const schema = (project.schema_data ?? {}) as { meta?: { language?: 'tr' | 'en' }; sections?: Array<{ type?: string; email?: string; hidden?: boolean; sampleFields?: string[] }> }
   const contact = schema.sections?.find((section) => section.type === 'contact' && section.hidden !== true)
   const { data: domain } = await admin
     .from('custom_domains')
@@ -180,7 +180,7 @@ export async function getOrderConfirmation(
     payment_provider: provider,
     language: schema.meta?.language === 'en' ? 'en' : 'tr',
     store_base_url: domain?.domain ? `https://${domain.domain}` : null,
-    contact_email: contact?.email ?? null,
+    contact_email: contact?.sampleFields?.includes('email') ? null : (contact?.email ?? null),
     has_contact_section: !!contact,
     bank,
     bank_missing: bankMissing,

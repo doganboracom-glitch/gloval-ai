@@ -180,6 +180,17 @@ export class SupabaseDomainProvider implements DomainProvider {
     return data ? toDomain(data as Row) : null
   }
 
+  async listActiveForProject(projectId: string): Promise<CustomDomain[]> {
+    if (!UUID_RE.test(projectId)) return []
+    const { data, error } = await this.db()
+      .from('custom_domains')
+      .select(COLUMNS)
+      .eq('website_project_id', projectId)
+      .eq('status', 'active')
+    if (error) throw error
+    return ((data ?? []) as Row[]).map(toDomain)
+  }
+
   async findActiveByHostname(domain: string): Promise<CustomDomain | null> {
     const { data, error } = await this.db()
       .from('custom_domains')

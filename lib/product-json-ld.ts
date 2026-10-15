@@ -10,7 +10,7 @@ export function safeJsonLd(value: unknown): string {
     .replace(/\u2029/g, '\\u2029')
 }
 
-export function buildProductJsonLd(product: StoreProduct) {
+export function buildProductJsonLd(product: StoreProduct, url?: string) {
   const availability = product.track_stock === false
     ? 'https://schema.org/InStock'
     : product.stock <= 0
@@ -24,8 +24,10 @@ export function buildProductJsonLd(product: StoreProduct) {
     image: product.images.map((item) => item.url),
     description: product.description ?? undefined,
     ...(product.sku ? { sku: product.sku } : {}),
+    ...(url ? { url } : {}),
     offers: {
       '@type': 'Offer',
+      ...(url ? { url } : {}),
       price: (product.price_cents / 100).toFixed(2),
       priceCurrency: product.currency,
       availability,
@@ -33,6 +35,6 @@ export function buildProductJsonLd(product: StoreProduct) {
   }
 }
 
-export function productJsonLdScript(product: StoreProduct): string {
-  return safeJsonLd(buildProductJsonLd(product))
+export function productJsonLdScript(product: StoreProduct, url?: string): string {
+  return safeJsonLd(buildProductJsonLd(product, url))
 }
