@@ -1,6 +1,14 @@
 import { LegalBlocks } from '@/components/legal/legal-blocks'
 import { parseLegalMarkup } from '@/lib/legal-markup'
-import { blogListPath, blogPostPath, postDescription, postTitle, type BlogPagination, type BlogPost } from '@/lib/blog'
+import {
+  blogListPath,
+  blogPostPath,
+  postDescription,
+  postTitle,
+  sanitizeBlogBody,
+  type BlogPagination,
+  type BlogPost,
+} from '@/lib/blog'
 
 type Lang = 'tr' | 'en'
 
@@ -135,7 +143,7 @@ export function BlogPostView({
         />
       ) : null}
       <div className="mt-8">
-        <LegalBlocks blocks={parseLegalMarkup(post.body)} />
+        <LegalBlocks blocks={parseLegalMarkup(sanitizeBlogBody(post.body))} />
       </div>
 
       {previous || next ? (

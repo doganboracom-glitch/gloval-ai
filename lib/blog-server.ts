@@ -1,6 +1,6 @@
 import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { livePosts, type BlogPost, type BlogStatus } from '@/lib/blog'
+import { livePosts, sanitizeBlogBody, type BlogPost, type BlogStatus } from '@/lib/blog'
 import { getTenantSlugFromHost, isForeignHost } from '@/lib/domains'
 
 /**
@@ -50,7 +50,8 @@ export function rowToPost(row: Row): BlogPost {
     slug: row.slug,
     title: row.title,
     excerpt: row.excerpt,
-    body: row.body ?? '',
+    // Defence in depth: whatever is stored, raw markup never reaches a reader.
+    body: sanitizeBlogBody(row.body ?? ''),
     keywords: row.keywords ?? [],
     seoTitle: row.seo_title,
     metaDescription: row.meta_description,

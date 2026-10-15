@@ -34,6 +34,8 @@ export type BlogPost = {
 export const BLOG_PAGE_SIZE = 9
 export const BLOG_RSS_LIMIT = 50
 export const BLOG_BODY_MAX = 40000
+/** Safety cap, the same on every plan (blog is not a paid feature). */
+export const BLOG_MAX_POSTS = 500
 
 /** Segments under `/blog` that are served by the platform, not by a post. */
 const RESERVED_POST_SLUGS: ReadonlySet<string> = new Set(['rss.xml', 'page', 'feed', 'sitemap.xml'])
