@@ -214,7 +214,7 @@ describe('pricing copy only describes features that exist', () => {
       for (const claim of REMOVED_CLAIMS) expect(texts).not.toContain(claim)
     }
     expect(Object.keys(UPGRADE_PROMPTS).sort()).toEqual(
-      ['advancedAi', 'analytics', 'customDomain', 'phone', 'social', 'whatsapp'].sort(),
+      ['advancedAi', 'analytics', 'customDomain', 'logoStudio', 'phone', 'social', 'whatsapp'].sort(),
     )
   })
 

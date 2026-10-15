@@ -25,6 +25,7 @@ export type LockedFeatureKey =
   | 'analytics'
   | 'social'
   | 'advancedAi'
+  | 'logoStudio'
 
 /* -------------------------------------------------------------------------- */
 /* AI kredi sistemi                                                            */
@@ -470,6 +471,13 @@ export const UPGRADE_PROMPTS: Record<LockedFeatureKey, UpgradePrompt> = {
     title: 'Sosyal medya bağlantıları Starter ve PRO paketlerinde kullanılabilir.',
     description:
       'Instagram, Facebook, LinkedIn gibi hesaplarını sitene ekleyerek ziyaretçilerini takipçine dönüştür.',
+    primaryCta: 'Starter’a Geç',
+    secondaryCta: 'PRO’yu İncele',
+  },
+  logoStudio: {
+    title: 'Logo stüdyosu Starter ve PRO paketlerinde kullanılabilir.',
+    description:
+      'Markana özel logo önerileri oluştur, logonu ve favicon’unu tek yerden yönet. Kendi logonu yüklemek tüm paketlerde ücretsizdir.',
     primaryCta: 'Starter’a Geç',
     secondaryCta: 'PRO’yu İncele',
   },
