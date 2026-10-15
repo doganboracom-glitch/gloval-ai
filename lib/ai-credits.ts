@@ -34,6 +34,8 @@ export const AI_ACTION_COSTS = {
    *  every buyer-initiated attempt (not gated behind the free daily limit
    *  the way owner-initiated edits are). */
   tryOn: 5,
+  /** One AI blog post, charged only for a delivered, validated draft — see `app/api/blog/ai-write/route.ts`. */
+  blogWrite: 3,
 } as const
 
 export type AiActionCost = (typeof AI_ACTION_COSTS)[keyof typeof AI_ACTION_COSTS]

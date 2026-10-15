@@ -38,6 +38,7 @@ export function EditorClient({
   planCode,
   autoPublish,
   payments,
+  blog,
   catalog,
 }: {
   projectId: string
@@ -62,6 +63,8 @@ export function EditorClient({
   autoPublish?: boolean
   /** Non-null only for a store's owner/admin: enables the Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
+  /** Enables the Blog tab (project owner/admin). */
+  blog?: { projectId: string; topics: string[] } | null
   /** Owner-verified store catalog for the live preview (store sites only). */
   catalog?: EditorCatalog | null
 }) {
@@ -76,6 +79,7 @@ export function EditorClient({
       planCode={planCode}
       autoPublish={autoPublish}
       payments={payments ?? null}
+      blog={blog ?? null}
       catalog={catalog ?? null}
       onClose={() => {
         // Bust the client Router Cache so the dashboard reflects this project's

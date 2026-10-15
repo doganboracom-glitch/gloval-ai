@@ -9,6 +9,7 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 import { getEditorCatalog } from '@/lib/store-editor-catalog'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
+import { suggestBlogTopics } from '@/lib/blog-ai'
 
 export default async function EditorPage({
   params,
@@ -71,6 +72,19 @@ export default async function EditorPage({
   const catalog =
     commerce && commerce.mode !== 'none' ? await getEditorCatalog(projectId) : null
 
+  // "Blog" tab: project owner or an admin. Topic ideas are matched on the
+  // site's own words (never substrings) so the sector pool fits the business.
+  const canManageBlog = isOwner || isAdminEmail(user.email)
+  const meta = parsed.data.meta
+  const blogTopics = canManageBlog
+    ? suggestBlogTopics(
+        [project.name, meta.name, meta.tagline, meta.description, meta.audience, meta.seoTitle]
+          .filter(Boolean)
+          .join(' '),
+        language,
+      )
+    : []
+
   return (
     <EditorClient
       projectId={projectId}
@@ -85,6 +99,7 @@ export default async function EditorPage({
       autoPublish={autopublish === '1'}
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
       catalog={catalog}
+      blog={canManageBlog ? { projectId, topics: blogTopics } : null}
     />
   )
 }

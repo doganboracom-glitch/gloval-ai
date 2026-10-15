@@ -140,6 +140,7 @@ export function WebsitePreview({
   initialEditorOpen = false,
   planCode = 'free',
   payments = null,
+  blog = null,
   catalog = null,
   persist,
   autoPublish = false,
@@ -159,6 +160,8 @@ export function WebsitePreview({
   planCode?: PlanCode
   /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
+  /** Non-null for a project's owner/admin: enables the editor's Blog tab. */
+  blog?: { projectId: string; topics: string[] } | null
   /**
    * Store owner's active products + collections (loaded server-side), shown by
    * product showcase sections in the preview. Null: no data, empty-state message.
@@ -1526,6 +1529,7 @@ export function WebsitePreview({
               <WebsiteEditorPanel
                 site={currentSite}
                 payments={payments}
+                blog={blog}
                 publicSlug={liveSlug}
                 planCode={planCode}
                 onBeforeUpgrade={flushDraft}

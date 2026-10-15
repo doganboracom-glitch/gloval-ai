@@ -278,6 +278,7 @@ export async function POST(req: Request) {
       tracking: original.tracking,
       // Legal identity and legal texts are owner-only: the AI never sees or edits them.
       company: original.company,
+      blogProfile: original.blogProfile,
       legalDocs: original.legalDocs,
     }
     // Social links are a paid feature: on FREE whatever the model wrote is

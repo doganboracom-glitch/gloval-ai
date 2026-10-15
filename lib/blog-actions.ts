@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
-import { createBlogWriteDeps } from '@/lib/blog-store'
+import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
+import type { BlogPost } from '@/lib/blog'
 import {
   createBlogPost,
   deleteBlogPost,
@@ -43,6 +44,18 @@ function refresh(slug: string | null) {
 }
 
 type Denied = Extract<Access, { ok: false }>
+
+export async function listBlogPostsAction(
+  projectId: string,
+): Promise<{ ok: true; posts: BlogPost[] } | Denied> {
+  const access = await authorize(projectId)
+  if (!access.ok) return access
+  try {
+    return { ok: true, posts: await listProjectBlogPosts(projectId) }
+  } catch {
+    return { ok: true, posts: [] }
+  }
+}
 
 export async function createBlogPostAction(projectId: string, input: unknown): Promise<BlogWriteResult | Denied> {
   const access = await authorize(projectId)

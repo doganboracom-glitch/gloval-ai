@@ -87,6 +87,18 @@ export function createBlogStore(admin = createAdminClient()): BlogStore {
   }
 }
 
+/** Every post of one project for the editor list (drafts and scheduled included), newest first. */
+export async function listProjectBlogPosts(projectId: string, admin = createAdminClient()): Promise<BlogPost[]> {
+  const { data, error } = await admin
+    .from('site_blog_posts')
+    .select(COLUMNS)
+    .eq('project_id', projectId)
+    .order('updated_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  return (data ?? []).map((row) => rowToPost(row as Parameters<typeof rowToPost>[0]))
+}
+
 /** Posts held back as unapproved samples: they stay hidden until the owner confirms them. */
 export async function listSampleBlogPosts(
   projectId: string,
