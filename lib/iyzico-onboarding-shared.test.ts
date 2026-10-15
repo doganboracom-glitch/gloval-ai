@@ -2,8 +2,10 @@ import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   IYZICO_ONBOARDING_URL,
+  IYZICO_CAMPAIGN_COPY,
   buildIyzicoInstantHeaders,
   classifyIyzicoStatus,
+  isIyzicoCampaignEnabled,
   normalizeIyzicoPhone,
   readIyzicoInstantCredentials,
   signIyzicoInstant,
@@ -11,6 +13,38 @@ import {
 } from './iyzico-onboarding-shared'
 
 const FAKE = { developerKey: 'fake-dev-key', applicationName: 'fake-app', saltKey: 'fake-salt' }
+
+describe('campaign copy and flag', () => {
+  it('carries the exact, complete Turkish disclosure', () => {
+    expect(IYZICO_CAMPAIGN_COPY.tr).toBe(
+      "iyzico kampanyası: 7 gün vade ve %2,29 komisyon oranı; yalnızca tek çekim, Türk kartı işlemleri için, canlıya geçilen ay ve sonraki 3 ay geçerlidir. Kampanya koşulları iyzico'ya aittir ve iyzico tarafından değiştirilebilir.",
+    )
+  })
+
+  it.each(['tr', 'en'] as const)('never claims the rate is unlimited in time (%s)', (lang) => {
+    expect(IYZICO_CAMPAIGN_COPY[lang].toLowerCase()).not.toMatch(/süresiz|unlimited|lifetime|forever|permanent/)
+  })
+
+  it('is off by default and only the exact string "true" turns it on', () => {
+    expect(isIyzicoCampaignEnabled({})).toBe(false)
+    expect(isIyzicoCampaignEnabled({ IYZICO_INSTANT_SHOW_CAMPAIGN: '' })).toBe(false)
+    expect(isIyzicoCampaignEnabled({ IYZICO_INSTANT_SHOW_CAMPAIGN: '1' })).toBe(false)
+    expect(isIyzicoCampaignEnabled({ IYZICO_INSTANT_SHOW_CAMPAIGN: 'TRUE' })).toBe(false)
+    expect(isIyzicoCampaignEnabled({ IYZICO_INSTANT_SHOW_CAMPAIGN: 'true' })).toBe(true)
+  })
+
+  it('keeps the payload to name, surname, phone and email only (no domain)', () => {
+    const result = validateIyzicoInstantInput({
+      firstName: 'Ayşe',
+      lastName: 'Yılmaz',
+      email: 'a@b.com',
+      phone: '0532 123 45 67',
+    })
+    expect(result.ok && Object.keys(result.payload).sort()).toEqual(
+      ['contactName', 'contactSurname', 'gsmNumber', 'registrationEmail'],
+    )
+  })
+})
 
 describe('normalizeIyzicoPhone', () => {
   it.each([

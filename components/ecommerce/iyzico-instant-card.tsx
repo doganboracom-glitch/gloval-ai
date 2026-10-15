@@ -9,11 +9,12 @@ import {
   submitIyzicoInstant,
   type IyzicoInstantPrefill,
 } from '@/lib/iyzico-onboarding'
+import { IYZICO_CAMPAIGN_COPY } from '@/lib/iyzico-onboarding-shared'
 
 const copy = {
   tr: {
-    title: 'iyzico hesabınız yok mu? Hızlı ön başvuru',
-    intro: "iyzico'nun Gloval kullanıcılarına sunduğu ön başvuru kanalı; kampanya koşulları iyzico'ya aittir.",
+    title: 'iyzico ön başvuru',
+    intro: "iyzico hesabınız yoksa yalnızca ad, soyad, telefon ve e-posta bilgilerinizi iyzico'ya iletebilirsiniz.",
     firstName: 'Ad',
     lastName: 'Soyad',
     email: 'E-posta',
@@ -36,8 +37,8 @@ const copy = {
     } as Record<string, string>,
   },
   en: {
-    title: 'No iyzico account? Quick application',
-    intro: 'A quick application channel iyzico offers Gloval users; campaign terms belong to iyzico.',
+    title: 'iyzico pre-application',
+    intro: 'If you have no iyzico account, you can send only your name, surname, phone and email to iyzico.',
     firstName: 'First name',
     lastName: 'Last name',
     email: 'Email',
@@ -117,6 +118,11 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
       <div>
         <h3 id="iyzico-instant-title" className="font-medium">{c.title}</h3>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{c.intro}</p>
+        {prefill.showCampaign && (
+          <p className="mt-2 rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground">
+            {IYZICO_CAMPAIGN_COPY[lang === 'en' ? 'en' : 'tr']}
+          </p>
+        )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {([['firstName', c.firstName], ['lastName', c.lastName], ['email', c.email], ['phone', c.phone]] as const).map(([field, label]) => (

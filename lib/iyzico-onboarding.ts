@@ -12,6 +12,7 @@ import {
   buildIyzicoInstantHeaders,
   classifyIyzicoStatus,
   cleanName,
+  isIyzicoCampaignEnabled,
   readIyzicoInstantCredentials,
   validateIyzicoInstantInput,
   type IyzicoInstantError,
@@ -33,11 +34,12 @@ export type IyzicoInstantPrefill = {
   phone: string
   firstName: string
   lastName: string
+  showCampaign: boolean
 }
 
 export type IyzicoInstantResult = { ok: true } | { ok: false; error: IyzicoInstantError }
 
-const DISABLED: IyzicoInstantPrefill = { enabled: false, email: '', phone: '', firstName: '', lastName: '' }
+const DISABLED: IyzicoInstantPrefill = { enabled: false, email: '', phone: '', firstName: '', lastName: '', showCampaign: false }
 
 const REQUEST_TIMEOUT_MS = 15_000
 
@@ -56,6 +58,7 @@ export async function getIyzicoInstantPrefill(projectId: string): Promise<Iyzico
     .filter(Boolean)
   return {
     enabled: true,
+    showCampaign: isIyzicoCampaignEnabled(),
     email: user?.email ?? '',
     phone:
       typeof user?.phone === 'string' && user.phone

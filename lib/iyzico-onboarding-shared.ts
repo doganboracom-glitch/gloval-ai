@@ -9,6 +9,25 @@ export const MAX_EMAIL_LENGTH = 254
 /** Identifies the exact consent wording shown in the card; recorded with every request. */
 export const IYZICO_INSTANT_CONSENT_VERSION = 'instant-consent-v1'
 
+/**
+ * Campaign disclosure shown on the card ONLY while the campaign flag is on
+ * (IYZICO_INSTANT_SHOW_CAMPAIGN=true). The wording mirrors iyzico's written
+ * terms: single-installment Turkish-card transactions only, valid for the go-live
+ * month plus the next 3 months. It must never be shortened or reworded to imply
+ * the rate is unlimited in time or covers other transactions.
+ */
+export const IYZICO_CAMPAIGN_COPY = {
+  tr: "iyzico kampanyası: 7 gün vade ve %2,29 komisyon oranı; yalnızca tek çekim, Türk kartı işlemleri için, canlıya geçilen ay ve sonraki 3 ay geçerlidir. Kampanya koşulları iyzico'ya aittir ve iyzico tarafından değiştirilebilir.",
+  en: 'iyzico campaign: 7-day settlement and a 2.29% commission rate; applies only to single-installment, Turkish card transactions, for the month of going live and the following 3 months. Campaign terms belong to iyzico and may be changed by iyzico.',
+} as const
+
+/** Separate flag (default OFF): only the exact string "true" turns the campaign copy on. */
+export function isIyzicoCampaignEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.IYZICO_INSTANT_SHOW_CAMPAIGN === 'true'
+}
+
 export const IYZICO_INSTANT_LIMITS = {
   /** Max submitted + failed attempts per store inside the window. */
   perProject: 2,

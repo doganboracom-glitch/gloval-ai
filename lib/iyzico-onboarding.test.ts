@@ -204,14 +204,22 @@ describe('feature gating', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('is on and prefilled when secrets and table exist', async () => {
+  it('is on and prefilled when secrets and table exist, campaign copy off by default', async () => {
     expect(await getIyzicoInstantPrefill(PROJECT)).toEqual({
       enabled: true,
+      showCampaign: false,
       email: 'sahip@example.com',
       phone: '0532 123 45 67',
       firstName: 'Ayşe',
       lastName: 'Yılmaz',
     })
+  })
+
+  it('turns the campaign copy on only with IYZICO_INSTANT_SHOW_CAMPAIGN=true', async () => {
+    vi.stubEnv('IYZICO_INSTANT_SHOW_CAMPAIGN', 'true')
+    expect(await getIyzicoInstantPrefill(PROJECT)).toMatchObject({ enabled: true, showCampaign: true })
+    vi.stubEnv('IYZICO_INSTANT_SHOW_CAMPAIGN', '1')
+    expect(await getIyzicoInstantPrefill(PROJECT)).toMatchObject({ enabled: true, showCampaign: false })
   })
 })
 
