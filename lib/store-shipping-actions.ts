@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
+import { requireEcommerceMode, requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
 import { scheduleDeliveredNotification, scheduleShippedNotification } from '@/lib/store-order-notifications'
 import {
   markOrderDelivered,
@@ -58,7 +58,7 @@ export async function shipStoreOrder(
   orderId: string,
   input: { carrier: string; trackingNumber: string; renotify?: boolean },
 ): Promise<ShipOutcome> {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const result = await shipOrder(supabaseShippingStore(), {
     projectId,
     orderId,
@@ -74,7 +74,7 @@ export async function shipStoreOrder(
 }
 
 export async function markStoreOrderUndelivered(projectId: string, orderId: string) {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const result = await markOrderUndelivered(supabaseShippingStore(), { projectId, orderId })
   if (result.ok) revalidatePath(`/ecommerce/${projectId}/orders`)
   return result
@@ -84,7 +84,7 @@ export async function markStoreOrderDelivered(
   projectId: string,
   orderId: string,
 ): Promise<DeliverOutcome> {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const result = await markOrderDelivered(supabaseShippingStore(), { projectId, orderId })
   if (result.ok) {
     scheduleDeliveredNotification(orderId)

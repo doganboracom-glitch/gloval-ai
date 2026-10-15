@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { getProject } from '@/lib/projects'
 import { resolveCustomersPageAccess } from '@/lib/store-customers-page-access'
 import { listOwnerCustomers } from '@/lib/store-owner-customers'
@@ -23,7 +24,7 @@ export default async function CustomersPage({
 
   const project = await getProject(projectId)
   if (!project) notFound()
-  if (project.project_type !== 'ecommerce') notFound()
+  if ((await loadProjectCommerce({ id: projectId }))?.mode !== 'ecommerce') notFound()
 
   const result = await listOwnerCustomers({
     projectId,

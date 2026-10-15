@@ -1,5 +1,6 @@
 import 'server-only'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
+import { isEcommerceProjectId } from '@/lib/commerce-mode-server'
 
 export type CustomersPageAccess = 'allowed' | 'login' | 'not_found'
 
@@ -11,6 +12,7 @@ export type CustomersPageAccess = 'allowed' | 'login' | 'not_found'
 export async function resolveCustomersPageAccess(projectId: string): Promise<CustomersPageAccess> {
   try {
     await authorizeProjectOwner(projectId)
+    if (!(await isEcommerceProjectId(projectId))) return 'not_found'
     return 'allowed'
   } catch (err) {
     return err instanceof Error && err.message === 'UNAUTHENTICATED' ? 'login' : 'not_found'
