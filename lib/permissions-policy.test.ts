@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+// @ts-expect-error Next's compiled path-to-regexp ships no type declarations
 import { pathToRegexp } from 'next/dist/compiled/path-to-regexp'
-// @ts-expect-error next.config.mjs ships no type declarations
 import nextConfig from '../next.config.mjs'
 
 interface HeaderRule {
