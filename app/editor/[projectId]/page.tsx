@@ -8,6 +8,7 @@ import { EditorClient } from '@/components/editor/editor-client'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 import { getEditorCatalog } from '@/lib/store-editor-catalog'
+import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 
 export default async function EditorPage({
   params,
@@ -58,8 +59,9 @@ export default async function EditorPage({
   // "Sanal Poslar" tab: store sites only, and only for the owner or an admin.
   // The summary read re-checks ownership server side; a failure just hides
   // the badge, never the editor.
+  const commerce = await loadProjectCommerce({ id: projectId }).catch(() => null)
   const canManagePayments =
-    project.project_type === 'ecommerce' && (isOwner || isAdminEmail(user.email))
+    commerce?.mode === 'ecommerce' && (isOwner || isAdminEmail(user.email))
   const paymentSummary = canManagePayments
     ? await getPaymentSummary(projectId).catch(() => null)
     : null
@@ -67,7 +69,7 @@ export default async function EditorPage({
   // Owner-verified, project_id-keyed read that also works before first publish
   // (the public RPCs only serve published stores). A failure only empties the preview.
   const catalog =
-    project.project_type === 'ecommerce' ? await getEditorCatalog(projectId) : null
+    commerce && commerce.mode !== 'none' ? await getEditorCatalog(projectId) : null
 
   return (
     <EditorClient

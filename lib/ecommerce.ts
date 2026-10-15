@@ -3,7 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { revalidateStorefront } from '@/lib/store-revalidate'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireOwnedEcommerceProject, requireUser } from '@/lib/ecommerce-access'
+import {
+  requireCatalogCapablePlan,
+  requireEcommerceMode,
+  requireOwnedEcommerceProject,
+  requireUser,
+} from '@/lib/ecommerce-access'
+import { CATALOG_NOT_AVAILABLE, CATALOG_PRODUCT_LIMIT } from '@/lib/commerce-mode'
 import {
   normalizeProductImages,
   prepareProductImagesForSave,
@@ -235,7 +241,9 @@ function refreshStorefront(supabase: OwnedSupabase, projectId: string) {
 }
 
 export async function createProduct(projectId: string, input: ProductInput): Promise<ProductRow> {
-  const { supabase, userId } = await requireOwnedEcommerceProject(projectId)
+  const access = await requireOwnedEcommerceProject(projectId)
+  requireCatalogCapablePlan(access)
+  const { supabase, userId } = access
   const normalized = normalizeProductInput(input)
   const fields = {
     ...normalized,
@@ -248,9 +256,12 @@ export async function createProduct(projectId: string, input: ProductInput): Pro
   }
 
   // Server-side capacity: plan product limit + active "Ek Ürün" add-ons.
-  // Nothing the client sends influences this number.
+  // Nothing the client sends influences this number. The count below is
+  // account-wide (owner_id), so catalog and store products share one pool.
   const plan = await getMyCurrentPlan()
-  const limit = await getEffectiveProductLimit(userId, plan?.code)
+  const planCode = access.commerceMode === 'catalog' ? access.ownerPlanCode : plan?.code
+  let limit = await getEffectiveProductLimit(userId, planCode)
+  if (access.commerceMode === 'catalog' && limit === null) limit = CATALOG_PRODUCT_LIMIT
   if (limit !== null) {
     const { count, error: countErr } = await supabase
       .from('ecommerce_products')
@@ -284,7 +295,9 @@ export async function updateProduct(
   productId: string,
   input: ProductInput,
 ): Promise<ProductRow> {
-  const { supabase } = await requireOwnedEcommerceProject(projectId)
+  const access = await requireOwnedEcommerceProject(projectId)
+  requireCatalogCapablePlan(access)
+  const { supabase } = access
   const normalized = normalizeProductInput(input)
 
   const { data: current, error: currentErr } = await supabase
@@ -332,7 +345,7 @@ export type SaveProductResult =
       ok: false
       /** Problems tied to a field; empty for limit and unexpected failures. */
       errors: ProductFieldError[]
-      reason: 'invalid' | 'limit_reached' | 'unexpected'
+      reason: 'invalid' | 'limit_reached' | 'catalog_unavailable' | 'unexpected'
     }
 
 /**
@@ -356,6 +369,7 @@ export async function saveProduct(
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     if (message === PRODUCT_LIMIT_ERROR) return { ok: false, errors: [], reason: 'limit_reached' }
+    if (message === CATALOG_NOT_AVAILABLE) return { ok: false, errors: [], reason: 'catalog_unavailable' }
     if (message === 'INVALID_IMAGES' || message === 'INVALID_IMAGE_URL') {
       return { ok: false, errors: [{ field: 'images', code: message }], reason: 'invalid' }
     }
@@ -479,7 +493,9 @@ export type OrderWithItems = OrderRow & { items: OrderItemRow[] }
 
 /** Lists a store's orders (newest first). Owner + RLS scoped. */
 export async function listOrders(projectId: string): Promise<OrderWithItems[]> {
-  const { supabase } = await requireOwnedEcommerceProject(projectId)
+  const access = await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(access)
+  const { supabase } = access
   const orderColumns =
     'id, project_id, status, customer_name, customer_email, customer_phone, subtotal_cents, shipping_cents, total_cents, currency, payment_provider, payment_status, created_at'
   const withShipping = await supabase
@@ -588,7 +604,7 @@ export async function confirmOrderPayment(
   projectId: string,
   orderId: string,
 ): Promise<ManualOrderActionResult> {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const { userId: actorId } = await requireUser()
   const res = await confirmManualPayment(
     createAdminClient(),
@@ -604,7 +620,7 @@ export async function cancelOrderPayment(
   projectId: string,
   orderId: string,
 ): Promise<ManualOrderActionResult> {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const { userId: actorId } = await requireUser()
   const res = await cancelManualOrder(
     createAdminClient(),
@@ -626,7 +642,7 @@ export type RefundCardOrderResult =
  * order untouched and retryable.
  */
 export async function refundCardOrder(projectId: string, orderId: string): Promise<RefundCardOrderResult> {
-  await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(await requireOwnedEcommerceProject(projectId))
   const admin = createAdminClient()
   const loaded = await loadIyzicoCredentials(admin, projectId)
   if (!loaded.ok) {
@@ -653,7 +669,9 @@ export async function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
 ): Promise<void> {
-  const { supabase } = await requireOwnedEcommerceProject(projectId)
+  const access = await requireOwnedEcommerceProject(projectId)
+  requireEcommerceMode(access)
+  const { supabase } = access
   if (!ORDER_STATUSES.includes(status)) throw new Error('INVALID_STATUS')
 
   const { data: current } = await supabase

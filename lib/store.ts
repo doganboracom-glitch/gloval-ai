@@ -1,6 +1,8 @@
 "use server";
 
 import { persistPaymentIntent, voidOrder } from "@/lib/store-order-intent";
+import { COMMERCE_NOT_AVAILABLE } from "@/lib/commerce-mode";
+import { isEcommerceProjectId } from "@/lib/commerce-mode-server";
 import { headers } from "next/headers";
 import {
   prepareIyzicoCheckout,
@@ -301,6 +303,9 @@ export async function createOrder(
     .maybeSingle();
 
   if (!project) return { ok: false, error: "store_not_found" };
+  if (!(await isEcommerceProjectId(project.id))) {
+    return { ok: false, error: COMMERCE_NOT_AVAILABLE };
+  }
 
   // Idempotency: if this key already produced an order, return it.
   const { data: existing } = await admin

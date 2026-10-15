@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers'
 import { after } from 'next/server'
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isEcommerceProjectId } from '@/lib/commerce-mode-server'
 import { sendTransactionalEmail } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { hmacHex } from '@/lib/store-customer-keys'
@@ -223,7 +224,10 @@ async function resolveProject(
     .eq('published', true)
     .maybeSingle()
   if (error) console.error('[store-customer] project lookup failed', { code: error.code })
-  return data ? { id: data.id, name: asString(data.name) } : null
+  if (!data) return null
+  // Customer accounts exist only on full stores; catalog/none sites reject every path.
+  if (!(await isEcommerceProjectId(data.id))) return null
+  return { id: data.id, name: asString(data.name) }
 }
 
 function toCustomer(row: {

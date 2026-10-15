@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { getPaymentSettingsForOwner } from '@/lib/payment-settings'
@@ -23,7 +24,7 @@ export default async function PaymentSettingsPage({
 
   const project = await getProject(projectId)
   if (!project) notFound()
-  if (project.project_type !== 'ecommerce') notFound()
+  if ((await loadProjectCommerce({ id: projectId }))?.mode !== 'ecommerce') notFound()
 
   const settings = await getPaymentSettingsForOwner(projectId)
   const tryOnEnabled = await getTryOnEnabledForOwner(projectId)
