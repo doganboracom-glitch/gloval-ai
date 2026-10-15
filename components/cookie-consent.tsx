@@ -15,7 +15,7 @@ import {
   type CookieConsent as ConsentChoice,
 } from '@/lib/cookie-consent-storage'
 import {
-  COOKIE_BANNER_HEIGHT_VAR,
+  applyBannerInset,
   shouldUseCompactBanner,
 } from '@/lib/cookie-banner-layout'
 
@@ -153,17 +153,16 @@ export function CookieConsent() {
     const root = document.documentElement
     const node = bannerRef.current
     if (!open || !node) {
-      root.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
+      applyBannerInset(root, null)
       return
     }
-    const apply = () =>
-      root.style.setProperty(COOKIE_BANNER_HEIGHT_VAR, `${node.offsetHeight}px`)
+    const apply = () => applyBannerInset(root, node.offsetHeight)
     apply()
     const observer = new ResizeObserver(apply)
     observer.observe(node)
     return () => {
       observer.disconnect()
-      root.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
+      applyBannerInset(root, null)
     }
   }, [open, compact, customize])
 

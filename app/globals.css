@@ -171,8 +171,6 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    /* Set by the cookie banner while it is open so it never covers page controls. */
-    padding-bottom: var(--cookie-banner-h, 0px);
   }
   /* Geist/Space Grotesk ship no Arabic glyphs, so Arabic text rendered with
      font-sans/font-display falls back to tofu boxes. Tailwind's `@theme
@@ -385,4 +383,56 @@
 }
 .animate-fade-up {
   animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ---- Cookie banner inset -------------------------------------------------
+   `html[data-cookie-banner]` and `--cookie-banner-h` exist only while the
+   banner is on screen (see lib/cookie-banner-layout.ts), so none of this
+   applies once it is closed. Unlayered on purpose: it must beat the
+   min-height utilities. */
+html[data-cookie-banner] body {
+  padding-bottom: var(--cookie-banner-h);
+}
+/* Full-height shells give the reserved space back, so the padding above does
+   not turn a page that fits the viewport into one that scrolls. */
+html[data-cookie-banner] .min-h-svh,
+html[data-cookie-banner] .min-h-screen {
+  min-height: calc(100svh - var(--cookie-banner-h));
+}
+/* Modal dialogs are fixed overlays above the page padding; keep them (and
+   their action buttons) inside the area the banner leaves free. */
+html[data-cookie-banner] .fixed.inset-0 {
+  bottom: var(--cookie-banner-h);
+}
+/* Short viewports: tighten the auth screens so sign-up / login submit buttons
+   are visible without scrolling while the banner is showing. */
+@media (max-height: 760px) {
+  html[data-cookie-banner] .auth-shell {
+    padding-block: 0.75rem;
+    align-items: flex-start;
+  }
+  html[data-cookie-banner] .auth-shell .auth-back {
+    display: none;
+  }
+  html[data-cookie-banner] .auth-shell .auth-logo {
+    margin-bottom: 0.5rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-card {
+    padding: 1rem 1.25rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-card > p {
+    margin-top: 0.25rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-body {
+    margin-top: 0.75rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-body .flex-col.gap-5 {
+    gap: 0.625rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-body form.flex-col {
+    gap: 0.5rem;
+  }
+  html[data-cookie-banner] .auth-shell .auth-footer {
+    margin-top: 0.5rem;
+  }
 }
