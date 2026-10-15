@@ -83,12 +83,13 @@ export function EditorClient({
         snapshot: async (next) => {
           await snapshotProject({ id: projectId, schema: next })
         },
-        publish: async (next, approvals) => {
+        publish: async (next, approvals, confirmedReal) => {
           const result = await publishProject({
             id: projectId,
             schema: next,
             name: next.meta.name,
             approvals,
+            confirmedReal,
           })
   if (!result.ok) {
             if (result.reason === 'SAMPLE_CONTENT') {

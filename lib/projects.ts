@@ -19,14 +19,28 @@ import { syncStoreFromSchema } from '@/lib/store-sync'
 import { slugifyProjectName } from '@/lib/slug'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
+  CONTACT_ATTESTATION_VERSION,
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
   collectBlockingSampleFindings,
   collectSampleFindings,
+  resolveDetectedPlaceholders,
   stripSampleContent,
+  type SampleItemFinding,
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { loadAttestedDigests, recordAttestations, selectApproved } from '@/lib/content-attestations'
+import { getDomainProvider } from '@/lib/custom-domains/provider'
+
+/** Hosts connected to the project; e-mail on them is the owner's own. Fails to none (stricter). */
+async function connectedHosts(projectId: string): Promise<string[]> {
+  try {
+    return (await getDomainProvider().listActiveForProject(projectId)).map((domain) => domain.domain)
+  } catch (err) {
+    console.log('[v0] connected domain lookup failed, treating as none:', err instanceof Error ? err.message : err)
+    return []
+  }
+}
 
 export type ProjectType = 'corporate' | 'ecommerce'
 
@@ -327,6 +341,8 @@ export async function publishProject(input: {
   schema: WebsiteSchema
   name?: string
   approvals?: string[]
+  /** Digests of detected contact values the owner confirmed are real. */
+  confirmedReal?: string[]
 }): Promise<PublishResult> {
   const { db, elevated, userId } = await clientForProject(input.id)
   const requested = websiteSchema.parse(input.schema)
@@ -391,36 +407,61 @@ export async function publishProject(input: {
   // Contact placeholders are listed here too, but they are never "approved as
   // real": the owner either fixes them or acknowledges that they publish empty
   // (their digest in `approvals`). They are stripped from the public site either way.
-  const allFindings = collectSampleFindings(requested)
-  const findings = collectBlockingSampleFindings(requested)
+  //
+  // Contact-like values are also matched by content (known fake patterns). For
+  // those `detected` items an id in `approvals` means "hide it" and an id in
+  // `confirmedReal` means "this is real" (stored as a contact attestation).
+  const detection = { ownDomains: await connectedHosts(input.id) }
+  const allFindings = collectSampleFindings(requested, detection)
+  const findings = collectBlockingSampleFindings(requested, detection)
+  const detectedItems = allFindings.flatMap((section) =>
+    section.items.filter((item) => item.detected).map((item) => ({ sectionType: section.sectionType, item })),
+  )
   let parsed = requested
   if (allFindings.length > 0) {
     const attested = findings.length > 0 ? await loadAttestedDigests(input.id) : new Set<string>()
+    const contactAttested =
+      detectedItems.length > 0 ? await loadAttestedDigests(input.id, CONTACT_ATTESTATION_VERSION) : new Set<string>()
     const requestedIds = new Set(input.approvals ?? [])
+    const confirmedIds = new Set(input.confirmedReal ?? [])
+    const isReal = (item: SampleItemFinding) =>
+      item.confirmable !== false && (confirmedIds.has(item.id) || contactAttested.has(item.id))
     const unresolved = allFindings
       .map((section) => ({
         ...section,
-        items: section.items.filter((item) =>
-          section.sectionType === 'contact'
+        items: section.items.filter((item) => {
+          if (item.detected) return !isReal(item) && !requestedIds.has(item.id)
+          return section.sectionType === 'contact'
             ? !requestedIds.has(item.id)
-            : !attested.has(item.id) && !requestedIds.has(item.id),
-        ),
+            : !attested.has(item.id) && !requestedIds.has(item.id)
+        }),
       }))
       .filter((section) => section.items.length > 0)
     if (unresolved.length > 0) return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: unresolved }
 
     const fresh = selectApproved(findings, requestedIds).filter(({ item }) => !attested.has(item.id))
+    const freshReal = detectedItems.filter(({ item }) => item.confirmable !== false && confirmedIds.has(item.id) && !contactAttested.has(item.id))
     try {
       await recordAttestations({ projectId: input.id, userId, approvals: fresh })
+      await recordAttestations({
+        projectId: input.id,
+        userId,
+        approvals: freshReal,
+        statementVersion: CONTACT_ATTESTATION_VERSION,
+      })
     } catch (err) {
       // Fail closed: an approval that cannot be recorded is not an approval.
       // Nothing is saved or published; hiding the sections still works because
       // hidden sections are never findings and need no attestation.
       console.log('[v0] attestation could not be stored, refusing publish:', err instanceof Error ? err.message : err)
-      return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: findings, attestationFailed: true }
+      return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: allFindings, attestationFailed: true }
     }
+    const detectedIds = new Set(detectedItems.map(({ item }) => item.id))
+    const realIds = new Set(detectedItems.filter(({ item }) => isReal(item)).map(({ item }) => item.id))
+    const hideIds = new Set([...requestedIds].filter((id) => detectedIds.has(id) && !realIds.has(id)))
+    const resolved = resolveDetectedPlaceholders(requested, { hide: hideIds, real: realIds }, detection)
     // Approved items are the owner's content from here on: drop their flag.
-    parsed = approveSampleFindings(requested, new Set([...attested, ...requestedIds]))
+    parsed = approveSampleFindings(resolved, new Set([...attested, ...[...requestedIds].filter((id) => !detectedIds.has(id))]))
   }
 
   // Persist the draft first so the published snapshot matches what's on screen.

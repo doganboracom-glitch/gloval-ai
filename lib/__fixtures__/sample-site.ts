@@ -49,7 +49,11 @@ export function buildSampleSections(): Section[] {
 }
 
 export function buildSampleSite(sections: Section[] = buildSampleSections()): WebsiteSchema {
-  return { ...fallbackWebsite('kahve dükkanı', 'tr'), sections }
+  return {
+    ...fallbackWebsite('kahve dükkanı', 'tr'),
+    sections,
+    contactActions: { enabled: true, phone: '+90 532 874 19 03', whatsapp: '+90 532 874 19 03' },
+  }
 }
 
 /** The same site with no sample flag anywhere. */

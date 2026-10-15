@@ -11,8 +11,10 @@ import {
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
   clearEditedSampleFlags,
+  collectSampleFindings,
   hideSampleSections,
   removeOrHideSampleItem,
+  resolveDetectedPlaceholders,
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
@@ -178,6 +180,7 @@ export function WebsitePreview({
     publish?: (
       schema: WebsiteSchema,
       approvals?: string[],
+      confirmedReal?: string[],
     ) => Promise<
       | { url: string }
       | {
@@ -448,12 +451,12 @@ export function WebsitePreview({
   }
 
   // Publish: persists a version snapshot and points the public slug at it.
-  async function handlePublish(approvals?: string[], siteOverride?: WebsiteSchema) {
+  async function handlePublish(approvals?: string[], siteOverride?: WebsiteSchema, confirmedReal?: string[]) {
     const siteToPublish = siteOverride ?? currentSite
     if (!persist?.publish || !siteToPublish || publishState === 'publishing') return
     setPublishState('publishing')
     try {
-      const result = await persist.publish(siteToPublish, approvals)
+      const result = await persist.publish(siteToPublish, approvals, confirmedReal)
       if ('error' in result) {
         if (result.error === SAMPLE_CONTENT_ERROR) {
           const ids = (result.sections ?? []).flatMap((section) => section.items.map((item) => item.id))
@@ -477,10 +480,16 @@ export function WebsitePreview({
   }
       // The server stored the approved items as the owner's content (flag
       // cleared); mirror that locally so the draft and the live site agree.
-      const published =
-        approvals && approvals.length > 0
-          ? approveSampleFindings(siteToPublish, new Set(approvals))
-          : siteToPublish
+      const detectedIds = new Set(
+        collectSampleFindings(siteToPublish).flatMap((section) =>
+          section.items.filter((item) => item.detected).map((item) => item.id),
+        ),
+      )
+      const realIds = new Set(confirmedReal ?? [])
+      const hideIds = new Set((approvals ?? []).filter((id) => detectedIds.has(id) && !realIds.has(id)))
+      const sampleApprovals = new Set((approvals ?? []).filter((id) => !detectedIds.has(id)))
+      const resolved = resolveDetectedPlaceholders(siteToPublish, { hide: hideIds, real: realIds })
+      const published = sampleApprovals.size > 0 ? approveSampleFindings(resolved, sampleApprovals) : resolved
       if (published !== siteToPublish) commitSchema(published)
       lastSavedRef.current = JSON.stringify(published)
       setSaveState('saved')
@@ -1356,14 +1365,14 @@ export function WebsitePreview({
             setShowEdit(true)
             setSelectedSectionIndex(index)
           }}
-          onPublish={(approvals, hideIndexes) => {
+          onPublish={(approvals, hideIndexes, confirmedReal) => {
             if (hideIndexes.length === 0) {
-              void handlePublish(approvals)
+              void handlePublish(approvals, undefined, confirmedReal)
               return
             }
             const hidden = hideSampleSections(currentSite, hideIndexes)
             commitSchema(hidden)
-            void handlePublish(approvals, hidden)
+            void handlePublish(approvals, hidden, confirmedReal)
           }}
           onClose={() => setSampleGateIds(null)}
         />
