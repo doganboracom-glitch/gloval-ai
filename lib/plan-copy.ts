@@ -161,6 +161,14 @@ type Strings = {
     contactSectionNote: string
     versionHistory: string
     versionHistoryNote: string
+    autoBackupWeekly: string
+    autoBackupDaily: string
+    autoBackupRow: string
+    autoBackupNote: string
+    autoBackupWeeklyValue: string
+    autoBackupDailyValue: string
+    versionHistoryRestore: string
+    versionHistoryRestoreNote: string
     customDomain: string
     trackingCodes: string
     trackingCodesNote: string
@@ -311,6 +319,14 @@ const TR: Strings = {
     contactSectionNote: 'E-posta, telefon ve adres bilgilerini sitende göster.',
     versionHistory: 'Sürüm geçmişi',
     versionHistoryNote: 'Kaydettiğin önceki sürümlere geri dön.',
+    autoBackupWeekly: 'Haftalık otomatik yedekleme',
+    autoBackupDaily: 'Günlük otomatik yedekleme (son 14 gün)',
+    autoBackupRow: 'Otomatik yedekleme',
+    autoBackupNote: 'Sitenin taslağı otomatik yedeklenir; yedekler hesabında saklanır.',
+    autoBackupWeeklyValue: 'Haftalık',
+    autoBackupDailyValue: 'Günlük (son 14 gün)',
+    versionHistoryRestore: 'Sürüm geçmişi ve geri yükleme',
+    versionHistoryRestoreNote: 'Kaydettiğin önceki sürümlere ve yedeklere geri dön.',
     customDomain: 'Kendi alan adını bağla',
     trackingCodes: 'Analytics ve Search Console kodu ekleme',
     trackingCodesNote: 'Takip ve doğrulama kodlarını sitene yapıştır.',
@@ -463,6 +479,14 @@ const EN: Strings = {
     contactSectionNote: 'Show your email, phone and address on your site.',
     versionHistory: 'Version history',
     versionHistoryNote: 'Go back to earlier versions you saved.',
+    autoBackupWeekly: 'Weekly automatic backups',
+    autoBackupDaily: 'Daily automatic backups (last 14 days)',
+    autoBackupRow: 'Automatic backups',
+    autoBackupNote: 'Your site draft is backed up automatically; backups are kept in your account.',
+    autoBackupWeeklyValue: 'Weekly',
+    autoBackupDailyValue: 'Daily (last 14 days)',
+    versionHistoryRestore: 'Version history and restore',
+    versionHistoryRestoreNote: 'Go back to earlier versions and backups you saved.',
     customDomain: 'Connect your own domain',
     trackingCodes: 'Add Analytics and Search Console code',
     trackingCodesNote: 'Paste your tracking and verification code into your site.',
@@ -592,6 +616,20 @@ export function buildPlanView(
     value: String(effectivePageLimit(code)),
   })
 
+  // Both rows are live: the daily/weekly cron step and the restore flow exist and run.
+  const autoBackupItem = (label: string, value: string): PlanCopyItem => ({
+    id: 'autoBackup',
+    label,
+    rowLabel: f.autoBackupRow,
+    value,
+    note: f.autoBackupNote,
+  })
+  const versionHistoryRestoreItem = (): PlanCopyItem => ({
+    id: 'versionHistory',
+    label: f.versionHistoryRestore,
+    note: f.versionHistoryRestoreNote,
+  })
+
   // Announced, not built yet: faded row with a "Yakında" pill, never a link.
   const glovalAdsItem = (): PlanCopyItem => ({
     id: 'glovalAds',
@@ -618,7 +656,6 @@ export function buildPlanView(
             { id: 'mobile', label: f.mobile },
             { id: 'seo', label: f.basicSeo, rowLabel: f.seoRow, note: f.seoNote },
             { id: 'contact', label: f.contactSection, note: f.contactSectionNote },
-            { id: 'versionHistory', label: f.versionHistory, note: f.versionHistoryNote },
           ],
         },
         ...mailGroup(s, code),
@@ -643,7 +680,7 @@ export function buildPlanView(
             { id: 'mobile', label: f.mobile },
             { id: 'seo', label: f.seo, rowLabel: f.seoRow, note: f.seoNote },
             { id: 'contact', label: f.contactSection, note: f.contactSectionNote },
-            { id: 'versionHistory', label: f.versionHistory, note: f.versionHistoryNote },
+            autoBackupItem(f.autoBackupWeekly, f.autoBackupWeeklyValue),
             { id: 'trackingCodes', label: f.trackingCodes, note: f.trackingCodesNote },
             { id: 'phoneWhatsapp', label: f.phoneWhatsapp },
             { id: 'socialLinks', label: f.socialLinks, note: f.socialLinksNote },
@@ -686,6 +723,8 @@ export function buildPlanView(
           items: [
             sitesItem(f.sitesRight(SITE_LIMITS.pro), true),
             ...pageItems,
+            autoBackupItem(f.autoBackupDaily, f.autoBackupDailyValue),
+            versionHistoryRestoreItem(),
             ...advancedAiItems,
             glovalAdsItem(),
           ],
@@ -726,6 +765,8 @@ export function buildPlanView(
         items: [
           sitesItem(f.ecomSites(corporateSites, ECOMMERCE_SITE_LIMITS.ecommerce), true),
           ...pageItems,
+          autoBackupItem(f.autoBackupDaily, f.autoBackupDailyValue),
+          versionHistoryRestoreItem(),
           ...advancedAiItems,
           glovalAdsItem(),
         ],

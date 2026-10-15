@@ -2,18 +2,23 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
-import { backupCadence, toPlanCode } from '@/lib/pricing-config'
 import {
   BACKUP_RETENTION,
   BACKUP_SCHEMA_VERSION,
   VERSION_PRUNE_DAYS,
+  cadenceForBillingCode,
   changedSinceBackup,
   contentHash,
   excessBackupIds,
   expiresAt,
   isBackupDue,
+  isPruneEnabled,
+  keepsVersionHistory,
   payloadBytes,
+  selectPrunableVersionIds,
   type BackupKind,
+  type PruneProjectRow,
+  type PruneVersionRow,
 } from '@/lib/project-backups-core'
 
 const TABLE = 'project_backups'
@@ -94,7 +99,7 @@ export async function backupIfDue(input: {
   schema: WebsiteSchema
   now?: Date
 }): Promise<RecordResult | 'skipped'> {
-  const kind = backupCadence(toPlanCode(input.planCode))
+  const kind = cadenceForBillingCode(input.planCode)
   if (!kind) return 'skipped'
   const latest = await latestOfKind(input.projectId, kind)
   if (!isBackupDue(kind, latest?.created_at ?? null, input.now ?? new Date())) return 'skipped'
@@ -103,7 +108,11 @@ export async function backupIfDue(input: {
 
 export type BackupSweepSummary = {
   expiredDeleted: number
-  versionsPruned: number | null
+  pruneEnabled: boolean
+  /** Dry-run count: version rows the prune step would delete (null when the count failed). */
+  versionsWouldPrune: number | null
+  /** Rows actually deleted; always 0 while BACKUP_PRUNE_ENABLED is off. */
+  versionsPruned: number
   scanned: number
   created: number
   unchanged: number
@@ -116,27 +125,85 @@ type SubscriptionRow = {
   billing_plans: { code: string | null } | Array<{ code: string | null }> | null
 }
 
-/** Deletes expired backups and stale non-published versions. Independent failures are isolated. */
-async function sweepExpired(now: Date): Promise<{ expiredDeleted: number; versionsPruned: number | null }> {
+const PRUNE_BATCH = 2000
+
+/**
+ * Read-only: ids of non-published version rows older than the cutoff whose owner
+ * has no active plan that keeps version history (exact plan-code list).
+ */
+export async function findPrunableVersionIds(cutoffIso: string, limit = PRUNE_BATCH): Promise<string[]> {
   const admin = createAdminClient()
-  let expiredDeleted = 0
+  const { data: versions, error } = await admin
+    .from('project_versions')
+    .select('id, project_id, label')
+    .lt('created_at', cutoffIso)
+    .or('label.is.null,label.neq.published')
+    .order('created_at', { ascending: true })
+    .limit(limit)
+  if (error) throw error
+  const versionRows = (versions ?? []) as PruneVersionRow[]
+  if (versionRows.length === 0) return []
+
+  const projectIds = [...new Set(versionRows.map((row) => row.project_id))]
+  const { data: projects, error: projectErr } = await admin
+    .from('projects')
+    .select('id, owner_id, published_version_id')
+    .in('id', projectIds)
+  if (projectErr) throw projectErr
+  const projectRows = (projects ?? []) as PruneProjectRow[]
+
+  const ownerIds = [...new Set(projectRows.map((row) => row.owner_id))]
+  const protectedOwners = new Set<string>()
+  if (ownerIds.length > 0) {
+    const { data: subs, error: subErr } = await admin
+      .from('billing_subscriptions')
+      .select('user_id, billing_plans!billing_subscriptions_plan_id_fkey(code)')
+      .in('user_id', ownerIds)
+      .in('status', ACTIVE_STATUSES)
+    if (subErr) throw subErr
+    for (const sub of (subs ?? []) as unknown as Array<{
+      user_id: string
+      billing_plans: { code: string | null } | Array<{ code: string | null }> | null
+    }>) {
+      const plan = Array.isArray(sub.billing_plans) ? sub.billing_plans[0] : sub.billing_plans
+      if (keepsVersionHistory(plan?.code)) protectedOwners.add(sub.user_id)
+    }
+  }
+  return selectPrunableVersionIds(versionRows, projectRows, protectedOwners)
+}
+
+/**
+ * Deletes expired backups. Stale version rows are only COUNTED (dry run) unless
+ * BACKUP_PRUNE_ENABLED is exactly 'true'; with the flag off no version row is deleted.
+ */
+async function sweepExpired(
+  now: Date,
+): Promise<Pick<BackupSweepSummary, 'expiredDeleted' | 'pruneEnabled' | 'versionsWouldPrune' | 'versionsPruned'>> {
+  const admin = createAdminClient()
   const { data, error } = await admin.from(TABLE).delete().lt('expires_at', now.toISOString()).select('id')
   if (error) throw error
-  expiredDeleted = data?.length ?? 0
+  const expiredDeleted = data?.length ?? 0
 
-  let versionsPruned: number | null = null
+  const pruneEnabled = isPruneEnabled(process.env.BACKUP_PRUNE_ENABLED)
+  let versionsWouldPrune: number | null = null
+  let versionsPruned = 0
   try {
     const cutoff = new Date(now.getTime() - VERSION_PRUNE_DAYS * 24 * 60 * 60 * 1000).toISOString()
-    const { data: pruned, error: pruneErr } = await admin.rpc('prune_stale_project_versions', {
-      p_cutoff: cutoff,
-      p_limit: 2000,
-    })
-    if (pruneErr) throw pruneErr
-    versionsPruned = typeof pruned === 'number' ? pruned : 0
+    const ids = await findPrunableVersionIds(cutoff)
+    versionsWouldPrune = ids.length
+    if (pruneEnabled) {
+      if (ids.length > 0) {
+        const { data: deleted, error: delErr } = await admin.from('project_versions').delete().in('id', ids).select('id')
+        if (delErr) throw delErr
+        versionsPruned = deleted?.length ?? 0
+      }
+    } else {
+      console.log(`[project-backups] version prune dry-run (BACKUP_PRUNE_ENABLED off): ${ids.length} would be deleted, 0 deleted`)
+    }
   } catch (err) {
-    console.log('[project-backups] version prune failed:', err instanceof Error ? err.message : 'unknown')
+    console.log('[project-backups] version prune step failed:', err instanceof Error ? err.message : 'unknown')
   }
-  return { expiredDeleted, versionsPruned }
+  return { expiredDeleted, pruneEnabled, versionsWouldPrune, versionsPruned }
 }
 
 /**
@@ -178,7 +245,7 @@ export async function runBackupSweep(options: { deadlineMs: number; now?: Date }
     const kindByOwner = new Map<string, 'daily' | 'weekly'>()
     for (const sub of subs) {
       const plan = Array.isArray(sub.billing_plans) ? sub.billing_plans[0] : sub.billing_plans
-      const kind = backupCadence(toPlanCode(plan?.code))
+      const kind = cadenceForBillingCode(plan?.code)
       if (kind) kindByOwner.set(sub.user_id, kind)
     }
 

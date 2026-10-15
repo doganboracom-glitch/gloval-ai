@@ -524,10 +524,34 @@ export function yearlySavingLabel(plan: Plan): string | null {
   return `Yıllık ödemede ${formatTL(saving)} avantaj`
 }
 
+/**
+ * Bilinen `billing_plans.code` değerlerinin kesin listesi (eklentiler dahil değildir).
+ * Veri silen ya da yedek alan işler alt dize eşlemesine değil bu listeye güvenir.
+ */
+export const BILLING_PLAN_CODE_MAP: Readonly<Record<string, PlanCode>> = {
+  free: 'free',
+  starter: 'starter',
+  starter_yearly: 'starter',
+  corporate_starter: 'starter',
+  pro: 'pro',
+  pro_yearly: 'pro',
+  corporate_pro: 'pro',
+  ecommerce: 'ecommerce',
+  ecommerce_yearly: 'ecommerce',
+}
+
+/** Kesin eşleşme; bilinmeyen kod (eklenti dahil) için null döner. */
+export function exactPlanCode(code: string | null | undefined): PlanCode | null {
+  if (!code) return null
+  return BILLING_PLAN_CODE_MAP[code.trim().toLowerCase()] ?? null
+}
+
 /** `billing_plans.code` değerini pazarlama paket koduna eşler. */
 export function toPlanCode(code: string | null | undefined): PlanCode {
   if (!code) return 'free'
   const normalized = code.toLowerCase()
+  const exact = BILLING_PLAN_CODE_MAP[normalized.trim()]
+  if (exact) return exact
   if (normalized.includes('ecommerce') || normalized.includes('eticaret')) {
     return 'ecommerce'
   }

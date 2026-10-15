@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { backupCadence, canUseVersionHistory, exactPlanCode, type BackupCadence } from '@/lib/pricing-config'
 
 /**
  * Pure rules for project draft backups (no I/O). What is backed up is ONLY the
@@ -73,6 +74,49 @@ export function isBackupDue(kind: 'daily' | 'weekly', latestAt: string | null, n
 export function changedSinceBackup(projectUpdatedAt: string, latestAt: string | null): boolean {
   if (!latestAt) return true
   return new Date(projectUpdatedAt).getTime() > new Date(latestAt).getTime()
+}
+
+/** Version pruning deletes rows, so it only runs when the flag is exactly the string 'true'. */
+export function isPruneEnabled(flag: string | undefined | null): boolean {
+  return flag === 'true'
+}
+
+/** Cadence for a raw `billing_plans.code`; unknown codes (add-ons, typos) never get backups. */
+export function cadenceForBillingCode(code: string | null | undefined): BackupCadence {
+  const plan = exactPlanCode(code)
+  return plan ? backupCadence(plan) : null
+}
+
+/** Whether a raw `billing_plans.code` keeps its version history (exact list, no substring matching). */
+export function keepsVersionHistory(code: string | null | undefined): boolean {
+  const plan = exactPlanCode(code)
+  return plan ? canUseVersionHistory(plan) : false
+}
+
+export type PruneVersionRow = { id: string; project_id: string; label: string | null }
+export type PruneProjectRow = { id: string; owner_id: string; published_version_id: string | null }
+
+/**
+ * Picks the version rows that may be pruned: never a published version (by label or
+ * by `published_version_id`), never one of a project that is missing, and never one
+ * whose owner has an active plan that keeps version history.
+ */
+export function selectPrunableVersionIds(
+  versions: PruneVersionRow[],
+  projects: PruneProjectRow[],
+  protectedOwnerIds: ReadonlySet<string>,
+): string[] {
+  const byId = new Map(projects.map((project) => [project.id, project]))
+  const ids: string[] = []
+  for (const version of versions) {
+    if (version.label === 'published') continue
+    const project = byId.get(version.project_id)
+    if (!project) continue
+    if (project.published_version_id === version.id) continue
+    if (protectedOwnerIds.has(project.owner_id)) continue
+    ids.push(version.id)
+  }
+  return ids
 }
 
 /** Ids past the retention count; `rowsNewestFirst` must already be sorted newest first. */
