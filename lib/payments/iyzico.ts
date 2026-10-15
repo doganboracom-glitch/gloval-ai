@@ -8,7 +8,9 @@ import {
   mayUseSandboxIyzicoInProduction,
 } from './domain-e2e-mode'
 import {
+  PaymentBuyerError,
   PaymentConfigError,
+  PaymentProviderError,
   type PaymentIntentInput,
   type PaymentIntentResult,
   type PaymentProvider,
@@ -208,11 +210,21 @@ async function iyzicoFetch(
     baseUrl: creds.baseUrl,
     isSandbox: creds.baseUrl.includes('sandbox'),
   })
-  const res = await fetch(`${creds.baseUrl}${uriPath}`, {
-    method: 'POST',
-    headers,
-    body: bodyJson,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${creds.baseUrl}${uriPath}`, {
+      method: 'POST',
+      headers,
+      body: bodyJson,
+      signal: AbortSignal.timeout(IYZICO_REQUEST_TIMEOUT_MS),
+    })
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+    throw new PaymentProviderError(
+      timedOut ? 'iyzico_error: request_timeout' : 'iyzico_error: network_error',
+      timedOut ? 'timeout' : 'network',
+    )
+  }
   const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
   console.log('[v0] iyzico response', {
     uriPath,
@@ -225,9 +237,25 @@ async function iyzicoFetch(
     hasToken: uriPath === CF_INITIALIZE_PATH ? Boolean(json?.token) : undefined,
   })
   if (!json) {
-    throw new Error(`iyzico_error: http_${res.status}`)
+    throw new PaymentProviderError(`iyzico_error: http_${res.status}`, 'http', undefined, res.status)
   }
   return json
+}
+
+const IYZICO_REQUEST_TIMEOUT_MS = 20_000
+
+/** buyer.ip must be a public IPv4; anything else (IPv6, loopback, private) uses iyzico's documented sample. */
+const IYZICO_FALLBACK_BUYER_IP = '85.34.78.112'
+function toBuyerIp(raw: string | undefined | null): string {
+  const ip = (raw ?? '').trim()
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip)
+  if (!m) return IYZICO_FALLBACK_BUYER_IP
+  const [a, b, c, d] = m.slice(1).map(Number)
+  if ([a, b, c, d].some((n) => n > 255)) return IYZICO_FALLBACK_BUYER_IP
+  if (a === 0 || a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)) {
+    return IYZICO_FALLBACK_BUYER_IP
+  }
+  return ip
 }
 
 /**
@@ -365,7 +393,7 @@ export const iyzicoProvider: PaymentProvider = {
       gsmNumber = IYZICO_SANDBOX_TEST_GSM
     } else {
       // A live charge must not proceed with a fabricated phone number.
-      throw new Error('iyzico_invalid_gsm_number')
+      throw new PaymentBuyerError('phone')
     }
 
     console.log('[v0] iyzico createIntent: resolved callback origin + gsm', {
@@ -396,7 +424,7 @@ export const iyzicoProvider: PaymentProvider = {
         registrationAddress: address,
         city: 'Istanbul',
         country: 'Turkey',
-        ip: buyer.ip || '85.34.78.112',
+        ip: toBuyerIp(buyer.ip),
       },
       shippingAddress: {
         contactName: rawName,
@@ -425,7 +453,11 @@ export const iyzicoProvider: PaymentProvider = {
     if (json.status !== 'success' || !json.token || !json.paymentPageUrl) {
       const errorMessage =
         typeof json.errorMessage === 'string' ? json.errorMessage : String(json.status ?? 'unknown')
-      throw new Error(`iyzico_error: ${errorMessage}`)
+      throw new PaymentProviderError(
+        `iyzico_error: ${errorMessage}`,
+        'rejected',
+        json.errorCode != null ? String(json.errorCode) : undefined,
+      )
     }
 
     const paymentPageUrl = String(json.paymentPageUrl)

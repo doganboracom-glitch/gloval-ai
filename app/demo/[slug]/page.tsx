@@ -63,7 +63,7 @@ export default async function DemoPage({
   const isPreview = preview === '1'
 
   const backLabel = lang === 'tr' ? 'gloval.ai’a dön' : 'Back to gloval.ai'
-  const demoBadge = lang === 'tr' ? 'Demo çalışma' : 'Demo project'
+  const demoBadge = lang === 'tr' ? 'Demo çalışma · Örnek içerik' : 'Demo project · Example content'
 
   // The global floating phone/WhatsApp CTAs live here too (the landing page uses
   // WebsiteRenderer directly, not DemoChrome). Wrap them in the demo's theme

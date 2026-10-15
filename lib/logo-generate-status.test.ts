@@ -4,6 +4,7 @@ import { classifyLogoGenerateStatus } from './logo-generate-status'
 describe('classifyLogoGenerateStatus', () => {
   it.each([
     [401, 'auth'],
+    [403, 'planRequired'],
     [402, 'credits'],
     [429, 'dailyLimit'],
     [400, 'failed'],

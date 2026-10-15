@@ -41,7 +41,7 @@ export function buildSiteGenerateSystem(
     `Give the hero a badge and a trustText, and write descriptive imagePrompt fields for hero, ` +
     `gallery, portfolio and team images. ` +
     `Use lucide-react icon names (lowercase) for any icon fields. ` +
-    `Be specific to the user's idea — never generic placeholder text. ` +
+    `Be specific to the user's idea, but NEVER invent proof: no fake customer reviews, names or roles, customer counts, satisfaction or success percentages, years of experience, awards, certifications, press mentions, comparative old prices, discount percentages, stock scarcity, or urgency claims. If the brief does not provide a fact, leave the field empty or omit that section/item; mark illustrative values only as sample. ` +
     `Do NOT output any HTML, React, or code; only structured content.`
   )
 }

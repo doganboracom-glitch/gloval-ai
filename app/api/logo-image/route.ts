@@ -4,7 +4,7 @@ import { AI_ACTION_COSTS, consumeCredits, getCreditBalance, hasLedgerReason, ref
 import { recordAiGenerationEvent } from '@/lib/ai-generation-events'
 import { refundRound, runPaidRound, type CreditPort } from '@/lib/logo-studio/paid-round'
 import { getPlanCodeForUser } from '@/lib/billing'
-import { toPlanCode } from '@/lib/pricing-config'
+import { canUseLogoGeneration, toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { buildTextAssets } from '@/lib/logo-studio/font-source'
@@ -48,10 +48,11 @@ function distinctAccent(primary: string, accent: string, foreground: string): st
  *  3. COMPOSITION — done by the client (`lib/logo-studio/compose.ts`), which can
  *     measure the emblem's real bounds and crop exactly.
  *
- * `mode: 'local'` needs no sign-in and costs nothing. `mode: 'ai'` requires
- * sign-in and charges `AI_ACTION_COSTS.logoImage` per emblem that passed the
- * quality gate AND is returned (never for a failed, rejected or timed-out one;
- * see `lib/logo-studio/paid-round.ts`). A `requestId` makes retries idempotent.
+ * Every mode requires sign-in and a Starter+ plan (401 / 403). `mode: 'local'`
+ * and `textOnly` then cost nothing; `mode: 'ai'` charges
+ * `AI_ACTION_COSTS.logoImage` per emblem that passed the quality gate AND is
+ * returned (never for a failed, rejected or timed-out one; see
+ * `lib/logo-studio/paid-round.ts`). A `requestId` makes retries idempotent.
  */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
@@ -80,17 +81,20 @@ export async function POST(req: Request) {
   const mode = body.mode === 'local' || textOnly ? 'local' : 'ai'
   const seed = Math.max(0, Math.trunc(Number(body.seed) || 0))
 
-  let userId: string | null = null
-  let planCode = toPlanCode(null)
-  if (mode === 'ai') {
-    const supabase = await createClient()
-    const { data: userData, error: authError } = await supabase.auth.getUser()
-    if (authError || !userData?.user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    userId = userData.user.id
+  // The logo studio (every mode, including the free local/text-only ones) is a
+  // Starter+ feature. The client lock is only UX; this is the real check.
+  const supabase = await createClient()
+  const { data: userData, error: authError } = await supabase.auth.getUser()
+  if (authError || !userData?.user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const userId: string = userData.user.id
 
-    planCode = toPlanCode(await getPlanCodeForUser(userId))
+  const planCode = toPlanCode(await getPlanCodeForUser(userId))
+  if (!canUseLogoGeneration(planCode)) {
+    return Response.json({ error: 'Plan required', code: 'plan_required' }, { status: 403 })
+  }
+  if (mode === 'ai') {
     const dailyLimit = await checkFreeDailyActionLimit(userId, planCode)
     if (!dailyLimit.allowed) {
       return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })

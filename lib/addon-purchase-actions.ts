@@ -9,6 +9,8 @@ import { addOnOrderRef } from '@/lib/addon-purchases'
 import { loadCatalogPrice } from '@/lib/payments/addon-fulfillment'
 import { verifyAddOnFulfillmentContext } from '@/lib/payments/addon-verify'
 import type { CheckoutBuyer } from '@/lib/billing'
+import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
+import type { BuyerField } from '@/lib/payments/types'
 
 /**
  * Starts the purchase of one add-on through the existing iyzico Checkout Form.
@@ -33,17 +35,13 @@ export type PurchaseAddOnError =
   | 'not_available'
   | 'purchase_in_progress'
   | 'payment_init_failed'
+  | 'payment_not_ready'
+  | 'buyer_invalid'
   | 'failed'
 
 export type PurchaseAddOnResult =
   | { ok: true; purchaseId: string; redirectUrl: string }
-  | { ok: false; error: PurchaseAddOnError; detail?: string }
-
-/** Short, secret-free reason shown next to a generic payment-init failure so it can be reported. */
-function failureDetail(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.replace(/\s+/g, ' ').trim().slice(0, 160)
-}
+  | { ok: false; error: PurchaseAddOnError; detail?: string; field?: BuyerField }
 
 const ENTITLED_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due']
 
@@ -180,10 +178,8 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
     providerId = getPlatformPaymentProviderId()
     provider = getPlatformPaymentProvider()
   } catch (error) {
-    console.log('[v0] purchaseAddOn: payment provider unavailable', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return { ok: false, error: 'payment_init_failed', detail: failureDetail(error) }
+    const failure = await reportPaymentInitFailure('addon', error)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
 
   // Open purchases of this user for this add-on on this subscription. Scoped by
@@ -274,13 +270,9 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
         : undefined,
     })
   } catch (error) {
-    console.log('[v0] purchaseAddOn: payment intent failed', {
-      purchaseId: purchase.id,
-      providerId,
-      error: error instanceof Error ? error.message : String(error),
-    })
     await failPending(admin, user.id, purchase.id, true)
-    return { ok: false, error: 'payment_init_failed', detail: failureDetail(error) }
+    const failure = await reportPaymentInitFailure('addon', error, providerId)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
 
   // Add-ons are only fulfilled by the verified callback, so the intent must be

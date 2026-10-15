@@ -390,7 +390,7 @@ function DesignTab({
           value={site.navigation.logoText}
           onCommit={(v) => onDispatch({ op: 'updateNavigation', logoText: v })}
         />
-        <LogoField site={site} onDispatch={onDispatch} onBeforeUpgrade={onBeforeUpgrade} />
+        <LogoField site={site} planCode={planCode} onDispatch={onDispatch} onBeforeUpgrade={onBeforeUpgrade} />
         <FaviconField site={site} onDispatch={onDispatch} />
         {site.pages.length > 1 &&
           site.pages.map((page, pageIndex) => {

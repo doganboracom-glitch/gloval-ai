@@ -53,7 +53,7 @@ import { brandKitFileNames, buildBrandKitZip, renderBrandKitPdf, type BrandKitIn
 import { buildZip } from '@/lib/logo-studio/zip'
 import { FaviconPreview, SurfacePreviews } from '@/components/editor/logo-studio-previews'
 
-export type LogoStudioFailure = 'auth' | 'credits' | 'dailyLimit' | 'failed'
+export type LogoStudioFailure = 'auth' | 'planRequired' | 'credits' | 'dailyLimit' | 'failed'
 export type LogoStudioIntent = 'logo' | 'favicon'
 export type LogoStudioResult = {
   logo?: { src: string; source: 'ai' | 'generated' }
@@ -180,7 +180,7 @@ export function LogoStudioDialog({
         if (id !== requestId.current) return
         if (!res.ok) {
           const kind = classifyLogoGenerateStatus(res.status)
-          if (kind === 'auth' || kind === 'credits' || kind === 'dailyLimit') {
+          if (kind === 'auth' || kind === 'planRequired' || kind === 'credits' || kind === 'dailyLimit') {
             onFail(kind)
             onClose()
             return

@@ -2,7 +2,9 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlignCenter, AlignLeft, AlignRight, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Lock, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react'
+import { UpgradeModal } from '@/components/pricing/upgrade-modal'
+import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
 import { useLanguage } from '@/components/language-provider'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
@@ -44,10 +46,12 @@ type Align = 'left' | 'center' | 'right'
  */
 export function LogoField({
   site,
+  planCode = 'free',
   onDispatch,
   onBeforeUpgrade,
 }: {
   site: WebsiteSchema
+  planCode?: PlanCode
   onDispatch: (op: EditOperation) => void
   /** Saves/stashes the draft before an anonymous visitor leaves for login. */
   onBeforeUpgrade?: () => Promise<boolean>
@@ -62,11 +66,17 @@ export function LogoField({
   const [busy, setBusy] = useState(false)
   const [studio, setStudio] = useState<'local' | 'ai' | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const studioLocked = !canUseLogoGeneration(planCode)
 
   const logo = site.navigation.logo
   const theme = resolveTheme(site)
 
   function openStudio(mode: 'local' | 'ai') {
+    if (studioLocked) {
+      setUpgradeOpen(true)
+      return
+    }
     setError(null)
     setGenError(null)
     setLoginRequired(false)
@@ -75,6 +85,7 @@ export function LogoField({
 
   function handleStudioFail(kind: LogoStudioFailure) {
     if (kind === 'auth') setLoginRequired(true)
+    else if (kind === 'planRequired') setUpgradeOpen(true)
     else if (kind === 'credits') setGenError(ui.logoGenerateOutOfCredits)
     else if (kind === 'dailyLimit') setGenError(ui.logoGenerateDailyLimit)
     else setGenError(ui.logoGenerateFailed)
@@ -174,7 +185,7 @@ export function LogoField({
 
       <div className="grid grid-cols-2 gap-1.5">
         <GhostButton onClick={() => openStudio('local')} disabled={busy}>
-          <RefreshCw className="h-3.5 w-3.5" />
+          {studioLocked ? <Lock className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
           {ui.logoRegenerate}
         </GhostButton>
         <GhostButton onClick={() => inputRef.current?.click()} disabled={busy}>
@@ -184,9 +195,16 @@ export function LogoField({
       </div>
 
       <GhostButton onClick={() => openStudio('ai')} disabled={busy}>
-        <Sparkles className="h-3.5 w-3.5" />
+        {studioLocked ? <Lock className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
         {ui.logoGenerateAi}
       </GhostButton>
+
+      <UpgradeModal
+        featureKey={upgradeOpen ? 'logoStudio' : null}
+        onClose={() => setUpgradeOpen(false)}
+        linkPrefix="/"
+        onBeforeUpgrade={onBeforeUpgrade}
+      />
 
       {loginRequired ? (
         <div

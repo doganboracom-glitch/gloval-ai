@@ -11,7 +11,8 @@ import {
   type PaymentProviderId,
   type SubscriptionStatus,
 } from '@/lib/payments'
-import { toSafeFailureCode } from '@/lib/payments/failure-code'
+import type { BuyerField } from '@/lib/payments/types'
+import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
 import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
   subscriptionStatusLabelTr,
@@ -236,7 +237,7 @@ function computeProration(params: {
 
 export type SubscribeResult =
   | { ok: true; status: SubscriptionStatus; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string }
+  | { ok: false; error: string; detail?: string; field?: BuyerField }
 
 /**
  * Start a subscription to a plan. Free plans and plans with a trial activate
@@ -311,8 +312,21 @@ export async function subscribeToPlan(
   const isFree = plan.price_cents === 0
   const hasTrial = plan.trial_days > 0
 
-  const providerId = getPlatformPaymentProviderId()
-  const provider = getPlatformPaymentProvider()
+  // Provider selection fails closed in production without a live PSP. That
+  // must come back as a structured result for a paid checkout (not an
+  // unhandled throw, which the browser only sees as an opaque error).
+  let providerId: PaymentProviderId
+  let provider: ReturnType<typeof getPlatformPaymentProvider>
+  try {
+    providerId = getPlatformPaymentProviderId()
+    provider = getPlatformPaymentProvider()
+  } catch (error) {
+    if (!isFree && !hasTrial) {
+      const failure = await reportPaymentInitFailure('subscribe', error)
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    }
+    throw error
+  }
   // Redirect-based PSPs (iyzico) settle asynchronously via webhook; the mock
   // provider settles synchronously so dev/preview keeps working end to end.
   const settlesAsync = !isFree && !hasTrial && !provider.capabilities.synchronous
@@ -450,7 +464,8 @@ export async function subscribeToPlan(
       // Nothing was charged and no redirect will ever come back for this row,
       // so it must not survive to block a retry.
       await admin.from('billing_subscriptions').delete().eq('id', sub.id)
-      return { ok: false, error: 'payment_init_failed', detail: toSafeFailureCode(error) }
+      const failure = await reportPaymentInitFailure('subscribe', error, providerId)
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
     }
   }
 
@@ -477,7 +492,7 @@ export async function subscribeToPlan(
 
 export type ChangePlanResult =
   | { ok: true; status: SubscriptionStatus; netCents: number; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string }
+  | { ok: false; error: string; detail?: string; field?: BuyerField }
 
 /**
  * Upgrade or downgrade the current subscription to another plan, applying a
@@ -523,8 +538,18 @@ export async function changePlan(
     now,
   })
   const isUpgrade = newPlan.price_cents >= currentPlan.price_cents
-  const provider = getPlatformPaymentProvider()
-  const providerId = getPlatformPaymentProviderId()
+  let provider: ReturnType<typeof getPlatformPaymentProvider>
+  let providerId: PaymentProviderId
+  try {
+    provider = getPlatformPaymentProvider()
+    providerId = getPlatformPaymentProviderId()
+  } catch (error) {
+    if (isUpgrade && netCents > 0) {
+      const failure = await reportPaymentInitFailure('change_plan', error)
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    }
+    throw error
+  }
 
   // Paid upgrades are tracked with `pending_plan_id`/`pending_change_ref` on
   // the user's EXISTING subscription row rather than a second row: the
@@ -593,7 +618,8 @@ export async function changePlan(
         .from('billing_subscriptions')
         .update({ pending_plan_id: null, pending_change_ref: null })
         .eq('id', sub.id)
-      return { ok: false, error: 'payment_init_failed', detail: toSafeFailureCode(error) }
+      const failure = await reportPaymentInitFailure('change_plan', error, providerId)
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
     }
   }
 
@@ -662,7 +688,7 @@ export async function changePlan(
 
 export type RenewResult =
   | { ok: true; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string }
+  | { ok: false; error: string; detail?: string; field?: BuyerField }
 
 /**
  * Starts payment for the NEXT period of the user's current paid plan. It only
@@ -780,7 +806,8 @@ export async function renewSubscription(
       error: message,
       environment,
     })
-    return { ok: false, error: 'payment_init_failed', detail: toSafeFailureCode(error) }
+    const failure = await reportPaymentInitFailure('renew', error, providerId)
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
 }
 
