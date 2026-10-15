@@ -24,6 +24,7 @@ import {
   Pencil,
   Lock,
   CreditCard,
+  FileText,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
@@ -44,6 +45,7 @@ import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
+import { BlogTab } from '@/components/editor/blog-tab'
 import {
   COMPANY_GROUP_ID,
   CompanyFields,
@@ -63,7 +65,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string }
 export type AiPhase = 'analyzing' | 'applying' | null
 
 type HeroSection = Extract<Section, { type: 'hero' }>
-type Tab = 'design' | 'ai' | 'history' | 'payments'
+type Tab = 'design' | 'ai' | 'history' | 'payments' | 'blog'
 
 /**
  * WebsiteEditorPanel
@@ -105,9 +107,12 @@ export function WebsiteEditorPanel({
   onRejectAiEdit,
   onBeforeUpgrade,
   payments = null,
+  blog = null,
   publicSlug = null,
 }: {
   site: WebsiteSchema
+  /** Project owner/admin only: shows the Blog tab (posts, AI writer). */
+  blog?: { projectId: string; topics: string[] } | null
   /** Live subdomain slug (null before the first publish), for "Sayfayı aç" links. */
   publicSlug?: string | null
   /** Store owner/admin only: shows the Sanal Poslar tab. */
@@ -248,6 +253,12 @@ export function WebsiteEditorPanel({
             {t.editor.history.tab}
           </TabButton>
         )}
+        {blog && (
+          <TabButton active={tab === 'blog'} onClick={() => setTab('blog')}>
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="truncate">Blog</span>
+          </TabButton>
+        )}
         {payments && (
           <TabButton active={tab === 'payments'} onClick={() => setTab('payments')}>
             <CreditCard className="h-4 w-4 shrink-0" />
@@ -299,6 +310,16 @@ export function WebsiteEditorPanel({
             onBeforeUpgrade={onBeforeUpgrade}
             selectedIndex={selectedIndex}
             onClearSelection={onSelectIndex ? () => onSelectIndex(null) : undefined}
+          />
+        )}
+        {tab === 'blog' && blog && (
+          <BlogTab
+            projectId={blog.projectId}
+            lang={lang === 'en' ? 'en' : 'tr'}
+            topics={blog.topics}
+            profile={site.blogProfile}
+            onDispatch={onDispatch}
+            published={Boolean(publicSlug)}
           />
         )}
         {tab === 'payments' && payments && (

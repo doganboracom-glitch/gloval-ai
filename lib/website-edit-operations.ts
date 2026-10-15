@@ -1,4 +1,4 @@
-import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
+import type { BlogProfile, Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
@@ -66,6 +66,7 @@ export type EditOperation =
   | { op: 'updateSocialLinks'; patch: Partial<Record<SocialNetwork, string>>; showInHeader?: boolean }
   /** Owner company details (legal identity). Empty string removes a field. */
   | { op: 'updateCompany'; patch: Partial<Record<CompanyField, string>> }
+  | { op: 'updateBlogProfile'; profile: BlogProfile | null }
   /** Saves an owner-edited legal text (sanitised markup). Empty body = back to the template. */
   | { op: 'updateLegalDoc'; slug: string; body: string }
   | { op: 'resetLegalDoc'; slug: string }
@@ -292,6 +293,21 @@ export function applyOperation(
       const current = next.tracking ?? {}
       const value = operation.value
       next.tracking = { ...current, [operation.field]: value.trim() ? value : undefined }
+      return next
+    }
+
+    case 'updateBlogProfile': {
+      if (!operation.profile) {
+        delete next.blogProfile
+        return next
+      }
+      const cleaned: BlogProfile = {}
+      for (const key of ['offering', 'region', 'difference', 'audience', 'contact'] as const) {
+        const value = operation.profile[key]?.trim()
+        if (value) cleaned[key] = value
+      }
+      if (Object.keys(cleaned).length === 0) delete next.blogProfile
+      else next.blogProfile = cleaned
       return next
     }
 

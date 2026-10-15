@@ -11,6 +11,7 @@ import {
 import { applyOperation } from '@/lib/website-edit-operations'
 import { sectionSystemPrompt, sectionUserPrompt, siteSystemPrompt } from '@/lib/site-edit-prompts'
 import { parseCommand } from '@/lib/website-command-parser'
+import { parseBlogInstruction } from '@/lib/blog-operations'
 import {
   PRODUCTS_MANAGED_IN_PANEL,
   isBlockedProductOperation,
@@ -154,6 +155,14 @@ export async function POST(req: Request) {
   }
   const userId = userData.user.id
 
+  // Blog instructions are only RECOGNISED here. Posts live in their own table,
+  // so the client executes them via /api/blog/operation (confirmation, gates and
+  // the 3-credit rule live there). Nothing is charged or changed by this branch.
+  const blogOperation = parseBlogInstruction(instruction)
+  if (blogOperation && !hasValidScope) {
+    return Response.json({ schema: original, source: 'blog', blogOperation })
+  }
+
   // FREE-plan daily action gate — independent from and checked BEFORE the AI
   // credit balance below. See lib/free-daily-limit.ts.
   const planCode = toPlanCode(await getPlanCodeForUser(userId))
@@ -278,6 +287,7 @@ export async function POST(req: Request) {
       tracking: original.tracking,
       // Legal identity and legal texts are owner-only: the AI never sees or edits them.
       company: original.company,
+      blogProfile: original.blogProfile,
       legalDocs: original.legalDocs,
     }
     // Social links are a paid feature: on FREE whatever the model wrote is

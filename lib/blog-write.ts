@@ -209,6 +209,59 @@ export async function updateBlogPost(
   return { ok: true, post }
 }
 
+export type PersonalizedContent = Pick<
+  BlogInput,
+  'title' | 'body' | 'excerpt' | 'keywords' | 'seoTitle' | 'metaDescription' | 'coverAlt'
+>
+
+/** The writable columns of a stored post, used to restore a post after a failed charge. */
+export function recordOf(post: BlogPost): BlogRecord {
+  const { id: _id, createdAt: _created, updatedAt: _updated, ...record } = post
+  return record
+}
+
+/**
+ * First-setup / sample drafts become the owner's own text: the content is
+ * replaced by a validated rewrite built from the owner's facts, and the post is
+ * marked `personalized` (no longer a sample). `indexable` only flips to true
+ * when the caller passes the owner's confirmation. Slug, status, publish time
+ * and cover stay as they were so published URLs never change.
+ */
+export async function personalizeBlogPost(
+  deps: BlogWriteDeps,
+  projectId: string,
+  postId: string,
+  content: PersonalizedContent,
+  options: { indexable: boolean },
+): Promise<
+  | { ok: true; post: BlogPost; previous: BlogPost }
+  | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_PERSONALIZED' | 'INVALID' }
+> {
+  const existing = await deps.store.get(projectId, postId)
+  if (!existing) return { ok: false, reason: 'NOT_FOUND' }
+  if (existing.personalized && !existing.sample) return { ok: false, reason: 'ALREADY_PERSONALIZED' }
+  const title = content.title.trim().slice(0, 200)
+  const body = sanitizeBlogBody(content.body)
+  if (!title || !body) return { ok: false, reason: 'INVALID' }
+  const record: BlogRecord = {
+    ...recordOf(existing),
+    title,
+    body,
+    excerpt: clip(content.excerpt, 300),
+    keywords: cleanKeywords(content.keywords),
+    seoTitle: clip(content.seoTitle, 70),
+    metaDescription: clip(content.metaDescription, 300),
+    coverAlt: existing.coverUrl ? existing.coverAlt : clip(content.coverAlt, 200),
+    personalized: true,
+    sample: false,
+    indexable: options.indexable ? true : existing.indexable,
+  }
+  const post = await deps.store.update(projectId, postId, record)
+  const now = (deps.now ?? (() => new Date()))()
+  if (isPostLive(existing, now) || isPostLive(post, now)) pingSlugs(deps, projectId, [post.slug], 'blog:update')
+  return { ok: true, post, previous: existing }
+}
+
 export async function deleteBlogPost(
   deps: BlogWriteDeps,
   projectId: string,

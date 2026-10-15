@@ -692,6 +692,18 @@ export const companyProfileSchema = z.object({
 })
 
 /**
+ * Answers the owner chose to "remember" for the AI blog writer. These are the
+ * ONLY business facts the writer may use, so they stay strictly owner-supplied.
+ */
+export const blogProfileSchema = z.object({
+  offering: z.string().max(600).optional(),
+  region: z.string().max(200).optional(),
+  difference: z.string().max(600).optional(),
+  audience: z.string().max(400).optional(),
+  contact: z.string().max(400).optional(),
+})
+
+/**
  * Owner edits of the legal pages. `docs[slug].body` is a tiny, sanitised markup
  * (`## heading`, `- item`, `**bold**`) — never HTML — so a saved text can't
  * carry script or markup. `hidden` lists docs the owner turned off.
@@ -768,6 +780,7 @@ export const websiteSchema = z.object({
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
   legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
+  blogProfile: blogProfileSchema.optional().describe('Owner answers remembered for the AI blog writer'),
   pageRedirects: z
     .array(z.object({ from: z.string().max(80), to: z.string().max(80) }))
     .max(60)
@@ -782,7 +795,15 @@ export const websiteSchema = z.object({
  * fills it in later from the editor).
  */
 export const websiteGenerationSchema = websiteSchema
-  .omit({ tracking: true, contactActions: true, social: true, company: true, legalDocs: true, pageRedirects: true })
+  .omit({
+    tracking: true,
+    contactActions: true,
+    social: true,
+    company: true,
+    legalDocs: true,
+    blogProfile: true,
+    pageRedirects: true,
+  })
   .extend({
     pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
     meta: siteMetaSchema.extend({
@@ -803,7 +824,7 @@ export const websiteGenerationSchema = websiteSchema
  * them back from the current schema instead.
  */
 export const websiteEditSchema = websiteSchema
-  .omit({ tracking: true, company: true, legalDocs: true, pageRedirects: true })
+  .omit({ tracking: true, company: true, legalDocs: true, blogProfile: true, pageRedirects: true })
   .extend({
   pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
   meta: siteMetaSchema.omit({ seoTitle: true }),
@@ -827,6 +848,7 @@ export type ContactActions = z.infer<typeof contactActionsSchema>
 export type SocialLinksState = z.infer<typeof socialSchema>
 export type CompanyProfile = z.infer<typeof companyProfileSchema>
 export type LegalDocsState = z.infer<typeof legalDocsSchema>
+export type BlogProfile = z.infer<typeof blogProfileSchema>
 export type WebsiteSchema = z.infer<typeof websiteSchema>
 
 /* -------------------------------------------------------------------------- */

@@ -40,7 +40,19 @@ import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
-import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
+import { blogOperationSchema } from '@/lib/blog-operations'
+import {
+  BLOG_CHANGED_EVENT,
+  blogFailureText,
+  blogConfirmCopy,
+  blogOperationConfirmText,
+blogOperationCopy,
+  blogOperationSuccessText,
+  callBlogAi,
+  newRequestId,
+} from '@/lib/blog-client'
+  import { DailyLimitModal } from '@/components/pricing/daily-limit-modal'
+  import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type Device = 'desktop' | 'tablet' | 'mobile'
 
@@ -140,6 +152,7 @@ export function WebsitePreview({
   initialEditorOpen = false,
   planCode = 'free',
   payments = null,
+  blog = null,
   catalog = null,
   persist,
   autoPublish = false,
@@ -159,6 +172,8 @@ export function WebsitePreview({
   planCode?: PlanCode
   /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
+  /** Non-null for a project's owner/admin: enables the editor's Blog tab. */
+  blog?: { projectId: string; topics: string[] } | null
   /**
    * Store owner's active products + collections (loaded server-side), shown by
    * product showcase sections in the preview. Null: no data, empty-state message.
@@ -285,6 +300,14 @@ export function WebsitePreview({
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   // AI kredisi tükendiğinde açılan yükseltme / kredi satın alma ekranı.
   const [outOfCredits, setOutOfCredits] = useState(false)
+  // Erişilebilir onay penceresi: blog işlemleri 3 AI kredisi harcamadan önce sorar.
+  const [blogConfirm, setBlogConfirm] = useState<{ text: string; resolve: (ok: boolean) => void } | null>(null)
+  const askBlogConfirm = (text: string) =>
+    new Promise<boolean>((resolve) => setBlogConfirm({ text, resolve }))
+  const answerBlogConfirm = (ok: boolean) => {
+    blogConfirm?.resolve(ok)
+    setBlogConfirm(null)
+  }
   // FREE planın günlük AI işlem limitine ulaşıldığında açılan ekran — bkz.
   // lib/free-daily-limit.ts. resetAt, sunucunun 429 yanıtındaki ISO zaman damgası.
   const [dailyLimitResetAt, setDailyLimitResetAt] = useState<string | null>(null)
@@ -1124,6 +1147,9 @@ export function WebsitePreview({
       if (!res.ok) throw new Error('failed')
       const data = await res.json()
       debug('AI edit — endpoint source:', data.source)
+      if (data.source === 'blog') {
+        return await runBlogInstruction(data.blogOperation)
+      }
       const parsed = websiteSchema.safeParse(data.schema)
       if (!parsed.success) throw new Error('invalid')
 
@@ -1161,6 +1187,39 @@ export function WebsitePreview({
       setEditing(false)
       setAiPhase(null)
     }
+  }
+
+  /**
+   * Executes a blog operation recognised by /api/edit. Credit-spending
+   * operations (write / personalize) are confirmed with the owner first; the
+   * server re-checks every gate, so this is never the only protection.
+   */
+  async function runBlogInstruction(raw: unknown): Promise<boolean> {
+    const say = (text: string, ok: boolean) => {
+      setMessages((prev) => [...prev, { role: 'assistant', text }])
+      flashToast(ok ? 'ok' : 'err', text)
+      return ok
+    }
+    const parsedOperation = blogOperationSchema.safeParse(raw)
+    if (!parsedOperation.success) return say(blogOperationCopy(lang).failed, false)
+    if (!blog) return say(blogOperationCopy(lang).notAvailable, false)
+    const operation = parsedOperation.data
+
+    const confirmText = blogOperationConfirmText(lang, operation)
+    if (confirmText && !(await askBlogConfirm(confirmText))) return say(blogFailureText(lang, 'confirm'), false)
+
+    const outcome = await callBlogAi('/api/blog/operation', {
+      projectId: blog.projectId,
+      requestId: newRequestId(),
+      operation,
+      confirmed: confirmText !== null,
+    })
+    if (!outcome.ok) {
+      if (outcome.reason === 'credits') setOutOfCredits(true)
+      return say(blogFailureText(lang, outcome.reason), false)
+    }
+    window.dispatchEvent(new Event(BLOG_CHANGED_EVENT))
+    return say(blogOperationSuccessText(lang, operation, outcome.post), true)
   }
 
   useEffect(() => {
@@ -1526,6 +1585,7 @@ export function WebsitePreview({
               <WebsiteEditorPanel
                 site={currentSite}
                 payments={payments}
+                blog={blog}
                 publicSlug={liveSlug}
                 planCode={planCode}
                 onBeforeUpgrade={flushDraft}
@@ -1579,6 +1639,15 @@ export function WebsitePreview({
 
         {/* AI kredisi tükendiğinde hata yerine gösterilen açıklayıcı ekran. */}
         <OutOfCreditsModal open={outOfCredits} onClose={() => setOutOfCredits(false)} />
+        <ConfirmDialog
+          open={blogConfirm !== null}
+          title={blogConfirmCopy(lang).creditsTitle}
+          description={blogConfirm?.text ?? ''}
+          confirmLabel={blogConfirmCopy(lang).creditsContinue}
+          cancelLabel={blogConfirmCopy(lang).cancel}
+          onConfirm={() => answerBlogConfirm(true)}
+          onCancel={() => answerBlogConfirm(false)}
+        />
         {/* FREE planın günlük AI işlem limitine ulaşıldığında gösterilen ekran. */}
         <DailyLimitModal
           open={dailyLimitResetAt !== null}
