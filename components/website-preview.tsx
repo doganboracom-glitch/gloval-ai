@@ -6,6 +6,15 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/components/language-provider'
+import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
+import {
+  SAMPLE_CONTENT_ERROR,
+  approveSampleFindings,
+  clearEditedSampleFlags,
+  hideSampleSections,
+  removeOrHideSampleItem,
+  type SampleSectionFinding,
+} from '@/lib/sample-content'
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { WebsiteRenderer, type PreviewNav } from '@/components/website-renderer/website-renderer'
 import { resolveTheme, googleFontsHref } from '@/components/website-renderer/theme'
@@ -168,7 +177,17 @@ export function WebsitePreview({
      */
     publish?: (
       schema: WebsiteSchema,
-    ) => Promise<{ url: string } | { error: string; used?: number; total?: number }>
+      approvals?: string[],
+    ) => Promise<
+      | { url: string }
+      | {
+          error: string
+          used?: number
+          total?: number
+          sections?: SampleSectionFinding[]
+          attestationFailed?: boolean
+        }
+    >
     /** Takes the public site offline. The draft is left untouched. */
     unpublish?: () => Promise<void>
     /** Whether the project is already published (controls button label). */
@@ -220,6 +239,10 @@ export function WebsitePreview({
   // session was lost mid-edit (publish call came back UNAUTHENTICATED).
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
   const autoPublishedRef = useRef(false)
+  // Digests of the sample items the server refused to publish without approval.
+  // Non-null opens the approval dialog.
+  const [sampleGateIds, setSampleGateIds] = useState<ReadonlySet<string> | null>(null)
+  const [sampleAttestationFailed, setSampleAttestationFailed] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
   // The canonical tenant slug may be assigned during the first publish. Keep
   // it in local state so every URL shown by the editor switches to the same
@@ -297,7 +320,8 @@ export function WebsitePreview({
   const dispatch = useCallback((op: EditOperation) => {
     setHistory((h) => {
       if (!h.present) return h
-      const next = applyOperation(h.present, op)
+      // A sample item the owner edits by hand becomes their own content.
+      const next = clearEditedSampleFlags(h.present, applyOperation(h.present, op))
       // Skip no-op operations so undo never has empty steps.
       if (JSON.stringify(next) === JSON.stringify(h.present)) return h
       return { past: [...h.past, h.present], present: next, future: [] }
@@ -424,12 +448,20 @@ export function WebsitePreview({
   }
 
   // Publish: persists a version snapshot and points the public slug at it.
-  async function handlePublish() {
-    if (!persist?.publish || !currentSite || publishState === 'publishing') return
+  async function handlePublish(approvals?: string[], siteOverride?: WebsiteSchema) {
+    const siteToPublish = siteOverride ?? currentSite
+    if (!persist?.publish || !siteToPublish || publishState === 'publishing') return
     setPublishState('publishing')
     try {
-      const result = await persist.publish(currentSite)
+      const result = await persist.publish(siteToPublish, approvals)
       if ('error' in result) {
+        if (result.error === SAMPLE_CONTENT_ERROR) {
+          const ids = (result.sections ?? []).flatMap((section) => section.items.map((item) => item.id))
+          setSampleGateIds(new Set(ids))
+          setSampleAttestationFailed(Boolean(result.attestationFailed))
+          return
+        }
+        setSampleGateIds(null)
   const siteLimitMessage = t.publish.siteLimit
     .replace('{used}', String(result.used ?? '—'))
     .replace('{total}', String(result.total ?? '—'))
@@ -443,8 +475,16 @@ export function WebsitePreview({
   )
   return
   }
-      lastSavedRef.current = JSON.stringify(currentSite)
+      // The server stored the approved items as the owner's content (flag
+      // cleared); mirror that locally so the draft and the live site agree.
+      const published =
+        approvals && approvals.length > 0
+          ? approveSampleFindings(siteToPublish, new Set(approvals))
+          : siteToPublish
+      if (published !== siteToPublish) commitSchema(published)
+      lastSavedRef.current = JSON.stringify(published)
       setSaveState('saved')
+      setSampleGateIds(null)
   setPublishedUrl(result.url)
   // `publish` returns the authoritative URL from the database write. Extract
   // that slug and make the browser chrome, preview links, and live-store links
@@ -1298,6 +1338,35 @@ export function WebsitePreview({
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
+      )}
+
+      {sampleGateIds && currentSite && (
+        <SamplePublishDialog
+          lang={lang}
+          site={currentSite}
+          gateIds={sampleGateIds}
+          publishing={publishState === 'publishing'}
+          attestationFailed={sampleAttestationFailed}
+          onHideSections={(indexes) => commitSchema(hideSampleSections(currentSite, indexes))}
+          onDeleteItem={(sectionIndex, itemIndex) =>
+            commitSchema(removeOrHideSampleItem(currentSite, sectionIndex, itemIndex))
+          }
+          onEditSection={(index) => {
+            setSampleGateIds(null)
+            setShowEdit(true)
+            setSelectedSectionIndex(index)
+          }}
+          onPublish={(approvals, hideIndexes) => {
+            if (hideIndexes.length === 0) {
+              void handlePublish(approvals)
+              return
+            }
+            const hidden = hideSampleSections(currentSite, hideIndexes)
+            commitSchema(hidden)
+            void handlePublish(approvals, hidden)
+          }}
+          onClose={() => setSampleGateIds(null)}
+        />
       )}
 
       {/* Unpublish confirmation. Layered above the editor shell (which is itself

@@ -18,6 +18,14 @@ import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { slugifyProjectName } from '@/lib/slug'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
+import {
+  SAMPLE_CONTENT_ERROR,
+  approveSampleFindings,
+  collectSampleFindings,
+  stripSampleContent,
+  type SampleSectionFinding,
+} from '@/lib/sample-content'
+import { loadAttestedDigests, recordAttestations, selectApproved } from '@/lib/content-attestations'
 
 export type ProjectType = 'corporate' | 'ecommerce'
 
@@ -290,19 +298,35 @@ export type PublishResult =
       used?: number
       total?: number
     }
+  | {
+      /** AI-generated sample content is still unapproved; nothing was published. */
+      ok: false
+      reason: typeof SAMPLE_CONTENT_ERROR
+      sections: SampleSectionFinding[]
+      /** The owner's approval could not be stored, so nothing was published. */
+      attestationFailed?: boolean
+    }
 
 /**
  * Publishes a project: records a version snapshot of the current draft and
  * points the public slug at it. Assigns a unique slug on first publish and
  * reuses it afterwards. RLS ensures only the owner can publish their project.
+ *
+ * Server-side sample-content gate: every publish path (editor button,
+ * `?autopublish=1`, direct action calls) lands here, so a site that still
+ * contains `sample: true` sections/items is refused with `SAMPLE_CONTENT`
+ * unless the owner approved each item. `approvals` carries the content digests
+ * (see `lib/sample-content.ts`) approved in this request; they are only honoured
+ * when they match a current finding, and are stored as attestations.
  */
 export async function publishProject(input: {
   id: string
   schema: WebsiteSchema
   name?: string
+  approvals?: string[]
 }): Promise<PublishResult> {
-  const { db, elevated } = await clientForProject(input.id)
-  const parsed = websiteSchema.parse(input.schema)
+  const { db, elevated, userId } = await clientForProject(input.id)
+  const requested = websiteSchema.parse(input.schema)
 
   // Load the row to reuse an existing slug or mint a new one. For an admin
   // editing another tenant's site, `db` is the elevated service-role client.
@@ -357,6 +381,35 @@ export async function publishProject(input: {
     if ((count ?? 0) >= limit) {
       return { ok: false, reason: SITE_LIMIT_ERROR, used: count ?? 0, total: limit }
     }
+  }
+
+  // Sample-content gate. Runs after the billing checks (so a payment redirect
+  // wins) and before anything is persisted or published.
+  const findings = collectSampleFindings(requested)
+  let parsed = requested
+  if (findings.length > 0) {
+    const attested = await loadAttestedDigests(input.id)
+    const requestedIds = new Set(input.approvals ?? [])
+    const unresolved = findings
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !attested.has(item.id) && !requestedIds.has(item.id)),
+      }))
+      .filter((section) => section.items.length > 0)
+    if (unresolved.length > 0) return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: unresolved }
+
+    const fresh = selectApproved(findings, requestedIds).filter(({ item }) => !attested.has(item.id))
+    try {
+      await recordAttestations({ projectId: input.id, userId, approvals: fresh })
+    } catch (err) {
+      // Fail closed: an approval that cannot be recorded is not an approval.
+      // Nothing is saved or published; hiding the sections still works because
+      // hidden sections are never findings and need no attestation.
+      console.log('[v0] attestation could not be stored, refusing publish:', err instanceof Error ? err.message : err)
+      return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: findings, attestationFailed: true }
+    }
+    // Approved items are the owner's content from here on: drop their flag.
+    parsed = approveSampleFindings(requested, new Set([...attested, ...requestedIds]))
   }
 
   // Persist the draft first so the published snapshot matches what's on screen.
@@ -466,7 +519,10 @@ export async function getPublishedSite(slug: string): Promise<PublishedSite | nu
   if (!parsed.success) return null
   return {
     name: row.name as string,
-    schema: parsed.data,
+    // Every public render (tenant subdomain, custom domain, store pages) reads
+    // through here, so unapproved sample content can never reach a visitor.
+    // Sites without sample flags come back untouched (same object).
+    schema: stripSampleContent(parsed.data),
     ownerPlanCode: (row.owner_plan_code as string | null) ?? null,
   }
 }
