@@ -545,3 +545,20 @@ export function canUseContactActions(plan: PlanCode): boolean {
 export function canUseLogoGeneration(plan: PlanCode): boolean {
   return plan !== 'free'
 }
+
+/** Sürüm geçmişi ve yedekten geri yükleme yalnızca PRO ve E-Ticaret paketlerinde açıktır. */
+export function canUseVersionHistory(plan: PlanCode): boolean {
+  return plan === 'pro' || plan === 'ecommerce'
+}
+
+export type BackupCadence = 'daily' | 'weekly' | null
+
+/**
+ * Otomatik yedek sıklığı: PRO/E-Ticaret günlük, Starter haftalık, FREE yedeksiz.
+ * Müşteri erişimli geri yükleme yalnızca `canUseVersionHistory` olan paketlerde açıktır.
+ */
+export function backupCadence(plan: PlanCode): BackupCadence {
+  if (plan === 'pro' || plan === 'ecommerce') return 'daily'
+  if (plan === 'starter') return 'weekly'
+  return null
+}

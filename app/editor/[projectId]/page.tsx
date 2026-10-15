@@ -1,9 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getProject, listProjectVersions } from '@/lib/projects'
+import { getProject, listProjectBackups, listProjectVersions } from '@/lib/projects'
 import { websiteSchema } from '@/lib/website-schema'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
-import { toPlanCode } from '@/lib/pricing-config'
+import { canUseVersionHistory, toPlanCode } from '@/lib/pricing-config'
 import { EditorClient } from '@/components/editor/editor-client'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPaymentSummary } from '@/lib/store-payments/general-settings'
@@ -33,7 +33,6 @@ export default async function EditorPage({
   if (!parsed.success) notFound()
 
   const language = project.language === 'en' ? 'en' : 'tr'
-  const initialVersions = await listProjectVersions(projectId)
 
   // Plana bağlı özellikler (telefon/WhatsApp butonları) SİTENİN SAHİBİNİN
   // paketine göre kilitlenir — düzenleyene göre değil. Böylece admin başka bir
@@ -45,6 +44,16 @@ export default async function EditorPage({
     ? (await getMyCurrentPlan().catch(() => null))?.code ?? null
     : await getPlanCodeForUser(project.owner_id)
   const planCode = toPlanCode(ownerPlanCode)
+
+  // Version history + backups are PRO/E-Ticaret only. The server functions
+  // enforce this too; here a failed read just shows an empty list.
+  const historyEnabled = canUseVersionHistory(planCode)
+  const [initialVersions, initialBackups] = historyEnabled
+    ? await Promise.all([
+        listProjectVersions(projectId).catch(() => []),
+        listProjectBackups(projectId).catch(() => []),
+      ])
+    : [[], []]
 
   // "Sanal Poslar" tab: store sites only, and only for the owner or an admin.
   // The summary read re-checks ownership server side; a failure just hides
@@ -68,6 +77,8 @@ export default async function EditorPage({
       published={project.published}
       slug={project.slug}
       initialVersions={initialVersions}
+      initialBackups={initialBackups}
+      historyEnabled={historyEnabled}
       planCode={planCode}
       autoPublish={autopublish === '1'}
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}

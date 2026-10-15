@@ -3,13 +3,16 @@
 import { useRouter } from 'next/navigation'
 import { WebsitePreview } from '@/components/website-preview'
 import {
+  listProjectBackups,
   listProjectVersions,
   publishProject,
+  restoreProjectBackup,
   saveProjectSchema,
   snapshotProject,
   unpublishProject,
 } from '@/lib/projects'
-import type { ProjectVersionItem } from '@/lib/projects'
+import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
+import type { BackupItem } from '@/lib/project-backups-core'
 import { useLanguage } from '@/components/language-provider'
 import { tenantUrl } from '@/lib/domains'
 import { trackPublishSite } from '@/lib/analytics'
@@ -30,6 +33,8 @@ export function EditorClient({
   published,
   slug,
   initialVersions,
+  initialBackups = [],
+  historyEnabled = false,
   planCode,
   autoPublish,
   payments,
@@ -43,6 +48,9 @@ export function EditorClient({
    * store URL that preview product/cart links open. */
   slug: string | null
   initialVersions: ProjectVersionItem[]
+  initialBackups?: BackupItem[]
+  /** PRO / E-Ticaret only: enables the version list, backups and restore. */
+  historyEnabled?: boolean
   /** Pakete bağlı özellik kilitlerini belirler (FREE = telefon/WhatsApp kapalı). */
   planCode: PlanCode
   /**
@@ -119,7 +127,15 @@ export function EditorClient({
         published,
         slug,
         initialVersions,
-        listVersions: async () => listProjectVersions(projectId),
+        ...(historyEnabled
+          ? {
+              listVersions: async () => listProjectVersions(projectId),
+              initialBackups,
+              listBackups: async () => listProjectBackups(projectId),
+              restoreBackup: async (backupId: string) =>
+                restoreProjectBackup({ projectId, backupId }),
+            }
+          : {}),
         closeLabel: t.dash.backToDash,
       }}
     />

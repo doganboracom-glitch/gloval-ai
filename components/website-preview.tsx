@@ -34,7 +34,8 @@ import {
 import { tenantUrl, TENANT_ROOT_DOMAIN } from '@/lib/domains'
 import { slugifyProjectName } from '@/lib/slug'
 import { fitLogoToCanvas } from '@/lib/logo-mark'
-import type { ProjectVersionItem } from '@/lib/projects'
+import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
+import type { BackupItem } from '@/lib/project-backups-core'
 import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
@@ -202,6 +203,11 @@ export function WebsitePreview({
     initialVersions?: ProjectVersionItem[]
     /** Re-fetches version snapshots after a save/publish. */
     listVersions?: () => Promise<ProjectVersionItem[]>
+    /** Draft backups (PRO / E-Ticaret). Absent = backups hidden. */
+    initialBackups?: BackupItem[]
+    listBackups?: () => Promise<BackupItem[]>
+    /** Restores a backup into the draft only; never touches the published site. */
+    restoreBackup?: (backupId: string) => Promise<RestoreBackupResult>
     closeLabel?: string
   }
   /**
@@ -258,6 +264,7 @@ export function WebsitePreview({
   const [unpublishState, setUnpublishState] = useState<'idle' | 'working'>('idle')
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [versions, setVersions] = useState<ProjectVersionItem[]>(persist?.initialVersions ?? [])
+  const [backups, setBackups] = useState<BackupItem[]>(persist?.initialBackups ?? [])
   // AI edit progress phase, so the panel can show Analyzing → Applying → Ready.
   const [aiPhase, setAiPhase] = useState<'analyzing' | 'applying' | null>(null)
   // Hero image regeneration runs independently of the text/design AI editor.
@@ -428,6 +435,7 @@ export function WebsitePreview({
     if (!p?.listVersions) return
     try {
       setVersions(await p.listVersions())
+      if (p.listBackups) setBackups(await p.listBackups())
     } catch (err) {
       debug('version refresh error:', err instanceof Error ? err.message : err)
     }
@@ -1532,6 +1540,8 @@ export function WebsitePreview({
                 onRedo={redo}
                 onClose={() => setShowEdit(false)}
               versions={persist?.listVersions ? versions : null}
+              backups={persist?.listBackups ? backups : null}
+              onRestoreBackup={persist?.restoreBackup}
               saveState={saveState}
               onRegenerateHeroImage={handleRegenerateHeroImage}
               heroImageWorking={heroImageWorking}
