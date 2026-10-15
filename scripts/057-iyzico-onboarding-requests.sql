@@ -29,7 +29,7 @@ begin;
 create table if not exists public.iyzico_onboarding_requests (
   id               bigint generated always as identity primary key,
   project_id       uuid        not null references public.projects(id) on delete cascade,
-  user_id          uuid        not null,
+  user_id          uuid        not null references auth.users (id) on delete cascade,
   status           text        not null check (status in ('submitted', 'failed', 'rate_limited')),
   http_status      smallint    check (http_status between 0 and 599),
   consent_version  text        not null check (char_length(consent_version) between 1 and 64),
