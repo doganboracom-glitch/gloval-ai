@@ -137,40 +137,37 @@ export function BlogPostView({
   const postHref = (p: BlogPost) => `${hrefBase}${blogPostPath(p.slug)}`
   return (
     <article className="mx-auto w-full max-w-5xl px-6 py-14" style={{ color: 'var(--site-fg)' }}>
-      <nav aria-label="breadcrumb" className="mb-6 text-xs" style={{ color: 'var(--site-muted-fg)' }}>
-        <a href={hrefBase || '/'} className="hover:underline">{copy.home}</a>
-        <span aria-hidden="true"> / </span>
-        <a href={`${hrefBase}/blog`} className="hover:underline">{copy.blog}</a>
-      </nav>
-      <header
-        data-blog-post-header
-        data-has-cover={post.coverUrl ? 'true' : 'false'}
-        className={post.coverUrl ? 'flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10' : 'mx-auto max-w-3xl'}
-      >
-        {post.coverUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- owner-supplied remote cover
-          <img
-            src={post.coverUrl}
-            alt={post.coverAlt || post.title}
-            className="aspect-[16/9] w-full object-cover lg:order-2"
-            style={{ borderRadius: 'var(--site-radius)' }}
-          />
-        ) : null}
-        <div className="lg:order-1">
+      <div data-blog-post-column className="mx-auto w-full max-w-[46rem]">
+        <nav aria-label="breadcrumb" className="mb-6 text-xs" style={{ color: 'var(--site-muted-fg)' }}>
+          <a href={hrefBase || '/'} className="hover:underline">{copy.home}</a>
+          <span aria-hidden="true"> / </span>
+          <a href={`${hrefBase}/blog`} className="hover:underline">{copy.blog}</a>
+        </nav>
+        <header data-blog-post-header data-has-cover={post.coverUrl ? 'true' : 'false'}>
           <h1 className="text-balance text-3xl font-bold tracking-tight lg:text-4xl" style={{ fontFamily: 'var(--site-heading-font)' }}>
             {postTitle({ title: post.title, seoTitle: null })}
           </h1>
           <time dateTime={post.publishedAt ?? undefined} className="mt-3 block text-xs" style={{ color: 'var(--site-muted-fg)' }}>
             {formatBlogDate(post.publishedAt, lang)}
           </time>
+        </header>
+        {post.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- owner-supplied remote cover
+          <img
+            data-blog-post-cover
+            src={post.coverUrl}
+            alt={post.coverAlt || post.title}
+            className="mt-8 aspect-[16/9] w-full object-cover"
+            style={{ borderRadius: 'var(--site-radius)' }}
+          />
+        ) : null}
+        <div className="mt-10">
+          <LegalBlocks blocks={parseLegalMarkup(sanitizeBlogBody(post.body))} />
         </div>
-      </header>
-      <div className="mx-auto mt-10 max-w-3xl">
-        <LegalBlocks blocks={parseLegalMarkup(sanitizeBlogBody(post.body))} />
       </div>
 
       {previous || next ? (
-        <nav className="mx-auto mt-12 grid max-w-3xl gap-4 border-t pt-6 sm:grid-cols-2" style={{ borderColor: 'var(--site-border)' }}>
+        <nav className="mx-auto mt-12 grid max-w-[46rem] gap-4 border-t pt-6 sm:grid-cols-2" style={{ borderColor: 'var(--site-border)' }}>
           {previous ? (
             <a rel="prev" href={postHref(previous)} className="text-sm">
               <span className="block text-xs" style={{ color: 'var(--site-muted-fg)' }}>{copy.previous}</span>
