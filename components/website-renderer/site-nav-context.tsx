@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, type ReactNode } from 'react'
+import { normalizeInternalHref } from '@/lib/internal-href'
 
 /**
  * SiteNav context
@@ -26,22 +27,35 @@ export type SiteNavHandler = (href: string) => boolean
 
 const SiteNavContext = createContext<SiteNavHandler | null>(null)
 const SitePreviewContext = createContext(false)
+const EMPTY_SLUGS: readonly string[] = []
+const PageSlugsContext = createContext<readonly string[]>(EMPTY_SLUGS)
 
 export function SiteNavProvider({
   handler,
   preview = false,
+  pageSlugs = EMPTY_SLUGS,
   children,
 }: {
   handler: SiteNavHandler
   /** True only inside the editor/landing preview (never on published or demo pages). */
   preview?: boolean
+  /** The site's page slugs, so a hand-written relative link like `hakkimizda` can be made absolute. */
+  pageSlugs?: readonly string[]
   children: ReactNode
 }) {
   return (
     <SiteNavContext.Provider value={handler}>
-      <SitePreviewContext.Provider value={preview}>{children}</SitePreviewContext.Provider>
+      <SitePreviewContext.Provider value={preview}>
+        <PageSlugsContext.Provider value={pageSlugs}>{children}</PageSlugsContext.Provider>
+      </SitePreviewContext.Provider>
     </SiteNavContext.Provider>
   )
+}
+
+/** Turns a stored relative internal target into an absolute path at render time. */
+export function useHrefNormalizer(): (href: string) => string {
+  const slugs = useContext(PageSlugsContext)
+  return useCallback((href: string) => normalizeInternalHref(href, slugs), [slugs])
 }
 
 /** True when the site renders inside the editor preview. */

@@ -279,7 +279,11 @@ export function WebsiteRenderer({
     showLatest && blog ? <WebsiteLatestPosts key="latest-posts" blog={blog} lang={data.meta.language} /> : null
 
   const content = (
-    <SiteNavProvider handler={navHandler} preview={Boolean(preview)}>
+    <SiteNavProvider
+      handler={navHandler}
+      preview={Boolean(preview)}
+      pageSlugs={pages.filter((p) => !p.isHome).map((p) => p.slug)}
+    >
     <SiteBlogProvider blog={blog} settings={data.blogSettings}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>
       <WebsiteHeader

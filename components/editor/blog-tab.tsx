@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Loader2, Plus, Sparkles } from 'lucide-react'
 import { deleteBlogPostAction, listBlogPostsAction } from '@/lib/blog-actions'
-import type { BlogPost } from '@/lib/blog'
+import { livePosts, type BlogPost } from '@/lib/blog'
 import { BLOG_CHANGED_EVENT, blogConfirmCopy } from '@/lib/blog-client'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { EditOperation } from '@/lib/website-edit-operations'
-import type { BlogProfile } from '@/lib/website-schema'
+import type { BlogProfile, BlogSettings } from '@/lib/website-schema'
 import { BlogPostForm } from '@/components/editor/blog-post-form'
 import { BlogAiPanel } from '@/components/editor/blog-ai-panel'
 import { BlogPersonalizePanel } from '@/components/editor/blog-personalize-panel'
@@ -25,6 +25,10 @@ const T = {
     personalizeLabel: 'Firmanıza özelleştirin',
     personalizeCta: 'AI ile özelleştir',
     title: 'Blog yazıları',
+    visibility: 'Sitede görünürlük',
+    showInMenu: 'Menüde göster',
+    showLatest: 'Ana sayfada son yazıları göster',
+    needsLivePost: 'Yayında yazı olmadığı için menü bağlantısı ve son yazılar bölümü şu an görünmüyor.',
     intro: 'Yazılar sitenizin /blog sayfasında yayınlanır ve site haritasına eklenir.',
     newPost: 'Yeni yazı',
     ai: 'AI ile yaz',
@@ -44,6 +48,10 @@ const T = {
     personalizeLabel: 'Personalize for your business',
     personalizeCta: 'Personalize with AI',
     title: 'Blog posts',
+    visibility: 'Visibility on your site',
+    showInMenu: 'Show in menu',
+    showLatest: 'Show latest posts on the home page',
+    needsLivePost: 'With no published post, the menu link and the latest-posts block stay hidden for now.',
     intro: 'Posts are published at your site\u2019s /blog page and added to the sitemap.',
     newPost: 'New post',
     ai: 'Write with AI',
@@ -61,6 +69,40 @@ const T = {
   },
 } as const
 
+function BlogSwitch({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-foreground">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange(!checked)}
+        className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+          checked ? 'border-brand bg-brand' : 'border-border bg-secondary'
+        }`}
+      >
+        <span
+          aria-hidden
+          className={`absolute left-0.5 top-0.5 h-4.5 w-4.5 rounded-full bg-background shadow transition-transform ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+          style={{ height: '1.125rem', width: '1.125rem' }}
+        />
+      </button>
+    </div>
+  )
+}
+
 function statusOf(post: BlogPost): 'draft' | 'live' | 'scheduled' {
   if (post.status !== 'published') return 'draft'
   return post.publishedAt && Date.parse(post.publishedAt) > Date.now() ? 'scheduled' : 'live'
@@ -71,6 +113,7 @@ export function BlogTab({
   lang,
   topics,
   profile,
+  settings,
   onDispatch,
   published,
 }: {
@@ -78,6 +121,7 @@ export function BlogTab({
   lang: Lang
   topics: string[]
   profile: BlogProfile | undefined
+  settings?: BlogSettings
   onDispatch: (op: EditOperation) => void
   published: boolean
 }) {
@@ -97,6 +141,7 @@ export function BlogTab({
     { revalidateOnFocus: false },
   )
   const posts = data ?? []
+  const livePostCount = livePosts(posts).length
 
   useEffect(() => {
     if (view.kind === 'list') window.scrollTo?.({ top: 0 })
@@ -205,6 +250,23 @@ export function BlogTab({
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{t.intro}</p>
         {!published && <p className="mt-1 text-xs text-muted-foreground">{t.noSlug}</p>}
       </div>
+
+      <fieldset className="flex flex-col gap-2 rounded-xl border border-border p-3">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">{t.visibility}</legend>
+        <BlogSwitch
+          label={t.showInMenu}
+          checked={settings?.showInMenu !== false}
+          onChange={(value) => onDispatch({ op: 'updateBlogSettings', patch: { showInMenu: value } })}
+        />
+        <BlogSwitch
+          label={t.showLatest}
+          checked={settings?.showLatest !== false}
+          onChange={(value) => onDispatch({ op: 'updateBlogSettings', patch: { showLatest: value } })}
+        />
+        {!isLoading && !loadError && livePostCount === 0 && (
+          <p className="text-xs leading-relaxed text-muted-foreground">{t.needsLivePost}</p>
+        )}
+      </fieldset>
 
       <div className="flex gap-2">
         <button

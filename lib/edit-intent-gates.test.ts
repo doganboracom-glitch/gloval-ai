@@ -12,23 +12,23 @@ describe('foldInstruction / stripQuoted', () => {
 })
 
 describe('blog menu gate', () => {
-  it('explains that the blog link cannot be removed separately', () => {
+  it('points removal at the "Menüde göster" switch', () => {
     const gate = classifyEditInstruction('Blogu menüden kaldır', 'tr')
     expect(gate?.kind).toBe('blog-menu')
-    expect(gate?.message).toContain('şu an desteklenmiyor')
-    expect(gate?.message).toContain('taslağa')
+    expect(gate?.message).toContain('Menüde göster')
+    expect(gate?.message).not.toContain('desteklenmiyor')
   })
 
-  it('explains that the blog link cannot be added by hand', () => {
+  it('points adding at the same switch', () => {
     const gate = classifyEditInstruction('Menüye blog ekle', 'tr')
     expect(gate?.kind).toBe('blog-menu')
-    expect(gate?.message).toContain('şu an desteklenmiyor')
-    expect(gate?.message).toContain('kendiliğinden')
+    expect(gate?.message).toContain('Menüde göster')
+    expect(gate?.message).not.toContain('desteklenmiyor')
   })
 
   it('answers in English too', () => {
-    expect(classifyEditInstruction('remove blog from the menu', 'en')?.message).toContain('not supported right now')
-    expect(classifyEditInstruction('add blog to the menu', 'en')?.message).toContain('not supported right now')
+    expect(classifyEditInstruction('remove blog from the menu', 'en')?.message).toContain('Show in menu')
+    expect(classifyEditInstruction('add blog to the menu', 'en')?.message).toContain('Show in menu')
   })
 
   it('ignores blog mentions that are not about the menu', () => {

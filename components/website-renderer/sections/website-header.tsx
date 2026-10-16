@@ -3,7 +3,7 @@
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { PageItem } from '@/lib/website-pages'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
-import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
@@ -54,6 +54,7 @@ export function WebsiteHeader({
   actions?: React.ReactNode
 }) {
   const nav = useSiteNav()
+  const normalizeHref = useHrefNormalizer()
   const blog = useBlogLink()
   const cart = useOptionalCart()
   const cartSlug = cartSlugProp ?? storeSlug
@@ -191,7 +192,7 @@ export function WebsiteHeader({
                 const href =
                   cartSlug && isProductsLink(link.label, link.href)
                     ? storeListHref(cartSlug)
-                    : link.href
+                    : normalizeHref(link.href)
                 return (
                 <a
                   key={link.label + link.href}

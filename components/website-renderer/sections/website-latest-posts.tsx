@@ -31,7 +31,7 @@ export function WebsiteLatestPosts({ blog, lang = 'tr' }: { blog: SiteBlogData; 
             className="shrink-0 text-sm font-medium hover:underline"
             style={{ color: 'var(--site-primary)' }}
           >
-            {lang === 'en' ? 'All posts' : 'Tüm yazılar'}
+            {lang === 'en' ? 'View all' : 'Tümünü gör'}
           </a>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
