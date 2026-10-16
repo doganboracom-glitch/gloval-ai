@@ -10,6 +10,7 @@ import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 import { getEditorCatalog } from '@/lib/store-editor-catalog'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { suggestBlogTopics } from '@/lib/blog-ai'
+import { isStarterPending } from '@/lib/blog-site'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 
 export default async function EditorPage({
@@ -107,7 +108,11 @@ export default async function EditorPage({
       autoPublish={autopublish === '1'}
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
       catalog={catalog}
-      blog={canManageBlog ? { projectId, topics: blogTopics, sitemapUrl } : null}
+      blog={
+        canManageBlog
+          ? { projectId, topics: blogTopics, sitemapUrl, starterPending: isStarterPending(project.created_at, Date.now()) }
+          : null
+      }
     />
   )
 }

@@ -59,6 +59,9 @@ blogOperationCopy,
 
 type Device = 'desktop' | 'tablet' | 'mobile'
 
+const STARTER_POLL_MS = 8_000
+const STARTER_WAIT_MS = 165_000
+
 const DEVICE_MAX_WIDTH: Record<Device, string> = {
   desktop: 'max-w-6xl',
   tablet: 'max-w-3xl',
@@ -176,7 +179,7 @@ export function WebsitePreview({
   /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Non-null for a project's owner/admin: enables the editor's Blog tab. */
-  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null } | null
+  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
   /**
    * Store owner's active products + collections (loaded server-side), shown by
    * product showcase sections in the preview. Null: no data, empty-state message.
@@ -314,7 +317,12 @@ export function WebsitePreview({
   // Same SWR key as the Blog tab, so the preview's menu link and latest-posts
   // block follow the owner's posts and the two visibility switches live.
   const blogProjectId = blog?.projectId ?? null
-  const starterPollCount = useRef(0)
+  const [starterWaiting, setStarterWaiting] = useState(Boolean(blog?.starterPending))
+  useEffect(() => {
+    if (!starterWaiting) return
+    const stop = setTimeout(() => setStarterWaiting(false), STARTER_WAIT_MS)
+    return () => clearTimeout(stop)
+  }, [starterWaiting])
   const { data: previewPosts, mutate: reloadPreviewPosts } = useSWR(
     blogProjectId ? ['blog-posts', blogProjectId] : null,
     async () => {
@@ -325,17 +333,16 @@ export function WebsitePreview({
     {
       revalidateOnFocus: false,
       // The three starter posts are written in the background right after the
-      // site is created: poll briefly while the list is empty so the "Blog"
-      // link and "Son yazılar" block appear without a manual reload.
-      refreshInterval: (latest) => {
-        if (latest && latest.length > 0) return 0
-        starterPollCount.current += 1
-        return starterPollCount.current <= 12 ? 12_000 : 0
-      },
+      // site is created: poll briefly (only for a just-created site) so the
+      // "Blog" link and "Son yazılar" block appear without a manual reload.
+      refreshInterval: (latest) => (starterWaiting && !(latest && latest.length > 0) ? STARTER_POLL_MS : 0),
       errorRetryCount: 3,
     },
   )
-  const previewBlog = useMemo(() => (previewPosts ? previewSiteBlogData(previewPosts) : null), [previewPosts])
+  const previewBlog = useMemo(
+    () => (previewPosts ? previewSiteBlogData(previewPosts, starterWaiting) : null),
+    [previewPosts, starterWaiting],
+  )
   useEffect(() => {
     if (!blogProjectId) return
     const reload = () => void reloadPreviewPosts()

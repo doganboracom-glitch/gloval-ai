@@ -2,6 +2,7 @@ import {
   blogCardHref,
   blogIndexHref,
   latestPostsHeading,
+  postsPreparingLabel,
   type SiteBlogData,
 } from '@/lib/blog-site'
 import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
@@ -9,6 +10,44 @@ import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
 export function WebsiteLatestPosts({ blog, lang = 'tr' }: { blog: SiteBlogData; lang?: 'tr' | 'en' }) {
   const copy = blogCopy(lang)
   const heading = latestPostsHeading(lang)
+
+  if (blog.posts.length === 0 && blog.preparing) {
+    return (
+      <section
+        aria-labelledby="latest-posts-heading"
+        data-latest-posts
+        data-latest-posts-preparing
+        className="px-6 py-16"
+        style={{ backgroundColor: 'var(--site-bg)', color: 'var(--site-fg)' }}
+      >
+        <div className="mx-auto w-full max-w-5xl">
+          <h2
+            id="latest-posts-heading"
+            className="mb-8 text-balance text-2xl font-bold tracking-tight sm:text-3xl"
+            style={{ fontFamily: 'var(--site-heading-font)' }}
+          >
+            {heading}
+          </h2>
+          <p role="status" className="text-sm" style={{ color: 'var(--site-muted-fg)' }}>
+            {postsPreparingLabel(lang)}
+          </p>
+          <div aria-hidden="true" className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-40 animate-pulse border"
+                style={{
+                  borderColor: 'var(--site-border)',
+                  borderRadius: 'var(--site-radius)',
+                  backgroundColor: 'var(--site-card)',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <section

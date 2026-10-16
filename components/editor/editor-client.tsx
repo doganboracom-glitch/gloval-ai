@@ -64,7 +64,7 @@ export function EditorClient({
   /** Non-null only for a store's owner/admin: enables the Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Enables the Blog tab (project owner/admin). */
-  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null } | null
+  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
   /** Owner-verified store catalog for the live preview (store sites only). */
   catalog?: EditorCatalog | null
 }) {
