@@ -263,6 +263,15 @@ export async function createProject(input: {
   }
   if (error || !data) throw error ?? new Error('PROJECT_INSERT_FAILED')
   revalidatePath('/dashboard')
+  // First registration of the site: three sector posts are written in the
+  // background (free, noindex). Only signed-in owners reach this point.
+  scheduleStarterBlog({
+    projectId: data.id as string,
+    ownerId: userId,
+    siteSlug: null,
+    site: { name: parsed.meta.name, description: parsed.meta.description, storefront: isStorefront(parsed) },
+    lang: row.language === 'en' ? 'en' : 'tr',
+  })
   return data.id as string
 }
 
@@ -712,6 +721,7 @@ export async function publishProject(input: {
     if (firstPublish) {
       scheduleStarterBlog({
         projectId: input.id,
+        ownerId: project.owner_id as string,
         siteSlug: slug,
         site: { name: parsed.meta.name, description: parsed.meta.description, storefront: isStorefront(parsed) },
         lang: project.language === 'en' ? 'en' : 'tr',

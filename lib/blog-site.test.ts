@@ -4,6 +4,7 @@ import {
   blogIndexHref,
   buildSiteBlogData,
   isBlogRoutePath,
+  isStarterPending,
   previewSiteBlogData,
   shouldShowBlogLink,
   shouldShowLatestPosts,
@@ -78,6 +79,31 @@ describe('previewSiteBlogData', () => {
     const data = previewSiteBlogData([post()])
     expect(shouldShowBlogLink(data)).toBe(true)
     expect(shouldShowLatestPosts(data, { showLatest: false })).toBe(false)
+  })
+
+  it('shows a "preparing" latest block (never the menu link) while starter posts are pending', () => {
+    const data = previewSiteBlogData([], true)
+    expect(data?.preparing).toBe(true)
+    expect(data?.posts).toEqual([])
+    expect(shouldShowLatestPosts(data)).toBe(true)
+    expect(shouldShowLatestPosts(data, { showLatest: false })).toBe(false)
+    expect(shouldShowBlogLink(data)).toBe(false)
+  })
+
+  it('replaces the preparing state with real posts once they exist', () => {
+    const data = previewSiteBlogData([post()], true)
+    expect(data?.preparing).toBeUndefined()
+    expect(shouldShowBlogLink(data)).toBe(true)
+  })
+})
+
+describe('isStarterPending', () => {
+  const now = Date.parse('2026-10-16T12:00:00Z')
+  it('is true only for a recently created site', () => {
+    expect(isStarterPending('2026-10-16T11:58:00Z', now)).toBe(true)
+    expect(isStarterPending('2026-10-16T11:30:00Z', now)).toBe(false)
+    expect(isStarterPending(null, now)).toBe(false)
+    expect(isStarterPending('not-a-date', now)).toBe(false)
   })
 })
 

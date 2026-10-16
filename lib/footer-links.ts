@@ -170,19 +170,50 @@ export function resolveFooterColumns(
 
 export type FooterLegalInput = { hidden?: boolean; links?: NavLink[] } | undefined
 
-/** Default official-text links for a site kind. */
-export function defaultLegalLinks(
-  kind: 'ecommerce' | 'corporate',
-  lang: 'tr' | 'en' = 'tr',
-): NavLink[] {
-  const slugs: FooterLegalSlug[] =
-    kind === 'ecommerce'
-      ? FOOTER_LEGAL_DOCS.map((d) => d.slug)
-      : ['gizlilik-politikasi', 'hizmet-sozlesmesi', 'uyelik-sozlesmesi']
+const CORPORATE_LEGAL_SLUGS: FooterLegalSlug[] = ['gizlilik-politikasi']
+
+/** What corporate footers showed before the privacy-only default; kept for sites that never stored `legal`. */
+const LEGACY_CORPORATE_LEGAL_SLUGS: FooterLegalSlug[] = [
+  'gizlilik-politikasi',
+  'hizmet-sozlesmesi',
+  'uyelik-sozlesmesi',
+]
+
+function legalLinksFor(slugs: readonly FooterLegalSlug[], lang: 'tr' | 'en'): NavLink[] {
   return slugs.map((slug) => {
     const doc = FOOTER_LEGAL_DOCS.find((d) => d.slug === slug)!
     return { label: doc[lang === 'en' ? 'en' : 'tr'], href: legalDocPath(slug) }
   })
+}
+
+/**
+ * Default official-text links for a NEW site: a store carries every document,
+ * a corporate site only the privacy policy.
+ */
+export function defaultLegalLinks(
+  kind: 'ecommerce' | 'corporate',
+  lang: 'tr' | 'en' = 'tr',
+): NavLink[] {
+  return legalLinksFor(kind === 'ecommerce' ? FOOTER_LEGAL_DOCS.map((d) => d.slug) : CORPORATE_LEGAL_SLUGS, lang)
+}
+
+/**
+ * What an existing site shows when it never stored `legal`. Corporate sites
+ * keep their original three links so already-published footers do not change.
+ */
+export function implicitLegalLinks(kind: 'ecommerce' | 'corporate', lang: 'tr' | 'en' = 'tr'): NavLink[] {
+  return kind === 'ecommerce' ? defaultLegalLinks(kind, lang) : legalLinksFor(LEGACY_CORPORATE_LEGAL_SLUGS, lang)
+}
+
+/** Persists the privacy-only legal bar on a newly generated corporate site (stores and existing choices are left alone). */
+export function seedFooterLegal(site: WebsiteSchema, lang: 'tr' | 'en' = 'tr'): WebsiteSchema {
+  if (isStorefront(site)) return site
+  const index = site.sections.findIndex((s) => s.type === 'footer')
+  const footer = site.sections[index]
+  if (!footer || footer.type !== 'footer' || footer.legal) return site
+  const sections = site.sections.slice()
+  sections[index] = { ...footer, legal: { links: defaultLegalLinks('corporate', lang) } }
+  return { ...site, sections }
 }
 
 /**
@@ -198,7 +229,7 @@ export function resolveFooterLegal(
   const store = Boolean(site && isStorefront(site))
   if (legal?.hidden && !store) return []
   const kind = store ? 'ecommerce' : 'corporate'
-  const owned = legal?.hidden ? [] : (legal?.links ?? defaultLegalLinks(kind, lang))
+  const owned = legal?.hidden ? [] : (legal?.links ?? implicitLegalLinks(kind, lang))
   const links = store ? withStoreEssentialLegal(owned, lang) : owned
   return links.filter((l) => {
     if (l.label.trim() === '' || !isValidFooterHref(l.href, site)) return false

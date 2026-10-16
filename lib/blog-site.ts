@@ -9,6 +9,8 @@ export type SiteBlogData = {
   hrefBase: string
   /** Live posts, newest first. */
   posts: BlogCardData[]
+  /** Preview only: the starter posts are still being written in the background. */
+  preparing?: boolean
 }
 
 export type BlogCardData = {
@@ -57,9 +59,19 @@ export function isBlogRoutePath(tenantPath: string): boolean {
 }
 
 /** The live posts as the site chrome sees them; samples and drafts never appear. */
-export function previewSiteBlogData(posts: readonly BlogPost[]): SiteBlogData | null {
+export function previewSiteBlogData(posts: readonly BlogPost[], starterPending = false): SiteBlogData | null {
   const live = livePosts(posts.filter((post) => !post.sample))
-  return live.length > 0 ? buildSiteBlogData('', live) : null
+  if (live.length > 0) return buildSiteBlogData('', live)
+  return starterPending ? { hrefBase: '', posts: [], preparing: true } : null
+}
+
+/** How long after creation a site with no posts is still assumed to be waiting for its starter posts. */
+export const STARTER_PENDING_WINDOW_MS = 10 * 60 * 1000
+
+export function isStarterPending(createdAt: string | null | undefined, now: number): boolean {
+  if (!createdAt) return false
+  const created = Date.parse(createdAt)
+  return Number.isFinite(created) && now - created >= 0 && now - created < STARTER_PENDING_WINDOW_MS
 }
 
 /** The menu/footer link shows only when the blog has a public post and the owner has not hidden it. */
@@ -68,7 +80,11 @@ export function shouldShowBlogLink(blog: SiteBlogData | null | undefined, settin
 }
 
 export function shouldShowLatestPosts(blog: SiteBlogData | null | undefined, settings?: BlogSettings): boolean {
-  return Boolean(blog && blog.posts.length > 0 && settings?.showLatest !== false)
+  return Boolean(blog && (blog.posts.length > 0 || blog.preparing) && settings?.showLatest !== false)
+}
+
+export function postsPreparingLabel(lang: Lang): string {
+  return lang === 'en' ? 'Posts are being prepared' : 'Yazılar hazırlanıyor'
 }
 
 /**

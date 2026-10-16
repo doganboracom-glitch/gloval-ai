@@ -9,6 +9,7 @@ import {
   defaultLegalLinks,
   describeFooterIssue,
   footerTargetOptions,
+  implicitLegalLinks,
   sanitizeFooterColumns,
   sanitizeFooterLegalLinks,
   validateFooterHref,
@@ -104,7 +105,7 @@ export function FooterLinksEditor({
   const storedColumns: FooterColumnInput[] = footer?.columns ?? []
   const kind = isStorefront(site) ? 'ecommerce' : 'corporate'
   const storedLegal = footer?.legal
-  const storedLegalLinks: NavLink[] = storedLegal?.links ?? defaultLegalLinks(kind, l)
+  const storedLegalLinks: NavLink[] = storedLegal?.links ?? implicitLegalLinks(kind, l)
 
   const [columns, setColumns] = useState<FooterColumnInput[]>(storedColumns)
   const [legalLinks, setLegalLinks] = useState<NavLink[]>(storedLegalLinks)

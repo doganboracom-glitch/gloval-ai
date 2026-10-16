@@ -4,7 +4,7 @@ import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedContactActions } from '@/lib/site-contact-actions'
-import { seedFooterColumns } from '@/lib/footer-links'
+import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { normalizeCorporateSectionOrder } from '@/lib/section-order'
@@ -186,8 +186,11 @@ async function runGenerate(
         // Seeds the floating phone + WhatsApp buttons from the site's own
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
-        website: seedFooterColumns(
-          seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object))), prompt)),
+        website: seedFooterLegal(
+          seedFooterColumns(
+            seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object))), prompt)),
+            normalizedLang,
+          ),
           normalizedLang,
         ),
         source: 'ai',
@@ -211,8 +214,11 @@ async function runGenerate(
         attachSectionImages(website, prompt),
       ])
       return Response.json({
-        website: seedFooterColumns(
-          seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website))), prompt)),
+        website: seedFooterLegal(
+          seedFooterColumns(
+            seedContactActions(flagPlaceholderContact(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website))), prompt)),
+            normalizedLang,
+          ),
           normalizedLang,
         ),
         source: 'fallback',

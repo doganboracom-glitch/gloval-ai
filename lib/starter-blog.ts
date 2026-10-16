@@ -18,6 +18,14 @@ export const STARTER_LIMITS = { minWords: 600, maxWords: 900 } as const
 /** Whole-run time budget; a slow model must never hold the server up. */
 export const STARTER_BUDGET_MS = 150_000
 
+/** Sites per user per rolling 24 hours that get their free starter posts. */
+export const STARTER_DAILY_SITE_CAP = 5
+
+/** True once the owner already received a full day's worth of starter posts. */
+export function starterDailyCapReached(postsLast24h: number): boolean {
+  return postsLast24h >= STARTER_DAILY_SITE_CAP * STARTER_POST_COUNT
+}
+
 export type StarterSite = {
   name: string
   description: string

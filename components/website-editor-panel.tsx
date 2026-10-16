@@ -111,7 +111,7 @@ export function WebsiteEditorPanel({
 }: {
   site: WebsiteSchema
   /** Project owner/admin only: shows the Blog tab (posts, AI writer). */
-  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null } | null
+  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
   /** Live subdomain slug (null before the first publish), for "Sayfayı aç" links. */
   publicSlug?: string | null
   /** Store owner/admin only: shows the Sanal Poslar tab. */

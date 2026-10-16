@@ -4,11 +4,13 @@ import {
   customKindOf,
   defaultLegalLinks,
   footerTargetOptions,
+  implicitLegalLinks,
   resolveFooterColumns,
   resolveFooterLegal,
   resolveStoreEssentialPageLinks,
   sanitizeFooterColumns,
   seedFooterColumns,
+  seedFooterLegal,
   validateFooterHref,
 } from './footer-links'
 import { applyOperation } from './website-edit-operations'
@@ -153,6 +155,45 @@ describe('defaults and seeding', () => {
         expect(validateFooterHref(link.href, kind === 'ecommerce' ? store() : corporate()).ok).toBe(true)
       }
     }
+  })
+})
+
+describe('corporate footer legal links', () => {
+  const labels = (links: { label: string }[]) => links.map((l) => l.label)
+
+  it('new corporate defaults carry only the privacy policy', () => {
+    expect(labels(defaultLegalLinks('corporate'))).toEqual(['Gizlilik Politikası'])
+  })
+
+  it('stores keep every document by default', () => {
+    expect(defaultLegalLinks('ecommerce').length).toBeGreaterThan(1)
+    expect(labels(resolveFooterLegal(undefined, store()))).toEqual(
+      expect.arrayContaining(['Gizlilik Politikası', 'Teslimat ve İade', 'Mesafeli Satış Sözleşmesi']),
+    )
+  })
+
+  it('seedFooterLegal persists privacy-only on a new corporate site and never overwrites', () => {
+    const seeded = seedFooterLegal(corporate())
+    const footer = seeded.sections.find((s) => s.type === 'footer') as {
+      legal?: { links?: { label: string; href: string }[] }
+    }
+    expect(labels(footer.legal?.links ?? [])).toEqual(['Gizlilik Politikası'])
+    expect(seedFooterLegal(seeded)).toBe(seeded)
+    expect(labels(resolveFooterLegal(footer.legal, seeded))).toEqual(['Gizlilik Politikası'])
+  })
+
+  it('seedFooterLegal leaves stores untouched', () => {
+    const site = store()
+    expect(seedFooterLegal(site)).toBe(site)
+  })
+
+  it('existing corporate sites that never stored legal keep their published links', () => {
+    expect(labels(resolveFooterLegal(undefined, corporate()))).toEqual([
+      'Gizlilik Politikası',
+      'Hizmet Sözleşmesi',
+      'Üyelik Sözleşmesi',
+    ])
+    expect(labels(implicitLegalLinks('corporate'))).toHaveLength(3)
   })
 })
 

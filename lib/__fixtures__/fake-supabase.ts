@@ -126,6 +126,7 @@ class Query implements PromiseLike<{ data: unknown; error: FakeError | null }> {
     }
     if (this.op === 'insert') {
       const rows = Array.isArray(this.payload) ? this.payload : [this.payload as Row]
+      const inserted: Row[] = []
       for (const input of rows) {
         const row: Row = { id: `fake-${++idCounter}`, created_at: this.options.now?.() ?? new Date().toISOString(), ...input }
         const key = this.options.uniqueKey?.(this.table, row) ?? null
@@ -134,9 +135,10 @@ class Query implements PromiseLike<{ data: unknown; error: FakeError | null }> {
           if (clash) return { data: null, error: { code: '23505', message: 'duplicate key value' } }
         }
         ;(this.tables[this.table] ??= []).push(row)
+        inserted.push(row)
         log?.push({ table: this.table, op: 'insert', detail: clone(row) })
       }
-      return { data: null, error: null }
+      return { data: this.returning ? inserted.map(clone) : null, error: null }
     }
     if (this.op === 'update') {
       const rows = this.matching()
