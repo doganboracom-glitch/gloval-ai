@@ -1,6 +1,7 @@
 import type { SectionType, WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { pickLang, type Lang } from '@/lib/i18n'
+import { classifyEditInstruction } from '@/lib/edit-intent-gates'
 
 /* -------------------------------------------------------------------------- */
 /*  Deterministic natural-language command parser (TR + EN)                   */
@@ -178,7 +179,7 @@ const SECTION_SYNONYMS: [SectionType, string[]][] = [
   ['footer', ['alt bilgi', 'footer']],
 ]
 
-const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
+export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
   hero: { tr: 'Hero', en: 'Hero' },
   slider: { tr: 'Kayan Görsel', en: 'Slider' },
   about: { tr: 'Hakkımızda', en: 'About' },
@@ -346,6 +347,189 @@ function parseMenuRemoval(
   }
 }
 
+/* ---- precision guards ----------------------------------------------------- */
+
+const MAX_FIELD_WORDS = 8
+
+function extractQuoted(raw: string): string | null {
+  const m = raw.match(/["“”«»]([^"“”«»]{1,200})["“”«»]/)
+  return m ? m[1].trim() || null : null
+}
+
+/** Label words that name the field, never the new value ("metnini X yap"). */
+const LEADING_LABELS =
+  /^(?:metn\S*|yaz[ıi]s[ıi]\S*|etiket\S*|ad[ıi]\S*|isim\S*|ba[şs]l[ıi][kğ]\S*|a[çc][ıi]klama\S*|text|label|title|to)\s+/i
+
+/**
+ * Captures the new value of a field. A quoted value always wins and is copied
+ * verbatim. An unquoted value is only trusted when it is short (a whole
+ * sentence after the field name means the instruction is something else and
+ * must go to the AI, not be pasted into the field).
+ */
+function captureField(raw: string, patterns: RegExp[]): string | null {
+  const noQuote = stripQuoted(raw)
+  const quoted = extractQuoted(raw)
+  for (const re of patterns) {
+    const m = noQuote.match(re)
+    if (!m) continue
+    if (quoted) return quoted
+    let value = cleanValue(m[1] ?? '')
+    let guard = 0
+    while (LEADING_LABELS.test(value + ' ') && guard++ < 3) value = value.replace(LEADING_LABELS, '').trim()
+    if (!value || value.split(/\s+/).length > MAX_FIELD_WORDS) return null
+    return value
+  }
+  return null
+}
+
+function stripQuoted(raw: string): string {
+  return raw.replace(/["“”«»][^"“”«»]*["“”«»]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** Words allowed around a section name in a pure structural command. */
+const STRUCTURAL_FILLERS = [
+  'bolum', 'kisim', 'section', 'bir', 'yeni', 'ekle', 'add', 'insert', 'kaldir', 'sil', 'cikar', 'remove',
+  'delete', 'gizle', 'hide', 'kapat', 'goster', 'show', 'gorunur', 'yukari', 'asagi', 'tasi', 'move', 'up',
+  'down', 'lutfen', 'please', 'bana', 'site', 'siteye', 'siteden', 'sitemize', 'the', 'my', 'misin', 'sirala',
+  'kaydir', 'en', 'uste', 'alta', 'basa', 'sona', 'top', 'bottom', 'ustune', 'onune', 'uzerine', 'altina',
+  'arkasina', 'sonrasina', 'before', 'above', 'below', 'after', 'under', 'ile', 've', 'de', 'da',
+]
+
+function isFillerToken(token: string): boolean {
+  if (token.length <= 2) return true
+  return STRUCTURAL_FILLERS.some((f) => token === f || (token.startsWith(f) && token.length - f.length <= 4))
+}
+
+/**
+ * True when the instruction is ONLY a structural command about the given
+ * section types ("Hizmetler bölümünü kaldır"). Any extra content ("Hizmetlerime
+ * yeni bir madde ekle") means the instruction is about something else, so the
+ * section-level shortcut must not fire and delete or add the wrong thing.
+ */
+function isPureStructural(textNorm: string, types: SectionType[]): boolean {
+  let rest = ` ${textNorm} `
+  const syns = types.flatMap((t) => SECTION_SYNONYMS.find(([ty]) => ty === t)?.[1] ?? [])
+  for (const syn of syns.sort((a, b) => b.length - a.length)) {
+    rest = rest.replace(new RegExp(`(^|[^a-z0-9])${escapeRe(syn)}[a-z0-9]*`, 'g'), ' ')
+  }
+  return rest
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .every(isFillerToken)
+}
+
+/** Distinct section types named in the text, in order of appearance. */
+function sectionTypesInOrder(textNorm: string): SectionType[] {
+  const found: { type: SectionType; at: number }[] = []
+  for (const [type, syns] of SECTION_SYNONYMS) {
+    let at = -1
+    for (const syn of syns) {
+      const m = new RegExp(`(^|[^a-z0-9])${escapeRe(syn)}`).exec(textNorm)
+      if (m && (at === -1 || m.index < at)) at = m.index
+    }
+    if (at !== -1) found.push({ type, at })
+  }
+  return found.sort((a, b) => a.at - b.at).map((f) => f.type)
+}
+
+/** Hero and the footer keep their place when something is sent to an extreme. */
+function moveBounds(site: WebsiteSchema, moving: SectionType): { lo: number; hi: number } {
+  const lo = site.sections[0]?.type === 'hero' && moving !== 'hero' ? 1 : 0
+  const last = site.sections.length - 1
+  const hi = site.sections[last]?.type === 'footer' && moving !== 'footer' ? last - 1 : last
+  return { lo, hi }
+}
+
+function moveOps(index: number, steps: number): EditOperation[] {
+  const direction: 'up' | 'down' = steps < 0 ? 'up' : 'down'
+  return Array.from({ length: Math.abs(steps) }, () => ({ op: 'moveSection', index: 0, direction })).map(
+    (op, i) => ({ ...op, index: index + (direction === 'down' ? i : -i) }) as EditOperation,
+  )
+}
+
+/**
+ * "X bölümünü Y bölümünün üstüne/altına taşı" and "X'i en üste/en alta taşı".
+ * Returns null when the instruction is not a pure move of this kind.
+ */
+function parseTargetedMove(textNorm: string, site: WebsiteSchema, lang: Lang): ParsedCommand | null {
+  if (!/(tasi|\bmove\b|sirala|kaydir)/.test(textNorm)) return null
+  const types = sectionTypesInOrder(textNorm)
+  const toTop = /(en uste|en basa|en yukari|\btop\b)/.test(textNorm)
+  const toBottom = /(en alta|en sona|en asagi|\bbottom\b)/.test(textNorm)
+  const before = /(ustune|onune|uzerine|\bbefore\b|\babove\b)/.test(textNorm)
+  const after = /(altina|arkasina|sonrasina|\bbelow\b|\bafter\b|\bunder\b)/.test(textNorm)
+
+  if (types.length === 2 && (before || after) && !(before && after) && isPureStructural(textNorm, types)) {
+    const [mover, anchor] = types
+    const from = resolveSectionIndex(mover, site)
+    const to = resolveSectionIndex(anchor, site)
+    if (from === -1 || to === -1) {
+      const missing = from === -1 ? mover : anchor
+      return {
+        operations: [],
+        feedback: say(lang, `Bu sitede ${SECTION_LABEL[missing].tr} bölümü bulunmuyor.`, `This site doesn't have a ${SECTION_LABEL[missing].en} section.`),
+      }
+    }
+    // Final slot of the mover once it sits just before/after the anchor.
+    const target = before ? (from < to ? to - 1 : to) : from < to ? to : to + 1
+    const { lo, hi } = moveBounds(site, mover)
+    const steps = Math.min(hi, Math.max(lo, target)) - from
+    const dir = before ? say(lang, 'üstüne', 'above') : say(lang, 'altına', 'below')
+    if (steps === 0) {
+      return {
+        operations: [],
+        feedback: say(lang, `${SECTION_LABEL[mover].tr} bölümü zaten orada.`, `The ${SECTION_LABEL[mover].en} section is already there.`),
+      }
+    }
+    return {
+      operations: moveOps(from, steps),
+      feedback: say(
+        lang,
+        `${SECTION_LABEL[mover].tr} bölümü ${SECTION_LABEL[anchor].tr} bölümünün ${dir} taşındı.`,
+        `Moved the ${SECTION_LABEL[mover].en} section ${dir} the ${SECTION_LABEL[anchor].en} section.`,
+      ),
+    }
+  }
+
+  if (types.length === 1 && (toTop || toBottom) && isPureStructural(textNorm, types)) {
+    const type = types[0]
+    const from = resolveSectionIndex(type, site)
+    if (from === -1) {
+      return {
+        operations: [],
+        feedback: say(lang, `Bu sitede ${SECTION_LABEL[type].tr} bölümü bulunmuyor.`, `This site doesn't have a ${SECTION_LABEL[type].en} section.`),
+      }
+    }
+    const { lo, hi } = moveBounds(site, type)
+    const steps = (toTop ? lo : hi) - from
+    if (steps === 0) {
+      return {
+        operations: [],
+        feedback: say(lang, `${SECTION_LABEL[type].tr} bölümü zaten orada.`, `The ${SECTION_LABEL[type].en} section is already there.`),
+      }
+    }
+    return {
+      operations: moveOps(from, steps),
+      feedback: say(
+        lang,
+        `${SECTION_LABEL[type].tr} bölümü ${toTop ? 'en üste' : 'en alta'} taşındı.`,
+        `Moved the ${SECTION_LABEL[type].en} section to the ${toTop ? 'top' : 'bottom'}.`,
+      ),
+    }
+  }
+  return null
+}
+
+/** True when the words around a hero field name do not point at another target. */
+function targetsHeroField(textNorm: string): boolean {
+  if (/\b(seo|meta|google|sekme|tarayici|browser)\b/.test(textNorm)) return false
+  if (/\bsayfa/.test(textNorm.replace(/\bana sayfa\w*/g, ' '))) return false
+  const type = detectSectionType(textNorm)
+  return type === null || type === 'hero'
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Main parser                                                               */
 /* -------------------------------------------------------------------------- */
@@ -357,8 +541,17 @@ export function parseCommand(
   const lang: Lang = site.meta.language === 'en' ? 'en' : 'tr'
   const raw = instruction.trim()
   if (raw.length < 2) return null
-  const text = lower(raw)
-  const textNorm = normalize(raw)
+  // Quoted text is content to copy, never an instruction: keyword detection
+  // runs on the unquoted remainder only.
+  const structural = stripQuoted(raw)
+  const text = lower(structural)
+  const textNorm = normalize(structural)
+
+  const gate = classifyEditInstruction(raw, lang)
+  if (gate?.kind === 'blog-menu') return { operations: [], feedback: gate.message }
+
+  const targetedMove = parseTargetedMove(textNorm, site, lang)
+  if (targetedMove) return targetedMove
 
   /* 1. Structural section operations (add / remove / hide / show / move) ---- */
   const wantsAdd = /(\bekle\b|\bekler misin\b|\badd\b|\binsert\b)/.test(text)
@@ -378,7 +571,11 @@ export function parseCommand(
     return parseMenuRemoval(textNorm, sectionType, site, lang)
   }
 
-  if (sectionType && wantsAdd) {
+  // The section shortcuts below only fire for a PURE structural command; extra
+  // content ("Hizmetlerime yeni bir madde ekle") belongs to the AI.
+  const pureStructural = sectionType !== null && isPureStructural(textNorm, [sectionType])
+
+  if (sectionType && pureStructural && wantsAdd) {
     return {
       operations: [{ op: 'addSection', sectionType }],
       feedback: say(
@@ -389,7 +586,7 @@ export function parseCommand(
     }
   }
 
-  if (sectionType && (wantsRemove || wantsHide || wantsShow || wantsMove)) {
+  if (sectionType && pureStructural && (wantsRemove || wantsHide || wantsShow || wantsMove)) {
     const index = resolveSectionIndex(sectionType, site)
     if (index === -1) {
       return {
@@ -455,11 +652,14 @@ export function parseCommand(
   }
 
   /* 3. Site name -------------------------------------------------------------*/
-  const siteName = firstMatch(raw, [
-    /(?:marka|firma|i[şs]letme|sit\w*)\s+(?:ad|isim|ism)\S*\s+(.+)/i,
-    /(?:site|brand|company)\s*name\s*(?:to\s+)?(.+)/i,
-    /(?:rename|call\s+it)\s+(?:to\s+)?(.+)/i,
-  ])
+  const siteName =
+    detectSectionType(textNorm) === null && !/\b(seo|meta|sayfa|page)\w*/.test(textNorm)
+      ? captureField(raw, [
+          /(?:marka|firma|i[şs]letme|sit\w*)\s+(?:ad|isim|ism)\S*\s*(.*)/i,
+          /(?:site|brand|company)\s*name\s*(?:to\s+)?(.*)/i,
+          /(?:rename|call\s+it)\s+(?:to\s+)?(.*)/i,
+        ])
+      : null
   if (siteName) {
     return {
       // Update both the site name and the visible header logo so the brand
@@ -548,10 +748,24 @@ export function parseCommand(
   }
 
   /* 4. Hero fields -----------------------------------------------------------*/
-  const heroTitle = firstMatch(raw, [
-    /(?:hero\s*)?ba[şs]l[ıi][kğ]\S*\s+(.+)/i,
-    /(?:hero\s*)?(?:title|headline)\s*(?:to\s+)?(.+)/i,
+  const seoTitle = captureField(raw, [
+    /(?:seo|meta|sekme|taray[ıi]c[ıi])\s*(?:ba[şs]l[ıi][kğ]|title)\S*\s*(.*)/i,
+    /(?:ba[şs]l[ıi][kğ]|title)\S*\s*(?:seo|meta)\S*\s*(.*)/i,
   ])
+  if (seoTitle) {
+    return {
+      operations: [{ op: 'updateMeta', seoTitle }],
+      feedback: say(lang, `SEO başlığı güncellendi: "${seoTitle}".`, `SEO title updated: "${seoTitle}".`),
+    }
+  }
+
+  const heroContext = targetsHeroField(textNorm)
+  const heroTitle = heroContext
+    ? captureField(raw, [
+        /(?:hero\s*)?ba[şs]l[ıi][kğ]\S*\s*(.*)/i,
+        /(?:hero\s*)?(?:title|headline)\s*(?:to\s+)?(.*)/i,
+      ])
+    : null
   if (heroTitle) {
     return {
       operations: [{ op: 'updateHero', patch: { title: heroTitle } }],
@@ -563,10 +777,12 @@ export function parseCommand(
     }
   }
 
-  const heroDesc = firstMatch(raw, [
-    /(?:hero\s*)?a[çc][ıi]klama\S*\s+(.+)/i,
-    /(?:hero\s*)?(?:description|subtitle|subheadline)\s*(?:to\s+)?(.+)/i,
-  ])
+  const heroDesc = heroContext
+    ? captureField(raw, [
+        /(?:hero\s*)?a[çc][ıi]klama\S*\s*(.*)/i,
+        /(?:hero\s*)?(?:description|subtitle|subheadline)\s*(?:to\s+)?(.*)/i,
+      ])
+    : null
   if (heroDesc) {
     return {
       operations: [{ op: 'updateHero', patch: { description: heroDesc } }],
@@ -574,10 +790,12 @@ export function parseCommand(
     }
   }
 
-  const secondaryCta = firstMatch(raw, [
-    /(?:ikincil)\s*(?:buton|d[üu][ğg]me)\S*\s+(.+)/i,
-    /(?:secondary)\s*(?:button|cta)\s*(?:text\s*)?(?:to\s+)?(.+)/i,
-  ])
+  const secondaryCta = heroContext
+    ? captureField(raw, [
+        /(?:ikincil)\s*(?:buton|d[üu][ğg]me)\S*\s*(.*)/i,
+        /(?:secondary)\s*(?:button|cta)\s*(?:text\s*)?(?:to\s+)?(.*)/i,
+      ])
+    : null
   if (secondaryCta) {
     return {
       operations: [{ op: 'updateHero', patch: { secondaryButtonLabel: secondaryCta } }],
@@ -585,11 +803,16 @@ export function parseCommand(
     }
   }
 
-  const primaryCta = firstMatch(raw, [
-    /(?:ana|birincil|as[ıi]l)\s*(?:buton|d[üu][ğg]me)\S*\s+(.+)/i,
-    /(?:primary|main)\s*(?:button|cta)\s*(?:text\s*)?(?:to\s+)?(.+)/i,
-    /(?:buton|d[üu][ğg]me)(?:u|nu)?\s+(?:metnini\s+|yaz[ıi]s[ıi]n[ıi]\s+)?(.+)/i,
-  ])
+  // A bare "butonu X yap" is ambiguous (which button? colour? text?) and is
+  // left to the AI; only an explicitly named primary button or a named label
+  // field is handled here.
+  const primaryCta = heroContext
+    ? captureField(raw, [
+        /(?:ana|birincil|as[ıi]l)\s*(?:buton|d[üu][ğg]me)\S*\s*(.*)/i,
+        /(?:primary|main)\s*(?:button|cta)\s*(?:text\s*)?(?:to\s+)?(.*)/i,
+        /(?:buton|d[üu][ğg]me)\S*\s+(?:metn|yaz[ıi]s|etiket)\S*\s*(.*)/i,
+      ])
+    : null
   if (primaryCta) {
     return {
       operations: [{ op: 'updateHero', patch: { primaryButtonLabel: primaryCta } }],
@@ -598,9 +821,9 @@ export function parseCommand(
   }
 
   /* 5. Tagline ---------------------------------------------------------------*/
-  const tagline = firstMatch(raw, [
-    /(?:slogan|slogan[ıi]n[ıi]?)\s+(.+)/i,
-    /(?:tagline)\s*(?:to\s+)?(.+)/i,
+  const tagline = captureField(raw, [
+    /(?:slogan\S*)\s*(.*)/i,
+    /(?:tagline)\s*(?:to\s+)?(.*)/i,
   ])
   if (tagline) {
     return {

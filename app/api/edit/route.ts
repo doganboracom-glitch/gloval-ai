@@ -12,6 +12,8 @@ import { applyOperation } from '@/lib/website-edit-operations'
 import { sectionSystemPrompt, sectionUserPrompt, siteSystemPrompt } from '@/lib/site-edit-prompts'
 import { parseCommand } from '@/lib/website-command-parser'
 import { parseBlogInstruction } from '@/lib/blog-operations'
+import { classifyEditInstruction } from '@/lib/edit-intent-gates'
+import { isOverBroadEdit, summarizeSiteChanges } from '@/lib/site-change-summary'
 import {
   PRODUCTS_MANAGED_IN_PANEL,
   isBlockedProductOperation,
@@ -163,6 +165,14 @@ export async function POST(req: Request) {
     return Response.json({ schema: original, source: 'blog', blogOperation })
   }
 
+  // Requests the schema cannot express (login system, hosting, integrations),
+  // the automatic Blog menu link and one-word "make it nicer" instructions are
+  // answered honestly here: no AI call, no credit, nothing changed.
+  const gate = classifyEditInstruction(instruction, normalizedLang, { scoped: hasValidScope })
+  if (gate) {
+    return Response.json({ schema: original, source: 'declined', reason: gate.kind, message: gate.message })
+  }
+
   // FREE-plan daily action gate — independent from and checked BEFORE the AI
   // credit balance below. See lib/free-daily-limit.ts.
   const planCode = toPlanCode(await getPlanCodeForUser(userId))
@@ -306,6 +316,22 @@ export async function POST(req: Request) {
       return Response.json({ schema: original, source: 'fallback', notice })
     }
 
+    // A focused instruction must not rewrite half the site: such a result is
+    // discarded (nothing charged) instead of being offered for approval.
+    const changeSummary = summarizeSiteChanges(original, finalSchema, normalizedLang)
+    if (isOverBroadEdit(changeSummary, instruction)) {
+      console.log('[v0] edit touched too many sections, declining', changeSummary.sectionsTouched)
+      return Response.json({
+        schema: original,
+        source: 'declined',
+        reason: 'too-broad',
+        message:
+          normalizedLang === 'tr'
+            ? `Bu istek ${changeSummary.sectionsTouched} bölümü birden değiştirecekti; istediğinden fazlasını değiştirmemek için hiçbir şey uygulamadım. Lütfen tek bir bölümü veya öğeyi belirterek yeniden dene.`
+            : `This request would have changed ${changeSummary.sectionsTouched} sections at once; to avoid changing more than you asked for I applied nothing. Please try again naming a single section or element.`,
+      })
+    }
+
     // Refuse before charging: a result that adds pages past the plan limit costs nothing.
     const blockedByPageLimit = pageLimitResponse(finalSchema)
     if (blockedByPageLimit) return blockedByPageLimit
@@ -320,7 +346,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
     }
 
-    return Response.json({ schema: finalSchema, source: 'ai', notice })
+    return Response.json({ schema: finalSchema, source: 'ai', notice, changes: changeSummary.lines })
   } catch (err) {
     // AI Gateway unavailable or generation failed. Fall back to the offline
     // deterministic command parser so common edits still work; never destroy
