@@ -10,6 +10,7 @@ import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 import { getEditorCatalog } from '@/lib/store-editor-catalog'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { suggestBlogTopics } from '@/lib/blog-ai'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
 
 export default async function EditorPage({
   params,
@@ -85,6 +86,13 @@ export default async function EditorPage({
       )
     : []
 
+  // The origin the site really advertises (live custom domain, else the
+  // tenant subdomain); the sitemap hint must show the same address Search Console needs.
+  const sitemapUrl =
+    canManageBlog && project.published && project.slug
+      ? `${(await getSiteSeoContext(project.slug)).origin}/sitemap.xml`
+      : null
+
   return (
     <EditorClient
       projectId={projectId}
@@ -99,7 +107,7 @@ export default async function EditorPage({
       autoPublish={autopublish === '1'}
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
       catalog={catalog}
-      blog={canManageBlog ? { projectId, topics: blogTopics } : null}
+      blog={canManageBlog ? { projectId, topics: blogTopics, sitemapUrl } : null}
     />
   )
 }

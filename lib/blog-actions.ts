@@ -6,9 +6,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import type { BlogPost } from '@/lib/blog'
+import { runStarterBlogNow } from '@/lib/starter-blog-server'
+import { isStorefront, websiteSchema } from '@/lib/website-schema'
 import {
   createBlogPost,
   deleteBlogPost,
+  markBlogPostPersonalized,
   updateBlogPost,
   type BlogWriteFailure,
   type BlogWriteResult,
@@ -86,6 +89,54 @@ export async function deleteBlogPostAction(
   const result = await deleteBlogPost(createBlogWriteDeps(projectId, access.slug), projectId, postId)
   if (result.ok) refresh(access.slug)
   return result
+}
+
+export async function markBlogPostPersonalizedAction(
+  projectId: string,
+  postId: string,
+): Promise<{ ok: true; post: BlogPost } | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_PERSONALIZED' } | Denied> {
+  const access = await authorize(projectId)
+  if (!access.ok) return access
+  const result = await markBlogPostPersonalized(createBlogWriteDeps(projectId, access.slug), projectId, postId)
+  if (result.ok) refresh(access.slug)
+  return result
+}
+
+/** One click for existing sites: the same three free starter posts a new site gets at first publish. */
+export async function addStarterBlogPostsAction(
+  projectId: string,
+): Promise<
+  | { ok: true; posts: BlogPost[]; failed: number }
+  | { ok: false; reason: 'already_added' | 'in_progress' | 'generation' | 'suspended' }
+  | Denied
+> {
+  const access = await authorize(projectId)
+  if (!access.ok) return access
+  const supabase = await createClient()
+  const { data: project } = await supabase
+    .from('projects')
+    .select('name, language, data')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!project) return { ok: false, reason: 'NOT_FOUND' }
+  const parsed = websiteSchema.safeParse(project.data)
+  const site = {
+    name: parsed.success ? parsed.data.meta.name : String(project.name ?? ''),
+    description: parsed.success ? parsed.data.meta.description : '',
+    storefront: parsed.success ? isStorefront(parsed.data) : false,
+  }
+  const result = await runStarterBlogNow({
+    projectId,
+    siteSlug: access.slug,
+    site,
+    lang: project.language === 'en' ? 'en' : 'tr',
+  })
+  if (result.status === 'created') {
+    refresh(access.slug)
+    return { ok: true, posts: result.posts, failed: result.failed }
+  }
+  if (result.status === 'skipped') return { ok: false, reason: result.reason }
+  return { ok: false, reason: result.reason }
 }
 
 export type { BlogWriteFailure }

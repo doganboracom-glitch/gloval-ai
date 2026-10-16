@@ -176,7 +176,7 @@ export function WebsitePreview({
   /** Non-null for a store's owner/admin: enables the editor's Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Non-null for a project's owner/admin: enables the editor's Blog tab. */
-  blog?: { projectId: string; topics: string[] } | null
+  blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null } | null
   /**
    * Store owner's active products + collections (loaded server-side), shown by
    * product showcase sections in the preview. Null: no data, empty-state message.

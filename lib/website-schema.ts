@@ -443,6 +443,7 @@ export const faqSection = z.object({
       z.object({
         question: z.string(),
         answer: z.string(),
+        sample: sampleFlag,
       }),
     )
     .min(2)

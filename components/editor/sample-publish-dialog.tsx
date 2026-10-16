@@ -63,6 +63,7 @@ const COPY = {
       stats: 'Rakamlar',
       pricing: 'Fiyat planları',
       products: 'Ürünler',
+      faq: 'Bilgi sayfası',
       contact: 'İletişim bilgileri',
     } as Record<string, string>,
     kinds: {
@@ -74,6 +75,7 @@ const COPY = {
       badge: 'Rozet',
       trust: 'Güven satırı',
       product: 'Ürün',
+      info: 'Bilgi sayfası maddesi',
     } as Record<SampleKind, string>,
   },
   en: {
@@ -129,6 +131,7 @@ const COPY = {
       stats: 'Statistics',
       pricing: 'Pricing plans',
       products: 'Products',
+      faq: 'Info page',
       contact: 'Contact details',
     } as Record<string, string>,
     kinds: {
@@ -140,6 +143,7 @@ const COPY = {
       badge: 'Badge',
       trust: 'Trust line',
       product: 'Product',
+      info: 'Info page item',
     } as Record<SampleKind, string>,
   },
 } as const

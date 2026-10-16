@@ -74,6 +74,11 @@ export function isPostLive(
   return !Number.isNaN(at) && at <= now.getTime()
 }
 
+/** An untouched starter post: AI-written without business facts and kept out of search until personalised. */
+export function isStarterPost(post: Pick<BlogPost, 'aiGenerated' | 'personalized' | 'sample' | 'indexable'>): boolean {
+  return post.aiGenerated && !post.personalized && !post.sample && !post.indexable
+}
+
 /** Live AND allowed into search: drives robots meta, sitemap and RSS. */
 export function isPostIndexable(post: BlogPost, now: Date = new Date()): boolean {
   return isPostLive(post, now) && post.indexable
