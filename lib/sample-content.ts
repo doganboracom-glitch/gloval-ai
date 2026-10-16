@@ -50,6 +50,7 @@ export type SampleKind =
   | 'trust'
   | 'product'
   | 'contact'
+  | 'info'
 
 /**
  * Contact-section fields that can hold an unconfirmed placeholder. They are
@@ -144,6 +145,13 @@ const ITEM_SPECS: Partial<Record<Section['type'], ItemSpec>> = {
     kind: () => 'pricing',
     fields: (i) => [i.name, i.price, i.period, i.description, i.features, i.buttonText],
     label: (i) => truncate(`${str(i.name)} ${str(i.price)}${str(i.period)}`),
+  },
+  faq: {
+    key: 'items',
+    minItems: 2,
+    kind: () => 'info',
+    fields: (i) => [i.question, i.answer],
+    label: (i) => truncate(str(i.question)),
   },
   products: {
     key: 'items',

@@ -176,6 +176,16 @@ export type EditOperation =
    * the plan page limit, which the server checks on the resulting page count.
    */
   | { op: 'addPage'; title: string; slug?: string }
+  /**
+   * Adds a ready-made info page (FAQ, About, Shipping, ...) built by
+   * `buildInfoPage`. Placeholder items carry `sample: true`, so they stay
+   * hidden publicly and are caught by the publish gate until the owner edits
+   * or approves them.
+   */
+  | {
+      op: 'addInfoPage'
+      page: { slug: string; title: string; sections: Section[]; seo?: { title?: string; description?: string } }
+    }
   | { op: 'renamePage'; pageIndex: number; title: string; slug?: string }
   | { op: 'setPageSeo'; pageIndex: number; title?: string; description?: string; indexable?: boolean }
   | { op: 'movePage'; pageIndex: number; direction: 'up' | 'down' }
@@ -673,6 +683,20 @@ export function applyOperation(
       if (!title || next.pages.length >= SITE_PAGE_HARD_CAP) return next
       const slug = uniquePageSlug(operation.slug?.trim() || title, next.pages.map((p) => p.slug))
       next.pages.push({ slug, title, kind: 'custom', sections: [] })
+      return next
+    }
+
+    case 'addInfoPage': {
+      const title = operation.page.title.trim().slice(0, 60)
+      if (!title || next.pages.length >= SITE_PAGE_HARD_CAP) return next
+      const slug = uniquePageSlug(operation.page.slug?.trim() || title, next.pages.map((p) => p.slug))
+      next.pages.push({
+        slug,
+        title,
+        kind: 'info',
+        sections: structuredClone(operation.page.sections),
+        seo: operation.page.seo,
+      })
       return next
     }
 

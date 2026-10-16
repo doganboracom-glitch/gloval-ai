@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyOperation } from './website-edit-operations'
 import { parseCommand } from './website-command-parser'
+import { buildInfoPage } from './info-pages'
 import type { WebsiteSchema } from './website-schema'
 
 function makeSite(): WebsiteSchema {
@@ -60,5 +61,51 @@ describe('menu removal command', () => {
     const result = (parsed?.operations ?? []).reduce(applyOperation, site)
     expect(labels(result)).toEqual(['Ana Sayfa', 'Çözümler'])
     expect(slugs(result)).toEqual(['home', 'pricing'])
+  })
+})
+
+describe('addInfoPage', () => {
+  it('adds a real info page with a unique slug and keeps placeholders flagged', () => {
+    const site = makeSite()
+    const draft = buildInfoPage({ template: 'faq', lang: 'tr', sector: 'default' as never, existingSlugs: site.pages.map((p) => p.slug) })
+    const once = applyOperation(site, {
+      op: 'addInfoPage',
+      page: { slug: draft.slug, title: draft.title, sections: draft.sections, seo: draft.seo },
+    })
+    const twice = applyOperation(once, {
+      op: 'addInfoPage',
+      page: { slug: draft.slug, title: draft.title, sections: draft.sections, seo: draft.seo },
+    })
+    expect(once.pages.length).toBe(site.pages.length + 1)
+    expect(twice.pages.length).toBe(site.pages.length + 2)
+    const slugs = twice.pages.map((p) => p.slug)
+    expect(new Set(slugs).size).toBe(slugs.length)
+    const added = once.pages[once.pages.length - 1]
+    expect(added.kind).toBe('info')
+    expect(draft.placeholders).toBeGreaterThan(0)
+  })
+
+  it('ignores an empty title', () => {
+    const site = makeSite()
+    const next = applyOperation(site, { op: 'addInfoPage', page: { slug: 'x', title: '  ', sections: [] } })
+    expect(next.pages.length).toBe(site.pages.length)
+  })
+})
+
+describe('buildInfoPage store facts', () => {
+  it('does not claim shipping facts when nothing is configured', () => {
+    const draft = buildInfoPage({ template: 'shipping', lang: 'tr', sector: 'ecommerce', store: { shipping: null, payment: null }, existingSlugs: [] })
+    expect(draft.placeholders).toBeGreaterThan(0)
+  })
+
+  it('uses configured shipping facts', () => {
+    const draft = buildInfoPage({
+      template: 'shipping',
+      lang: 'tr',
+      sector: 'ecommerce',
+      store: { shipping: { feeCents: 4999, freeThresholdCents: 50000, deliveryNote: null, carrierName: null }, payment: null },
+      existingSlugs: [],
+    })
+    expect(JSON.stringify(draft.sections)).toContain('49')
   })
 })

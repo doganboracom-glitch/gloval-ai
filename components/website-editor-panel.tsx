@@ -296,6 +296,7 @@ export function WebsiteEditorPanel({
             locked={locked}
             onBeforeUpgrade={onBeforeUpgrade}
             publicSlug={publicSlug}
+            projectId={payments?.projectId ?? blog?.projectId ?? null}
           />
         )}
         {tab === 'ai' && (
@@ -359,9 +360,12 @@ function DesignTab({
   locked = false,
   onBeforeUpgrade,
   publicSlug = null,
+  projectId = null,
 }: {
   site: WebsiteSchema
   publicSlug?: string | null
+  /** Owner/admin project id; enables store-fed info page drafts. */
+  projectId?: string | null
   planCode: PlanCode
   onDispatch: (op: EditOperation) => void
   /** Saves/stashes the draft before an anonymous visitor leaves for login. */
@@ -425,7 +429,12 @@ function DesignTab({
         />
         <LogoField site={site} planCode={planCode} onDispatch={onDispatch} onBeforeUpgrade={onBeforeUpgrade} />
         <FaviconField site={site} onDispatch={onDispatch} />
-        <PagesManager site={site} planCode={planCode} onDispatch={onDispatch} />
+        <PagesManager
+          site={site}
+          planCode={planCode}
+          projectId={projectId}
+          onDispatch={onDispatch}
+        />
         {site.pages.length <= 1 && site.navigation.links.map((link, linkIndex) => (
           <div key={linkIndex} className="flex items-end gap-1">
             <div className="grid flex-1 grid-cols-2 gap-1.5">

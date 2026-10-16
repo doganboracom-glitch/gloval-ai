@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { IconBtn, TextField } from '@/components/editor/editor-fields'
+import { InfoPageTemplates } from '@/components/editor/info-page-templates'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { pageLimitForPlan } from '@/lib/page-limits'
@@ -50,10 +51,12 @@ const COPY = {
 export function PagesManager({
   site,
   planCode,
+  projectId,
   onDispatch,
 }: {
   site: WebsiteSchema
   planCode: PlanCode
+  projectId?: string | null
   onDispatch: (op: EditOperation) => void
 }) {
   const { lang } = useLanguage()
@@ -161,6 +164,8 @@ export function PagesManager({
         <Plus className="h-3.5 w-3.5" />
         {c.add}
       </button>
+
+      <InfoPageTemplates site={site} projectId={projectId} canAdd={canAdd} onDispatch={onDispatch} />
     </div>
   )
 }
