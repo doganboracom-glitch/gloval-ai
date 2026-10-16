@@ -4,6 +4,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { SITE_LEGAL_DISCLAIMER } from '@/lib/site-legal-templates'
 import { formatLegalDate, resolveLegalDoc } from '@/lib/site-legal-docs'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { getSiteBlogData } from '@/lib/blog-server'
 import { LegalBlocks } from '@/components/legal/legal-blocks'
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +36,7 @@ export default async function SiteLegalPage({
   if (!page) notFound()
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug}>
+    <StoreSiteShell site={site.schema} slug={slug} blog={await getSiteBlogData(slug)}>
       <article
         className="mx-auto w-full max-w-3xl px-6 py-14"
         style={{ color: 'var(--site-fg)' }}

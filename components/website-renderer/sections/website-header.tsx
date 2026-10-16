@@ -5,6 +5,8 @@ import type { PageItem } from '@/lib/website-pages'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { SocialLinks } from '@/components/website-renderer/social-links'
+import { useBlogLink } from '@/components/website-renderer/site-blog-context'
+import { withoutBlogLinks } from '@/lib/blog-site'
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { useEffect, useRef } from 'react'
@@ -30,10 +32,7 @@ export function WebsiteHeader({
   actions,
   socialLinks,
   commerce = true,
-  blog,
 }: {
-  /** Real link to the site's blog; pass only when at least one post is public. */
-  blog?: { href: string; label: string } | null
   /** False on a catalog: hides the account link and the cart CTA (no cart exists). */
   commerce?: boolean
   /** Small icons next to the CTA; pass `resolveHeaderSocialLinks(site)` (empty hides them). */
@@ -55,6 +54,7 @@ export function WebsiteHeader({
   actions?: React.ReactNode
 }) {
   const nav = useSiteNav()
+  const blog = useBlogLink()
   const cart = useOptionalCart()
   const cartSlug = cartSlugProp ?? storeSlug
   const cartCount = cart?.count ?? 0
@@ -187,7 +187,7 @@ export function WebsiteHeader({
                   </button>
                 )
               })
-            : navigation.links.map((link) => {
+            : withoutBlogLinks(navigation.links).map((link) => {
                 const href =
                   cartSlug && isProductsLink(link.label, link.href)
                     ? storeListHref(cartSlug)
@@ -207,6 +207,7 @@ export function WebsiteHeader({
           {blog ? (
             <a
               href={blog.href}
+              onClick={(e) => onSiteNavClick(e, blog.href, nav)}
               className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
               style={{ color: 'var(--site-muted-fg)' }}
             >

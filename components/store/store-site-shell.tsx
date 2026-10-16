@@ -11,6 +11,8 @@ import { CatalogProvider } from './catalog-context'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { resolveHeaderSocialLinks } from '@/lib/social-links'
 import { modeHasTransactions, type CommerceMode } from '@/lib/commerce-mode'
+import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
+import type { SiteBlogData } from '@/lib/blog-site'
 
 export function StoreSiteShell({
   site,
@@ -19,11 +21,11 @@ export function StoreSiteShell({
   mode = 'ecommerce',
   whatsappNumber = null,
   origin = '',
-  blogHref = null,
+  blog = null,
   children,
 }: {
-  /** Menu link to the blog; null hides it (no public posts). */
-  blogHref?: string | null
+  /** Live blog data for the menu/footer link; null hides it (no public posts). */
+  blog?: SiteBlogData | null
   site: WebsiteSchema
   slug: string
   shipping?: Parameters<typeof SiteCartIsland>[0]['shipping']
@@ -42,6 +44,7 @@ export function StoreSiteShell({
   return (
     <CartProvider slug={slug}>
       <CatalogProvider value={{ mode, whatsappNumber, origin, slug }}>
+       <SiteBlogProvider blog={blog} settings={site.blogSettings}>
         <div style={themeToCssVars(resolveTheme(site))} data-storefront-root data-commerce-mode={mode}>
           <WebsiteHeader
             navigation={site.navigation}
@@ -50,13 +53,13 @@ export function StoreSiteShell({
             lang={site.meta.language}
             socialLinks={resolveHeaderSocialLinks(site)}
             commerce={transactions}
-            blog={blogHref ? { href: blogHref, label: 'Blog' } : null}
           />
           <main>{children}</main>
           {footer ? <WebsiteFooter data={footer} logoText={site.navigation.logoText} lang={site.meta.language} showBranding site={site} /> : null}
           <SiteFloatingActions site={site} />
           {transactions ? <SiteCartIsland slug={slug} lang={site.meta.language} shipping={shipping} /> : null}
         </div>
+       </SiteBlogProvider>
       </CatalogProvider>
     </CartProvider>
   )

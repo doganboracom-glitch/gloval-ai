@@ -5,6 +5,7 @@ import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import type { StoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
+import { getSiteBlogData } from '@/lib/blog-server'
 import { isSiteBrandingRemoved } from '@/lib/project-entitlements'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { isStorefront } from '@/lib/website-schema'
@@ -44,7 +45,7 @@ export async function buildSitePageMetadata(slug: string, pageSlug: string | nul
 }
 
 export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlug: string | null }) {
-  const [site, brandingRemoved, products, collections, shipping] = await Promise.all([
+  const [site, brandingRemoved, products, collections, shipping, blog] = await Promise.all([
     getPublishedSite(slug),
     isSiteBrandingRemoved(slug),
     // Real catalog for this store. Empty for corporate sites: then the site
@@ -52,6 +53,7 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
     getStoreProducts(slug),
     getStoreCollections(slug),
     getStoreShippingInfo(slug),
+    getSiteBlogData(slug),
   ])
   if (!site) notFound()
 
@@ -111,6 +113,7 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
         paymentBadges={paymentBadges}
         contactForm={contactForm}
         initialPage={page?.slug ?? null}
+        blog={blog}
         pageRouting
       />
     </main>

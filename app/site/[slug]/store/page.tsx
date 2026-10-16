@@ -6,6 +6,7 @@ import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-
 import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { getSiteBlogData } from '@/lib/blog-server'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +42,7 @@ export default async function StorePage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin} blog={await getSiteBlogData(slug)}>
       <StoreFront
         slug={slug}
         storeName={site.name}

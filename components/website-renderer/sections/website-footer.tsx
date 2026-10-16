@@ -7,6 +7,8 @@ import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { resolveFooterSocialLinks } from '@/lib/social-links'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useBlogLink } from '@/components/website-renderer/site-blog-context'
+import { withBlogFooterLink, withoutBlogLinks } from '@/lib/blog-site'
 import { OPEN_CART_EVENT } from '@/components/store/cart-provider'
 import { hasAnyPaymentBadge, type PaymentBadgeSet } from '@/lib/payment-badges'
 import {
@@ -106,7 +108,11 @@ export function WebsiteFooter({
   /** Used to verify link targets (pages, sections, store) before showing them. */
   site?: WebsiteSchema | null
 }) {
-  const columns = resolveFooterColumns(data.columns, site)
+  const blogLink = useBlogLink()
+  const resolvedColumns = resolveFooterColumns(data.columns, site)
+  const columns = blogLink
+    ? withBlogFooterLink(resolvedColumns, { label: blogLink.label, href: blogLink.href }, lang)
+    : resolvedColumns.map((col) => ({ ...col, links: withoutBlogLinks(col.links) }))
   const legal = [
     ...resolveStoreEssentialPageLinks(site, columns, lang),
     ...resolveFooterLegal(data.legal, site, lang),
