@@ -40,7 +40,22 @@ function PostCard({ post, lang, href }: { post: BlogPost; lang: Lang; href: stri
           {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied remote cover */}
           <img src={post.coverUrl} alt={post.coverAlt || post.title} loading="lazy" className="h-full w-full object-cover" />
         </a>
-      ) : null}
+      ) : (
+        <a
+          href={href}
+          tabIndex={-1}
+          aria-hidden="true"
+          data-blog-cover-placeholder
+          className="flex aspect-[16/9] items-center justify-center text-4xl font-bold"
+          style={{
+            background: 'color-mix(in oklab, var(--site-primary) 10%, var(--site-bg, transparent))',
+            color: 'var(--site-primary)',
+            fontFamily: 'var(--site-heading-font)',
+          }}
+        >
+          {post.title.trim().charAt(0).toLocaleUpperCase(lang === 'en' ? 'en-US' : 'tr-TR')}
+        </a>
+      )}
       <div className="flex flex-1 flex-col gap-2 p-5">
         <time dateTime={post.publishedAt ?? undefined} className="text-xs" style={{ color: 'var(--site-muted-fg)' }}>
           {formatBlogDate(post.publishedAt, lang)}
@@ -121,33 +136,41 @@ export function BlogPostView({
   const copy = blogCopy(lang)
   const postHref = (p: BlogPost) => `${hrefBase}${blogPostPath(p.slug)}`
   return (
-    <article className="mx-auto w-full max-w-3xl px-6 py-14" style={{ color: 'var(--site-fg)' }}>
+    <article className="mx-auto w-full max-w-5xl px-6 py-14" style={{ color: 'var(--site-fg)' }}>
       <nav aria-label="breadcrumb" className="mb-6 text-xs" style={{ color: 'var(--site-muted-fg)' }}>
         <a href={hrefBase || '/'} className="hover:underline">{copy.home}</a>
         <span aria-hidden="true"> / </span>
         <a href={`${hrefBase}/blog`} className="hover:underline">{copy.blog}</a>
       </nav>
-      <h1 className="text-balance text-3xl font-bold tracking-tight" style={{ fontFamily: 'var(--site-heading-font)' }}>
-        {postTitle({ title: post.title, seoTitle: null })}
-      </h1>
-      <time dateTime={post.publishedAt ?? undefined} className="mt-2 block text-xs" style={{ color: 'var(--site-muted-fg)' }}>
-        {formatBlogDate(post.publishedAt, lang)}
-      </time>
-      {post.coverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- owner-supplied remote cover
-        <img
-          src={post.coverUrl}
-          alt={post.coverAlt || post.title}
-          className="mt-8 aspect-[16/9] w-full object-cover"
-          style={{ borderRadius: 'var(--site-radius)' }}
-        />
-      ) : null}
-      <div className="mt-8">
+      <header
+        data-blog-post-header
+        data-has-cover={post.coverUrl ? 'true' : 'false'}
+        className={post.coverUrl ? 'flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:items-center lg:gap-10' : 'mx-auto max-w-3xl'}
+      >
+        {post.coverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- owner-supplied remote cover
+          <img
+            src={post.coverUrl}
+            alt={post.coverAlt || post.title}
+            className="aspect-[16/9] w-full object-cover lg:order-2"
+            style={{ borderRadius: 'var(--site-radius)' }}
+          />
+        ) : null}
+        <div className="lg:order-1">
+          <h1 className="text-balance text-3xl font-bold tracking-tight lg:text-4xl" style={{ fontFamily: 'var(--site-heading-font)' }}>
+            {postTitle({ title: post.title, seoTitle: null })}
+          </h1>
+          <time dateTime={post.publishedAt ?? undefined} className="mt-3 block text-xs" style={{ color: 'var(--site-muted-fg)' }}>
+            {formatBlogDate(post.publishedAt, lang)}
+          </time>
+        </div>
+      </header>
+      <div className="mx-auto mt-10 max-w-3xl">
         <LegalBlocks blocks={parseLegalMarkup(sanitizeBlogBody(post.body))} />
       </div>
 
       {previous || next ? (
-        <nav className="mt-12 grid gap-4 border-t pt-6 sm:grid-cols-2" style={{ borderColor: 'var(--site-border)' }}>
+        <nav className="mx-auto mt-12 grid max-w-3xl gap-4 border-t pt-6 sm:grid-cols-2" style={{ borderColor: 'var(--site-border)' }}>
           {previous ? (
             <a rel="prev" href={postHref(previous)} className="text-sm">
               <span className="block text-xs" style={{ color: 'var(--site-muted-fg)' }}>{copy.previous}</span>

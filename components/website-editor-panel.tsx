@@ -315,6 +315,7 @@ export function WebsiteEditorPanel({
             lang={lang === 'en' ? 'en' : 'tr'}
             topics={blog.topics}
             profile={site.blogProfile}
+            settings={site.blogSettings}
             onDispatch={onDispatch}
             published={Boolean(publicSlug)}
           />

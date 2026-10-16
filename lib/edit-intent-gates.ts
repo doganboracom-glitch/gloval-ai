@@ -105,8 +105,8 @@ export function classifyEditInstruction(
         kind: 'blog-menu',
         message: say(
           lang,
-          'Blog bağlantısını menüden ayrıca kaldırmak şu an desteklenmiyor: bağlantı, yayınlanmış blog yazın olduğu sürece otomatik görünür. Tüm yazıları taslağa alırsan menüden kalkar. Sitede bir değişiklik yapmadım.',
-          'Removing the Blog link from the menu separately is not supported right now: the link shows automatically while you have published posts. Set every post to draft and it disappears. I changed nothing on the site.',
+          'Blog bağlantısını menüden kaldırmak için sol paneldeki Blog sekmesini aç ve "Menüde göster" anahtarını kapat. Bağlantı, yayınlanmış yazın olduğu sürece varsayılan olarak açıktır. Sitede bir değişiklik yapmadım.',
+          'To remove the Blog link from the menu, open the Blog tab in the side panel and turn off "Show in menu". It is on by default while you have published posts. I changed nothing on the site.',
         ),
       }
     }
@@ -115,8 +115,8 @@ export function classifyEditInstruction(
         kind: 'blog-menu',
         message: say(
           lang,
-          'Blog bağlantısını menüye elle eklemek şu an desteklenmiyor. Yayınlanmış en az bir blog yazın olduğunda üst menüde "Blog" kendiliğinden görünür. Menüde bir değişiklik yapmadım.',
-          'Adding the Blog link to the menu by hand is not supported right now. Once you have at least one published post, "Blog" appears in the top menu by itself. I changed nothing.',
+          'Blog bağlantısı menüye elle eklenmez; Blog sekmesindeki "Menüde göster" anahtarı bunu yönetir. Yayınlanmış en az bir yazın varsa varsayılan olarak açıktır; kapattıysan oradan tekrar aç. Menüde bir değişiklik yapmadım.',
+          'The Blog link is not added by hand; the "Show in menu" switch in the Blog tab controls it. It is on by default once you have a published post; if you turned it off, switch it back on there. I changed nothing.',
         ),
       }
     }
