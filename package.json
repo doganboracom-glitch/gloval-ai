@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "eval:ai-edit": "AI_EDIT_EVAL=1 vitest run --config vitest.ai-edit-eval.config.ts"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^4.0.101",
