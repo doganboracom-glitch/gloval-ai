@@ -47,10 +47,28 @@ export function getCommerceMode(
   project: { commerce_mode?: string | null; project_type?: string | null },
   plan?: string | null,
 ): CommerceMode {
-  const stored =
-    toStoredMode(project.commerce_mode) ?? (project.project_type === 'ecommerce' ? 'ecommerce' : 'none')
+  const fromType: CommerceMode = project.project_type === 'ecommerce' ? 'ecommerce' : 'none'
+  const storedRaw = toStoredMode(project.commerce_mode)
+  // `none` next to `project_type = 'ecommerce'` is a contradiction, not a
+  // choice: the column defaults to `none`, so any insert that forgot to set it
+  // (every store created after 063) lands here. project_type wins, otherwise
+  // the store's payment/shipping/orders panels silently disappear.
+  const stored: CommerceMode = storedRaw === null || storedRaw === 'none' ? fromType : storedRaw
   if (stored === 'catalog' && plan !== undefined && !planAllowsCatalog(plan)) return 'none'
   return stored
+}
+
+/**
+ * The `commerce_mode` a NEW project must be inserted with. An explicit mode
+ * (the catalog setup flow passes `catalog`) wins; otherwise a store is
+ * `ecommerce` and everything else `none`.
+ */
+export function commerceModeForNewProject(input: {
+  projectType: string
+  explicit?: CommerceMode | null
+}): CommerceMode {
+  if (input.explicit) return input.explicit
+  return input.projectType === 'ecommerce' ? 'ecommerce' : 'none'
 }
 
 /* -------------------------------------------------------------------------- */

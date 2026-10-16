@@ -145,6 +145,30 @@ export function Hero() {
   }
 
   /**
+   * The anonymous landing preview has no project behind it, so its editor only
+   * offers the Design and AI tabs; payments, blog, catalog and history need a
+   * saved project. A signed-in visitor is therefore saved and sent to the real
+   * editor, where every tool is available. Anonymous visitors keep the
+   * in-page preview.
+   */
+  async function openPreview(withEditor: boolean) {
+    if (!website || savingRef.current) return
+    try {
+      const {
+        data: { user },
+      } = await createClient().auth.getUser()
+      if (user) {
+        await saveAndEdit()
+        return
+      }
+    } catch {
+      // Fall through to the in-page preview.
+    }
+    setStartWithEditor(withEditor)
+    setShowPreview(true)
+  }
+
+  /**
    * Stashes the current draft with `publishIntent: true` so that whichever
    * auth path the visitor takes (login or sign-up), landing back on the
    * dashboard finishes the save AND carries them straight into an
@@ -521,20 +545,14 @@ export function Hero() {
                     </button>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <button
-                        onClick={() => {
-                          setStartWithEditor(false)
-                          setShowPreview(true)
-                        }}
+                        onClick={() => openPreview(false)}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-semibold transition-colors hover:bg-secondary"
                       >
                         <Eye className="h-4 w-4" />
                         {t.preview.open}
                       </button>
                       <button
-                        onClick={() => {
-                          setStartWithEditor(true)
-                          setShowPreview(true)
-                        }}
+                        onClick={() => openPreview(true)}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 text-sm font-semibold transition-colors hover:bg-secondary"
                       >
                         <Wand2 className="h-4 w-4" />

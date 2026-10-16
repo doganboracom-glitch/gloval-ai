@@ -24,6 +24,8 @@ import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { scheduleStarterBlog } from '@/lib/starter-blog-server'
 import { slugifyProjectName } from '@/lib/slug'
+import { commerceModeForNewProject, type CommerceMode } from '@/lib/commerce-mode'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
   CONTACT_ATTESTATION_VERSION,
@@ -219,6 +221,8 @@ export async function createProject(input: {
   prompt?: string | null
   schema: WebsiteSchema
   projectType?: ProjectType
+  /** Only the catalog setup flow passes this (`catalog`); otherwise derived from the project type. */
+  commerceMode?: CommerceMode
 }): Promise<string> {
   const { supabase, userId } = await requireUser()
   const parsed = websiteSchema.parse(input.schema)
@@ -232,23 +236,32 @@ export async function createProject(input: {
   // caller override when one is passed.
   const projectType: ProjectType =
     input.projectType ?? (isStorefront(parsed) ? 'ecommerce' : 'corporate')
-  const { data, error } = await supabase
+  // The column defaults to `none` (063), so every insert must set it: a store
+  // created without it used to read as a non-store and lost its payment,
+  // shipping and orders panels.
+  const row = {
+    owner_id: userId,
+    name: input.name || 'Untitled',
+    sector: input.sector ?? null,
+    // The site's own language wins over the caller's UI language, so an
+    // English site created from the Turkish UI is stored (and edited) as English.
+    language: parsed.meta.language ?? input.language ?? 'tr',
+    prompt: input.prompt ?? null,
+    schema_data: parsed,
+    status: 'draft',
+    project_type: projectType,
+  }
+  const commerce_mode = commerceModeForNewProject({ projectType, explicit: input.commerceMode })
+  let { data, error } = await supabase
     .from('projects')
-    .insert({
-      owner_id: userId,
-      name: input.name || 'Untitled',
-      sector: input.sector ?? null,
-      // The site's own language wins over the caller's UI language, so an
-      // English site created from the Turkish UI is stored (and edited) as English.
-      language: parsed.meta.language ?? input.language ?? 'tr',
-      prompt: input.prompt ?? null,
-      schema_data: parsed,
-      status: 'draft',
-      project_type: projectType,
-    })
+    .insert({ ...row, commerce_mode })
     .select('id')
     .single()
-  if (error) throw error
+  if (isMissingColumnError(error)) {
+    // Migration 063 not applied yet: getCommerceMode derives from project_type.
+    ;({ data, error } = await supabase.from('projects').insert(row).select('id').single())
+  }
+  if (error || !data) throw error ?? new Error('PROJECT_INSERT_FAILED')
   revalidatePath('/dashboard')
   return data.id as string
 }

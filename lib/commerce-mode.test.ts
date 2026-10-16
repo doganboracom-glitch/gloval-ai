@@ -6,6 +6,7 @@ import {
   CATALOG_PRODUCT_LIMIT,
   NON_INDEXABLE_STORE_PATHS,
   buildWhatsappOrderUrl,
+  commerceModeForNewProject,
   getCommerceMode,
   isPlaceholderNumber,
   modeHasStoreRoutes,
@@ -50,7 +51,19 @@ describe('getCommerceMode', () => {
 
   it('prefers the stored mode', () => {
     expect(getCommerceMode({ commerce_mode: 'catalog', project_type: 'corporate' })).toBe('catalog')
-    expect(getCommerceMode({ commerce_mode: 'none', project_type: 'ecommerce' })).toBe('none')
+  })
+
+  it('treats a stored `none` next to project_type ecommerce as a contradiction: project_type wins', () => {
+    expect(getCommerceMode({ commerce_mode: 'none', project_type: 'ecommerce' })).toBe('ecommerce')
+    expect(getCommerceMode({ commerce_mode: 'none', project_type: 'corporate' })).toBe('none')
+    expect(getCommerceMode({ commerce_mode: 'catalog', project_type: 'ecommerce' })).toBe('catalog')
+  })
+
+  it('assigns the mode a new project is inserted with', () => {
+    expect(commerceModeForNewProject({ projectType: 'ecommerce' })).toBe('ecommerce')
+    expect(commerceModeForNewProject({ projectType: 'corporate' })).toBe('none')
+    expect(commerceModeForNewProject({ projectType: 'corporate', explicit: 'catalog' })).toBe('catalog')
+    expect(commerceModeForNewProject({ projectType: 'ecommerce', explicit: 'catalog' })).toBe('catalog')
   })
 
   it('does not change legacy ecommerce/none behavior whatever the plan', () => {
