@@ -1,4 +1,4 @@
-import type { BlogProfile, Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
+import type { BlogProfile, BlogSettings, Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
@@ -67,6 +67,8 @@ export type EditOperation =
   /** Owner company details (legal identity). Empty string removes a field. */
   | { op: 'updateCompany'; patch: Partial<Record<CompanyField, string>> }
   | { op: 'updateBlogProfile'; profile: BlogProfile | null }
+  /** Owner choices for the blog menu link and latest-posts block; only the given keys change. */
+  | { op: 'updateBlogSettings'; patch: BlogSettings }
   /** Saves an owner-edited legal text (sanitised markup). Empty body = back to the template. */
   | { op: 'updateLegalDoc'; slug: string; body: string }
   | { op: 'resetLegalDoc'; slug: string }
@@ -308,6 +310,12 @@ export function applyOperation(
       }
       if (Object.keys(cleaned).length === 0) delete next.blogProfile
       else next.blogProfile = cleaned
+      return next
+    }
+
+    case 'updateBlogSettings': {
+      const merged = { ...(next.blogSettings ?? {}), ...operation.patch }
+      next.blogSettings = merged
       return next
     }
 

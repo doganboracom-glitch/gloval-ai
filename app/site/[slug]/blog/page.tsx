@@ -6,6 +6,7 @@ import { getPublishedSiteCommerceMode, getCatalogContext } from '@/lib/commerce-
 import { blogHrefBase, getLiveBlogPosts } from '@/lib/blog-server'
 import { blogListPath, paginatePosts } from '@/lib/blog'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { buildSiteBlogData } from '@/lib/blog-site'
 import { BlogIndexView, blogCopy } from '@/components/blog/blog-views'
 
 export const dynamic = 'force-dynamic'
@@ -56,7 +57,7 @@ export default async function BlogIndexPage({ params, searchParams }: Props) {
       mode={mode}
       whatsappNumber={catalog.whatsappNumber}
       origin={catalog.origin}
-      blogHref={`${hrefBase}/blog`}
+      blog={buildSiteBlogData(hrefBase, posts)}
     >
       <BlogIndexView
         posts={posts.slice(pagination.start, pagination.end)}

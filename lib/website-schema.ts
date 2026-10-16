@@ -704,6 +704,17 @@ export const blogProfileSchema = z.object({
 })
 
 /**
+ * Where the blog shows up on the site. Every flag is optional so existing sites
+ * (no settings) behave as "on": the menu link and the latest-posts block appear
+ * as soon as the blog has a public post, and the owner can turn either off.
+ */
+export const blogSettingsSchema = z.object({
+  showInMenu: z.boolean().optional(),
+  showLatest: z.boolean().optional(),
+  latestPlacement: z.enum(['after-hero', 'before-footer']).optional(),
+})
+
+/**
  * Owner edits of the legal pages. `docs[slug].body` is a tiny, sanitised markup
  * (`## heading`, `- item`, `**bold**`) — never HTML — so a saved text can't
  * carry script or markup. `hidden` lists docs the owner turned off.
@@ -781,6 +792,7 @@ export const websiteSchema = z.object({
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
   legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
   blogProfile: blogProfileSchema.optional().describe('Owner answers remembered for the AI blog writer'),
+  blogSettings: blogSettingsSchema.optional().describe('Owner choices for the blog menu link and latest-posts block'),
   pageRedirects: z
     .array(z.object({ from: z.string().max(80), to: z.string().max(80) }))
     .max(60)
@@ -802,6 +814,7 @@ export const websiteGenerationSchema = websiteSchema
     company: true,
     legalDocs: true,
     blogProfile: true,
+    blogSettings: true,
     pageRedirects: true,
   })
   .extend({
@@ -824,7 +837,7 @@ export const websiteGenerationSchema = websiteSchema
  * them back from the current schema instead.
  */
 export const websiteEditSchema = websiteSchema
-  .omit({ tracking: true, company: true, legalDocs: true, blogProfile: true, pageRedirects: true })
+  .omit({ tracking: true, company: true, legalDocs: true, blogProfile: true, blogSettings: true, pageRedirects: true })
   .extend({
   pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
   meta: siteMetaSchema.omit({ seoTitle: true }),
@@ -849,6 +862,7 @@ export type SocialLinksState = z.infer<typeof socialSchema>
 export type CompanyProfile = z.infer<typeof companyProfileSchema>
 export type LegalDocsState = z.infer<typeof legalDocsSchema>
 export type BlogProfile = z.infer<typeof blogProfileSchema>
+export type BlogSettings = z.infer<typeof blogSettingsSchema>
 export type WebsiteSchema = z.infer<typeof websiteSchema>
 
 /* -------------------------------------------------------------------------- */

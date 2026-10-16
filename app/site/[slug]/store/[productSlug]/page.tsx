@@ -8,6 +8,7 @@ import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { productJsonLdScript } from '@/lib/product-json-ld'
 import { ProductDetail } from '@/components/store/product-detail'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { getSiteBlogData } from '@/lib/blog-server'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { modeHasStoreRoutes } from '@/lib/commerce-mode'
@@ -68,7 +69,7 @@ export default async function ProductPage({
   ])
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} mode={mode} whatsappNumber={catalog.whatsappNumber} origin={catalog.origin} blog={await getSiteBlogData(slug)}>
       <ProductDetail
         slug={slug}
         shipping={shipping}

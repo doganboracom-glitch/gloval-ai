@@ -16,6 +16,7 @@ import {
   relatedPosts,
 } from '@/lib/blog'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { buildSiteBlogData } from '@/lib/blog-site'
 import { BlogPostView, blogCopy } from '@/components/blog/blog-views'
 
 export const dynamic = 'force-dynamic'
@@ -86,7 +87,7 @@ export default async function BlogPostPage({ params }: Props) {
       mode={mode}
       whatsappNumber={catalog.whatsappNumber}
       origin={catalog.origin}
-      blogHref={`${hrefBase}/blog`}
+      blog={buildSiteBlogData(hrefBase, all)}
     >
       <BlogPostView
         post={post}
