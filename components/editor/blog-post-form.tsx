@@ -211,6 +211,7 @@ export function BlogPostForm({
       if (!res.ok || !data?.url) {
         if (res.status === 402) setError(lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.')
         else if (res.status === 409) setError(t.errCoverBusy)
+        else if (data?.error === 'timeout') setError(t.errCoverTimeout)
         else if (data?.error === 'rejected') setError(t.errCoverRejected)
         else if (kind === 'ai') setError(t.errCoverFailed)
         else setError(t.errCover)

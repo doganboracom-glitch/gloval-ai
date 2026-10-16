@@ -8,22 +8,15 @@ import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/fre
 import { getImageProvider, imageGenerationAvailable } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
 import { websiteSchema } from '@/lib/website-schema'
-import {
-  DEFAULT_COVER_MODEL,
-  buildCoverPrompt,
-  deriveCoverConcepts,
-  generateAcceptedCover,
-  paletteNames,
-  parseCoverStyle,
-} from '@/lib/blog-cover'
+import { DEFAULT_COVER_MODEL, paletteNames, parseCoverStyle } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
+import { runCoverGeneration } from '@/lib/blog-cover-run'
 
+// The pipeline gives up (and refuses to charge) after COVER_BUDGET_MS, well inside this limit.
 export const maxDuration = 180
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
-// flux-3-image takes ~17-27 s; two attempts + concepts + checks stay well under maxDuration.
-const ATTEMPT_TIMEOUT_MS = 45_000
 const CONCEPT_TIMEOUT_MS = 10_000
 
 /** One generation per user and project at a time; the ledger covers other instances. */
@@ -119,38 +112,33 @@ export async function POST(req: Request) {
     if (!dailyLimit.allowed) return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
 
     const cost = AI_ACTION_COSTS.sectionImage
-    const balance = await getCreditBalance(owner.userId)
-    if (balance < cost) return Response.json({ error: 'Out of credits', balance }, { status: 402 })
-
     const style = parseCoverStyle(body?.style)
-    const { concepts, source } = await deriveCoverConcepts({ title, excerpt }, { complete: completeConcepts })
-    const prompt = buildCoverPrompt({ concepts, style, colors: paletteNames(owner.palette) })
     const model = process.env.BLOG_COVER_IMAGE_MODEL || DEFAULT_COVER_MODEL
     const provider = getImageProvider()
 
-    const result = await generateAcceptedCover({
-      generate: () =>
-        Promise.race([
-          provider.generate({ prompt, aspectRatio: '16:9', allowText: true, model }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), ATTEMPT_TIMEOUT_MS)),
-        ]),
-      inspect: inspectCover,
+    const result = await runCoverGeneration(
+      {
+        getBalance: () => getCreditBalance(owner.userId),
+        concepts: completeConcepts,
+        generate: (prompt) => provider.generate({ prompt, aspectRatio: '16:9', allowText: true, model }),
+        inspect: inspectCover,
+        persist: persistImageDataUri,
+        charge: (amount, chargeReason) => consumeCredits(owner.userId, amount, chargeReason),
+      },
+      { title, excerpt, style, colors: paletteNames(owner.palette), cost, reason, signal: req.signal },
+    )
+    console.info('[blog-cover]', {
+      style,
+      model,
+      ok: result.ok,
+      error: result.ok ? null : result.error,
+      charged: result.charged,
     })
-    console.info('[blog-cover]', { style, model, conceptSource: source, ok: result.ok, attempts: result.attempts })
     if (!result.ok) {
-      return Response.json(
-        { error: result.reason === 'rejected' ? 'rejected' : 'generation_failed', charged: 0, balance },
-        { status: 502 },
-      )
+      const error = result.error === 'out_of_credits' ? 'Out of credits' : result.error
+      return Response.json({ error, charged: 0, balance: result.balance }, { status: result.status })
     }
-
-    const url = await persistImageDataUri(result.src)
-    if (!url.startsWith('https://') && !url.startsWith('/')) {
-      return Response.json({ error: 'storage_failed', charged: 0, balance }, { status: 502 })
-    }
-    const charge = await consumeCredits(owner.userId, cost, reason)
-    if (!charge.ok) return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
-    return Response.json({ url, charged: cost, balance: charge.balance, style })
+    return Response.json({ url: result.url, charged: result.charged, balance: result.balance, style })
   } finally {
     inflight.delete(lockKey)
   }
