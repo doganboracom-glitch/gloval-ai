@@ -314,6 +314,7 @@ export function WebsitePreview({
   // Same SWR key as the Blog tab, so the preview's menu link and latest-posts
   // block follow the owner's posts and the two visibility switches live.
   const blogProjectId = blog?.projectId ?? null
+  const starterPollCount = useRef(0)
   const { data: previewPosts, mutate: reloadPreviewPosts } = useSWR(
     blogProjectId ? ['blog-posts', blogProjectId] : null,
     async () => {
@@ -321,7 +322,18 @@ export function WebsitePreview({
       if (!result.ok) throw new Error(result.reason)
       return result.posts
     },
-    { revalidateOnFocus: false },
+    {
+      revalidateOnFocus: false,
+      // The three starter posts are written in the background right after the
+      // site is created: poll briefly while the list is empty so the "Blog"
+      // link and "Son yazılar" block appear without a manual reload.
+      refreshInterval: (latest) => {
+        if (latest && latest.length > 0) return 0
+        starterPollCount.current += 1
+        return starterPollCount.current <= 12 ? 12_000 : 0
+      },
+      errorRetryCount: 3,
+    },
   )
   const previewBlog = useMemo(() => (previewPosts ? previewSiteBlogData(previewPosts) : null), [previewPosts])
   useEffect(() => {

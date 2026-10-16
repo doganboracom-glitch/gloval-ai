@@ -2,12 +2,14 @@ import 'server-only'
 import { after } from 'next/server'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveAiModel } from '@/lib/ai-models'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import { isStarterPost } from '@/lib/blog'
 import {
   buildStarterSystemPrompt,
   buildStarterUserPrompt,
   runStarterBlog,
+  starterDailyCapReached,
   starterOutputSchema,
   type StarterBlogDeps,
   type StarterBlogResult,
@@ -49,17 +51,47 @@ export async function runStarterBlogNow(args: {
   })
 }
 
-/** Runs after the response is sent, so the publish itself never waits on it and never fails because of it. */
+/** Starter posts the owner's sites received in the last 24 hours (counts only, no content). */
+async function starterPostsLast24h(ownerId: string): Promise<number> {
+  const admin = createAdminClient()
+  const { data: projects, error } = await admin.from('projects').select('id').eq('owner_id', ownerId)
+  if (error) throw error
+  const ids = (projects ?? []).map((p) => p.id as string)
+  if (ids.length === 0) return 0
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { count, error: countErr } = await admin
+    .from('site_blog_posts')
+    .select('id', { count: 'exact', head: true })
+    .in('project_id', ids)
+    .eq('ai_generated', true)
+    .eq('personalized', false)
+    .eq('sample', false)
+    .eq('indexable', false)
+    .gte('created_at', since)
+  if (countErr) throw countErr
+  return count ?? 0
+}
+
+/**
+ * Runs after the response is sent, so neither project creation nor publish waits on it
+ * or fails because of it. `ownerId` enables the per-user daily cap.
+ */
 export function scheduleStarterBlog(args: {
   projectId: string
+  ownerId?: string
   siteSlug: string | null
   site: StarterSite
   lang: BlogLang
 }): void {
+  const { ownerId, ...run } = args
   try {
     after(async () => {
       try {
-        const result = await runStarterBlogNow(args)
+        if (ownerId && starterDailyCapReached(await starterPostsLast24h(ownerId))) {
+          console.log('[starter-blog] skipped daily_cap')
+          return
+        }
+        const result = await runStarterBlogNow(run)
         console.log('[starter-blog]', result.status, 'reason' in result ? result.reason : '')
       } catch (err) {
         console.log('[starter-blog] failed:', err instanceof Error ? err.message : 'unknown')

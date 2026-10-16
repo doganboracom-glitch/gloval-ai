@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowUp, Loader2, Sparkles, AlertCircle, Eye, Wand2, Check, Save, RefreshCw, ShoppingBag } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import { toBilingual } from '@/lib/i18n'
 import { PlanResult, type Plan } from '@/components/plan-result'
@@ -358,10 +357,7 @@ export function Hero() {
               className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
             />
             <div className="flex items-center justify-between gap-3 px-2 pb-1">
-              <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground/80">
-                {t.hero.hint}
-                <AdvancedAiBadge flow="siteGenerate" lang={lang === 'en' ? 'en' : 'tr'} />
-              </span>
+              <span className="text-xs text-muted-foreground/80">{t.hero.hint}</span>
               <div className="flex items-center gap-2">
               <VoiceInputButton value={prompt} onText={setPrompt} disabled={loading} />
               <button

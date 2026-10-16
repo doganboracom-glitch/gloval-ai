@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), 'utf8')
 
 const ADVANCED_FLOWS: Array<{ file: string; flow: string }> = [
-  { file: 'components/hero.tsx', flow: 'siteGenerate' },
   { file: 'components/ecommerce/product-ai-assistant.tsx', flow: 'productText' },
   { file: 'components/editor/logo-studio-dialog.tsx', flow: 'logoEmblem' },
   { file: 'components/editor/blog-ai-panel.tsx', flow: 'blogWrite' },
@@ -17,6 +16,13 @@ describe('"Gelişmiş AI" badge placement', () => {
     expect(src).not.toContain('AdvancedAiBadge')
     expect(src).not.toContain('gelişmiş AI modeliyle')
     expect(src).not.toMatch(/advanced AI model/i)
+  })
+
+  it('is absent from the home page prompt box (no badge, no PRO lock label)', () => {
+    const src = read('components/hero.tsx')
+    expect(src).not.toContain('AdvancedAiBadge')
+    expect(src).not.toContain('advanced-ai-badge')
+    expect(src).not.toContain('Gelişmiş AI')
   })
 
   it.each(ADVANCED_FLOWS)('$file renders the badge for the $flow flow', ({ file, flow }) => {
