@@ -18,11 +18,12 @@ import {
 } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
 
-export const maxDuration = 120
+export const maxDuration = 180
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
-const ATTEMPT_TIMEOUT_MS = 30_000
+// flux-3-image takes ~17-27 s; two attempts + concepts + checks stay well under maxDuration.
+const ATTEMPT_TIMEOUT_MS = 45_000
 const CONCEPT_TIMEOUT_MS = 10_000
 
 /** One generation per user and project at a time; the ledger covers other instances. */

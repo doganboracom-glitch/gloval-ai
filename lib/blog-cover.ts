@@ -12,8 +12,12 @@ export const COVER_STYLES = ['flat', 'photo', 'gradient'] as const
 export type CoverStyle = (typeof COVER_STYLES)[number]
 export const DEFAULT_COVER_STYLE: CoverStyle = 'flat'
 
-/** Overridable with `BLOG_COVER_IMAGE_MODEL`. Chosen from scripts/blog-cover-compare.ts. */
-export const DEFAULT_COVER_MODEL = 'bfl/flux-2-klein-4b'
+/**
+ * Overridable with `BLOG_COVER_IMAGE_MODEL`. Chosen from scripts/blog-cover-compare.ts
+ * (reports/blog-cover-compare.html): the best flat-illustration quality at a native 3:2.
+ * Takes ~17-27 s per image, hence the per-attempt timeout in the cover route.
+ */
+export const DEFAULT_COVER_MODEL = 'bfl/flux-3-image'
 
 export function parseCoverStyle(value: unknown): CoverStyle {
   return COVER_STYLES.find((style) => style === value) ?? DEFAULT_COVER_STYLE
