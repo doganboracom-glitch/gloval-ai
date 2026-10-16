@@ -8,6 +8,7 @@ import { getStorePaymentMethods } from '@/lib/store'
 import { getCurrentStoreCustomer } from '@/lib/store-customer'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
+import { getSiteBlogData } from '@/lib/blog-server'
 import { companyForSite, resolveLegalDoc } from '@/lib/site-legal-docs'
 import { sellerSummary } from '@/lib/company-profile'
 
@@ -43,7 +44,7 @@ export default async function CheckoutPage({
   const seller = sellerSummary(companyForSite(site.schema, site.name).seller)
 
   return (
-    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping}>
+    <StoreSiteShell site={site.schema} slug={slug} shipping={shipping} blog={await getSiteBlogData(slug)}>
       <CheckoutForm
         slug={slug}
         shipping={shipping}

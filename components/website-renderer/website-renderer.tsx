@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
+import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
+import { WebsiteLatestPosts } from '@/components/website-renderer/sections/website-latest-posts'
+import { shouldShowLatestPosts, type SiteBlogData } from '@/lib/blog-site'
 import {
   resolveTheme,
   themeToCssVars,
@@ -92,8 +95,11 @@ export function WebsiteRenderer({
   contactForm = null,
   initialPage = null,
   pageRouting = false,
+  blog = null,
 }: {
   site: unknown
+  /** Published site only: live blog posts that feed the menu/footer link and the latest-posts block. */
+  blog?: SiteBlogData | null
   /** Published site only: the page slug this request is rendering (null = home). */
   initialPage?: string | null
   /**
@@ -255,8 +261,26 @@ export function WebsiteRenderer({
   // vanish, so fall back to the pinned chip instead.
   const hasFooter = sections.some((section) => section.type === 'footer')
 
+  // The latest-posts block lives on the home page only, either right after the
+  // opening hero or just above the footer (the default).
+  const showLatest =
+    active === homeSlug(data) && blog && shouldShowLatestPosts(blog, data.blogSettings)
+  const footerIndex = sections.findIndex((section) => section.type === 'footer')
+  const latestIndex = !showLatest
+    ? -1
+    : data.blogSettings?.latestPlacement === 'after-hero'
+      ? sections[0]?.type === 'hero' || sections[0]?.type === 'slider'
+        ? 1
+        : 0
+      : footerIndex >= 0
+        ? footerIndex
+        : sections.length
+  const latestPosts =
+    showLatest && blog ? <WebsiteLatestPosts key="latest-posts" blog={blog} lang={data.meta.language} /> : null
+
   const content = (
     <SiteNavProvider handler={navHandler} preview={Boolean(preview)}>
+    <SiteBlogProvider blog={blog} settings={data.blogSettings}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>
       <WebsiteHeader
         navigation={data.navigation}
@@ -268,7 +292,8 @@ export function WebsiteRenderer({
         actions={headerActions}
         socialLinks={resolveHeaderSocialLinks(data)}
       />
-      {sections.map((section, i) => {
+      {sections.flatMap((section, i) => {
+        const item = (() => {
         const rendered = (
           <SectionRenderer
             key={`${active}-${section.type}-${i}`}
@@ -330,7 +355,10 @@ export function WebsiteRenderer({
             {sampleBadge}
           </div>
         )
+        })()
+        return i === latestIndex ? [latestPosts, item] : [item]
       })}
+      {latestIndex === sections.length ? latestPosts : null}
       {showContactActions && <SiteFloatingActions site={data} planCode={planCode} />}
       <BackToTop anchorRef={rootRef} lang={data.meta.language} resetKey={active} />
       {showBranding && !hasFooter && (
@@ -338,6 +366,7 @@ export function WebsiteRenderer({
       )}
       {store && <SiteCartIsland slug={store.slug} lang={data.meta.language} shipping={store.shipping} />}
     </div>
+    </SiteBlogProvider>
     </SiteNavProvider>
   )
 

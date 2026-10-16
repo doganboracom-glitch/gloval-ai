@@ -2,6 +2,7 @@ import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { livePosts, sanitizeBlogBody, type BlogPost, type BlogStatus } from '@/lib/blog'
 import { getTenantSlugFromHost, isForeignHost } from '@/lib/domains'
+import { buildSiteBlogData, type SiteBlogData } from '@/lib/blog-site'
 
 /**
  * Prefix for internal blog links: empty on a tenant subdomain or custom domain
@@ -117,6 +118,12 @@ export async function getLiveBlogPost(slug: string, postSlug: string): Promise<B
   } catch {
     return null
   }
+}
+
+/** Blog data for the site chrome (menu/footer link, latest posts); null when nothing is public. */
+export async function getSiteBlogData(slug: string): Promise<SiteBlogData | null> {
+  const [posts, hrefBase] = await Promise.all([getLiveBlogPosts(slug), blogHrefBase(slug)])
+  return posts.length > 0 ? buildSiteBlogData(hrefBase, posts) : null
 }
 
 /** Drives the menu link: true only when at least one post is publicly visible. */
