@@ -368,7 +368,7 @@ const TR: Strings = {
     aiProductNote: 'Ürün metni ve görseli üretir (işlem kullanır).',
     advancedAi: 'Gelişmiş AI işlemleri',
     advancedAiNote:
-      'Site oluşturma, düzenleme ve ürün metni daha gelişmiş modelle çalışır. Kredi fiyatları değişmez.',
+      'Site oluşturma, ürün metni ve logo çizimi daha gelişmiş modelle çalışır. Kredi fiyatları değişmez.',
     legalDocs: 'Resmi metin şablonları',
     legalDocsNote: 'Mesafeli satış, iptal ve iade, gizlilik şablonları; düzenlenebilir.',
     productSeo: 'Ürün SEO',
@@ -531,7 +531,7 @@ const EN: Strings = {
     aiProductNote: 'Writes product text and images (uses AI actions).',
     advancedAi: 'Advanced AI actions',
     advancedAiNote:
-      'Site creation, editing and product text run on a more advanced model. Credit prices stay the same.',
+      'Site creation, product text and logo drawing run on a more advanced model. Credit prices stay the same.',
     legalDocs: 'Legal document templates',
     legalDocsNote: 'Distance sales, cancellation and refund, privacy templates; editable.',
     productSeo: 'Product SEO',

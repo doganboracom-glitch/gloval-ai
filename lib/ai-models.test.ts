@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADVANCED_AI_DISTINCT,
+  AI_FLOW_ADVANCED,
   AI_TIER_MODELS,
+  type AiFlow,
   advancedAiBadgeState,
   resolveAiModel,
   tierForPlan,
@@ -60,6 +62,35 @@ describe('advanced AI visibility once the advanced model differs', () => {
     expect(advancedAiBadgeState(undefined, true)).toBeNull()
   })
 
+  it('shows the badge only for flows that really run on the advanced model', () => {
+    const flows = Object.keys(AI_FLOW_ADVANCED) as AiFlow[]
+    for (const flow of flows) {
+      for (const code of ['free', 'starter', 'pro', 'ecommerce']) {
+        const state = advancedAiBadgeState(code, true, flow)
+        if (!AI_FLOW_ADVANCED[flow]) {
+          expect(state).toBeNull()
+        } else {
+          expect(state).toBe(code === 'pro' || code === 'ecommerce' ? 'active' : 'locked')
+        }
+      }
+    }
+  })
+
+  it('never shows the badge for editor chat edits, whatever the plan', () => {
+    for (const flow of ['siteEdit', 'sectionEdit'] as AiFlow[]) {
+      for (const code of [...CODES, null, undefined]) {
+        expect(advancedAiBadgeState(code, true, flow)).toBeNull()
+      }
+    }
+  })
+
+  it('keeps the locked upgrade prompt for FREE and STARTER on the advanced flows', () => {
+    for (const flow of ['siteGenerate', 'productText', 'logoEmblem', 'blogWrite'] as AiFlow[]) {
+      expect(advancedAiBadgeState('free', true, flow)).toBe('locked')
+      expect(advancedAiBadgeState('starter', true, flow)).toBe('locked')
+    }
+  })
+
   it('shows the pricing row on the PRO card, which e-commerce inherits', () => {
     for (const code of CODES) {
       const ids = buildPlanView(code, 'yearly', 'tr', { advancedAi: true }).groups.flatMap((g) =>
@@ -92,8 +123,17 @@ describe('model resolution', () => {
     }
   })
 
+  it('keeps site and section edits on the standard model for every plan', () => {
+    for (const flow of ['siteEdit', 'sectionEdit'] as const) {
+      for (const plan of ['free', 'starter', 'pro', 'ecommerce', null]) {
+        expect(resolveAiModel(flow, plan)).toMatchObject({ tier: 'standard', model: AI_TIER_MODELS.standard })
+      }
+    }
+  })
+
   it('leaves the other flows on the shared tier table', () => {
-    expect(resolveAiModel('siteEdit', 'pro').model).toBe(AI_TIER_MODELS.advanced)
-    expect(resolveAiModel('siteEdit', 'starter').model).toBe(AI_TIER_MODELS.standard)
+    expect(resolveAiModel('siteGenerate', 'pro').model).toBe(AI_TIER_MODELS.advanced)
+    expect(resolveAiModel('productText', 'pro').model).toBe(AI_TIER_MODELS.advanced)
+    expect(resolveAiModel('productText', 'starter').model).toBe(AI_TIER_MODELS.standard)
   })
 })

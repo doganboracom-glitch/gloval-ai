@@ -49,7 +49,15 @@ export function siteSystemPrompt(normalizedLang: 'tr' | 'en', language: string):
     `CRITICAL: copy every existing image "src" value through UNCHANGED, exactly as given, ` +
     `including long data: URIs and https URLs. Never blank, shorten, truncate or invent an image "src". ` +
     `If the user asks for a different image, only rewrite its "imagePrompt" and leave "src" as-is. ` +
-    `Keep meta.language as "${normalizedLang}" and write any new human-readable text in ${language}. ` +
+    `Keep meta.language as "${normalizedLang}" and write any new human-readable text in ${language}, ` +
+    `EXCEPT when the user asks to translate the whole site into another language: then translate all visible text and set meta.language to that language code. ` +
+    `SCOPE: change only the fields the instruction names. If the instruction is vague or its target is unclear ("make it nicer", "change this"), change nothing. ` +
+    `Never rewrite many sections at once unless the user explicitly says all / the whole site. ` +
+    `UNSUPPORTED: the schema describes static pages only. User login, accounts or membership, server or hosting changes, payment gateways, databases and external integrations CANNOT be built. ` +
+    `If the instruction needs one of them, or has no counterpart in the schema, return the website EXACTLY as given (identical JSON). ` +
+    `Never add placeholder pages, menu links or sections (such as "Login", "Members" or "Blog") for a feature that does not exist. ` +
+    `The "Blog" menu link is added automatically once a blog post is published: never add a Blog page or navigation link yourself. ` +
+    `Replace a text only when the instruction gives the new text or clearly asks you to write it; never paste the instruction itself into a title, button or label. ` +
     `When adding a section, pick the most fitting type from: hero, about, services, features, stats, ` +
     `testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
     `To hide a section rather than delete it, set its "hidden" field to true (and false to show it again). ` +

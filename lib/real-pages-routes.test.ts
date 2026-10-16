@@ -11,6 +11,9 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('server-only', () => ({}))
+vi.mock('next/headers', () => ({
+  headers: async () => new Headers({ host: 'kahve.gloval.site' }),
+}))
 vi.mock('@/lib/commerce-mode-server', () => ({
   getPublishedSiteCommerceMode: async () => 'none',
   getCatalogContext: async () => ({ mode: 'none', whatsappNumber: null, origin: state.origin }),

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { Check, Loader2, Sparkles, X } from 'lucide-react'
+import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
 import { getStoreAiStatus, markStoreAiApplied } from '@/lib/store-ai-actions'
 import { STORE_AI_DRAFT_NOTE, costLabel, type StoreAiNextAttempt } from '@/lib/store-ai-constants'
 import { STORE_AI_ERROR_MESSAGES } from '@/lib/store-ai-messages'
@@ -205,6 +206,7 @@ export function ProductAiAssistant({
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Sparkles className="size-4 text-brand" aria-hidden />
             Yapay zekâ ile doldur
+            <AdvancedAiBadge flow="productText" />
           </h3>
           <p className="text-xs text-muted-foreground">
             Görsel, ürün adı ve özelliklerden açıklama, özellikler, SEO ve görsel açıklamaları önerir.

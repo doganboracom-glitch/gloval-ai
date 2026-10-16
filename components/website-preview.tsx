@@ -1150,8 +1150,22 @@ export function WebsitePreview({
       if (data.source === 'blog') {
         return await runBlogInstruction(data.blogOperation)
       }
+      if (data.source === 'declined') {
+        const message = typeof data.message === 'string' ? data.message : t.editor.assistantAckFallback
+        setMessages((prev) => [...prev, { role: 'assistant', text: message }])
+        flashToast('err', t.editor.failure)
+        return false
+      }
       const parsed = websiteSchema.safeParse(data.schema)
       if (!parsed.success) throw new Error('invalid')
+
+      const changeLines: string[] = Array.isArray(data.changes)
+        ? data.changes.filter((c: unknown): c is string => typeof c === 'string')
+        : []
+      const ackText =
+        changeLines.length > 0
+          ? `${t.editor.assistantAck}\n${changeLines.map((c) => `• ${c}`).join('\n')}`
+          : t.editor.assistantAck
 
       const productsNotice = data.notice ? t.editor.productsManagedNotice : null
 
@@ -1166,7 +1180,7 @@ export function WebsitePreview({
         })
         setMessages((prev) => [
           ...prev,
-          { role: 'assistant', text: t.editor.assistantAck },
+          { role: 'assistant', text: ackText },
           ...(productsNotice ? [{ role: 'assistant' as const, text: productsNotice }] : []),
         ])
         return true
