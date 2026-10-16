@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
+import useSWR from 'swr'
+import { listBlogPostsAction } from '@/lib/blog-actions'
+import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useLanguage } from '@/components/language-provider'
@@ -308,6 +311,25 @@ export function WebsitePreview({
     blogConfirm?.resolve(ok)
     setBlogConfirm(null)
   }
+  // Same SWR key as the Blog tab, so the preview's menu link and latest-posts
+  // block follow the owner's posts and the two visibility switches live.
+  const blogProjectId = blog?.projectId ?? null
+  const { data: previewPosts, mutate: reloadPreviewPosts } = useSWR(
+    blogProjectId ? ['blog-posts', blogProjectId] : null,
+    async () => {
+      const result = await listBlogPostsAction(blogProjectId as string)
+      if (!result.ok) throw new Error(result.reason)
+      return result.posts
+    },
+    { revalidateOnFocus: false },
+  )
+  const previewBlog = useMemo(() => (previewPosts ? previewSiteBlogData(previewPosts) : null), [previewPosts])
+  useEffect(() => {
+    if (!blogProjectId) return
+    const reload = () => void reloadPreviewPosts()
+    window.addEventListener(BLOG_CHANGED_EVENT, reload)
+    return () => window.removeEventListener(BLOG_CHANGED_EVENT, reload)
+  }, [blogProjectId, reloadPreviewPosts])
   // FREE planın günlük AI işlem limitine ulaşıldığında açılan ekran — bkz.
   // lib/free-daily-limit.ts. resetAt, sunucunun 429 yanıtındaki ISO zaman damgası.
   const [dailyLimitResetAt, setDailyLimitResetAt] = useState<string | null>(null)
@@ -1290,11 +1312,16 @@ export function WebsitePreview({
       if (livePublished && liveSlug) {
         window.open(`${tenantUrl(liveSlug)}${tenantPath}`, '_blank', 'noopener,noreferrer')
       } else {
+        const blogRoute = isBlogRoutePath(tenantPath)
         flashToast(
           'err',
-          lang === 'en'
-            ? 'Publish your store to open product and cart pages.'
-            : 'Ürün ve sepet sayfalarını açmak için mağazanızı yayınlayın.',
+          blogRoute
+            ? lang === 'en'
+              ? 'Publish your site to open the blog pages.'
+              : 'Blog sayfalarını açmak için sitenizi yayınlayın.'
+            : lang === 'en'
+              ? 'Publish your store to open product and cart pages.'
+              : 'Ürün ve sepet sayfalarını açmak için mağazanızı yayınlayın.',
         )
       }
     },
@@ -1575,6 +1602,7 @@ export function WebsitePreview({
                     site={pendingAiEdit ? pendingAiEdit.after : currentSite}
                     planCode={planCode}
                     preview={previewNav}
+                    blog={previewBlog}
                     previewProducts={catalog?.products}
                     previewCollections={catalog?.collections}
                     editSelection={

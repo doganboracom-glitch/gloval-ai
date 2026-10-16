@@ -1,7 +1,7 @@
 'use client'
 
 import type { CTAButton, SiteImageRef } from '@/lib/website-schema'
-import { useSiteNav, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
+import { useHrefNormalizer, useSiteNav, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { canonicalSectionAnchor } from '@/lib/website-pages'
 import { ThemedImagePlaceholder } from '@/components/themed-image-placeholder'
 
@@ -60,6 +60,8 @@ export function SiteButton({
   variant?: 'primary' | 'outline'
 }) {
   const nav = useSiteNav()
+  const normalize = useHrefNormalizer()
+  const href = normalize(button.href || '')
   const base: React.CSSProperties = {
     borderRadius: 'var(--site-radius)',
     fontFamily: 'var(--site-body-font)',
@@ -80,8 +82,8 @@ export function SiteButton({
 
   return (
     <a
-      href={button.href || '#'}
-      onClick={(e) => onSiteNavClick(e, button.href, nav)}
+      href={href || '#'}
+      onClick={(e) => onSiteNavClick(e, href, nav)}
       className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
       style={style}
     >

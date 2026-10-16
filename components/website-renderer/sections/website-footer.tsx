@@ -6,7 +6,7 @@ import { PaymentBadges } from '@/components/payment-badges'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { resolveFooterSocialLinks } from '@/lib/social-links'
-import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withBlogFooterLink, withoutBlogLinks } from '@/lib/blog-site'
 import { OPEN_CART_EVENT } from '@/components/store/cart-provider'
@@ -51,9 +51,10 @@ function FooterLink({
   style: React.CSSProperties
 }) {
   const nav = useSiteNav()
+  const normalizeHref = useHrefNormalizer()
   const check = validateFooterHref(link.href, site)
   const kind = check.ok ? check.kind : null
-  const href = link.href.trim()
+  const href = normalizeHref(link.href.trim())
 
   if (kind === 'cart') {
     return (
@@ -112,7 +113,7 @@ export function WebsiteFooter({
   const resolvedColumns = resolveFooterColumns(data.columns, site)
   const columns = blogLink
     ? withBlogFooterLink(resolvedColumns, { label: blogLink.label, href: blogLink.href }, lang)
-    : resolvedColumns.map((col) => ({ ...col, links: withoutBlogLinks(col.links) }))
+    : resolvedColumns
   const legal = [
     ...resolveStoreEssentialPageLinks(site, columns, lang),
     ...resolveFooterLegal(data.legal, site, lang),

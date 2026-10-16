@@ -12,6 +12,8 @@ import { COVER_STYLES, COVER_STYLE_LABELS, DEFAULT_COVER_STYLE, type CoverStyle 
 type Lang = 'tr' | 'en'
 type Mode = 'draft' | 'published' | 'scheduled'
 
+const COVER_TIMEOUT_MS = 120_000
+
 const T = {
   tr: {
     back: 'Yazılar',
@@ -57,6 +59,8 @@ const T = {
     errCoverFailed: 'Görsel üretilemedi. Kredin düşülmedi; tekrar deneyebilirsin.',
     errCoverBusy: 'Zaten bir görsel üretiliyor, lütfen bekleyin.',
     coverPlaceholder: 'Kapak yok',
+    coverGenerating: 'Görsel hazırlanıyor, yaklaşık 30 saniye sürebilir.',
+    errCoverTimeout: 'Görsel zamanında hazırlanamadı. Kredin düşülmedi; lütfen tekrar dene.',
     chars: 'karakter',
   },
   en: {
@@ -103,6 +107,8 @@ const T = {
     errCoverFailed: 'Could not generate the image. No credits were charged; please try again.',
     errCoverBusy: 'An image is already being generated, please wait.',
     coverPlaceholder: 'No cover',
+    coverGenerating: 'Preparing the image, this can take about 30 seconds.',
+    errCoverTimeout: 'The image took too long to prepare. No credits were charged; please try again.',
     chars: 'characters',
   },
 } as const
@@ -197,11 +203,15 @@ export function BlogPostForm({
     setCoverBusy(kind)
     setError(null)
     try {
-      const res = await fetch('/api/blog/cover', init)
+      const res = await fetch('/api/blog/cover', {
+        ...init,
+        signal: kind === 'ai' ? AbortSignal.timeout(COVER_TIMEOUT_MS) : undefined,
+      })
       const data = (await res.json().catch(() => null)) as { url?: string; alt?: string; error?: string } | null
       if (!res.ok || !data?.url) {
         if (res.status === 402) setError(lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.')
         else if (res.status === 409) setError(t.errCoverBusy)
+        else if (data?.error === 'timeout') setError(t.errCoverTimeout)
         else if (data?.error === 'rejected') setError(t.errCoverRejected)
         else if (kind === 'ai') setError(t.errCoverFailed)
         else setError(t.errCover)
@@ -209,8 +219,9 @@ export function BlogPostForm({
       }
       setCoverUrl(data.url)
       if (data.alt && !coverAlt) setCoverAlt(data.alt)
-    } catch {
-      setError(kind === 'ai' ? t.errCoverFailed : t.errCover)
+    } catch (caught) {
+      const timedOut = caught instanceof DOMException && (caught.name === 'TimeoutError' || caught.name === 'AbortError')
+      setError(timedOut ? t.errCoverTimeout : kind === 'ai' ? t.errCoverFailed : t.errCover)
     } finally {
       coverLock.current = false
       setCoverBusy(null)
@@ -428,6 +439,14 @@ export function BlogPostForm({
             }}
           />
         </div>
+        {coverBusy === 'ai' && (
+          <div role="status" aria-live="polite" className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
+            <p className="text-sm text-foreground">{t.coverGenerating}</p>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary" aria-hidden>
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-brand" />
+            </div>
+          </div>
+        )}
         <p className="text-xs text-muted-foreground">{t.coverCredits}</p>
         {coverUrl && (
           <div>
