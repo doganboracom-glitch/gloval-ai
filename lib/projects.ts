@@ -22,6 +22,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
+import { scheduleStarterBlog } from '@/lib/starter-blog-server'
 import { slugifyProjectName } from '@/lib/slug'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
@@ -505,11 +506,12 @@ export async function publishProject(input: {
   // editing another tenant's site, `db` is the elevated service-role client.
   const { data: project, error: loadErr } = await db
     .from('projects')
-    .select('id, name, slug, published, owner_id')
+    .select('id, name, slug, published, published_at, language, owner_id')
     .eq('id', input.id)
     .maybeSingle()
   if (loadErr) throw loadErr
   if (!project) throw new Error('NOT_FOUND')
+  const firstPublish = !project.published && !project.published_at
 
   // Yayınlanabilir site limitini uygula. Zaten yayında olan bir siteyi yeniden
   // yayınlamak limiti tüketmez; bu yüzden yalnızca BAŞKA yayında siteler sayılır.
@@ -693,6 +695,15 @@ export async function publishProject(input: {
     // Queued for the next cron run; never blocks or fails a publish.
     void enqueueSitePages(input.id, slug, parsed, 'site:publish')
     void enqueueLiveBlog(input.id, slug, 'site:publish')
+    // Three general starter posts, written once in the background (noindex until personalised).
+    if (firstPublish) {
+      scheduleStarterBlog({
+        projectId: input.id,
+        siteSlug: slug,
+        site: { name: parsed.meta.name, description: parsed.meta.description, storefront: isStorefront(parsed) },
+        lang: project.language === 'en' ? 'en' : 'tr',
+      })
+    }
   }
   return { ok: true, slug: slug as string, publishedAt }
 }

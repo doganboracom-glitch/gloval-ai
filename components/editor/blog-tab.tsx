@@ -73,6 +73,7 @@ export function BlogTab({
   profile,
   onDispatch,
   published,
+  sitemapUrl = null,
 }: {
   projectId: string
   lang: Lang
@@ -80,6 +81,7 @@ export function BlogTab({
   profile: BlogProfile | undefined
   onDispatch: (op: EditOperation) => void
   published: boolean
+  sitemapUrl?: string | null
 }) {
   const t = T[lang]
   const [view, setView] = useState<View>({ kind: 'list' })
@@ -288,6 +290,9 @@ export function BlogTab({
       )}
 
       <p className="text-xs leading-relaxed text-muted-foreground">{t.google}</p>
+      {sitemapUrl && (
+        <p className="break-all rounded-lg bg-secondary px-3 py-2 font-mono text-xs text-foreground">{sitemapUrl}</p>
+      )}
     </div>
   )
 }

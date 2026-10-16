@@ -121,6 +121,7 @@ export async function enqueueLiveBlog(projectId: string, slug: string, reason: s
       .eq('project_id', projectId)
       .eq('status', 'published')
       .eq('sample', false)
+      .eq('indexable', true)
       .lte('published_at', new Date().toISOString())
       .limit(INDEXNOW_MAX_URLS_PER_ENQUEUE - 1)
     return await enqueueBlogPosts(

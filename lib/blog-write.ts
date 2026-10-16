@@ -182,7 +182,7 @@ export async function createBlogPost(
   if (!prepared.ok) return prepared
   const post = await deps.store.insert(projectId, prepared.record)
   const now = (deps.now ?? (() => new Date()))()
-  if (isPostLive(post, now)) pingSlugs(deps, projectId, [post.slug], 'blog:publish')
+  if (isPostLive(post, now) && post.indexable) pingSlugs(deps, projectId, [post.slug], 'blog:publish')
   return { ok: true, post }
 }
 
@@ -200,8 +200,8 @@ export async function updateBlogPost(
   if (!prepared.ok) return prepared
   const post = await deps.store.update(projectId, postId, prepared.record)
   const now = (deps.now ?? (() => new Date()))()
-  const wasLive = isPostLive(existing, now)
-  const isLive = isPostLive(post, now)
+  const wasLive = isPostLive(existing, now) && existing.indexable
+  const isLive = isPostLive(post, now) && post.indexable
   if (wasLive || isLive) {
     const reason = wasLive && !isLive ? 'blog:unpublish' : wasLive ? 'blog:update' : 'blog:publish'
     pingSlugs(deps, projectId, [existing.slug, post.slug], reason)
@@ -258,8 +258,34 @@ export async function personalizeBlogPost(
   }
   const post = await deps.store.update(projectId, postId, record)
   const now = (deps.now ?? (() => new Date()))()
-  if (isPostLive(existing, now) || isPostLive(post, now)) pingSlugs(deps, projectId, [post.slug], 'blog:update')
+  const indexedBefore = isPostLive(existing, now) && existing.indexable
+  const indexedAfter = isPostLive(post, now) && post.indexable
+  if (indexedBefore || indexedAfter) pingSlugs(deps, projectId, [post.slug], 'blog:update')
   return { ok: true, post, previous: existing }
+}
+
+/**
+ * The owner edited an unpersonalised (starter) post themselves and confirms it
+ * now describes their business: it becomes `personalized` and indexable, so it
+ * enters the sitemap, RSS and IndexNow. Content stays exactly as written.
+ */
+export async function markBlogPostPersonalized(
+  deps: BlogWriteDeps,
+  projectId: string,
+  postId: string,
+): Promise<{ ok: true; post: BlogPost } | { ok: false; reason: 'NOT_FOUND' | 'ALREADY_PERSONALIZED' }> {
+  const existing = await deps.store.get(projectId, postId)
+  if (!existing) return { ok: false, reason: 'NOT_FOUND' }
+  if (existing.personalized && existing.indexable) return { ok: false, reason: 'ALREADY_PERSONALIZED' }
+  const post = await deps.store.update(projectId, postId, {
+    ...recordOf(existing),
+    personalized: true,
+    sample: false,
+    indexable: true,
+  })
+  const now = (deps.now ?? (() => new Date()))()
+  if (isPostLive(post, now)) pingSlugs(deps, projectId, [post.slug], 'blog:update')
+  return { ok: true, post }
 }
 
 export async function deleteBlogPost(
