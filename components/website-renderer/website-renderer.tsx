@@ -7,7 +7,7 @@ import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlu
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
 import { WebsiteLatestPosts } from '@/components/website-renderer/sections/website-latest-posts'
-import { shouldShowLatestPosts, type SiteBlogData } from '@/lib/blog-site'
+import { isBlogRoutePath, shouldShowLatestPosts, type SiteBlogData } from '@/lib/blog-site'
 import {
   resolveTheme,
   themeToCssVars,
@@ -221,8 +221,9 @@ export function WebsiteRenderer({
         handleNavigate(pageSlug)
         return true
       }
-      if (isStorefront(parsed.data) || href.startsWith('/yasal/')) {
-        preview.onStoreRoute(hrefToTenantPath(href, preview.slug))
+      const tenantPath = hrefToTenantPath(href, preview.slug)
+      if (isStorefront(parsed.data) || href.startsWith('/yasal/') || isBlogRoutePath(tenantPath)) {
+        preview.onStoreRoute(tenantPath)
       }
       return true
     },

@@ -1,4 +1,4 @@
-import { blogPostPath, type BlogPost } from '@/lib/blog'
+import { blogPostPath, livePosts, type BlogPost } from '@/lib/blog'
 import type { BlogSettings, NavLink } from '@/lib/website-schema'
 
 type Lang = 'tr' | 'en'
@@ -49,6 +49,17 @@ export function blogIndexHref(blog: Pick<SiteBlogData, 'hrefBase'>): string {
 
 export function blogCardHref(blog: Pick<SiteBlogData, 'hrefBase'>, post: Pick<BlogCardData, 'slug'>): string {
   return `${blog.hrefBase}${blogPostPath(post.slug)}`
+}
+
+/** True for a tenant-relative blog route: `/blog` or `/blog/<post>` (query and hash allowed). */
+export function isBlogRoutePath(tenantPath: string): boolean {
+  return /^\/blog(?:[/?#]|$)/i.test(tenantPath)
+}
+
+/** The live posts as the site chrome sees them; samples and drafts never appear. */
+export function previewSiteBlogData(posts: readonly BlogPost[]): SiteBlogData | null {
+  const live = livePosts(posts.filter((post) => !post.sample))
+  return live.length > 0 ? buildSiteBlogData('', live) : null
 }
 
 /** The menu/footer link shows only when the blog has a public post and the owner has not hidden it. */
