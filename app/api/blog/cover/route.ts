@@ -3,35 +3,69 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
-import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
+import { AI_ACTION_COSTS, consumeCredits, getCreditBalance, hasLedgerReason } from '@/lib/ai-credits'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
-import { generateSiteImage, imageGenerationAvailable } from '@/lib/image-provider'
+import { getImageProvider, imageGenerationAvailable } from '@/lib/image-provider'
 import { persistImageDataUri } from '@/lib/image-storage'
+import { websiteSchema } from '@/lib/website-schema'
+import {
+  DEFAULT_COVER_MODEL,
+  buildCoverPrompt,
+  deriveCoverConcepts,
+  generateAcceptedCover,
+  paletteNames,
+  parseCoverStyle,
+} from '@/lib/blog-cover'
+import { inspectCover } from '@/lib/blog-cover-inspect'
 
-export const maxDuration = 60
+export const maxDuration = 180
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+// flux-3-image takes ~17-27 s; two attempts + concepts + checks stay well under maxDuration.
+const ATTEMPT_TIMEOUT_MS = 45_000
+const CONCEPT_TIMEOUT_MS = 10_000
 
-async function ownsProject(projectId: string): Promise<{ userId: string } | null> {
+/** One generation per user and project at a time; the ledger covers other instances. */
+const inflight = new Set<string>()
+
+type OwnedProject = { userId: string; palette: Array<{ hex: string }> }
+
+async function ownsProject(projectId: string): Promise<OwnedProject | null> {
   const supabase = await createClient()
   const { data } = await supabase.auth.getUser()
   const user = data?.user
   if (!user) return null
-  const { data: owned } = await supabase.from('projects').select('id').eq('id', projectId).maybeSingle()
-  if (owned) return { userId: user.id }
-  if (isAdminEmail(user.email ?? null)) {
-    const { data: any } = await createAdminClient().from('projects').select('id').eq('id', projectId).maybeSingle()
-    if (any) return { userId: user.id }
+  const columns = 'id, schema_data'
+  let { data: project } = await supabase.from('projects').select(columns).eq('id', projectId).maybeSingle()
+  if (!project && isAdminEmail(user.email ?? null)) {
+    project = (await createAdminClient().from('projects').select(columns).eq('id', projectId).maybeSingle()).data
   }
-  return null
+  if (!project) return null
+  const site = websiteSchema.safeParse(project.schema_data)
+  return { userId: user.id, palette: site.success ? site.data.theme.palette : [] }
+}
+
+async function completeConcepts({ system, prompt }: { system: string; prompt: string }): Promise<string> {
+  const { generateText } = await import('ai')
+  const { text } = await generateText({
+    model: process.env.BLOG_COVER_CONCEPT_MODEL || 'google/gemini-2.5-flash-lite',
+    system,
+    prompt,
+    maxOutputTokens: 80,
+    temperature: 0.3,
+    abortSignal: AbortSignal.timeout(CONCEPT_TIMEOUT_MS),
+  })
+  return text
 }
 
 /**
  * POST /api/blog/cover
  *  - multipart (`file`, `projectId`): uploads an owner image, free of charge.
- *  - JSON (`projectId`, `title`, `alt`): generates a cover with the site image
- *    flow and charges the usual image credit ONLY when an image was delivered.
+ *  - JSON (`projectId`, `title`, `excerpt`, `style`, `requestId`): generates a
+ *    cover from model-extracted visual concepts (the title is never sent to the
+ *    image model), rejects images that contain text or people (one automatic
+ *    retry) and charges the image credit ONLY for an accepted image.
  * Returns `{ url }`. The post itself is saved afterwards through the blog
  * server actions, never from here.
  */
@@ -54,33 +88,70 @@ export async function POST(req: Request) {
     return Response.json({ url })
   }
 
-  const body = (await req.json().catch(() => null)) as { projectId?: string; title?: string; alt?: string } | null
+  const body = (await req.json().catch(() => null)) as {
+    projectId?: string
+    title?: string
+    excerpt?: string
+    alt?: string
+    style?: string
+    requestId?: string
+  } | null
   const projectId = body?.projectId ?? ''
-  const subject = (body?.alt || body?.title || '').replace(/\s+/g, ' ').trim().slice(0, 200)
-  if (!projectId || subject.length < 3) return Response.json({ error: 'invalid_input' }, { status: 400 })
+  const title = (body?.title || body?.alt || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  const excerpt = (body?.excerpt ?? '').replace(/\s+/g, ' ').trim().slice(0, 300)
+  const requestId = /^[A-Za-z0-9-]{8,64}$/.test(body?.requestId ?? '') ? (body?.requestId as string) : ''
+  if (!projectId || title.length < 3) return Response.json({ error: 'invalid_input' }, { status: 400 })
   const owner = await ownsProject(projectId)
   if (!owner) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   if (!imageGenerationAvailable()) return Response.json({ error: 'unavailable' }, { status: 503 })
 
-  const planCode = toPlanCode(await getPlanCodeForUser(owner.userId))
-  const dailyLimit = await checkFreeDailyActionLimit(owner.userId, planCode)
-  if (!dailyLimit.allowed) return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
-
-  const cost = AI_ACTION_COSTS.sectionImage
-  const balance = await getCreditBalance(owner.userId)
-  if (balance < cost) return Response.json({ error: 'Out of credits', balance }, { status: 402 })
-
-  const image = await generateSiteImage({
-    prompt: `Editorial blog cover photograph: ${subject}. Realistic, natural light, uncluttered composition.`,
-    aspectRatio: '16:9',
-  })
-  if (!image) return Response.json({ error: 'generation_failed' }, { status: 502 })
-
-  const url = await persistImageDataUri(image.src)
-  if (!url.startsWith('https://') && !url.startsWith('/')) {
-    return Response.json({ error: 'storage_failed' }, { status: 502 })
+  const lockKey = `${owner.userId}:${projectId}`
+  if (inflight.has(lockKey)) return Response.json({ error: 'busy' }, { status: 409 })
+  const reason = requestId ? `blogCover:${requestId}` : 'blogCover'
+  if (requestId && (await hasLedgerReason(owner.userId, reason))) {
+    return Response.json({ error: 'duplicate' }, { status: 409 })
   }
-  const charge = await consumeCredits(owner.userId, cost, 'blogCover')
-  if (!charge.ok) return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
-  return Response.json({ url, charged: cost, balance: charge.balance })
+
+  inflight.add(lockKey)
+  try {
+    const planCode = toPlanCode(await getPlanCodeForUser(owner.userId))
+    const dailyLimit = await checkFreeDailyActionLimit(owner.userId, planCode)
+    if (!dailyLimit.allowed) return Response.json(freeDailyLimitResponseBody(dailyLimit), { status: 429 })
+
+    const cost = AI_ACTION_COSTS.sectionImage
+    const balance = await getCreditBalance(owner.userId)
+    if (balance < cost) return Response.json({ error: 'Out of credits', balance }, { status: 402 })
+
+    const style = parseCoverStyle(body?.style)
+    const { concepts, source } = await deriveCoverConcepts({ title, excerpt }, { complete: completeConcepts })
+    const prompt = buildCoverPrompt({ concepts, style, colors: paletteNames(owner.palette) })
+    const model = process.env.BLOG_COVER_IMAGE_MODEL || DEFAULT_COVER_MODEL
+    const provider = getImageProvider()
+
+    const result = await generateAcceptedCover({
+      generate: () =>
+        Promise.race([
+          provider.generate({ prompt, aspectRatio: '16:9', allowText: true, model }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), ATTEMPT_TIMEOUT_MS)),
+        ]),
+      inspect: inspectCover,
+    })
+    console.info('[blog-cover]', { style, model, conceptSource: source, ok: result.ok, attempts: result.attempts })
+    if (!result.ok) {
+      return Response.json(
+        { error: result.reason === 'rejected' ? 'rejected' : 'generation_failed', charged: 0, balance },
+        { status: 502 },
+      )
+    }
+
+    const url = await persistImageDataUri(result.src)
+    if (!url.startsWith('https://') && !url.startsWith('/')) {
+      return Response.json({ error: 'storage_failed', charged: 0, balance }, { status: 502 })
+    }
+    const charge = await consumeCredits(owner.userId, cost, reason)
+    if (!charge.ok) return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
+    return Response.json({ url, charged: cost, balance: charge.balance, style })
+  } finally {
+    inflight.delete(lockKey)
+  }
 }

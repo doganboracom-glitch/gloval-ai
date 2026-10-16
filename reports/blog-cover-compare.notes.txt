@@ -1,0 +1,8 @@
+Sonuç: varsayılan kapak modeli bfl/flux-3-image olarak seçildi (öncesi: bfl/flux-2-klein-4b).
+
+- recraft/recraft-v4.1: En temiz ve en tutarlı sonuç (0 metin sızması, ~4.5 sn, $0.035) ancak Gateway üzerinden yalnızca 1024x1024 üretiyor; 3:2 / 16:9 boyut ve aspectRatio istekleri sessizce kare çıktı veriyor. Kapak oranına uymadığı için seçilmedi.
+- bfl/flux-3-image: Net çizgiler, doğru paleti kullanıyor, doğal 3:2 çıktı. ~17-27 sn, $0.048. Metin sızması 6 denemede 1 (üretim hattındaki denetim + otomatik yeniden deneme bunu yakalar).
+- bytedance/seedream-5.0-lite: Güzel görsel ama ~30 sn (zaman aşımına yakın), 6 denemede 2 metin sızması ve alt köşede soluk "AI generated" filigranı görüldü; 2560x1440 gerektiriyor. Seçilmedi.
+- bfl/flux-2-klein-4b (eski varsayılan): En hızlı (~3 sn) ve Gateway fiyatı yayınlanmıyor (0); fakat bulanık/düşük detaylı, e-ticaret örneğinde etikette okunamayan yazı üretti (1/6 sızma). Kalite nedeniyle bırakıldı; BLOG_COVER_IMAGE_MODEL=bfl/flux-2-klein-4b ile geri dönülebilir.
+
+Bilinen not: flux-3-image yavaş olduğundan kapak rotasındaki deneme zaman aşımı 30 sn -> 45 sn, maxDuration 120 -> 180 sn yapıldı.

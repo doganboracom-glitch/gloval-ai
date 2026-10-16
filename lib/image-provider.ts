@@ -24,6 +24,8 @@ export type ImageRequest = {
   aspectRatio?: ImageAspect
   /** Logos/wordmarks only: skips the no-text rules and the text guard. */
   allowText?: boolean
+  /** Gateway image model id for this request; defaults to `IMAGE_MODEL` or the site default. */
+  model?: string
 }
 
 export type ImageResult = { src: string; provider: string } | null
@@ -130,7 +132,7 @@ const gatewayProvider: ImageProvider = {
         process.env.IMAGE_PROVIDER === 'gateway',
     )
   },
-  async generate({ prompt, aspectRatio = '16:9' }) {
+  async generate({ prompt, aspectRatio = '16:9', model }) {
     let currentContext: { modelId: string; size: string } | undefined
     try {
       const { generateImage, gateway } = await import('ai')
@@ -144,7 +146,7 @@ const gatewayProvider: ImageProvider = {
       // directly against the gateway: `bfl/flux-2-klein-4b` produces comparable
       // photographic quality in ~3s. Override with `IMAGE_MODEL` if a specific
       // model is required.
-      const modelId = process.env.IMAGE_MODEL || 'bfl/flux-2-klein-4b'
+      const modelId = model || process.env.IMAGE_MODEL || 'bfl/flux-2-klein-4b'
       // `size` (WxH) is the broadly-compatible knob (e.g. gpt-image-1 rejects
       // `aspectRatio`), so we translate our aspect into a concrete size.
       const size = aspectToSize(aspectRatio)

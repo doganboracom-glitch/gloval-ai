@@ -7,6 +7,7 @@ import { parseLegalMarkup } from '@/lib/legal-markup'
 import { sanitizeBlogBody, type BlogPost } from '@/lib/blog'
 import { detectUnverifiedClaims, type BlogClaimFinding } from '@/lib/blog-trust'
 import { LegalBlocks } from '@/components/legal/legal-blocks'
+import { COVER_STYLES, COVER_STYLE_LABELS, DEFAULT_COVER_STYLE, type CoverStyle } from '@/lib/blog-cover'
 
 type Lang = 'tr' | 'en'
 type Mode = 'draft' | 'published' | 'scheduled'
@@ -50,7 +51,11 @@ const T = {
     errLimit: (n: number) => `En fazla ${n} yazı ekleyebilirsiniz.`,
     errGeneric: 'Kaydedilemedi. Lütfen tekrar deneyin.',
     errCover: 'Görsel eklenemedi.',
-    coverCredits: 'Görsel üretimi AI kredisi harcar.',
+    coverCredits: 'Görsel üretimi AI kredisi harcar; üretilemeyen veya uygun bulunmayan görsel için kredi düşmez.',
+    coverStyle: 'Görsel stili',
+    errCoverRejected: 'Uygun bir görsel üretilemedi (görselde yazı veya kişi çıktı). Kredin düşülmedi; farklı bir stil deneyebilir veya görsel yükleyebilirsin.',
+    errCoverFailed: 'Görsel üretilemedi. Kredin düşülmedi; tekrar deneyebilirsin.',
+    errCoverBusy: 'Zaten bir görsel üretiliyor, lütfen bekleyin.',
     coverPlaceholder: 'Kapak yok',
     chars: 'karakter',
   },
@@ -92,7 +97,11 @@ const T = {
     errLimit: (n: number) => `You can add up to ${n} posts.`,
     errGeneric: 'Could not save. Please try again.',
     errCover: 'Could not add the image.',
-    coverCredits: 'Image generation uses AI credits.',
+    coverCredits: 'Image generation uses AI credits; no credits are charged when an image fails or is rejected.',
+    coverStyle: 'Image style',
+    errCoverRejected: 'Could not produce a suitable image (it contained text or people). No credits were charged; try another style or upload an image.',
+    errCoverFailed: 'Could not generate the image. No credits were charged; please try again.',
+    errCoverBusy: 'An image is already being generated, please wait.',
     coverPlaceholder: 'No cover',
     chars: 'characters',
   },
@@ -151,6 +160,8 @@ export function BlogPostForm({
   const [sampleBlocked, setSampleBlocked] = useState(false)
   const [confirmSample, setConfirmSample] = useState(false)
   const [coverBusy, setCoverBusy] = useState<'upload' | 'ai' | null>(null)
+  const [coverStyle, setCoverStyle] = useState<CoverStyle>(DEFAULT_COVER_STYLE)
+  const coverLock = useRef(false)
   const [pending, startTransition] = useTransition()
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -181,20 +192,27 @@ export function BlogPostForm({
   }
 
   async function sendCover(init: RequestInit, kind: 'upload' | 'ai') {
+    if (coverLock.current) return
+    coverLock.current = true
     setCoverBusy(kind)
     setError(null)
     try {
       const res = await fetch('/api/blog/cover', init)
       const data = (await res.json().catch(() => null)) as { url?: string; alt?: string; error?: string } | null
       if (!res.ok || !data?.url) {
-        setError(res.status === 402 ? (lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.') : t.errCover)
+        if (res.status === 402) setError(lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.')
+        else if (res.status === 409) setError(t.errCoverBusy)
+        else if (data?.error === 'rejected') setError(t.errCoverRejected)
+        else if (kind === 'ai') setError(t.errCoverFailed)
+        else setError(t.errCover)
         return
       }
       setCoverUrl(data.url)
       if (data.alt && !coverAlt) setCoverAlt(data.alt)
     } catch {
-      setError(t.errCover)
+      setError(kind === 'ai' ? t.errCoverFailed : t.errCover)
     } finally {
+      coverLock.current = false
       setCoverBusy(null)
     }
   }
@@ -211,7 +229,7 @@ export function BlogPostForm({
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ projectId, title, excerpt }),
+        body: JSON.stringify({ projectId, title, excerpt, style: coverStyle, requestId: crypto.randomUUID() }),
       },
       'ai',
     )
@@ -364,6 +382,26 @@ export function BlogPostForm({
             {t.coverPlaceholder}
           </div>
         )}
+        <div role="radiogroup" aria-label={t.coverStyle} className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">{t.coverStyle}</span>
+          {COVER_STYLES.map((style) => (
+            <button
+              key={style}
+              type="button"
+              role="radio"
+              aria-checked={coverStyle === style}
+              disabled={coverBusy !== null}
+              onClick={() => setCoverStyle(style)}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                coverStyle === style
+                  ? 'border-brand/40 bg-brand/10 text-foreground'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {COVER_STYLE_LABELS[style][lang]}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={coverBusy !== null} onClick={() => fileRef.current?.click()} className={ghostBtn}>
             {coverBusy === 'upload' ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
