@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { Loader2, Plus, Sparkles } from 'lucide-react'
-import { deleteBlogPostAction, listBlogPostsAction } from '@/lib/blog-actions'
-import type { BlogPost } from '@/lib/blog'
+import {
+  addStarterBlogPostsAction,
+  deleteBlogPostAction,
+  listBlogPostsAction,
+  markBlogPostPersonalizedAction,
+} from '@/lib/blog-actions'
+import { isStarterPost, type BlogPost } from '@/lib/blog'
+import { SearchPromoCard } from '@/components/editor/search-promo-card'
 import { BLOG_CHANGED_EVENT, blogConfirmCopy } from '@/lib/blog-client'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { EditOperation } from '@/lib/website-edit-operations'
@@ -24,6 +30,12 @@ const T = {
   tr: {
     personalizeLabel: 'Firmanıza özelleştirin',
     personalizeCta: 'AI ile özelleştir',
+    markPersonalized: 'Özelleştirildi olarak işaretle',
+    markFailed: 'Yazı işaretlenemedi.',
+    addStarter: 'Örnek blog yazılarını ekle',
+    addStarterHint: 'Sektörünüze uygun 3 genel yazı eklenir. Ücretsizdir; özelleştirene kadar arama motorlarında görünmez.',
+    addStarterFailed: 'Örnek yazılar eklenemedi. Biraz sonra tekrar deneyin.',
+    addStarterDone: 'Örnek yazılar zaten eklenmiş.',
     title: 'Blog yazıları',
     intro: 'Yazılar sitenizin /blog sayfasında yayınlanır ve site haritasına eklenir.',
     newPost: 'Yeni yazı',
@@ -43,6 +55,12 @@ const T = {
   en: {
     personalizeLabel: 'Personalize for your business',
     personalizeCta: 'Personalize with AI',
+    markPersonalized: 'Mark as personalized',
+    markFailed: 'Could not mark the post.',
+    addStarter: 'Add sample blog posts',
+    addStarterHint: 'Adds 3 general posts for your sector. Free; hidden from search engines until you personalize them.',
+    addStarterFailed: 'Could not add sample posts. Try again shortly.',
+    addStarterDone: 'Sample posts were already added.',
     title: 'Blog posts',
     intro: 'Posts are published at your site\u2019s /blog page and added to the sitemap.',
     newPost: 'New post',
@@ -120,6 +138,30 @@ export function BlogTab({
     }
     await mutate((current) => current?.filter((p) => p.id !== post.id), { revalidate: false })
     setView({ kind: 'list' })
+  }
+
+  const [addingStarter, setAddingStarter] = useState(false)
+
+  async function addStarter() {
+    setError(null)
+    setAddingStarter(true)
+    const result = await addStarterBlogPostsAction(projectId).catch(() => null)
+    setAddingStarter(false)
+    if (result && result.ok) {
+      await mutate()
+      return
+    }
+    setError(result && !result.ok && result.reason === 'already_added' ? t.addStarterDone : t.addStarterFailed)
+  }
+
+  async function markPersonalized(post: BlogPost) {
+    setError(null)
+    const result = await markBlogPostPersonalizedAction(projectId, post.id).catch(() => null)
+    if (!result || !result.ok) {
+      setError(t.markFailed)
+      return
+    }
+    upsert(result.post)
   }
 
   function upsert(post: BlogPost) {
@@ -241,7 +283,19 @@ export function BlogTab({
           </button>
         </div>
       ) : posts.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border p-4 text-sm leading-relaxed text-muted-foreground">{t.empty}</p>
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">{t.empty}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{t.addStarterHint}</p>
+          <button
+            type="button"
+            disabled={addingStarter}
+            onClick={() => void addStarter()}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+          >
+            {addingStarter ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
+            {t.addStarter}
+          </button>
+        </div>
       ) : (
         <ul className="flex flex-col gap-2">
           {posts.map((post) => {
@@ -270,17 +324,28 @@ export function BlogTab({
                     {post.aiGenerated && <span className="rounded-full bg-brand/15 px-2 py-0.5 text-brand">{t.aiTag}</span>}
                   </span>
                 </button>
-                {post.sample && (
-                  <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
+                {(post.sample || isStarterPost(post)) && (
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
                     <span className="text-xs font-medium text-amber-500">{t.personalizeLabel}</span>
-                    <button
-                      type="button"
-                      onClick={() => setView({ kind: 'personalize', post })}
-                      className="flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90"
-                    >
-                      <Sparkles className="h-3 w-3" aria-hidden />
-                      {t.personalizeCta}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {isStarterPost(post) && (
+                        <button
+                          type="button"
+                          onClick={() => void markPersonalized(post)}
+                          className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+                        >
+                          {t.markPersonalized}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setView({ kind: 'personalize', post })}
+                        className="flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1 text-xs font-medium text-brand-foreground transition-opacity hover:opacity-90"
+                      >
+                        <Sparkles className="h-3 w-3" aria-hidden />
+                        {t.personalizeCta}
+                      </button>
+                    </div>
                   </div>
                 )}
               </li>
@@ -289,10 +354,7 @@ export function BlogTab({
         </ul>
       )}
 
-      <p className="text-xs leading-relaxed text-muted-foreground">{t.google}</p>
-      {sitemapUrl && (
-        <p className="break-all rounded-lg bg-secondary px-3 py-2 font-mono text-xs text-foreground">{sitemapUrl}</p>
-      )}
+      <SearchPromoCard sitemapUrl={sitemapUrl} lang={lang} />
     </div>
   )
 }
