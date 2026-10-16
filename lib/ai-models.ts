@@ -50,11 +50,17 @@ export type AdvancedAiBadgeState = 'active' | 'locked' | null
  * mark (everyone else) are gated by the one `distinct` flag: while the advanced
  * model equals the standard one nothing is shown at all, not even a lock.
  * `distinct` defaults to the live flag and is only passed explicitly by tests.
+ *
+ * `flow` ties the badge to a flow that really runs on the advanced model: a
+ * flow with `AI_FLOW_ADVANCED[flow] === false` (e.g. editor chat edits) never
+ * shows it, whatever the plan.
  */
 export function advancedAiBadgeState(
   plan: string | null | undefined,
   distinct: boolean = ADVANCED_AI_DISTINCT,
+  flow?: AiFlow,
 ): AdvancedAiBadgeState {
+  if (flow && !AI_FLOW_ADVANCED[flow]) return null
   if (!distinct || !plan) return null
   return tierForPlan(plan) === 'advanced' ? 'active' : 'locked'
 }

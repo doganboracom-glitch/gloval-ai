@@ -43,7 +43,6 @@ import { LogoField } from '@/components/editor/logo-field'
 import { PagesManager } from '@/components/editor/pages-manager'
 import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
-import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
 import { BlogTab } from '@/components/editor/blog-tab'
 import {
@@ -306,8 +305,6 @@ export function WebsiteEditorPanel({
             aiPhase={aiPhase}
             onSubmit={onSubmitAi}
             locked={locked}
-            planCode={planCode}
-            onBeforeUpgrade={onBeforeUpgrade}
             selectedIndex={selectedIndex}
             onClearSelection={onSelectIndex ? () => onSelectIndex(null) : undefined}
           />
@@ -1183,15 +1180,11 @@ function AiTab({
   aiPhase,
   onSubmit,
   locked = false,
-  planCode,
-  onBeforeUpgrade,
   selectedIndex = null,
   onClearSelection,
 }: {
   messages: ChatMessage[]
   loading: boolean
-  planCode: PlanCode
-  onBeforeUpgrade?: () => Promise<boolean>
   aiPhase: AiPhase
   /**
    * Applies an instruction. May resolve to `false` when the edit could not be
@@ -1282,12 +1275,6 @@ function AiTab({
       </div>
 
       <div className="border-t border-border p-3">
-        <AdvancedAiBadge
-          planCode={planCode}
-          lang={lang === 'en' ? 'en' : 'tr'}
-          onBeforeUpgrade={onBeforeUpgrade}
-          className="mb-2"
-        />
         {selectedIndex !== null && (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5">
             <span className="text-[11px] font-medium text-primary">{ui.aiSelectionScoped}</span>

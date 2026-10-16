@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react'
 import type { BlogPost } from '@/lib/blog'
 import { blogConfirmCopy, callBlogAi, newRequestId } from '@/lib/blog-client'
+import { AdvancedAiBadge } from '@/components/advanced-ai-badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import type { BlogProfile } from '@/lib/website-schema'
@@ -132,7 +133,10 @@ export function BlogAiPanel({
       </button>
 
       <div>
-        <h4 className="font-display text-base font-bold text-foreground">{t.title}</h4>
+        <h4 className="flex flex-wrap items-center gap-2 font-display text-base font-bold text-foreground">
+          {t.title}
+          <AdvancedAiBadge flow="blogWrite" lang={lang === 'en' ? 'en' : 'tr'} />
+        </h4>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{t.intro}</p>
       </div>
 
