@@ -63,12 +63,17 @@ export function advancedAiBadgeState(
  * Whether a flow may use the advanced tier. `sitePlan` is the cheap landing
  * page sketch and stays on the standard tier. `blogWrite` is reserved for the
  * upcoming blog writer and has no caller yet.
+ *
+ * `siteEdit` and `sectionEdit` stay standard on purpose: the edit-quality
+ * evaluation (reports/ai-edit-quality.md) found no quality gain from the
+ * advanced model on edits (the fixes are deterministic guards, not model
+ * strength), so PRO must not be promised a better editor.
  */
 export const AI_FLOW_ADVANCED: Record<AiFlow, boolean> = {
   siteGenerate: true,
   sitePlan: false,
-  siteEdit: true,
-  sectionEdit: true,
+  siteEdit: false,
+  sectionEdit: false,
   productText: true,
   blogWrite: true,
   logoEmblem: true,

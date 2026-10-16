@@ -92,8 +92,17 @@ describe('model resolution', () => {
     }
   })
 
+  it('keeps site and section edits on the standard model for every plan', () => {
+    for (const flow of ['siteEdit', 'sectionEdit'] as const) {
+      for (const plan of ['free', 'starter', 'pro', 'ecommerce', null]) {
+        expect(resolveAiModel(flow, plan)).toMatchObject({ tier: 'standard', model: AI_TIER_MODELS.standard })
+      }
+    }
+  })
+
   it('leaves the other flows on the shared tier table', () => {
-    expect(resolveAiModel('siteEdit', 'pro').model).toBe(AI_TIER_MODELS.advanced)
-    expect(resolveAiModel('siteEdit', 'starter').model).toBe(AI_TIER_MODELS.standard)
+    expect(resolveAiModel('siteGenerate', 'pro').model).toBe(AI_TIER_MODELS.advanced)
+    expect(resolveAiModel('productText', 'pro').model).toBe(AI_TIER_MODELS.advanced)
+    expect(resolveAiModel('productText', 'starter').model).toBe(AI_TIER_MODELS.standard)
   })
 })
