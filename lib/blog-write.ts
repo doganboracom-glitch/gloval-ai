@@ -64,7 +64,7 @@ export type BlogWriteDeps = {
 }
 
 export type BlogWriteFailure =
-  | { ok: false; reason: 'INVALID'; field: 'title' | 'body' | 'input' }
+  | { ok: false; reason: 'INVALID'; field: 'title' | 'body' | 'input' | 'publishAt' }
   | { ok: false; reason: 'NOT_FOUND' }
   | { ok: false; reason: 'POST_LIMIT'; limit: number }
   | { ok: false; reason: 'SUBSCRIPTION_SUSPENDED' }
@@ -104,15 +104,37 @@ export function safeCoverUrl(value: string | null | undefined): string | null {
 
 type Timing = { status: BlogStatus; publishedAt: string | null; goesPublic: boolean }
 
-/** `scheduled` is stored as `published` with a future time: readers only look at the clock. */
-function resolveTiming(input: BlogInput, existing: BlogPost | null, now: Date): Timing {
+const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i
+
+/**
+ * Epoch ms of an ISO-8601 timestamp that carries an explicit offset (`Z` or `+03:00`).
+ * A zone-less value like a raw `datetime-local` string is ambiguous (the server runs in UTC,
+ * so it would shift the time by hours) and is rejected.
+ */
+export function parsePublishAt(value: string | null | undefined): number | null {
+  const text = (value ?? '').trim()
+  if (!ISO_WITH_OFFSET.test(text)) return null
+  const at = Date.parse(text)
+  return Number.isNaN(at) ? null : at
+}
+
+/**
+ * `published` ignores `publishAt` entirely: the post goes live now. Only an explicit `scheduled`
+ * uses `publishAt`, stored as `published` with that time (readers only look at the clock).
+ * Returns null when a scheduled post has no valid, offset-carrying `publishAt`.
+ */
+function resolveTiming(input: BlogInput, existing: BlogPost | null, now: Date): Timing | null {
   if (input.status === 'draft') return { status: 'draft', publishedAt: null, goesPublic: false }
-  const requested = input.publishAt ? Date.parse(input.publishAt) : NaN
-  if (!Number.isNaN(requested)) {
-    return { status: 'published', publishedAt: new Date(requested).toISOString(), goesPublic: true }
+  if (input.status === 'scheduled') {
+    const at = parsePublishAt(input.publishAt)
+    if (at === null) return null
+    return { status: 'published', publishedAt: new Date(at).toISOString(), goesPublic: true }
   }
-  if (input.status === 'published' && existing?.status === 'published' && existing.publishedAt) {
-    return { status: 'published', publishedAt: existing.publishedAt, goesPublic: true }
+  // "Publish now" keeps the original publish date only when it has already passed;
+  // a still-future (scheduled) time would leave the post hidden after the owner asked for it live.
+  const keptAt = existing?.status === 'published' && existing.publishedAt ? Date.parse(existing.publishedAt) : NaN
+  if (!Number.isNaN(keptAt) && keptAt <= now.getTime()) {
+    return { status: 'published', publishedAt: existing!.publishedAt, goesPublic: true }
   }
   return { status: 'published', publishedAt: now.toISOString(), goesPublic: true }
 }
@@ -131,6 +153,7 @@ async function prepare(
   if (!title) return { ok: false, reason: 'INVALID', field: 'title' }
   const body = sanitizeBlogBody(input.body)
   const timing = resolveTiming(input, existing, now)
+  if (!timing) return { ok: false, reason: 'INVALID', field: 'publishAt' }
 
   let sample = existing?.sample ?? provenance.sample ?? false
   if (timing.goesPublic) {

@@ -37,8 +37,9 @@ const T = {
     status: 'Yayın durumu',
     draft: 'Taslak',
     published: 'Hemen yayınla',
-    scheduled: 'Zamanla',
+    scheduled: 'Planla',
     publishAt: 'Yayın zamanı',
+    errPublishAt: 'Planlamak için geçerli bir yayın zamanı seçin.',
     save: 'Kaydet',
     saved: 'Kaydedildi.',
     claimsTitle: 'Doğrulanmamış iddialar bulundu',
@@ -87,6 +88,7 @@ const T = {
     published: 'Publish now',
     scheduled: 'Schedule',
     publishAt: 'Publish at',
+    errPublishAt: 'Pick a valid publish time to schedule.',
     save: 'Save',
     saved: 'Saved.',
     claimsTitle: 'Unverified claims found',
@@ -157,7 +159,7 @@ export function BlogPostForm({
   const [coverUrl, setCoverUrl] = useState(post?.coverUrl ?? '')
   const [coverAlt, setCoverAlt] = useState(post?.coverAlt ?? '')
   const [mode, setMode] = useState<Mode>(initialMode(post))
-  const [publishAt, setPublishAt] = useState(toLocalInput(post?.publishedAt ?? null))
+  const [publishAt, setPublishAt] = useState(initialMode(post) === 'scheduled' ? toLocalInput(post?.publishedAt ?? null) : '')
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -251,6 +253,12 @@ export function BlogPostForm({
     setNotice(null)
     if (!title.trim()) return setError(t.errTitle)
     if (coverUrl && !coverAlt.trim()) return setError(t.errAlt)
+    let scheduledAt: string | null = null
+    if (mode === 'scheduled') {
+      const at = publishAt ? new Date(publishAt) : null
+      if (!at || Number.isNaN(at.getTime())) return setError(t.errPublishAt)
+      scheduledAt = at.toISOString()
+    }
     const input = {
       title,
       body,
@@ -261,7 +269,7 @@ export function BlogPostForm({
       coverUrl: coverUrl || null,
       coverAlt: coverAlt || null,
       status: mode,
-      publishAt: mode === 'scheduled' && publishAt ? new Date(publishAt).toISOString() : null,
+      publishAt: scheduledAt,
       indexable,
       approvals: [...approved],
       confirmSample,
@@ -291,7 +299,7 @@ export function BlogPostForm({
             setError(t.errLimit(result.limit))
             break
           case 'INVALID':
-            setError(result.field === 'title' ? t.errTitle : t.errGeneric)
+            setError(result.field === 'title' ? t.errTitle : result.field === 'publishAt' ? t.errPublishAt : t.errGeneric)
             break
           default:
             setError(t.errGeneric)
