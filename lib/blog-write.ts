@@ -111,8 +111,11 @@ function resolveTiming(input: BlogInput, existing: BlogPost | null, now: Date): 
   if (!Number.isNaN(requested)) {
     return { status: 'published', publishedAt: new Date(requested).toISOString(), goesPublic: true }
   }
-  if (input.status === 'published' && existing?.status === 'published' && existing.publishedAt) {
-    return { status: 'published', publishedAt: existing.publishedAt, goesPublic: true }
+  // "Publish now" keeps the original publish date only when it has already passed;
+  // a still-future (scheduled) time would leave the post hidden after the owner asked for it live.
+  const keptAt = existing?.status === 'published' && existing.publishedAt ? Date.parse(existing.publishedAt) : NaN
+  if (input.status === 'published' && !Number.isNaN(keptAt) && keptAt <= now.getTime()) {
+    return { status: 'published', publishedAt: existing!.publishedAt, goesPublic: true }
   }
   return { status: 'published', publishedAt: now.toISOString(), goesPublic: true }
 }

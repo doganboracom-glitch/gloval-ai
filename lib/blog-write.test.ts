@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BLOG_MAX_POSTS, type BlogPost } from '@/lib/blog'
+import { BLOG_MAX_POSTS, isPostLive, type BlogPost } from '@/lib/blog'
 import { detectUnverifiedClaims } from '@/lib/blog-trust'
 import {
   createBlogPost,
@@ -215,6 +215,22 @@ describe('updateBlogPost', () => {
     const { deps: d, enqueue } = deps({ initial: [existing({ status: 'draft', publishedAt: null })] })
     await updateBlogPost(d, PROJECT, 'p1', input({ status: 'draft' }))
     expect(enqueue).not.toHaveBeenCalled()
+  })
+
+  it('publishes a scheduled post immediately when the owner picks "publish now"', async () => {
+    const future = '2026-04-01T00:00:00.000Z'
+    const { deps: d, enqueue } = deps({ initial: [existing({ publishedAt: future })] })
+    const result = await updateBlogPost(d, PROJECT, 'p1', input({ status: 'published', publishAt: null }))
+    expect(result.ok && result.post.publishedAt).toBe(NOW.toISOString())
+    expect(result.ok && isPostLive(result.post, NOW)).toBe(true)
+    expect(enqueue).toHaveBeenCalled()
+  })
+
+  it('still reschedules a live post when a future time is requested', async () => {
+    const { deps: d } = deps({ initial: [existing()] })
+    const result = await updateBlogPost(d, PROJECT, 'p1', input({ status: 'scheduled', publishAt: '2026-05-01T00:00:00Z' }))
+    expect(result.ok && result.post.publishedAt).toBe('2026-05-01T00:00:00.000Z')
+    expect(result.ok && isPostLive(result.post, NOW)).toBe(false)
   })
 
   it('treats a first publish of a draft as a publish ping', async () => {
