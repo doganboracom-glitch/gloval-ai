@@ -8,6 +8,7 @@ import {
   isTimeoutError,
   runStarterBlog,
   STARTER_DAILY_SITE_CAP,
+  STARTER_LIMITS,
   starterDailyCapReached,
   starterOutputSchema,
   starterSourceKey,
@@ -107,9 +108,25 @@ const args = { projectId: PROJECT, site: SITE, lang: 'tr' as const }
 describe('fixture sanity', () => {
   it('the generated body passes the starter output schema', () => {
     const body = bodyWith(700)
-    expect(countWords(body)).toBeGreaterThanOrEqual(600)
-    expect(countWords(body)).toBeLessThanOrEqual(900)
+    expect(countWords(body)).toBeGreaterThanOrEqual(STARTER_LIMITS.minWords)
+    expect(countWords(body)).toBeLessThanOrEqual(STARTER_LIMITS.maxWords)
     expect(starterOutputSchema(SITE.name).safeParse(output()).success).toBe(true)
+  })
+
+  it('accepts a ~490-word body: the length models really produce (root cause of the empty section)', () => {
+    const body = bodyWith(490)
+    expect(countWords(body)).toBeLessThan(600)
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body })).success).toBe(true)
+  })
+
+  it('still rejects bodies that are far too short or too long', () => {
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body: bodyWith(150) })).success).toBe(false)
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body: bodyWith(1400) })).success).toBe(false)
+  })
+
+  it('asks the model for a target range inside the hard limits', () => {
+    expect(STARTER_LIMITS.targetMinWords).toBeGreaterThan(STARTER_LIMITS.minWords)
+    expect(STARTER_LIMITS.targetMaxWords).toBeLessThan(STARTER_LIMITS.maxWords)
   })
 })
 
@@ -387,5 +404,53 @@ describe('isTimeoutError', () => {
     const controller = new AbortController()
     controller.abort()
     expect(isTimeoutError(new Error('boom'), controller.signal)).toBe(true)
+  })
+})
+
+describe('runStarterBlog: own cover per post', () => {
+  function withCover(cover: NonNullable<StarterBlogDeps['cover']>) {
+    const made = makeDeps()
+    made.deps.write.store.update = async (_project, id, record) => {
+      const index = made.posts.findIndex((p) => p.id === id)
+      const next: BlogPost = { ...made.posts[index], ...record }
+      made.posts[index] = next
+      return next
+    }
+    made.deps.cover = cover
+    return made
+  }
+
+  it('replaces the generic illustration with each post cover and uses the title as alt text', async () => {
+    const { deps, posts } = withCover(async ({ post }) => `https://cdn.example.com/${post.id}.png`)
+    const result = await runStarterBlog(deps, args)
+    expect(result.status).toBe('created')
+    for (const post of posts) {
+      expect(post.coverUrl).toBe(`https://cdn.example.com/${post.id}.png`)
+      expect(post.coverAlt).toBe(post.title)
+    }
+  })
+
+  it('keeps the generic illustration when the cover step throws or returns an unsafe URL', async () => {
+    const calls: string[] = []
+    const { deps, posts } = withCover(async ({ post }) => {
+      calls.push(post.id)
+      if (calls.length === 1) throw new Error('image model down')
+      return 'http://insecure.example.com/x.png'
+    })
+    const result = await runStarterBlog(deps, args)
+    expect(result.status).toBe('created')
+    for (const post of posts) expect(post.coverUrl).toMatch(/^\/blog-covers\/.+\.svg$/)
+  })
+
+  it('never waits past the cover budget: the posts stay published with the illustration', async () => {
+    const { deps, posts } = withCover(() => new Promise<string | null>(() => undefined))
+    const started = Date.now()
+    const result = await runStarterBlog(deps, { ...args, coverBudgetMs: 30 })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(result.status).toBe('created')
+    for (const post of posts) {
+      expect(post.status).toBe('published')
+      expect(post.coverUrl).toMatch(/^\/blog-covers\/.+\.svg$/)
+    }
   })
 })

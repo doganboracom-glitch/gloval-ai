@@ -8,6 +8,7 @@ import { SiteNavProvider, type SiteNavHandler } from '@/components/website-rende
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
 import { WebsiteLatestPosts } from '@/components/website-renderer/sections/website-latest-posts'
 import { isBlogRoutePath, shouldShowLatestPosts, type SiteBlogData } from '@/lib/blog-site'
+import { hasBlogLatestSection } from '@/lib/section-order'
 import {
   resolveTheme,
   themeToCssVars,
@@ -264,8 +265,13 @@ export function WebsiteRenderer({
 
   // The latest-posts block lives on the home page only, either right after the
   // opening hero or just above the footer (the default).
+  // A site that has a real `blogLatest` section (visible or hidden) places and
+  // hides the block through that section; only older sites use this fixed block.
   const showLatest =
-    active === homeSlug(data) && blog && shouldShowLatestPosts(blog, data.blogSettings)
+    !hasBlogLatestSection(data) &&
+    active === homeSlug(data) &&
+    blog &&
+    shouldShowLatestPosts(blog, data.blogSettings)
   const footerIndex = sections.findIndex((section) => section.type === 'footer')
   const latestIndex = !showLatest
     ? -1

@@ -160,6 +160,7 @@ function detectColorRole(textLower: string): PaletteRole {
  */
 const SECTION_SYNONYMS: [SectionType, string[]][] = [
   ['faq', ['sss', 'sik soru', 'sik sorulan soru', 'sikca sorulan soru', 'sikca soru', 'soru cevap', 'soru-cevap', 'faq', 'faqs', 'frequently asked question', 'frequently asked', 'questions']],
+  ['blogLatest', ['blogdan son yazi', 'son blog yazi', 'son yazilar', 'blog yazilari', 'latest post', 'latest blog', 'recent post']],
   ['services', ['hizmet', 'service']],
   ['categories', ['kategori', 'kategoriler', 'category', 'categories', 'departman', 'reyon']],
   ['products', ['urun', 'urunler', 'product', 'products', 'magaza', 'vitrin', 'katalog', 'shop', 'store']],
@@ -195,6 +196,7 @@ export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
   team: { tr: 'Ekip', en: 'Team' },
   pricing: { tr: 'Fiyatlandırma', en: 'Pricing' },
   faq: { tr: 'SSS', en: 'FAQ' },
+  blogLatest: { tr: 'Blogdan Son Yazılar', en: 'Latest posts' },
   contact: { tr: 'İletişim', en: 'Contact' },
   cta: { tr: 'Eylem Çağrısı', en: 'Call to action' },
   footer: { tr: 'Alt Bilgi', en: 'Footer' },

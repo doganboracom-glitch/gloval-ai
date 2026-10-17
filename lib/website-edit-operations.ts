@@ -1181,6 +1181,8 @@ export function blankSection(type: SectionType, lang: Lang): Section {
           { question: pick(lang, 'Soru 2?', 'Question 2?'), answer: pick(lang, 'Cevap', 'Answer') },
         ],
       }
+    case 'blogLatest':
+      return { type: 'blogLatest' }
     case 'contact':
       return {
         type: 'contact',
