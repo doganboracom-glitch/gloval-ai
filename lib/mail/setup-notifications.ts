@@ -2,6 +2,7 @@ import 'server-only'
 
 import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { warnOnError } from '@/lib/db-guard'
 import { claimNotification, sendTransactionalEmail } from '@/lib/notify'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { getMailServerHost, getWebmailUrl } from './webmail'
@@ -36,7 +37,7 @@ export async function resendMailboxSetupEmail(input: { userId: string; accountEm
   const admin = createAdminClient(); const since = new Date(Date.now() - 3600000).toISOString()
   const { count, error } = await admin.from('notification_logs').select('id', { count: 'exact', head: true }).eq('user_id', input.userId).eq('type', 'mailbox_setup_resend').gte('created_at', since)
   if (error || (count ?? 0) >= 3) return { ok: false as const, error: 'RATE_LIMIT' as const }
-  await admin.from('notification_logs').insert({ user_id: input.userId, channel: 'system', type: 'mailbox_setup_resend', subject: 'mailbox setup resend', status: 'sent' })
+  warnOnError('mail.setupResendLog', await admin.from('notification_logs').insert({ user_id: input.userId, channel: 'system', type: 'mailbox_setup_resend', subject: 'mailbox setup resend', status: 'sent' }))
   const host = getMailServerHost(); const webmail = getWebmailUrl(); const lang = resolveEmailLang(input.lang)
   const sent = await sendTransactionalEmail({ to: input.accountEmail, subject: mailSetupSubject(lang, input.mailbox.address, 'resend'), text: renderMailSetupText(lang, input.mailbox.address, webmail, host), html: renderMailSetupHtml(lang, input.mailbox.address, webmail, host) })
   return sent ? { ok: true as const } : { ok: false as const, error: 'SEND_FAILED' as const }

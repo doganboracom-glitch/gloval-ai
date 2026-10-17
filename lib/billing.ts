@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk, warnOnError } from '@/lib/db-guard'
 import { formatTicketNumber, logUserEvent } from '@/lib/notify'
 import {
   getPlatformPaymentProvider,
@@ -259,12 +260,16 @@ export async function subscribeToPlan(
   // Enforce a single LIVE subscription per user. 'incomplete' is intentionally
   // excluded: it marks an abandoned redirect-payment attempt, not a real
   // subscription, so it must not lock the user out of trying again.
-  const { data: existing } = await admin
-    .from('billing_subscriptions')
-    .select('id, status')
-    .eq('user_id', userId)
-    .in('status', ['trialing', 'active', 'past_due', 'suspended'])
-    .maybeSingle()
+  // A failed read must not look like "no subscription yet".
+  const { data: existing } = requireOk(
+    'billing.subscribe.existing',
+    await admin
+      .from('billing_subscriptions')
+      .select('id, status')
+      .eq('user_id', userId)
+      .in('status', ['trialing', 'active', 'past_due', 'suspended'])
+      .maybeSingle(),
+  )
   if (existing) {
     return { ok: false, error: 'already_subscribed' }
   }
@@ -291,23 +296,30 @@ export async function subscribeToPlan(
   // long). If a fresh one still exists, refuse the new attempt with a
   // friendly, handled result instead of letting the insert crash.
   const staleCutoff = new Date(now.getTime() - 30 * 60 * 1000).toISOString()
-  const { data: freshIncomplete } = await admin
-    .from('billing_subscriptions')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('status', 'incomplete')
-    .gte('created_at', staleCutoff)
-    .maybeSingle()
+  // If this read failed we could delete a row with an in-flight payment below.
+  const { data: freshIncomplete } = requireOk(
+    'billing.subscribe.freshIncomplete',
+    await admin
+      .from('billing_subscriptions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'incomplete')
+      .gte('created_at', staleCutoff)
+      .maybeSingle(),
+  )
   if (freshIncomplete) {
     return { ok: false, error: 'payment_pending' }
   }
 
-  await admin
-    .from('billing_subscriptions')
-    .delete()
-    .eq('user_id', userId)
-    .eq('status', 'incomplete')
-    .lt('created_at', staleCutoff)
+  requireOk(
+    'billing.subscribe.reclaimStale',
+    await admin
+      .from('billing_subscriptions')
+      .delete()
+      .eq('user_id', userId)
+      .eq('status', 'incomplete')
+      .lt('created_at', staleCutoff),
+  )
 
   const isFree = plan.price_cents === 0
   const hasTrial = plan.trial_days > 0
@@ -419,41 +431,52 @@ export async function subscribeToPlan(
 
       // Persist the provider reference so the webhook can match the callback back
       // to THIS subscription.
-      await admin
-        .from('billing_subscriptions')
-        .update({ provider_ref: intent.reference })
-        .eq('id', sub.id)
+      // Without provider_ref the callback can never match this subscription, so a
+      // failure here aborts into the rollback below instead of redirecting to pay.
+      requireOk(
+        'billing.subscribe.providerRef',
+        await admin
+          .from('billing_subscriptions')
+          .update({ provider_ref: intent.reference })
+          .eq('id', sub.id),
+      )
 
       if (settlesAsync && intent.action === 'redirect') {
         paymentPending = true
         // Ledger row stays 'pending' until the callback confirms payment.
-        await admin.from('billing_transactions').insert({
-          subscription_id: sub.id,
-          user_id: userId,
-          kind: 'charge',
-          amount_cents: plan.price_cents,
-          currency: plan.currency,
-          status: 'pending',
-          provider: providerId,
-          provider_ref: intent.reference,
-          idempotency_key: `sub_${sub.id}_initial`,
-          description: `${plan.name} aboneliği`,
-        })
+        requireOk(
+          'billing.subscribe.pendingCharge',
+          await admin.from('billing_transactions').insert({
+            subscription_id: sub.id,
+            user_id: userId,
+            kind: 'charge',
+            amount_cents: plan.price_cents,
+            currency: plan.currency,
+            status: 'pending',
+            provider: providerId,
+            provider_ref: intent.reference,
+            idempotency_key: `sub_${sub.id}_initial`,
+            description: `${plan.name} aboneliği`,
+          }),
+        )
         redirectUrl = intent.redirectUrl
       } else {
         // Synchronous settlement (mock): record the successful charge now.
-        await admin.from('billing_transactions').insert({
-          subscription_id: sub.id,
-          user_id: userId,
-          kind: 'charge',
-          amount_cents: plan.price_cents,
-          currency: plan.currency,
-          status: 'succeeded',
-          provider: providerId,
-          provider_ref: intent.reference,
-          idempotency_key: `sub_${sub.id}_initial`,
-          description: `${plan.name} aboneliği`,
-        })
+        requireOk(
+          'billing.subscribe.syncCharge',
+          await admin.from('billing_transactions').insert({
+            subscription_id: sub.id,
+            user_id: userId,
+            kind: 'charge',
+            amount_cents: plan.price_cents,
+            currency: plan.currency,
+            status: 'succeeded',
+            provider: providerId,
+            provider_ref: intent.reference,
+            idempotency_key: `sub_${sub.id}_initial`,
+            description: `${plan.name} aboneliği`,
+          }),
+        )
       }
     } catch (error) {
       console.log('[v0] subscribeToPlan: payment intent failed, rolling back incomplete subscription', {
@@ -463,7 +486,7 @@ export async function subscribeToPlan(
       })
       // Nothing was charged and no redirect will ever come back for this row,
       // so it must not survive to block a retry.
-      await admin.from('billing_subscriptions').delete().eq('id', sub.id)
+      warnOnError('billing.subscribe.rollback', await admin.from('billing_subscriptions').delete().eq('id', sub.id))
       const failure = await reportPaymentInitFailure('subscribe', error, providerId)
       return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
     }
@@ -565,10 +588,13 @@ export async function changePlan(
     // Clear any previous, abandoned pending-change attempt for this
     // subscription so its old `pending_change_ref` (unique when non-null)
     // can't collide with the new intent we're about to create.
-    await admin
-      .from('billing_subscriptions')
-      .update({ pending_plan_id: null, pending_change_ref: null })
-      .eq('id', sub.id)
+    requireOk(
+      'billing.changePlan.clearPending',
+      await admin
+        .from('billing_subscriptions')
+        .update({ pending_plan_id: null, pending_change_ref: null })
+        .eq('id', sub.id),
+    )
 
     try {
       const intent = await provider.createIntent({
@@ -592,18 +618,21 @@ export async function changePlan(
         .update({ pending_plan_id: newPlan.id, pending_change_ref: intent.reference })
         .eq('id', sub.id)
       if (pendingErr) throw pendingErr
-      await admin.from('billing_transactions').insert({
-        subscription_id: sub.id,
-        user_id: userId,
-        kind: 'charge',
-        amount_cents: netCents,
-        currency: newPlan.currency,
-        status: 'pending',
-        provider: providerId,
-        provider_ref: intent.reference,
-        idempotency_key: `upgrade_${sub.id}_${now.getTime()}`,
-        description: `${currentPlan.name} → ${newPlan.name} paket yükseltme ara farkı`,
-      })
+      requireOk(
+        'billing.changePlan.pendingCharge',
+        await admin.from('billing_transactions').insert({
+          subscription_id: sub.id,
+          user_id: userId,
+          kind: 'charge',
+          amount_cents: netCents,
+          currency: newPlan.currency,
+          status: 'pending',
+          provider: providerId,
+          provider_ref: intent.reference,
+          idempotency_key: `upgrade_${sub.id}_${now.getTime()}`,
+          description: `${currentPlan.name} → ${newPlan.name} paket yükseltme ara farkı`,
+        }),
+      )
       return { ok: true, status: 'incomplete', netCents, redirectUrl: intent.redirectUrl }
     } catch (error) {
       // Same reasoning as subscribeToPlan: never let a PSP failure escape as
@@ -614,10 +643,13 @@ export async function changePlan(
         providerId,
         error: error instanceof Error ? error.message : String(error),
       })
-      await admin
-        .from('billing_subscriptions')
-        .update({ pending_plan_id: null, pending_change_ref: null })
-        .eq('id', sub.id)
+      warnOnError(
+        'billing.changePlan.rollback',
+        await admin
+          .from('billing_subscriptions')
+          .update({ pending_plan_id: null, pending_change_ref: null })
+          .eq('id', sub.id),
+      )
       const failure = await reportPaymentInitFailure('change_plan', error, providerId)
       return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
     }
@@ -733,12 +765,16 @@ export async function renewSubscription(
   if (!buyer) return { ok: false, error: 'buyer_required' }
 
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-  const { data: openRenewals } = await admin
-    .from('billing_transactions')
-    .select('id, idempotency_key')
-    .eq('subscription_id', subData.id)
-    .eq('status', 'pending')
-    .gte('created_at', staleCutoff)
+  // A failed read would look like "no open renewal" and allow a double charge.
+  const { data: openRenewals } = requireOk(
+    'billing.renew.openRenewals',
+    await admin
+      .from('billing_transactions')
+      .select('id, idempotency_key')
+      .eq('subscription_id', subData.id)
+      .eq('status', 'pending')
+      .gte('created_at', staleCutoff),
+  )
   if ((openRenewals ?? []).some((t) => String(t.idempotency_key ?? '').startsWith('renew_'))) {
     return { ok: false, error: 'payment_pending' }
   }

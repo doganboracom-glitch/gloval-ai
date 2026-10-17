@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk, warnOnError } from '@/lib/db-guard'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import { PaymentConfigError } from '@/lib/payments/types'
 import { describeIyzicoEnvironment } from '@/lib/payments/iyzico'
@@ -181,7 +183,10 @@ export async function startMyDomainPurchase(
     })
     .select('id')
     .single()
-  if (orderErr || !order) return { ok: false, error: 'FAILED' }
+  if (orderErr || !order) {
+    console.error('[domains] order insert failed', { code: orderErr?.code ?? 'no_row' })
+    return { ok: false, error: 'FAILED' }
+  }
 
   const providerId = getPlatformPaymentProviderId()
   const provider = getPlatformPaymentProvider()
@@ -218,42 +223,59 @@ export async function startMyDomainPurchase(
     // PaymentConfigError messages are fixed machine codes (no secrets), so they
     // are safe to persist and make the real stage/cause visible on the order.
     const isConfigError = error instanceof PaymentConfigError
-    await admin
-      .from('domain_orders')
-      .update({
-        status: 'failed',
-        error_message: isConfigError ? `payment_config:${error.message}` : 'payment_init_failed',
-      })
-      .eq('id', order.id)
+    warnOnError(
+      'domainPurchase.markInitFailed',
+      await admin
+        .from('domain_orders')
+        .update({
+          status: 'failed',
+          error_message: isConfigError ? `payment_config:${error.message}` : 'payment_init_failed',
+        })
+        .eq('id', order.id),
+    )
     return { ok: false, error: isConfigError ? 'PAYMENT_UNAVAILABLE' : 'FAILED' }
   }
   if (intent.status === 'failed') {
-    await admin.from('domain_orders').update({ status: 'failed' }).eq('id', order.id)
+    warnOnError(
+      'domainPurchase.markIntentFailed',
+      await admin.from('domain_orders').update({ status: 'failed' }).eq('id', order.id),
+    )
     return { ok: false, error: 'FAILED' }
   }
 
-  await admin
-    .from('domain_orders')
-    .update({ payment_provider: providerId, payment_reference: intent.reference })
-    .eq('id', order.id)
+  // The payment reference is what lets the callback find this order; losing it
+  // would leave a paid order unmatched, so a failed write must stop the flow.
+  requireOk(
+    'domainPurchase.saveReference',
+    await admin
+      .from('domain_orders')
+      .update({ payment_provider: providerId, payment_reference: intent.reference })
+      .eq('id', order.id),
+  )
 
-  await admin.from('billing_transactions').upsert(
-    {
-      user_id: userId,
-      kind: 'charge',
-      amount_cents: priceCents,
-      currency,
-      status: intent.action === 'completed' ? 'succeeded' : 'pending',
-      provider: providerId,
-      provider_ref: intent.reference,
-      idempotency_key: `domreg_${order.id}`,
-      description: `Alan adı kaydı — ${parsed.domain}`,
-    },
-    { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
+  requireOk(
+    'domainPurchase.recordTransaction',
+    await admin.from('billing_transactions').upsert(
+      {
+        user_id: userId,
+        kind: 'charge',
+        amount_cents: priceCents,
+        currency,
+        status: intent.action === 'completed' ? 'succeeded' : 'pending',
+        provider: providerId,
+        provider_ref: intent.reference,
+        idempotency_key: `domreg_${order.id}`,
+        description: `Alan adı kaydı — ${parsed.domain}`,
+      },
+      { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
+    ),
   )
 
   if (intent.action === 'completed') {
-    await admin.from('domain_orders').update({ status: 'payment_verified' }).eq('id', order.id)
+    requireOk(
+      'domainPurchase.markVerified',
+      await admin.from('domain_orders').update({ status: 'payment_verified' }).eq('id', order.id),
+    )
     await finalizeDomainOrder(order.id)
     revalidatePath('/dashboard/domains')
     return { ok: true, orderId: order.id }
@@ -285,7 +307,13 @@ export async function getMyDomainOrders(): Promise<MyDomainOrder[]> {
   // `price_snapshot` is added by migration 015; fall back to the legacy column
   // set so the list keeps working before that migration is applied.
   let { data, error } = await query(`${base}, price_snapshot`)
-  if (error) ({ data } = await query(base))
+  if (error && isMissingColumnError(error)) ({ data, error } = await query(base))
+  if (error) {
+    // Display-only status list (no money or state change depends on it), so an empty list is
+    // acceptable here, but the failure is logged with its code instead of vanishing.
+    console.error('[domains] order list read failed', { code: error.code ?? 'unknown' })
+    return []
+  }
 
   type Row = {
     id: string
