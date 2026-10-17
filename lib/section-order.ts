@@ -17,6 +17,7 @@ const CORPORATE_ORDER = [
   'stats',
   'pricing',
   'testimonials',
+  'blogLatest',
   'faq',
   'cta',
   'contact',

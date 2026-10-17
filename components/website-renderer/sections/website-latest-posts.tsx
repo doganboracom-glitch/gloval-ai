@@ -7,9 +7,17 @@ import {
 } from '@/lib/blog-site'
 import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
 
-export function WebsiteLatestPosts({ blog, lang = 'tr' }: { blog: SiteBlogData; lang?: 'tr' | 'en' }) {
+export function WebsiteLatestPosts({
+  blog,
+  lang = 'tr',
+  title,
+}: {
+  blog: SiteBlogData
+  lang?: 'tr' | 'en'
+  title?: string
+}) {
   const copy = blogCopy(lang)
-  const heading = latestPostsHeading(lang)
+  const heading = title?.trim() || latestPostsHeading(lang)
 
   if (blog.posts.length === 0 && blog.preparing) {
     return (

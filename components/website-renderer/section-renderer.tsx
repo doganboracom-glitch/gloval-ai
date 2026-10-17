@@ -17,6 +17,7 @@ import { CategoriesSection } from '@/components/website-renderer/sections/catego
 import { ProcessSection } from '@/components/website-renderer/sections/process-section'
 import { TeamSection } from '@/components/website-renderer/sections/team-section'
 import { FaqSection } from '@/components/website-renderer/sections/faq-section'
+import { BlogLatestSection } from '@/components/website-renderer/sections/blog-latest-section'
 import { ContactSection } from '@/components/website-renderer/sections/contact-section'
 import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import { CtaSection } from '@/components/website-renderer/sections/cta-section'
@@ -82,6 +83,8 @@ export function SectionRenderer({
       return <TeamSection data={section} lang={meta.language} />
     case 'faq':
       return <FaqSection data={section} />
+    case 'blogLatest':
+      return <BlogLatestSection title={section.title} lang={meta.language} />
     case 'contact':
       return <ContactSection data={section} lang={meta.language} live={contactForm} site={site} />
     case 'cta':

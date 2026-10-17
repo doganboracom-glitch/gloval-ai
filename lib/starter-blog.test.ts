@@ -8,6 +8,7 @@ import {
   isTimeoutError,
   runStarterBlog,
   STARTER_DAILY_SITE_CAP,
+  STARTER_LIMITS,
   starterDailyCapReached,
   starterOutputSchema,
   starterSourceKey,
@@ -107,9 +108,25 @@ const args = { projectId: PROJECT, site: SITE, lang: 'tr' as const }
 describe('fixture sanity', () => {
   it('the generated body passes the starter output schema', () => {
     const body = bodyWith(700)
-    expect(countWords(body)).toBeGreaterThanOrEqual(600)
-    expect(countWords(body)).toBeLessThanOrEqual(900)
+    expect(countWords(body)).toBeGreaterThanOrEqual(STARTER_LIMITS.minWords)
+    expect(countWords(body)).toBeLessThanOrEqual(STARTER_LIMITS.maxWords)
     expect(starterOutputSchema(SITE.name).safeParse(output()).success).toBe(true)
+  })
+
+  it('accepts a ~490-word body: the length models really produce (root cause of the empty section)', () => {
+    const body = bodyWith(490)
+    expect(countWords(body)).toBeLessThan(600)
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body })).success).toBe(true)
+  })
+
+  it('still rejects bodies that are far too short or too long', () => {
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body: bodyWith(150) })).success).toBe(false)
+    expect(starterOutputSchema(SITE.name).safeParse(output({ body: bodyWith(1400) })).success).toBe(false)
+  })
+
+  it('asks the model for a target range inside the hard limits', () => {
+    expect(STARTER_LIMITS.targetMinWords).toBeGreaterThan(STARTER_LIMITS.minWords)
+    expect(STARTER_LIMITS.targetMaxWords).toBeLessThan(STARTER_LIMITS.maxWords)
   })
 })
 

@@ -450,6 +450,17 @@ export const faqSection = z.object({
     .max(10),
 })
 
+/**
+ * The "latest blog posts" block as a real, movable section. Its posts are not
+ * stored here: they come from the blog tables at render time, so the section
+ * only carries an optional heading override and the usual editor meta.
+ */
+export const blogLatestSection = z.object({
+  type: z.literal('blogLatest'),
+  ...sectionEditorMeta,
+  title: z.string().optional(),
+})
+
 export const contactSection = z.object({
   type: z.literal('contact'),
   ...sectionEditorMeta,
@@ -529,6 +540,7 @@ export const sectionSchema = z.discriminatedUnion('type', [
   processSection,
   teamSection,
   pricingSection,
+  blogLatestSection,
   faqSection,
   contactSection,
   ctaSection,
@@ -908,6 +920,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
     team: ['Ekip', 'Team'],
     pricing: ['Fiyatlandırma', 'Pricing'],
     faq: ['SSS', 'FAQ'],
+    blogLatest: ['Blogdan Son Yazılar', 'Latest posts'],
     contact: ['İletişim', 'Contact'],
     cta: ['Eylem Çağrısı', 'Call to action'],
     footer: ['Alt Bilgi', 'Footer'],
@@ -941,6 +954,8 @@ function sectionSummary(section: Section): string {
     case 'gallery':
     case 'faq':
       return section.title
+    case 'blogLatest':
+      return section.title ?? ''
     case 'contact':
       return section.description ?? section.title
     case 'cta':
