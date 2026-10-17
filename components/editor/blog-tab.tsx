@@ -438,7 +438,7 @@ export function BlogTab({
         </ul>
       )}
 
-      <SearchPromoCard sitemapUrl={sitemapUrl} lang={lang} />
+      <SearchPromoCard sitemapUrl={sitemapUrl} published={published} lang={lang} />
     </div>
   )
 }

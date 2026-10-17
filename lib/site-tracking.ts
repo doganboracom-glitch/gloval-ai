@@ -1,4 +1,5 @@
-import type { TrackingCodes } from '@/lib/website-schema'
+import type { TrackingCodes, WebsiteSchema } from '@/lib/website-schema'
+import type { PlanCode } from '@/lib/pricing-config'
 
 /**
  * Owner-supplied third-party code (analytics, tag manager, pixels, site
@@ -48,6 +49,30 @@ export function stripMetaTags(code?: string | null): string {
 /** True when a snippet has anything worth injecting. */
 export function hasCode(code?: string | null): boolean {
   return Boolean(code && code.trim().length > 0)
+}
+
+/** Custom head/body code (analytics, Search Console verification) is open on STARTER and above. */
+export function canUseTrackingCode(plan: PlanCode): boolean {
+  return plan !== 'free'
+}
+
+/**
+ * Server-side authority for the plan gate. A plan without the feature can never
+ * change `tracking`: whatever it submitted is ignored and the stored value kept.
+ */
+export function enforceTrackingPlan(
+  next: WebsiteSchema,
+  stored: Pick<WebsiteSchema, 'tracking'> | null | undefined,
+  plan: PlanCode,
+): WebsiteSchema {
+  if (canUseTrackingCode(plan)) return next
+  const tracking = stored?.tracking
+  if (tracking === undefined) {
+    if (next.tracking === undefined) return next
+    const { tracking: _dropped, ...rest } = next
+    return rest as WebsiteSchema
+  }
+  return { ...next, tracking }
 }
 
 export type { TrackingCodes }

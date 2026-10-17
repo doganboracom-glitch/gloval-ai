@@ -23,6 +23,7 @@ import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { scheduleStarterBlog } from '@/lib/starter-blog-server'
+import { enforceTrackingPlan } from '@/lib/site-tracking'
 import { slugifyProjectName } from '@/lib/slug'
 import { commerceModeForNewProject, type CommerceMode } from '@/lib/commerce-mode'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
@@ -310,10 +311,17 @@ export async function saveProjectSchema(input: {
       )
         ? ((existing.schema_data as { pages: unknown[] }).pages.length)
         : 0
-      const limit = pageLimitForPlan(await getPlanCodeForUser(existing.owner_id as string))
+      const ownerPlan = await getPlanCodeForUser(existing.owner_id as string)
+      const limit = pageLimitForPlan(ownerPlan)
       if (isPageGrowthBlocked(currentPages, parsed.pages.length, limit)) {
         throw new Error(PAGE_LIMIT_ERROR)
       }
+      // Custom head/body code is a paid feature: FREE keeps whatever is stored.
+      parsed = enforceTrackingPlan(
+        parsed,
+        existing.schema_data as Pick<WebsiteSchema, 'tracking'> | null,
+        toPlanCode(ownerPlan),
+      )
     }
   }
 

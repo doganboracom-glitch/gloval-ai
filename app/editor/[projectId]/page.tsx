@@ -12,6 +12,7 @@ import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { suggestBlogTopics } from '@/lib/blog-ai'
 import { isStarterPending } from '@/lib/blog-site'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { tenantUrl } from '@/lib/domains'
 
 export default async function EditorPage({
   params,
@@ -89,10 +90,15 @@ export default async function EditorPage({
 
   // The origin the site really advertises (live custom domain, else the
   // tenant subdomain); the sitemap hint must show the same address Search Console needs.
-  const sitemapUrl =
-    canManageBlog && project.published && project.slug
-      ? `${(await getSiteSeoContext(project.slug)).origin}/sitemap.xml`
+  // Before publishing there is no live origin yet, so the tenant subdomain is
+  // shown (the card labels it "valid once published").
+  const sitemapOrigin =
+    canManageBlog && project.slug
+      ? project.published
+        ? (await getSiteSeoContext(project.slug)).origin
+        : tenantUrl(project.slug)
       : null
+  const sitemapUrl = sitemapOrigin ? `${sitemapOrigin}/sitemap.xml` : null
 
   return (
     <EditorClient

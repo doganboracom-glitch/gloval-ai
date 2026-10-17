@@ -32,6 +32,7 @@ import {
 } from '@/lib/page-limits'
 import { toPlanCode } from '@/lib/pricing-config'
 import { enforceSocialPlan } from '@/lib/social-links'
+import { enforceTrackingPlan } from '@/lib/site-tracking'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { sanitizeGeneratedProofContent } from '@/lib/proof-content'
 
@@ -303,7 +304,11 @@ export async function POST(req: Request) {
     }
     // Social links are a paid feature: on FREE whatever the model wrote is
     // discarded and the stored value kept; elsewhere it is validated/normalized.
-    const restored = enforceSocialPlan(restoredBase, original, planCode)
+    const restored = enforceTrackingPlan(
+    enforceSocialPlan(restoredBase, original, planCode),
+    original,
+    planCode,
+  )
     // A storefront's catalog lives in the database: any product data the model
     // wrote into the schema is discarded and the user is pointed to the panel.
     const locked = lockStorefrontProducts(original, restored)
