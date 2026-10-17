@@ -24,7 +24,7 @@ import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { scheduleStarterBlog } from '@/lib/starter-blog-server'
-import { enforceTrackingPlan } from '@/lib/site-tracking'
+import { enforceTrackingPlan, sanitizeTracking } from '@/lib/site-tracking'
 import { slugifyProjectName } from '@/lib/slug'
 import { commerceModeForNewProject, type CommerceMode } from '@/lib/commerce-mode'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
@@ -327,6 +327,12 @@ export async function saveProjectSchema(input: {
     }
   }
 
+  if (parsed.tracking) {
+    const { tracking: _unsafe, ...withoutTracking } = parsed
+    const tracking = sanitizeTracking(parsed.tracking)
+    parsed = tracking ? { ...withoutTracking, tracking } : withoutTracking
+  }
+
   const patch: Record<string, unknown> = {
     schema_data: parsed,
     updated_at: new Date().toISOString(),
@@ -589,8 +595,8 @@ export async function publishProject(input: {
       .eq('published', true)
       .neq('id', input.id)
     if (countErr) throw countErr
-    // Limit dolu: hata fırlatmak yerine yapılandırılmış sonuç döndürüyoruz;
-    // böylece sunucu action hata temizlemesi mesajı bozmadan istemciye ulaşır.
+    // Limit dolu: hata firlatmak yerine yapilandirilmis sonuc donduruyoruz;
+    // boylece sunucu action hata temizlemesi mesaji bozmadan istemciye ulasir.
     if ((count ?? 0) >= limit) {
       return { ok: false, reason: SITE_LIMIT_ERROR, used: count ?? 0, total: limit }
     }

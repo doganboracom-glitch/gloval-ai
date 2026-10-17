@@ -12,6 +12,7 @@ import {
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
+import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -304,6 +305,7 @@ export function applyOperation(
     case 'updateTracking': {
       const current = next.tracking ?? {}
       const value = operation.value
+      if (isUnsafeTrackingCode(value)) return next
       next.tracking = { ...current, [operation.field]: value.trim() ? value : undefined }
       return next
     }
