@@ -1,5 +1,6 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
+import { requireOk } from '@/lib/db-guard'
 
 /**
  * Reads an order's lines with their frozen VAT. Before scripts/037 the VAT
@@ -16,8 +17,10 @@ export async function readOrderItems<T extends Record<string, unknown>>(
     .select(`${columns}, vat_rate, vat_cents`)
     .eq('order_id', orderId)
   if (!withVat.error) return (withVat.data ?? []) as unknown as Array<T & { vat_rate?: number | null; vat_cents?: number | null }>
-  if (!isMissingColumnError(withVat.error)) return []
+  // Only a missing VAT column may fall back; any other failure must not look like "an order with no lines".
+  if (!isMissingColumnError(withVat.error)) requireOk('orderItems.read', withVat)
 
   const legacy = await admin.from('ecommerce_order_items').select(columns).eq('order_id', orderId)
+  requireOk('orderItems.readLegacy', legacy)
   return (legacy.data ?? []) as unknown as Array<T & { vat_rate?: number | null; vat_cents?: number | null }>
 }

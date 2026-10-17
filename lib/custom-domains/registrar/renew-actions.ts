@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk, warnOnError } from '@/lib/db-guard'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import type { CheckoutBuyer } from '@/lib/billing'
 import type { DomainErrorCode } from '../types'
@@ -140,46 +141,61 @@ export async function startMyDomainRenewal(
         : undefined,
     })
   } catch {
-    await admin
-      .from('domain_renewals')
-      .update({ status: 'failed', error_message: 'payment_init_failed', updated_at: new Date().toISOString() })
-      .eq('id', row.id)
+    warnOnError(
+      'domainRenewal.markInitFailed',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'failed', error_message: 'payment_init_failed', updated_at: new Date().toISOString() })
+        .eq('id', row.id),
+    )
     return { ok: false, error: 'TEMPORARY_FAILURE' }
   }
   if (intent.status === 'failed') {
-    await admin
-      .from('domain_renewals')
-      .update({ status: 'failed', error_message: 'payment_init_failed', updated_at: new Date().toISOString() })
-      .eq('id', row.id)
+    warnOnError(
+      'domainRenewal.markIntentFailed',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'failed', error_message: 'payment_init_failed', updated_at: new Date().toISOString() })
+        .eq('id', row.id),
+    )
     return { ok: false, error: 'TEMPORARY_FAILURE' }
   }
 
-  await admin
-    .from('domain_renewals')
-    .update({ payment_provider: providerId, payment_reference: intent.reference, updated_at: new Date().toISOString() })
-    .eq('id', row.id)
+  requireOk(
+    'domainRenewal.saveReference',
+    await admin
+      .from('domain_renewals')
+      .update({ payment_provider: providerId, payment_reference: intent.reference, updated_at: new Date().toISOString() })
+      .eq('id', row.id),
+  )
 
-  await admin.from('billing_transactions').upsert(
-    {
-      user_id: user.userId,
-      kind: 'charge',
-      amount_cents: priceCents,
-      currency,
-      status: intent.action === 'completed' ? 'succeeded' : 'pending',
-      provider: providerId,
-      provider_ref: intent.reference,
-      idempotency_key: `domren_${row.id}`,
-      description: `Alan adı yenileme — ${quote.domain} (${quote.years} yıl)`,
-    },
-    { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
+  requireOk(
+    'domainRenewal.recordTransaction',
+    await admin.from('billing_transactions').upsert(
+      {
+        user_id: user.userId,
+        kind: 'charge',
+        amount_cents: priceCents,
+        currency,
+        status: intent.action === 'completed' ? 'succeeded' : 'pending',
+        provider: providerId,
+        provider_ref: intent.reference,
+        idempotency_key: `domren_${row.id}`,
+        description: `Alan adı yenileme — ${quote.domain} (${quote.years} yıl)`,
+      },
+      { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
+    ),
   )
 
   if (intent.action === 'completed') {
-    await admin
-      .from('domain_renewals')
-      .update({ status: 'payment_verified', updated_at: new Date().toISOString() })
-      .eq('id', row.id)
-      .eq('status', 'pending_payment')
+    requireOk(
+      'domainRenewal.markVerified',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'payment_verified', updated_at: new Date().toISOString() })
+        .eq('id', row.id)
+        .eq('status', 'pending_payment'),
+    )
     await finalizeRenewal(row.id)
     revalidatePath('/dashboard/domains')
     return { ok: true, renewalId: row.id }

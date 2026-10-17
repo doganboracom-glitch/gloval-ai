@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
 import { isEcommerceProjectId } from '@/lib/commerce-mode-server'
 import { hitRateLimit } from '@/lib/store-auth-rate-limit'
+import { isDbQueryError, requireOk } from '@/lib/db-guard'
 import {
   purgeSuspendedCustomerNow,
   restoreStoreCustomer,
@@ -100,8 +101,34 @@ async function countMembers(admin: Admin, projectId: string, sinceIso?: string):
   }
   const res = await base().is('deletion_scheduled_at', null)
   if (!res.error) return res.count ?? 0
+  // Only a missing deletion column may fall back; any other failure must not read as "0 members".
+  if (!isMissingDeletionSchema(res.error)) requireOk('ownerCustomers.countMembers', res)
   const legacy = await base()
+  requireOk('ownerCustomers.countMembersLegacy', legacy)
   return legacy.count ?? 0
+}
+
+type CountResult = { count: number | null; error: { code?: string; message?: string } | null }
+
+/** Permanently deleted only: suspended accounts keep deleted_at null. */
+async function countDeleted(admin: Admin, projectId: string): Promise<CountResult> {
+  const { count, error } = await admin
+    .from('store_customers')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .not('deleted_at', 'is', null)
+  return { count, error }
+}
+
+async function countPending(admin: Admin, projectId: string): Promise<CountResult> {
+  const { count, error } = await admin
+    .from('store_customers')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .is('deleted_at', null)
+    .is('anonymized_at', null)
+    .not('deletion_scheduled_at', 'is', null)
+  return { count, error }
 }
 
 export async function listOwnerCustomers(input: {
@@ -128,7 +155,9 @@ export async function listOwnerCustomers(input: {
   }
   let res = await admin.rpc('store_owner_customers', { ...args, p_status: status })
   // Before 044 the function has no p_status argument: the active list still works.
-  if (res.error && status === 'active') res = await admin.rpc('store_owner_customers', args)
+  if (res.error && status === 'active' && isMissingDeletionSchema(res.error)) {
+    res = await admin.rpc('store_owner_customers', args)
+  }
   const { data, error } = res
   if (error) return { ok: false, reason: isMissingDeletionSchema(error) ? 'migration_pending' : 'failed' }
 
@@ -138,23 +167,28 @@ export async function listOwnerCustomers(input: {
   const monthStart = new Date()
   monthStart.setUTCDate(1)
   monthStart.setUTCHours(0, 0, 0, 0)
-  const [members, newThisMonth, deleted, pending] = await Promise.all([
-    countMembers(admin, input.projectId),
-    countMembers(admin, input.projectId, monthStart.toISOString()),
-    // Permanently deleted only: suspended accounts keep deleted_at null.
-    admin
-      .from('store_customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('project_id', input.projectId)
-      .not('deleted_at', 'is', null),
-    admin
-      .from('store_customers')
-      .select('id', { count: 'exact', head: true })
-      .eq('project_id', input.projectId)
-      .is('deleted_at', null)
-      .is('anonymized_at', null)
-      .not('deletion_scheduled_at', 'is', null),
-  ])
+  let members: number
+  let newThisMonth: number
+  let deleted: CountResult
+  let pending: CountResult
+  try {
+    ;[members, newThisMonth, deleted, pending] = await Promise.all([
+      countMembers(admin, input.projectId),
+      countMembers(admin, input.projectId, monthStart.toISOString()),
+      countDeleted(admin, input.projectId),
+      countPending(admin, input.projectId),
+    ])
+  } catch (error) {
+    console.error('[store-owner-customers] stats failed', { code: isDbQueryError(error) ? error.code : 'unknown' })
+    return { ok: false, reason: 'failed' }
+  }
+  // Before 044 the pending filter column is missing (reads as 0); any other error must not show wrong stats.
+  if (deleted.error || (pending.error && !isMissingDeletionSchema(pending.error))) {
+    console.error('[store-owner-customers] stats failed', {
+      code: (deleted.error ?? pending.error)?.code ?? 'unknown',
+    })
+    return { ok: false, reason: 'failed' }
+  }
 
   return {
     ok: true,
@@ -209,8 +243,12 @@ export async function getOwnerCustomerDetail(
   let found = await detailQuery(`${base}, deletion_scheduled_at`)
   // Before 044 the deletion column does not exist: read the plain profile instead.
   if (found.error && isMissingDeletionSchema(found.error)) found = await detailQuery(base)
+  if (found.error) {
+    console.error('[store-owner-customers] customer read failed', { code: found.error.code ?? 'unknown' })
+    return { ok: false, error: 'Müşteri yüklenemedi. Lütfen tekrar deneyin.' }
+  }
   const c = found.data as Record<string, unknown> | null
-  if (found.error || !c) return { ok: false, error: 'Müşteri bulunamadı.' }
+  if (!c) return { ok: false, error: 'Müşteri bulunamadı.' }
 
   const { data: orders, error: ordersError } = await admin
     .from('ecommerce_orders')

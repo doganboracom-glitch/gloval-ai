@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { strictDb } from '@/lib/db-guard'
 import { logUserEvent, formatTicketNumber } from '@/lib/notify'
 import { finalizeDomainOrder } from '@/lib/custom-domains/registrar/service'
 import { finalizeTransferIn } from '@/lib/custom-domains/registrar/transfer-service'
@@ -36,7 +37,9 @@ export async function settlePaymentResult(
   providerId: PaymentProviderId,
   result: PaymentWebhookResult,
 ): Promise<SettleOutcome> {
-  const admin = createAdminClient()
+  // Every query here gates real money state; a failed read or write must abort
+  // (the webhook then 500s and the PSP retries) rather than look like "no match".
+  const admin = strictDb(createAdminClient(), 'payments.settle')
   const ref = result.reference
   const refMasked = ref.length > 10 ? `${ref.slice(0, 6)}...${ref.slice(-4)}` : `${ref.slice(0, 3)}***`
   console.log('[v0] settlePaymentResult: start', {
@@ -130,14 +133,10 @@ export async function settlePaymentResult(
     if (alreadySettled && result.status === 'paid') return 'subscription'
 
     if (result.status === 'paid') {
-      if (isUpgrade) {
-        await admin
-          .from('billing_subscriptions')
-          .update({ status: 'active', plan_id: sub.pending_plan_id!, pending_plan_id: null, pending_change_ref: null })
-          .eq('id', sub.id)
-      } else {
-        await admin.from('billing_subscriptions').update({ status: 'active' }).eq('id', sub.id)
-      }
+      // The idempotent ledger upsert runs BEFORE the status flip: an upgrade's
+      // `pending_change_ref` is cleared by the flip, so if the ledger write failed
+      // afterwards the PSP retry could no longer match this row and the charge
+      // would never be recorded.
       await admin.from('billing_transactions').upsert(
         {
           subscription_id: sub.id,
@@ -153,6 +152,14 @@ export async function settlePaymentResult(
         },
         { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
       )
+      if (isUpgrade) {
+        await admin
+          .from('billing_subscriptions')
+          .update({ status: 'active', plan_id: sub.pending_plan_id!, pending_plan_id: null, pending_change_ref: null })
+          .eq('id', sub.id)
+      } else {
+        await admin.from('billing_subscriptions').update({ status: 'active' }).eq('id', sub.id)
+      }
       await logUserEvent({
         userId: sub.user_id,
         type: isUpgrade ? 'plan_upgraded' : 'payment_succeeded',

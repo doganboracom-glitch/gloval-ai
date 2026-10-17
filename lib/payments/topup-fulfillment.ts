@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk, warnOnError } from '@/lib/db-guard'
 import { logUserEvent, formatTicketNumber } from '@/lib/notify'
 import { TOPUP_ORDER_PREFIX, type CreditTopUp } from '@/lib/pricing-config'
 import { verifyTopUpPayment, type TopUpPaymentFacts } from './topup-verify'
@@ -51,11 +52,16 @@ export async function grantTopUpCredits(
   })
 
   if (ledgerError) {
-    await admin
-      .from('billing_transactions')
-      .update({ status: 'pending' })
-      .eq('id', charge.id)
-      .eq('status', 'succeeded')
+    // The ledger error below is what gets rethrown; a failed rollback is logged
+    // with its code so the stuck `succeeded` row can be found and repaired.
+    warnOnError(
+      'payments.topup.rollback',
+      await admin
+        .from('billing_transactions')
+        .update({ status: 'pending' })
+        .eq('id', charge.id)
+        .eq('status', 'succeeded'),
+    )
     throw new Error(`topup_ledger_failed: ${ledgerError.message}`)
   }
 
@@ -82,11 +88,14 @@ export async function settleTopUpResult(
   result: PaymentWebhookResult,
 ): Promise<boolean> {
   const admin = createAdminClient()
-  const { data: rows } = await admin
+  const { data: rows, error: lookupError } = await admin
     .from('billing_transactions')
     .select('id, user_id, amount_cents, currency, status, provider_ref, idempotency_key')
     .eq('provider_ref', result.reference)
     .limit(5)
+  // A failed lookup must not read as "not a top-up": the caller would fall
+  // through to other settlement paths and could report `no_match` for a paid charge.
+  requireOk('payments.topup.lookup', { error: lookupError })
 
   const charge = (rows ?? []).find((row) =>
     row.idempotency_key?.startsWith(TOPUP_ORDER_PREFIX),
@@ -105,11 +114,14 @@ export async function settleTopUpResult(
         chargeId: charge.id,
         reason: verdict.reason,
       })
-      await admin
-        .from('billing_transactions')
-        .update({ status: 'failed' })
-        .eq('id', charge.id)
-        .eq('status', 'pending')
+      requireOk(
+        'payments.topup.reject',
+        await admin
+          .from('billing_transactions')
+          .update({ status: 'failed' })
+          .eq('id', charge.id)
+          .eq('status', 'pending'),
+      )
       return true
     }
     await grantTopUpCredits(admin, charge, verdict.pack, providerId)
@@ -117,11 +129,14 @@ export async function settleTopUpResult(
   }
 
   if (result.status === 'failed') {
-    await admin
-      .from('billing_transactions')
-      .update({ status: 'failed' })
-      .eq('id', charge.id)
-      .eq('status', 'pending')
+    requireOk(
+      'payments.topup.fail',
+      await admin
+        .from('billing_transactions')
+        .update({ status: 'failed' })
+        .eq('id', charge.id)
+        .eq('status', 'pending'),
+    )
   }
   return true
 }

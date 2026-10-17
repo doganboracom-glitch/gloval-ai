@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
@@ -124,11 +125,12 @@ async function clientForProject(projectId: string): Promise<{
 
   // Can the caller already see this row under RLS? If so, they own it (or it's
   // otherwise permitted) — keep them on the normal client.
-  const { data: owned } = await supabase
-    .from('projects')
-    .select('id')
-    .eq('id', projectId)
-    .maybeSingle()
+  // A failed read must not look like "not owned": that would send an admin down
+  // the elevated path (or a user to a misleading 404) on a transient error.
+  const { data: owned } = requireOk(
+    'projects.ownership',
+    await supabase.from('projects').select('id').eq('id', projectId).maybeSingle(),
+  )
   if (owned) return { db: supabase, userId, elevated: false }
 
   // Not reachable under RLS. Only a verified admin gets elevated; everyone else
@@ -353,7 +355,10 @@ export async function snapshotProject(input: {
   })
   if (error) throw error
 
-  const { data: owner } = await db.from('projects').select('owner_id').eq('id', input.id).maybeSingle()
+  const { data: owner } = warnOnError(
+    'projects.backupOwner',
+    await db.from('projects').select('owner_id').eq('id', input.id).maybeSingle(),
+  )
   if (owner?.owner_id) await backupDraftBestEffort(input.id, owner.owner_id as string, parsed)
 }
 
@@ -414,12 +419,15 @@ export async function restoreProjectBackup(input: {
     return { ok: false, reason: 'RATE_LIMITED', retryAfterSeconds: Math.ceil(limited.retryAfterMs / 1000) }
   }
 
-  const { data: exists } = await db
-    .from('project_backups')
-    .select('id')
-    .eq('id', input.backupId)
-    .eq('project_id', input.projectId)
-    .maybeSingle()
+  const { data: exists } = requireOk(
+    'projects.restoreBackupExists',
+    await db
+      .from('project_backups')
+      .select('id')
+      .eq('id', input.backupId)
+      .eq('project_id', input.projectId)
+      .maybeSingle(),
+  )
   if (!exists) return { ok: false, reason: 'BACKUP_NOT_FOUND' }
 
   const restored = await loadBackupSchema(input.projectId, input.backupId)
