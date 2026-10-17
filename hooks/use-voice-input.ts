@@ -1,6 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { registerVoiceCanceller } from '@/lib/voice/voice-registry'
 import { MAX_AUDIO_BYTES, MAX_RECORDING_MS } from '@/lib/voice/audio-limits'
 import { composeDictation, mergeIntoText, type SpeechResultLike } from '@/lib/voice/transcript'
 import {
@@ -197,10 +200,15 @@ export function useVoiceInput({ lang, value, onText }: UseVoiceInputOptions) {
       }
 
       recorder.onstop = async () => {
+        if (session !== sessionRef.current) {
+          // Superseded session: only close our own stream, never a newer one's.
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
         clearTimer()
         releaseStream()
         recorderRef.current = null
-        if (discardRef.current || session !== sessionRef.current) return
+        if (discardRef.current) return
 
         const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
         if (blob.size === 0) {
@@ -322,7 +330,11 @@ export function useVoiceInput({ lang, value, onText }: UseVoiceInputOptions) {
     }
   }, [clearTimer, releaseStream, updateStatus])
 
-  /** Tears everything down without producing text (unmount, page hidden). */
+  /**
+   * Tears everything down without producing text (submit, unmount, route
+   * change, hidden tab, sign-out). Bumping the session first makes every late
+   * recognition / recorder / transcription callback a no-op.
+   */
   const cancel = useCallback(() => {
     sessionRef.current += 1
     discardRef.current = true
@@ -331,12 +343,27 @@ export function useVoiceInput({ lang, value, onText }: UseVoiceInputOptions) {
     abortRef.current = null
     const recognition = recognitionRef.current
     recognitionRef.current = null
-    recognition?.abort()
+    if (recognition) {
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      try {
+        recognition.abort()
+      } catch {
+        // Already ended.
+      }
+    }
     const recorder = recorderRef.current
     recorderRef.current = null
-    if (recorder && recorder.state !== 'inactive') recorder.stop()
+    if (recorder && recorder.state !== 'inactive') {
+      try {
+        recorder.stop()
+      } catch {
+        // Already stopped.
+      }
+    }
     releaseStream()
-    updateStatus('idle')
+    if (statusRef.current !== 'idle') updateStatus('idle')
   }, [clearTimer, releaseStream, updateStatus])
 
   const toggle = useCallback(() => {
@@ -346,19 +373,35 @@ export function useVoiceInput({ lang, value, onText }: UseVoiceInputOptions) {
 
   const dismissError = useCallback(() => setError(null), [])
 
+  const pathname = usePathname()
+  const lastPathnameRef = useRef(pathname)
+  useEffect(() => {
+    if (lastPathnameRef.current === pathname) return
+    lastPathnameRef.current = pathname
+    cancel()
+  }, [pathname, cancel])
+
+  useEffect(() => registerVoiceCanceller(cancel), [cancel])
+
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden' && statusRef.current === 'listening') stop()
+      if (document.visibilityState === 'hidden') cancel()
     }
     const onPageHide = () => cancel()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
+
+    const { data } = createClient().auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') cancel()
+    })
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
+      data.subscription.unsubscribe()
       cancel()
     }
-  }, [stop, cancel])
+  }, [cancel])
 
   return { status, error, supported, start, stop, toggle, cancel, dismissError }
 }

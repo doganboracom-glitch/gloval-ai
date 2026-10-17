@@ -8,6 +8,7 @@ import { listBlogPostsAction } from '@/lib/blog-actions'
 import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
 import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
 import {
@@ -526,6 +527,7 @@ export function WebsitePreview({
   async function handlePublish(approvals?: string[], siteOverride?: WebsiteSchema, confirmedReal?: string[]) {
     const siteToPublish = siteOverride ?? currentSite
     if (!persist?.publish || !siteToPublish || publishState === 'publishing') return
+    stopAllVoiceInput()
     setPublishState('publishing')
     try {
       const result = await persist.publish(siteToPublish, approvals, confirmedReal)
