@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireOk } from '@/lib/db-guard'
 import {
   MailError,
   isValidLocalPart,
@@ -115,7 +116,10 @@ function mapError(error: unknown): never {
  */
 async function domainName(domainId: string): Promise<string> {
   if (!UUID_RE.test(domainId)) return domainId.toLowerCase()
-  const { data } = await createAdminClient().from('custom_domains').select('domain').eq('id', domainId).maybeSingle()
+  const { data } = requireOk(
+    'mailcow.domainName',
+    await createAdminClient().from('custom_domains').select('domain').eq('id', domainId).maybeSingle(),
+  )
   const name = (data as { domain?: string } | null)?.domain
   if (!name) throw new MailError('NOT_FOUND')
   return name.toLowerCase()

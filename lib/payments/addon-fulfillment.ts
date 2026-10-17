@@ -166,11 +166,16 @@ async function fulfilPaidPurchase(
   if (purchase.status === 'pending') {
     const claimed = await transition(admin, purchase.id, ['pending'], 'paid')
     if (!claimed) {
-      const { data: current } = await admin
+      const { data: current, error: currentError } = await admin
         .from('addon_purchases')
         .select('status')
         .eq('id', purchase.id)
         .maybeSingle()
+      // "Could not read" is not "someone else settled it": retry instead of dropping a paid purchase.
+      if (currentError) {
+        console.log('[v0] settleAddOnResult: status re-read failed', { purchaseId: purchase.id, code: currentError.code })
+        return 'retry_pending'
+      }
       if (current?.status !== 'paid') return 'already_settled'
     }
   }
@@ -234,7 +239,13 @@ async function fulfilPaidPurchase(
     { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
   )
   if (ledgerError) {
-    console.log('[v0] settleAddOnResult: ledger write failed', { purchaseId: purchase.id, error: ledgerError.message })
+    // The grant and this upsert are both idempotent, so leaving the purchase
+    // `paid` lets the retry write the missing ledger row instead of marking it granted without one.
+    console.log('[v0] settleAddOnResult: ledger write failed, leaving purchase paid for retry', {
+      purchaseId: purchase.id,
+      code: ledgerError.code,
+    })
+    return 'retry_pending'
   }
 
   const flipped = await transition(admin, purchase.id, ['paid'], 'granted')

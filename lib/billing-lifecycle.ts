@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { strictDb, warnOnError } from '@/lib/db-guard'
 import { addCalendarMonths, isYearlySwitchTarget, parseRenewalTargetPlanId } from '@/lib/billing-utils'
 import { formatTicketNumber, logUserEvent } from '@/lib/notify'
 import { buildLifecycleNotice, type LifecycleNoticeKind } from '@/lib/billing-notices'
@@ -296,7 +297,9 @@ type ProjectRow = { id: string; slug: string | null; published: boolean; project
  * rest corporate. Sites that do not fit stay unpublished.
  */
 async function restoreSuspendedSites(userId: string, suspendedIds: string[], planCode: string | null) {
-  const admin = createAdminClient()
+  // A failed read would look like "no owned/live sites" and a failed update like
+  // "restored"; both must abort so the renewal is retried instead.
+  const admin = strictDb(createAdminClient(), 'billing.restoreSites')
   const [{ getEffectiveSiteLimit }, { resolveEcommerceSiteLimit }, { toPlanCode }] = await Promise.all([
     import('@/lib/effective-limits'),
     import('@/lib/add-ons'),
@@ -364,7 +367,9 @@ export async function settleSubscriptionRenewal(input: {
   periodMonths?: number
   source?: 'provider' | 'manual' | 'gift'
 }): Promise<RenewalOutcome> {
-  const admin = createAdminClient()
+  // Rollbacks use the plain client so a failing rollback cannot mask the original error.
+  const rawAdmin = createAdminClient()
+  const admin = strictDb(rawAdmin, 'billing.settleRenewal')
   const { charge } = input
   const now = input.now ?? new Date()
   const ticket = formatTicketNumber(input.reference)
@@ -395,7 +400,9 @@ export async function settleSubscriptionRenewal(input: {
 
   const { data: sub } = await admin
     .from('billing_subscriptions')
-    .select('id, user_id, status, plan_id, current_period_end, suspended_project_ids')
+    .select(
+      'id, user_id, status, plan_id, current_period_start, current_period_end, grace_period_ends_at, suspended_at, suspension_reason, suspended_project_ids',
+    )
     .eq('id', charge.subscription_id)
     .maybeSingle()
   if (!sub || sub.user_id !== charge.user_id || !RENEWABLE_STATUSES.includes(sub.status)) {
@@ -463,13 +470,18 @@ export async function settleSubscriptionRenewal(input: {
         grace_period_ends_at: null,
         suspended_at: null,
         suspension_reason: null,
-        suspended_project_ids: [],
       })
       .eq('id', sub.id)
 
     const { restored, skipped } = suspendedIds.length
       ? await restoreSuspendedSites(sub.user_id, suspendedIds, plan?.code ?? null)
       : { restored: 0, skipped: 0 }
+
+    // Forget the remembered sites only once they are restored, so a failure above
+    // leaves the list intact for the retry.
+    if (suspendedIds.length) {
+      await admin.from('billing_subscriptions').update({ suspended_project_ids: [] }).eq('id', sub.id)
+    }
 
     await logUserEvent({
       userId: sub.user_id,
@@ -491,8 +503,28 @@ export async function settleSubscriptionRenewal(input: {
     grantPlanCreditsAfterPayment(sub.id)
     return { kind: 'renewed', restored, skipped }
   } catch (error) {
-    // Hand the ledger row back so a retried callback can finish the renewal.
-    await admin.from('billing_transactions').update({ status: 'pending' }).eq('id', charge.id)
+    // Put the subscription back as it was, then hand the ledger row back: a retry
+    // starts from the original period end instead of extending it a second time.
+    warnOnError(
+      'billing.settleRenewal.rollbackSub',
+      await rawAdmin
+        .from('billing_subscriptions')
+        .update({
+          status: sub.status,
+          plan_id: sub.plan_id,
+          current_period_start: sub.current_period_start,
+          current_period_end: sub.current_period_end,
+          grace_period_ends_at: sub.grace_period_ends_at,
+          suspended_at: sub.suspended_at,
+          suspension_reason: sub.suspension_reason,
+          suspended_project_ids: sub.suspended_project_ids ?? [],
+        })
+        .eq('id', sub.id),
+    )
+    warnOnError(
+      'billing.settleRenewal.rollbackCharge',
+      await rawAdmin.from('billing_transactions').update({ status: 'pending' }).eq('id', charge.id),
+    )
     throw error
   }
 }

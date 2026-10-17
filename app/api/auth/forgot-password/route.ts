@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { warnOnError } from '@/lib/db-guard'
 import { DEFAULT_LANG, LANG_COOKIE, normalizeLang, type Lang } from '@/lib/i18n'
 
 const BLOCK_WINDOW_MS = 15 * 60 * 1000
@@ -55,28 +56,43 @@ export async function POST(request: Request) {
 
   const now = new Date()
   const blockedUntil = new Date(now.getTime() + BLOCK_WINDOW_MS)
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('password_reset_blocked_until')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (profile?.password_reset_blocked_until && new Date(profile.password_reset_blocked_until) > now) {
-    await admin.from('password_reset_security_events').insert({
-      user_id: user.id,
-      event_type: 'reset_request_rejected',
-      blocked_from: now.toISOString(),
-      blocked_until: new Date(profile.password_reset_blocked_until).toISOString(),
-      ip_address: context.ip,
-      user_agent: context.userAgent,
-    })
+  // Fail closed: without the throttle state we cannot tell whether this
+  // request is allowed, and a 500 would reveal that the address exists.
+  if (profileError) {
+    console.error('[forgot-password] throttle read failed', { code: profileError.code ?? 'unknown' })
     return NextResponse.json({ message: GENERIC_MESSAGE })
   }
 
-  await admin
+  if (profile?.password_reset_blocked_until && new Date(profile.password_reset_blocked_until) > now) {
+    warnOnError(
+      'forgotPassword.rejectedEvent',
+      await admin.from('password_reset_security_events').insert({
+        user_id: user.id,
+        event_type: 'reset_request_rejected',
+        blocked_from: now.toISOString(),
+        blocked_until: new Date(profile.password_reset_blocked_until).toISOString(),
+        ip_address: context.ip,
+        user_agent: context.userAgent,
+      }),
+    )
+    return NextResponse.json({ message: GENERIC_MESSAGE })
+  }
+
+  const { error: blockError } = await admin
     .from('profiles')
     .update({ password_reset_blocked_until: blockedUntil.toISOString() })
     .eq('id', user.id)
+  // Never send a reset email when the throttle could not be recorded.
+  if (blockError) {
+    console.error('[forgot-password] throttle write failed', { code: blockError.code ?? 'unknown' })
+    return NextResponse.json({ message: GENERIC_MESSAGE })
+  }
 
   // The Supabase email template renders exactly one language block based on
   // user_metadata.email_locale, so it must be stored before the email is sent.
@@ -88,7 +104,10 @@ export async function POST(request: Request) {
     if (localeError || updated?.user?.user_metadata?.email_locale !== emailLocale) {
       // Never send the email with a stale/missing locale; release the throttle so the user can retry.
       console.error('[forgot-password] email_locale update failed:', localeError?.message ?? 'value mismatch')
-      await admin.from('profiles').update({ password_reset_blocked_until: null }).eq('id', user.id)
+      warnOnError(
+        'forgotPassword.releaseAfterLocale',
+        await admin.from('profiles').update({ password_reset_blocked_until: null }).eq('id', user.id),
+      )
       return NextResponse.json({ message: GENERIC_MESSAGE })
     }
   }
@@ -100,7 +119,10 @@ export async function POST(request: Request) {
   })
 
   if (error) {
-    await admin.from('profiles').update({ password_reset_blocked_until: null }).eq('id', user.id)
+    warnOnError(
+      'forgotPassword.releaseAfterSend',
+      await admin.from('profiles').update({ password_reset_blocked_until: null }).eq('id', user.id),
+    )
     return NextResponse.json({ message: GENERIC_MESSAGE })
   }
 

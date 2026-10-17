@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isDbQueryError, requireOk, warnOnError } from '@/lib/db-guard'
 import type { DomainErrorCode } from '../types'
 import { loadPricingContext } from '../pricing/context'
 import { resolveOrderPricing } from '../pricing/order'
@@ -114,14 +115,17 @@ export type RenewalView = {
 /** Latest renewal of this domain for the signed-in owner (any status). */
 export async function getLatestRenewal(userId: string, domain: string): Promise<RenewalView | null> {
   const admin = createAdminClient()
-  const { data } = await admin
-    .from('domain_renewals')
-    .select('id, status, period_years, created_at, provider_expires_raw')
-    .eq('user_id', userId)
-    .eq('domain', domain.trim().toLowerCase())
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const { data } = requireOk(
+    'domainRenewal.getLatest',
+    await admin
+      .from('domain_renewals')
+      .select('id, status, period_years, created_at, provider_expires_raw')
+      .eq('user_id', userId)
+      .eq('domain', domain.trim().toLowerCase())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  )
   if (!data) return null
   return {
     id: data.id,
@@ -147,22 +151,31 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
   const admin = createAdminClient()
   try {
     // Atomic claim: exactly one caller may move payment_verified -> submitting.
-    const { data: claimed } = await admin
-      .from('domain_renewals')
-      .update({ status: 'renewal_submitting', updated_at: new Date().toISOString() })
-      .eq('id', renewalId)
-      .eq('status', 'payment_verified')
-      .select('id, user_id, domain, period_years, baseline_expires_raw')
+    // A failed claim throws into the outer catch: the row stays payment_verified
+    // and sweepStaleRenewals retries it, instead of the failure looking like
+    // "someone else already claimed it".
+    const { data: claimed } = requireOk(
+      'domainRenewal.claim',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'renewal_submitting', updated_at: new Date().toISOString() })
+        .eq('id', renewalId)
+        .eq('status', 'payment_verified')
+        .select('id, user_id, domain, period_years, baseline_expires_raw'),
+    )
     const row = claimed?.[0]
     if (!row) return
 
     const registrar = getDomainRegistrarProvider()
     if (!isManageCapable(registrar) || !isTransferCapable(registrar)) {
       // Nothing was sent to the provider, but the buyer has paid.
-      await admin
-        .from('domain_renewals')
-        .update({ status: 'manual_refund_required', error_message: 'registrar_unavailable' })
-        .eq('id', row.id)
+      requireOk(
+        'domainRenewal.markRegistrarUnavailable',
+        await admin
+          .from('domain_renewals')
+          .update({ status: 'manual_refund_required', error_message: 'registrar_unavailable' })
+          .eq('id', row.id),
+      )
       return
     }
 
@@ -171,37 +184,55 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
     try {
       const info = await registrar.getOwnedDomainInfo(row.domain)
       if (info && isLaterRawDate(info.expiresAtRaw ?? null, row.baseline_expires_raw)) {
-        await admin
-          .from('domain_renewals')
-          .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
-          .eq('id', row.id)
+        requireOk(
+          'domainRenewal.markCompletedReplay',
+          await admin
+            .from('domain_renewals')
+            .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
+            .eq('id', row.id),
+        )
         return
       }
-    } catch {
+    } catch (e) {
+      // A failed DB write here must not fall through to a second Renew call.
+      if (isDbQueryError(e)) throw e
       // Cannot read state: continue, the renew call itself re-checks before sending.
     }
 
+    let result: Awaited<ReturnType<typeof registrar.renewDomain>>
     try {
-      const result = await registrar.renewDomain(row.domain, row.period_years)
-      await admin
-        .from('domain_renewals')
-        .update({ status: 'completed', provider_expires_raw: result.expiresAtRaw, error_message: null })
-        .eq('id', row.id)
+      result = await registrar.renewDomain(row.domain, row.period_years)
     } catch (e) {
       const code = e instanceof RegistrarError ? e.code : 'UNEXPECTED'
       console.error('[domain-renewal] renew failed', row.id, code)
       if (isDefiniteRejection(e)) {
-        await admin
-          .from('domain_renewals')
-          .update({ status: 'manual_refund_required', error_message: `renew_rejected:${code}` })
-          .eq('id', row.id)
+        requireOk(
+          'domainRenewal.markRejected',
+          await admin
+            .from('domain_renewals')
+            .update({ status: 'manual_refund_required', error_message: `renew_rejected:${code}` })
+            .eq('id', row.id),
+        )
       } else {
-        await admin
-          .from('domain_renewals')
-          .update({ status: 'renewal_reconciliation_required', error_message: `renew_uncertain:${code}` })
-          .eq('id', row.id)
+        requireOk(
+          'domainRenewal.markUncertain',
+          await admin
+            .from('domain_renewals')
+            .update({ status: 'renewal_reconciliation_required', error_message: `renew_uncertain:${code}` })
+            .eq('id', row.id),
+        )
       }
+      return
     }
+    // If this write fails the row stays renewal_submitting; the sweeper moves it
+    // to reconciliation, which completes it once the new expiry is observed.
+    requireOk(
+      'domainRenewal.markCompleted',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'completed', provider_expires_raw: result.expiresAtRaw, error_message: null })
+        .eq('id', row.id),
+    )
   } catch (e) {
     console.error('[domain-renewal] finalize crashed', renewalId, e instanceof Error ? e.name : 'unknown')
   }
@@ -215,37 +246,50 @@ export async function reconcileRenewals(): Promise<{ checked: number; completed:
   const registrar = getDomainRegistrarProvider()
   if (!isManageCapable(registrar) || !isTransferCapable(registrar)) return { checked: 0, completed: 0 }
   const admin = createAdminClient()
-  const { data: rows } = await admin
-    .from('domain_renewals')
-    .select('id, domain, baseline_expires_raw')
-    .eq('status', 'renewal_reconciliation_required')
-    .order('updated_at', { ascending: true })
-    .limit(50)
+  const { data: rows } = requireOk(
+    'domainRenewal.reconcileList',
+    await admin
+      .from('domain_renewals')
+      .select('id, domain, baseline_expires_raw')
+      .eq('status', 'renewal_reconciliation_required')
+      .order('updated_at', { ascending: true })
+      .limit(50),
+  )
   let completed = 0
   for (const row of (rows ?? []) as { id: string; domain: string; baseline_expires_raw: string | null }[]) {
     try {
       const info = await registrar.getOwnedDomainInfo(row.domain)
       if (info && isLaterRawDate(info.expiresAtRaw ?? null, row.baseline_expires_raw)) {
-        const done = await admin
-          .from('domain_renewals')
-          .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
-          .eq('id', row.id)
-          .eq('status', 'renewal_reconciliation_required')
-          .select('id')
+        const done = requireOk(
+          'domainRenewal.reconcileComplete',
+          await admin
+            .from('domain_renewals')
+            .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
+            .eq('id', row.id)
+            .eq('status', 'renewal_reconciliation_required')
+            .select('id'),
+        )
         if (done.data && done.data.length > 0) completed++
       } else {
+        warnOnError(
+          'domainRenewal.reconcileTouch',
+          await admin
+            .from('domain_renewals')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', row.id)
+            .eq('status', 'renewal_reconciliation_required'),
+        )
+      }
+    } catch (e) {
+      if (isDbQueryError(e)) console.error('[domain-renewal] reconcile write failed', row.id, e.code)
+      warnOnError(
+        'domainRenewal.reconcileTouchAfterError',
         await admin
           .from('domain_renewals')
           .update({ updated_at: new Date().toISOString() })
           .eq('id', row.id)
-          .eq('status', 'renewal_reconciliation_required')
-      }
-    } catch {
-      await admin
-        .from('domain_renewals')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', row.id)
-        .eq('status', 'renewal_reconciliation_required')
+          .eq('status', 'renewal_reconciliation_required'),
+      )
     }
   }
   return { checked: rows?.length ?? 0, completed }
@@ -263,26 +307,35 @@ export async function sweepStaleRenewals(olderThanMs = STALE_PENDING_MS): Promis
   const admin = createAdminClient()
   const cutoff = new Date(Date.now() - olderThanMs).toISOString()
   let swept = 0
-  const cancelled = await admin
-    .from('domain_renewals')
-    .update({ status: 'cancelled', error_message: 'payment_not_completed' })
-    .eq('status', 'pending_payment')
-    .lt('updated_at', cutoff)
-    .select('id')
+  const cancelled = requireOk(
+    'domainRenewal.sweepCancel',
+    await admin
+      .from('domain_renewals')
+      .update({ status: 'cancelled', error_message: 'payment_not_completed' })
+      .eq('status', 'pending_payment')
+      .lt('updated_at', cutoff)
+      .select('id'),
+  )
   swept += cancelled.data?.length ?? 0
-  const stuck = await admin
-    .from('domain_renewals')
-    .update({ status: 'renewal_reconciliation_required', error_message: 'submitting_timeout' })
-    .eq('status', 'renewal_submitting')
-    .lt('updated_at', cutoff)
-    .select('id')
+  const stuck = requireOk(
+    'domainRenewal.sweepStuck',
+    await admin
+      .from('domain_renewals')
+      .update({ status: 'renewal_reconciliation_required', error_message: 'submitting_timeout' })
+      .eq('status', 'renewal_submitting')
+      .lt('updated_at', cutoff)
+      .select('id'),
+  )
   swept += stuck.data?.length ?? 0
-  const { data: unclaimed } = await admin
-    .from('domain_renewals')
-    .select('id')
-    .eq('status', 'payment_verified')
-    .lt('updated_at', cutoff)
-    .limit(25)
+  const { data: unclaimed } = requireOk(
+    'domainRenewal.sweepUnclaimed',
+    await admin
+      .from('domain_renewals')
+      .select('id')
+      .eq('status', 'payment_verified')
+      .lt('updated_at', cutoff)
+      .limit(25),
+  )
   for (const row of (unclaimed ?? []) as { id: string }[]) {
     await finalizeRenewal(row.id)
     swept++

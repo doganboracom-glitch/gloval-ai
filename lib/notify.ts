@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { warnOnError } from '@/lib/db-guard'
 import { composeStoreFrom } from '@/lib/email/from'
 import { appendBillingProfileReminder } from '@/lib/billing-profile-copy'
 import { getBillingProfileStatusForUser } from '@/lib/billing-profile-store'
@@ -115,14 +116,17 @@ export async function recordNotification(input: {
 }): Promise<void> {
   try {
     const admin = createAdminClient()
-    await admin.from('notification_logs').insert({
-      user_id: input.userId,
-      channel: input.channel,
-      type: input.type,
-      subject: input.subject,
-      body: input.body ?? null,
-      status: input.status ?? 'sent',
-    })
+    warnOnError(
+      'notify.record',
+      await admin.from('notification_logs').insert({
+        user_id: input.userId,
+        channel: input.channel,
+        type: input.type,
+        subject: input.subject,
+        body: input.body ?? null,
+        status: input.status ?? 'sent',
+      }),
+    )
   } catch (error) {
     console.log('[v0] notification log failed:', error)
   }
@@ -170,7 +174,8 @@ export async function claimNotification(input: {
 export async function releaseNotificationClaim(dedupeKey: string): Promise<void> {
   try {
     const admin = createAdminClient()
-    await admin.from('notification_logs').delete().eq('dedupe_key', dedupeKey)
+    // A stuck claim blocks the retry of a payment notice, so a failure must be visible.
+    warnOnError('notify.releaseClaim', await admin.from('notification_logs').delete().eq('dedupe_key', dedupeKey))
   } catch (error) {
     console.log('[v0] notification release error:', error)
   }
