@@ -6,6 +6,7 @@ import {
   type SiteBlogData,
 } from '@/lib/blog-site'
 import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
+import { PostsRetry } from '@/components/website-renderer/sections/posts-retry'
 
 export function WebsiteLatestPosts({
   blog,
@@ -19,7 +20,7 @@ export function WebsiteLatestPosts({
   const copy = blogCopy(lang)
   const heading = title?.trim() || latestPostsHeading(lang)
 
-  if (blog.posts.length === 0 && blog.preparing) {
+  if (blog.posts.length === 0 && (blog.preparing || blog.stalled)) {
     return (
       <section
         aria-labelledby="latest-posts-heading"
@@ -36,9 +37,13 @@ export function WebsiteLatestPosts({
           >
             {heading}
           </h2>
-          <p role="status" className="text-sm" style={{ color: 'var(--site-muted-fg)' }}>
-            {postsPreparingLabel(lang)}
-          </p>
+          {blog.stalled && !blog.preparing ? (
+            <PostsRetry stalled={blog.stalled} lang={lang} />
+          ) : (
+            <p role="status" className="text-sm" style={{ color: 'var(--site-muted-fg)' }}>
+              {postsPreparingLabel(lang)}
+            </p>
+          )}
           <div aria-hidden="true" className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
               <div

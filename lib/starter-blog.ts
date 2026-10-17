@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { blogAiOutputSchema, countWords, type BlogAiOutput, type BlogLang } from '@/lib/blog-ai'
 import { detectUnverifiedClaims } from '@/lib/blog-trust'
-import { createBlogPost, type BlogWriteDeps, type BlogWriteResult } from '@/lib/blog-write'
+import { createBlogPost, recordOf, safeCoverUrl, type BlogWriteDeps, type BlogWriteResult } from '@/lib/blog-write'
 import { detectSector, type Sector } from '@/lib/sector-profiles'
 import { pickStarterTopics, STARTER_POST_COUNT } from '@/lib/starter-blog-topics'
 import type { BlogPost } from '@/lib/blog'
@@ -23,6 +23,13 @@ export const STARTER_LIMITS = { minWords: 400, maxWords: 1000, targetMinWords: 5
 
 /** Whole-run time budget; a slow model must never hold the server up. */
 export const STARTER_BUDGET_MS = 150_000
+
+/**
+ * Extra time, after the posts exist, for the real cover images. Posts are
+ * already live with the generic illustration, so a slow image model can only
+ * cost the upgrade, never the posts.
+ */
+export const STARTER_COVER_BUDGET_MS = 45_000
 
 /** Sites per user per rolling 24 hours that get their free starter posts. */
 export const STARTER_DAILY_SITE_CAP = 5
@@ -145,8 +152,39 @@ export type StarterBlogDeps = {
     description: string
     abortSignal: AbortSignal
   }): Promise<BlogAiOutput>
+  /**
+   * Optional: resolves to a stored https/site URL for the post's own cover, or
+   * null. Never throws into the run; a failure keeps the generic illustration.
+   */
+  cover?(args: { post: BlogPost; sector: Sector; lang: BlogLang; abortSignal: AbortSignal }): Promise<string | null>
   /** Per-process guard for double clicks and concurrent runs. */
   inflight?: Set<string>
+}
+
+/** Replaces the generic illustration with each post's own cover, within a hard time budget. */
+async function upgradeCovers(
+  deps: StarterBlogDeps,
+  projectId: string,
+  posts: BlogPost[],
+  sector: Sector,
+  lang: BlogLang,
+  budgetMs: number,
+): Promise<BlogPost[]> {
+  const cover = deps.cover
+  if (!cover) return posts
+  const signal = AbortSignal.timeout(budgetMs)
+  const expired = new Promise<null>((resolve) => signal.addEventListener('abort', () => resolve(null), { once: true }))
+  return Promise.all(
+    posts.map(async (post) => {
+      try {
+        const url = safeCoverUrl(await Promise.race([cover({ post, sector, lang, abortSignal: signal }), expired]))
+        if (!url || signal.aborted) return post
+        return await deps.write.store.update(projectId, post.id, { ...recordOf(post), coverUrl: url, coverAlt: post.title })
+      } catch {
+        return post
+      }
+    }),
+  )
 }
 
 /** One code per failure branch: logged on the server (no personal data) and mapped to a user message in the UI. */
@@ -213,7 +251,14 @@ const defaultInflight = new Set<string>()
  */
 export async function runStarterBlog(
   deps: StarterBlogDeps,
-  args: { projectId: string; site: StarterSite; lang: BlogLang; seed?: string; budgetMs?: number },
+  args: {
+    projectId: string
+    site: StarterSite
+    lang: BlogLang
+    seed?: string
+    budgetMs?: number
+    coverBudgetMs?: number
+  },
 ): Promise<StarterBlogResult> {
   const inflight = deps.inflight ?? defaultInflight
   if (inflight.has(args.projectId)) return { status: 'skipped', reason: 'in_progress' }
@@ -274,7 +319,17 @@ export async function runStarterBlog(
     const posts = outcomes.flatMap((o) => ('post' in o ? [o.post] : []))
     const duplicates = outcomes.filter((o) => 'duplicate' in o).length
     const codes = outcomes.flatMap((o) => ('code' in o ? [o.code] : []))
-    if (posts.length > 0) return { status: 'created', posts, failed: topics.length - posts.length - duplicates }
+    if (posts.length > 0) {
+      const withCovers = await upgradeCovers(
+        deps,
+        args.projectId,
+        posts,
+        sector,
+        args.lang,
+        args.coverBudgetMs ?? STARTER_COVER_BUDGET_MS,
+      )
+      return { status: 'created', posts: withCovers, failed: topics.length - posts.length - duplicates }
+    }
     if (codes.length === 0) return { status: 'skipped', reason: 'already_added' }
     const code = CODE_PRIORITY.find((c) => codes.includes(c)) ?? 'starter_blog_model'
     return { status: 'failed', failed: topics.length - duplicates, code }

@@ -16,6 +16,15 @@ import {
   type StarterSite,
 } from '@/lib/starter-blog'
 import type { BlogLang } from '@/lib/blog-ai'
+import {
+  buildCoverPrompt,
+  DEFAULT_COVER_STYLE,
+  generateAcceptedCover,
+  heuristicCoverConcepts,
+} from '@/lib/blog-cover'
+import { inspectCover } from '@/lib/blog-cover-inspect'
+import { generateSiteImage, imageGenerationAvailable } from '@/lib/image-provider'
+import { persistImageDataUri } from '@/lib/image-storage'
 
 function realDeps(projectId: string, siteSlug: string | null, ownerId?: string): StarterBlogDeps {
   return {
@@ -35,6 +44,27 @@ function realDeps(projectId: string, siteSlug: string | null, ownerId?: string):
         abortSignal,
       })
       return result.object
+    },
+    async cover({ post, abortSignal }) {
+      if (!imageGenerationAvailable()) return null
+      const prompt = buildCoverPrompt({
+        concepts: heuristicCoverConcepts(`${post.title} ${post.excerpt ?? ''}`),
+        style: DEFAULT_COVER_STYLE,
+      })
+      const gate = await generateAcceptedCover({
+        generate: async () => (abortSignal.aborted ? null : generateSiteImage({ prompt, aspectRatio: '16:9' })),
+        inspect: async (src) => {
+          try {
+            return await inspectCover(src)
+          } catch {
+            return { text: 'unknown', people: 'unknown' }
+          }
+        },
+        maxAttempts: 1,
+      })
+      if (!gate.ok || abortSignal.aborted) return null
+      const stored = await persistImageDataUri(gate.src)
+      return stored.startsWith('https://') || stored.startsWith('/') ? stored : null
     },
   }
 }
