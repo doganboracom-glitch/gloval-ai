@@ -924,7 +924,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
     team: ['Ekip', 'Team'],
     pricing: ['Fiyatlandırma', 'Pricing'],
     faq: ['SSS', 'FAQ'],
-    blogLatest: ['Blogdan Son Yazılar', 'Latest posts'],
+    blogLatest: ['Blog', 'Blog'],
     contact: ['İletişim', 'Contact'],
     cta: ['Eylem Çağrısı', 'Call to action'],
     footer: ['Alt Bilgi', 'Footer'],

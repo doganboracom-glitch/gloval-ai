@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import type { BlogPost } from '@/lib/blog'
-import { runStarterBlogNow } from '@/lib/starter-blog-server'
+import { regenerateStarterBlogNow, runStarterBlogNow } from '@/lib/starter-blog-server'
 import type { StarterErrorCode } from '@/lib/starter-blog'
 import { isStorefront, websiteSchema } from '@/lib/website-schema'
 import {
@@ -146,6 +146,44 @@ export async function addStarterBlogPostsAction(
     return { ok: true, posts: result.posts, failed: result.failed }
   }
   if (result.status === 'skipped') return { ok: false, reason: result.reason }
+  return { ok: false, reason: result.code }
+}
+
+/** Replaces the owner's untouched sample posts with new ones. Free; edited or personalised posts are never touched. */
+export async function regenerateStarterBlogPostsAction(
+  projectId: string,
+): Promise<
+  | { ok: true; posts: BlogPost[]; failed: number }
+  | { ok: false; reason: 'nothing_to_replace' | 'already_added' | 'in_progress' | StarterErrorCode | 'NOT_FOUND' }
+  | Denied
+> {
+  const access = await authorize(projectId)
+  if (!access.ok) return access
+  const supabase = await createClient()
+  const { data: project } = await supabase
+    .from('projects')
+    .select('name, language, schema_data')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!project) return { ok: false, reason: 'NOT_FOUND' }
+  const parsed = websiteSchema.safeParse(project.schema_data)
+  const site = {
+    name: parsed.success ? parsed.data.meta.name : String(project.name ?? ''),
+    description: parsed.success ? parsed.data.meta.description : '',
+    storefront: parsed.success ? isStorefront(parsed.data) : false,
+  }
+  const result = await regenerateStarterBlogNow({
+    projectId,
+    siteSlug: access.slug,
+    site,
+    lang: project.language === 'en' ? 'en' : 'tr',
+  })
+  if (result.status === 'created') {
+    refresh(access.slug)
+    return { ok: true, posts: result.posts, failed: result.failed }
+  }
+  if (result.status === 'skipped') return { ok: false, reason: result.reason }
+  refresh(access.slug)
   return { ok: false, reason: result.code }
 }
 

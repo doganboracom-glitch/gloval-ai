@@ -4,7 +4,7 @@ import { detectUnverifiedClaims } from '@/lib/blog-trust'
 import { createBlogPost, recordOf, safeCoverUrl, type BlogWriteDeps, type BlogWriteResult } from '@/lib/blog-write'
 import { detectSector, type Sector } from '@/lib/sector-profiles'
 import { pickStarterTopics, STARTER_POST_COUNT } from '@/lib/starter-blog-topics'
-import type { BlogPost } from '@/lib/blog'
+import { isRegenerableStarterPost, type BlogPost } from '@/lib/blog'
 
 /**
  * Starter blog posts: three general, sector-appropriate articles written once,
@@ -240,6 +240,50 @@ function outcomeForFailure(failure: Exclude<BlogWriteResult, { ok: true }>): Out
       // INVALID / SAMPLE_CONTENT: the model's text was rejected by the write rules.
       return { code: 'starter_blog_model' }
   }
+}
+
+export type StarterRegenerateResult = StarterBlogResult | { status: 'skipped'; reason: 'nothing_to_replace' }
+
+async function restorePosts(deps: StarterBlogDeps, projectId: string, posts: BlogPost[]): Promise<void> {
+  for (const post of posts) {
+    try {
+      await deps.write.store.insert(projectId, recordOf(post))
+    } catch {
+      // Best effort: a failed restore must not hide the original failure.
+    }
+  }
+}
+
+/**
+ * Replaces the untouched starter posts with freshly written ones (used after a
+ * sector fix left wrong-topic samples behind). Posts the owner edited,
+ * personalised or marked are never selected. If nothing new could be written the
+ * old posts are put back, so a failed run never leaves the blog emptier.
+ */
+export async function regenerateStarterBlog(
+  deps: StarterBlogDeps,
+  args: { projectId: string; site: StarterSite; lang: BlogLang; posts: readonly BlogPost[]; seed?: string },
+): Promise<StarterRegenerateResult> {
+  const targets = args.posts.filter(isRegenerableStarterPost)
+  if (targets.length === 0) return { status: 'skipped', reason: 'nothing_to_replace' }
+
+  const removed: BlogPost[] = []
+  try {
+    for (const post of targets) {
+      await deps.write.store.remove(args.projectId, post.id)
+      removed.push(post)
+    }
+  } catch {
+    await restorePosts(deps, args.projectId, removed)
+    return { status: 'failed', failed: STARTER_POST_COUNT, code: 'starter_blog_db' }
+  }
+
+  const result = await runStarterBlog(
+    { ...deps, existingStarterCount: async () => 0, dailyCapReached: undefined },
+    { projectId: args.projectId, site: args.site, lang: args.lang, seed: args.seed ?? `${args.projectId}:${Date.now()}` },
+  )
+  if (result.status === 'failed') await restorePosts(deps, args.projectId, removed)
+  return result
 }
 
 const defaultInflight = new Set<string>()

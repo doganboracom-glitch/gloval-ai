@@ -8,8 +8,8 @@ import { WebsiteLatestPosts } from '@/components/website-renderer/sections/websi
  * public post (and the starter posts are not pending), so a published site
  * never shows an empty block; the editor preview shows the skeleton instead.
  */
-export function BlogLatestSection({ title, lang }: { title?: string; lang: 'tr' | 'en' }) {
+export function BlogLatestSection({ lang }: { lang: 'tr' | 'en' }) {
   const latest = useLatestPosts()
   if (!latest) return null
-  return <WebsiteLatestPosts blog={latest.blog} lang={lang} title={title} />
+  return <WebsiteLatestPosts blog={latest.blog} lang={lang} />
 }

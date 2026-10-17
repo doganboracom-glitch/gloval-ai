@@ -84,7 +84,7 @@ export function SectionRenderer({
     case 'faq':
       return <FaqSection data={section} />
     case 'blogLatest':
-      return <BlogLatestSection title={section.title} lang={meta.language} />
+      return <BlogLatestSection lang={meta.language} />
     case 'contact':
       return <ContactSection data={section} lang={meta.language} live={contactForm} site={site} />
     case 'cta':

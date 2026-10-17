@@ -8,11 +8,13 @@ import { isStarterPost } from '@/lib/blog'
 import {
   buildStarterSystemPrompt,
   buildStarterUserPrompt,
+  regenerateStarterBlog,
   runStarterBlog,
   starterDailyCapReached,
   starterOutputSchema,
   type StarterBlogDeps,
   type StarterBlogResult,
+  type StarterRegenerateResult,
   type StarterSite,
 } from '@/lib/starter-blog'
 import type { BlogLang } from '@/lib/blog-ai'
@@ -89,6 +91,36 @@ export async function runStarterBlogNow(args: {
   )
   return result
 }
+
+/** Replaces the untouched starter posts of one project; free, never billed, owner-edited posts are never touched. */
+export async function regenerateStarterBlogNow(args: {
+  projectId: string
+  siteSlug: string | null
+  site: StarterSite
+  lang: BlogLang
+}): Promise<StarterRegenerateResult> {
+  const inflight = regenerateInflight
+  if (inflight.has(args.projectId)) return { status: 'skipped', reason: 'in_progress' }
+  inflight.add(args.projectId)
+  try {
+    const result = await regenerateStarterBlog(realDeps(args.projectId, args.siteSlug), {
+      projectId: args.projectId,
+      site: args.site,
+      lang: args.lang,
+      posts: await listProjectBlogPosts(args.projectId),
+    })
+    console.log(
+      '[starter-blog] regenerate',
+      result.status,
+      result.status === 'failed' ? result.code : result.status === 'skipped' ? result.reason : '',
+    )
+    return result
+  } finally {
+    inflight.delete(args.projectId)
+  }
+}
+
+const regenerateInflight = new Set<string>()
 
 /** Starter posts the owner's sites received in the last 24 hours (counts only, no content). */
 async function starterPostsLast24h(ownerId: string): Promise<number> {

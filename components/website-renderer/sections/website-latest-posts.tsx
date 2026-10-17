@@ -4,14 +4,12 @@ import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
 export function WebsiteLatestPosts({
   blog,
   lang = 'tr',
-  title,
 }: {
   blog: SiteBlogData
   lang?: 'tr' | 'en'
-  title?: string
 }) {
   const copy = blogCopy(lang)
-  const heading = title?.trim() || latestPostsHeading()
+  const heading = latestPostsHeading()
 
   return (
     <section
