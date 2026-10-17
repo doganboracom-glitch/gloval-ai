@@ -1121,13 +1121,15 @@ function SectionManager({
                   </span>
                 )}
               </span>
-              <IconBtn
-                label={ui.editContent}
-                onClick={() => setOpenIndex(open ? null : i)}
-                small
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </IconBtn>
+              {section.type !== 'blogLatest' && (
+                <IconBtn
+                  label={ui.editContent}
+                  onClick={() => setOpenIndex(open ? null : i)}
+                  small
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </IconBtn>
+              )}
               <IconBtn
                 label={ui.moveUp}
                 disabled={i === 0}
@@ -1144,24 +1146,28 @@ function SectionManager({
               >
                 <ChevronDown className="h-3.5 w-3.5" />
               </IconBtn>
-              <IconBtn
-                label={isHidden ? ui.show : ui.hide}
-                disabled={section.type === 'footer'}
-                onClick={() =>
-                  onDispatch({ op: 'setSectionHidden', index: i, hidden: !isHidden })
-                }
-                small
-              >
-                {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </IconBtn>
-              <IconBtn
-                label={ui.remove}
-                disabled={locked}
-                onClick={() => removeSection(i)}
-                small
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </IconBtn>
+              {section.type !== 'blogLatest' && (
+                <>
+                  <IconBtn
+                    label={isHidden ? ui.show : ui.hide}
+                    disabled={section.type === 'footer'}
+                    onClick={() =>
+                      onDispatch({ op: 'setSectionHidden', index: i, hidden: !isHidden })
+                    }
+                    small
+                  >
+                    {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </IconBtn>
+                  <IconBtn
+                    label={ui.remove}
+                    disabled={locked}
+                    onClick={() => removeSection(i)}
+                    small
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </IconBtn>
+                </>
+              )}
             </div>
 
             {open && (

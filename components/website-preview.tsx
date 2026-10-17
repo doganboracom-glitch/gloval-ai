@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import useSWR from 'swr'
-import { addStarterBlogPostsAction, listBlogPostsAction } from '@/lib/blog-actions'
+import { listBlogPostsAction } from '@/lib/blog-actions'
 import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
@@ -320,15 +320,9 @@ export function WebsitePreview({
   // block follow the owner's posts and the two visibility switches live.
   const blogProjectId = blog?.projectId ?? null
   const [starterWaiting, setStarterWaiting] = useState(Boolean(blog?.starterPending))
-  const [starterStalled, setStarterStalled] = useState(false)
-  const [starterRetrying, setStarterRetrying] = useState(false)
-  const [starterError, setStarterError] = useState<string | null>(null)
   useEffect(() => {
     if (!starterWaiting) return
-    const stop = setTimeout(() => {
-      setStarterWaiting(false)
-      setStarterStalled(true)
-    }, STARTER_WAIT_MS)
+    const stop = setTimeout(() => setStarterWaiting(false), STARTER_WAIT_MS)
     return () => clearTimeout(stop)
   }, [starterWaiting])
   const { data: previewPosts, mutate: reloadPreviewPosts } = useSWR(
@@ -347,37 +341,9 @@ export function WebsitePreview({
       errorRetryCount: 3,
     },
   )
-  const retryStarter = useCallback(async () => {
-    if (!blogProjectId) return
-    setStarterRetrying(true)
-    setStarterError(null)
-    try {
-      const result = await addStarterBlogPostsAction(blogProjectId)
-      if (result.ok || result.reason === 'already_added') {
-        setStarterStalled(false)
-        await reloadPreviewPosts()
-        window.dispatchEvent(new Event(BLOG_CHANGED_EVENT))
-      } else {
-        setStarterError(result.reason)
-      }
-    } catch {
-      setStarterError('network')
-    } finally {
-      setStarterRetrying(false)
-    }
-  }, [blogProjectId, reloadPreviewPosts])
   const previewBlog = useMemo(
-    () =>
-      previewPosts
-        ? previewSiteBlogData(
-            previewPosts,
-            starterWaiting,
-            starterStalled
-              ? { error: starterError, retrying: starterRetrying, onRetry: () => void retryStarter() }
-              : undefined,
-          )
-        : null,
-    [previewPosts, starterWaiting, starterStalled, starterError, starterRetrying, retryStarter],
+    () => (previewPosts ? previewSiteBlogData(previewPosts) : null),
+    [previewPosts],
   )
   useEffect(() => {
     if (!blogProjectId) return

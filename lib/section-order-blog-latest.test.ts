@@ -3,7 +3,8 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import {
   defaultBlogLatestIndex,
   hasBlogLatestSection,
-  withDefaultBlogLatest,
+  setBlogLatestEnabled,
+  withBlogOffByDefault,
   withLegacyBlogLatest,
 } from '@/lib/section-order'
 
@@ -27,11 +28,39 @@ describe('defaultBlogLatestIndex', () => {
   })
 })
 
-describe('withDefaultBlogLatest', () => {
-  it('adds the section above the FAQ once', () => {
-    const next = withDefaultBlogLatest(site(['hero', 'features', 'faq', 'contact', 'footer']))
+describe('withBlogOffByDefault', () => {
+  it('generates a new site with the menu link and home section both off', () => {
+    const next = withBlogOffByDefault(site(['hero', 'faq', 'footer']))
+    expect(next.blogSettings).toEqual({ showInMenu: false, showLatest: false })
+    expect(types(next)).toEqual(['hero', 'faq', 'footer'])
+  })
+
+  it('keeps settings the owner already chose', () => {
+    const s = site(['hero', 'footer'], { showInMenu: true })
+    expect(withBlogOffByDefault(s)).toBe(s)
+  })
+})
+
+describe('setBlogLatestEnabled', () => {
+  it('adds the section above the FAQ the first time it is switched on', () => {
+    const next = setBlogLatestEnabled(site(['hero', 'features', 'faq', 'contact', 'footer']), true)
     expect(types(next)).toEqual(['hero', 'features', 'blogLatest', 'faq', 'contact', 'footer'])
-    expect(types(withDefaultBlogLatest(next))).toEqual(types(next))
+    expect(types(setBlogLatestEnabled(next, true))).toEqual(types(next))
+  })
+
+  it('removes the section when switched off and restores it to the same spot', () => {
+    const on = setBlogLatestEnabled(site(['hero', 'features', 'faq', 'footer']), true)
+    const off = setBlogLatestEnabled(on, false)
+    expect(types(off)).toEqual(['hero', 'features', 'faq', 'footer'])
+    expect(off.blogSettings?.latestIndex).toBe(2)
+    expect(types(setBlogLatestEnabled(off, true))).toEqual(types(on))
+  })
+
+  it('shows a hidden section when switched on', () => {
+    const s = site(['hero', 'footer'])
+    s.sections = [s.sections[0], { type: 'blogLatest', hidden: true }, s.sections[1]] as WebsiteSchema['sections']
+    const next = setBlogLatestEnabled(s, true)
+    expect(next.sections.find((section) => section.type === 'blogLatest')).not.toHaveProperty('hidden')
   })
 })
 
@@ -56,8 +85,8 @@ describe('withLegacyBlogLatest', () => {
     expect(types(next)).toEqual(['hero', 'blogLatest', 'features', 'footer'])
   })
 
-  it('hides the section when the owner had switched the block off', () => {
+  it('adds no section when the owner had switched the block off', () => {
     const next = withLegacyBlogLatest(site(['hero', 'footer'], { showLatest: false }))
-    expect(next.sections.find((section) => section.type === 'blogLatest')).toMatchObject({ hidden: true })
+    expect(types(next)).toEqual(['hero', 'footer'])
   })
 })

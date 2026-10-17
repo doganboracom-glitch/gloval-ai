@@ -196,7 +196,7 @@ export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
   team: { tr: 'Ekip', en: 'Team' },
   pricing: { tr: 'Fiyatlandırma', en: 'Pricing' },
   faq: { tr: 'SSS', en: 'FAQ' },
-  blogLatest: { tr: 'Blogdan Son Yazılar', en: 'Latest posts' },
+  blogLatest: { tr: 'Blog', en: 'Blog' },
   contact: { tr: 'İletişim', en: 'Contact' },
   cta: { tr: 'Eylem Çağrısı', en: 'Call to action' },
   footer: { tr: 'Alt Bilgi', en: 'Footer' },

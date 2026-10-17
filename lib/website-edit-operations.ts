@@ -3,6 +3,7 @@ import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
 import { sanitizeLegalMarkup } from '@/lib/legal-markup'
+import { setBlogLatestEnabled } from '@/lib/section-order'
 import {
   SOCIAL_NETWORKS,
   normalizeSocialInput,
@@ -326,8 +327,10 @@ export function applyOperation(
     }
 
     case 'updateBlogSettings': {
-      const merged = { ...(next.blogSettings ?? {}), ...operation.patch }
-      next.blogSettings = merged
+      next.blogSettings = { ...(next.blogSettings ?? {}), ...operation.patch }
+      if (typeof operation.patch.showLatest === 'boolean') {
+        return setBlogLatestEnabled(next, operation.patch.showLatest)
+      }
       return next
     }
 

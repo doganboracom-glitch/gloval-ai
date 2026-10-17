@@ -48,26 +48,59 @@ function insertBlogLatest<T extends WebsiteSchema>(site: T, index: number, hidde
   return { ...site, sections }
 }
 
-/** Adds the movable latest-posts section to a newly generated site at its default spot. */
-export function withDefaultBlogLatest<T extends WebsiteSchema>(site: T): T {
-  if (hasBlogLatestSection(site)) return site
-  return insertBlogLatest(site, defaultBlogLatestIndex(site.sections))
+/**
+ * A newly generated site starts with the blog menu link and the home blog
+ * section both off; the owner turns them on in the Blog tab.
+ */
+export function withBlogOffByDefault<T extends WebsiteSchema>(site: T): T {
+  if (site.blogSettings) return site
+  return { ...site, blogSettings: { showInMenu: false, showLatest: false } }
+}
+
+/**
+ * Switches the home blog section on or off. Off removes it from the page (and so
+ * from the Design list) after remembering its index; on brings it back there, or
+ * at the default spot (above the FAQ) the first time. A hidden section is shown.
+ */
+export function setBlogLatestEnabled<T extends WebsiteSchema>(site: T, enabled: boolean): T {
+  const index = site.sections.findIndex((section) => section.type === 'blogLatest')
+  if (!enabled) {
+    if (index < 0) return site
+    return {
+      ...site,
+      sections: site.sections.filter((_, i) => i !== index),
+      blogSettings: { ...(site.blogSettings ?? {}), latestIndex: index },
+    }
+  }
+  if (index >= 0) {
+    const current = site.sections[index] as SectionLike & { hidden?: boolean }
+    if (!current.hidden) return site
+    const { hidden: _hidden, ...visible } = current
+    const sections = [...site.sections]
+    sections[index] = visible as SectionLike
+    return { ...site, sections }
+  }
+  const saved = site.blogSettings?.latestIndex
+  const footer = site.sections.findIndex((section) => section.type === 'footer')
+  const limit = footer >= 0 ? footer : site.sections.length
+  const at = typeof saved === 'number' ? Math.min(saved, limit) : defaultBlogLatestIndex(site.sections)
+  return insertBlogLatest(site, at)
 }
 
 /**
  * Existing sites used to get a fixed block (after the hero, or above the footer).
  * This lists it as a real section at exactly that spot, so nothing moves on screen.
- * A site whose owner had switched the block off gets the section hidden.
+ * A site whose owner had switched the block off gets no section at all.
  */
 export function withLegacyBlogLatest<T extends WebsiteSchema>(site: T): T {
   if (hasBlogLatestSection(site)) return site
-  const hidden = site.blogSettings?.showLatest === false
+  if (site.blogSettings?.showLatest === false) return site
   if (site.blogSettings?.latestPlacement === 'after-hero') {
     const first = site.sections[0]?.type
-    return insertBlogLatest(site, first === 'hero' || first === 'slider' ? 1 : 0, hidden)
+    return insertBlogLatest(site, first === 'hero' || first === 'slider' ? 1 : 0)
   }
   const footer = site.sections.findIndex((section) => section.type === 'footer')
-  return insertBlogLatest(site, footer >= 0 ? footer : site.sections.length, hidden)
+  return insertBlogLatest(site, footer >= 0 ? footer : site.sections.length)
 }
 
 /**

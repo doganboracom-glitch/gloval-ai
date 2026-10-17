@@ -9,10 +9,6 @@ export type SiteBlogData = {
   hrefBase: string
   /** Live posts, newest first. */
   posts: BlogCardData[]
-  /** Preview only: the starter posts are still being written in the background. */
-  preparing?: boolean
-  /** Preview only: the wait ran out with no posts; the owner can retry (`error` is a code, never post text). */
-  stalled?: { error: string | null; retrying: boolean; onRetry: () => void }
 }
 
 export type BlogCardData = {
@@ -43,8 +39,8 @@ export function buildSiteBlogData(hrefBase: string, posts: BlogPost[]): SiteBlog
 
 export const BLOG_LABEL = 'Blog'
 
-export function latestPostsHeading(lang: Lang): string {
-  return lang === 'en' ? 'Latest from the blog' : 'Blogdan son yazılar'
+export function latestPostsHeading(): string {
+  return BLOG_LABEL
 }
 
 export function blogIndexHref(blog: Pick<SiteBlogData, 'hrefBase'>): string {
@@ -61,15 +57,9 @@ export function isBlogRoutePath(tenantPath: string): boolean {
 }
 
 /** The live posts as the site chrome sees them; samples and drafts never appear. */
-export function previewSiteBlogData(
-  posts: readonly BlogPost[],
-  starterPending = false,
-  stalled?: SiteBlogData['stalled'],
-): SiteBlogData | null {
+export function previewSiteBlogData(posts: readonly BlogPost[]): SiteBlogData | null {
   const live = livePosts(posts.filter((post) => !post.sample))
-  if (live.length > 0) return buildSiteBlogData('', live)
-  if (starterPending) return { hrefBase: '', posts: [], preparing: true }
-  return stalled ? { hrefBase: '', posts: [], stalled } : null
+  return live.length > 0 ? buildSiteBlogData('', live) : null
 }
 
 /** How long after creation a site with no posts is still assumed to be waiting for its starter posts. */
@@ -87,21 +77,7 @@ export function shouldShowBlogLink(blog: SiteBlogData | null | undefined, settin
 }
 
 export function shouldShowLatestPosts(blog: SiteBlogData | null | undefined, settings?: BlogSettings): boolean {
-  return Boolean(
-    blog && (blog.posts.length > 0 || blog.preparing || blog.stalled) && settings?.showLatest !== false,
-  )
-}
-
-export function postsPreparingLabel(lang: Lang): string {
-  return lang === 'en' ? 'Posts are being prepared' : 'Yazılar hazırlanıyor'
-}
-
-export function postsStalledLabel(lang: Lang): string {
-  return lang === 'en' ? 'The posts could not be prepared.' : 'Yazılar hazırlanamadı.'
-}
-
-export function postsRetryLabel(lang: Lang): string {
-  return lang === 'en' ? 'Try again' : 'Yeniden dene'
+  return Boolean(blog && blog.posts.length > 0 && settings?.showLatest !== false)
 }
 
 /**
