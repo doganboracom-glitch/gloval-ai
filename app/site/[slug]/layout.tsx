@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
-import { extractMetaTags, stripMetaTags } from '@/lib/site-tracking'
+import { extractMetaTags, safeTrackingCode, sanitizeTracking, stripMetaTags } from '@/lib/site-tracking'
 
 /**
  * Tenant layout for every published page of a site (home, store, checkout…).
@@ -23,7 +23,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  const other = extractMetaTags(site?.schema.tracking?.head)
+  const other = extractMetaTags(safeTrackingCode(site?.schema.tracking?.head))
   // The platform's own Google Search Console token belongs to gloval.ai only,
   // so it is dropped here instead of leaking into every published tenant site.
   const base: Metadata = { verification: { google: null } }
@@ -43,7 +43,7 @@ export default async function PublishedSiteLayout({
 }) {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  const tracking = site?.schema.tracking
+  const tracking = sanitizeTracking(site?.schema.tracking)
 
   return (
     <>

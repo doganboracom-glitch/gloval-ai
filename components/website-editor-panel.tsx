@@ -52,6 +52,7 @@ import {
 } from '@/components/editor/company-fields'
 import { LegalDocsFields } from '@/components/editor/legal-docs-fields'
 import { SocialLinksFields } from '@/components/editor/social-links-fields'
+import { canUseTrackingCode } from '@/lib/site-tracking'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
@@ -594,6 +595,10 @@ function DesignTab({
 
       <Group title={ui.groupCode}>
         <p className="text-[11px] leading-snug text-muted-foreground">{ui.codeIntro}</p>
+        {!canUseTrackingCode(planCode) ? (
+          <LockedTrackingFields onBeforeUpgrade={onBeforeUpgrade} />
+        ) : (
+          <>
         <TextField
           label={ui.codeHead}
           hint={ui.codeHeadHelp}
@@ -624,9 +629,39 @@ function DesignTab({
           value={site.tracking?.bodyEnd ?? ''}
           onCommit={(v) => onDispatch({ op: 'updateTracking', field: 'bodyEnd', value: v })}
         />
+          </>
+        )}
       </Group>
     </div>
     </div>
+  )
+}
+
+/** FREE sees the three code slots as locks; tapping one opens the analytics upgrade message. */
+function LockedTrackingFields({ onBeforeUpgrade }: { onBeforeUpgrade?: () => Promise<boolean> }) {
+  const { t } = useLanguage()
+  const ui = t.editor.ui
+  const [locked, setLocked] = useState(false)
+  return (
+    <>
+      {[ui.codeHead, ui.codeBodyStart, ui.codeBodyEnd].map((label) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => setLocked(true)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="text-xs font-medium text-muted-foreground">{label}</span>
+          <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </button>
+      ))}
+      <UpgradeModal
+        featureKey={locked ? 'analytics' : null}
+        onClose={() => setLocked(false)}
+        linkPrefix="/"
+        onBeforeUpgrade={onBeforeUpgrade}
+      />
+    </>
   )
 }
 

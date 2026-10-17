@@ -36,6 +36,12 @@ const T = {
     addStarterHint: 'Sektörünüze uygun 3 genel yazı eklenir. Ücretsizdir; özelleştirene kadar arama motorlarında görünmez.',
     addStarterFailed: 'Örnek yazılar eklenemedi. Biraz sonra tekrar deneyin.',
     addStarterDone: 'Örnek yazılar zaten eklenmiş.',
+    addStarterBusy: 'Örnek yazılar şu anda hazırlanıyor. Birkaç dakika sonra tekrar bakın.',
+    addStarterDaily: 'Bugünlük örnek yazı hakkınız doldu. Yarın tekrar deneyin.',
+    addStarterSuspended: 'Aboneliğiniz askıda olduğu için yazı eklenemedi.',
+    addStarterPostLimit: 'Planınızın blog yazısı sınırına ulaşıldı.',
+    addStarterTimeout: 'Yazılar zamanında hazırlanamadı. Tekrar deneyin.',
+    addStarterDb: 'Yazılar kaydedilemedi. Biraz sonra tekrar deneyin.',
     title: 'Blog yazıları',
     visibility: 'Sitede görünürlük',
     showInMenu: 'Menüde göster',
@@ -65,6 +71,12 @@ const T = {
     addStarterHint: 'Adds 3 general posts for your sector. Free; hidden from search engines until you personalize them.',
     addStarterFailed: 'Could not add sample posts. Try again shortly.',
     addStarterDone: 'Sample posts were already added.',
+    addStarterBusy: 'Sample posts are being prepared right now. Check again in a few minutes.',
+    addStarterDaily: 'You have used today\u2019s sample post allowance. Try again tomorrow.',
+    addStarterSuspended: 'Your subscription is suspended, so posts could not be added.',
+    addStarterPostLimit: 'Your plan\u2019s blog post limit has been reached.',
+    addStarterTimeout: 'The posts were not ready in time. Please try again.',
+    addStarterDb: 'The posts could not be saved. Try again shortly.',
     title: 'Blog posts',
     visibility: 'Visibility on your site',
     showInMenu: 'Show in menu',
@@ -196,7 +208,17 @@ export function BlogTab({
       await mutate()
       return
     }
-    setError(result && !result.ok && result.reason === 'already_added' ? t.addStarterDone : t.addStarterFailed)
+    const reason = result && !result.ok ? result.reason : null
+    const messages: Record<string, string> = {
+      already_added: t.addStarterDone,
+      in_progress: t.addStarterBusy,
+      starter_blog_limit: t.addStarterDaily,
+      starter_blog_suspended: t.addStarterSuspended,
+      starter_blog_post_limit: t.addStarterPostLimit,
+      starter_blog_timeout: t.addStarterTimeout,
+      starter_blog_db: t.addStarterDb,
+    }
+    setError((reason && messages[reason]) || t.addStarterFailed)
   }
 
   async function markPersonalized(post: BlogPost) {
@@ -416,7 +438,7 @@ export function BlogTab({
         </ul>
       )}
 
-      <SearchPromoCard sitemapUrl={sitemapUrl} lang={lang} />
+      <SearchPromoCard sitemapUrl={sitemapUrl} published={published} lang={lang} />
     </div>
   )
 }

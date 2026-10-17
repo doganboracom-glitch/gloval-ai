@@ -1,4 +1,5 @@
-import type { TrackingCodes } from '@/lib/website-schema'
+import type { TrackingCodes, WebsiteSchema } from '@/lib/website-schema'
+import type { PlanCode } from '@/lib/pricing-config'
 
 /**
  * Owner-supplied third-party code (analytics, tag manager, pixels, site
@@ -45,9 +46,74 @@ export function stripMetaTags(code?: string | null): string {
   return code.replace(META_TAG, '').trim()
 }
 
+const UNSAFE_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
+  ['javascript_uri', /javascript\s*:/i],
+  ['html_data_uri', /data\s*:\s*text\/html/i],
+  ['meta_refresh', /<\s*meta\b[^>]*http-equiv\s*=\s*["']?\s*(refresh|set-cookie|content-security-policy)/i],
+  ['base_tag', /<\s*base\b/i],
+  ['form_tag', /<\s*form\b/i],
+  ['object_embed', /<\s*(object|embed)\b/i],
+  ['canonical_link', /<\s*link\b[^>]*rel\s*=\s*["']?\s*canonical/i],
+  ['insecure_script', /<\s*script\b[^>]*\bsrc\s*=\s*["']?\s*http:\/\//i],
+]
+
+/**
+ * Names of the harmful patterns found in an owner snippet. Analytics, tag
+ * manager, pixel and verification snippets never need any of these; they
+ * redirect visitors, hijack relative URLs, spoof the canonical or phish.
+ */
+export function findUnsafeTrackingPatterns(code?: string | null): string[] {
+  if (!code) return []
+  return UNSAFE_PATTERNS.filter(([, pattern]) => pattern.test(code)).map(([name]) => name)
+}
+
+export function isUnsafeTrackingCode(code?: string | null): boolean {
+  return findUnsafeTrackingPatterns(code).length > 0
+}
+
+/** `code` itself when clean, otherwise an empty string (the snippet is rejected whole). */
+export function safeTrackingCode(code?: string | null): string {
+  return !code || isUnsafeTrackingCode(code) ? '' : code
+}
+
+/** The tracking object without any rejected snippet; `undefined` when nothing is left. */
+export function sanitizeTracking(tracking: TrackingCodes | undefined): TrackingCodes | undefined {
+  if (!tracking) return tracking
+  const clean: TrackingCodes = {}
+  for (const field of ['head', 'bodyStart', 'bodyEnd'] as const) {
+    const value = tracking[field]
+    if (value !== undefined && !isUnsafeTrackingCode(value)) clean[field] = value
+  }
+  return Object.keys(clean).length > 0 ? clean : undefined
+}
+
 /** True when a snippet has anything worth injecting. */
 export function hasCode(code?: string | null): boolean {
   return Boolean(code && code.trim().length > 0)
+}
+
+/** Custom head/body code (analytics, Search Console verification) is open on STARTER and above. */
+export function canUseTrackingCode(plan: PlanCode): boolean {
+  return plan !== 'free'
+}
+
+/**
+ * Server-side authority for the plan gate. A plan without the feature can never
+ * change `tracking`: whatever it submitted is ignored and the stored value kept.
+ */
+export function enforceTrackingPlan(
+  next: WebsiteSchema,
+  stored: Pick<WebsiteSchema, 'tracking'> | null | undefined,
+  plan: PlanCode,
+): WebsiteSchema {
+  if (canUseTrackingCode(plan)) return next
+  const tracking = stored?.tracking
+  if (tracking === undefined) {
+    if (next.tracking === undefined) return next
+    const { tracking: _dropped, ...rest } = next
+    return rest as WebsiteSchema
+  }
+  return { ...next, tracking }
 }
 
 export type { TrackingCodes }

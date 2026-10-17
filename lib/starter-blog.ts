@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { blogAiOutputSchema, countWords, type BlogAiOutput, type BlogLang } from '@/lib/blog-ai'
 import { detectUnverifiedClaims } from '@/lib/blog-trust'
-import { createBlogPost, type BlogWriteDeps } from '@/lib/blog-write'
+import { createBlogPost, type BlogWriteDeps, type BlogWriteResult } from '@/lib/blog-write'
 import { detectSector, type Sector } from '@/lib/sector-profiles'
 import { pickStarterTopics, STARTER_POST_COUNT } from '@/lib/starter-blog-topics'
 import type { BlogPost } from '@/lib/blog'
@@ -130,6 +130,8 @@ export type StarterBlogDeps = {
   write: BlogWriteDeps
   /** Posts that already are untouched starter posts of this project. */
   existingStarterCount(projectId: string): Promise<number>
+  /** True once the owner already received a full day's worth of starter posts. */
+  dailyCapReached?(): Promise<boolean>
   generate(args: {
     topic: string
     lang: BlogLang
@@ -141,10 +143,60 @@ export type StarterBlogDeps = {
   inflight?: Set<string>
 }
 
+/** One code per failure branch: logged on the server (no personal data) and mapped to a user message in the UI. */
+export type StarterErrorCode =
+  | 'starter_blog_limit'
+  | 'starter_blog_post_limit'
+  | 'starter_blog_db'
+  | 'starter_blog_model'
+  | 'starter_blog_timeout'
+  | 'starter_blog_suspended'
+
 export type StarterBlogResult =
   | { status: 'created'; posts: BlogPost[]; failed: number }
   | { status: 'skipped'; reason: 'already_added' | 'in_progress' }
-  | { status: 'failed'; failed: number; reason: 'generation' | 'suspended' }
+  | { status: 'failed'; failed: number; code: StarterErrorCode }
+
+/** When every post failed for different reasons, the most actionable one is reported. */
+const CODE_PRIORITY: StarterErrorCode[] = [
+  'starter_blog_suspended',
+  'starter_blog_post_limit',
+  'starter_blog_db',
+  'starter_blog_timeout',
+  'starter_blog_model',
+  'starter_blog_limit',
+]
+
+/** Fixed idempotency key of the n-th starter post; a unique (project_id, source_key) index backs it. */
+export function starterSourceKey(index: number): string {
+  return `starter:${index}`
+}
+
+export function isTimeoutError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true
+  if (!error || typeof error !== 'object') return false
+  const { name, message } = error as { name?: unknown; message?: unknown }
+  if (name === 'TimeoutError' || name === 'AbortError') return true
+  return /timed? ?out|timeout|aborted/i.test(String(message ?? ''))
+}
+
+type Outcome = { post: BlogPost } | { duplicate: true } | { code: StarterErrorCode }
+
+function outcomeForFailure(failure: Exclude<BlogWriteResult, { ok: true }>): Outcome {
+  switch (failure.reason) {
+    case 'DUPLICATE_SOURCE':
+      return { duplicate: true }
+    case 'SUBSCRIPTION_SUSPENDED':
+      return { code: 'starter_blog_suspended' }
+    case 'POST_LIMIT':
+      return { code: 'starter_blog_post_limit' }
+    case 'NOT_FOUND':
+      return { code: 'starter_blog_db' }
+    default:
+      // INVALID / SAMPLE_CONTENT: the model's text was rejected by the write rules.
+      return { code: 'starter_blog_model' }
+  }
+}
 
 const defaultInflight = new Set<string>()
 
@@ -161,51 +213,65 @@ export async function runStarterBlog(
   if (inflight.has(args.projectId)) return { status: 'skipped', reason: 'in_progress' }
   inflight.add(args.projectId)
   try {
-    if ((await deps.existingStarterCount(args.projectId)) > 0) return { status: 'skipped', reason: 'already_added' }
+    try {
+      if ((await deps.existingStarterCount(args.projectId)) > 0) return { status: 'skipped', reason: 'already_added' }
+      if (deps.dailyCapReached && (await deps.dailyCapReached())) {
+        return { status: 'failed', failed: STARTER_POST_COUNT, code: 'starter_blog_limit' }
+      }
+    } catch {
+      return { status: 'failed', failed: STARTER_POST_COUNT, code: 'starter_blog_db' }
+    }
 
     const sector = starterSectorFor(args.site)
     const topics = pickStarterTopics(sector, args.seed ?? args.projectId, STARTER_POST_COUNT)
     const abortSignal = AbortSignal.timeout(args.budgetMs ?? STARTER_BUDGET_MS)
 
-    let suspended = false
-    const settled = await Promise.allSettled(
-      topics.map(async (topic): Promise<BlogPost | null> => {
-        const output = await deps.generate({
-          topic,
-          lang: args.lang,
-          siteName: args.site.name,
-          description: args.site.description,
-          abortSignal,
-        })
-        const result = await createBlogPost(
-          deps.write,
-          args.projectId,
-          {
-            title: output.title,
-            excerpt: output.excerpt,
-            body: output.body,
-            keywords: output.keywords,
-            seoTitle: output.seoTitle,
-            metaDescription: output.metaDescription,
-            coverUrl: starterCoverUrl(sector),
-            coverAlt: STARTER_COVER_ALT[args.lang],
-            status: 'published',
-            indexable: false,
-          },
-          { aiGenerated: true, personalized: false },
-        )
-        if (result.ok) return result.post
-        if (result.reason === 'SUBSCRIPTION_SUSPENDED') suspended = true
-        return null
+    const outcomes = await Promise.all(
+      topics.map(async (topic, index): Promise<Outcome> => {
+        let output: BlogAiOutput
+        try {
+          output = await deps.generate({
+            topic,
+            lang: args.lang,
+            siteName: args.site.name,
+            description: args.site.description,
+            abortSignal,
+          })
+        } catch (error) {
+          return { code: isTimeoutError(error, abortSignal) ? 'starter_blog_timeout' : 'starter_blog_model' }
+        }
+        try {
+          const result = await createBlogPost(
+            deps.write,
+            args.projectId,
+            {
+              title: output.title,
+              excerpt: output.excerpt,
+              body: output.body,
+              keywords: output.keywords,
+              seoTitle: output.seoTitle,
+              metaDescription: output.metaDescription,
+              coverUrl: starterCoverUrl(sector),
+              coverAlt: STARTER_COVER_ALT[args.lang],
+              status: 'published',
+              indexable: false,
+            },
+            { aiGenerated: true, personalized: false, sourceKey: starterSourceKey(index) },
+          )
+          return result.ok ? { post: result.post } : outcomeForFailure(result)
+        } catch {
+          return { code: 'starter_blog_db' }
+        }
       }),
     )
 
-    const posts = settled.flatMap((entry) => (entry.status === 'fulfilled' && entry.value ? [entry.value] : []))
-    const failed = topics.length - posts.length
-    if (posts.length === 0) return { status: 'failed', failed, reason: suspended ? 'suspended' : 'generation' }
-    return { status: 'created', posts, failed }
-  } catch {
-    return { status: 'failed', failed: STARTER_POST_COUNT, reason: 'generation' }
+    const posts = outcomes.flatMap((o) => ('post' in o ? [o.post] : []))
+    const duplicates = outcomes.filter((o) => 'duplicate' in o).length
+    const codes = outcomes.flatMap((o) => ('code' in o ? [o.code] : []))
+    if (posts.length > 0) return { status: 'created', posts, failed: topics.length - posts.length - duplicates }
+    if (codes.length === 0) return { status: 'skipped', reason: 'already_added' }
+    const code = CODE_PRIORITY.find((c) => codes.includes(c)) ?? 'starter_blog_model'
+    return { status: 'failed', failed: topics.length - duplicates, code }
   } finally {
     inflight.delete(args.projectId)
   }

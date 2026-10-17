@@ -55,7 +55,7 @@ async function anonymizeFinancialRecords(
   const { data: ownedProjects, error: projectsError } = await admin
     .from('projects')
     .select('id')
-    .eq('user_id', userId)
+    .eq('owner_id', userId)
   // Deleting the user cascades through these rows: a detach that silently failed would wipe the orders.
   if (projectsError) throw new Error(`anonymize_projects_failed:${projectsError.code}`)
   const ownedProjectIds = (ownedProjects ?? []).map((p) => p.id as string)

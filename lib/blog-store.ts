@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { enqueueBlogPosts } from '@/lib/indexnow-server'
 import { rowToPost } from '@/lib/blog-server'
+import { isMissingColumnError } from '@/lib/store-schema-compat'
 import type { BlogPost } from '@/lib/blog'
 import type { BlogRecord, BlogStore, BlogWriteDeps } from '@/lib/blog-write'
 
@@ -32,6 +33,8 @@ function toRow(record: BlogRecord) {
     ai_generated: record.aiGenerated,
     personalized: record.personalized,
     sample: record.sample,
+    // Only set on first insert; updates never clear or change it.
+    ...(record.sourceKey ? { source_key: record.sourceKey } : {}),
   }
 }
 
@@ -61,11 +64,13 @@ export function createBlogStore(admin = createAdminClient()): BlogStore {
       return data ? rowToPost(data as Parameters<typeof rowToPost>[0]) : null
     },
     async insert(projectId, record) {
-      const { data, error } = await admin
-        .from('site_blog_posts')
-        .insert({ project_id: projectId, ...toRow(record) })
-        .select(COLUMNS)
-        .single()
+      const row = { project_id: projectId, ...toRow(record) }
+      let { data, error } = await admin.from('site_blog_posts').insert(row).select(COLUMNS).single()
+      if (error && record.sourceKey && isMissingColumnError(error)) {
+        // Migration 066 not applied yet: write without the key until it is.
+        const { source_key: _sourceKey, ...withoutKey } = row
+        ;({ data, error } = await admin.from('site_blog_posts').insert(withoutKey).select(COLUMNS).single())
+      }
       if (error) throw error
       return rowToPost(data as Parameters<typeof rowToPost>[0])
     },
