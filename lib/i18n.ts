@@ -1362,7 +1362,7 @@ const dict = {
       buyBack: 'Geri',
       buyNotConfigured: 'Alan adı satın alma şu anda kullanılamıyor.',
       buyErrInvalidQuery: 'Geçerli bir alan adı veya kelime girin.',
-      buyErrProviderError: 'Alan adı sağlayıcıs��na ulaşılamadı. Lütfen tekrar deneyin.',
+      buyErrProviderError: 'Alan adı sağlayıcısına ulaşılamadı. Lütfen tekrar deneyin.',
       buyErrInvalidDomain: 'Geçerli bir alan adı girin.',
       buyErrUnavailable: 'Bu alan adı artık uygun değil.',
       buyErrAlreadyOwned: 'Bu alan adı zaten hesabınızda bağlı.',

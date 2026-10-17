@@ -5,6 +5,8 @@ import {
   buildSiteBlogData,
   isBlogRoutePath,
   isStarterPending,
+  postsRetryLabel,
+  postsStalledLabel,
   previewSiteBlogData,
   shouldShowBlogLink,
   shouldShowLatestPosts,
@@ -120,5 +122,39 @@ describe('isBlogRoutePath', () => {
   it('works on hrefs rewritten from the internal site path', () => {
     expect(isBlogRoutePath(hrefToTenantPath('/site/demo/blog', 'demo'))).toBe(true)
     expect(isBlogRoutePath(hrefToTenantPath('/site/demo/blog/ilk-yazi', 'demo'))).toBe(true)
+  })
+})
+
+describe('previewSiteBlogData: stalled wait', () => {
+  const stalled = { error: 'starter_blog_timeout', retrying: false, onRetry: () => undefined }
+
+  it('shows the retry state when the wait ran out with no posts', () => {
+    const data = previewSiteBlogData([], false, stalled)
+    expect(data?.stalled).toBe(stalled)
+    expect(data?.posts).toEqual([])
+    expect(data?.preparing).toBeUndefined()
+    expect(shouldShowLatestPosts(data)).toBe(true)
+  })
+
+  it('keeps the preparing state while the wait is still open', () => {
+    const data = previewSiteBlogData([], true, stalled)
+    expect(data?.preparing).toBe(true)
+    expect(data?.stalled).toBeUndefined()
+  })
+
+  it('real posts always win over the stalled state', () => {
+    const data = previewSiteBlogData([post()], false, stalled)
+    expect(data?.posts).toHaveLength(1)
+    expect(data?.stalled).toBeUndefined()
+  })
+
+  it('stays hidden when the owner turned the latest-posts block off', () => {
+    expect(shouldShowLatestPosts(previewSiteBlogData([], false, stalled), { showLatest: false } as never)).toBe(false)
+  })
+
+  it('has Turkish and English labels', () => {
+    expect(postsStalledLabel('tr')).toBe('Yazılar hazırlanamadı.')
+    expect(postsRetryLabel('tr')).toBe('Yeniden dene')
+    expect(postsRetryLabel('en')).toBe('Try again')
   })
 })

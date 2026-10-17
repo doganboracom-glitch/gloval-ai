@@ -406,3 +406,51 @@ describe('isTimeoutError', () => {
     expect(isTimeoutError(new Error('boom'), controller.signal)).toBe(true)
   })
 })
+
+describe('runStarterBlog: own cover per post', () => {
+  function withCover(cover: NonNullable<StarterBlogDeps['cover']>) {
+    const made = makeDeps()
+    made.deps.write.store.update = async (_project, id, record) => {
+      const index = made.posts.findIndex((p) => p.id === id)
+      const next: BlogPost = { ...made.posts[index], ...record }
+      made.posts[index] = next
+      return next
+    }
+    made.deps.cover = cover
+    return made
+  }
+
+  it('replaces the generic illustration with each post cover and uses the title as alt text', async () => {
+    const { deps, posts } = withCover(async ({ post }) => `https://cdn.example.com/${post.id}.png`)
+    const result = await runStarterBlog(deps, args)
+    expect(result.status).toBe('created')
+    for (const post of posts) {
+      expect(post.coverUrl).toBe(`https://cdn.example.com/${post.id}.png`)
+      expect(post.coverAlt).toBe(post.title)
+    }
+  })
+
+  it('keeps the generic illustration when the cover step throws or returns an unsafe URL', async () => {
+    const calls: string[] = []
+    const { deps, posts } = withCover(async ({ post }) => {
+      calls.push(post.id)
+      if (calls.length === 1) throw new Error('image model down')
+      return 'http://insecure.example.com/x.png'
+    })
+    const result = await runStarterBlog(deps, args)
+    expect(result.status).toBe('created')
+    for (const post of posts) expect(post.coverUrl).toMatch(/^\/blog-covers\/.+\.svg$/)
+  })
+
+  it('never waits past the cover budget: the posts stay published with the illustration', async () => {
+    const { deps, posts } = withCover(() => new Promise<string | null>(() => undefined))
+    const started = Date.now()
+    const result = await runStarterBlog(deps, { ...args, coverBudgetMs: 30 })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(result.status).toBe('created')
+    for (const post of posts) {
+      expect(post.status).toBe('published')
+      expect(post.coverUrl).toMatch(/^\/blog-covers\/.+\.svg$/)
+    }
+  })
+})
