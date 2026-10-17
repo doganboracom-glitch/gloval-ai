@@ -7,6 +7,7 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import type { BlogPost } from '@/lib/blog'
 import { runStarterBlogNow } from '@/lib/starter-blog-server'
+import type { StarterErrorCode } from '@/lib/starter-blog'
 import { isStorefront, websiteSchema } from '@/lib/website-schema'
 import {
   createBlogPost,
@@ -17,7 +18,7 @@ import {
   type BlogWriteResult,
 } from '@/lib/blog-write'
 
-type Access = { ok: true; slug: string | null } | { ok: false; reason: 'UNAUTHENTICATED' | 'NOT_FOUND' }
+type Access = { ok: true; slug: string | null; ownerId: string } | { ok: false; reason: 'UNAUTHENTICATED' | 'NOT_FOUND' }
 
 /**
  * Only the project's owner (or a verified admin, same rule as project edits)
@@ -30,12 +31,20 @@ async function authorize(projectId: string): Promise<Access> {
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, reason: 'UNAUTHENTICATED' }
 
-  const { data: owned } = await supabase.from('projects').select('id, slug').eq('id', projectId).maybeSingle()
-  if (owned) return { ok: true, slug: (owned.slug as string | null) ?? null }
+  const { data: owned } = await supabase
+    .from('projects')
+    .select('id, slug, owner_id')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (owned) return { ok: true, slug: (owned.slug as string | null) ?? null, ownerId: owned.owner_id as string }
 
   if (isAdminEmail(user.email ?? null)) {
-    const { data } = await createAdminClient().from('projects').select('id, slug').eq('id', projectId).maybeSingle()
-    if (data) return { ok: true, slug: (data.slug as string | null) ?? null }
+    const { data } = await createAdminClient()
+      .from('projects')
+      .select('id, slug, owner_id')
+      .eq('id', projectId)
+      .maybeSingle()
+    if (data) return { ok: true, slug: (data.slug as string | null) ?? null, ownerId: data.owner_id as string }
   }
   return { ok: false, reason: 'NOT_FOUND' }
 }
@@ -107,7 +116,7 @@ export async function addStarterBlogPostsAction(
   projectId: string,
 ): Promise<
   | { ok: true; posts: BlogPost[]; failed: number }
-  | { ok: false; reason: 'already_added' | 'in_progress' | 'generation' | 'suspended' }
+  | { ok: false; reason: 'already_added' | 'in_progress' | StarterErrorCode }
   | Denied
 > {
   const access = await authorize(projectId)
@@ -115,11 +124,11 @@ export async function addStarterBlogPostsAction(
   const supabase = await createClient()
   const { data: project } = await supabase
     .from('projects')
-    .select('name, language, data')
+    .select('name, language, schema_data')
     .eq('id', projectId)
     .maybeSingle()
   if (!project) return { ok: false, reason: 'NOT_FOUND' }
-  const parsed = websiteSchema.safeParse(project.data)
+  const parsed = websiteSchema.safeParse(project.schema_data)
   const site = {
     name: parsed.success ? parsed.data.meta.name : String(project.name ?? ''),
     description: parsed.success ? parsed.data.meta.description : '',
@@ -127,6 +136,7 @@ export async function addStarterBlogPostsAction(
   }
   const result = await runStarterBlogNow({
     projectId,
+    ownerId: access.ownerId,
     siteSlug: access.slug,
     site,
     lang: project.language === 'en' ? 'en' : 'tr',
@@ -136,7 +146,7 @@ export async function addStarterBlogPostsAction(
     return { ok: true, posts: result.posts, failed: result.failed }
   }
   if (result.status === 'skipped') return { ok: false, reason: result.reason }
-  return { ok: false, reason: result.reason }
+  return { ok: false, reason: result.code }
 }
 
 export type { BlogWriteFailure }

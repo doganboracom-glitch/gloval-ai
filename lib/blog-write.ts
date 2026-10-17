@@ -35,9 +35,15 @@ export const blogInputSchema = z.object({
 export type BlogInput = z.infer<typeof blogInputSchema>
 
 /** Server-decided provenance. Never taken from the client. */
-export type BlogProvenance = { sample?: boolean; aiGenerated?: boolean; personalized?: boolean }
+export type BlogProvenance = {
+  sample?: boolean
+  aiGenerated?: boolean
+  personalized?: boolean
+  /** Fixed idempotency key (`starter:<n>`); a unique (project_id, source_key) index rejects a second insert. */
+  sourceKey?: string
+}
 
-export type BlogRecord = Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'>
+export type BlogRecord = Omit<BlogPost, 'id' | 'createdAt' | 'updatedAt'> & { sourceKey?: string | null }
 
 export type BlogStore = {
   count(projectId: string): Promise<number>
@@ -62,6 +68,7 @@ export type BlogWriteFailure =
   | { ok: false; reason: 'NOT_FOUND' }
   | { ok: false; reason: 'POST_LIMIT'; limit: number }
   | { ok: false; reason: 'SUBSCRIPTION_SUSPENDED' }
+  | { ok: false; reason: 'DUPLICATE_SOURCE' }
   | { ok: false; reason: 'SAMPLE_CONTENT'; samplePost: boolean; findings: BlogClaimFinding[] }
 
 export type BlogWriteResult = { ok: true; post: BlogPost } | BlogWriteFailure
@@ -159,8 +166,16 @@ async function prepare(
       aiGenerated: existing?.aiGenerated ?? provenance.aiGenerated ?? false,
       personalized: existing?.personalized ?? provenance.personalized ?? false,
       sample,
+      ...(provenance.sourceKey ? { sourceKey: provenance.sourceKey } : {}),
     },
   }
+}
+
+/** The unique (project_id, source_key) index rejected the insert: another run already wrote this post. */
+export function isSourceKeyConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { code?: unknown; message?: unknown; details?: unknown }
+  return e.code === '23505' && /source_key/.test(`${String(e.message ?? '')} ${String(e.details ?? '')}`)
 }
 
 function pingSlugs(deps: BlogWriteDeps, projectId: string, slugs: string[], reason: string) {
@@ -180,7 +195,13 @@ export async function createBlogPost(
   }
   const prepared = await prepare(deps, projectId, parsed.data, null, provenance)
   if (!prepared.ok) return prepared
-  const post = await deps.store.insert(projectId, prepared.record)
+  let post: BlogPost
+  try {
+    post = await deps.store.insert(projectId, prepared.record)
+  } catch (error) {
+    if (isSourceKeyConflict(error)) return { ok: false, reason: 'DUPLICATE_SOURCE' }
+    throw error
+  }
   const now = (deps.now ?? (() => new Date()))()
   if (isPostLive(post, now) && post.indexable) pingSlugs(deps, projectId, [post.slug], 'blog:publish')
   return { ok: true, post }

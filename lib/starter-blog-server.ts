@@ -17,12 +17,13 @@ import {
 } from '@/lib/starter-blog'
 import type { BlogLang } from '@/lib/blog-ai'
 
-function realDeps(projectId: string, siteSlug: string | null): StarterBlogDeps {
+function realDeps(projectId: string, siteSlug: string | null, ownerId?: string): StarterBlogDeps {
   return {
     write: createBlogWriteDeps(projectId, siteSlug),
     async existingStarterCount(id) {
       return (await listProjectBlogPosts(id)).filter(isStarterPost).length
     },
+    dailyCapReached: ownerId ? async () => starterDailyCapReached(await starterPostsLast24h(ownerId)) : undefined,
     async generate({ topic, lang, siteName, description, abortSignal }) {
       // Always the standard tier and never billed: the starter posts are a
       // free onboarding gift, so their cost stays predictable on every plan.
@@ -40,15 +41,23 @@ function realDeps(projectId: string, siteSlug: string | null): StarterBlogDeps {
 
 export async function runStarterBlogNow(args: {
   projectId: string
+  ownerId?: string
   siteSlug: string | null
   site: StarterSite
   lang: BlogLang
 }): Promise<StarterBlogResult> {
-  return runStarterBlog(realDeps(args.projectId, args.siteSlug), {
+  const result = await runStarterBlog(realDeps(args.projectId, args.siteSlug, args.ownerId), {
     projectId: args.projectId,
     site: args.site,
     lang: args.lang,
   })
+  // Codes only: no project id, name or post text ever reaches the log.
+  console.log(
+    '[starter-blog]',
+    result.status,
+    result.status === 'failed' ? result.code : result.status === 'skipped' ? result.reason : '',
+  )
+  return result
 }
 
 /** Starter posts the owner's sites received in the last 24 hours (counts only, no content). */
@@ -83,21 +92,15 @@ export function scheduleStarterBlog(args: {
   site: StarterSite
   lang: BlogLang
 }): void {
-  const { ownerId, ...run } = args
   try {
     after(async () => {
       try {
-        if (ownerId && starterDailyCapReached(await starterPostsLast24h(ownerId))) {
-          console.log('[starter-blog] skipped daily_cap')
-          return
-        }
-        const result = await runStarterBlogNow(run)
-        console.log('[starter-blog]', result.status, 'reason' in result ? result.reason : '')
-      } catch (err) {
-        console.log('[starter-blog] failed:', err instanceof Error ? err.message : 'unknown')
+        await runStarterBlogNow(args)
+      } catch {
+        console.log('[starter-blog] failed starter_blog_unexpected')
       }
     })
-  } catch (err) {
-    console.log('[starter-blog] could not schedule:', err instanceof Error ? err.message : 'unknown')
+  } catch {
+    console.log('[starter-blog] failed starter_blog_schedule')
   }
 }
