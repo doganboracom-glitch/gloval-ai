@@ -5,8 +5,7 @@ import {
   buildSiteBlogData,
   isBlogRoutePath,
   isStarterPending,
-  postsRetryLabel,
-  postsStalledLabel,
+  latestPostsHeading,
   previewSiteBlogData,
   shouldShowBlogLink,
   shouldShowLatestPosts,
@@ -83,19 +82,9 @@ describe('previewSiteBlogData', () => {
     expect(shouldShowLatestPosts(data, { showLatest: false })).toBe(false)
   })
 
-  it('shows a "preparing" latest block (never the menu link) while starter posts are pending', () => {
-    const data = previewSiteBlogData([], true)
-    expect(data?.preparing).toBe(true)
-    expect(data?.posts).toEqual([])
-    expect(shouldShowLatestPosts(data)).toBe(true)
-    expect(shouldShowLatestPosts(data, { showLatest: false })).toBe(false)
-    expect(shouldShowBlogLink(data)).toBe(false)
-  })
-
-  it('replaces the preparing state with real posts once they exist', () => {
-    const data = previewSiteBlogData([post()], true)
-    expect(data?.preparing).toBeUndefined()
-    expect(shouldShowBlogLink(data)).toBe(true)
+  it('never shows a placeholder block while there are no posts', () => {
+    expect(shouldShowLatestPosts(previewSiteBlogData([]))).toBe(false)
+    expect(shouldShowBlogLink(previewSiteBlogData([]))).toBe(false)
   })
 })
 
@@ -125,36 +114,8 @@ describe('isBlogRoutePath', () => {
   })
 })
 
-describe('previewSiteBlogData: stalled wait', () => {
-  const stalled = { error: 'starter_blog_timeout', retrying: false, onRetry: () => undefined }
-
-  it('shows the retry state when the wait ran out with no posts', () => {
-    const data = previewSiteBlogData([], false, stalled)
-    expect(data?.stalled).toBe(stalled)
-    expect(data?.posts).toEqual([])
-    expect(data?.preparing).toBeUndefined()
-    expect(shouldShowLatestPosts(data)).toBe(true)
-  })
-
-  it('keeps the preparing state while the wait is still open', () => {
-    const data = previewSiteBlogData([], true, stalled)
-    expect(data?.preparing).toBe(true)
-    expect(data?.stalled).toBeUndefined()
-  })
-
-  it('real posts always win over the stalled state', () => {
-    const data = previewSiteBlogData([post()], false, stalled)
-    expect(data?.posts).toHaveLength(1)
-    expect(data?.stalled).toBeUndefined()
-  })
-
-  it('stays hidden when the owner turned the latest-posts block off', () => {
-    expect(shouldShowLatestPosts(previewSiteBlogData([], false, stalled), { showLatest: false } as never)).toBe(false)
-  })
-
-  it('has Turkish and English labels', () => {
-    expect(postsStalledLabel('tr')).toBe('Yazılar hazırlanamadı.')
-    expect(postsRetryLabel('tr')).toBe('Yeniden dene')
-    expect(postsRetryLabel('en')).toBe('Try again')
+describe('latestPostsHeading', () => {
+  it('is simply "Blog"', () => {
+    expect(latestPostsHeading()).toBe('Blog')
   })
 })

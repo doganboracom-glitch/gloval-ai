@@ -8,8 +8,9 @@ import {
   deleteBlogPostAction,
   listBlogPostsAction,
   markBlogPostPersonalizedAction,
+  regenerateStarterBlogPostsAction,
 } from '@/lib/blog-actions'
-import { isStarterPost, livePosts, type BlogPost } from '@/lib/blog'
+import { isRegenerableStarterPost, isStarterPost, livePosts, type BlogPost } from '@/lib/blog'
 import { SearchPromoCard } from '@/components/editor/search-promo-card'
 import { BLOG_CHANGED_EVENT, blogConfirmCopy } from '@/lib/blog-client'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -42,6 +43,12 @@ const T = {
     addStarterPostLimit: 'Planınızın blog yazısı sınırına ulaşıldı.',
     addStarterTimeout: 'Yazılar zamanında hazırlanamadı. Tekrar deneyin.',
     addStarterDb: 'Yazılar kaydedilemedi. Biraz sonra tekrar deneyin.',
+    regenerate: 'Örnek blog yazılarını yeniden oluştur',
+    regenerateHint: 'Yalnızca düzenlemediğiniz ve özelleştirmediğiniz örnek yazılar yenilenir. Ücretsizdir.',
+    regenerateTitle: 'Örnek yazılar yeniden oluşturulsun mu?',
+    regenerateBody: 'Düzenlemediğiniz ve özelleştirmediğiniz örnek yazılar silinip sektörünüze uygun yenileriyle değiştirilir. Kendi yazılarınıza ve düzenlediğiniz yazılara dokunulmaz. Kredi düşmez.',
+    regenerateConfirm: 'Yeniden oluştur',
+    regenerateNothing: 'Yenilenecek örnek yazı bulunamadı.',
     title: 'Blog yazıları',
     visibility: 'Sitede görünürlük',
     showInMenu: 'Menüde göster',
@@ -77,6 +84,12 @@ const T = {
     addStarterPostLimit: 'Your plan\u2019s blog post limit has been reached.',
     addStarterTimeout: 'The posts were not ready in time. Please try again.',
     addStarterDb: 'The posts could not be saved. Try again shortly.',
+    regenerate: 'Regenerate sample blog posts',
+    regenerateHint: 'Only sample posts you have not edited or personalized are replaced. Free.',
+    regenerateTitle: 'Regenerate sample posts?',
+    regenerateBody: 'Sample posts you have not edited or personalized are deleted and replaced with new ones for your sector. Your own and edited posts are never touched. No credits are used.',
+    regenerateConfirm: 'Regenerate',
+    regenerateNothing: 'No sample posts to regenerate.',
     title: 'Blog posts',
     visibility: 'Visibility on your site',
     showInMenu: 'Show in menu',
@@ -221,6 +234,36 @@ export function BlogTab({
     setError((reason && messages[reason]) || t.addStarterFailed)
   }
 
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const regenerableCount = posts.filter(isRegenerableStarterPost).length
+
+  async function regenerateStarter() {
+    setConfirmRegenerate(false)
+    setError(null)
+    setRegenerating(true)
+    const result = await regenerateStarterBlogPostsAction(projectId).catch(() => null)
+    setRegenerating(false)
+    if (result && result.ok) {
+      await mutate()
+      return
+    }
+    const reason = result && !result.ok ? result.reason : null
+    const messages: Record<string, string> = {
+      nothing_to_replace: t.regenerateNothing,
+      in_progress: t.addStarterBusy,
+      starter_blog_limit: t.addStarterDaily,
+      starter_blog_suspended: t.addStarterSuspended,
+      starter_blog_post_limit: t.addStarterPostLimit,
+      starter_blog_timeout: t.addStarterTimeout,
+      starter_blog_db: t.addStarterDb,
+    }
+    if (reason === 'nothing_to_replace' || reason === 'starter_blog_db' || reason === 'starter_blog_timeout') {
+      await mutate()
+    }
+    setError((reason && messages[reason]) || t.addStarterFailed)
+  }
+
   async function markPersonalized(post: BlogPost) {
     setError(null)
     const result = await markBlogPostPersonalizedAction(projectId, post.id).catch(() => null)
@@ -354,6 +397,30 @@ export function BlogTab({
       </div>
 
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+
+      {!isLoading && !loadError && regenerableCount > 0 && (
+        <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">{t.regenerateHint}</p>
+          <button
+            type="button"
+            disabled={regenerating}
+            onClick={() => setConfirmRegenerate(true)}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+          >
+            {regenerating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
+            {t.regenerate}
+          </button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={confirmRegenerate}
+        title={t.regenerateTitle}
+        description={t.regenerateBody}
+        confirmLabel={t.regenerateConfirm}
+        cancelLabel={confirmCopy.cancel}
+        onConfirm={() => void regenerateStarter()}
+        onCancel={() => setConfirmRegenerate(false)}
+      />
 
       {isLoading ? (
         <div className="flex justify-center py-8 text-muted-foreground">

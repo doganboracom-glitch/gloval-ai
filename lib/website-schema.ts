@@ -720,11 +720,15 @@ export const blogProfileSchema = z.object({
  * Where the blog shows up on the site. Every flag is optional so existing sites
  * (no settings) behave as "on": the menu link and the latest-posts block appear
  * as soon as the blog has a public post, and the owner can turn either off.
+ * New sites are generated with both flags explicitly `false`.
+ * `latestIndex` remembers where the blog section sat when the owner switched it
+ * off, so switching it back on returns it to that spot.
  */
 export const blogSettingsSchema = z.object({
   showInMenu: z.boolean().optional(),
   showLatest: z.boolean().optional(),
   latestPlacement: z.enum(['after-hero', 'before-footer']).optional(),
+  latestIndex: z.number().int().min(0).optional(),
 })
 
 /**
@@ -920,7 +924,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
     team: ['Ekip', 'Team'],
     pricing: ['Fiyatlandırma', 'Pricing'],
     faq: ['SSS', 'FAQ'],
-    blogLatest: ['Blogdan Son Yazılar', 'Latest posts'],
+    blogLatest: ['Blog', 'Blog'],
     contact: ['İletişim', 'Contact'],
     cta: ['Eylem Çağrısı', 'Call to action'],
     footer: ['Alt Bilgi', 'Footer'],

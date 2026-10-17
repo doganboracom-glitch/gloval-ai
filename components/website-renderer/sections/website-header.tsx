@@ -188,7 +188,7 @@ export function WebsiteHeader({
                   </button>
                 )
               })
-            : (blog ? withoutBlogLinks(navigation.links) : navigation.links).map((link) => {
+            : withoutBlogLinks(navigation.links).map((link) => {
                 const href =
                   cartSlug && isProductsLink(link.label, link.href)
                     ? storeListHref(cartSlug)

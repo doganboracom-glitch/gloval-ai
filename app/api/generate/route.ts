@@ -7,7 +7,7 @@ import { seedContactActions } from '@/lib/site-contact-actions'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
-import { normalizeCorporateSectionOrder, withDefaultBlogLatest } from '@/lib/section-order'
+import { normalizeCorporateSectionOrder, withBlogOffByDefault } from '@/lib/section-order'
 import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
 import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
 import { attachHeroImage } from '@/lib/hero-image'
@@ -188,7 +188,7 @@ async function runGenerate(
         // being able to invent a phone number.
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(flagPlaceholderContact(withDefaultBlogLatest(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object)))), prompt)),
+            seedContactActions(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object)))), prompt)),
             normalizedLang,
           ),
           normalizedLang,
@@ -216,7 +216,7 @@ async function runGenerate(
       return Response.json({
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(flagPlaceholderContact(withDefaultBlogLatest(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website)))), prompt)),
+            seedContactActions(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website)))), prompt)),
             normalizedLang,
           ),
           normalizedLang,

@@ -1,66 +1,15 @@
-import {
-  blogCardHref,
-  blogIndexHref,
-  latestPostsHeading,
-  postsPreparingLabel,
-  type SiteBlogData,
-} from '@/lib/blog-site'
+import { blogCardHref, blogIndexHref, latestPostsHeading, type SiteBlogData } from '@/lib/blog-site'
 import { blogCopy, formatBlogDate } from '@/components/blog/blog-views'
-import { PostsRetry } from '@/components/website-renderer/sections/posts-retry'
 
 export function WebsiteLatestPosts({
   blog,
   lang = 'tr',
-  title,
 }: {
   blog: SiteBlogData
   lang?: 'tr' | 'en'
-  title?: string
 }) {
   const copy = blogCopy(lang)
-  const heading = title?.trim() || latestPostsHeading(lang)
-
-  if (blog.posts.length === 0 && (blog.preparing || blog.stalled)) {
-    return (
-      <section
-        aria-labelledby="latest-posts-heading"
-        data-latest-posts
-        data-latest-posts-preparing
-        className="px-6 py-16"
-        style={{ backgroundColor: 'var(--site-bg)', color: 'var(--site-fg)' }}
-      >
-        <div className="mx-auto w-full max-w-5xl">
-          <h2
-            id="latest-posts-heading"
-            className="mb-8 text-balance text-2xl font-bold tracking-tight sm:text-3xl"
-            style={{ fontFamily: 'var(--site-heading-font)' }}
-          >
-            {heading}
-          </h2>
-          {blog.stalled && !blog.preparing ? (
-            <PostsRetry stalled={blog.stalled} lang={lang} />
-          ) : (
-            <p role="status" className="text-sm" style={{ color: 'var(--site-muted-fg)' }}>
-              {postsPreparingLabel(lang)}
-            </p>
-          )}
-          <div aria-hidden="true" className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-40 animate-pulse border"
-                style={{
-                  borderColor: 'var(--site-border)',
-                  borderRadius: 'var(--site-radius)',
-                  backgroundColor: 'var(--site-card)',
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
-    )
-  }
+  const heading = latestPostsHeading()
 
   return (
     <section

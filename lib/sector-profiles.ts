@@ -89,11 +89,24 @@ export function isEcommerceIntent(prompt: string): boolean {
   return STRONG_ECOMMERCE.some((w) => p.includes(w))
 }
 
+/**
+ * Technical-service trades (boiler/AC/plumbing/appliance repair). They say
+ * "bakım" (maintenance) constantly, which used to match the beauty sector's
+ * "bakım" keyword and give them skin-care starter posts. They have no sector of
+ * their own, so they resolve to `default` (generic, neutral topics).
+ */
+const TECHNICAL_SERVICE: string[] = [
+  'teknik servis', 'yetkili servis', 'kombi', 'klima', 'tesisat', 'beyaz eşya', 'beyaz esya',
+  'çilingir', 'cilingir', 'tamirci', 'elektrikçi', 'elektrikci', 'petek', 'doğalgaz', 'dogalgaz',
+  'plumbing', 'plumber', 'hvac', 'boiler', 'air conditioning', 'appliance repair',
+]
+
 export function detectSector(prompt: string): Sector {
-  const p = prompt.toLowerCase()
+  const p = prompt.toLocaleLowerCase('tr')
   // Strong e-commerce intent wins over every other sector: "kozmetik satışı
   // için e-ticaret sitesi" is a store, not a beauty salon.
   if (isEcommerceIntent(prompt)) return 'ecommerce'
+  if (TECHNICAL_SERVICE.some((w) => p.includes(w))) return 'default'
   // Order matters: more specific sectors first.
   const order: Exclude<Sector, 'default'>[] = [
     'dental',

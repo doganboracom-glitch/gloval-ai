@@ -79,6 +79,24 @@ export function isStarterPost(post: Pick<BlogPost, 'aiGenerated' | 'personalized
   return post.aiGenerated && !post.personalized && !post.sample && !post.indexable
 }
 
+/**
+ * Longest gap between creation and last update that still counts as "never
+ * touched by the owner". The cover upgrade of a fresh starter post is a system
+ * update, not an edit.
+ */
+export const STARTER_EDIT_GRACE_MS = 10 * 60 * 1000
+
+/** An untouched AI starter post: the only kind "regenerate sample posts" may replace. */
+export function isRegenerableStarterPost(
+  post: Pick<BlogPost, 'aiGenerated' | 'personalized' | 'sample' | 'indexable' | 'createdAt' | 'updatedAt'>,
+): boolean {
+  if (!isStarterPost(post)) return false
+  const created = Date.parse(post.createdAt)
+  const updated = Date.parse(post.updatedAt)
+  if (Number.isNaN(created) || Number.isNaN(updated)) return false
+  return updated - created <= STARTER_EDIT_GRACE_MS
+}
+
 /** Live AND allowed into search: drives robots meta, sitemap and RSS. */
 export function isPostIndexable(post: BlogPost, now: Date = new Date()): boolean {
   return isPostLive(post, now) && post.indexable

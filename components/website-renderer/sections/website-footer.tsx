@@ -113,7 +113,7 @@ export function WebsiteFooter({
   const resolvedColumns = resolveFooterColumns(data.columns, site)
   const columns = blogLink
     ? withBlogFooterLink(resolvedColumns, { label: blogLink.label, href: blogLink.href }, lang)
-    : resolvedColumns
+    : resolvedColumns.map((col) => ({ ...col, links: withoutBlogLinks(col.links) }))
   const legal = [
     ...resolveStoreEssentialPageLinks(site, columns, lang),
     ...resolveFooterLegal(data.legal, site, lang),
