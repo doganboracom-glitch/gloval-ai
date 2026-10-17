@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import useSWR from 'swr'
 import { listBlogPostsAction } from '@/lib/blog-actions'
 import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
+import { withLegacyBlogLatest } from '@/lib/section-order'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
@@ -299,7 +300,7 @@ export function WebsitePreview({
   const initial = useMemo(() => websiteSchema.safeParse(site), [site])
   const [history, setHistory] = useState<History>(() => ({
     past: [],
-    present: initial.success ? initial.data : null,
+    present: initial.success ? withLegacyBlogLatest(initial.data) : null,
     future: [],
   }))
   const [messages, setMessages] = useState<ChatMessage[]>([])
