@@ -110,7 +110,7 @@ describe('createBlogPost', () => {
     expect(draft.enqueue).not.toHaveBeenCalled()
 
     const scheduled = deps()
-    const result = await createBlogPost(scheduled.deps, PROJECT, input({ publishAt: '2026-04-01T00:00:00Z' }))
+    const result = await createBlogPost(scheduled.deps, PROJECT, input({ status: 'scheduled', publishAt: '2026-04-01T00:00:00Z' }))
     expect(result.ok && result.post.status).toBe('published')
     expect(scheduled.enqueue).not.toHaveBeenCalled()
   })

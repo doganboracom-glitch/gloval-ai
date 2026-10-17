@@ -9,6 +9,7 @@ import {
   listBlogPostsAction,
   markBlogPostPersonalizedAction,
   regenerateStarterBlogPostsAction,
+  updateBlogPostAction,
 } from '@/lib/blog-actions'
 import { isRegenerableStarterPost, isStarterPost, livePosts, type BlogPost } from '@/lib/blog'
 import { SearchPromoCard } from '@/components/editor/search-promo-card'
@@ -60,7 +61,9 @@ const T = {
     empty: 'Henüz yazınız yok. İlk yazınızı kendiniz yazabilir veya yapay zekaya hazırlatabilirsiniz.',
     draft: 'Taslak',
     live: 'Yayında',
-    scheduled: 'Zamanlandı',
+    scheduled: 'Planlı',
+    publishNow: 'Şimdi yayınla',
+    publishNowFailed: 'Yazı yayınlanamadı. Örnek içerik onayı veya abonelik durumunu kontrol edin.',
     sample: 'Örnek',
     aiTag: 'AI taslağı',
     loadFailed: 'Yazılar yüklenemedi.',
@@ -102,6 +105,8 @@ const T = {
     draft: 'Draft',
     live: 'Live',
     scheduled: 'Scheduled',
+    publishNow: 'Publish now',
+    publishNowFailed: 'Could not publish the post. Check the sample-content confirmation or your subscription.',
     sample: 'Sample',
     aiTag: 'AI draft',
     loadFailed: 'Could not load posts.',
@@ -144,6 +149,11 @@ function BlogSwitch({
       </button>
     </div>
   )
+}
+
+function formatPlannedDate(iso: string | null, lang: Lang): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function statusOf(post: BlogPost): 'draft' | 'live' | 'scheduled' {
@@ -269,6 +279,32 @@ export function BlogTab({
     const result = await markBlogPostPersonalizedAction(projectId, post.id).catch(() => null)
     if (!result || !result.ok) {
       setError(t.markFailed)
+      return
+    }
+    upsert(result.post)
+  }
+
+  const [publishingId, setPublishingId] = useState<string | null>(null)
+
+  async function publishNow(post: BlogPost) {
+    setError(null)
+    setPublishingId(post.id)
+    const result = await updateBlogPostAction(projectId, post.id, {
+      title: post.title,
+      body: post.body,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      keywords: post.keywords,
+      seoTitle: post.seoTitle,
+      metaDescription: post.metaDescription,
+      coverUrl: post.coverUrl,
+      coverAlt: post.coverAlt,
+      indexable: post.indexable,
+      status: 'published',
+    }).catch(() => null)
+    setPublishingId(null)
+    if (!result || !result.ok) {
+      setError(t.publishNowFailed)
       return
     }
     upsert(result.post)
@@ -469,12 +505,25 @@ export function BlogTab({
                             : 'bg-secondary text-muted-foreground'
                       }`}
                     >
-                      {t[status]}
+                      {status === 'scheduled' ? `${t.scheduled}: ${formatPlannedDate(post.publishedAt, lang)}` : t[status]}
                     </span>
                     {post.sample && <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">{t.sample}</span>}
                     {post.aiGenerated && <span className="rounded-full bg-brand/15 px-2 py-0.5 text-brand">{t.aiTag}</span>}
                   </span>
                 </button>
+                {status === 'scheduled' && (
+                  <div className="mt-1.5 flex justify-end">
+                    <button
+                      type="button"
+                      disabled={publishingId === post.id}
+                      onClick={() => void publishNow(post)}
+                      className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-secondary disabled:opacity-60"
+                    >
+                      {publishingId === post.id && <Loader2 className="h-3 w-3 animate-spin" aria-hidden />}
+                      {t.publishNow}
+                    </button>
+                  </div>
+                )}
                 {(post.sample || isStarterPost(post)) && (
                   <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2">
                     <span className="text-xs font-medium text-amber-500">{t.personalizeLabel}</span>

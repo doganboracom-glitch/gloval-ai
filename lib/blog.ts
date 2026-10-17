@@ -74,6 +74,32 @@ export function isPostLive(
   return !Number.isNaN(at) && at <= now.getTime()
 }
 
+/** Badge state of a post in the owner's list: draft, live, or published with a future time. */
+export function postDisplayStatus(
+  post: Pick<BlogPost, 'status' | 'publishedAt'>,
+  now: Date = new Date(),
+): 'draft' | 'live' | 'scheduled' {
+  if (post.status !== 'published') return 'draft'
+  return post.publishedAt && Date.parse(post.publishedAt) > now.getTime() ? 'scheduled' : 'live'
+}
+
+/** Write input for "publish now": no `publishAt`, so the server stamps the current time. */
+export function publishNowInput(post: BlogPost) {
+  return {
+    title: post.title,
+    body: post.body,
+    slug: post.slug,
+    excerpt: post.excerpt,
+    keywords: post.keywords,
+    seoTitle: post.seoTitle,
+    metaDescription: post.metaDescription,
+    coverUrl: post.coverUrl,
+    coverAlt: post.coverAlt,
+    indexable: post.indexable,
+    status: 'published' as const,
+  }
+}
+
 /** An untouched starter post: AI-written without business facts and kept out of search until personalised. */
 export function isStarterPost(post: Pick<BlogPost, 'aiGenerated' | 'personalized' | 'sample' | 'indexable'>): boolean {
   return post.aiGenerated && !post.personalized && !post.sample && !post.indexable
