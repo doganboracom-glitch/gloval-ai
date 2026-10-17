@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
+import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
 import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
@@ -1258,6 +1259,7 @@ function AiTab({
   async function submit(text: string) {
     const trimmed = text.trim()
     if (!trimmed || loading || locked) return
+    stopAllVoiceInput()
     // Optimistically clear the field so the message log reads cleanly, but keep
     // the text so a failed edit can restore it (network/server error retry).
     setValue('')

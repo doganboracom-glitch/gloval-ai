@@ -28,11 +28,17 @@ export function VoiceInputButton({ value, onText, disabled, className }: VoiceIn
   const { lang } = useLanguage()
   const voiceLang = toBilingual(lang)
   const copy = voiceCopy(voiceLang)
-  const { status, error, supported, start, stop, toggle, dismissError } = useVoiceInput({
+  const { status, error, supported, start, stop, toggle, cancel, dismissError } = useVoiceInput({
     lang: voiceLang,
     value,
     onText,
   })
+
+  // The field turns busy (generation / publish / locked): shut the microphone
+  // down at once instead of letting dictation run behind the action.
+  useEffect(() => {
+    if (disabled) cancel()
+  }, [disabled, cancel])
 
   const pressStartedAt = useRef<number | null>(null)
   const startedByThisPress = useRef(false)
