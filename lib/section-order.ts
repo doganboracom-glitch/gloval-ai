@@ -1,4 +1,5 @@
 import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
 /**
  * Standard top-to-bottom order for corporate sites. Types not listed keep their
@@ -41,7 +42,13 @@ export function defaultBlogLatestIndex(sections: readonly SectionLike[]): number
   return sections.length
 }
 
+/** Adding a section to a site already at the schema's section cap would make the whole site invalid. */
+function atSectionCap(site: Pick<WebsiteSchema, 'sections'>): boolean {
+  return site.sections.length >= SITE_SECTION_HARD_CAP
+}
+
 function insertBlogLatest<T extends WebsiteSchema>(site: T, index: number, hidden?: boolean): T {
+  if (atSectionCap(site)) return site
   const section = { type: 'blogLatest', ...(hidden ? { hidden: true } : {}) } as SectionLike
   const sections = [...site.sections]
   sections.splice(index, 0, section)

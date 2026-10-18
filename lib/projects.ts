@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { logSchemaRepair, normalizeWebsiteSchema, parseWebsiteForSave } from '@/lib/website-schema-compat'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
 import { materializePages, withPageRedirects } from '@/lib/website-pages'
@@ -229,7 +230,7 @@ export async function createProject(input: {
   commerceMode?: CommerceMode
 }): Promise<string> {
   const { supabase, userId } = await requireUser()
-  const parsed = websiteSchema.parse(input.schema)
+  const parsed = parseWebsiteForSave(input.schema)
   // The project type MUST reflect the actual generated content. A brief like
   // "…e-ticaret sitesi oluştur" yields a schema with products/categories
   // sections, but the create payload from the landing hero never carried a
@@ -291,7 +292,7 @@ export async function saveProjectSchema(input: {
   expectedUpdatedAt?: string
 }): Promise<void> {
   const { db, elevated } = await clientForProject(input.id)
-  let parsed = websiteSchema.parse(input.schema)
+  let parsed = parseWebsiteForSave(input.schema)
 
   const { data: existing, error: existingErr } = await db
     .from('projects')
@@ -361,7 +362,7 @@ export async function snapshotProject(input: {
   label?: string
 }): Promise<void> {
   const { db } = await clientForProject(input.id)
-  const parsed = websiteSchema.parse(input.schema)
+  const parsed = parseWebsiteForSave(input.schema)
   await saveProjectSchema({ id: input.id, schema: parsed })
   const { error } = await db.from('project_versions').insert({
     project_id: input.id,
@@ -545,7 +546,7 @@ export async function publishProject(input: {
   confirmedReal?: string[]
 }): Promise<PublishResult> {
   const { db, elevated, userId } = await clientForProject(input.id)
-  const requested = websiteSchema.parse(input.schema)
+  const requested = parseWebsiteForSave(input.schema)
 
   // Load the row to reuse an existing slug or mint a new one. For an admin
   // editing another tenant's site, `db` is the elevated service-role client.
@@ -792,14 +793,15 @@ export async function getPublishedSite(slug: string): Promise<PublishedSite | nu
   if (error) throw error
   const row = Array.isArray(data) ? data[0] : data
   if (!row) return null
-  const parsed = websiteSchema.safeParse(row.schema_data)
-  if (!parsed.success) return null
+  const normalized = normalizeWebsiteSchema(row.schema_data)
+  if (!normalized.ok) return null
+  logSchemaRepair('published', normalized.steps)
   return {
     name: row.name as string,
     // Every public render (tenant subdomain, custom domain, store pages) reads
     // through here, so unapproved sample content can never reach a visitor.
     // Sites without sample flags come back untouched (same object).
-    schema: stripSampleContent(parsed.data),
+    schema: stripSampleContent(normalized.value),
     ownerPlanCode: (row.owner_plan_code as string | null) ?? null,
   }
 }

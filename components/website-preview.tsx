@@ -25,6 +25,7 @@ import {
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { websiteSchema, type BlogSettings, type WebsiteSchema } from '@/lib/website-schema'
+import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
 import { WebsiteRenderer, type PreviewNav } from '@/components/website-renderer/website-renderer'
 import { resolveTheme, googleFontsHref } from '@/components/website-renderer/theme'
 import { WebsiteEditorPanel, type ChatMessage } from '@/components/website-editor-panel'
@@ -299,7 +300,12 @@ export function WebsitePreview({
   // Index of the slider slide whose image is currently regenerating (or null).
   const [workingSlide, setWorkingSlide] = useState<number | null>(null)
 
-  const initial = useMemo(() => websiteSchema.safeParse(site), [site])
+  const initial = useMemo(() => {
+    const result = normalizeWebsiteSchema(site)
+    if (!result.ok) return { success: false as const }
+    logSchemaRepair('editor', result.steps)
+    return { success: true as const, data: result.value }
+  }, [site])
   const [history, setHistory] = useState<History>(() => ({
     past: [],
     present: initial.success ? withLegacyBlogLatest(initial.data) : null,
