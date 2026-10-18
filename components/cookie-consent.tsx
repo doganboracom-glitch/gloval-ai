@@ -71,11 +71,11 @@ function Toggle({
       aria-label={label}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        checked ? 'bg-brand' : 'bg-muted'
+        checked ? 'cookie-toggle-on' : 'cookie-toggle-off'
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
+        className={`cookie-toggle-knob inline-block h-4 w-4 transform rounded-full transition-transform ${
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       />
@@ -180,7 +180,7 @@ export function CookieConsent() {
           ref={bannerRef}
           className={
             compact
-              ? 'fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto border-t border-border bg-card shadow-lg shadow-black/20'
+              ? 'cookie-surface fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto border-t shadow-lg shadow-black/20'
               : 'fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4'
           }
           role="dialog"
@@ -191,12 +191,12 @@ export function CookieConsent() {
             className={
               compact
                 ? `mx-auto max-w-5xl px-4 py-3 ${sideBySide ? 'sm:flex sm:items-center sm:gap-4' : ''}`
-                : 'mx-auto max-w-3xl rounded-2xl border border-border bg-card p-5 shadow-lg shadow-black/20 sm:p-6'
+                : 'cookie-surface mx-auto max-w-3xl rounded-2xl border p-5 shadow-lg shadow-black/20 sm:p-6'
             }
           >
             <div className={`flex items-start gap-3 ${sideBySide ? 'sm:min-w-0 sm:flex-1' : ''}`}>
               {!compact && (
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
+                <span className="cookie-icon mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12">
                   <Cookie className="h-5 w-5" aria-hidden="true" />
                 </span>
               )}
@@ -208,7 +208,7 @@ export function CookieConsent() {
                   {c.title}
                 </h2>
                 <p
-                  className={`text-pretty text-muted-foreground ${
+                  className={`cookie-muted text-pretty ${
                     compact
                       ? 'mt-0.5 line-clamp-2 text-xs leading-snug'
                       : 'mt-1 text-sm leading-relaxed'
@@ -217,7 +217,7 @@ export function CookieConsent() {
                   {c.description}{' '}
                   <Link
                     href="/yasal/cerez-politikasi"
-                    className="font-medium text-brand underline-offset-2 hover:underline"
+                    className="cookie-link font-medium"
                   >
                     {c.policyLink}
                   </Link>
@@ -231,7 +231,7 @@ export function CookieConsent() {
                     setCustomize(false)
                   }}
                   aria-label="Kapat"
-                  className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  className="cookie-close rounded-lg p-1 transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -239,22 +239,22 @@ export function CookieConsent() {
             </div>
 
             {customize && (
-              <div className="mt-5 space-y-3 border-t border-border pt-5">
+              <div className="cookie-divider mt-5 space-y-3 border-t pt-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">{c.necessary}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="cookie-muted mt-0.5 text-xs">
                       {c.necessaryDesc}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+                  <span className="cookie-muted shrink-0 rounded-full border cookie-divider px-2.5 py-1 text-[11px] font-medium">
                     {c.always}
                   </span>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">{c.analytics}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="cookie-muted mt-0.5 text-xs">
                       {c.analyticsDesc}
                     </p>
                   </div>
@@ -267,7 +267,7 @@ export function CookieConsent() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm font-medium">{c.marketing}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="cookie-muted mt-0.5 text-xs">
                       {c.marketingDesc}
                     </p>
                   </div>
@@ -291,7 +291,7 @@ export function CookieConsent() {
                 <button
                   type="button"
                   onClick={saveCustom}
-                  className={`inline-flex items-center justify-center rounded-xl bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 ${buttonSize}`}
+                  className={`cookie-btn-primary inline-flex items-center justify-center rounded-xl font-semibold transition-opacity hover:opacity-90 ${buttonSize}`}
                 >
                   {c.save}
                 </button>
@@ -304,21 +304,21 @@ export function CookieConsent() {
                       setDraftMarketing(consent?.marketing ?? false)
                       setCustomize(true)
                     }}
-                    className={`inline-flex items-center justify-center rounded-xl border border-border font-semibold transition-colors hover:bg-secondary/60 ${buttonSize}`}
+                    className={`cookie-btn-outline inline-flex items-center justify-center rounded-xl border font-semibold transition-colors ${buttonSize}`}
                   >
                     {c.customize}
                   </button>
                   <button
                     type="button"
                     onClick={rejectAll}
-                    className={`inline-flex items-center justify-center rounded-xl border border-border font-semibold transition-colors hover:bg-secondary/60 ${buttonSize}`}
+                    className={`cookie-btn-outline inline-flex items-center justify-center rounded-xl border font-semibold transition-colors ${buttonSize}`}
                   >
                     {c.rejectAll}
                   </button>
                   <button
                     type="button"
                     onClick={acceptAll}
-                    className={`inline-flex items-center justify-center rounded-xl bg-brand font-semibold text-brand-foreground transition-opacity hover:opacity-90 ${buttonSize}`}
+                    className={`cookie-btn-primary inline-flex items-center justify-center rounded-xl font-semibold transition-opacity hover:opacity-90 ${buttonSize}`}
                   >
                     {c.acceptAll}
                   </button>

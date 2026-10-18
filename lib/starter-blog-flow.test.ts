@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeClient, type Tables } from '@/lib/__fixtures__/fake-supabase'
+import { starterSiteFromSchema } from '@/lib/starter-blog'
 import { fallbackWebsite } from '@/lib/website-schema'
 
 const state = vi.hoisted(() => ({
@@ -78,7 +79,7 @@ describe('starter blog after project creation', () => {
       projectId: id,
       ownerId: 'owner-1',
       siteSlug: null,
-      site: { name: schema.meta.name, description: schema.meta.description, storefront: false },
+      site: starterSiteFromSchema(schema),
       lang: 'tr',
     })
   })
@@ -148,7 +149,7 @@ describe('"Örnek blog yazılarını ekle" button action', () => {
       projectId: 'p1',
       ownerId: 'owner-1',
       siteSlug: 'klinik',
-      site: { name: schema.meta.name, description: schema.meta.description, storefront: false },
+      site: starterSiteFromSchema(schema),
       lang: 'tr',
     })
   })

@@ -24,6 +24,7 @@ import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { scheduleStarterBlog } from '@/lib/starter-blog-server'
+import { starterSiteFromSchema } from '@/lib/starter-blog'
 import { enforceTrackingPlan, sanitizeTracking } from '@/lib/site-tracking'
 import { slugifyProjectName } from '@/lib/slug'
 import { commerceModeForNewProject, type CommerceMode } from '@/lib/commerce-mode'
@@ -272,8 +273,8 @@ export async function createProject(input: {
     projectId: data.id as string,
     ownerId: userId,
     siteSlug: null,
-    site: { name: parsed.meta.name, description: parsed.meta.description, storefront: isStorefront(parsed) },
-    lang: row.language === 'en' ? 'en' : 'tr',
+  site: starterSiteFromSchema(parsed),
+  lang: row.language === 'en' ? 'en' : 'tr',
   })
   return data.id as string
 }
@@ -745,8 +746,8 @@ export async function publishProject(input: {
         projectId: input.id,
         ownerId: project.owner_id as string,
         siteSlug: slug,
-        site: { name: parsed.meta.name, description: parsed.meta.description, storefront: isStorefront(parsed) },
-        lang: project.language === 'en' ? 'en' : 'tr',
+  site: starterSiteFromSchema(parsed),
+  lang: project.language === 'en' ? 'en' : 'tr',
       })
     }
   }

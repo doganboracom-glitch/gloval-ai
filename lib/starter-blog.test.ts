@@ -158,6 +158,16 @@ describe('runStarterBlog: generation after project creation', () => {
     expect(enqueue).not.toHaveBeenCalled()
   })
 
+  it('publishes immediately: status published, published_at is now, nothing scheduled', async () => {
+    const { deps, posts } = makeDeps()
+    await runStarterBlog(deps, args)
+    expect(posts).toHaveLength(STARTER_POST_COUNT)
+    for (const post of posts) {
+      expect(post.status).toBe('published')
+      expect(post.publishedAt).toBe(NOW.toISOString())
+    }
+  })
+
   it('a second call never generates again (already_added)', async () => {
     const { deps, generate } = makeDeps()
     await runStarterBlog(deps, args)

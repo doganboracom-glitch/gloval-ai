@@ -7,8 +7,8 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import type { BlogPost } from '@/lib/blog'
 import { regenerateStarterBlogNow, runStarterBlogNow } from '@/lib/starter-blog-server'
-import type { StarterErrorCode } from '@/lib/starter-blog'
-import { isStorefront, websiteSchema } from '@/lib/website-schema'
+import { starterSiteFromSchema, type StarterErrorCode } from '@/lib/starter-blog'
+import { websiteSchema } from '@/lib/website-schema'
 import {
   createBlogPost,
   deleteBlogPost,
@@ -129,11 +129,9 @@ export async function addStarterBlogPostsAction(
     .maybeSingle()
   if (!project) return { ok: false, reason: 'NOT_FOUND' }
   const parsed = websiteSchema.safeParse(project.schema_data)
-  const site = {
-    name: parsed.success ? parsed.data.meta.name : String(project.name ?? ''),
-    description: parsed.success ? parsed.data.meta.description : '',
-    storefront: parsed.success ? isStorefront(parsed.data) : false,
-  }
+  const site = parsed.success
+    ? starterSiteFromSchema(parsed.data)
+    : { name: String(project.name ?? ''), description: '', storefront: false }
   const result = await runStarterBlogNow({
     projectId,
     ownerId: access.ownerId,
@@ -167,11 +165,9 @@ export async function regenerateStarterBlogPostsAction(
     .maybeSingle()
   if (!project) return { ok: false, reason: 'NOT_FOUND' }
   const parsed = websiteSchema.safeParse(project.schema_data)
-  const site = {
-    name: parsed.success ? parsed.data.meta.name : String(project.name ?? ''),
-    description: parsed.success ? parsed.data.meta.description : '',
-    storefront: parsed.success ? isStorefront(parsed.data) : false,
-  }
+  const site = parsed.success
+    ? starterSiteFromSchema(parsed.data)
+    : { name: String(project.name ?? ''), description: '', storefront: false }
   const result = await regenerateStarterBlogNow({
     projectId,
     siteSlug: access.slug,

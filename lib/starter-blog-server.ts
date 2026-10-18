@@ -8,6 +8,9 @@ import { isStarterPost } from '@/lib/blog'
 import {
   buildStarterSystemPrompt,
   buildStarterUserPrompt,
+  buildTopicSystemPrompt,
+  buildTopicUserPrompt,
+  topicSuggestionSchema,
   regenerateStarterBlog,
   runStarterBlog,
   starterDailyCapReached,
@@ -35,14 +38,24 @@ function realDeps(projectId: string, siteSlug: string | null, ownerId?: string):
       return (await listProjectBlogPosts(id)).filter(isStarterPost).length
     },
     dailyCapReached: ownerId ? async () => starterDailyCapReached(await starterPostsLast24h(ownerId)) : undefined,
-    async generate({ topic, lang, siteName, description, abortSignal }) {
+    async suggestTopics({ site, lang, avoidTitles, abortSignal }) {
+      const result = await generateStructured({
+        ai: resolveAiModel('blogWrite', null),
+        schema: topicSuggestionSchema,
+        system: buildTopicSystemPrompt(lang),
+        prompt: buildTopicUserPrompt({ site, lang, avoidTitles }),
+        abortSignal,
+      })
+      return result.object
+    },
+    async generate({ topic, lang, siteName, description, businessType, topicLang, abortSignal }) {
       // Always the standard tier and never billed: the starter posts are a
       // free onboarding gift, so their cost stays predictable on every plan.
       const result = await generateStructured({
         ai: resolveAiModel('blogWrite', null),
         schema: starterOutputSchema(siteName),
         system: buildStarterSystemPrompt(lang),
-        prompt: buildStarterUserPrompt({ topic, lang, description }),
+        prompt: buildStarterUserPrompt({ topic, lang, description, businessType, topicLang }),
         abortSignal,
       })
       return result.object

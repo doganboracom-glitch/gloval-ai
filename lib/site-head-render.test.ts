@@ -43,7 +43,10 @@ async function renderHead(slug: string) {
     children: createElement('main', null, 'sayfa'),
     params,
   })
-  return { metadata, html: renderToStaticMarkup(element) }
+  const full = renderToStaticMarkup(element)
+  // The platform's own cookie-banner theme <style> is not owner head code.
+  const html = full.replace(/<style>:root\{--cookie-[^<]*\}<\/style>/, '')
+  return { metadata, html, full }
 }
 
 async function rewriteTarget(url: string) {
@@ -57,6 +60,14 @@ beforeEach(() => {
   state.site = null
   state.boundProject = null
   state.publishedSlug = null
+})
+
+describe('cookie banner theme in the published layout', () => {
+  it('emits the tenant --cookie-* variables on :root', async () => {
+    publish('')
+    const { full } = await renderHead('kahve')
+    expect(full).toMatch(/<style>:root\{--cookie-brand:#[0-9a-f]{6}/)
+  })
 })
 
 describe('google-site-verification in the published <head>', () => {
