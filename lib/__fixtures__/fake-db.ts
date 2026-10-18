@@ -125,6 +125,7 @@ export const fakeDb = {
         return api
       },
       order: () => api,
+      limit: () => api,
       maybeSingle: () => run('maybe'),
       single: () => run('single'),
       then: (resolve: (r: Result) => unknown, reject: (e: unknown) => unknown) => run('many').then(resolve, reject),

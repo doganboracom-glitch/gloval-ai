@@ -3,15 +3,38 @@
  * unpublished, suspended or deleted). Only Turkish and English are written;
  * every other visitor language gets English.
  */
-export function siteUnavailableCopy(lang: string): { title: string; body: string } {
+export type SiteUnavailableCopy = {
+  title: string
+  body: string
+  /** Owner note, split around the "support ticket" link text. */
+  ownerNote: { before: string; link: string; after: string }
+  homeButton: string
+  ticketSubject: string
+}
+
+export function siteUnavailableCopy(lang: string): SiteUnavailableCopy {
   return lang === 'tr'
     ? {
         title: 'Bu site şu an yayında değil',
-        body: 'Site sahibi siteyi yayından kaldırmış, askıya alınmış ya da silinmiş olabilir. Lütfen daha sonra tekrar deneyin.',
+        body: 'Aradığınız site kapatılmış, askıya alınmış ya da henüz yayına alınmamış olabilir.',
+        ownerNote: {
+          before: 'Bu site size aitse GLOVAL AI paneline giriş yaparak sitenizi yayına alabilir veya ',
+          link: 'destek talebi',
+          after: ' oluşturabilirsiniz.',
+        },
+        homeButton: "GLOVAL AI'a git",
+        ticketSubject: 'Sitem yayında görünmüyor',
       }
     : {
         title: 'This site is not available right now',
-        body: 'The site owner may have unpublished it, it may be suspended, or it may have been deleted. Please try again later.',
+        body: 'The site you are looking for may have been taken down, suspended, or not published yet.',
+        ownerNote: {
+          before: 'If this site is yours, you can sign in to your GLOVAL AI dashboard to publish it, or create a ',
+          link: 'support ticket',
+          after: '.',
+        },
+        homeButton: 'Go to GLOVAL AI',
+        ticketSubject: 'My site is not showing as published',
       }
 }
 

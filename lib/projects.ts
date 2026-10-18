@@ -6,7 +6,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
-import { logSchemaRepair, normalizeWebsiteSchema, parseWebsiteForSave } from '@/lib/website-schema-compat'
+import {
+  logSchemaRepair,
+  normalizeWebsiteSchema,
+  parseWebsiteForSave,
+  pickLastValidSchema,
+  type SchemaCandidate,
+} from '@/lib/website-schema-compat'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
 import { materializePages, withPageRedirects } from '@/lib/website-pages'
@@ -494,6 +500,67 @@ export async function restoreProjectBackup(input: {
     }
     throw err
   }
+  return { ok: true }
+}
+
+export type RestoreLastValidResult =
+  | { ok: true }
+  | { ok: false; reason: 'NO_VALID_VERSION' | 'RATE_LIMITED' }
+
+/**
+ * Recovery for a draft that can no longer be opened: replaces it with the
+ * newest saved snapshot (published versions and backups) that still reads as a
+ * valid site. Deliberately not plan-gated, since the owner has no other way in.
+ * The unreadable draft is overwritten only after a readable replacement exists,
+ * and the published site is never touched.
+ */
+export async function restoreLastValidVersion(projectId: string): Promise<RestoreLastValidResult> {
+  const { db, userId, elevated } = await clientForProject(projectId)
+
+  const { data: project, error: projectErr } = await db
+    .from('projects')
+    .select('id, owner_id, language')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (projectErr) throw projectErr
+  if (!project) throw new Error('NOT_FOUND')
+  if (!elevated && project.owner_id !== userId) throw new Error('NOT_FOUND')
+
+  const limited = checkRateLimit(`last-valid-restore:${userId}`, BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS)
+  if (!limited.allowed) return { ok: false, reason: 'RATE_LIMITED' }
+
+  const [versions, backups] = await Promise.all([
+    db
+      .from('project_versions')
+      .select('schema_data, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(30),
+    // Ownership was verified above, so the admin client is used only to read this project's backups.
+    createAdminClient()
+      .from('project_backups')
+      .select('schema_data, created_at')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+      .limit(30),
+  ])
+  if (versions.error) throw versions.error
+  if (backups.error) throw backups.error
+
+  const restored = pickLastValidSchema(
+    [...(versions.data ?? []), ...(backups.data ?? [])] as SchemaCandidate[],
+    project.language === 'en' ? 'en' : 'tr',
+  )
+  if (!restored) return { ok: false, reason: 'NO_VALID_VERSION' }
+
+  const { error: updateErr } = await db
+    .from('projects')
+    .update({ schema_data: materializePages(restored), updated_at: new Date().toISOString() })
+    .eq('id', projectId)
+  if (updateErr) throw updateErr
+
+  revalidatePath(`/editor/${projectId}`)
+  revalidatePath('/dashboard')
   return { ok: true }
 }
 

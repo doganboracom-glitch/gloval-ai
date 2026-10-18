@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { RestoreLastValidButton } from '@/components/editor/restore-last-valid-button'
 import { newTicketHref } from '@/lib/support/prefill'
 
 export function SiteUnavailable({ projectId }: { projectId: string }) {
@@ -13,6 +14,7 @@ export function SiteUnavailable({ projectId }: { projectId: string }) {
       <p className="max-w-md text-pretty text-sm leading-relaxed text-muted-foreground">
         Sitenizin kayıtlı yapısı okunamadı. Verileriniz silinmedi. Destek ekibine yazarsanız sitenizi sizin için onarırız.
       </p>
+      <RestoreLastValidButton projectId={projectId} />
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Link
           href={supportHref}

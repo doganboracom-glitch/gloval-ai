@@ -36,6 +36,25 @@ export function parseWebsiteForSave(raw: unknown, lang: 'tr' | 'en' = 'tr'): Web
   throw new Error(`invalid_site_schema: ${result.issues.map((i) => `${i.path}:${i.code}`).join(', ')}`)
 }
 
+export type SchemaCandidate = { created_at: string; schema_data: unknown }
+
+/**
+ * Newest stored snapshot that is readable (valid, or repairable by the same
+ * pass the editor uses), or null when none is. Drives "restore the last valid
+ * version" for a draft that can no longer be opened.
+ */
+export function pickLastValidSchema(
+  candidates: readonly SchemaCandidate[],
+  lang: 'tr' | 'en' = 'tr',
+): WebsiteSchema | null {
+  const newestFirst = [...candidates].sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
+  for (const candidate of newestFirst) {
+    const result = normalizeWebsiteSchema(candidate.schema_data, lang)
+    if (result.ok) return result.value
+  }
+  return null
+}
+
 /** Logs repair codes and paths only, never field values. */
 export function logSchemaRepair(context: string, steps: readonly RepairStep[]): void {
   if (steps.length === 0) return

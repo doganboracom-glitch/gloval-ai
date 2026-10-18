@@ -12,9 +12,21 @@ describe('siteUnavailableCopy', () => {
     expect(siteUnavailableCopy('de')).toEqual(siteUnavailableCopy('en'))
   })
 
-  it('covers suspended and deleted sites without naming the cause', () => {
-    expect(siteUnavailableCopy('tr').body).toMatch(/askıya alınmış/)
-    expect(siteUnavailableCopy('en').body).toMatch(/suspended/)
+  it('covers closed, suspended and unpublished sites without naming the cause', () => {
+    expect(siteUnavailableCopy('tr').body).toBe(
+      'Aradığınız site kapatılmış, askıya alınmış ya da henüz yayına alınmamış olabilir.',
+    )
+    expect(siteUnavailableCopy('en').body).toMatch(/taken down, suspended, or not published yet/)
+  })
+
+  it('points owners at the dashboard and a support ticket link', () => {
+    const tr = siteUnavailableCopy('tr')
+    expect(`${tr.ownerNote.before}${tr.ownerNote.link}${tr.ownerNote.after}`).toBe(
+      'Bu site size aitse GLOVAL AI paneline giriş yaparak sitenizi yayına alabilir veya destek talebi oluşturabilirsiniz.',
+    )
+    expect(tr.ownerNote.link).toBe('destek talebi')
+    expect(tr.homeButton).toBe("GLOVAL AI'a git")
+    expect(siteUnavailableCopy('en').homeButton).toBe('Go to GLOVAL AI')
   })
 })
 
