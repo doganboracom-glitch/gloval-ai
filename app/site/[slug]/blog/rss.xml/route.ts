@@ -1,4 +1,5 @@
 import { getPublishedSite } from '@/lib/projects'
+import { closedSiteFileResponse } from '@/lib/site-availability'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { getLiveBlogPosts } from '@/lib/blog-server'
 import { buildRss, indexablePosts } from '@/lib/blog'
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  if (!site) return new Response('Not found', { status: 404 })
+  if (!site) return closedSiteFileResponse()
 
   const posts = await getLiveBlogPosts(slug)
   if (indexablePosts(posts).length === 0) return new Response('Not found', { status: 404 })

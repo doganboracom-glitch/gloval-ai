@@ -39,6 +39,24 @@ export function siteUnavailableCopy(lang: string): SiteUnavailableCopy {
 }
 
 /**
+ * Response for machine-readable tenant files (sitemap.xml, robots.txt, RSS) of
+ * a site that is not published. They 404 instead of listing URLs that no
+ * longer exist, and are marked noindex. `robots.txt` deliberately does not
+ * `Disallow: /`, which would stop crawlers from seeing the 404 and dropping
+ * the site from the index.
+ */
+export function closedSiteFileResponse(): Response {
+  return new Response('Not found', {
+    status: 404,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Robots-Tag': 'noindex, nofollow',
+      'Cache-Control': 'public, max-age=0, s-maxage=60',
+    },
+  })
+}
+
+/**
  * "Back to the site's home" target for the tenant 404 page. On a tenant host or
  * custom domain the site lives at the root; on the platform host it lives under
  * `/site/<slug>`, so a bare `/` would leave the site for the GLOVAL homepage.

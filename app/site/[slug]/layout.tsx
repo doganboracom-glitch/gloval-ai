@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
-import { SiteUnpublished } from '@/components/site/site-unpublished'
 import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
 import { resolveCookieBannerDoc } from '@/lib/cookie-policy-link'
@@ -49,8 +49,10 @@ export default async function PublishedSiteLayout({
   const { slug } = await params
   const site = await getPublishedSite(slug)
   // No published site (never published, unpublished, suspended or deleted):
-  // every route under this slug, store pages included, shows the same notice.
-  if (!site) return <SiteUnpublished />
+  // every route under this slug, store pages included, answers HTTP 404 with the
+  // notice from `app/site/not-found.tsx`. Suspended and unpublished sites are
+  // indistinguishable to the public read, so they share the 404.
+  if (!site) notFound()
   const tracking = sanitizeTracking(site.schema.tracking)
   const cookieCss = cookieBannerCss(site.schema)
 

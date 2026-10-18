@@ -1,4 +1,5 @@
 import { getPublishedSite } from '@/lib/projects'
+import { closedSiteFileResponse } from '@/lib/site-availability'
 import { getStoreProducts } from '@/lib/store'
 import { storeSeoPlan } from '@/lib/commerce-mode'
 import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
@@ -52,9 +53,7 @@ export async function GET(
 ) {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  if (!site) {
-    return new Response('Not found', { status: 404 })
-  }
+  if (!site) return closedSiteFileResponse()
 
   const { origin: base, lastModified } = await getSiteSeoContext(slug)
   const entries: UrlEntry[] = [
