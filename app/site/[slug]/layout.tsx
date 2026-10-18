@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
+import { SiteUnpublished } from '@/components/site/site-unpublished'
 import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
 import { resolveCookieBannerDoc } from '@/lib/cookie-policy-link'
@@ -26,6 +27,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const site = await getPublishedSite(slug)
+  if (!site) return { verification: { google: null }, robots: { index: false, follow: false } }
   const other = extractMetaTags(safeTrackingCode(site?.schema.tracking?.head))
   // The platform's own Google Search Console token belongs to gloval.ai only,
   // so it is dropped here instead of leaking into every published tenant site.
@@ -46,15 +48,18 @@ export default async function PublishedSiteLayout({
 }) {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  const tracking = sanitizeTracking(site?.schema.tracking)
-  const cookieCss = cookieBannerCss(site?.schema)
+  // No published site (never published, unpublished, suspended or deleted):
+  // every route under this slug, store pages included, shows the same notice.
+  if (!site) return <SiteUnpublished />
+  const tracking = sanitizeTracking(site.schema.tracking)
+  const cookieCss = cookieBannerCss(site.schema)
 
   return (
     <>
       {cookieCss && <style dangerouslySetInnerHTML={{ __html: cookieCss }} />}
       <SiteCustomCode code={stripMetaTags(tracking?.head)} />
       <SiteCustomCode code={tracking?.bodyStart} />
-      <CookieBannerDocProvider doc={resolveCookieBannerDoc(site?.schema)}>{children}</CookieBannerDocProvider>
+      <CookieBannerDocProvider doc={resolveCookieBannerDoc(site.schema)}>{children}</CookieBannerDocProvider>
       <SiteCustomCode code={tracking?.bodyEnd} />
     </>
   )

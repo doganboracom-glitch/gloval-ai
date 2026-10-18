@@ -20,6 +20,14 @@ interface Finding {
   source: Source
   status: Status
   classes: string[]
+  sectionCount: number
+}
+
+const SECTION_LIMIT = 12
+
+function countSections(raw: unknown): number {
+  const sections = (raw as { sections?: unknown } | null)?.sections
+  return Array.isArray(sections) ? sections.length : 0
 }
 
 const PAGE = 200
@@ -66,12 +74,28 @@ async function main() {
 
   for (const project of projects) {
     const draft = classify(project.schema_data)
-    findings.push({ projectId: project.id, slug: project.slug, source: 'draft', ...draft })
+    findings.push({
+      projectId: project.id,
+      slug: project.slug,
+      source: 'draft',
+      sectionCount: countSections(project.schema_data),
+      ...draft,
+    })
     if (project.published_version_id && versions.has(project.published_version_id)) {
-      const published = classify(versions.get(project.published_version_id))
-      findings.push({ projectId: project.id, slug: project.slug, source: 'published', ...published })
+      const raw = versions.get(project.published_version_id)
+      findings.push({
+        projectId: project.id,
+        slug: project.slug,
+        source: 'published',
+        sectionCount: countSections(raw),
+        ...classify(raw),
+      })
     }
   }
+
+  console.log(`Supabase host: ${new URL(process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://unset').host}`)
+  console.log(`projects: ${projects.length}`)
+  console.log(`projects with a published version: ${projects.filter((p) => p.published_version_id).length}`)
 
   for (const source of ['draft', 'published'] as const) {
     const rows = findings.filter((f) => f.source === source)
@@ -80,6 +104,12 @@ async function main() {
     console.log(`valid:        ${count('valid')}`)
     console.log(`repaired:     ${count('repaired')}`)
     console.log(`unrepairable: ${count('unrepairable')}`)
+
+    const atLimit = rows.filter((f) => f.sectionCount >= SECTION_LIMIT)
+    console.log(`sections >= ${SECTION_LIMIT}: ${atLimit.length}`)
+    for (const f of atLimit) {
+      console.log(`  ${f.projectId} (${f.slug ?? '-'}) sections=${f.sectionCount} [${f.status}]`)
+    }
 
     const byClass = new Map<string, { count: number; example: string; projects: Set<string> }>()
     for (const finding of rows.filter((f) => f.status !== 'valid')) {

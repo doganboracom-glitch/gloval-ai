@@ -1,12 +1,18 @@
 /**
- * What a visitor sees when a tenant request finds no published site:
- * the slug belongs to a project the owner has not (or no longer) published,
- * or there is no such site at all.
+ * Copy for a tenant request that finds no published site (never published,
+ * unpublished, suspended or deleted). Only Turkish and English are written;
+ * every other visitor language gets English.
  */
-export type MissingSiteKind = 'unpublished' | 'missing'
-
-export function classifyMissingSite(row: { published: boolean | null } | null | undefined): MissingSiteKind {
-  return row ? 'unpublished' : 'missing'
+export function siteUnavailableCopy(lang: string): { title: string; body: string } {
+  return lang === 'tr'
+    ? {
+        title: 'Bu site şu an yayında değil',
+        body: 'Site sahibi siteyi yayından kaldırmış, askıya alınmış ya da silinmiş olabilir. Lütfen daha sonra tekrar deneyin.',
+      }
+    : {
+        title: 'This site is not available right now',
+        body: 'The site owner may have unpublished it, it may be suspended, or it may have been deleted. Please try again later.',
+      }
 }
 
 /**
