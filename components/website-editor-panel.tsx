@@ -29,7 +29,7 @@ import {
 import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
-import type { WebsiteSchema, Section } from '@/lib/website-schema'
+import type { BlogSettings, WebsiteSchema, Section } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
 import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
 import type { BackupItem } from '@/lib/project-backups-core'
@@ -111,8 +111,11 @@ export function WebsiteEditorPanel({
   payments = null,
   blog = null,
   publicSlug = null,
+  onPatchBlogSettings,
 }: {
   site: WebsiteSchema
+  /** Saves a blog setting without an undo step (used by the starter-posts card). */
+  onPatchBlogSettings?: (patch: BlogSettings) => void
   /** Project owner/admin only: shows the Blog tab (posts, AI writer). */
   blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
   /** Live subdomain slug (null before the first publish), for "Sayfayı aç" links. */
@@ -239,7 +242,15 @@ export function WebsiteEditorPanel({
         </div>
       )}
 
-      {blog && <StarterBlogNote projectId={blog.projectId} lang={lang === 'en' ? 'en' : 'tr'} />}
+      {blog && onPatchBlogSettings && (
+  <StarterBlogNote
+  projectId={blog.projectId}
+  lang={lang === 'en' ? 'en' : 'tr'}
+  settings={site.blogSettings}
+  starterPending={Boolean(blog.starterPending)}
+  onPatchSettings={onPatchBlogSettings}
+  />
+  )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border p-2">

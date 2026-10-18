@@ -729,6 +729,15 @@ export const blogSettingsSchema = z.object({
   showLatest: z.boolean().optional(),
   latestPlacement: z.enum(['after-hero', 'before-footer']).optional(),
   latestIndex: z.number().int().min(0).optional(),
+  /**
+   * First-publish switch-on of the starter blog. `false` marks a newly generated
+   * site that is still waiting for it; `true` means it already happened, so an
+   * owner who later turns the blog off is never overridden. Absent on every
+   * site created before this existed, which are never touched.
+   */
+  starterAutoEnabled: z.boolean().optional(),
+  /** The "starter posts published" card was shown or closed; it never returns for this project. */
+  starterCardDismissed: z.boolean().optional(),
 })
 
 /**
