@@ -16,12 +16,19 @@ import {
   TICKET_PRIORITIES,
   TICKET_SERVICES,
 } from '@/lib/support/constants'
+import { EMPTY_TICKET_PREFILL, type TicketPrefill } from '@/lib/support/prefill'
 import type { OwnProject } from '@/lib/support/queries'
 
 const fieldClass =
   'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring'
 
-export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
+export function NewTicketForm({
+  projects,
+  prefill = EMPTY_TICKET_PREFILL,
+}: {
+  projects: OwnProject[]
+  prefill?: TicketPrefill
+}) {
   const c = useSupportCopy()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -70,7 +77,7 @@ export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
               <span className="text-sm font-medium">
                 {c.department} <span className="text-destructive">*</span>
               </span>
-              <select name="department" required defaultValue="" className={fieldClass}>
+              <select name="department" required defaultValue={prefill.department} className={fieldClass}>
                 <option value="" disabled>
                   {c.departmentPlaceholder}
                 </option>
@@ -98,7 +105,7 @@ export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
               <span className="text-sm font-medium">
                 {c.service} <span className="font-normal text-muted-foreground">{c.optional}</span>
               </span>
-              <select name="service" defaultValue="none" className={fieldClass}>
+              <select name="service" defaultValue={prefill.service} className={fieldClass}>
                 <option value="none">{c.serviceNone}</option>
                 {TICKET_SERVICES.map((s) => (
                   <option key={s} value={s}>
@@ -111,7 +118,7 @@ export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
               <span className="text-sm font-medium">
                 {c.project} <span className="font-normal text-muted-foreground">{c.optional}</span>
               </span>
-              <select name="projectId" defaultValue="none" className={fieldClass}>
+              <select name="projectId" defaultValue={prefill.projectId} className={fieldClass}>
                 <option value="none">{c.projectNone}</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -130,6 +137,7 @@ export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
             <input
               name="subject"
               required
+              defaultValue={prefill.subject}
               maxLength={SUBJECT_MAX}
               placeholder={c.subjectPlaceholder}
               className={fieldClass}
@@ -143,6 +151,7 @@ export function NewTicketForm({ projects }: { projects: OwnProject[] }) {
             <textarea
               name="message"
               required
+              defaultValue={prefill.message}
               maxLength={MESSAGE_MAX}
               rows={9}
               placeholder={c.messagePlaceholder}

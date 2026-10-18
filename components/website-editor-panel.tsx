@@ -47,6 +47,7 @@ import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
 import { BlogTab } from '@/components/editor/blog-tab'
 import { StarterBlogNote } from '@/components/editor/starter-blog-note'
+import { tenantUrl } from '@/lib/domains'
 import {
   COMPANY_GROUP_ID,
   CompanyFields,
@@ -246,6 +247,7 @@ export function WebsiteEditorPanel({
   <StarterBlogNote
   projectId={blog.projectId}
   lang={lang === 'en' ? 'en' : 'tr'}
+  siteUrl={publicSlug ? tenantUrl(publicSlug) : null}
   settings={site.blogSettings}
   starterPending={Boolean(blog.starterPending)}
   onPatchSettings={onPatchBlogSettings}
