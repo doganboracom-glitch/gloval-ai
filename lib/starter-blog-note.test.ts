@@ -6,10 +6,16 @@ import { PlanResult, type Plan } from '@/components/plan-result'
 import { PLAN_BLOG_LINE } from '@/lib/starter-blog-note'
 import {
   AUTO_ENABLE_PATCH,
+  BLOG_REPORT_DEPARTMENT,
+  BLOG_REPORT_SERVICE,
+  blogReportMessage,
+  blogReportTarget,
+  blogReportTicketHref,
   shouldAutoEnableBlog,
   starterCardState,
   supportMailHref,
 } from '@/lib/starter-blog-card'
+import { parseTicketPrefill } from '@/lib/support/prefill'
 import type { BlogPost } from '@/lib/blog'
 
 const plan: Plan = {
@@ -87,6 +93,71 @@ describe('starterCardState', () => {
     expect(starterCardState({ ...base, settings: { starterCardDismissed: true }, posts: [starter()] })).toBe('hidden')
     expect(starterCardState({ ...base, starterPending: false, settings: undefined, posts: [starter()] })).toBe('hidden')
     expect(starterCardState({ ...base, settings: { starterAutoEnabled: false }, posts: undefined })).toBe('hidden')
+  })
+})
+
+describe('blog report ticket link', () => {
+  const args = { projectId: 'abc-123', siteUrl: 'https://demo.gloval.site', lang: 'tr' as const }
+
+  function parse(href: string) {
+    const url = new URL(href, 'https://gloval.ai')
+    return { path: url.pathname, params: url.searchParams }
+  }
+
+  it('targets the new-ticket page, not a mailto', () => {
+    const href = blogReportTicketHref(args)
+    expect(href.startsWith('/support/new?')).toBe(true)
+    expect(href).not.toContain('mailto:')
+  })
+
+  it('prefills subject, category, project id and site address', () => {
+    const { params } = parse(blogReportTicketHref(args))
+    expect(params.get('subject')).toBe('Blog yazısı sorunu')
+    expect(params.get('department')).toBe(BLOG_REPORT_DEPARTMENT)
+    expect(params.get('service')).toBe(BLOG_REPORT_SERVICE)
+    expect(params.get('project')).toBe('abc-123')
+    const message = params.get('message') ?? ''
+    expect(message).toContain('abc-123')
+    expect(message).toContain('https://demo.gloval.site')
+  })
+
+  it('says the site is unpublished when there is no address yet', () => {
+    const message = blogReportMessage({ projectId: 'abc-123', siteUrl: null, lang: 'tr' })
+    expect(message).toContain('Henüz yayınlanmadı')
+    expect(message).toContain('abc-123')
+  })
+
+  it('uses English copy for the en language', () => {
+    const { params } = parse(blogReportTicketHref({ ...args, lang: 'en' }))
+    expect(params.get('subject')).toBe('Blog post issue')
+  })
+
+  it('round-trips through the ticket page parser so the fields arrive prefilled', () => {
+    const { params } = parse(blogReportTicketHref(args))
+    const raw = Object.fromEntries(params.entries())
+    const prefill = parseTicketPrefill(raw, ['abc-123'])
+    expect(prefill.subject).toBe('Blog yazısı sorunu')
+    expect(prefill.projectId).toBe('abc-123')
+    expect(prefill.department).toBe(BLOG_REPORT_DEPARTMENT)
+    expect(prefill.service).toBe(BLOG_REPORT_SERVICE)
+    expect(prefill.message).toContain('https://demo.gloval.site')
+  })
+})
+
+describe('blogReportTarget', () => {
+  const base = { projectId: 'abc-123', siteUrl: null, lang: 'tr' as const, email: 'destek@gloval.ai' }
+
+  it('uses the ticket page while the support area is reachable', () => {
+    const target = blogReportTarget({ ...base, supportReachable: true })
+    expect(target.kind).toBe('ticket')
+    expect(target.href.startsWith('/support/new?')).toBe(true)
+  })
+
+  it('falls back to the mailto only when support is unreachable', () => {
+    const target = blogReportTarget({ ...base, supportReachable: false })
+    expect(target.kind).toBe('mail')
+    expect(target.href.startsWith('mailto:destek@gloval.ai?subject=')).toBe(true)
+    expect(decodeURIComponent(target.href)).toContain('abc-123')
   })
 })
 

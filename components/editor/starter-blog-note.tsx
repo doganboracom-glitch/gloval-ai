@@ -11,16 +11,19 @@ import { COMPANY } from '@/lib/legal/company'
 import {
   STARTER_CARD_COPY,
   STARTER_CARD_WAIT_MS,
+  blogReportTarget,
   starterCardState,
-  supportMailHref,
   type StarterCardState,
 } from '@/lib/starter-blog-card'
+import { SUPPORT_HOME_PATH, probeSupportReachable } from '@/lib/support/prefill'
 import type { NoteLang } from '@/lib/starter-blog-note'
 import type { BlogSettings } from '@/lib/website-schema'
 
 type Props = {
   projectId: string
   lang: NoteLang
+  /** Live address of the site (null before the first publish). */
+  siteUrl?: string | null
   settings: BlogSettings | undefined
   /** The site was created moments ago and its posts are still being written. */
   starterPending: boolean
@@ -28,7 +31,7 @@ type Props = {
   onPatchSettings: (patch: BlogSettings) => void
 }
 
-export function StarterBlogNote({ projectId, lang, settings, starterPending, onPatchSettings }: Props) {
+export function StarterBlogNote({ projectId, lang, siteUrl = null, settings, starterPending, onPatchSettings }: Props) {
   const copy = STARTER_CARD_COPY[lang]
   const [waitExpired, setWaitExpired] = useState(!starterPending)
   const [pinned, setPinned] = useState<StarterCardState | null>(null)
@@ -48,6 +51,20 @@ export function StarterBlogNote({ projectId, lang, settings, starterPending, onP
   const computed = starterCardState({ settings, posts, now: blogNow(), starterPending, waitExpired })
   // Once the success card has been shown it stays for this session, but never returns after a reload.
   const state = computed === 'hidden' ? (pinned ?? 'hidden') : computed
+
+  // Assume the ticket page works until the probe says otherwise; only an unreachable
+  // support area swaps the link for the mailto fallback.
+  const { data: supportReachable } = useSWR(state === 'success' ? SUPPORT_HOME_PATH : null, () => probeSupportReachable(), {
+    revalidateOnFocus: false,
+    shouldRetryOnError: false,
+  })
+  const reportTarget = blogReportTarget({
+    projectId,
+    siteUrl,
+    lang,
+    email: COMPANY.supportEmail,
+    supportReachable: supportReachable !== false,
+  })
 
   useEffect(() => {
     if (computed !== 'success' || pinned === 'success') return
@@ -103,7 +120,10 @@ export function StarterBlogNote({ projectId, lang, settings, starterPending, onP
             <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
               {copy.success.lead}
               <a
-                href={supportMailHref({ email: COMPANY.supportEmail, projectId, lang })}
+                href={reportTarget.href}
+                data-testid="starter-blog-report-link"
+                data-target={reportTarget.kind}
+                {...(reportTarget.kind === 'ticket' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className="font-medium text-brand underline underline-offset-2"
               >
                 {copy.success.link}

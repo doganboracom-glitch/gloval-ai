@@ -1,6 +1,10 @@
 import { isStarterPost, livePosts, type BlogPost } from '@/lib/blog'
+import { newTicketHref } from '@/lib/support/prefill'
 import type { NoteLang } from '@/lib/starter-blog-note'
 import type { BlogSettings } from '@/lib/website-schema'
+
+export const BLOG_REPORT_DEPARTMENT = 'website'
+export const BLOG_REPORT_SERVICE = 'ai_content'
 
 export type StarterCardState = 'hidden' | 'preparing' | 'success' | 'failed'
 
@@ -62,6 +66,9 @@ export const STARTER_CARD_COPY = {
     dismiss: 'Kartı kapat',
     mailSubject: 'Blog yazısı sorunu',
     mailBody: 'Merhaba, blog yazılarımda bir sorun gördüm:',
+    projectIdLabel: 'Proje kimliği',
+    siteLabel: 'Site adresi',
+    unpublished: 'Henüz yayınlanmadı',
   },
   en: {
     preparing: { title: '3 sample blog posts are being prepared', body: 'Posts that fit your sector are being written. This can take a few minutes.' },
@@ -75,10 +82,53 @@ export const STARTER_CARD_COPY = {
     dismiss: 'Dismiss card',
     mailSubject: 'Blog post issue',
     mailBody: 'Hello, I noticed a problem with my blog posts:',
+    projectIdLabel: 'Project ID',
+    siteLabel: 'Site address',
+    unpublished: 'Not published yet',
   },
 } as const
 
-/** Support mailto with the subject and project id already filled in. */
+/** Editable ticket description: what happened, plus the project id and site address. */
+export function blogReportMessage(args: { projectId: string; siteUrl?: string | null; lang: NoteLang }): string {
+  const copy = STARTER_CARD_COPY[args.lang]
+  return [
+    copy.mailBody,
+    '',
+    '',
+    `${copy.projectIdLabel}: ${args.projectId}`,
+    `${copy.siteLabel}: ${args.siteUrl || copy.unpublished}`,
+  ].join('\n')
+}
+
+/**
+ * The platform's own new-ticket page (the dashboard "Destek" area), prefilled.
+ * There is no dedicated blog category, so it files under Website / AI Content.
+ */
+export function blogReportTicketHref(args: { projectId: string; siteUrl?: string | null; lang: NoteLang }): string {
+  return newTicketHref({
+    subject: STARTER_CARD_COPY[args.lang].mailSubject,
+    message: blogReportMessage(args),
+    department: BLOG_REPORT_DEPARTMENT,
+    service: BLOG_REPORT_SERVICE,
+    projectId: args.projectId,
+  })
+}
+
+export type BlogReportTarget = { kind: 'ticket' | 'mail'; href: string }
+
+/** The ticket page, or the mailto only when the support area cannot be reached. */
+export function blogReportTarget(args: {
+  projectId: string
+  siteUrl?: string | null
+  lang: NoteLang
+  email: string
+  supportReachable: boolean
+}): BlogReportTarget {
+  if (args.supportReachable) return { kind: 'ticket', href: blogReportTicketHref(args) }
+  return { kind: 'mail', href: supportMailHref(args) }
+}
+
+/** Support mailto with the subject and project id already filled in. Fallback only. */
 export function supportMailHref(args: { email: string; projectId: string; lang: NoteLang }): string {
   const copy = STARTER_CARD_COPY[args.lang]
   const subject = `${copy.mailSubject} (${args.projectId})`
