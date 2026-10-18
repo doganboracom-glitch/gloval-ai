@@ -190,6 +190,21 @@ export function buildPrivacyPolicy(input: CompanyInput): StoreLegalDoc {
   }
 }
 
+export function buildCookiePolicy(input: CompanyInput): StoreLegalDoc {
+  const c = company(input)
+  return {
+    title: 'Çerez Politikası',
+    sections: [
+      { heading: 'Genel', paragraphs: [`${intro(c.name)} Bu politika, sitede kullanılan çerezlerin ne işe yaradığını ve tercihlerinizin nasıl yönetileceğini açıklar.`] },
+      { heading: 'Zorunlu çerezler', paragraphs: ['Sitenin güvenli çalışması, oturum açma, sepet ve ödeme gibi temel işlevlerin sunulması için gerekli çerezler kullanılır. Bu çerezler devre dışı bırakılamaz.'] },
+      { heading: 'İsteğe bağlı çerezler', paragraphs: ['Analitik çerezleri, site kullanımını anlamamıza yardımcı olur. Pazarlama çerezleri ise yalnızca işletme sahibi siteye ilgili bir araç (örneğin reklam, harita veya video hizmeti) eklediyse ve tercihiniz izin veriyorsa kullanılır. Bu çerezler varsayılan olarak etkin değildir.'] },
+      { heading: 'Tercihlerinizi yönetme', paragraphs: ['Çerez bandındaki “Tercihleri özelleştir” seçeneğinden analitik ve pazarlama çerezlerine izin verip vermediğinizi istediğiniz zaman değiştirebilirsiniz.'] },
+      { heading: 'Tarayıcı ayarları', paragraphs: ['Çerezleri tarayıcınızın ayarlarındaki site verileri veya çerezler bölümünden silebilir ya da engelleyebilirsiniz. Zorunlu çerezleri engellemeniz hâlinde sitenin bazı işlevleri çalışmayabilir.'] },
+      { heading: 'İletişim', paragraphs: [`Çerezler hakkında sorularınızı ${contactChannels(c)} üzerinden iletebilirsiniz.`] },
+    ],
+  }
+}
+
 export function buildTermsOfService(input: CompanyInput): StoreLegalDoc {
   const c = company(input)
   return {
@@ -304,6 +319,7 @@ export function buildMembershipAgreement(input: CompanyInput): StoreLegalDoc {
 
 export const SITE_LEGAL_BUILDERS = {
   'gizlilik-politikasi': buildPrivacyPolicy,
+  'cerez-politikasi': buildCookiePolicy,
   'mesafeli-satis-sozlesmesi': buildDistanceSalesNotice,
   'hizmet-sozlesmesi': buildTermsOfService,
   'teslimat-ve-iade': buildCancellationAndRefund,

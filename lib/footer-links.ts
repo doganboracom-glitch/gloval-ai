@@ -49,6 +49,7 @@ export const FOOTER_CART_HREF = '#cart'
 /** Official-text pages served by every published site under `/yasal/<slug>`. */
 export const FOOTER_LEGAL_DOCS = [
   { slug: 'gizlilik-politikasi', tr: 'Gizlilik Politikası', en: 'Privacy Policy' },
+  { slug: 'cerez-politikasi', tr: 'Çerez Politikası', en: 'Cookie Policy' },
   { slug: 'mesafeli-satis-sozlesmesi', tr: 'Mesafeli Satış Sözleşmesi', en: 'Distance Sales Agreement' },
   { slug: 'hizmet-sozlesmesi', tr: 'Hizmet Sözleşmesi', en: 'Terms of Service' },
   { slug: 'teslimat-ve-iade', tr: 'Teslimat ve İade', en: 'Delivery & Returns' },

@@ -136,6 +136,10 @@ export function CookieConsent() {
   const analyticsAllowed = ready && consent?.analytics === true
 
   const pathname = usePathname()
+  const cookiePolicyHref = (() => {
+    const match = pathname.match(/^\/site\/([^/]+)/)
+    return match ? `/site/${match[1]}/yasal/cerez-politikasi` : '/yasal/cerez-politikasi'
+  })()
   const [viewportHeight, setViewportHeight] = useState<number | null>(null)
   useEffect(() => {
     const update = () => setViewportHeight(window.innerHeight)
@@ -216,7 +220,7 @@ export function CookieConsent() {
                 >
                   {c.description}{' '}
                   <Link
-                    href="/yasal/cerez-politikasi"
+                    href={cookiePolicyHref}
                     className="cookie-link font-medium"
                   >
                     {c.policyLink}
