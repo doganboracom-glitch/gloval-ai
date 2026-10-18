@@ -1,3 +1,5 @@
+import { getPublishedSite } from '@/lib/projects'
+import { closedSiteFileResponse } from '@/lib/site-availability'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { NON_INDEXABLE_STORE_PATHS } from '@/lib/commerce-mode'
 
@@ -17,6 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await params
+  if (!(await getPublishedSite(slug))) return closedSiteFileResponse()
   const { origin } = await getSiteSeoContext(slug)
   const body = [
     'User-Agent: *',
