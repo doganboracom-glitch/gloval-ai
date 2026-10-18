@@ -58,7 +58,7 @@ export const STARTER_CARD_COPY = {
     preparing: { title: 'Blog için 3 örnek yazı hazırlanıyor', body: 'Sektörünüze uygun yazılar yazılıyor. Bu birkaç dakika sürebilir.' },
     success: {
       title: 'Blog makaleleriniz yayınlandı',
-      lead: 'Blog makaleleriniz yayınlandı. Göz atmanızı öneririz. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize ',
+      lead: 'Blog makaleleriniz yayınlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize ',
       link: 'bildirin',
       tail: '.',
     },
@@ -74,8 +74,8 @@ export const STARTER_CARD_COPY = {
     preparing: { title: '3 sample blog posts are being prepared', body: 'Posts that fit your sector are being written. This can take a few minutes.' },
     success: {
       title: 'Your blog posts are live',
-      lead: 'Your blog posts are live. We recommend taking a look. AI can make mistakes; if you see a problem, please ',
-      link: 'report it',
+      lead: 'Your blog posts are published. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please ',
+      link: 'let us know',
       tail: '.',
     },
     failed: { title: 'Sample posts could not be prepared', body: 'The posts could not be added right now. You can try again.', retry: 'Try again', retrying: 'Preparing...' },
