@@ -44,6 +44,7 @@ const T = {
     addStarterPostLimit: 'Planınızın blog yazısı sınırına ulaşıldı.',
     addStarterTimeout: 'Yazılar zamanında hazırlanamadı. Tekrar deneyin.',
     addStarterDb: 'Yazılar kaydedilemedi. Biraz sonra tekrar deneyin.',
+  addStarterTopics: 'Sitenize uygun konular belirlenemedi. Biraz sonra tekrar deneyin.',
     regenerate: 'Örnek blog yazılarını yeniden oluştur',
     regenerateHint: 'Yalnızca düzenlemediğiniz ve özelleştirmediğiniz örnek yazılar yenilenir. Ücretsizdir.',
     regenerateTitle: 'Örnek yazılar yeniden oluşturulsun mu?',
@@ -87,6 +88,7 @@ const T = {
     addStarterPostLimit: 'Your plan\u2019s blog post limit has been reached.',
     addStarterTimeout: 'The posts were not ready in time. Please try again.',
     addStarterDb: 'The posts could not be saved. Try again shortly.',
+  addStarterTopics: 'Could not work out topics that fit your site. Try again shortly.',
     regenerate: 'Regenerate sample blog posts',
     regenerateHint: 'Only sample posts you have not edited or personalized are replaced. Free.',
     regenerateTitle: 'Regenerate sample posts?',
@@ -240,6 +242,7 @@ export function BlogTab({
       starter_blog_post_limit: t.addStarterPostLimit,
       starter_blog_timeout: t.addStarterTimeout,
       starter_blog_db: t.addStarterDb,
+      starter_blog_topics: t.addStarterTopics,
     }
     setError((reason && messages[reason]) || t.addStarterFailed)
   }
@@ -267,6 +270,7 @@ export function BlogTab({
       starter_blog_post_limit: t.addStarterPostLimit,
       starter_blog_timeout: t.addStarterTimeout,
       starter_blog_db: t.addStarterDb,
+      starter_blog_topics: t.addStarterTopics,
     }
     if (reason === 'nothing_to_replace' || reason === 'starter_blog_db' || reason === 'starter_blog_timeout') {
       await mutate()

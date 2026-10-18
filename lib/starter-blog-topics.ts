@@ -2,11 +2,15 @@ import type { Sector } from '@/lib/sector-profiles'
 
 /**
  * Topic pools for the starter blog posts written at a site's first publish.
- * Twelve general, evergreen subjects per sector. Titles are Turkish on purpose:
+ * Twelve general, evergreen subjects per sector. There is deliberately NO
+ * generic pool for unknown businesses: a made-up "any business" topic reads as
+ * unrelated to the real field, so those sites get AI-suggested topics instead. Titles are Turkish on purpose:
  * for an English site the writer is told to cover the same subject in English.
  * None of them names a business or promises a result.
  */
-export const STARTER_BLOG_TOPICS: Record<Sector, readonly string[]> = {
+export type PooledSector = Exclude<Sector, 'default'>
+
+export const STARTER_BLOG_TOPICS: Record<PooledSector, readonly string[]> = {
   dental: [
     'Günlük ağız bakımında sık yapılan hatalar',
     'Diş hekimine ne sıklıkla gitmek gerekir?',
@@ -147,20 +151,6 @@ export const STARTER_BLOG_TOPICS: Record<Sector, readonly string[]> = {
     'Gayrimenkul danışmanıyla çalışmanın avantajları',
     'Yeni inşaat ile ikinci el konut karşılaştırması',
   ],
-  default: [
-    'Doğru hizmet sağlayıcısını seçerken dikkat edilecekler',
-    'İlk görüşmeye hazırlanmanın pratik yolları',
-    'Sık sorulan sorular ve doğru bilinen yanlışlar',
-    'Hizmet alırken beklentileri netleştirmenin önemi',
-    'Planlı olmanın zaman ve emek açısından faydaları',
-    'Küçük işletmeden hizmet almanın artıları',
-    'Randevu ve iletişim sürecini kolaylaştıran alışkanlıklar',
-    'Kalite ve fiyat dengesini değerlendirme rehberi',
-    'Mevsimsel hazırlıklar için kontrol listesi',
-    'Bir hizmetten memnun kalmanın temel koşulları',
-    'Karar vermeden önce sorulması gereken sorular',
-    'Uzun vadeli düşünerek yatırım yapmanın önemi',
-  ],
 }
 
 export const STARTER_POST_COUNT = 3
@@ -181,7 +171,8 @@ export function seedFrom(value: string): number {
  * receive the same trio and a single site never gets a repeat.
  */
 export function pickStarterTopics(sector: Sector, seed: string, count = STARTER_POST_COUNT): string[] {
-  const pool = STARTER_BLOG_TOPICS[sector] ?? STARTER_BLOG_TOPICS.default
+  if (sector === 'default') return []
+  const pool = STARTER_BLOG_TOPICS[sector]
   const hash = seedFrom(seed)
   const strides = [1, 5, 7, 11].filter((stride) => pool.length % stride !== 0 || stride === 1)
   const start = hash % pool.length
@@ -191,4 +182,22 @@ export function pickStarterTopics(sector: Sector, seed: string, count = STARTER_
     picked.push(pool[(start + i * stride) % pool.length])
   }
   return picked
+}
+
+const normalizeTopic = (topic: string) => topic.toLocaleLowerCase('tr').replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+const POOL_TOPIC_OWNER = new Map<string, PooledSector>(
+  (Object.entries(STARTER_BLOG_TOPICS) as [PooledSector, readonly string[]][]).flatMap(([sector, topics]) =>
+    topics.map((topic) => [normalizeTopic(topic), sector] as const),
+  ),
+)
+
+/**
+ * True when a topic is a ready-made pool topic of a DIFFERENT sector than the
+ * site's own (e.g. an architecture topic suggested for a coffee shop). A model
+ * answer like that is cross-contamination, never a good topic.
+ */
+export function isForeignPoolTopic(topic: string, ownSector: Sector): boolean {
+  const owner = POOL_TOPIC_OWNER.get(normalizeTopic(topic))
+  return owner !== undefined && owner !== ownSector
 }

@@ -63,9 +63,21 @@ function makeDeps(generate?: StarterBlogDeps['generate']) {
   const { store, posts } = memoryStore()
   const write: BlogWriteDeps = { store, suspended: async () => false, enqueue: vi.fn(async () => 1), now: () => NOW }
   let n = 0
+  let round = 0
   const deps: StarterBlogDeps = {
     write,
     existingStarterCount: async () => posts.filter(isStarterPost).length,
+    suggestTopics: async () => {
+      round++
+      return {
+        businessType: 'air conditioner and boiler repair service',
+        topics: [
+          `Klima bakımı ne sıklıkla yapılmalı, ${round}. rehber`,
+          `Kombi arızalarında ilk bakılacak noktalar, ${round}. rehber`,
+          `Servis çağırmadan önce hazırlanması gerekenler, ${round}. rehber`,
+        ],
+      }
+    },
     generate: generate ?? (async () => output(`Yeni teknik servis rehberi ${++n}`)),
     inflight: new Set<string>(),
   }
