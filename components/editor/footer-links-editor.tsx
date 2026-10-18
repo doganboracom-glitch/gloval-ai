@@ -9,10 +9,12 @@ import {
   defaultLegalLinks,
   describeFooterIssue,
   footerTargetOptions,
+  hasCookiePolicyLink,
   implicitLegalLinks,
   sanitizeFooterColumns,
   sanitizeFooterLegalLinks,
   validateFooterHref,
+  withCookiePolicyLink,
   type FooterColumnInput,
 } from '@/lib/footer-links'
 import { pageNavItems } from '@/lib/website-pages'
@@ -51,6 +53,7 @@ const T = {
     legalTitle: 'Resmi yazılar çubuğu',
     legalHide: 'Resmi yazılar çubuğunu gizle',
     legalReset: 'Varsayılanlara dön',
+    addCookie: 'Çerez Politikası ekle',
     maxColumns: 'En fazla 5 sütun',
   },
   en: {
@@ -73,6 +76,7 @@ const T = {
     legalTitle: 'Official texts bar',
     legalHide: 'Hide the official texts bar',
     legalReset: 'Reset to defaults',
+    addCookie: 'Add Cookie Policy',
     maxColumns: 'At most 5 columns',
   },
 } as const
@@ -142,6 +146,7 @@ export function FooterLinksEditor({
   }
 
   const legalHidden = storedLegal?.hidden === true
+  const hasCookieLink = hasCookiePolicyLink(legalLinks)
 
   return (
     <div className="flex flex-col gap-3">
@@ -227,6 +232,12 @@ export function FooterLinksEditor({
               max={8}
               onChange={(links) => saveLegal(links, false)}
             />
+            {!hasCookieLink && legalLinks.length < 8 && (
+              <GhostButton onClick={() => saveLegal(withCookiePolicyLink(legalLinks, l), false)}>
+                <Plus className="h-3.5 w-3.5" />
+                {s.addCookie}
+              </GhostButton>
+            )}
             <GhostButton onClick={() => saveLegal(defaultLegalLinks(kind, l), false)}>
               {s.legalReset}
             </GhostButton>

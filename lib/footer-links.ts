@@ -64,6 +64,16 @@ export function legalDocPath(slug: FooterLegalSlug): string {
   return `/yasal/${slug}`
 }
 
+export function hasCookiePolicyLink(links: readonly NavLink[]): boolean {
+  return links.some((link) => link.href === legalDocPath('cerez-politikasi'))
+}
+
+/** One-click "add Cookie Policy": appends the link once, never duplicates it. */
+export function withCookiePolicyLink(links: readonly NavLink[], lang: 'tr' | 'en' = 'tr'): NavLink[] {
+  if (hasCookiePolicyLink(links)) return [...links]
+  return [...links, { label: lang === 'en' ? 'Cookie Policy' : 'Çerez Politikası', href: legalDocPath('cerez-politikasi') }]
+}
+
 export function isFooterLegalSlug(slug: string): slug is FooterLegalSlug {
   return LEGAL_SLUGS.has(slug)
 }
@@ -171,7 +181,7 @@ export function resolveFooterColumns(
 
 export type FooterLegalInput = { hidden?: boolean; links?: NavLink[] } | undefined
 
-const CORPORATE_LEGAL_SLUGS: FooterLegalSlug[] = ['gizlilik-politikasi']
+const CORPORATE_LEGAL_SLUGS: FooterLegalSlug[] = ['gizlilik-politikasi', 'cerez-politikasi']
 
 /** What corporate footers showed before the privacy-only default; kept for sites that never stored `legal`. */
 const LEGACY_CORPORATE_LEGAL_SLUGS: FooterLegalSlug[] = [
@@ -189,7 +199,7 @@ function legalLinksFor(slugs: readonly FooterLegalSlug[], lang: 'tr' | 'en'): Na
 
 /**
  * Default official-text links for a NEW site: a store carries every document,
- * a corporate site only the privacy policy.
+ * a corporate site the privacy and cookie policies.
  */
 export function defaultLegalLinks(
   kind: 'ecommerce' | 'corporate',
@@ -206,7 +216,7 @@ export function implicitLegalLinks(kind: 'ecommerce' | 'corporate', lang: 'tr' |
   return kind === 'ecommerce' ? defaultLegalLinks(kind, lang) : legalLinksFor(LEGACY_CORPORATE_LEGAL_SLUGS, lang)
 }
 
-/** Persists the privacy-only legal bar on a newly generated corporate site (stores and existing choices are left alone). */
+/** Persists the privacy + cookie legal bar on a newly generated corporate site (stores and existing choices are left alone). */
 export function seedFooterLegal(site: WebsiteSchema, lang: 'tr' | 'en' = 'tr'): WebsiteSchema {
   if (isStorefront(site)) return site
   const index = site.sections.findIndex((s) => s.type === 'footer')

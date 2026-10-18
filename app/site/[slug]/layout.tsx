@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
 import { cookieBannerCss } from '@/lib/cookie-banner-theme'
+import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
+import { resolveCookieBannerDoc } from '@/lib/cookie-policy-link'
 import { extractMetaTags, safeTrackingCode, sanitizeTracking, stripMetaTags } from '@/lib/site-tracking'
 
 /**
@@ -52,7 +54,7 @@ export default async function PublishedSiteLayout({
       {cookieCss && <style dangerouslySetInnerHTML={{ __html: cookieCss }} />}
       <SiteCustomCode code={stripMetaTags(tracking?.head)} />
       <SiteCustomCode code={tracking?.bodyStart} />
-      {children}
+      <CookieBannerDocProvider doc={resolveCookieBannerDoc(site?.schema)}>{children}</CookieBannerDocProvider>
       <SiteCustomCode code={tracking?.bodyEnd} />
     </>
   )
