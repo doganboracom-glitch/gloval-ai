@@ -1,6 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+
+// Secure-context support never changes after load, so there is nothing to subscribe to.
+// The server snapshot stays false so SSR and the first client render agree.
+const subscribeNoop = () => () => {}
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { registerVoiceCanceller } from '@/lib/voice/voice-registry'
@@ -118,7 +122,11 @@ export function useVoiceInput({ lang, value, onText }: UseVoiceInputOptions) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const supported = typeof window !== 'undefined' && window.isSecureContext !== false
+  const supported = useSyncExternalStore(
+    subscribeNoop,
+    () => window.isSecureContext !== false,
+    () => false,
+  )
 
   const updateStatus = useCallback((next: VoiceStatus) => {
     statusRef.current = next
