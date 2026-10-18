@@ -31,7 +31,7 @@ describe('defaultBlogLatestIndex', () => {
 describe('withBlogOffByDefault', () => {
   it('generates a new site with the menu link and home section both off', () => {
     const next = withBlogOffByDefault(site(['hero', 'faq', 'footer']))
-    expect(next.blogSettings).toEqual({ showInMenu: false, showLatest: false })
+    expect(next.blogSettings).toEqual({ showInMenu: false, showLatest: false, starterAutoEnabled: false })
     expect(types(next)).toEqual(['hero', 'faq', 'footer'])
   })
 

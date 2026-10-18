@@ -24,6 +24,7 @@ export type LegalDocStatus = 'template' | 'custom' | 'hidden'
 
 export const LEGAL_DOC_ENTRIES: ReadonlyArray<{ slug: LegalDocSlug; title: string }> = [
   { slug: 'gizlilik-politikasi', title: 'Gizlilik Politikası' },
+  { slug: 'cerez-politikasi', title: 'Çerez Politikası' },
   { slug: 'mesafeli-satis-sozlesmesi', title: 'Mesafeli Satış Sözleşmesi' },
   { slug: 'hizmet-sozlesmesi', title: 'Hizmet Sözleşmesi' },
   { slug: 'teslimat-ve-iade', title: 'Teslimat ve İade' },
@@ -41,6 +42,7 @@ export const LEGAL_RESPONSIBILITY_NOTE =
 
 /** Editor-only notes for texts that are still drafts awaiting legal review. */
 export const LEGAL_DRAFT_NOTES: Partial<Record<LegalDocSlug, string>> = {
+  'cerez-politikasi': 'Taslak: kullanılan üçüncü taraf araçlarını ve çerez sürelerini kontrol edin; bu metin hukuk ekibi onayı bekliyor.',
   'teslimat-ve-iade':
     'Taslak: teslimat, kargo ücreti, iade ve değişim metni hukuk ekibi onayı bekliyor. Yayınlamadan önce kendi teslimat süreleriniz, kargo ücretiniz ve iade koşullarınıza göre düzenleyin.',
 }

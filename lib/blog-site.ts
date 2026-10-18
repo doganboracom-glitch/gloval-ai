@@ -57,8 +57,8 @@ export function isBlogRoutePath(tenantPath: string): boolean {
 }
 
 /** The live posts as the site chrome sees them; samples and drafts never appear. */
-export function previewSiteBlogData(posts: readonly BlogPost[]): SiteBlogData | null {
-  const live = livePosts(posts.filter((post) => !post.sample))
+export function previewSiteBlogData(posts: readonly BlogPost[], now: Date = new Date()): SiteBlogData | null {
+  const live = livePosts(posts.filter((post) => !post.sample), now)
   return live.length > 0 ? buildSiteBlogData('', live) : null
 }
 

@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import useSWR from 'swr'
-import { listBlogPostsAction } from '@/lib/blog-actions'
+import { blogPostsKey, fetchBlogPosts } from '@/lib/blog-posts-fetcher'
+import { blogNow } from '@/lib/blog-clock'
 import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
+import { AUTO_ENABLE_PATCH, shouldAutoEnableBlog } from '@/lib/starter-blog-card'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
@@ -22,7 +24,7 @@ import {
   resolveDetectedPlaceholders,
   type SampleSectionFinding,
 } from '@/lib/sample-content'
-import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
+import { websiteSchema, type BlogSettings, type WebsiteSchema } from '@/lib/website-schema'
 import { WebsiteRenderer, type PreviewNav } from '@/components/website-renderer/website-renderer'
 import { resolveTheme, googleFontsHref } from '@/components/website-renderer/theme'
 import { WebsiteEditorPanel, type ChatMessage } from '@/components/website-editor-panel'
@@ -326,12 +328,8 @@ export function WebsitePreview({
     return () => clearTimeout(stop)
   }, [starterWaiting])
   const { data: previewPosts, mutate: reloadPreviewPosts } = useSWR(
-    blogProjectId ? ['blog-posts', blogProjectId] : null,
-    async () => {
-      const result = await listBlogPostsAction(blogProjectId as string)
-      if (!result.ok) throw new Error(result.reason)
-      return result.posts
-    },
+    blogProjectId ? blogPostsKey(blogProjectId) : null,
+    () => fetchBlogPosts(blogProjectId as string),
     {
       revalidateOnFocus: false,
       // The three starter posts are written in the background right after the
@@ -342,7 +340,7 @@ export function WebsitePreview({
     },
   )
   const previewBlog = useMemo(
-    () => (previewPosts ? previewSiteBlogData(previewPosts) : null),
+    () => (previewPosts ? previewSiteBlogData(previewPosts, blogNow()) : null),
     [previewPosts],
   )
   useEffect(() => {
@@ -351,6 +349,35 @@ export function WebsitePreview({
     window.addEventListener(BLOG_CHANGED_EVENT, reload)
     return () => window.removeEventListener(BLOG_CHANGED_EVENT, reload)
   }, [blogProjectId, reloadPreviewPosts])
+  // Saves a blog setting on the live schema without an undo step. The same
+  // patch is applied to undo/redo snapshots so stepping back never re-triggers
+  // the one-time switch-on below or brings the starter card back.
+  const patchBlogSettingsSilently = useCallback((patch: BlogSettings) => {
+    setHistory((h) => {
+      if (!h.present) return h
+      const withPatch = (s: WebsiteSchema): WebsiteSchema => ({ ...s, blogSettings: { ...(s.blogSettings ?? {}), ...patch } })
+      const flagsOnly: BlogSettings = {
+        ...(patch.starterAutoEnabled !== undefined ? { starterAutoEnabled: patch.starterAutoEnabled } : {}),
+        ...(patch.starterCardDismissed !== undefined ? { starterCardDismissed: patch.starterCardDismissed } : {}),
+      }
+      const keepFlags = (s: WebsiteSchema): WebsiteSchema => ({ ...s, blogSettings: { ...(s.blogSettings ?? {}), ...flagsOnly } })
+      const nextPresent = applyOperation(h.present, { op: 'updateBlogSettings', patch })
+      return {
+        past: h.past.map(keepFlags),
+        present: nextPresent === h.present ? withPatch(h.present) : nextPresent,
+        future: h.future.map(keepFlags),
+      }
+    })
+  }, [])
+  // One-time: when a newly generated site's starter posts become public, turn
+  // the menu link and the home "latest posts" block on. `starterAutoEnabled`
+  // flips to true in the same patch, so a later manual "off" is never overridden
+  // and sites generated before this existed (no marker) are never touched.
+  const blogSettingsNow = history.present?.blogSettings
+  useEffect(() => {
+    if (!blogProjectId || !shouldAutoEnableBlog(blogSettingsNow, previewPosts, blogNow())) return
+    patchBlogSettingsSilently(AUTO_ENABLE_PATCH)
+  }, [blogProjectId, blogSettingsNow, previewPosts, patchBlogSettingsSilently])
   // FREE planın günlük AI işlem limitine ulaşıldığında açılan ekran — bkz.
   // lib/free-daily-limit.ts. resetAt, sunucunun 429 yanıtındaki ISO zaman damgası.
   const [dailyLimitResetAt, setDailyLimitResetAt] = useState<string | null>(null)
@@ -1650,6 +1677,7 @@ export function WebsitePreview({
                 site={currentSite}
                 payments={payments}
                 blog={blog}
+  onPatchBlogSettings={patchBlogSettingsSilently}
                 publicSlug={liveSlug}
                 planCode={planCode}
                 onBeforeUpgrade={flushDraft}

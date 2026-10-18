@@ -59,13 +59,13 @@ type Denied = Extract<Access, { ok: false }>
 
 export async function listBlogPostsAction(
   projectId: string,
-): Promise<{ ok: true; posts: BlogPost[] } | Denied> {
+): Promise<{ ok: true; posts: BlogPost[]; serverNow: string } | Denied> {
   const access = await authorize(projectId)
   if (!access.ok) return access
   try {
-    return { ok: true, posts: await listProjectBlogPosts(projectId) }
+    return { ok: true, posts: await listProjectBlogPosts(projectId), serverNow: new Date().toISOString() }
   } catch {
-    return { ok: true, posts: [] }
+    return { ok: true, posts: [], serverNow: new Date().toISOString() }
   }
 }
 

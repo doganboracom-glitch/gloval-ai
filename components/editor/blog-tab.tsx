@@ -6,12 +6,13 @@ import { Loader2, Plus, Sparkles } from 'lucide-react'
 import {
   addStarterBlogPostsAction,
   deleteBlogPostAction,
-  listBlogPostsAction,
   markBlogPostPersonalizedAction,
   regenerateStarterBlogPostsAction,
   updateBlogPostAction,
 } from '@/lib/blog-actions'
-import { isRegenerableStarterPost, isStarterPost, livePosts, type BlogPost } from '@/lib/blog'
+import { blogPostsKey, fetchBlogPosts } from '@/lib/blog-posts-fetcher'
+import { blogNow } from '@/lib/blog-clock'
+import { isRegenerableStarterPost, isStarterPost, livePosts, postDisplayStatus, type BlogPost } from '@/lib/blog'
 import { SearchPromoCard } from '@/components/editor/search-promo-card'
 import { BLOG_CHANGED_EVENT, blogConfirmCopy } from '@/lib/blog-client'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -159,8 +160,7 @@ function formatPlannedDate(iso: string | null, lang: Lang): string {
 }
 
 function statusOf(post: BlogPost): 'draft' | 'live' | 'scheduled' {
-  if (post.status !== 'published') return 'draft'
-  return post.publishedAt && Date.parse(post.publishedAt) > Date.now() ? 'scheduled' : 'live'
+  return postDisplayStatus(post, blogNow())
 }
 
 export function BlogTab({
@@ -189,16 +189,12 @@ export function BlogTab({
   const confirmCopy = blogConfirmCopy(lang)
 
   const { data, error: loadError, isLoading, mutate } = useSWR(
-    ['blog-posts', projectId],
-    async () => {
-      const result = await listBlogPostsAction(projectId)
-      if (!result.ok) throw new Error(result.reason)
-      return result.posts
-    },
+    blogPostsKey(projectId),
+    () => fetchBlogPosts(projectId),
     { revalidateOnFocus: false },
   )
   const posts = data ?? []
-  const livePostCount = livePosts(posts).length
+  const livePostCount = livePosts(posts, blogNow()).length
 
   useEffect(() => {
     if (view.kind === 'list') window.scrollTo?.({ top: 0 })

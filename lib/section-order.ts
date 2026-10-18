@@ -50,11 +50,12 @@ function insertBlogLatest<T extends WebsiteSchema>(site: T, index: number, hidde
 
 /**
  * A newly generated site starts with the blog menu link and the home blog
- * section both off; the owner turns them on in the Blog tab.
+ * section both off, and is marked as waiting for its one-time switch-on once the
+ * starter posts are published (`starterAutoEnabled: false`).
  */
 export function withBlogOffByDefault<T extends WebsiteSchema>(site: T): T {
   if (site.blogSettings) return site
-  return { ...site, blogSettings: { showInMenu: false, showLatest: false } }
+  return { ...site, blogSettings: { showInMenu: false, showLatest: false, starterAutoEnabled: false } }
 }
 
 /**
