@@ -1,7 +1,8 @@
 'use client'
 
-import { Check, Sparkles, ShoppingBag } from 'lucide-react'
+import { Check, FileText, Sparkles, ShoppingBag } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { PLAN_BLOG_LINE } from '@/lib/starter-blog-note'
 
 export type Plan = {
   siteName: string
@@ -15,7 +16,7 @@ export type Plan = {
 }
 
 export function PlanResult({ plan }: { plan: Plan }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
 
   return (
     <div className="animate-fade-up overflow-hidden rounded-2xl border border-primary/25 bg-card/80 text-left backdrop-blur">
@@ -99,7 +100,12 @@ export function PlanResult({ plan }: { plan: Plan }) {
           </div>
         </div>
 
-        <p className="mt-5 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <p className="mt-5 flex items-start gap-2 text-xs text-muted-foreground">
+          <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+          <span data-testid="plan-blog-line">{PLAN_BLOG_LINE[lang === 'en' ? 'en' : 'tr']}</span>
+        </p>
+
+        <p className="mt-3 border-t border-border/60 pt-3 text-xs text-muted-foreground">
           {t.hero.resultHint}
         </p>
       </div>

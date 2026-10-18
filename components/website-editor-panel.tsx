@@ -46,6 +46,7 @@ import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
 import { BlogTab } from '@/components/editor/blog-tab'
+import { StarterBlogNote } from '@/components/editor/starter-blog-note'
 import {
   COMPANY_GROUP_ID,
   CompanyFields,
@@ -237,6 +238,8 @@ export function WebsiteEditorPanel({
           </div>
         </div>
       )}
+
+      {blog && <StarterBlogNote projectId={blog.projectId} lang={lang === 'en' ? 'en' : 'tr'} />}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border p-2">
