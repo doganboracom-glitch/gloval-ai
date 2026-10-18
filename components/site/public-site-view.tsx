@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { getMissingSiteKind } from '@/lib/site-availability-server'
+import { SiteUnpublished } from '@/components/site/site-unpublished'
 import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import type { StoreCatalog } from '@/components/website-renderer/store-catalog-context'
@@ -55,7 +57,10 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
     getStoreShippingInfo(slug),
     getSiteBlogData(slug),
   ])
-  if (!site) notFound()
+  if (!site) {
+    if ((await getMissingSiteKind(slug)) === 'unpublished') return <SiteUnpublished />
+    notFound()
+  }
 
   let page: ReturnType<typeof findPublicPage> = null
   if (pageSlug) {

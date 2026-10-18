@@ -161,8 +161,8 @@ describe('defaults and seeding', () => {
 describe('corporate footer legal links', () => {
   const labels = (links: { label: string }[]) => links.map((l) => l.label)
 
-  it('new corporate defaults carry only the privacy policy', () => {
-    expect(labels(defaultLegalLinks('corporate'))).toEqual(['Gizlilik Politikası'])
+  it('new corporate defaults carry the privacy and cookie policies', () => {
+    expect(labels(defaultLegalLinks('corporate'))).toEqual(['Gizlilik Politikası', 'Çerez Politikası'])
   })
 
   it('stores keep every document by default', () => {
@@ -172,14 +172,14 @@ describe('corporate footer legal links', () => {
     )
   })
 
-  it('seedFooterLegal persists privacy-only on a new corporate site and never overwrites', () => {
+  it('seedFooterLegal persists privacy + cookie on a new corporate site and never overwrites', () => {
     const seeded = seedFooterLegal(corporate())
     const footer = seeded.sections.find((s) => s.type === 'footer') as {
       legal?: { links?: { label: string; href: string }[] }
     }
-    expect(labels(footer.legal?.links ?? [])).toEqual(['Gizlilik Politikası'])
+    expect(labels(footer.legal?.links ?? [])).toEqual(['Gizlilik Politikası', 'Çerez Politikası'])
     expect(seedFooterLegal(seeded)).toBe(seeded)
-    expect(labels(resolveFooterLegal(footer.legal, seeded))).toEqual(['Gizlilik Politikası'])
+    expect(labels(resolveFooterLegal(footer.legal, seeded))).toEqual(['Gizlilik Politikası', 'Çerez Politikası'])
   })
 
   it('seedFooterLegal leaves stores untouched', () => {

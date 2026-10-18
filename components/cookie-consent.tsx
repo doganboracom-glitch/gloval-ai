@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
 import { Cookie, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { useCookieBannerDoc } from '@/components/cookie-banner-doc-context'
+import { COOKIE_BANNER_DOC_LABEL, cookieBannerHref } from '@/lib/cookie-policy-link'
 import {
   CONSENT_CHANGE_EVENT,
   CONSENT_COOKIE,
@@ -84,7 +86,7 @@ function Toggle({
 }
 
 export function CookieConsent() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const c = t.cookie
 
   const [consent, setConsent] = useState<ConsentChoice | null>(null)
@@ -136,10 +138,13 @@ export function CookieConsent() {
   const analyticsAllowed = ready && consent?.analytics === true
 
   const pathname = usePathname()
-  const cookiePolicyHref = (() => {
-    const match = pathname.match(/^\/site\/([^/]+)/)
-    return match ? `/site/${match[1]}/yasal/cerez-politikasi` : '/yasal/cerez-politikasi'
-  })()
+  const siteDoc = useCookieBannerDoc()
+  const bannerDoc = siteDoc === undefined ? 'cerez-politikasi' : siteDoc
+  const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname)
+  const policyLabel =
+    bannerDoc && bannerDoc !== 'cerez-politikasi'
+      ? COOKIE_BANNER_DOC_LABEL[bannerDoc][lang === 'en' ? 'en' : 'tr']
+      : c.policyLink
   const [viewportHeight, setViewportHeight] = useState<number | null>(null)
   useEffect(() => {
     const update = () => setViewportHeight(window.innerHeight)
@@ -218,13 +223,15 @@ export function CookieConsent() {
                       : 'mt-1 text-sm leading-relaxed'
                   }`}
                 >
-                  {c.description}{' '}
-                  <Link
-                    href={cookiePolicyHref}
-                    className="cookie-link font-medium"
-                  >
-                    {c.policyLink}
-                  </Link>
+                  {c.description}
+                  {cookiePolicyHref && (
+                    <>
+                      {' '}
+                      <Link href={cookiePolicyHref} className="cookie-link font-medium">
+                        {policyLabel}
+                      </Link>
+                    </>
+                  )}
                 </p>
               </div>
               {consent && (
