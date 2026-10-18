@@ -12,6 +12,7 @@ import {
   blogReportTarget,
   blogReportTicketHref,
   shouldAutoEnableBlog,
+  STARTER_CARD_COPY,
   starterCardState,
   supportMailHref,
 } from '@/lib/starter-blog-card'
@@ -158,6 +159,24 @@ describe('blogReportTarget', () => {
     expect(target.kind).toBe('mail')
     expect(target.href.startsWith('mailto:destek@gloval.ai?subject=')).toBe(true)
     expect(decodeURIComponent(target.href)).toContain('abc-123')
+  })
+})
+
+describe('success card copy', () => {
+  it('tr: reminds to republish and keeps the report link text', () => {
+    const { lead, link, tail } = STARTER_CARD_COPY.tr.success
+    expect(lead + link + tail).toBe(
+      'Blog makaleleriniz yayınlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize bildirin.',
+    )
+    expect(link).toBe('bildirin')
+  })
+
+  it('en: reminds to republish and keeps the report link text', () => {
+    const { lead, link, tail } = STARTER_CARD_COPY.en.success
+    expect(lead + link + tail).toBe(
+      'Your blog posts are published. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please let us know.',
+    )
+    expect(link).toBe('let us know')
   })
 })
 
