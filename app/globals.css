@@ -385,6 +385,54 @@
   animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ---- Cookie banner colors ------------------------------------------------
+   Published customer sites set --cookie-* on :root from their own theme (see
+   lib/cookie-banner-theme.ts). Where nothing sets them (gloval.ai) every rule
+   falls back to the GLOVAL tokens, so the platform banner is unchanged. */
+.cookie-surface {
+  background-color: var(--cookie-bg, var(--color-card));
+  border-color: var(--cookie-border, var(--color-border));
+  color: var(--cookie-fg, inherit);
+}
+.cookie-muted {
+  color: var(--cookie-muted, var(--color-muted-foreground));
+}
+.cookie-divider {
+  border-color: var(--cookie-border, var(--color-border));
+}
+.cookie-link {
+  color: var(--cookie-brand-link, var(--cookie-fg, var(--color-brand)));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cookie-btn-primary {
+  background-color: var(--cookie-brand, var(--color-brand));
+  color: var(--cookie-brand-fg, var(--color-brand-foreground));
+}
+.cookie-btn-outline {
+  border-color: var(--cookie-border, var(--color-border));
+  color: var(--cookie-fg, inherit);
+}
+.cookie-btn-outline:hover,
+.cookie-close:hover {
+  background-color: var(--cookie-hover, color-mix(in oklab, var(--color-secondary) 60%, transparent));
+}
+.cookie-close {
+  color: var(--cookie-muted, var(--color-muted-foreground));
+}
+.cookie-toggle-on {
+  background-color: var(--cookie-brand, var(--color-brand));
+}
+.cookie-toggle-off {
+  background-color: var(--cookie-border, var(--color-muted));
+}
+.cookie-toggle-knob {
+  background-color: var(--cookie-bg, var(--color-background));
+}
+.cookie-icon {
+  color: var(--cookie-fg, var(--color-brand));
+}
+
 /* ---- Cookie banner inset -------------------------------------------------
    `html[data-cookie-banner]` and `--cookie-banner-h` exist only while the
    banner is on screen (see lib/cookie-banner-layout.ts), so none of this

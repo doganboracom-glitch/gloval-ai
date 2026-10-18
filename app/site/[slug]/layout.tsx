@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
+import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { extractMetaTags, safeTrackingCode, sanitizeTracking, stripMetaTags } from '@/lib/site-tracking'
 
 /**
@@ -44,9 +45,11 @@ export default async function PublishedSiteLayout({
   const { slug } = await params
   const site = await getPublishedSite(slug)
   const tracking = sanitizeTracking(site?.schema.tracking)
+  const cookieCss = cookieBannerCss(site?.schema)
 
   return (
     <>
+      {cookieCss && <style dangerouslySetInnerHTML={{ __html: cookieCss }} />}
       <SiteCustomCode code={stripMetaTags(tracking?.head)} />
       <SiteCustomCode code={tracking?.bodyStart} />
       {children}
