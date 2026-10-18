@@ -1,7 +1,8 @@
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getProject, listProjectBackups, listProjectVersions } from '@/lib/projects'
-import { websiteSchema } from '@/lib/website-schema'
+import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
+import { SiteUnavailable } from '@/components/editor/site-unavailable'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { canUseVersionHistory, toPlanCode } from '@/lib/pricing-config'
 import { EditorClient } from '@/components/editor/editor-client'
@@ -33,9 +34,15 @@ export default async function EditorPage({
   const project = await getProject(projectId)
   if (!project) notFound()
 
-  // Validate the stored schema so a legacy/corrupt row can't crash the editor.
-  const parsed = websiteSchema.safeParse(project.schema_data)
-  if (!parsed.success) notFound()
+  // A legacy/drifted row is repaired in memory (the draft is only rewritten on
+  // the owner's next save); one that cannot be repaired gets a recoverable page, not a 404.
+  const normalized = normalizeWebsiteSchema(project.schema_data, project.language === 'en' ? 'en' : 'tr')
+  if (!normalized.ok) {
+    console.warn('[schema-compat] editor unreadable', normalized.issues.map((i) => `${i.path}:${i.code}`))
+    return <SiteUnavailable projectId={projectId} />
+  }
+  logSchemaRepair('editor-page', normalized.steps)
+  const parsed = { data: normalized.value }
 
   const language = project.language === 'en' ? 'en' : 'tr'
 

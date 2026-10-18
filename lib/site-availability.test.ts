@@ -1,16 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { classifyMissingSite, siteHomeHref } from './site-availability'
+import { siteHomeHref, siteUnavailableCopy } from './site-availability'
 import { PLATFORM_CANONICAL_HOST, getTenantSlugFromHost, tenantHost } from './domains'
 
-describe('classifyMissingSite', () => {
-  it('a project that exists but is not served is "unpublished"', () => {
-    expect(classifyMissingSite({ published: false })).toBe('unpublished')
-    expect(classifyMissingSite({ published: null })).toBe('unpublished')
+describe('siteUnavailableCopy', () => {
+  it('is Turkish for tr visitors', () => {
+    expect(siteUnavailableCopy('tr').title).toBe('Bu site şu an yayında değil')
   })
 
-  it('no project at all is "missing"', () => {
-    expect(classifyMissingSite(null)).toBe('missing')
-    expect(classifyMissingSite(undefined)).toBe('missing')
+  it('is English for every other language', () => {
+    expect(siteUnavailableCopy('en').title).toBe('This site is not available right now')
+    expect(siteUnavailableCopy('de')).toEqual(siteUnavailableCopy('en'))
+  })
+
+  it('covers closed, suspended and unpublished sites without naming the cause', () => {
+    expect(siteUnavailableCopy('tr').body).toBe(
+      'Aradığınız site kapatılmış, askıya alınmış ya da henüz yayına alınmamış olabilir.',
+    )
+    expect(siteUnavailableCopy('en').body).toMatch(/taken down, suspended, or not published yet/)
+  })
+
+  it('points owners at the dashboard and a support ticket link', () => {
+    const tr = siteUnavailableCopy('tr')
+    expect(`${tr.ownerNote.before}${tr.ownerNote.link}${tr.ownerNote.after}`).toBe(
+      'Bu site size aitse GLOVAL AI paneline giriş yaparak sitenizi yayına alabilir veya destek talebi oluşturabilirsiniz.',
+    )
+    expect(tr.ownerNote.link).toBe('destek talebi')
+    expect(tr.homeButton).toBe("GLOVAL AI'a git")
+    expect(siteUnavailableCopy('en').homeButton).toBe('Go to GLOVAL AI')
   })
 })
 

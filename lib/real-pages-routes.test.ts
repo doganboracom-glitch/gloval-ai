@@ -43,6 +43,7 @@ vi.mock('@/lib/custom-domains/service', () => ({
 }))
 
 import { buildSitePageMetadata, PublicSiteView } from '@/components/site/public-site-view'
+import { SiteUnpublished } from '@/components/site/site-unpublished'
 import { GET as sitemapGET } from '@/app/site/[slug]/sitemap.xml/route'
 import { middleware } from '@/middleware'
 
@@ -110,9 +111,12 @@ describe('real page rendering: 404 and 301', () => {
     await expect(PublicSiteView({ slug: 'kahve', pageSlug: 'home' })).rejects.toThrow('NEXT_NOT_FOUND')
   })
 
-  it('answers 404 for an unpublished site', async () => {
+  it('shows the unavailable notice, not a 404, for a site that is not published', async () => {
     state.site = null
-    await expect(PublicSiteView({ slug: 'kahve', pageSlug: null })).rejects.toThrow('NEXT_NOT_FOUND')
+    const home = await PublicSiteView({ slug: 'kahve', pageSlug: null })
+    const page = await PublicSiteView({ slug: 'kahve', pageSlug: 'hakkimizda' })
+    expect(home).toMatchObject({ type: SiteUnpublished })
+    expect(page).toMatchObject({ type: SiteUnpublished })
   })
 
   it('permanently redirects the old slug of a renamed page', async () => {

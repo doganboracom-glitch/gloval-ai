@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { cn } from '@/lib/utils'
-import { websiteSchema, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
+import { NEW_TICKET_PATH } from '@/lib/support/prefill'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
@@ -163,7 +165,14 @@ export function WebsiteRenderer({
    */
   editSelection?: EditSelection | null
 }) {
-  const parsed = useMemo(() => websiteSchema.safeParse(site), [site])
+  const parsed = useMemo(() => {
+    const result = normalizeWebsiteSchema(site)
+    if (result.ok) {
+      logSchemaRepair('render', result.steps)
+      return { success: true as const, data: result.value }
+    }
+    return { success: false as const }
+  }, [site])
   const [activeSlug, setActiveSlug] = useState<string | null>(initialPage)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -405,12 +414,13 @@ export function WebsiteRenderer({
 function RendererError() {
   return (
     <div className="flex min-h-64 flex-col items-center justify-center gap-2 p-10 text-center">
-      <p className="text-sm font-medium text-foreground">
-        This website could not be rendered.
-      </p>
+      <p className="text-sm font-medium text-foreground">Bu sayfa şu anda görüntülenemiyor.</p>
       <p className="max-w-sm text-xs text-muted-foreground">
-        The generated structure was invalid. Please try generating again.
+        Sitenizin kayıtlı yapısı okunamadı. Verileriniz silinmedi; sorunu düzeltmemiz için destek ekibine yazabilirsiniz.
       </p>
+      <a href={NEW_TICKET_PATH} className="text-xs font-medium text-brand underline underline-offset-2">
+        Destek talebi oluştur
+      </a>
     </div>
   )
 }
