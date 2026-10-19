@@ -845,7 +845,8 @@ export function applyOperation(
 
     case 'addSection': {
       if (operation.sectionType === 'announcement') {
-        // One band per site, and it lives at the very top of the list.
+        // One band per site. A new one starts first (above the header); the
+        // owner can move it anywhere in the list afterwards.
         if (countAnnouncements(next.sections) > 0) return next
         next.sections.unshift(blankSection('announcement', next.meta.language))
         return next
@@ -862,8 +863,8 @@ export function applyOperation(
     case 'changeSectionType': {
       const current = next.sections[operation.index]
       if (!current) return next
-      // The band is site chrome: it can neither be converted into a page
-      // section nor be created by converting one (that could duplicate it).
+      // The band can neither be converted into a page section nor be created
+      // by converting one (that could duplicate it).
       if (current.type === 'announcement' || operation.sectionType === 'announcement') return next
       const replacement = blankSection(operation.sectionType, next.meta.language)
       // Preserve a shared title/subtitle where both types have one.

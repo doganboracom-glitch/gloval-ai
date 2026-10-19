@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { safeAnnouncementHref } from './announcement'
+import { announcementPlacement, safeAnnouncementHref } from './announcement'
 import { applyOperation } from './website-edit-operations'
 import { SITE_SECTION_HARD_CAP } from './pricing-config'
 import { countAnnouncements, countCappedSections, type WebsiteSchema } from './website-schema'
@@ -30,6 +30,35 @@ describe('safeAnnouncementHref', () => {
   })
 })
 
+describe('announcementPlacement', () => {
+  it('is above the header only when the band is the first section', () => {
+    expect(announcementPlacement([{ type: 'announcement' }, { type: 'hero' }])).toBe('above-header')
+  })
+
+  it('renders in the page flow at any other position', () => {
+    expect(announcementPlacement([{ type: 'hero' }, { type: 'announcement' }, { type: 'faq' }])).toBe('in-flow')
+    expect(announcementPlacement([{ type: 'hero' }, { type: 'faq' }, { type: 'announcement' }])).toBe('in-flow')
+  })
+
+  it('skips hidden sections when deciding what is first', () => {
+    expect(
+      announcementPlacement([{ type: 'hero', hidden: true }, { type: 'announcement' }, { type: 'faq' }]),
+    ).toBe('above-header')
+  })
+
+  it('is none without a visible band', () => {
+    expect(announcementPlacement([{ type: 'hero' }, { type: 'faq' }])).toBe('none')
+    expect(announcementPlacement([{ type: 'announcement', hidden: true }, { type: 'hero' }])).toBe('none')
+    expect(announcementPlacement([])).toBe('none')
+  })
+
+  it('keeps legacy records (band stored first, no extra fields) above the header', () => {
+    const legacy = site([{ type: 'announcement', items: [{ text: 'Eski duyuru' }] }, { type: 'hero' }])
+    expect(announcementPlacement(legacy.sections)).toBe('above-header')
+    expect(countAnnouncements(legacy.sections)).toBe(1)
+  })
+})
+
 describe('announcement band operations', () => {
   it('adds a single band at the top and ignores a second one', () => {
     const once = applyOperation(site(), { op: 'addSection', sectionType: 'announcement' })
@@ -50,6 +79,24 @@ describe('announcement band operations', () => {
     const base = applyOperation(site(), { op: 'addSection', sectionType: 'announcement' })
     expect(applyOperation(base, { op: 'changeSectionType', index: 0, sectionType: 'about' })).toEqual(base)
     expect(applyOperation(base, { op: 'changeSectionType', index: 1, sectionType: 'announcement' })).toEqual(base)
+  })
+
+  it('moves like any other section, anywhere in the list', () => {
+    const base = applyOperation(site([{ type: 'hero' }, { type: 'faq' }, { type: 'footer' }]), {
+      op: 'addSection',
+      sectionType: 'announcement',
+    })
+    expect(base.sections.map((s) => s.type)).toEqual(['announcement', 'hero', 'faq', 'footer'])
+    const afterHero = applyOperation(base, { op: 'moveSection', index: 0, direction: 'down' })
+    expect(afterHero.sections.map((s) => s.type)).toEqual(['hero', 'announcement', 'faq', 'footer'])
+    const aboveFaq = applyOperation(afterHero, { op: 'moveSection', index: 1, direction: 'down' })
+    expect(aboveFaq.sections.map((s) => s.type)).toEqual(['hero', 'faq', 'announcement', 'footer'])
+    const backToTop = applyOperation(
+      applyOperation(aboveFaq, { op: 'moveSection', index: 2, direction: 'up' }),
+      { op: 'moveSection', index: 1, direction: 'up' },
+    )
+    expect(backToTop.sections.map((s) => s.type)).toEqual(['announcement', 'hero', 'faq', 'footer'])
+    expect(countAnnouncements(aboveFaq.sections)).toBe(1)
   })
 
   it('updates behavior flags', () => {
