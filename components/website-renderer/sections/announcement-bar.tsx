@@ -73,7 +73,7 @@ export function AnnouncementBar({ data, lang = 'tr' }: { data: AnnouncementData;
       role="region"
       aria-label={lang === 'en' ? 'Announcement' : 'Duyuru'}
       data-gv-announcement
-      className="relative z-30 flex items-center text-sm font-medium"
+      className="relative flex items-center text-sm font-medium"
       style={{ backgroundColor: bg, color: fg, fontFamily: 'var(--site-body-font)' }}
     >
       <div

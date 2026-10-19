@@ -536,9 +536,11 @@ export const ANNOUNCEMENT_SPEEDS = ['slow', 'normal', 'fast'] as const
 export type AnnouncementSpeed = (typeof ANNOUNCEMENT_SPEEDS)[number]
 
 /**
- * A scrolling site-wide notice band. It is NOT a page section for limit
- * purposes (see `countsTowardSectionCap`), at most one exists per list, and it
- * shows on every page of the site. `link` is stored as typed and validated at
+ * A scrolling notice band. It is NOT a page section for limit purposes (see
+ * `countsTowardSectionCap`) and at most one exists per list, but it is movable
+ * like any section: first in the list it renders above the header, anywhere
+ * else it renders in the page flow at that position (`announcementPlacement`).
+ * `link` is stored as typed and validated at
  * render time (`safeAnnouncementHref`), so a half-typed link can never make the
  * whole site schema invalid.
  */
@@ -559,8 +561,7 @@ export const announcementSection = z.object({
 })
 
 /**
- * The announcement band is site chrome, not page content: it never counts
- * toward the section limit, so adding one can neither fill the cap nor block
+ * The announcement band never counts toward the section limit, so adding one can neither fill the cap nor block
  * another section.
  */
 export function countsTowardSectionCap(section: { type: string }): boolean {
