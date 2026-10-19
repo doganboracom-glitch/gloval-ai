@@ -1,4 +1,9 @@
-import { sectionSchema, type SectionType } from '@/lib/website-schema'
+import {
+  countCappedSections,
+  countsTowardSectionCap,
+  sectionSchema,
+  type SectionType,
+} from '@/lib/website-schema'
 import type { FieldPath, RepairCode, RepairOptions } from '@/lib/ai-repair'
 import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
@@ -48,9 +53,9 @@ function isRecord(value: unknown): value is Loose {
  * removing the LAST copy of a type before earlier ones.
  */
 export function trimSectionsToLimit<T extends { type: string }>(sections: T[], max: number = SITE_SECTION_MAX): T[] {
-  if (sections.length <= max) return sections
+  if (countCappedSections(sections) <= max) return sections
   const keep = sections.map(() => true)
-  let remaining = sections.length
+  let remaining = countCappedSections(sections)
   const drop = (index: number) => {
     if (keep[index]) {
       keep[index] = false
@@ -61,6 +66,7 @@ export function trimSectionsToLimit<T extends { type: string }>(sections: T[], m
   const seen = new Set<string>()
   const duplicates: number[] = []
   sections.forEach((section, index) => {
+    if (!countsTowardSectionCap(section)) return
     if (seen.has(section.type)) duplicates.push(index)
     else seen.add(section.type)
   })
@@ -78,7 +84,7 @@ export function trimSectionsToLimit<T extends { type: string }>(sections: T[], m
 
   // Everything left is protected; as a last resort cut from the middle.
   for (let index = sections.length - 2; index > 0 && remaining > max; index--) {
-    if (keep[index] && !PROTECTED.has(sections[index].type)) drop(index)
+    if (keep[index] && countsTowardSectionCap(sections[index]) && !PROTECTED.has(sections[index].type)) drop(index)
   }
   return sections.filter((_, index) => keep[index])
 }
@@ -141,7 +147,17 @@ export function siteRepairOptions(context: SiteRepairContext): RepairOptions {
             isRecord(section) && typeof section.type === 'string' && KNOWN_SECTION_TYPES.has(section.type),
         )
         for (let i = sections.length; i < before; i++) record('section_dropped', 'sections[]')
-        if (trimSections && sections.length > SITE_SECTION_MAX) {
+        let seenAnnouncement = false
+        sections = sections.filter((section) => {
+          if (section.type !== 'announcement') return true
+          if (seenAnnouncement) {
+            record('section_dropped', 'sections[]')
+            return false
+          }
+          seenAnnouncement = true
+          return true
+        })
+        if (trimSections && countCappedSections(sections) > SITE_SECTION_MAX) {
           const trimmed = trimSectionsToLimit(sections)
           for (let i = trimmed.length; i < sections.length; i++) record('sections_trimmed', 'sections')
           sections = trimmed

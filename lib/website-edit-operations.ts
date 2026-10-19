@@ -1,4 +1,15 @@
-import type { BlogProfile, BlogSettings, Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
+import {
+  ANNOUNCEMENT_MAX_ITEMS,
+  ANNOUNCEMENT_SPEEDS,
+  ANNOUNCEMENT_TEXT_MAX,
+  countAnnouncements,
+  type AnnouncementSpeed,
+  type BlogProfile,
+  type BlogSettings,
+  type Section,
+  type SectionType,
+  type WebsiteSchema,
+} from '@/lib/website-schema'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
@@ -200,6 +211,17 @@ export type EditOperation =
       index: number
       columns?: Array<{ title: string; links: Array<{ label: string; href: string }> }>
       legal?: { hidden?: boolean; links?: Array<{ label: string; href: string }> }
+    }
+  /** Behavior flags of the site-wide announcement band (items use the generic item ops). */
+  | {
+      op: 'updateAnnouncement'
+      index: number
+      patch: {
+        speed?: AnnouncementSpeed
+        pauseOnHover?: boolean
+        dismissible?: boolean
+        useAccentColor?: boolean
+      }
     }
   | { op: 'setSectionHidden'; index: number; hidden: boolean }
   | { op: 'moveSection'; index: number; direction: 'up' | 'down' }
@@ -559,8 +581,15 @@ export function applyOperation(
     }
 
     case 'updateItemField': {
-      const item = collectionOf(next.sections[operation.index])?.[operation.itemIndex]
-      if (item) (item as Record<string, unknown>)[operation.field] = operation.value
+      const section = next.sections[operation.index]
+      const item = collectionOf(section)?.[operation.itemIndex]
+      if (item) {
+        const value =
+          section?.type === 'announcement' && operation.field === 'text'
+            ? operation.value.slice(0, ANNOUNCEMENT_TEXT_MAX)
+            : operation.value
+        ;(item as Record<string, unknown>)[operation.field] = value
+      }
       return next
     }
 
@@ -611,6 +640,7 @@ export function applyOperation(
     case 'addItem': {
       const section = next.sections[operation.index]
       const list = collectionOf(section)
+      if (section?.type === 'announcement' && list && list.length >= ANNOUNCEMENT_MAX_ITEMS) return next
       if (section && list) list.push(blankItem(section.type, next.meta.language))
       return next
     }
@@ -768,6 +798,17 @@ export function applyOperation(
       return next
     }
 
+    case 'updateAnnouncement': {
+      const section = next.sections[operation.index]
+      if (section?.type !== 'announcement') return next
+      const { speed, pauseOnHover, dismissible, useAccentColor } = operation.patch
+      if (speed && ANNOUNCEMENT_SPEEDS.includes(speed)) section.speed = speed
+      if (pauseOnHover !== undefined) section.pauseOnHover = pauseOnHover
+      if (dismissible !== undefined) section.dismissible = dismissible
+      if (useAccentColor !== undefined) section.useAccentColor = useAccentColor
+      return next
+    }
+
     case 'updateFooterLinks': {
       const section = next.sections[operation.index]
       if (section?.type !== 'footer') return next
@@ -803,6 +844,12 @@ export function applyOperation(
     }
 
     case 'addSection': {
+      if (operation.sectionType === 'announcement') {
+        // One band per site, and it lives at the very top of the list.
+        if (countAnnouncements(next.sections) > 0) return next
+        next.sections.unshift(blankSection('announcement', next.meta.language))
+        return next
+      }
       const section = blankSection(operation.sectionType, next.meta.language)
       const insertAt =
         operation.index !== undefined
@@ -815,6 +862,9 @@ export function applyOperation(
     case 'changeSectionType': {
       const current = next.sections[operation.index]
       if (!current) return next
+      // The band is site chrome: it can neither be converted into a page
+      // section nor be created by converting one (that could duplicate it).
+      if (current.type === 'announcement' || operation.sectionType === 'announcement') return next
       const replacement = blankSection(operation.sectionType, next.meta.language)
       // Preserve a shared title/subtitle where both types have one.
       const currentTitle = (current as Record<string, unknown>).title
@@ -845,6 +895,7 @@ export function applyOperation(
  * ANY section without a hand-written form per type.
  */
 export const SECTION_COLLECTION_KEY: Partial<Record<SectionType, string>> = {
+  announcement: 'items',
   slider: 'slides',
   services: 'items',
   features: 'items',
@@ -883,6 +934,8 @@ export function collectionOf(section: Section | undefined): Record<string, unkno
 /** A schema-valid empty entry for the section's collection. */
 export function blankItem(type: SectionType, lang: Lang): Record<string, unknown> {
   switch (type) {
+    case 'announcement':
+      return { text: pick(lang, 'Yeni duyuru', 'New announcement') }
     case 'slider':
       return {
         caption: pick(lang, 'Yeni', 'New'),
@@ -980,6 +1033,7 @@ const pick = (lang: Lang, tr: string, en: string) => (lang === 'tr' ? tr : en)
 
 /** Section types offered in the "+ Add Section" menu, in a sensible order. */
 export const ADDABLE_SECTION_TYPES: SectionType[] = [
+  'announcement',
   'hero',
   'slider',
   'about',
@@ -1006,6 +1060,14 @@ export const ADDABLE_SECTION_TYPES: SectionType[] = [
  */
 export function blankSection(type: SectionType, lang: Lang): Section {
   switch (type) {
+    case 'announcement':
+      return {
+        type: 'announcement',
+        items: [{ text: pick(lang, 'Yeni duyuru', 'New announcement') }],
+        speed: 'normal',
+        pauseOnHover: true,
+        dismissible: false,
+      }
     case 'hero':
       return {
         type: 'hero',

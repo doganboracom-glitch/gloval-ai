@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import { ANNOUNCEMENT_SPEEDS, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { VIEW_ALL_DEFAULT } from '@/lib/store-header-links'
 import { listOwnerCollections } from '@/lib/store-collections-actions'
 import {
@@ -75,6 +75,7 @@ const ITEM_FIELDS = [
   'caption',
   'buttonText',
   'icon',
+  'link',
 ] as const
 
 /** Plain string arrays that can be edited entry by entry. */
@@ -225,6 +226,15 @@ export function SectionInspector({
         <FooterLinksEditor site={site} index={index} onDispatch={onDispatch} />
       )}
 
+      {section.type === 'announcement' && (
+        <AnnouncementSettings
+          index={index}
+          section={section}
+          lang={site.meta.language}
+          onDispatch={onDispatch}
+        />
+      )}
+
       {!managedProducts && section.type !== 'footer' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
@@ -247,6 +257,75 @@ export function SectionInspector({
           </GhostButton>
         </div>
       )}
+    </div>
+  )
+}
+
+const SPEED_LABELS = {
+  tr: { slow: 'Yavaş', normal: 'Normal', fast: 'Hızlı' },
+  en: { slow: 'Slow', normal: 'Normal', fast: 'Fast' },
+} as const
+
+function AnnouncementSettings({
+  index,
+  section,
+  lang,
+  onDispatch,
+}: {
+  index: number
+  section: Extract<WebsiteSchema['sections'][number], { type: 'announcement' }>
+  lang: 'tr' | 'en'
+  onDispatch: (op: EditOperation) => void
+}) {
+  const tr = lang === 'tr'
+  const toggles = [
+    {
+      key: 'pauseOnHover' as const,
+      label: tr ? 'Üzerine gelince durdur' : 'Pause on hover',
+      checked: section.pauseOnHover !== false,
+    },
+    {
+      key: 'dismissible' as const,
+      label: tr ? 'Ziyaretçi kapatabilsin' : 'Allow visitors to dismiss',
+      checked: section.dismissible === true,
+    },
+    {
+      key: 'useAccentColor' as const,
+      label: tr ? 'Vurgu rengini kullan' : 'Use accent color',
+      checked: section.useAccentColor === true,
+    },
+  ]
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">
+        {tr ? 'Kayma hızı' : 'Scroll speed'}
+      </span>
+      <div className="flex gap-1" role="group" aria-label={tr ? 'Kayma hızı' : 'Scroll speed'}>
+        {ANNOUNCEMENT_SPEEDS.map((speed) => (
+          <button
+            key={speed}
+            type="button"
+            aria-pressed={(section.speed ?? 'normal') === speed}
+            onClick={() => onDispatch({ op: 'updateAnnouncement', index, patch: { speed } })}
+            className="min-h-9 flex-1 cursor-pointer rounded-md border border-border px-2 text-xs font-medium transition-colors hover:bg-muted aria-pressed:border-brand/60 aria-pressed:bg-brand/15 aria-pressed:text-foreground"
+          >
+            {SPEED_LABELS[lang][speed]}
+          </button>
+        ))}
+      </div>
+      {toggles.map((toggle) => (
+        <label key={toggle.key} className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={toggle.checked}
+            onChange={(e) =>
+              onDispatch({ op: 'updateAnnouncement', index, patch: { [toggle.key]: e.target.checked } })
+            }
+            className="size-4 cursor-pointer accent-[var(--color-brand)]"
+          />
+          {toggle.label}
+        </label>
+      ))}
     </div>
   )
 }

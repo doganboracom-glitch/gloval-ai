@@ -473,6 +473,7 @@ const dict = {
           bio: 'Biyografi',
           caption: 'Alt yazı',
           buttonText: 'Buton yazısı',
+          link: 'Bağlantı (isteğe bağlı)',
           icon: 'İkon adı',
           features: 'Özellikler (her satır bir madde)',
           links: 'Bağlantılar',
@@ -494,6 +495,7 @@ const dict = {
         cancel: 'İptal',
       },
       sectionNames: {
+        announcement: 'Duyuru Bandı',
         hero: 'Hero',
         slider: 'Kayan Görsel',
         about: 'Hakkımızda',
@@ -2035,6 +2037,7 @@ const dict = {
       cancel: 'Cancel',
     },
     sectionNames: {
+      announcement: 'Announcement bar',
       hero: 'Hero',
       slider: 'Slider',
       about: 'About',

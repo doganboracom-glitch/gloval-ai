@@ -388,6 +388,25 @@
   animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Announcement band marquee: the track holds two identical copies, so shifting
+   by exactly one copy (-50%) loops seamlessly. */
+@keyframes gv-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.gv-marquee-track {
+  animation: gv-marquee var(--gv-marquee-duration, 30s) linear infinite;
+}
+.gv-marquee-pausable:hover .gv-marquee-track,
+.gv-marquee-pausable:focus-within .gv-marquee-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gv-marquee { overflow-x: auto; }
+  .gv-marquee-track { animation: none; width: auto; flex-wrap: wrap; }
+  .gv-marquee-copy { display: none; }
+}
+
 /* ---- Cookie banner colors ------------------------------------------------
    Published customer sites set --cookie-* on :root from their own theme (see
    lib/cookie-banner-theme.ts). Where nothing sets them (gloval.ai) every rule
