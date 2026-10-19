@@ -18,6 +18,7 @@ import {
 import { SectionRenderer } from '@/components/website-renderer/section-renderer'
 import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
+import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { WebsiteHeader } from '@/components/website-renderer/sections/website-header'
 import { BackToTop, scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
@@ -294,6 +295,35 @@ export function WebsiteRenderer({
   const latestPosts =
     showLatest && blog ? <WebsiteLatestPosts key="latest-posts" blog={blog} lang={data.meta.language} /> : null
 
+  // The announcement band lives in the home section list but shows on every page.
+  const announcement = data.sections.find(
+    (s): s is Extract<typeof s, { type: 'announcement' }> => s.type === 'announcement' && !s.hidden,
+  )
+  const announcementIndex = announcement ? sections.indexOf(announcement) : -1
+  const announcementBar = announcement ? (
+    <AnnouncementBar data={announcement} lang={data.meta.language} />
+  ) : null
+  const announcementNode =
+    announcementBar && editSelection && announcementIndex >= 0 ? (
+      <div
+        data-gv-section-index={announcementIndex}
+        onClickCapture={(e: MouseEvent<HTMLDivElement>) => {
+          if (isKeepInteractiveTarget(e.target)) return
+          e.preventDefault()
+          e.stopPropagation()
+          editSelection.onSelect(announcementIndex)
+        }}
+        className={cn(
+          'relative cursor-pointer',
+          editSelection.index === announcementIndex && 'ring-2 ring-primary ring-inset',
+        )}
+      >
+        {announcementBar}
+      </div>
+    ) : (
+      announcementBar
+    )
+
   const content = (
     <SiteNavProvider
       handler={navHandler}
@@ -302,6 +332,7 @@ export function WebsiteRenderer({
     >
     <SiteBlogProvider blog={blog} settings={data.blogSettings}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>
+      {announcementNode}
       <WebsiteHeader
         navigation={data.navigation}
         pages={pages}
@@ -313,6 +344,8 @@ export function WebsiteRenderer({
         socialLinks={resolveHeaderSocialLinks(data)}
       />
       {sections.flatMap((section, i) => {
+        // Site chrome: rendered once above the header on every page.
+        if (section.type === 'announcement') return []
         const item = (() => {
         const rendered = (
           <SectionRenderer

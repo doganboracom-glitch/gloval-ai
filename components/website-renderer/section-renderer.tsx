@@ -2,6 +2,7 @@
 
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
+import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
 import { AboutSection } from '@/components/website-renderer/sections/about-section'
@@ -48,6 +49,8 @@ export function SectionRenderer({
   paymentBadges?: PaymentBadgeSet | null
 }) {
   switch (section.type) {
+    case 'announcement':
+      return <AnnouncementBar data={section} lang={meta.language} />
     case 'hero':
       return <HeroSection data={section} />
     case 'slider':

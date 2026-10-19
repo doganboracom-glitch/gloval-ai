@@ -181,6 +181,7 @@ const SECTION_SYNONYMS: [SectionType, string[]][] = [
 ]
 
 export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
+  announcement: { tr: 'Duyuru Bandı', en: 'Announcement bar' },
   hero: { tr: 'Hero', en: 'Hero' },
   slider: { tr: 'Kayan Görsel', en: 'Slider' },
   about: { tr: 'Hakkımızda', en: 'About' },

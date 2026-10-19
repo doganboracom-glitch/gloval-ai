@@ -153,6 +153,13 @@ const ITEM_SPECS: Partial<Record<Section['type'], ItemSpec>> = {
     fields: (i) => [i.question, i.answer],
     label: (i) => truncate(str(i.question)),
   },
+  announcement: {
+    key: 'items',
+    minItems: 1,
+    kind: () => 'info',
+    fields: (i) => [i.text, i.link],
+    label: (i) => truncate(str(i.text)),
+  },
   products: {
     key: 'items',
     minItems: 2,

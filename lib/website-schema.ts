@@ -525,7 +525,68 @@ export const footerSection = z.object({
     .optional(),
 })
 
+export const ANNOUNCEMENT_MAX_ITEMS = 5
+export const ANNOUNCEMENT_TEXT_MAX = 200
+export const ANNOUNCEMENT_SPEEDS = ['slow', 'normal', 'fast'] as const
+export type AnnouncementSpeed = (typeof ANNOUNCEMENT_SPEEDS)[number]
+
+/**
+ * A scrolling site-wide notice band. It is NOT a page section for limit
+ * purposes (see `countsTowardSectionCap`), at most one exists per list, and it
+ * shows on every page of the site. `link` is stored as typed and validated at
+ * render time (`safeAnnouncementHref`), so a half-typed link can never make the
+ * whole site schema invalid.
+ */
+export const announcementItemSchema = z.object({
+  text: z.string().max(ANNOUNCEMENT_TEXT_MAX).describe('Plain text, no HTML'),
+  link: z.string().max(500).optional().describe('https URL or a site path starting with /'),
+  sample: sampleFlag,
+})
+
+export const announcementSection = z.object({
+  type: z.literal('announcement'),
+  ...sectionEditorMeta,
+  items: z.array(announcementItemSchema).min(1).max(ANNOUNCEMENT_MAX_ITEMS),
+  speed: z.enum(ANNOUNCEMENT_SPEEDS).default('normal'),
+  pauseOnHover: z.boolean().default(true),
+  dismissible: z.boolean().default(false),
+  useAccentColor: z.boolean().optional().describe('true = use the accent color instead of the primary color'),
+})
+
+/**
+ * The announcement band is site chrome, not page content: it never counts
+ * toward the section limit, so adding one can neither fill the cap nor block
+ * another section.
+ */
+export function countsTowardSectionCap(section: { type: string }): boolean {
+  return section.type !== 'announcement'
+}
+
+export function countCappedSections(sections: readonly { type: string }[]): number {
+  return sections.filter(countsTowardSectionCap).length
+}
+
+export function countAnnouncements(sections: readonly { type: string }[]): number {
+  return sections.length - countCappedSections(sections)
+}
+
+/**
+ * Applies the section limit to a list: at most SITE_SECTION_HARD_CAP regular
+ * sections plus at most one announcement. The array max is cap + 1 so the
+ * bound still reaches the AI JSON schema; the refinements are the real rule.
+ */
+function limitedSections<T extends z.ZodType<{ type: string }[]>>(schema: T) {
+  return schema
+    .refine((sections) => countCappedSections(sections) <= SITE_SECTION_HARD_CAP, {
+      message: `At most ${SITE_SECTION_HARD_CAP} sections (the announcement band does not count)`,
+    })
+    .refine((sections) => countAnnouncements(sections) <= 1, {
+      message: 'At most one announcement section',
+    })
+}
+
 export const sectionSchema = z.discriminatedUnion('type', [
+  announcementSection,
   heroSection,
   sliderSection,
   aboutSection,
@@ -770,7 +831,7 @@ export const pageSchema = z.object({
   title: z.string(),
   isHome: z.boolean().optional(),
   kind: z.enum(PAGE_KINDS).optional(),
-  sections: z.array(sectionSchema).max(SITE_SECTION_HARD_CAP).optional(),
+  sections: limitedSections(z.array(sectionSchema).max(SITE_SECTION_HARD_CAP + 1)).optional(),
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
 })
@@ -809,11 +870,9 @@ export const websiteSchema = z.object({
     .describe('Floating phone + WhatsApp buttons shown on every page'),
   social: socialSchema.optional().describe('Owner-supplied social media links'),
   pages: z.array(pageSchema).min(1).max(SITE_PAGE_HARD_CAP),
-  sections: z
-    .array(sectionSchema)
-    .min(3)
-    .max(SITE_SECTION_HARD_CAP)
-    .describe('The ordered homepage sections'),
+  sections: limitedSections(z.array(sectionSchema).min(3).max(SITE_SECTION_HARD_CAP + 1)).describe(
+    'The ordered homepage sections',
+  ),
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
   legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
@@ -918,6 +977,7 @@ export type WebsitePlan = {
 /** Human-readable section title used in the plan summary, per language. */
 function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
   const map: Record<SectionType, [tr: string, en: string]> = {
+    announcement: ['Duyuru Bandı', 'Announcement bar'],
     hero: ['Kahraman', 'Hero'],
     slider: ['Kayan Görsel', 'Slider'],
     about: ['Hakkında', 'About'],
@@ -945,6 +1005,8 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
 /** Short description of a section for the plan summary. */
 function sectionSummary(section: Section): string {
   switch (section.type) {
+    case 'announcement':
+      return section.items[0]?.text ?? ''
     case 'hero':
       return section.title
     case 'slider':

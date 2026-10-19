@@ -139,6 +139,7 @@ export function themeToCssVars(t: ResolvedTheme): React.CSSProperties {
     '--site-primary': t.primary,
     '--site-primary-fg': t.primaryFg,
     '--site-accent': t.accent,
+    '--site-accent-fg': readableOn(t.accent),
     '--site-bg': t.background,
     '--site-fg': t.foreground,
     '--site-card': t.card,
