@@ -584,10 +584,12 @@ export function applyOperation(
       const section = next.sections[operation.index]
       const item = collectionOf(section)?.[operation.itemIndex]
       if (item) {
-        const value =
-          section?.type === 'announcement' && operation.field === 'text'
-            ? operation.value.slice(0, ANNOUNCEMENT_TEXT_MAX)
-            : operation.value
+  const value =
+  section?.type === 'announcement' && operation.field === 'text'
+  ? operation.value.slice(0, ANNOUNCEMENT_TEXT_MAX)
+  : section?.type === 'announcement' && operation.field === 'link'
+  ? operation.value.trim().slice(0, 500)
+  : operation.value
         ;(item as Record<string, unknown>)[operation.field] = value
       }
       return next
@@ -936,7 +938,7 @@ export function collectionOf(section: Section | undefined): Record<string, unkno
 export function blankItem(type: SectionType, lang: Lang): Record<string, unknown> {
   switch (type) {
     case 'announcement':
-      return { text: pick(lang, 'Yeni duyuru', 'New announcement') }
+      return { text: pick(lang, 'Yeni duyuru', 'New announcement'), sample: true }
     case 'slider':
       return {
         caption: pick(lang, 'Yeni', 'New'),
@@ -1064,7 +1066,8 @@ export function blankSection(type: SectionType, lang: Lang): Section {
     case 'announcement':
       return {
         type: 'announcement',
-        items: [{ text: pick(lang, 'Yeni duyuru', 'New announcement') }],
+        items: [{ text: pick(lang, 'Yeni duyuru', 'New announcement'), sample: true }],
+        sample: true,
         speed: 'normal',
         pauseOnHover: true,
         dismissible: false,

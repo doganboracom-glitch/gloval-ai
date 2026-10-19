@@ -5,7 +5,14 @@ import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { ANNOUNCEMENT_SPEEDS, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
+import {
+  ANNOUNCEMENT_MAX_ITEMS,
+  ANNOUNCEMENT_SPEEDS,
+  ANNOUNCEMENT_TEXT_MAX,
+  isStorefront,
+  type WebsiteSchema,
+} from '@/lib/website-schema'
+import { isInvalidAnnouncementLink } from '@/lib/announcement'
 import { VIEW_ALL_DEFAULT } from '@/lib/store-header-links'
 import { listOwnerCollections } from '@/lib/store-collections-actions'
 import {
@@ -235,7 +242,16 @@ export function SectionInspector({
         />
       )}
 
-      {!managedProducts && section.type !== 'footer' && items.length > 0 && (
+      {section.type === 'announcement' && (
+        <AnnouncementItems
+          index={index}
+          items={section.items}
+          lang={site.meta.language}
+          onDispatch={onDispatch}
+        />
+      )}
+
+      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (
@@ -326,6 +342,92 @@ function AnnouncementSettings({
           {toggle.label}
         </label>
       ))}
+    </div>
+  )
+}
+
+function AnnouncementItems({
+  index,
+  items,
+  lang,
+  onDispatch,
+}: {
+  index: number
+  items: { text: string; link?: string }[]
+  lang: 'tr' | 'en'
+  onDispatch: (op: EditOperation) => void
+}) {
+  const tr = lang === 'tr'
+  const atLimit = items.length >= ANNOUNCEMENT_MAX_ITEMS
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">
+        {tr ? 'Duyurular' : 'Announcements'} ({items.length}/{ANNOUNCEMENT_MAX_ITEMS})
+      </span>
+      {items.map((item, itemIndex) => (
+        <div key={itemIndex} className="flex flex-col gap-2 rounded-lg border border-border bg-background/60 p-2">
+          <div className="flex items-center gap-1">
+            <span className="flex-1 truncate text-xs font-semibold text-muted-foreground">
+              {itemIndex + 1}. {item.text}
+            </span>
+            <IconBtn
+              label={tr ? 'Yukarı taşı' : 'Move up'}
+              small
+              disabled={itemIndex === 0}
+              onClick={() => onDispatch({ op: 'moveItem', index, itemIndex, direction: 'up' })}
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+            </IconBtn>
+            <IconBtn
+              label={tr ? 'Aşağı taşı' : 'Move down'}
+              small
+              disabled={itemIndex === items.length - 1}
+              onClick={() => onDispatch({ op: 'moveItem', index, itemIndex, direction: 'down' })}
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
+            </IconBtn>
+            <IconBtn
+              label={tr ? 'Sil' : 'Remove'}
+              small
+              disabled={items.length <= 1}
+              onClick={() => onDispatch({ op: 'removeItem', index, itemIndex })}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </IconBtn>
+          </div>
+          <TextField
+            label={tr ? 'Duyuru metni' : 'Announcement text'}
+            multiline
+            rows={2}
+            value={item.text}
+            hint={`${item.text.length}/${ANNOUNCEMENT_TEXT_MAX}`}
+            onCommit={(v) => onDispatch({ op: 'updateItemField', index, itemIndex, field: 'text', value: v })}
+          />
+          <TextField
+            label={tr ? 'Bağlantı (isteğe bağlı)' : 'Link (optional)'}
+            value={item.link ?? ''}
+            placeholder="https://… / /sayfa / #bolum"
+            hint={
+              isInvalidAnnouncementLink(item.link)
+                ? tr
+                  ? 'Geçersiz bağlantı: yalnızca https://, /yol veya #bağlantı kullanın. Şu an düz metin olarak görünür.'
+                  : 'Invalid link: use https://, /path or #anchor only. It currently shows as plain text.'
+                : undefined
+            }
+            onCommit={(v) => onDispatch({ op: 'updateItemField', index, itemIndex, field: 'link', value: v })}
+          />
+        </div>
+      ))}
+      <GhostButton disabled={atLimit} onClick={() => onDispatch({ op: 'addItem', index })}>
+        <Plus className="h-3.5 w-3.5" />
+        {atLimit
+          ? tr
+            ? `En fazla ${ANNOUNCEMENT_MAX_ITEMS} duyuru eklenebilir`
+            : `Up to ${ANNOUNCEMENT_MAX_ITEMS} announcements`
+          : tr
+            ? 'Duyuru ekle'
+            : 'Add announcement'}
+      </GhostButton>
     </div>
   )
 }
