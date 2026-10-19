@@ -9,8 +9,15 @@ import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ShoppingCart } from 'lucide-react'
 import { requestOpenCart, useOptionalCart } from '@/components/store/cart-provider'
+import {
+  DESKTOP_NAV_SHOW_CLASS,
+  MobileMenu,
+  hamburgerBreakpoint,
+  type MobileMenuItem,
+} from '@/components/website-renderer/sections/mobile-menu'
 import { StoreAccountLink } from '@/components/website-renderer/store-account-link'
 import {
   isCartCta,
@@ -63,6 +70,26 @@ export function WebsiteHeader({
   // fall back to the in-page anchor links from the schema.
   const multiPage = (pages?.length ?? 0) > 1
 
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuItems = buildMenuItems({
+    navigation,
+    pages,
+    activeSlug,
+    onNavigate,
+    storeSlug,
+    cartSlug,
+    multiPage,
+    blog,
+    nav,
+    normalizeHref,
+  })
+  const showCtaInBar = Boolean(navigation.cta && !(!commerce && isCartCta(navigation.cta)))
+  const ctaIsCart = Boolean(cartSlug && commerce && navigation.cta && isCartCta(navigation.cta))
+  // A non-cart CTA moves into the menu panel below `md`, so it needs a menu to live in.
+  const panelCta = showCtaInBar && !ctaIsCart && navigation.cta ? <SiteButton button={navigation.cta} /> : null
+  const hasMenu = menuItems.length > 0 || Boolean(panelCta) || Boolean(socialLinks && socialLinks.length > 0)
+  const breakpoint = hamburgerBreakpoint(menuItems.length)
+
   const headerRef = useRef<HTMLElement>(null)
   useEffect(() => {
     const el = headerRef.current
@@ -81,18 +108,22 @@ export function WebsiteHeader({
   return (
     <header
       ref={headerRef}
-      className="sticky top-[var(--site-sticky-offset,0px)] z-20 backdrop-blur"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--site-bg) 82%, transparent)',
-        borderBottom: '1px solid var(--site-border)',
-      }}
+      className={`sticky top-[var(--site-sticky-offset,0px)] ${menuOpen ? 'z-50' : 'z-20'}`}
+      style={{ borderBottom: '1px solid var(--site-border)' }}
     >
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
+      {/* The blurred backdrop sits on its own layer: backdrop-filter on the header itself would
+          become the containing block of the fixed mobile menu panel. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 backdrop-blur"
+        style={{ backgroundColor: 'color-mix(in srgb, var(--site-bg) 82%, transparent)' }}
+      />
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         {storeSlug ? (
           <a
             href={storeHomeHref(storeSlug)}
             aria-label={navigation.logoText}
-            className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight md:shrink-0"
             style={{
               fontFamily: 'var(--site-heading-font)',
               color: 'var(--site-fg)',
@@ -108,14 +139,14 @@ export function WebsiteHeader({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={navigation.logo.src} alt={navigation.logo.alt || navigation.logoText} className="[height:var(--logo-h,48px)] [max-width:var(--logo-maxw,200px)] [width:var(--logo-mobile-w,auto)] object-contain md:[height:var(--logo-h,64px)] md:[max-width:var(--logo-maxw,280px)] md:[width:var(--logo-w,auto)]" />
             ) : null}
-            {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
+            {navigation.logo?.src && navigation.showLogoText === false ? null : <span className="truncate">{navigation.logoText}</span>}
           </a>
         ) : homeHref ? (
           <a
             href={homeHref}
             aria-label={navigation.logoText}
             data-header-logo
-            className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight md:shrink-0"
             style={{
               fontFamily: 'var(--site-heading-font)',
               color: 'var(--site-fg)',
@@ -128,7 +159,7 @@ export function WebsiteHeader({
             }}
           >
             <LogoImage navigation={navigation} />
-            {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
+            {navigation.logo?.src && navigation.showLogoText === false ? null : <span className="truncate">{navigation.logoText}</span>}
           </a>
         ) : <button
           type="button"
@@ -140,7 +171,7 @@ export function WebsiteHeader({
             if (home && onNavigate && home !== activeSlug) onNavigate(home)
             scrollSiteToTop(e.currentTarget)
           }}
-          className="flex shrink-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight"
+          className="flex min-w-0 cursor-pointer items-center gap-2 text-lg font-bold tracking-tight md:shrink-0"
           style={{
             fontFamily: 'var(--site-heading-font)',
             color: 'var(--site-fg)',
@@ -153,10 +184,10 @@ export function WebsiteHeader({
           }}
         >
           <LogoImage navigation={navigation} />
-          {navigation.logo?.src && navigation.showLogoText === false ? null : <span>{navigation.logoText}</span>}
+          {navigation.logo?.src && navigation.showLogoText === false ? null : <span className="truncate">{navigation.logoText}</span>}
         </button>}
 
-        <nav className="hidden items-center gap-6 md:flex">
+        <nav className={`hidden items-center gap-6 ${DESKTOP_NAV_SHOW_CLASS[breakpoint]}`}>
           {multiPage
             ? pages!.map((page) => {
                 const isActive = page.slug === activeSlug
@@ -225,16 +256,17 @@ export function WebsiteHeader({
         />
         {actions}
         {commerce && shouldShowAccountLink(cartSlug) ? <StoreAccountLink slug={cartSlug} lang={lang} /> : null}
-        {navigation.cta && !(!commerce && isCartCta(navigation.cta)) ? (
-          cartSlug && commerce && isCartCta(navigation.cta) ? (
+        {navigation.cta && showCtaInBar ? (
+          ctaIsCart ? (
             <button
               type="button"
               onClick={() => requestOpenCart()}
               data-header-cart
-              className="inline-flex cursor-pointer items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+              className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 sm:px-5"
               style={{ borderRadius: 'var(--site-radius)', fontFamily: 'var(--site-body-font)', backgroundColor: 'var(--site-primary)', color: 'var(--site-primary-fg)' }}
             >
-              {navigation.cta.label}
+              <ShoppingCart className="size-5 sm:hidden" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{navigation.cta.label}</span>
               {cartCount > 0 && (
                 <span
                   className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-bold"
@@ -244,7 +276,21 @@ export function WebsiteHeader({
                 </span>
               )}
             </button>
-          ) : <SiteButton button={navigation.cta} />
+          ) : (
+            <div className="hidden md:block">
+              <SiteButton button={navigation.cta} />
+            </div>
+          )
+        ) : null}
+        {hasMenu ? (
+          <MobileMenu
+            items={menuItems}
+            cta={panelCta}
+            socialLinks={socialLinks}
+            lang={lang}
+            breakpoint={breakpoint}
+            onOpenChange={setMenuOpen}
+          />
         ) : null}
         </div>
       </div>
@@ -279,4 +325,59 @@ function LogoImage({ navigation }: { navigation: WebsiteSchema['navigation'] }) 
       }
     />
   )
+}
+
+function buildMenuItems({
+  navigation,
+  pages,
+  activeSlug,
+  onNavigate,
+  storeSlug,
+  cartSlug,
+  multiPage,
+  blog,
+  nav,
+  normalizeHref,
+}: {
+  navigation: WebsiteSchema['navigation']
+  pages?: PageItem[]
+  activeSlug?: string
+  onNavigate?: (slug: string) => void
+  storeSlug?: string
+  cartSlug?: string
+  multiPage: boolean
+  blog: ReturnType<typeof useBlogLink>
+  nav: ReturnType<typeof useSiteNav>
+  normalizeHref: (href: string) => string
+}): MobileMenuItem[] {
+  const asAnchorClick = (href: string) => (e: React.MouseEvent<HTMLElement>) =>
+    onSiteNavClick(e as React.MouseEvent<HTMLAnchorElement>, href, nav)
+
+  const items: MobileMenuItem[] = multiPage
+    ? pages!.map((page): MobileMenuItem => {
+        if (cartSlug && isProductsLink(page.title)) {
+          const href = storeListHref(cartSlug)
+          return { key: page.slug, label: page.title, href, onSelect: asAnchorClick(href) }
+        }
+        // Store sub-pages (blog, legal, product list) have no in-memory page switcher,
+        // so a real link to the page is the only way the entry can work there.
+        if (!onNavigate && storeSlug) {
+          const home = storeHomeHref(storeSlug)
+          return { key: page.slug, label: page.title, href: page.isHome ? home : `${home}/${page.slug}` }
+        }
+        return {
+          key: page.slug,
+          label: page.title,
+          active: page.slug === activeSlug,
+          onSelect: () => onNavigate?.(page.slug),
+        }
+      })
+    : withoutBlogLinks(navigation.links).map((link): MobileMenuItem => {
+        const href =
+          cartSlug && isProductsLink(link.label, link.href) ? storeListHref(cartSlug) : normalizeHref(link.href)
+        return { key: link.label + link.href, label: link.label, href: href || '#', onSelect: asAnchorClick(href) }
+      })
+
+  if (blog) items.push({ key: 'blog', label: blog.label, href: blog.href, onSelect: asAnchorClick(blog.href) })
+  return items
 }
