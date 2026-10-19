@@ -1,7 +1,7 @@
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import { SocialIcon } from '@/components/website-renderer/social-icons'
 
-export type SocialLinksVariant = 'contact' | 'footer' | 'header'
+export type SocialLinksVariant = 'contact' | 'footer' | 'header' | 'menu'
 
 const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-primary)]'
@@ -30,6 +30,13 @@ const VARIANTS: Record<
     icon: 'h-4 w-4',
     color: 'var(--site-muted-fg)',
     bordered: false,
+  },
+  menu: {
+    list: 'flex flex-wrap items-center gap-2',
+    link: 'h-11 w-11',
+    icon: 'h-5 w-5',
+    color: 'var(--site-fg)',
+    bordered: true,
   },
 }
 
