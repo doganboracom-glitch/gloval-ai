@@ -35,6 +35,7 @@ import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { isKeepInteractiveTarget } from '@/lib/preview-interactive'
 import { sectionHasSample } from '@/lib/sample-content'
 import { resolveHeaderSocialLinks } from '@/lib/social-links'
+import { resolveMenuContact } from '@/lib/menu-contact'
 
 /**
  * Preview navigation context, passed only by the editor/landing preview (whose
@@ -352,6 +353,7 @@ export function WebsiteRenderer({
         lang={data.meta.language}
         actions={headerActions}
         socialLinks={resolveHeaderSocialLinks(data)}
+        contact={resolveMenuContact(data)}
       />
       {announcement && !announcementAboveHeader && !announcementOnPage && announcementNode}
       {sections.flatMap((section, i) => {

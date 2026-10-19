@@ -160,7 +160,7 @@ describe('MobileMenu accessibility and content', () => {
     const { trigger } = setup({ items: many })
     fireEvent.click(trigger)
     expect(screen.getAllByRole('link')).toHaveLength(10)
-    const list = screen.getByRole('dialog').querySelector('nav')!
+    const list = screen.getByRole('dialog').querySelector('nav')!.parentElement!
     expect(list.className).toContain('overflow-y-auto')
     expect(list.className).toContain('overscroll-contain')
   })
