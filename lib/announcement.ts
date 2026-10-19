@@ -1,3 +1,25 @@
+export type AnnouncementPlacement =
+  /** No visible announcement. */
+  | 'none'
+  /** First visible section: rendered above the logo/menu header. */
+  | 'above-header'
+  /** Anywhere else: rendered in the page flow at its position in the list. */
+  | 'in-flow'
+
+/**
+ * Where the (single) announcement band renders, from its position in the home
+ * section list. Hidden sections are skipped, so a band that only has hidden
+ * sections above it still counts as first.
+ */
+export function announcementPlacement(
+  sections: readonly { type: string; hidden?: boolean }[],
+): AnnouncementPlacement {
+  const firstVisible = sections.find((section) => !section.hidden)
+  if (!firstVisible) return 'none'
+  if (!sections.some((section) => section.type === 'announcement' && !section.hidden)) return 'none'
+  return firstVisible.type === 'announcement' ? 'above-header' : 'in-flow'
+}
+
 /**
  * Validates an announcement link at render time. Only absolute http(s) URLs,
  * in-site paths (`/x`, not protocol-relative `//x`) and `#anchors` are allowed;

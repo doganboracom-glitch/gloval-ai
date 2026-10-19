@@ -19,6 +19,7 @@ import { SectionRenderer } from '@/components/website-renderer/section-renderer'
 import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
+import { announcementPlacement } from '@/lib/announcement'
 import { WebsiteHeader } from '@/components/website-renderer/sections/website-header'
 import { BackToTop, scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { GlovalBadge } from '@/components/website-renderer/gloval-badge'
@@ -283,22 +284,31 @@ export function WebsiteRenderer({
     blog &&
     shouldShowLatestPosts(blog, data.blogSettings)
   const footerIndex = sections.findIndex((section) => section.type === 'footer')
+  const firstContentIndex = Math.max(
+    0,
+    sections.findIndex((section) => section.type !== 'announcement'),
+  )
   const latestIndex = !showLatest
     ? -1
     : data.blogSettings?.latestPlacement === 'after-hero'
-      ? sections[0]?.type === 'hero' || sections[0]?.type === 'slider'
-        ? 1
-        : 0
+      ? sections[firstContentIndex]?.type === 'hero' || sections[firstContentIndex]?.type === 'slider'
+        ? firstContentIndex + 1
+        : firstContentIndex
       : footerIndex >= 0
         ? footerIndex
         : sections.length
   const latestPosts =
     showLatest && blog ? <WebsiteLatestPosts key="latest-posts" blog={blog} lang={data.meta.language} /> : null
 
-  // The announcement band lives in the home section list but shows on every page.
+  // The announcement band is a movable section of the home list. First in the
+  // list it sits above the header; anywhere else it renders in the page flow at
+  // its position. Pages that do not list it (sub-pages) still show it: above the
+  // header when first, otherwise right below the header.
   const announcement = data.sections.find(
     (s): s is Extract<typeof s, { type: 'announcement' }> => s.type === 'announcement' && !s.hidden,
   )
+  const announcementOnPage = announcement ? sections.includes(announcement) : false
+  const announcementAboveHeader = announcementPlacement(data.sections) === 'above-header'
   const announcementIndex = announcement ? sections.indexOf(announcement) : -1
   const announcementBar = announcement ? (
     <AnnouncementBar data={announcement} lang={data.meta.language} />
@@ -332,7 +342,7 @@ export function WebsiteRenderer({
     >
     <SiteBlogProvider blog={blog} settings={data.blogSettings}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>
-      {announcementNode}
+      {announcementAboveHeader && announcementNode}
       <WebsiteHeader
         navigation={data.navigation}
         pages={pages}
@@ -343,9 +353,11 @@ export function WebsiteRenderer({
         actions={headerActions}
         socialLinks={resolveHeaderSocialLinks(data)}
       />
+      {announcement && !announcementAboveHeader && !announcementOnPage && announcementNode}
       {sections.flatMap((section, i) => {
-        // Site chrome: rendered once above the header on every page.
-        if (section.type === 'announcement') return []
+        if (section.type === 'announcement' && announcementAboveHeader) {
+          return i === latestIndex ? [latestPosts] : []
+        }
         const item = (() => {
         const rendered = (
           <SectionRenderer
