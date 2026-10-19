@@ -7,7 +7,7 @@ export default defineConfig({
     include: ['**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/.next/**'],
   },
-  esbuild: { jsx: 'automatic' },
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
