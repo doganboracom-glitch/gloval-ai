@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Clock, Mail, MapPin, Menu, Navigation, Phone, X } from 'lucide-react'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import type { ResolvedSocialLink } from '@/lib/social-links'
+import type { MenuContact } from '@/lib/menu-contact'
 
 export type MobileMenuItem = {
   key: string
@@ -41,8 +42,32 @@ export function isHamburgerVisibleAt(viewportWidth: number, breakpoint: MobileMe
 }
 
 export const MOBILE_MENU_LABELS = {
-  tr: { open: 'Menüyü aç', close: 'Menüyü kapat', menu: 'Menü', social: 'Sosyal medya' },
-  en: { open: 'Open menu', close: 'Close menu', menu: 'Menu', social: 'Social media' },
+  tr: {
+    open: 'Menüyü aç',
+    close: 'Menüyü kapat',
+    menu: 'Menü',
+    social: 'Sosyal medya',
+    contactHeading: 'İLETİŞİM',
+    phone: 'Telefon',
+    email: 'E-posta',
+    address: 'Adres',
+    hours: 'Çalışma saatleri',
+    directions: 'Yol Tarifi Al',
+    newTab: '(yeni sekmede açılır)',
+  },
+  en: {
+    open: 'Open menu',
+    close: 'Close menu',
+    menu: 'Menu',
+    social: 'Social media',
+    contactHeading: 'CONTACT',
+    phone: 'Phone',
+    email: 'Email',
+    address: 'Address',
+    hours: 'Opening hours',
+    directions: 'Get Directions',
+    newTab: '(opens in a new tab)',
+  },
 } as const
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -60,6 +85,7 @@ export function MobileMenu({
   items,
   cta,
   socialLinks,
+  contact,
   lang = 'tr',
   breakpoint = 'md',
   onOpenChange,
@@ -68,6 +94,8 @@ export function MobileMenu({
   /** Pre-rendered main call-to-action, shown under the links. */
   cta?: React.ReactNode
   socialLinks?: ResolvedSocialLink[]
+  /** Real contact details (`resolveMenuContact`); null/absent draws no contact block. */
+  contact?: MenuContact | null
   lang?: 'tr' | 'en'
   breakpoint?: MobileMenuBreakpoint
   onOpenChange?: (open: boolean) => void
@@ -236,7 +264,8 @@ export function MobileMenu({
             </button>
           </div>
 
-          <nav aria-label={labels.menu} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <nav aria-label={labels.menu} className="py-2">
             <ul>
               {items.map((item) => {
                 const style: React.CSSProperties = {
@@ -273,6 +302,88 @@ export function MobileMenu({
               })}
             </ul>
           </nav>
+
+          {contact ? (
+            <section
+              aria-labelledby={`${rootId}-contact`}
+              data-mobile-menu-contact
+              className="flex flex-col gap-1 px-5 pt-4 pb-4"
+            >
+              <h2
+                id={`${rootId}-contact`}
+                className="text-xs font-semibold tracking-wide"
+                style={{ color: 'var(--site-muted-fg)' }}
+              >
+                {labels.contactHeading}
+              </h2>
+              <ul className="flex flex-col">
+                {contact.phone ? (
+                  <li>
+                    <a
+                      href={contact.phone.href}
+                      className={`flex min-h-11 items-center gap-3 text-sm transition-opacity hover:opacity-70 ${FOCUS_RING}`}
+                    >
+                      <Phone className="size-4 shrink-0" aria-hidden="true" style={{ color: 'var(--site-primary)' }} />
+                      <span className="sr-only">{labels.phone}: </span>
+                      <span className="min-w-0 break-words">{contact.phone.display}</span>
+                    </a>
+                  </li>
+                ) : null}
+                {contact.email ? (
+                  <li>
+                    <a
+                      href={contact.email.href}
+                      className={`flex min-h-11 items-center gap-3 text-sm transition-opacity hover:opacity-70 ${FOCUS_RING}`}
+                    >
+                      <Mail className="size-4 shrink-0" aria-hidden="true" style={{ color: 'var(--site-primary)' }} />
+                      <span className="sr-only">{labels.email}: </span>
+                      <span className="min-w-0 break-all">{contact.email.display}</span>
+                    </a>
+                  </li>
+                ) : null}
+                {contact.address ? (
+                  <li className="flex min-h-11 items-start gap-3 py-3 text-sm leading-relaxed">
+                    <MapPin
+                      className="mt-0.5 size-4 shrink-0"
+                      aria-hidden="true"
+                      style={{ color: 'var(--site-primary)' }}
+                    />
+                    <span className="sr-only">{labels.address}: </span>
+                    <address className="min-w-0 break-words not-italic">{contact.address}</address>
+                  </li>
+                ) : null}
+                {contact.hours ? (
+                  <li className="flex min-h-11 items-start gap-3 py-3 text-sm leading-relaxed">
+                    <Clock
+                      className="mt-0.5 size-4 shrink-0"
+                      aria-hidden="true"
+                      style={{ color: 'var(--site-primary)' }}
+                    />
+                    <span className="sr-only">{labels.hours}: </span>
+                    <span className="min-w-0 whitespace-pre-line break-words">{contact.hours}</span>
+                  </li>
+                ) : null}
+              </ul>
+              {contact.directionsUrl ? (
+                <a
+                  href={contact.directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 px-4 text-sm font-semibold transition-opacity hover:opacity-80 ${FOCUS_RING}`}
+                  style={{
+                    border: '1px solid var(--site-primary)',
+                    color: 'var(--site-primary)',
+                    borderRadius: 'var(--site-radius)',
+                  }}
+                >
+                  <Navigation className="size-4 shrink-0" aria-hidden="true" />
+                  {labels.directions}
+                  <span className="sr-only"> {labels.newTab}</span>
+                </a>
+              ) : null}
+            </section>
+          ) : null}
+          </div>
 
           {cta || (socialLinks && socialLinks.length > 0) ? (
             <div

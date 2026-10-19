@@ -8,6 +8,7 @@ import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
 import type { ResolvedSocialLink } from '@/lib/social-links'
+import type { MenuContact } from '@/lib/menu-contact'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
 import { useEffect, useRef, useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
@@ -38,8 +39,11 @@ export function WebsiteHeader({
   homeHref,
   actions,
   socialLinks,
+  contact,
   commerce = true,
 }: {
+  /** Real contact details for the mobile menu panel; pass `resolveMenuContact(site)`. */
+  contact?: MenuContact | null
   /** False on a catalog: hides the account link and the cart CTA (no cart exists). */
   commerce?: boolean
   /** Small icons next to the CTA; pass `resolveHeaderSocialLinks(site)` (empty hides them). */
@@ -87,7 +91,8 @@ export function WebsiteHeader({
   const ctaIsCart = Boolean(cartSlug && commerce && navigation.cta && isCartCta(navigation.cta))
   // A non-cart CTA moves into the menu panel below `md`, so it needs a menu to live in.
   const panelCta = showCtaInBar && !ctaIsCart && navigation.cta ? <SiteButton button={navigation.cta} /> : null
-  const hasMenu = menuItems.length > 0 || Boolean(panelCta) || Boolean(socialLinks && socialLinks.length > 0)
+  const hasMenu =
+    menuItems.length > 0 || Boolean(panelCta) || Boolean(socialLinks && socialLinks.length > 0) || Boolean(contact)
   const breakpoint = hamburgerBreakpoint(menuItems.length)
 
   const headerRef = useRef<HTMLElement>(null)
@@ -287,6 +292,7 @@ export function WebsiteHeader({
             items={menuItems}
             cta={panelCta}
             socialLinks={socialLinks}
+            contact={contact}
             lang={lang}
             breakpoint={breakpoint}
             onOpenChange={setMenuOpen}

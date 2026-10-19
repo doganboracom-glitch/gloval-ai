@@ -10,6 +10,7 @@ import { CartProvider } from './cart-provider'
 import { CatalogProvider } from './catalog-context'
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { resolveHeaderSocialLinks } from '@/lib/social-links'
+import { resolveMenuContact } from '@/lib/menu-contact'
 import { modeHasTransactions, type CommerceMode } from '@/lib/commerce-mode'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
 import type { SiteBlogData } from '@/lib/blog-site'
@@ -52,6 +53,7 @@ export function StoreSiteShell({
             storeSlug={slug}
             lang={site.meta.language}
             socialLinks={resolveHeaderSocialLinks(site)}
+            contact={resolveMenuContact(site)}
             commerce={transactions}
           />
           <main>{children}</main>

@@ -473,9 +473,14 @@ export const contactSection = z.object({
     .describe('Where contact-form messages are e-mailed; empty = the contact e-mail, then the account e-mail'),
   phone: z.string().optional(),
   address: z.string().optional(),
+  hours: z
+  .string()
+  .max(300)
+  .optional()
+  .describe('Owner-supplied opening hours, shown in the mobile menu. Never generate this; leave it unset.'),
   mapEmbed: z
-    .string()
-    .max(2000)
+  .string()
+  .max(2000)
     .optional()
     .describe('Owner-supplied Google Maps embed URL. Never generate this; leave it unset.'),
   sampleFields: z
