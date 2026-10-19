@@ -112,6 +112,9 @@ export type ComparisonCopy = {
   featureColumn: string
   yes: string
   no: string
+  /** Mobile plan picker: tablist label and the highlight on the popular plan. */
+  planPicker: string
+  popular: string
 }
 
 type Strings = {
@@ -243,6 +246,8 @@ const TR: Strings = {
     featureColumn: 'Özellik',
     yes: 'Var',
     no: 'Yok',
+    planPicker: 'Paket seç',
+    popular: 'En çok tercih edilen',
     soon: 'Yakında',
     groups: {
       ai: 'Yapay zeka işlemleri',
@@ -406,6 +411,8 @@ const EN: Strings = {
     featureColumn: 'Feature',
     yes: 'Included',
     no: 'Not included',
+    planPicker: 'Choose a plan',
+    popular: 'Most popular',
     soon: 'Soon',
     groups: {
       ai: 'AI actions',
@@ -557,8 +564,9 @@ export function getCommonPlanCopy(lang: string | null | undefined): CommonPlanCo
 }
 
 export function getComparisonCopy(lang: string | null | undefined): ComparisonCopy {
-  const { toggle, featureColumn, yes, no } = STRINGS[copyLang(lang)].comparison
-  return { toggle, featureColumn, yes, no }
+  const { toggle, featureColumn, yes, no, planPicker, popular } =
+    STRINGS[copyLang(lang)].comparison
+  return { toggle, featureColumn, yes, no, planPicker, popular }
 }
 
 function numberFormatter(lang: CopyLang) {

@@ -4,9 +4,10 @@ import * as path from 'node:path'
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['**/*.test.ts'],
+    include: ['**/*.test.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/.next/**'],
   },
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),

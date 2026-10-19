@@ -1,48 +1,34 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, ChevronDown, Minus } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { buildComparison, getComparisonCopy, type ComparisonCopy } from '@/lib/plan-copy'
-import type { ComparisonValue } from '@/lib/pricing-config'
-
-const PLAN_COLUMNS = ['FREE', 'STARTER', 'PRO', 'E-TİCARET'] as const
-
-function Cell({ value, copy }: { value: ComparisonValue; copy: ComparisonCopy }) {
-  if (value === true) {
-    return (
-      <>
-        <Check className="mx-auto h-4 w-4 text-brand" aria-hidden />
-        <span className="sr-only">{copy.yes}</span>
-      </>
-    )
-  }
-  if (value === false) {
-    return (
-      <>
-        <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" aria-hidden />
-        <span className="sr-only">{copy.no}</span>
-      </>
-    )
-  }
-  return <span className="text-xs sm:text-sm">{value}</span>
-}
+import { ComparisonCell } from '@/components/pricing/comparison-cell'
+import { ComparisonPlanPicker } from '@/components/pricing/comparison-plan-picker'
+import { buildComparison, getComparisonCopy } from '@/lib/plan-copy'
+import { COMPARISON_PLANS, POPULAR_PLAN } from '@/lib/plan-comparison'
+import { getDirection } from '@/lib/locale-registry'
+import type { PlanCode } from '@/lib/pricing-config'
 
 /**
  * Paket karşılaştırması — varsayılan olarak KAPALI accordion.
  *
- * Eskiden sayfanın altında her zaman açık duran büyük tablo vardı; sayfa
- * akışını boğduğu için detay isteyene açılan tek bir bloğa indirildi ve
- * paket kartlarının hemen altına taşındı.
+ * Masaüstünde (md ve üzeri) 4 kolonlu tablo, dar ekranlarda ise paket seçmeli
+ * sekme görünümü gösterilir; böylece tablo hiçbir ekranda sayfayı yatay
+ * genişletmez. `currentPlanCode` verilirse sekme görünümü o paketle açılır.
  */
-export function ComparisonAccordion() {
+export function ComparisonAccordion({
+  currentPlanCode,
+}: {
+  currentPlanCode?: PlanCode | null
+}) {
   const [open, setOpen] = useState(false)
   const { lang } = useLanguage()
   const copy = getComparisonCopy(lang)
   const comparison = buildComparison(lang)
 
   return (
-    <section className="mt-10">
+    <section className="mt-10 min-w-0">
       <div className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-border bg-card">
         <h3>
           <button
@@ -50,7 +36,7 @@ export function ComparisonAccordion() {
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
             aria-controls="plan-comparison-panel"
-            className="flex w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex min-h-14 w-full items-center justify-between gap-3 p-5 text-left transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <span className="font-display text-base font-semibold">
               {copy.toggle}
@@ -65,9 +51,15 @@ export function ComparisonAccordion() {
 
         {open && (
           <div id="plan-comparison-panel" className="border-t border-border">
-            {/* Mobilde yatay kaydırma: 4 paket sığmadığında tablo daraltılıp
-                okunamaz hale gelmesin. */}
-            <div className="overflow-x-auto">
+            <ComparisonPlanPicker
+              className="md:hidden"
+              comparison={comparison}
+              copy={copy}
+              currentPlanCode={currentPlanCode}
+              rtl={getDirection(lang) === 'rtl'}
+            />
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[620px] border-separate border-spacing-0 text-left">
                 <thead>
                   <tr>
@@ -77,15 +69,17 @@ export function ComparisonAccordion() {
                     >
                       {copy.featureColumn}
                     </th>
-                    {PLAN_COLUMNS.map((name) => (
+                    {COMPARISON_PLANS.map((plan) => (
                       <th
-                        key={name}
+                        key={plan.code}
                         scope="col"
                         className={`px-2 py-3 text-center font-display text-[11px] font-bold tracking-widest ${
-                          name === 'PRO' ? 'text-brand' : 'text-muted-foreground'
+                          plan.code === POPULAR_PLAN
+                            ? 'text-brand'
+                            : 'text-muted-foreground'
                         }`}
                       >
-                        {name}
+                        {plan.name}
                       </th>
                     ))}
                   </tr>
@@ -109,18 +103,16 @@ export function ComparisonAccordion() {
                         >
                           {row.label}
                         </th>
-                        <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.free} copy={copy} />
-                        </td>
-                        <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.starter} copy={copy} />
-                        </td>
-                        <td className="border-t border-border/60 bg-brand/5 px-2 py-3 text-center font-medium">
-                          <Cell value={row.pro} copy={copy} />
-                        </td>
-                        <td className="border-t border-border/60 px-2 py-3 text-center">
-                          <Cell value={row.ecommerce} copy={copy} />
-                        </td>
+                        {COMPARISON_PLANS.map((plan) => (
+                          <td
+                            key={plan.code}
+                            className={`border-t border-border/60 px-2 py-3 text-center ${
+                              plan.code === POPULAR_PLAN ? 'bg-brand/5 font-medium' : ''
+                            }`}
+                          >
+                            <ComparisonCell value={row[plan.code]} copy={copy} />
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

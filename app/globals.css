@@ -171,6 +171,9 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    /* Safety net: no single component may widen the page horizontally.
+       `clip` (unlike `hidden`) keeps position: sticky working. */
+    overflow-x: clip;
   }
   /* Geist/Space Grotesk ship no Arabic glyphs, so Arabic text rendered with
      font-sans/font-display falls back to tofu boxes. Tailwind's `@theme
