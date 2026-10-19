@@ -5,12 +5,13 @@ import { X } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
-import { safeAnnouncementHref } from '@/lib/announcement'
+import {
+  announcementMarqueeTiming,
+  estimateAnnouncementUnitWidth,
+  safeAnnouncementHref,
+} from '@/lib/announcement'
 
 type AnnouncementData = Extract<Section, { type: 'announcement' }>
-
-const SECONDS_PER_CHAR = { slow: 0.4, normal: 0.25, fast: 0.15 } as const
-const MIN_SECONDS = 14
 
 /** Stable per-content key so a changed announcement reappears after being dismissed. */
 function dismissKey(data: AnnouncementData): string {
@@ -32,10 +33,31 @@ export function AnnouncementBar({ data, lang = 'tr' }: { data: AnnouncementData;
   }, [data])
 
   const items = data.items.filter((item) => item.text.trim().length > 0)
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null)
+  const [unitEl, setUnitEl] = useState<HTMLDivElement | null>(null)
+  const [measured, setMeasured] = useState({ unit: 0, viewport: 0 })
+
+  useEffect(() => {
+    if (!containerEl || !unitEl || typeof ResizeObserver === 'undefined') return
+    const measure = () => {
+      const unit = unitEl.getBoundingClientRect().width
+      const viewport = containerEl.getBoundingClientRect().width
+      setMeasured((prev) => (prev.unit === unit && prev.viewport === viewport ? prev : { unit, viewport }))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(containerEl)
+    observer.observe(unitEl)
+    return () => observer.disconnect()
+  }, [containerEl, unitEl])
+
   if (items.length === 0 || dismissed) return null
 
-  const chars = items.reduce((sum, item) => sum + item.text.length + 8, 0)
-  const duration = Math.max(MIN_SECONDS, Math.round(chars * SECONDS_PER_CHAR[data.speed ?? 'normal']))
+  const { repeats, durationSeconds } = announcementMarqueeTiming({
+    unitWidth: measured.unit || estimateAnnouncementUnitWidth(items.map((item) => item.text)),
+    viewportWidth: measured.viewport,
+    speed: data.speed,
+  })
   const bg = data.useAccentColor ? 'var(--site-accent)' : 'var(--site-primary)'
   const fg = data.useAccentColor ? 'var(--site-accent-fg, var(--site-primary-fg))' : 'var(--site-primary-fg)'
 
@@ -77,14 +99,22 @@ export function AnnouncementBar({ data, lang = 'tr' }: { data: AnnouncementData;
       style={{ backgroundColor: bg, color: fg, fontFamily: 'var(--site-body-font)' }}
     >
       <div
-        className={`gv-marquee relative flex-1 overflow-hidden py-2 ${data.pauseOnHover === false ? '' : 'gv-marquee-pausable'}`}
-        style={{ ['--gv-marquee-duration' as string]: `${duration}s` }}
+        ref={setContainerEl}
+        className={`gv-marquee relative min-w-0 flex-1 overflow-hidden py-2 ${data.pauseOnHover === false ? '' : 'gv-marquee-pausable'}`}
+        style={{ ['--gv-marquee-duration' as string]: `${durationSeconds.toFixed(2)}s` }}
       >
         <div className="gv-marquee-track flex w-max items-center">
-          <div className="flex shrink-0 items-center px-3">{renderItems(false)}</div>
-          <div className="gv-marquee-copy flex shrink-0 items-center px-3" aria-hidden="true">
-            {renderItems(true)}
-          </div>
+          {Array.from({ length: repeats * 2 }, (_, k) =>
+            k === 0 ? (
+              <div key={k} ref={setUnitEl} className="flex shrink-0 items-center px-3">
+                {renderItems(false)}
+              </div>
+            ) : (
+              <div key={k} className="gv-marquee-copy flex shrink-0 items-center px-3" aria-hidden="true">
+                {renderItems(true)}
+              </div>
+            ),
+          )}
         </div>
       </div>
       {data.dismissible ? (

@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { announcementPlacement, safeAnnouncementHref } from './announcement'
+import {
+  ANNOUNCEMENT_PX_PER_SECOND,
+  announcementMarqueeTiming,
+  announcementPlacement,
+  estimateAnnouncementUnitWidth,
+  isInvalidAnnouncementLink,
+  safeAnnouncementHref,
+} from './announcement'
 import { applyOperation } from './website-edit-operations'
 import { SITE_SECTION_HARD_CAP } from './pricing-config'
-import { countAnnouncements, countCappedSections, type WebsiteSchema } from './website-schema'
+import {
+  ANNOUNCEMENT_MAX_ITEMS,
+  ANNOUNCEMENT_TEXT_MAX,
+  countAnnouncements,
+  countCappedSections,
+  type WebsiteSchema,
+} from './website-schema'
 
 function site(sections: unknown[] = [{ type: 'hero' }, { type: 'footer' }]): WebsiteSchema {
   return {
@@ -107,5 +120,98 @@ describe('announcement band operations', () => {
       patch: { speed: 'fast', dismissible: true, pauseOnHover: false },
     })
     expect(next.sections[0]).toMatchObject({ speed: 'fast', dismissible: true, pauseOnHover: false })
+  })
+})
+
+describe('announcementMarqueeTiming', () => {
+  const speedPxPerSecond = (unitWidth: number, viewportWidth: number, speed: 'slow' | 'normal' | 'fast') => {
+    const { repeats, durationSeconds } = announcementMarqueeTiming({ unitWidth, viewportWidth, speed })
+    return (unitWidth * repeats) / durationSeconds
+  }
+
+  it('scrolls at the same px/second for short and long text', () => {
+    for (const speed of ['slow', 'normal', 'fast'] as const) {
+      const expected = ANNOUNCEMENT_PX_PER_SECOND[speed]
+      expect(speedPxPerSecond(180, 1200, speed)).toBeCloseTo(expected, 5)
+      expect(speedPxPerSecond(2400, 1200, speed)).toBeCloseTo(expected, 5)
+    }
+  })
+
+  it('orders speeds slow < normal < fast for the same content', () => {
+    const duration = (speed: 'slow' | 'normal' | 'fast') =>
+      announcementMarqueeTiming({ unitWidth: 600, viewportWidth: 1200, speed }).durationSeconds
+    expect(duration('slow')).toBeGreaterThan(duration('normal'))
+    expect(duration('normal')).toBeGreaterThan(duration('fast'))
+  })
+
+  it('repeats short text so a group always covers the band (no gap)', () => {
+    const { repeats } = announcementMarqueeTiming({ unitWidth: 200, viewportWidth: 1000, speed: 'normal' })
+    expect(repeats).toBe(5)
+    expect(200 * repeats).toBeGreaterThanOrEqual(1000)
+    expect(announcementMarqueeTiming({ unitWidth: 4000, viewportWidth: 1000 }).repeats).toBe(1)
+  })
+
+  it('stays finite and bounded for degenerate widths and defaults to normal', () => {
+    const zero = announcementMarqueeTiming({ unitWidth: 0, viewportWidth: 0 })
+    expect(Number.isFinite(zero.durationSeconds)).toBe(true)
+    expect(zero.repeats).toBeLessThanOrEqual(24)
+    const legacy = announcementMarqueeTiming({ unitWidth: 600, viewportWidth: 600 })
+    expect(legacy.durationSeconds).toBeCloseTo(600 / ANNOUNCEMENT_PX_PER_SECOND.normal, 5)
+  })
+
+  it('estimates a larger unit for longer text', () => {
+    expect(estimateAnnouncementUnitWidth(['a'.repeat(100)])).toBeGreaterThan(estimateAnnouncementUnitWidth(['a']))
+  })
+})
+
+describe('announcement link hint', () => {
+  it('flags only non-empty links that would not render as links', () => {
+    expect(isInvalidAnnouncementLink('javascript:alert(1)')).toBe(true)
+    expect(isInvalidAnnouncementLink('not a link')).toBe(true)
+    expect(isInvalidAnnouncementLink('https://example.com')).toBe(false)
+    expect(isInvalidAnnouncementLink('/iletisim')).toBe(false)
+    expect(isInvalidAnnouncementLink('')).toBe(false)
+    expect(isInvalidAnnouncementLink('   ')).toBe(false)
+    expect(isInvalidAnnouncementLink(undefined)).toBe(false)
+  })
+})
+
+describe('announcement item editing', () => {
+  const withBand = () => applyOperation(site(), { op: 'addSection', sectionType: 'announcement' })
+
+  it('marks a freshly added band and its item as sample content', () => {
+    const band = withBand().sections[0] as unknown as { sample?: boolean; items: { sample?: boolean }[] }
+    expect(band.sample).toBe(true)
+    expect(band.items[0].sample).toBe(true)
+  })
+
+  it('marks an added item as sample and stops at the item limit', () => {
+    let next = withBand()
+    for (let i = 0; i < ANNOUNCEMENT_MAX_ITEMS + 2; i++) next = applyOperation(next, { op: 'addItem', index: 0 })
+    const items = (next.sections[0] as unknown as { items: { sample?: boolean }[] }).items
+    expect(items).toHaveLength(ANNOUNCEMENT_MAX_ITEMS)
+    expect(items.every((item) => item.sample === true)).toBe(true)
+  })
+
+  it('caps text and link length and trims the link', () => {
+    const base = withBand()
+    const texted = applyOperation(base, {
+      op: 'updateItemField',
+      index: 0,
+      itemIndex: 0,
+      field: 'text',
+      value: 'x'.repeat(ANNOUNCEMENT_TEXT_MAX + 50),
+    })
+    const linked = applyOperation(texted, {
+      op: 'updateItemField',
+      index: 0,
+      itemIndex: 0,
+      field: 'link',
+      value: `  /${'a'.repeat(600)}  `,
+    })
+    const item = (linked.sections[0] as unknown as { items: { text: string; link: string }[] }).items[0]
+    expect(item.text).toHaveLength(ANNOUNCEMENT_TEXT_MAX)
+    expect(item.link).toHaveLength(500)
+    expect(item.link.startsWith('/')).toBe(true)
   })
 })
