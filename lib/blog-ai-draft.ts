@@ -96,14 +96,19 @@ function stripLinks(text: string): string {
 export function cleanDraftBody(raw: string): { body: string; removed: number } {
   let removed = 0
   const lines: string[] = []
-  for (const original of sanitizeBlogMarkup(raw).split('\n')) {
+  // The sanitizer strips ">" characters, so quote lines must be dropped before it runs.
+  const unquoted = String(raw ?? '')
+    .split('\n')
+    .filter((original) => {
+      const isQuote = original.trim().startsWith('>')
+      if (isQuote) removed += 1
+      return !isQuote
+    })
+    .join('\n')
+  for (const original of sanitizeBlogMarkup(unquoted).split('\n')) {
     const line = original.trim()
     if (!line) {
       lines.push('')
-      continue
-    }
-    if (line.startsWith('>')) {
-      removed += 1
       continue
     }
     const prefix = line.startsWith('## ') ? '## ' : line.startsWith('- ') ? '- ' : ''

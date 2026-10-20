@@ -90,6 +90,18 @@ const tr = {
     uploadFailed: 'Görsel yüklenemedi.',
     uploading: 'Yükleniyor...',
     charsLeft: 'karakter',
+    aiDraft: {
+      open: 'AI ile taslak oluştur',
+      title: 'AI ile taslak oluştur',
+      hint: 'Konuyu yazın; taslak oluşturulup editörde açılır. Taslak asla otomatik yayınlanmaz, okuyup düzenledikten sonra yayını siz yaparsınız. Doğrulanamayan rakam, kaynak ve alıntılar metinden çıkarılır.',
+      topic: 'Konu',
+      topicPlaceholder: 'Örn. Yerel işletmeler için web sitesi kurarken dikkat edilecekler',
+      keywords: 'Anahtar kelimeler',
+      keywordsHint: 'Virgülle ayırın (en fazla 8).',
+      submit: 'Taslağı oluştur',
+      working: 'Taslak yazılıyor... (yarım dakika sürebilir)',
+      cancel: 'Vazgeç',
+    },
   },
   categories: {
     title: 'Blog kategorileri',
@@ -124,6 +136,10 @@ const tr = {
     failed: 'Bir şeyler ters gitti. Lütfen tekrar deneyin.',
     validation: 'Lütfen işaretli alanları düzeltin.',
     slug_taken: 'Bu adres zaten kullanılıyor.',
+    rate_limited: 'Çok fazla istek. Biraz bekleyip tekrar deneyin.',
+    invalid_input: 'Konu 5 ile 160 karakter arasında olmalı.',
+    generation_failed: 'Taslak yazılamadı. Lütfen tekrar deneyin.',
+    draft_too_short: 'Üretilen taslak çok kısa kaldı. Konuyu biraz genişletip tekrar deneyin.',
   } as Record<string, string>,
 }
 
@@ -217,6 +233,18 @@ const en: typeof tr = {
     uploadFailed: 'The image could not be uploaded.',
     uploading: 'Uploading...',
     charsLeft: 'characters',
+    aiDraft: {
+      open: 'Create draft with AI',
+      title: 'Create draft with AI',
+      hint: 'Describe the topic; a draft is created and opened in the editor. It is never published automatically: you read, edit and publish it yourself. Figures, sources and quotes that cannot be verified are removed.',
+      topic: 'Topic',
+      topicPlaceholder: 'e.g. What to consider when building a website for a local business',
+      keywords: 'Keywords',
+      keywordsHint: 'Separate with commas (up to 8).',
+      submit: 'Create draft',
+      working: 'Writing the draft... (this can take half a minute)',
+      cancel: 'Cancel',
+    },
   },
   categories: {
     title: 'Blog categories',
@@ -251,6 +279,10 @@ const en: typeof tr = {
     failed: 'Something went wrong. Please try again.',
     validation: 'Please fix the highlighted fields.',
     slug_taken: 'This address is already in use.',
+    rate_limited: 'Too many requests. Wait a moment and try again.',
+    invalid_input: 'The topic must be between 5 and 160 characters.',
+    generation_failed: 'The draft could not be written. Please try again.',
+    draft_too_short: 'The generated draft was too short. Widen the topic and try again.',
   },
 }
 

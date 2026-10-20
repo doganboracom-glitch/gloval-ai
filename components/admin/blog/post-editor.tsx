@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { BlogMarkupView } from '@/components/content/blog-markup-view'
 import { Panel } from '@/components/admin/admin-ui'
+import { AiDraftPanel } from '@/components/admin/blog/ai-draft-panel'
 import { blogAdminT } from '@/lib/blog-admin-copy'
 import { savePostAction } from '@/app/admin/blog/actions'
 import {
@@ -126,6 +127,7 @@ export function PostEditor({
   const e = t.editor
   const router = useRouter()
   const isNew = !initial.id
+  const [aiOpen, setAiOpen] = useState(false)
 
   const [form, setForm] = useState<PostInput>(initial)
   const [saved, setSaved] = useState<string>(() => JSON.stringify(initial))
@@ -337,6 +339,12 @@ export function PostEditor({
               <span className="text-muted-foreground">{e.unsaved}</span>
             ) : null}
           </p>
+          {isNew && !postId ? (
+            <Button type="button" variant="outline" onClick={() => setAiOpen((open) => !open)} aria-expanded={aiOpen}>
+              <Sparkles className="size-4" aria-hidden />
+              {e.aiDraft.open}
+            </Button>
+          ) : null}
           {canViewLive ? (
             <Link
               href={liveHref}
@@ -352,6 +360,8 @@ export function PostEditor({
           </Button>
         </div>
       </div>
+
+      {aiOpen && isNew && !postId ? <AiDraftPanel onClose={() => setAiOpen(false)} /> : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-5">
