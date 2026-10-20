@@ -25,6 +25,7 @@ import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-lega
 import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
+import { MAX_ABOUT_IMAGES, hasRealFigure, isAboutLayout } from '@/lib/about-media'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -115,6 +116,22 @@ export type EditOperation =
   /** A single slider slide's image (slider hero variant). */
   | { op: 'updateSlideImage'; slideIndex: number; patch: HeroImagePatch }
   | { op: 'updateSectionField'; index: number; field: SectionTextField; value: string }
+  /**
+   * The about section's imagery block. Only the given keys change; `cta`/`figure`
+   * set to null remove them, and `images` replaces the whole (max 3) list.
+   */
+  | {
+      op: 'updateAboutMedia'
+      index: number
+      patch: {
+        enabled?: boolean
+        layout?: string
+        label?: string
+        images?: { src?: string; alt?: string; imagePrompt?: string; origin?: string }[]
+        figure?: { value: string; label: string } | null
+        cta?: { label: string; href: string } | null
+      }
+    }
   /** Any scalar (string) field on the section, including ones outside the text set. */
   | { op: 'updateSectionValue'; index: number; field: string; value: string }
   /** A section button (hero/cta) label or href. */
@@ -394,6 +411,28 @@ export function applyOperation(
       for (const key of legalSlugKeys(operation.slug)) hidden.delete(key)
       if (operation.hidden) hidden.add(operation.slug)
       next.legalDocs = { ...next.legalDocs, hidden: [...hidden] }
+      return next
+    }
+
+    case 'updateAboutMedia': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'about') return next
+      const { patch } = operation
+      const media = { ...(section.media ?? {}) }
+      if (patch.enabled !== undefined) media.enabled = patch.enabled
+      if (patch.layout !== undefined && isAboutLayout(patch.layout)) media.layout = patch.layout
+      if (patch.label !== undefined) media.label = patch.label.trim() || undefined
+      if (patch.images !== undefined) media.images = patch.images.slice(0, MAX_ABOUT_IMAGES)
+      if (patch.figure !== undefined) {
+        media.figure =
+          patch.figure && hasRealFigure(patch.figure)
+            ? { value: patch.figure.value.trim(), label: patch.figure.label.trim() }
+            : undefined
+      }
+      if (patch.cta !== undefined) {
+        media.cta = patch.cta && patch.cta.label.trim() ? { label: patch.cta.label.trim(), href: patch.cta.href.trim() } : undefined
+      }
+      next.sections[operation.index] = { ...section, media }
       return next
     }
 

@@ -33,6 +33,30 @@ export const buttonSchema = z.object({
 })
 
 /**
+ * Visual composition of the about section. Deliberately lenient (plain strings,
+ * every field optional) so a stored row can never fail validation because of it;
+ * `lib/about-media.ts` resolves/normalizes it. Absent = a legacy text-only about.
+ */
+export const aboutMediaSchema = z.object({
+  enabled: z.boolean().optional(),
+  layout: z.string().optional(),
+  images: z
+    .array(
+      z.object({
+        src: z.string().optional(),
+        alt: z.string().optional(),
+        imagePrompt: z.string().optional(),
+        origin: z.string().optional(),
+      }),
+    )
+    .max(3)
+    .optional(),
+  label: z.string().optional(),
+  figure: z.object({ value: z.string(), label: z.string() }).optional(),
+  cta: buttonSchema.optional(),
+})
+
+/**
  * A structured image reference. The renderer shows a themed gradient
  * placeholder today, but this shape is future-proof: when a real image
  * generation API is connected, only `imagePrompt` -> `src` needs wiring, and no
@@ -189,7 +213,10 @@ export const aboutSection = z.object({
   title: z.string(),
   body: z.string().describe('One or two short paragraphs'),
   highlights: z.array(z.string()).max(6).optional().describe('Short bullet highlights'),
-})
+  media: aboutMediaSchema
+    .optional()
+    .describe('Managed by the platform after generation. Never set this field yourself.'),
+  })
 
 export const servicesSection = z.object({
   type: z.literal('services'),

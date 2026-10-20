@@ -57,7 +57,7 @@ export function SectionRenderer({
     case 'slider':
       return <SliderSection data={section} />
     case 'about':
-      return <AboutSection data={section} />
+      return <AboutSection data={section} siteName={meta.name} />
     case 'services':
       return <ServicesSection data={section} lang={meta.language} />
     case 'features':
