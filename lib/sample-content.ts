@@ -1,3 +1,4 @@
+import { stripAnnouncementHint } from '@/lib/announcement'
 import { DEMO_PHONE } from '@/lib/contact-links'
 import {
   isPlaceholderAddress,
@@ -515,9 +516,13 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
     if (!spec) return section
     const items = itemsOf(section, spec)
     if (!items.some((item) => item.sample)) return section
-    const next = items.map((item) =>
-      item.sample && approvedIds.has(sampleDigest(section.type, spec.fields(item))) ? { ...item, sample: undefined } : item,
-    )
+    const next = items.map((item) => {
+      if (!item.sample || !approvedIds.has(sampleDigest(section.type, spec.fields(item)))) return item
+      // An approved demo announcement keeps the owner's sentence but never the "add your announcements" hint.
+      return section.type === 'announcement'
+        ? { ...item, sample: undefined, text: stripAnnouncementHint(str(item.text)) }
+        : { ...item, sample: undefined }
+    })
     return withItems(section, spec, next)
   })
   return { ...site, sections }
