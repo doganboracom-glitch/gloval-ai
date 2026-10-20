@@ -215,6 +215,26 @@ function withItems(section: Section, spec: ItemSpec, items: AnyItem[]): Section 
   return { ...section, [spec.key]: items, sample } as Section
 }
 
+type AboutSectionLike = Extract<Section, { type: 'about' }>
+
+/** A demo about figure flagged `sample` that still holds a value. */
+function sampleAboutFigure(section: Section): NonNullable<AboutSectionLike['media']>['figure'] | undefined {
+  if (section.type !== 'about') return undefined
+  const figure = section.media?.figure
+  return figure?.sample && figure.value.trim() ? figure : undefined
+}
+
+function aboutFigureDigest(figure: { value: string; label: string }): string {
+  return sampleDigest('about', [figure.value, figure.label])
+}
+
+function withoutAboutFigure(section: AboutSectionLike): AboutSectionLike {
+  const media = section.media
+  if (!media) return section
+  const layout = media.layout === 'figure' ? 'corner' : media.layout
+  return { ...section, media: { ...media, figure: undefined, layout } }
+}
+
 function heroTrustDigest(trustText: string | undefined): string {
   return sampleDigest('hero', [trustText ?? ''])
 }
@@ -365,6 +385,17 @@ export function collectSampleFindings(site: WebsiteSchema, context?: DetectionCo
       if (items.length) findings.push({ sectionIndex, sectionType: 'footer', items })
       return
     }
+    if (section.type === 'about') {
+      const figure = sampleAboutFigure(section)
+      if (figure) {
+        findings.push({
+          sectionIndex,
+          sectionType: 'about',
+          items: [{ id: aboutFigureDigest(figure), itemIndex: null, kind: 'stats', label: truncate(`${figure.value} ${figure.label}`) }],
+        })
+      }
+      return
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return
     const items: SampleItemFinding[] = []
@@ -512,6 +543,11 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
         ? { ...section, sample: undefined }
         : section
     }
+    if (section.type === 'about') {
+      const figure = sampleAboutFigure(section)
+      if (!figure || !approvedIds.has(aboutFigureDigest(figure)) || !section.media) return section
+      return { ...section, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)
@@ -565,6 +601,12 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
       changed = true
       return { ...section, sampleFields: kept.length ? kept : undefined, sample: kept.length ? true : undefined }
     }
+    if (section.type === 'about') {
+      const figure = sampleAboutFigure(section)
+      if (!figure || before.has(aboutFigureDigest(figure)) || !section.media) return section
+      changed = true
+      return { ...section, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)
@@ -601,6 +643,11 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       if (!section.sample && !section.sampleFields?.length) return [section]
       changed = true
       return [stripSampleContactFields(section)]
+    }
+    if (section.type === 'about') {
+      if (!sampleAboutFigure(section)) return [section]
+      changed = true
+      return [withoutAboutFigure(section)]
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
@@ -660,6 +707,7 @@ export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number
 export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
   if (section.type === 'contact') return sampleContactFields(section).length > 0
+  if (section.type === 'about') return sampleAboutFigure(section) !== undefined
   const spec = ITEM_SPECS[section.type]
   return spec ? itemsOf(section, spec).some((item) => item.sample) : false
 }

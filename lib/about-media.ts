@@ -238,12 +238,79 @@ function aboutLabel(lang: Lang) {
   return lang === 'tr' ? 'Biz kimiz' : 'Who we are'
 }
 
-/** A starter alt text from the site's own words (editable; never empty). */
-export function suggestAboutAlt(site: Pick<WebsiteSchema, 'meta'>, title: string, lang: Lang): string {
+const SECTOR_NOUN: Record<Sector, { tr: string; en: string }> = {
+  law: { tr: 'hukuk bürosu', en: 'law firm' },
+  tech: { tr: 'teknoloji şirketi', en: 'technology company' },
+  architecture: { tr: 'mimarlık ofisi', en: 'architecture studio' },
+  realestate: { tr: 'emlak ofisi', en: 'real estate agency' },
+  automotive: { tr: 'otomotiv işletmesi', en: 'automotive business' },
+  photography: { tr: 'fotoğraf stüdyosu', en: 'photography studio' },
+  food: { tr: 'yeme içme mekanı', en: 'food and drink venue' },
+  ecommerce: { tr: 'online mağaza', en: 'online store' },
+  dental: { tr: 'diş kliniği', en: 'dental clinic' },
+  beauty: { tr: 'güzellik salonu', en: 'beauty salon' },
+  default: { tr: 'işletme', en: 'business' },
+}
+
+export function sectorNoun(sector: Sector, lang: Lang): string {
+  return SECTOR_NOUN[sector][lang]
+}
+
+/** Business name + sector, e.g. "Denta Estetik - diş kliniği çalışma alanı". Never empty. */
+export function suggestAboutAlt(
+  site: Pick<WebsiteSchema, 'meta'>,
+  title: string,
+  lang: Lang,
+  prompt = '',
+): string {
   const name = site.meta.name.trim()
-  const about = title.trim()
-  if (name && about) return lang === 'tr' ? `${name} - ${about}` : `${name} - ${about}`
-  return name || about
+  const context = [prompt, name, site.meta.tagline, site.meta.audience].filter(Boolean).join(' ')
+  const noun = sectorNoun(detectSector(context), lang)
+  const scene = lang === 'tr' ? 'hakkında görseli' : 'about image'
+  if (name) return `${name} - ${noun} ${scene}`
+  return title.trim() ? `${title.trim()} - ${noun}` : `${noun} ${scene}`
+}
+
+/** Alt text is mandatory: any image saved without one gets the meaningful suggestion. */
+export function withRequiredAlt<T extends { alt?: string }>(
+  images: T[],
+  site: Pick<WebsiteSchema, 'meta'>,
+  title: string,
+  lang: Lang,
+): T[] {
+  const fallback = suggestAboutAlt(site, title, lang)
+  return images.map((image) => (image.alt?.trim() ? image : { ...image, alt: fallback }))
+}
+
+/**
+ * Prompt for the about image. A place or workspace scene, never people: the
+ * shared image rules (no text) still apply on top, and the explicit people ban
+ * keeps faces and figures out of an image nobody has reviewed.
+ */
+export function buildAboutImagePrompt(
+  site: Pick<WebsiteSchema, 'meta'>,
+  prompt = '',
+  request = '',
+): string {
+  const context = [prompt, site.meta.name, site.meta.tagline, site.meta.audience].filter(Boolean).join(' ')
+  const sector = detectSector(context)
+  const subject = request.trim() || `${SECTOR_NOUN[sector].en} of "${site.meta.name}"`
+  return [
+    `Photorealistic photograph of the workspace or premises of a ${SECTOR_NOUN[sector].en}: ${subject}.`,
+    'Calm, well-lit environment scene showing tools, materials and interior details.',
+    'No people, no faces, no hands, no human figures, no mannequins, no text, no logos.',
+    'Natural light, shallow depth of field, high resolution, sharp focus.',
+  ].join(' ')
+}
+
+/** Suggestion state for the editor: a published site is only ever nudged, never changed. */
+export function aboutImageHint(
+  site: Pick<WebsiteSchema, 'sections' | 'dismissedHints'>,
+  published: boolean,
+): 'none' | 'draft' | 'published' {
+  if (!aboutLacksImage(site)) return 'none'
+  if (published && site.dismissedHints?.includes('aboutImage')) return 'none'
+  return published ? 'published' : 'draft'
 }
 
 /**

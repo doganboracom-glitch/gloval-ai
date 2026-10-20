@@ -1,11 +1,13 @@
 'use client'
 
-import { Plus, Trash2, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Sparkles, Trash2, Upload } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import {
   ABOUT_LAYOUTS,
   MAX_ABOUT_IMAGES,
+  aboutImageHint,
   collectReusableImages,
   hasRealFigure,
   isUsableImageSrc,
@@ -15,6 +17,7 @@ import {
   type AboutLayout,
 } from '@/lib/about-media'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { useSitePublished } from '@/components/editor/published-context'
 
 type AboutSectionData = Extract<WebsiteSchema['sections'][number], { type: 'about' }>
 
@@ -39,6 +42,12 @@ const COPY = {
     upload: 'Görsel yükle',
     remove: 'Kaldır',
     reuse: 'Sitedeki görsellerden ekle',
+    generate: 'AI ile üret (2 kredi)',
+    working: 'Hazırlanıyor…',
+    suggestAlt: 'AI ile öner (1 kredi)',
+    noCredits: 'AI krediniz yetersiz.',
+    dailyLimit: 'Günlük ücretsiz işlem limitine ulaştınız.',
+    failed: 'Görsel üretilemedi, kredi düşülmedi.',
     badge: 'Rozet metni',
     ctaLabel: 'Buton metni',
     ctaHref: 'Buton bağlantısı',
@@ -46,6 +55,10 @@ const COPY = {
     figureLabel: 'Rakam etiketi (örn. Kuruluş yılı)',
     figureHint: 'Yalnızca gerçek bilgilerinizi girin; uydurma rakam kullanmayın.',
     max: `En fazla ${MAX_ABOUT_IMAGES} görsel.`,
+    hintTitle: '"Hakkımızda" bölümüne görsel ekleyin',
+    hintBody: 'Yayındaki siteniz değişmez; görseli eklediğinizde yeniden yayınlayınca görünür.',
+    hintAdd: 'Görsel ekle',
+    hintClose: 'Önerileri kapat',
   },
   en: {
     heading: 'Section imagery',
@@ -67,6 +80,12 @@ const COPY = {
     upload: 'Upload image',
     remove: 'Remove',
     reuse: 'Add from the site images',
+    generate: 'Generate with AI (2 credits)',
+    working: 'Working…',
+    suggestAlt: 'Suggest with AI (1 credit)',
+    noCredits: 'Not enough AI credits.',
+    dailyLimit: 'You reached the free daily action limit.',
+    failed: 'Could not generate the image. No credits were used.',
     badge: 'Badge text',
     ctaLabel: 'Button label',
     ctaHref: 'Button link',
@@ -74,6 +93,10 @@ const COPY = {
     figureLabel: 'Figure label (e.g. Founded)',
     figureHint: 'Only enter facts that are true for your business.',
     max: `Up to ${MAX_ABOUT_IMAGES} images.`,
+    hintTitle: 'Add an image to your About section',
+    hintBody: 'Your live site does not change; the image shows up once you publish again.',
+    hintAdd: 'Add image',
+    hintClose: 'Dismiss suggestion',
   },
 } as const
 
@@ -104,6 +127,55 @@ export function AboutMediaFields({
   const reusable = collectReusableImages(site).filter((i) => !used.has(i.src))
   const canAdd = stored.length < MAX_ABOUT_IMAGES
 
+  const published = useSitePublished()
+  const hint = aboutImageHint(site, published)
+  const [busy, setBusy] = useState<'image' | `alt:${number}` | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const post = async (url: string, body: Record<string, unknown>) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schema: site, index, ...body }),
+    })
+    if (res.status === 402) throw new Error(c.noCredits)
+    if (res.status === 429) throw new Error(c.dailyLimit)
+    if (!res.ok) throw new Error(c.failed)
+    return res.json()
+  }
+
+  const generateImage = async () => {
+    if (busy || !canAdd) return
+    setBusy('image')
+    setNotice(null)
+    try {
+      const data = await post('/api/section-image', { about: true })
+      const next = data.website?.sections?.[index]
+      const images = next?.type === 'about' ? next.media?.images : undefined
+      if (data.image?.status !== 'generated' || !images) throw new Error(c.failed)
+      patch({ enabled: true, images, ...(media?.layout ? {} : { layout: 'corner' }) })
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : c.failed)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const suggestAlt = async (i: number) => {
+    if (busy) return
+    setBusy(`alt:${i}`)
+    setNotice(null)
+    try {
+      const data = await post('/api/about-alt', { imageIndex: i })
+      if (typeof data.alt !== 'string' || !data.alt.trim()) throw new Error(c.failed)
+      patch({ images: stored.map((s, k) => (k === i ? { ...s, alt: data.alt } : s)) })
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : c.failed)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const addImage = (src: string, alt?: string, origin?: string) => {
     if (!isUsableImageSrc(src) || !canAdd) return
     patch({
@@ -115,6 +187,30 @@ export function AboutMediaFields({
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-3">
+      {hint === 'published' && (
+        <div role="note" className="flex flex-col gap-2 rounded-md border border-brand/40 bg-brand/10 p-3 text-xs">
+          <p className="font-medium text-foreground">{c.hintTitle}</p>
+          <p className="text-muted-foreground">{c.hintBody}</p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={busy !== null || !canAdd}
+              onClick={() => void generateImage()}
+              className="inline-flex items-center gap-1 font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {busy === 'image' ? c.working : c.hintAdd}
+            </button>
+            <button
+              type="button"
+              onClick={() => onDispatch({ op: 'dismissHint', hint: 'aboutImage' })}
+              className="text-muted-foreground hover:underline"
+            >
+              {c.hintClose}
+            </button>
+          </div>
+        </div>
+      )}
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
@@ -146,9 +242,20 @@ export function AboutMediaFields({
                     label={c.alt}
                     value={image.alt ?? ''}
                     onCommit={(v) =>
-                      patch({ images: stored.map((s, k) => (k === i ? { ...s, alt: v } : s)) })
+                      patch({
+                        images: stored.map((s, k) => (k === i ? { ...s, alt: v.trim() || fallbackAlt } : s)),
+                      })
                     }
                   />
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void suggestAlt(i)}
+                    className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand hover:underline disabled:opacity-50"
+                  >
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                    {busy === `alt:${i}` ? c.working : c.suggestAlt}
+                  </button>
                 </div>
                 <IconBtn
                   label={c.remove}
@@ -166,6 +273,10 @@ export function AboutMediaFields({
                   icon={<Upload className="h-3.5 w-3.5" />}
                   onFile={(dataUri) => addImage(dataUri, undefined, 'upload')}
                 />
+                <GhostButton onClick={() => void generateImage()}>
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                  {busy === 'image' ? c.working : c.generate}
+                </GhostButton>
                 {reusable.slice(0, 3).map((image) => (
                   <GhostButton key={image.src} onClick={() => addImage(image.src, image.alt, 'reused')}>
                     <Plus className="h-3.5 w-3.5" />
@@ -176,6 +287,11 @@ export function AboutMediaFields({
             ) : (
               <p className="text-xs text-muted-foreground">{c.max}</p>
             )}
+            {notice ? (
+              <p role="status" className="text-xs text-destructive">
+                {notice}
+              </p>
+            ) : null}
           </div>
 
           <fieldset className="flex flex-col gap-1.5">

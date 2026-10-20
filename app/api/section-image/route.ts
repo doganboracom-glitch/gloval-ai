@@ -1,5 +1,6 @@
 import { websiteSchema } from '@/lib/website-schema'
 import { applyItemImageRequest, attachSectionImages } from '@/lib/section-images'
+import { generateAboutImageAt } from '@/lib/about-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -18,8 +19,10 @@ export const maxDuration = 60
  * never touched — only image fields — so this can never undo a manual edit.
  */
 export async function POST(req: Request) {
-  const { schema, index, itemIndex, request } = (await req.json().catch(() => ({}))) as {
+  const { schema, index, itemIndex, request, about } = (await req.json().catch(() => ({}))) as {
     schema?: unknown
+    /** `true` with `index`: generate one image for the about section at `index`. */
+    about?: boolean
     index?: number
     itemIndex?: number
     /** A visual description, or a direct image URL to link verbatim. */
@@ -54,6 +57,19 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (about === true && typeof index === 'number') {
+      // One about image, charged at the existing image price and only when an
+      // image was actually produced and stored.
+      const outcome = await generateAboutImageAt(site, index, request ?? '')
+      if (outcome === 'generated') {
+        const charge = await consumeCredits(userId, cost, 'sectionImage:about')
+        if (!charge.ok) {
+          return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
+        }
+      }
+      return Response.json({ website: site, image: { status: outcome } })
+    }
+
     if (typeof index === 'number' && typeof itemIndex === 'number') {
       const outcome = await applyItemImageRequest(site, index, itemIndex, request ?? '')
       const generated = outcome.status === 'generated' || outcome.status === 'linked'

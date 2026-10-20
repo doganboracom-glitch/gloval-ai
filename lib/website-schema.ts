@@ -52,7 +52,14 @@ export const aboutMediaSchema = z.object({
     .max(3)
     .optional(),
   label: z.string().optional(),
-  figure: z.object({ value: z.string(), label: z.string() }).optional(),
+  figure: z
+    .object({
+      value: z.string(),
+      label: z.string(),
+      /** Demo-only figure. Blocks publish until the owner approves or replaces it. */
+      sample: z.boolean().optional(),
+    })
+    .optional(),
   cta: buttonSchema.optional(),
 })
 
@@ -916,6 +923,11 @@ export const websiteSchema = z.object({
     .max(60)
     .optional()
     .describe('Old page paths that 308 to the page that replaced them; maintained on save'),
+  dismissedHints: z
+    .array(z.string().max(40))
+    .max(10)
+    .optional()
+    .describe('Editor suggestions the owner closed. Never rendered on the public site.'),
 })
 
 /**
@@ -934,6 +946,7 @@ export const websiteGenerationSchema = websiteSchema
     blogProfile: true,
     blogSettings: true,
     pageRedirects: true,
+    dismissedHints: true,
   })
   .extend({
     pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),

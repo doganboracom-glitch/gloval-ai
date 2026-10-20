@@ -132,6 +132,8 @@ export type EditOperation =
         cta?: { label: string; href: string } | null
       }
     }
+  /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
+  | { op: 'dismissHint'; hint: 'aboutImage' }
   /** Any scalar (string) field on the section, including ones outside the text set. */
   | { op: 'updateSectionValue'; index: number; field: string; value: string }
   /** A section button (hero/cta) label or href. */
@@ -433,6 +435,13 @@ export function applyOperation(
         media.cta = patch.cta && patch.cta.label.trim() ? { label: patch.cta.label.trim(), href: patch.cta.href.trim() } : undefined
       }
       next.sections[operation.index] = { ...section, media }
+      return next
+    }
+
+    case 'dismissHint': {
+      const hints = new Set(next.dismissedHints ?? [])
+      hints.add(operation.hint)
+      next.dismissedHints = [...hints].slice(0, 10)
       return next
     }
 

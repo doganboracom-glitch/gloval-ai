@@ -7,7 +7,11 @@ import {
   SectionHeading,
   SiteButton,
 } from '@/components/website-renderer/primitives'
+import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveAboutMedia, type ResolvedAbout } from '@/lib/about-media'
+
+/** Text on the primary chip / figure block. Falls back to the shared token when the theme is unknown. */
+const ON_PRIMARY = 'var(--about-on-primary, var(--site-primary-fg))'
 
 type AboutData = Extract<Section, { type: 'about' }>
 type Frame = { src: string; alt: string }
@@ -78,7 +82,7 @@ function Copy({
           className="mb-4 inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wide"
           style={{
             backgroundColor: 'var(--site-primary)',
-            color: 'var(--site-primary-fg)',
+            color: ON_PRIMARY,
             borderRadius: 'var(--site-radius)',
           }}
         >
@@ -174,7 +178,7 @@ function FigureVisual({ image, figure }: { image: Frame; figure: NonNullable<Res
         className="absolute bottom-0 right-4 px-6 py-4 text-center"
         style={{
           backgroundColor: 'var(--site-primary)',
-          color: 'var(--site-primary-fg)',
+          color: ON_PRIMARY,
           borderRadius: 'var(--site-radius)',
         }}
       >
@@ -187,7 +191,15 @@ function FigureVisual({ image, figure }: { image: Frame; figure: NonNullable<Res
   )
 }
 
-export function AboutSection({ data, siteName }: { data: AboutData; siteName?: string }) {
+export function AboutSection({
+  data,
+  siteName,
+  colors = null,
+}: {
+  data: AboutData
+  siteName?: string
+  colors?: { primary: string } | null
+}) {
   const resolved = resolveAboutMedia(data, siteName ? `${siteName} - ${data.title}` : data.title)
 
   if (resolved.layout === 'text') {
@@ -221,6 +233,12 @@ export function AboutSection({ data, siteName }: { data: AboutData; siteName?: s
   return (
     <SectionShell id="about">
       <div
+        data-about-layout={layout}
+        style={
+          colors
+            ? ({ '--about-on-primary': announcementTextColor(colors.primary) } as React.CSSProperties)
+            : undefined
+        }
         className={`grid items-center gap-10 lg:gap-14 ${
           layout === 'round' ? 'lg:grid-cols-[1fr_1.2fr]' : 'lg:grid-cols-2'
         }`}
