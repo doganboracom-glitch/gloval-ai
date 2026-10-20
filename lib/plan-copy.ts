@@ -14,6 +14,7 @@ import {
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 import { ADVANCED_AI_DISTINCT } from '@/lib/ai-models'
 import { CATALOG_MODE_LIVE, CATALOG_PRODUCT_LIMIT } from '@/lib/commerce-mode'
+import { BLOG_MAX_POSTS } from '@/lib/blog'
 
 /**
  * User-facing plan copy (TR + EN only; every other language falls back to EN).
@@ -59,7 +60,7 @@ export type PlanCopyItem = {
   /** Faded pill rendered next to the card label (e.g. "Yakında"). */
   badge?: string
   /** Lists the row under another comparison category than its card group. */
-  tableGroup?: 'ai'
+  tableGroup?: 'ai' | 'content'
   /**
    * Position in the plan's "most valuable" ranking (0 = most valuable). Set by
    * `buildPlanView` from `PINNED_ITEM_IDS`; the collapsed card shows these first.
@@ -121,7 +122,7 @@ type Strings = {
   common: CommonPlanCopy
   comparison: ComparisonCopy & {
     soon: string
-    groups: Record<GroupKey | 'ai', string>
+    groups: Record<GroupKey | 'ai' | 'content', string>
     ai: {
       credits: string
       rollover: string
@@ -171,6 +172,10 @@ type Strings = {
     seoNote: string
     contactSection: string
     contactSectionNote: string
+    blog: string
+    blogNote: (maxPosts: string) => string
+    blogAi: string
+    blogAiNote: (maxPosts: string) => string
     versionHistory: string
     versionHistoryNote: string
     autoBackupWeekly: string
@@ -251,6 +256,7 @@ const TR: Strings = {
     soon: 'Yakında',
     groups: {
       ai: 'Yapay zeka işlemleri',
+      content: 'İçerik ve blog',
       site: 'Site',
       store: 'Mağaza',
       email: 'E-posta',
@@ -334,6 +340,10 @@ const TR: Strings = {
     seoNote: 'Arama motorlarında bulunmanıza yardımcı olur.',
     contactSection: 'İletişim bölümü',
     contactSectionNote: 'E-posta, telefon ve adres bilgilerini sitende göster.',
+    blog: 'Site blogu (ayrı blog sayfaları + AI yazı üretimi)',
+    blogNote: (n) => `Sitende ayrı blog sayfaları açılır; yazılarını kendin yazıp yayınlayabilirsin. Site başına en fazla ${n} yazı.`,
+    blogAi: 'AI yazı üretimi (kredi ile)',
+    blogAiNote: (n) => `AI ile yazı taslağı hazırlamak AI işlemi (kredi) kullanır; elle yazı eklemek işlem harcamaz. Site başına en fazla ${n} yazı.`,
     versionHistory: 'Sürüm geçmişi',
     versionHistoryNote: 'Kaydettiğin önceki sürümlere geri dön.',
     autoBackupWeekly: 'Haftalık otomatik yedekleme',
@@ -416,6 +426,7 @@ const EN: Strings = {
     soon: 'Soon',
     groups: {
       ai: 'AI actions',
+      content: 'Content and blog',
       site: 'Site',
       store: 'Store',
       email: 'Email',
@@ -499,6 +510,10 @@ const EN: Strings = {
     seoNote: 'Helps people find you in search engines.',
     contactSection: 'Contact section',
     contactSectionNote: 'Show your email, phone and address on your site.',
+    blog: 'Site blog (separate blog pages + AI post writing)',
+    blogNote: (n) => `Your site gets its own blog pages; you can write and publish posts yourself. Up to ${n} posts per site.`,
+    blogAi: 'AI post writing (uses credits)',
+    blogAiNote: (n) => `Drafting a post with AI uses AI actions (credits); adding a post by hand does not. Up to ${n} posts per site.`,
     versionHistory: 'Version history',
     versionHistoryNote: 'Go back to earlier versions you saved.',
     autoBackupWeekly: 'Weekly automatic backups',
@@ -615,6 +630,25 @@ function buildRawPlanView(
       ? [{ id: 'advancedAi', label: f.advancedAi, note: f.advancedAiNote, tableGroup: 'ai' }]
       : []
 
+  // Blog is not plan-gated: every plan gets it, capped at BLOG_MAX_POSTS per site.
+  // Writing with AI is the only part that spends credits.
+  const blogMaxPosts = nf.format(BLOG_MAX_POSTS)
+  const blogItems: PlanCopyItem[] = [
+    {
+      id: 'blog',
+      label: f.blog,
+      rowLabel: f.blog,
+      note: f.blogNote(blogMaxPosts),
+      tableGroup: 'content',
+    },
+    {
+      id: 'blogAi',
+      label: f.blogAi,
+      note: f.blogAiNote(blogMaxPosts),
+      tableGroup: 'content',
+    },
+  ]
+
   const head = {
     code,
     name: base.name,
@@ -678,6 +712,7 @@ function buildRawPlanView(
             { id: 'mobile', label: f.mobile },
             { id: 'seo', label: f.basicSeo, rowLabel: f.seoRow, note: f.seoNote },
             { id: 'contact', label: f.contactSection, note: f.contactSectionNote },
+            ...blogItems,
           ],
         },
         ...mailGroup(s, code),
@@ -702,6 +737,7 @@ function buildRawPlanView(
             { id: 'mobile', label: f.mobile },
             { id: 'seo', label: f.seo, rowLabel: f.seoRow, note: f.seoNote },
             { id: 'contact', label: f.contactSection, note: f.contactSectionNote },
+            ...blogItems,
             autoBackupItem(f.autoBackupWeekly, f.autoBackupWeeklyValue),
             { id: 'trackingCodes', label: f.trackingCodes, note: f.trackingCodesNote },
             { id: 'phoneWhatsapp', label: f.phoneWhatsapp },
@@ -840,7 +876,7 @@ const PARENT_PLAN: Record<PlanCode, PlanCode | null> = {
   ecommerce: 'pro',
 }
 
-const GROUP_ORDER: GroupKey[] = ['site', 'store', 'email', 'support']
+const GROUP_ORDER: Array<GroupKey | 'content'> = ['site', 'content', 'store', 'email', 'support']
 
 /** How many feature rows a collapsed plan card shows. */
 export const PLAN_VISIBLE_ITEM_COUNT = 6
@@ -852,10 +888,10 @@ export const PLAN_VISIBLE_ITEM_COUNT = 6
  * de-duplicated away) are simply skipped.
  */
 export const PINNED_ITEM_IDS: Record<PlanCode, string[]> = {
-  // FREE: the limits a visitor tries first (sites, pages), then the trust basics.
-  free: ['sites', 'pages', 'glovalAddress', 'ssl', 'seo', 'mobile'],
-  // STARTER: the reasons to leave FREE (own domain, backups, a mailbox, support).
-  starter: ['sites', 'pages', 'customDomain', 'autoBackup', 'mailboxes', 'support'],
+  // FREE: the limits a visitor tries first (sites, pages), the blog, then the trust basics.
+  free: ['sites', 'pages', 'blog', 'glovalAddress', 'ssl', 'seo'],
+  // STARTER: the reasons to leave FREE (own domain, blog, backups, a mailbox).
+  starter: ['sites', 'pages', 'customDomain', 'blog', 'autoBackup', 'mailboxes'],
   // PRO: what it adds over STARTER: more sites, catalog, daily backups, restore,
   // advanced AI, priority support. Pages and the mailbox count sit behind the toggle.
   pro: ['sites', 'catalogOrder', 'autoBackup', 'versionHistory', 'advancedAi', 'support'],
@@ -965,8 +1001,9 @@ export function buildComparison(
   const nf = numberFormatter(lang)
 
   const rowLabels = new Map<string, string>()
-  const rowOrder: Record<GroupKey | 'ai', string[]> = {
+  const rowOrder: Record<GroupKey | 'ai' | 'content', string[]> = {
     site: [],
+    content: [],
     store: [],
     email: [],
     support: [],

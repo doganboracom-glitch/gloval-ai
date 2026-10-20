@@ -84,14 +84,14 @@ describe('collapsed card shows exactly six rows (pins)', () => {
   it('the six visible rows per plan are the intended ones', () => {
     const visible = (code: PlanCode) =>
       splitPlanItems(buildPlanView(code, 'yearly', 'en')).featured.map((i) => i.id)
-    expect(visible('free')).toEqual(['sites', 'pages', 'glovalAddress', 'ssl', 'seo', 'mobile'])
+    expect(visible('free')).toEqual(['sites', 'pages', 'blog', 'glovalAddress', 'ssl', 'seo'])
     expect(visible('starter')).toEqual([
       'sites',
       'pages',
       'customDomain',
+      'blog',
       'autoBackup',
       'mailboxes',
-      'support',
     ])
     expect(visible('pro')).toEqual([
       'sites',

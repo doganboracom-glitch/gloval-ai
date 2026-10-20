@@ -52,3 +52,16 @@ describe('ComparisonPlanPicker', () => {
     expect(screen.getByRole('tab', { name: 'FREE' }).getAttribute('aria-selected')).toBe('true')
   })
 })
+
+describe('ComparisonPlanPicker blog rows', () => {
+  it('shows the content group with the blog rows for the active plan', () => {
+    setup()
+    const panel = screen.getByRole('tabpanel')
+    expect(within(panel).getByText('İçerik ve blog')).toBeTruthy()
+    expect(within(panel).getByText('Site blogu (ayrı blog sayfaları + AI yazı üretimi)')).toBeTruthy()
+    expect(within(panel).getByText('AI yazı üretimi (kredi ile)')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'FREE' }))
+    const free = screen.getByRole('tabpanel')
+    expect(within(free).getByText('AI yazı üretimi (kredi ile)')).toBeTruthy()
+  })
+})
