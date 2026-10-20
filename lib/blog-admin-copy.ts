@@ -75,7 +75,10 @@ const tr = {
     noindex: 'Arama motorlarından gizle (noindex)',
     serpTitle: 'Google önizlemesi',
     english: 'İngilizce çeviri',
-    englishHint: 'Boş bırakılırsa İngilizce arayüzde Türkçe metin gösterilir.',
+    englishHint: 'İsteğe bağlı. Boş bırakılırsa sitede Türkçe metin gösterilir.',
+    langTabs: 'İçerik dili',
+    langTr: 'Türkçe',
+    langEn: 'English',
     oldSlugs: 'Eski adresler',
     oldSlugsHint: 'Bu adresler yazıya kalıcı yönlendirilir.',
     save: 'Kaydet',
@@ -90,10 +93,22 @@ const tr = {
     uploadFailed: 'Görsel yüklenemedi.',
     uploading: 'Yükleniyor...',
     charsLeft: 'karakter',
+    aiDraft: {
+      open: 'AI ile taslak oluştur',
+      title: 'AI ile taslak oluştur',
+      hint: 'Konuyu yazın; taslak oluşturulup editörde açılır. Taslak asla otomatik yayınlanmaz, okuyup düzenledikten sonra yayını siz yaparsınız. Doğrulanamayan rakam, kaynak ve alıntılar metinden çıkarılır.',
+      topic: 'Konu',
+      topicPlaceholder: 'Örn. Yerel işletmeler için web sitesi kurarken dikkat edilecekler',
+      keywords: 'Anahtar kelimeler',
+      keywordsHint: 'Virgülle ayırın (en fazla 8).',
+      submit: 'Taslağı oluştur',
+      working: 'Taslak yazılıyor... (yarım dakika sürebilir)',
+      cancel: 'Vazgeç',
+    },
   },
   categories: {
     title: 'Blog kategorileri',
-    subtitle: 'Yazıları gruplayın. Bir kategori silinirse yazıları kategorisiz kalır.',
+    subtitle: 'Yazıları gruplayın. Yazısı olan bir kategori silinirken yazılar başka bir kategoriye taşınır.',
     back: 'Yazılar',
     name: 'Ad',
     slug: 'Adres (slug)',
@@ -109,7 +124,12 @@ const tr = {
     empty: 'Henüz kategori yok.',
     deleteTitle: 'Kategori silinsin mi?',
     deleteBody: (n: number) =>
-      n > 0 ? `${n} yazı kategorisiz kalacak. Yazılar silinmez.` : 'Bu kategori kalıcı olarak silinir.',
+      n > 0
+        ? `Bu kategoride ${n} yazı var. Silmeden önce yazıların taşınacağı kategoriyi seçin; yazılar silinmez.`
+        : 'Bu kategori kalıcı olarak silinir.',
+    moveTo: 'Yazıların taşınacağı kategori',
+    movePlaceholder: 'Kategori seçin',
+    noTarget: 'Yazıları taşıyabileceğiniz başka kategori yok. Önce yeni bir kategori ekleyin.',
   },
   errors: {
     required: 'Bu alan zorunlu.',
@@ -124,6 +144,11 @@ const tr = {
     failed: 'Bir şeyler ters gitti. Lütfen tekrar deneyin.',
     validation: 'Lütfen işaretli alanları düzeltin.',
     slug_taken: 'Bu adres zaten kullanılıyor.',
+    rate_limited: 'Çok fazla istek. Biraz bekleyip tekrar deneyin.',
+    category_in_use: 'Bu kategoride yazı var. Yazıların taşınacağı kategoriyi seçin.',
+    invalid_input: 'Konu 5 ile 160 karakter arasında olmalı.',
+    generation_failed: 'Taslak yazılamadı. Lütfen tekrar deneyin.',
+    draft_too_short: 'Üretilen taslak çok kısa kaldı. Konuyu biraz genişletip tekrar deneyin.',
   } as Record<string, string>,
 }
 
@@ -202,7 +227,10 @@ const en: typeof tr = {
     noindex: 'Hide from search engines (noindex)',
     serpTitle: 'Google preview',
     english: 'English translation',
-    englishHint: 'If left empty, the English interface shows the Turkish text.',
+    englishHint: 'Optional. If left empty, the site shows the Turkish text.',
+    langTabs: 'Content language',
+    langTr: 'Türkçe',
+    langEn: 'English',
     oldSlugs: 'Old addresses',
     oldSlugsHint: 'These addresses permanently redirect to the post.',
     save: 'Save',
@@ -217,10 +245,22 @@ const en: typeof tr = {
     uploadFailed: 'The image could not be uploaded.',
     uploading: 'Uploading...',
     charsLeft: 'characters',
+    aiDraft: {
+      open: 'Create draft with AI',
+      title: 'Create draft with AI',
+      hint: 'Describe the topic; a draft is created and opened in the editor. It is never published automatically: you read, edit and publish it yourself. Figures, sources and quotes that cannot be verified are removed.',
+      topic: 'Topic',
+      topicPlaceholder: 'e.g. What to consider when building a website for a local business',
+      keywords: 'Keywords',
+      keywordsHint: 'Separate with commas (up to 8).',
+      submit: 'Create draft',
+      working: 'Writing the draft... (this can take half a minute)',
+      cancel: 'Cancel',
+    },
   },
   categories: {
     title: 'Blog categories',
-    subtitle: 'Group posts. Deleting a category leaves its posts uncategorized.',
+    subtitle: 'Group posts. Deleting a category that has posts moves them to another category.',
     back: 'Posts',
     name: 'Name',
     slug: 'Address (slug)',
@@ -236,7 +276,12 @@ const en: typeof tr = {
     empty: 'No categories yet.',
     deleteTitle: 'Delete this category?',
     deleteBody: (n: number) =>
-      n > 0 ? `${n} post(s) will become uncategorized. Posts are not deleted.` : 'This category is permanently deleted.',
+      n > 0
+        ? `This category has ${n} post(s). Choose the category to move them to before deleting; posts are not deleted.`
+        : 'This category is permanently deleted.',
+    moveTo: 'Move posts to',
+    movePlaceholder: 'Select a category',
+    noTarget: 'There is no other category to move the posts to. Add a new category first.',
   },
   errors: {
     required: 'This field is required.',
@@ -251,6 +296,11 @@ const en: typeof tr = {
     failed: 'Something went wrong. Please try again.',
     validation: 'Please fix the highlighted fields.',
     slug_taken: 'This address is already in use.',
+    rate_limited: 'Too many requests. Wait a moment and try again.',
+    category_in_use: 'This category has posts. Choose a category to move them to.',
+    invalid_input: 'The topic must be between 5 and 160 characters.',
+    generation_failed: 'The draft could not be written. Please try again.',
+    draft_too_short: 'The generated draft was too short. Widen the topic and try again.',
   },
 }
 

@@ -1,6 +1,7 @@
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { blocksToMarkup } from '@/lib/blog-markup'
+import { blocksToMarkup, sanitizeBlogMarkup } from '@/lib/blog-markup'
+import { LIMITS, SLUG_PATTERN } from '@/lib/blog-admin-shared'
 import { staticCategories, staticPosts } from './blog-static'
 import type { BlogCategory, BlogPost, Localized, StaticBlogPost } from './types'
 
@@ -96,6 +97,11 @@ async function cached<T>(keyParts: string[], tags: string[], load: () => Promise
   }
 }
 
+/** Public URLs carry arbitrary text: anything that is not a well-formed slug never reaches the database or the cache. */
+export function isValidSlug(slug: unknown): slug is string {
+  return typeof slug === 'string' && slug.length <= LIMITS.slug && SLUG_PATTERN.test(slug)
+}
+
 export function isLive(row: Pick<PostRow, 'status' | 'published_at'>, now = Date.now()): boolean {
   if (row.status === 'draft' || !row.published_at) return false
   return Date.parse(row.published_at) <= now
@@ -123,8 +129,9 @@ export function mapPostRow(row: PostRow, categories: Map<string, CategoryRow>, w
     seoTitle: row.seo_title || row.title,
     seoDescription: row.meta_description || excerpt,
   }
-  const body = withBody ? (row.body ?? '') : ''
-  const enBody = withBody ? (en?.body || body) : ''
+  // Re-sanitized on every read, so a row written outside the admin form can never render unsafe markup.
+  const body = withBody ? sanitizeBlogMarkup(row.body ?? '') : ''
+  const enBody = withBody ? (en?.body ? sanitizeBlogMarkup(en.body) : body) : ''
 
   return {
     slug: row.slug,
@@ -230,6 +237,7 @@ export async function getFeaturedPosts(limit = 3): Promise<BlogPost[]> {
 
 /** One live post with its full body, or null. */
 export async function getPost(slug: string): Promise<BlogPost | null> {
+  if (!isValidSlug(slug)) return null
   try {
     const { row, categories } = await cached(['platform-blog', 'post', slug], [BLOG_CACHE_TAG, `${BLOG_CACHE_TAG}:${slug}`], async () => {
       const supabase = createAdminClient()
@@ -271,6 +279,7 @@ export async function getUsedCategories(posts?: BlogPost[]): Promise<BlogCategor
 
 /** Slug a renamed post used to live at, or null. Powers the permanent redirect. */
 export async function getRedirectTarget(oldSlug: string): Promise<string | null> {
+  if (!isValidSlug(oldSlug)) return null
   try {
     const target = await cached(['platform-blog', 'redirect', oldSlug], [BLOG_CACHE_TAG], async () => {
       const { data, error } = await createAdminClient()

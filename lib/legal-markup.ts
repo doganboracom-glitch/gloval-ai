@@ -40,7 +40,8 @@ export function sanitizeLegalMarkup(raw: string): string {
 /** Only web, mail, phone and same-site links survive; anything else is plain text. */
 export function isSafeLegalHref(href: string): boolean {
   const h = href.trim()
-  if (!h || /[\s\u0000-\u001F]/.test(h)) return false
+  // A backslash is rejected because browsers read "/\evil.com" as "//evil.com".
+  if (!h || /[\s\u0000-\u001F\\]/.test(h)) return false
   if (h.startsWith('/') && !h.startsWith('//')) return true
   return /^(https?:\/\/[^\s/]+|mailto:[^\s@]+@[^\s@]+|tel:\+?[\d\s()-]+)/i.test(h)
 }

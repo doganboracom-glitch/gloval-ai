@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { requireAdminResponse } from '@/lib/mail/admin-guard'
+import { getAdminUser, requireAdminResponse } from '@/lib/mail/admin-guard'
+import { checkBlogAdminLimit } from '@/lib/blog-admin-limit'
+import { recordBlogAudit } from '@/lib/blog-audit'
+import { BLOG_UPLOAD_MAX_BYTES, inspectUpload, randomBlogImagePath } from '@/lib/blog-upload'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { BUCKET, ensureBucket, persistImageDataUri } from '@/lib/image-storage'
 import { getImageProvider, imageGenerationAvailable } from '@/lib/image-provider'
@@ -9,22 +12,13 @@ import { runCoverGeneration } from '@/lib/blog-cover-run'
 
 export const maxDuration = 180
 
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 const CONCEPT_TIMEOUT_MS = 10_000
 
-type ImageKind = { mime: string; ext: string }
-
-/** Identify the real format from magic bytes; the client-supplied MIME type is never trusted. */
-function sniffImage(bytes: Buffer): ImageKind | null {
-  if (bytes.length > 12 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: 'image/jpeg', ext: 'jpg' }
-  if (bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return { mime: 'image/png', ext: 'png' }
-  }
-  if (bytes.length > 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
-    return { mime: 'image/webp', ext: 'webp' }
-  }
-  return null
-}
+const tooMany = (retryAfterSeconds: number) =>
+  Response.json(
+    { error: 'rate_limited', retryAfterSeconds },
+    { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'no-store' } },
+  )
 
 async function completeConcepts({ system, prompt }: { system: string; prompt: string }): Promise<string> {
   const { generateText } = await import('ai')
@@ -48,32 +42,46 @@ async function completeConcepts({ system, prompt }: { system: string; prompt: st
  * Returns `{ url }`; the post itself is saved through the server actions.
  */
 export async function POST(req: Request) {
-  const denied = await requireAdminResponse()
-  if (denied) return denied
+  const admin = await getAdminUser()
+  if (!admin) return requireAdminResponse() as Promise<Response>
 
   const contentType = req.headers.get('content-type') ?? ''
 
   if (contentType.startsWith('multipart/form-data')) {
+    const limit = await checkBlogAdminLimit(admin.userId, 'upload')
+    if (!limit.allowed) return tooMany(limit.retryAfterSeconds)
+
+    // Refuse before reading the body when the declared size is already too big.
+    const declared = Number(req.headers.get('content-length') ?? 0)
+    if (declared > BLOG_UPLOAD_MAX_BYTES + 64 * 1024) return Response.json({ error: 'too_large' }, { status: 413 })
+
     const form = await req.formData().catch(() => null)
     const file = form?.get('file')
     if (!(file instanceof File)) return Response.json({ error: 'invalid_input' }, { status: 400 })
-    if (file.size > MAX_UPLOAD_BYTES) return Response.json({ error: 'too_large' }, { status: 413 })
-    const bytes = Buffer.from(await file.arrayBuffer())
-    const kind = sniffImage(bytes)
-    if (!kind) return Response.json({ error: 'unsupported_type' }, { status: 415 })
+    if (file.size > BLOG_UPLOAD_MAX_BYTES) return Response.json({ error: 'too_large' }, { status: 413 })
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    const inspected = inspectUpload(bytes)
+    if (!inspected.ok) {
+      const status = inspected.error === 'too_large' ? 413 : inspected.error === 'unsupported_type' ? 415 : 400
+      return Response.json({ error: inspected.error }, { status })
+    }
 
     const client = createAdminClient()
     await ensureBucket(client)
-    const path = `blog/${randomUUID()}.${kind.ext}`
+    const path = randomBlogImagePath(inspected.kind.ext, randomUUID())
     const { error } = await client.storage.from(BUCKET).upload(path, bytes, {
-      contentType: kind.mime,
+      contentType: inspected.kind.mime,
       cacheControl: '31536000',
       upsert: false,
     })
     if (error) return Response.json({ error: 'storage_failed' }, { status: 502 })
     const { data } = client.storage.from(BUCKET).getPublicUrl(path)
-    return Response.json({ url: data.publicUrl })
+    await recordBlogAudit({ actor: admin, action: 'media.upload', detail: { path, bytes: bytes.length } })
+    return Response.json({ url: data.publicUrl, path })
   }
+
+  const limit = await checkBlogAdminLimit(admin.userId, 'ai')
+  if (!limit.allowed) return tooMany(limit.retryAfterSeconds)
 
   const body = (await req.json().catch(() => null)) as { title?: string; excerpt?: string; style?: string } | null
   const title = (body?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 200)
