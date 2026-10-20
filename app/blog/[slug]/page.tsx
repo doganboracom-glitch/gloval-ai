@@ -1,16 +1,14 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { BlogPostClient } from '@/components/content/blog-post-client'
-import { getPost, getPosts, getRelatedPosts } from '@/lib/content/blog'
+import { getPost, getPosts, getRedirectTarget, getRelatedPosts } from '@/lib/content/blog'
 import { OG_IMAGE_SIZE, ogImageUrlForPost } from '@/lib/seo/page-seo'
 
-/**
- * Pre-renders every post at build time. The content service is currently
- * static, so this is exhaustive; if it moves to a CMS this stays correct but
- * would need a revalidate window alongside it.
- */
-export function generateStaticParams() {
-  return getPosts().map((post) => ({ slug: post.slug }))
+/** Posts are admin-managed: pages are regenerated at most every 5 minutes, and instantly when an admin saves. */
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  return (await getPosts()).map((post) => ({ slug: post.slug }))
 }
 
 export async function generateMetadata({
@@ -19,8 +17,8 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>
 }): Promise<Metadata> {
   const { slug } = await params
-  const post = getPost(slug)
-  if (!post) return { title: 'Blog | GLOVAL AI' }
+  const post = await getPost(slug)
+  if (!post) return { title: 'Blog | GLOVAL AI', robots: { index: false, follow: false } }
 
   // Turkish is the primary content language, so TR copy drives the tags. Static
   // metadata cannot read the client-side language toggle, so it is not localized
@@ -37,8 +35,9 @@ export async function generateMetadata({
   return {
     title,
     description,
-    keywords: post.keywords.tr,
+    keywords: post.tags,
     alternates: { canonical: `/blog/${post.slug}` },
+    ...(post.noindex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       type: 'article',
       siteName: 'GLOVAL AI',
@@ -65,10 +64,15 @@ export default async function BlogPostPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const post = getPost(slug)
-  if (!post) notFound()
+  const post = await getPost(slug)
+  if (!post) {
+    // A renamed post keeps answering on its old address with a permanent redirect.
+    const target = await getRedirectTarget(slug)
+    if (target) permanentRedirect(`/blog/${target}`)
+    notFound()
+  }
 
-  const related = getRelatedPosts(post.slug, 3)
+  const related = await getRelatedPosts(post, 3)
 
   // BlogPosting structured data (Turkish-first, matching the crawlable
   // metadata). Built from the same post record the page renders, so the schema
@@ -91,6 +95,7 @@ export default async function BlogPostPage({
       },
     },
     mainEntityOfPage: `https://gloval.ai/blog/${post.slug}`,
+    ...(post.tags.length ? { keywords: post.tags.join(', ') } : {}),
     ...(post.coverImage
       ? {
           image: [
@@ -106,8 +111,8 @@ export default async function BlogPostPage({
     <>
       <script
         type="application/ld+json"
-        // Authored in-repo, not user input.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        // Admin-authored text: `<` is escaped so no value can close the script tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
       />
       <BlogPostClient post={post} related={related} />
     </>

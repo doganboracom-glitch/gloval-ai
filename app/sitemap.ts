@@ -26,7 +26,13 @@ type Entry = MetadataRoute.Sitemap[number]
 /** Builds one entry with tr/en alternates for a platform path. */
 function entry(
   path: string,
-  options: { lastModified?: string | Date; changeFrequency?: Entry['changeFrequency']; priority?: number } = {},
+  options: {
+    lastModified?: string | Date
+    changeFrequency?: Entry['changeFrequency']
+    priority?: number
+    /** False for pages that have no English version, so no dead hreflang is declared. */
+    english?: boolean
+  } = {},
 ): Entry {
   const url = platformUrl(path)
   return {
@@ -39,14 +45,14 @@ function entry(
     alternates: {
       languages: {
         'tr-TR': url,
-        en: `${url}?lang=en`,
+        ...(options.english === false ? {} : { en: `${url}?lang=en` }),
         'x-default': url,
       },
     },
   }
 }
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const marketing: MetadataRoute.Sitemap = [
     entry('/', { changeFrequency: 'weekly', priority: 1 }),
     entry('/blog', { changeFrequency: 'weekly', priority: 0.8 }),
@@ -59,13 +65,18 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry(`/yasal/${slug}`, { changeFrequency: 'yearly', priority: 0.4 }),
   )
 
-  const posts: MetadataRoute.Sitemap = getPosts().map((post) =>
-    entry(`/blog/${post.slug}`, {
-      lastModified: post.updatedAt ?? post.publishedAt,
-      changeFrequency: 'yearly',
-      priority: 0.7,
-    }),
-  )
+  // Live posts only (drafts and not-yet-due scheduled posts never reach
+  // getPosts), and noindex posts are kept out of the sitemap on purpose.
+  const posts: MetadataRoute.Sitemap = (await getPosts())
+    .filter((post) => !post.noindex)
+    .map((post) =>
+      entry(`/blog/${post.slug}`, {
+        lastModified: post.updatedAt ?? post.publishedAt,
+        changeFrequency: 'yearly',
+        priority: 0.7,
+        english: post.hasEnglish,
+      }),
+    )
 
   return [...marketing, ...legal, ...posts]
 }
