@@ -20,6 +20,21 @@ export function announcementPlacement(
   return firstVisible.type === 'announcement' ? 'above-header' : 'in-flow'
 }
 
+/** Fixed hint the demo band appends to its example sentence; it must never reach a published site. */
+export const ANNOUNCEMENT_SAMPLE_HINT = {
+  tr: 'Duyurularınızı buraya ekleyebilirsiniz.',
+  en: 'You can add your announcements here.',
+} as const
+
+/** Removes the demo hint (either language) from an announcement text, leaving the owner's sentence. */
+export function stripAnnouncementHint(text: string): string {
+  let result = text
+  for (const hint of Object.values(ANNOUNCEMENT_SAMPLE_HINT)) {
+    result = result.split(hint).join('')
+  }
+  return result.replace(/\s+/g, ' ').trim()
+}
+
 type MarqueeSpeed = 'slow' | 'normal' | 'fast'
 
 /** Constant scroll speed, independent of how much text the band carries. */
