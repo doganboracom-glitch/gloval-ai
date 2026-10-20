@@ -86,7 +86,7 @@ describe('collapsed card shows exactly six rows (pins)', () => {
       splitPlanItems(buildPlanView(code, 'yearly', 'en')).featured.map((i) => i.id)
     expect(visible('free')).toEqual(['sites', 'pages', 'blog', 'glovalAddress', 'ssl', 'seo'])
     expect(visible('starter')).toEqual([
-      'sites',
+      'pages',
       'customDomain',
       'blog',
       'autoBackup',
