@@ -85,7 +85,11 @@ export const metadata: Metadata = {
   },
 }
 
+// width + initial-scale only: never add maximum-scale / user-scalable=no
+// (blocks pinch-zoom). iOS input zoom is prevented by 16px form fields instead.
 export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
   colorScheme: 'dark',
   themeColor: '#221a33',
 }

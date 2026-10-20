@@ -57,6 +57,20 @@ export function Hero() {
   // The prompt textarea, so the "E-Ticaret sitesi" quick idea can focus it
   // after dropping in the editable example text.
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  // The whole prompt card (textarea + "Sitemi oluştur"). On mobile we keep the
+  // card, not just the textarea, centred when the keyboard opens so the submit
+  // button never ends up hidden behind it.
+  const promptBoxRef = useRef<HTMLDivElement | null>(null)
+
+  function keepPromptBoxVisible() {
+    if (typeof window === 'undefined') return
+    if (!window.matchMedia('(max-width: 767px)').matches) return
+    // Wait for the on-screen keyboard to finish animating in; measuring
+    // earlier centres against the full-height viewport.
+    window.setTimeout(() => {
+      promptBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 350)
+  }
 
   // Scroll to the freshly generated plan only after it has truly rendered.
   // We key off `plan` (the state that renders the card) and guard against the
@@ -350,26 +364,30 @@ export function Hero() {
         {/* AI prompt box */}
         <div
           id="hero-input"
-          className="mx-auto mt-10 max-w-2xl animate-fade-up [animation-delay:120ms]"
+          className="mx-auto mt-10 w-full min-w-0 max-w-2xl animate-fade-up [animation-delay:120ms]"
         >
-          <div className="glow-primary rounded-2xl border border-border bg-card/80 p-2 backdrop-blur">
+          <div
+            ref={promptBoxRef}
+            className="glow-primary w-full min-w-0 scroll-my-24 rounded-2xl border border-border bg-card/80 p-2 backdrop-blur"
+          >
             <textarea
               ref={textareaRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={onKeyDown}
+              onFocus={keepPromptBoxVisible}
               rows={3}
               placeholder={t.hero.placeholder}
-              className="w-full resize-none rounded-xl bg-transparent px-4 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="block w-full min-w-0 resize-none rounded-xl bg-transparent px-4 py-3 text-base leading-relaxed md:text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
             />
-            <div className="flex items-center justify-between gap-3 px-2 pb-1">
-              <span className="text-xs text-muted-foreground/80">{t.hero.hint}</span>
-              <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-col gap-2 px-2 pb-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <span className="min-w-0 text-xs text-muted-foreground/80">{t.hero.hint}</span>
+              <div className="flex shrink-0 items-center justify-end gap-2">
               <VoiceInputButton value={prompt} onText={setPrompt} disabled={loading} />
               <button
                 onClick={() => generate(prompt)}
                 disabled={loading || prompt.trim().length < 3}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl bg-primary px-3 text-sm font-semibold sm:px-4 text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading ? (
                   <>
@@ -387,7 +405,7 @@ export function Hero() {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex min-w-0 max-w-full flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {t.hero.tryLabel}
             </span>
@@ -404,7 +422,7 @@ export function Hero() {
                   el.setSelectionRange(el.value.length, el.value.length)
                 })
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:border-primary hover:bg-primary/15"
+              className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-left text-xs font-medium text-primary transition-colors hover:border-primary hover:bg-primary/15"
             >
               <ShoppingBag className="h-3.5 w-3.5" />
               {t.hero.ecommerceIdea}
@@ -416,7 +434,7 @@ export function Hero() {
                   setPrompt(s)
                   generate(s)
                 }}
-                className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                className="max-w-full rounded-full border border-border bg-secondary/40 px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
               >
                 {s}
               </button>
@@ -435,7 +453,7 @@ export function Hero() {
                   el.setSelectionRange(el.value.length, el.value.length)
                 })
               }}
-              className="rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              className="max-w-full rounded-full border border-border bg-secondary/40 px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
             >
               {t.hero.architectureIdea}
             </button>

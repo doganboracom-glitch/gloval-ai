@@ -455,6 +455,40 @@
   color: var(--cookie-fg, var(--color-brand));
 }
 
+/* ---- iOS input zoom guard -------------------------------------------------
+   iOS Safari zooms the whole page when a text field with a computed
+   font-size below 16px gains focus, and often stays zoomed afterwards. The
+   viewport meta must keep pinch-zoom enabled (accessibility), so instead every
+   text-entry control is at least 16px on phones and on any iOS device
+   (@supports -webkit-touch-callout is WebKit-on-iOS only). Desktop is
+   untouched. Unlayered on purpose: it must beat Tailwind `text-xs/text-sm`
+   utilities, which live in a cascade layer. */
+@media (max-width: 767px) {
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: 16px;
+  }
+}
+@supports (-webkit-touch-callout: none) {
+  input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image'], [type='hidden']),
+  textarea,
+  select,
+  [contenteditable='true'] {
+    font-size: 16px;
+  }
+}
+
+/* Full-height shells follow the *dynamic* viewport so an open keyboard or the
+   collapsing Safari toolbar does not push content off screen. Declared before
+   the cookie-banner rules below, which are more specific and still win. */
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+}
+
 /* ---- Cookie banner inset -------------------------------------------------
    `html[data-cookie-banner]` and `--cookie-banner-h` exist only while the
    banner is on screen (see lib/cookie-banner-layout.ts), so none of this
