@@ -5,6 +5,7 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import { demoImages, applyDemoImages } from '@/lib/demo-images'
 import { getCatalog } from '@/lib/demo-catalog'
 import { addDemoAnnouncement } from '@/lib/demo-announcement'
+import { applyDemoAbout } from '@/lib/demo-about'
 
 /**
  * Showcase demos
@@ -148,6 +149,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   const site = fallbackWebsite(pickLang(demo.prompt, lang), toBilingual(lang))
   applyDemoImages(site, demoImages[demo.slug])
   customizeDemoSite(site, demo.slug, lang)
+  applyDemoAbout(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   // After customization, so a slider added there is already in the list when the band is placed.
   const demoLang = lang === 'en' ? 'en' : 'tr'
   addDemoAnnouncement(

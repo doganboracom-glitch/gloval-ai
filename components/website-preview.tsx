@@ -29,6 +29,7 @@ import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-co
 import { WebsiteRenderer, type PreviewNav } from '@/components/website-renderer/website-renderer'
 import { resolveTheme, googleFontsHref } from '@/components/website-renderer/theme'
 import { WebsiteEditorPanel, type ChatMessage } from '@/components/website-editor-panel'
+import { PublishedContext } from '@/components/editor/published-context'
 import { applyOperation, type EditOperation } from '@/lib/website-edit-operations'
 import { parseCommand } from '@/lib/website-command-parser'
 import {
@@ -1679,6 +1680,7 @@ export function WebsitePreview({
         {/* Editor: docked column on md+, drawer overlay on small screens */}
         {showEdit && currentSite && (
           <aside className="absolute inset-y-0 right-0 z-10 w-full max-w-[380px] p-3 md:static md:z-auto md:w-[380px] md:shrink-0 md:border-l md:border-border md:p-3">
+              <PublishedContext.Provider value={livePublished}>
               <WebsiteEditorPanel
                 site={currentSite}
                 payments={payments}
@@ -1715,6 +1717,7 @@ export function WebsitePreview({
               onApplyAiEdit={applyPendingAiEdit}
               onRejectAiEdit={rejectPendingAiEdit}
             />
+              </PublishedContext.Provider>
           </aside>
         )}
       </div>

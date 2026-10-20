@@ -1,6 +1,7 @@
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { countCodes, repairToSchema, summarizeIssues, type IssueSummary, type RepairStep } from '@/lib/ai-repair'
 import { siteRepairOptions } from '@/lib/site-repair'
+import { normalizeAboutMedia } from '@/lib/about-media'
 
 export type NormalizedSite =
   | { ok: true; value: WebsiteSchema; steps: RepairStep[]; repaired: boolean }
@@ -15,14 +16,18 @@ export type NormalizedSite =
  */
 export function normalizeWebsiteSchema(raw: unknown, lang: 'tr' | 'en' = 'tr'): NormalizedSite {
   const direct = websiteSchema.safeParse(raw)
-  if (direct.success) return { ok: true, value: direct.data, steps: [], repaired: false }
+  if (direct.success) {
+    return { ok: true, value: normalizeAboutMedia(direct.data), steps: [], repaired: false }
+  }
 
   const cloned = cloneJson(raw)
   if (cloned === undefined) {
     return { ok: false, steps: [], issues: summarizeIssues(direct.error.issues) }
   }
   const result = repairToSchema(cloned, websiteSchema, siteRepairOptions({ lang, trimSections: true }))
-  if (result.ok) return { ok: true, value: result.value, steps: result.steps, repaired: result.steps.length > 0 }
+  if (result.ok) {
+    return { ok: true, value: normalizeAboutMedia(result.value), steps: result.steps, repaired: result.steps.length > 0 }
+  }
   return { ok: false, steps: result.steps, issues: result.issues }
 }
 

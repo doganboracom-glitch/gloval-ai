@@ -28,6 +28,7 @@ import {
 } from '@/lib/website-edit-operations'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { MapEmbedField } from '@/components/editor/map-embed-field'
+import { AboutMediaFields } from '@/components/editor/about-media-fields'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -219,6 +220,10 @@ export function SectionInspector({
           </div>
         )
       })}
+
+      {section.type === 'about' && (
+        <AboutMediaFields site={site} index={index} section={section} onDispatch={onDispatch} />
+      )}
 
       {managedProducts && (
         <ProductsShowcaseSettings
