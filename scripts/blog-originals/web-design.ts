@@ -78,8 +78,8 @@ Ziyaretçilerin önemli bir kısmı telefondan gelir. Ana sayfanızı mutlaka ke
 - Başlık: [Ne yapıyorum] + [nerede / kimin için]
 - Alt cümle: [Müşterinin sorununu nasıl çözdüğüm] (gerçek bir cümle)
 - Düğme: [İstediğim ana eylem]
-- Hizmetler: 3–6 kalem, her biri tek cümle
-- Neden ben: 3 somut ve doğrulanabilir bilgi
+- Hizmetler: birkaç kalem, her biri tek cümle
+- Neden ben: birkaç somut ve doğrulanabilir bilgi
 - İletişim: adres, telefon, saat, harita
 
 Bu iskeleti kendi bilgilerinizle doldurun. İşletmenizin yaptığı iş bu iskeletin içinde tanıdık görünecek.
@@ -120,7 +120,7 @@ Mobil uyumluluğu kontrol etmenin en kolay yolu sitenizi kendi telefonunuzda gez
 - Sayfa açılır açılmaz başlık ve ana düğme görünüyor mu?
 - Yazılar yakınlaştırmadan okunabiliyor mu?
 - Sayfayı yana kaydırmanız gerekiyor mu? Gerekiyorsa bir öğe ekrana sığmıyor demektir.
-- Menü simgesine dokununca bağlantılar açılıyor ve kapanıyor mu?
+- Men�� simgesine dokununca bağlantılar açılıyor ve kapanıyor mu?
 - Telefon numarasına dokununca arama ekranı geliyor mu?
 - Adres bilgisine dokununca harita açılıyor mu?
 - Formu doldururken klavye alanları kapatmıyor mu?

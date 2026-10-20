@@ -142,8 +142,8 @@ Yüzlerce ürününüz varsa, hepsinin aynı kalıpla yazılması cazip gelir. K
 
 ## Sık yapılan hatalar
 
-- Kendini tekrar eden, anlamsız sıfatlar: "şık, kaliteli, kullanışlı"
-- Doğrulanamayan üstünlük iddiaları
+- Kendini tekrar eden, anlamsız sıfatlar (şık, kaliteli, kullanışlı gibi)
+- Kanıtlayamadığınız üstünlük iddiaları
 - Ölçü, renk ya da içerik bilgisini eksik bırakmak
 - Fotoğrafta görünen ile metinde yazılan bilginin çelişmesi
 - Başka bir mağazanın açıklamasını kopyalamak
@@ -220,7 +220,7 @@ Kargo ve iade bilgisi birçok yerde geçer: politika sayfası, ürün sayfası, 
 
 ## Sayfa düzeni
 
-Politikayı kolay okunur kılmak için başlıklar, kısa paragraflar ve listeler kullanın. Sayfanın başına tek paragraflık bir özet koyun: "Siparişleriniz 1–3 iş günü içinde kargoya verilir. İade için 14 gün içinde bize ulaşabilirsiniz." Tabii bu cümleler örnektir; sizin gerçek süreleriniz ve koşullarınız ne ise onu yazın. Sayfaya mağaza menüsünden ve alt bilgi bölümünden kolayca ulaşılabilmeli.
+Politikayı kolay okunur kılmak için başlıklar, kısa paragraflar ve listeler kullanın. Sayfanın başına tek paragraflık bir özet koyun: "Siparişleriniz, belirttiğimiz hazırlık süresi içinde kargoya verilir. İade için, aşağıda yazılı süre içinde bize ulaşabilirsiniz." Bu cümleler yalnızca kalıp örneğidir; kendi gerçek sürelerinizi ve koşullarınızı yazın, doğrulayamadığınız bir süreyi vaat etmeyin. Sayfaya mağaza menüsünden ve alt bilgi bölümünden kolayca ulaşılabilmeli.
 
 ## Müşteri iletişimi
 
@@ -281,7 +281,7 @@ Bu bilgileri alt bilgi bölümünde ya da ayrı bir "Kurumsal" sayfasında topla
 
 ## Rozet ve sertifika konusunda dürüst olun
 
-Siteye "güvenli alışveriş", "yüzde yüz güvenli" gibi görseller koymak cazip gelir. Ancak kanıtlanamayan, geçerliliğini yitirmiş ya da size ait olmayan bir sertifika rozeti, müşteriyi yanıltır. Gerçekten sahip olduğunuz ve doğrulanabilir bir belge varsa gösterin; yoksa uydurma bir güvence görseli kullanmayın. Müşteriler çoğu zaman bir rozetten çok, düzenli bir mağazanın ayrıntılarına bakar.
+Siteye "güvenli alışveriş", "tamamen güvenli" gibi görseller koymak cazip gelir. Ancak kanıtlanamayan, geçerliliğini yitirmiş ya da size ait olmayan bir sertifika rozeti, müşteriyi yanıltır. Gerçekten sahip olduğunuz ve doğrulanabilir bir belge varsa gösterin; yoksa uydurma bir güvence görseli kullanmayın. Müşteriler çoğu zaman bir rozetten çok, düzenli bir mağazanın ayrıntılarına bakar.
 
 ## Deneyim güveni: ödeme adımı
 

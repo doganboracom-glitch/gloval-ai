@@ -51,10 +51,12 @@ begin
     return;
   end if;
 
-  update public.rate_limit_counters
-    set hit_count = hit_count + 1
-    where subject = p_subject
-    returning * into v_row;
+  -- `hit_count` is also an OUT column of this function; unqualified, the
+  -- right-hand side raised 42702 (ambiguous) on every hit after the first.
+  update public.rate_limit_counters as c
+    set hit_count = c.hit_count + 1
+    where c.subject = p_subject
+    returning c.* into v_row;
   return query select true, v_row.hit_count, v_row.window_started_at + make_interval(secs => p_window_seconds);
 end;
 $$;

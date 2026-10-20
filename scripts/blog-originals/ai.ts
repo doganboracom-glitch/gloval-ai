@@ -214,7 +214,7 @@ Son talimat işe yarar: model bilmediği bir yerde uydurmak yerine boşluk bıra
 
 Üretilen açıklamalarda şu hatalar sık görülür:
 
-- Kartta olmayan bir malzeme ("el yapımı", "organik", "yüzde yüz pamuk") ekleme
+- Kartta olmayan bir malzeme ("el yapımı", "organik", "saf pamuk") ekleme
 - Ürünü aslında olmayan bir kullanıma uygun gösterme (örneğin her kabı "bulaşık makinesinde yıkanabilir" yapma)
 - Aynı kalıbı bütün ürünlerde tekrar etme
 - Sağlıkla ilgili ya da güvenlikle ilgili iddialar ekleme
@@ -303,7 +303,7 @@ Yeni bir fotoğraf yüklerken boyutuna dikkat edin. Telefon fotoğrafları çok 
 
 Renkleri değiştirirken üç kuralı aklınızda tutun. Birincisi, logonuzdaki renkle uyumlu bir ana renk seçin. İkincisi, metin ile zemin arasındaki karşıtlığı koruyun; açık gri zemin üzerinde açık gri yazı okunmaz. Üçüncüsü, çok renk kullanmayın; bir ana renk, birkaç nötr ton ve en fazla bir vurgu rengi çoğu işletme için yeterlidir.
 
-Yazı tipinde de sadelik kazanır. Başlıklar ve gövde metni için iki farklı yazı tipi yeterlidir. Gövde metnini küçük puntoyla yazmayın; telefonda okunabilirlik her zaman öncelikli olmalıdır.
+Yazı tipinde de sadelik kazanır. Başlıklar ve g��vde metni için iki farklı yazı tipi yeterlidir. Gövde metnini küçük puntoyla yazmayın; telefonda okunabilirlik her zaman öncelikli olmalıdır.
 
 ## Bölüm sırasını gözden geçirmek
 
@@ -357,7 +357,7 @@ Her brifte şu beş bölüm bulunmalı:
 
 Zayıf brif şöyle olabilir: "Berber dükkânım için bir web sitesi yap."
 
-Aynı işletme için daha güçlü bir brif şöyle yazılır: "Bursa Nilüfer'de iki koltuklu bir erkek berber dükkânıyım. Müşterilerim çoğunlukla mahalleden, 20 ile 50 yaş arası erkekler. Sitenin amacı randevu almalarını sağlamak. Ana sayfada kısa bir tanıtım, hizmet listesi, çalışma saatleri ve iletişim bölümü olsun. Ton samimi ve kısa olsun. Fiyat, ödül ya da müşteri yorumu uydurma."
+Aynı işletme için daha güçlü bir brif şöyle yazılır: "Bursa Nilüfer'de iki koltuklu bir erkek berber dükkânıyım. Müşterilerim çoğunlukla mahalleden, her yaştan erkekler. Sitenin amacı randevu almalarını sağlamak. Ana sayfada kısa bir tanıtım, hizmet listesi, çalışma saatleri ve iletişim bölümü olsun. Ton samimi ve kısa olsun. Fiyat, ödül ya da müşteri yorumu uydurma."
 
 İkinci metin yalnızca beş cümle ama modele bir işletme, bir kitle, bir amaç ve net sınırlar veriyor. Çıktının kalitesindeki fark ilk bakışta görülür.
 

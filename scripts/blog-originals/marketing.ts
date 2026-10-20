@@ -108,7 +108,7 @@ Telefon numaranızın sitenizde, Google profilinizde ve sosyal medya hesapların
 
 ## İlk yanıt süresi
 
-Mesajlaşmada beklenti hızdır. Yanıtı hemen veremeyeceğiniz saatleri, otomatik karşılama mesajıyla belirtin: "Merhaba, çalışma saatlerimiz hafta içi 09.00–18.00. Mesajınızı aldık, mesai başladığında size dönüş yapacağız." Bu mesajdaki saatler gerçek olmalı ve verdiğiniz sözü tutmalısınız. Söz verip dönmemek, hiç söz vermemekten kötüdür.
+Mesajlaşmada beklenti hızdır. Yanıtı hemen veremeyeceğiniz saatleri, otomatik karşılama mesajıyla belirtin: "Merhaba, çalışma saatlerimiz hafta içi [açılış saati] ile [kapanış saati] arasıdır. Mesajınızı aldık, mesai başladığında size dönüş yapacağız." Bu mesajdaki saatler gerçek olmalı ve verdiğiniz sözü tutmalısınız. Söz verip dönmemek, hiç söz vermemekten kötüdür.
 
 ## Hazır cevaplar
 

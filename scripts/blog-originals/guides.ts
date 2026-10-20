@@ -73,7 +73,7 @@ Sertifikaların bir geçerlilik süresi vardır. Süresi dolan sertifika, siteni
 
 ## HTTPS tek başına yeterli değil
 
-HTTPS, güvenliğin yalnızca bir parçasıdır. Sitenizin yazılımını güncel tutmak, güçlü parolalar kullanmak, yönetim paneline giriş için ek doğrulama yöntemlerini değerlendirmek, yetkisiz kişilere erişim vermemek ve yedek almak da gereklidir. HTTPS'in "siteniz tamamen güvenlidir" anlamına geldiğini düşünmek, yanıltıcıdır. Güvenlik iddialarını abartmayın; "verileriniz şifreli iletilir" demek doğru, "yüzde yüz güvenli" demek ise vaat edilemeyecek bir ifadedir.
+HTTPS, güvenliğin yalnızca bir parçasıdır. Sitenizin yazılımını güncel tutmak, güçlü parolalar kullanmak, yönetim paneline giriş için ek doğrulama yöntemlerini değerlendirmek, yetkisiz kişilere erişim vermemek ve yedek almak da gereklidir. HTTPS'in "siteniz tamamen güvenlidir" anlamına geldiğini düşünmek, yanıltıcıdır. Güvenlik iddialarını abartmayın; "verileriniz şifreli iletilir" demek doğru, "tamamen güvenli" demek ise vaat edilemeyecek bir ifadedir.
 
 ## Kısa kontrol listesi
 

@@ -210,7 +210,7 @@ Meta açıklamayı tüm sayfalar için aynı yazmak yaygın bir hatadır. Aynı 
 
 Başlık ve açıklamanın tıklama çekmesi gerekir, ama yanıltıcı olmaması şart. Sayfanın içeriğiyle uyuşmayan, abartılı bir vaat bir kez tıklama getirir, ardından ziyaretçi hemen geri döner. Bu geri dönüş sizin için değerli bir şey kazandırmaz. Dürüst ve net bir vaat, daha az ama daha nitelikli ziyaretçi getirir.
 
-Sayısal bir iddia kullanacaksanız ("500 müşteri", "10 yıllık deneyim") bunun gerçek ve güncel olduğundan emin olun. Doğrulayamadığınız bir sayıyı yazmayın.
+Sayısal bir iddia kullanacaksanız (müşteri sayısı ya da deneyim yılı gibi) bunun gerçek ve güncel olduğundan emin olun. Doğrulayamadığınız bir sayıyı yazmayın.
 
 ## Türkçe karakterler ve yazım
 
