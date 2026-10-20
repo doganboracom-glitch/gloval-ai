@@ -120,7 +120,7 @@ Mobil uyumluluğu kontrol etmenin en kolay yolu sitenizi kendi telefonunuzda gez
 - Sayfa açılır açılmaz başlık ve ana düğme görünüyor mu?
 - Yazılar yakınlaştırmadan okunabiliyor mu?
 - Sayfayı yana kaydırmanız gerekiyor mu? Gerekiyorsa bir öğe ekrana sığmıyor demektir.
-- Men�� simgesine dokununca bağlantılar açılıyor ve kapanıyor mu?
+- Menü simgesine dokununca bağlantılar açılıyor ve kapanıyor mu?
 - Telefon numarasına dokununca arama ekranı geliyor mu?
 - Adres bilgisine dokununca harita açılıyor mu?
 - Formu doldururken klavye alanları kapatmıyor mu?
@@ -155,7 +155,7 @@ Telefonda form doldurmak, masaüstünden çok daha zahmetlidir. Gerekli olmayan 
 
 ## Hız meselesi
 
-Mobil kullanıcılar çoğu zaman daha yavaş bağlantılarla gelir. Bu yüzden sayfanın hızlı açılması ayrı bir kaygıdır. Gereksiz büyük görseller, birbiri üzerine binen betikler ve her sayfada tekrar yüklenen ağır öğeler sitenizi yavaşlatır. Hızla ilgili adımları [blogdaki ilgili rehberde](/blog) bulabilirsiniz.
+Mobil kullanıcılar bazen daha yavaş bağlantılarla gelir. Bu yüzden sayfanın hızlı açılması ayrı bir kaygıdır. Gereksiz büyük görseller, birbiri üzerine binen betikler ve her sayfada tekrar yüklenen ağır öğeler sitenizi yavaşlatır. Hızla ilgili adımları [blogdaki ilgili rehberde](/blog) bulabilirsiniz.
 
 ## Mobil kontrol listesi
 

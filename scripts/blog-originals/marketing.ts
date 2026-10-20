@@ -96,7 +96,7 @@ Takvim sizi robotlaştırmak için değil, özgürleştirmek için var. Planı b
     seoDescription:
       'Küçük işletmeler için WhatsApp müşteri iletişimi: hızlı yanıt, hazır cevaplar, izin, çalışma saatleri ve düzenli kayıt tutma.',
     tags: ['WhatsApp', 'müşteri iletişimi', 'satış iletişimi'],
-    body: `Bir halı yıkama firmasına telefon açan müşteri çoğu zaman meşgul sesi duyar ya da bir sonraki arama için bekler. Aynı müşteri, mesaj atabileceği bir numara görürse işini hemen halletmek ister. Birçok küçük işletme için WhatsApp, bu yüzden günlük iletişimin ana kanalına dönüşmüş durumda. Ama kontrolsüz bir mesaj trafiği, hem sizi hem müşteriyi yorar. Biraz düzen, büyük fark yaratır.
+    body: `Bir halı yıkama firmasına telefon açan müşteri çoğu zaman meşgul sesi duyar ya da bir sonraki arama için bekler. Aynı müşteri, mesaj atabileceği bir numara görürse işini hemen halletmek ister. Bu yüzden bazı işletmelerde WhatsApp, günlük iletişimin başlıca kanalı hâline gelebiliyor. Ama kontrolsüz bir mesaj trafiği, hem sizi hem müşteriyi yorar. Biraz düzen, büyük fark yaratır.
 
 ## İş numarası ve kişisel numarayı ayırın
 
@@ -168,7 +168,7 @@ WhatsApp, doğru kullanıldığında müşteriyle aranızdaki mesafeyi kısaltı
     seoDescription:
       'Küçük işletmeler için Google yorumu toplama: doğru zaman, kolay bağlantı, olumsuz yorumlara yanıt ve kaçınılması gereken uygulamalar.',
     tags: ['Google yorumları', 'müşteri geri bildirimi', 'yerel pazarlama'],
-    body: `Yeni bir müşteri bir işletmeyi aramadan önce çoğu zaman telefonuna bakar: kaç yıldız var, insanlar ne yazmış? Birkaç dürüst yorum, yüzlerce sayfalık tanıtımdan daha ikna edicidir. Çünkü yorumlar işletmenin kendi sesi değil, müşterilerin sesidir. Ancak memnun müşterilerin çoğu, istenmedikçe yorum yazmaz. Bu yazı, yorum istemeyi doğal ve dürüst biçimde nasıl yapabileceğinizi anlatıyor.
+    body: `Yeni bir müşteri bir işletmeyi aramadan önce çoğu zaman telefonuna bakar: kaç yıldız var, insanlar ne yazmış? Birkaç dürüst yorum, uzun bir tanıtım metninden daha ikna edici olabilir. Çünkü yorumlar işletmenin kendi sesi değil, müşterilerin sesidir. Memnun kalan biri bile kendisinden rica edilmeyince yorum yazmayı akla getirmeyebilir. Bu yazı, yorum istemeyi doğal ve dürüst biçimde nasıl yapabileceğinizi anlatıyor.
 
 ## Önce profilinizin hazır olduğundan emin olun
 

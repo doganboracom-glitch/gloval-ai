@@ -52,7 +52,7 @@ Her semt için ayrı, birbirinin kopyası sayfalar üretmek iyi bir fikir değil
 
 ## Yorumlar ve geri bildirim
 
-Müşteri yorumları yerel görünürlükte önemli bir rol oynar. Memnun müşterilere, uygun bir anda ve baskı yapmadan geri bildirim bırakma imkânı sunun. Yorum satın almayın, karşılığında indirim ya da hediye vererek yorum istemeyin ve yorumları kendiniz yazmayın; bu hem platform kurallarına aykırı olabilir hem de güveni zedeler. Gelen yorumlara, olumlu ya da olumsuz, sakin ve gerçekçi bir dille yanıt verin. Olumsuz bir yorumda savunmaya geçmeden sorunu anlamaya çalışın ve gerekirse çözüm için özel bir kanala davet edin.
+Müşteri yorumları yerel görünürlükte rol oynayabilir. Memnun müşterilere, uygun bir anda ve baskı yapmadan geri bildirim bırakma imkânı sunun. Yorum satın almayın, karşılığında indirim ya da hediye vererek yorum istemeyin ve yorumları kendiniz yazmayın; bu hem platform kurallarına aykırı olabilir hem de güveni zedeler. Gelen yorumlara, olumlu ya da olumsuz, sakin ve gerçekçi bir dille yanıt verin. Olumsuz bir yorumda savunmaya geçmeden sorunu anlamaya çalışın ve gerekirse çözüm için özel bir kanala davet edin.
 
 ## Fotoğraf ve güncellik
 
@@ -60,7 +60,7 @@ Google profilinizin yaşadığını göstermek için düzenli güncelleme yapın
 
 ## Ölçmek ve gözlemlemek
 
-Profil ve site üzerindeki hareketi izlemek, neyin işe yaradığını anlamanıza yardımcı olur. Profil, aramalar ve ziyaretler hakkında sınırlı da olsa istatistik sunar. Bu sayıları yorumlarken temkinli olun: bir ayın düşüşü ya da yükselişi tek başına bir sonuç vermez. Telefon çağrılarını ve mesajları, "bizi nereden buldunuz?" diye sorarak da takip edebilirsiniz; bu basit yöntem, rakamların anlatmadığı şeyleri gösterir.
+Profil ve site üzerindeki hareketi izlemek, neyin işe yaradığını anlamanıza yardımcı olur. Profil panelinde aramalar ve ziyaretler hakkında bazı sayılar görebilirsiniz. Bu sayıları yorumlarken temkinli olun: bir ayın düşüşü ya da yükselişi tek başına bir sonuç vermez. Telefon çağrılarını ve mesajları, "bizi nereden buldunuz?" diye sorarak da takip edebilirsiniz; bu basit yöntem, rakamların anlatmadığı şeyleri gösterir.
 
 ## Yapılacaklar listesi
 

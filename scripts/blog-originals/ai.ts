@@ -303,7 +303,7 @@ Yeni bir fotoğraf yüklerken boyutuna dikkat edin. Telefon fotoğrafları çok 
 
 Renkleri değiştirirken üç kuralı aklınızda tutun. Birincisi, logonuzdaki renkle uyumlu bir ana renk seçin. İkincisi, metin ile zemin arasındaki karşıtlığı koruyun; açık gri zemin üzerinde açık gri yazı okunmaz. Üçüncüsü, çok renk kullanmayın; bir ana renk, birkaç nötr ton ve en fazla bir vurgu rengi çoğu işletme için yeterlidir.
 
-Yazı tipinde de sadelik kazanır. Başlıklar ve g��vde metni için iki farklı yazı tipi yeterlidir. Gövde metnini küçük puntoyla yazmayın; telefonda okunabilirlik her zaman öncelikli olmalıdır.
+Yazı tipinde de sadelik kazanır. Başlıklar ve gövde metni için iki farklı yazı tipi yeterlidir. Gövde metnini küçük puntoyla yazmayın; telefonda okunabilirlik her zaman öncelikli olmalıdır.
 
 ## Bölüm sırasını gözden geçirmek
 
