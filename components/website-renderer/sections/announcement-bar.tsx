@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import {
   announcementMarqueeTiming,
   estimateAnnouncementUnitWidth,
@@ -18,7 +19,16 @@ function dismissKey(data: AnnouncementData): string {
   return `gv-announcement:${data.items.map((i) => i.text).join('|')}`
 }
 
-export function AnnouncementBar({ data, lang = 'tr' }: { data: AnnouncementData; lang?: 'tr' | 'en' }) {
+export function AnnouncementBar({
+  data,
+  lang = 'tr',
+  colors = null,
+}: {
+  data: AnnouncementData
+  lang?: 'tr' | 'en'
+  /** Resolved site colours; lets the band pick its own AA-safe text colour. Null keeps the theme text colour. */
+  colors?: { primary: string; accent: string } | null
+}) {
   const nav = useSiteNav()
   const normalizeHref = useHrefNormalizer()
   const [dismissed, setDismissed] = useState(false)
@@ -59,7 +69,8 @@ export function AnnouncementBar({ data, lang = 'tr' }: { data: AnnouncementData;
     speed: data.speed,
   })
   const bg = data.useAccentColor ? 'var(--site-accent)' : 'var(--site-primary)'
-  const fg = data.useAccentColor ? 'var(--site-accent-fg, var(--site-primary-fg))' : 'var(--site-primary-fg)'
+  const themeFg = data.useAccentColor ? 'var(--site-accent-fg, var(--site-primary-fg))' : 'var(--site-primary-fg)'
+  const fg = colors ? announcementTextColor(data.useAccentColor ? colors.accent : colors.primary) : themeFg
 
   const renderItems = (hidden: boolean) =>
     items.map((item, i) => {

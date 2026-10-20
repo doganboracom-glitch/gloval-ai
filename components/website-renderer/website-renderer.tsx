@@ -312,7 +312,7 @@ export function WebsiteRenderer({
   const announcementAboveHeader = announcementPlacement(data.sections) === 'above-header'
   const announcementIndex = announcement ? sections.indexOf(announcement) : -1
   const announcementBar = announcement ? (
-    <AnnouncementBar data={announcement} lang={data.meta.language} />
+    <AnnouncementBar data={announcement} lang={data.meta.language} colors={theme} />
   ) : null
   const announcementNode =
     announcementBar && editSelection && announcementIndex >= 0 ? (

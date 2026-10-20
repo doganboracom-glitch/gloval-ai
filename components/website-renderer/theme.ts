@@ -58,13 +58,9 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-/**
- * Returns black or white — whichever is more readable on `hex`. The switch sits at
- * luminance 0.3 (white text below 3:1 contrast); at the old 0.5 mid-tone teals and
- * greens got unreadable white text.
- */
+/** Returns black or white — whichever is more readable on `hex`. */
 function readableOn(hex: string): string {
-  return luminance(hex) > 0.3 ? '#0b0b0f' : '#ffffff'
+  return luminance(hex) > 0.5 ? '#0b0b0f' : '#ffffff'
 }
 
 function mix(a: string, b: string, t: number): string {
