@@ -8,7 +8,7 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
 
 const supabase = createClient(url, key, { auth: { persistSession: false } })
-const allowedInternalPaths = new Set(['/'])
+const allowedInternalPaths = new Set(['/blog', '/blog/yapay-zeka-ile-urun-aciklamasi-yazma'])
 const linkPattern = /\]\((\/[^)\s]+)\)/g
 
 export function validateApprovedPost(post: (typeof approvedPosts)[number]) {
@@ -18,7 +18,7 @@ export function validateApprovedPost(post: (typeof approvedPosts)[number]) {
   }
   const words = body.replace(/[#*\[\]()]/g, ' ').trim().split(/\s+/).filter(Boolean).length
   if (words < 800 || words > 1200) throw new Error(`${post.slug}: ${words} words, expected 800-1200`)
-  if (post.category !== 'ai' && post.category !== 'web-design' && post.category !== 'seo') throw new Error(`${post.slug}: invalid category`)
+  if (post.category !== 'marketing' && post.category !== 'ecommerce') throw new Error(`${post.slug}: invalid category`)
 }
 
 async function main() {
