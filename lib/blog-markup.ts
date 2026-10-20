@@ -50,7 +50,7 @@ export function parseBlogInline(text: string): BlogInline[] {
 /** Only https or same-site image sources are rendered. */
 export function isSafeImageSrc(src: string): boolean {
   const s = src.trim()
-  if (!s || /[\s\u0000-\u001F]/.test(s)) return false
+  if (!s || /[\s\u0000-\u001F\\]/.test(s)) return false
   if (s.startsWith('/') && !s.startsWith('//')) return true
   return /^https:\/\/[^\s/]+/i.test(s)
 }

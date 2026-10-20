@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { BlogPostClient } from '@/components/content/blog-post-client'
 import { getPost, getPosts, getRedirectTarget, getRelatedPosts } from '@/lib/content/blog'
+import { platformPostJsonLd, serializeJsonLd } from '@/lib/blog-jsonld'
 import { OG_IMAGE_SIZE, ogImageUrlForPost } from '@/lib/seo/page-seo'
 
 /** Posts are admin-managed: pages are regenerated at most every 5 minutes, and instantly when an admin saves. */
@@ -77,42 +78,14 @@ export default async function BlogPostPage({
   // BlogPosting structured data (Turkish-first, matching the crawlable
   // metadata). Built from the same post record the page renders, so the schema
   // can never disagree with the visible article.
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'BlogPosting',
-    headline: post.seoTitle.tr,
-    description: post.seoDescription.tr,
-    inLanguage: 'tr-TR',
-    datePublished: post.publishedAt,
-    dateModified: post.updatedAt ?? post.publishedAt,
-    author: { '@type': 'Organization', name: post.author },
-    publisher: {
-      '@type': 'Organization',
-      name: 'GLOVAL AI',
-      logo: {
-        '@type': 'ImageObject',
-        url: 'https://gloval.ai/icon-512x512.png',
-      },
-    },
-    mainEntityOfPage: `https://gloval.ai/blog/${post.slug}`,
-    ...(post.tags.length ? { keywords: post.tags.join(', ') } : {}),
-    ...(post.coverImage
-      ? {
-          image: [
-            post.coverImage.startsWith('http')
-              ? post.coverImage
-              : `https://gloval.ai${post.coverImage}`,
-          ],
-        }
-      : {}),
-  }
+  const jsonLd = platformPostJsonLd(post)
 
   return (
     <>
       <script
         type="application/ld+json"
         // Admin-authored text: `<` is escaped so no value can close the script tag.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <BlogPostClient post={post} related={related} />
     </>

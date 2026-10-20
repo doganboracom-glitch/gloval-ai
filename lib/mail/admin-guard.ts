@@ -48,7 +48,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
  * or a 403, so the existence of the admin area is not disclosed to people who
  * may not have it.
  */
-async function getAdminUser(): Promise<{ userId: string; email: string } | null> {
+export async function getAdminUser(): Promise<{ userId: string; email: string } | null> {
   const supabase = await createClient()
   const {
     data: { user },
