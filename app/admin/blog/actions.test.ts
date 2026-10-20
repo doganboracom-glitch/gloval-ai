@@ -187,6 +187,62 @@ describe('blog admin actions', () => {
     })
   })
 
+  describe('category deletion', () => {
+    const withPosts = (count: number, targetExists = true) =>
+      mocks.respond.mockImplementation((state: Op) => {
+        if (state.table === 'platform_blog_posts' && state.op === 'select') return { data: null, count, error: null }
+        if (state.table === 'platform_blog_categories' && state.op === 'select') return { data: targetExists ? { id: 'c-2' } : null, error: null }
+        return { data: null, error: null }
+      })
+
+    it('blocks deleting a category that has posts when no target is given', async () => {
+      withPosts(3)
+      await expect(deleteCategoryAction('c-1')).resolves.toEqual({ ok: false, error: 'category_in_use', count: 3 })
+      expect(writes()).toHaveLength(0)
+      expect(mocks.audit).not.toHaveBeenCalled()
+    })
+
+    it('moves the posts to the chosen category before deleting, so none are left uncategorized', async () => {
+      withPosts(3)
+      await expect(deleteCategoryAction('c-1', 'c-2')).resolves.toEqual({ ok: true, moved: 3 })
+      const [move, remove] = writes()
+      expect(move).toMatchObject({ table: 'platform_blog_posts', op: 'update', payload: { category_id: 'c-2' }, filters: [['category_id', 'c-1']] })
+      expect(remove).toMatchObject({ table: 'platform_blog_categories', op: 'delete', filters: [['id', 'c-1']] })
+      expect(mocks.audit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'category.delete', detail: { id: 'c-1', moved: 3, movedTo: 'c-2' } }),
+      )
+    })
+
+    it('rejects moving posts into the category being deleted', async () => {
+      withPosts(2)
+      await expect(deleteCategoryAction('c-1', 'c-1')).resolves.toMatchObject({ ok: false, error: 'validation' })
+      expect(writes()).toHaveLength(0)
+    })
+
+    it('rejects a move target that does not exist and deletes nothing', async () => {
+      withPosts(2, false)
+      await expect(deleteCategoryAction('c-1', 'ghost')).resolves.toMatchObject({ ok: false, error: 'not_found' })
+      expect(writes()).toHaveLength(0)
+    })
+
+    it('does not delete the category if moving the posts fails', async () => {
+      mocks.respond.mockImplementation((state: Op) => {
+        if (state.table === 'platform_blog_posts' && state.op === 'select') return { data: null, count: 2, error: null }
+        if (state.table === 'platform_blog_categories' && state.op === 'select') return { data: { id: 'c-2' }, error: null }
+        if (state.table === 'platform_blog_posts' && state.op === 'update') return { data: null, error: { message: 'boom' } }
+        return { data: null, error: null }
+      })
+      await expect(deleteCategoryAction('c-1', 'c-2')).resolves.toMatchObject({ ok: false, error: 'failed' })
+      expect(writes().some((o) => o.op === 'delete')).toBe(false)
+    })
+
+    it('deletes an empty category directly without touching posts', async () => {
+      withPosts(0)
+      await expect(deleteCategoryAction('c-1')).resolves.toEqual({ ok: true, moved: 0 })
+      expect(writes().map((o) => `${o.table}:${o.op}`)).toEqual(['platform_blog_categories:delete'])
+    })
+  })
+
   it('deletes a post and records its slug and title in the audit trail', async () => {
     mocks.respond.mockImplementation((state: Op) =>
       state.op === 'select' ? { data: { slug: 'silinen', title: 'Silinen' }, error: null } : { data: null, error: null },

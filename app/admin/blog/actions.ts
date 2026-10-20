@@ -19,8 +19,9 @@ export type ActionResult<T = object> =
   | ({ ok: true } & T)
   | {
       ok: false
-      error: 'unauthorized' | 'validation' | 'not_found' | 'slug_taken' | 'rate_limited' | 'failed'
+      error: 'unauthorized' | 'validation' | 'not_found' | 'slug_taken' | 'rate_limited' | 'category_in_use' | 'failed'
       errors?: FieldErrors
+      count?: number
     }
 
 type Admin = { userId: string; email: string }
@@ -213,12 +214,43 @@ export async function saveCategoryAction(input: CategoryInput): Promise<ActionRe
   return { ok: true }
 }
 
-export async function deleteCategoryAction(id: string): Promise<ActionResult> {
+/**
+ * A category that still has posts is never deleted silently: the caller must name another
+ * category to move those posts to, otherwise the delete is refused with the post count.
+ */
+export async function deleteCategoryAction(id: string, moveToId?: string): Promise<ActionResult<{ moved: number }>> {
   const auth = await authorizeWrite()
   if ('denied' in auth) return auth.denied
-  const { error } = await createAdminClient().from('platform_blog_categories').delete().eq('id', id)
+  const supabase = createAdminClient()
+
+  const { count, error: countError } = await supabase
+    .from('platform_blog_posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('category_id', id)
+  if (countError) return { ok: false, error: 'failed' }
+  const postCount = count ?? 0
+
+  if (postCount > 0) {
+    if (!moveToId) return { ok: false, error: 'category_in_use', count: postCount }
+    if (moveToId === id) return { ok: false, error: 'validation' }
+    const { data: target, error: targetError } = await supabase
+      .from('platform_blog_categories')
+      .select('id')
+      .eq('id', moveToId)
+      .maybeSingle()
+    if (targetError) return { ok: false, error: 'failed' }
+    if (!target) return { ok: false, error: 'not_found' }
+    const { error: moveError } = await supabase.from('platform_blog_posts').update({ category_id: moveToId }).eq('category_id', id)
+    if (moveError) return { ok: false, error: 'failed' }
+  }
+
+  const { error } = await supabase.from('platform_blog_categories').delete().eq('id', id)
   if (error) return { ok: false, error: 'failed' }
-  await recordBlogAudit({ actor: auth.admin, action: 'category.delete', detail: { id } })
+  await recordBlogAudit({
+    actor: auth.admin,
+    action: 'category.delete',
+    detail: { id, moved: postCount, movedTo: postCount > 0 ? moveToId : null },
+  })
   refreshBlog()
-  return { ok: true }
+  return { ok: true, moved: postCount }
 }

@@ -29,6 +29,9 @@ export function CategoriesView({ categories }: { categories: AdminCategory[] }) 
   const [errors, setErrors] = useState<FieldErrors>({})
   const [message, setMessage] = useState('')
   const [toDelete, setToDelete] = useState<AdminCategory | null>(null)
+  const [moveTo, setMoveTo] = useState('')
+  const targets = categories.filter((category) => category.id !== toDelete?.id)
+  const needsTarget = (toDelete?.postCount ?? 0) > 0
   const [pending, startTransition] = useTransition()
 
   const open = (next: Draft, touched: boolean) => {
@@ -61,9 +64,9 @@ export function CategoriesView({ categories }: { categories: AdminCategory[] }) 
     })
   }
 
-  const remove = (category: AdminCategory) => {
+  const remove = (category: AdminCategory, moveToId?: string) => {
     startTransition(async () => {
-      const result = await deleteCategoryAction(category.id)
+      const result = await deleteCategoryAction(category.id, moveToId)
       if (!result.ok) setMessage(t.errors[result.error] ?? t.errors.failed)
       router.refresh()
     })
@@ -201,7 +204,11 @@ export function CategoriesView({ categories }: { categories: AdminCategory[] }) 
                 >
                   <Pencil aria-hidden />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" aria-label={`${c.delete}: ${category.name}`} title={c.delete} disabled={pending} onClick={() => setToDelete(category)}>
+                <Button type="button" variant="ghost" size="icon" aria-label={`${c.delete}: ${category.name}`} title={c.delete} disabled={pending} onClick={() => {
+                  setMoveTo('')
+                  setMessage('')
+                  setToDelete(category)
+                }}>
                   <Trash2 aria-hidden />
                 </Button>
               </div>
@@ -217,13 +224,34 @@ export function CategoriesView({ categories }: { categories: AdminCategory[] }) 
         confirmLabel={c.delete}
         cancelLabel={c.cancel}
         destructive
+        confirmDisabled={needsTarget && !moveTo}
         onCancel={() => setToDelete(null)}
         onConfirm={() => {
           const target = toDelete
           setToDelete(null)
-          if (target) remove(target)
+          if (target) remove(target, needsTarget ? moveTo : undefined)
         }}
-      />
+      >
+        {needsTarget ? (
+          targets.length > 0 ? (
+            <label className="mt-4 flex flex-col gap-1.5 text-sm font-medium text-foreground">
+              {c.moveTo}
+              <select value={moveTo} onChange={(ev) => setMoveTo(ev.target.value)} className={field}>
+                <option value="">{c.movePlaceholder}</option>
+                {targets.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p role="alert" className="mt-4 text-sm text-destructive">
+              {c.noTarget}
+            </p>
+          )
+        ) : null}
+      </ConfirmDialog>
     </div>
   )
 }

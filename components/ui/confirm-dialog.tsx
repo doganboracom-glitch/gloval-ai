@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { nextTrapIndex } from '@/lib/focus-trap'
 
@@ -18,6 +18,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
   onCancel,
 }: {
@@ -27,6 +29,8 @@ export function ConfirmDialog({
   confirmLabel: string
   cancelLabel: string
   destructive?: boolean
+  confirmDisabled?: boolean
+  children?: ReactNode
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -87,6 +91,7 @@ export function ConfirmDialog({
         <p id={descriptionId} className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {description}
         </p>
+        {children}
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             ref={cancelRef}
@@ -99,7 +104,8 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className={`inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium transition-opacity hover:opacity-90 ${
+            disabled={confirmDisabled}
+            className={`inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
               destructive ? 'bg-destructive text-white' : 'bg-brand text-brand-foreground'
             }`}
           >

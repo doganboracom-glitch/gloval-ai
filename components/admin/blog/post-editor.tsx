@@ -142,6 +142,7 @@ export function PostEditor({
   const [busy, setBusy] = useState<null | 'cover' | 'generate' | 'image'>(null)
   const [coverError, setCoverError] = useState('')
   const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const [contentLang, setContentLang] = useState<'tr' | 'en'>('tr')
   const coverInput = useRef<HTMLInputElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
 
@@ -365,6 +366,50 @@ export function PostEditor({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-5">
+          <div role="tablist" aria-label={e.langTabs} className="inline-flex w-fit rounded-lg border border-border p-0.5 text-sm">
+            {(['tr', 'en'] as const).map((id) => {
+              const hasEnglish = id === 'en' && Object.values(form.en).some(Boolean)
+              const hasError = id === 'en' && Object.keys(errors).some((key) => key.startsWith('en'))
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  id={`lang-tab-${id}`}
+                  aria-selected={contentLang === id}
+                  aria-controls="lang-panel"
+                  onClick={() => setContentLang(id)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3.5 py-1 font-medium transition-colors ${contentLang === id ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {id === 'tr' ? e.langTr : e.langEn}
+                  {hasError ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden /> : hasEnglish ? <span className="size-1.5 rounded-full bg-brand" aria-hidden /> : null}
+                </button>
+              )
+            })}
+          </div>
+
+          {contentLang === 'en' ? (
+            <div id="lang-panel" role="tabpanel" aria-labelledby="lang-tab-en" className="flex flex-col gap-4">
+              <p className="text-xs text-muted-foreground">{e.englishHint}</p>
+              <Field label={e.title} htmlFor="en-title" error={err('enTitle')}>
+                <input id="en-title" value={form.en.title} onChange={(ev) => setEn('title', ev.target.value)} aria-invalid={Boolean(errors.enTitle)} className={`${field} h-11 text-base font-medium`} />
+              </Field>
+              <Field label={e.excerpt} htmlFor="en-excerpt" error={err('enExcerpt')}>
+                <textarea id="en-excerpt" rows={3} value={form.en.excerpt} onChange={(ev) => setEn('excerpt', ev.target.value)} className={field} />
+              </Field>
+              <Field label={e.body} htmlFor="en-body" error={err('enBody')}>
+                <textarea id="en-body" rows={22} value={form.en.body} onChange={(ev) => setEn('body', ev.target.value)} className={`${field} min-h-96 font-mono`} />
+              </Field>
+              <Field label={e.seoTitle} htmlFor="en-seo" error={err('enSeoTitle')}>
+                <input id="en-seo" value={form.en.seoTitle} onChange={(ev) => setEn('seoTitle', ev.target.value)} className={field} />
+              </Field>
+              <Field label={e.metaDescription} htmlFor="en-meta" error={err('enMetaDescription')}>
+                <textarea id="en-meta" rows={3} value={form.en.metaDescription} onChange={(ev) => setEn('metaDescription', ev.target.value)} className={field} />
+              </Field>
+            </div>
+          ) : null}
+
+          <div id={contentLang === 'tr' ? 'lang-panel' : undefined} role={contentLang === 'tr' ? 'tabpanel' : undefined} aria-labelledby={contentLang === 'tr' ? 'lang-tab-tr' : undefined} hidden={contentLang !== 'tr'} className="flex min-w-0 flex-col gap-5">
           <Field label={e.title} htmlFor="post-title" error={err('title')} counter={{ value: form.title.length, max: LIMITS.title, unit: e.charsLeft }}>
             <input
               id="post-title"
@@ -489,6 +534,7 @@ export function PostEditor({
                 {err('body')}
               </p>
             ) : null}
+          </div>
           </div>
         </div>
 
@@ -663,30 +709,6 @@ export function PostEditor({
                 {e.noindex}
               </label>
             </div>
-          </Panel>
-
-          <Panel>
-            <details className="group" open={Object.values(form.en).some(Boolean)}>
-              <summary className="cursor-pointer list-none px-4 py-3 font-display text-sm font-semibold marker:hidden">{e.english}</summary>
-              <div className="flex flex-col gap-4 border-t border-border p-4">
-                <p className="text-xs text-muted-foreground">{e.englishHint}</p>
-                <Field label={e.title} htmlFor="en-title" error={err('enTitle')}>
-                  <input id="en-title" value={form.en.title} onChange={(ev) => setEn('title', ev.target.value)} aria-invalid={Boolean(errors.enTitle)} className={field} />
-                </Field>
-                <Field label={e.excerpt} htmlFor="en-excerpt" error={err('enExcerpt')}>
-                  <textarea id="en-excerpt" rows={2} value={form.en.excerpt} onChange={(ev) => setEn('excerpt', ev.target.value)} className={field} />
-                </Field>
-                <Field label={e.body} htmlFor="en-body" error={err('enBody')}>
-                  <textarea id="en-body" rows={8} value={form.en.body} onChange={(ev) => setEn('body', ev.target.value)} className={`${field} font-mono`} />
-                </Field>
-                <Field label={e.seoTitle} htmlFor="en-seo" error={err('enSeoTitle')}>
-                  <input id="en-seo" value={form.en.seoTitle} onChange={(ev) => setEn('seoTitle', ev.target.value)} className={field} />
-                </Field>
-                <Field label={e.metaDescription} htmlFor="en-meta" error={err('enMetaDescription')}>
-                  <textarea id="en-meta" rows={2} value={form.en.metaDescription} onChange={(ev) => setEn('metaDescription', ev.target.value)} className={field} />
-                </Field>
-              </div>
-            </details>
           </Panel>
 
           {oldSlugs.length > 0 ? (
