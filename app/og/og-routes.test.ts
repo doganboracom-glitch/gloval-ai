@@ -59,7 +59,7 @@ describe('/og/[page]', () => {
 
 describe('/og/post/[slug]', () => {
   it('renders a 1200x630 PNG for a real post', async () => {
-    const slug = getPosts()[0].slug
+    const slug = (await getPosts())[0].slug
     const res = await getPost(new Request(`https://gloval.ai/og/post/${slug}`), {
       params: Promise.resolve({ slug }),
     })

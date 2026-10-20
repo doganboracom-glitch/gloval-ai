@@ -6,7 +6,7 @@ import { PostCover } from '@/components/content/post-cover'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { BlogCard, formatPostDate } from '@/components/content/blog-card'
-import { getCategory } from '@/lib/content/blog'
+import { BlogMarkupView } from '@/components/content/blog-markup-view'
 import { getLocalized, type BlogPost } from '@/lib/content/types'
 
 export function BlogPostClient({
@@ -17,7 +17,7 @@ export function BlogPostClient({
   related: BlogPost[]
 }) {
   const { t, lang } = useLanguage()
-  const category = getCategory(post.category)
+  const category = post.categoryLabel
 
   return (
     <div className="min-h-screen">
@@ -37,13 +37,16 @@ export function BlogPostClient({
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               {category && (
                 <span className="rounded-full bg-primary/12 px-2.5 py-0.5 font-medium text-primary">
-                  {getLocalized(category.label, lang)}
+                  {getLocalized(category, lang)}
                 </span>
               )}
               <time dateTime={post.publishedAt} className="text-muted-foreground">
                 {formatPostDate(post.publishedAt, lang)}
               </time>
               <span className="text-muted-foreground">{post.author}</span>
+              <span className="text-muted-foreground">
+                {post.readingTime} {lang === 'tr' ? 'dk okuma' : 'min read'}
+              </span>
             </div>
 
             <h1 className="mt-4 text-balance font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
@@ -62,44 +65,8 @@ export function BlogPostClient({
             </div>
           )}
 
-          {/* Body blocks are rendered by type rather than as raw HTML, which
-              keeps the article free of dangerouslySetInnerHTML. */}
           <div className="mt-12">
-            {post.body.map((block, i) => {
-              if (block.type === 'heading') {
-                return (
-                  <h2
-                    key={i}
-                    className="mt-10 text-balance font-display text-2xl font-semibold tracking-tight first:mt-0"
-                  >
-                    {getLocalized(block.text, lang)}
-                  </h2>
-                )
-              }
-              if (block.type === 'list') {
-                return (
-                  <ul key={i} className="mt-5 flex flex-col gap-2.5">
-                    {getLocalized(block.items, lang).map((entry) => (
-                      <li key={entry} className="flex gap-3 text-pretty leading-relaxed">
-                        <span
-                          aria-hidden="true"
-                          className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                        />
-                        <span className="text-muted-foreground">{entry}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              }
-              return (
-                <p
-                  key={i}
-                  className="mt-5 text-pretty leading-relaxed text-muted-foreground"
-                >
-                  {getLocalized(block.text, lang)}
-                </p>
-              )
-            })}
+            <BlogMarkupView markup={getLocalized(post.markup, lang)} />
           </div>
         </article>
 

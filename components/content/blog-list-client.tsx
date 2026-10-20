@@ -6,16 +6,17 @@ import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { BlogCard } from '@/components/content/blog-card'
-import { getPosts, getUsedCategories } from '@/lib/content/blog'
-import { getLocalized, type BlogCategoryId } from '@/lib/content/types'
+import { getLocalized, type BlogCategory, type BlogCategoryId, type BlogPost } from '@/lib/content/types'
 
-export function BlogListClient() {
+export function BlogListClient({
+  posts: allPosts,
+  categories,
+}: {
+  posts: BlogPost[]
+  categories: BlogCategory[]
+}) {
   const { t, lang } = useLanguage()
   const [active, setActive] = useState<BlogCategoryId | 'all'>('all')
-
-  const allPosts = getPosts()
-  // Only categories that actually have posts, so no filter leads to a dead end.
-  const categories = getUsedCategories()
 
   const posts = useMemo(
     () => (active === 'all' ? allPosts : allPosts.filter((p) => p.category === active)),

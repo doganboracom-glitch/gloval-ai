@@ -13,9 +13,11 @@ import {
   LayoutTemplate,
   LifeBuoy,
   Mail,
+  Newspaper,
   Sparkles,
   Users,
 } from 'lucide-react'
+import { blogAdminT } from '@/lib/blog-admin-copy'
 import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
@@ -53,6 +55,7 @@ export function AdminShell({
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe },
+    { href: '/admin/blog', label: blogAdminT(lang).nav, icon: Newspaper },
     { href: '/admin/support', label: t.nav.support, icon: LifeBuoy },
     { href: '/admin/notifications', label: t.nav.notifications, icon: Bell },
     { href: '/admin/mail', label: t.nav.mail, icon: Mail },

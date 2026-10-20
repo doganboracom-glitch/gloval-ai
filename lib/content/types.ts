@@ -38,47 +38,67 @@ export type FaqItem = {
   featured: boolean
 }
 
-export type BlogCategoryId =
-  | 'ai'
-  | 'web-design'
-  | 'seo'
-  | 'marketing'
-  | 'ecommerce'
-  | 'gloval'
-  | 'guides'
+/** Category slug. Free-form now that categories are managed in the admin. */
+export type BlogCategoryId = string
 
 export type BlogCategory = {
+  /** The category slug; also the filter key on /blog. */
   id: BlogCategoryId
   label: Localized<string>
 }
 
-/** One paragraph or subheading of post body copy. */
+/** One paragraph or subheading of post body copy (static fallback content only). */
 export type BlogBlock =
   | { type: 'paragraph'; text: Localized<string> }
   | { type: 'heading'; text: Localized<string> }
   | { type: 'list'; items: Localized<string[]> }
 
-export type BlogPost = {
-  /** SEO-friendly, ascii-only slug used as the URL segment. */
+/** Shape of the file-based fallback posts in `blog-static.ts`. */
+export type StaticBlogPost = {
   slug: string
   title: Localized<string>
   excerpt: Localized<string>
   body: BlogBlock[]
-  /**
-   * Optional cover image path. When unset, the UI renders a generated cover
-   * panel instead — see components/content/post-cover.tsx.
-   */
   coverImage?: string
-  /** Alt text is localized because it is user-visible content, not a label. */
   coverAlt?: Localized<string>
   category: BlogCategoryId
   author: string
-  /** ISO date strings (YYYY-MM-DD). */
+  /** ISO dates (YYYY-MM-DD). */
   publishedAt: string
   updatedAt: string
   seoTitle: Localized<string>
   seoDescription: Localized<string>
   keywords: Localized<string[]>
-  /** Controls placement in the homepage summary; see `FaqItem.featured`. */
   featured: boolean
+}
+
+/** A post as the public pages consume it, regardless of where it came from. */
+export type BlogPost = {
+  /** SEO-friendly, ascii-only slug used as the URL segment. */
+  slug: string
+  title: Localized<string>
+  excerpt: Localized<string>
+  /**
+   * Article body in the blog markup (see lib/blog-markup.ts). Empty on list
+   * results: only the detail query loads the body.
+   */
+  markup: Localized<string>
+  coverImage?: string
+  coverAlt?: Localized<string>
+  category: BlogCategoryId
+  /** Display label so client components never look categories up themselves. */
+  categoryLabel?: Localized<string>
+  author: string
+  /** Full ISO timestamps. */
+  publishedAt: string
+  updatedAt: string
+  seoTitle: Localized<string>
+  seoDescription: Localized<string>
+  keywords: Localized<string[]>
+  tags: string[]
+  featured: boolean
+  noindex: boolean
+  readingTime: number
+  /** True when an English translation exists (drives the hreflang alternate). */
+  hasEnglish: boolean
 }

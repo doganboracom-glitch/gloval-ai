@@ -3,15 +3,14 @@
 import { ArrowRight } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { BlogCard } from '@/components/content/blog-card'
-import { getFeaturedPosts } from '@/lib/content/blog'
+import type { BlogPost } from '@/lib/content/types'
 
 /**
  * Homepage blog summary: exactly three featured posts. Only card-level fields
  * are read here — full article bodies are never pulled into the homepage.
  */
-export function BlogPreview() {
+export function BlogPreviewView({ posts }: { posts: BlogPost[] }) {
   const { t } = useLanguage()
-  const posts = getFeaturedPosts(3)
 
   if (posts.length === 0) return null
 

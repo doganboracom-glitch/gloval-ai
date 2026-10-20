@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { PostCover } from '@/components/content/post-cover'
-import { getCategory } from '@/lib/content/blog'
 import { getLocalized, type BlogPost } from '@/lib/content/types'
 import type { Lang } from '@/lib/i18n'
 
@@ -15,9 +14,9 @@ import type { Lang } from '@/lib/i18n'
  * post text itself).
  */
 export function formatPostDate(iso: string, lang: Lang): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(
+  return new Date(iso).toLocaleDateString(
     lang === 'tr' ? 'tr-TR' : 'en-US',
-    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' },
+    { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Istanbul' },
   )
 }
 
@@ -37,7 +36,7 @@ export function BlogCard({
   priority?: boolean
 }) {
   const { t, lang } = useLanguage()
-  const category = getCategory(post.category)
+  const category = post.categoryLabel
 
   return (
     <Link
@@ -64,7 +63,7 @@ export function BlogCard({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           {category && (
             <span className="rounded-full bg-primary/12 px-2.5 py-0.5 font-medium text-primary">
-              {getLocalized(category.label, lang)}
+              {getLocalized(category, lang)}
             </span>
           )}
           <time dateTime={post.publishedAt} className="text-muted-foreground">

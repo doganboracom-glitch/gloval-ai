@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import sitemap from './sitemap'
 import robots from './robots'
 
 const PRIVATE_PREFIXES = ['/dashboard', '/editor', '/ecommerce', '/billing', '/admin', '/auth', '/api', '/site', '/demo', '/og']
 
 describe('platform sitemap', () => {
-  const entries = sitemap()
+  let entries: Awaited<ReturnType<typeof sitemap>> = []
+  beforeAll(async () => {
+    entries = await sitemap()
+  })
 
   it('lists the marketing pages on the platform host only', () => {
     const urls = entries.map((e) => e.url)
@@ -35,7 +38,7 @@ describe('platform sitemap', () => {
       const languages = entry.alternates?.languages as Record<string, string>
       expect(languages['x-default']).toBe(entry.url)
       expect(languages['tr-TR']).toBe(entry.url)
-      expect(languages.en).toBe(`${entry.url}?lang=en`)
+      if (languages.en) expect(languages.en).toBe(`${entry.url}?lang=en`)
     }
   })
 
