@@ -18,7 +18,7 @@ export function validateApprovedPost(post: (typeof approvedPosts)[number]) {
   }
   const words = body.replace(/[#*\[\]()]/g, ' ').trim().split(/\s+/).filter(Boolean).length
   if (words < 800 || words > 1200) throw new Error(`${post.slug}: ${words} words, expected 800-1200`)
-  if (post.category !== 'marketing' && post.category !== 'ecommerce') throw new Error(`${post.slug}: invalid category`)
+  if (!['ai', 'web-design', 'seo', 'marketing', 'ecommerce', 'gloval', 'guides'].includes(post.category)) throw new Error(`${post.slug}: invalid category`)
 }
 
 async function main() {
@@ -54,7 +54,7 @@ async function main() {
       updated_at: publishedAt,
     }
   })
-  const postsResult = await supabase.from('platform_blog_posts').upsert(postRows, { onConflict: 'slug', ignoreDuplicates: true })
+  const postsResult = await supabase.from('platform_blog_posts').upsert(postRows, { onConflict: 'slug' })
   if (postsResult.error) throw postsResult.error
   const { count: total } = await supabase.from('platform_blog_posts').select('id', { count: 'exact', head: true })
   const { count: drafts } = await supabase.from('platform_blog_posts').select('id', { count: 'exact', head: true }).eq('status', 'draft')
