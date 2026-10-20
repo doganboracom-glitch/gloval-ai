@@ -308,7 +308,7 @@ const TR: Strings = {
       badge: 'En Çok Tercih Edilen',
     },
     ecommerce: {
-      name: 'E-TİCARET',
+      name: 'E-T��CARET',
       headline: 'Ürünlerini online sat',
       description: 'Mağazasını internete taşımak isteyen işletmeler için.',
       cta: 'E-Ticarete Başla',
@@ -890,8 +890,9 @@ export const PLAN_VISIBLE_ITEM_COUNT = 6
 export const PINNED_ITEM_IDS: Record<PlanCode, string[]> = {
   // FREE: the limits a visitor tries first (sites, pages), the blog, then the trust basics.
   free: ['sites', 'pages', 'blog', 'glovalAddress', 'ssl', 'seo'],
-  // STARTER: the reasons to leave FREE (own domain, blog, backups, a mailbox).
-  starter: ['sites', 'pages', 'customDomain', 'blog', 'autoBackup', 'mailboxes'],
+  // STARTER: the reasons to leave FREE (own domain, blog, backups, a mailbox, support).
+  // The page count is the lowest-priority row and sits behind the toggle.
+  starter: ['sites', 'customDomain', 'blog', 'autoBackup', 'mailboxes', 'support'],
   // PRO: what it adds over STARTER: more sites, catalog, daily backups, restore,
   // advanced AI, priority support. Pages and the mailbox count sit behind the toggle.
   pro: ['sites', 'catalogOrder', 'autoBackup', 'versionHistory', 'advancedAi', 'support'],

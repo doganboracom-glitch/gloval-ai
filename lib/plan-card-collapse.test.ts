@@ -87,11 +87,11 @@ describe('collapsed card shows exactly six rows (pins)', () => {
     expect(visible('free')).toEqual(['sites', 'pages', 'blog', 'glovalAddress', 'ssl', 'seo'])
     expect(visible('starter')).toEqual([
       'sites',
-      'pages',
       'customDomain',
       'blog',
       'autoBackup',
       'mailboxes',
+      'support',
     ])
     expect(visible('pro')).toEqual([
       'sites',
