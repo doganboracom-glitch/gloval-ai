@@ -1,5 +1,5 @@
 -- 070-ai-image-previews.sql
--- DRAFT v2: shown to the owner for review. NOT applied to any database.
+-- v3: approved by the owner with conditions (signature check, rollback tests).
 --
 -- Server-side preview sessions for "AI ile üret" images, plus the ONE-TIME free
 -- preview per ACCOUNT. Every money/entitlement decision happens inside a
@@ -179,6 +179,9 @@ begin
               where user_id = p_user and idem_key = 'regen:' || p_id::text || ':' || p_key) then
     return 'duplicate';
   end if;
+  if v_row.status = 'regenerating' and v_row.updated_at < now() - interval '3 minutes' then
+    v_row.status := 'open';
+  end if;
   if v_row.status in ('generating', 'regenerating') then return 'inflight'; end if;
   if v_row.status <> 'open' or v_row.expires_at <= now() then return 'invalid'; end if;
   update public.ai_image_previews set status = 'regenerating', updated_at = now() where id = p_id;
@@ -339,6 +342,13 @@ begin
   return v_n;
 end $$;
 
+-- 6b) Read-only: is the account's one free preview still unused?
+create or replace function public.ai_preview_free_available(p_user uuid)
+returns boolean
+language sql stable security definer set search_path = public, pg_temp as $$
+  select not exists (select 1 from public.ai_preview_entitlements where user_id = p_user);
+$$;
+
 -- 7) Function privileges: nobody but service_role may execute.
 do $$
 declare f text;
@@ -354,7 +364,8 @@ begin
     'ai_preview_expire_stale()',
     'ai_preview_pending_cleanup(integer)',
     'ai_preview_mark_cleaned(uuid[])',
-    'ai_preview_purge(interval)'
+    'ai_preview_purge(interval)',
+    'ai_preview_free_available(uuid)'
   ] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
     execute format('grant execute on function public.%s to service_role', f);
