@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ArrowLeft, Mail, Phone, MapPin, Building2, ShieldCheck, Send, CheckCircle2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Mail,
+  Phone,
+  MapPin,
+  Building2,
+  ShieldCheck,
+  Send,
+  CheckCircle2,
+  Receipt,
+  Landmark,
+} from 'lucide-react'
 import Link from 'next/link'
 import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
@@ -21,13 +32,23 @@ export function ContactPageClient() {
   const { t, lang } = useLanguage()
   const tr = lang === 'tr'
 
-  const rows = [
+  const allRows: Array<{
+    icon: typeof Building2
+    label: string
+    value: string
+    href?: string
+    hideIfPlaceholder?: boolean
+  }> = [
     { icon: Building2, label: tr ? 'Şirket unvanı' : 'Legal name', value: COMPANY.legalName },
+    { icon: Receipt, label: tr ? 'Vergi No' : 'Tax number', value: COMPANY.taxNumber, hideIfPlaceholder: true },
+    { icon: Landmark, label: tr ? 'Vergi Dairesi' : 'Tax office', value: COMPANY.taxOffice, hideIfPlaceholder: true },
     { icon: Mail, label: tr ? 'Destek e-postası' : 'Support email', value: COMPANY.supportEmail, href: `mailto:${COMPANY.supportEmail}` },
     { icon: ShieldCheck, label: tr ? 'KVKK başvuru' : 'Data requests', value: COMPANY.kvkkEmail, href: `mailto:${COMPANY.kvkkEmail}` },
     { icon: Phone, label: tr ? 'Telefon' : 'Phone', value: COMPANY.phone, href: `tel:${COMPANY.phone.replace(/\s+/g, '')}` },
     { icon: MapPin, label: tr ? 'Adres' : 'Address', value: COMPANY.address },
   ]
+
+  const rows = allRows.filter((row) => !(row.hideIfPlaceholder && isPlaceholder(row.value)))
 
   const missing = tr ? 'Eksik' : 'Missing'
 
