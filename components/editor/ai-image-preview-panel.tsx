@@ -56,20 +56,23 @@ const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? (r.json() as Pro
 export function AiImagePreviewPanel({
   site,
   index,
+  sectionKey: explicitKey,
   projectId,
   canAdd,
   disabled,
   onUse,
 }: {
   site: WebsiteSchema
-  index: number
+  /** About section index; ignored when `sectionKey` is given (e.g. `services:2.1`). */
+  index?: number
+  sectionKey?: string
   projectId: string | null
   canAdd: boolean
   disabled?: boolean
   onUse: (image: UsedImage) => void
 }) {
   const c = COPY[site.meta.language === 'en' ? 'en' : 'tr']
-  const sectionKey = `about:${index}`
+  const sectionKey = explicitKey ?? `about:${index ?? 0}`
   const swrKey = projectId
     ? `/api/ai-previews?projectId=${encodeURIComponent(projectId)}&sectionKey=${encodeURIComponent(sectionKey)}`
     : null

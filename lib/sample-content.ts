@@ -227,6 +227,27 @@ function aboutDetailDigest(detail: NonNullable<AboutSectionLike['detail']>): str
   return sampleDigest('about', ['detail', detail.heading ?? '', (detail.blocks ?? []).map((b) => [b.heading ?? '', b.body])])
 }
 
+type ServicesSectionLike = Extract<Section, { type: 'services' }>
+type ServiceItemLike = ServicesSectionLike['items'][number]
+
+/** A service's own page text while it is still platform-written and unapproved. */
+function serviceDetailDigest(item: ServiceItemLike): string {
+  return sampleDigest('services', ['detail', item.title, (item.detail ?? []).map((b) => [b.heading ?? '', b.body])])
+}
+
+function mapServiceItems(
+  section: ServicesSectionLike,
+  fn: (item: ServiceItemLike) => ServiceItemLike,
+): ServicesSectionLike {
+  let touched = false
+  const items = section.items.map((item) => {
+    const out = fn(item)
+    if (out !== item) touched = true
+    return out
+  })
+  return touched ? { ...section, items } : section
+}
+
 function heroTrustDigest(trustText: string | undefined): string {
   return sampleDigest('hero', [trustText ?? ''])
 }
@@ -386,6 +407,15 @@ export function collectSampleFindings(site: WebsiteSchema, context?: DetectionCo
       if (items.length) findings.push({ sectionIndex, sectionType: 'about', items })
       return
     }
+    if (section.type === 'services') {
+      const items: SampleItemFinding[] = []
+      section.items.forEach((item, itemIndex) => {
+        if (!item.sample) return
+        items.push({ id: serviceDetailDigest(item), itemIndex, kind: 'info', label: truncate(item.title) })
+      })
+      if (items.length) findings.push({ sectionIndex, sectionType: 'services', items })
+      return
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return
     const items: SampleItemFinding[] = []
@@ -541,6 +571,11 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
       }
       return next
     }
+    if (section.type === 'services') {
+      return mapServiceItems(section, (item) =>
+        item.sample && approvedIds.has(serviceDetailDigest(item)) ? { ...item, sample: undefined } : item,
+      )
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)
@@ -603,6 +638,13 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
       }
       return next
     }
+    if (section.type === 'services') {
+      const out = mapServiceItems(section, (item) =>
+        item.sample && !before.has(serviceDetailDigest(item)) ? { ...item, sample: undefined } : item,
+      )
+      if (out !== section) changed = true
+      return out
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)
@@ -646,6 +688,14 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       changed = true
       // Unapproved platform text never ships: the detail page and its link go away.
       return [{ ...section, detail: { ...detailSample, pageEnabled: false, linkEnabled: false } }]
+    }
+    if (section.type === 'services') {
+      // Unapproved platform text never ships: the card stays, its own page goes away.
+      const out = mapServiceItems(section, (item) =>
+        item.sample ? { ...item, sample: undefined, detail: undefined, pageEnabled: false } : item,
+      )
+      if (out !== section) changed = true
+      return [out]
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
@@ -706,6 +756,7 @@ export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
   if (section.type === 'contact') return sampleContactFields(section).length > 0
   if (section.type === 'about') return sampleAboutDetail(section) !== undefined
+  if (section.type === 'services') return section.items.some((item) => item.sample)
   const spec = ITEM_SPECS[section.type]
   return spec ? itemsOf(section, spec).some((item) => item.sample) : false
 }

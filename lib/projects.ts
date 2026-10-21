@@ -31,6 +31,7 @@ import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
 import { scheduleStarterBlog } from '@/lib/starter-blog-server'
+import { scheduleServiceDetails } from '@/lib/service-detail-server'
 import { starterSiteFromSchema } from '@/lib/starter-blog'
 import { enforceTrackingPlan, sanitizeTracking } from '@/lib/site-tracking'
 import { slugifyProjectName } from '@/lib/slug'
@@ -283,6 +284,9 @@ export async function createProject(input: {
   site: starterSiteFromSchema(parsed),
   lang: row.language === 'en' ? 'en' : 'tr',
   })
+  // Service pages get their text and pictures in the background too (free,
+  // flagged sample until the owner approves). No-op without a services section.
+  scheduleServiceDetails({ projectId: data.id as string, ownerId: userId })
   return data.id as string
 }
 

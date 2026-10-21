@@ -156,17 +156,37 @@ export type EditOperation =
   | {
       op: 'updateServicesDetail'
       index: number
-      patch: { linkEnabled?: boolean; linkLabel?: string; pageEnabled?: boolean; heading?: string }
+      patch: {
+        linkEnabled?: boolean
+        linkLabel?: string
+        pageEnabled?: boolean
+        heading?: string
+        ctaTitle?: string
+        ctaText?: string
+        ctaLabel?: string
+      }
     }
-  /** One service's own page: slug, image and long text (`blocks` replaces the list). */
+  /**
+   * One service's own page: slug, image, on/off, SEO and long text (`blocks`
+   * replaces the list). Editing the text or approving clears the platform `sample` flag.
+   */
   | {
       op: 'updateServiceItem'
       index: number
       item: number
-      patch: { slug?: string; src?: string; alt?: string; blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[] }
+      patch: {
+        slug?: string
+        src?: string
+        alt?: string
+        pageEnabled?: boolean
+        seoTitle?: string
+        seoDescription?: string
+        blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
+        approve?: boolean
+      }
     }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
-  | { op: 'dismissHint'; hint: 'aboutImage' }
+  | { op: 'dismissHint'; hint: 'aboutImage' | 'serviceDetail' }
   /** Any scalar (string) field on the section, including ones outside the text set. */
   | { op: 'updateSectionValue'; index: number; field: string; value: string }
   /** A section button (hero/cta) label or href. */
@@ -494,6 +514,9 @@ export function applyOperation(
       if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, 60) || undefined
       if (patch.pageEnabled !== undefined) detail.pageEnabled = patch.pageEnabled
       if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, 140) || undefined
+      if (patch.ctaTitle !== undefined) detail.ctaTitle = patch.ctaTitle.trim().slice(0, 140) || undefined
+      if (patch.ctaText !== undefined) detail.ctaText = patch.ctaText.trim().slice(0, 300) || undefined
+      if (patch.ctaLabel !== undefined) detail.ctaLabel = patch.ctaLabel.trim().slice(0, 60) || undefined
       next.sections[operation.index] = { ...section, detail }
       return syncSectionPages(next)
     }
@@ -508,7 +531,11 @@ export function applyOperation(
       if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.title)
       if (patch.src !== undefined) updated.src = patch.src.trim() || undefined
       if (patch.alt !== undefined) updated.alt = patch.alt.trim().slice(0, 200) || undefined
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, 120) || undefined
+      if (patch.seoDescription !== undefined) updated.seoDescription = patch.seoDescription.trim().slice(0, 320) || undefined
       if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
+      if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))
       next.sections[operation.index] = { ...section, items }
       return syncSectionPages(next)

@@ -56,14 +56,22 @@ function Breadcrumb({
   )
 }
 
-function ServiceCard({ entry, href, label }: { entry: ServiceEntry; href: string; label: string }) {
+function ServiceCard({ entry, href, label }: { entry: ServiceEntry; href: string | null; label: string }) {
   const link = useLink()
-  const target = link.href(href)
+  const target = href ? link.href(href) : null
+  const Wrapper = (
+    props: { children: React.ReactNode; className: string; style: React.CSSProperties },
+  ) =>
+    target ? (
+      <a href={target} onClick={(e) => link.onClick(e, target)} {...props} />
+    ) : (
+      <div {...props} />
+    )
   return (
-    <a
-      href={target}
-      onClick={(e) => link.onClick(e, target)}
-      className="block overflow-hidden p-5 transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+    <Wrapper
+      className={`block overflow-hidden p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
+        target ? 'transition-opacity hover:opacity-90' : ''
+      }`}
       style={{
         backgroundColor: 'var(--site-card)',
         border: '1px solid var(--site-border)',
@@ -103,28 +111,31 @@ function ServiceCard({ entry, href, label }: { entry: ServiceEntry; href: string
       <span className="mt-2 block text-sm leading-relaxed" style={{ color: 'var(--site-muted-fg)' }}>
         {entry.description}
       </span>
-      <span
-        className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold"
-        style={{ color: 'var(--site-primary)' }}
-      >
-        {label}
-        <ArrowRight className="h-4 w-4" aria-hidden="true" />
-      </span>
-    </a>
+      {target ? (
+        <span
+          className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold"
+          style={{ color: 'var(--site-primary)' }}
+        >
+          {label}
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </span>
+      ) : null}
+    </Wrapper>
   )
 }
 
-function ContactCta({ site }: { site: WebsiteSchema }) {
+function ContactCta({
+  site,
+  copy,
+}: {
+  site: WebsiteSchema
+  copy: { title: string; text: string; label: string }
+}) {
   const demoHref = useDemoHref()
-  const lang = site.meta.language === 'en' ? 'en' : 'tr'
   const contactPage = (site.pages ?? []).find((p) => CONTACT_PAGE_SLUGS.has((p.slug ?? '').toLowerCase()))
   const hasContact = site.sections.some((s) => s.type === 'contact' && !s.hidden)
   const raw = contactPage ? `/${contactPage.slug}` : hasContact ? '/#contact' : null
   if (!raw) return null
-  const copy =
-    lang === 'en'
-      ? { title: `Talk to ${site.meta.name}`, text: 'Tell us what you need and we will get back to you.', button: 'Contact us' }
-      : { title: `${site.meta.name} ile görüşün`, text: 'İhtiyacınızı bize iletin, size geri dönelim.', button: 'İletişime geçin' }
   return (
     <section
       data-gv-detail-cta
@@ -143,7 +154,7 @@ function ContactCta({ site }: { site: WebsiteSchema }) {
             {copy.text}
           </p>
         </div>
-        <SiteButton button={{ label: copy.button, href: demoHref(raw) }} />
+        <SiteButton button={{ label: copy.label, href: demoHref(raw) }} />
       </div>
     </section>
   )
@@ -162,7 +173,8 @@ export function ServicesDetailPage({ site, itemSlug }: { site: WebsiteSchema; it
   const lang = site.meta.language === 'en' ? 'en' : 'tr'
   const homeLabel = lang === 'en' ? 'Home' : 'Ana sayfa'
   const listHref = `/${resolved.listSlug}`
-  const entry = itemSlug ? resolved.items.find((i) => i.slug.toLowerCase() === itemSlug.toLowerCase()) : null
+  const found = itemSlug ? resolved.items.find((i) => i.slug.toLowerCase() === itemSlug.toLowerCase()) : null
+  const entry = found?.pageEnabled ? found : null
 
   if (!entry) {
     return (
@@ -192,18 +204,18 @@ export function ServicesDetailPage({ site, itemSlug }: { site: WebsiteSchema; it
               <ServiceCard
                 key={item.slug}
                 entry={item}
-                href={servicePath(resolved.listSlug, item.slug)}
+                href={item.pageEnabled ? servicePath(resolved.listSlug, item.slug) : null}
                 label={resolved.itemLinkLabel}
               />
             ))}
           </div>
         </div>
-        <ContactCta site={site} />
+        <ContactCta site={site} copy={resolved.cta} />
       </div>
     )
   }
 
-  const others = resolved.items.filter((i) => i.slug !== entry.slug)
+  const others = resolved.items.filter((i) => i.slug !== entry.slug && i.pageEnabled)
   const blocks = entry.blocks
 
   return (
@@ -317,7 +329,7 @@ export function ServicesDetailPage({ site, itemSlug }: { site: WebsiteSchema; it
           ) : null}
         </div>
       </div>
-      <ContactCta site={site} />
+      <ContactCta site={site} copy={resolved.cta} />
     </div>
   )
 }

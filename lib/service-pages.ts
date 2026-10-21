@@ -103,9 +103,16 @@ export type ServiceEntry = {
   icon?: string
   image: { src: string; alt: string } | null
   blocks: DetailBlock[]
+  /** False when the owner turned this service's own page off (the card stays). */
+  pageEnabled: boolean
+  seoTitle?: string
+  seoDescription?: string
+  /** Platform-written text the owner has not approved yet. */
+  sample: boolean
 }
 
 export type ResolvedServices = {
+  cta: { title: string; text: string; label: string }
   section: ServicesData
   /** True when the pages are on, the section is visible and the list page exists. */
   pageActive: boolean
@@ -129,7 +136,55 @@ export function toServiceEntry(item: ServiceItem, fallbackAlt?: string): Service
     icon: item.icon,
     image,
     blocks: cleanDetailBlocks(item.detail),
+    pageEnabled: item.pageEnabled !== false,
+    seoTitle: item.seoTitle?.trim() || undefined,
+    seoDescription: item.seoDescription?.trim() || undefined,
+    sample: item.sample === true,
   }
+}
+
+const CTA_DEFAULTS = {
+  tr: (name: string) => ({
+    title: `${name} ile görüşün`,
+    text: 'İhtiyacınızı bize iletin, size geri dönelim.',
+    label: 'İletişime geçin',
+  }),
+  en: (name: string) => ({
+    title: `Talk to ${name}`,
+    text: 'Tell us what you need and we will get back to you.',
+    label: 'Get in touch',
+  }),
+}
+
+/** The closing contact card: the owner's wording, else the neutral default. */
+export function resolveServicesCta(
+  site: Pick<WebsiteSchema, 'meta'>,
+  detail: NonNullable<ServicesData['detail']> | undefined,
+) {
+  const base = CTA_DEFAULTS[siteLang(site)](site.meta.name)
+  return {
+    title: detail?.ctaTitle?.trim() || base.title,
+    text: detail?.ctaText?.trim() || base.text,
+    label: detail?.ctaLabel?.trim() || base.label,
+  }
+}
+
+export type ServiceDetailHint = 'none' | 'published'
+
+/**
+ * Persistent editor suggestion for sites that were published before service
+ * pages existed. Pure and read-only: the live output never changes until the
+ * owner accepts. Closed for good by `dismissHint: 'serviceDetail'`.
+ */
+export function serviceDetailHint(
+  site: Pick<WebsiteSchema, 'sections' | 'pages' | 'dismissedHints'>,
+  published: boolean,
+): ServiceDetailHint {
+  if (!published) return 'none'
+  const section = findServicesSection(site)
+  if (!section || section.hidden || section.detail) return 'none'
+  if ((site.dismissedHints ?? []).includes('serviceDetail')) return 'none'
+  return 'published'
 }
 
 /** null when the site has no services section with the pages configured. */
@@ -145,6 +200,7 @@ export function resolveServices(
   const label = section.detail.linkLabel?.trim() || LINK_LABELS[lang]
   const slugged = withServiceSlugs(section.items)
   return {
+    cta: resolveServicesCta(site, section.detail),
     section,
     pageActive,
     listSlug,
@@ -178,12 +234,13 @@ export function findPublicService(site: WebsiteSchema, listSlug: string, itemSlu
   if (!resolved?.pageActive || resolved.listSlug.toLowerCase() !== listSlug.toLowerCase()) return null
   const wanted = itemSlug.toLowerCase()
   const index = resolved.items.findIndex((i) => i.slug.toLowerCase() === wanted)
-  if (index < 0) return null
+  if (index < 0 || !resolved.items[index].pageEnabled) return null
   return { resolved, entry: resolved.items[index], index }
 }
 
-/** Plain-text digest for meta descriptions. */
+/** Plain-text digest for meta descriptions; the owner's SEO text wins. */
 export function serviceDescription(entry: ServiceEntry): string {
+  if (entry.seoDescription) return entry.seoDescription.slice(0, 320)
   const firstBlock = entry.blocks.find((b) => b.body)?.body
   const source = firstBlock || entry.description
   return source.replace(/\s+/g, ' ').trim().slice(0, 160)

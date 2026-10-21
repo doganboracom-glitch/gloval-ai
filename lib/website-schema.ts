@@ -87,6 +87,12 @@ export const sectionDetailSchema = z.object({
     .optional(),
   /** Platform-written filler. Blocks publish until the owner approves or replaces it. */
   sample: z.boolean().optional(),
+  /** Services list page: the closing "İletişime Geç" card. Empty falls back to the defaults. */
+  ctaTitle: z.string().max(140).optional(),
+  ctaText: z.string().max(300).optional(),
+  ctaLabel: z.string().max(60).optional(),
+  /** Set once the background writer has handled this site (even when it wrote nothing). */
+  textsWrittenAt: z.string().max(40).optional(),
 })
 
 /**
@@ -273,6 +279,10 @@ export const servicesSection = z.object({
           .max(12)
           .optional()
           .describe('Managed by the platform. Never set this field yourself.'),
+        pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoTitle: z.string().max(120).optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoDescription: z.string().max(320).optional().describe('Managed by the platform. Never set this field yourself.'),
+        sample: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
     .min(2)
@@ -282,11 +292,14 @@ export const servicesSection = z.object({
     .object({
       linkEnabled: z.boolean().optional(),
       linkLabel: z.string().max(60).optional(),
-      pageEnabled: z.boolean().optional(),
-      heading: z.string().max(140).optional(),
-    })
-    .optional()
-    .describe('Managed by the platform after generation. Never set this field yourself.'),
+  pageEnabled: z.boolean().optional(),
+  heading: z.string().max(140).optional(),
+  ctaTitle: z.string().max(140).optional(),
+  ctaText: z.string().max(300).optional(),
+  ctaLabel: z.string().max(60).optional(),
+  })
+  .optional()
+  .describe('Managed by the platform after generation. Never set this field yourself.'),
 })
 
 export const featuresSection = z.object({
