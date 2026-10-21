@@ -73,8 +73,9 @@ export function serviceSlugFromTitle(title: string): string {
 
 /** Normalizes an owner-typed item slug; falls back to the title. */
 export function cleanServiceSlug(value: string | undefined, title: string): string {
-  const slug = slugifyPageSlug(value ?? '').slice(0, MAX_SERVICE_ITEM_SLUG)
-  return slug || serviceSlugFromTitle(title)
+  // slugifyPageSlug('') returns the generic 'sayfa', so an empty value must be handled before it.
+  if (!value?.trim()) return serviceSlugFromTitle(title)
+  return slugifyPageSlug(value).slice(0, MAX_SERVICE_ITEM_SLUG) || serviceSlugFromTitle(title)
 }
 
 /**

@@ -9,7 +9,12 @@ import { SectionDetailPage } from '@/components/website-renderer/sections/sectio
 import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
 import { matchServiceHref } from '@/lib/service-pages'
 import { pageNavItems, headerPageItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
-import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
+import {
+  SiteNavProvider,
+  isDemoServiceHref,
+  type DemoRoutes,
+  type SiteNavHandler,
+} from '@/components/website-renderer/site-nav-context'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
 import { WebsiteLatestPosts } from '@/components/website-renderer/sections/website-latest-posts'
 import { isBlogRoutePath, shouldShowLatestPosts, type SiteBlogData } from '@/lib/blog-site'
@@ -110,7 +115,7 @@ export function WebsiteRenderer({
   onDemoRoute,
 }: {
   /** Demo pages only: the demo's own home/about URLs, and the slug of its long about page. */
-  demoRoutes?: { home: string; about: string; aboutPageSlug: string | null }
+  demoRoutes?: DemoRoutes
   /** Demo pages only: soft-navigates to one of `demoRoutes`. */
   onDemoRoute?: (url: string) => void
   site: unknown
@@ -259,6 +264,10 @@ export function WebsiteRenderer({
         // The rendered hrefs are the demo's own real URLs; a plain click soft
         // navigates to them, while new-tab / right-click / no-JS use the href.
         if (demoRoutes && onDemoRoute) {
+          if (isDemoServiceHref(href, demoRoutes)) {
+            onDemoRoute(href)
+            return true
+          }
           if (href === demoRoutes.about && activeSlug !== demoRoutes.aboutPageSlug) {
             onDemoRoute(demoRoutes.about)
             return true
