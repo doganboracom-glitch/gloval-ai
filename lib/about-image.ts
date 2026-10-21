@@ -54,6 +54,26 @@ export async function attachAboutImage(site: WebsiteSchema, prompt = ''): Promis
   return { ...site, sections }
 }
 
+/**
+ * Preview flow: runs the SAME provider seam, no-text guard and no-people
+ * prompt as every other about image, but returns the raw image (data URI or
+ * URL) instead of touching the site. Null when nothing acceptable was produced.
+ */
+export async function generateAboutPreviewImage(
+  site: WebsiteSchema,
+  index: number,
+  request = '',
+): Promise<{ image: string; alt: string; imagePrompt: string } | null> {
+  const section = site.sections[index]
+  if (!section || section.type !== 'about') return null
+  if (!imageGenerationAvailable()) return null
+  const imagePrompt = buildAboutImagePrompt(site, '', request)
+  const result = await generateSiteImage({ prompt: imagePrompt, aspectRatio: '4:3' }).catch(() => null)
+  if (!result) return null
+  const lang = site.meta.language === 'en' ? 'en' : 'tr'
+  return { image: result.src, alt: suggestAboutAlt(site, section.title, lang), imagePrompt }
+}
+
 /** Editor "AI ile üret": fills one about section. Same output contract as attachAboutImage. */
 export async function generateAboutImageAt(
   site: WebsiteSchema,

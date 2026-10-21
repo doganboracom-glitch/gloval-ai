@@ -17,7 +17,8 @@ import {
   type AboutLayout,
 } from '@/lib/about-media'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
-import { useSitePublished } from '@/components/editor/published-context'
+import { useEditorProjectId, useSitePublished } from '@/components/editor/published-context'
+import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
 
 type AboutSectionData = Extract<WebsiteSchema['sections'][number], { type: 'about' }>
 
@@ -144,21 +145,16 @@ export function AboutMediaFields({
     return res.json()
   }
 
-  const generateImage = async () => {
-    if (busy || !canAdd) return
-    setBusy('image')
-    setNotice(null)
-    try {
-      const data = await post('/api/section-image', { about: true })
-      const next = data.website?.sections?.[index]
-      const images = next?.type === 'about' ? next.media?.images : undefined
-      if (data.image?.status !== 'generated' || !images) throw new Error(c.failed)
-      patch({ enabled: true, images, ...(media?.layout ? {} : { layout: 'corner' }) })
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : c.failed)
-    } finally {
-      setBusy(null)
+  const projectId = useEditorProjectId()
+
+  // The generated image is appended from the CURRENT local state only after the
+  // user presses "Kullan"; the server never writes the site itself.
+  const useGenerated = (image: { src: string; alt: string }) => {
+    if (!isUsableImageSrc(image.src)) {
+      setNotice(c.failed)
+      return
     }
+    addImage(image.src, image.alt || fallbackAlt, 'ai')
   }
 
   const suggestAlt = async (i: number) => {
@@ -195,11 +191,11 @@ export function AboutMediaFields({
             <button
               type="button"
               disabled={busy !== null || !canAdd}
-              onClick={() => void generateImage()}
+              onClick={() => patch({ enabled: true, ...(media?.layout ? {} : { layout: 'corner' }) })}
               className="inline-flex items-center gap-1 font-medium text-brand hover:underline disabled:opacity-50"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              {busy === 'image' ? c.working : c.hintAdd}
+              {c.hintAdd}
             </button>
             <button
               type="button"
@@ -273,10 +269,6 @@ export function AboutMediaFields({
                   icon={<Upload className="h-3.5 w-3.5" />}
                   onFile={(dataUri) => addImage(dataUri, undefined, 'upload')}
                 />
-                <GhostButton onClick={() => void generateImage()}>
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  {busy === 'image' ? c.working : c.generate}
-                </GhostButton>
                 {reusable.slice(0, 3).map((image) => (
                   <GhostButton key={image.src} onClick={() => addImage(image.src, image.alt, 'reused')}>
                     <Plus className="h-3.5 w-3.5" />
@@ -287,6 +279,14 @@ export function AboutMediaFields({
             ) : (
               <p className="text-xs text-muted-foreground">{c.max}</p>
             )}
+            <AiImagePreviewPanel
+              site={site}
+              index={index}
+              projectId={projectId}
+              canAdd={canAdd}
+              disabled={busy !== null}
+              onUse={useGenerated}
+            />
             {notice ? (
               <p role="status" className="text-xs text-destructive">
                 {notice}

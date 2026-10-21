@@ -1,3 +1,4 @@
+import { sweepAiImagePreviews } from '@/lib/ai-preview/sweep'
 import { NextResponse } from 'next/server'
 import { reconcileDomainOrders, sweepStaleOrders } from '@/lib/custom-domains/registrar/service'
 import { getDomainProvider } from '@/lib/custom-domains/provider'
@@ -145,6 +146,15 @@ export async function GET(request: Request) {
     aiEvents = { error: 'ai_events_sweep_failed' }
   }
 
+  // Isolated: expires abandoned AI image previews and removes their storage objects.
+  let aiImagePreviews: { expired: number; cleaned: number; deleted: number } | { error: string }
+  try {
+    aiImagePreviews = await sweepAiImagePreviews()
+  } catch (error) {
+    console.log('[ai-preview] sweep failed:', error instanceof Error ? error.message : 'unknown')
+    aiImagePreviews = { error: 'ai_image_previews_sweep_failed' }
+  }
+
   // Isolated: deletes sign-up attribution rows past the 24-month retention window.
   let signupAttribution: { deleted: number } | { error: string }
   try {
@@ -207,7 +217,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, signupAttribution, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }
