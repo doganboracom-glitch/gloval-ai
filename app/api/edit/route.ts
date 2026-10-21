@@ -30,7 +30,6 @@ import {
   pageLimitForPlan,
   pageLimitMessage,
 } from '@/lib/page-limits'
-import { countLimitedPages } from '@/lib/section-detail'
 import { toPlanCode } from '@/lib/pricing-config'
 import { enforceSocialPlan } from '@/lib/social-links'
 import { enforceTrackingPlan } from '@/lib/site-tracking'
@@ -187,14 +186,13 @@ export async function POST(req: Request) {
   // count always pass, even on a site that is already over the limit.
   const pageLimit = pageLimitForPlan(planCode)
   const pageLimitResponse = (next: WebsiteSchema): Response | null => {
-    const currentCount = countLimitedPages(original.pages)
-    if (!isPageGrowthBlocked(currentCount, countLimitedPages(next.pages), pageLimit)) return null
+    if (!isPageGrowthBlocked(original.pages.length, next.pages.length, pageLimit)) return null
     return Response.json(
       {
         error: PAGE_LIMIT_ERROR,
-        message: pageLimitMessage(normalizedLang, pageLimit, currentCount),
+        message: pageLimitMessage(normalizedLang, pageLimit, original.pages.length),
         limit: pageLimit,
-        current: currentCount,
+        current: original.pages.length,
       },
       { status: 403 },
     )

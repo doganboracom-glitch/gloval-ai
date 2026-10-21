@@ -1,5 +1,6 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { collectSlugRedirects } from '@/lib/page-slugs'
+import { resolveAboutDetail } from '@/lib/section-detail'
 
 /**
  * Multi-page preview routing.
@@ -222,9 +223,13 @@ export function isPageIndexable(page: { indexable?: boolean }): boolean {
 export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
   const wanted = pathSlug.toLowerCase()
   const home = homeSlug(site)
+  // A detail page is public only while its switch is on and its text is approved:
+  // `stripSampleContent` turns the switch off for unapproved text, so it 404s.
+  const detailLive = resolveAboutDetail(site)?.pageActive === true
   return (
     (site.pages ?? []).find((p, i) => {
       const slug = p.slug || `page-${i}`
+      if (p.kind === 'detail' && !detailLive) return false
       return slug.toLowerCase() === wanted && slug !== home
     }) ?? null
   )

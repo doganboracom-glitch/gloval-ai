@@ -1,6 +1,8 @@
 'use client'
 
-import { Plus, Trash2, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Sparkles, Trash2, Upload } from 'lucide-react'
+import { useSitePublished } from '@/components/editor/published-context'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { isUsableImageSrc } from '@/lib/about-media'
@@ -35,6 +37,14 @@ const COPY = {
     alt: 'Görsel açıklaması (alt metin)',
     sample: 'Bu içerik platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin; onaylanana kadar yayınlamadan önce sorulur.',
     approve: 'İçeriği onayla',
+    aiWrite: 'AI ile uzun metin yaz',
+    aiWriting: 'Yazılıyor…',
+    aiThin: 'Sitenizde yeterli bilgi yok; yalnızca mevcut bilgileri özetleyen kısa bir metin hazırlandı. Bilgi ekleyip yeniden deneyin.',
+    aiFailed: 'Metin yazılamadı. Lütfen tekrar deneyin.',
+    aiNoCredits: 'AI krediniz yetersiz.',
+    suggestTitle: 'Hakkımızda sayfası oluşturabilirsiniz',
+    suggestBody: 'Sitenizde ayrı bir Hakkımızda sayfası yok. Oluşturursanız ana sayfadaki bölümden "Daha fazlası…" bağlantısıyla ulaşılır; sayfa siz onaylayana kadar yayınlanmaz.',
+    suggestCta: 'Hakkımızda sayfası oluştur',
     off: 'Sayfa kapalıyken bağlantı gizlenir ve adres 404 döner.',
   },
   en: {
@@ -56,6 +66,14 @@ const COPY = {
     alt: 'Image description (alt text)',
     sample: 'This content was drafted by the platform as a sample. Approve or edit it if it fits your business; you are asked before publishing until you do.',
     approve: 'Approve content',
+    aiWrite: 'Write long text with AI',
+    aiWriting: 'Writing…',
+    aiThin: 'Your site has too little information, so a short text summarizing what exists was prepared. Add details and try again.',
+    aiFailed: 'Could not write the text. Please try again.',
+    aiNoCredits: 'Not enough AI credits.',
+    suggestTitle: 'You can create an About page',
+    suggestBody: 'Your site has no separate About page. If you create one, the home section links to it with "Learn more…"; it stays unpublished until you approve it.',
+    suggestCta: 'Create About page',
     off: 'While the page is off, the link is hidden and the address returns 404.',
   },
 } as const
@@ -85,9 +103,49 @@ export function AboutDetailFields({
   const updateBlock = (i: number, next: Partial<(typeof blocks)[number]>) =>
     patch({ blocks: blocks.map((b, k) => (k === i ? { ...b, ...next } : b)) })
 
+  const published = useSitePublished()
+  const [writing, setWriting] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const writeWithAi = async () => {
+    if (writing) return
+    setWriting(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/about-detail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schema: site }),
+      })
+      if (res.status === 402) throw new Error(c.aiNoCredits)
+      if (!res.ok) throw new Error(c.aiFailed)
+      const data = (await res.json()) as { blocks?: typeof blocks; thinFacts?: boolean }
+      if (!Array.isArray(data.blocks) || data.blocks.length === 0) throw new Error(c.aiFailed)
+      patch({ blocks: data.blocks, pageEnabled: true })
+      if (data.thinFacts) setNotice(c.aiThin)
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : c.aiFailed)
+    } finally {
+      setWriting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.heading}</span>
+      {published && !detail && !page ? (
+        <div role="note" className="flex flex-col gap-2 rounded-md border border-brand/40 bg-brand/10 p-3 text-xs">
+          <p className="font-medium text-foreground">{c.suggestTitle}</p>
+          <p className="text-muted-foreground">{c.suggestBody}</p>
+          <button
+            type="button"
+            onClick={() => patch({ pageEnabled: true })}
+            className="self-start font-medium text-brand hover:underline"
+          >
+            {c.suggestCta}
+          </button>
+        </div>
+      ) : null}
       <label className="flex items-center gap-2 text-sm font-medium">
         <input
           type="checkbox"
@@ -144,6 +202,20 @@ export function AboutDetailFields({
 
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium text-muted-foreground">{c.blocks}</span>
+            <button
+              type="button"
+              disabled={writing}
+              onClick={() => void writeWithAi()}
+              className="inline-flex items-center gap-1.5 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {writing ? c.aiWriting : c.aiWrite}
+            </button>
+            {notice ? (
+              <p role="status" className="text-xs text-muted-foreground">
+                {notice}
+              </p>
+            ) : null}
             {blocks.map((block, i) => (
               <div key={i} className="flex flex-col gap-2 rounded-md border border-border p-2">
                 <div className="flex items-end gap-2">

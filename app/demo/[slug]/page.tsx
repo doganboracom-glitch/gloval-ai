@@ -5,6 +5,7 @@ import { DemoBanner } from '@/components/demo-site/demo-banner'
 import { DemoHeaderActions } from '@/components/demo-site/demo-header-actions'
 import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
+import { resolveAboutDetail } from '@/lib/section-detail'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
@@ -46,9 +47,12 @@ export async function generateMetadata({
 export default async function DemoPage({
   params,
   searchParams,
+  initialPage = null,
 }: {
   params: Promise<{ slug: string }>
   searchParams: Promise<{ lang?: string; preview?: string }>
+  /** Set by the /hakkimizda route so the same demo opens on its long about page. */
+  initialPage?: 'about' | null
 }) {
   const { slug } = await params
   const { lang: langParam, preview } = await searchParams
@@ -87,6 +91,7 @@ export default async function DemoPage({
       <WebsiteRenderer
         site={site}
         showContactActions={!catalog}
+        initialPage={initialPage === 'about' ? (resolveAboutDetail(site)?.pageSlug ?? null) : null}
         headerActions={commerce ? <DemoHeaderActions slug={slug} lang={lang} /> : undefined}
       />
 

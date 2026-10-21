@@ -75,15 +75,6 @@ export function findAboutSection(site: Pick<WebsiteSchema, 'sections'>): AboutDa
   return (site.sections.find((s) => s.type === 'about') as AboutData | undefined) ?? null
 }
 
-/** Detail pages never count toward the plan page limit: they extend a section, not the site map. */
-export function isDetailPage(page: { kind?: string }): boolean {
-  return page.kind === 'detail'
-}
-
-export function countLimitedPages(pages: Array<{ kind?: string }>): number {
-  return pages.filter((p) => !isDetailPage(p)).length
-}
-
 export function findDetailPage(site: Pick<WebsiteSchema, 'pages'>, kind: DetailKind = 'about') {
   return (site.pages ?? []).find((p) => p.kind === 'detail' && p.detailOf === kind) ?? null
 }
@@ -221,9 +212,11 @@ function freeSlug(base: string, taken: Set<string>): string {
  *  - detail on  -> exactly one `kind: 'detail'` page (an existing empty
  *    "Hakkımızda" page is adopted instead of creating a duplicate);
  *  - detail off / section hidden or removed -> that page is dropped.
- * Idempotent; returns the same object when nothing changes.
+ * The detail page COUNTS toward the plan page limit: a new page is only
+ * created while `pages.length < pageLimit` (adopting an existing page never
+ * adds one). Idempotent; returns the same object when nothing changes.
  */
-export function syncDetailPages<T extends WebsiteSchema>(site: T): T {
+export function syncDetailPages<T extends WebsiteSchema>(site: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
   const about = findAboutSection(site)
   const wanted = !!about?.detail && !about.hidden && about.detail.pageEnabled !== false
   const pages = site.pages ?? []
@@ -245,7 +238,7 @@ export function syncDetailPages<T extends WebsiteSchema>(site: T): T {
       pages: pages.map((p) => (p === adopt ? { ...p, kind: 'detail' as const, detailOf: 'about' as const } : p)),
     }
   }
-  if (pages.length >= SITE_PAGE_HARD_CAP) return site
+  if (pages.length >= Math.min(pageLimit, SITE_PAGE_HARD_CAP)) return site
 
   const taken = new Set(pages.map((p) => (p.slug || '').toLowerCase()))
   const slug = freeSlug(SLUGS.about[lang], taken)

@@ -6,6 +6,7 @@ import {
   type AboutLayout,
   type AboutMedia,
 } from '@/lib/about-media'
+import { buildStarterAboutDetail, findAboutSection, syncDetailPages } from '@/lib/section-detail'
 
 type Lang = 'tr' | 'en'
 type Copy = { tr: string; en: string }
@@ -138,4 +139,14 @@ export function applyDemoAbout(site: WebsiteSchema, slug: string, lang: Lang): v
     }
     return { ...section, media }
   })
+
+  // Demo about copy is the demo's own content, so its long page is shown
+  // (not flagged as an unapproved sample) and reachable at /demo/<slug>/hakkimizda.
+  const about = findAboutSection(site)
+  if (about && !about.detail) {
+    const detail = { ...buildStarterAboutDetail(site, about), sample: false }
+    site.sections = site.sections.map((section) => (section === about ? { ...about, detail } : section))
+  }
+  const synced = syncDetailPages(site)
+  site.pages = synced.pages
 }
