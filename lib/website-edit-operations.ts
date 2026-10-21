@@ -26,6 +26,7 @@ import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, hasRealFigure, isAboutLayout } from '@/lib/about-media'
+import { MAX_DETAIL_IMAGES, cleanDetailBlocks, syncDetailPages } from '@/lib/section-detail'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -130,6 +131,25 @@ export type EditOperation =
         images?: { src?: string; alt?: string; imagePrompt?: string; origin?: string }[]
         figure?: { value: string; label: string } | null
         cta?: { label: string; href: string } | null
+      }
+    }
+  /**
+   * The about section's "Daha fazlası…" detail page. Only the given keys change;
+   * any manual change clears the platform `sample` flag (the owner has reviewed it).
+   * `blocks`/`images` replace the whole list. The page itself is kept in step
+   * by `syncDetailPages` on normalize.
+   */
+  | {
+      op: 'updateSectionDetail'
+      index: number
+      patch: {
+        linkEnabled?: boolean
+        linkLabel?: string
+        pageEnabled?: boolean
+        heading?: string
+        blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
+        images?: { src?: string; alt?: string }[]
+        approve?: boolean
       }
     }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
@@ -436,6 +456,26 @@ export function applyOperation(
       }
       next.sections[operation.index] = { ...section, media }
       return next
+    }
+
+    case 'updateSectionDetail': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'about') return next
+      const { patch } = operation
+      const current = section.detail ?? {}
+      const detail = { ...current }
+      if (patch.linkEnabled !== undefined) detail.linkEnabled = patch.linkEnabled
+      if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, 60) || undefined
+      if (patch.pageEnabled !== undefined) detail.pageEnabled = patch.pageEnabled
+      if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, 140) || undefined
+      if (patch.blocks !== undefined) detail.blocks = cleanDetailBlocks(patch.blocks)
+      if (patch.images !== undefined) detail.images = patch.images.slice(0, MAX_DETAIL_IMAGES)
+      // Editing the content, or explicitly approving it, makes it the owner's own.
+      if (patch.approve || patch.blocks !== undefined || patch.heading !== undefined || patch.images !== undefined) {
+        detail.sample = undefined
+      }
+      next.sections[operation.index] = { ...section, detail }
+      return syncDetailPages(next)
     }
 
     case 'dismissHint': {

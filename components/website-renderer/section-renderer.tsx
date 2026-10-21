@@ -3,6 +3,7 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { resolveTheme } from '@/components/website-renderer/theme'
+import { aboutDetailLink } from '@/lib/section-detail'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
@@ -57,7 +58,14 @@ export function SectionRenderer({
     case 'slider':
       return <SliderSection data={section} />
     case 'about':
-      return <AboutSection data={section} siteName={meta.name} colors={site ? resolveTheme(site) : null} />
+      return (
+        <AboutSection
+          data={section}
+          siteName={meta.name}
+          colors={site ? resolveTheme(site) : null}
+          moreLink={site ? aboutDetailLink(site) : null}
+        />
+      )
     case 'services':
       return <ServicesSection data={section} lang={meta.language} />
     case 'features':

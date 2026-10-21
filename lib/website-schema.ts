@@ -64,6 +64,37 @@ export const aboutMediaSchema = z.object({
 })
 
 /**
+ * "Section detail page": an optional long-form page a section links to with a
+ * "Daha fazlası…" link (the about section is the first user). Lenient and fully
+ * optional so stored rows never fail validation; `lib/section-detail.ts`
+ * resolves and normalizes it. The page body lives here, NOT in the page's own
+ * `sections`, so the section and its detail page stay one owner-editable unit.
+ */
+export const sectionDetailBlockSchema = z.object({
+  heading: z.string().max(140).optional(),
+  level: z.enum(['h2', 'h3']).optional(),
+  body: z.string().max(5000),
+})
+
+export const sectionDetailSchema = z.object({
+  /** false hides the "more" link on the home section (default: shown). */
+  linkEnabled: z.boolean().optional(),
+  linkLabel: z.string().max(60).optional(),
+  /** false switches the detail page off (404 + link hidden). Default: on. */
+  pageEnabled: z.boolean().optional(),
+  /** Title of the text column; falls back to the section title. */
+  heading: z.string().max(140).optional(),
+  blocks: z.array(sectionDetailBlockSchema).max(12).optional(),
+  /** Up to 3 small strip images under the text. */
+  images: z
+    .array(z.object({ src: z.string().optional(), alt: z.string().optional() }))
+    .max(3)
+    .optional(),
+  /** Platform-written filler. Blocks publish until the owner approves or replaces it. */
+  sample: z.boolean().optional(),
+})
+
+/**
  * A structured image reference. The renderer shows a themed gradient
  * placeholder today, but this shape is future-proof: when a real image
  * generation API is connected, only `imagePrompt` -> `src` needs wiring, and no
@@ -221,6 +252,9 @@ export const aboutSection = z.object({
   body: z.string().describe('One or two short paragraphs'),
   highlights: z.array(z.string()).max(6).optional().describe('Short bullet highlights'),
   media: aboutMediaSchema
+    .optional()
+    .describe('Managed by the platform after generation. Never set this field yourself.'),
+  detail: sectionDetailSchema
     .optional()
     .describe('Managed by the platform after generation. Never set this field yourself.'),
   })
@@ -853,7 +887,7 @@ export const legalDocsSchema = z.object({
   hidden: z.array(z.string()).max(10).optional(),
 })
 
-export const PAGE_KINDS = ['home', 'custom', 'info', 'legal', 'blog-index'] as const
+export const PAGE_KINDS = ['home', 'custom', 'info', 'legal', 'blog-index', 'detail'] as const
 export type PageKind = (typeof PAGE_KINDS)[number]
 
 export const pageSeoSchema = z.object({
@@ -874,6 +908,8 @@ export const pageSchema = z.object({
   sections: limitedSections(z.array(sectionSchema).max(SITE_SECTION_HARD_CAP + 1)).optional(),
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
+  /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
+  detailOf: z.enum(['about']).optional(),
 })
 
 /** Pages as the AI sees them when generating: structure only, no per-page content. */

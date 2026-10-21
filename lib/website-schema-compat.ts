@@ -2,6 +2,12 @@ import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { countCodes, repairToSchema, summarizeIssues, type IssueSummary, type RepairStep } from '@/lib/ai-repair'
 import { siteRepairOptions } from '@/lib/site-repair'
 import { normalizeAboutMedia } from '@/lib/about-media'
+import { syncDetailPages } from '@/lib/section-detail'
+
+/** Stored-site invariants: valid about media, and the detail page list matching `detail`. */
+function finalize(site: WebsiteSchema): WebsiteSchema {
+  return syncDetailPages(normalizeAboutMedia(site))
+}
 
 export type NormalizedSite =
   | { ok: true; value: WebsiteSchema; steps: RepairStep[]; repaired: boolean }
@@ -17,7 +23,7 @@ export type NormalizedSite =
 export function normalizeWebsiteSchema(raw: unknown, lang: 'tr' | 'en' = 'tr'): NormalizedSite {
   const direct = websiteSchema.safeParse(raw)
   if (direct.success) {
-    return { ok: true, value: normalizeAboutMedia(direct.data), steps: [], repaired: false }
+    return { ok: true, value: finalize(direct.data), steps: [], repaired: false }
   }
 
   const cloned = cloneJson(raw)
@@ -26,7 +32,7 @@ export function normalizeWebsiteSchema(raw: unknown, lang: 'tr' | 'en' = 'tr'): 
   }
   const result = repairToSchema(cloned, websiteSchema, siteRepairOptions({ lang, trimSections: true }))
   if (result.ok) {
-    return { ok: true, value: normalizeAboutMedia(result.value), steps: result.steps, repaired: result.steps.length > 0 }
+    return { ok: true, value: finalize(result.value), steps: result.steps, repaired: result.steps.length > 0 }
   }
   return { ok: false, steps: result.steps, issues: result.issues }
 }

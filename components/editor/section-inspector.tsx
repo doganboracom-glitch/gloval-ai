@@ -29,6 +29,7 @@ import {
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { MapEmbedField } from '@/components/editor/map-embed-field'
 import { AboutMediaFields } from '@/components/editor/about-media-fields'
+import { AboutDetailFields } from '@/components/editor/about-detail-fields'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -222,7 +223,10 @@ export function SectionInspector({
       })}
 
       {section.type === 'about' && (
-        <AboutMediaFields site={site} index={index} section={section} onDispatch={onDispatch} />
+        <>
+          <AboutMediaFields site={site} index={index} section={section} onDispatch={onDispatch} />
+          <AboutDetailFields site={site} index={index} section={section} onDispatch={onDispatch} />
+        </>
       )}
 
       {managedProducts && (

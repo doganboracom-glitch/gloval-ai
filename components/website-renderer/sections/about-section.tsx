@@ -1,12 +1,14 @@
 'use client'
 
-import { Check } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
 import {
   SectionShell,
   SectionHeading,
   SiteButton,
+  onSiteNavClick,
 } from '@/components/website-renderer/primitives'
+import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveAboutMedia, type ResolvedAbout } from '@/lib/about-media'
 
@@ -191,14 +193,34 @@ function FigureVisual({ image, figure }: { image: Frame; figure: NonNullable<Res
   )
 }
 
+function MoreLink({ link }: { link: { label: string; href: string } }) {
+  const nav = useSiteNav()
+  const normalize = useHrefNormalizer()
+  const href = normalize(link.href)
+  return (
+    <a
+      href={href}
+      onClick={(e) => onSiteNavClick(e, href, nav)}
+      className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline"
+      style={{ color: 'var(--site-primary)' }}
+    >
+      {link.label}
+      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+    </a>
+  )
+}
+
 export function AboutSection({
   data,
   siteName,
   colors = null,
+  moreLink = null,
 }: {
   data: AboutData
   siteName?: string
   colors?: { primary: string } | null
+  /** "Daha fazlası…" link to the long-form detail page, or null when it must not show. */
+  moreLink?: { label: string; href: string } | null
 }) {
   const resolved = resolveAboutMedia(data, siteName ? `${siteName} - ${data.title}` : data.title)
 
@@ -214,6 +236,7 @@ export function AboutSection({
             >
               {data.body}
             </p>
+            {moreLink ? <MoreLink link={moreLink} /> : null}
           </div>
           <Highlights items={data.highlights} />
         </div>
@@ -245,6 +268,7 @@ export function AboutSection({
       >
         <div className={layout === 'corner' || layout === 'figure' ? 'order-2 lg:order-1' : 'order-2'}>
           <Copy data={data} label={label} subtitle={subtitle} cta={cta} />
+          {moreLink ? <MoreLink link={moreLink} /> : null}
           {data.highlights && data.highlights.length > 0 ? (
             <div className="mt-6">
               <Highlights items={data.highlights} />

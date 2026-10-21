@@ -14,7 +14,18 @@ import { collectSlugRedirects } from '@/lib/page-slugs'
  * "Services", "About", "Portfolio" and "Contact" feel like real pages.
  */
 
-export type PageItem = { slug: string; title: string; isHome: boolean }
+export type PageItem = { slug: string; title: string; isHome: boolean; detail?: boolean }
+
+/**
+ * Pages shown as header buttons. A section detail page ("Hakkımızda" long
+ * form) is reached through its "Daha fazlası…" link, so it only becomes a
+ * header button when the site already has a real multi-page menu; otherwise a
+ * one-page site would silently lose its anchor menu.
+ */
+export function headerPageItems(items: PageItem[]): PageItem[] {
+  const regular = items.filter((p) => !p.detail)
+  return regular.length > 1 ? items : regular
+}
 
 type Category = 'products' | 'services' | 'about' | 'portfolio' | 'contact' | 'pricing' | 'team'
 
@@ -114,7 +125,7 @@ export function pageNavItems(site: WebsiteSchema): PageItem[] {
   const items: PageItem[] = pages.map((p, i) => {
     const isHome = p.isHome === true || (!pages.some((x) => x.isHome) && i === 0)
     if (isHome) homeFound = true
-    return { slug: p.slug || `page-${i}`, title: p.title, isHome }
+    return { slug: p.slug || `page-${i}`, title: p.title, isHome, ...(p.kind === 'detail' ? { detail: true } : {}) }
   })
   if (!homeFound && items[0]) items[0].isHome = true
   return items
@@ -299,6 +310,10 @@ export function sectionsForPage(
   if (items.length <= 1 || !active || active.isHome) return visible
 
   const footer = visible.filter((s) => s.type === 'footer')
+
+  // A section detail page draws its own body (SectionDetailPage); only the
+  // shared footer comes from the section list.
+  if (active.detail) return footer
 
   const own = (site.pages ?? []).find((p, i) => (p.slug || `page-${i}`) === active.slug)
   if (own?.sections && own.sections.length > 0) {

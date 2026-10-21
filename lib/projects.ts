@@ -15,6 +15,7 @@ import {
 } from '@/lib/website-schema-compat'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
+import { countLimitedPages } from '@/lib/section-detail'
 import { materializePages, withPageRedirects } from '@/lib/website-pages'
 import { getEffectiveSiteLimit, getEffectiveProductLimit } from '@/lib/effective-limits'
 import {
@@ -319,11 +320,11 @@ export async function saveProjectSchema(input: {
       const currentPages = Array.isArray(
         (existing.schema_data as { pages?: unknown } | null)?.pages,
       )
-        ? ((existing.schema_data as { pages: unknown[] }).pages.length)
+        ? countLimitedPages((existing.schema_data as { pages: Array<{ kind?: string }> }).pages)
         : 0
       const ownerPlan = await getPlanCodeForUser(existing.owner_id as string)
       const limit = pageLimitForPlan(ownerPlan)
-      if (isPageGrowthBlocked(currentPages, parsed.pages.length, limit)) {
+      if (isPageGrowthBlocked(currentPages, countLimitedPages(parsed.pages), limit)) {
         throw new Error(PAGE_LIMIT_ERROR)
       }
       // Custom head/body code is a paid feature: FREE keeps whatever is stored.
@@ -468,9 +469,9 @@ export async function restoreProjectBackup(input: {
 
   // Same rule as saving: only GROWTH past the plan's page limit is refused.
   if (!elevated) {
-    const currentPages = (current.schema_data as { pages?: unknown[] } | null)?.pages?.length ?? 0
+    const currentPages = countLimitedPages((current.schema_data as { pages?: Array<{ kind?: string }> } | null)?.pages ?? [])
     const limit = pageLimitForPlan(await getPlanCodeForUser(access.ownerId))
-    if (isPageGrowthBlocked(currentPages, restored.pages.length, limit)) {
+    if (isPageGrowthBlocked(currentPages, countLimitedPages(restored.pages), limit)) {
       return { ok: false, reason: 'PAGE_LIMIT_REACHED', limit }
     }
   }
