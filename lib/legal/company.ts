@@ -78,7 +78,7 @@ export const COMPANY = {
 } as const
 
 /** Yasal metinlerin en son gözden geçirildiği tarih (footer/başlıkta gösterilir). */
-export const LEGAL_LAST_UPDATED = '2026-01-01'
+export const LEGAL_LAST_UPDATED = '2026-10-21'
 
 /**
  * Herhangi bir zorunlu kurumsal alan hâlâ placeholder mı? Admin'e "yasal

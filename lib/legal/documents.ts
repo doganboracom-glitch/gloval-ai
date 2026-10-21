@@ -507,6 +507,17 @@ const terms: LegalDoc = {
     ],
     sections: [
       {
+        heading: 'Hizmet Sağlayıcı',
+        blocks: [
+          p(`${COMPANY.legalName} (bundan sonra “${COMPANY.brandName}” olarak anılacaktır)`),
+          list([
+            `Adres: ${COMPANY.address}`,
+            `Telefon: ${COMPANY.phone}`,
+            `E-posta: ${COMPANY.supportEmail}`,
+          ]),
+        ],
+      },
+      {
         heading: '1. Hizmetin Tanımı',
         blocks: [
           p(
@@ -603,6 +614,17 @@ const terms: LegalDoc = {
       `These Terms of Use govern your use of the ${COMPANY.brandName} services. By using the service, you are deemed to have accepted these terms.`,
     ],
     sections: [
+      {
+        heading: 'Service Provider',
+        blocks: [
+          p(`${COMPANY.legalName} (hereinafter referred to as “${COMPANY.brandName}”)`),
+          list([
+            `Address: ${COMPANY.address}`,
+            `Phone: ${COMPANY.phone}`,
+            `Email: ${COMPANY.supportEmail}`,
+          ]),
+        ],
+      },
       {
         heading: '1. Description of the Service',
         blocks: [
