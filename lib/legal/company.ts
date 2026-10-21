@@ -5,11 +5,11 @@
  * bilgilerini BURADAN okur. Böylece şirket unvanı, vergi/MERSİS, adres ve
  * iletişim bilgileri tek bir yerden güncellenir.
  *
- * ÖNEMLİ: Buradaki değerler UYDURULMAMIŞTIR. Gerçek şirket bilgileri henüz
- * bilinmediği için, doldurulmayı bekleyen açık placeholder'lar kullanılır
- * (ör. "[ŞİRKET UNVANI]"). Production'a çıkmadan önce bu alanlar gerçek
- * bilgilerle — tercihen aşağıdaki NEXT_PUBLIC_* ortam değişkenleriyle —
- * doldurulmalıdır.
+ * ÖNEMLİ: legalName ve taxNumber DB AJANS bilgileriyle varsayılan olarak
+ * doldurulmuştur; vergi dairesi, MERSİS ve ticaret sicil no gerçek bilgilerle
+ * NEXT_PUBLIC_COMPANY_* ortam değişkenlerinden girilmelidir. Bilinmeyen alanlar
+ * UYDURULMAZ; doldurulmayı bekleyen açık placeholder'lar kullanılır
+ * (ör. "[VERGİ DAİRESİ]").
  *
  * Neden NEXT_PUBLIC_*: Bu bilgiler gizli değildir (yasal metinlerde zaten
  * herkese açıktır) ve hem sunucu hem istemci bileşenlerinde aynı değeri
@@ -33,11 +33,14 @@ export const COMPANY = {
   brandName: 'GLOVAL AI',
 
   /** Yasal şirket unvanı (ör. "... Bilişim Teknolojileri A.Ş."). */
-  legalName: field(process.env.NEXT_PUBLIC_COMPANY_LEGAL_NAME, 'Osman Doğan BASTIRMACI'),
+  legalName: field(
+    process.env.NEXT_PUBLIC_COMPANY_LEGAL_NAME,
+    'DB AJANS REKLAM MEDYA HİZMETLERİ BİLİŞİM TEKNOLOJİLERİ SANAYİ VE TİCARET LİMİTED ŞİRKETİ',
+  ),
 
   /** Vergi dairesi ve numarası. */
   taxOffice: field(process.env.NEXT_PUBLIC_COMPANY_TAX_OFFICE, '[VERGİ DAİRESİ]'),
-  taxNumber: field(process.env.NEXT_PUBLIC_COMPANY_TAX_NUMBER, '[VERGİ NUMARASI]'),
+  taxNumber: field(process.env.NEXT_PUBLIC_COMPANY_TAX_NUMBER, '2721037801'),
 
   /** MERSİS numarası. */
   mersisNo: field(process.env.NEXT_PUBLIC_COMPANY_MERSIS_NO, '[MERSİS NO]'),
