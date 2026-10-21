@@ -229,6 +229,17 @@ export function WebsiteRenderer({
         }, 60)
         return true
       }
+      // Demos have no per-page routes (pageRouting is off) and no preview, so a
+      // link to one of the site's own pages must switch in-memory instead of
+      // leaving the demo for a path that does not exist.
+      if (!preview && !pageRouting && parsed.success) {
+        const demoSlug = resolveHrefToPageSlug(parsed.data, href)
+        if (demoSlug) {
+          handleNavigate(demoSlug)
+          return true
+        }
+        return false
+      }
       if (!preview || !parsed.success) return false
       const pageSlug = resolveHrefToPageSlug(parsed.data, href)
       if (pageSlug) {
