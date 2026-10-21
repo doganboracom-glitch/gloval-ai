@@ -14,6 +14,7 @@ import {
 import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
 import type { BackupItem } from '@/lib/project-backups-core'
 import { useLanguage } from '@/components/language-provider'
+import { ProjectIdContext } from '@/components/editor/published-context'
 import { tenantUrl } from '@/lib/domains'
 import { trackPublishSite } from '@/lib/analytics'
 import type { WebsiteSchema } from '@/lib/website-schema'
@@ -72,6 +73,7 @@ export function EditorClient({
   const { t } = useLanguage()
 
   return (
+    <ProjectIdContext.Provider value={projectId}>
     <WebsitePreview
       site={schema}
       lang={language}
@@ -143,5 +145,6 @@ export function EditorClient({
         closeLabel: t.dash.backToDash,
       }}
     />
+    </ProjectIdContext.Provider>
   )
 }
