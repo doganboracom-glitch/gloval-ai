@@ -3,7 +3,7 @@
 import { Check, ChevronRight } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { SiteButton, onSiteNavClick } from '@/components/website-renderer/primitives'
-import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import {
   detailLeadImage,
   detailStripImages,
@@ -52,7 +52,8 @@ function BlockBody({ body }: { body: string }) {
 function Breadcrumb({ homeLabel, current }: { homeLabel: string; current: string }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
-  const href = normalize('/')
+  const demoHref = useDemoHref()
+  const href = demoHref(normalize('/'))
   return (
     <nav aria-label="Breadcrumb" data-gv-breadcrumb>
       <ol className="flex flex-wrap items-center gap-1.5 text-sm" style={{ color: 'var(--site-muted-fg)' }}>
@@ -83,6 +84,7 @@ function Breadcrumb({ homeLabel, current }: { homeLabel: string; current: string
  * the section edits this page; the header and footer come from the shared site.
  */
 export function SectionDetailPage({ site }: { site: WebsiteSchema }) {
+  const demoHref = useDemoHref()
   const resolved = resolveAboutDetail(site)
   if (!resolved) return null
 
@@ -96,7 +98,8 @@ export function SectionDetailPage({ site }: { site: WebsiteSchema }) {
 
   const contactPage = (site.pages ?? []).find((p) => CONTACT_PAGE_SLUGS.has((p.slug ?? '').toLowerCase()))
   const hasContact = site.sections.some((s) => s.type === 'contact' && !s.hidden)
-  const ctaHref = contactPage ? `/${contactPage.slug}` : hasContact ? '/#contact' : null
+  const rawCtaHref = contactPage ? `/${contactPage.slug}` : hasContact ? '/#contact' : null
+  const ctaHref = rawCtaHref ? demoHref(rawCtaHref) : null
   const ctaCopy =
     lang === 'en'
       ? { title: `Talk to ${site.meta.name}`, text: 'Tell us what you need and we will get back to you.', button: 'Contact us' }
