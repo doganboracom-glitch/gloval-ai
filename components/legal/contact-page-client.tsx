@@ -18,7 +18,7 @@ import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
-import { COMPANY, isPlaceholder } from '@/lib/legal/company'
+import { COMPANY, isPlaceholder, toTelHref } from '@/lib/legal/company'
 import { submitContactRequest } from '@/lib/support/contact'
 
 /**
@@ -44,7 +44,7 @@ export function ContactPageClient() {
     { icon: Landmark, label: tr ? 'Vergi Dairesi' : 'Tax office', value: COMPANY.taxOffice, hideIfPlaceholder: true },
     { icon: Mail, label: tr ? 'Destek e-postası' : 'Support email', value: COMPANY.supportEmail, href: `mailto:${COMPANY.supportEmail}` },
     { icon: ShieldCheck, label: tr ? 'KVKK başvuru' : 'Data requests', value: COMPANY.kvkkEmail, href: `mailto:${COMPANY.kvkkEmail}` },
-    { icon: Phone, label: tr ? 'Telefon' : 'Phone', value: COMPANY.phone, href: `tel:${COMPANY.phone.replace(/\s+/g, '')}` },
+    { icon: Phone, label: tr ? 'Telefon' : 'Phone', value: COMPANY.phone, href: toTelHref(COMPANY.phone) },
     { icon: MapPin, label: tr ? 'Adres' : 'Address', value: COMPANY.address },
   ]
 

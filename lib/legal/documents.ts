@@ -247,7 +247,7 @@ const kvkk: LegalDoc = {
     description:
       '6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında GLOVAL AI veri işleme faaliyetlerine ilişkin aydınlatma metni.',
     intro: [
-      `İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu ${COMPANY.legalName} tarafından hazırlanmıştır.`,
+      `İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır) tarafından hazırlanmıştır.`,
     ],
     sections: [
       {
@@ -328,7 +328,7 @@ const kvkk: LegalDoc = {
     description:
       'Disclosure notice regarding GLOVAL AI data processing activities under Turkish Personal Data Protection Law No. 6698 (KVKK).',
     intro: [
-      `This Disclosure Notice has been prepared by the data controller ${COMPANY.legalName} pursuant to Article 10 of the Turkish Personal Data Protection Law No. 6698 ("KVKK").`,
+      `This Disclosure Notice has been prepared by the data controller ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”) pursuant to Article 10 of the Turkish Personal Data Protection Law No. 6698 ("KVKK").`,
     ],
     sections: [
       {
@@ -507,6 +507,17 @@ const terms: LegalDoc = {
     ],
     sections: [
       {
+        heading: 'Hizmet Sağlayıcı',
+        blocks: [
+          p(`${COMPANY.legalName} (bundan sonra “${COMPANY.brandName}” olarak anılacaktır)`),
+          list([
+            `Adres: ${COMPANY.address}`,
+            `Telefon: ${COMPANY.phone}`,
+            `E-posta: ${COMPANY.supportEmail}`,
+          ]),
+        ],
+      },
+      {
         heading: '1. Hizmetin Tanımı',
         blocks: [
           p(
@@ -603,6 +614,17 @@ const terms: LegalDoc = {
       `These Terms of Use govern your use of the ${COMPANY.brandName} services. By using the service, you are deemed to have accepted these terms.`,
     ],
     sections: [
+      {
+        heading: 'Service Provider',
+        blocks: [
+          p(`${COMPANY.legalName} (hereinafter referred to as “${COMPANY.brandName}”)`),
+          list([
+            `Address: ${COMPANY.address}`,
+            `Phone: ${COMPANY.phone}`,
+            `Email: ${COMPANY.supportEmail}`,
+          ]),
+        ],
+      },
       {
         heading: '1. Description of the Service',
         blocks: [
@@ -712,7 +734,7 @@ const distanceSales: LegalDoc = {
         heading: '1. Taraflar — Hizmet Sağlayıcı (Satıcı)',
         blocks: [
           list([
-            `Unvan: ${COMPANY.legalName}`,
+            `Unvan: ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır)`,
             `Adres: ${COMPANY.address}`,
             `E-posta: ${COMPANY.supportEmail}`,
             `Telefon: ${COMPANY.phone}`,
@@ -803,7 +825,7 @@ const distanceSales: LegalDoc = {
         heading: '1. Parties — Service Provider (Seller)',
         blocks: [
           list([
-            `Legal name: ${COMPANY.legalName}`,
+            `Legal name: ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`,
             `Address: ${COMPANY.address}`,
             `Email: ${COMPANY.supportEmail}`,
             `Phone: ${COMPANY.phone}`,
@@ -902,7 +924,7 @@ const preInfo: LegalDoc = {
         heading: '1. Hizmet Sağlayıcı',
         blocks: [
           list([
-            `Unvan: ${COMPANY.legalName}`,
+            `Unvan: ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır)`,
             `Adres: ${COMPANY.address}`,
             `E-posta: ${COMPANY.supportEmail}`,
             `Telefon: ${COMPANY.phone}`,
@@ -964,7 +986,7 @@ const preInfo: LegalDoc = {
         heading: '1. Service Provider',
         blocks: [
           list([
-            `Legal name: ${COMPANY.legalName}`,
+            `Legal name: ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`,
             `Address: ${COMPANY.address}`,
             `Email: ${COMPANY.supportEmail}`,
             `Phone: ${COMPANY.phone}`,
