@@ -12,7 +12,7 @@ import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveAboutMedia, type ResolvedAbout } from '@/lib/about-media'
 
-/** Text on the primary chip / figure block. Falls back to the shared token when the theme is unknown. */
+/** Text on the primary badge chip. Falls back to the shared token when the theme is unknown. */
 const ON_PRIMARY = 'var(--about-on-primary, var(--site-primary-fg))'
 
 type AboutData = Extract<Section, { type: 'about' }>
@@ -81,7 +81,8 @@ function Copy({
     <div>
       {label ? (
         <span
-          className="mb-4 inline-block px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+          className="mb-4 inline-block max-w-full truncate px-3 py-1 align-top text-xs font-semibold tracking-wide"
+          title={label}
           style={{
             backgroundColor: 'var(--site-primary)',
             color: ON_PRIMARY,
@@ -166,33 +167,6 @@ function RoundVisual({ image }: { image: Frame }) {
   )
 }
 
-/** Image with the owner-supplied figure on a solid block overlapping its corner. */
-function FigureVisual({ image, figure }: { image: Frame; figure: NonNullable<ResolvedAbout['figure']> }) {
-  return (
-    <div className="relative mx-auto w-full max-w-md pb-10 lg:max-w-none">
-      <div
-        className="aspect-[4/3] overflow-hidden"
-        style={{ borderRadius: 'var(--site-radius)', border: '1px solid var(--site-border)' }}
-      >
-        <Picture image={image} sizes="(min-width: 1024px) 40vw, 90vw" />
-      </div>
-      <div
-        className="absolute bottom-0 right-4 px-6 py-4 text-center"
-        style={{
-          backgroundColor: 'var(--site-primary)',
-          color: ON_PRIMARY,
-          borderRadius: 'var(--site-radius)',
-        }}
-      >
-        <p className="text-3xl font-bold leading-none" style={{ fontFamily: 'var(--site-heading-font)' }}>
-          {figure.value}
-        </p>
-        <p className="mt-1 text-xs font-medium">{figure.label}</p>
-      </div>
-    </div>
-  )
-}
-
 function MoreLink({ link }: { link: { label: string; href: string } }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
@@ -245,13 +219,12 @@ export function AboutSection({
     )
   }
 
-  const { layout, images, figure, label, cta } = resolved
+  const { layout, images, label, cta } = resolved
   const subtitle = layout === 'collage' ? siteName : undefined
 
   let visual: React.ReactNode
   if (layout === 'collage') visual = <CollageVisual images={images} />
   else if (layout === 'round') visual = <RoundVisual image={images[0]} />
-  else if (layout === 'figure' && figure) visual = <FigureVisual image={images[0]} figure={figure} />
   else visual = <CornerVisual image={images[0]} />
 
   return (
@@ -267,7 +240,7 @@ export function AboutSection({
           layout === 'round' ? 'lg:grid-cols-[1fr_1.2fr]' : 'lg:grid-cols-2'
         }`}
       >
-        <div className={layout === 'corner' || layout === 'figure' ? 'order-2 lg:order-1' : 'order-2'}>
+        <div className={layout === 'corner' ? 'order-2 lg:order-1' : 'order-2'}>
           <Copy data={data} label={label} subtitle={subtitle} cta={cta} />
           {moreLink ? <MoreLink link={moreLink} /> : null}
           {data.highlights && data.highlights.length > 0 ? (
@@ -276,7 +249,7 @@ export function AboutSection({
             </div>
           ) : null}
         </div>
-        <div className={layout === 'corner' || layout === 'figure' ? 'order-1 lg:order-2' : 'order-1'}>
+        <div className={layout === 'corner' ? 'order-1 lg:order-2' : 'order-1'}>
           {visual}
         </div>
       </div>

@@ -5,7 +5,9 @@ import { LegacyAboutSection } from '@/components/website-renderer/sections/__fix
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
 import {
+  ABOUT_BADGE_MAX,
   ABOUT_LAYOUTS,
+  aboutBadgeLimit,
   layoutAvailability,
   normalizeAboutMedia,
   pickAboutLayout,
@@ -42,7 +44,6 @@ function mediaFor(layout: AboutLayout): About['media'] {
     layout,
     images: layout === 'collage' ? IMAGES : IMAGES.slice(0, 1),
     label: 'Biz kimiz',
-    figure: layout === 'figure' ? { value: '2009', label: 'kurulus yili' } : undefined,
   } as About['media']
 }
 
@@ -68,7 +69,6 @@ describe('four layouts render, in both languages and both modes', () => {
           expect(imgCount).toBe(layout === 'collage' ? 3 : 1)
           expect(html).toContain('alt="')
           expect(html).not.toMatch(/alt=""/)
-          if (layout === 'figure') expect(html).toContain('2009')
         })
       }
     }
@@ -105,26 +105,47 @@ describe('text-weighted fallback', () => {
   })
 })
 
-describe('figure layout needs real data', () => {
-  it('is unavailable without an owner-supplied figure', () => {
-    expect(layoutAvailability('figure', 1, undefined).available).toBe(false)
-    expect(layoutAvailability('figure', 1, { value: ' ', label: 'x' }).available).toBe(false)
-    expect(layoutAvailability('figure', 1, { value: '2009', label: 'kurulus' }).available).toBe(true)
+describe('the figure ("Rakamlı") layout is gone', () => {
+  const LEGACY_FIGURE_MEDIA = {
+    enabled: true,
+    layout: 'figure',
+    images: IMAGES.slice(0, 1),
+    label: 'Biz kimiz',
+    figure: { value: '2009', label: 'kurulus yili', sample: true },
+  } as unknown as About['media']
+
+  it('is not an offered layout', () => {
+    expect(ABOUT_LAYOUTS).not.toContain('figure')
   })
 
-  it('renderer degrades a figure layout without a figure to corner', () => {
-    const media = { ...mediaFor('figure')!, figure: undefined }
-    expect(resolveAboutMedia(about(media), 'alt').layout).toBe('corner')
-    expect(themed('light', 'tr', about(media))).toContain('data-about-layout="corner"')
+  it('layout availability depends on image count only', () => {
+    expect(layoutAvailability('corner', 1).available).toBe(true)
+    expect(layoutAvailability('corner', 0).available).toBe(false)
+    expect(layoutAvailability('collage', 1).available).toBe(false)
+    expect(layoutAvailability('collage', 2).available).toBe(true)
   })
 
-  it('is never picked automatically without a figure, for any sector', () => {
+  it('is never picked automatically, for any sector', () => {
     for (const sector of ['legal', 'restaurant', 'default', 'automotive'] as const) {
-      expect(pickAboutLayout(sector as never, 1, undefined)).not.toBe('figure')
+      expect(pickAboutLayout(sector as never, 1)).not.toBe('figure')
     }
   })
 
-  it('seeding never invents a figure from a prompt that states none', () => {
+  it('a stored figure layout still parses and degrades to corner without printing the figure', () => {
+    const site = fallbackWebsite('test', 'tr')
+    const stored = {
+      ...site,
+      sections: [...site.sections.filter((s) => s.type !== 'about'), about(LEGACY_FIGURE_MEDIA)],
+    }
+    expect(websiteSchema.safeParse(stored).success).toBe(true)
+    expect(resolveAboutMedia(about(LEGACY_FIGURE_MEDIA), 'alt').layout).toBe('corner')
+    const html = themed('light', 'tr', about(LEGACY_FIGURE_MEDIA))
+    expect(html).toContain('data-about-layout="corner"')
+    expect(html).not.toContain('2009')
+    expect(html).not.toContain('kurulus yili')
+  })
+
+  it('seeding never invents a figure', () => {
     const site = fallbackWebsite('modern bir kafe sitesi', 'tr')
     const withAbout: WebsiteSchema = {
       ...site,
@@ -132,8 +153,25 @@ describe('figure layout needs real data', () => {
     }
     const seeded = seedAboutMedia(withAbout, 'modern bir kafe sitesi')
     for (const s of seeded.sections) {
-      if (s.type === 'about') expect(s.media?.figure).toBeUndefined()
+      if (s.type === 'about') expect((s.media as Record<string, unknown> | undefined)?.figure).toBeUndefined()
     }
+  })
+})
+
+describe('badge stays one line', () => {
+  it('is capped for new text but never shorter than what is already stored', () => {
+    expect(aboutBadgeLimit('')).toBe(ABOUT_BADGE_MAX)
+    expect(aboutBadgeLimit('kisa')).toBe(ABOUT_BADGE_MAX)
+    const long = 'x'.repeat(ABOUT_BADGE_MAX + 25)
+    expect(aboutBadgeLimit(long)).toBe(long.length)
+  })
+
+  it('renders one line with ellipsis and keeps the full stored text', () => {
+    const label = 'Cok uzun bir rozet metni '.repeat(6).trim()
+    const html = themed('light', 'tr', about({ ...mediaFor('corner')!, label }))
+    expect(html).toContain(label)
+    expect(html).toMatch(/truncate|text-ellipsis/)
+    expect(html).toMatch(/whitespace-nowrap|truncate/)
   })
 })
 
@@ -246,26 +284,22 @@ describe('demos', () => {
         expect(section, demo.slug).toBeDefined()
         const resolved = resolveAboutMedia(section!, 'alt')
         expect(['text', ...ABOUT_LAYOUTS]).toContain(resolved.layout)
-        if (resolved.layout === 'figure') expect(resolved.figure).toBeDefined()
       }
     }
   })
 
-  it('a demo figure is flagged as a sample, so the publish gate sees it and stripping removes it', () => {
-    let flagged = 0
+  it('no demo carries a figure, so the publish gate never flags one', () => {
     for (const demo of demos) {
       const site = buildDemoSite(demo, 'tr')
       const section = site.sections.find((s) => s.type === 'about') as About | undefined
-      if (!section?.media?.figure) continue
-      flagged++
-      expect(section.media.figure.sample, demo.slug).toBe(true)
+      expect((section?.media as Record<string, unknown> | undefined)?.figure, demo.slug).toBeUndefined()
+      expect(section?.media?.layout, demo.slug).not.toBe('figure')
       const findings = collectSampleFindings(site)
-      expect(findings.some((f) => f.sectionType === 'about'), demo.slug).toBe(true)
-      const stripped = stripSampleContent(site)
-      const after = stripped.sections.find((s) => s.type === 'about') as About
-      expect(after.media?.figure).toBeUndefined()
-      expect(resolveAboutMedia(after, 'alt').layout).not.toBe('figure')
+      const aboutFindings = findings.filter((f) => f.sectionType === 'about')
+      for (const f of aboutFindings) {
+        expect(f.items.every((i) => i.kind !== 'stats'), demo.slug).toBe(true)
+      }
+      void stripSampleContent
     }
-    expect(flagged).toBeGreaterThan(0)
   })
 })

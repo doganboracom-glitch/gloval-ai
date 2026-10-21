@@ -52,14 +52,9 @@ export const aboutMediaSchema = z.object({
     .max(3)
     .optional(),
   label: z.string().optional(),
-  figure: z
-    .object({
-      value: z.string(),
-      label: z.string(),
-      /** Demo-only figure. Blocks publish until the owner approves or replaces it. */
-      sample: z.boolean().optional(),
-    })
-    .optional(),
+  // Rows saved while the "figure" layout existed may still carry `figure` and
+  // layout "figure": zod drops the unknown key and `normalizeAboutMedia` maps
+  // that layout to "corner", so old rows stay valid.
   cta: buttonSchema.optional(),
 })
 
