@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   checkLimit: vi.fn(),
   audit: vi.fn(),
   respond: vi.fn(),
+  revalidatePath: vi.fn(),
+  updateTag: vi.fn(),
   ops: [] as unknown[],
 }))
 
 vi.mock('server-only', () => ({}))
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), updateTag: vi.fn() }))
+vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath, updateTag: mocks.updateTag }))
 vi.mock('@/lib/content/blog', () => ({ BLOG_CACHE_TAG: 'platform-blog' }))
 vi.mock('@/lib/mail/admin-guard', () => ({ getAdminUser: mocks.getAdminUser }))
 vi.mock('@/lib/blog-admin-limit', () => ({ checkBlogAdminLimit: mocks.checkLimit }))
@@ -177,6 +179,8 @@ describe('blog admin actions', () => {
       expect(update?.payload).toMatchObject({ status: 'published' })
       expect(typeof (update?.payload as { published_at: string }).published_at).toBe('string')
       expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'post.publish' }))
+      expect(mocks.revalidatePath).toHaveBeenCalledWith('/sitemap.xml')
+      expect(mocks.updateTag).toHaveBeenCalledWith('platform-blog')
     })
 
     it('allows unpublishing an empty post back to draft', async () => {
