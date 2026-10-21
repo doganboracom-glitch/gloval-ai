@@ -4,7 +4,7 @@ import { checkBlogAdminLimit } from '@/lib/blog-admin-limit'
 import { recordBlogAudit } from '@/lib/blog-audit'
 import { BLOG_UPLOAD_MAX_BYTES, inspectUpload, randomBlogImagePath } from '@/lib/blog-upload'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { BUCKET, ensureBucket, persistImageDataUri } from '@/lib/image-storage'
+import { BUCKET, IMAGE_STORAGE_USER_MESSAGE, ensureBucket, persistImageDataUri } from '@/lib/image-storage'
 import { getImageProvider, imageGenerationAvailable } from '@/lib/image-provider'
 import { DEFAULT_COVER_MODEL, parseCoverStyle } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
@@ -102,6 +102,9 @@ export async function POST(req: Request) {
     },
     { title, excerpt, style: parseCoverStyle(body?.style), colors: [], cost: 0, reason: 'platformBlogCover', signal: req.signal },
   )
-  if (!result.ok) return Response.json({ error: result.error }, { status: result.status })
+  if (!result.ok) {
+    const message = result.error === 'storage_failed' ? IMAGE_STORAGE_USER_MESSAGE : undefined
+    return Response.json({ error: result.error, ...(message ? { message } : {}) }, { status: result.status })
+  }
   return Response.json({ url: result.url })
 }

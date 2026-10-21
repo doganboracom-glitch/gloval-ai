@@ -1,6 +1,6 @@
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { generateSiteImage, imageGenerationAvailable, type ImageAspect } from '@/lib/image-provider'
-import { persistImageDataUri } from '@/lib/image-storage'
+import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
 import { imagePromptRules } from '@/lib/image-prompt-rules'
 import { analyzeBrief } from '@/lib/hero-image'
 import { describeVisualRequest } from '@/lib/visual-subjects'
@@ -106,7 +106,12 @@ export function buildItemImagePrompt(
     .trim()
 }
 
-/** Generates one image and stores a short, durable URL on the item. */
+/**
+ * Generates one image and stores a short, durable URL on the item.
+ * Resolves false when the provider produced nothing; REJECTS with
+ * `ImageStorageError` when the image was produced but could not be stored
+ * (the item's src is then left untouched, never base64).
+ */
 async function resolveTarget(
   site: WebsiteSchema,
   target: ImageTarget,
@@ -129,7 +134,13 @@ async function resolveTarget(
 export async function attachSectionImages(
   site: WebsiteSchema,
   prompt?: string,
-): Promise<{ available: boolean; generated: number; requested: number }> {
+): Promise<{
+  available: boolean
+  generated: number
+  requested: number
+  /** Present only when > 0: images generated but not stored (left without a src). */
+  storageFailed?: number
+}> {
   const available = imageGenerationAvailable()
   const pending = imageTargets(site)
     .filter((t) => typeof t.item.src !== 'string' || !t.item.src)
@@ -139,12 +150,16 @@ export async function attachSectionImages(
     return { available, generated: 0, requested: pending.length }
   }
 
+  let storageFailed = 0
   // The brief is derived per item, but seeding it with the original prompt keeps
   // the whole set on-topic when the item copy alone is thin ("Proje 1").
   const results = await Promise.all(
     pending.map((target) =>
       resolveTarget(site, target, prompt && pending.length === 1 ? prompt : undefined).catch(
-        () => false,
+        (err) => {
+          if (err instanceof ImageStorageError) storageFailed += 1
+          return false
+        },
       ),
     ),
   )
@@ -153,6 +168,7 @@ export async function attachSectionImages(
     available,
     generated: results.filter(Boolean).length,
     requested: pending.length,
+    ...(storageFailed > 0 ? { storageFailed } : {}),
   }
 }
 
@@ -192,7 +208,13 @@ export async function applyItemImageRequest(
   // Clear the stale image so a genuine failure cannot masquerade as success.
   const previousSrc = item.src
   item.src = undefined
-  const ok = await resolveTarget(site, target, trimmed || undefined)
+  let ok = false
+  try {
+    ok = await resolveTarget(site, target, trimmed || undefined)
+  } catch (err) {
+    item.src = previousSrc
+    throw err
+  }
   if (!ok) item.src = previousSrc
   return { status: ok ? 'generated' : 'failed', imagePrompt: String(item.imagePrompt ?? imagePrompt) }
 }

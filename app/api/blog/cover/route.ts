@@ -6,7 +6,7 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance, hasLedgerReason } from '@/lib/ai-credits'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { getImageProvider, imageGenerationAvailable } from '@/lib/image-provider'
-import { persistImageDataUri } from '@/lib/image-storage'
+import { IMAGE_STORAGE_USER_MESSAGE, ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
 import { websiteSchema } from '@/lib/website-schema'
 import { DEFAULT_COVER_MODEL, paletteNames, parseCoverStyle } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
@@ -18,6 +18,19 @@ export const maxDuration = 180
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 const CONCEPT_TIMEOUT_MS = 10_000
+
+/** The existing `storage_failed` code, now with a user-facing message; never charged. */
+function storageFailedResponse(balance?: number) {
+  return Response.json(
+    {
+      error: 'storage_failed',
+      message: IMAGE_STORAGE_USER_MESSAGE,
+      charged: 0,
+      ...(balance === undefined ? {} : { balance }),
+    },
+    { status: 502 },
+  )
+}
 
 /** One generation per user and project at a time; the ledger covers other instances. */
 const inflight = new Set<string>()
@@ -74,10 +87,14 @@ export async function POST(req: Request) {
     if (!ALLOWED_TYPES.has(file.type)) return Response.json({ error: 'unsupported_type' }, { status: 415 })
     if (file.size > MAX_UPLOAD_BYTES) return Response.json({ error: 'too_large' }, { status: 413 })
     const bytes = Buffer.from(await file.arrayBuffer())
-    const url = await persistImageDataUri(`data:${file.type};base64,${bytes.toString('base64')}`)
-    if (!url.startsWith('https://') && !url.startsWith('/')) {
-      return Response.json({ error: 'storage_failed' }, { status: 502 })
+    let url: string
+    try {
+      url = await persistImageDataUri(`data:${file.type};base64,${bytes.toString('base64')}`)
+    } catch (err) {
+      if (err instanceof ImageStorageError) return storageFailedResponse()
+      throw err
     }
+    if (!url.startsWith('https://') && !url.startsWith('/')) return storageFailedResponse()
     return Response.json({ url })
   }
 
@@ -135,6 +152,7 @@ export async function POST(req: Request) {
       charged: result.charged,
     })
     if (!result.ok) {
+      if (result.error === 'storage_failed') return storageFailedResponse(result.balance)
       const error = result.error === 'out_of_credits' ? 'Out of credits' : result.error
       return Response.json({ error, charged: 0, balance: result.balance }, { status: result.status })
     }

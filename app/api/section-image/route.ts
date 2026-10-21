@@ -1,6 +1,7 @@
 import { websiteSchema } from '@/lib/website-schema'
 import { applyItemImageRequest, attachSectionImages } from '@/lib/section-images'
 import { generateAboutImageAt } from '@/lib/about-image'
+import { ImageStorageError, imageStorageErrorResponse } from '@/lib/image-storage'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -86,6 +87,8 @@ export async function POST(req: Request) {
     }
 
     const result = await attachSectionImages(site)
+    // Nothing could be stored: tell the user why, charge nothing.
+    if (result.generated === 0 && (result.storageFailed ?? 0) > 0) return imageStorageErrorResponse()
     const status = !result.available
       ? 'skipped'
       : result.generated > 0
@@ -107,10 +110,12 @@ export async function POST(req: Request) {
         status,
         generated: result.generated,
         requested: result.requested,
+        ...(result.storageFailed ? { storageFailed: result.storageFailed } : {}),
       },
     })
   } catch (err) {
     console.log('[v0] section-image error:', err instanceof Error ? err.message : err)
+    if (err instanceof ImageStorageError) return imageStorageErrorResponse()
     return Response.json({ error: 'Image generation failed' }, { status: 500 })
   }
 }

@@ -7,7 +7,8 @@ vi.mock('@/lib/image-provider', () => ({
   generateSiteImage: (...args: unknown[]) => generateSiteImage(...args),
   imageGenerationAvailable: () => true,
 }))
-vi.mock('@/lib/image-storage', () => ({
+vi.mock('@/lib/image-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/image-storage')>()),
   persistImageDataUri: async (src: string) => src,
 }))
 vi.mock('@/lib/supabase/server', () => ({

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { readImageStorageFailure } from '@/lib/image-storage-error'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import useSWR from 'swr'
@@ -735,7 +736,14 @@ export function WebsitePreview({
           setDailyLimitResetAt(body?.resetAt ?? new Date().toISOString())
           return false
         }
-        if (!res.ok) throw new Error('failed')
+        if (!res.ok) {
+          const storageMessage = await readImageStorageFailure(res)
+          if (storageMessage) {
+            flashToast('err', storageMessage)
+            return false
+          }
+          throw new Error('failed')
+        }
         const data = await res.json()
         const parsed = websiteSchema.safeParse(data.website)
         if (!parsed.success) throw new Error('invalid')
@@ -794,7 +802,14 @@ export function WebsitePreview({
             setDailyLimitResetAt(body?.resetAt ?? new Date().toISOString())
             return
           }
-          if (!res.ok) throw new Error('failed')
+          if (!res.ok) {
+            const storageMessage = await readImageStorageFailure(res)
+            if (storageMessage) {
+              flashToast('err', storageMessage)
+              return
+            }
+            throw new Error('failed')
+          }
           const data = await res.json()
           const parsed = websiteSchema.safeParse(data.website)
           if (!parsed.success) throw new Error('invalid')
@@ -854,7 +869,14 @@ export function WebsitePreview({
             setDailyLimitResetAt(body?.resetAt ?? new Date().toISOString())
             return
           }
-          if (!res.ok) throw new Error('failed')
+          if (!res.ok) {
+            const storageMessage = await readImageStorageFailure(res)
+            if (storageMessage) {
+              flashToast('err', storageMessage)
+              return
+            }
+            throw new Error('failed')
+          }
           const data = await res.json()
           const parsed = websiteSchema.safeParse(data.website)
           if (!parsed.success) throw new Error('invalid')
@@ -915,7 +937,14 @@ export function WebsitePreview({
             setDailyLimitResetAt(body?.resetAt ?? new Date().toISOString())
             return false
           }
-          if (!res.ok) throw new Error('failed')
+          if (!res.ok) {
+            const storageMessage = await readImageStorageFailure(res)
+            if (storageMessage) {
+              flashToast('err', storageMessage)
+              return false
+            }
+            throw new Error('failed')
+          }
           const data = await res.json()
           const src = Array.isArray(data.alternatives) ? data.alternatives[0]?.src : null
           if (typeof src !== 'string' || !src) throw new Error('no alternative')
@@ -953,7 +982,14 @@ export function WebsitePreview({
           setDailyLimitResetAt(body?.resetAt ?? new Date().toISOString())
           return false
         }
-        if (!res.ok) throw new Error('failed')
+        if (!res.ok) {
+          const storageMessage = await readImageStorageFailure(res)
+          if (storageMessage) {
+            flashToast('err', storageMessage)
+            return false
+          }
+          throw new Error('failed')
+        }
         const data = await res.json()
         const parsed = websiteSchema.safeParse(data.website)
         if (!parsed.success) throw new Error('invalid')

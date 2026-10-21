@@ -14,7 +14,8 @@ vi.mock('@/lib/mail/admin-guard', () => ({
 }))
 vi.mock('@/lib/blog-admin-limit', () => ({ checkBlogAdminLimit: mocks.checkLimit }))
 vi.mock('@/lib/blog-audit', () => ({ recordBlogAudit: mocks.audit }))
-vi.mock('@/lib/image-storage', () => ({
+vi.mock('@/lib/image-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/image-storage')>()),
   BUCKET: 'site-images',
   ensureBucket: vi.fn(async () => {}),
   persistImageDataUri: vi.fn(),

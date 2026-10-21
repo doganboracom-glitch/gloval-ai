@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { IMAGE_STORAGE_USER_MESSAGE } from '@/lib/image-storage-error'
 import { ArrowLeft, ExternalLink, ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
@@ -261,7 +262,11 @@ export function PostEditor({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: form.title, excerpt: form.excerpt }),
       })
-      const json = (await res.json().catch(() => ({}))) as { url?: string }
+      const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string; message?: string }
+      if (json.error === 'storage_failed') {
+        setCoverError(json.message || IMAGE_STORAGE_USER_MESSAGE)
+        return
+      }
       if (!res.ok || !json.url) throw new Error('generate')
       setForm((prev) => ({ ...prev, coverUrl: json.url as string, coverAlt: prev.coverAlt || prev.title }))
     } catch {

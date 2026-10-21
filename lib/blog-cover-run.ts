@@ -145,7 +145,8 @@ export async function runCoverGeneration(deps: CoverRunDeps, input: CoverRunInpu
     try {
       const stored = await deps.persist(gate.src)
       url = isStoredUrl(stored) ? stored : null
-    } catch {
+    } catch (err) {
+      console.error('[blog-cover] storage failed, nothing charged:', err instanceof Error ? err.message : err)
       url = null
     }
     if (cancelled) return failure(cancelled, balance)

@@ -4,6 +4,7 @@ import {
   applySlideImageRequest,
   attachHeroImage,
 } from '@/lib/hero-image'
+import { ImageStorageError, imageStorageErrorResponse } from '@/lib/image-storage'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
       })
     } catch (err) {
       console.log('[v0] slide-image request error:', err instanceof Error ? err.message : err)
+      if (err instanceof ImageStorageError) return imageStorageErrorResponse()
       return Response.json({ error: 'Image generation failed' }, { status: 500 })
     }
   }
@@ -129,6 +131,7 @@ export async function POST(req: Request) {
       })
     } catch (err) {
       console.log('[v0] hero-image request error:', err instanceof Error ? err.message : err)
+      if (err instanceof ImageStorageError) return imageStorageErrorResponse()
       return Response.json({ error: 'Image generation failed' }, { status: 500 })
     }
   }
@@ -165,6 +168,8 @@ export async function POST(req: Request) {
         generated: img.generated,
       })
     }
+    // Every generated image failed to be stored: tell the user why, charge nothing.
+    if (!img.generated && img.storageFailed > 0) return imageStorageErrorResponse()
     const insufficientBalance = await chargeIfGenerated(img.generated)
     if (insufficientBalance !== null) {
       return Response.json({ error: 'Out of credits', balance: insufficientBalance }, { status: 402 })
@@ -176,10 +181,12 @@ export async function POST(req: Request) {
         available: img.available,
         generated: img.generated,
         status: img.available ? (img.generated ? 'completed' : 'failed') : 'skipped',
+        ...(img.storageFailed > 0 ? { storageFailed: img.storageFailed } : {}),
       },
     })
   } catch (err) {
     console.log('[v0] hero-image retry error:', err instanceof Error ? err.message : err)
+    if (err instanceof ImageStorageError) return imageStorageErrorResponse()
     return Response.json({ error: 'Image generation failed' }, { status: 500 })
   }
 }

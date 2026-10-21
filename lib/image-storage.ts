@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { IMAGE_STORAGE_ERROR_CODE, IMAGE_STORAGE_USER_MESSAGE } from '@/lib/image-storage-error'
 
 /**
  * Image storage
@@ -12,12 +13,32 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  * This module persists a data URI to Supabase Storage ONCE and returns a small,
  * durable public URL, so the schema only ever carries a short string.
  *
- * It is BEST-EFFORT and never throws: if storage is not configured or the
- * upload fails for any reason, the original data URI is returned unchanged, so
- * the image still renders and the pipeline is never broken.
+ * It FAILS LOUD: if storage is not configured or the upload fails, it throws an
+ * `ImageStorageError` instead of handing the raw base64 back. A caller that
+ * treated that base64 as success would charge credits for an image that was
+ * never stored and write megabytes into the schema and client state.
  */
 
 export const BUCKET = 'site-images'
+
+export { IMAGE_STORAGE_ERROR_CODE, IMAGE_STORAGE_USER_MESSAGE }
+
+export class ImageStorageError extends Error {
+  readonly code = IMAGE_STORAGE_ERROR_CODE
+  readonly userMessage = IMAGE_STORAGE_USER_MESSAGE
+  constructor(detail: string) {
+    super(detail)
+    this.name = 'ImageStorageError'
+  }
+}
+
+/** JSON body + status for a route that hit an `ImageStorageError`; never charged. */
+export function imageStorageErrorResponse(): Response {
+  return Response.json(
+    { error: IMAGE_STORAGE_ERROR_CODE, message: IMAGE_STORAGE_USER_MESSAGE, charged: 0 },
+    { status: 502 },
+  )
+}
 
 /** A Supabase admin client (service role) or null when storage isn't configured. */
 function adminClient() {
@@ -56,22 +77,30 @@ export async function ensureBucket(client: SupabaseClient) {
 
 /**
  * Uploads a base64 data URI to Supabase Storage and returns a public URL.
- * Non-data-URI inputs (already a URL) and any failure return the input as-is.
+ * Non-data-URI inputs (already a URL) are returned as-is. Every other failure
+ * (storage not configured, malformed data URI, upload error, no public URL)
+ * logs the technical cause and throws `ImageStorageError`.
  * Content-addressed by hash so identical images are only stored once.
  */
 export async function persistImageDataUri(src: string): Promise<string> {
   if (!src || !src.startsWith('data:')) return src
 
+  const fail = (detail: string): never => {
+    console.error('[image-storage] persist failed:', detail)
+    throw new ImageStorageError(detail)
+  }
+
   const client = adminClient()
-  if (!client) return src
+  if (!client) return fail('storage is not configured')
 
   const parsed = parseDataUri(src)
-  if (!parsed) return src
+  if (!parsed) return fail('malformed data URI')
 
   const ext = parsed.mime.split('/')[1]?.replace('+xml', '') || 'png'
   const hash = createHash('sha256').update(parsed.buffer).digest('hex').slice(0, 32)
   const path = `generated/${hash}.${ext}`
 
+  let publicUrl: string | undefined
   try {
     await ensureBucket(client)
     const { error } = await client.storage.from(BUCKET).upload(path, parsed.buffer, {
@@ -79,17 +108,11 @@ export async function persistImageDataUri(src: string): Promise<string> {
       cacheControl: '31536000',
       upsert: true,
     })
-    if (error) {
-      console.log('[v0] image-storage: upload error:', error.message)
-      return src
-    }
-    const { data } = client.storage.from(BUCKET).getPublicUrl(path)
-    return data?.publicUrl || src
+    if (error) throw new Error(`upload error: ${error.message}`)
+    publicUrl = client.storage.from(BUCKET).getPublicUrl(path).data?.publicUrl
   } catch (err) {
-    console.log(
-      '[v0] image-storage: persist threw:',
-      err instanceof Error ? err.message : err,
-    )
-    return src
+    return fail(err instanceof Error ? err.message : 'unknown storage error')
   }
+  if (!publicUrl) return fail('no public URL returned')
+  return publicUrl
 }

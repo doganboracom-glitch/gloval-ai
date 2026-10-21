@@ -12,7 +12,8 @@ vi.mock('@/lib/image-provider', () => ({
   },
   imageGenerationAvailable: () => true,
 }))
-vi.mock('@/lib/image-storage', () => ({
+vi.mock('@/lib/image-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/image-storage')>()),
   persistImageDataUri: async (src: string) => src,
 }))
 
