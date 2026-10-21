@@ -23,6 +23,11 @@ import { LEGAL_SLUGS } from '@/lib/legal/documents'
 
 type Entry = MetadataRoute.Sitemap[number]
 
+// Blog publication actions invalidate this route explicitly. Keep the metadata
+// route request-time rendered as a second guard against a stale sitemap snapshot
+// surviving independently from the tagged blog data cache.
+export const revalidate = 0
+
 /** Builds one entry with tr/en alternates for a platform path. */
 function entry(
   path: string,
