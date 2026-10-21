@@ -8,7 +8,7 @@ import {
   SiteButton,
   onSiteNavClick,
 } from '@/components/website-renderer/primitives'
-import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveAboutMedia, type ResolvedAbout } from '@/lib/about-media'
 
@@ -196,7 +196,8 @@ function FigureVisual({ image, figure }: { image: Frame; figure: NonNullable<Res
 function MoreLink({ link }: { link: { label: string; href: string } }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
-  const href = normalize(link.href)
+  const demoHref = useDemoHref()
+  const href = demoHref(normalize(link.href))
   return (
     <a
       href={href}

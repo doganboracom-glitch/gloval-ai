@@ -239,6 +239,18 @@ export function WebsiteRenderer({
       // link to one of the site's own pages must switch in-memory instead of
       // leaving the demo for a path that does not exist.
       if (!preview && !pageRouting && parsed.success) {
+        // The rendered hrefs are the demo's own real URLs; a plain click soft
+        // navigates to them, while new-tab / right-click / no-JS use the href.
+        if (demoRoutes && onDemoRoute) {
+          if (href === demoRoutes.about && activeSlug !== demoRoutes.aboutPageSlug) {
+            onDemoRoute(demoRoutes.about)
+            return true
+          }
+          if (href === demoRoutes.home && activeSlug === demoRoutes.aboutPageSlug) {
+            onDemoRoute(demoRoutes.home)
+            return true
+          }
+        }
         const demoSlug = resolveHrefToPageSlug(parsed.data, href)
         if (demoSlug) {
           // Demos expose the long about page (and the home page) as real
@@ -372,6 +384,7 @@ export function WebsiteRenderer({
       handler={navHandler}
       preview={Boolean(preview)}
       pageSlugs={pages.filter((p) => !p.isHome).map((p) => p.slug)}
+      demoRoutes={demoRoutes ?? null}
     >
     <SiteBlogProvider blog={blog} settings={data.blogSettings}>
     <div ref={rootRef} style={themeToCssVars(theme)} data-website-root>

@@ -25,6 +25,23 @@ import { normalizeInternalHref } from '@/lib/internal-href'
  */
 export type SiteNavHandler = (href: string) => boolean
 
+/** A demo's own URLs; only demo pages provide them, customer sites never do. */
+export type DemoRoutes = { home: string; about: string; aboutPageSlug: string | null }
+
+/**
+ * Rewrites the few links of the long about page (home/about/section anchors)
+ * to the demo's own `/demo/<slug>` URLs so the raw HTML never points at
+ * gloval.ai paths that do not exist for a demo.
+ */
+export function mapDemoHref(href: string, routes: DemoRoutes | null): string {
+  if (!routes) return href
+  if (href === '/') return routes.home
+  if (href.startsWith('/#')) return `${routes.home}${href.slice(1)}`
+  if (routes.aboutPageSlug && href === `/${routes.aboutPageSlug}`) return routes.about
+  return href
+}
+
+const DemoRoutesContext = createContext<DemoRoutes | null>(null)
 const SiteNavContext = createContext<SiteNavHandler | null>(null)
 const SitePreviewContext = createContext(false)
 const EMPTY_SLUGS: readonly string[] = []
@@ -34,8 +51,11 @@ export function SiteNavProvider({
   handler,
   preview = false,
   pageSlugs = EMPTY_SLUGS,
+  demoRoutes = null,
   children,
 }: {
+  /** Demo pages only: the demo's own home/about URLs. */
+  demoRoutes?: DemoRoutes | null
   handler: SiteNavHandler
   /** True only inside the editor/landing preview (never on published or demo pages). */
   preview?: boolean
@@ -46,7 +66,9 @@ export function SiteNavProvider({
   return (
     <SiteNavContext.Provider value={handler}>
       <SitePreviewContext.Provider value={preview}>
-        <PageSlugsContext.Provider value={pageSlugs}>{children}</PageSlugsContext.Provider>
+        <PageSlugsContext.Provider value={pageSlugs}>
+          <DemoRoutesContext.Provider value={demoRoutes}>{children}</DemoRoutesContext.Provider>
+        </PageSlugsContext.Provider>
       </SitePreviewContext.Provider>
     </SiteNavContext.Provider>
   )
@@ -56,6 +78,12 @@ export function SiteNavProvider({
 export function useHrefNormalizer(): (href: string) => string {
   const slugs = useContext(PageSlugsContext)
   return useCallback((href: string) => normalizeInternalHref(href, slugs), [slugs])
+}
+
+/** Maps a link to the demo's own URL on demo pages; the identity everywhere else. */
+export function useDemoHref(): (href: string) => string {
+  const routes = useContext(DemoRoutesContext)
+  return useCallback((href: string) => mapDemoHref(href, routes), [routes])
 }
 
 /** True when the site renders inside the editor preview. */
