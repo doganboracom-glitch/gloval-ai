@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 /**
  * WebsiteSchema
@@ -271,17 +272,17 @@ export const servicesSection = z.object({
         title: z.string(),
         description: z.string(),
         icon: z.string().optional().describe('A lucide-react icon name, e.g. "sparkles"'),
-        slug: z.string().max(80).optional().describe('Managed by the platform. Never set this field yourself.'),
+        slug: z.string().max(SERVICE_ITEM_LIMITS.slug).optional().describe('Managed by the platform. Never set this field yourself.'),
         src: z.string().optional().describe('Managed by the platform. Never set this field yourself.'),
-        alt: z.string().max(200).optional().describe('Managed by the platform. Never set this field yourself.'),
+        alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional().describe('Managed by the platform. Never set this field yourself.'),
         detail: z
           .array(sectionDetailBlockSchema)
-          .max(12)
+          .max(SERVICE_ITEM_LIMITS.blocks)
           .optional()
           .describe('Managed by the platform. Never set this field yourself.'),
         pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
-        seoTitle: z.string().max(120).optional().describe('Managed by the platform. Never set this field yourself.'),
-        seoDescription: z.string().max(320).optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoTitle: z.string().max(SERVICE_ITEM_LIMITS.seoTitle).optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoDescription: z.string().max(SERVICE_ITEM_LIMITS.seoDescription).optional().describe('Managed by the platform. Never set this field yourself.'),
         sample: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
@@ -291,12 +292,12 @@ export const servicesSection = z.object({
   detail: z
     .object({
       linkEnabled: z.boolean().optional(),
-      linkLabel: z.string().max(60).optional(),
+      linkLabel: z.string().max(SERVICE_LIST_LIMITS.linkLabel).optional(),
   pageEnabled: z.boolean().optional(),
-  heading: z.string().max(140).optional(),
-  ctaTitle: z.string().max(140).optional(),
-  ctaText: z.string().max(300).optional(),
-  ctaLabel: z.string().max(60).optional(),
+  heading: z.string().max(SERVICE_LIST_LIMITS.heading).optional(),
+  ctaTitle: z.string().max(SERVICE_LIST_LIMITS.ctaTitle).optional(),
+  ctaText: z.string().max(SERVICE_LIST_LIMITS.ctaText).optional(),
+  ctaLabel: z.string().max(SERVICE_LIST_LIMITS.ctaLabel).optional(),
   })
   .optional()
   .describe('Managed by the platform after generation. Never set this field yourself.'),

@@ -28,6 +28,7 @@ import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
+import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -511,12 +512,12 @@ export function applyOperation(
       const { patch } = operation
       const detail = { ...(section.detail ?? {}) }
       if (patch.linkEnabled !== undefined) detail.linkEnabled = patch.linkEnabled
-      if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, 60) || undefined
+      if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, SERVICE_LIST_LIMITS.linkLabel) || undefined
       if (patch.pageEnabled !== undefined) detail.pageEnabled = patch.pageEnabled
-      if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, 140) || undefined
-      if (patch.ctaTitle !== undefined) detail.ctaTitle = patch.ctaTitle.trim().slice(0, 140) || undefined
-      if (patch.ctaText !== undefined) detail.ctaText = patch.ctaText.trim().slice(0, 300) || undefined
-      if (patch.ctaLabel !== undefined) detail.ctaLabel = patch.ctaLabel.trim().slice(0, 60) || undefined
+      if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, SERVICE_LIST_LIMITS.heading) || undefined
+      if (patch.ctaTitle !== undefined) detail.ctaTitle = patch.ctaTitle.trim().slice(0, SERVICE_LIST_LIMITS.ctaTitle) || undefined
+      if (patch.ctaText !== undefined) detail.ctaText = patch.ctaText.trim().slice(0, SERVICE_LIST_LIMITS.ctaText) || undefined
+      if (patch.ctaLabel !== undefined) detail.ctaLabel = patch.ctaLabel.trim().slice(0, SERVICE_LIST_LIMITS.ctaLabel) || undefined
       next.sections[operation.index] = { ...section, detail }
       return syncSectionPages(next)
     }
@@ -530,10 +531,10 @@ export function applyOperation(
       const updated = { ...item }
       if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.title)
       if (patch.src !== undefined) updated.src = patch.src.trim() || undefined
-      if (patch.alt !== undefined) updated.alt = patch.alt.trim().slice(0, 200) || undefined
+      if (patch.alt !== undefined) updated.alt = patch.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) || undefined
       if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
-      if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, 120) || undefined
-      if (patch.seoDescription !== undefined) updated.seoDescription = patch.seoDescription.trim().slice(0, 320) || undefined
+      if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, SERVICE_ITEM_LIMITS.seoTitle) || undefined
+      if (patch.seoDescription !== undefined) updated.seoDescription = patch.seoDescription.trim().slice(0, SERVICE_ITEM_LIMITS.seoDescription) || undefined
       if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
       if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))

@@ -1,6 +1,7 @@
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { cleanDetailBlocks, type DetailBlock } from '@/lib/section-detail'
 import { findServicesSection, type ServiceItem } from '@/lib/service-pages'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 import { collectReusableImages, isUsableImageSrc } from '@/lib/about-media'
 import { STARTER_DAILY_SITE_CAP } from '@/lib/starter-blog'
 import type { ServiceDetailWrite } from '@/lib/service-detail-ai'
@@ -58,7 +59,7 @@ export function fillServiceImages(site: WebsiteSchema): { site: WebsiteSchema; f
     const candidate = pool.shift()
     if (!candidate) return item
     filled += 1
-    return { ...item, src: candidate.src, alt: `${item.title.trim() || candidate.alt} - ${site.meta.name}`.slice(0, 200) }
+    return { ...item, src: candidate.src, alt: `${item.title.trim() || candidate.alt} - ${site.meta.name}`.slice(0, SERVICE_ITEM_LIMITS.alt) }
   })
   if (!filled) return { site, filled: 0 }
   return { site: { ...site, sections: site.sections.map((s) => (s === section ? { ...section, items } : s)) }, filled }

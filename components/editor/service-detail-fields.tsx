@@ -5,7 +5,7 @@ import { Plus, Sparkles, Trash2, Upload } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { isUsableImageSrc } from '@/lib/about-media'
-import { MAX_DETAIL_BLOCKS } from '@/lib/section-detail'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 import {
   defaultServicesLinkLabel,
   findServicesPage,
@@ -275,7 +275,7 @@ export function ServiceDetailFields({
                         <TextField
                           label={c.seoTitle}
                           value={item.seoTitle ?? ''}
-                          maxLength={120}
+                          maxLength={SERVICE_ITEM_LIMITS.seoTitle}
                           onCommit={(v) => patchItem(i, { seoTitle: v })}
                         />
                         <TextField
@@ -283,7 +283,7 @@ export function ServiceDetailFields({
                           value={item.seoDescription ?? ''}
                           multiline
                           rows={2}
-                          maxLength={320}
+                          maxLength={SERVICE_ITEM_LIMITS.seoDescription}
                           onCommit={(v) => patchItem(i, { seoDescription: v })}
                         />
 
@@ -364,7 +364,7 @@ export function ServiceDetailFields({
                               />
                             </div>
                           ))}
-                          {blocks.length < MAX_DETAIL_BLOCKS && (
+                          {blocks.length < SERVICE_ITEM_LIMITS.blocks && (
                             <GhostButton onClick={() => patchItem(i, { blocks: [...blocks, { level: 'h2', body: '' }] })}>
                               <Plus className="h-3.5 w-3.5" />
                               {c.addBlock}

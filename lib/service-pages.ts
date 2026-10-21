@@ -3,6 +3,7 @@ import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { cleanDetailBlocks, syncDetailPages, type DetailBlock } from '@/lib/section-detail'
 import { slugifyPageSlug, uniquePageSlug } from '@/lib/page-slugs'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 
 /**
  * Service pages
@@ -25,7 +26,7 @@ const LIST_TITLES: Record<Lang, string> = { tr: 'Hizmetlerimiz', en: 'Our servic
 const LINK_LABELS: Record<Lang, string> = { tr: 'Tüm hizmetlerimiz', en: 'All our services' }
 const ITEM_LINK_LABELS: Record<Lang, string> = { tr: 'Detayları incele', en: 'View details' }
 
-export const MAX_SERVICE_ITEM_SLUG = 80
+export const MAX_SERVICE_ITEM_SLUG = SERVICE_ITEM_LIMITS.slug
 
 const siteLang = (site: Pick<WebsiteSchema, 'meta'>): Lang => (site.meta.language === 'en' ? 'en' : 'tr')
 
@@ -241,7 +242,7 @@ export function findPublicService(site: WebsiteSchema, listSlug: string, itemSlu
 
 /** Plain-text digest for meta descriptions; the owner's SEO text wins. */
 export function serviceDescription(entry: ServiceEntry): string {
-  if (entry.seoDescription) return entry.seoDescription.slice(0, 320)
+  if (entry.seoDescription) return entry.seoDescription.slice(0, SERVICE_ITEM_LIMITS.seoDescription)
   const firstBlock = entry.blocks.find((b) => b.body)?.body
   const source = firstBlock || entry.description
   return source.replace(/\s+/g, ' ').trim().slice(0, 160)
