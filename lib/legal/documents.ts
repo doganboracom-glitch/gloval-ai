@@ -247,7 +247,7 @@ const kvkk: LegalDoc = {
     description:
       '6698 sayılı Kişisel Verilerin Korunması Kanunu kapsamında GLOVAL AI veri işleme faaliyetlerine ilişkin aydınlatma metni.',
     intro: [
-      `İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu ${COMPANY.legalName} tarafından hazırlanmıştır.`,
+      `İşbu Aydınlatma Metni, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır) tarafından hazırlanmıştır.`,
     ],
     sections: [
       {
@@ -328,7 +328,7 @@ const kvkk: LegalDoc = {
     description:
       'Disclosure notice regarding GLOVAL AI data processing activities under Turkish Personal Data Protection Law No. 6698 (KVKK).',
     intro: [
-      `This Disclosure Notice has been prepared by the data controller ${COMPANY.legalName} pursuant to Article 10 of the Turkish Personal Data Protection Law No. 6698 ("KVKK").`,
+      `This Disclosure Notice has been prepared by the data controller ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”) pursuant to Article 10 of the Turkish Personal Data Protection Law No. 6698 ("KVKK").`,
     ],
     sections: [
       {
@@ -712,7 +712,7 @@ const distanceSales: LegalDoc = {
         heading: '1. Taraflar — Hizmet Sağlayıcı (Satıcı)',
         blocks: [
           list([
-            `Unvan: ${COMPANY.legalName}`,
+            `Unvan: ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır)`,
             `Adres: ${COMPANY.address}`,
             `E-posta: ${COMPANY.supportEmail}`,
             `Telefon: ${COMPANY.phone}`,
@@ -803,7 +803,7 @@ const distanceSales: LegalDoc = {
         heading: '1. Parties — Service Provider (Seller)',
         blocks: [
           list([
-            `Legal name: ${COMPANY.legalName}`,
+            `Legal name: ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`,
             `Address: ${COMPANY.address}`,
             `Email: ${COMPANY.supportEmail}`,
             `Phone: ${COMPANY.phone}`,
@@ -902,7 +902,7 @@ const preInfo: LegalDoc = {
         heading: '1. Hizmet Sağlayıcı',
         blocks: [
           list([
-            `Unvan: ${COMPANY.legalName}`,
+            `Unvan: ${COMPANY.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır)`,
             `Adres: ${COMPANY.address}`,
             `E-posta: ${COMPANY.supportEmail}`,
             `Telefon: ${COMPANY.phone}`,
@@ -964,7 +964,7 @@ const preInfo: LegalDoc = {
         heading: '1. Service Provider',
         blocks: [
           list([
-            `Legal name: ${COMPANY.legalName}`,
+            `Legal name: ${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`,
             `Address: ${COMPANY.address}`,
             `Email: ${COMPANY.supportEmail}`,
             `Phone: ${COMPANY.phone}`,
