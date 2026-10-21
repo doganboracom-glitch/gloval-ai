@@ -235,6 +235,16 @@ function withoutAboutFigure(section: AboutSectionLike): AboutSectionLike {
   return { ...section, media: { ...media, figure: undefined, layout } }
 }
 
+/** The about section's detail page while its platform-written text is still unapproved. */
+function sampleAboutDetail(section: Section): NonNullable<AboutSectionLike['detail']> | undefined {
+  if (section.type !== 'about') return undefined
+  return section.detail?.sample ? section.detail : undefined
+}
+
+function aboutDetailDigest(detail: NonNullable<AboutSectionLike['detail']>): string {
+  return sampleDigest('about', ['detail', detail.heading ?? '', (detail.blocks ?? []).map((b) => [b.heading ?? '', b.body])])
+}
+
 function heroTrustDigest(trustText: string | undefined): string {
   return sampleDigest('hero', [trustText ?? ''])
 }
@@ -387,13 +397,15 @@ export function collectSampleFindings(site: WebsiteSchema, context?: DetectionCo
     }
     if (section.type === 'about') {
       const figure = sampleAboutFigure(section)
+      const detail = sampleAboutDetail(section)
+      const items: SampleItemFinding[] = []
       if (figure) {
-        findings.push({
-          sectionIndex,
-          sectionType: 'about',
-          items: [{ id: aboutFigureDigest(figure), itemIndex: null, kind: 'stats', label: truncate(`${figure.value} ${figure.label}`) }],
-        })
+        items.push({ id: aboutFigureDigest(figure), itemIndex: null, kind: 'stats', label: truncate(`${figure.value} ${figure.label}`) })
       }
+      if (detail) {
+        items.push({ id: aboutDetailDigest(detail), itemIndex: null, kind: 'info', label: truncate(detail.heading || section.title) })
+      }
+      if (items.length) findings.push({ sectionIndex, sectionType: 'about', items })
       return
     }
     const spec = ITEM_SPECS[section.type]
@@ -544,9 +556,16 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
         : section
     }
     if (section.type === 'about') {
+      let next: AboutSectionLike = section
       const figure = sampleAboutFigure(section)
-      if (!figure || !approvedIds.has(aboutFigureDigest(figure)) || !section.media) return section
-      return { ...section, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+      if (figure && approvedIds.has(aboutFigureDigest(figure)) && section.media) {
+        next = { ...next, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+      }
+      const detail = sampleAboutDetail(section)
+      if (detail && approvedIds.has(aboutDetailDigest(detail))) {
+        next = { ...next, detail: { ...detail, sample: undefined } }
+      }
+      return next
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
@@ -602,10 +621,18 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
       return { ...section, sampleFields: kept.length ? kept : undefined, sample: kept.length ? true : undefined }
     }
     if (section.type === 'about') {
+      let next: AboutSectionLike = section
       const figure = sampleAboutFigure(section)
-      if (!figure || before.has(aboutFigureDigest(figure)) || !section.media) return section
-      changed = true
-      return { ...section, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+      if (figure && !before.has(aboutFigureDigest(figure)) && section.media) {
+        changed = true
+        next = { ...next, media: { ...section.media, figure: { ...figure, sample: undefined } } }
+      }
+      const detail = sampleAboutDetail(section)
+      if (detail && !before.has(aboutDetailDigest(detail))) {
+        changed = true
+        next = { ...next, detail: { ...detail, sample: undefined } }
+      }
+      return next
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
@@ -645,9 +672,13 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       return [stripSampleContactFields(section)]
     }
     if (section.type === 'about') {
-      if (!sampleAboutFigure(section)) return [section]
+      const figureSample = sampleAboutFigure(section)
+      const detailSample = sampleAboutDetail(section)
+      if (!figureSample && !detailSample) return [section]
       changed = true
-      return [withoutAboutFigure(section)]
+      const base = figureSample ? withoutAboutFigure(section) : section
+      // Unapproved platform text never ships: the detail page and its link go away.
+      return [detailSample ? { ...base, detail: { ...detailSample, pageEnabled: false, linkEnabled: false } } : base]
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
@@ -707,7 +738,7 @@ export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number
 export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
   if (section.type === 'contact') return sampleContactFields(section).length > 0
-  if (section.type === 'about') return sampleAboutFigure(section) !== undefined
+  if (section.type === 'about') return sampleAboutFigure(section) !== undefined || sampleAboutDetail(section) !== undefined
   const spec = ITEM_SPECS[section.type]
   return spec ? itemsOf(section, spec).some((item) => item.sample) : false
 }

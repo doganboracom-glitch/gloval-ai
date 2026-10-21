@@ -9,6 +9,8 @@ import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-sect
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { seedAboutMedia } from '@/lib/about-media'
 import { attachAboutImage } from '@/lib/about-image'
+import { seedAboutDetail, syncDetailPages } from '@/lib/section-detail'
+import { generateAboutDetail } from '@/lib/about-detail-ai'
 import { normalizeCorporateSectionOrder, withBlogOffByDefault } from '@/lib/section-order'
 import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
 import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
@@ -191,6 +193,9 @@ async function runGenerate(
         seedAboutMedia(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object)))), prompt), prompt),
         prompt,
       )
+      // Long-form About body written only from the site's own facts; any
+      // failure falls back to the deterministic starter inside the helper.
+      const aboutDetail = await generateAboutDetail(seededAbout, planCode)
 
       return Response.json({
         // Seeds the floating phone + WhatsApp buttons from the site's own
@@ -198,7 +203,7 @@ async function runGenerate(
         // being able to invent a phone number.
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(seededAbout),
+            seedContactActions(syncDetailPages(seedAboutDetail(seededAbout, aboutDetail), pageLimit)),
             normalizedLang,
           ),
           normalizedLang,
@@ -230,7 +235,7 @@ async function runGenerate(
       return Response.json({
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(seededAbout),
+            seedContactActions(syncDetailPages(seedAboutDetail(seededAbout))),
             normalizedLang,
           ),
           normalizedLang,

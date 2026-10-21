@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
 import { NEW_TICKET_PATH } from '@/lib/support/prefill'
-import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
+import { SectionDetailPage } from '@/components/website-renderer/sections/section-detail-page'
+import { pageNavItems, headerPageItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
 import { WebsiteLatestPosts } from '@/components/website-renderer/sections/website-latest-posts'
@@ -270,6 +271,7 @@ export function WebsiteRenderer({
   // Keep the active page valid even if pages change under an edit.
   const active = pages.find((p) => p.slug === activeSlug)?.slug ?? homeSlug(data)
   const sections = sectionsForPage(data, active)
+  const activeIsDetail = Boolean(pages.find((p) => p.slug === active)?.detail)
 
   // The footer hosts the credit. Without a visible footer on this page it would
   // vanish, so fall back to the pinned chip instead.
@@ -346,7 +348,7 @@ export function WebsiteRenderer({
       {announcementAboveHeader && announcementNode}
       <WebsiteHeader
         navigation={data.navigation}
-        pages={pages}
+        pages={headerPageItems(pages)}
         activeSlug={active}
         onNavigate={handleNavigate}
         cartSlug={store?.slug}
@@ -356,6 +358,7 @@ export function WebsiteRenderer({
         contact={resolveMenuContact(data)}
       />
       {announcement && !announcementAboveHeader && !announcementOnPage && announcementNode}
+      {activeIsDetail && <SectionDetailPage site={data} />}
       {sections.flatMap((section, i) => {
         if (section.type === 'announcement' && announcementAboveHeader) {
           return i === latestIndex ? [latestPosts] : []

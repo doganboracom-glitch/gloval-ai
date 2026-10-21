@@ -12,6 +12,8 @@ import { isStorefront } from '@/lib/website-schema'
 import { getStorePaymentBadges } from '@/lib/store-payment-badges'
 import { contactSecret, signContactToken } from '@/lib/site-contact-guard'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
+import { detailDescription, resolveAboutDetail } from '@/lib/section-detail'
+import { buildBreadcrumbJsonLd } from '@/lib/seo/breadcrumb-jsonld'
 
 /**
  * Metadata for the home page (`pageSlug` null) or one real page. Titles,
@@ -24,7 +26,12 @@ export async function buildSitePageMetadata(slug: string, pageSlug: string | nul
   const page = pageSlug ? findPublicPage(site.schema, pageSlug) : null
   if (pageSlug && !page) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
 
-  const description = page?.seo?.description?.trim() || site.schema.meta.description || site.schema.meta.tagline
+  const aboutDetail = page?.kind === 'detail' ? resolveAboutDetail(site.schema) : null
+  const description =
+    page?.seo?.description?.trim() ||
+    (aboutDetail ? detailDescription(aboutDetail) : '') ||
+    site.schema.meta.description ||
+    site.schema.meta.tagline
   const seoTitle = site.schema.meta.seoTitle?.trim()
   const siteTitle = seoTitle ? `${site.name} - ${seoTitle}` : site.name
   const title = page ? page.seo?.title?.trim() || `${page.title} | ${site.name}` : siteTitle
@@ -68,6 +75,17 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
     }
   }
 
+  const { origin } = await getSiteSeoContext(slug)
+  const breadcrumb =
+    page?.kind === 'detail'
+      ? buildBreadcrumbJsonLd({
+          origin,
+          homeName: site.name,
+          pageName: page.title,
+          pagePath: pagePath(site.schema, page.slug),
+        })
+      : null
+
   const paymentBadges = isStorefront(site.schema) ? await getStorePaymentBadges(slug) : null
 
   const store: StoreCatalog | null =
@@ -103,6 +121,9 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
 
   return (
     <main className="min-h-svh bg-white text-black">
+      {breadcrumb ? (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumb }} />
+      ) : null}
       {/* The "Gloval AI ile oluşturuldu." credit is on unless this specific
           site's owner bought the one-time Copyright Kaldırma right. */}
       <WebsiteRenderer
