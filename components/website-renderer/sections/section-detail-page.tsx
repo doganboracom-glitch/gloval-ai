@@ -26,7 +26,7 @@ function Photo({ image, className = '' }: { image: DetailImage; className?: stri
   )
 }
 
-function BlockBody({ body }: { body: string }) {
+export function BlockBody({ body }: { body: string }) {
   return (
     <div className="mt-3 grid gap-4">
       {parseDetailBody(body).map((part, i) =>

@@ -4,6 +4,7 @@ import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { MAX_ABOUT_IMAGES } from '@/lib/about-media'
+import { serviceItemAt } from '@/lib/service-image'
 import { createPreviewDeps, parseSectionKey, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
 import {
   discardPreview,
@@ -93,9 +94,15 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Invalid request' }, { status: 400 })
     }
     const target = site.sections[section.index]
-    if (!target || target.type !== 'about') return Response.json({ error: 'Invalid request' }, { status: 400 })
-    if ((target.media?.images ?? []).length >= MAX_ABOUT_IMAGES) {
-      return Response.json({ error: 'max_images' }, { status: 409 })
+    if (section.target === 'services') {
+      if (section.item === undefined || !serviceItemAt(site, section.index, section.item)) {
+        return Response.json({ error: 'Invalid request' }, { status: 400 })
+      }
+    } else {
+      if (!target || target.type !== 'about') return Response.json({ error: 'Invalid request' }, { status: 400 })
+      if ((target.media?.images ?? []).length >= MAX_ABOUT_IMAGES) {
+        return Response.json({ error: 'max_images' }, { status: 409 })
+      }
     }
     const result = await startPreview(deps, {
       userId,

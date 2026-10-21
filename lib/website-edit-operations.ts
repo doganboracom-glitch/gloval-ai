@@ -26,7 +26,9 @@ import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
-import { MAX_DETAIL_IMAGES, cleanDetailBlocks, syncDetailPages } from '@/lib/section-detail'
+import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
+import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
+import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -151,8 +153,41 @@ export type EditOperation =
         approve?: boolean
       }
     }
+  /** The services section's list page + links ("Tüm hizmetlerimiz", /hizmetlerimiz). */
+  | {
+      op: 'updateServicesDetail'
+      index: number
+      patch: {
+        linkEnabled?: boolean
+        linkLabel?: string
+        pageEnabled?: boolean
+        heading?: string
+        ctaTitle?: string
+        ctaText?: string
+        ctaLabel?: string
+      }
+    }
+  /**
+   * One service's own page: slug, image, on/off, SEO and long text (`blocks`
+   * replaces the list). Editing the text or approving clears the platform `sample` flag.
+   */
+  | {
+      op: 'updateServiceItem'
+      index: number
+      item: number
+      patch: {
+        slug?: string
+        src?: string
+        alt?: string
+        pageEnabled?: boolean
+        seoTitle?: string
+        seoDescription?: string
+        blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
+        approve?: boolean
+      }
+    }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
-  | { op: 'dismissHint'; hint: 'aboutImage' }
+  | { op: 'dismissHint'; hint: 'aboutImage' | 'serviceDetail' }
   /** Any scalar (string) field on the section, including ones outside the text set. */
   | { op: 'updateSectionValue'; index: number; field: string; value: string }
   /** A section button (hero/cta) label or href. */
@@ -468,7 +503,43 @@ export function applyOperation(
         detail.sample = undefined
       }
       next.sections[operation.index] = { ...section, detail }
-      return syncDetailPages(next)
+      return syncSectionPages(next)
+    }
+
+    case 'updateServicesDetail': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'services') return next
+      const { patch } = operation
+      const detail = { ...(section.detail ?? {}) }
+      if (patch.linkEnabled !== undefined) detail.linkEnabled = patch.linkEnabled
+      if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, SERVICE_LIST_LIMITS.linkLabel) || undefined
+      if (patch.pageEnabled !== undefined) detail.pageEnabled = patch.pageEnabled
+      if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, SERVICE_LIST_LIMITS.heading) || undefined
+      if (patch.ctaTitle !== undefined) detail.ctaTitle = patch.ctaTitle.trim().slice(0, SERVICE_LIST_LIMITS.ctaTitle) || undefined
+      if (patch.ctaText !== undefined) detail.ctaText = patch.ctaText.trim().slice(0, SERVICE_LIST_LIMITS.ctaText) || undefined
+      if (patch.ctaLabel !== undefined) detail.ctaLabel = patch.ctaLabel.trim().slice(0, SERVICE_LIST_LIMITS.ctaLabel) || undefined
+      next.sections[operation.index] = { ...section, detail }
+      return syncSectionPages(next)
+    }
+
+    case 'updateServiceItem': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'services') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      const { patch } = operation
+      const updated = { ...item }
+      if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.title)
+      if (patch.src !== undefined) updated.src = patch.src.trim() || undefined
+      if (patch.alt !== undefined) updated.alt = patch.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) || undefined
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, SERVICE_ITEM_LIMITS.seoTitle) || undefined
+      if (patch.seoDescription !== undefined) updated.seoDescription = patch.seoDescription.trim().slice(0, SERVICE_ITEM_LIMITS.seoDescription) || undefined
+      if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
+      if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
+      const items = section.items.map((it, i) => (i === operation.item ? updated : it))
+      next.sections[operation.index] = { ...section, items }
+      return syncSectionPages(next)
     }
 
     case 'dismissHint': {

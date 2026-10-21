@@ -9,7 +9,8 @@ import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-sect
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { seedAboutMedia } from '@/lib/about-media'
 import { attachAboutImage } from '@/lib/about-image'
-import { seedAboutDetail, syncDetailPages } from '@/lib/section-detail'
+import { seedAboutDetail } from '@/lib/section-detail'
+import { seedServicesDetail, syncSectionPages } from '@/lib/service-pages'
 import { generateAboutDetail } from '@/lib/about-detail-ai'
 import { normalizeCorporateSectionOrder, withBlogOffByDefault } from '@/lib/section-order'
 import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
@@ -203,7 +204,7 @@ async function runGenerate(
         // being able to invent a phone number.
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(syncDetailPages(seedAboutDetail(seededAbout, aboutDetail), pageLimit)),
+            seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail)), pageLimit)),
             normalizedLang,
           ),
           normalizedLang,
@@ -235,7 +236,7 @@ async function runGenerate(
       return Response.json({
         website: seedFooterLegal(
           seedFooterColumns(
-            seedContactActions(syncDetailPages(seedAboutDetail(seededAbout))),
+            seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout)))),
             normalizedLang,
           ),
           normalizedLang,

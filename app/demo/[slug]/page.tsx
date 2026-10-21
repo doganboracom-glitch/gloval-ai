@@ -6,6 +6,7 @@ import { DemoHeaderActions } from '@/components/demo-site/demo-header-actions'
 import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
 import { resolveAboutDetail } from '@/lib/section-detail'
+import { resolveServices } from '@/lib/service-pages'
 import { DemoSiteRenderer } from '@/components/demo-site/demo-site-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
@@ -48,11 +49,14 @@ export default async function DemoPage({
   params,
   searchParams,
   initialPage = null,
+  initialService = null,
 }: {
   params: Promise<{ slug: string }>
   searchParams: Promise<{ lang?: string; preview?: string }>
-  /** Set by the /hakkimizda route so the same demo opens on its long about page. */
-  initialPage?: 'about' | null
+  /** Set by the /hakkimizda and /hizmetler routes so the demo opens on that page. */
+  initialPage?: 'about' | 'services' | null
+  /** With `initialPage="services"`: the service whose own page opens. */
+  initialService?: string | null
 }) {
   const { slug } = await params
   const { lang: langParam, preview } = await searchParams
@@ -81,6 +85,22 @@ export default async function DemoPage({
   const checkoutHref = `/demo/${slug}/odeme?lang=${lang}`
   const langQuery = lang === 'en' ? '?lang=en' : ''
   const aboutPageSlug = resolveAboutDetail(site)?.pageSlug ?? null
+  const resolvedServices = resolveServices(site)
+  const servicesActive = !!resolvedServices?.pageActive
+  if (initialPage === 'services') {
+    if (!servicesActive) notFound()
+    if (initialService && !resolvedServices?.items.some((s) => s.slug === initialService && s.pageEnabled)) notFound()
+  }
+  const servicesRoutes = servicesActive
+    ? {
+        listSlug: resolvedServices!.listSlug,
+        list: `/demo/${slug}/hizmetler${langQuery}`,
+        itemBase: `/demo/${slug}/hizmet`,
+        query: langQuery,
+      }
+    : undefined
+  const initialSlug =
+    initialPage === 'about' ? aboutPageSlug : initialPage === 'services' ? (resolvedServices?.listSlug ?? null) : null
 
   const content = (
     <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
@@ -97,8 +117,10 @@ export default async function DemoPage({
           home: `/demo/${slug}${langQuery}`,
           about: `/demo/${slug}/hakkimizda${langQuery}`,
           aboutPageSlug,
+          services: servicesRoutes,
         }}
-        initialPage={initialPage === 'about' ? aboutPageSlug : null}
+        initialPage={initialSlug}
+        initialService={initialPage === 'services' ? initialService : null}
         headerActions={commerce ? <DemoHeaderActions slug={slug} lang={lang} /> : undefined}
       />
 

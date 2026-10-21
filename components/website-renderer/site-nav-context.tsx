@@ -26,19 +26,42 @@ import { normalizeInternalHref } from '@/lib/internal-href'
 export type SiteNavHandler = (href: string) => boolean
 
 /** A demo's own URLs; only demo pages provide them, customer sites never do. */
-export type DemoRoutes = { home: string; about: string; aboutPageSlug: string | null }
+export type DemoRoutes = {
+  home: string
+  about: string
+  aboutPageSlug: string | null
+  /** The services list page slug and the demo's own list / per-service URLs. */
+  services?: { listSlug: string; list: string; itemBase: string; query: string }
+}
 
 /**
  * Rewrites the few links of the long about page (home/about/section anchors)
- * to the demo's own `/demo/<slug>` URLs so the raw HTML never points at
- * gloval.ai paths that do not exist for a demo.
+ * and the services list/detail pages to the demo's own `/demo/<slug>` URLs so
+ * the raw HTML never points at gloval.ai paths that do not exist for a demo.
  */
 export function mapDemoHref(href: string, routes: DemoRoutes | null): string {
   if (!routes) return href
   if (href === '/') return routes.home
   if (href.startsWith('/#')) return `${routes.home}${href.slice(1)}`
   if (routes.aboutPageSlug && href === `/${routes.aboutPageSlug}`) return routes.about
+  const services = routes.services
+  if (services) {
+    const path = href.split(/[?#]/)[0]
+    if (path === `/${services.listSlug}`) return services.list
+    const prefix = `/${services.listSlug}/`
+    if (path.startsWith(prefix) && !path.slice(prefix.length).includes('/')) {
+      return `${services.itemBase}/${path.slice(prefix.length)}${services.query}`
+    }
+  }
   return href
+}
+
+/** True for the demo's own services list / service URLs (already mapped). */
+export function isDemoServiceHref(href: string, routes: DemoRoutes | null): boolean {
+  const services = routes?.services
+  if (!services) return false
+  const path = href.split(/[?#]/)[0]
+  return path === services.list.split('?')[0] || path.startsWith(`${services.itemBase}/`)
 }
 
 const DemoRoutesContext = createContext<DemoRoutes | null>(null)

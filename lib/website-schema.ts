@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 /**
  * WebsiteSchema
@@ -87,6 +88,12 @@ export const sectionDetailSchema = z.object({
     .optional(),
   /** Platform-written filler. Blocks publish until the owner approves or replaces it. */
   sample: z.boolean().optional(),
+  /** Services list page: the closing "İletişime Geç" card. Empty falls back to the defaults. */
+  ctaTitle: z.string().max(140).optional(),
+  ctaText: z.string().max(300).optional(),
+  ctaLabel: z.string().max(60).optional(),
+  /** Set once the background writer has handled this site (even when it wrote nothing). */
+  textsWrittenAt: z.string().max(40).optional(),
 })
 
 /**
@@ -265,10 +272,35 @@ export const servicesSection = z.object({
         title: z.string(),
         description: z.string(),
         icon: z.string().optional().describe('A lucide-react icon name, e.g. "sparkles"'),
+        slug: z.string().max(SERVICE_ITEM_LIMITS.slug).optional().describe('Managed by the platform. Never set this field yourself.'),
+        src: z.string().optional().describe('Managed by the platform. Never set this field yourself.'),
+        alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional().describe('Managed by the platform. Never set this field yourself.'),
+        detail: z
+          .array(sectionDetailBlockSchema)
+          .max(SERVICE_ITEM_LIMITS.blocks)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
+        pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoTitle: z.string().max(SERVICE_ITEM_LIMITS.seoTitle).optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoDescription: z.string().max(SERVICE_ITEM_LIMITS.seoDescription).optional().describe('Managed by the platform. Never set this field yourself.'),
+        sample: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
     .min(2)
     .max(8),
+  /** List page + item pages switches ("Tüm hizmetlerimiz" link, /hizmetlerimiz). Managed by the platform. */
+  detail: z
+    .object({
+      linkEnabled: z.boolean().optional(),
+      linkLabel: z.string().max(SERVICE_LIST_LIMITS.linkLabel).optional(),
+  pageEnabled: z.boolean().optional(),
+  heading: z.string().max(SERVICE_LIST_LIMITS.heading).optional(),
+  ctaTitle: z.string().max(SERVICE_LIST_LIMITS.ctaTitle).optional(),
+  ctaText: z.string().max(SERVICE_LIST_LIMITS.ctaText).optional(),
+  ctaLabel: z.string().max(SERVICE_LIST_LIMITS.ctaLabel).optional(),
+  })
+  .optional()
+  .describe('Managed by the platform after generation. Never set this field yourself.'),
 })
 
 export const featuresSection = z.object({
@@ -904,7 +936,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about']).optional(),
+  detailOf: z.enum(['about', 'services']).optional(),
 })
 
 /** Pages as the AI sees them when generating: structure only, no per-page content. */

@@ -1,67 +1,41 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getDemo } from '@/lib/demos'
-import { getCatalog, getService } from '@/lib/demo-catalog'
-import { DemoChrome } from '@/components/demo-site/demo-chrome'
-import { CatalogDetail } from '@/components/demo-site/catalog-detail'
+import { getDemo, buildDemoSite } from '@/lib/demos'
+import { findPublicService, resolveServices } from '@/lib/service-pages'
+import DemoPage from '../../page'
 
-// Demo content locale (tr/en only) is a separate, narrower concept from the
-// platform UI locale (`Lang`/`SupportedLocale`, now 12 languages).
-type DemoLang = 'tr' | 'en'
-
-function resolveLang(value: string | undefined): DemoLang {
-  return value === 'en' ? 'en' : 'tr'
+type Props = {
+  params: Promise<{ slug: string; itemSlug: string }>
+  searchParams: Promise<{ lang?: string; preview?: string }>
 }
 
-export async function generateMetadata({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string; itemSlug: string }>
-  searchParams: Promise<{ lang?: string }>
-}): Promise<Metadata> {
+function lookup(slug: string, itemSlug: string, langParam: string | undefined) {
+  const demo = getDemo(slug)
+  if (!demo) return null
+  const language = langParam === 'en' ? ('en' as const) : ('tr' as const)
+  const site = buildDemoSite(demo, language)
+  const resolved = resolveServices(site)
+  if (!resolved?.pageActive) return null
+  const found = findPublicService(site, resolved.listSlug, itemSlug)
+  if (!found) return null
+  return { demo, lang: language, entry: found.entry }
+}
+
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { slug, itemSlug } = await params
-  const { lang: langParam } = await searchParams
-  const lang = resolveLang(langParam)
-  const catalog = getCatalog(slug)
-  const service = getService(slug, itemSlug)
-  if (!catalog || !service) return {}
+  const { lang } = await searchParams
+  const found = lookup(slug, itemSlug, lang)
+  if (!found) return { title: 'Demo bulunamadı' }
   return {
-    title: `${service.name[lang]} | ${catalog.brand[lang]}`,
-    description: service.short[lang],
+    title: `${found.entry.title} | ${found.demo.brand[found.lang]}`,
+    description: found.entry.description,
     robots: { index: false, follow: true },
-    openGraph: { images: [service.image] },
   }
 }
 
-export default async function DemoServiceDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string; itemSlug: string }>
-  searchParams: Promise<{ lang?: string }>
-}) {
-  const { slug, itemSlug } = await params
-  const { lang: langParam } = await searchParams
-  const lang = resolveLang(langParam)
-
-  const demo = getDemo(slug)
-  const catalog = getCatalog(slug)
-  const service = getService(slug, itemSlug)
-  if (!demo || !catalog || !service) notFound()
-
-  const backLabel =
-    lang === 'tr' ? `${catalog.servicesLabel.tr}'e dön` : `Back to ${catalog.servicesLabel.en}`
-
-  return (
-    <DemoChrome slug={slug} lang={lang}>
-      <CatalogDetail
-        item={service}
-        contact={catalog.contact}
-        lang={lang}
-        backHref={`/demo/${slug}/hizmetler?lang=${lang}`}
-        backLabel={backLabel}
-      />
-    </DemoChrome>
-  )
+export default async function DemoServicePage(props: Props) {
+  const { slug, itemSlug } = await props.params
+  const { lang } = await props.searchParams
+  if (!lookup(slug, itemSlug, lang)) notFound()
+  return <DemoPage params={props.params} searchParams={props.searchParams} initialPage="services" initialService={itemSlug} />
 }
