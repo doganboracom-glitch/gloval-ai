@@ -103,7 +103,13 @@ export function WebsiteRenderer({
   initialPage = null,
   pageRouting = false,
   blog = null,
+  demoRoutes,
+  onDemoRoute,
 }: {
+  /** Demo pages only: the demo's own home/about URLs, and the slug of its long about page. */
+  demoRoutes?: { home: string; about: string; aboutPageSlug: string | null }
+  /** Demo pages only: soft-navigates to one of `demoRoutes`. */
+  onDemoRoute?: (url: string) => void
   site: unknown
   /** Published site only: live blog posts that feed the menu/footer link and the latest-posts block. */
   blog?: SiteBlogData | null
@@ -235,6 +241,19 @@ export function WebsiteRenderer({
       if (!preview && !pageRouting && parsed.success) {
         const demoSlug = resolveHrefToPageSlug(parsed.data, href)
         if (demoSlug) {
+          // Demos expose the long about page (and the home page) as real
+          // /demo/<slug> routes, so moving between those two is a soft
+          // navigation to the demo's own URL, never out to gloval.ai.
+          if (demoRoutes && onDemoRoute) {
+            if (demoSlug === demoRoutes.aboutPageSlug && activeSlug !== demoSlug) {
+              onDemoRoute(demoRoutes.about)
+              return true
+            }
+            if (demoSlug === homeSlug(parsed.data) && activeSlug === demoRoutes.aboutPageSlug) {
+              onDemoRoute(demoRoutes.home)
+              return true
+            }
+          }
           handleNavigate(demoSlug)
           return true
         }
@@ -252,7 +271,7 @@ export function WebsiteRenderer({
       }
       return true
     },
-    [parsed, handleNavigate, preview, pageRouting, activeSlug],
+    [parsed, handleNavigate, preview, pageRouting, activeSlug, demoRoutes, onDemoRoute],
   )
 
   // Display-only catalog for a storefront preview, so product cards link to the

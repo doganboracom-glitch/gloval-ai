@@ -6,7 +6,7 @@ import { DemoHeaderActions } from '@/components/demo-site/demo-header-actions'
 import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
 import { resolveAboutDetail } from '@/lib/section-detail'
-import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
+import { DemoSiteRenderer } from '@/components/demo-site/demo-site-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
 import { DemoCartProvider, DemoCartIsland } from '@/components/demo-site/demo-store'
@@ -79,6 +79,8 @@ export default async function DemoPage({
   // add to cart). Preview thumbnails stay clean — no provider, no island.
   const commerce = catalog?.commerce === true && !isPreview
   const checkoutHref = `/demo/${slug}/odeme?lang=${lang}`
+  const langQuery = lang === 'en' ? '?lang=en' : ''
+  const aboutPageSlug = resolveAboutDetail(site)?.pageSlug ?? null
 
   const content = (
     <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
@@ -88,10 +90,15 @@ export default async function DemoPage({
       {/* The demo supplies its own phone/WhatsApp buttons below, from the
           authoritative demo catalog, so the renderer's built-in pair is
           suppressed here to avoid rendering them twice. */}
-      <WebsiteRenderer
+      <DemoSiteRenderer
         site={site}
         showContactActions={!catalog}
-        initialPage={initialPage === 'about' ? (resolveAboutDetail(site)?.pageSlug ?? null) : null}
+        demoRoutes={{
+          home: `/demo/${slug}${langQuery}`,
+          about: `/demo/${slug}/hakkimizda${langQuery}`,
+          aboutPageSlug,
+        }}
+        initialPage={initialPage === 'about' ? aboutPageSlug : null}
         headerActions={commerce ? <DemoHeaderActions slug={slug} lang={lang} /> : undefined}
       />
 
