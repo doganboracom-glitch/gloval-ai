@@ -14,7 +14,10 @@ const TARGETS = [
   'odeme-guvenligi-ve-guven-unsurlari',
   'gizlilik-ve-kvkk-sayfasi-neden-gerekir',
 ] as const
-const FIRST_PUBLISH_UTC = Date.UTC(2026, 9, 22, 6)
+const LEGACY_POST_COUNT = 6
+const NEW_POST_COUNT = 26
+const MIN_ALLOWED_UTC = Date.UTC(2026, 6, 28, 0)
+const MAX_ALLOWED_UTC = Date.UTC(2026, 9, 21, 23, 59, 59)
 const STEP_MS = 2 * 24 * 60 * 60 * 1000
 const forbidden = /(?:araştırmalara göre|en iyi|1\s*numara|ödül|müşteri yorumu|iyzico|kredi kartı|banka kartı|webmail|ceza tutarı|madde\s*\d+)/iu
 
@@ -60,7 +63,7 @@ async function concept(prompt: string) {
 }
 
 async function persist(src: string) {
-  const match = /^data:([^;]+);base64,([\\s\\S]+)$/.exec(src)
+  const match = /^data:([^;]+);base64,([\s\S]+)$/.exec(src)
   if (!match) throw new Error('cover is not a data URI')
   const bytes = new Uint8Array(Buffer.from(match[2], 'base64'))
   if (bytes.length > BLOG_UPLOAD_MAX_BYTES) throw new Error('cover is too large')
@@ -78,6 +81,16 @@ async function main() {
   const sources = TARGETS.map((slug) => originalPosts.find((post) => post.slug === slug))
   if (sources.some((post) => !post)) throw new Error('A target post is missing from blog-originals')
   const posts = sources as NonNullable<(typeof sources)[number]>[]
+  const { data: publishedRows, error: publishedError } = await supabase.from('platform_blog_posts').select('slug, published_at, status').eq('status', 'published').not('published_at', 'is', null).order('published_at', { ascending: true }).order('slug', { ascending: true })
+  if (publishedError) throw publishedError
+  const legacyRows = publishedRows.slice(0, LEGACY_POST_COUNT)
+  const newRows = publishedRows.slice(LEGACY_POST_COUNT)
+  if (legacyRows.length !== LEGACY_POST_COUNT || newRows.length !== NEW_POST_COUNT) throw new Error(`Expected ${LEGACY_POST_COUNT} legacy and ${NEW_POST_COUNT} new published posts, found ${legacyRows.length} and ${newRows.length}`)
+  const anchorPublishedAt = Date.parse(newRows[0].published_at)
+  if (!Number.isFinite(anchorPublishedAt)) throw new Error(`Invalid anchor published_at: ${newRows[0].published_at}`)
+  const scheduledAt = TARGETS.map((_, i) => anchorPublishedAt - (i + 1) * STEP_MS)
+  const now = Date.now()
+  if (scheduledAt.some((value) => value < MIN_ALLOWED_UTC || value > Math.min(MAX_ALLOWED_UTC, now))) throw new Error(`Calculated dates are outside the allowed range: ${scheduledAt.map((value) => new Date(value).toISOString()).join(', ')}`)
   const { data: rows, error } = await supabase.from('platform_blog_posts').select('id, slug, title, excerpt, body, status, cover_url').in('slug', TARGETS)
   if (error) throw error
   if (rows.length !== TARGETS.length) throw new Error(`Expected ${TARGETS.length} rows, found ${rows.length}`)
@@ -92,7 +105,10 @@ async function main() {
     if (post.slug === 'gizlilik-ve-kvkk-sayfasi-neden-gerekir' && !/hukuki tavsiye değildir.*uzmana danışın/iu.test(body)) problems.push(`${post.slug}: missing legal disclaimer`)
   }
   if (problems.length) throw new Error(problems.join('\n'))
-  if (dryRun) { console.log(JSON.stringify({ targets: TARGETS, publishAt: TARGETS.map((_, i) => new Date(FIRST_PUBLISH_UTC + i * STEP_MS).toISOString()) })); return }
+  if (dryRun) {
+    console.log(JSON.stringify({ anchorPublishedAt: new Date(anchorPublishedAt).toISOString(), legacyPostCount: legacyRows.length, newPostCount: newRows.length, targets: TARGETS.map((slug, i) => ({ slug, publishAt: new Date(scheduledAt[i]).toISOString() })) }, null, 2))
+    return
+  }
   if (!imageGenerationAvailable()) throw new Error('Image generation is unavailable')
   const actor = await adminId()
   const provider = getImageProvider()
@@ -115,8 +131,8 @@ async function main() {
       if (!result.ok) throw new Error(`${post.slug}: cover failed: ${result.error}`)
       coverUrl = result.url
     }
-    const publishedAt = new Date(FIRST_PUBLISH_UTC + i * STEP_MS).toISOString()
-    const { error: updateError } = await supabase.from('platform_blog_posts').update({ body, excerpt: post.excerpt, cover_url: coverUrl, cover_alt: `${post.title} yazısı için sade, yazısız bir konu illüstrasyonu`, published_at: publishedAt, status: 'published', indexable: true }).eq('id', row.id).eq('status', 'draft')
+    const publishedAt = new Date(scheduledAt[i]).toISOString()
+    const { error: updateError } = await supabase.from('platform_blog_posts').update({ body, excerpt: post.excerpt, cover_url: coverUrl, cover_alt: `${post.title} yazısı için sade, yazısız bir konu illüstrasyonu`, published_at: publishedAt, status: 'published' }).eq('id', row.id).eq('status', 'draft')
     if (updateError) throw updateError
     await supabase.from('platform_blog_audit').insert({ actor_id: actor.id, actor_email: actor.email, action: 'post.publish', post_id: row.id, post_slug: post.slug, post_title: post.title, detail: { source: 'scripts/publish-held-back-blog.ts', publishedAt } })
     console.log(`[ok] ${post.slug} ${publishedAt}`)
