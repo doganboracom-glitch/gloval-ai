@@ -147,7 +147,7 @@ export async function GET(request: Request) {
   }
 
   // Isolated: expires abandoned AI image previews and removes their storage objects.
-  let aiImagePreviews: { cleaned: number; deleted: number } | { error: string }
+  let aiImagePreviews: { expired: number; cleaned: number; deleted: number } | { error: string }
   try {
     aiImagePreviews = await sweepAiImagePreviews()
   } catch (error) {

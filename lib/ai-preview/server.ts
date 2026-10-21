@@ -3,7 +3,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { generateAboutPreviewImage } from '@/lib/about-image'
-import { consumeCredits, getCreditBalance, hasLedgerReason } from '@/lib/ai-credits'
+import { getCreditBalance } from '@/lib/ai-credits'
 import { createSupabasePreviewStore } from '@/lib/ai-preview/store'
 import { savePreviewImage, removePreviewImages } from '@/lib/ai-preview/storage'
 import type { PreviewDeps } from '@/lib/ai-preview/service'
@@ -26,11 +26,7 @@ export function createPreviewDeps(args: {
 }): PreviewDeps {
   return {
     store: createSupabasePreviewStore(),
-    credits: {
-      balance: getCreditBalance,
-      consume: consumeCredits,
-      charged: hasLedgerReason,
-    },
+    credits: { balance: getCreditBalance },
     async generate({ sectionKey, request }) {
       const parsed = parseSectionKey(sectionKey)
       if (!parsed || parsed.target !== 'about') return null

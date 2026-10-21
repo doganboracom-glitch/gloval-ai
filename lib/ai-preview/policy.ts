@@ -20,7 +20,6 @@ export type PreviewStatus =
   | 'generating'
   | 'open'
   | 'regenerating'
-  | 'using'
   | 'used'
   | 'discarded'
   | 'expired'

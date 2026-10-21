@@ -7,11 +7,14 @@ import {
 } from '@/lib/ai-preview/policy'
 
 /**
- * Preview-session service. All side effects (database, credit ledger, image
- * provider, storage) come in through `PreviewDeps`, so the credit rules are
- * unit-tested without a database. Every state change goes through one atomic
- * `claim*` call on the store, and every charge is tagged with a ledger reason
- * derived from the preview id, so repeats can never charge twice.
+ * Preview-session service. Every side effect comes in through `PreviewDeps`,
+ * so the rules are unit-tested without a database.
+ *
+ * Money and the one-time free preview never move in this file: they change
+ * only inside the `commit*` store calls, which are single database functions
+ * (scripts/070-ai-image-previews.sql) that consume the free right / debit
+ * credits, write the idempotency record and flip the preview row in ONE
+ * transaction. The service only decides what to generate and when to give up.
  */
 
 export type PreviewRow = {
@@ -28,8 +31,6 @@ export type PreviewRow = {
   imagePrompt: string | null
   chargedCredits: number
   regenCount: number
-  lastRegenKey: string | null
-  useKey: string | null
   expiresAt: number
   createdAt: number
 }
@@ -41,49 +42,59 @@ export type ImagePatch = {
   imagePrompt: string
 }
 
+export type CreateCommit = {
+  outcome: 'ok' | 'replay' | 'invalid' | 'no_credits'
+  kind: PreviewKind | null
+  charged: number
+  balance: number | null
+}
+
+export type RegenCommit = {
+  outcome: 'ok' | 'replay' | 'invalid' | 'no_credits'
+  /** Storage path of the image this regeneration replaced (delete it). */
+  oldPath: string | null
+  balance: number | null
+}
+
+export type UseCommit = {
+  outcome: 'ok' | 'done' | 'invalid' | 'expired' | 'no_credits'
+  charged: number
+  balance: number | null
+  image: { src: string; alt: string; imagePrompt: string } | null
+}
+
 export type PreviewStore = {
   /** True while the account's one free preview is still unused. */
-  hasFreeEntitlement(userId: string): Promise<boolean>
-  /** Atomic: true only for the single call that consumed it. */
-  consumeFreeEntitlement(userId: string): Promise<boolean>
-  /** The live (non-expired) preview of this section, expiring stale rows first. */
+  freeAvailable(userId: string): Promise<boolean>
+  /** The live (non-expired) preview of this section. Read-only. */
   findLive(userId: string, projectId: string, sectionKey: string, now: number): Promise<PreviewRow | null>
   get(userId: string, id: string): Promise<PreviewRow | null>
-  /** Atomic insert of a `generating` row; fails when a live one exists. */
-  claimSlot(
-    input: { id: string; userId: string; projectId: string; sectionKey: string; target: string },
-    now: number,
-  ): Promise<{ claimed: true } | { claimed: false }>
-  completeCreate(id: string, userId: string, patch: ImagePatch & { kind: PreviewKind; chargedCredits: number }, now: number): Promise<void>
-  release(id: string, userId: string, status: 'discarded' | 'expired'): Promise<void>
-  /** open -> regenerating; `duplicate` when this key already regenerated it; `inflight` while another request runs. */
-  claimRegen(id: string, userId: string, key: string, now: number): Promise<'claimed' | 'duplicate' | 'inflight' | 'invalid'>
-  completeRegen(id: string, userId: string, patch: ImagePatch, now: number): Promise<void>
-  revertRegen(id: string, userId: string): Promise<void>
-  /**
-   * open -> using. `inflight` while another request holds it, `resume` only
-   * when that attempt was abandoned (stale), `done` when already used.
-   */
-  claimUse(id: string, userId: string, key: string, now: number): Promise<'claimed' | 'resume' | 'inflight' | 'done' | 'invalid'>
-  completeUse(id: string, userId: string, now: number): Promise<void>
-  revertUse(id: string, userId: string): Promise<void>
+  /** Atomic insert of a `generating` row (expiring dead ones first); false when a live one exists. */
+  claimSlot(input: { id: string; userId: string; projectId: string; sectionKey: string; target: string }): Promise<boolean>
+  /** Free-right consumption or 2-credit debit + row -> `open` + idempotency record, one transaction. */
+  commitCreate(userId: string, id: string, patch: ImagePatch): Promise<CreateCommit>
+  /** Moves a live row to `discarded`/`expired`; returns its storage path. */
+  release(userId: string, id: string, status: 'discarded' | 'expired'): Promise<string | null>
+  /** open -> regenerating; `duplicate` when this key already regenerated it. */
+  claimRegen(userId: string, id: string, key: string): Promise<'claimed' | 'duplicate' | 'inflight' | 'invalid'>
+  /** 1-credit debit + new image + idempotency record, one transaction. */
+  commitRegen(userId: string, id: string, key: string, patch: ImagePatch): Promise<RegenCommit>
+  /** regenerating -> open without charging (generation failed or was refused). */
+  releaseRegen(userId: string, id: string): Promise<void>
+  /** 2-credit debit in a free session (0 in a paid one) + row -> `used`, one transaction. */
+  commitUse(userId: string, id: string, key: string): Promise<UseCommit>
 }
 
 export type GeneratedPreviewImage = { image: string; alt: string; imagePrompt: string }
 
 export type PreviewDeps = {
   store: PreviewStore
-  credits: {
-    balance(userId: string): Promise<number>
-    consume(userId: string, amount: number, reason: string): Promise<{ ok: boolean; balance: number }>
-    /** Whether a ledger row with exactly this reason exists (fails closed). */
-    charged(userId: string, reason: string): Promise<boolean>
-  }
+  credits: { balance(userId: string): Promise<number> }
   /** Runs the existing image pipeline (no-text / no-people guards). Null = failed or rejected. */
   generate(input: { target: string; sectionKey: string; request: string }): Promise<GeneratedPreviewImage | null>
   storage: {
     save(userId: string, name: string, image: string): Promise<{ url: string; path: string | null } | null>
-    remove(paths: string[]): Promise<void>
+    remove(paths: string[]): Promise<unknown>
   }
   now(): number
   newId(): string
@@ -122,12 +133,24 @@ async function removeQuietly(deps: PreviewDeps, path: string | null | undefined)
   if (path) await deps.storage.remove([path]).catch(() => undefined)
 }
 
+/** Commits are idempotent in the database, so one retry after a transport error is safe. */
+async function commitWithRetry<T>(run: () => Promise<T>): Promise<T | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await run()
+    } catch {
+      // retry once
+    }
+  }
+  return null
+}
+
 export async function getPreviewState(
   deps: PreviewDeps,
   input: { userId: string; projectId: string; sectionKey: string },
 ) {
   const [freeAvailable, balance, live] = await Promise.all([
-    deps.store.hasFreeEntitlement(input.userId),
+    deps.store.freeAvailable(input.userId),
     deps.credits.balance(input.userId),
     deps.store.findLive(input.userId, input.projectId, input.sectionKey, deps.now()),
   ])
@@ -147,49 +170,48 @@ export async function startPreview(
     return view ? { ok: true, preview: view, resumed: true } : { ok: false, error: 'busy' }
   }
 
-  const freeAvailable = await deps.store.hasFreeEntitlement(userId)
+  // No provider call, no row, nothing starts for an account that cannot pay.
+  const freeAvailable = await deps.store.freeAvailable(userId)
   if (!freeAvailable) {
     const balance = await deps.credits.balance(userId)
     if (balance < PREVIEW_COSTS.newPreview) return { ok: false, error: 'no_credits', balance }
   }
 
   const id = deps.newId()
-  const slot = await deps.store.claimSlot({ id, userId, projectId, sectionKey, target }, deps.now())
-  if (!slot.claimed) return { ok: false, error: 'busy' }
+  if (!(await deps.store.claimSlot({ id, userId, projectId, sectionKey, target }))) {
+    return { ok: false, error: 'busy' }
+  }
 
   const generated = await deps.generate({ target, sectionKey, request: input.request }).catch(() => null)
   const saved = generated ? await deps.storage.save(userId, `${id}-0`, generated.image).catch(() => null) : null
   if (!generated || !saved) {
-    await deps.store.release(id, userId, 'discarded')
+    await deps.store.release(userId, id, 'discarded').catch(() => null)
     return { ok: false, error: 'generation_failed' }
   }
 
-  // The free preview is consumed only now, after an image really exists. Losing
-  // the race to another request simply turns this into a paid preview.
-  let kind: PreviewKind = 'paid'
-  let charged = 0
-  if (freeAvailable && (await deps.store.consumeFreeEntitlement(userId))) {
-    kind = 'free'
-  } else {
-    const reason = `ai-preview-new:${id}`
-    const alreadyCharged = await deps.credits.charged(userId, reason)
-    if (!alreadyCharged) {
-      const charge = await deps.credits.consume(userId, PREVIEW_COSTS.newPreview, reason)
-      if (!charge.ok) {
-        await deps.store.release(id, userId, 'discarded')
-        await removeQuietly(deps, saved.path)
-        return { ok: false, error: 'no_credits', balance: charge.balance }
-      }
-    }
-    charged = PREVIEW_COSTS.newPreview
+  // The free right is consumed (or 2 credits debited) only now, inside the
+  // commit transaction, after an image really exists. Losing the race for the
+  // free right to another request turns this into a paid preview.
+  const commit = await commitWithRetry(() =>
+    deps.store.commitCreate(userId, id, {
+      imageUrl: saved.url,
+      storagePath: saved.path,
+      alt: generated.alt,
+      imagePrompt: generated.imagePrompt,
+    }),
+  )
+  if (!commit) return { ok: false, error: 'generation_failed' }
+
+  if (commit.outcome === 'no_credits') {
+    await deps.store.release(userId, id, 'discarded').catch(() => null)
+    await removeQuietly(deps, saved.path)
+    return { ok: false, error: 'no_credits', balance: commit.balance ?? undefined }
+  }
+  if (commit.outcome === 'invalid') {
+    await removeQuietly(deps, saved.path)
+    return { ok: false, error: 'busy' }
   }
 
-  await deps.store.completeCreate(
-    id,
-    userId,
-    { imageUrl: saved.url, storagePath: saved.path, alt: generated.alt, imagePrompt: generated.imagePrompt, kind, chargedCredits: charged },
-    deps.now(),
-  )
   const row = await deps.store.get(userId, id)
   const view = row ? toView(row) : null
   return view ? { ok: true, preview: view, resumed: false } : { ok: false, error: 'generation_failed' }
@@ -201,30 +223,25 @@ export async function regeneratePreview(
   input: { userId: string; id: string; key: string; request: string },
 ): Promise<{ ok: true; preview: PreviewView } | Failure> {
   const { userId, id, key } = input
-  const claim = await deps.store.claimRegen(id, userId, key, deps.now())
+  const claim = await deps.store.claimRegen(userId, id, key)
   if (claim === 'invalid') return { ok: false, error: 'not_found' }
   if (claim === 'inflight') return { ok: false, error: 'busy' }
   if (claim === 'duplicate') {
-    const row = await deps.store.get(userId, id)
-    const view = row ? toView(row) : null
+    const current = await deps.store.get(userId, id)
+    const view = current ? toView(current) : null
     return view ? { ok: true, preview: view } : { ok: false, error: 'not_found' }
   }
 
+  const release = () => deps.store.releaseRegen(userId, id).catch(() => undefined)
   const row = await deps.store.get(userId, id)
-  if (!row) return { ok: false, error: 'not_found' }
-  const reason = `ai-preview-regen:${id}:${key}`
-
-  // A key that was already charged is a replay of a finished press: return the
-  // current image instead of generating (and giving away) another one.
-  if (await deps.credits.charged(userId, reason)) {
-    await deps.store.revertRegen(id, userId)
-    const view = toView(row)
-    return view ? { ok: true, preview: view } : { ok: false, error: 'not_found' }
+  if (!row) {
+    await release()
+    return { ok: false, error: 'not_found' }
   }
 
   const balance = await deps.credits.balance(userId)
   if (balance < PREVIEW_COSTS.regenerate) {
-    await deps.store.revertRegen(id, userId)
+    await release()
     return { ok: false, error: 'no_credits', balance }
   }
 
@@ -235,24 +252,30 @@ export async function regeneratePreview(
     ? await deps.storage.save(userId, `${id}-${row.regenCount + 1}`, generated.image).catch(() => null)
     : null
   if (!generated || !saved) {
-    await deps.store.revertRegen(id, userId)
+    await release()
     return { ok: false, error: 'generation_failed' }
   }
 
-  const charge = await deps.credits.consume(userId, PREVIEW_COSTS.regenerate, reason)
-  if (!charge.ok) {
-    await deps.store.revertRegen(id, userId)
-    await removeQuietly(deps, saved.path)
-    return { ok: false, error: 'no_credits', balance: charge.balance }
-  }
-
-  await deps.store.completeRegen(
-    id,
-    userId,
-    { imageUrl: saved.url, storagePath: saved.path, alt: generated.alt, imagePrompt: generated.imagePrompt },
-    deps.now(),
+  const commit = await commitWithRetry(() =>
+    deps.store.commitRegen(userId, id, key, {
+      imageUrl: saved.url,
+      storagePath: saved.path,
+      alt: generated.alt,
+      imagePrompt: generated.imagePrompt,
+    }),
   )
-  await removeQuietly(deps, row.storagePath)
+  if (!commit) return { ok: false, error: 'generation_failed' }
+
+  if (commit.outcome === 'no_credits') {
+    await removeQuietly(deps, saved.path)
+    return { ok: false, error: 'no_credits', balance: commit.balance ?? undefined }
+  }
+  if (commit.outcome === 'invalid') {
+    await removeQuietly(deps, saved.path)
+    return { ok: false, error: 'busy' }
+  }
+  if (commit.outcome === 'ok') await removeQuietly(deps, commit.oldPath)
+
   const updated = await deps.store.get(userId, id)
   const view = updated ? toView(updated) : null
   return view ? { ok: true, preview: view } : { ok: false, error: 'not_found' }
@@ -263,42 +286,22 @@ export async function usePreview(
   deps: PreviewDeps,
   input: { userId: string; id: string; key: string },
 ): Promise<{ ok: true; image: { src: string; alt: string; imagePrompt: string }; charged: number } | Failure> {
-  const { userId, id, key } = input
-  const claim = await deps.store.claimUse(id, userId, key, deps.now())
-  if (claim === 'inflight') return { ok: false, error: 'busy' }
-  if (claim === 'invalid') {
-    const row = await deps.store.get(userId, id)
-    return { ok: false, error: row && row.expiresAt <= deps.now() ? 'expired' : 'not_found' }
+  const commit = await commitWithRetry(() => deps.store.commitUse(input.userId, input.id, input.key))
+  if (!commit) return { ok: false, error: 'busy' }
+  if (commit.outcome === 'no_credits') {
+    return { ok: false, error: 'no_credits', balance: commit.balance ?? undefined }
   }
-
-  const row = await deps.store.get(userId, id)
-  if (!row || !row.imageUrl || !row.kind) return { ok: false, error: 'not_found' }
-  const image = { src: row.imageUrl, alt: row.alt ?? '', imagePrompt: row.imagePrompt ?? '' }
-  if (claim === 'done') return { ok: true, image, charged: 0 }
-
-  const cost = useCost(row.kind)
-  let charged = 0
-  if (cost > 0) {
-    const reason = `ai-preview-use:${id}`
-    if (!(await deps.credits.charged(userId, reason))) {
-      const charge = await deps.credits.consume(userId, cost, reason)
-      if (!charge.ok) {
-        await deps.store.revertUse(id, userId)
-        return { ok: false, error: 'no_credits', balance: charge.balance }
-      }
-      charged = cost
-    }
-  }
-  await deps.store.completeUse(id, userId, deps.now())
-  return { ok: true, image, charged }
+  if (commit.outcome === 'expired') return { ok: false, error: 'expired' }
+  if (commit.outcome === 'invalid' || !commit.image) return { ok: false, error: 'not_found' }
+  return { ok: true, image: commit.image, charged: commit.charged }
 }
 
 /** "Vazgeç / Kapat": always free. Never returns the free preview. */
 export async function discardPreview(deps: PreviewDeps, input: { userId: string; id: string }) {
   const row = await deps.store.get(input.userId, input.id)
   if (!row || row.status !== 'open') return { ok: true as const }
-  await deps.store.release(input.id, input.userId, 'discarded')
-  await removeQuietly(deps, row.storagePath)
+  const path = await deps.store.release(input.userId, input.id, 'discarded').catch(() => null)
+  await removeQuietly(deps, path ?? row.storagePath)
   return { ok: true as const }
 }
 

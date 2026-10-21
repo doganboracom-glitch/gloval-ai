@@ -40,9 +40,16 @@ export async function savePreviewImage(
   }
 }
 
-export async function removePreviewImages(paths: string[]): Promise<void> {
-  const admin = client()
+/** True when every preview object is gone (or there was nothing of ours to remove). */
+export async function removePreviewImages(paths: string[]): Promise<boolean> {
   const clean = paths.filter((p) => p.startsWith('previews/'))
-  if (!admin || clean.length === 0) return
-  await admin.storage.from(BUCKET).remove(clean).catch(() => undefined)
+  if (clean.length === 0) return true
+  const admin = client()
+  if (!admin) return false
+  try {
+    const { error } = await admin.storage.from(BUCKET).remove(clean)
+    return !error
+  } catch {
+    return false
+  }
 }
