@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AboutSection } from '@/components/website-renderer/sections/about-section'
@@ -8,6 +10,7 @@ import {
   ABOUT_BADGE_MAX,
   ABOUT_LAYOUTS,
   aboutBadgeLimit,
+  aboutLabel,
   layoutAvailability,
   normalizeAboutMedia,
   pickAboutLayout,
@@ -172,6 +175,58 @@ describe('badge stays one line', () => {
     expect(html).toContain(label)
     expect(html).toMatch(/truncate|text-ellipsis/)
     expect(html).toMatch(/whitespace-nowrap|truncate/)
+  })
+})
+
+describe('badge shows the text exactly as written', () => {
+  const BADGE = /<span class="mb-4 inline-block[^>]*>[^<]*<\/span>/
+  const badgeOf = (html: string) => html.match(BADGE)?.[0] ?? ''
+
+  it('is never forced to capitals, and Turkish İ/ı are untouched', () => {
+    const label = 'İstanbul ışığı Biz Kimiz'
+    for (const layout of ABOUT_LAYOUTS) {
+      const badge = badgeOf(themed('light', 'tr', about({ ...mediaFor(layout)!, label })))
+      expect(badge).toContain(`>${label}</span>`)
+      expect(badge).not.toContain(label.toUpperCase())
+      expect(badge).not.toContain(label.toLocaleUpperCase('tr-TR'))
+      expect(badge).not.toMatch(/\buppercase\b|text-transform|small-caps/)
+    }
+  })
+
+  it('no source file that draws or stores the badge uppercases text', () => {
+    for (const file of [
+      'components/website-renderer/sections/about-section.tsx',
+      'lib/about-media.ts',
+      'lib/demo-about.ts',
+    ]) {
+      const source = readFileSync(join(process.cwd(), file), 'utf8')
+      expect(source, file).not.toMatch(/\buppercase\b|toUpperCase|toLocaleUpperCase|text-transform/)
+    }
+  })
+
+  it('defaults to "Biz Kimiz" (tr) and "Who We Are" (en), mixed case', () => {
+    expect(aboutLabel('tr')).toBe('Biz Kimiz')
+    expect(aboutLabel('en')).toBe('Who We Are')
+  })
+
+  it('only the badge depends on the badge text: the rest of the markup is identical without it', () => {
+    for (const layout of ABOUT_LAYOUTS) {
+      const withBadge = themed('light', 'tr', about({ ...mediaFor(layout)!, label: 'Biz Kimiz' }))
+      const withoutBadge = themed('light', 'tr', about({ ...mediaFor(layout)!, label: undefined }))
+      expect(withBadge).toMatch(BADGE)
+      expect(withoutBadge).not.toContain('min-w-0')
+      const stripped = withBadge.replace(BADGE, '').replace(' min-w-0"', '"')
+      expect(stripped).toBe(withoutBadge)
+    }
+  })
+
+  it('a long badge cannot widen the page: it truncates and its column may shrink', () => {
+    const long = 'Hayatınızı kolaylaştırmak için, insan kaynaklarınızın her an yanındayız. '.repeat(3)
+    for (const layout of ABOUT_LAYOUTS) {
+      const html = themed('light', 'tr', about({ ...mediaFor(layout)!, label: long }))
+      expect(badgeOf(html)).toMatch(/\bmax-w-full\b[^"]*\btruncate\b/)
+      expect(html).toMatch(/class="order-2[^"]* min-w-0"/)
+    }
   })
 })
 

@@ -240,7 +240,11 @@ export function AboutSection({
           layout === 'round' ? 'lg:grid-cols-[1fr_1.2fr]' : 'lg:grid-cols-2'
         }`}
       >
-        <div className={layout === 'corner' ? 'order-2 lg:order-1' : 'order-2'}>
+        <div
+          className={`${layout === 'corner' ? 'order-2 lg:order-1' : 'order-2'}${
+            label ? ' min-w-0' : ''
+          }`}
+        >
           <Copy data={data} label={label} subtitle={subtitle} cta={cta} />
           {moreLink ? <MoreLink link={moreLink} /> : null}
           {data.highlights && data.highlights.length > 0 ? (
