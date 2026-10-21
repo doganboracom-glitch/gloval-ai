@@ -46,7 +46,7 @@ export async function attachAboutImage(site: WebsiteSchema, prompt = ''): Promis
       media: {
         ...section.media,
         enabled: true,
-        layout: pickAboutLayout(sector, 1, section.media?.figure),
+        layout: pickAboutLayout(sector, 1),
         images: [{ src: image.src, alt, imagePrompt: image.imagePrompt, origin: 'ai' }],
       },
     }

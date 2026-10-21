@@ -1,6 +1,7 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import {
   MAX_ABOUT_IMAGES,
+  aboutLabel,
   collectReusableImages,
   layoutAvailability,
   type AboutLayout,
@@ -21,15 +22,7 @@ export const DEMO_ABOUT_LAYOUT: Record<string, AboutLayout> = {
   guzellik: 'round',
   mimarlik: 'corner',
   emlak: 'corner',
-  hukuk: 'figure',
-}
-
-/**
- * Illustrative figures for demos that use the figure layout. They are flagged
- * `sample`, so the publish gate lists them until the owner confirms or edits.
- */
-const DEMO_ABOUT_FIGURE: Record<string, { value: string; label: Copy }> = {
-  hukuk: { value: '1998', label: { tr: 'Kuruluş yılı', en: 'Founded' } },
+  hukuk: 'corner',
 }
 
 /** About copy for demos whose generated site has no about section of its own. */
@@ -120,21 +113,16 @@ export function applyDemoAbout(site: WebsiteSchema, slug: string, lang: Lang): v
   const images = collectReusableImages(site)
     .slice(0, MAX_ABOUT_IMAGES)
     .map((image) => ({ src: image.src, alt: image.alt, origin: 'reused' }))
-  const sample = DEMO_ABOUT_FIGURE[slug]
-  const figure: AboutMedia['figure'] = sample
-    ? { value: sample.value, label: sample.label[lang], sample: true }
-    : undefined
   const hasContact = site.sections.some((s) => s.type === 'contact' && !s.hidden)
 
   site.sections = site.sections.map((section) => {
     if (section.type !== 'about' || section.media) return section
-    const available = layoutAvailability(layout, images.length, figure).available
+    const available = layoutAvailability(layout, images.length).available
     const media: AboutMedia = {
       enabled: images.length > 0,
       layout: available ? layout : 'corner',
       images,
-      label: lang === 'tr' ? 'Biz kimiz' : 'Who we are',
-      figure: available ? figure : undefined,
+      label: aboutLabel(lang),
       cta: hasContact ? { label: lang === 'tr' ? 'İletişime geçin' : 'Get in touch', href: '#contact' } : undefined,
     }
     return { ...section, media }

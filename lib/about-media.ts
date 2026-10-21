@@ -11,16 +11,27 @@ import { detectSector, type Sector } from '@/lib/sector-profiles'
  * share ONE definition of "which layout is actually showable".
  */
 
-export const ABOUT_LAYOUTS = ['corner', 'collage', 'round', 'figure'] as const
+export const ABOUT_LAYOUTS = ['corner', 'collage', 'round'] as const
 export type AboutLayout = (typeof ABOUT_LAYOUTS)[number]
 export type AboutRenderLayout = AboutLayout | 'text'
 
 export const MAX_ABOUT_IMAGES = 3
 
+/**
+ * The badge (small pill above the title) is a short label. The editor stops
+ * new text at this length; the renderer shows one line and ellipsizes anything
+ * longer, so stored labels that are already longer are never cut or rewritten.
+ */
+export const ABOUT_BADGE_MAX = 40
+
+/** Largest badge length the editor accepts for a value: never shorter than what is already stored. */
+export function aboutBadgeLimit(current: string): number {
+  return Math.max(ABOUT_BADGE_MAX, current.length)
+}
+
 type AboutData = Extract<Section, { type: 'about' }>
 export type AboutMedia = NonNullable<AboutData['media']>
 export type AboutImage = NonNullable<AboutMedia['images']>[number]
-export type AboutFigure = NonNullable<AboutMedia['figure']>
 
 type Lang = 'tr' | 'en'
 
@@ -28,7 +39,6 @@ export type ResolvedAbout = {
   layout: AboutRenderLayout
   images: { src: string; alt: string }[]
   label?: string
-  figure?: AboutFigure
   cta?: { label: string; href: string }
 }
 
@@ -46,10 +56,6 @@ export function isUsableImageSrc(src: unknown): src is string {
   return /^https?:\/\//i.test(value) || value.startsWith('/') || /^data:image\//i.test(value)
 }
 
-export function hasRealFigure(figure: AboutMedia['figure']): figure is AboutFigure {
-  return !!figure && figure.value.trim().length > 0 && figure.label.trim().length > 0
-}
-
 /** Images that can really be drawn (have a src), capped at the panel limit. */
 export function usableAboutImages(media: AboutMedia | undefined, fallbackAlt: string) {
   return (media?.images ?? [])
@@ -61,18 +67,13 @@ export function usableAboutImages(media: AboutMedia | undefined, fallbackAlt: st
     }))
 }
 
-/**
- * Why a layout can or cannot be chosen right now. `figure` is only available
- * with a figure the OWNER supplied; `collage` needs at least two images.
- */
+/** Why a layout can or cannot be chosen right now: `collage` needs at least two images. */
 export function layoutAvailability(
   layout: AboutLayout,
   imageCount: number,
-  figure: AboutMedia['figure'],
-): { available: boolean; reason?: 'needs-image' | 'needs-two-images' | 'needs-figure' } {
+): { available: boolean; reason?: 'needs-image' | 'needs-two-images' } {
   if (imageCount < 1) return { available: false, reason: 'needs-image' }
   if (layout === 'collage' && imageCount < 2) return { available: false, reason: 'needs-two-images' }
-  if (layout === 'figure' && !hasRealFigure(figure)) return { available: false, reason: 'needs-figure' }
   return { available: true }
 }
 
@@ -88,65 +89,17 @@ export function resolveAboutMedia(data: AboutData, fallbackAlt: string): Resolve
   const images = usableAboutImages(media, fallbackAlt)
   if (images.length === 0) return TEXT_ONLY
 
+  // A stored `figure` layout (removed) is not a known layout any more, so it lands on corner.
   let layout: AboutLayout = isAboutLayout(media.layout) ? media.layout : 'corner'
-  if (!layoutAvailability(layout, images.length, media.figure).available) layout = 'corner'
+  if (!layoutAvailability(layout, images.length).available) layout = 'corner'
 
   const cta = media.cta?.label.trim() && media.cta.href.trim() ? media.cta : undefined
   return {
     layout,
     images,
     label: media.label?.trim() || undefined,
-    figure: layout === 'figure' && hasRealFigure(media.figure) ? media.figure : undefined,
     cta,
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Real figures (never invented)                                             */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Pulls a founding year or a project/customer count out of what the customer
- * actually wrote. Returns null when nothing is stated: the figure layout then
- * stays unavailable and no number is ever made up.
- */
-export function extractRealFigure(text: string, lang: Lang, now = new Date()): AboutFigure | null {
-  const source = text.toLocaleLowerCase('tr')
-  const maxYear = now.getFullYear()
-  const validYear = (raw: string | undefined) => {
-    const year = Number(raw)
-    return Number.isInteger(year) && year >= 1900 && year <= maxYear ? String(year) : null
-  }
-
-  const yearPatterns = [
-    /(?:^|[^\d])((?:19|20)\d{2})['’]?\s*(?:y[ıi]l[ıi]ndan\s*)?(?:den|dan|ten|tan)?\s*beri/,
-    /kurulu[sş]\s*(?:y[ıi]l[ıi])?\s*[:\-]?\s*((?:19|20)\d{2})/,
-    /((?:19|20)\d{2})\s*y[ıi]l[ıi]nda\s*kuruldu/,
-    /(?:since|founded in|established in|est\.?)\s*((?:19|20)\d{2})/,
-  ]
-  for (const pattern of yearPatterns) {
-    const year = validYear(source.match(pattern)?.[1])
-    if (year) return { value: year, label: lang === 'tr' ? 'Kuruluş yılı' : 'Founded' }
-  }
-
-  const count = source.match(
-    /(\d[\d.,]*)\s*(\+)?\s*(?:adet\s+)?(?:tamamlanan\s+|mutlu\s+)?(proje|projects?|m[uü][sş]teri|clients?|customers?)/,
-  )
-  if (count) {
-    const digits = count[1].replace(/[.,]/g, '')
-    const amount = Number(digits)
-    if (Number.isInteger(amount) && amount >= 10 && amount <= 1_000_000) {
-      const isProject = /^proje|^project/.test(count[3])
-      const formatted = amount.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US')
-      return {
-        value: `${formatted}${count[2] ? '+' : ''}`,
-        label: isProject
-          ? lang === 'tr' ? 'Tamamlanan proje' : 'Projects completed'
-          : lang === 'tr' ? 'Mutlu müşteri' : 'Happy customers',
-      }
-    }
-  }
-  return null
 }
 
 /* -------------------------------------------------------------------------- */
@@ -167,23 +120,9 @@ const LAYOUT_BY_SECTOR: Record<Sector, AboutLayout> = {
   beauty: 'round',
 }
 
-const FIGURE_FRIENDLY: ReadonlySet<Sector> = new Set<Sector>([
-  'law',
-  'tech',
-  'architecture',
-  'realestate',
-  'automotive',
-  'default',
-])
-
-export function pickAboutLayout(
-  sector: Sector,
-  imageCount: number,
-  figure: AboutMedia['figure'],
-): AboutLayout {
-  const preferred =
-    hasRealFigure(figure) && FIGURE_FRIENDLY.has(sector) ? 'figure' : LAYOUT_BY_SECTOR[sector]
-  return layoutAvailability(preferred, imageCount, figure).available ? preferred : 'corner'
+export function pickAboutLayout(sector: Sector, imageCount: number): AboutLayout {
+  const preferred = LAYOUT_BY_SECTOR[sector]
+  return layoutAvailability(preferred, imageCount).available ? preferred : 'corner'
 }
 
 /* -------------------------------------------------------------------------- */
@@ -234,8 +173,9 @@ function defaultCta(site: Pick<WebsiteSchema, 'sections'>, lang: Lang) {
   return { label: lang === 'tr' ? 'İletişime geçin' : 'Get in touch', href: '#contact' }
 }
 
-function aboutLabel(lang: Lang) {
-  return lang === 'tr' ? 'Biz kimiz' : 'Who we are'
+/** Default badge text, written as it should read (the renderer no longer forces capitals). */
+export function aboutLabel(lang: Lang) {
+  return lang === 'tr' ? 'Biz Kimiz' : 'Who We Are'
 }
 
 const SECTOR_NOUN: Record<Sector, { tr: string; en: string }> = {
@@ -325,17 +265,15 @@ export function seedAboutMedia<T extends Pick<WebsiteSchema, 'sections' | 'meta'
   const candidates = collectReusableImages(site)
   const context = [prompt, site.meta.name, site.meta.tagline, site.meta.audience].filter(Boolean).join(' ')
   const sector = detectSector(context)
-  const figure = extractRealFigure(`${prompt} ${site.meta.tagline ?? ''}`, lang) ?? undefined
 
   const sections = site.sections.map((section) => {
     if (section.type !== 'about' || section.media) return section
     const images = candidates.slice(0, MAX_ABOUT_IMAGES).map((c) => ({ src: c.src, alt: c.alt, origin: 'reused' }))
     const media: AboutMedia = {
       enabled: true,
-      layout: pickAboutLayout(sector, images.length, figure),
+      layout: pickAboutLayout(sector, images.length),
       images,
       label: aboutLabel(lang),
-      figure,
       cta: defaultCta(site, lang),
     }
     return { ...section, media }
@@ -359,8 +297,12 @@ export function aboutLacksImage(site: Pick<WebsiteSchema, 'sections'>): boolean 
 
 /**
  * Keeps a stored `media` block inside its invariants (valid layout, at most 3
- * real images, a figure only when it holds a value). Sites without `media`
- * come back untouched, which is what keeps legacy rows byte-identical.
+ * real images). Sites without `media` come back untouched, which is what keeps
+ * legacy rows byte-identical.
+ *
+ * Backward compatibility for the removed "figure" layout: a row that still
+ * carries a `figure` object (or the `figure` layout) has the number fields
+ * ignored and dropped and its layout set to `corner`. No SQL migration needed.
  */
 export function normalizeAboutMedia<T extends Pick<WebsiteSchema, 'sections'>>(site: T): T {
   if (!site.sections.some((s) => s.type === 'about' && s.media)) return site
@@ -368,21 +310,20 @@ export function normalizeAboutMedia<T extends Pick<WebsiteSchema, 'sections'>>(s
   let changed = false
   const sections = site.sections.map((section) => {
     if (section.type !== 'about' || !section.media) return section
-    const media = section.media
+    const { figure: legacyFigure, ...media } = section.media as AboutMedia & { figure?: unknown }
     const images = (media.images ?? [])
       .filter((image) => isUsableImageSrc(image.src) || asText(image.imagePrompt))
       .slice(0, MAX_ABOUT_IMAGES)
-    const figure = hasRealFigure(media.figure) ? media.figure : undefined
-    let layout = isAboutLayout(media.layout) ? media.layout : undefined
-    if (layout === 'figure' && !figure) layout = 'corner'
+    const legacyLayout = (media.layout as string | undefined) === 'figure'
+    const layout = legacyLayout ? 'corner' : isAboutLayout(media.layout) ? media.layout : undefined
 
-    const next: AboutMedia = { ...media, images, figure, layout }
     const same =
       images.length === (media.images ?? []).length &&
-      figure === media.figure &&
-      layout === media.layout
+      layout === media.layout &&
+      legacyFigure === undefined
     if (same) return section
     changed = true
+    const next: AboutMedia = { ...media, images, layout }
     return { ...section, media: next }
   })
   return changed ? { ...site, sections } : site

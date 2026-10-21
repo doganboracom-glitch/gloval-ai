@@ -20,10 +20,13 @@ export function TextField({
   rows = 3,
   hint,
   mono = false,
+  maxLength,
 }: {
   label: string
   value: string
   onCommit: (value: string) => void
+  /** Caps the number of characters the field accepts. */
+  maxLength?: number
   multiline?: boolean
   placeholder?: string
   rows?: number
@@ -66,6 +69,7 @@ export function TextField({
           type="text"
           value={draft}
           placeholder={placeholder}
+          maxLength={maxLength}
           onChange={(e) => {
             dirtyRef.current = true
             setDraft(e.target.value)

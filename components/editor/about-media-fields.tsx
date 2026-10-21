@@ -7,9 +7,9 @@ import type { EditOperation } from '@/lib/website-edit-operations'
 import {
   ABOUT_LAYOUTS,
   MAX_ABOUT_IMAGES,
+  aboutBadgeLimit,
   aboutImageHint,
   collectReusableImages,
-  hasRealFigure,
   isUsableImageSrc,
   layoutAvailability,
   suggestAboutAlt,
@@ -31,12 +31,10 @@ const COPY = {
       corner: 'Köşe çerçeve',
       collage: 'Kolaj',
       round: 'Yuvarlak',
-      figure: 'Rakamlı',
     } as Record<AboutLayout, string>,
     needs: {
       'needs-image': 'Önce bir görsel ekleyin.',
       'needs-two-images': 'En az 2 görsel gerekir.',
-      'needs-figure': 'Önce gerçek bir rakam ve etiket girin.',
     } as Record<string, string>,
     images: 'Görseller',
     alt: 'Görsel açıklaması (alt metin)',
@@ -52,9 +50,6 @@ const COPY = {
     badge: 'Rozet metni',
     ctaLabel: 'Buton metni',
     ctaHref: 'Buton bağlantısı',
-    figureValue: 'Rakam (örn. 2012)',
-    figureLabel: 'Rakam etiketi (örn. Kuruluş yılı)',
-    figureHint: 'Yalnızca gerçek bilgilerinizi girin; uydurma rakam kullanmayın.',
     max: `En fazla ${MAX_ABOUT_IMAGES} görsel.`,
     hintTitle: '"Hakkımızda" bölümüne görsel ekleyin',
     hintBody: 'Yayındaki siteniz değişmez; görseli eklediğinizde yeniden yayınlayınca görünür.',
@@ -69,12 +64,10 @@ const COPY = {
       corner: 'Corner frame',
       collage: 'Collage',
       round: 'Round',
-      figure: 'With figure',
     } as Record<AboutLayout, string>,
     needs: {
       'needs-image': 'Add an image first.',
       'needs-two-images': 'Needs at least 2 images.',
-      'needs-figure': 'Enter a real figure and label first.',
     } as Record<string, string>,
     images: 'Images',
     alt: 'Image description (alt text)',
@@ -90,9 +83,6 @@ const COPY = {
     badge: 'Badge text',
     ctaLabel: 'Button label',
     ctaHref: 'Button link',
-    figureValue: 'Figure (e.g. 2012)',
-    figureLabel: 'Figure label (e.g. Founded)',
-    figureHint: 'Only enter facts that are true for your business.',
     max: `Up to ${MAX_ABOUT_IMAGES} images.`,
     hintTitle: 'Add an image to your About section',
     hintBody: 'Your live site does not change; the image shows up once you publish again.',
@@ -298,7 +288,7 @@ export function AboutMediaFields({
             <legend className="mb-1 text-xs font-medium text-muted-foreground">{c.layout}</legend>
             <div className="grid grid-cols-2 gap-2">
               {ABOUT_LAYOUTS.map((layout) => {
-                const state = layoutAvailability(layout, shownCount, media?.figure)
+                const state = layoutAvailability(layout, shownCount)
                 const active = activeLayout === layout
                 return (
                   <button
@@ -327,30 +317,9 @@ export function AboutMediaFields({
           <TextField
             label={c.badge}
             value={media?.label ?? ''}
+            maxLength={aboutBadgeLimit(media?.label ?? '')}
             onCommit={(v) => patch({ label: v })}
           />
-
-          <div className="flex flex-col gap-1.5">
-            <div className="grid grid-cols-2 gap-2">
-              <TextField
-                label={c.figureValue}
-                value={media?.figure?.value ?? ''}
-                onCommit={(v) =>
-                  patch({ figure: { value: v, label: media?.figure?.label ?? '' } })
-                }
-              />
-              <TextField
-                label={c.figureLabel}
-                value={media?.figure?.label ?? ''}
-                onCommit={(v) =>
-                  patch({ figure: { value: media?.figure?.value ?? '', label: v } })
-                }
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {hasRealFigure(media?.figure) ? c.figureHint : c.figureHint}
-            </p>
-          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <TextField

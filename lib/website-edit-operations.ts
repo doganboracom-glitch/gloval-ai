@@ -25,7 +25,7 @@ import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-lega
 import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
-import { MAX_ABOUT_IMAGES, hasRealFigure, isAboutLayout } from '@/lib/about-media'
+import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks, syncDetailPages } from '@/lib/section-detail'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
@@ -118,8 +118,8 @@ export type EditOperation =
   | { op: 'updateSlideImage'; slideIndex: number; patch: HeroImagePatch }
   | { op: 'updateSectionField'; index: number; field: SectionTextField; value: string }
   /**
-   * The about section's imagery block. Only the given keys change; `cta`/`figure`
-   * set to null remove them, and `images` replaces the whole (max 3) list.
+   * The about section's imagery block. Only the given keys change; `cta`
+   * set to null removes it, and `images` replaces the whole (max 3) list.
    */
   | {
       op: 'updateAboutMedia'
@@ -129,7 +129,6 @@ export type EditOperation =
         layout?: string
         label?: string
         images?: { src?: string; alt?: string; imagePrompt?: string; origin?: string }[]
-        figure?: { value: string; label: string } | null
         cta?: { label: string; href: string } | null
       }
     }
@@ -445,12 +444,6 @@ export function applyOperation(
       if (patch.layout !== undefined && isAboutLayout(patch.layout)) media.layout = patch.layout
       if (patch.label !== undefined) media.label = patch.label.trim() || undefined
       if (patch.images !== undefined) media.images = patch.images.slice(0, MAX_ABOUT_IMAGES)
-      if (patch.figure !== undefined) {
-        media.figure =
-          patch.figure && hasRealFigure(patch.figure)
-            ? { value: patch.figure.value.trim(), label: patch.figure.label.trim() }
-            : undefined
-      }
       if (patch.cta !== undefined) {
         media.cta = patch.cta && patch.cta.label.trim() ? { label: patch.cta.label.trim(), href: patch.cta.href.trim() } : undefined
       }

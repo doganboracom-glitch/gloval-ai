@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { AboutSection } from '@/components/website-renderer/sections/about-section'
@@ -5,7 +7,10 @@ import { LegacyAboutSection } from '@/components/website-renderer/sections/__fix
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
 import {
+  ABOUT_BADGE_MAX,
   ABOUT_LAYOUTS,
+  aboutBadgeLimit,
+  aboutLabel,
   layoutAvailability,
   normalizeAboutMedia,
   pickAboutLayout,
@@ -42,7 +47,6 @@ function mediaFor(layout: AboutLayout): About['media'] {
     layout,
     images: layout === 'collage' ? IMAGES : IMAGES.slice(0, 1),
     label: 'Biz kimiz',
-    figure: layout === 'figure' ? { value: '2009', label: 'kurulus yili' } : undefined,
   } as About['media']
 }
 
@@ -68,7 +72,6 @@ describe('four layouts render, in both languages and both modes', () => {
           expect(imgCount).toBe(layout === 'collage' ? 3 : 1)
           expect(html).toContain('alt="')
           expect(html).not.toMatch(/alt=""/)
-          if (layout === 'figure') expect(html).toContain('2009')
         })
       }
     }
@@ -105,26 +108,47 @@ describe('text-weighted fallback', () => {
   })
 })
 
-describe('figure layout needs real data', () => {
-  it('is unavailable without an owner-supplied figure', () => {
-    expect(layoutAvailability('figure', 1, undefined).available).toBe(false)
-    expect(layoutAvailability('figure', 1, { value: ' ', label: 'x' }).available).toBe(false)
-    expect(layoutAvailability('figure', 1, { value: '2009', label: 'kurulus' }).available).toBe(true)
+describe('the figure ("Rakamlı") layout is gone', () => {
+  const LEGACY_FIGURE_MEDIA = {
+    enabled: true,
+    layout: 'figure',
+    images: IMAGES.slice(0, 1),
+    label: 'Biz kimiz',
+    figure: { value: '2009', label: 'kurulus yili', sample: true },
+  } as unknown as About['media']
+
+  it('is not an offered layout', () => {
+    expect(ABOUT_LAYOUTS).not.toContain('figure')
   })
 
-  it('renderer degrades a figure layout without a figure to corner', () => {
-    const media = { ...mediaFor('figure')!, figure: undefined }
-    expect(resolveAboutMedia(about(media), 'alt').layout).toBe('corner')
-    expect(themed('light', 'tr', about(media))).toContain('data-about-layout="corner"')
+  it('layout availability depends on image count only', () => {
+    expect(layoutAvailability('corner', 1).available).toBe(true)
+    expect(layoutAvailability('corner', 0).available).toBe(false)
+    expect(layoutAvailability('collage', 1).available).toBe(false)
+    expect(layoutAvailability('collage', 2).available).toBe(true)
   })
 
-  it('is never picked automatically without a figure, for any sector', () => {
+  it('is never picked automatically, for any sector', () => {
     for (const sector of ['legal', 'restaurant', 'default', 'automotive'] as const) {
-      expect(pickAboutLayout(sector as never, 1, undefined)).not.toBe('figure')
+      expect(pickAboutLayout(sector as never, 1)).not.toBe('figure')
     }
   })
 
-  it('seeding never invents a figure from a prompt that states none', () => {
+  it('a stored figure layout still parses and degrades to corner without printing the figure', () => {
+    const site = fallbackWebsite('test', 'tr')
+    const stored = {
+      ...site,
+      sections: [...site.sections.filter((s) => s.type !== 'about'), about(LEGACY_FIGURE_MEDIA)],
+    }
+    expect(websiteSchema.safeParse(stored).success).toBe(true)
+    expect(resolveAboutMedia(about(LEGACY_FIGURE_MEDIA), 'alt').layout).toBe('corner')
+    const html = themed('light', 'tr', about(LEGACY_FIGURE_MEDIA))
+    expect(html).toContain('data-about-layout="corner"')
+    expect(html).not.toContain('2009')
+    expect(html).not.toContain('kurulus yili')
+  })
+
+  it('seeding never invents a figure', () => {
     const site = fallbackWebsite('modern bir kafe sitesi', 'tr')
     const withAbout: WebsiteSchema = {
       ...site,
@@ -132,7 +156,76 @@ describe('figure layout needs real data', () => {
     }
     const seeded = seedAboutMedia(withAbout, 'modern bir kafe sitesi')
     for (const s of seeded.sections) {
-      if (s.type === 'about') expect(s.media?.figure).toBeUndefined()
+      if (s.type === 'about') expect((s.media as Record<string, unknown> | undefined)?.figure).toBeUndefined()
+    }
+  })
+})
+
+describe('badge stays one line', () => {
+  it('is capped for new text but never shorter than what is already stored', () => {
+    expect(aboutBadgeLimit('')).toBe(ABOUT_BADGE_MAX)
+    expect(aboutBadgeLimit('kisa')).toBe(ABOUT_BADGE_MAX)
+    const long = 'x'.repeat(ABOUT_BADGE_MAX + 25)
+    expect(aboutBadgeLimit(long)).toBe(long.length)
+  })
+
+  it('renders one line with ellipsis and keeps the full stored text', () => {
+    const label = 'Cok uzun bir rozet metni '.repeat(6).trim()
+    const html = themed('light', 'tr', about({ ...mediaFor('corner')!, label }))
+    expect(html).toContain(label)
+    expect(html).toMatch(/truncate|text-ellipsis/)
+    expect(html).toMatch(/whitespace-nowrap|truncate/)
+  })
+})
+
+describe('badge shows the text exactly as written', () => {
+  const BADGE = /<span class="mb-4 inline-block[^>]*>[^<]*<\/span>/
+  const badgeOf = (html: string) => html.match(BADGE)?.[0] ?? ''
+
+  it('is never forced to capitals, and Turkish İ/ı are untouched', () => {
+    const label = 'İstanbul ışığı Biz Kimiz'
+    for (const layout of ABOUT_LAYOUTS) {
+      const badge = badgeOf(themed('light', 'tr', about({ ...mediaFor(layout)!, label })))
+      expect(badge).toContain(`>${label}</span>`)
+      expect(badge).not.toContain(label.toUpperCase())
+      expect(badge).not.toContain(label.toLocaleUpperCase('tr-TR'))
+      expect(badge).not.toMatch(/\buppercase\b|text-transform|small-caps/)
+    }
+  })
+
+  it('no source file that draws or stores the badge uppercases text', () => {
+    for (const file of [
+      'components/website-renderer/sections/about-section.tsx',
+      'lib/about-media.ts',
+      'lib/demo-about.ts',
+    ]) {
+      const source = readFileSync(join(process.cwd(), file), 'utf8')
+      expect(source, file).not.toMatch(/\buppercase\b|toUpperCase|toLocaleUpperCase|text-transform/)
+    }
+  })
+
+  it('defaults to "Biz Kimiz" (tr) and "Who We Are" (en), mixed case', () => {
+    expect(aboutLabel('tr')).toBe('Biz Kimiz')
+    expect(aboutLabel('en')).toBe('Who We Are')
+  })
+
+  it('only the badge depends on the badge text: the rest of the markup is identical without it', () => {
+    for (const layout of ABOUT_LAYOUTS) {
+      const withBadge = themed('light', 'tr', about({ ...mediaFor(layout)!, label: 'Biz Kimiz' }))
+      const withoutBadge = themed('light', 'tr', about({ ...mediaFor(layout)!, label: undefined }))
+      expect(withBadge).toMatch(BADGE)
+      expect(withoutBadge).not.toContain('min-w-0')
+      const stripped = withBadge.replace(BADGE, '').replace(' min-w-0"', '"')
+      expect(stripped).toBe(withoutBadge)
+    }
+  })
+
+  it('a long badge cannot widen the page: it truncates and its column may shrink', () => {
+    const long = 'Hayatınızı kolaylaştırmak için, insan kaynaklarınızın her an yanındayız. '.repeat(3)
+    for (const layout of ABOUT_LAYOUTS) {
+      const html = themed('light', 'tr', about({ ...mediaFor(layout)!, label: long }))
+      expect(badgeOf(html)).toMatch(/\bmax-w-full\b[^"]*\btruncate\b/)
+      expect(html).toMatch(/class="order-2[^"]* min-w-0"/)
     }
   })
 })
@@ -246,26 +339,22 @@ describe('demos', () => {
         expect(section, demo.slug).toBeDefined()
         const resolved = resolveAboutMedia(section!, 'alt')
         expect(['text', ...ABOUT_LAYOUTS]).toContain(resolved.layout)
-        if (resolved.layout === 'figure') expect(resolved.figure).toBeDefined()
       }
     }
   })
 
-  it('a demo figure is flagged as a sample, so the publish gate sees it and stripping removes it', () => {
-    let flagged = 0
+  it('no demo carries a figure, so the publish gate never flags one', () => {
     for (const demo of demos) {
       const site = buildDemoSite(demo, 'tr')
       const section = site.sections.find((s) => s.type === 'about') as About | undefined
-      if (!section?.media?.figure) continue
-      flagged++
-      expect(section.media.figure.sample, demo.slug).toBe(true)
+      expect((section?.media as Record<string, unknown> | undefined)?.figure, demo.slug).toBeUndefined()
+      expect(section?.media?.layout, demo.slug).not.toBe('figure')
       const findings = collectSampleFindings(site)
-      expect(findings.some((f) => f.sectionType === 'about'), demo.slug).toBe(true)
-      const stripped = stripSampleContent(site)
-      const after = stripped.sections.find((s) => s.type === 'about') as About
-      expect(after.media?.figure).toBeUndefined()
-      expect(resolveAboutMedia(after, 'alt').layout).not.toBe('figure')
+      const aboutFindings = findings.filter((f) => f.sectionType === 'about')
+      for (const f of aboutFindings) {
+        expect(f.items.every((i) => i.kind !== 'stats'), demo.slug).toBe(true)
+      }
+      void stripSampleContent
     }
-    expect(flagged).toBeGreaterThan(0)
   })
 })

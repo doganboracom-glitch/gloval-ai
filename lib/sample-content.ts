@@ -217,24 +217,6 @@ function withItems(section: Section, spec: ItemSpec, items: AnyItem[]): Section 
 
 type AboutSectionLike = Extract<Section, { type: 'about' }>
 
-/** A demo about figure flagged `sample` that still holds a value. */
-function sampleAboutFigure(section: Section): NonNullable<AboutSectionLike['media']>['figure'] | undefined {
-  if (section.type !== 'about') return undefined
-  const figure = section.media?.figure
-  return figure?.sample && figure.value.trim() ? figure : undefined
-}
-
-function aboutFigureDigest(figure: { value: string; label: string }): string {
-  return sampleDigest('about', [figure.value, figure.label])
-}
-
-function withoutAboutFigure(section: AboutSectionLike): AboutSectionLike {
-  const media = section.media
-  if (!media) return section
-  const layout = media.layout === 'figure' ? 'corner' : media.layout
-  return { ...section, media: { ...media, figure: undefined, layout } }
-}
-
 /** The about section's detail page while its platform-written text is still unapproved. */
 function sampleAboutDetail(section: Section): NonNullable<AboutSectionLike['detail']> | undefined {
   if (section.type !== 'about') return undefined
@@ -396,12 +378,8 @@ export function collectSampleFindings(site: WebsiteSchema, context?: DetectionCo
       return
     }
     if (section.type === 'about') {
-      const figure = sampleAboutFigure(section)
       const detail = sampleAboutDetail(section)
       const items: SampleItemFinding[] = []
-      if (figure) {
-        items.push({ id: aboutFigureDigest(figure), itemIndex: null, kind: 'stats', label: truncate(`${figure.value} ${figure.label}`) })
-      }
       if (detail) {
         items.push({ id: aboutDetailDigest(detail), itemIndex: null, kind: 'info', label: truncate(detail.heading || section.title) })
       }
@@ -557,10 +535,6 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
     }
     if (section.type === 'about') {
       let next: AboutSectionLike = section
-      const figure = sampleAboutFigure(section)
-      if (figure && approvedIds.has(aboutFigureDigest(figure)) && section.media) {
-        next = { ...next, media: { ...section.media, figure: { ...figure, sample: undefined } } }
-      }
       const detail = sampleAboutDetail(section)
       if (detail && approvedIds.has(aboutDetailDigest(detail))) {
         next = { ...next, detail: { ...detail, sample: undefined } }
@@ -622,11 +596,6 @@ export function clearEditedSampleFlags(prev: WebsiteSchema, next: WebsiteSchema)
     }
     if (section.type === 'about') {
       let next: AboutSectionLike = section
-      const figure = sampleAboutFigure(section)
-      if (figure && !before.has(aboutFigureDigest(figure)) && section.media) {
-        changed = true
-        next = { ...next, media: { ...section.media, figure: { ...figure, sample: undefined } } }
-      }
       const detail = sampleAboutDetail(section)
       if (detail && !before.has(aboutDetailDigest(detail))) {
         changed = true
@@ -672,13 +641,11 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       return [stripSampleContactFields(section)]
     }
     if (section.type === 'about') {
-      const figureSample = sampleAboutFigure(section)
       const detailSample = sampleAboutDetail(section)
-      if (!figureSample && !detailSample) return [section]
+      if (!detailSample) return [section]
       changed = true
-      const base = figureSample ? withoutAboutFigure(section) : section
       // Unapproved platform text never ships: the detail page and its link go away.
-      return [detailSample ? { ...base, detail: { ...detailSample, pageEnabled: false, linkEnabled: false } } : base]
+      return [{ ...section, detail: { ...detailSample, pageEnabled: false, linkEnabled: false } }]
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
@@ -738,7 +705,7 @@ export function removeOrHideSampleItem(site: WebsiteSchema, sectionIndex: number
 export function sectionHasSample(section: Section): boolean {
   if (section.type === 'hero') return Boolean(section.sample && section.trustText?.trim())
   if (section.type === 'contact') return sampleContactFields(section).length > 0
-  if (section.type === 'about') return sampleAboutFigure(section) !== undefined || sampleAboutDetail(section) !== undefined
+  if (section.type === 'about') return sampleAboutDetail(section) !== undefined
   const spec = ITEM_SPECS[section.type]
   return spec ? itemsOf(section, spec).some((item) => item.sample) : false
 }
