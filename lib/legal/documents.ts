@@ -56,6 +56,17 @@ const privacy: LegalDoc = {
     ],
     sections: [
       {
+        heading: 'Veri Sorumlusu',
+        blocks: [
+          p(`${COMPANY.legalName} (bundan sonra “${COMPANY.brandName}” olarak anılacaktır)`),
+          list([
+            `Adres: ${COMPANY.address}`,
+            `Telefon: ${COMPANY.phone}`,
+            `E-posta: ${COMPANY.kvkkEmail}`,
+          ]),
+        ],
+      },
+      {
         heading: '1. İşlenen Kişisel Veriler',
         blocks: [
           p('Hizmeti sunabilmek için aşağıdaki verileri işleriz:'),
@@ -149,6 +160,17 @@ const privacy: LegalDoc = {
       'This policy covers only data actually collected in the course of operating the service; it does not describe data types we do not use.',
     ],
     sections: [
+      {
+        heading: 'Data Controller',
+        blocks: [
+          p(`${COMPANY.legalName} (hereinafter referred to as “${COMPANY.brandName}”)`),
+          list([
+            `Address: ${COMPANY.address}`,
+            `Phone: ${COMPANY.phone}`,
+            `Email: ${COMPANY.kvkkEmail}`,
+          ]),
+        ],
+      },
       {
         heading: '1. Personal Data We Process',
         blocks: [
@@ -256,6 +278,7 @@ const kvkk: LegalDoc = {
           list([
             `Unvan: ${COMPANY.legalName}`,
             `Adres: ${COMPANY.address}`,
+            `Telefon: ${COMPANY.phone}`,
             `Başvuru e-posta: ${COMPANY.kvkkEmail}`,
           ]),
         ],
@@ -337,6 +360,7 @@ const kvkk: LegalDoc = {
           list([
             `Legal name: ${COMPANY.legalName}`,
             `Address: ${COMPANY.address}`,
+            `Phone: ${COMPANY.phone}`,
             `Application email: ${COMPANY.kvkkEmail}`,
           ]),
         ],
