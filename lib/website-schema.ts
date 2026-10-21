@@ -265,10 +265,28 @@ export const servicesSection = z.object({
         title: z.string(),
         description: z.string(),
         icon: z.string().optional().describe('A lucide-react icon name, e.g. "sparkles"'),
+        slug: z.string().max(80).optional().describe('Managed by the platform. Never set this field yourself.'),
+        src: z.string().optional().describe('Managed by the platform. Never set this field yourself.'),
+        alt: z.string().max(200).optional().describe('Managed by the platform. Never set this field yourself.'),
+        detail: z
+          .array(sectionDetailBlockSchema)
+          .max(12)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
     .min(2)
     .max(8),
+  /** List page + item pages switches ("Tüm hizmetlerimiz" link, /hizmetlerimiz). Managed by the platform. */
+  detail: z
+    .object({
+      linkEnabled: z.boolean().optional(),
+      linkLabel: z.string().max(60).optional(),
+      pageEnabled: z.boolean().optional(),
+      heading: z.string().max(140).optional(),
+    })
+    .optional()
+    .describe('Managed by the platform after generation. Never set this field yourself.'),
 })
 
 export const featuresSection = z.object({
@@ -904,7 +922,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about']).optional(),
+  detailOf: z.enum(['about', 'services']).optional(),
 })
 
 /** Pages as the AI sees them when generating: structure only, no per-page content. */

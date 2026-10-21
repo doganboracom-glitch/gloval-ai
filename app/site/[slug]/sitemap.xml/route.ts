@@ -6,6 +6,7 @@ import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 import { getLiveBlogPosts } from '@/lib/blog-server'
+import { resolveServices, servicePath } from '@/lib/service-pages'
 import { blogPostPath, indexablePosts } from '@/lib/blog'
 
 /**
@@ -71,6 +72,17 @@ export async function GET(
       priority: '0.7',
       lastmod: lastModified,
     })
+    if (resolved.detailOf === 'services') {
+      const services = resolveServices(site.schema)
+      for (const item of services?.pageActive ? services.items : []) {
+        entries.push({
+          loc: `${base}${servicePath(services!.listSlug, item.slug)}`,
+          changefreq: 'monthly',
+          priority: '0.6',
+          lastmod: lastModified,
+        })
+      }
+    }
   }
 
   // Store routes only exist for sites that actually sell something. Checkout

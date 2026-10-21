@@ -7,7 +7,8 @@ import {
   type AboutLayout,
   type AboutMedia,
 } from '@/lib/about-media'
-import { buildStarterAboutDetail, findAboutSection, syncDetailPages } from '@/lib/section-detail'
+import { buildStarterAboutDetail, findAboutSection } from '@/lib/section-detail'
+import { syncDetailPages } from '@/lib/section-detail'
 
 type Lang = 'tr' | 'en'
 type Copy = { tr: string; en: string }

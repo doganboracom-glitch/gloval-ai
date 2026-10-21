@@ -1,6 +1,7 @@
 import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { collectSlugRedirects } from '@/lib/page-slugs'
 import { resolveAboutDetail } from '@/lib/section-detail'
+import { collectServiceRedirects, resolveServices } from '@/lib/service-pages'
 
 /**
  * Multi-page preview routing.
@@ -15,7 +16,13 @@ import { resolveAboutDetail } from '@/lib/section-detail'
  * "Services", "About", "Portfolio" and "Contact" feel like real pages.
  */
 
-export type PageItem = { slug: string; title: string; isHome: boolean; detail?: boolean }
+export type PageItem = {
+  slug: string
+  title: string
+  isHome: boolean
+  detail?: boolean
+  detailOf?: 'about' | 'services'
+}
 
 /**
  * Pages shown as header buttons. A section detail page ("Hakkımızda" long
@@ -126,7 +133,7 @@ export function pageNavItems(site: WebsiteSchema): PageItem[] {
   const items: PageItem[] = pages.map((p, i) => {
     const isHome = p.isHome === true || (!pages.some((x) => x.isHome) && i === 0)
     if (isHome) homeFound = true
-    return { slug: p.slug || `page-${i}`, title: p.title, isHome, ...(p.kind === 'detail' ? { detail: true } : {}) }
+    return { slug: p.slug || `page-${i}`, title: p.title, isHome, ...(p.kind === 'detail' ? { detail: true, ...(p.detailOf ? { detailOf: p.detailOf } : {}) } : {}) }
   })
   if (!homeFound && items[0]) items[0].isHome = true
   return items
@@ -225,11 +232,12 @@ export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
   const home = homeSlug(site)
   // A detail page is public only while its switch is on and its text is approved:
   // `stripSampleContent` turns the switch off for unapproved text, so it 404s.
-  const detailLive = resolveAboutDetail(site)?.pageActive === true
+  const aboutLive = resolveAboutDetail(site)?.pageActive === true
+  const servicesLive = resolveServices(site)?.pageActive === true
   return (
     (site.pages ?? []).find((p, i) => {
       const slug = p.slug || `page-${i}`
-      if (p.kind === 'detail' && !detailLive) return false
+      if (p.kind === 'detail' && !(p.detailOf === 'services' ? servicesLive : aboutLive)) return false
       return slug.toLowerCase() === wanted && slug !== home
     }) ?? null
   )
@@ -275,10 +283,17 @@ const MAX_PAGE_REDIRECTS = 60
 export function withPageRedirects(
   next: WebsiteSchema,
   previousPages: Array<{ slug: string; isHome?: boolean }> | undefined,
+  previousSite?: WebsiteSchema | null,
 ): WebsiteSchema {
   const pages = next.pages ?? []
-  const created = collectSlugRedirects(previousPages ?? [], pages)
+  const created = [...collectSlugRedirects(previousPages ?? [], pages), ...collectServiceRedirects(previousSite, next)]
   const live = new Set(pages.map((p, i) => p.slug || `page-${i}`))
+  const services = resolveServices(next)
+  const liveServicePaths = new Set(
+    services?.pageActive ? services.items.map((i) => `/${services.listSlug}/${i.slug}`) : [],
+  )
+  const isLive = (path: string) =>
+    path.replace(/^\//, '').includes('/') ? liveServicePaths.has(path) : live.has(path.replace(/^\//, ''))
   const byFrom = new Map<string, string>()
   for (const r of next.pageRedirects ?? []) byFrom.set(r.from, r.to)
   for (const r of created) {
@@ -286,7 +301,7 @@ export function withPageRedirects(
     byFrom.set(r.from, r.to)
   }
   const merged = Array.from(byFrom, ([from, to]) => ({ from, to }))
-    .filter((r) => r.from !== r.to && !live.has(r.from.replace(/^\//, '')) && live.has(r.to.replace(/^\//, '')))
+    .filter((r) => r.from !== r.to && !isLive(r.from) && isLive(r.to))
     .slice(-MAX_PAGE_REDIRECTS)
   const unchanged =
     merged.length === (next.pageRedirects?.length ?? 0) &&

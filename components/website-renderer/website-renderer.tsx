@@ -6,6 +6,8 @@ import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
 import { NEW_TICKET_PATH } from '@/lib/support/prefill'
 import { SectionDetailPage } from '@/components/website-renderer/sections/section-detail-page'
+import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
+import { matchServiceHref } from '@/lib/service-pages'
 import { pageNavItems, headerPageItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import { SiteNavProvider, type SiteNavHandler } from '@/components/website-renderer/site-nav-context'
 import { SiteBlogProvider } from '@/components/website-renderer/site-blog-context'
@@ -101,6 +103,7 @@ export function WebsiteRenderer({
   headerActions,
   contactForm = null,
   initialPage = null,
+  initialService = null,
   pageRouting = false,
   blog = null,
   demoRoutes,
@@ -115,6 +118,8 @@ export function WebsiteRenderer({
   blog?: SiteBlogData | null
   /** Published site only: the page slug this request is rendering (null = home). */
   initialPage?: string | null
+  /** Published site only: the service page slug under the services list page. */
+  initialService?: string | null
   /**
    * Published site only: page links are real URLs (`/<slug>`), so switching
    * pages navigates for real instead of swapping sections in memory.
@@ -184,6 +189,7 @@ export function WebsiteRenderer({
     return { success: false as const }
   }, [site])
   const [activeSlug, setActiveSlug] = useState<string | null>(initialPage)
+  const [activeService, setActiveService] = useState<string | null>(initialService)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Page switches always land at the top of the new page, exactly like a real
@@ -196,6 +202,7 @@ export function WebsiteRenderer({
         return
       }
       setActiveSlug(slug)
+      setActiveService(null)
       scrollSiteToTop(rootRef.current)
     },
     [pageRouting, parsed],
@@ -233,6 +240,16 @@ export function WebsiteRenderer({
             .getElementById(id)
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }, 60)
+        return true
+      }
+      // A service page lives under the services list page: switch in-memory
+      // everywhere except the published site, where it is a real URL.
+      const service = parsed.success ? matchServiceHref(parsed.data, href) : null
+      if (service) {
+        if (pageRouting) return false
+        setActiveSlug(service.listSlug)
+        setActiveService(service.itemSlug)
+        scrollSiteToTop(rootRef.current)
         return true
       }
       // Demos have no per-page routes (pageRouting is off) and no preview, so a
@@ -313,7 +330,8 @@ export function WebsiteRenderer({
   // Keep the active page valid even if pages change under an edit.
   const active = pages.find((p) => p.slug === activeSlug)?.slug ?? homeSlug(data)
   const sections = sectionsForPage(data, active)
-  const activeIsDetail = Boolean(pages.find((p) => p.slug === active)?.detail)
+  const activePage = pages.find((p) => p.slug === active)
+  const activeIsDetail = Boolean(activePage?.detail)
 
   // The footer hosts the credit. Without a visible footer on this page it would
   // vanish, so fall back to the pinned chip instead.
@@ -401,7 +419,12 @@ export function WebsiteRenderer({
         contact={resolveMenuContact(data)}
       />
       {announcement && !announcementAboveHeader && !announcementOnPage && announcementNode}
-      {activeIsDetail && <SectionDetailPage site={data} />}
+      {activeIsDetail &&
+        (activePage?.detailOf === 'services' ? (
+          <ServicesDetailPage site={data} itemSlug={activeService} />
+        ) : (
+          <SectionDetailPage site={data} />
+        ))}
       {sections.flatMap((section, i) => {
         if (section.type === 'announcement' && announcementAboveHeader) {
           return i === latestIndex ? [latestPosts] : []

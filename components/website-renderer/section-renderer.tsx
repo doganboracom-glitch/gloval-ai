@@ -4,6 +4,7 @@ import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { aboutDetailLink } from '@/lib/section-detail'
+import { resolveServices, servicePath } from '@/lib/service-pages'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
@@ -66,8 +67,20 @@ export function SectionRenderer({
           moreLink={site ? aboutDetailLink(site) : null}
         />
       )
-    case 'services':
-      return <ServicesSection data={section} lang={meta.language} />
+    case 'services': {
+      const resolved = site ? resolveServices(site) : null
+      const links =
+        resolved && resolved.section === section
+          ? {
+              more: resolved.link,
+              itemHrefs: resolved.pageActive
+                ? resolved.items.map((i) => servicePath(resolved.listSlug, i.slug))
+                : resolved.items.map(() => null),
+              itemLinkLabel: resolved.itemLinkLabel,
+            }
+          : null
+      return <ServicesSection data={section} lang={meta.language} links={links} />
+    }
     case 'features':
       return <FeaturesSection data={section} />
     case 'stats':

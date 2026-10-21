@@ -309,7 +309,11 @@ export async function saveProjectSchema(input: {
 
   // A renamed page leaves a permanent redirect behind so its old URL keeps working.
   const previousPages = (existing?.schema_data as { pages?: Array<{ slug: string; isHome?: boolean }> } | null)?.pages
-  parsed = withPageRedirects(materializePages(parsed), previousPages)
+  parsed = withPageRedirects(
+    materializePages(parsed),
+    previousPages,
+    existing?.schema_data as WebsiteSchema | null | undefined,
+  )
 
   // Server-side backstop for the plan page limit: only GROWTH past the limit is
   // refused, so a site already over its limit (downgrade, limit change) can

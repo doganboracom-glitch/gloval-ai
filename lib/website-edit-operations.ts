@@ -26,7 +26,8 @@ import { uniquePageSlug } from '@/lib/page-slugs'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
-import { MAX_DETAIL_IMAGES, cleanDetailBlocks, syncDetailPages } from '@/lib/section-detail'
+import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
+import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -150,6 +151,19 @@ export type EditOperation =
         images?: { src?: string; alt?: string }[]
         approve?: boolean
       }
+    }
+  /** The services section's list page + links ("Tüm hizmetlerimiz", /hizmetlerimiz). */
+  | {
+      op: 'updateServicesDetail'
+      index: number
+      patch: { linkEnabled?: boolean; linkLabel?: string; pageEnabled?: boolean; heading?: string }
+    }
+  /** One service's own page: slug, image and long text (`blocks` replaces the list). */
+  | {
+      op: 'updateServiceItem'
+      index: number
+      item: number
+      patch: { slug?: string; src?: string; alt?: string; blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[] }
     }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
   | { op: 'dismissHint'; hint: 'aboutImage' }
@@ -468,7 +482,36 @@ export function applyOperation(
         detail.sample = undefined
       }
       next.sections[operation.index] = { ...section, detail }
-      return syncDetailPages(next)
+      return syncSectionPages(next)
+    }
+
+    case 'updateServicesDetail': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'services') return next
+      const { patch } = operation
+      const detail = { ...(section.detail ?? {}) }
+      if (patch.linkEnabled !== undefined) detail.linkEnabled = patch.linkEnabled
+      if (patch.linkLabel !== undefined) detail.linkLabel = patch.linkLabel.trim().slice(0, 60) || undefined
+      if (patch.pageEnabled !== undefined) detail.pageEnabled = patch.pageEnabled
+      if (patch.heading !== undefined) detail.heading = patch.heading.trim().slice(0, 140) || undefined
+      next.sections[operation.index] = { ...section, detail }
+      return syncSectionPages(next)
+    }
+
+    case 'updateServiceItem': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'services') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      const { patch } = operation
+      const updated = { ...item }
+      if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.title)
+      if (patch.src !== undefined) updated.src = patch.src.trim() || undefined
+      if (patch.alt !== undefined) updated.alt = patch.alt.trim().slice(0, 200) || undefined
+      if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
+      const items = section.items.map((it, i) => (i === operation.item ? updated : it))
+      next.sections[operation.index] = { ...section, items }
+      return syncSectionPages(next)
     }
 
     case 'dismissHint': {

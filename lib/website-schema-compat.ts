@@ -2,11 +2,11 @@ import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { countCodes, repairToSchema, summarizeIssues, type IssueSummary, type RepairStep } from '@/lib/ai-repair'
 import { siteRepairOptions } from '@/lib/site-repair'
 import { normalizeAboutMedia } from '@/lib/about-media'
-import { syncDetailPages } from '@/lib/section-detail'
+import { syncSectionPages } from '@/lib/service-pages'
 
 /** Stored-site invariants: valid about media, and the detail page list matching `detail`. */
 function finalize(site: WebsiteSchema): WebsiteSchema {
-  return syncDetailPages(normalizeAboutMedia(site))
+  return syncSectionPages(normalizeAboutMedia(site))
 }
 
 export type NormalizedSite =

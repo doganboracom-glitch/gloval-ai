@@ -14,17 +14,40 @@ import { contactSecret, signContactToken } from '@/lib/site-contact-guard'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 import { detailDescription, resolveAboutDetail } from '@/lib/section-detail'
 import { buildBreadcrumbJsonLd } from '@/lib/seo/breadcrumb-jsonld'
+import { findPublicService, serviceDescription, servicePath } from '@/lib/service-pages'
 
 /**
  * Metadata for the home page (`pageSlug` null) or one real page. Titles,
  * descriptions, canonical and og:url are per page; a page the owner marked
  * non-indexable is `noindex`.
  */
-export async function buildSitePageMetadata(slug: string, pageSlug: string | null): Promise<Metadata> {
+export async function buildSitePageMetadata(
+  slug: string,
+  pageSlug: string | null,
+  itemSlug: string | null = null,
+): Promise<Metadata> {
   const site = await getPublishedSite(slug)
   if (!site) return { title: 'Site bulunamadı' }
   const page = pageSlug ? findPublicPage(site.schema, pageSlug) : null
   if (pageSlug && !page) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
+
+  if (page && itemSlug) {
+    const found = findPublicService(site.schema, page.slug, itemSlug)
+    if (!found) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
+    const { entry } = found
+    const { origin } = await getSiteSeoContext(slug)
+    const canonical = `${origin}${servicePath(found.resolved.listSlug, entry.slug)}`
+    const title = `${entry.title} | ${site.name}`
+    const description = serviceDescription(entry) || site.schema.meta.description || site.schema.meta.tagline
+    return {
+      title,
+      description,
+      metadataBase: new URL(origin),
+      alternates: { canonical },
+      openGraph: { title, description, url: canonical, ...(entry.image ? { images: [entry.image.src] } : {}) },
+      robots: { index: isPageIndexable(page), follow: true },
+    }
+  }
 
   const aboutDetail = page?.kind === 'detail' ? resolveAboutDetail(site.schema) : null
   const description =
@@ -51,7 +74,15 @@ export async function buildSitePageMetadata(slug: string, pageSlug: string | nul
   }
 }
 
-export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlug: string | null }) {
+export async function PublicSiteView({
+  slug,
+  pageSlug,
+  itemSlug = null,
+}: {
+  slug: string
+  pageSlug: string | null
+  itemSlug?: string | null
+}) {
   const [site, brandingRemoved, products, collections, shipping, blog] = await Promise.all([
     getPublishedSite(slug),
     isSiteBrandingRemoved(slug),
@@ -71,6 +102,21 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
       // A renamed page keeps answering on its old URL with a permanent redirect.
       const moved = site.schema.pageRedirects?.find((r) => r.from === `/${pageSlug.toLowerCase()}`)
       if (moved && findPublicPage(site.schema, moved.to.replace(/^\//, ''))) permanentRedirect(moved.to)
+      notFound()
+    }
+  }
+
+  let service: ReturnType<typeof findPublicService> = null
+  if (itemSlug) {
+    service = page ? findPublicService(site.schema, page.slug, itemSlug) : null
+    if (!service) {
+      const moved = site.schema.pageRedirects?.find(
+        (r) => r.from === `/${pageSlug?.toLowerCase()}/${itemSlug.toLowerCase()}`,
+      )
+      if (moved) {
+        const [to1, to2] = moved.to.replace(/^\//, '').split('/')
+        if (to1 && to2 && findPublicService(site.schema, to1, to2)) permanentRedirect(moved.to)
+      }
       notFound()
     }
   }
@@ -134,6 +180,7 @@ export async function PublicSiteView({ slug, pageSlug }: { slug: string; pageSlu
         paymentBadges={paymentBadges}
         contactForm={contactForm}
         initialPage={page?.slug ?? null}
+        initialService={service?.entry.slug ?? null}
         blog={blog}
         pageRouting
       />
