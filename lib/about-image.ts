@@ -1,6 +1,6 @@
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { generateSiteImage, imageGenerationAvailable } from '@/lib/image-provider'
-import { persistImageDataUri } from '@/lib/image-storage'
+import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
 import {
   aboutLacksImage,
   buildAboutImagePrompt,
@@ -83,7 +83,11 @@ export async function generateAboutImageAt(
   const section = site.sections[index]
   if (!section || section.type !== 'about') return 'failed'
   if (!imageGenerationAvailable()) return 'skipped'
-  const image = await renderAboutImage(site, '', request).catch(() => null)
+  // A storage failure is rethrown so the route can tell the user (and not charge).
+  const image = await renderAboutImage(site, '', request).catch((err) => {
+    if (err instanceof ImageStorageError) throw err
+    return null
+  })
   if (!image) return 'failed'
 
   const lang = site.meta.language === 'en' ? 'en' : 'tr'

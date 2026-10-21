@@ -5,7 +5,7 @@ import {
   imageGenerationAvailable,
   type ImageAspect,
 } from '@/lib/image-provider'
-import { persistImageDataUri } from '@/lib/image-storage'
+import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
 import { imagePromptRules, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
 import {
   describeVisualRequest,
@@ -489,17 +489,25 @@ function ensureImageRef(
 export async function attachHeroImage(
   site: WebsiteSchema,
   prompt: string,
-): Promise<{ brief: Brief; heroPrompt: string; generated: boolean; available: boolean }> {
+): Promise<{
+  brief: Brief
+  heroPrompt: string
+  generated: boolean
+  available: boolean
+  /** Images that were generated but could not be stored (never written to the schema). */
+  storageFailed: number
+}> {
   const brief = analyzeBrief(prompt, site)
   const available = imageGenerationAvailable()
   let generated = false
+  let storageFailed = 0
 
   const hero = site.sections.find((s) => s.type === 'hero') as
     | Extract<WebsiteSchema['sections'][number], { type: 'hero' }>
     | undefined
 
   const heroPrompt = buildHeroImagePrompt(brief, site?.meta?.tagline)
-  if (!hero) return { brief, heroPrompt, generated, available }
+  if (!hero) return { brief, heroPrompt, generated, available, storageFailed }
 
   const altBase =
     site.meta.language === 'tr'
@@ -543,16 +551,22 @@ export async function attachHeroImage(
     const targets = ordered.slice(0, MAX_IMAGES)
 
     // Generate, then persist the (large) base64 data URI to storage so the
-    // schema only ever carries a short, durable URL. `persistImageDataUri` is
-    // best-effort: on any failure it returns the data URI unchanged so the
-    // image still renders.
+    // schema only ever carries a short, durable URL. `persistImageDataUri`
+    // throws when storage fails: that image keeps NO new src (never base64),
+    // counts as not generated, and is reported via `storageFailed`.
     const gen = async (img: SiteImageRef) => {
       const res = await generateSiteImage({
         prompt: img.imagePrompt,
         aspectRatio: toProviderAspect(img.aspectRatio),
       })
       if (!res) return null
-      img.src = await persistImageDataUri(res.src)
+      try {
+        img.src = await persistImageDataUri(res.src)
+      } catch (err) {
+        if (!(err instanceof ImageStorageError)) throw err
+        storageFailed += 1
+        return null
+      }
       return img
     }
 
@@ -570,5 +584,5 @@ export async function attachHeroImage(
     }
   }
 
-  return { brief, heroPrompt, generated, available }
+  return { brief, heroPrompt, generated, available, storageFailed }
 }

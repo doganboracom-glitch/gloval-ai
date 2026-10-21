@@ -29,7 +29,7 @@ import {
 } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
 import { generateSiteImage, imageGenerationAvailable } from '@/lib/image-provider'
-import { persistImageDataUri } from '@/lib/image-storage'
+import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
 
 function realDeps(projectId: string, siteSlug: string | null, ownerId?: string): StarterBlogDeps {
   return {
@@ -78,8 +78,14 @@ function realDeps(projectId: string, siteSlug: string | null, ownerId?: string):
         maxAttempts: 1,
       })
       if (!gate.ok || abortSignal.aborted) return null
-      const stored = await persistImageDataUri(gate.src)
-      return stored.startsWith('https://') || stored.startsWith('/') ? stored : null
+      try {
+        const stored = await persistImageDataUri(gate.src)
+        return stored.startsWith('https://') || stored.startsWith('/') ? stored : null
+      } catch (err) {
+        // Free onboarding post: publish it without a cover rather than with base64.
+        if (err instanceof ImageStorageError) return null
+        throw err
+      }
     },
   }
 }

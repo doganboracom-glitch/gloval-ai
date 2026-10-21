@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from 'react'
 import { ArrowLeft, Bold, ImagePlus, Link2, List, Heading2, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import { createBlogPostAction, updateBlogPostAction } from '@/lib/blog-actions'
+import { IMAGE_STORAGE_USER_MESSAGE } from '@/lib/image-storage-error'
 import { parseLegalMarkup } from '@/lib/legal-markup'
 import { sanitizeBlogBody, type BlogPost } from '@/lib/blog'
 import { detectUnverifiedClaims, type BlogClaimFinding } from '@/lib/blog-trust'
@@ -209,9 +210,12 @@ export function BlogPostForm({
         ...init,
         signal: kind === 'ai' ? AbortSignal.timeout(COVER_TIMEOUT_MS) : undefined,
       })
-      const data = (await res.json().catch(() => null)) as { url?: string; alt?: string; error?: string } | null
+      const data = (await res.json().catch(() => null)) as
+        | { url?: string; alt?: string; error?: string; message?: string }
+        | null
       if (!res.ok || !data?.url) {
-        if (res.status === 402) setError(lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.')
+        if (data?.error === 'storage_failed') setError(data.message || IMAGE_STORAGE_USER_MESSAGE)
+        else if (res.status === 402) setError(lang === 'tr' ? 'AI krediniz yetersiz.' : 'Not enough AI credits.')
         else if (res.status === 409) setError(t.errCoverBusy)
         else if (data?.error === 'timeout') setError(t.errCoverTimeout)
         else if (data?.error === 'rejected') setError(t.errCoverRejected)
