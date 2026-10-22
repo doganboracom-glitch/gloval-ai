@@ -19,6 +19,7 @@ import {
   isBlockedProductOperation,
   lockStorefrontProducts,
 } from '@/lib/storefront-product-lock'
+import { guardCorporateCatalog } from '@/lib/corporate-products'
 import { preserveResolvedImages } from '@/lib/hero-image'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
@@ -313,7 +314,9 @@ export async function POST(req: Request) {
     // wrote into the schema is discarded and the user is pointed to the panel.
     const locked = lockStorefrontProducts(original, restored)
     const notice = locked.touched ? PRODUCTS_MANAGED_IN_PANEL : undefined
-    const finalSchema = sanitizeGeneratedProofContent(preserveResolvedImages(original, locked.schema), original)
+    // A corporate site never gets a model-invented store or product catalog.
+    const guarded = guardCorporateCatalog(original, locked.schema, instruction)
+    const finalSchema = sanitizeGeneratedProofContent(preserveResolvedImages(original, guarded), original)
 
     // The model sometimes answers "done" while returning the site untouched.
     // That must surface as a failure (and cost nothing), never as a success.

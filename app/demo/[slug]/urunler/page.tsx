@@ -70,6 +70,7 @@ export default async function DemoProductsPage({
         items={catalog.products}
         detailHref={(itemSlug) => `/demo/${slug}/urun/${itemSlug}?lang=${lang}`}
         lang={lang}
+        sample={catalog.sampleCatalog === true}
       />
     </DemoChrome>
   )

@@ -18,12 +18,15 @@ export function CatalogGrid({
   items,
   detailHref,
   lang,
+  sample = false,
 }: {
   title: string
   subtitle: string
   items: CatalogItem[]
   detailHref: (itemSlug: string) => string
   lang: Lang
+  /** The items are illustrative examples; shows an "Örnek" note under the subtitle. */
+  sample?: boolean
 }) {
   const detailCta = lang === 'tr' ? 'İncele' : 'View'
 
@@ -39,6 +42,20 @@ export function CatalogGrid({
         <p className="mt-3 max-w-2xl text-pretty leading-relaxed" style={{ color: 'var(--site-muted-fg)' }}>
           {subtitle}
         </p>
+        {sample ? (
+          <p
+            className="mt-3 inline-block px-3 py-1 text-sm"
+            style={{
+              color: 'var(--site-muted-fg)',
+              border: '1px dashed var(--site-border)',
+              borderRadius: 'var(--site-radius)',
+            }}
+          >
+            {lang === 'tr'
+              ? 'Örnek katalog: bu içerik gösterim amaçlıdır, kendi ürünlerinizle değiştirilir.'
+              : 'Sample catalog: illustrative content, replaced with your own items.'}
+          </p>
+        ) : null}
       </header>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

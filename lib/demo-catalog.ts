@@ -44,6 +44,8 @@ export type DemoCatalog = {
   /** When true, the demo behaves as a real store: cart, add-to-cart and a
    *  simulated checkout are enabled across its homepage and sub-routes. */
   commerce?: boolean
+  /** The catalog items are illustrative examples (not the owner's real products). */
+  sampleCatalog?: boolean
   brand: L
   /** Nav + page label for the product-like collection. */
   productsLabel: L
@@ -202,6 +204,7 @@ export const demoCatalogs: DemoCatalog[] = [
   // ------------------------------------------------------------- mimarlik
   {
     slug: 'mimarlik',
+    sampleCatalog: true,
     brand: { tr: 'Atölye Mimarlık', en: 'Atelier Studio' },
     productsLabel: { tr: 'Projeler', en: 'Projects' },
     productSingular: { tr: 'Proje', en: 'Project' },
@@ -267,6 +270,60 @@ export const demoCatalogs: DemoCatalog[] = [
         image: '/demos/mimarlik/p3.d039185b.webp',
         gallery: ['/demos/mimarlik/p3.d039185b.webp', '/demos/mimarlik/p6.07f650d9.webp', '/demos/mimarlik/p1.effec99e.webp'],
       },
+      {
+        slug: 'otel-projesi',
+        name: { tr: 'Butik Otel Projesi', en: 'Boutique Hotel Project' },
+        short: { tr: 'Yerel malzemeyle kurgulanan küçük ölçekli otel.', en: 'A small-scale hotel built with local materials.' },
+        description: {
+          tr: 'Taş ve ahşap gibi yerel malzemelerle kurgulanan, lobiden odalara kadar tutarlı bir mekân dili olan butik otel tasarımı.',
+          en: 'A boutique hotel design built with local materials such as stone and timber, with one consistent spatial language from lobby to rooms.',
+        },
+        price: { tr: 'Proje bazlı', en: 'Project-based' },
+        category: { tr: 'Ticari', en: 'Commercial' },
+        features: [
+          { tr: 'Yerel malzeme', en: 'Local materials' },
+          { tr: 'Lobi ve oda tasarımı', en: 'Lobby and room design' },
+          { tr: 'Aydınlatma kurgusu', en: 'Lighting concept' },
+        ],
+        image: '/demos/mimarlik/p4.b36867f8.webp',
+        gallery: ['/demos/mimarlik/p4.b36867f8.webp', '/demos/mimarlik/p2.c2160830.webp'],
+      },
+      {
+        slug: 'restorasyon-projesi',
+        name: { tr: 'Restorasyon Projesi', en: 'Restoration Project' },
+        short: { tr: 'Tarihi yapıyı bugüne taşıyan koruma çalışması.', en: 'A conservation project bringing a historic building into the present.' },
+        description: {
+          tr: 'Mevcut yapının özgün dokusunu koruyarak güncel kullanıma uyarlayan restorasyon ve yeniden işlevlendirme çalışması.',
+          en: 'A restoration and adaptive reuse project that keeps the original character of the existing building while fitting it to current use.',
+        },
+        price: { tr: 'Proje bazlı', en: 'Project-based' },
+        category: { tr: 'Restorasyon', en: 'Restoration' },
+        features: [
+          { tr: 'Rölöve çalışması', en: 'Measured survey' },
+          { tr: 'Özgün doku koruma', en: 'Original fabric preserved' },
+          { tr: 'Yeniden işlevlendirme', en: 'Adaptive reuse' },
+        ],
+        image: '/demos/mimarlik/p5.9d09f813.webp',
+        gallery: ['/demos/mimarlik/p5.9d09f813.webp', '/demos/mimarlik/p3.d039185b.webp'],
+      },
+      {
+        slug: 'kamusal-alan-projesi',
+        name: { tr: 'Kamusal Alan Projesi', en: 'Public Space Project' },
+        short: { tr: 'Meydan ve yaya aksı için peyzaj ve mimari tasarım.', en: 'Landscape and architecture for a square and pedestrian axis.' },
+        description: {
+          tr: 'Meydan, yaya aksı ve oturma alanlarını bir bütün olarak ele alan, gölge ve yeşili öne çıkaran kamusal alan tasarımı.',
+          en: 'A public space design that treats the square, pedestrian axis and seating as one whole, with shade and greenery up front.',
+        },
+        price: { tr: 'Proje bazlı', en: 'Project-based' },
+        category: { tr: 'Kamusal', en: 'Public' },
+        features: [
+          { tr: 'Yaya odaklı kurgu', en: 'Pedestrian-first layout' },
+          { tr: 'Gölge ve yeşil', en: 'Shade and greenery' },
+          { tr: 'Erişilebilir tasarım', en: 'Accessible design' },
+        ],
+        image: '/demos/mimarlik/p6.07f650d9.webp',
+        gallery: ['/demos/mimarlik/p6.07f650d9.webp', '/demos/mimarlik/p1.effec99e.webp'],
+      },
     ],
     services: [
       {
@@ -328,6 +385,7 @@ export const demoCatalogs: DemoCatalog[] = [
   // ---------------------------------------------------------- dis-klinigi
   {
     slug: 'dis-klinigi',
+    sampleCatalog: true,
     brand: { tr: 'Denta Estetik', en: 'Denta Care' },
     productsLabel: { tr: 'Tedaviler', en: 'Treatments' },
     productSingular: { tr: 'Tedavi', en: 'Treatment' },
@@ -389,6 +447,54 @@ export const demoCatalogs: DemoCatalog[] = [
           { tr: 'Takip seansları', en: 'Follow-up visits' },
         ],
         image: '/demos/dis-klinigi/products/orthodontics.a237cd0d.webp',
+      },
+      {
+        slug: 'dolgu-tedavisi',
+        name: { tr: 'Dolgu Tedavisi', en: 'Fillings' },
+        short: { tr: 'Çürük dişler için diş rengine uyumlu dolgu.', en: 'Tooth-coloured fillings for decayed teeth.' },
+        description: {
+          tr: 'Çürük temizlendikten sonra diş rengine uyumlu dolgu malzemesiyle dişin şekli ve çiğneme işlevi geri kazandırılır.',
+          en: 'After the decay is removed, a tooth-coloured filling restores the shape and chewing function of the tooth.',
+        },
+        price: { tr: 'Muayene sonrası', en: 'After consultation' },
+        category: { tr: 'Restoratif', en: 'Restorative' },
+        features: [
+          { tr: 'Diş rengi dolgu', en: 'Tooth-coloured filling' },
+          { tr: 'Tek seansta uygulama', en: 'Single-visit treatment' },
+        ],
+        image: '/demos/dis-klinigi/services/checkup.1ee5531a.webp',
+      },
+      {
+        slug: 'kanal-tedavisi',
+        name: { tr: 'Kanal Tedavisi', en: 'Root Canal Treatment' },
+        short: { tr: 'Enfekte diş sinirinin temizlenip dişin korunması.', en: 'Cleaning an infected nerve to keep the tooth.' },
+        description: {
+          tr: 'Enfekte olan diş siniri temizlenir, kanallar doldurulur ve diş çekilmeden korunur. Süreç muayene ve röntgenle planlanır.',
+          en: 'The infected nerve is cleaned, the canals are filled and the tooth is kept instead of extracted. The process is planned from an examination and x-ray.',
+        },
+        price: { tr: 'Muayene sonrası', en: 'After consultation' },
+        category: { tr: 'Endodonti', en: 'Endodontics' },
+        features: [
+          { tr: 'Röntgen ile planlama', en: 'Planned from x-ray' },
+          { tr: 'Dişi koruyan tedavi', en: 'Tooth-preserving treatment' },
+        ],
+        image: '/demos/dis-klinigi/services/gum-care.4dafd3fa.webp',
+      },
+      {
+        slug: 'cocuk-dis-hekimligi',
+        name: { tr: 'Çocuk Diş Hekimliği', en: 'Pediatric Dentistry' },
+        short: { tr: 'Çocuklar için sakin ve alışma odaklı muayene.', en: 'A calm, familiarisation-first check-up for children.' },
+        description: {
+          tr: 'Çocukların diş hekimine alışması için kısa ve sakin seanslarla muayene, koruyucu uygulama ve tedavi yapılır.',
+          en: 'Short, calm sessions help children get used to the dentist, covering examination, preventive care and treatment.',
+        },
+        price: { tr: 'Muayene sonrası', en: 'After consultation' },
+        category: { tr: 'Çocuk', en: 'Pediatric' },
+        features: [
+          { tr: 'Kısa seanslar', en: 'Short sessions' },
+          { tr: 'Koruyucu uygulama', en: 'Preventive care' },
+        ],
+        image: '/demos/dis-klinigi/services/cleaning.d292938e.webp',
       },
     ],
     services: [

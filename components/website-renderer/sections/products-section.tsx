@@ -1,5 +1,6 @@
 'use client'
 
+import { hasNamedProducts } from '@/lib/corporate-products'
 import { useState } from 'react'
 import { ShoppingCart } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
@@ -56,6 +57,8 @@ export function ProductsSection({ data, lang }: { data: ProductsData; lang?: str
   if (catalog?.products) {
     return <CatalogShowcase data={data} catalog={catalog} products={catalog.products} />
   }
+  // A corporate catalog with no named product yet is an empty draft: nothing to show.
+  if (data.inline && !hasNamedProducts(data)) return null
   return <SchemaProducts data={data} lang={lang} />
 }
 
