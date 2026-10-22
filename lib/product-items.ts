@@ -31,7 +31,7 @@ type ProductsSection = Extract<Section, { type: 'products' }>
 export type InlineProduct = ProductsSection['items'][number]
 
 export function findInlineCatalogSection(site: Pick<WebsiteSchema, 'sections'>): ProductsSection | null {
-  const section = site.sections.find((s): s is ProductsSection => s.type === 'products' && s.inline === true)
+  const section = site.sections?.find((s): s is ProductsSection => s.type === 'products' && s.inline === true)
   return section ?? null
 }
 

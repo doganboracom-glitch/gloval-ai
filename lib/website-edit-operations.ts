@@ -592,6 +592,13 @@ export function applyOperation(
       return syncSectionPages(next)
     }
 
+    case 'dismissHint': {
+      const hints = new Set(next.dismissedHints ?? [])
+      hints.add(operation.hint)
+      next.dismissedHints = [...hints].slice(0, 10)
+      return next
+    }
+
     case 'updateProductsCatalog': {
       const section = next.sections[operation.index]
       if (!section || section.type !== 'products') return next
@@ -647,13 +654,6 @@ export function applyOperation(
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))
       const edited = { ...section, items }
       next.sections[operation.index] = edited.inline ? withProductSlugs(edited) : edited
-      return next
-    }
-
-    case 'dismissHint': {
-      const hints = new Set(next.dismissedHints ?? [])
-      hints.add(operation.hint)
-      next.dismissedHints = [...hints].slice(0, 10)
       return next
     }
 
