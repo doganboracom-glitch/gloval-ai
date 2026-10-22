@@ -33,7 +33,8 @@ export function buildSiteGenerateSystem(
         `at least one "products" section with real products (name, price, and a "Sepete Ekle"/"Add to ` +
         `Cart" buttonText; add oldPrice + a discount badge on sale items) and a "products" page in ` +
         `pages. Prefer a "slider" hero for campaign slides. `
-      : '') +
+      : `This is NOT an online store: do NOT output "products" or "categories" sections or a products ` +
+        `page, and never invent product names, codes or prices. `) +
     siteLimitsPromptHint(pageLimit) +
     `ALWAYS include exactly one "contact" section just before the footer (also on online stores), ` +
     `with a title, a short description, and form field labels; leave mapEmbed unset. ` +

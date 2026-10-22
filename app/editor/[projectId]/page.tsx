@@ -15,6 +15,7 @@ import { suggestBlogTopics } from '@/lib/blog-ai'
 import { isStarterPending } from '@/lib/blog-site'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { tenantUrl } from '@/lib/domains'
+import { canManageProducts } from '@/lib/site-kind'
 
 export default async function EditorPage({
   params,
@@ -136,6 +137,10 @@ export default async function EditorPage({
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
       catalog={catalog}
       catalogFeature={catalogFeature}
+      productsManaged={canManageProducts({
+        project_type: project.project_type,
+        commerce_mode: commerce?.mode,
+      })}
       blog={
         canManageBlog
           ? { projectId, topics: blogTopics, sitemapUrl, starterPending: isStarterPending(project.created_at, Date.now()) }

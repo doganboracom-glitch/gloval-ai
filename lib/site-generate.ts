@@ -1,7 +1,8 @@
 import { websiteGenerationSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
 import { siteNameFromPrompt, siteRepairOptions } from '@/lib/site-repair'
-import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
+import { deriveSeoTitle, detectSector, isEcommerceIntent } from '@/lib/sector-profiles'
+import { stripInventedStoreSections } from '@/lib/corporate-products'
 import { capPagesToLimit } from '@/lib/page-limits'
 import { sanitizeGeneratedProofContent } from '@/lib/proof-content'
 import type { AiModelSelection } from '@/lib/ai-models'
@@ -41,7 +42,9 @@ export async function generateSiteObject(
 
   // The prompt asks for at most `pageLimit` pages, but the model can still
   // overshoot; hard-cap the generated site so it never exceeds the plan.
-  const site = sanitizeGeneratedProofContent(capPagesToLimit(result.object as WebsiteSchema, pageLimit))
+  const capped = sanitizeGeneratedProofContent(capPagesToLimit(result.object as WebsiteSchema, pageLimit))
+  // A brief that did not ask for an online store never gets invented products.
+  const site = isEcommerceIntent(prompt) ? capped : stripInventedStoreSections(capped)
 
   // A skipped or blank SEO title falls back to the deterministic keyword
   // derivation so a new site is never published without one.

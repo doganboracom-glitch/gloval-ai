@@ -21,10 +21,14 @@ function siteWithSection(type: SectionType): { site: WebsiteSchema; index: numbe
 describe('list limits: one definition shared by schema, ops and editor', () => {
   it('the schema file reads the numbers from list-limits and re-declares none', () => {
     const src = readFileSync(join(process.cwd(), 'lib/website-schema.ts'), 'utf8')
-    for (const key of Object.keys(LIST_LIMITS)) {
+    // Products are the one exception: the inline (corporate) catalog reads its
+    // own, larger PRODUCT_CATALOG_LIMIT, which is also defined in list-limits.
+    for (const key of Object.keys(LIST_LIMITS).filter((k) => k !== 'products')) {
       expect(src).toContain(`LIST_LIMITS.${key}.min`)
       expect(src).toContain(`LIST_LIMITS.${key}.max`)
     }
+    expect(src).toContain('PRODUCT_CATALOG_LIMIT.min')
+    expect(src).toContain('PRODUCT_CATALOG_LIMIT.max')
   })
 
   it.each(TYPES)('%s: adding and removing never leaves the schema-valid range', (type) => {

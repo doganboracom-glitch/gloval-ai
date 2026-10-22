@@ -6,6 +6,7 @@ import {
   makeProductsInline,
   parsePriceToCents,
   resolveInlineCatalog,
+  saleBadge,
   toCatalogItem,
   withProductSlugs,
   type InlineProduct,
@@ -36,6 +37,20 @@ describe('parsePriceToCents', () => {
   it('returns 0 for unreadable text', () => {
     expect(parsePriceToCents('Fiyat sorunuz')).toBe(0)
     expect(parsePriceToCents(undefined)).toBe(0)
+  })
+})
+
+describe('saleBadge', () => {
+  it('marks a real markdown as sale in the site language', () => {
+    expect(saleBadge({ price: '₺899', oldPrice: '₺1.299' }, 'tr')).toBe('İndirimli')
+    expect(saleBadge({ price: '$89', oldPrice: '$129' }, 'en')).toBe('Sale')
+  })
+  it('keeps the owner badge and ignores non-discounts', () => {
+    expect(saleBadge({ badge: 'Yeni', price: '₺899', oldPrice: '₺1.299' }, 'tr')).toBe('Yeni')
+    expect(saleBadge({ price: '₺899', oldPrice: '₺899' }, 'tr')).toBeUndefined()
+    expect(saleBadge({ price: '₺899', oldPrice: '₺500' }, 'tr')).toBeUndefined()
+    expect(saleBadge({ price: 'Fiyat sorunuz', oldPrice: '₺500' }, 'tr')).toBeUndefined()
+    expect(saleBadge({ price: '₺899' }, 'tr')).toBeUndefined()
   })
 })
 

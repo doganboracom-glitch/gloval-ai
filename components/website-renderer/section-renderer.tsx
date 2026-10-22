@@ -99,7 +99,7 @@ export function SectionRenderer({
     case 'portfolio':
       return <PortfolioSection data={section} lang={meta.language} />
     case 'products':
-      return <ProductsSection data={section} />
+      return <ProductsSection data={section} lang={meta.language} />
     case 'categories':
       return <CategoriesSection data={section} />
     case 'process':

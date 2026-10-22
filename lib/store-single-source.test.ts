@@ -184,7 +184,7 @@ describe('single product card component', () => {
 
   it('editor hides product item fields on storefronts and links to the product panel', () => {
     const src = read('components/editor/section-inspector.tsx')
-    expect(src).toContain("const managedProducts = section.type === 'products' && isStorefront(site)")
+    expect(src).toContain("section.type === 'products' && isStorefront(site) && (productsManagedByProject ?? true)")
     expect(src).toContain(
       "{!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && items.length > 0 && (",
     )

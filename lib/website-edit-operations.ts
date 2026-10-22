@@ -9,8 +9,10 @@ import {
   type BlogSettings,
   type Section,
   type SectionType,
+  isStorefront,
   type WebsiteSchema,
 } from '@/lib/website-schema'
+import { emptyProductDraft } from '@/lib/corporate-products'
 import { isBlockedProductOperation } from '@/lib/storefront-product-lock'
 import { sanitizeFooterColumns, sanitizeFooterLegalLinks } from '@/lib/footer-links'
 import { isBusinessType, normalizeCompanyValue, type CompanyField } from '@/lib/company-profile'
@@ -592,6 +594,13 @@ export function applyOperation(
       return syncSectionPages(next)
     }
 
+    case 'dismissHint': {
+      const hints = new Set(next.dismissedHints ?? [])
+      hints.add(operation.hint)
+      next.dismissedHints = [...hints].slice(0, 10)
+      return next
+    }
+
     case 'updateProductsCatalog': {
       const section = next.sections[operation.index]
       if (!section || section.type !== 'products') return next
@@ -647,13 +656,6 @@ export function applyOperation(
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))
       const edited = { ...section, items }
       next.sections[operation.index] = edited.inline ? withProductSlugs(edited) : edited
-      return next
-    }
-
-    case 'dismissHint': {
-      const hints = new Set(next.dismissedHints ?? [])
-      hints.add(operation.hint)
-      next.dismissedHints = [...hints].slice(0, 10)
       return next
     }
 
@@ -1147,7 +1149,7 @@ export function applyOperation(
         next.sections.unshift(blankSection('announcement', next.meta.language))
         return next
       }
-      const section = blankSection(operation.sectionType, next.meta.language)
+      const section = blankSection(operation.sectionType, next.meta.language, { corporate: !isStorefront(next) })
       const insertAt =
         operation.index !== undefined
           ? operation.index
@@ -1162,7 +1164,7 @@ export function applyOperation(
       // The band can neither be converted into a page section nor be created
       // by converting one (that could duplicate it).
       if (current.type === 'announcement' || operation.sectionType === 'announcement') return next
-      const replacement = blankSection(operation.sectionType, next.meta.language)
+      const replacement = blankSection(operation.sectionType, next.meta.language, { corporate: !isStorefront(next) })
       // Preserve a shared title/subtitle where both types have one.
       const currentTitle = (current as Record<string, unknown>).title
       if (typeof currentTitle === 'string' && 'title' in replacement) {
@@ -1355,7 +1357,18 @@ export const ADDABLE_SECTION_TYPES: SectionType[] = [
  * placeholder copy in the site's language. Used by both "+ Add Section" and
  * section type conversion.
  */
-export function blankSection(type: SectionType, lang: Lang): Section {
+export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?: boolean }): Section {
+  if (type === 'products' && opts?.corporate) {
+    // A corporate catalog never starts with invented products: one empty draft
+    // row the owner fills in. The renderer skips it until it has a name.
+    return {
+      type: 'products',
+      title: pick(lang, 'Ürünlerimiz', 'Our products'),
+      layout: 'grid',
+      inline: true,
+      items: [emptyProductDraft()],
+    }
+  }
   switch (type) {
     case 'announcement':
       return {

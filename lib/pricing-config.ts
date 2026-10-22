@@ -149,6 +149,25 @@ export const PRODUCT_LIMITS: Record<PlanCode, number | null> = {
 }
 
 /**
+ * Kurumsal sitenin SATIR İÇİ ürün kataloğu (`products` bölümü `inline: true`,
+ * /urunlerimiz sayfaları, sepetsiz). KARAR: hizmet ve portföy detay sayfaları
+ * gibi site İÇERİĞİDİR; her pakette açıktır ve ürün limiti (PRODUCT_LIMITS)
+ * sayılmaz. Veritabanı katalogu (`commerce_mode = 'catalog'`) ayrıdır ve PRO'dur
+ * (`planAllowsCatalog`). Bir paket buradan kapatılırsa editör ve sunucu aynı
+ * `planAllowsInlineCatalog` kapısından geçmelidir; limit/fiyat bu karardan etkilenmez.
+ */
+export const INLINE_CATALOG_PLAN_ACCESS: Record<PlanCode, boolean> = {
+  free: true,
+  starter: true,
+  pro: true,
+  ecommerce: true,
+}
+
+export function planAllowsInlineCatalog(code: PlanCode | string | null | undefined): boolean {
+  return INLINE_CATALOG_PLAN_ACCESS[(code ?? 'free') as PlanCode] ?? INLINE_CATALOG_PLAN_ACCESS.free
+}
+
+/**
  * E-ticaret sitesi hakkı. Toplam yayın limitinden (SITE_LIMITS) bağımsızdır ve
  * ek site add-on'larından etkilenmez: E-ticaret paketi 3 kurumsal + 1 e-ticaret.
  */
