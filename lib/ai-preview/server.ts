@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { generateAboutPreviewImage } from '@/lib/about-image'
 import { generateServicePreviewImage } from '@/lib/service-image-generate'
+import { generateProductPreviewImage } from '@/lib/product-image'
 import { getCreditBalance } from '@/lib/ai-credits'
 import { createSupabasePreviewStore } from '@/lib/ai-preview/store'
 import { savePreviewImage, removePreviewImages } from '@/lib/ai-preview/storage'
@@ -20,7 +21,7 @@ export function parseSectionKey(sectionKey: string): { target: string; index: nu
   return match[3] === undefined ? base : { ...base, item: Number(match[3]) }
 }
 
-export const SUPPORTED_TARGETS = ['about', 'services'] as const
+export const SUPPORTED_TARGETS = ['about', 'services', 'products'] as const
 
 /**
  * Real dependencies for one request. `beforeGenerate` runs right before the
@@ -43,6 +44,10 @@ export function createPreviewDeps(args: {
       if (parsed.target === 'services' && parsed.item !== undefined) {
         if (!(await args.beforeGenerate())) return null
         return generateServicePreviewImage(args.site, parsed.index, parsed.item, request)
+      }
+      if (parsed.target === 'products' && parsed.item !== undefined) {
+        if (!(await args.beforeGenerate())) return null
+        return generateProductPreviewImage(args.site, parsed.index, parsed.item, request)
       }
       return null
     },

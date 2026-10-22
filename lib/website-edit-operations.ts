@@ -39,6 +39,10 @@ import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
+import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import { isUsableImageSrc } from '@/lib/about-media'
+import { parseVideoUrl } from '@/lib/catalog-public'
+import { makeProductsInline, withProductSlugs } from '@/lib/product-items'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -192,6 +196,34 @@ export type EditOperation =
         pageEnabled?: boolean
         seoTitle?: string
         seoDescription?: string
+        blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
+        approve?: boolean
+      }
+    }
+  /**
+   * Corporate product catalog (inline `products` section, no cart): switches the
+   * section's own /urunlerimiz pages on or off. Never touches a storefront.
+   */
+  | { op: 'updateProductsCatalog'; index: number; inline: boolean }
+  /**
+   * One corporate product's page: slug, code, price mode, gallery, specs, video,
+   * SEO and long text (`blocks` replaces the list). Editing the text or approving
+   * clears the platform `sample` flag.
+   */
+  | {
+      op: 'updateProductItem'
+      index: number
+      item: number
+      patch: {
+        slug?: string
+        sku?: string
+        priceMode?: 'show' | 'ask'
+        pageEnabled?: boolean
+        seoTitle?: string
+        seoDescription?: string
+        videoUrl?: string
+        images?: { src: string; alt?: string }[]
+        specs?: { name: string; value: string }[]
         blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
         approve?: boolean
       }
@@ -558,6 +590,64 @@ export function applyOperation(
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))
       next.sections[operation.index] = { ...section, items }
       return syncSectionPages(next)
+    }
+
+    case 'updateProductsCatalog': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'products') return next
+      next.sections[operation.index] = operation.inline
+        ? makeProductsInline(section)
+        : { ...section, inline: undefined }
+      return next
+    }
+
+    case 'updateProductItem': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'products') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      const { patch } = operation
+      const updated = { ...item }
+      if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.name)
+      if (patch.sku !== undefined) updated.sku = patch.sku.trim().slice(0, 60) || undefined
+      if (patch.priceMode !== undefined) updated.priceMode = patch.priceMode
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, SERVICE_ITEM_LIMITS.seoTitle) || undefined
+      if (patch.seoDescription !== undefined) {
+        updated.seoDescription = patch.seoDescription.trim().slice(0, SERVICE_ITEM_LIMITS.seoDescription) || undefined
+      }
+      if (patch.videoUrl !== undefined) {
+        const url = patch.videoUrl.trim()
+        if (!url) updated.videoUrl = undefined
+        else if (parseVideoUrl(url)) updated.videoUrl = url.slice(0, 300)
+      }
+      if (patch.images !== undefined) {
+        const images = patch.images
+          .filter((image) => isUsableImageSrc(image.src))
+          .slice(0, PRODUCT_IMAGES_MAX)
+          .map((image) => ({
+            src: image.src.trim(),
+            ...(image.alt?.trim() ? { alt: image.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) } : {}),
+          }))
+        updated.images = images.length > 0 ? images : undefined
+        // The showcase card reads `src`, so it follows the first gallery image.
+        if (images.length > 0) {
+          updated.src = images[0].src
+          updated.alt = images[0].alt ?? updated.alt
+        }
+      }
+      if (patch.specs !== undefined) {
+        const specs = patch.specs
+          .map((spec) => ({ name: spec.name.trim().slice(0, 60), value: spec.value.trim().slice(0, 200) }))
+          .slice(0, PRODUCT_SPECS_MAX)
+        updated.specs = specs.length > 0 ? specs : undefined
+      }
+      if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
+      if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
+      const items = section.items.map((it, i) => (i === operation.item ? updated : it))
+      const edited = { ...section, items }
+      next.sections[operation.index] = edited.inline ? withProductSlugs(edited) : edited
+      return next
     }
 
     case 'dismissHint': {

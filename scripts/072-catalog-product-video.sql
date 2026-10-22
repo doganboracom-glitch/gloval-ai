@@ -1,6 +1,10 @@
 -- 072: ecommerce_products.video_url (katalog urun videosu)
 --
--- UYGULANMADI. Onay bekliyor. Idempotent, geriye uyumludur: kolon yoksa uygulama
+-- IPTAL EDILDI - CALISTIRMAYIN. Kullanici karari: kurumsal sitelerde urunler artik
+-- sitenin SEMASINDA satir ici ogeler olarak tutulur (Portfoy / Hizmetler gibi);
+-- ayri DB tablosu veya SQL gerekmiyor. Dosya yalnizca kayit icin saklaniyor.
+--
+-- (Eski not) UYGULANMADI. Idempotent, geriye uyumludur: kolon yoksa uygulama
 -- video sekmesini gizler, mevcut urunler etkilenmez. get_store_products RPC'sine
 -- DOKUNMAZ; video, sunucuda service role ile ayri okunur.
 --
