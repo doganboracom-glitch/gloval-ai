@@ -7,7 +7,14 @@ import { InfoPageTemplates } from '@/components/editor/info-page-templates'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { pageLimitForPlan } from '@/lib/page-limits'
-import { countHeaderEntries, menuGapLabels, MENU_MAX, pageMenuKey, resolveHeaderMenu } from '@/lib/site-menu'
+import {
+  countHeaderEntries,
+  isProductsEntry,
+  menuGapLabels,
+  MENU_MAX,
+  pageMenuKey,
+  resolveHeaderMenu,
+} from '@/lib/site-menu'
 import { pageNavItems } from '@/lib/website-pages'
 import { SITE_PAGE_HARD_CAP, type PlanCode } from '@/lib/pricing-config'
 
@@ -34,6 +41,8 @@ const COPY = {
     menuLabel: 'Menü adı',
     headerFull: (max: number) => `Üst menü en fazla ${max} öğe alır. Yer açmak için başka bir öğeyi kapatın.`,
     orderTitle: 'Menü sırası',
+    submenuTitle: 'Ürünler altında kategorileri göster',
+    submenuHint: 'Ürün kategorilerinizi açılır menü olarak listeler (2 veya daha fazla kategori varsa).',
     blog: 'Blog',
     contactHint: (labels: string) => `Üst menünüzde ${labels} yok. Ziyaretçilerin kolayca bulması için eklemek ister misiniz?`,
     contactAdd: 'Sayfaları üst menüye ekle',
@@ -61,6 +70,8 @@ const COPY = {
     menuLabel: 'Menu label',
     headerFull: (max: number) => `The header holds up to ${max} items. Turn another item off to make room.`,
     orderTitle: 'Menu order',
+    submenuTitle: 'Show categories under Products',
+    submenuHint: 'Lists your product categories as a drop-down (2 or more categories).',
     blog: 'Blog',
     contactHint: (labels: string) => `Your header has no ${labels}. Add them so visitors can find them easily?`,
     contactAdd: 'Add pages to the header menu',
@@ -241,6 +252,21 @@ export function PagesManager({
           </details>
         )
       })}
+
+      {menu.some(isProductsEntry) && (
+        <label className="flex items-start gap-2 rounded-lg border border-border bg-card/40 p-3 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={site.navigation.productsSubmenu !== false}
+            onChange={(e) => onDispatch({ op: 'setProductsSubmenu', enabled: e.target.checked })}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">{c.submenuTitle}</span>
+            <span className="text-[11px] leading-snug">{c.submenuHint}</span>
+          </span>
+        </label>
+      )}
 
       {menu.length > 1 && (
         <div className="flex flex-col gap-1 rounded-lg border border-border bg-card/40 p-3">

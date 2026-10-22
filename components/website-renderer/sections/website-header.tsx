@@ -7,7 +7,10 @@ import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/sit
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
-import { resolveHeaderMenu, type MenuEntry } from '@/lib/site-menu'
+import { resolveHeaderMenu, withProductChildren, type MenuCategory, type MenuEntry } from '@/lib/site-menu'
+import { useStoreCatalog } from '@/components/website-renderer/store-catalog-context'
+import { categoryNames } from '@/lib/store-discovery'
+import { DesktopSubmenuItem } from '@/components/website-renderer/sections/header-submenu'
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import type { MenuContact } from '@/lib/menu-contact'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
@@ -43,7 +46,10 @@ export function WebsiteHeader({
   socialLinks,
   contact,
   commerce = true,
+  productCategories,
 }: {
+  /** Categories to list under the products entry; falls back to the live catalog in context. */
+  productCategories?: MenuCategory[]
   /** Real contact details for the mobile menu panel; pass `resolveMenuContact(site)`. */
   contact?: MenuContact | null
   /** False on a catalog: hides the account link and the cart CTA (no cart exists). */
@@ -78,15 +84,29 @@ export function WebsiteHeader({
   const cartSlug = cartSlugProp ?? storeSlug
   const cartCount = cart?.count ?? 0
   const [menuOpen, setMenuOpen] = useState(false)
+  const catalogContext = useStoreCatalog()
+  const categories: MenuCategory[] | undefined =
+    productCategories ??
+    (cartSlug && catalogContext?.products
+      ? categoryNames(catalogContext.products).map((name) => ({
+          key: `category:${name}`,
+          label: name,
+          href: `${storeListHref(cartSlug)}?kategori=${encodeURIComponent(name)}`,
+        }))
+      : undefined)
   const menuItems = buildMenuItems({
-    entries: resolveHeaderMenu({
-      pages,
-      links: withoutBlogLinks(navigation.links),
-      blog: Boolean(blog),
-      blogLabel: blog?.label ?? '',
-      menuOrder: navigation.menuOrder,
-      rawPages: Boolean(storeSlug),
-    }),
+    entries: withProductChildren(
+      resolveHeaderMenu({
+        pages,
+        links: withoutBlogLinks(navigation.links),
+        blog: Boolean(blog),
+        blogLabel: blog?.label ?? '',
+        menuOrder: navigation.menuOrder,
+        rawPages: Boolean(storeSlug),
+      }),
+      categories,
+      navigation.productsSubmenu,
+    ),
     activeSlug,
     onNavigate,
     pageHref,
@@ -203,7 +223,9 @@ export function WebsiteHeader({
 
         <nav className={`hidden items-center gap-6 ${DESKTOP_NAV_SHOW_CLASS[breakpoint]}`}>
           {menuItems.map((item) =>
-            item.href ? (
+            item.children && item.children.length > 0 ? (
+              <DesktopSubmenuItem key={item.key} item={item} lang={lang} />
+            ) : item.href ? (
               <a
                 key={item.key}
                 href={item.href}

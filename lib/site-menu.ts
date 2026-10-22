@@ -1,6 +1,7 @@
 import type { NavLink, WebsiteSchema } from '@/lib/website-schema'
 import { headerPageItems, pageNavItems, type PageItem } from '@/lib/website-pages'
 import { NAV_LINK_MAX } from '@/lib/pricing-config'
+import { isProductsLink } from '@/lib/store-header-links'
 
 /** The header holds at most this many entries; the editor blocks switching on more. */
 export const MENU_MAX = 7
@@ -8,10 +9,50 @@ export const MENU_MAX = 7
 /** Key of the blog entry in `navigation.menuOrder` and in the resolved list. */
 export const BLOG_MENU_KEY = 'blog'
 
+/** One single-level sub-menu item (a product category under "Ürünler"). */
+export type MenuChild = { key: string; label: string; href: string }
+
+/** A product category the header can list under the products entry. */
+export type MenuCategory = { key: string; label: string; href: string }
+
+/** Sub-menu only appears from this many categories on; one category adds nothing over the entry itself. */
+export const SUBMENU_MIN_CATEGORIES = 2
+
 export type MenuEntry =
-  | { kind: 'page'; key: string; label: string; page: PageItem }
-  | { kind: 'link'; key: string; label: string; link: NavLink }
-  | { kind: 'blog'; key: string; label: string }
+  | { kind: 'page'; key: string; label: string; page: PageItem; children?: MenuChild[] }
+  | { kind: 'link'; key: string; label: string; link: NavLink; children?: MenuChild[] }
+  | { kind: 'blog'; key: string; label: string; children?: MenuChild[] }
+
+/** Whether this entry is the product list entry (the one that can own category children). */
+export function isProductsEntry(entry: MenuEntry): boolean {
+  if (entry.kind === 'blog') return false
+  if (entry.kind === 'link') return isProductsLink(entry.link.label, entry.link.href)
+  return isProductsLink(entry.page.title)
+}
+
+/**
+ * Hands the categories to the products entry as its children. `enabled`
+ * defaults to ON (undefined); an explicit `false` is the owner's switch. Only the
+ * first products entry gets children and only when 2+ categories exist.
+ */
+export function withProductChildren(
+  entries: MenuEntry[],
+  categories: MenuCategory[] | undefined,
+  enabled: boolean | undefined,
+): MenuEntry[] {
+  if (enabled === false || !categories || categories.length < SUBMENU_MIN_CATEGORIES) return entries
+  let done = false
+  return entries.map((entry) => {
+    if (done || !isProductsEntry(entry)) return entry
+    done = true
+    return { ...entry, children: categories.map((c) => ({ key: c.key, label: c.label, href: c.href })) }
+  })
+}
+
+/** Children of the products entry, for the menu layout panel. */
+export function productsEntryChildren(entries: MenuEntry[]): MenuChild[] {
+  return entries.find((e) => e.children && e.children.length > 0)?.children ?? []
+}
 
 /** Identity of a page in the menu: its id, falling back to the slug for pages without one. */
 export function pageMenuKey(page: Pick<PageItem, 'id' | 'slug'>): string {
