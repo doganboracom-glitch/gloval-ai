@@ -13,7 +13,9 @@ alter table public.ecommerce_products
 do $$
 begin
   if not exists (
-    select 1 from pg_constraint where conname = 'ecommerce_products_video_url_check'
+    select 1 from pg_constraint
+    where conname = 'ecommerce_products_video_url_check'
+      and conrelid = 'public.ecommerce_products'::regclass
   ) then
     alter table public.ecommerce_products
       add constraint ecommerce_products_video_url_check
