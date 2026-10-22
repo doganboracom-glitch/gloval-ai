@@ -67,6 +67,9 @@ describe('customer sites keep their /hakkimizda hrefs', () => {
   const isDemoAboutOrHome = (h: string) =>
     /^\/demo\/[^/?#]+(\?[^#]*)?(#.*)?$/.test(h) || /^\/demo\/[^/]+\/hakkimizda/.test(h)
   const site = buildDemoSite(demos[0], 'tr')
+  // The demo menu's own "Hakkımızda" entry is a literal /demo/... href by design (covered in
+  // demo-menu-about.test.tsx); a customer site never has it, so the fixture drops just that one.
+  site.navigation.links = site.navigation.links.filter((l) => !isDemoAboutOrHome(l.href))
   const aboutPageSlug = resolveAboutDetail(site)?.pageSlug ?? null
 
   it('home links to /hakkimizda and never to /demo/…', () => {
