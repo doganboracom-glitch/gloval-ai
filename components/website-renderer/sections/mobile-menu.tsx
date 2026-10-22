@@ -1,10 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { Clock, Mail, MapPin, Menu, Navigation, Phone, X } from 'lucide-react'
+import { ChevronDown, Clock, Mail, MapPin, Menu, Navigation, Phone, X } from 'lucide-react'
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import type { MenuContact } from '@/lib/menu-contact'
+
+export type MobileMenuChild = {
+  key: string
+  label: string
+  href: string
+  onSelect?: (e: React.MouseEvent<HTMLElement>) => void
+}
 
 export type MobileMenuItem = {
   key: string
@@ -13,6 +20,8 @@ export type MobileMenuItem = {
   /** With an href the item renders as a link; without one it is a button. */
   href?: string
   onSelect?: (e: React.MouseEvent<HTMLElement>) => void
+  /** Single-level sub-menu (product categories); an accordion in the panel. */
+  children?: MobileMenuChild[]
 }
 
 export type MobileMenuBreakpoint = 'md' | 'lg'
@@ -46,6 +55,7 @@ export const MOBILE_MENU_LABELS = {
     open: 'Menüyü aç',
     close: 'Menüyü kapat',
     menu: 'Menü',
+    submenu: 'alt menüyü aç veya kapat',
     social: 'Sosyal medya',
     contactHeading: 'İLETİŞİM',
     phone: 'Telefon',
@@ -59,6 +69,7 @@ export const MOBILE_MENU_LABELS = {
     open: 'Open menu',
     close: 'Close menu',
     menu: 'Menu',
+    submenu: 'toggle sub-menu',
     social: 'Social media',
     contactHeading: 'CONTACT',
     phone: 'Phone',
@@ -71,6 +82,66 @@ export const MOBILE_MENU_LABELS = {
 } as const
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function MobileAccordionItem({
+  item,
+  itemClass,
+  style,
+  labels,
+}: {
+  item: MobileMenuItem
+  itemClass: string
+  style: React.CSSProperties
+  labels: (typeof MOBILE_MENU_LABELS)['tr'] | (typeof MOBILE_MENU_LABELS)['en']
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const listId = useId()
+  const children = item.children ?? []
+  return (
+    <li>
+      <div className="flex items-stretch" style={{ borderBottom: style.borderBottom }}>
+        <a
+          href={item.href}
+          aria-current={item.active ? 'page' : undefined}
+          onClick={(e) => item.onSelect?.(e)}
+          className={`${itemClass} flex-1`}
+          style={{ color: style.color, fontWeight: style.fontWeight }}
+        >
+          {item.label}
+        </a>
+        <button
+          type="button"
+          aria-haspopup="true"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          aria-label={`${item.label}: ${labels.submenu}`}
+          onClick={() => setExpanded((v) => !v)}
+          className={`inline-flex min-h-12 w-12 shrink-0 cursor-pointer items-center justify-center transition-opacity hover:opacity-70 ${FOCUS_RING}`}
+          style={{ color: 'var(--site-fg)' }}
+        >
+          <ChevronDown className={`size-5 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+      </div>
+      <ul id={listId} hidden={!expanded} style={{ backgroundColor: 'color-mix(in srgb, var(--site-fg) 4%, transparent)' }}>
+        {children.map((child) => (
+          <li key={child.key}>
+            <a
+              href={child.href}
+              onClick={(e) => child.onSelect?.(e)}
+              className={`${itemClass} ps-9 text-sm`}
+              style={{
+                color: 'var(--site-fg)',
+                borderBottom: '1px solid color-mix(in srgb, var(--site-border) 60%, transparent)',
+              }}
+            >
+              {child.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </li>
+  )
+}
 
 const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--site-primary)]'
@@ -272,6 +343,17 @@ export function MobileMenu({
                   color: item.active ? 'var(--site-primary)' : 'var(--site-fg)',
                   fontWeight: item.active ? 700 : 500,
                   borderBottom: '1px solid color-mix(in srgb, var(--site-border) 60%, transparent)',
+                }
+                if (item.children && item.children.length > 0) {
+                  return (
+                    <MobileAccordionItem
+                      key={item.key}
+                      item={item}
+                      itemClass={itemClass}
+                      style={style}
+                      labels={labels}
+                    />
+                  )
                 }
                 return (
                   <li key={item.key}>

@@ -289,6 +289,8 @@ export type EditOperation =
   | { op: 'setPageMenu'; pageIndex: number; showInHeader?: boolean; showInFooter?: boolean; menuLabel?: string }
   /** Header order as page ids (plus `blog`). An empty list restores the page order. */
   | { op: 'setMenuOrder'; order: string[] }
+  /** Turns the category sub-menu under the products entry on (default) or off. */
+  | { op: 'setProductsSubmenu'; enabled: boolean }
   /** Adds the Contact entry to the header (accepting the suggestion) or closes the suggestion for good. */
   | { op: 'resolveContactSuggestion'; accept: boolean; lang?: 'tr' | 'en' }
   /**
@@ -920,6 +922,11 @@ export function applyOperation(
       const known = new Set<string>(['blog', ...next.pages.flatMap((p) => (p.id ? [p.id] : [p.slug]))])
       const order = [...new Set(operation.order)].filter((key) => known.has(key)).slice(0, 40)
       next.navigation.menuOrder = order.length > 0 ? order : undefined
+      return next
+    }
+
+    case 'setProductsSubmenu': {
+      next.navigation.productsSubmenu = operation.enabled ? undefined : false
       return next
     }
 

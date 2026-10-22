@@ -964,6 +964,8 @@ export const navigationSchema = z.object({
   menuOrder: z.array(z.string().max(60)).max(40).optional(),
   /** The owner closed the "add Contact to the header" suggestion; never show it again. */
   contactSuggestionDismissed: z.boolean().optional(),
+  /** false hides the product categories under the "Ürünler" header entry. Unset = shown (with 2+ categories). */
+  productsSubmenu: z.boolean().optional(),
 })
 
 export const websiteSchema = z.object({
