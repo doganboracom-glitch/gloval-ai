@@ -13,6 +13,7 @@ import {
   pickLastValidSchema,
   type SchemaCandidate,
 } from '@/lib/website-schema-compat'
+import { INVALID_SCHEMA_ERROR, INVALID_SCHEMA_MESSAGE, checkPublishable } from '@/lib/publish-gate'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
 import { materializePages, withPageRedirects } from '@/lib/website-pages'
@@ -592,6 +593,12 @@ export type PublishResult =
       total?: number
     }
   | {
+      /** The schema is not valid; nothing was saved or published. */
+      ok: false
+      reason: typeof INVALID_SCHEMA_ERROR
+      message: string
+    }
+  | {
       /** AI-generated sample content is still unapproved; nothing was published. */
       ok: false
       reason: typeof SAMPLE_CONTENT_ERROR
@@ -621,6 +628,13 @@ export async function publishProject(input: {
   confirmedReal?: string[]
 }): Promise<PublishResult> {
   const { db, elevated, userId } = await clientForProject(input.id)
+  // Publish gate: refuse anything the renderer cannot read exactly as sent.
+  // Runs first, so nothing is saved, snapshotted or pointed at.
+  const gate = checkPublishable(input.schema)
+  if (!gate.ok) {
+    console.warn('[publish] refused invalid schema', gate.paths.slice(0, 8))
+    return { ok: false, reason: INVALID_SCHEMA_ERROR, message: INVALID_SCHEMA_MESSAGE }
+  }
   const requested = parseWebsiteForSave(input.schema)
 
   // Load the row to reuse an existing slug or mint a new one. For an admin
