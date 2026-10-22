@@ -21,6 +21,7 @@ import { createProject, deleteProject } from '@/lib/projects'
 import { createEcommerceProject } from '@/lib/ecommerce'
 import type { ProjectListItem } from '@/lib/projects'
 import { getCommerceMode } from '@/lib/commerce-mode'
+import { canManageProducts } from '@/lib/site-kind'
 import { peekPendingProject, clearPendingProject } from '@/lib/pending-project'
 import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -345,7 +346,7 @@ export function DashboardClient({
                   )}
                 </div>
 
-  {getCommerceMode(p) !== 'none' && (
+  {canManageProducts(p) && (
   <Link
   href={`/ecommerce/${p.id}`}
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"

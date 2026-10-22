@@ -19,6 +19,18 @@ export function siteKindOf(project: { commerce_mode?: string | null; project_typ
   return mode === 'ecommerce' ? 'ecommerce' : mode === 'catalog' ? 'catalog' : 'corporate'
 }
 
+/**
+ * Whether the dashboard offers "Ürünleri yönet" for a project: only stores
+ * (`project_type = 'ecommerce'`) and catalogs (`commerce_mode = 'catalog'`).
+ * A corporate site never shows it, whatever sections its draft contains.
+ */
+export function canManageProducts(project: {
+  commerce_mode?: string | null
+  project_type?: string | null
+}): boolean {
+  return project.project_type === 'ecommerce' || project.commerce_mode === 'catalog'
+}
+
 export function columnsForKind(kind: SiteKind): { project_type: 'corporate' | 'ecommerce'; commerce_mode: 'none' | 'ecommerce' | 'catalog' } {
   if (kind === 'ecommerce') return { project_type: 'ecommerce', commerce_mode: 'ecommerce' }
   if (kind === 'catalog') return { project_type: 'ecommerce', commerce_mode: 'catalog' }
