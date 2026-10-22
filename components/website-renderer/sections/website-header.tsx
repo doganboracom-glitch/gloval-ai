@@ -7,6 +7,7 @@ import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/sit
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
+import { resolveHeaderMenu, type MenuEntry } from '@/lib/site-menu'
 import type { ResolvedSocialLink } from '@/lib/social-links'
 import type { MenuContact } from '@/lib/menu-contact'
 import { scrollSiteToTop } from '@/components/website-renderer/back-to-top'
@@ -33,6 +34,7 @@ export function WebsiteHeader({
   pages,
   activeSlug,
   onNavigate,
+  pageHref,
   storeSlug,
   cartSlug: cartSlugProp,
   lang = 'tr',
@@ -53,6 +55,11 @@ export function WebsiteHeader({
   pages?: PageItem[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
+  /**
+   * Real URL of a page. With it, page entries are `<a href>` links (crawlable, new-tab
+   * friendly); without it they stay buttons driven by `onNavigate`.
+   */
+  pageHref?: (page: PageItem) => string
   storeSlug?: string
   /** Store slug for the cart CTA / product links; set on every storefront page, home included. */
   cartSlug?: string
@@ -70,19 +77,21 @@ export function WebsiteHeader({
   const cart = useOptionalCart()
   const cartSlug = cartSlugProp ?? storeSlug
   const cartCount = cart?.count ?? 0
-  // Use real page navigation when the site has more than one page; otherwise
-  // fall back to the in-page anchor links from the schema.
-  const multiPage = (pages?.length ?? 0) > 1
-
   const [menuOpen, setMenuOpen] = useState(false)
   const menuItems = buildMenuItems({
-    navigation,
-    pages,
+    entries: resolveHeaderMenu({
+      pages,
+      links: withoutBlogLinks(navigation.links),
+      blog: Boolean(blog),
+      blogLabel: blog?.label ?? '',
+      menuOrder: navigation.menuOrder,
+      rawPages: Boolean(storeSlug),
+    }),
     activeSlug,
     onNavigate,
+    pageHref,
     storeSlug,
     cartSlug,
-    multiPage,
     blog,
     nav,
     normalizeHref,
@@ -193,64 +202,38 @@ export function WebsiteHeader({
         </button>}
 
         <nav className={`hidden items-center gap-6 ${DESKTOP_NAV_SHOW_CLASS[breakpoint]}`}>
-          {multiPage
-            ? pages!.map((page) => {
-                const isActive = page.slug === activeSlug
-                if (cartSlug && isProductsLink(page.title)) {
-                  return (
-                    <a
-                      key={page.slug}
-                      href={storeListHref(cartSlug)}
-                      onClick={(e) => onSiteNavClick(e, storeListHref(cartSlug), nav)}
-                      className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
-                      style={{ color: 'var(--site-muted-fg)' }}
-                    >
-                      {page.title}
-                    </a>
-                  )
+          {menuItems.map((item) =>
+            item.href ? (
+              <a
+                key={item.key}
+                href={item.href}
+                aria-current={item.active ? 'page' : undefined}
+                onClick={(e) => item.onSelect?.(e)}
+                className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
+                style={
+                  item.active
+                    ? { color: 'var(--site-primary)', fontWeight: 700 }
+                    : { color: 'var(--site-muted-fg)' }
                 }
-                return (
-                  <button
-                    key={page.slug}
-                    type="button"
-                    onClick={() => onNavigate?.(page.slug)}
-                    className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
-                    style={{
-                      color: isActive ? 'var(--site-primary)' : 'var(--site-muted-fg)',
-                      fontWeight: isActive ? 700 : 500,
-                    }}
-                  >
-                    {page.title}
-                  </button>
-                )
-              })
-            : withoutBlogLinks(navigation.links).map((link) => {
-                const href =
-                  cartSlug && isProductsLink(link.label, link.href)
-                    ? storeListHref(cartSlug)
-                    : normalizeHref(link.href)
-                return (
-                <a
-                  key={link.label + link.href}
-                  href={href || '#'}
-                  onClick={(e) => onSiteNavClick(e, href, nav)}
-                  className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
-                  style={{ color: 'var(--site-muted-fg)' }}
-                >
-                  {link.label}
-                </a>
-                )
-              })}
-          {blog ? (
-            <a
-              href={blog.href}
-              onClick={(e) => onSiteNavClick(e, blog.href, nav)}
-              className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
-              style={{ color: 'var(--site-muted-fg)' }}
-            >
-              {blog.label}
-            </a>
-          ) : null}
+              >
+                {item.label}
+              </a>
+            ) : (
+              <button
+                key={item.key}
+                type="button"
+                aria-current={item.active ? 'page' : undefined}
+                onClick={(e) => item.onSelect?.(e)}
+                className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
+                style={{
+                  color: item.active ? 'var(--site-primary)' : 'var(--site-muted-fg)',
+                  fontWeight: item.active ? 700 : 500,
+                }}
+              >
+                {item.label}
+              </button>
+            ),
+          )}
         </nav>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
@@ -333,25 +316,24 @@ function LogoImage({ navigation }: { navigation: WebsiteSchema['navigation'] }) 
   )
 }
 
+/** One resolved menu entry as both the desktop bar and the mobile panel draw it. */
 function buildMenuItems({
-  navigation,
-  pages,
+  entries,
   activeSlug,
   onNavigate,
+  pageHref,
   storeSlug,
   cartSlug,
-  multiPage,
   blog,
   nav,
   normalizeHref,
 }: {
-  navigation: WebsiteSchema['navigation']
-  pages?: PageItem[]
+  entries: MenuEntry[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
+  pageHref?: (page: PageItem) => string
   storeSlug?: string
   cartSlug?: string
-  multiPage: boolean
   blog: ReturnType<typeof useBlogLink>
   nav: ReturnType<typeof useSiteNav>
   normalizeHref: (href: string) => string
@@ -359,31 +341,33 @@ function buildMenuItems({
   const asAnchorClick = (href: string) => (e: React.MouseEvent<HTMLElement>) =>
     onSiteNavClick(e as React.MouseEvent<HTMLAnchorElement>, href, nav)
 
-  const items: MobileMenuItem[] = multiPage
-    ? pages!.map((page): MobileMenuItem => {
-        if (cartSlug && isProductsLink(page.title)) {
-          const href = storeListHref(cartSlug)
-          return { key: page.slug, label: page.title, href, onSelect: asAnchorClick(href) }
-        }
-        // Store sub-pages (blog, legal, product list) have no in-memory page switcher,
-        // so a real link to the page is the only way the entry can work there.
-        if (!onNavigate && storeSlug) {
-          const home = storeHomeHref(storeSlug)
-          return { key: page.slug, label: page.title, href: page.isHome ? home : `${home}/${page.slug}` }
-        }
-        return {
-          key: page.slug,
-          label: page.title,
-          active: page.slug === activeSlug,
-          onSelect: () => onNavigate?.(page.slug),
-        }
-      })
-    : withoutBlogLinks(navigation.links).map((link): MobileMenuItem => {
-        const href =
-          cartSlug && isProductsLink(link.label, link.href) ? storeListHref(cartSlug) : normalizeHref(link.href)
-        return { key: link.label + link.href, label: link.label, href: href || '#', onSelect: asAnchorClick(href) }
-      })
-
-  if (blog) items.push({ key: 'blog', label: blog.label, href: blog.href, onSelect: asAnchorClick(blog.href) })
-  return items
+  return entries.map((entry): MobileMenuItem => {
+    if (entry.kind === 'blog') {
+      const href = blog?.href ?? '#'
+      return { key: entry.key, label: entry.label, href, onSelect: asAnchorClick(href) }
+    }
+    if (entry.kind === 'link') {
+      const { link } = entry
+      const href =
+        cartSlug && isProductsLink(link.label, link.href) ? storeListHref(cartSlug) : normalizeHref(link.href)
+      return { key: link.label + link.href, label: link.label, href: href || '#', onSelect: asAnchorClick(href) }
+    }
+    const { page } = entry
+    if (cartSlug && isProductsLink(page.title)) {
+      const href = storeListHref(cartSlug)
+      return { key: entry.key, label: entry.label, href, onSelect: asAnchorClick(href) }
+    }
+    // Store sub-pages (blog, legal, product list) have no in-memory page switcher,
+    // so a real link to the page is the only way the entry can work there.
+    if (!onNavigate && storeSlug) {
+      const home = storeHomeHref(storeSlug)
+      return { key: entry.key, label: entry.label, href: page.isHome ? home : `${home}/${page.slug}` }
+    }
+    const active = page.slug === activeSlug
+    if (pageHref) {
+      const href = pageHref(page)
+      return { key: entry.key, label: entry.label, href, active, onSelect: asAnchorClick(href) }
+    }
+    return { key: entry.key, label: entry.label, active, onSelect: () => onNavigate?.(page.slug) }
+  })
 }

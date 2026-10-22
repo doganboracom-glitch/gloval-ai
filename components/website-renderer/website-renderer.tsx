@@ -8,7 +8,7 @@ import { NEW_TICKET_PATH } from '@/lib/support/prefill'
 import { SectionDetailPage } from '@/components/website-renderer/sections/section-detail-page'
 import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
 import { matchServiceHref } from '@/lib/service-pages'
-import { pageNavItems, headerPageItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
+import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import {
   SiteNavProvider,
   isDemoServiceHref,
@@ -421,9 +421,18 @@ export function WebsiteRenderer({
       {announcementAboveHeader && announcementNode}
       <WebsiteHeader
         navigation={data.navigation}
-        pages={headerPageItems(pages)}
+        pages={pages}
         activeSlug={active}
         onNavigate={handleNavigate}
+        pageHref={(page) =>
+          demoRoutes && !pageRouting && !preview
+            ? page.isHome
+              ? demoRoutes.home
+              : page.slug === demoRoutes.aboutPageSlug
+                ? demoRoutes.about
+                : pagePath(data, page.slug)
+            : pagePath(data, page.slug)
+        }
         cartSlug={store?.slug}
         lang={data.meta.language}
         actions={headerActions}

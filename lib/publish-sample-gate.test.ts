@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeDb } from '@/lib/__fixtures__/fake-db'
 import { buildCleanSite, buildSampleSections, buildSampleSite } from '@/lib/__fixtures__/sample-site'
 import { getPublishedSite, publishProject } from '@/lib/projects'
+import { ensurePageIds } from '@/lib/website-schema-compat'
 import {
   CONTACT_ATTESTATION_VERSION,
   SAMPLE_CONTENT_ERROR,
@@ -323,7 +324,7 @@ describe('getPublishedSite', () => {
     fakeDb.rpcRow = row(clean)
     const served = await getPublishedSite('kahve')
     const expected = websiteSchema.parse(clean)
-    expect(JSON.stringify(served!.schema)).toBe(JSON.stringify(expected))
+    expect(JSON.stringify(served!.schema)).toBe(JSON.stringify(ensurePageIds(expected)))
     expect(JSON.stringify(stripSampleContent(expected))).toBe(JSON.stringify(expected))
   })
 

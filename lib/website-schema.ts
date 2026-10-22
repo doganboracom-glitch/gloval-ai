@@ -938,6 +938,13 @@ export const pageSchema = z.object({
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
   detailOf: z.enum(['about', 'services']).optional(),
+  /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
+  id: z.string().max(60).optional(),
+  /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */
+  showInHeader: z.boolean().optional(),
+  showInFooter: z.boolean().optional(),
+  /** Short label used in the header and footer instead of the page title. */
+  menuLabel: z.string().max(40).optional(),
 })
 
 /** Pages as the AI sees them when generating: structure only, no per-page content. */
@@ -953,6 +960,10 @@ export const navigationSchema = z.object({
     .optional()
     .describe('false hides the logo text next to the logo (the logo already contains the name). Default: shown'),
   favicon: faviconSchema.optional().describe('Optional browser tab icon, separate from the header logo'),
+  /** Owner-chosen header order: page ids, plus `blog`. Unset keeps the page order. */
+  menuOrder: z.array(z.string().max(60)).max(40).optional(),
+  /** The owner closed the "add Contact to the header" suggestion; never show it again. */
+  contactSuggestionDismissed: z.boolean().optional(),
 })
 
 export const websiteSchema = z.object({
