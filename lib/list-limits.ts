@@ -14,20 +14,38 @@ export type ListLimit = { readonly min: number; readonly max: number }
 export const LIST_LIMITS = {
   slider: { min: 1, max: 8 },
   heroSlides: { min: 1, max: 6 },
-  services: { min: 2, max: 8 },
-  features: { min: 2, max: 8 },
-  stats: { min: 2, max: 6 },
+  services: { min: 1, max: 8 },
+  features: { min: 1, max: 8 },
+  stats: { min: 1, max: 6 },
   pricing: { min: 1, max: 4 },
   testimonials: { min: 1, max: 6 },
-  gallery: { min: 2, max: 12 },
-  portfolio: { min: 2, max: 9 },
-  products: { min: 2, max: 12 },
-  categories: { min: 2, max: 8 },
-  process: { min: 2, max: 6 },
+  gallery: { min: 1, max: 12 },
+  portfolio: { min: 1, max: 9 },
+  products: { min: 1, max: 12 },
+  categories: { min: 1, max: 8 },
+  process: { min: 1, max: 6 },
   team: { min: 1, max: 8 },
-  faq: { min: 2, max: 10 },
+  faq: { min: 1, max: 10 },
   announcement: { min: 1, max: ANNOUNCEMENT_MAX_ITEMS },
 } as const satisfies Record<string, ListLimit>
+
+/**
+ * How many entries the AI should aim for when it writes a section. This is a
+ * suggestion for generation prompts, deliberately separate from LIST_LIMITS:
+ * the limits say what the schema accepts (and what an owner may trim down to),
+ * these say what reads well on a fresh site.
+ */
+export const AI_SUGGESTED_COUNTS = {
+  services: { min: 3, max: 6 },
+  features: { min: 4, max: 6 },
+  stats: { min: 3, max: 4 },
+  gallery: { min: 6, max: 9 },
+  portfolio: { min: 3, max: 6 },
+  products: { min: 4, max: 8 },
+  categories: { min: 4, max: 6 },
+  process: { min: 3, max: 4 },
+  faq: { min: 4, max: 6 },
+} as const satisfies Partial<Record<keyof typeof LIST_LIMITS, ListLimit>>
 
 export type LimitedSectionType = Exclude<keyof typeof LIST_LIMITS, 'heroSlides'>
 

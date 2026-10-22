@@ -22,9 +22,16 @@ export function CategoriesSection({ data }: { data: CategoriesData }) {
   return (
     <SectionShell id="categories" tinted>
       <SectionHeading title={data.title} subtitle={data.subtitle} />
-      <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+      <div
+        className={
+          data.items.length === 1
+            ? 'mx-auto mt-10 grid max-w-md gap-4'
+            : 'mt-10 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4'
+        }
+        data-single-item={data.items.length === 1 ? 'true' : undefined}
+      >
         {data.items.map((item, i) => (
-          <CategoryTile key={i} item={item} seed={i + 1} featured={i === 0} />
+          <CategoryTile key={i} item={item} seed={i + 1} featured={data.items.length > 1 && i === 0} />
         ))}
       </div>
     </SectionShell>

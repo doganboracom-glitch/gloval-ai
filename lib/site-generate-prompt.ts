@@ -1,5 +1,11 @@
 import { sectorPromptHint, isEcommerceIntent } from '@/lib/sector-profiles'
 import { siteLimitsPromptHint } from '@/lib/page-limits'
+import { AI_SUGGESTED_COUNTS } from '@/lib/list-limits'
+
+function suggestedCountsPromptHint(): string {
+  const parts = Object.entries(AI_SUGGESTED_COUNTS).map(([type, c]) => `${type} ${c.min}-${c.max}`)
+  return `Aim for this many items per list section (owners may later trim lists down to a single item): ${parts.join(', ')}. `
+}
 
 /**
  * System prompt of the full-website generation call (`/api/generate`,
@@ -33,6 +39,7 @@ export function buildSiteGenerateSystem(
     `with a title, a short description, and form field labels; leave mapEmbed unset. ` +
     `Use the available section types richly and appropriately: hero, about, services, features, ` +
     `stats, testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
+    suggestedCountsPromptHint() +
     `Set meta.seoTitle to a short, keyword-rich search phrase (3-6 words) that helps this ` +
     `business rank on Google: lead with the city or district when the brief mentions one, ` +
     `then the main service keyword a customer would actually search for ` +
