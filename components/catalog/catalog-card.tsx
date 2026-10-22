@@ -1,6 +1,6 @@
 import { catalogPriceText, catalogProductPath, type CatalogItem } from '@/lib/catalog-public'
 
-export function CatalogCard({ item }: { item: CatalogItem }) {
+export function CatalogCard({ item, askLabel }: { item: CatalogItem; askLabel?: string }) {
   const image = item.images[0]
   return (
     <a
@@ -18,7 +18,7 @@ export function CatalogCard({ item }: { item: CatalogItem }) {
       <div className="flex flex-1 flex-col gap-1 p-4">
         <span className="text-xs text-muted-foreground">{item.categoryName}</span>
         <h3 className="text-balance font-semibold leading-snug">{item.name}</h3>
-        <span className="mt-auto pt-2 text-sm font-bold" style={{ color: 'var(--site-primary, var(--primary))' }}>{catalogPriceText(item)}</span>
+        <span className="mt-auto pt-2 text-sm font-bold" style={{ color: 'var(--site-primary, var(--primary))' }}>{catalogPriceText(item, askLabel)}</span>
       </div>
     </a>
   )

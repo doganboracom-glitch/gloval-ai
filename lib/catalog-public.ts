@@ -91,8 +91,11 @@ export function groupByCategory(items: CatalogItem[]): CatalogGroup[] {
   return [...all.filter((g) => g.slug !== UNCATEGORIZED_SLUG), ...all.filter((g) => g.slug === UNCATEGORIZED_SLUG)]
 }
 
-export function catalogPriceText(item: Pick<CatalogItem, 'priceMode' | 'priceCents' | 'currency'>): string {
-  return item.priceMode === 'ask' ? ASK_PRICE_LABEL : formatCatalogPrice(item.priceCents, item.currency)
+export function catalogPriceText(
+  item: Pick<CatalogItem, 'priceMode' | 'priceCents' | 'currency'>,
+  askLabel: string = ASK_PRICE_LABEL,
+): string {
+  return item.priceMode === 'ask' ? askLabel : formatCatalogPrice(item.priceCents, item.currency)
 }
 
 /* -------------------------------------------------------------------------- */
