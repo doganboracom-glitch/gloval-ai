@@ -1,5 +1,6 @@
 'use client'
 
+import { guardEdit } from '@/lib/edit-guard'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readImageStorageFailure } from '@/lib/image-storage-error'
 import { createPortal } from 'react-dom'
@@ -429,6 +430,17 @@ export function WebsitePreview({
 
   // Apply a typed visual operation and push it onto the history stack.
   const dispatch = useCallback((op: EditOperation) => {
+    const live = historyRef.current
+    if (live) {
+      const candidate = clearEditedSampleFlags(live, applyOperation(live, op))
+      if (JSON.stringify(candidate) !== JSON.stringify(live)) {
+        const verdict = guardEdit(live, candidate)
+        if (!verdict.ok) {
+          flashToast('err', verdict.message)
+          return
+        }
+      }
+    }
     setHistory((h) => {
       if (!h.present) return h
       // A sample item the owner edits by hand becomes their own content.
@@ -458,6 +470,11 @@ export function WebsitePreview({
   // Commits a completed schema edit as ONE history entry (so an AI edit or a
   // multi-operation command can be undone in a single step).
   const commitSchema = useCallback((nextSchema: WebsiteSchema) => {
+    const verdict = guardEdit(historyRef.current, nextSchema)
+    if (!verdict.ok) {
+      flashToast('err', verdict.message)
+      return
+    }
     setHistory((h) =>
       h.present
         ? { past: [...h.past, h.present], present: nextSchema, future: [] }

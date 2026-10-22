@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import useSWR from 'swr'
 import { ChevronDown, ChevronUp, ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { canAddEntry, canRemoveEntry, limitReason } from '@/lib/list-limits'
 import {
   ANNOUNCEMENT_MAX_ITEMS,
   ANNOUNCEMENT_SPEEDS,
@@ -275,16 +276,30 @@ export function SectionInspector({
               index={index}
               itemIndex={itemIndex}
               total={items.length}
+              sectionType={section.type}
               hasImages={hasImages}
               working={workingItem === `${index}:${itemIndex}`}
               onDispatch={onDispatch}
               onRegenerateItemImage={onRegenerateItemImage}
             />
           ))}
-          <GhostButton onClick={() => onDispatch({ op: 'addItem', index })}>
+          <GhostButton
+            disabled={!canAddEntry(section.type, items.length)}
+            onClick={() => onDispatch({ op: 'addItem', index })}
+          >
             <Plus className="h-3.5 w-3.5" />
             {ui.addItem}
           </GhostButton>
+          {!canAddEntry(section.type, items.length) && (
+            <p className="text-xs text-muted-foreground" data-testid="list-limit-add-reason">
+              {limitReason(section.type, 'add', site.meta.language === 'en' ? 'en' : 'tr')}
+            </p>
+          )}
+          {!canRemoveEntry(section.type, items.length) && (
+            <p className="text-xs text-muted-foreground" data-testid="list-limit-remove-reason">
+              {limitReason(section.type, 'remove', site.meta.language === 'en' ? 'en' : 'tr')}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -403,7 +418,7 @@ function AnnouncementItems({
             <IconBtn
               label={tr ? 'Sil' : 'Remove'}
               small
-              disabled={items.length <= 1}
+              disabled={!canRemoveEntry('announcement', items.length)}
               onClick={() => onDispatch({ op: 'removeItem', index, itemIndex })}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -582,6 +597,7 @@ function ItemCard({
   index,
   itemIndex,
   total,
+  sectionType,
   hasImages,
   working,
   onDispatch,
@@ -591,6 +607,7 @@ function ItemCard({
   index: number
   itemIndex: number
   total: number
+  sectionType: string
   hasImages: boolean
   working: boolean
   onDispatch: (op: EditOperation) => void
@@ -632,7 +649,7 @@ function ItemCard({
         <IconBtn
           label={ui.remove}
           small
-          disabled={total <= 1}
+          disabled={!canRemoveEntry(sectionType, total)}
           onClick={() => onDispatch({ op: 'removeItem', index, itemIndex })}
         >
           <Trash2 className="h-3.5 w-3.5" />

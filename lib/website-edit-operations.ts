@@ -1,3 +1,4 @@
+import { canAddEntry, canRemoveEntry } from '@/lib/list-limits'
 import {
   ANNOUNCEMENT_MAX_ITEMS,
   ANNOUNCEMENT_SPEEDS,
@@ -794,15 +795,16 @@ export function applyOperation(
     case 'addItem': {
       const section = next.sections[operation.index]
       const list = collectionOf(section)
-      if (section?.type === 'announcement' && list && list.length >= ANNOUNCEMENT_MAX_ITEMS) return next
+      if (section && list && !canAddEntry(section.type, list.length)) return next
       if (section && list) list.push(blankItem(section.type, next.meta.language))
       return next
     }
 
     case 'removeItem': {
-      const list = collectionOf(next.sections[operation.index])
-      // Never empty a collection out — every section schema requires at least one.
-      if (list && list.length > 1 && list[operation.itemIndex]) {
+      const section = next.sections[operation.index]
+      const list = collectionOf(section)
+      // The schema's per-section minimum (see lib/list-limits) is the floor.
+      if (section && list && canRemoveEntry(section.type, list.length) && list[operation.itemIndex]) {
         list.splice(operation.itemIndex, 1)
       }
       return next
