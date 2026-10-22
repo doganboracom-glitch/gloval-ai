@@ -81,6 +81,20 @@ describe('home page "Daha fazlası…" link', () => {
     const html = renderToStaticMarkup(<WebsiteRenderer site={site} pageRouting initialPage={null} />)
     const label = aboutDetailLink(approvedSite())!.label
     expect(html).not.toContain(label)
+    // The only /hakkimizda anchors left are menu entries (desktop bar + mobile panel),
+    // each labelled with the page name - none is a content "Daha fazlası…" link.
+    const aboutAnchors = Array.from(html.matchAll(/<a\s[^>]*?href="\/hakkimizda"[^>]*>(.*?)<\/a>/g), (m) => m[1])
+    expect(aboutAnchors).toEqual(['Hakkımızda', 'Hakkımızda'])
+    const body = html.replace(/<header[\s\S]*?<\/header>/, '').replace(/<footer[\s\S]*?<\/footer>/, '')
+    expect(body).not.toContain('href="/hakkimizda"')
+  })
+
+  it('on a customer site the link and the menu both point at /hakkimizda', () => {
+    const html = renderToStaticMarkup(<WebsiteRenderer site={approvedSite()} pageRouting initialPage={null} />)
+    const label = aboutDetailLink(approvedSite())!.label
+    const body = html.replace(/<header[\s\S]*?<\/header>/, '')
+    expect(body).toMatch(new RegExp(`<a\\s[^>]*?href="/hakkimizda"[^>]*>[^<]*${label.replace(/[…]/g, '.*')}`))
+    expect(html).not.toContain('href="/demo/')
   })
 })
 

@@ -4,7 +4,7 @@ import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedContactActions } from '@/lib/site-contact-actions'
-import { addContactToMenu } from '@/lib/site-menu'
+import { addMissingToMenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
@@ -203,7 +203,7 @@ async function runGenerate(
         // Seeds the floating phone + WhatsApp buttons from the site's own
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
-        website: addContactToMenu(
+        website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
               seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail)), pageLimit)),
@@ -238,7 +238,7 @@ async function runGenerate(
         prompt,
       )
       return Response.json({
-        website: addContactToMenu(
+        website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
               seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout)))),

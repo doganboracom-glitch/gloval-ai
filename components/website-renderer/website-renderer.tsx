@@ -424,15 +424,15 @@ export function WebsiteRenderer({
         pages={pages}
         activeSlug={active}
         onNavigate={handleNavigate}
-        pageHref={(page) =>
-          demoRoutes && !pageRouting && !preview
-            ? page.isHome
-              ? demoRoutes.home
-              : page.slug === demoRoutes.aboutPageSlug
-                ? demoRoutes.about
-                : pagePath(data, page.slug)
-            : pagePath(data, page.slug)
-        }
+        pageHref={(page) => {
+          if (!(demoRoutes && !pageRouting && !preview)) return pagePath(data, page.slug)
+          if (page.isHome) return demoRoutes.home
+          if (page.slug === demoRoutes.aboutPageSlug) return demoRoutes.about
+          if (demoRoutes.services && page.slug === demoRoutes.services.listSlug) return demoRoutes.services.list
+          // A demo is not a published tenant: any other page has no real URL, so it
+          // stays an in-memory switch rather than a link that leaves the demo.
+          return undefined
+        }}
         cartSlug={store?.slug}
         lang={data.meta.language}
         actions={headerActions}

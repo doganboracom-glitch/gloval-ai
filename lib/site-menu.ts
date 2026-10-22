@@ -96,46 +96,108 @@ export function resolveFooterPages(pages: PageItem[] | undefined, menuOrder?: st
   return picked.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(({ p }) => p)
 }
 
-const CONTACT_WORDS = /ileti[sş]im|contact/i
+export type MenuGapKind = 'about' | 'services' | 'contact'
 
-function isContactText(text: string): boolean {
-  return CONTACT_WORDS.test(text.toLocaleLowerCase('tr').replace(/ı/g, 'i'))
+const DEFAULT_MENU_KINDS: MenuGapKind[] = ['about', 'services', 'contact']
+
+const GAP_WORDS: Record<MenuGapKind, RegExp> = {
+  about: /hakkimizda|hakkinda|about/,
+  services: /hizmet|services/,
+  contact: /iletisim|contact/,
+}
+
+const GAP_LABELS: Record<MenuGapKind, { tr: string; en: string }> = {
+  about: { tr: 'Hakkımızda', en: 'About' },
+  services: { tr: 'Hizmetlerimiz', en: 'Services' },
+  contact: { tr: 'İletişim', en: 'Contact' },
+}
+
+const GAP_SECTION: Record<MenuGapKind, 'about' | 'services' | 'contact'> = {
+  about: 'about',
+  services: 'services',
+  contact: 'contact',
+}
+
+function foldText(text: string): string {
+  return text.toLocaleLowerCase('tr').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u')
+}
+
+export type MenuGap = { kind: MenuGapKind; target: { type: 'page'; pageIndex: number } | { type: 'link' } }
+
+function candidatePageIndex(site: WebsiteSchema, kind: MenuGapKind): number {
+  const pages = site.pages ?? []
+  const items = pageNavItems(site)
+  return pages.findIndex((p, i) => {
+    if (p.isHome) return false
+    if (kind === 'contact') return p.kind !== 'detail' && p.kind !== 'legal' && GAP_WORDS.contact.test(foldText(`${p.slug} ${p.title}`))
+    return p.kind === 'detail' && p.detailOf === kind && !items[i]?.unpublished
+  })
 }
 
 /**
- * Where the header lacks a Contact entry although the site has one to point at:
- * a contact page (`page`, switched on by `showInHeader`) or, on a one-page site,
- * the contact section (`link`, an anchor in `navigation.links`). Null when the
- * header already has it, the owner switched it off on purpose, or there is
- * nothing to point at.
+ * The default entries (About, Services, Contact) the header lacks although the
+ * site has something to point at: a live page (switched on by `showInHeader`) or,
+ * on a one-page site, the section's anchor in `navigation.links`. An entry is
+ * skipped when the header already has it, the owner switched it off on purpose,
+ * there is nothing to point at, or the header is already at `MENU_MAX` - so
+ * adding never pushes an existing menu past the cap.
  */
-export function findContactMenuGap(site: WebsiteSchema): { kind: 'page'; pageIndex: number } | { kind: 'link' } | null {
-  const pages = site.pages ?? []
-  const pageIndex = pages.findIndex((p) => !p.isHome && p.kind !== 'detail' && p.kind !== 'legal' && isContactText(`${p.slug} ${p.title}`))
-  if (pageIndex >= 0) {
-    const page = pages[pageIndex]
-    if (page.showInHeader === false) return null
-    const entries = resolveHeaderMenu({ pages: pageNavItems(site), links: [], blog: false, blogLabel: '', menuOrder: site.navigation.menuOrder })
-    const inMenu = entries.some((e) => e.key === pageMenuKey(page))
-    if (inMenu || entries.length >= MENU_MAX) return null
-    return { kind: 'page', pageIndex }
+export function findMenuGaps(site: WebsiteSchema, kinds: MenuGapKind[] = DEFAULT_MENU_KINDS): MenuGap[] {
+  const pages = pageNavItems(site)
+  const entries = resolveHeaderMenu({ pages, links: site.navigation.links, blog: false, blogLabel: '', menuOrder: site.navigation.menuOrder })
+  let count = entries.length
+  let links = site.navigation.links.length
+  const multiPage = headerPageItems(pages).length > 1
+  const gaps: MenuGap[] = []
+  for (const kind of kinds) {
+    if (count >= MENU_MAX) break
+    const present = entries.some((e) => GAP_WORDS[kind].test(foldText(`${e.label} ${e.kind === 'link' ? e.link.href : ''} ${e.kind === 'page' ? e.page.slug : ''}`)))
+    if (present) continue
+    const pageIndex = candidatePageIndex(site, kind)
+    if (pageIndex >= 0) {
+      if (site.pages[pageIndex].showInHeader === false) continue
+      gaps.push({ kind, target: { type: 'page', pageIndex } })
+      count++
+      continue
+    }
+    if (multiPage || links >= NAV_LINK_MAX) continue
+    if (!site.sections.some((s) => s.type === GAP_SECTION[kind] && !s.hidden)) continue
+    gaps.push({ kind, target: { type: 'link' } })
+    count++
+    links++
   }
-  const multiPage = headerPageItems(pageNavItems(site)).length > 1
-  if (multiPage || !site.sections.some((s) => s.type === 'contact' && !s.hidden)) return null
-  const links = site.navigation.links
-  if (links.length >= NAV_LINK_MAX || links.some((l) => isContactText(l.label) || isContactText(l.href))) return null
-  return { kind: 'link' }
+  return gaps
 }
 
-/** Closes the gap found by `findContactMenuGap`; returns the same site when there is none. */
-export function addContactToMenu(site: WebsiteSchema, lang: 'tr' | 'en' = 'tr'): WebsiteSchema {
-  const gap = findContactMenuGap(site)
-  if (!gap) return site
-  if (gap.kind === 'page') {
-    return { ...site, pages: site.pages.map((p, i) => (i === gap.pageIndex ? { ...p, showInHeader: true } : p)) }
+/** Contact-only view of `findMenuGaps`. */
+export function findContactMenuGap(site: WebsiteSchema): { kind: 'page'; pageIndex: number } | { kind: 'link' } | null {
+  const gap = findMenuGaps(site, ['contact'])[0]
+  if (!gap) return null
+  return gap.target.type === 'page' ? { kind: 'page', pageIndex: gap.target.pageIndex } : { kind: 'link' }
+}
+
+/** Closes the gaps found by `findMenuGaps`; returns the same site when there are none. */
+export function addMissingToMenu(site: WebsiteSchema, lang: 'tr' | 'en' = 'tr', kinds: MenuGapKind[] = DEFAULT_MENU_KINDS): WebsiteSchema {
+  const gaps = findMenuGaps(site, kinds)
+  if (gaps.length === 0) return site
+  const pageIndexes = new Set(gaps.flatMap((g) => (g.target.type === 'page' ? [g.target.pageIndex] : [])))
+  const added = gaps
+    .filter((g) => g.target.type === 'link')
+    .map((g) => ({ label: GAP_LABELS[g.kind][lang], href: `#${GAP_SECTION[g.kind]}` }))
+  return {
+    ...site,
+    pages: site.pages.map((p, i) => (pageIndexes.has(i) ? { ...p, showInHeader: true } : p)),
+    navigation: added.length > 0 ? { ...site.navigation, links: [...site.navigation.links, ...added] } : site.navigation,
   }
-  const label = lang === 'tr' ? 'İletişim' : 'Contact'
-  return { ...site, navigation: { ...site.navigation, links: [...site.navigation.links, { label, href: '#contact' }] } }
+}
+
+export function addContactToMenu(site: WebsiteSchema, lang: 'tr' | 'en' = 'tr'): WebsiteSchema {
+  return addMissingToMenu(site, lang, ['contact'])
+}
+
+/** Labels of the entries `addMissingToMenu` would add, for the editor suggestion. */
+export function menuGapLabels(site: WebsiteSchema, lang: 'tr' | 'en'): string[] {
+  return findMenuGaps(site).map((g) => GAP_LABELS[g.kind][lang])
 }
 
 /** How many entries the header would show; the editor uses it to disable the switch at the cap. */
