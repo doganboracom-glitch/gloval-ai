@@ -11,6 +11,15 @@ export const ANNOUNCEMENT_MAX_ITEMS = 5
 
 export type ListLimit = { readonly min: number; readonly max: number }
 
+/**
+ * A corporate site keeps its products inline in the schema (like portfolio or
+ * services), so it may hold more than the 12 a store showcase carries. The schema
+ * accepts the larger number; stores keep `LIST_LIMITS.products` through the edit ops.
+ */
+export const PRODUCT_CATALOG_LIMIT: ListLimit = { min: 1, max: 40 }
+export const PRODUCT_IMAGES_MAX = 6
+export const PRODUCT_SPECS_MAX = 20
+
 export const LIST_LIMITS = {
   slider: { min: 1, max: 8 },
   heroSlides: { min: 1, max: 6 },

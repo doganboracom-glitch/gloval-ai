@@ -32,6 +32,7 @@ import { MapEmbedField } from '@/components/editor/map-embed-field'
 import { AboutMediaFields } from '@/components/editor/about-media-fields'
 import { AboutDetailFields } from '@/components/editor/about-detail-fields'
 import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
+import { ProductItemFields } from '@/components/editor/product-item-fields'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -233,6 +234,10 @@ export function SectionInspector({
 
       {section.type === 'services' && (
         <ServiceDetailFields site={site} index={index} section={section} onDispatch={onDispatch} />
+      )}
+
+      {section.type === 'products' && !managedProducts && (
+        <ProductItemFields site={site} index={index} section={section} onDispatch={onDispatch} />
       )}
 
       {managedProducts && (

@@ -1,7 +1,13 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
-import { ANNOUNCEMENT_MAX_ITEMS, LIST_LIMITS } from '@/lib/list-limits'
+import {
+  ANNOUNCEMENT_MAX_ITEMS,
+  LIST_LIMITS,
+  PRODUCT_CATALOG_LIMIT,
+  PRODUCT_IMAGES_MAX,
+  PRODUCT_SPECS_MAX,
+} from '@/lib/list-limits'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 /**
@@ -463,10 +469,37 @@ export const productsSection = z.object({
         alt: z.string().optional(),
         buttonText: z.string().optional().describe('Card action label, e.g. "İncele", "Sepete Ekle"'),
         href: z.string().optional().describe('Where the card/action points'),
+        slug: z.string().max(SERVICE_ITEM_LIMITS.slug).optional().describe('Managed by the platform. Never set this field yourself.'),
+        sku: z.string().max(60).optional().describe('Managed by the platform. Never set this field yourself.'),
+        priceMode: z.enum(['show', 'ask']).optional().describe('Managed by the platform. Never set this field yourself.'),
+        images: z
+          .array(z.object({ src: z.string(), alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional() }))
+          .max(PRODUCT_IMAGES_MAX)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
+        specs: z
+          .array(z.object({ name: z.string().max(60), value: z.string().max(200) }))
+          .max(PRODUCT_SPECS_MAX)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
+        detail: z
+          .array(sectionDetailBlockSchema)
+          .max(SERVICE_ITEM_LIMITS.blocks)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
+        videoUrl: z.string().max(300).optional().describe('Managed by the platform. Never set this field yourself.'),
+        pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoTitle: z.string().max(SERVICE_ITEM_LIMITS.seoTitle).optional().describe('Managed by the platform. Never set this field yourself.'),
+        seoDescription: z.string().max(SERVICE_ITEM_LIMITS.seoDescription).optional().describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
-    .min(LIST_LIMITS.products.min)
-    .max(LIST_LIMITS.products.max),
+    .min(PRODUCT_CATALOG_LIMIT.min)
+    .max(PRODUCT_CATALOG_LIMIT.max),
+  /**
+   * Corporate catalog: the items above are the site's real product catalog (own pages under
+   * /urunlerimiz, no cart). Absent = the classic showcase / store section.
+   */
+  inline: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
 })
 
 /**
@@ -1171,7 +1204,7 @@ function sectionSummary(section: Section): string {
  * counts as a store.
  */
 export function isStorefront(site: WebsiteSchema): boolean {
-  return site.sections.some((s) => s.type === 'products' || s.type === 'categories')
+  return site.sections.some((s) => (s.type === 'products' && !s.inline) || s.type === 'categories')
 }
 
 /**

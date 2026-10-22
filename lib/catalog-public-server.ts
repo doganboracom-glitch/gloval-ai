@@ -7,6 +7,7 @@ import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { isPlaceholderNumber } from '@/lib/commerce-mode'
 import { getCatalogContext, loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { resolveContactActions } from '@/lib/site-contact-actions'
+import { resolveInlineCatalog } from '@/lib/product-items'
 import {
   buildCatalogPaths,
   type CatalogPaths,
@@ -45,7 +46,7 @@ export async function loadCatalogPaths(
   return buildCatalogPaths(products, await loadCategories(projectId))
 }
 
-/** `video_url` lives outside the public RPC; a database without migration 064 simply has no videos. */
+/** `video_url` lives outside the public RPC; a database without migration 072 simply has no videos. */
 async function loadVideoUrls(projectId: string): Promise<Map<string, string>> {
   const { data, error } = await createAdminClient()
     .from('ecommerce_products')
@@ -70,6 +71,23 @@ async function loadVideoUrls(projectId: string): Promise<Map<string, string>> {
 export async function loadPublicCatalog(slug: string): Promise<PublicCatalog | null> {
   const site = await getPublishedSite(slug)
   if (!site) return null
+
+  // A corporate site's products live inline in its schema: no table, no mode switch.
+  const inline = resolveInlineCatalog(site.schema)
+  if (inline) {
+    const context = await getCatalogContext(slug, site.schema, 'catalog')
+    const phone = resolveContactActions(site.schema)?.phone ?? null
+    return {
+      slug,
+      site,
+      origin: context.origin,
+      items: inline.items,
+      groups: inline.groups,
+      whatsappNumber: context.whatsappNumber,
+      phone: phone && !isPlaceholderNumber(phone.display) ? phone : null,
+    }
+  }
+
   const commerce = await loadProjectCommerce({ slug }).catch(() => null)
   if (!commerce?.published || commerce.mode !== 'catalog') return null
 
