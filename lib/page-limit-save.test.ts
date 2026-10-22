@@ -93,3 +93,24 @@ describe('server-side page limit on save', () => {
     expect(saved.pageRedirects).toEqual([{ from: '/sayfa-1', to: '/yeni-ad' }])
   })
 })
+
+describe('site type on save', () => {
+  it('never promotes a corporate site that gains a products section', async () => {
+    fakeDb.rows('projects').push({
+      id: ID,
+      owner_id: 'user-1',
+      name: 'Kahve',
+      slug: null,
+      published: false,
+      published_version_id: null,
+      project_type: 'corporate',
+      commerce_mode: 'none',
+      schema_data: siteWithPages(1),
+    })
+    const store = fallbackWebsite('e-ticaret sitesi oluştur, ayakkabı satan online mağaza', 'tr')
+    await saveProjectSchema({ id: ID, schema: { ...store, pages: siteWithPages(1).pages } })
+    const row = fakeDb.rows('projects')[0]
+    expect(row.project_type).toBe('corporate')
+    expect(row.commerce_mode).toBe('none')
+  })
+})

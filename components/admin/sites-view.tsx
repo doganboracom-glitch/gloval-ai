@@ -1,8 +1,12 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Pencil } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ExternalLink, Package, Pencil } from 'lucide-react'
+import { previewSiteTypeChange, setSiteType, type SiteTypeImpact } from '@/lib/admin/actions'
+import { MAX_TYPE_CHANGE_NOTE, MIN_TYPE_CHANGE_NOTE, siteKindOf, type SiteKind } from '@/lib/site-kind'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useLanguage } from '@/components/language-provider'
 import { adminT } from '@/lib/admin/i18n'
 import { tenantUrl } from '@/lib/domains'
@@ -16,6 +20,52 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
   const t = adminT(lang)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+  const [change, setChange] = useState<{ site: AdminSite; impact: SiteTypeImpact | null; error: string | null } | null>(null)
+  const [note, setNote] = useState('')
+
+  const kindLabel: Record<SiteKind, string> = {
+    corporate: t.sites.corporate,
+    ecommerce: t.sites.ecommerce,
+    catalog: t.sites.catalog,
+  }
+
+  function errorText(code: string): string {
+    if (code === 'has_store_data') return t.sites.typeChangeHasData
+    if (code === 'has_orders') return t.sites.typeChangeHasOrders
+    if (code === 'note_required') return t.sites.typeChangeNoteRequired
+    if (code === 'audit_failed') return t.sites.typeChangeAuditFailed
+    return t.sites.typeChangeFailed
+  }
+
+  function openChange(site: AdminSite, next: SiteKind) {
+    setNote('')
+    setChange({ site, impact: null, error: null })
+    startTransition(async () => {
+      const res = await previewSiteTypeChange(site.id, next)
+      setChange({ site, impact: res.ok ? res.impact : null, error: res.ok ? null : errorText(res.error) })
+    })
+  }
+
+  function closeChange() {
+    setChange(null)
+    router.refresh()
+  }
+
+  function confirmChange() {
+    if (!change?.impact) return
+    const { site, impact } = change
+    startTransition(async () => {
+      const res = await setSiteType(site.id, impact.to, note)
+      if (!res.ok) {
+        setChange({ site, impact, error: errorText(res.error) })
+        return
+      }
+      setChange(null)
+      router.refresh()
+    })
+  }
 
   const dateFmt = new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     day: '2-digit',
@@ -98,8 +148,18 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                 t.common.none
               )}
             </Td>
-            <Td className="text-muted-foreground">
-              {s.projectType === 'ecommerce' ? t.sites.ecommerce : t.sites.corporate}
+            <Td>
+              <select
+                value={siteKindOf({ project_type: s.projectType, commerce_mode: s.commerceMode })}
+                disabled={pending}
+                onChange={(e) => openChange(s, e.target.value as SiteKind)}
+                aria-label={t.sites.type}
+                className="h-8 rounded-md border border-border bg-card/70 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:opacity-60"
+              >
+                <option value="corporate">{t.sites.corporate}</option>
+                <option value="ecommerce">{t.sites.ecommerce}</option>
+                <option value="catalog">{t.sites.catalog}</option>
+              </select>
             </Td>
             <Td>
               <StatusBadge tone={s.published ? 'success' : 'muted'}>
@@ -124,18 +184,84 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                 <span className="text-muted-foreground">{t.common.none}</span>
               )}
             </Td>
-            <Td className="text-right">
-              <Link
-                href={s.projectType === 'ecommerce' ? `/ecommerce/${s.id}` : `/editor/${s.id}`}
-                className="inline-flex items-center gap-1 rounded-md border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
-              >
-                <Pencil className="size-3.5" />
-                {t.sites.edit}
-              </Link>
+            <Td className="sticky right-0 whitespace-nowrap border-l border-border bg-card text-right">
+              <div className="flex items-center justify-end gap-2">
+                {s.projectType === 'ecommerce' && s.commerceMode !== 'none' && (
+                  <Link
+                    href={`/ecommerce/${s.id}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                  >
+                    <Package className="size-3.5" />
+                    {t.sites.products}
+                  </Link>
+                )}
+                <Link
+                  href={`/editor/${s.id}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
+                >
+                  <Pencil className="size-3.5" />
+                  {t.sites.edit}
+                </Link>
+              </div>
             </Td>
           </Tr>
         ))}
       </DataTable>
+
+      <ConfirmDialog
+        open={change !== null}
+        title={`${t.sites.typeChangeTitle}${change ? ` — ${change.site.name}` : ''}`}
+        description={t.sites.typeChangeDescription}
+        confirmLabel={t.sites.typeChangeSubmit}
+        cancelLabel={t.common.cancel}
+        confirmDisabled={pending || !change?.impact || change.impact.blocker !== null || note.trim().length < MIN_TYPE_CHANGE_NOTE}
+        onConfirm={confirmChange}
+        onCancel={closeChange}
+      >
+        <div className="mt-4 flex flex-col gap-3 text-sm">
+          {change && !change.impact && !change.error && (
+            <p className="text-muted-foreground">{t.sites.typeChangeLoading}</p>
+          )}
+          {change?.impact && (
+            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 rounded-lg border border-border bg-background/50 p-3">
+              <dt className="text-muted-foreground">{t.sites.typeChangeFrom}</dt>
+              <dd className="font-medium">{kindLabel[change.impact.from]}</dd>
+              <dt className="text-muted-foreground">{t.sites.typeChangeTo}</dt>
+              <dd className="font-medium">{kindLabel[change.impact.to]}</dd>
+              <dt className="text-muted-foreground">{t.sites.typeChangeProducts}</dt>
+              <dd>{change.impact.products}</dd>
+              <dt className="text-muted-foreground">{t.sites.typeChangeOrders}</dt>
+              <dd>{change.impact.orders}</dd>
+              <dt className="text-muted-foreground">{t.sites.typeChangeSections}</dt>
+              <dd>{change.impact.hasStoreSections ? t.sites.typeChangeYes : t.sites.typeChangeNo}</dd>
+            </dl>
+          )}
+          {change?.impact?.published && (
+            <p className="text-xs text-muted-foreground">{t.sites.typeChangePublished}</p>
+          )}
+          {change?.impact?.blocker && (
+            <p role="alert" className="text-xs text-destructive">
+              {errorText(change.impact.blocker)}
+            </p>
+          )}
+          {change?.error && (
+            <p role="alert" className="text-xs text-destructive">
+              {change.error}
+            </p>
+          )}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-foreground">{t.sites.typeChangeNoteLabel}</span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={MAX_TYPE_CHANGE_NOTE}
+              rows={3}
+              placeholder={t.sites.typeChangeNotePlaceholder}
+              className="rounded-lg border border-border bg-card/70 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+            />
+          </label>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }

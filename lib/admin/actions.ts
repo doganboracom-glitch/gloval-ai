@@ -13,6 +13,16 @@ import {
 } from '@/lib/notify'
 import { TICKET_STATUSES, type TicketStatus } from '@/lib/support/constants'
 import { headers } from 'next/headers'
+import {
+  MAX_TYPE_CHANGE_NOTE,
+  MIN_TYPE_CHANGE_NOTE,
+  columnsForKind,
+  isSiteKind,
+  siteKindOf,
+  siteTypeBlocker,
+  type SiteKind,
+  type SiteTypeBlocker,
+} from '@/lib/site-kind'
 import type { UserStatus } from './queries'
 
 /**
@@ -31,6 +41,121 @@ import type { UserStatus } from './queries'
 export type AdminActionResult = { ok: true } | { ok: false; error: string }
 
 const ADMIN_PASSWORD_MIN_LENGTH = 8
+
+/* --------------------------------- sites --------------------------------- */
+
+export type SiteTypeImpact = {
+  name: string
+  published: boolean
+  from: SiteKind
+  to: SiteKind
+  products: number
+  orders: number
+  hasStoreSections: boolean
+  blocker: SiteTypeBlocker | null
+}
+
+type SiteTypeContext =
+  | { ok: false; error: string }
+  | {
+      ok: true
+      admin: ReturnType<typeof createAdminClient>
+      project: { id: string; name: string; published: boolean; project_type: string | null; commerce_mode: string | null }
+      impact: SiteTypeImpact
+    }
+
+async function loadSiteTypeContext(projectId: string, kind: unknown): Promise<SiteTypeContext> {
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  if (!isSiteKind(kind)) return { ok: false, error: 'invalid_type' }
+
+  const admin = createAdminClient()
+  const { data: project } = await admin
+    .from('projects')
+    .select('id, name, published, project_type, commerce_mode, schema_data')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!project) return { ok: false, error: 'invalid_site' }
+
+  const [{ count: products }, { count: orders }] = await Promise.all([
+    admin.from('ecommerce_products').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+    admin.from('ecommerce_orders').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+  ])
+  const sections = (project.schema_data as { sections?: Array<{ type?: string }> } | null)?.sections ?? []
+  const counts = { products: products ?? 0, orders: orders ?? 0 }
+  const from = siteKindOf(project)
+  return {
+    ok: true,
+    admin,
+    project,
+    impact: {
+      name: project.name as string,
+      published: Boolean(project.published),
+      from,
+      to: kind,
+      ...counts,
+      hasStoreSections: sections.some((s) => s.type === 'products' || s.type === 'categories'),
+      blocker: siteTypeBlocker(from, kind, counts),
+    },
+  }
+}
+
+/** Read-only impact summary shown in the confirmation dialog before a switch. */
+export async function previewSiteTypeChange(
+  projectId: string,
+  kind: SiteKind,
+): Promise<{ ok: true; impact: SiteTypeImpact } | { ok: false; error: string }> {
+  await requireAdmin()
+  const ctx = await loadSiteTypeContext(projectId, kind)
+  return ctx.ok ? { ok: true, impact: ctx.impact } : ctx
+}
+
+/**
+ * Explicitly switches a site between corporate, e-commerce and catalog. Saves
+ * never change the type; this is the only path. It refuses switches that would
+ * orphan a catalog or orders, requires a reason, and writes an audit row
+ * (`site_type_changes`); if that row cannot be written the switch is undone.
+ */
+export async function setSiteType(
+  projectId: string,
+  kind: SiteKind,
+  note: string,
+): Promise<AdminActionResult> {
+  const { email: actorEmail, userId: actorId } = await requireAdmin()
+  const reason = typeof note === 'string' ? note.trim() : ''
+  if (reason.length < MIN_TYPE_CHANGE_NOTE) return { ok: false, error: 'note_required' }
+
+  const ctx = await loadSiteTypeContext(projectId, kind)
+  if (!ctx.ok) return ctx
+  const { admin, project, impact } = ctx
+  if (impact.from === impact.to) return { ok: false, error: 'no_change' }
+  if (impact.blocker) return { ok: false, error: impact.blocker }
+
+  const next = columnsForKind(kind)
+  const { error } = await admin.from('projects').update(next).eq('id', projectId)
+  if (error) return { ok: false, error: 'update_failed' }
+
+  const { error: auditError } = await admin.from('site_type_changes').insert({
+    project_id: projectId,
+    actor_id: actorId ?? null,
+    actor_email: actorEmail,
+    from_type: project.project_type ?? 'corporate',
+    from_mode: project.commerce_mode ?? 'none',
+    to_type: next.project_type,
+    to_mode: next.commerce_mode,
+    note: reason.slice(0, MAX_TYPE_CHANGE_NOTE),
+  })
+  if (auditError) {
+    await admin
+      .from('projects')
+      .update({ project_type: project.project_type ?? 'corporate', commerce_mode: project.commerce_mode ?? 'none' })
+      .eq('id', projectId)
+    return { ok: false, error: 'audit_failed' }
+  }
+
+  revalidatePath('/admin/sites')
+  revalidatePath('/dashboard')
+  return { ok: true }
+}
 
 /* --------------------------------- users --------------------------------- */
 
