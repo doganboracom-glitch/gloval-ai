@@ -14,17 +14,17 @@ import { productShippingLine } from '@/lib/store-shipping-display'
 import { catalogDisplayPrice, useCatalog, whatsappOrderHref } from './catalog-context'
 import { WHATSAPP_ORDER_LABEL } from '@/lib/commerce-mode'
 
-type Props = { slug: string; storeName: string; product: StoreProduct; relatedProducts?: StoreProduct[]; enableTryOn?: boolean; shipping?: ShippingSettings; whatsapp?: { href: string; display: string } | null; cardPaymentEnabled?: boolean; codEnabled?: boolean }
+type Props = { slug: string; storeName: string; product: StoreProduct; relatedProducts?: StoreProduct[]; enableTryOn?: boolean; shipping?: ShippingSettings; whatsapp?: { href: string; display: string } | null; cardPaymentEnabled?: boolean; codEnabled?: boolean; canonicalPath?: string }
 
 const themedButton = 'inline-flex min-h-12 items-center justify-center gap-2 rounded-[var(--site-radius,0.75rem)] px-5 py-3 text-sm font-semibold transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--site-primary,var(--primary))] disabled:cursor-not-allowed disabled:opacity-50'
 
 export function ProductDetail(props: Props) { return <ProductDetailInner {...props} /> }
 
-function ProductDetailInner({ slug, storeName, product, relatedProducts = [], enableTryOn = false, shipping = DEFAULT_SHIPPING_SETTINGS, whatsapp, cardPaymentEnabled = false, codEnabled = false }: Props) {
+function ProductDetailInner({ slug, storeName, product, relatedProducts = [], enableTryOn = false, shipping = DEFAULT_SHIPPING_SETTINGS, whatsapp, cardPaymentEnabled = false, codEnabled = false, canonicalPath }: Props) {
   const cart = useCart()
   const catalog = useCatalog()
   const isCatalog = catalog?.mode === 'catalog'
-  const orderHref = isCatalog ? whatsappOrderHref(catalog, product) : null
+  const orderHref = isCatalog ? whatsappOrderHref(catalog, product, canonicalPath) : null
   const priceText = isCatalog ? catalogDisplayPrice(product) : formatPrice(product.price_cents, product.currency)
   const askPrice = isCatalog && product.price_mode === 'ask'
   const { requestAdd } = useAddWithConfirm(cart)

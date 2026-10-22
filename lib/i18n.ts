@@ -90,6 +90,23 @@ export function resolveLangFromAcceptLanguage(header: string | null | undefined)
 
 const dict = {
   tr: {
+    catalog: {
+      title: 'Ürünlerimiz',
+      home: 'Ana sayfa',
+      breadcrumb: 'Kırıntı yolu',
+      all: 'Tümü',
+      categories: 'Kategoriler',
+      showing: '{count} ürün gösteriliyor',
+      empty: 'Henüz ürün eklenmedi.',
+      askPrice: 'Fiyat için iletişime geçin',
+      orderWhatsapp: "WhatsApp'tan Sipariş Ver",
+      pagination: 'Sayfalama',
+      page: 'Sayfa {n}',
+      prev: 'Önceki',
+      next: 'Sonraki',
+      sample: 'Örnek',
+      productCount: '{count} ürün',
+    },
     nav: {
       features: 'Özellikler',
       how: 'Nasıl çalışır',
@@ -673,7 +690,7 @@ const dict = {
     publish: {
       publish: 'Yayınla',
       republish: 'Yeniden yayınla',
-      publishing: 'Yayınlanıyor...',
+      publishing: 'Yayınlan��yor...',
       published: 'Yayınlandı',
       liveAt: 'Siten yayında:',
       unpublish: 'Yayından kaldır',
@@ -1634,6 +1651,23 @@ const dict = {
     },
   },
   en: {
+    catalog: {
+      title: 'Our Products',
+      home: 'Home',
+      breadcrumb: 'Breadcrumb',
+      all: 'All',
+      categories: 'Categories',
+      showing: 'Showing {count} products',
+      empty: 'No products have been added yet.',
+      askPrice: 'Contact us for price',
+      orderWhatsapp: 'Order on WhatsApp',
+      pagination: 'Pagination',
+      page: 'Page {n}',
+      prev: 'Previous',
+      next: 'Next',
+      sample: 'Sample',
+      productCount: '{count} products',
+    },
     nav: {
       features: 'Features',
       how: 'How it works',

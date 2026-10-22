@@ -3,7 +3,7 @@
 import { useId, useState } from 'react'
 import { MessageCircle, Phone, Play } from 'lucide-react'
 import { ProductGallery } from '@/components/store/product-gallery'
-import { WHATSAPP_ORDER_LABEL } from '@/lib/commerce-mode'
+import type { CatalogLabels } from '@/lib/catalog-view'
 import {
   catalogCategoryPath,
   catalogListPath,
@@ -61,7 +61,9 @@ export function CatalogProductView({
   related,
   whatsappHref,
   phone,
+  labels,
 }: {
+  labels: CatalogLabels
   storeName: string
   item: CatalogItem
   related: CatalogItem[]
@@ -107,7 +109,7 @@ export function CatalogProductView({
             {item.name}
           </h1>
           <div className="flex flex-wrap items-end gap-3">
-            <span className="text-3xl font-bold">{catalogPriceText(item)}</span>
+            <span className="text-3xl font-bold">{catalogPriceText(item, labels.askPrice)}</span>
             {discount !== null && item.compareAtCents != null && (
               <>
                 <span className="text-sm text-muted-foreground line-through">
@@ -123,7 +125,7 @@ export function CatalogProductView({
             {whatsappHref && (
               <a href={whatsappHref} target="_blank" rel="noopener noreferrer" data-whatsapp-order className={`${buttonClass} ${phone ? '' : 'sm:col-span-2'}`} style={primaryStyle}>
                 <MessageCircle className="size-4" aria-hidden />
-                {WHATSAPP_ORDER_LABEL}
+                {labels.orderWhatsapp}
               </a>
             )}
             {phone && (
@@ -202,7 +204,7 @@ export function CatalogProductView({
           </h2>
           <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {related.map((product) => (
-              <li key={product.id}><CatalogCard item={product} /></li>
+              <li key={product.id}><CatalogCard item={product} askLabel={labels.askPrice} /></li>
             ))}
           </ul>
         </section>

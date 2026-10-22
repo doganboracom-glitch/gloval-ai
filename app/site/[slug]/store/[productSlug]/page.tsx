@@ -66,6 +66,10 @@ export default async function ProductPage({
   }
 
   const catalog = await getCatalogContext(slug, site.schema, mode)
+  const canonicalPath =
+    mode === 'catalog' && projectId
+      ? (await loadCatalogPaths(projectId, [product])).products[product.slug]
+      : undefined
 
   const [seo, tryOnConfig, shipping, products, payments] = await Promise.all([
     getSiteSeoContext(slug),
@@ -84,6 +88,7 @@ export default async function ProductPage({
         product={product}
         relatedProducts={products.filter((item) => item.id !== product.id && item.category_id === product.category_id).slice(0, 4)}
         whatsapp={site.schema.contactActions?.whatsapp && /\d/.test(site.schema.contactActions.whatsapp) ? { href: `https://wa.me/${site.schema.contactActions.whatsapp.replace(/\D/g, '')}`, display: site.schema.contactActions.whatsapp } : null}
+        canonicalPath={canonicalPath}
         enableTryOn={tryOnConfig !== null}
         cardPaymentEnabled={payments.available && payments.methods.some(isCardProviderMethod)}
         codEnabled={payments.available && payments.methods.includes('cash_on_delivery')}

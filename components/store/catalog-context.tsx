@@ -9,6 +9,7 @@ import {
   toPriceMode,
   type CommerceMode,
 } from '@/lib/commerce-mode'
+import { catalogListPath } from '@/lib/catalog-public'
 import type { StoreProduct } from '@/lib/store'
 
 export type CatalogContextValue = {
@@ -53,7 +54,7 @@ export function whatsappOrderHref(
   return buildWhatsappOrderUrl({
     number: catalog.whatsappNumber,
     productName: product.name,
-    productUrl: `${catalog.origin}${canonicalPath ?? `/store/${product.slug}`}`,
+    productUrl: `${catalog.origin}${canonicalPath ?? catalogListPath()}`,
     priceMode: toPriceMode(product.price_mode),
     priceCents: product.price_cents,
     currency: product.currency,
