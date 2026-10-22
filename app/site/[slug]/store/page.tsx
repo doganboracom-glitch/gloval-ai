@@ -1,8 +1,10 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { modeHasStoreRoutes } from '@/lib/commerce-mode'
-import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
+import { getCatalogContext, getPublishedSiteRouting } from '@/lib/commerce-mode-server'
+import { catalogListPath } from '@/lib/catalog-public'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
@@ -31,8 +33,9 @@ export default async function StorePage({
   const [{ slug }, initialParams] = await Promise.all([params, searchParams])
   const site = await getPublishedSite(slug)
   if (!site) notFound()
-  const mode = await getPublishedSiteCommerceMode(slug)
+  const { mode, catalogPaths } = await getPublishedSiteRouting(slug)
   if (!modeHasStoreRoutes(mode)) notFound()
+  if (catalogPaths) permanentRedirect(`${(await getSiteSeoContext(slug)).origin}${catalogListPath()}`)
 
   const catalog = await getCatalogContext(slug, site.schema, mode)
   const [products, collections, shipping] = await Promise.all([

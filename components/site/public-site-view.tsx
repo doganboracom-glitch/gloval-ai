@@ -5,6 +5,8 @@ import { getStoreCollections, getStoreProducts } from "@/lib/store";
 import { WebsiteRenderer } from "@/components/website-renderer/website-renderer";
 import type { StoreCatalog } from "@/components/website-renderer/store-catalog-context";
 import { getStoreShippingInfo } from "@/lib/store-shipping-settings";
+import { getPublishedSiteRouting } from "@/lib/commerce-mode-server";
+import { loadCatalogPaths } from "@/lib/catalog-public-server";
 import { getSiteBlogData } from "@/lib/blog-server";
 import { isSiteBrandingRemoved } from "@/lib/project-entitlements";
 import { getSiteSeoContext } from "@/lib/seo/site-seo";
@@ -195,11 +197,18 @@ export async function PublicSiteView({
 
   const paymentBadges = isStorefront(site.schema) ? await getStorePaymentBadges(slug) : null
 
+  const routing = products.length > 0 ? await getPublishedSiteRouting(slug) : null
+  const catalogPaths =
+    routing?.catalogPaths && routing.id
+      ? await loadCatalogPaths(routing.id, products).catch(() => undefined)
+      : undefined
+
   const store: StoreCatalog | null =
     products.length > 0
       ? {
           slug,
           products,
+          catalogPaths,
           collections: collections.map((c) => ({
             slug: c.slug,
             name: c.name,

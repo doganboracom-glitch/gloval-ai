@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { requireUser } from '@/lib/ecommerce-access'
+import { isCatalogFeatureUiEnabled } from '@/lib/catalog-feature-flag'
 import {
   CATALOG_PLAN_WARNING,
   catalogColumns,
@@ -14,7 +15,11 @@ import {
 
 export type CatalogToggleResult =
   | { ok: true; enabled: boolean }
-  | { ok: false; error: CatalogToggleBlocker | 'not_found' | 'update_failed' | 'audit_failed'; message?: string }
+  | {
+      ok: false
+      error: CatalogToggleBlocker | 'not_found' | 'update_failed' | 'audit_failed' | 'feature_disabled'
+      message?: string
+    }
 
 /**
  * Owner-side switch for the catalog feature. Writes `commerce_mode` only,
@@ -22,6 +27,7 @@ export type CatalogToggleResult =
  * audit row cannot be stored.
  */
 export async function setCatalogEnabled(projectId: string, enable: boolean): Promise<CatalogToggleResult> {
+  if (!isCatalogFeatureUiEnabled()) return { ok: false, error: 'feature_disabled', message: 'Özellik kapalı' }
   if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'not_found' }
   const { supabase, userId } = await requireUser()
   const {

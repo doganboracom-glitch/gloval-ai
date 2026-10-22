@@ -6,6 +6,7 @@ import { isMissingColumnError } from '@/lib/store-schema-compat'
 import {
   CATALOG_NOT_AVAILABLE,
   COMMERCE_NOT_AVAILABLE,
+  catalogOwnsProductPaths,
   getCommerceMode,
   planAllowsCatalog,
   type CommerceMode,
@@ -21,6 +22,7 @@ export type ProjectCommerce = {
   /** Mode as stored, before the plan rule. */
   storedMode: CommerceMode
   ownerPlanCode: string | null
+  projectType: string | null
 }
 
 type Key = { id: string } | { slug: string }
@@ -60,6 +62,31 @@ export async function loadProjectCommerce(key: Key): Promise<ProjectCommerce | n
     mode: storedMode === 'catalog' ? getCommerceMode(row, ownerPlanCode) : storedMode,
     storedMode,
     ownerPlanCode,
+    projectType: row.project_type ?? null,
+  }
+}
+
+export type PublishedSiteRouting = {
+  id: string | null
+  mode: CommerceMode
+  projectType: string | null
+  /** True when /store is retired for this site and /urunlerimiz is canonical. */
+  catalogPaths: boolean
+}
+
+/** Mode + project type of a PUBLISHED site by slug; unknown/unpublished/errors fail closed to `none`. */
+export async function getPublishedSiteRouting(slug: string): Promise<PublishedSiteRouting> {
+  try {
+    const commerce = await loadProjectCommerce({ slug })
+    if (!commerce?.published) return { id: null, mode: 'none', projectType: null, catalogPaths: false }
+    return {
+      id: commerce.id,
+      mode: commerce.mode,
+      projectType: commerce.projectType,
+      catalogPaths: catalogOwnsProductPaths(commerce.mode, commerce.projectType),
+    }
+  } catch {
+    return { id: null, mode: 'none', projectType: null, catalogPaths: false }
   }
 }
 

@@ -77,7 +77,7 @@ function CatalogShowcase({
   const carousel = data.layout === 'carousel'
   const nav = useSiteNav()
   const viewAllLabel = resolveViewAllLabel(data.viewAllLabel)
-  const listHref = storeListHref(catalog.slug)
+  const listHref = catalog.catalogPaths?.list ?? storeListHref(catalog.slug)
 
   if (selected.length === 0 && !catalog.isPreview) return null
 
@@ -185,7 +185,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
   // Prefer the real product detail route; fall back to the schema's own href.
   const detailHref =
     entry && catalog
-      ? `/site/${catalog.slug}/store/${entry.slug}`
+      ? (catalog.catalogPaths?.products[entry.slug] ?? `/site/${catalog.slug}/store/${entry.slug}`)
       : (item.href || '').trim()
   const isDetailLink = detailHref.startsWith('/')
 

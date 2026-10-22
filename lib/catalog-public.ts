@@ -28,6 +28,29 @@ export function catalogProductPath(categorySlug: string, productSlug: string): s
   return `/${CATALOG_LIST_SLUG}/${categorySlug}/${productSlug}`
 }
 
+/** Canonical /urunlerimiz addresses for a site whose products are linked from outside the catalog pages. */
+export type CatalogPaths = {
+  list: string
+  /** Product slug -> /urunlerimiz/<kategori>/<ürün>. */
+  products: Record<string, string>
+  /** Category display name -> /urunlerimiz/<kategori>. */
+  categories: Record<string, string>
+}
+
+export function buildCatalogPaths(
+  products: { slug: string; category_id: string | null }[],
+  categories: Map<string, { name: string; slug: string }>,
+): CatalogPaths {
+  const paths: CatalogPaths = { list: catalogListPath(), products: {}, categories: {} }
+  for (const product of products) {
+    const category = product.category_id ? categories.get(product.category_id) : undefined
+    const identity = categoryIdentity(category?.name, category?.slug)
+    paths.products[product.slug] = catalogProductPath(identity.slug, product.slug)
+    paths.categories[identity.name] = catalogCategoryPath(identity.slug)
+  }
+  return paths
+}
+
 export type CatalogItem = {
   id: string
   name: string

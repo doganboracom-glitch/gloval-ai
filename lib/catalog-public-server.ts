@@ -8,6 +8,8 @@ import { isPlaceholderNumber } from '@/lib/commerce-mode'
 import { getCatalogContext, loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { resolveContactActions } from '@/lib/site-contact-actions'
 import {
+  buildCatalogPaths,
+  type CatalogPaths,
   categoryIdentity,
   groupByCategory,
   parseVideoUrl,
@@ -33,6 +35,14 @@ async function loadCategories(projectId: string): Promise<Map<string, CategoryRo
     .select('id, name, slug')
     .eq('project_id', projectId)
   return new Map(((data ?? []) as CategoryRow[]).map((row) => [row.id, row]))
+}
+
+/** Category-aware canonical addresses for already-loaded products (home page + menu links). */
+export async function loadCatalogPaths(
+  projectId: string,
+  products: { slug: string; category_id: string | null }[],
+): Promise<CatalogPaths> {
+  return buildCatalogPaths(products, await loadCategories(projectId))
 }
 
 /** `video_url` lives outside the public RPC; a database without migration 064 simply has no videos. */

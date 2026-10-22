@@ -2,7 +2,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { closedSiteFileResponse } from '@/lib/site-availability'
 import { getStoreProducts } from '@/lib/store'
 import { storeSeoPlan } from '@/lib/commerce-mode'
-import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
+import { getPublishedSiteRouting } from '@/lib/commerce-mode-server'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 import { getLiveBlogPosts } from '@/lib/blog-server'
@@ -89,7 +89,8 @@ export async function GET(
 
   // Store routes only exist for sites that actually sell something. Checkout
   // and order-confirmation pages are transactional and stay out of the sitemap.
-  const seoPlan = storeSeoPlan(await getPublishedSiteCommerceMode(slug))
+  const routing = await getPublishedSiteRouting(slug)
+  const seoPlan = storeSeoPlan(routing.mode, routing.projectType)
   const products = seoPlan.indexStore ? await getStoreProducts(slug).catch(() => []) : []
   if (products.length > 0) {
     entries.push({ loc: `${base}/store`, changefreq: 'weekly', priority: '0.8', lastmod: lastModified })

@@ -7,6 +7,7 @@ import { WHATSAPP_ORDER_LABEL } from '@/lib/commerce-mode'
 import { ProductImagePlaceholder } from '@/components/store/product-image-placeholder'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useStoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { SiteConfirmDialog } from '@/components/website-renderer/site-confirm-dialog'
 import {
   formatPrice,
@@ -87,14 +88,15 @@ export function ProductCard({ product, slug, categoryName }: ProductCardProps) {
     return () => window.clearInterval(id)
   }, [playing, images.length])
 
-  const href = `/site/${slug}/store/${product.slug}`
+  const storeCatalog = useStoreCatalog()
+  const href = storeCatalog?.catalogPaths?.products[product.slug] ?? `/site/${slug}/store/${product.slug}`
   const outOfStock = isSoldOut(product)
   const stockNotice = getStockNotice(product)
   const discount = discountPercent(product.price_cents, product.compare_at_price_cents)
   const catalog = useCatalog()
   const isCatalog = catalog?.mode === 'catalog'
   const canAdd = !!cart && !outOfStock && !isCatalog
-  const orderHref = isCatalog ? whatsappOrderHref(catalog, product) : null
+  const orderHref = isCatalog ? whatsappOrderHref(catalog, product, storeCatalog?.catalogPaths?.products[product.slug]) : null
   const priceText = isCatalog ? catalogDisplayPrice(product) : formatPrice(product.price_cents, product.currency)
   const showCompare = discount !== null && product.compare_at_price_cents != null && !(isCatalog && product.price_mode === 'ask')
 
