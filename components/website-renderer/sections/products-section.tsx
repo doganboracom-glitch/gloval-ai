@@ -25,6 +25,7 @@ import { ProductCard as StoreProductCard } from '@/components/store/product-card
 import type { StoreProduct } from '@/lib/store'
 import { resolveShowcaseSettings, selectShowcase } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { saleBadge } from '@/lib/product-items'
 import { resolveViewAllLabel, storeListHref } from '@/lib/store-header-links'
 
 type ProductsData = Extract<Section, { type: 'products' }>
@@ -50,12 +51,12 @@ function productIdFor(item: ProductItem): string {
  * collapses to a clean grid on desktop so it never overflows the page. Colors,
  * radius and fonts all read from the scoped `--site-*` theme variables.
  */
-export function ProductsSection({ data }: { data: ProductsData }) {
+export function ProductsSection({ data, lang }: { data: ProductsData; lang?: string }) {
   const catalog = useStoreCatalog()
   if (catalog?.products) {
     return <CatalogShowcase data={data} catalog={catalog} products={catalog.products} />
   }
-  return <SchemaProducts data={data} />
+  return <SchemaProducts data={data} lang={lang} />
 }
 
 /**
@@ -132,7 +133,7 @@ function CatalogShowcase({
   )
 }
 
-function SchemaProducts({ data }: { data: ProductsData }) {
+function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
   const carousel = data.layout === 'carousel'
   const single = data.items.length === 1
 
@@ -171,7 +172,8 @@ function SchemaProducts({ data }: { data: ProductsData }) {
   )
 }
 
-function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
+function ProductCard({ item, seed, lang }: { item: ProductItem; seed: number; lang?: string }) {
+  const badge = saleBadge(item, lang)
   const nav = useSiteNav()
   const cart = useOptionalCart()
   const catalog = useStoreCatalog()
@@ -235,7 +237,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
         rounded={false}
         className="w-full"
       />
-      {item.badge ? (
+      {badge ? (
         <span
           className="absolute left-3 top-3 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
           style={{
@@ -243,7 +245,7 @@ function ProductCard({ item, seed }: { item: ProductItem; seed: number }) {
             color: 'var(--site-primary-fg)',
           }}
         >
-          {item.badge}
+          {badge}
         </span>
       ) : null}
     </div>

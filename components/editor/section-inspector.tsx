@@ -33,6 +33,7 @@ import { AboutMediaFields } from '@/components/editor/about-media-fields'
 import { AboutDetailFields } from '@/components/editor/about-detail-fields'
 import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
 import { ProductItemFields } from '@/components/editor/product-item-fields'
+import { useProductsManaged } from '@/components/editor/published-context'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -80,6 +81,7 @@ const ITEM_FIELDS = [
   'value',
   'label',
   'price',
+  'oldPrice',
   'period',
   'description',
   'bio',
@@ -123,7 +125,9 @@ export function SectionInspector({
   const label = (field: string) => ui.fieldLabels[field] ?? field
   const params = useParams<{ projectId?: string }>()
   const projectId = typeof params?.projectId === 'string' ? params.projectId : null
-  const managedProducts = section.type === 'products' && isStorefront(site)
+  const productsManagedByProject = useProductsManaged()
+  const managedProducts =
+    section.type === 'products' && isStorefront(site) && (productsManagedByProject ?? true)
 
   return (
     <div className="mt-2 flex flex-col gap-3 border-t border-border pt-2">

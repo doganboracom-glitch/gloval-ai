@@ -20,6 +20,11 @@ import { isUsableImageSrc } from '@/lib/about-media'
  * table, no cart. This module turns those items into the same `CatalogItem`s the
  * public /urunlerimiz views already render, so lists, categories, product pages,
  * JSON-LD and the sitemap share one definition. Pure: no I/O.
+ *
+ * Plan gate decision: inline product pages are site CONTENT (like service and
+ * portfolio detail pages), so they are available on every plan and
+ * `resolveInlineCatalog` takes no plan input. Only the database-backed catalog
+ * (`commerce_mode = 'catalog'`, see `lib/catalog-feature.ts`) stays PRO-only.
  */
 
 type ProductsSection = Extract<Section, { type: 'products' }>
@@ -60,6 +65,22 @@ export function parsePriceToCents(text: string | undefined): number {
   const whole = (hasDecimal ? digits.slice(0, decimalAt) : digits).replace(/[.,]/g, '')
   const cents = Number(whole || '0') * 100 + (hasDecimal ? Number(fraction.padEnd(2, '0')) : 0)
   return Number.isFinite(cents) ? Math.round(cents) : 0
+}
+
+/**
+ * Corner badge for a product card: the owner's own badge wins; otherwise a
+ * struck old price that is really higher than the current price earns "İndirimli".
+ */
+export function saleBadge(
+  item: { badge?: string; price?: string; oldPrice?: string },
+  lang: string | undefined,
+): string | undefined {
+  const own = item.badge?.trim()
+  if (own) return own
+  const now = parsePriceToCents(item.price)
+  const was = parsePriceToCents(item.oldPrice)
+  if (now <= 0 || was <= now) return undefined
+  return lang === 'en' ? 'Sale' : 'İndirimli'
 }
 
 /** Stable slugs: keeps a valid stored slug, otherwise derives one from the name, then de-duplicates. */
