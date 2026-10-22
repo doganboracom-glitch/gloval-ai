@@ -16,6 +16,7 @@ vi.mock('next/headers', () => ({
 }))
 vi.mock('@/lib/commerce-mode-server', () => ({
   getPublishedSiteCommerceMode: async () => 'none',
+  getPublishedSiteRouting: async () => ({ id: null, mode: 'none', projectType: null, catalogPaths: false }),
   getCatalogContext: async () => ({ mode: 'none', whatsappNumber: null, origin: state.origin }),
 }))
 vi.mock('next/navigation', () => ({
