@@ -52,6 +52,7 @@ import {
 } from '@/lib/sample-content'
 import { loadAttestedDigests, recordAttestations, selectApproved } from '@/lib/content-attestations'
 import { getDomainProvider } from '@/lib/custom-domains/provider'
+import { seedProductsSubmenu } from '@/lib/site-menu'
 
 /** Hosts connected to the project; e-mail on them is the owner's own. Fails to none (stricter). */
 async function connectedHosts(projectId: string): Promise<string[]> {
@@ -216,7 +217,13 @@ export async function getProject(id: string): Promise<ProjectRow | null> {
   const { db } = await clientForProject(id)
   const { data, error } = await db.from('projects').select('*').eq('id', id).maybeSingle()
   if (error) throw error
-  return (data as ProjectRow) ?? null
+  const row = (data as ProjectRow) ?? null
+  // A draft that was never published has no live HTML to keep stable, so it gets
+  // the products sub-menu on by default. Published sites stay opt-in.
+  if (row && !row.published && !row.published_at && row.schema_data?.navigation) {
+    return { ...row, schema_data: seedProductsSubmenu(row.schema_data) }
+  }
+  return row
 }
 
 /**

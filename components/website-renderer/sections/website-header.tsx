@@ -7,7 +7,7 @@ import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/sit
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
-import { resolveHeaderMenu, withProductChildren, type MenuCategory, type MenuEntry } from '@/lib/site-menu'
+import { resolveHeaderMenu, withProductChildren, type MenuCategory, type MenuChild, type MenuEntry } from '@/lib/site-menu'
 import { useStoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { categoryNames } from '@/lib/store-discovery'
 import { DesktopSubmenuItem } from '@/components/website-renderer/sections/header-submenu'
@@ -339,6 +339,13 @@ function LogoImage({ navigation }: { navigation: WebsiteSchema['navigation'] }) 
 }
 
 /** One resolved menu entry as both the desktop bar and the mobile panel draw it. */
+function toMenuChildren(
+  children: MenuChild[],
+  asAnchorClick: (href: string) => (e: React.MouseEvent<HTMLElement>) => void,
+) {
+  return children.map((c) => ({ key: c.key, label: c.label, href: c.href, onSelect: asAnchorClick(c.href) }))
+}
+
 function buildMenuItems({
   entries,
   activeSlug,
@@ -372,12 +379,24 @@ function buildMenuItems({
       const { link } = entry
       const href =
         cartSlug && isProductsLink(link.label, link.href) ? storeListHref(cartSlug) : normalizeHref(link.href)
-      return { key: link.label + link.href, label: link.label, href: href || '#', onSelect: asAnchorClick(href) }
+      return {
+        key: link.label + link.href,
+        label: link.label,
+        href: href || '#',
+        onSelect: asAnchorClick(href),
+        ...(entry.children ? { children: toMenuChildren(entry.children, asAnchorClick) } : {}),
+      }
     }
     const { page } = entry
     if (cartSlug && isProductsLink(page.title)) {
       const href = storeListHref(cartSlug)
-      return { key: entry.key, label: entry.label, href, onSelect: asAnchorClick(href) }
+      return {
+        key: entry.key,
+        label: entry.label,
+        href,
+        onSelect: asAnchorClick(href),
+        ...(entry.children ? { children: toMenuChildren(entry.children, asAnchorClick) } : {}),
+      }
     }
     // Store sub-pages (blog, legal, product list) have no in-memory page switcher,
     // so a real link to the page is the only way the entry can work there.

@@ -31,22 +31,30 @@ export function isProductsEntry(entry: MenuEntry): boolean {
 }
 
 /**
- * Hands the categories to the products entry as its children. `enabled`
- * defaults to ON (undefined); an explicit `false` is the owner's switch. Only the
- * first products entry gets children and only when 2+ categories exist.
+ * Hands the categories to the products entry as its children. `enabled` is
+ * OPT-IN: only an explicit `true` shows the sub-menu, so a site saved before the
+ * feature (undefined) renders exactly the HTML it always did. New sites get
+ * `true` seeded (`seedProductsSubmenu`), unpublished drafts get it when loaded.
+ * Only the first products entry gets children and only when 2+ categories exist.
  */
 export function withProductChildren(
   entries: MenuEntry[],
   categories: MenuCategory[] | undefined,
   enabled: boolean | undefined,
 ): MenuEntry[] {
-  if (enabled === false || !categories || categories.length < SUBMENU_MIN_CATEGORIES) return entries
+  if (enabled !== true || !categories || categories.length < SUBMENU_MIN_CATEGORIES) return entries
   let done = false
   return entries.map((entry) => {
     if (done || !isProductsEntry(entry)) return entry
     done = true
     return { ...entry, children: categories.map((c) => ({ key: c.key, label: c.label, href: c.href })) }
   })
+}
+
+/** Turns the sub-menu on for a site that has never made a choice (new generations, unpublished drafts). */
+export function seedProductsSubmenu<T extends Pick<WebsiteSchema, 'navigation'>>(site: T): T {
+  if (site.navigation.productsSubmenu !== undefined) return site
+  return { ...site, navigation: { ...site.navigation, productsSubmenu: true } }
 }
 
 /** Children of the products entry, for the menu layout panel. */

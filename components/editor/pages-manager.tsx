@@ -258,7 +258,7 @@ export function PagesManager({
           <input
             type="checkbox"
             className="mt-0.5"
-            checked={site.navigation.productsSubmenu !== false}
+            checked={site.navigation.productsSubmenu === true}
             onChange={(e) => onDispatch({ op: 'setProductsSubmenu', enabled: e.target.checked })}
           />
           <span className="flex flex-col gap-0.5">
