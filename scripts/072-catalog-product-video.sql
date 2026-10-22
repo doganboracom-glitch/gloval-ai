@@ -1,4 +1,4 @@
--- 064: ecommerce_products.video_url (katalog urun videosu)
+-- 072: ecommerce_products.video_url (katalog urun videosu)
 --
 -- UYGULANMADI. Onay bekliyor. Idempotent, geriye uyumludur: kolon yoksa uygulama
 -- video sekmesini gizler, mevcut urunler etkilenmez. get_store_products RPC'sine

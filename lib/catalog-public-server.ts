@@ -45,7 +45,7 @@ export async function loadCatalogPaths(
   return buildCatalogPaths(products, await loadCategories(projectId))
 }
 
-/** `video_url` lives outside the public RPC; a database without migration 064 simply has no videos. */
+/** `video_url` lives outside the public RPC; a database without migration 072 simply has no videos. */
 async function loadVideoUrls(projectId: string): Promise<Map<string, string>> {
   const { data, error } = await createAdminClient()
     .from('ecommerce_products')
