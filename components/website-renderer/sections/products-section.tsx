@@ -134,12 +134,17 @@ function CatalogShowcase({
 
 function SchemaProducts({ data }: { data: ProductsData }) {
   const carousel = data.layout === 'carousel'
+  const single = data.items.length === 1
 
   return (
     <SectionShell id="products">
       <SectionHeading title={data.title} subtitle={data.subtitle} />
 
-      {carousel ? (
+      {single ? (
+        <div className="mx-auto mt-10 grid max-w-xs gap-5" data-single-item="true">
+          <ProductCard item={data.items[0]} seed={1} />
+        </div>
+      ) : carousel ? (
         // Mobile: contained horizontal snap-scroll (bleeds to the section
         // padding edges). Desktop: a 4-up grid that fits exactly, so no
         // horizontal scrollbar ever leaks onto the page.

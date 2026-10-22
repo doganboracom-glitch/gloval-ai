@@ -17,9 +17,14 @@ export function StatsSection({ data }: { data: StatsData }) {
         <SectionHeading title={data.title} subtitle={data.subtitle} />
       ) : null}
       <div
-        className={`grid gap-6 ${data.title ? 'mt-10' : ''} grid-cols-2 ${
-          cols >= 4 ? 'lg:grid-cols-4' : cols === 3 ? 'lg:grid-cols-3' : ''
-        }`}
+        className={
+          cols === 1
+            ? `mx-auto grid max-w-xs gap-6 ${data.title ? 'mt-10' : ''}`
+            : `grid gap-6 ${data.title ? 'mt-10' : ''} grid-cols-2 ${
+                cols >= 4 ? 'lg:grid-cols-4' : cols === 3 ? 'lg:grid-cols-3' : ''
+              }`
+        }
+        data-single-item={cols === 1 ? 'true' : undefined}
       >
         {data.items.map((item, i) => (
           <div

@@ -13,7 +13,14 @@ export function FeaturesSection({ data }: { data: FeaturesData }) {
   return (
     <SectionShell id="features" tinted>
       <SectionHeading title={data.title} subtitle={data.subtitle} />
-      <div className="mt-10 grid gap-x-8 gap-y-8 sm:grid-cols-2">
+      <div
+        className={
+          data.items.length === 1
+            ? 'mx-auto mt-10 grid max-w-md gap-x-8 gap-y-8'
+            : 'mt-10 grid gap-x-8 gap-y-8 sm:grid-cols-2'
+        }
+        data-single-item={data.items.length === 1 ? 'true' : undefined}
+      >
         {data.items.map((item) => (
           <div key={item.title} className="flex items-start gap-4">
             <span

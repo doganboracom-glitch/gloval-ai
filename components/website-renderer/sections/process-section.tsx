@@ -10,7 +10,14 @@ export function ProcessSection({ data }: { data: ProcessData }) {
   return (
     <SectionShell id="process" tinted>
       <SectionHeading title={data.title} subtitle={data.subtitle} />
-      <ol className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <ol
+        className={
+          data.steps.length === 1
+            ? 'mx-auto mt-10 grid max-w-md gap-6'
+            : 'mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4'
+        }
+        data-single-item={data.steps.length === 1 ? 'true' : undefined}
+      >
         {data.steps.map((step, i) => (
           <li key={i} className="relative flex flex-col">
             <div className="flex items-center gap-3">

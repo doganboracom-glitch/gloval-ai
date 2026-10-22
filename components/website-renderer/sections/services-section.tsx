@@ -105,7 +105,14 @@ export function ServicesSection({
   return (
     <SectionShell id="services">
       <SectionHeading title={data.title} subtitle={data.subtitle} />
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div
+        className={
+          data.items.length === 1
+            ? 'mx-auto mt-10 grid max-w-md gap-4'
+            : 'mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
+        }
+        data-single-item={data.items.length === 1 ? 'true' : undefined}
+      >
         {data.items.map((item, i) => {
           const rawHref = links?.itemHrefs[i] ?? null
           if (rawHref) {
