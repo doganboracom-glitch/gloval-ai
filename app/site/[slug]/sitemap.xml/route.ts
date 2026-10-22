@@ -8,6 +8,8 @@ import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 import { getLiveBlogPosts } from '@/lib/blog-server'
 import { resolveServices, servicePath } from '@/lib/service-pages'
 import { blogPostPath, indexablePosts } from '@/lib/blog'
+import { loadPublicCatalog } from '@/lib/catalog-public-server'
+import { catalogCategoryPath, catalogListPath, catalogProductPath } from '@/lib/catalog-public'
 
 /**
  * Per-tenant sitemap for a published site.
@@ -97,6 +99,23 @@ export async function GET(
         changefreq: 'weekly',
         priority: '0.6',
         lastmod: toIso(product.created_at),
+      })
+    }
+  }
+
+  // Catalog sites: list, one URL per category and one per product.
+  const catalog = await loadPublicCatalog(slug).catch(() => null)
+  if (catalog && catalog.items.length > 0) {
+    entries.push({ loc: `${base}${catalogListPath()}`, changefreq: 'weekly', priority: '0.8', lastmod: lastModified })
+    for (const group of catalog.groups) {
+      entries.push({ loc: `${base}${catalogCategoryPath(group.slug)}`, changefreq: 'weekly', priority: '0.7', lastmod: lastModified })
+    }
+    for (const item of catalog.items) {
+      entries.push({
+        loc: `${base}${catalogProductPath(item.categorySlug, item.slug)}`,
+        changefreq: 'weekly',
+        priority: '0.6',
+        lastmod: lastModified,
       })
     }
   }

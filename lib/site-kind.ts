@@ -8,9 +8,17 @@ import { getCommerceMode } from '@/lib/commerce-mode'
  */
 export type SiteKind = 'corporate' | 'ecommerce' | 'catalog'
 
-export const SITE_KINDS: readonly SiteKind[] = ['corporate', 'ecommerce', 'catalog']
+/**
+ * What an admin may switch a site TO. `catalog` is deliberately absent: it is
+ * not a site type but a feature a corporate site turns on in the editor
+ * (`commerce_mode = 'catalog'`, `project_type` untouched). Existing catalog
+ * rows still read as `catalog` through `siteKindOf` and may be switched away.
+ */
+export type SelectableSiteKind = Exclude<SiteKind, 'catalog'>
 
-export function isSiteKind(value: unknown): value is SiteKind {
+export const SITE_KINDS: readonly SelectableSiteKind[] = ['corporate', 'ecommerce']
+
+export function isSiteKind(value: unknown): value is SelectableSiteKind {
   return typeof value === 'string' && (SITE_KINDS as readonly string[]).includes(value)
 }
 
@@ -31,9 +39,8 @@ export function canManageProducts(project: {
   return project.project_type === 'ecommerce' || project.commerce_mode === 'catalog'
 }
 
-export function columnsForKind(kind: SiteKind): { project_type: 'corporate' | 'ecommerce'; commerce_mode: 'none' | 'ecommerce' | 'catalog' } {
+export function columnsForKind(kind: SelectableSiteKind): { project_type: 'corporate' | 'ecommerce'; commerce_mode: 'none' | 'ecommerce' } {
   if (kind === 'ecommerce') return { project_type: 'ecommerce', commerce_mode: 'ecommerce' }
-  if (kind === 'catalog') return { project_type: 'ecommerce', commerce_mode: 'catalog' }
   return { project_type: 'corporate', commerce_mode: 'none' }
 }
 

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, Package, Pencil } from 'lucide-react'
 import { previewSiteTypeChange, setSiteType, type SiteTypeImpact } from '@/lib/admin/actions'
-import { MAX_TYPE_CHANGE_NOTE, MIN_TYPE_CHANGE_NOTE, siteKindOf, type SiteKind } from '@/lib/site-kind'
+import { MAX_TYPE_CHANGE_NOTE, MIN_TYPE_CHANGE_NOTE, siteKindOf, type SelectableSiteKind, type SiteKind } from '@/lib/site-kind'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useLanguage } from '@/components/language-provider'
 import { adminT } from '@/lib/admin/i18n'
@@ -39,7 +39,7 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
     return t.sites.typeChangeFailed
   }
 
-  function openChange(site: AdminSite, next: SiteKind) {
+  function openChange(site: AdminSite, next: SelectableSiteKind) {
     setNote('')
     setChange({ site, impact: null, error: null })
     startTransition(async () => {
@@ -152,13 +152,17 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
               <select
                 value={siteKindOf({ project_type: s.projectType, commerce_mode: s.commerceMode })}
                 disabled={pending}
-                onChange={(e) => openChange(s, e.target.value as SiteKind)}
+                onChange={(e) => openChange(s, e.target.value as SelectableSiteKind)}
                 aria-label={t.sites.type}
                 className="h-8 rounded-md border border-border bg-card/70 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:opacity-60"
               >
                 <option value="corporate">{t.sites.corporate}</option>
                 <option value="ecommerce">{t.sites.ecommerce}</option>
-                <option value="catalog">{t.sites.catalog}</option>
+                {siteKindOf({ project_type: s.projectType, commerce_mode: s.commerceMode }) === 'catalog' ? (
+                  <option value="catalog" disabled>
+                    {t.sites.catalog}
+                  </option>
+                ) : null}
               </select>
             </Td>
             <Td>

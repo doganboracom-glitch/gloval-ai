@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { columnsForKind, isSiteKind, siteKindOf, siteTypeBlocker } from '@/lib/site-kind'
 
 describe('siteKindOf / columnsForKind', () => {
-  it('round-trips every kind through the column pair', () => {
-    for (const kind of ['corporate', 'ecommerce', 'catalog'] as const) {
+  it('round-trips every selectable kind through the column pair', () => {
+    for (const kind of ['corporate', 'ecommerce'] as const) {
       expect(siteKindOf(columnsForKind(kind))).toBe(kind)
     }
   })
@@ -11,11 +11,16 @@ describe('siteKindOf / columnsForKind', () => {
   it('keeps project_type and commerce_mode consistent', () => {
     expect(columnsForKind('corporate')).toEqual({ project_type: 'corporate', commerce_mode: 'none' })
     expect(columnsForKind('ecommerce')).toEqual({ project_type: 'ecommerce', commerce_mode: 'ecommerce' })
-    expect(columnsForKind('catalog')).toEqual({ project_type: 'ecommerce', commerce_mode: 'catalog' })
+  })
+
+  it('reads an existing catalog row as catalog without ever writing it', () => {
+    expect(siteKindOf({ project_type: 'corporate', commerce_mode: 'catalog' })).toBe('catalog')
+    expect(siteKindOf({ project_type: 'ecommerce', commerce_mode: 'catalog' })).toBe('catalog')
   })
 
   it('validates unknown input', () => {
-    expect(isSiteKind('catalog')).toBe(true)
+    expect(isSiteKind('catalog')).toBe(false)
+    expect(isSiteKind('ecommerce')).toBe(true)
     expect(isSiteKind('store')).toBe(false)
     expect(isSiteKind(undefined)).toBe(false)
   })
