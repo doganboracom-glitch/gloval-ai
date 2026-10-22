@@ -9,6 +9,8 @@ import { resolveFooterSocialLinks } from '@/lib/social-links'
 import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withBlogFooterLink, withoutBlogLinks } from '@/lib/blog-site'
+import { pageMenuLabel, resolveFooterPages } from '@/lib/site-menu'
+import { pageNavItems, pagePath } from '@/lib/website-pages'
 import { OPEN_CART_EVENT } from '@/components/store/cart-provider'
 import { hasAnyPaymentBadge, type PaymentBadgeSet } from '@/lib/payment-badges'
 import {
@@ -111,9 +113,16 @@ export function WebsiteFooter({
 }) {
   const blogLink = useBlogLink()
   const resolvedColumns = resolveFooterColumns(data.columns, site)
-  const columns = blogLink
+  const withBlog = blogLink
     ? withBlogFooterLink(resolvedColumns, { label: blogLink.label, href: blogLink.href }, lang)
     : resolvedColumns.map((col) => ({ ...col, links: withoutBlogLinks(col.links) }))
+  const columns = site
+    ? resolveFooterPages(pageNavItems(site), site.navigation.menuOrder).reduce((acc, page) => {
+        const href = pagePath(site, page.slug)
+        if (acc.some((col) => col.links.some((l) => l.href === href))) return acc
+        return withBlogFooterLink(acc, { label: pageMenuLabel(page), href }, lang)
+      }, withBlog)
+    : withBlog
   const legal = [
     ...resolveStoreEssentialPageLinks(site, columns, lang),
     ...resolveFooterLegal(data.legal, site, lang),

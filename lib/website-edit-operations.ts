@@ -24,6 +24,15 @@ import {
 } from '@/lib/social-links'
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 import { uniquePageSlug } from '@/lib/page-slugs'
+import { addContactToMenu } from '@/lib/site-menu'
+
+function newPageId(pages: { id?: string }[], slug: string): string {
+  const used = new Set(pages.map((p) => p.id))
+  const base = `pg-${slug}`.slice(0, 56)
+  let id = base
+  for (let n = 2; used.has(id); n++) id = `${base}-${n}`
+  return id
+}
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
@@ -276,6 +285,12 @@ export type EditOperation =
   | { op: 'renamePage'; pageIndex: number; title: string; slug?: string }
   | { op: 'setPageSeo'; pageIndex: number; title?: string; description?: string; indexable?: boolean }
   | { op: 'movePage'; pageIndex: number; direction: 'up' | 'down' }
+  /** Header/footer switches and short label of one page. An empty `menuLabel` clears it. */
+  | { op: 'setPageMenu'; pageIndex: number; showInHeader?: boolean; showInFooter?: boolean; menuLabel?: string }
+  /** Header order as page ids (plus `blog`). An empty list restores the page order. */
+  | { op: 'setMenuOrder'; order: string[] }
+  /** Adds the Contact entry to the header (accepting the suggestion) or closes the suggestion for good. */
+  | { op: 'resolveContactSuggestion'; accept: boolean; lang?: 'tr' | 'en' }
   /**
    * Replaces a footer's link columns and/or official-text bar. Entries with an
    * empty label or an invalid target are NOT saved (no dead links).
@@ -873,7 +888,7 @@ export function applyOperation(
       const title = operation.title.trim().slice(0, 60)
       if (!title || next.pages.length >= SITE_PAGE_HARD_CAP) return next
       const slug = uniquePageSlug(operation.slug?.trim() || title, next.pages.map((p) => p.slug))
-      next.pages.push({ slug, title, kind: 'custom', sections: [] })
+      next.pages.push({ slug, title, kind: 'custom', sections: [], id: newPageId(next.pages, slug) })
       return next
     }
 
@@ -887,8 +902,31 @@ export function applyOperation(
         kind: 'info',
         sections: structuredClone(operation.page.sections),
         seo: operation.page.seo,
+        id: newPageId(next.pages, slug),
       })
       return next
+    }
+
+    case 'setPageMenu': {
+      const page = next.pages[operation.pageIndex]
+      if (!page) return next
+      if (operation.showInHeader !== undefined) page.showInHeader = operation.showInHeader
+      if (operation.showInFooter !== undefined) page.showInFooter = operation.showInFooter
+      if (operation.menuLabel !== undefined) page.menuLabel = operation.menuLabel.trim().slice(0, 40) || undefined
+      return next
+    }
+
+    case 'setMenuOrder': {
+      const known = new Set<string>(['blog', ...next.pages.flatMap((p) => (p.id ? [p.id] : [p.slug]))])
+      const order = [...new Set(operation.order)].filter((key) => known.has(key)).slice(0, 40)
+      next.navigation.menuOrder = order.length > 0 ? order : undefined
+      return next
+    }
+
+    case 'resolveContactSuggestion': {
+      const resolved = operation.accept ? addContactToMenu(next, operation.lang) : next
+      resolved.navigation = { ...resolved.navigation, contactSuggestionDismissed: true }
+      return resolved
     }
 
     case 'renamePage': {
@@ -930,6 +968,11 @@ export function applyOperation(
       if (operation.pageIndex === homeIndex) return next
       if (operation.pageIndex < 0 || operation.pageIndex >= next.pages.length) return next
       const [removed] = next.pages.splice(operation.pageIndex, 1)
+      if (next.navigation.menuOrder) {
+        const key = removed.id ?? removed.slug
+        const order = next.navigation.menuOrder.filter((k) => k !== key)
+        next.navigation.menuOrder = order.length > 0 ? order : undefined
+      }
       // `pages` drives the header of a multi-page site while `navigation.links`
       // is what a single-page render, the published site and exports read.
       // Drop the page's own link in the same step so the two never disagree.

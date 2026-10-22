@@ -4,9 +4,31 @@ import { siteRepairOptions } from '@/lib/site-repair'
 import { normalizeAboutMedia } from '@/lib/about-media'
 import { syncSectionPages } from '@/lib/service-pages'
 
-/** Stored-site invariants: valid about media, and the detail page list matching `detail`. */
+/**
+ * Gives every page a stable `id` (derived from its slug the first time, then kept), so
+ * menu entries keep pointing at the page after a slug change. Returns the same object
+ * when nothing is missing.
+ */
+export function ensurePageIds(site: WebsiteSchema): WebsiteSchema {
+  const pages = site.pages
+  if (!pages || pages.every((p) => p.id)) return site
+  const used = new Set(pages.map((p) => p.id).filter((id): id is string => Boolean(id)))
+  return {
+    ...site,
+    pages: pages.map((page) => {
+      if (page.id) return page
+      const base = `pg-${page.slug}`.slice(0, 56)
+      let id = base
+      for (let n = 2; used.has(id); n++) id = `${base}-${n}`
+      used.add(id)
+      return { ...page, id }
+    }),
+  }
+}
+
+/** Stored-site invariants: valid about media, the detail page list matching `detail`, page ids. */
 function finalize(site: WebsiteSchema): WebsiteSchema {
-  return syncSectionPages(normalizeAboutMedia(site))
+  return ensurePageIds(syncSectionPages(normalizeAboutMedia(site)))
 }
 
 export type NormalizedSite =

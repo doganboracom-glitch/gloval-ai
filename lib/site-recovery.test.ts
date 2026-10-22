@@ -3,7 +3,7 @@ import { fakeDb } from '@/lib/__fixtures__/fake-db'
 import { buildCleanSite } from '@/lib/__fixtures__/sample-site'
 import { publishProject, restoreLastValidVersion } from '@/lib/projects'
 import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
-import { pickLastValidSchema } from '@/lib/website-schema-compat'
+import { ensurePageIds, pickLastValidSchema } from '@/lib/website-schema-compat'
 import { fallbackWebsite, websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -80,7 +80,7 @@ describe('pickLastValidSchema', () => {
       { created_at: '2026-01-02T00:00:00Z', schema_data: valid },
       { created_at: '2026-01-01T00:00:00Z', schema_data: older },
     ])
-    expect(picked).toEqual(valid)
+    expect(picked).toEqual(ensurePageIds(valid))
   })
 
   it('returns null when nothing is readable', () => {

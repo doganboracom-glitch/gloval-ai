@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { setBlogLatestEnabled, withLegacyBlogLatest } from '@/lib/section-order'
 import { fallbackWebsite, websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
-import { normalizeWebsiteSchema, parseWebsiteForSave } from '@/lib/website-schema-compat'
+import { ensurePageIds, normalizeWebsiteSchema, parseWebsiteForSave } from '@/lib/website-schema-compat'
 
 function siteAtCap(): WebsiteSchema {
   const base = fallbackWebsite('kahve dükkanı', 'tr')
@@ -25,8 +25,19 @@ describe('normalizeWebsiteSchema', () => {
     if (result.ok) {
       expect(result.repaired).toBe(false)
       expect(result.steps).toEqual([])
-      expect(result.value).toEqual(site)
+      expect(result.value).toEqual(ensurePageIds(site))
+      expect(result.value.pages?.every((p) => p.id)).toBe(true)
     }
+  })
+
+  it('fills missing page ids once and keeps existing ones', () => {
+    const site = fallbackWebsite('kahve dükkanı', 'tr')
+    const once = ensurePageIds(site)
+    expect(ensurePageIds(once)).toBe(once)
+    const ids = once.pages?.map((p) => p.id) ?? []
+    expect(new Set(ids).size).toBe(ids.length)
+    const renamed = { ...once, pages: once.pages?.map((p) => ({ ...p, slug: `${p.slug}-x` })) }
+    expect(ensurePageIds(renamed).pages?.map((p) => p.id)).toEqual(ids)
   })
 
   it('repairs a site with more sections than the cap and keeps it schema-valid', () => {

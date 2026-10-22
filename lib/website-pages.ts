@@ -22,6 +22,12 @@ export type PageItem = {
   isHome: boolean
   detail?: boolean
   detailOf?: 'about' | 'services'
+  id?: string
+  showInHeader?: boolean
+  showInFooter?: boolean
+  menuLabel?: string
+  /** A detail page whose switch is off or whose text is unapproved: the public URL is a 404. */
+  unpublished?: boolean
 }
 
 /**
@@ -130,10 +136,22 @@ export function pageNavItems(site: WebsiteSchema): PageItem[] {
     return [{ slug: 'home', title: site.meta.name, isHome: true }]
   }
   let homeFound = false
+  const aboutLive = resolveAboutDetail(site)?.pageActive === true
+  const servicesLive = resolveServices(site)?.pageActive === true
   const items: PageItem[] = pages.map((p, i) => {
     const isHome = p.isHome === true || (!pages.some((x) => x.isHome) && i === 0)
     if (isHome) homeFound = true
-    return { slug: p.slug || `page-${i}`, title: p.title, isHome, ...(p.kind === 'detail' ? { detail: true, ...(p.detailOf ? { detailOf: p.detailOf } : {}) } : {}) }
+    const live = p.detailOf === 'services' ? servicesLive : aboutLive
+    return {
+      slug: p.slug || `page-${i}`,
+      title: p.title,
+      isHome,
+      ...(p.kind === 'detail' ? { detail: true, ...(p.detailOf ? { detailOf: p.detailOf } : {}), ...(live ? {} : { unpublished: true }) } : {}),
+      ...(p.id ? { id: p.id } : {}),
+      ...(p.showInHeader !== undefined ? { showInHeader: p.showInHeader } : {}),
+      ...(p.showInFooter !== undefined ? { showInFooter: p.showInFooter } : {}),
+      ...(p.menuLabel?.trim() ? { menuLabel: p.menuLabel.trim() } : {}),
+    }
   })
   if (!homeFound && items[0]) items[0].isHome = true
   return items

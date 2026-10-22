@@ -79,7 +79,8 @@ describe('home page "Daha fazlası…" link', () => {
     })
     expect(aboutDetailLink(site)).toBeNull()
     const html = renderToStaticMarkup(<WebsiteRenderer site={site} pageRouting initialPage={null} />)
-    expect(html).not.toContain('href="/hakkimizda"')
+    const label = aboutDetailLink(approvedSite())!.label
+    expect(html).not.toContain(label)
   })
 })
 
