@@ -91,7 +91,10 @@ describe('tenant sitemap with a single service', () => {
     vi.doMock('@/lib/site-availability', () => ({ closedSiteFileResponse: () => new Response('closed', { status: 404 }) }))
     vi.doMock('@/lib/store', () => ({ getStoreProducts: async () => [] }))
     vi.doMock('@/lib/commerce-mode', () => ({ storeSeoPlan: () => ({ indexStore: false }) }))
-    vi.doMock('@/lib/commerce-mode-server', () => ({ getPublishedSiteCommerceMode: async () => null }))
+    vi.doMock('@/lib/commerce-mode-server', () => ({
+      getPublishedSiteCommerceMode: async () => null,
+      getPublishedSiteRouting: async () => ({ id: null, mode: 'none', projectType: null, catalogPaths: false }),
+    }))
     vi.doMock('@/lib/seo/site-seo', () => ({
       getSiteSeoContext: async () => ({ origin: 'https://x.gloval.site', lastModified: null }),
     }))

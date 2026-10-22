@@ -23,7 +23,10 @@ vi.mock('@/lib/seo/site-seo', () => ({
   }),
 }))
 vi.mock('@/lib/store', () => ({ getStoreProducts: async () => [] }))
-vi.mock('@/lib/commerce-mode-server', () => ({ getPublishedSiteCommerceMode: async () => 'none' }))
+vi.mock('@/lib/commerce-mode-server', () => ({
+  getPublishedSiteCommerceMode: async () => 'none',
+  getPublishedSiteRouting: async () => ({ id: null, mode: 'none', projectType: null, catalogPaths: false }),
+}))
 vi.mock('@/lib/blog-server', () => ({ getLiveBlogPosts: async () => [] }))
 
 function legacySite(lang: 'tr' | 'en'): WebsiteSchema {

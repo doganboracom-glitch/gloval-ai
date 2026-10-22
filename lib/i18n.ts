@@ -690,7 +690,7 @@ const dict = {
     publish: {
       publish: 'Yayınla',
       republish: 'Yeniden yayınla',
-      publishing: 'Yayınlan��yor...',
+      publishing: 'Yayınlanıyor...',
       published: 'Yayınlandı',
       liveAt: 'Siten yayında:',
       unpublish: 'Yayından kaldır',
