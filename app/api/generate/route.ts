@@ -4,7 +4,7 @@ import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedContactActions } from '@/lib/site-contact-actions'
-import { addMissingToMenu } from '@/lib/site-menu'
+import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
@@ -206,7 +206,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail)), pageLimit)),
+              seedProductsSubmenu(seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail)), pageLimit))),
               normalizedLang,
             ),
             normalizedLang,
@@ -241,7 +241,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout)))),
+              seedProductsSubmenu(seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout))))),
               normalizedLang,
             ),
             normalizedLang,

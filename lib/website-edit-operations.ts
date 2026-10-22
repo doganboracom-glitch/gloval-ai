@@ -926,7 +926,7 @@ export function applyOperation(
     }
 
     case 'setProductsSubmenu': {
-      next.navigation.productsSubmenu = operation.enabled ? undefined : false
+      next.navigation.productsSubmenu = operation.enabled
       return next
     }
 
