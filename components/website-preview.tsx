@@ -1,5 +1,7 @@
 'use client'
 
+import { guardEdit, vetAiSuggestion } from '@/lib/edit-guard'
+import { INVALID_SCHEMA_ERROR, INVALID_SCHEMA_MESSAGE, checkPublishable } from '@/lib/publish-gate'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readImageStorageFailure } from '@/lib/image-storage-error'
 import { createPortal } from 'react-dom'
@@ -214,6 +216,7 @@ export function WebsitePreview({
       | { url: string }
       | {
           error: string
+          message?: string
           used?: number
           total?: number
           sections?: SampleSectionFinding[]
@@ -407,6 +410,9 @@ export function WebsitePreview({
     sectionIndex: number | null
   } | null>(null)
 
+  const pendingAiEditRef = useRef(pendingAiEdit)
+  pendingAiEditRef.current = pendingAiEdit
+
   const currentSite = history.present
   const canUndo = history.past.length > 0
   const canRedo = history.future.length > 0
@@ -429,6 +435,17 @@ export function WebsitePreview({
 
   // Apply a typed visual operation and push it onto the history stack.
   const dispatch = useCallback((op: EditOperation) => {
+    const live = historyRef.current
+    if (live) {
+      const candidate = clearEditedSampleFlags(live, applyOperation(live, op))
+      if (JSON.stringify(candidate) !== JSON.stringify(live)) {
+        const verdict = guardEdit(live, candidate)
+        if (!verdict.ok) {
+          flashToast('err', verdict.message)
+          return
+        }
+      }
+    }
     setHistory((h) => {
       if (!h.present) return h
       // A sample item the owner edits by hand becomes their own content.
@@ -457,12 +474,18 @@ export function WebsitePreview({
 
   // Commits a completed schema edit as ONE history entry (so an AI edit or a
   // multi-operation command can be undone in a single step).
-  const commitSchema = useCallback((nextSchema: WebsiteSchema) => {
+  const commitSchema = useCallback((nextSchema: WebsiteSchema): boolean => {
+    const verdict = guardEdit(historyRef.current, nextSchema)
+    if (!verdict.ok) {
+      flashToast('err', verdict.message)
+      return false
+    }
     setHistory((h) =>
       h.present
         ? { past: [...h.past, h.present], present: nextSchema, future: [] }
         : { past: [], present: nextSchema, future: [] },
     )
+    return true
   }, [])
 
   // Tracks the last-persisted schema so autosave only fires on real changes and
@@ -564,10 +587,18 @@ export function WebsitePreview({
     const siteToPublish = siteOverride ?? currentSite
     if (!persist?.publish || !siteToPublish || publishState === 'publishing') return
     stopAllVoiceInput()
+    if (!checkPublishable(siteToPublish).ok) {
+      flashToast('err', INVALID_SCHEMA_MESSAGE)
+      return
+    }
     setPublishState('publishing')
     try {
       const result = await persist.publish(siteToPublish, approvals, confirmedReal)
       if ('error' in result) {
+        if (result.error === INVALID_SCHEMA_ERROR) {
+          flashToast('err', result.message ?? INVALID_SCHEMA_MESSAGE)
+          return
+        }
         if (result.error === SAMPLE_CONTENT_ERROR) {
           const ids = (result.sections ?? []).flatMap((section) => section.items.map((item) => item.id))
           setSampleGateIds(new Set(ids))
@@ -1007,10 +1038,17 @@ export function WebsitePreview({
   // Commits the pending AI suggestion into the SAME history stack a manual
   // edit uses, so it can be undone/redone and autosaved identically.
   const applyPendingAiEdit = useCallback(() => {
-    setPendingAiEdit((pending) => {
-      if (pending) commitSchema(pending.after)
-      return null
-    })
+    const pending = pendingAiEditRef.current
+    setPendingAiEdit(null)
+    if (!pending) return
+    const live = historyRef.current
+    const verdict = live ? vetAiSuggestion(live, pending.after) : null
+    if (verdict && !verdict.ok) {
+      flashToast('err', verdict.message)
+      setMessages((prev) => [...prev, { role: 'assistant', text: verdict.message }])
+      return
+    }
+    commitSchema(verdict ? verdict.schema : pending.after)
   }, [commitSchema])
 
   // Discards the suggestion; the canvas falls back to rendering the
@@ -1187,7 +1225,15 @@ export function WebsitePreview({
           }
           if (valid.success) {
             debug('AI edit — patched site name:', valid.data.meta.name)
-            commitSchema(valid.data)
+            if (!commitSchema(valid.data)) {
+              setMessages((prev) => [
+                ...prev,
+                { role: 'assistant', text: 'Bu değişiklik sitenizin yapısını bozacağı için uygulanmadı.' },
+              ])
+              setEditing(false)
+              setAiPhase(null)
+              return false
+            }
             setMessages((prev) => [...prev, { role: 'assistant', text: parsed.feedback }])
             flashToast('ok', t.editor.success)
             setEditing(false)
@@ -1270,8 +1316,14 @@ export function WebsitePreview({
         flashToast('err', t.editor.failure)
         return false
       }
-      const parsed = websiteSchema.safeParse(data.schema)
-      if (!parsed.success) throw new Error('invalid')
+      const vetted = vetAiSuggestion(currentSite, data.schema)
+      if (!vetted.ok) {
+        // Rejected: nothing reaches the canvas or the history.
+        setMessages((prev) => [...prev, { role: 'assistant', text: vetted.message }])
+        flashToast('err', vetted.message)
+        return false
+      }
+      const parsed = { success: true as const, data: vetted.schema }
 
       const changeLines: string[] = Array.isArray(data.changes)
         ? data.changes.filter((c: unknown): c is string => typeof c === 'string')
@@ -1692,6 +1744,7 @@ export function WebsitePreview({
                 <IframeCanvas fontsHref={fontsHref}>
                   <WebsiteRenderer
                     site={pendingAiEdit ? pendingAiEdit.after : currentSite}
+                    onUndoLastChange={canUndo ? undo : null}
                     planCode={planCode}
                     preview={previewNav}
                     blog={previewBlog}

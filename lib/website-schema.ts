@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { ANNOUNCEMENT_MAX_ITEMS, LIST_LIMITS } from '@/lib/list-limits'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 
 /**
@@ -201,8 +202,8 @@ export const heroSection = z.object({
     .describe('Legacy simple hero image prompt (prefer `image`)'),
   slides: z
     .array(heroSlideSchema)
-    .min(1)
-    .max(6)
+    .min(LIST_LIMITS.heroSlides.min)
+    .max(LIST_LIMITS.heroSlides.max)
     .optional()
     .describe('Slides for the "slider" variant. Ignored by other variants.'),
 })
@@ -242,8 +243,8 @@ export const sliderSection = z.object({
     .describe('"card" (contained, rounded band) or "full" (edge-to-edge). Defaults to "card".'),
   slides: z
     .array(sliderSlideSchema)
-    .min(1)
-    .max(8)
+    .min(LIST_LIMITS.slider.min)
+    .max(LIST_LIMITS.slider.max)
     .describe('The rotating slides.'),
 })
 
@@ -286,8 +287,8 @@ export const servicesSection = z.object({
         sample: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(LIST_LIMITS.services.min)
+    .max(LIST_LIMITS.services.max),
   /** List page + item pages switches ("Tüm hizmetlerimiz" link, /hizmetlerimiz). Managed by the platform. */
   detail: z
     .object({
@@ -316,8 +317,8 @@ export const featuresSection = z.object({
         icon: z.string().optional().describe('A lucide-react icon name'),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(LIST_LIMITS.features.min)
+    .max(LIST_LIMITS.features.max),
 })
 
 export const statsSection = z.object({
@@ -334,8 +335,8 @@ export const statsSection = z.object({
         sample: sampleFlag,
       }),
     )
-    .min(2)
-    .max(6),
+    .min(LIST_LIMITS.stats.min)
+    .max(LIST_LIMITS.stats.max),
 })
 
 export const pricingSection = z.object({
@@ -356,8 +357,8 @@ export const pricingSection = z.object({
         sample: sampleFlag,
       }),
     )
-    .min(1)
-    .max(4),
+    .min(LIST_LIMITS.pricing.min)
+    .max(LIST_LIMITS.pricing.max),
 })
 
 export const testimonialsSection = z.object({
@@ -373,8 +374,8 @@ export const testimonialsSection = z.object({
         sample: sampleFlag,
       }),
     )
-    .min(1)
-    .max(6),
+    .min(LIST_LIMITS.testimonials.min)
+    .max(LIST_LIMITS.testimonials.max),
 })
 
 export const gallerySection = z.object({
@@ -392,8 +393,8 @@ export const gallerySection = z.object({
         aspectRatio: z.enum(['1/1', '4/3', '3/2', '16/9', '3/4', '9/16']).optional(),
       }),
     )
-    .min(2)
-    .max(12),
+    .min(LIST_LIMITS.gallery.min)
+    .max(LIST_LIMITS.gallery.max),
 })
 
 export const portfolioSection = z.object({
@@ -412,8 +413,8 @@ export const portfolioSection = z.object({
         alt: z.string().optional(),
       }),
     )
-    .min(2)
-    .max(9),
+    .min(LIST_LIMITS.portfolio.min)
+    .max(LIST_LIMITS.portfolio.max),
 })
 
 /**
@@ -464,8 +465,8 @@ export const productsSection = z.object({
         href: z.string().optional().describe('Where the card/action points'),
       }),
     )
-    .min(2)
-    .max(12),
+    .min(LIST_LIMITS.products.min)
+    .max(LIST_LIMITS.products.max),
 })
 
 /**
@@ -489,8 +490,8 @@ export const categoriesSection = z.object({
         href: z.string().optional().describe('Where the tile points'),
       }),
     )
-    .min(2)
-    .max(8),
+    .min(LIST_LIMITS.categories.min)
+    .max(LIST_LIMITS.categories.max),
 })
 
 export const processSection = z.object({
@@ -506,8 +507,8 @@ export const processSection = z.object({
         icon: z.string().optional().describe('A lucide-react icon name'),
       }),
     )
-    .min(2)
-    .max(6),
+    .min(LIST_LIMITS.process.min)
+    .max(LIST_LIMITS.process.max),
 })
 
 export const teamSection = z.object({
@@ -525,8 +526,8 @@ export const teamSection = z.object({
         src: z.string().optional().describe('A resolved portrait image URL or path, if available'),
       }),
     )
-    .min(1)
-    .max(8),
+    .min(LIST_LIMITS.team.min)
+    .max(LIST_LIMITS.team.max),
 })
 
 export const faqSection = z.object({
@@ -541,8 +542,8 @@ export const faqSection = z.object({
         sample: sampleFlag,
       }),
     )
-    .min(2)
-    .max(10),
+    .min(LIST_LIMITS.faq.min)
+    .max(LIST_LIMITS.faq.max),
 })
 
 /**
@@ -625,7 +626,7 @@ export const footerSection = z.object({
     .optional(),
 })
 
-export const ANNOUNCEMENT_MAX_ITEMS = 5
+export { ANNOUNCEMENT_MAX_ITEMS }
 export const ANNOUNCEMENT_TEXT_MAX = 200
 export const ANNOUNCEMENT_SPEEDS = ['slow', 'normal', 'fast'] as const
 export type AnnouncementSpeed = (typeof ANNOUNCEMENT_SPEEDS)[number]
@@ -648,7 +649,7 @@ export const announcementItemSchema = z.object({
 export const announcementSection = z.object({
   type: z.literal('announcement'),
   ...sectionEditorMeta,
-  items: z.array(announcementItemSchema).min(1).max(ANNOUNCEMENT_MAX_ITEMS),
+  items: z.array(announcementItemSchema).min(LIST_LIMITS.announcement.min).max(LIST_LIMITS.announcement.max),
   speed: z.enum(ANNOUNCEMENT_SPEEDS).default('normal'),
   pauseOnHover: z.boolean().default(true),
   dismissible: z.boolean().default(false),

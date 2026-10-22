@@ -113,7 +113,10 @@ export function WebsiteRenderer({
   blog = null,
   demoRoutes,
   onDemoRoute,
+  onUndoLastChange = null,
 }: {
+  /** Editor preview only: when the site cannot be read, offers to undo the last edit. */
+  onUndoLastChange?: (() => void) | null
   /** Demo pages only: the demo's own home/about URLs, and the slug of its long about page. */
   demoRoutes?: DemoRoutes
   /** Demo pages only: soft-navigates to one of `demoRoutes`. */
@@ -329,7 +332,7 @@ export function WebsiteRenderer({
   }, [preview, parsed, previewProducts, previewCollections])
 
   if (!parsed.success) {
-    return <RendererError />
+    return <RendererError onUndo={onUndoLastChange} />
   }
 
   const data: WebsiteSchema = parsed.data
@@ -536,13 +539,22 @@ export function WebsiteRenderer({
   return content
 }
 
-function RendererError() {
+function RendererError({ onUndo }: { onUndo: (() => void) | null }) {
   return (
     <div className="flex min-h-64 flex-col items-center justify-center gap-2 p-10 text-center">
       <p className="text-sm font-medium text-foreground">Bu sayfa şu anda görüntülenemiyor.</p>
       <p className="max-w-sm text-xs text-muted-foreground">
         Sitenizin kayıtlı yapısı okunamadı. Verileriniz silinmedi; sorunu düzeltmemiz için destek ekibine yazabilirsiniz.
       </p>
+      {onUndo && (
+        <button
+          type="button"
+          onClick={onUndo}
+          className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+        >
+          Son değişikliği geri al
+        </button>
+      )}
       <a href={NEW_TICKET_PATH} className="text-xs font-medium text-brand underline underline-offset-2">
         Destek talebi oluştur
       </a>

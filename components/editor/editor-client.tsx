@@ -119,6 +119,9 @@ export function EditorClient({
             if (result.reason === 'SUBSCRIPTION_SUSPENDED') {
               router.push('/billing')
             }
+            if (result.reason === 'INVALID_SCHEMA') {
+              return { error: result.reason, message: result.message }
+            }
             return { error: result.reason }
           }
           // Canonical public address of a published site is always its own
