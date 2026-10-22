@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { slugify } from '@/lib/slug'
 import type { StoreProduct } from '@/lib/store'
+import type { CatalogPaths } from '@/lib/catalog-public'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { ShippingSettings } from '@/lib/store-shipping-rules'
 
@@ -35,6 +36,11 @@ export type StoreCatalog = {
   collections?: Array<{ slug: string; name: string; product_ids: string[] }>
   /** Display-only shipping rules for the cart drawer; createOrder recomputes the real charge. */
   shipping?: ShippingSettings
+  /**
+   * Set only for corporate sites with the catalog feature on: product and
+   * "view all" links go to the /urunlerimiz pages instead of /store.
+   */
+  catalogPaths?: CatalogPaths
   /** True for the editor preview, which shows owner hints and has no cart. */
   isPreview?: boolean
 }

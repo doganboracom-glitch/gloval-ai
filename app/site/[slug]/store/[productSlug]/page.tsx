@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
+import { loadCatalogPaths } from '@/lib/catalog-public-server'
 import { getPublishedSite } from '@/lib/projects'
 import { getStoreProductBySlug, getStoreProducts, getStorePaymentMethods } from '@/lib/store'
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
@@ -10,7 +11,7 @@ import { ProductDetail } from '@/components/store/product-detail'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
 import { getSiteBlogData } from '@/lib/blog-server'
 import { getStoreShippingInfo } from '@/lib/store-shipping-settings'
-import { getCatalogContext, getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
+import { getCatalogContext, getPublishedSiteRouting } from '@/lib/commerce-mode-server'
 import { modeHasStoreRoutes } from '@/lib/commerce-mode'
 
 export const dynamic = 'force-dynamic'
@@ -52,11 +53,17 @@ export default async function ProductPage({
   const site = await getPublishedSite(slug)
   if (!site) notFound()
 
-  const mode = await getPublishedSiteCommerceMode(slug)
+  const { id: projectId, mode, catalogPaths } = await getPublishedSiteRouting(slug)
   if (!modeHasStoreRoutes(mode)) notFound()
 
   const product = await getStoreProductBySlug(slug, productSlug)
   if (!product) notFound()
+
+  if (catalogPaths && projectId) {
+    const paths = await loadCatalogPaths(projectId, [product])
+    const target = paths.products[product.slug]
+    if (target) permanentRedirect(`${(await getSiteSeoContext(slug)).origin}${target}`)
+  }
 
   const catalog = await getCatalogContext(slug, site.schema, mode)
 

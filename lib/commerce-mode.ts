@@ -108,8 +108,23 @@ export type StoreSeoPlan = {
   disallow: string[]
 }
 
-export function storeSeoPlan(mode: CommerceMode): StoreSeoPlan {
-  return { indexStore: modeHasStoreRoutes(mode), disallow: [...NON_INDEXABLE_STORE_PATHS] }
+/**
+ * A corporate site with the catalog feature on publishes its products under
+ * /urunlerimiz only; its /store routes permanently redirect there. E-commerce
+ * stores (project_type 'ecommerce') never match, so /store stays untouched.
+ */
+export function catalogOwnsProductPaths(
+  mode: CommerceMode,
+  projectType: string | null | undefined,
+): boolean {
+  return mode === 'catalog' && projectType === 'corporate'
+}
+
+export function storeSeoPlan(mode: CommerceMode, projectType?: string | null): StoreSeoPlan {
+  return {
+    indexStore: modeHasStoreRoutes(mode) && !catalogOwnsProductPaths(mode, projectType),
+    disallow: [...NON_INDEXABLE_STORE_PATHS],
+  }
 }
 
 /* -------------------------------------------------------------------------- */

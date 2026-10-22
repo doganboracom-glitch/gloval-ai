@@ -44,12 +44,16 @@ export function catalogDisplayPrice(product: StoreProduct): string {
 }
 
 /** Ready WhatsApp order link, or null when the mode/number does not allow the button. */
-export function whatsappOrderHref(catalog: CatalogContextValue | null, product: StoreProduct): string | null {
+export function whatsappOrderHref(
+  catalog: CatalogContextValue | null,
+  product: StoreProduct,
+  canonicalPath?: string,
+): string | null {
   if (!catalog || !modeUsesWhatsappOrder(catalog.mode) || !catalog.whatsappNumber) return null
   return buildWhatsappOrderUrl({
     number: catalog.whatsappNumber,
     productName: product.name,
-    productUrl: `${catalog.origin}/store/${product.slug}`,
+    productUrl: `${catalog.origin}${canonicalPath ?? `/store/${product.slug}`}`,
     priceMode: toPriceMode(product.price_mode),
     priceCents: product.price_cents,
     currency: product.currency,

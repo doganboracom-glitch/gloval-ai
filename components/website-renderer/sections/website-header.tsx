@@ -91,7 +91,9 @@ export function WebsiteHeader({
       ? categoryNames(catalogContext.products).map((name) => ({
           key: `category:${name}`,
           label: name,
-          href: `${storeListHref(cartSlug)}?kategori=${encodeURIComponent(name)}`,
+          href:
+            catalogContext.catalogPaths?.categories[name] ??
+            `${storeListHref(cartSlug)}?kategori=${encodeURIComponent(name)}`,
         }))
       : undefined)
   const menuItems = buildMenuItems({
@@ -115,6 +117,7 @@ export function WebsiteHeader({
     blog,
     nav,
     normalizeHref,
+    catalogContext,
   })
   const showCtaInBar = Boolean(navigation.cta && !(!commerce && isCartCta(navigation.cta)))
   const ctaIsCart = Boolean(cartSlug && commerce && navigation.cta && isCartCta(navigation.cta))
@@ -356,7 +359,9 @@ function buildMenuItems({
   blog,
   nav,
   normalizeHref,
+  catalogContext,
 }: {
+  catalogContext: ReturnType<typeof useStoreCatalog>
   entries: MenuEntry[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
@@ -378,7 +383,9 @@ function buildMenuItems({
     if (entry.kind === 'link') {
       const { link } = entry
       const href =
-        cartSlug && isProductsLink(link.label, link.href) ? storeListHref(cartSlug) : normalizeHref(link.href)
+        cartSlug && isProductsLink(link.label, link.href)
+          ? (catalogContext?.catalogPaths?.list ?? storeListHref(cartSlug))
+          : normalizeHref(link.href)
       return {
         key: link.label + link.href,
         label: link.label,
@@ -389,7 +396,7 @@ function buildMenuItems({
     }
     const { page } = entry
     if (cartSlug && isProductsLink(page.title)) {
-      const href = storeListHref(cartSlug)
+      const href = catalogContext?.catalogPaths?.list ?? storeListHref(cartSlug)
       return {
         key: entry.key,
         label: entry.label,
