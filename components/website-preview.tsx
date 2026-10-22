@@ -51,6 +51,7 @@ import type { BackupItem } from '@/lib/project-backups-core'
 import { canUseLogoGeneration, type PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
+import type { CatalogFeatureState } from '@/components/editor/catalog-feature-tab'
 import { OutOfCreditsModal } from '@/components/pricing/out-of-credits'
 import { blogOperationSchema } from '@/lib/blog-operations'
 import {
@@ -169,6 +170,7 @@ export function WebsitePreview({
   payments = null,
   blog = null,
   catalog = null,
+  catalogFeature = null,
   persist,
   autoPublish = false,
   onAuthenticatedPublish,
@@ -194,6 +196,8 @@ export function WebsitePreview({
    * product showcase sections in the preview. Null: no data, empty-state message.
    */
   catalog?: EditorCatalog | null
+  /** Non-null for a corporate site's owner: enables the editor's Ürünler tab (catalog switch). */
+  catalogFeature?: CatalogFeatureState | null
   /**
    * Optional persistence. When provided (editor route), the live schema is
    * debounce-autosaved and a manual "Save" button records a version snapshot.
@@ -1774,6 +1778,7 @@ export function WebsitePreview({
                 site={currentSite}
                 payments={payments}
                 blog={blog}
+                catalogFeature={catalogFeature}
   onPatchBlogSettings={patchBlogSettingsSilently}
                 publicSlug={liveSlug}
                 planCode={planCode}

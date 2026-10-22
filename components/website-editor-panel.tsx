@@ -25,6 +25,7 @@ import {
   Lock,
   CreditCard,
   FileText,
+  PackageOpen,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
@@ -46,6 +47,7 @@ import { FaviconField } from '@/components/editor/favicon-field'
 import { UpgradeModal } from '@/components/pricing/upgrade-modal'
 import { SanalPoslarTab } from '@/components/editor/sanal-poslar-tab'
 import { BlogTab } from '@/components/editor/blog-tab'
+import { CatalogFeatureTab, type CatalogFeatureState } from '@/components/editor/catalog-feature-tab'
 import { StarterBlogNote } from '@/components/editor/starter-blog-note'
 import { tenantUrl } from '@/lib/domains'
 import {
@@ -68,7 +70,7 @@ export type ChatMessage = { role: 'user' | 'assistant'; text: string }
 export type AiPhase = 'analyzing' | 'applying' | null
 
 type HeroSection = Extract<Section, { type: 'hero' }>
-type Tab = 'design' | 'ai' | 'history' | 'payments' | 'blog'
+type Tab = 'design' | 'ai' | 'history' | 'payments' | 'blog' | 'products'
 
 /**
  * WebsiteEditorPanel
@@ -111,10 +113,13 @@ export function WebsiteEditorPanel({
   onBeforeUpgrade,
   payments = null,
   blog = null,
+  catalogFeature = null,
   publicSlug = null,
   onPatchBlogSettings,
 }: {
   site: WebsiteSchema
+  /** Corporate-site owner only: shows the Ürünler tab with the catalog switch. */
+  catalogFeature?: CatalogFeatureState | null
   /** Saves a blog setting without an undo step (used by the starter-posts card). */
   onPatchBlogSettings?: (patch: BlogSettings) => void
   /** Project owner/admin only: shows the Blog tab (posts, AI writer). */
@@ -276,6 +281,12 @@ export function WebsiteEditorPanel({
             <span className="truncate">Blog</span>
           </TabButton>
         )}
+        {catalogFeature && (
+          <TabButton active={tab === 'products'} onClick={() => setTab('products')}>
+            <PackageOpen className="h-4 w-4 shrink-0" />
+            <span className="truncate">{lang === 'en' ? 'Products' : 'Ürünler'}</span>
+          </TabButton>
+        )}
         {payments && (
           <TabButton active={tab === 'payments'} onClick={() => setTab('payments')}>
             <CreditCard className="h-4 w-4 shrink-0" />
@@ -339,6 +350,9 @@ export function WebsiteEditorPanel({
             published={Boolean(publicSlug)}
             sitemapUrl={blog.sitemapUrl ?? null}
           />
+        )}
+        {tab === 'products' && catalogFeature && (
+          <CatalogFeatureTab state={catalogFeature} lang={lang === 'en' ? 'en' : 'tr'} />
         )}
         {tab === 'payments' && payments && (
           <SanalPoslarTab

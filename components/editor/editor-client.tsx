@@ -21,6 +21,7 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import type { PlanCode } from '@/lib/pricing-config'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import type { EditorCatalog } from '@/lib/store-editor-catalog-core'
+import type { CatalogFeatureState } from '@/components/editor/catalog-feature-tab'
 
 /**
  * Editor route wrapper. Reuses the full WebsitePreview editor and connects its
@@ -41,6 +42,7 @@ export function EditorClient({
   payments,
   blog,
   catalog,
+  catalogFeature,
 }: {
   projectId: string
   schema: WebsiteSchema
@@ -68,6 +70,8 @@ export function EditorClient({
   blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
   /** Owner-verified store catalog for the live preview (store sites only). */
   catalog?: EditorCatalog | null
+  /** Corporate-site owner only: enables the Ürünler tab with the catalog switch. */
+  catalogFeature?: CatalogFeatureState | null
 }) {
   const router = useRouter()
   const { t } = useLanguage()
@@ -83,6 +87,7 @@ export function EditorClient({
       payments={payments ?? null}
       blog={blog ?? null}
       catalog={catalog ?? null}
+      catalogFeature={catalogFeature ?? null}
       onClose={() => {
         // Bust the client Router Cache so the dashboard reflects this project's
         // latest state (name, updated_at, publish status) instead of a stale
