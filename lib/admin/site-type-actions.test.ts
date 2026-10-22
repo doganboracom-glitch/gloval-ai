@@ -143,9 +143,15 @@ describe('setSiteType', () => {
     expect(state.updates).toEqual([])
   })
 
-  it('maps catalog to the ecommerce project_type with commerce_mode catalog', async () => {
+  it('refuses catalog as a target: it is an editor feature, not a site type', async () => {
     state.project = { ...(state.project as Row), project_type: 'corporate', commerce_mode: 'none' }
-    expect(await setSiteType(SITE_ID, 'catalog', 'catalog only')).toEqual({ ok: true })
-    expect(state.updates[0].patch).toEqual({ project_type: 'ecommerce', commerce_mode: 'catalog' })
+    expect(await setSiteType(SITE_ID, 'catalog' as never, 'catalog only')).toEqual({ ok: false, error: 'invalid_type' })
+    expect(state.updates).toEqual([])
+  })
+
+  it('lets an existing catalog site be switched away without touching other rows', async () => {
+    state.project = { ...(state.project as Row), project_type: 'corporate', commerce_mode: 'catalog' }
+    expect(await setSiteType(SITE_ID, 'corporate', 'catalog off')).toEqual({ ok: true })
+    expect(state.updates[0].patch).toEqual({ project_type: 'corporate', commerce_mode: 'none' })
   })
 })

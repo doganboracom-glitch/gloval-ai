@@ -20,6 +20,7 @@ import {
   isSiteKind,
   siteKindOf,
   siteTypeBlocker,
+  type SelectableSiteKind,
   type SiteKind,
   type SiteTypeBlocker,
 } from '@/lib/site-kind'
@@ -48,7 +49,7 @@ export type SiteTypeImpact = {
   name: string
   published: boolean
   from: SiteKind
-  to: SiteKind
+  to: SelectableSiteKind
   products: number
   orders: number
   hasStoreSections: boolean
@@ -102,7 +103,7 @@ async function loadSiteTypeContext(projectId: string, kind: unknown): Promise<Si
 /** Read-only impact summary shown in the confirmation dialog before a switch. */
 export async function previewSiteTypeChange(
   projectId: string,
-  kind: SiteKind,
+  kind: SelectableSiteKind,
 ): Promise<{ ok: true; impact: SiteTypeImpact } | { ok: false; error: string }> {
   await requireAdmin()
   const ctx = await loadSiteTypeContext(projectId, kind)
@@ -110,14 +111,14 @@ export async function previewSiteTypeChange(
 }
 
 /**
- * Explicitly switches a site between corporate, e-commerce and catalog. Saves
+ * Explicitly switches a site between corporate and e-commerce (the catalog is an editor feature, see `lib/catalog-feature.ts`). Saves
  * never change the type; this is the only path. It refuses switches that would
  * orphan a catalog or orders, requires a reason, and writes an audit row
  * (`site_type_changes`); if that row cannot be written the switch is undone.
  */
 export async function setSiteType(
   projectId: string,
-  kind: SiteKind,
+  kind: SelectableSiteKind,
   note: string,
 ): Promise<AdminActionResult> {
   const { email: actorEmail, userId: actorId } = await requireAdmin()
