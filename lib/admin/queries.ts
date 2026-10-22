@@ -110,6 +110,7 @@ export type AdminSite = {
   slug: string | null
   status: string
   projectType: string
+  commerceMode: string
   published: boolean
   publishedAt: string | null
   createdAt: string
@@ -333,7 +334,7 @@ export async function getUserDetail(userId: string): Promise<{
   const { data: projects } = await admin
     .from('projects')
     .select(
-      'id, name, owner_id, slug, status, project_type, published, published_at, created_at, updated_at',
+      'id, name, owner_id, slug, status, project_type, commerce_mode, published, published_at, created_at, updated_at',
     )
     .eq('owner_id', userId)
     .order('updated_at', { ascending: false })
@@ -382,6 +383,7 @@ export async function getUserDetail(userId: string): Promise<{
       slug: (row.slug as string) ?? null,
       status: row.status as string,
       projectType: row.project_type as string,
+      commerceMode: ((row.commerce_mode as string | null) ?? 'none') as string,
       published: Boolean(row.published),
       publishedAt: (row.published_at as string) ?? null,
       createdAt: row.created_at as string,
@@ -409,7 +411,7 @@ export async function listSites(): Promise<AdminSite[]> {
   const { data } = await admin
     .from('projects')
     .select(
-      'id, name, owner_id, slug, status, project_type, published, published_at, created_at, updated_at',
+      'id, name, owner_id, slug, status, project_type, commerce_mode, published, published_at, created_at, updated_at',
     )
     .order('updated_at', { ascending: false })
 
@@ -421,6 +423,7 @@ export async function listSites(): Promise<AdminSite[]> {
     slug: (row.slug as string) ?? null,
     status: row.status as string,
     projectType: row.project_type as string,
+      commerceMode: ((row.commerce_mode as string | null) ?? 'none') as string,
     published: Boolean(row.published),
     publishedAt: (row.published_at as string) ?? null,
     createdAt: row.created_at as string,

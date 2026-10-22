@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
+import { StoreNotEnabled } from '@/components/ecommerce/store-not-enabled'
 import { createClient } from '@/lib/supabase/server'
 import { getProject } from '@/lib/projects'
 import { listProducts, listCategories } from '@/lib/ecommerce'
@@ -27,7 +28,8 @@ export default async function EcommercePage({
   if (!project) notFound()
   // Only e-commerce projects have a product catalog.
   const commerce = await loadProjectCommerce({ id: projectId })
-  if (!commerce || commerce.storedMode === 'none') notFound()
+  if (!commerce) notFound()
+  if (commerce.storedMode === 'none') return <StoreNotEnabled projectId={projectId} />
 
   const [products, categories, owned] = await Promise.all([
     listProducts(projectId),

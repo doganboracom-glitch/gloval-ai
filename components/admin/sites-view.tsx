@@ -1,8 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Pencil } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ExternalLink, Package, Pencil } from 'lucide-react'
+import { setSiteType } from '@/lib/admin/actions'
 import { useLanguage } from '@/components/language-provider'
 import { adminT } from '@/lib/admin/i18n'
 import { tenantUrl } from '@/lib/domains'
@@ -16,6 +18,22 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
   const t = adminT(lang)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function changeType(site: AdminSite, next: 'corporate' | 'ecommerce') {
+    if (!window.confirm(`${t.sites.typeChangeConfirm} (${site.name})`)) {
+      router.refresh()
+      return
+    }
+    startTransition(async () => {
+      const res = await setSiteType(site.id, next)
+      if (!res.ok) {
+        window.alert(res.error === 'has_store_data' ? t.sites.typeChangeHasData : t.sites.typeChangeFailed)
+      }
+      router.refresh()
+    })
+  }
 
   const dateFmt = new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     day: '2-digit',
@@ -98,8 +116,17 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                 t.common.none
               )}
             </Td>
-            <Td className="text-muted-foreground">
-              {s.projectType === 'ecommerce' ? t.sites.ecommerce : t.sites.corporate}
+            <Td>
+              <select
+                value={s.projectType === 'ecommerce' ? 'ecommerce' : 'corporate'}
+                disabled={pending}
+                onChange={(e) => changeType(s, e.target.value as 'corporate' | 'ecommerce')}
+                aria-label={t.sites.type}
+                className="h-8 rounded-md border border-border bg-card/70 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-brand/50 disabled:opacity-60"
+              >
+                <option value="corporate">{t.sites.corporate}</option>
+                <option value="ecommerce">{t.sites.ecommerce}</option>
+              </select>
             </Td>
             <Td>
               <StatusBadge tone={s.published ? 'success' : 'muted'}>
@@ -124,14 +151,25 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                 <span className="text-muted-foreground">{t.common.none}</span>
               )}
             </Td>
-            <Td className="text-right">
-              <Link
-                href={s.projectType === 'ecommerce' ? `/ecommerce/${s.id}` : `/editor/${s.id}`}
-                className="inline-flex items-center gap-1 rounded-md border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
-              >
-                <Pencil className="size-3.5" />
-                {t.sites.edit}
-              </Link>
+            <Td className="sticky right-0 whitespace-nowrap border-l border-border bg-card text-right">
+              <div className="flex items-center justify-end gap-2">
+                {s.projectType === 'ecommerce' && s.commerceMode !== 'none' && (
+                  <Link
+                    href={`/ecommerce/${s.id}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                  >
+                    <Package className="size-3.5" />
+                    {t.sites.products}
+                  </Link>
+                )}
+                <Link
+                  href={`/editor/${s.id}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
+                >
+                  <Pencil className="size-3.5" />
+                  {t.sites.edit}
+                </Link>
+              </div>
             </Td>
           </Tr>
         ))}

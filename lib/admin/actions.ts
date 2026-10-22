@@ -32,6 +32,45 @@ export type AdminActionResult = { ok: true } | { ok: false; error: string }
 
 const ADMIN_PASSWORD_MIN_LENGTH = 8
 
+/* --------------------------------- sites --------------------------------- */
+
+/**
+ * Explicitly switches a site between corporate and e-commerce. Saves never
+ * change the type; this is the only path. Refuses to turn a store with a
+ * catalog or orders back into a corporate site so no store data is orphaned.
+ */
+export async function setSiteType(
+  projectId: string,
+  siteType: 'corporate' | 'ecommerce',
+): Promise<AdminActionResult> {
+  await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  if (siteType !== 'corporate' && siteType !== 'ecommerce') return { ok: false, error: 'invalid_type' }
+
+  const admin = createAdminClient()
+
+  if (siteType === 'corporate') {
+    const [{ count: products }, { count: orders }] = await Promise.all([
+      admin.from('ecommerce_products').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+      admin.from('ecommerce_orders').select('id', { count: 'exact', head: true }).eq('project_id', projectId),
+    ])
+    if ((products ?? 0) > 0 || (orders ?? 0) > 0) return { ok: false, error: 'has_store_data' }
+  }
+
+  const { error } = await admin
+    .from('projects')
+    .update({
+      project_type: siteType,
+      commerce_mode: siteType === 'ecommerce' ? 'ecommerce' : 'none',
+    })
+    .eq('id', projectId)
+  if (error) return { ok: false, error: 'update_failed' }
+
+  revalidatePath('/admin/sites')
+  revalidatePath('/dashboard')
+  return { ok: true }
+}
+
 /* --------------------------------- users --------------------------------- */
 
 export async function deleteUser(userId: string): Promise<AdminActionResult> {

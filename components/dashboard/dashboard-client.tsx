@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/client'
 import { createProject, deleteProject } from '@/lib/projects'
 import { createEcommerceProject } from '@/lib/ecommerce'
 import type { ProjectListItem } from '@/lib/projects'
+import { getCommerceMode } from '@/lib/commerce-mode'
 import { peekPendingProject, clearPendingProject } from '@/lib/pending-project'
 import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -276,7 +277,7 @@ export function DashboardClient({
                     >
                       {p.published ? t.dash.liveBadge : t.dash.offlineBadge}
                     </span>
-                    {p.project_type === 'ecommerce' && (
+                    {getCommerceMode(p) === 'ecommerce' && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
                         <Package className="size-3" />
                         {t.dash.ecommerce}
@@ -344,9 +345,9 @@ export function DashboardClient({
                   )}
                 </div>
 
-                {p.project_type === 'ecommerce' && (
-                  <Link
-                    href={`/ecommerce/${p.id}`}
+  {getCommerceMode(p) !== 'none' && (
+  <Link
+  href={`/ecommerce/${p.id}`}
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
                   >
                     <Package className="size-4" />

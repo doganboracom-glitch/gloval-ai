@@ -95,7 +95,10 @@ export type ProjectListItem = Pick<
   | 'created_at'
   | 'slug'
   | 'published'
->
+> & {
+  /** Raw `projects.commerce_mode`; absent before migration 063. */
+  commerce_mode?: string | null
+}
 
 /** A single saved version snapshot, for the editor's change-history panel. */
 export type ProjectVersionItem = {
@@ -187,14 +190,22 @@ async function backupDraftBestEffort(projectId: string, ownerId: string, schema:
 /** Lists the current user's projects, newest first. RLS scopes to the owner. */
 export async function listProjects(): Promise<ProjectListItem[]> {
   const { supabase } = await requireUser()
-  const { data, error } = await supabase
+  const columns = 'id, name, sector, language, status, project_type, updated_at, created_at, slug, published'
+  let { data, error } = await supabase
     .from('projects')
-    .select(
-      'id, name, sector, language, status, project_type, updated_at, created_at, slug, published',
-    )
+    .select(`${columns}, commerce_mode`)
     .order('updated_at', { ascending: false })
+  if (isMissingColumnError(error)) {
+    // Migration 063 not applied yet: getCommerceMode derives from project_type.
+    const fallback = await supabase
+      .from('projects')
+      .select(columns)
+      .order('updated_at', { ascending: false })
+    data = fallback.data as unknown as typeof data
+    error = fallback.error
+  }
   if (error) throw error
-  return data ?? []
+  return (data ?? []) as unknown as ProjectListItem[]
 }
 
 /**
@@ -355,13 +366,11 @@ export async function saveProjectSchema(input: {
     updated_at: new Date().toISOString(),
   }
   if (input.name) patch.name = input.name
-  // Keep the type in sync with the content. Only ever PROMOTE to `ecommerce`
-  // (when the schema has product/category sections) — never demote — so an AI
-  // edit that adds a store, or a legacy store that was mis-typed `corporate`,
-  // becomes a real e-commerce project on its next save without ever stripping
-  // the type (and its catalog/orders) from a site whose sections were
-  // momentarily removed.
-  if (isStorefront(parsed)) patch.project_type = 'ecommerce'
+  // `project_type` / `commerce_mode` are deliberately NOT touched here. A save
+  // used to promote any site holding a products/categories section to
+  // `ecommerce`, and nothing ever demoted it: a corporate site whose owner
+  // merely tried a products section stayed an e-commerce project for good. The
+  // site type now changes only through an explicit "change site type" action.
   let update = db.from('projects').update(patch).eq('id', input.id)
   if (input.expectedUpdatedAt) update = update.eq('updated_at', input.expectedUpdatedAt)
   const { data: written, error } = await update.select('id')
