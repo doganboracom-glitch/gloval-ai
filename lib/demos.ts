@@ -7,6 +7,8 @@ import { getCatalog } from '@/lib/demo-catalog'
 import { addDemoAnnouncement } from '@/lib/demo-announcement'
 import { applyDemoAbout } from '@/lib/demo-about'
 import { applyDemoServices } from '@/lib/demo-services'
+import { resolveAboutDetail } from '@/lib/section-detail'
+import { MENU_MAX } from '@/lib/site-menu'
 
 /**
  * Showcase demos
@@ -152,6 +154,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   customizeDemoSite(site, demo.slug, lang)
   applyDemoAbout(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   applyDemoServices(site, demo.slug, lang === 'en' ? 'en' : 'tr')
+  addDemoAboutLink(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   // After customization, so a slider added there is already in the list when the band is placed.
   const demoLang = lang === 'en' ? 'en' : 'tr'
   addDemoAnnouncement(
@@ -161,6 +164,24 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
     getCatalog(demo.slug) ? `/demo/${demo.slug}/iletisim?lang=${demoLang}` : undefined,
   )
   return site
+}
+
+const DEMO_ABOUT_LINK_PATTERN = /hakkimizda|hakkinda|about/
+
+/**
+ * Puts "Hakkımızda" in the demo's top menu, right after Home, pointing at the
+ * demo's own about route. Runs after `applyDemoAbout` so the link only exists
+ * when that route renders a page, and it never pushes the menu past MENU_MAX.
+ * Demo-only: customer sites are untouched.
+ */
+function addDemoAboutLink(site: WebsiteSchema, slug: string, lang: 'tr' | 'en'): void {
+  const links = site.navigation.links
+  if (links.length >= MENU_MAX) return
+  if (links.some((l) => DEMO_ABOUT_LINK_PATTERN.test(l.href))) return
+  if (!resolveAboutDetail(site)?.pageActive) return
+  const about = { label: lang === 'tr' ? 'Hakkımızda' : 'About', href: `/demo/${slug}/hakkimizda?lang=${lang}` }
+  const homeIndex = links.findIndex((l) => l.href.startsWith('#'))
+  links.splice(homeIndex === -1 ? 0 : homeIndex + 1, 0, about)
 }
 
 /**
