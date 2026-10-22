@@ -10,7 +10,7 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getPaymentSummary } from '@/lib/store-payments/general-settings'
 import { getEditorCatalog } from '@/lib/store-editor-catalog'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
-import { planAllowsCatalog } from '@/lib/commerce-mode'
+import { isCatalogFeatureUiEnabled, resolveCatalogFeatureTab } from '@/lib/catalog-feature-flag'
 import { suggestBlogTopics } from '@/lib/blog-ai'
 import { isStarterPending } from '@/lib/blog-site'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
@@ -81,14 +81,15 @@ export default async function EditorPage({
   // "Ürünler" tab: a corporate site's owner can switch the cart-free catalog on/off.
   // Stores (ecommerce mode) never see it, and admins editing someone else's site
   // don't either, because the toggle action only accepts the owner.
-  const catalogFeature =
-    isOwner && commerce && commerce.mode !== 'ecommerce' && project.project_type !== 'ecommerce'
-      ? {
-          projectId,
-          enabled: commerce.mode === 'catalog',
-          planAllowed: planAllowsCatalog(planCode),
-        }
-      : null
+  // Hidden entirely unless CATALOG_FEATURE_UI=true (owner-side switch only).
+  const catalogFeature = resolveCatalogFeatureTab({
+    flagEnabled: isCatalogFeatureUiEnabled(),
+    isOwner,
+    projectId,
+    projectType: project.project_type,
+    commerceMode: commerce?.mode,
+    planCode,
+  })
 
   // Owner-verified, project_id-keyed read that also works before first publish
   // (the public RPCs only serve published stores). A failure only empties the preview.

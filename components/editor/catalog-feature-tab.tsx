@@ -44,6 +44,7 @@ const COPY = {
       audit_failed: 'Değişiklik kaydedilemedi, hiçbir şey değişmedi. Lütfen tekrar deneyin.',
       already_enabled: 'Katalog zaten açık.',
       already_disabled: 'Katalog zaten kapalı.',
+      feature_disabled: 'Özellik kapalı.',
     },
   },
   en: {
@@ -74,6 +75,7 @@ const COPY = {
       audit_failed: 'The change could not be recorded, nothing was changed. Please try again.',
       already_enabled: 'The catalog is already on.',
       already_disabled: 'The catalog is already off.',
+      feature_disabled: 'This feature is turned off.',
     },
   },
 } as const
