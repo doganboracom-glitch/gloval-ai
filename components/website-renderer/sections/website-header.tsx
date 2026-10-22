@@ -59,7 +59,7 @@ export function WebsiteHeader({
    * Real URL of a page. With it, page entries are `<a href>` links (crawlable, new-tab
    * friendly); without it they stay buttons driven by `onNavigate`.
    */
-  pageHref?: (page: PageItem) => string
+  pageHref?: (page: PageItem) => string | undefined
   storeSlug?: string
   /** Store slug for the cart CTA / product links; set on every storefront page, home included. */
   cartSlug?: string
@@ -209,7 +209,7 @@ export function WebsiteHeader({
                 href={item.href}
                 aria-current={item.active ? 'page' : undefined}
                 onClick={(e) => item.onSelect?.(e)}
-                className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70"
+                className="cursor-pointer text-sm font-medium transition-opacity hover:opacity-70 focus-visible:outline-offset-0"
                 style={
                   item.active
                     ? { color: 'var(--site-primary)', fontWeight: 700 }
@@ -331,7 +331,7 @@ function buildMenuItems({
   entries: MenuEntry[]
   activeSlug?: string
   onNavigate?: (slug: string) => void
-  pageHref?: (page: PageItem) => string
+  pageHref?: (page: PageItem) => string | undefined
   storeSlug?: string
   cartSlug?: string
   blog: ReturnType<typeof useBlogLink>
@@ -364,8 +364,8 @@ function buildMenuItems({
       return { key: entry.key, label: entry.label, href: page.isHome ? home : `${home}/${page.slug}` }
     }
     const active = page.slug === activeSlug
-    if (pageHref) {
-      const href = pageHref(page)
+    const href = pageHref?.(page)
+    if (href) {
       return { key: entry.key, label: entry.label, href, active, onSelect: asAnchorClick(href) }
     }
     return { key: entry.key, label: entry.label, active, onSelect: () => onNavigate?.(page.slug) }

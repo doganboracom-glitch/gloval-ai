@@ -24,7 +24,7 @@ import {
 } from '@/lib/social-links'
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 import { uniquePageSlug } from '@/lib/page-slugs'
-import { addContactToMenu } from '@/lib/site-menu'
+import { addMissingToMenu } from '@/lib/site-menu'
 
 function newPageId(pages: { id?: string }[], slug: string): string {
   const used = new Set(pages.map((p) => p.id))
@@ -924,7 +924,7 @@ export function applyOperation(
     }
 
     case 'resolveContactSuggestion': {
-      const resolved = operation.accept ? addContactToMenu(next, operation.lang) : next
+      const resolved = operation.accept ? addMissingToMenu(next, operation.lang) : next
       resolved.navigation = { ...resolved.navigation, contactSuggestionDismissed: true }
       return resolved
     }

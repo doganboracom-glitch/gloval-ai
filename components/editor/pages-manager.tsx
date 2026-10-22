@@ -7,7 +7,7 @@ import { InfoPageTemplates } from '@/components/editor/info-page-templates'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { pageLimitForPlan } from '@/lib/page-limits'
-import { countHeaderEntries, findContactMenuGap, MENU_MAX, pageMenuKey, resolveHeaderMenu } from '@/lib/site-menu'
+import { countHeaderEntries, menuGapLabels, MENU_MAX, pageMenuKey, resolveHeaderMenu } from '@/lib/site-menu'
 import { pageNavItems } from '@/lib/website-pages'
 import { SITE_PAGE_HARD_CAP, type PlanCode } from '@/lib/pricing-config'
 
@@ -35,8 +35,8 @@ const COPY = {
     headerFull: (max: number) => `Üst menü en fazla ${max} öğe alır. Yer açmak için başka bir öğeyi kapatın.`,
     orderTitle: 'Menü sırası',
     blog: 'Blog',
-    contactHint: 'Üst menünüzde İletişim yok. Ziyaretçilerin size kolayca ulaşması için eklemek ister misiniz?',
-    contactAdd: 'İletişim\'i ekle',
+    contactHint: (labels: string) => `Üst menünüzde ${labels} yok. Ziyaretçilerin kolayca bulması için eklemek ister misiniz?`,
+    contactAdd: 'Sayfaları üst menüye ekle',
     contactDismiss: 'Gerek yok',
   },
   en: {
@@ -62,8 +62,8 @@ const COPY = {
     headerFull: (max: number) => `The header holds up to ${max} items. Turn another item off to make room.`,
     orderTitle: 'Menu order',
     blog: 'Blog',
-    contactHint: 'Your header has no Contact entry. Add one so visitors can reach you easily?',
-    contactAdd: 'Add Contact',
+    contactHint: (labels: string) => `Your header has no ${labels}. Add them so visitors can find them easily?`,
+    contactAdd: 'Add pages to the header menu',
     contactDismiss: 'No thanks',
   },
 } as const
@@ -99,7 +99,8 @@ export function PagesManager({
     menuOrder: site.navigation.menuOrder,
   }).filter((entry) => entry.kind !== 'link')
   const headerFull = countHeaderEntries(menu) >= MENU_MAX
-  const showContactHint = !site.navigation.contactSuggestionDismissed && findContactMenuGap(site) !== null
+  const gapLabels = site.navigation.contactSuggestionDismissed ? [] : menuGapLabels(site, lang === 'en' ? 'en' : 'tr')
+  const showContactHint = gapLabels.length > 0
   const moveMenuEntry = (from: number, delta: -1 | 1) => {
     const keys = menu.map((entry) => entry.key)
     const to = from + delta
@@ -116,7 +117,7 @@ export function PagesManager({
       </div>
       {showContactHint && (
         <div className="flex flex-col gap-2 rounded-lg border border-brand/40 bg-card/40 p-3">
-          <p className="text-[11px] leading-snug text-foreground">{c.contactHint}</p>
+          <p className="text-[11px] leading-snug text-foreground">{c.contactHint(gapLabels.join(', '))}</p>
           <div className="flex items-center gap-2">
             <button
               type="button"
