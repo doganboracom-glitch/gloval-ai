@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Plus, Sparkles, Trash2, Upload } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
@@ -16,15 +16,25 @@ import {
   withProductSlugs,
 } from '@/lib/product-items'
 import { effectiveCategories, selectedCategory } from '@/lib/product-categories'
-import { GhostButton, IconBtn, TextField } from '@/components/editor/editor-fields'
+import { isUsableImageSrc } from '@/lib/about-media'
+import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { useEditorProjectId } from '@/components/editor/published-context'
+import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
 import { ProductImagesEditor } from '@/components/editor/product-images-editor'
+import { ProductCategoriesBlock } from '@/components/editor/product-categories-block'
 
 type ProductsData = Extract<WebsiteSchema['sections'][number], { type: 'products' }>
 
 const COPY = {
   tr: {
     heading: 'Ürün sayfaları',
+    banner: 'Katalog sayfa görseli',
+    bannerHint: 'Ürün sayfalarının üstündeki geniş başlık görseli. Boşsa ana görseliniz kullanılır.',
+    bannerAlt: 'Görsel açıklaması (alt metin)',
+    bannerUpload: 'Görsel yükle',
+    bannerReplace: 'Görseli değiştir',
+  shortNotePlaceholder: 'Aynı gün kargo',
+  descriptionPlaceholder: 'Ürün Açıklaması Giriniz',
     itemPage: 'Ana sayfada göster',
     homeFull: 'Ana sayfa vitrini dolu. Yeni bir ürün göstermek için önce başka birini kapatın ya da vitrin sayısını artırın.',
     sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
@@ -56,6 +66,13 @@ const COPY = {
   },
   en: {
     heading: 'Product pages',
+    banner: 'Catalog page banner',
+    bannerHint: 'The wide header image above the product pages. Your main site image is used when empty.',
+    bannerAlt: 'Image description (alt text)',
+    bannerUpload: 'Upload image',
+    bannerReplace: 'Replace image',
+  shortNotePlaceholder: 'Same-day shipping',
+  descriptionPlaceholder: 'Enter product description',
     itemPage: 'Show on the home page',
     homeFull: 'The home showcase is full. Turn another product off or raise the showcase count to show this one.',
     sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
@@ -107,6 +124,9 @@ export function ProductItemFields({
   const [writing, setWriting] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  const bannerSrc = section.pageImage?.src && isUsableImageSrc(section.pageImage.src) ? section.pageImage.src : ''
+  const setBanner = (src: string, alt: string) => onDispatch({ op: 'updateProductsPageImage', index, src, alt })
+
   const patchItem = (item: number, patch: Extract<EditOperation, { op: 'updateProductItem' }>['patch']) =>
     onDispatch({ op: 'updateProductItem', index, item, patch })
 
@@ -152,6 +172,45 @@ export function ProductItemFields({
               {notice}
             </p>
           ) : null}
+
+          <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+            <span className="text-xs font-medium text-muted-foreground">{c.banner}</span>
+            <p className="text-[11px] leading-snug text-muted-foreground/80">{c.bannerHint}</p>
+            {bannerSrc ? (
+              <div className="flex items-start gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={bannerSrc} alt="" className="h-14 w-24 shrink-0 rounded-md border border-border object-cover" />
+                <div className="flex-1">
+                  <TextField
+                    label={c.bannerAlt}
+                    value={section.pageImage?.alt ?? ''}
+                    maxLength={SERVICE_ITEM_LIMITS.alt}
+                    onCommit={(v) => setBanner(bannerSrc, v)}
+                  />
+                </div>
+                <IconBtn label={c.remove} small onClick={() => onDispatch({ op: 'updateProductsPageImage', index, src: '' })}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </IconBtn>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <UploadButton
+                label={bannerSrc ? c.bannerReplace : c.bannerUpload}
+                icon={<Upload className="h-3.5 w-3.5" />}
+                onFile={(dataUri) => setBanner(dataUri, section.pageImage?.alt ?? '')}
+              />
+            </div>
+            <AiImagePreviewPanel
+              site={site}
+              sectionKey={`productsbanner:${index}`}
+              projectId={projectId}
+              canAdd
+              disabled={writing !== null}
+              onUse={(image) => setBanner(image.src, image.alt)}
+            />
+          </div>
+
+          <ProductCategoriesBlock lang={lang} index={index} section={section} onDispatch={onDispatch} />
 
           <div className="flex flex-col gap-2">
             {items.map((item, i) => {
@@ -288,6 +347,8 @@ export function ProductItemFields({
                         <TextField
                           label={c.shortNote}
                           value={item.shortNote ?? ''}
+                          placeholder={c.shortNotePlaceholder}
+                          hidePlaceholderOnFocus
                           maxLength={PRODUCT_SHORT_NOTE_MAX}
                           onCommit={(v) => patchItem(i, { shortNote: v })}
                         />
@@ -305,6 +366,8 @@ export function ProductItemFields({
                           <TextField
                             label={c.description}
                             hint={c.descriptionHint}
+                            placeholder={c.descriptionPlaceholder}
+                            hidePlaceholderOnFocus
                             value={mergedProductDescription(item)}
                             multiline
                             rows={6}

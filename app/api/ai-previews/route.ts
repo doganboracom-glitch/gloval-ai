@@ -5,7 +5,8 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { MAX_ABOUT_IMAGES } from '@/lib/about-media'
 import { serviceItemAt } from '@/lib/service-image'
-import { createPreviewDeps, parseSectionKey, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
+import { catalogSectionAt, productItemAt } from '@/lib/product-image'
+import { createPreviewDeps, parseSectionKey, previewDbTarget, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
 import {
   discardPreview,
   getPreviewState,
@@ -98,6 +99,14 @@ export async function POST(req: Request) {
       if (section.item === undefined || !serviceItemAt(site, section.index, section.item)) {
         return Response.json({ error: 'Invalid request' }, { status: 400 })
       }
+    } else if (section.target === 'products') {
+      if (section.item === undefined || !productItemAt(site, section.index, section.item)) {
+        return Response.json({ error: 'Invalid request' }, { status: 400 })
+      }
+    } else if (section.target === 'productsbanner') {
+      if (section.item !== undefined || !catalogSectionAt(site, section.index)) {
+        return Response.json({ error: 'Invalid request' }, { status: 400 })
+      }
     } else {
       if (!target || target.type !== 'about') return Response.json({ error: 'Invalid request' }, { status: 400 })
       if ((target.media?.images ?? []).length >= MAX_ABOUT_IMAGES) {
@@ -108,7 +117,7 @@ export async function POST(req: Request) {
       userId,
       projectId,
       sectionKey,
-      target: section.target,
+      target: previewDbTarget(section.target),
       request: body.request ?? '',
     })
     return respond(result, result.ok ? { preview: result.preview, resumed: result.resumed } : {})

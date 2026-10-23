@@ -1,4 +1,5 @@
 import { catalogListPath } from '@/lib/catalog-public'
+import { isUsableImageSrc } from '@/lib/about-media'
 import { dictionary, toBilingual, type Dict, type Lang } from '@/lib/i18n'
 
 export const CATALOG_PAGE_SIZE = 12
@@ -44,6 +45,20 @@ export function findHeroImage(schema: { sections: unknown[]; pages?: { sections?
     }
   }
   return null
+}
+
+type PageImageLike = { type: string; inline?: boolean; pageImage?: { src?: string } }
+
+/** The owner's own band image for the catalog pages, or null when none is set. */
+export function findCatalogPageImage(schema: { sections: unknown[] }): string | null {
+  const section = (schema.sections as PageImageLike[]).find((s) => s.type === 'products' && s.inline === true)
+  const src = section?.pageImage?.src
+  return src && isUsableImageSrc(src) ? src : null
+}
+
+/** Band image of the catalog pages: the owner's image, else the site hero, else null (theme gradient). */
+export function findCatalogBandImage(schema: { sections: unknown[]; pages?: { sections?: unknown[] }[] }): string | null {
+  return findCatalogPageImage(schema) ?? findHeroImage(schema)
 }
 
 export { catalogListPath }

@@ -62,7 +62,10 @@ export function CatalogProductView({
   whatsappHref,
   phone,
   labels,
+  bandImage = null,
 }: {
+  /** Owner-chosen banner image; without one the plain header is kept. */
+  bandImage?: string | null
   labels: CatalogLabels
   storeName: string
   item: CatalogItem
@@ -87,9 +90,17 @@ export function CatalogProductView({
 
   return (
     <div className="flex flex-col">
-    <header className="border-b border-border bg-muted/40">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 md:py-8">
-        <p className="text-sm font-medium text-muted-foreground">Ürün Detayı</p>
+    <header className={bandImage ? 'relative isolate overflow-hidden border-b border-border' : 'border-b border-border bg-muted/40'}>
+      {bandImage && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={bandImage} alt="" aria-hidden decoding="async" className="absolute inset-0 -z-20 size-full object-cover" />
+      )}
+      {bandImage && <div aria-hidden className="absolute inset-0 -z-10 bg-black/65" />}
+      <div
+        className={`mx-auto flex max-w-6xl flex-col gap-2 px-4 ${bandImage ? 'py-10 md:py-14' : 'py-6 md:py-8'}`}
+        style={bandImage ? { color: '#fff' } : undefined}
+      >
+        <p className={`text-sm font-medium ${bandImage ? 'opacity-85' : 'text-muted-foreground'}`}>Ürün Detayı</p>
         <p className="text-2xl font-bold md:text-3xl" style={{ fontFamily: 'var(--site-heading-font, inherit)' }}>{item.name}</p>
       </div>
     </header>
@@ -124,6 +135,9 @@ export function CatalogProductView({
               </span>
             )}
           </div>
+          {item.shortNote?.trim() && (
+            <p data-short-note className="-mt-3 text-xs text-muted-foreground/80">{item.shortNote.trim()}</p>
+          )}
 
           <div className="grid gap-2 sm:grid-cols-2">
             {whatsappHref && (

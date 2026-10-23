@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { loadPublicCatalog } from '@/lib/catalog-public-server'
+import { findCategoryGroup } from '@/lib/product-categories'
 import { buildBreadcrumbJsonLd, catalogCategoryPath, catalogListPath, jsonLdScripts } from '@/lib/catalog-public'
-import { catalogLabels, catalogPageHref, findHeroImage, paginate, parsePage } from '@/lib/catalog-view'
+import { catalogLabels, catalogPageHref, findCatalogBandImage, paginate, parsePage } from '@/lib/catalog-view'
 import { CatalogPageShell } from '@/components/catalog/catalog-page-shell'
 import { CatalogListView } from '@/components/catalog/catalog-list-view'
 
@@ -17,8 +18,9 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   const { slug, category } = await params
   const { sayfa } = await searchParams
   const catalog = await loadPublicCatalog(slug)
-  const group = catalog?.groups.find((g) => g.slug === category)
-  if (!catalog || !group) notFound()
+  const found = catalog ? findCategoryGroup(catalog.groups, catalog.categoryRedirects, category) : null
+  if (!catalog || !found) notFound()
+  const group = found.group
   const page = paginate(group.items, parsePage(sayfa)).page
   const title = `${group.name} | ${catalog.site.name}`
   const description = `${catalog.site.name} ${group.name}: ${group.items.map((i) => i.name).slice(0, 4).join(', ')}.`
@@ -30,8 +32,13 @@ export default async function CatalogCategoryPage({ params, searchParams }: Para
   const { slug, category } = await params
   const { sayfa } = await searchParams
   const catalog = await loadPublicCatalog(slug)
-  const group = catalog?.groups.find((g) => g.slug === category)
-  if (!catalog || !group) notFound()
+  const found = catalog ? findCategoryGroup(catalog.groups, catalog.categoryRedirects, category) : null
+  if (!catalog || !found) notFound()
+  const group = found.group
+  if (found.moved) {
+    const query = parsePage(sayfa)
+    permanentRedirect(catalogPageHref(catalogCategoryPath(group.slug), query))
+  }
   const labels = catalogLabels(catalog.site.schema.meta.language)
   const [breadcrumb] = jsonLdScripts(
     buildBreadcrumbJsonLd([
@@ -48,7 +55,7 @@ export default async function CatalogCategoryPage({ params, searchParams }: Para
         activeSlug={group.slug}
         labels={labels}
         page={parsePage(sayfa)}
-        heroImage={findHeroImage(catalog.site.schema)}
+        heroImage={findCatalogBandImage(catalog.site.schema)}
       />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumb }} />
     </CatalogPageShell>

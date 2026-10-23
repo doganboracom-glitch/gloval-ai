@@ -10,6 +10,37 @@ export function productItemAt(site: WebsiteSchema, sectionIndex: number, itemInd
   return item ? { section, item } : null
 }
 
+/** The inline catalog section a preview key like `productsbanner:2` points at, or null. */
+export function catalogSectionAt(site: WebsiteSchema, sectionIndex: number) {
+  const section = site.sections[sectionIndex]
+  return section && section.type === 'products' && section === findInlineCatalogSection(site) ? section : null
+}
+
+/**
+ * Preview flow for the catalog pages' header banner (wide image behind the
+ * title on /urunlerimiz pages). Same provider seam and no-text guard; the image
+ * is only returned, never written to the site.
+ */
+export async function generateProductsBannerPreviewImage(
+  site: WebsiteSchema,
+  sectionIndex: number,
+  request = '',
+): Promise<{ image: string; alt: string; imagePrompt: string } | null> {
+  const section = catalogSectionAt(site, sectionIndex)
+  if (!section || !imageGenerationAvailable()) return null
+  const name = site.meta.name.trim()
+  const subject = request.trim() || `a tidy, well-lit showroom or display of the products sold by ${name || 'a business'}`
+  const imagePrompt = [
+    `Photorealistic wide banner photograph: ${subject}.`,
+    'Soft even lighting, calm composition with empty space for a headline, shallow depth of field.',
+    'No people, no faces, no hands, no human figures, no text, no logos.',
+    'High resolution, sharp focus.',
+  ].join(' ')
+  const result = await generateSiteImage({ prompt: imagePrompt, aspectRatio: '16:9' }).catch(() => null)
+  if (!result) return null
+  return { image: result.src, alt: name ? `${section.title || 'Ürünler'} - ${name}` : section.title || 'Ürünler', imagePrompt }
+}
+
 export function buildProductImagePrompt(item: { name: string; description?: string; category?: string }, request = ''): string {
   const subject = request.trim() || `the product "${item.name}"${item.category ? ` (${item.category})` : ''}`
   return [

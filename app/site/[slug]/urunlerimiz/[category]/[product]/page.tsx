@@ -10,7 +10,7 @@ import {
   catalogProductPath,
   jsonLdScripts,
 } from '@/lib/catalog-public'
-import { catalogLabels } from '@/lib/catalog-view'
+import { catalogLabels, findCatalogPageImage } from '@/lib/catalog-view'
 import { findCatalogItem } from '@/lib/product-items'
 import { CatalogPageShell } from '@/components/catalog/catalog-page-shell'
 import { CatalogProductView } from '@/components/catalog/catalog-product-view'
@@ -71,7 +71,7 @@ export default async function CatalogProductPage({ params }: Params) {
 
   return (
     <CatalogPageShell catalog={catalog}>
-      <CatalogProductView storeName={catalog.site.name} item={item} related={related} whatsappHref={whatsappHref} phone={catalog.phone} labels={catalogLabels(catalog.site.schema.meta.language)} />
+      <CatalogProductView bandImage={findCatalogPageImage(catalog.site.schema)} storeName={catalog.site.name} item={item} related={related} whatsappHref={whatsappHref} phone={catalog.phone} labels={catalogLabels(catalog.site.schema.meta.language)} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: productLd }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbLd }} />
     </CatalogPageShell>

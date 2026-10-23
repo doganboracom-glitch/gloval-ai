@@ -455,6 +455,10 @@ export const productsSection = z.object({
   /** Label of the "view all products" link on a storefront. Unset = default text; empty string = hidden. */
   viewAllLabel: z.string().optional().describe('Label of the link to the full product list, e.g. "Tüm ürünleri gör". Empty hides the link.'),
   categories: z.array(z.string().max(40)).max(30).optional().describe('Managed by the platform. Never set this field yourself.'),
+  categoryRedirects: z
+    .record(z.string().max(80), z.string().max(80))
+    .optional()
+    .describe('Managed by the platform. Never set this field yourself.'),
   pageImage: z
   .object({ src: z.string(), alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional() })
   .optional()

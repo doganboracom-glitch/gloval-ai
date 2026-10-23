@@ -322,6 +322,8 @@ export type InlineCatalog = {
   groups: CatalogGroup[]
   /** Product slug -> canonical address, for links on the home page and in menus. */
   paths: { list: string; products: Record<string, string>; categories: Record<string, string> }
+  /** Former category address -> current one; answers with a permanent redirect. */
+  categoryRedirects: Record<string, string>
 }
 
 /** Visible products of the site's inline catalog, or null when the site has none (-> 404). */
@@ -339,7 +341,12 @@ export function resolveInlineCatalog(site: Pick<WebsiteSchema, 'sections'>): Inl
     paths.products[item.slug] = catalogProductPath(item.categorySlug, item.slug)
     paths.categories[item.categoryName] = catalogCategoryPath(item.categorySlug)
   }
-  return { items, groups: orderCatalogGroups(groupByCategory(items), section), paths }
+  return {
+    items,
+    groups: orderCatalogGroups(groupByCategory(items), section),
+    paths,
+    categoryRedirects: section.categoryRedirects ?? {},
+  }
 }
 
 /** Every public path of the catalog, for the tenant sitemap. */
