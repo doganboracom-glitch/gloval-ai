@@ -108,6 +108,7 @@ export function WebsiteHeader({
           rawPages: Boolean(storeSlug),
         }),
         (page) => pageHref?.(page) ?? `/${page.slug}`,
+        pages,
       ),
       categories,
       navigation.productsSubmenu,

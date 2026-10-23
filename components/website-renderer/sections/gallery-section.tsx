@@ -1,22 +1,56 @@
 'use client'
 
 import { useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import type { Section } from '@/lib/website-schema'
 import { isUsableImageSrc } from '@/lib/about-media'
 import type { LightboxItem } from '@/lib/lightbox-nav'
 import { Lightbox } from '@/components/website-renderer/lightbox'
+import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import {
   SectionShell,
   SectionHeading,
   SiteImage,
+  onSiteNavClick,
 } from '@/components/website-renderer/primitives'
 
 type GalleryData = Extract<Section, { type: 'gallery' }>
 
-export function GallerySection({ data }: { data: GalleryData }) {
+/** The home page shows a preview strip; the full set lives on the gallery page. */
+export const HOME_GALLERY_LIMIT = 8
+
+function AllPhotosLink({ link }: { link: { label: string; href: string } }) {
+  const nav = useSiteNav()
+  const normalize = useHrefNormalizer()
+  const demoHref = useDemoHref()
+  const href = demoHref(normalize(link.href))
+  return (
+    <div className="mt-8 flex justify-center">
+      <a
+        href={href}
+        onClick={(e) => onSiteNavClick(e, href, nav)}
+        className="inline-flex items-center gap-1.5 text-sm font-semibold underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--site-primary)', outlineColor: 'var(--site-primary)' }}
+      >
+        {link.label}
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </a>
+    </div>
+  )
+}
+
+export function GallerySection({
+  data,
+  moreLink = null,
+}: {
+  data: GalleryData
+  /** Link to the full gallery page, or null when that page does not exist. */
+  moreLink?: { label: string; href: string } | null
+}) {
   const [open, setOpen] = useState<number | null>(null)
+  const shown = data.items.slice(0, HOME_GALLERY_LIMIT)
   // Only tiles with a real picture can be enlarged; the rest render exactly as before.
-  const viewable = data.items.flatMap((item, i) =>
+  const viewable = shown.flatMap((item, i) =>
     isUsableImageSrc(item.src)
       ? [{ i, item: { kind: 'image', src: item.src, alt: item.alt ?? item.caption ?? '', caption: item.caption } satisfies LightboxItem }]
       : [],
@@ -24,25 +58,26 @@ export function GallerySection({ data }: { data: GalleryData }) {
   const lightboxItems = viewable.map((v) => v.item)
   const lightboxPos = new Map(viewable.map((v, pos) => [v.i, pos]))
   const lang = typeof document !== 'undefined' && document.documentElement.lang.startsWith('en') ? 'en' : 'tr'
+  const single = shown.length === 1
   return (
     <SectionShell id="gallery" tinted>
       <SectionHeading title={data.title} subtitle={data.subtitle} />
       <div
         className={
-          data.items.length === 1
-            ? 'mx-auto mt-10 grid max-w-2xl gap-4'
-            : 'mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
+          single
+            ? 'mx-auto mt-10 grid max-w-xs gap-3'
+            : 'mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4'
         }
-        data-single-item={data.items.length === 1 ? 'true' : undefined}
+        data-single-item={single ? 'true' : undefined}
       >
-        {data.items.map((item, i) => {
+        {shown.map((item, i) => {
           const image = (
             <SiteImage
               image={{
                 imagePrompt: item.imagePrompt,
                 src: item.src,
                 alt: item.alt ?? item.caption,
-                aspectRatio: item.aspectRatio ?? '4/3',
+                aspectRatio: '4/3',
               }}
               seed={i + 1}
               name={item.caption}
@@ -78,6 +113,7 @@ export function GallerySection({ data }: { data: GalleryData }) {
           )
         })}
       </div>
+      {moreLink ? <AllPhotosLink link={moreLink} /> : null}
       {open !== null ? (
         <Lightbox items={lightboxItems} index={open} onIndexChange={setOpen} onClose={() => setOpen(null)} lang={lang} />
       ) : null}
