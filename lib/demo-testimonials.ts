@@ -8,8 +8,7 @@ import { findTestimonialsPage, testimonialsLinkDefaultLabel, testimonialsPageTit
  * Fictional, sector-specific example reviews for the 8 showcase demos. Every item is flagged `sample`
  * and the demo card shows a small "Örnek yorum" tag, so nothing here reads as a real customer.
  * Content rules: made-up first name + initial, no real brand or company, no figures, percentages,
- * awards or "N years" claims, and no photos (initials avatars only). Turkish only: the English demos
- * stay as they were.
+ * awards or "N years" claims, and no photos (initials avatars only). Turkish and English variants.
  *
  * Demo-only. The generation pipeline never reads this file; new sites get the generic placeholders
  * from `seedTestimonialItems` in `lib/testimonials.ts`.
@@ -84,8 +83,76 @@ const DEMO_REVIEWS_TR: Record<string, Review[]> = {
   ],
 }
 
-export function demoTestimonialItems(slug: string): TestimonialItem[] {
-  return (DEMO_REVIEWS_TR[slug] ?? []).map((review) => ({ ...review, sample: true }))
+const DEMO_REVIEWS_EN: Record<string, Review[]> = {
+  kahve: [
+    { quote: 'It became my stop on the way to work. The filter coffee is balanced, and the barista explains why when I ask.', author: 'Alice K.', role: 'Regular guest' },
+    { quote: 'I came with a laptop and stayed for hours; nobody rushed me. I took one of the beans home too.', author: 'Mark D.', role: 'Software developer' },
+    { quote: 'The foam on the milk coffees is just right. The cookie on the side was a nice surprise.', author: 'Ella T.', role: 'Teacher' },
+    { quote: 'We wanted a calm corner to meet friends and found it here. The music never gets in the way of talking.', author: 'Chris B.', role: 'Guest' },
+    { quote: 'I did not know much about coffee. They asked what I like and suggested something to match. Glad they asked.', author: 'Zoe A.', role: 'Student' },
+    { quote: 'We came for coffee after a weekend breakfast. A small place, but the attention is generous.', author: 'Owen S.', role: 'Guest' },
+  ],
+  mimarlik: [
+    { quote: 'We talked through our home plan from the start. They listened to what we did not want too, which I found valuable.', author: 'Selin Y.', role: 'Homeowner' },
+    { quote: 'When a small issue came up on site, a proposed fix arrived the same day. Communication was steady.', author: 'Ben E.', role: 'Project owner' },
+    { quote: 'We rebuilt the layout of our office. People are more comfortable now and the meeting area is very useful.', author: 'Dana M.', role: 'Company manager' },
+    { quote: 'The drawings were easy to follow, and the model made the decision simple.', author: 'Tom K.', role: 'Villa owner' },
+    { quote: 'We discussed the budget openly from day one and had no surprises. That gave me confidence.', author: 'Nina C.', role: 'Homeowner' },
+    { quote: 'While renovating our old flat, they showed us how to use natural light. We are happy with the result.', author: 'Eric G.', role: 'Flat owner' },
+  ],
+  'dis-klinigi': [
+    { quote: 'I am nervous about dentists, but they explained what would happen beforehand. My tension dropped a lot.', author: 'Mara H.', role: 'Patient' },
+    { quote: 'I was seen at my appointment time and did not wait. Care tips after the check-up came in writing.', author: 'Kyle U.', role: 'Patient' },
+    { quote: 'It was my child first visit. The doctor spoke to them like it was a game, and we left without tears.', author: 'Gail P.', role: 'Parent' },
+    { quote: 'My mouth felt fresh after the cleaning. They also explained how often I should come back.', author: 'Ben T.', role: 'Patient' },
+    { quote: 'They went through the treatment options one by one and the decision was mine. I felt no pressure.', author: 'Sofia N.', role: 'Patient' },
+    { quote: 'The clinic is clean and calm. The person at reception answered my questions patiently.', author: 'Oscar L.', role: 'Patient' },
+  ],
+  emlak: [
+    { quote: 'They listened to my criteria and only showed suitable homes. I did not waste time viewing the wrong ones.', author: 'Paula A.', role: 'Tenant' },
+    { quote: 'When we sold our home they explained the valuation openly. We were not left alone with the paperwork either.', author: 'Harry O.', role: 'Homeowner' },
+    { quote: 'We were buying our first home and there was a lot we did not know. They told us what to do at every step.', author: 'Daisy R.', role: 'Buyer' },
+    { quote: 'They were easy to reach by phone, and messages were answered the same day.', author: 'Sean V.', role: 'Investor' },
+    { quote: 'Renting out my flat, I felt at ease about finding a tenant and the contract.', author: 'Alyn B.', role: 'Flat owner' },
+    { quote: 'They told us the pros and the cons of the homes we viewed, honestly. I liked that.', author: 'Marc S.', role: 'Buyer' },
+  ],
+  guzellik: [
+    { quote: 'My skin is sensitive, so I was wary. They asked about the ingredients first, then we chose a fitting treatment.', author: 'Ellie D.', role: 'Client' },
+    { quote: 'I struggled to describe the hair color I wanted, so we decided together using a photo.', author: 'Bella K.', role: 'Client' },
+    { quote: 'We did a trial before the wedding, and on the day I felt no stress. The team was calm and attentive.', author: 'Clara M.', role: 'Bride' },
+    { quote: 'The salon is very clean and the tools are opened in front of you. Small things, but I notice them.', author: 'Nora T.', role: 'Client' },
+    { quote: 'My hands looked neat for a week after the manicure. I will be back.', author: 'Iris Y.', role: 'Client' },
+    { quote: 'The room temperature and music were just right during the massage. I left very relaxed.', author: 'Selma G.', role: 'Client' },
+  ],
+  hukuk: [
+    { quote: 'They listened to my problem calmly in the first meeting and explained clearly which steps would follow.', author: 'Fiona C.', role: 'Client' },
+    { quote: 'I was kept up to date on every development in my file. Information arrived without me having to call.', author: 'Leo A.', role: 'Client' },
+    { quote: 'We had our contract reviewed before signing. They fixed two clauses we would not have noticed.', author: 'Grace S.', role: 'Small business owner' },
+    { quote: 'I do not understand legal language, but they explained things plainly. I was never afraid to ask.', author: 'Cal R.', role: 'Client' },
+    { quote: 'We talked about fees at the start, and there were no surprises later.', author: 'Ada P.', role: 'Client' },
+    { quote: 'In an urgent situation they replied even on a weekend. That availability put me at ease.', author: 'Kent Y.', role: 'Client' },
+  ],
+  restoran: [
+    { quote: 'We booked a table for dinner and it was ready. Service moved along without rushing us.', author: 'Dean K.', role: 'Guest' },
+    { quote: 'The soup of the day surprised me, simple but very tasty. The main course portion was generous enough too.', author: 'Holly B.', role: 'Guest' },
+    { quote: 'We went as a family, and when we asked for something separate for the kids they arranged it right away.', author: 'Tim M.', role: 'Guest' },
+    { quote: 'I also recommend the dessert. The waiter helped us decide what to order.', author: 'Mel A.', role: 'Guest' },
+    { quote: 'We chose it for a business lunch. The room was quiet, so talking was easy.', author: 'Ian T.', role: 'Guest' },
+    { quote: 'When I mentioned my allergy, someone came out of the kitchen and went through the ingredients one by one. I trusted them.', author: 'Nell E.', role: 'Guest' },
+  ],
+  eticaret: [
+    { quote: 'After I ordered, the shipping details came by message. The package was wrapped with care too.', author: 'Gemma A.', role: 'Buyer' },
+    { quote: 'The product looked like the photos. I was unsure about the size and the support team helped.', author: 'Ben U.', role: 'Buyer' },
+    { quote: 'I bought it as a gift and they sent it with a note. The person who got it was delighted.', author: 'Tessa R.', role: 'Buyer' },
+    { quote: 'They made no fuss when I asked for an exchange. The process was simple and quickly sorted.', author: 'Vic D.', role: 'Buyer' },
+    { quote: 'I found what I wanted on the site easily, and the payment steps were plain and clear.', author: 'Sue K.', role: 'Buyer' },
+    { quote: 'I like buying from a small brand. The product is solid and the care felt personal.', author: 'Arlo N.', role: 'Buyer' },
+  ],
+}
+
+export function demoTestimonialItems(slug: string, lang: 'tr' | 'en' = 'tr'): TestimonialItem[] {
+  const source = lang === 'en' ? DEMO_REVIEWS_EN : DEMO_REVIEWS_TR
+  return (source[slug] ?? []).map((review) => ({ ...review, sample: true }))
 }
 
 /** Where the home section goes: just above the contact block, so the page keeps its order. */
@@ -97,24 +164,26 @@ function insertionIndex(sections: Section[]): number {
 }
 
 /**
- * Gives a Turkish demo a labelled example-review section and its own reviews page, and puts
- * "Müşteri Yorumları" in the demo's menu. Other sections and English demos are not touched.
+ * Gives a demo (Turkish or English) a labelled example-review section and its own reviews page at
+ * `/demo/<slug>/musteri-yorumlari`, and puts the reviews link in the demo's menu. Other sections are not touched.
  */
 export function applyDemoTestimonials(site: WebsiteSchema, slug: string, lang: 'tr' | 'en'): void {
-  if (lang !== 'tr') return
-  const items = demoTestimonialItems(slug)
+  const items = demoTestimonialItems(slug, lang)
   if (items.length === 0) return
   if (site.sections.some((s) => s.type === 'testimonials')) return
 
   const section: Section = {
     type: 'testimonials',
-    title: testimonialsPageTitle('tr'),
-    subtitle: 'Bu demodaki yorumlar kurgusaldır; sektörün nasıl görüneceğini göstermek için yazılmıştır.',
+    title: testimonialsPageTitle(lang),
+    subtitle:
+      lang === 'tr'
+        ? 'Bu demodaki yorumlar kurgusaldır; sektörün nasıl görüneceğini göstermek için yazılmıştır.'
+        : 'The reviews in this demo are fictional, written to show how this kind of site would look.',
     items,
     showAvatars: true,
     pageEnabled: true,
     linkEnabled: true,
-    linkLabel: testimonialsLinkDefaultLabel('tr'),
+    linkLabel: testimonialsLinkDefaultLabel(lang),
   }
   const at = insertionIndex(site.sections)
   site.sections = [...site.sections.slice(0, at), section, ...site.sections.slice(at)]
@@ -123,13 +192,13 @@ export function applyDemoTestimonials(site: WebsiteSchema, slug: string, lang: '
   if (!findTestimonialsPage(site)) {
     site.pages = [
       ...pages,
-      { slug: 'musteri-yorumlari', title: testimonialsPageTitle('tr'), kind: 'detail', detailOf: 'testimonials' },
+      { slug: 'musteri-yorumlari', title: testimonialsPageTitle(lang), kind: 'detail', detailOf: 'testimonials' },
     ]
   }
 
   const links = site.navigation.links
   if (links.length < MENU_MAX && !links.some((l) => l.href.includes('musteri-yorumlari'))) {
-    const entry = { label: testimonialsPageTitle('tr'), href: `/demo/${slug}/musteri-yorumlari?lang=tr` }
+    const entry = { label: testimonialsPageTitle(lang), href: `/demo/${slug}/musteri-yorumlari?lang=${lang}` }
     const contactAt = links.findIndex((l) => l.href.includes('/iletisim'))
     links.splice(contactAt === -1 ? links.length : contactAt, 0, entry)
   }

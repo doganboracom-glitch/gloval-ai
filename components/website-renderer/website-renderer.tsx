@@ -9,6 +9,7 @@ import { SectionDetailPage } from '@/components/website-renderer/sections/sectio
 import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
 import { matchServiceHref } from '@/lib/service-pages'
 import { matchAlbumHref } from '@/lib/gallery-pages'
+import { withDemoTestimonialsPage } from '@/lib/testimonials'
 import { TestimonialsDetailPage } from '@/components/website-renderer/sections/testimonials-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
@@ -195,14 +196,15 @@ export function WebsiteRenderer({
    */
   editSelection?: EditSelection | null
 }) {
+  const demoTestimonialsSlug = demoRoutes?.testimonials?.slug ?? null
   const parsed = useMemo(() => {
     const result = normalizeWebsiteSchema(site)
     if (result.ok) {
       logSchemaRepair('render', result.steps)
-      return { success: true as const, data: result.value }
+      return { success: true as const, data: withDemoTestimonialsPage(result.value, demoTestimonialsSlug) }
     }
     return { success: false as const }
-  }, [site])
+  }, [site, demoTestimonialsSlug])
   const [activeSlug, setActiveSlug] = useState<string | null>(initialPage)
   const [activeService, setActiveService] = useState<string | null>(initialService)
   const [activeAlbum, setActiveAlbum] = useState<string | null>(initialAlbum)
