@@ -10,7 +10,8 @@ import {
 } from '@/components/website-renderer/site-nav-context'
 import { TeamCard } from '@/components/website-renderer/sections/team-card'
 import { TeamExampleTag } from '@/components/website-renderer/sections/team-example-tag'
-import { TEAM_HOME_PREVIEW, realMembers, teamLink, teamShownOnHome } from '@/lib/team'
+import { LegacyTeamSection } from '@/components/website-renderer/sections/legacy-team-section'
+import { TEAM_HOME_PREVIEW, isLegacyTeam, realMembers, teamLink, teamShownOnHome } from '@/lib/team'
 
 type TeamData = Extract<Section, { type: 'team' }>
 
@@ -19,6 +20,12 @@ type TeamData = Extract<Section, { type: 'team' }>
  * freshly added empty section never shows), and nothing when the owner switched the home block off.
  */
 export function TeamSection({ data, lang, site = null }: { data: TeamData; lang?: string; site?: WebsiteSchema | null }) {
+  // Sections made before "Kadromuz" (generated or imported) keep their exact original markup.
+  if (isLegacyTeam(data)) return <LegacyTeamSection data={data} lang={lang} />
+  return <TeamBlock data={data} lang={lang} site={site} />
+}
+
+function TeamBlock({ data, lang, site }: { data: TeamData; lang?: string; site: WebsiteSchema | null }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
   const demoHref = useDemoHref()
@@ -29,7 +36,7 @@ export function TeamSection({ data, lang, site = null }: { data: TeamData; lang?
   const all = realMembers(data)
   const link = site ? teamLink(site, data) : null
   const members = link ? all.slice(0, TEAM_HOME_PREVIEW) : all
-  const showMore = link && all.length > members.length
+  const showMore = Boolean(link)
   const href = link ? demoHref(normalize(link.href)) : ''
   const showTag = demo && all.some((m) => m.sample)
 

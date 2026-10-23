@@ -303,3 +303,15 @@ export function teamLink(
     href: `/${resolved.slug}`,
   }
 }
+
+/**
+ * A team section written before the "Kadromuz" feature: no switches, and no person carries an avatar, phone,
+ * social link or sample flag. Such sections (e.g. the architecture studio's) keep their original look.
+ */
+export function isLegacyTeam(
+  section: Pick<TeamSection, 'members' | 'showOnHome' | 'pageEnabled'>,
+): boolean {
+  if (section.showOnHome !== undefined || section.pageEnabled !== undefined) return false
+  if (section.members.length === 0) return false
+  return section.members.every((m) => !m.avatar && !m.phone && !m.social && !m.sample)
+}

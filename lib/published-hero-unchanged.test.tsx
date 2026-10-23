@@ -33,6 +33,12 @@ function withoutLayoutFields(site: WebsiteSchema): WebsiteSchema {
   copy.navigation.links = copy.navigation.links.filter((l) => !l.href.includes('referanslar'))
   // The demo-only "Slider Altı Kutu" strip is covered by hero-strip.test.tsx; the goldens predate it.
   copy.sections = copy.sections.filter((s) => s.type !== 'heroStrip')
+  // The demo-only example "Kadromuz" block (dental, law and beauty demos) is covered by demo-team.test.tsx.
+  if (copy.sections.some((s) => s.type === 'team' && s.members.some((m) => m.sample))) {
+    copy.sections = copy.sections.filter((s) => s.type !== 'team')
+    copy.pages = (copy.pages ?? []).filter((p) => p.slug !== 'kadromuz')
+    copy.navigation.links = copy.navigation.links.filter((l) => !l.href.includes('kadromuz'))
+  }
   for (const section of copy.sections) {
     if (section.type !== 'hero') continue
     const hero = section as Record<string, unknown>
