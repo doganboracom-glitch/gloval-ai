@@ -9,6 +9,7 @@ import { resolveAboutDetail } from '@/lib/section-detail'
 import { resolveServices } from '@/lib/service-pages'
 import { resolveTestimonials } from '@/lib/testimonials'
 import { resolveReferences } from '@/lib/references'
+import { resolveTeam } from '@/lib/team'
 import { DemoSiteRenderer } from '@/components/demo-site/demo-site-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
@@ -56,7 +57,7 @@ export default async function DemoPage({
   params: Promise<{ slug: string }>
   searchParams: Promise<{ lang?: string; preview?: string }>
   /** Set by the /hakkimizda and /hizmetler routes so the demo opens on that page. */
-  initialPage?: 'about' | 'services' | 'testimonials' | 'references' | null
+  initialPage?: 'about' | 'services' | 'testimonials' | 'references' | 'team' | null
   /** With `initialPage="services"`: the service whose own page opens. */
   initialService?: string | null
 }) {
@@ -111,6 +112,11 @@ export default async function DemoPage({
     ? { slug: resolvedReferences.slug, list: `/demo/${slug}/referanslar${langQuery}` }
     : undefined
   if (initialPage === 'references' && !referencesRoutes) notFound()
+  const resolvedTeam = resolveTeam(site)
+  const teamRoutes = resolvedTeam.active
+    ? { slug: resolvedTeam.slug, list: `/demo/${slug}/kadromuz${langQuery}` }
+    : undefined
+  if (initialPage === 'team' && !teamRoutes) notFound()
   const initialSlug =
     initialPage === 'about'
       ? aboutPageSlug
@@ -120,7 +126,9 @@ export default async function DemoPage({
           ? (testimonialsRoutes?.slug ?? null)
           : initialPage === 'references'
             ? (referencesRoutes?.slug ?? null)
-            : null
+            : initialPage === 'team'
+              ? (teamRoutes?.slug ?? null)
+              : null
 
   const content = (
     <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
@@ -140,6 +148,7 @@ export default async function DemoPage({
           services: servicesRoutes,
           testimonials: testimonialsRoutes,
           references: referencesRoutes,
+          team: teamRoutes,
         }}
         initialPage={initialSlug}
         initialService={initialPage === 'services' ? initialService : null}

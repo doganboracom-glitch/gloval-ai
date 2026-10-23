@@ -689,6 +689,8 @@ export const teamSection = z.object({
         src: z.string().optional().describe('A resolved portrait image URL or path, if available'),
         /** Digits, +, spaces, dashes and parentheses; 20 characters at most. Optional. */
         phone: z.string().optional(),
+        /** Showcase demos only: fictional person shown with an "Example content" tag. */
+        sample: sampleFlag,
         /** 'preset:1'..'preset:12' (shared with reviews) | 'initials' | 'photo'. Unset = positional preset when there is no photo. */
         avatar: z.string().max(16).optional(),
         /** Owner-entered links. Validated by `lib/team.ts`: https + the platform's own host; email is a plain address. */
@@ -1146,7 +1148,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about', 'services', 'gallery', 'videos', 'testimonials', 'references']).optional(),
+  detailOf: z.enum(['about', 'services', 'gallery', 'videos', 'testimonials', 'references', 'team']).optional(),
   /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
   id: z.string().max(60).optional(),
   /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */

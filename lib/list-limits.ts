@@ -51,7 +51,7 @@ export const LIST_LIMITS = {
   products: { min: 1, max: 12 },
   categories: { min: 1, max: 8 },
   process: { min: 1, max: 6 },
-  team: { min: 1, max: 24 },
+  team: { min: 0, max: 24 },
   faq: { min: 1, max: 10 },
   announcement: { min: 1, max: ANNOUNCEMENT_MAX_ITEMS },
   heroStrip: { min: HERO_STRIP_ITEM_COUNT, max: HERO_STRIP_ITEM_COUNT },

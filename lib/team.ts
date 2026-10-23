@@ -4,12 +4,25 @@
  * Pure helpers shared by the renderer and the editor: field limits, phone and social-link validation,
  * and avatar resolution (the same 12 ready-made avatars as reviews, alternating woman / man).
  */
+import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
+import { uniquePageSlug } from '@/lib/page-slugs'
+import { isAllowedLogoDataUri } from '@/lib/references'
 import { nextAvatarForNewItem, resolveAvatar, type ResolvedAvatar } from '@/lib/testimonial-avatars'
+
+type Lang = 'tr' | 'en'
+type TeamSection = Extract<Section, { type: 'team' }>
 
 export const TEAM_NAME_MAX = 50
 export const TEAM_ROLE_MAX = 40
 export const TEAM_PHONE_MAX = 20
 export const TEAM_LINK_MAX = 200
+export const TEAM_TITLE_MAX = 80
+export const TEAM_SUBTITLE_MAX = 200
+/** Photo uploads: PNG / JPG / WebP, at most 5 MB each. SVG is never accepted. */
+export const TEAM_PHOTO_MAX_BYTES = 5 * 1024 * 1024
+export const TEAM_PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
+export const TEAM_PHOTO_RECOMMENDED = { width: 800, height: 1000 } as const
 
 export type TeamSocialKey = 'facebook' | 'instagram' | 'x' | 'linkedin' | 'email'
 export const TEAM_SOCIAL_KEYS: readonly TeamSocialKey[] = ['facebook', 'instagram', 'x', 'linkedin', 'email']
@@ -21,6 +34,7 @@ export interface TeamMemberLike {
   src?: string
   phone?: string
   avatar?: string
+  sample?: boolean
   social?: Partial<Record<TeamSocialKey, string>>
 }
 
@@ -131,4 +145,161 @@ export function initialsOf(name: string): string {
   const first = parts[0][0] ?? ''
   const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? '') : ''
   return (first + last).toLocaleUpperCase('tr')
+}
+
+/** True when the file's declared type is one of the accepted photo types (the real check is byte-based, see `isAllowedTeamPhotoDataUri`). */
+export function isAcceptedPhotoMime(type: string): boolean {
+  return (TEAM_PHOTO_TYPES as readonly string[]).includes(type.toLowerCase())
+}
+
+/** Decoded size of a base64 data URI in bytes. */
+export function dataUriBytes(src: string): number {
+  const comma = src.indexOf(',')
+  const b64 = comma >= 0 ? src.slice(comma + 1) : src
+  const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((b64.length * 3) / 4) - pad)
+}
+
+/** Server-side photo check: a real PNG / JPEG / WebP by magic bytes (never SVG), within the size cap. */
+export function isAllowedTeamPhotoDataUri(src: string): boolean {
+  return isAllowedLogoDataUri(src) && dataUriBytes(src) <= TEAM_PHOTO_MAX_BYTES
+}
+
+// --- Page, visibility and AI guard --------------------------------------------------------------
+
+const SLUGS: Record<Lang, string> = { tr: 'kadromuz', en: 'our-team' }
+const TITLES: Record<Lang, string> = { tr: 'Kadromuz', en: 'Our Team' }
+
+const siteLang = (site: Pick<WebsiteSchema, 'meta'>): Lang => (site.meta.language === 'en' ? 'en' : 'tr')
+
+export function teamPageTitle(lang: Lang): string {
+  return TITLES[lang]
+}
+export function teamExampleTagLabel(lang: Lang): string {
+  return lang === 'en' ? 'Example content' : 'Örnek içerik'
+}
+export function teamDescription(site: Pick<WebsiteSchema, 'meta'>, name: string, count: number): string {
+  return siteLang(site) === 'en' ? `Meet the ${count} people at ${name}.` : `${name} kadrosu (${count} kişi).`
+}
+
+/** A person who may appear publicly: they need a name. */
+export function isRealMember(member: Pick<TeamMemberLike, 'name'>): boolean {
+  return member.name.trim().length > 0
+}
+
+export function realMembers<M extends Pick<TeamMemberLike, 'name'>>(section: { members: M[] }): M[] {
+  return section.members.filter(isRealMember)
+}
+
+function teamSections(site: Pick<WebsiteSchema, 'sections' | 'pages'>): TeamSection[] {
+  const all = [...site.sections, ...(site.pages ?? []).flatMap((p) => p.sections ?? [])]
+  return all.filter((s): s is TeamSection => s.type === 'team' && !s.hidden)
+}
+
+export function findTeamPage(site: Pick<WebsiteSchema, 'pages'>) {
+  return (site.pages ?? []).find((p) => p.kind === 'detail' && p.detailOf === 'team') ?? null
+}
+
+export type ResolvedTeam = {
+  lang: Lang
+  slug: string
+  title: string
+  section: TeamSection | null
+  members: TeamSection['members']
+  /** The system page exists, its switch is on and at least one real person backs it. */
+  active: boolean
+}
+
+export function resolveTeam(site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>): ResolvedTeam {
+  const lang = siteLang(site)
+  const page = findTeamPage(site)
+  let section: TeamSection | null = null
+  let members: TeamSection['members'] = []
+  for (const candidate of teamSections(site)) {
+    const real = realMembers(candidate)
+    if (real.length > 0) {
+      section = candidate
+      members = real
+      break
+    }
+  }
+  return {
+    lang,
+    slug: page?.slug || SLUGS[lang],
+    title: page?.title || TITLES[lang],
+    section,
+    members,
+    active: !!page && !!section && section.pageEnabled === true && members.length > 0,
+  }
+}
+
+/** The home block renders only with at least one named person and while its switch is not off. */
+export function teamShownOnHome(section: Pick<TeamSection, 'members' | 'showOnHome'>): boolean {
+  return section.showOnHome !== false && realMembers(section).length > 0
+}
+
+/**
+ * Keeps the `/kadromuz` page in step with the section: created while a section with `pageEnabled` has a
+ * named person, dropped again when not. Counts toward the plan page limit. Idempotent; returns the same
+ * object when nothing changes. A page the owner already runs on the same address is left alone.
+ */
+export function syncTeamPage<T extends WebsiteSchema>(site: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
+  const pages = site.pages ?? []
+  const existing = findTeamPage(site)
+  const wanted = teamSections(site).some((s) => s.pageEnabled === true && realMembers(s).length > 0)
+  if (!wanted) {
+    if (!existing) return site
+    return { ...site, pages: pages.filter((p) => p !== existing) }
+  }
+  if (existing) return site
+
+  const lang = siteLang(site)
+  const own = new Set([SLUGS.tr, SLUGS.en])
+  if (pages.some((p) => !p.isHome && own.has((p.slug || '').toLowerCase()))) return site
+  if (pages.length >= Math.min(pageLimit, SITE_PAGE_HARD_CAP)) return site
+
+  const taken = new Set(pages.map((p) => (p.slug || '').toLowerCase()))
+  const slug = taken.has(SLUGS[lang]) ? uniquePageSlug(SLUGS[lang], taken) : SLUGS[lang]
+  const created = { slug, title: TITLES[lang], kind: 'detail' as const, detailOf: 'team' as const }
+  const base = pages.length === 0 ? [{ slug: 'home', title: site.meta.name, isHome: true }] : pages
+  return { ...site, pages: [...base, created] }
+}
+
+/**
+ * AI guard. The model must never invent staff, and must not touch photos, phones or links: whatever it
+ * returns for a `team` section's people is replaced by the owner's existing entries (matched by position
+ * in the previous site) or emptied. Title / subtitle edits are kept.
+ */
+export function stripAiTeam<T extends { sections: Section[] }>(next: T, previous?: { sections: Section[] } | null): T {
+  const prior = previous?.sections.filter((s): s is TeamSection => s.type === 'team') ?? []
+  let seen = 0
+  let changed = false
+  const sections = next.sections.map((section): Section => {
+    if (section.type !== 'team') return section
+    const before = prior[seen++]
+    if (!before) {
+      if (section.members.length === 0) return section
+      changed = true
+      return { ...section, members: [] }
+    }
+    if (section.members === before.members) return section
+    changed = true
+    return { ...section, members: before.members }
+  })
+  return changed ? { ...next, sections } : next
+}
+
+export const TEAM_HOME_PREVIEW = 8
+
+/** "View full team" link under the home block. Only while the system page is live and the home block is truncated. */
+export function teamLink(
+  site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>,
+  section: TeamSection,
+): { label: string; href: string } | null {
+  const resolved = resolveTeam(site)
+  if (!resolved.active || resolved.section !== section) return null
+  return {
+    label: resolved.lang === 'en' ? 'View full team' : 'Tüm kadroyu gör',
+    href: `/${resolved.slug}`,
+  }
 }

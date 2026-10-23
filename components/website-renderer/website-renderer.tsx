@@ -12,6 +12,7 @@ import { matchAlbumHref } from '@/lib/gallery-pages'
 import { withDemoTestimonialsPage } from '@/lib/testimonials'
 import { TestimonialsDetailPage } from '@/components/website-renderer/sections/testimonials-detail-page'
 import { ReferencesDetailPage } from '@/components/website-renderer/sections/references-detail-page'
+import { TeamDetailPage } from '@/components/website-renderer/sections/team-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import {
@@ -19,6 +20,7 @@ import {
   isDemoServiceHref,
   isDemoTestimonialsHref,
   isDemoReferencesHref,
+  isDemoTeamHref,
   type DemoRoutes,
   type SiteNavHandler,
 } from '@/components/website-renderer/site-nav-context'
@@ -307,11 +309,16 @@ export function WebsiteRenderer({
             onDemoRoute(href)
             return true
           }
+          if (isDemoTeamHref(href, demoRoutes) && activeSlug !== demoRoutes.team?.slug) {
+            onDemoRoute(href)
+            return true
+          }
           if (
             href === demoRoutes.home &&
             (activeSlug === demoRoutes.aboutPageSlug ||
               activeSlug === demoRoutes.testimonials?.slug ||
-              activeSlug === demoRoutes.references?.slug)
+              activeSlug === demoRoutes.references?.slug ||
+              activeSlug === demoRoutes.team?.slug)
           ) {
             onDemoRoute(demoRoutes.home)
             return true
@@ -335,11 +342,16 @@ export function WebsiteRenderer({
               onDemoRoute(demoRoutes.references.list)
               return true
             }
+            if (demoRoutes.team && demoSlug === demoRoutes.team.slug && activeSlug !== demoSlug) {
+              onDemoRoute(demoRoutes.team.list)
+              return true
+            }
             if (
               demoSlug === homeSlug(parsed.data) &&
               (activeSlug === demoRoutes.aboutPageSlug ||
                 activeSlug === demoRoutes.testimonials?.slug ||
-                activeSlug === demoRoutes.references?.slug)
+                activeSlug === demoRoutes.references?.slug ||
+                activeSlug === demoRoutes.team?.slug)
             ) {
               onDemoRoute(demoRoutes.home)
               return true
@@ -486,6 +498,7 @@ export function WebsiteRenderer({
           if (demoRoutes.services && page.slug === demoRoutes.services.listSlug) return demoRoutes.services.list
           if (demoRoutes.testimonials && page.slug === demoRoutes.testimonials.slug) return demoRoutes.testimonials.list
           if (demoRoutes.references && page.slug === demoRoutes.references.slug) return demoRoutes.references.list
+          if (demoRoutes.team && page.slug === demoRoutes.team.slug) return demoRoutes.team.list
           // A demo is not a published tenant: any other page has no real URL, so it
           // stays an in-memory switch rather than a link that leaves the demo.
           return undefined
@@ -509,6 +522,8 @@ export function WebsiteRenderer({
           <TestimonialsDetailPage site={data} />
         ) : activePage?.detailOf === 'references' ? (
           <ReferencesDetailPage site={data} />
+        ) : activePage?.detailOf === 'team' ? (
+          <TeamDetailPage site={data} />
         ) : (
           <SectionDetailPage site={data} />
         ))}

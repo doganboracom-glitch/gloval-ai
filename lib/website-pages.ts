@@ -5,6 +5,7 @@ import { collectServiceRedirects, resolveServices } from '@/lib/service-pages'
 import { resolveGalleryPages, type ResolvedGalleryPages } from '@/lib/gallery-pages'
 import { resolveTestimonials } from '@/lib/testimonials'
 import { resolveReferences } from '@/lib/references'
+import { resolveTeam } from '@/lib/team'
 
 /** Whether a system page's public URL answers: its content exists and its switch is on. */
 function detailPageLive(
@@ -15,9 +16,11 @@ function detailPageLive(
     gallery: ResolvedGalleryPages
     testimonialsLive: boolean
     referencesLive: boolean
+    teamLive: boolean
   },
 ): boolean {
   if (detailOf === 'references') return live.referencesLive
+  if (detailOf === 'team') return live.teamLive
   if (detailOf === 'services') return live.servicesLive
   if (detailOf === 'gallery') return live.gallery.gallery.active
   if (detailOf === 'videos') return live.gallery.videos.active
@@ -43,7 +46,7 @@ export type PageItem = {
   title: string
   isHome: boolean
   detail?: boolean
-  detailOf?: 'about' | 'services' | 'gallery' | 'videos' | 'testimonials' | 'references'
+  detailOf?: 'about' | 'services' | 'gallery' | 'videos' | 'testimonials' | 'references' | 'team'
   id?: string
   showInHeader?: boolean
   showInFooter?: boolean
@@ -163,10 +166,11 @@ export function pageNavItems(site: WebsiteSchema): PageItem[] {
   const gallery = resolveGalleryPages(site)
   const testimonialsLive = resolveTestimonials(site).active
   const referencesLive = resolveReferences(site).active
+  const teamLive = resolveTeam(site).active
   const items: PageItem[] = pages.map((p, i) => {
     const isHome = p.isHome === true || (!pages.some((x) => x.isHome) && i === 0)
     if (isHome) homeFound = true
-    const live = detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive })
+    const live = detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive, teamLive })
     return {
       slug: p.slug || `page-${i}`,
       title: p.title,
@@ -280,10 +284,11 @@ export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
   const gallery = resolveGalleryPages(site)
   const testimonialsLive = resolveTestimonials(site).active
   const referencesLive = resolveReferences(site).active
+  const teamLive = resolveTeam(site).active
   return (
     (site.pages ?? []).find((p, i) => {
       const slug = p.slug || `page-${i}`
-      if (p.kind === 'detail' && !detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive })) return false
+      if (p.kind === 'detail' && !detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive, teamLive })) return false
       return slug.toLowerCase() === wanted && slug !== home
     }) ?? null
   )
