@@ -15,7 +15,7 @@ import {
   type GalleryVideoEntry,
 } from '@/lib/gallery-pages'
 
-function useLink() {
+export function useLink() {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
   return {
@@ -24,7 +24,7 @@ function useLink() {
   }
 }
 
-function PageHeader({
+export function PageHeader({
   lang,
   trail,
   title,

@@ -7,6 +7,7 @@ import { getCatalog } from '@/lib/demo-catalog'
 import { addDemoAnnouncement } from '@/lib/demo-announcement'
 import { applyDemoAbout } from '@/lib/demo-about'
 import { applyDemoServices } from '@/lib/demo-services'
+import { applyDemoTestimonials } from '@/lib/demo-testimonials'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { MENU_MAX } from '@/lib/site-menu'
 
@@ -155,6 +156,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   applyDemoAbout(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   applyDemoServices(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   addDemoAboutLink(site, demo.slug, lang === 'en' ? 'en' : 'tr')
+  applyDemoTestimonials(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   // After customization, so a slider added there is already in the list when the band is placed.
   const demoLang = lang === 'en' ? 'en' : 'tr'
   addDemoAnnouncement(

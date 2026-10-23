@@ -737,6 +737,7 @@ export async function publishProject(input: {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
+          if (item.approvable === false) return true
           if (item.detected) return !isReal(item) && !requestedIds.has(item.id)
           return section.sectionType === 'contact'
             ? !requestedIds.has(item.id)
@@ -746,7 +747,7 @@ export async function publishProject(input: {
       .filter((section) => section.items.length > 0)
     if (unresolved.length > 0) return { ok: false, reason: SAMPLE_CONTENT_ERROR, sections: unresolved }
 
-    const fresh = selectApproved(findings, requestedIds).filter(({ item }) => !attested.has(item.id))
+    const fresh = selectApproved(findings, requestedIds).filter(({ item }) => item.approvable !== false && !attested.has(item.id))
     const freshReal = detectedItems.filter(({ item }) => item.confirmable !== false && confirmedIds.has(item.id) && !contactAttested.has(item.id))
     try {
       await recordAttestations({ projectId: input.id, userId, approvals: fresh })

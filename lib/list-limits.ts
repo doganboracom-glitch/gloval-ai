@@ -39,7 +39,7 @@ export const LIST_LIMITS = {
   features: { min: 1, max: 8 },
   stats: { min: 1, max: 6 },
   pricing: { min: 1, max: 4 },
-  testimonials: { min: 1, max: 6 },
+  testimonials: { min: 1, max: 24 },
   gallery: { min: 1, max: GALLERY_IMAGES_MAX },
   portfolio: { min: 1, max: 9 },
   products: { min: 1, max: 12 },
