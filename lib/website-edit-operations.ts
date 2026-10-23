@@ -1425,7 +1425,9 @@ export function applyOperation(
           flagged.items.forEach((it, i) => { section.items[i] = it })
           Object.assign(blank, { showOnHome: homeHasRoom(section) })
         }
-        if (section.type === 'testimonials') Object.assign(blank, { avatar: nextAvatarForNewItem(list.length) })
+        if (section.type === 'testimonials' || section.type === 'team') {
+          Object.assign(blank, { avatar: nextAvatarForNewItem(list.length) })
+        }
         list.push(blank)
       }
       return next

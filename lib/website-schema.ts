@@ -673,14 +673,34 @@ export const teamSection = z.object({
   ...sectionEditorMeta,
   title: z.string(),
   subtitle: z.string().optional(),
+  /** Home block visible. Unset = shown. Reserved for the "Kadromuz" system page step. */
+  showOnHome: z.boolean().optional(),
+  /** `/kadromuz` system page. Only `true` creates it; unset (every legacy site) never does. */
+  pageEnabled: z.boolean().optional(),
   members: z
     .array(
       z.object({
+        /** Full name (50 characters at most, enforced by `lib/team.ts`). */
         name: z.string(),
+        /** Job title (40 characters at most). */
         role: z.string(),
         bio: z.string().optional(),
         imagePrompt: z.string().optional().describe('A prompt describing this person\'s portrait'),
         src: z.string().optional().describe('A resolved portrait image URL or path, if available'),
+        /** Digits, +, spaces, dashes and parentheses; 20 characters at most. Optional. */
+        phone: z.string().optional(),
+        /** 'preset:1'..'preset:12' (shared with reviews) | 'initials' | 'photo'. Unset = positional preset when there is no photo. */
+        avatar: z.string().max(16).optional(),
+        /** Owner-entered links. Validated by `lib/team.ts`: https + the platform's own host; email is a plain address. */
+        social: z
+          .object({
+            facebook: z.string().max(200).optional(),
+            instagram: z.string().max(200).optional(),
+            x: z.string().max(200).optional(),
+            linkedin: z.string().max(200).optional(),
+            email: z.string().max(200).optional(),
+          })
+          .optional(),
       }),
     )
     .min(LIST_LIMITS.team.min)
@@ -1304,7 +1324,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
     products: ['Ürünler', 'Products'],
     categories: ['Kategoriler', 'Categories'],
     process: ['Süreç', 'Process'],
-    team: ['Ekip', 'Team'],
+    team: ['Kadromuz', 'Our Team'],
     pricing: ['Fiyatlandırma', 'Pricing'],
     faq: ['SSS', 'FAQ'],
     blogLatest: ['Blog', 'Blog'],
