@@ -9,6 +9,7 @@ import { SectionDetailPage } from '@/components/website-renderer/sections/sectio
 import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
 import { matchServiceHref } from '@/lib/service-pages'
 import { matchAlbumHref } from '@/lib/gallery-pages'
+import { TestimonialsDetailPage } from '@/components/website-renderer/sections/testimonials-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import {
@@ -464,6 +465,8 @@ export function WebsiteRenderer({
           <GalleryDetailPage site={data} albumSlug={activeAlbum} />
         ) : activePage?.detailOf === 'videos' ? (
           <VideosDetailPage site={data} />
+        ) : activePage?.detailOf === 'testimonials' ? (
+          <TestimonialsDetailPage site={data} />
         ) : (
           <SectionDetailPage site={data} />
         ))}

@@ -376,12 +376,24 @@ export const testimonialsSection = z.object({
   type: z.literal('testimonials'),
   ...sectionEditorMeta,
   title: z.string(),
+  subtitle: z.string().optional(),
+  /** Initials avatars on the cards. Unset keeps the pre-existing card markup (published sites stay byte-identical). */
+  showAvatars: z.boolean().optional(),
+  /** `/musteri-yorumlari` system page. Only `true` creates it; unset (every legacy site) never does. */
+  pageEnabled: z.boolean().optional(),
+  /** "All reviews" link under the home cards. Needs a live page; `false` hides it. */
+  linkEnabled: z.boolean().optional(),
+  linkLabel: z.string().max(40).optional(),
   items: z
     .array(
       z.object({
-        quote: z.string().describe('A real customer quote the user provided. Never invent one.'),
+        quote: z.string().describe('A real customer quote the user provided. Never invent one. 280 characters at most.'),
         author: z.string(),
         role: z.string().optional(),
+        /** 1-5. Unset means no stars at all. */
+        rating: z.number().int().min(1).max(5).optional(),
+        /** Owner-uploaded photo. Never AI generated: no human faces are synthesised. */
+        photo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
         sample: sampleFlag,
       }),
     )
@@ -1022,7 +1034,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about', 'services', 'gallery', 'videos']).optional(),
+  detailOf: z.enum(['about', 'services', 'gallery', 'videos', 'testimonials']).optional(),
   /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
   id: z.string().max(60).optional(),
   /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */

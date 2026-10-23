@@ -3,6 +3,7 @@ import { fallbackWebsite } from '@/lib/website-schema'
 import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
+import { seedTestimonialsSection } from '@/lib/testimonials'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
@@ -206,7 +207,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail)), pageLimit))),
+              seedProductsSubmenu(seedContactActions(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail))), pageLimit))),
               normalizedLang,
             ),
             normalizedLang,
@@ -241,7 +242,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(syncSectionPages(seedServicesDetail(seedAboutDetail(seededAbout))))),
+              seedProductsSubmenu(seedContactActions(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout)))))),
               normalizedLang,
             ),
             normalizedLang,
