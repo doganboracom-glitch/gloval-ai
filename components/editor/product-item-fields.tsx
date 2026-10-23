@@ -8,7 +8,7 @@ import { isUsableImageSrc } from '@/lib/about-media'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_HOME_DEFAULT_LIMIT, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { homeProductIndexes, withProductSlugs } from '@/lib/product-items'
+import { homeProductIndexes, isPlaceholderProduct, withProductSlugs } from '@/lib/product-items'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { useEditorProjectId } from '@/components/editor/published-context'
 import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
@@ -25,6 +25,8 @@ const COPY = {
     sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
     approve: 'İçeriği onayla',
     slug: 'Sayfa adresi',
+    slugAuto: 'Adres ürün adından otomatik oluşur. Adı değiştirirseniz eski adres yeni adrese yönlenir.',
+    draft: 'Taslak: ad, görsel veya fiyat girilene kadar yayınlanmaz.',
     sku: 'Ürün kodu (SKU)',
     priceMode: 'Fiyat gösterimi',
     priceShow: 'Fiyatı göster',
@@ -61,6 +63,8 @@ const COPY = {
     sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
     approve: 'Approve content',
     slug: 'Page address',
+    slugAuto: 'The address is built from the product name. If you rename it, the old address redirects to the new one.',
+    draft: 'Draft: not published until a name, image or price is added.',
     sku: 'Product code (SKU)',
     priceMode: 'Price display',
     priceShow: 'Show the price',
@@ -180,6 +184,7 @@ export function ProductItemFields({
                 <details key={i} className="rounded-md border border-border">
                   <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
                     {item.name || `#${i + 1}`}
+                    {isPlaceholderProduct(item) ? <span className="ml-2 text-xs font-normal text-muted-foreground">{c.draft}</span> : null}
                   </summary>
                   <div className="flex flex-col gap-3 border-t border-border p-3">
                     <label className="flex items-center gap-2 text-sm">
@@ -209,7 +214,13 @@ export function ProductItemFields({
                           </div>
                         ) : null}
 
-                        <TextField label={c.slug} value={item.slug ?? ''} mono onCommit={(v) => patchItem(i, { slug: v })} />
+                        <div className="flex flex-col gap-1 text-xs">
+                          <span className="font-medium text-muted-foreground">{c.slug}</span>
+                          <code className="rounded-md bg-muted px-2 py-1.5 font-mono text-foreground">
+                            {item.slug ? `/urunlerimiz/…/${item.slug}` : '—'}
+                          </code>
+                          <span className="text-muted-foreground">{c.slugAuto}</span>
+                        </div>
                         <TextField label={c.sku} value={item.sku ?? ''} mono maxLength={60} onCommit={(v) => patchItem(i, { sku: v })} />
 
                         <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">

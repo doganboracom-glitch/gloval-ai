@@ -44,7 +44,7 @@ import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-lim
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { homeHasRoom, makeProductsInline, withHomeFlags, withProductSlugs } from '@/lib/product-items'
+import { homeHasRoom, makeProductsInline, withHomeFlags, withProductSlugs, withRenamedProduct } from '@/lib/product-items'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -617,7 +617,6 @@ export function applyOperation(
       if (!item) return next
       const { patch } = operation
       const updated = { ...item }
-      if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.name)
       if (patch.sku !== undefined) updated.sku = patch.sku.trim().slice(0, 60) || undefined
       if (patch.priceMode !== undefined) updated.priceMode = patch.priceMode
       if (patch.showOnHome !== undefined) updated.showOnHome = patch.showOnHome
@@ -639,10 +638,13 @@ export function applyOperation(
             ...(image.alt?.trim() ? { alt: image.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) } : {}),
           }))
         updated.images = images.length > 0 ? images : undefined
-        // The showcase card reads `src`, so it follows the first gallery image.
+        // The showcase card reads `src`, so it follows the first gallery image; an emptied gallery clears it.
         if (images.length > 0) {
           updated.src = images[0].src
           updated.alt = images[0].alt ?? updated.alt
+        } else {
+          updated.src = undefined
+          updated.alt = undefined
         }
       }
       if (patch.specs !== undefined) {
@@ -846,6 +848,10 @@ export function applyOperation(
     case 'updateItemField': {
       const section = next.sections[operation.index]
       const item = collectionOf(section)?.[operation.itemIndex]
+      if (section?.type === 'products' && section.inline && operation.field === 'name' && item) {
+        next.sections[operation.index] = withRenamedProduct(section, operation.itemIndex, operation.value)
+        return next
+      }
       if (item) {
   const value =
   section?.type === 'announcement' && operation.field === 'text'

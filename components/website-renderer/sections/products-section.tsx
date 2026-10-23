@@ -26,7 +26,7 @@ import { ProductCard as StoreProductCard } from '@/components/store/product-card
 import type { StoreProduct } from '@/lib/store'
 import { resolveShowcaseSettings, selectShowcase } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
-import { homeProductCards, saleBadge } from '@/lib/product-items'
+import { formatProductPrice, homeProductCards, parsePriceToCents as parseCents, saleBadge } from '@/lib/product-items'
 import { resolveViewAllLabel, storeListHref } from '@/lib/store-header-links'
 
 type ProductsData = Extract<Section, { type: 'products' }>
@@ -149,7 +149,7 @@ function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
 
       {single ? (
         <div className="mx-auto mt-10 grid max-w-xs gap-5" data-single-item="true">
-          <ProductCard item={cards[0].item} href={cards[0].href} seed={1} />
+          <ProductCard item={cards[0].item} href={cards[0].href} seed={1} corporate={!!data.inline} />
         </div>
       ) : carousel ? (
         // Mobile: contained horizontal snap-scroll (bleeds to the section
@@ -163,14 +163,14 @@ function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
               key={i}
               className="w-60 shrink-0 snap-start sm:w-64 lg:w-auto"
             >
-              <ProductCard item={item} href={href} seed={i + 1} />
+              <ProductCard item={item} href={href} seed={i + 1} corporate={!!data.inline} />
             </div>
           ))}
         </div>
       ) : (
         <div className="mt-10 grid grid-cols-2 gap-5 lg:grid-cols-4">
           {cards.map(({ item, href }, i) => (
-            <ProductCard key={i} item={item} href={href} seed={i + 1} />
+            <ProductCard key={i} item={item} href={href} seed={i + 1} corporate={!!data.inline} />
           ))}
         </div>
       )}
@@ -183,13 +183,23 @@ function ProductCard({
   seed,
   lang,
   href,
+  corporate = false,
 }: {
   item: ProductItem
   seed: number
   lang?: string
   href?: string
+  corporate?: boolean
 }) {
   const badge = saleBadge(item, lang)
+  // A corporate catalog shows "1.299 TL" (no symbol) and hides a zero price; a store keeps the owner's own text.
+  const priceText = corporate
+    ? item.priceMode === 'ask'
+      ? 'Fiyat için sor'
+      : formatProductPrice(item.price)
+    : item.price
+  const oldPriceText =
+    corporate ? (priceText && parseCents(item.oldPrice) > parseCents(item.price) ? formatProductPrice(item.oldPrice) : null) : item.oldPrice
   const nav = useSiteNav()
   const cart = useOptionalCart()
   const catalog = useStoreCatalog()
@@ -324,16 +334,18 @@ function ProductCard({
           </p>
         ) : null}
 
-        <div className="mt-3 flex items-baseline gap-2">
-          <span className="text-base font-bold" style={{ color: 'var(--site-fg)' }}>
-            {item.price}
-          </span>
-          {item.oldPrice ? (
-            <span className="text-xs line-through" style={{ color: 'var(--site-muted-fg)' }}>
-              {item.oldPrice}
+        {priceText ? (
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-base font-bold" style={{ color: 'var(--site-fg)' }}>
+              {priceText}
             </span>
-          ) : null}
-        </div>
+            {oldPriceText ? (
+              <span className="text-xs line-through" style={{ color: 'var(--site-muted-fg)' }}>
+                {oldPriceText}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* When a cart exists (real or demo store), the primary action adds to
             the cart in place; otherwise it's a link to the detail/anchor.

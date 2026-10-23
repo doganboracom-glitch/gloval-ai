@@ -11,6 +11,7 @@ import {
   jsonLdScripts,
 } from '@/lib/catalog-public'
 import { catalogLabels } from '@/lib/catalog-view'
+import { findCatalogItem } from '@/lib/product-items'
 import { CatalogPageShell } from '@/components/catalog/catalog-page-shell'
 import { CatalogProductView } from '@/components/catalog/catalog-product-view'
 
@@ -21,8 +22,9 @@ type Params = { params: Promise<{ slug: string; category: string; product: strin
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug, product: productSlug } = await params
   const catalog = await loadPublicCatalog(slug)
-  const item = catalog?.items.find((i) => i.slug === productSlug)
-  if (!catalog || !item) notFound()
+  const found = catalog ? findCatalogItem(catalog.items, productSlug) : null
+  if (!catalog || !found) notFound()
+  const item = found.item
   const title = item.seoTitle ?? `${item.name} | ${catalog.site.name}`
   const description = item.seoDescription ?? item.description?.slice(0, 160) ?? undefined
   const canonical = `${catalog.origin}${catalogProductPath(item.categorySlug, item.slug)}`
@@ -44,11 +46,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function CatalogProductPage({ params }: Params) {
   const { slug, category, product: productSlug } = await params
   const catalog = await loadPublicCatalog(slug)
-  const item = catalog?.items.find((i) => i.slug === productSlug)
-  if (!catalog || !item) notFound()
+  const found = catalog ? findCatalogItem(catalog.items, productSlug) : null
+  if (!catalog || !found) notFound()
+  const item = found.item
 
-  // A product keeps one canonical address: a stale or wrong category segment redirects there.
-  if (item.categorySlug !== category) permanentRedirect(catalogProductPath(item.categorySlug, item.slug))
+  // A product keeps one canonical address: an old name, or a stale or wrong category segment, redirects there.
+  if (found.moved || item.categorySlug !== category) permanentRedirect(catalogProductPath(item.categorySlug, item.slug))
 
   const productUrl = `${catalog.origin}${catalogProductPath(item.categorySlug, item.slug)}`
   const whatsappHref = catalog.whatsappNumber

@@ -490,6 +490,7 @@ export const productsSection = z.object({
         videoUrl: z.string().max(300).optional().describe('Managed by the platform. Never set this field yourself.'),
         pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
         showOnHome: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        previousSlugs: z.array(z.string().max(80)).max(10).optional().describe('Managed by the platform. Never set this field yourself.'),
         seoTitle: z.string().max(SERVICE_ITEM_LIMITS.seoTitle).optional().describe('Managed by the platform. Never set this field yourself.'),
         seoDescription: z.string().max(SERVICE_ITEM_LIMITS.seoDescription).optional().describe('Managed by the platform. Never set this field yourself.'),
       }),

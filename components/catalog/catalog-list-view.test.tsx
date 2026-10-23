@@ -202,7 +202,7 @@ describe('price_mode and WhatsApp text', () => {
   })
 
   it('show products render the formatted price', () => {
-    expect(render()).toMatch(/125,00/)
+    expect(render()).toMatch(/125 TL/)
   })
 
   it('catalog product message carries name, code and the /urunlerimiz address', () => {

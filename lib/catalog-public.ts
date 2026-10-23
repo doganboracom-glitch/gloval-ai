@@ -1,5 +1,5 @@
 import { slugify } from '@/lib/slug'
-import { ASK_PRICE_LABEL, formatCatalogPrice, type PriceMode } from '@/lib/commerce-mode'
+import { ASK_PRICE_LABEL, formatPriceCents, type PriceMode } from '@/lib/commerce-mode'
 import { safeJsonLd } from '@/lib/product-json-ld'
 import type { ProductSpec } from '@/lib/product-input'
 import type { ProductImage } from '@/lib/product-images'
@@ -68,6 +68,10 @@ export type CatalogItem = {
   categorySlug: string
   seoTitle: string | null
   seoDescription: string | null
+  /** Former addresses of a renamed product; they answer with a permanent redirect. */
+  previousSlugs?: string[]
+  /** Long-form description blocks written in the editor. */
+  blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
 }
 
 export type CatalogGroup = { name: string; slug: string; items: CatalogItem[] }
@@ -95,7 +99,9 @@ export function catalogPriceText(
   item: Pick<CatalogItem, 'priceMode' | 'priceCents' | 'currency'>,
   askLabel: string = ASK_PRICE_LABEL,
 ): string {
-  return item.priceMode === 'ask' ? askLabel : formatCatalogPrice(item.priceCents, item.currency)
+  if (item.priceMode === 'ask') return askLabel
+  // "1.299 TL": no currency symbol, and a zero price is never shown as "0".
+  return formatPriceCents(item.priceCents, item.currency) ?? askLabel
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,5 +1,6 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import { isStorefront } from '@/lib/website-schema'
+import { isRealProduct } from '@/lib/product-items'
 
 /**
  * Guards that keep the AI from inventing a product catalog on a corporate site.
@@ -23,7 +24,7 @@ const STORE_LINK = /^(#|\/)?(products|categories|urunler|kategoriler)\/?$/i
 
 /** An item with no name is an empty draft row, never a product. */
 export function hasNamedProducts(section: Pick<ProductsSection, 'items'>): boolean {
-  return section.items.some((item) => item.name.trim().length > 0)
+  return section.items.some((item) => isRealProduct(item))
 }
 
 /** The empty draft row a freshly added corporate "Ürünler" section starts with. */
