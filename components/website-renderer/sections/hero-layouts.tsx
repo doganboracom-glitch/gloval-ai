@@ -52,12 +52,15 @@ export function HeroLayoutView({
 }) {
   const count = slides.length
   const [index, setIndex] = useState(0)
-  const [paused, setPaused] = useState(false)
+  const [hoverPaused, setHoverPaused] = useState(false)
+  const [touched, setTouched] = useState(false)
+  const [userPaused, setUserPaused] = useState(false)
   const [reducedMotion, setReducedMotion] = useState(false)
+  const paused = hoverPaused || touched || userPaused
   const fullBleed = settings.layout === 'full-bleed'
 
   useEffect(() => {
-    setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    setReducedMotion(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
   }, [])
 
   const go = useCallback((next: number) => setIndex((count + next) % count), [count])
@@ -73,20 +76,30 @@ export function HeroLayoutView({
   }, [count, index])
 
   const gestures = useCarouselGestures((dir) => go(index + dir), count > 1)
+  const { onTouchStart: gestureTouchStart, ...otherGestures } = gestures as {
+    onTouchStart?: React.TouchEventHandler<HTMLElement>
+  }
+  const autoplaying = count > 1 && !paused && !reducedMotion
 
   return (
     <section
       id="hero"
       className="relative overflow-hidden"
       style={{ backgroundColor: 'var(--site-bg)' }}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-      {...(count > 1 ? { 'aria-roledescription': 'carousel' } : {})}
-      {...gestures}
+      onMouseEnter={() => setHoverPaused(true)}
+      onMouseLeave={() => setHoverPaused(false)}
+      onFocusCapture={() => setHoverPaused(true)}
+      onBlurCapture={() => setHoverPaused(false)}
+      {...(count > 1
+        ? { role: 'region', 'aria-roledescription': 'carousel', 'aria-label': slides[0]?.title || 'Hero' }
+        : {})}
+      {...otherGestures}
+      onTouchStart={(e) => {
+        setTouched(true)
+        gestureTouchStart?.(e)
+      }}
     >
-      <div className="grid">
+      <div className="grid" aria-live={count > 1 ? (autoplaying ? 'off' : 'polite') : undefined}>
         {slides.map((slide, i) => {
           const active = i === index
           return (
@@ -117,7 +130,18 @@ export function HeroLayoutView({
       </div>
 
       {count > 1 ? (
-        <Controls count={count} index={index} go={go} dark={fullBleed} />
+        <Controls
+          count={count}
+          index={index}
+          go={go}
+          dark={fullBleed}
+          canAutoplay={!reducedMotion}
+          userPaused={userPaused}
+          onTogglePause={() => {
+            setUserPaused((v) => !v)
+            setTouched(false)
+          }}
+        />
       ) : null}
     </section>
   )
@@ -344,11 +368,17 @@ function Controls({
   index,
   go,
   dark,
+  canAutoplay,
+  userPaused,
+  onTogglePause,
 }: {
   count: number
   index: number
   go: (i: number) => void
   dark: boolean
+  canAutoplay: boolean
+  userPaused: boolean
+  onTogglePause: () => void
 }) {
   const pill: React.CSSProperties = dark
     ? { backgroundColor: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.5)', color: '#ffffff' }
@@ -385,6 +415,21 @@ function Controls({
           <path d="m9 18 6-6-6-6" />
         </svg>
       </button>
+      {canAutoplay ? (
+        <button
+          type="button"
+          {...KEEP_INTERACTIVE_PROPS}
+          onClick={onTogglePause}
+          aria-label={userPaused ? 'Play slideshow' : 'Pause slideshow'}
+          aria-pressed={userPaused}
+          className="absolute bottom-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full transition-opacity hover:opacity-80"
+          style={pill}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            {userPaused ? <path d="M7 4v16l13-8z" /> : <path d="M6 4h4v16H6zM14 4h4v16h-4z" />}
+          </svg>
+        </button>
+      ) : null}
       <div className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2">
         {Array.from({ length: count }, (_, i) => (
           <button

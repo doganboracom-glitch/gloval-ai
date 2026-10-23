@@ -152,6 +152,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   const site = fallbackWebsite(pickLang(demo.prompt, lang), toBilingual(lang))
   applyDemoImages(site, demoImages[demo.slug])
   customizeDemoSite(site, demo.slug, lang)
+  applyDemoHeroStyle(site, demo.slug)
   applyDemoAbout(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   applyDemoServices(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   addDemoAboutLink(site, demo.slug, lang === 'en' ? 'en' : 'tr')
@@ -164,6 +165,26 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
     getCatalog(demo.slug) ? `/demo/${demo.slug}/iletisim?lang=${demoLang}` : undefined,
   )
   return site
+}
+
+/**
+ * Showcases the hero styles on two demos using their existing photography:
+ * the restaurant gets the full-screen cover, the café the light side-image
+ * cover. Every other demo keeps the standard hero (no layout fields).
+ */
+export const DEMO_HERO_STYLES: Record<string, { layout: 'full-bleed' | 'light-cover'; align?: 'left' | 'center'; overlay?: number }> = {
+  restoran: { layout: 'full-bleed', align: 'center', overlay: 45 },
+  kahve: { layout: 'light-cover' },
+}
+
+function applyDemoHeroStyle(site: WebsiteSchema, slug: string): void {
+  const style = DEMO_HERO_STYLES[slug]
+  if (!style) return
+  const hero = site.sections.find((s) => s.type === 'hero')
+  if (!hero || hero.type !== 'hero') return
+  hero.layout = style.layout
+  if (style.align) hero.align = style.align
+  if (style.overlay !== undefined) hero.overlay = style.overlay
 }
 
 const DEMO_ABOUT_LINK_PATTERN = /hakkimizda|hakkinda|about/
