@@ -15,7 +15,7 @@ const unverifiedClaimPatterns: RegExp[] = [
     'iu',
   ),
   new RegExp(`${NOT_LETTER_BEFORE}(?:son\\s+\\d+|only\\s+\\d+|limited|kaçırma|hemen\\s+al)${NOT_LETTER_AFTER}`, 'iu'),
-  new RegExp(`\\d+\\s*(?:yıl|years?|ay|months?)${NOT_LETTER_AFTER}`, 'iu'),
+  new RegExp(`\\d+\\s*(?:yıl(?:lık)?|years?|ay(?:lık)?|months?)${NOT_LETTER_AFTER}`, 'iu'),
   /\d\s*\+/u,
 ]
 

@@ -5,6 +5,11 @@ import type { CTAButton, Section, SiteImageRef } from '@/lib/website-schema'
 import { SiteButton, SiteImage } from '@/components/website-renderer/primitives'
 import { useCarouselGestures } from '@/components/website-renderer/use-carousel-gestures'
 import { KEEP_INTERACTIVE_PROPS } from '@/lib/preview-interactive'
+import { hasHeroLayout, resolveHeroLayout } from '@/lib/hero-layout'
+import {
+  HeroLayoutView,
+  type LayoutSlide,
+} from '@/components/website-renderer/sections/hero-layouts'
 
 type HeroData = Extract<Section, { type: 'hero' }>
 type HeroSlide = NonNullable<HeroData['slides']>[number]
@@ -67,6 +72,23 @@ function resolveVariant(data: HeroData): NonNullable<HeroData['variant']> {
 
 export function HeroSection({ data }: { data: HeroData }) {
   const variant = resolveVariant(data)
+
+  // An owner-picked layout takes over rendering; `variant` still decides whether
+  // the hero is a single image or a slide rotation, so image generation is unchanged.
+  if (hasHeroLayout(data)) {
+    const slides: LayoutSlide[] = (
+      variant === 'slider' && data.slides && data.slides.length > 0
+        ? data.slides.map(slideToSlide)
+        : [heroToSlide(data)]
+    ).map(({ badge, title, description, primaryButton, image }) => ({
+      badge,
+      title,
+      description,
+      primaryButton,
+      image,
+    }))
+    return <HeroLayoutView slides={slides} settings={resolveHeroLayout(data)} />
+  }
 
   if (variant === 'slider') {
     const slides =
