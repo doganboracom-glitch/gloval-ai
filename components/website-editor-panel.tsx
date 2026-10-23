@@ -57,6 +57,7 @@ import {
 } from '@/components/editor/company-fields'
 import { LegalDocsFields } from '@/components/editor/legal-docs-fields'
 import { SocialLinksFields } from '@/components/editor/social-links-fields'
+import { HeroLayoutField } from '@/components/hero-layout-field'
 import { canUseTrackingCode } from '@/lib/site-tracking'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
@@ -547,6 +548,7 @@ function DesignTab({
 
       {hero && (
         <Group title={ui.groupHero}>
+          <HeroLayoutField hero={hero} onDispatch={onDispatch} />
           <TextField
             label={ui.heroBadge}
             value={hero.badge ?? ''}

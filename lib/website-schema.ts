@@ -197,6 +197,30 @@ export const heroSection = z.object({
     .describe(
       'Hero layout: "split" (text + image side by side), "centered" (text only, centered), "showcase" (full-width background image with overlaid text), or "slider" (rotating full-bleed slides).',
     ),
+  /**
+   * Visual style of the hero, independent of `variant` (which still decides
+   * single image vs. slides). Optional: when omitted the legacy `variant`
+   * rendering is used byte-for-byte, so published sites never change.
+   * `lib/hero-layout.ts` normalizes all four fields below.
+   */
+  layout: z
+    .enum(['split', 'light-cover', 'full-bleed'])
+    .optional()
+    .describe('Never set this yourself. Managed by the visual editor.'),
+  align: z
+    .enum(['left', 'center', 'right'])
+    .optional()
+    .describe('Never set this yourself. Text alignment of the hero layout.'),
+  overlay: z
+    .number()
+    .min(0)
+    .max(70)
+    .optional()
+    .describe('Never set this yourself. Dark overlay strength (0-70) of the full-bleed layout.'),
+  imageFit: z
+    .enum(['contain', 'cover'])
+    .optional()
+    .describe('Never set this yourself. How the light-cover image fits its half.'),
   badge: z.string().optional().describe('A small eyebrow/badge above the headline'),
   title: z.string().describe('The main headline'),
   description: z.string().describe('The supporting subheadline'),

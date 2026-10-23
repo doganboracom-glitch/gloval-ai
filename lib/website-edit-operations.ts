@@ -1,5 +1,12 @@
 import { canAddEntry, canRemoveEntry } from '@/lib/list-limits'
 import {
+  HERO_LAYOUTS,
+  clampOverlay,
+  type HeroAlign,
+  type HeroImageFit,
+  type HeroLayout,
+} from '@/lib/hero-layout'
+import {
   ANNOUNCEMENT_MAX_ITEMS,
   ANNOUNCEMENT_SPEEDS,
   ANNOUNCEMENT_TEXT_MAX,
@@ -161,6 +168,7 @@ export type EditOperation =
   /** The browser-tab favicon. `src: null` removes it (falls back to the platform default). */
   | { op: 'updateFavicon'; src: string | null }
   | { op: 'updateHero'; patch: HeroPatch }
+  | { op: 'updateHeroLayout'; patch: HeroLayoutPatch }
   | { op: 'updateHeroImage'; patch: HeroImagePatch }
   /** A single slider slide's image (slider hero variant). */
   | { op: 'updateSlideImage'; slideIndex: number; patch: HeroImagePatch }
@@ -426,6 +434,14 @@ export type HeroPatch = {
   trustText?: string
   primaryButtonLabel?: string
   secondaryButtonLabel?: string
+}
+
+/** Visual style of the hero; values are normalized by `lib/hero-layout.ts`. */
+export type HeroLayoutPatch = {
+  layout?: HeroLayout
+  align?: HeroAlign
+  overlay?: number
+  imageFit?: HeroImageFit
 }
 
 /**
@@ -932,6 +948,21 @@ export function applyOperation(
             ? { label: p.secondaryButtonLabel, href: hero.secondaryButton?.href ?? '#' }
             : undefined
         }
+      }
+      return next
+    }
+
+    case 'updateHeroLayout': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero') {
+        const p = operation.patch
+        if (p.layout !== undefined && HERO_LAYOUTS.includes(p.layout)) hero.layout = p.layout
+        if (p.align !== undefined) hero.align = p.align
+        if (p.overlay !== undefined) hero.overlay = clampOverlay(p.overlay)
+        if (p.imageFit !== undefined) hero.imageFit = p.imageFit
+        // Centered copy is only valid on full-bleed; never persist it elsewhere.
+        const layout = hero.layout ?? 'split'
+        if (hero.align === 'center' && layout !== 'full-bleed') hero.align = 'left'
       }
       return next
     }
