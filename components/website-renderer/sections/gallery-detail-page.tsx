@@ -29,35 +29,28 @@ export function PageHeader({
   trail,
   title,
   subtitle,
-  image,
 }: {
   lang: 'tr' | 'en'
   trail: Array<{ label: string; href?: string }>
   title: string
   subtitle?: string
-  /** The owner's own cover photo, shown under a dark layer; without it the theme gradient is used. */
-  image?: string
 }) {
   const link = useLink()
   const crumbs = [{ label: lang === 'en' ? 'Home' : 'Ana sayfa', href: '/' }, ...trail]
-  const gradient =
-    'linear-gradient(135deg, var(--site-primary), color-mix(in srgb, var(--site-primary) 45%, #000))'
+  // A plain theme-surface band: no cover photo, so the page heading never competes with the pictures below it.
   return (
     <header
       data-gv-detail-band
-      className="px-6 py-12 sm:py-16"
+      className="px-6 py-10 sm:py-12"
       style={{
-        color: '#fff',
-        backgroundImage: image
-          ? `linear-gradient(rgba(0,0,0,0.62), rgba(0,0,0,0.62)), url("${image.replace(/"/g, '%22')}")`
-          : `linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25)), ${gradient}`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        color: 'var(--site-fg)',
+        backgroundImage: 'linear-gradient(180deg, var(--site-card), var(--site-muted))',
+        borderBottom: '1px solid var(--site-border)',
       }}
     >
       <div className="mx-auto w-full max-w-5xl">
         <nav aria-label="Breadcrumb" data-gv-breadcrumb>
-          <ol className="flex flex-wrap items-center gap-1.5 text-sm" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          <ol className="flex flex-wrap items-center gap-1.5 text-sm" style={{ color: 'var(--site-muted-fg)' }}>
             {crumbs.map((crumb, i) => (
               <li key={`${crumb.label}-${i}`} className="flex items-center gap-1.5">
                 {i > 0 ? <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" /> : null}
@@ -66,12 +59,12 @@ export function PageHeader({
                     href={link.href(crumb.href)}
                     onClick={(e) => link.onClick(e, link.href(crumb.href as string))}
                     className="underline-offset-4 hover:underline"
-                    style={{ color: 'rgba(255,255,255,0.8)' }}
+                    style={{ color: 'var(--site-muted-fg)' }}
                   >
                     {crumb.label}
                   </a>
                 ) : (
-                  <span aria-current="page" className="font-medium" style={{ color: '#fff' }}>
+                  <span aria-current="page" className="font-medium" style={{ color: 'var(--site-fg)' }}>
                     {crumb.label}
                   </span>
                 )}
@@ -81,12 +74,12 @@ export function PageHeader({
         </nav>
         <h1
           className="mt-4 text-balance text-3xl font-bold sm:text-4xl lg:text-5xl"
-          style={{ fontFamily: 'var(--site-heading-font)', color: '#fff' }}
+          style={{ fontFamily: 'var(--site-heading-font)', color: 'var(--site-fg)' }}
         >
           {title}
         </h1>
         {subtitle ? (
-          <p className="mt-3 max-w-2xl text-pretty text-base sm:text-lg" style={{ color: 'rgba(255,255,255,0.85)' }}>
+          <p className="mt-3 max-w-2xl text-pretty text-base sm:text-lg" style={{ color: 'var(--site-muted-fg)' }}>
             {subtitle}
           </p>
         ) : null}
@@ -203,7 +196,6 @@ export function GalleryDetailPage({ site, albumSlug }: { site: WebsiteSchema; al
           trail={[{ label: gallery.title, href: `/${gallery.slug}` }, { label: album.name }]}
           title={album.name}
           subtitle={count(album.photos.length)}
-          image={album.cover.src}
         />
         <div className="px-6 py-12 sm:py-16">
           <div className="mx-auto w-full max-w-5xl">
@@ -221,7 +213,6 @@ export function GalleryDetailPage({ site, albumSlug }: { site: WebsiteSchema; al
         trail={[{ label: gallery.title }]}
         title={gallery.section?.title?.trim() || gallery.title}
         subtitle={gallery.section?.subtitle?.trim() || undefined}
-        image={gallery.photos[0]?.src}
       />
       <div className="px-6 py-12 sm:py-16">
         <div className="mx-auto w-full max-w-5xl">

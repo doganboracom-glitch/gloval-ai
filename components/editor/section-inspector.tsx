@@ -161,6 +161,21 @@ export function SectionInspector({
         />
       )}
 
+      {section.type === 'contact' && site.navigation.logo?.src && !isStorefront(site) && (
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-border bg-background p-2">
+          <input
+            type="checkbox"
+            checked={section.showLogo !== false}
+            onChange={(e) => onDispatch({ op: 'setContactShowLogo', index, show: e.target.checked })}
+            className="mt-0.5 h-3.5 w-3.5 accent-[var(--color-brand)]"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium">{label('showLogo')}</span>
+            <span className="text-[11px] leading-snug text-muted-foreground">{label('showLogoHint')}</span>
+          </span>
+        </label>
+      )}
+
       {section.type === 'contact' && (
         <MapEmbedField
           value={String(record.mapEmbed ?? '')}

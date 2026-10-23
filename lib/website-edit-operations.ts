@@ -443,6 +443,7 @@ export type EditOperation =
       }
     }
   | { op: 'setSectionHidden'; index: number; hidden: boolean }
+  | { op: 'setContactShowLogo'; index: number; show: boolean }
   | { op: 'moveSection'; index: number; direction: 'up' | 'down' }
   | { op: 'removeSection'; index: number }
   | { op: 'addSection'; sectionType: SectionType; index?: number }
@@ -1345,6 +1346,14 @@ export function applyOperation(
     case 'setSectionHidden': {
       const section = next.sections[operation.index]
       if (section) section.hidden = operation.hidden
+      return next
+    }
+
+    case 'setContactShowLogo': {
+      const section = next.sections[operation.index]
+      if (section?.type !== 'contact') return next
+      if (operation.show) delete section.showLogo
+      else section.showLogo = false
       return next
     }
 

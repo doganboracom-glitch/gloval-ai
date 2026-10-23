@@ -10,7 +10,13 @@ export const MENU_MAX = 7
 export const BLOG_MENU_KEY = 'blog'
 
 /** One single-level sub-menu item (a product category under "Ürünler"). */
-export type MenuChild = { key: string; label: string; href: string }
+export type MenuChild = {
+  key: string
+  label: string
+  href: string
+  /** Slug of the site page the child points at (page children only), so the parent can light up while it is open. */
+  pageSlug?: string
+}
 
 /** A product category the header can list under the products entry. */
 export type MenuCategory = { key: string; label: string; href: string }
@@ -52,22 +58,39 @@ export function withProductChildren(
 }
 
 /**
- * "Galeri" gets a two-item sub-menu (Resimler, Videolar) when both system pages are live; the separate
- * "Videolar" entry then folds into it. With only one of the two live, nothing changes: that page is a plain entry.
+ * "Galeri" gets a two-item sub-menu (Resimler, Videolar) as soon as the site has a live /videolar page: the owner
+ * never has to add "Videolar" to the menu by hand. A separate "Videolar" entry (switched on in the pages panel)
+ * folds into the sub-menu instead of repeating. `allPages` is the full page list, so the videos page is found even
+ * when it is not a menu entry. With only one of the two live, nothing changes: that page is a plain entry.
  */
 export function withGalleryChildren(
   entries: MenuEntry[],
   hrefOf: (page: PageItem) => string,
+  allPages?: PageItem[],
 ): MenuEntry[] {
   const gallery = entries.find((e) => e.kind === 'page' && e.page.detailOf === 'gallery')
-  const videos = entries.find((e) => e.kind === 'page' && e.page.detailOf === 'videos')
-  if (!gallery || !videos || gallery.kind !== 'page' || videos.kind !== 'page') return entries
-  const english = videos.page.title === 'Videos'
+  if (!gallery || gallery.kind !== 'page') return entries
+  const listed = entries.find((e) => e.kind === 'page' && e.page.detailOf === 'videos')
+  const listedPage = listed && listed.kind === 'page' ? listed : undefined
+  const unlisted = allPages?.find((p) => p.detailOf === 'videos' && isLinkable(p))
+  const videosPage = listedPage?.page ?? unlisted
+  if (!videosPage) return entries
+  const english = videosPage.title === 'Videos'
   const children: MenuChild[] = [
-    { key: `${gallery.key}:photos`, label: english ? 'Photos' : 'Resimler', href: hrefOf(gallery.page) },
-    { key: `${videos.key}:videos`, label: videos.label, href: hrefOf(videos.page) },
+    {
+      key: `${gallery.key}:photos`,
+      label: english ? 'Photos' : 'Resimler',
+      href: hrefOf(gallery.page),
+      pageSlug: gallery.page.slug,
+    },
+    {
+      key: `${pageMenuKey(videosPage)}:videos`,
+      label: listedPage?.label ?? pageMenuLabel(videosPage),
+      href: hrefOf(videosPage),
+      pageSlug: videosPage.slug,
+    },
   ]
-  return entries.filter((e) => e !== videos).map((e) => (e === gallery ? { ...gallery, children } : e))
+  return entries.filter((e) => e !== listedPage).map((e) => (e === gallery ? { ...gallery, children } : e))
 }
 
 /** Turns the sub-menu on for a site that has never made a choice (new generations, unpublished drafts). */
@@ -156,12 +179,27 @@ export function resolveHeaderMenu({
  */
 export function resolveFooterPages(pages: PageItem[] | undefined, menuOrder?: string[]): PageItem[] {
   const picked = (pages ?? []).filter((p) => p.showInFooter === true && isLinkable(p))
-  if (!menuOrder || menuOrder.length === 0) return picked
-  const rank = (p: PageItem) => {
-    const index = menuOrder.indexOf(pageMenuKey(p))
-    return index < 0 ? Number.MAX_SAFE_INTEGER : index
-  }
-  return picked.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(({ p }) => p)
+  const ordered = (() => {
+    if (!menuOrder || menuOrder.length === 0) return picked
+    const rank = (p: PageItem) => {
+      const index = menuOrder.indexOf(pageMenuKey(p))
+      return index < 0 ? Number.MAX_SAFE_INTEGER : index
+    }
+    return picked.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map(({ p }) => p)
+  })()
+  return withFooterVideos(ordered, pages)
+}
+
+/**
+ * Same rule as the header sub-menu: a footer that lists "Galeri" also lists the live "Videolar" page right after
+ * it, so the footer never links the photos while hiding the videos the header offers.
+ */
+function withFooterVideos(picked: PageItem[], pages: PageItem[] | undefined): PageItem[] {
+  const galleryAt = picked.findIndex((p) => p.detailOf === 'gallery')
+  if (galleryAt < 0 || picked.some((p) => p.detailOf === 'videos')) return picked
+  const videos = (pages ?? []).find((p) => p.detailOf === 'videos' && isLinkable(p))
+  if (!videos) return picked
+  return [...picked.slice(0, galleryAt + 1), videos, ...picked.slice(galleryAt + 1)]
 }
 
 export type MenuGapKind = 'about' | 'services' | 'contact'
