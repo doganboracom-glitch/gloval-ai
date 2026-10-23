@@ -16,6 +16,7 @@ import { FeaturesSection } from '@/components/website-renderer/sections/features
 import { StatsSection } from '@/components/website-renderer/sections/stats-section'
 import { PricingSection } from '@/components/website-renderer/sections/pricing-section'
 import { TestimonialsSection } from '@/components/website-renderer/sections/testimonials-section'
+import { ReferencesSection } from '@/components/website-renderer/sections/references-section'
 import { GallerySection } from '@/components/website-renderer/sections/gallery-section'
 import { PortfolioSection } from '@/components/website-renderer/sections/portfolio-section'
 import { ProductsSection } from '@/components/website-renderer/sections/products-section'
@@ -101,6 +102,8 @@ export function SectionRenderer({
       )
     case 'testimonials':
       return <TestimonialsSection data={section} site={site} lang={meta.language} />
+    case 'references':
+      return <ReferencesSection data={section} site={site} />
     case 'gallery': {
       const resolved = site ? resolveGalleryPages(site) : null
       const moreLink =

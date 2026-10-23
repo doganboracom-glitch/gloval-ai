@@ -45,6 +45,7 @@ export const LIST_LIMITS = {
   stats: { min: 1, max: 6 },
   pricing: { min: 1, max: 4 },
   testimonials: { min: 1, max: 24 },
+  references: { min: 0, max: 20 },
   gallery: { min: 1, max: GALLERY_IMAGES_MAX },
   portfolio: { min: 1, max: 9 },
   products: { min: 1, max: 12 },

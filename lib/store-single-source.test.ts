@@ -186,7 +186,7 @@ describe('single product card component', () => {
     const src = read('components/editor/section-inspector.tsx')
     expect(src).toContain("section.type === 'products' && isStorefront(site) && (productsManagedByProject ?? true)")
     expect(src).toContain(
-      "{!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'heroStrip' && items.length > 0 && (",
+      "{!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && section.type !== 'heroStrip' && items.length > 0 && (",
     )
     expect(src).toContain('ui.manageProducts')
   })

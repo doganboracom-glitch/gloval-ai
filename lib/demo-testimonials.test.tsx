@@ -84,17 +84,19 @@ describe.each(demos.map((d) => d.slug))('demo %s reviews', (slug) => {
     const stripped: WebsiteSchema = {
       ...site,
       sections: site.sections
-        .filter((s) => s.type !== 'testimonials' && s.type !== 'heroStrip')
+        .filter((s) => s.type !== 'testimonials' && s.type !== 'references' && s.type !== 'heroStrip')
         .map((s) => {
           if (s.type !== 'hero') return s
           // Hero style fields belong to the hero layout feature; the rest of the page must stay identical.
           const { layout: _layout, align: _align, overlay: _overlay, imageFit: _imageFit, ...plain } = s as Record<string, unknown>
           return plain as typeof s
         }),
-      pages: (site.pages ?? []).filter((p) => p.slug !== 'musteri-yorumlari'),
+      pages: (site.pages ?? []).filter((p) => p.slug !== 'musteri-yorumlari' && p.slug !== 'referanslar'),
       navigation: {
         ...site.navigation,
-        links: site.navigation.links.filter((l) => !l.href.includes('musteri-yorumlari')),
+        links: site.navigation.links.filter(
+          (l) => !l.href.includes('musteri-yorumlari') && !l.href.includes('referanslar'),
+        ),
       },
     }
     expect(render(stripped)).toBe(readFileSync(file, 'utf8'))

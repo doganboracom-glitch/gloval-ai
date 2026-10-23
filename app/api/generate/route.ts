@@ -4,6 +4,7 @@ import { generateSiteObject } from '@/lib/site-generate'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedTestimonialsSection } from '@/lib/testimonials'
+import { dropAiReferences } from '@/lib/references'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
@@ -171,12 +172,14 @@ async function runGenerate(
       // page cap + SEO title all live in `generateSiteObject`, shared with the
       // comparison script. It logs usage/repair itself and throws once the AI
       // path is exhausted, which lands in the fallback below.
-      const { site: object } = await generateSiteObject({
+      const { site: generatedSite } = await generateSiteObject({
         ai,
         prompt,
         lang: normalizedLang,
         pageLimit,
       })
+      // References are owner-only proof: any client the model invents is dropped.
+      const object = dropAiReferences(generatedSite)
 
       // Attach a dynamic, brief-derived hero/slider image AND every other
       // visual (gallery / portfolio / team) — concurrently. They mutate

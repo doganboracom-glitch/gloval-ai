@@ -9,6 +9,7 @@ import { addDemoHeroStrip } from '@/lib/demo-hero-strip'
 import { applyDemoAbout } from '@/lib/demo-about'
 import { applyDemoServices } from '@/lib/demo-services'
 import { applyDemoTestimonials } from '@/lib/demo-testimonials'
+import { applyDemoReferences } from '@/lib/demo-references'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { MENU_MAX } from '@/lib/site-menu'
 
@@ -159,6 +160,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   applyDemoServices(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   addDemoAboutLink(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   applyDemoTestimonials(site, demo.slug, lang === 'en' ? 'en' : 'tr')
+  applyDemoReferences(site, demo.slug, lang === 'en' ? 'en' : 'tr')
   // After customization, so a slider added there is already in the list when the band is placed.
   const demoLang = lang === 'en' ? 'en' : 'tr'
   addDemoAnnouncement(
