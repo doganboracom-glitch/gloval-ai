@@ -664,6 +664,10 @@ export const contactSection = z.object({
   .max(2000)
     .optional()
     .describe('Owner-supplied Google Maps embed URL. Never generate this; leave it unset.'),
+  showLogo: z
+  .boolean()
+  .optional()
+  .describe('false hides the site logo under the contact details. Unset = shown when the site has a logo. Never set by the model.'),
   sampleFields: z
   .array(z.enum(['email', 'phone', 'address', 'mapEmbed']))
   .max(4)
