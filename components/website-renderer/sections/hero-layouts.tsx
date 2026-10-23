@@ -46,9 +46,12 @@ function imageOf(slide: LayoutSlide): { src?: string; alt: string } {
 export function HeroLayoutView({
   slides,
   settings,
+  underHeader = false,
 }: {
   slides: LayoutSlide[]
   settings: ResolvedHeroLayout
+  /** Light-cover only: the hero opens the page, so it runs up behind the sticky header. */
+  underHeader?: boolean
 }) {
   const count = slides.length
   const [index, setIndex] = useState(0)
@@ -58,6 +61,7 @@ export function HeroLayoutView({
   const [reducedMotion, setReducedMotion] = useState(false)
   const paused = hoverPaused || touched || userPaused
   const fullBleed = settings.layout === 'full-bleed'
+  const behindHeader = underHeader && settings.layout === 'light-cover'
 
   useEffect(() => {
     setReducedMotion(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
@@ -84,7 +88,7 @@ export function HeroLayoutView({
   return (
     <section
       id="hero"
-      className="relative overflow-hidden"
+      className={`relative overflow-hidden${behindHeader ? ' mt-[calc(var(--site-header-h,6rem)*-1)]' : ''}`}
       style={{ backgroundColor: 'var(--site-bg)' }}
       onMouseEnter={() => setHoverPaused(true)}
       onMouseLeave={() => setHoverPaused(false)}
@@ -120,7 +124,12 @@ export function HeroLayoutView({
               {settings.layout === 'full-bleed' ? (
                 <FullBleedSlide slide={slide} settings={settings} first={i === 0} />
               ) : settings.layout === 'light-cover' ? (
-                <LightCoverSlide slide={slide} settings={settings} first={i === 0} />
+                <LightCoverSlide
+                  slide={slide}
+                  settings={settings}
+                  first={i === 0}
+                  underHeader={behindHeader}
+                />
               ) : (
                 <SplitSlide slide={slide} settings={settings} first={i === 0} />
               )}
@@ -289,22 +298,29 @@ function LightCoverSlide({
   slide,
   settings,
   first,
+  underHeader,
 }: {
   slide: LayoutSlide
   settings: ResolvedHeroLayout
   first: boolean
+  underHeader: boolean
 }) {
   const textRight = settings.align === 'right'
   return (
     <div
-      className="grid min-h-[420px] md:min-h-[560px] md:grid-cols-2"
+      className={`grid md:grid-cols-2 ${
+        underHeader
+          ? 'md:min-h-[calc(560px+var(--site-header-h,6rem))]'
+          : 'min-h-[420px] md:min-h-[560px]'
+      }`}
       style={{ backgroundColor: 'var(--site-card)' }}
     >
+      {/* Fills its half edge to edge; with "contain" the letterbox shows the
+          theme's hero ground (the same as the copy half), never black. */}
       <div
-        className={`relative order-1 aspect-[4/3] w-full md:aspect-auto md:min-h-[560px] ${
-          textRight ? '' : 'md:order-2'
-        }`}
-        style={{ backgroundColor: 'var(--site-bg)' }}
+        className={`relative order-1 h-[56vh] w-full md:h-auto ${textRight ? '' : 'md:order-2'}`}
+        style={{ backgroundColor: 'var(--site-card)' }}
+        data-hero-media
       >
         <Photo
           slide={slide}
@@ -315,8 +331,8 @@ function LightCoverSlide({
       </div>
       <div
         className={`order-2 flex items-center px-6 py-12 md:px-12 lg:px-16 ${
-          textRight ? '' : 'md:order-1'
-        }`}
+          underHeader ? 'md:pt-[var(--site-header-h,6rem)]' : ''
+        } ${textRight ? '' : 'md:order-1'}`}
       >
         <Copy slide={slide} align={settings.align} onImage={false} first={first} />
       </div>

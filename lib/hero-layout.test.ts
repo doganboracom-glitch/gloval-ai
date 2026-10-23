@@ -36,7 +36,7 @@ describe('hero layout settings', () => {
       layout: 'light-cover',
       align: 'left',
       overlay: 40,
-      imageFit: 'contain',
+      imageFit: 'cover',
     })
   })
 })
