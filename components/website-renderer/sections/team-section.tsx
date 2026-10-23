@@ -1,69 +1,66 @@
 'use client'
 
-import { useState } from 'react'
-import type { Section } from '@/lib/website-schema'
-import { SectionShell, SectionHeading, SiteImage } from '@/components/website-renderer/primitives'
-import { ItemDetailDialog, type ItemDetail } from '@/components/website-renderer/item-detail'
+import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { SectionShell, SectionHeading, onSiteNavClick } from '@/components/website-renderer/primitives'
+import {
+  useDemoHref,
+  useDemoRoutes,
+  useHrefNormalizer,
+  useSiteNav,
+} from '@/components/website-renderer/site-nav-context'
+import { TeamCard } from '@/components/website-renderer/sections/team-card'
+import { TeamExampleTag } from '@/components/website-renderer/sections/team-example-tag'
+import { LegacyTeamSection } from '@/components/website-renderer/sections/legacy-team-section'
+import { TEAM_HOME_PREVIEW, isLegacyTeam, realMembers, teamLink, teamShownOnHome } from '@/lib/team'
 
 type TeamData = Extract<Section, { type: 'team' }>
 
-export function TeamSection({ data, lang }: { data: TeamData; lang?: string }) {
-  const [detail, setDetail] = useState<ItemDetail | null>(null)
+/**
+ * Home "Kadromuz" block. Renders nothing until at least one person has a name (so an AI-generated or
+ * freshly added empty section never shows), and nothing when the owner switched the home block off.
+ */
+export function TeamSection({ data, lang, site = null }: { data: TeamData; lang?: string; site?: WebsiteSchema | null }) {
+  // Sections made before "Kadromuz" (generated or imported) keep their exact original markup.
+  if (isLegacyTeam(data)) return <LegacyTeamSection data={data} lang={lang} />
+  return <TeamBlock data={data} lang={lang} site={site} />
+}
+
+function TeamBlock({ data, lang, site }: { data: TeamData; lang?: string; site: WebsiteSchema | null }) {
+  const nav = useSiteNav()
+  const normalize = useHrefNormalizer()
+  const demoHref = useDemoHref()
+  const demo = useDemoRoutes() !== null
+  if (!teamShownOnHome(data)) return null
+
+  const language = lang === 'en' ? 'en' : 'tr'
+  const all = realMembers(data)
+  const link = site ? teamLink(site, data) : null
+  const members = link ? all.slice(0, TEAM_HOME_PREVIEW) : all
+  const showMore = Boolean(link)
+  const href = link ? demoHref(normalize(link.href)) : ''
+  const showTag = demo && all.some((m) => m.sample)
 
   return (
     <SectionShell id="team">
-      <SectionHeading title={data.title} subtitle={data.subtitle} />
-      <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {data.members.map((member, i) => {
-          const imagePrompt = member.imagePrompt ?? `Portrait of ${member.name}, ${member.role}`
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() =>
-                setDetail({
-                  title: member.name,
-                  eyebrow: member.role,
-                  description: member.bio,
-                  imagePrompt,
-                  src: member.src,
-                  alt: member.name,
-                  seed: i + 5,
-                  aspectRatio: '1/1',
-                })
-              }
-              aria-haspopup="dialog"
-              className="cursor-pointer text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
-              style={{ outlineColor: 'var(--site-primary)' }}
-            >
-              <SiteImage
-                image={{ imagePrompt, src: member.src, alt: member.name, aspectRatio: '1/1' }}
-                seed={i + 5}
-                name={member.name}
-                className="mx-auto w-full max-w-[180px]"
-              />
-              <span
-                className="mt-4 block text-base font-semibold"
-                style={{ fontFamily: 'var(--site-heading-font)', color: 'var(--site-fg)' }}
-              >
-                {member.name}
-              </span>
-              <span className="block text-sm font-medium" style={{ color: 'var(--site-primary)' }}>
-                {member.role}
-              </span>
-              {member.bio ? (
-                <span
-                  className="mt-2 line-clamp-3 block text-pretty text-sm leading-relaxed"
-                  style={{ color: 'var(--site-muted-fg)' }}
-                >
-                  {member.bio}
-                </span>
-              ) : null}
-            </button>
-          )
-        })}
-      </div>
-      <ItemDetailDialog detail={detail} onClose={() => setDetail(null)} lang={lang} />
+      <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
+      {showTag ? <TeamExampleTag lang={language} /> : null}
+      <ul className="mt-10 grid grid-cols-1 gap-6 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {members.map((member, i) => (
+          <TeamCard key={i} member={member} index={i} lang={language} />
+        ))}
+      </ul>
+      {link && showMore ? (
+        <div className="mt-8 text-center">
+          <a
+            href={href}
+            onClick={(e) => onSiteNavClick(e, href, nav)}
+            className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{ border: '1px solid var(--site-border)', borderRadius: 'var(--site-radius)', color: 'var(--site-fg)' }}
+          >
+            {link.label}
+          </a>
+        </div>
+      ) : null}
     </SectionShell>
   )
 }

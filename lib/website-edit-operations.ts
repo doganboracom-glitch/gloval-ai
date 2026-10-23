@@ -95,6 +95,18 @@ import {
   isAllowedLogoDataUri,
   validateReferenceUrl,
 } from '@/lib/references'
+import {
+  TEAM_NAME_MAX,
+  TEAM_PHONE_MAX,
+  TEAM_ROLE_MAX,
+  TEAM_SOCIAL_KEYS,
+  TEAM_SUBTITLE_MAX,
+  TEAM_TITLE_MAX,
+  isAllowedTeamPhotoDataUri,
+  safeSocialHref,
+  sanitizePhone,
+  type TeamSocialKey,
+} from '@/lib/team'
 import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { LIST_LIMITS, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
@@ -348,6 +360,32 @@ export type EditOperation =
       /** `url`: optional website; normalized, and ignored when it fails `validateReferenceUrl`. `''` removes the link. */
       patch: { name?: string; logo?: string; logoAlt?: string; url?: string }
     }
+  /** "Kadromuz" section settings: home block on/off, system page on/off, title and subtitle. */
+  | {
+      op: 'updateTeamSettings'
+      index: number
+      patch: { showOnHome?: boolean; pageEnabled?: boolean; title?: string; subtitle?: string }
+    }
+  /**
+   * One team member. `photo: ''` removes the photo (back to the avatar). Social values are validated
+   * (https on the platform's own host, plain e-mail); an invalid value is ignored, an empty one clears the link.
+   * Editing a person clears the platform `sample` flag.
+   */
+  | {
+      op: 'updateTeamMember'
+      index: number
+      item: number
+      patch: {
+        name?: string
+        role?: string
+        phone?: string
+        photo?: string
+        avatar?: string
+        social?: Partial<Record<TeamSocialKey, string>>
+      }
+    }
+  /** "Change avatar": the next ready-made illustration for one team member. Free of credits. */
+  | { op: 'cycleTeamAvatar'; index: number; item: number }
   /** "Change avatar": the next ready-made illustration for one review (wraps after 12). Free of credits. */
   | { op: 'cycleTestimonialAvatar'; index: number; item: number }
   /**
@@ -911,6 +949,79 @@ export function applyOperation(
       return next
     }
 
+    case 'updateTeamSettings': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'team') return next
+      const { patch } = operation
+      const updated = { ...section }
+      if (patch.showOnHome !== undefined) updated.showOnHome = patch.showOnHome
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.title !== undefined) updated.title = patch.title.trim().slice(0, TEAM_TITLE_MAX)
+      if (patch.subtitle !== undefined) updated.subtitle = patch.subtitle.trim().slice(0, TEAM_SUBTITLE_MAX) || undefined
+      next.sections[operation.index] = updated
+      return syncSectionPages(next)
+    }
+
+    case 'updateTeamMember': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'team') return next
+      const member = section.members[operation.item]
+      if (!member) return next
+      const { patch } = operation
+      const updated = { ...member }
+      if (patch.name !== undefined) updated.name = patch.name.slice(0, TEAM_NAME_MAX)
+      if (patch.role !== undefined) updated.role = patch.role.slice(0, TEAM_ROLE_MAX)
+      if (patch.phone !== undefined) updated.phone = sanitizePhone(patch.phone).slice(0, TEAM_PHONE_MAX) || undefined
+      if (patch.photo !== undefined) {
+        if (patch.photo === '') {
+          updated.src = undefined
+          if (updated.avatar === 'photo') updated.avatar = undefined
+        } else if (isAllowedTeamPhotoDataUri(patch.photo)) {
+          updated.src = patch.photo
+          updated.avatar = undefined
+        }
+      }
+      if (patch.avatar !== undefined) {
+        updated.avatar = parseAvatar(patch.avatar) ? patch.avatar.trim() : undefined
+      }
+      if (patch.social) {
+        const social = { ...(updated.social ?? {}) }
+        for (const key of TEAM_SOCIAL_KEYS) {
+          const raw = patch.social[key]
+          if (raw === undefined) continue
+          const text = raw.trim()
+          if (!text) {
+            delete social[key]
+            continue
+          }
+          const href = safeSocialHref(key, text)
+          if (!href) continue
+          social[key] = key === 'email' ? href.replace(/^mailto:/i, '') : href
+        }
+        updated.social = Object.keys(social).length > 0 ? social : undefined
+      }
+      updated.sample = undefined
+      next.sections[operation.index] = {
+        ...section,
+        members: section.members.map((m, i) => (i === operation.item ? updated : m)),
+      }
+      return syncSectionPages(next)
+    }
+
+    case 'cycleTeamAvatar': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'team') return next
+      const member = section.members[operation.item]
+      if (!member) return next
+      next.sections[operation.index] = {
+        ...section,
+        members: section.members.map((m, i) =>
+          i === operation.item ? { ...m, src: undefined, avatar: cycleAvatar(m.avatar, operation.item) } : m,
+        ),
+      }
+      return next
+    }
+
     case 'dismissHint': {
       const hints = new Set(next.dismissedHints ?? [])
       hints.add(operation.hint)
@@ -1434,7 +1545,9 @@ export function applyOperation(
           flagged.items.forEach((it, i) => { section.items[i] = it })
           Object.assign(blank, { showOnHome: homeHasRoom(section) })
         }
-        if (section.type === 'testimonials') Object.assign(blank, { avatar: nextAvatarForNewItem(list.length) })
+        if (section.type === 'testimonials' || section.type === 'team') {
+          Object.assign(blank, { avatar: nextAvatarForNewItem(list.length) })
+        }
         list.push(blank)
       }
       return next
@@ -1832,10 +1945,8 @@ export function blankItem(type: SectionType, lang: Lang): Record<string, unknown
       }
     case 'team':
       return {
-        name: pick(lang, 'İsim Soyisim', 'Full Name'),
-        role: pick(lang, 'Ünvan', 'Role'),
-        bio: '',
-        imagePrompt: pick(lang, 'ekip üyesi portresi', 'team member portrait'),
+        name: '',
+        role: '',
       }
     case 'faq':
       return { question: pick(lang, 'Yeni soru?', 'New question?'), answer: pick(lang, 'Cevap', 'Answer') }
@@ -2106,8 +2217,8 @@ export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?:
     case 'team':
       return {
         type: 'team',
-        title: pick(lang, 'Ekibimiz', 'Our team'),
-        members: [{ name: pick(lang, 'İsim Soyisim', 'Full Name'), role: pick(lang, 'Ünvan', 'Role') }],
+        title: pick(lang, 'Kadromuz', 'Our Team'),
+        members: [],
       }
     case 'faq':
       return {

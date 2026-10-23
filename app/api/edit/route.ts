@@ -22,6 +22,7 @@ import {
 import { guardCorporateCatalog } from '@/lib/corporate-products'
 import { preserveResolvedImages } from '@/lib/hero-image'
 import { stripAiReferences } from '@/lib/references'
+import { stripAiTeam } from '@/lib/team'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -317,8 +318,11 @@ export async function POST(req: Request) {
     const notice = locked.touched ? PRODUCTS_MANAGED_IN_PANEL : undefined
     // A corporate site never gets a model-invented store or product catalog.
     const guarded = guardCorporateCatalog(original, locked.schema, instruction)
-    const finalSchema = stripAiReferences(
-      sanitizeGeneratedProofContent(preserveResolvedImages(original, guarded), original),
+    const finalSchema = stripAiTeam(
+      stripAiReferences(
+        sanitizeGeneratedProofContent(preserveResolvedImages(original, guarded), original),
+        original,
+      ),
       original,
     )
 

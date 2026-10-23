@@ -33,6 +33,7 @@ import {
 } from "@/lib/gallery-pages";
 import { resolveTestimonials, testimonialsDescription } from "@/lib/testimonials";
 import { referencesDescription, resolveReferences } from "@/lib/references";
+import { resolveTeam, teamDescription } from "@/lib/team";
 
 /**
  * Metadata for the home page (`pageSlug` null) or one real page. Titles,
@@ -148,12 +149,17 @@ export async function buildSitePageMetadata(
           resolveReferences(site.schema).items.length,
         )
       : "";
+  const teamText =
+    page?.detailOf === "team"
+      ? teamDescription(site.schema, site.name, resolveTeam(site.schema).members.length)
+      : "";
   const description =
     page?.seo?.description?.trim() ||
     (aboutDetail ? detailDescription(aboutDetail) : "") ||
     galleryText ||
     testimonialsText ||
     referencesText ||
+    teamText ||
     site.schema.meta.description ||
     site.schema.meta.tagline;
   const seoTitle = site.schema.meta.seoTitle?.trim();

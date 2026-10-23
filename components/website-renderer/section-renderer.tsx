@@ -124,7 +124,7 @@ export function SectionRenderer({
     case 'process':
       return <ProcessSection data={section} />
     case 'team':
-      return <TeamSection data={section} lang={meta.language} />
+      return <TeamSection data={section} lang={meta.language} site={site} />
     case 'faq':
       return <FaqSection data={section} />
     case 'blogLatest':

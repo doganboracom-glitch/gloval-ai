@@ -723,6 +723,12 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       )
       return items.some((item) => isRealHeroStripItem(item)) ? [{ ...section, items }] : []
     }
+    if (section.type === 'team') {
+      // Showcase-demo people are fictional: they never reach a real site. An emptied section renders nothing.
+      if (!section.members.some((member) => member.sample)) return [section]
+      changed = true
+      return [{ ...section, members: section.members.filter((member) => !member.sample) }]
+    }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]
     const items = itemsOf(section, spec)
