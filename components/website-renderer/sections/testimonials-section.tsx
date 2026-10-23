@@ -33,7 +33,7 @@ export function TestimonialsSection({
       <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, i) => (
-          <TestimonialCard key={i} item={item} showAvatars={data.showAvatars === true} lang={lang} demo={demo} />
+          <TestimonialCard key={i} item={item} showAvatars={data.showAvatars === true} lang={lang} demo={demo} index={i} />
         ))}
       </div>
       {link ? (
