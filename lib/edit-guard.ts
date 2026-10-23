@@ -20,7 +20,38 @@ function issuesOf(site: WebsiteSchema): Issue[] {
   }))
 }
 
-const keyOf = (i: Issue) => `${i.path.join('.')}|${i.code}`
+/**
+ * Identity of an issue that survives reordering. A section's position in the
+ * list is not part of its identity: moving a section changes `sections.<n>`
+ * in every path under it, which used to make problems the site ALREADY had
+ * look brand new and block the move.
+ */
+const keyOf = (site: WebsiteSchema, i: Issue) => {
+  const [root, index, ...rest] = i.path
+  if (root === 'sections' && typeof index === 'number') {
+    const type = (site.sections[index] as { type?: unknown } | undefined)?.type
+    return `sections.${typeof type === 'string' ? type : '?'}.${rest.join('.')}|${i.code}`
+  }
+  return `${i.path.join('.')}|${i.code}`
+}
+
+/** Issues of `next` that exceed what `previous` already had (compared as a count per identity). */
+function freshIssues(previous: WebsiteSchema | null, next: WebsiteSchema, nextIssues: Issue[]): Issue[] {
+  const budget = new Map<string, number>()
+  for (const issue of previous ? issuesOf(previous) : []) {
+    const key = keyOf(previous as WebsiteSchema, issue)
+    budget.set(key, (budget.get(key) ?? 0) + 1)
+  }
+  return nextIssues.filter((issue) => {
+    const key = keyOf(next, issue)
+    const left = budget.get(key) ?? 0
+    if (left > 0) {
+      budget.set(key, left - 1)
+      return false
+    }
+    return true
+  })
+}
 
 export type GuardResult = { ok: true } | { ok: false; message: string; issues: Issue[] }
 
@@ -40,11 +71,10 @@ function describe(site: WebsiteSchema, issue: Issue): string {
 export function guardEdit(previous: WebsiteSchema | null, next: WebsiteSchema): GuardResult {
   const nextIssues = issuesOf(next)
   if (nextIssues.length === 0) return { ok: true }
-  const known = new Set((previous ? issuesOf(previous) : []).map(keyOf))
-  const fresh = nextIssues.filter((i) => !known.has(keyOf(i)))
+  const fresh = freshIssues(previous, next, nextIssues)
   if (fresh.length === 0) return { ok: true }
   return { ok: false, message: describe(next, fresh[0]), issues: fresh }
-}
+  }
 
 export function isSchemaValid(site: WebsiteSchema): boolean {
   return issuesOf(site).length === 0
