@@ -47,9 +47,9 @@ describe('avatar presets', () => {
 
   it('resolves legacy items by position and respects the avatars switch', () => {
     expect(resolveAvatar({}, 0, false)).toEqual({ kind: 'none' })
-    expect(resolveAvatar({}, 1, true)).toMatchObject({ kind: 'preset', n: 2 })
-    expect(resolveAvatar({}, 1, true, 'initials')).toEqual({ kind: 'initials' })
-    expect(resolveAvatar({ photo: { src: 'x' } }, 0, true)).toEqual({ kind: 'photo' })
+    expect(resolveAvatar({}, 1, true)).toEqual({ kind: 'initials' })
+    expect(resolveAvatar({}, 1, true, 'sequence')).toMatchObject({ kind: 'preset', n: 2 })
+        expect(resolveAvatar({ photo: { src: 'x' } }, 0, true)).toEqual({ kind: 'photo' })
     expect(resolveAvatar({ avatar: 'initials' }, 0, true)).toEqual({ kind: 'initials' })
   })
 })

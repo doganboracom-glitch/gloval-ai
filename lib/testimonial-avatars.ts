@@ -9,7 +9,7 @@
  *   `preset:1`..`preset:12` -> that illustration
  *   `initials`              -> the coloured initials circle
  *   `photo`                 -> the owner's uploaded `photo`
- *   unset (legacy)          -> uploaded photo if there is one, otherwise (avatars on) the next illustration in order
+ *   unset (legacy)          -> uploaded photo if there is one, otherwise (avatars on) the initials circle, as before
  * Pure and shared by the renderer and the editor. Choosing or cycling an avatar never costs credits.
  */
 
@@ -74,15 +74,15 @@ export type ResolvedAvatar =
 
 /**
  * Decides what a review card shows.
- * `fallback` is what an item without an `avatar` field gets when avatars are switched on:
- * `'sequence'` (customer sites) walks the illustrations by position, `'initials'` (showcase demos) keeps the
- * original initials circle so demo pages stay as they were.
+ * `fallback` is what an item without an `avatar` field gets when avatars are switched on. The default `'initials'` is the original
+ * initials circle, so every existing site (live sites and showcase demos) keeps its exact HTML; `'sequence'` walks the
+ * illustrations by position. New reviews get an explicit `preset:n` instead (see nextAvatarForNewItem).
  */
 export function resolveAvatar(
   item: { avatar?: unknown; photo?: { src?: string } | undefined },
   position: number,
   showAvatars: boolean,
-  fallback: 'sequence' | 'initials' = 'sequence',
+  fallback: 'sequence' | 'initials' = 'initials',
 ): ResolvedAvatar {
   const hasPhoto = !!item.photo?.src
   const choice = parseAvatar(item.avatar)

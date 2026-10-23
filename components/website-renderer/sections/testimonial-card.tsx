@@ -81,7 +81,7 @@ export function TestimonialCard({
   demo?: boolean
 }) {
   const rating = clampRating(item.rating)
-  const avatar = resolveAvatar(item, index, showAvatars, demo ? 'initials' : 'sequence')
+  const avatar = resolveAvatar(item, index, showAvatars)
   const hasAvatar = avatar.kind !== 'none'
   return (
     <figure
