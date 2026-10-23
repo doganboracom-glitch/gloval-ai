@@ -223,7 +223,7 @@ describe('price_mode and WhatsApp text', () => {
     const asked = decodeURIComponent(buildWhatsappOrderUrl({ ...base, priceMode: 'ask' }).split('?text=')[1])
     expect(asked).toContain(`Fiyat: ${ASK_PRICE_LABEL}`)
     const shown = decodeURIComponent(buildWhatsappOrderUrl({ ...base, priceMode: 'show' }).split('?text=')[1])
-    expect(shown).toMatch(/Fiyat: .*125,00/)
+    expect(shown).toContain("Fiyat: 125 TL")
     expect(shown).toContain('Ürün: https://s.test/urunlerimiz/seramik/vazo')
   })
 })

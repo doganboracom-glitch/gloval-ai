@@ -110,24 +110,20 @@ export function CatalogProductView({
         <ProductGallery images={item.images} name={item.name} />
 
         <section className="flex flex-col gap-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--site-primary, var(--primary))' }}>
-            {storeName}
-          </p>
+          {discount !== null && (
+            <span data-sale-badge className="self-start rounded-full bg-destructive px-3 py-1 text-xs font-bold text-destructive-foreground">İndirimli</span>
+          )}
           <h1 className="text-balance text-3xl font-bold leading-tight md:text-4xl" style={{ fontFamily: 'var(--site-heading-font, inherit)' }}>
             {item.name}
           </h1>
           <div className="flex flex-wrap items-end gap-3">
             <span className="text-3xl font-bold">{catalogPriceText(item, labels.askPrice)}</span>
             {discount !== null && item.compareAtCents != null && (
-              <>
-                <span className="text-sm text-muted-foreground line-through">
-                  {catalogPriceText({ ...item, priceCents: item.compareAtCents })}
-                </span>
-                <span className="rounded-full bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">İndirimli</span>
-              </>
+              <span className="text-lg text-muted-foreground line-through" data-old-price>
+                {catalogPriceText({ ...item, priceCents: item.compareAtCents })}
+              </span>
             )}
           </div>
-          {summary && <p className="line-clamp-4 leading-relaxed text-muted-foreground">{summary}</p>}
 
           <div className="grid gap-2 sm:grid-cols-2">
             {whatsappHref && (
@@ -148,6 +144,8 @@ export function CatalogProductView({
               </a>
             )}
           </div>
+
+          {summary && <p className="line-clamp-4 leading-relaxed text-muted-foreground">{summary}</p>}
 
           <dl className="divide-y divide-border rounded-[var(--site-radius,0.75rem)] border border-border text-sm">
             {item.sku && (

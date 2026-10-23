@@ -204,7 +204,9 @@ export function buildWhatsappOrderUrl(input: {
   currency: string
 }): string {
   const price =
-    input.priceMode === 'ask' ? ASK_PRICE_LABEL : formatCatalogPrice(input.priceCents, input.currency)
+    input.priceMode === 'ask'
+      ? ASK_PRICE_LABEL
+      : (formatPriceCents(input.priceCents, input.currency) ?? ASK_PRICE_LABEL)
   const text = [
     `Merhaba, "${input.productName}" ürünü hakkında sipariş vermek istiyorum.`,
     `Fiyat: ${price}`,

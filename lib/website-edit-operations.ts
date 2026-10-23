@@ -42,6 +42,7 @@ import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
 import { homeHasRoom, makeProductsInline, withHomeFlags, withProductSlugs, withRenamedProduct } from '@/lib/product-items'
@@ -633,15 +634,16 @@ export function applyOperation(
         const images = patch.images
           .filter((image) => isUsableImageSrc(image.src))
           .slice(0, PRODUCT_IMAGES_MAX)
-          .map((image) => ({
+          .map((image, position) => ({
             src: image.src.trim(),
-            ...(image.alt?.trim() ? { alt: image.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) } : {}),
+            // Alt text is required per image: an empty one falls back to a name-based suggestion.
+            alt: (image.alt?.trim() || suggestProductImageAlt(item.name, position)).slice(0, SERVICE_ITEM_LIMITS.alt),
           }))
         updated.images = images.length > 0 ? images : undefined
-        // The showcase card reads `src`, so it follows the first gallery image; an emptied gallery clears it.
+        // The showcase card reads `src`, so it follows the first gallery image (the cover); an emptied gallery clears it.
         if (images.length > 0) {
           updated.src = images[0].src
-          updated.alt = images[0].alt ?? updated.alt
+          updated.alt = images[0].alt
         } else {
           updated.src = undefined
           updated.alt = undefined
