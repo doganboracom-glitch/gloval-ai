@@ -5,6 +5,7 @@ import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { aboutDetailLink } from '@/lib/section-detail'
 import { resolveServices, servicePath } from '@/lib/service-pages'
+import { resolveGalleryPages } from '@/lib/gallery-pages'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
@@ -94,8 +95,17 @@ export function SectionRenderer({
       )
     case 'testimonials':
       return <TestimonialsSection data={section} />
-    case 'gallery':
-      return <GallerySection data={section} />
+    case 'gallery': {
+      const resolved = site ? resolveGalleryPages(site) : null
+      const moreLink =
+        resolved && resolved.gallery.section === section && resolved.gallery.active
+          ? {
+              label: resolved.lang === 'en' ? 'View all photos' : 'Tüm fotoğrafları gör',
+              href: `/${resolved.gallery.slug}`,
+            }
+          : null
+      return <GallerySection data={section} moreLink={moreLink} />
+    }
     case 'portfolio':
       return <PortfolioSection data={section} lang={meta.language} />
     case 'products':
