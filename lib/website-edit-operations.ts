@@ -40,7 +40,13 @@ import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
-import { clampRating, TESTIMONIAL_AUTHOR_MAX, TESTIMONIAL_QUOTE_MAX, TESTIMONIAL_ROLE_MAX } from '@/lib/testimonials'
+import {
+  clampRating,
+  TESTIMONIAL_AUTHOR_MAX,
+  TESTIMONIAL_LINK_LABEL_MAX,
+  TESTIMONIAL_QUOTE_MAX,
+  TESTIMONIAL_ROLE_MAX,
+} from '@/lib/testimonials'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
@@ -690,7 +696,7 @@ export function applyOperation(
       if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
       if (patch.linkEnabled !== undefined) updated.linkEnabled = patch.linkEnabled
       if (patch.showAvatars !== undefined) updated.showAvatars = patch.showAvatars
-      if (patch.linkLabel !== undefined) updated.linkLabel = patch.linkLabel.trim().slice(0, 40) || undefined
+      if (patch.linkLabel !== undefined) updated.linkLabel = patch.linkLabel.trim().slice(0, TESTIMONIAL_LINK_LABEL_MAX) || undefined
       next.sections[operation.index] = updated
       return syncSectionPages(next)
     }

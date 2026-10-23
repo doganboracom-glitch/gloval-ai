@@ -119,11 +119,12 @@ describe('approving, hiding and stripping', () => {
   it('strip removes unapproved sample content and keeps approved items', () => {
     const site = buildSampleSite()
     const testimonial = collectSampleFindings(site).find((f) => f.sectionType === 'testimonials')!
+    // Placeholder testimonials cannot be approved: approving is a no-op and they never ship.
     const approved = approveSampleFindings(site, new Set([testimonial.items[0].id]))
     const stripped = stripSampleContent(approved)
 
     const testimonials = stripped.sections.find((s) => s.type === 'testimonials') as Extract<Section, { type: 'testimonials' }>
-    expect(testimonials.items.map((i) => i.author)).toEqual(['Ayşe Yılmaz', 'Mehmet Kaya'])
+    expect(testimonials.items.map((i) => i.author)).toEqual(['Mehmet Kaya'])
     const types = stripped.sections.map((s) => s.type)
     expect(types).not.toContain('stats')
     expect(types).not.toContain('pricing')

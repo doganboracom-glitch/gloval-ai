@@ -52,10 +52,13 @@ export function TestimonialCard({
   item,
   showAvatars,
   lang,
+  demo = false,
 }: {
   item: TestimonialItem
   showAvatars: boolean
   lang: 'tr' | 'en'
+  /** Showcase demos only: marks a fictional review with a small "Example review" tag. */
+  demo?: boolean
 }) {
   const rating = clampRating(item.rating)
   const hasAvatar = showAvatars || !!item.photo?.src
@@ -68,7 +71,20 @@ export function TestimonialCard({
         borderRadius: 'var(--site-radius)',
       }}
     >
-      <Quote className="h-5 w-5" style={{ color: 'var(--site-primary)' }} />
+      {demo && item.sample ? (
+        <div className="flex items-center justify-between">
+          <Quote className="h-5 w-5" style={{ color: 'var(--site-primary)' }} />
+          <span
+            data-demo-example-review
+            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            style={{ border: '1px solid var(--site-border)', color: 'var(--site-muted-fg)' }}
+          >
+            {lang === 'en' ? 'Example review' : 'Örnek yorum'}
+          </span>
+        </div>
+      ) : (
+        <Quote className="h-5 w-5" style={{ color: 'var(--site-primary)' }} />
+      )}
       {rating ? <Stars rating={rating} lang={lang} /> : null}
       <blockquote
         className="mt-3 flex-1 text-sm leading-relaxed"

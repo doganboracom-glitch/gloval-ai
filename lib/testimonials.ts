@@ -1,6 +1,7 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { uniquePageSlug } from '@/lib/page-slugs'
+import { wordIncludes } from '@/lib/visual-subjects'
 
 /**
  * Customer reviews
@@ -19,6 +20,7 @@ export type TestimonialItem = TestimonialsSection['items'][number]
 export const TESTIMONIAL_QUOTE_MAX = 280
 export const TESTIMONIAL_AUTHOR_MAX = 80
 export const TESTIMONIAL_ROLE_MAX = 80
+export const TESTIMONIAL_LINK_LABEL_MAX = 40
 export const TESTIMONIALS_HOME_PREVIEW = 3
 
 const SLUGS: Record<Lang, string> = { tr: 'musteri-yorumlari', en: 'reviews' }
@@ -66,20 +68,143 @@ export function realTestimonials(section: Pick<TestimonialsSection, 'items'>): T
  * with a badge, removed from every public render, and impossible to approve at publish. The owner
  * replaces them with real customers or hides the section. No names of real people, no photos, no ratings.
  */
-export function seedTestimonialItems(lang: Lang): TestimonialItem[] {
-  const copy =
-    lang === 'en'
-      ? [
-          { quote: 'Replace this with a real customer review. Short, specific and in their own words works best.', author: 'Customer name', role: 'Customer' },
-          { quote: 'Add what the customer asked for, what you delivered and how it went.', author: 'Customer name', role: 'Customer' },
-          { quote: 'Ask happy customers for a sentence or two and paste it here with their permission.', author: 'Customer name', role: 'Customer' },
-        ]
-      : [
-          { quote: 'Bu metni gerçek bir müşteri yorumuyla değiştirin. Kısa, somut ve müşterinin kendi cümleleriyle olması en iyisidir.', author: 'Müşteri adı', role: 'Müşteri' },
-          { quote: 'Müşterinin ne istediğini, neyi teslim ettiğinizi ve sürecin nasıl geçtiğini buraya ekleyin.', author: 'Müşteri adı', role: 'Müşteri' },
-          { quote: 'Memnun müşterilerinizden bir iki cümle isteyin ve izinleriyle buraya yapıştırın.', author: 'Müşteri adı', role: 'Müşteri' },
-        ]
-  return copy.map((item) => ({ ...item, sample: true }))
+export const SEED_TESTIMONIAL_COUNT = 6
+
+type PlaceholderSector = { keys: string[]; role: string; hints: string[] }
+
+const GENERIC_HINTS_TR = [
+  'Müşterinin sizden ne istediğini kısaca yazın.',
+  'Süreçte onu en çok memnun eden şeyi ekleyin.',
+  'Sonuçtan nasıl söz ettiğini kendi cümleleriyle yazın.',
+  'İletişimin ve teslimatın nasıl geçtiğini anlatın.',
+  'Sizi bir arkadaşına nasıl tarif ettiğini yazın.',
+  'Tekrar çalışmak isteyip istemediğini ekleyin.',
+]
+
+/** Customer word and writing prompts for a few sectors. The wording is deliberately not review-like. */
+const PLACEHOLDER_SECTORS: PlaceholderSector[] = [
+  {
+    keys: ['dis', 'klinik', 'dental', 'dentist', 'ortodonti', 'saglik'],
+    role: 'Hasta',
+    hints: [
+      'Hastanın hangi şikayetle geldiğini yazın.',
+      'Muayene ve tedavi sürecinin nasıl geçtiğini ekleyin.',
+      'Ekibin yaklaşımı hakkında ne dediğini yazın.',
+      'Randevu ve bekleme deneyimini anlatın.',
+      'Tedavi sonrası nasıl hissettiğini kendi cümleleriyle yazın.',
+      'Sizi başkalarına önerip önermediğini ekleyin.',
+    ],
+  },
+  {
+    keys: ['restoran', 'kafe', 'kahve', 'cafe', 'restaurant', 'coffee', 'lokanta'],
+    role: 'Misafir',
+    hints: [
+      'Misafirin hangi gün ve kiminle geldiğini yazın.',
+      'En çok beğendiği ürünü ya da tabağı ekleyin.',
+      'Servis ve ortam hakkında ne dediğini yazın.',
+      'Mekanı bir cümleyle nasıl anlattığını ekleyin.',
+      'Tekrar gelip gelmeyeceğini kendi cümleleriyle yazın.',
+      'Başkalarına ne önereceğini yazın.',
+    ],
+  },
+  {
+    keys: ['hukuk', 'avukat', 'law', 'lawyer', 'danismanlik'],
+    role: 'Müvekkil',
+    hints: [
+      'Müvekkilin hangi konuda destek aldığını genel hatlarıyla yazın.',
+      'Süreç boyunca bilgilendirilmesini nasıl bulduğunu ekleyin.',
+      'İletişim ve ulaşılabilirlik hakkında ne dediğini yazın.',
+      'Açıklamaların anlaşılır olup olmadığını ekleyin.',
+      'Sonuçtan nasıl söz ettiğini kendi cümleleriyle yazın.',
+      'Sizi başkalarına önerip önermediğini yazın.',
+    ],
+  },
+  {
+    keys: ['emlak', 'gayrimenkul', 'konut', 'real estate', 'realtor'],
+    role: 'Ev sahibi',
+    hints: [
+      'Müşterinin ne aradığını ya da ne sattığını yazın.',
+      'Görüşme ve gezme sürecinin nasıl geçtiğini ekleyin.',
+      'Bilgilendirme ve ulaşılabilirlik hakkında ne dediğini yazın.',
+      'Evrak ve süreç yönetimini nasıl bulduğunu ekleyin.',
+      'Sonuçtan nasıl söz ettiğini kendi cümleleriyle yazın.',
+      'Sizi tanıdıklarına önerip önermediğini yazın.',
+    ],
+  },
+  {
+    keys: ['guzellik', 'kuafor', 'salon', 'estetik', 'beauty', 'spa', 'makyaj', 'bakim'],
+    role: 'Danışan',
+    hints: [
+      'Müşterinin hangi hizmeti aldığını yazın.',
+      'Uygulama sırasındaki deneyimini ekleyin.',
+      'Ekibin ilgisi hakkında ne dediğini yazın.',
+      'Salonun ortamı ve temizliği hakkında bir not ekleyin.',
+      'Sonuçtan nasıl söz ettiğini kendi cümleleriyle yazın.',
+      'Yeniden randevu alıp almayacağını yazın.',
+    ],
+  },
+  {
+    keys: ['mimarlik', 'mimar', 'insaat', 'ic mimar', 'tasarim', 'architecture', 'architect'],
+    role: 'Proje sahibi',
+    hints: [
+      'Projenin türünü ve ne istendiğini kısaca yazın.',
+      'Tasarım ve uygulama sürecinin nasıl geçtiğini ekleyin.',
+      'Ekiple iletişim hakkında ne dediğini yazın.',
+      'Zaman ve bütçe konusundaki deneyimini ekleyin.',
+      'Tamamlanan işten nasıl söz ettiğini kendi cümleleriyle yazın.',
+      'Sizi başkalarına önerip önermediğini yazın.',
+    ],
+  },
+  {
+    keys: ['magaza', 'eticaret', 'e ticaret', 'urun', 'butik', 'shop', 'store', 'ecommerce'],
+    role: 'Alıcı',
+    hints: [
+      'Müşterinin hangi ürünü aldığını yazın.',
+      'Sipariş ve kargo sürecinin nasıl geçtiğini ekleyin.',
+      'Ürünü eline aldığında ne düşündüğünü yazın.',
+      'Paketleme ve iletişim hakkında bir not ekleyin.',
+      'Ürünü nasıl kullandığını kendi cümleleriyle yazın.',
+      'Tekrar alışveriş yapıp yapmayacağını yazın.',
+    ],
+  },
+]
+
+function placeholderSector(site: Pick<WebsiteSchema, 'meta'>): PlaceholderSector | null {
+  const meta = site.meta as { name?: string; description?: string; seoTitle?: string }
+  const text = [meta.name, meta.seoTitle, meta.description].filter(Boolean).join(' ')
+  if (!text) return null
+  return PLACEHOLDER_SECTORS.find((sector) => sector.keys.some((key) => wordIncludes(text, key))) ?? null
+}
+
+/**
+ * Six placeholders for a freshly generated site. They are written as instructions for the owner, never as
+ * reviews, so nothing here can be mistaken for (or copied from) a demo's example reviews.
+ */
+export function seedTestimonialItems(lang: Lang, site?: Pick<WebsiteSchema, 'meta'>): TestimonialItem[] {
+  if (lang === 'en') {
+    const hints = [
+      'Say in a line what the customer came to you for.',
+      'Add what pleased them most along the way.',
+      'Write how they describe the result in their own words.',
+      'Mention how communication and delivery went.',
+      'Add how they would describe you to a friend.',
+      'Note whether they would work with you again.',
+    ]
+    return hints.map((hint) => ({
+      quote: `Write your customer review here. ${hint}`,
+      author: 'Customer name',
+      role: 'Customer',
+      sample: true,
+    }))
+  }
+  const sector = site ? placeholderSector(site) : null
+  const hints = sector?.hints ?? GENERIC_HINTS_TR
+  return hints.slice(0, SEED_TESTIMONIAL_COUNT).map((hint) => ({
+    quote: `Müşteri yorumunuzu buraya yazın. ${hint}`,
+    author: 'Müşteri adı',
+    role: sector?.role ?? 'Müşteri',
+    sample: true,
+  }))
 }
 
 /** Gives a generated `testimonials` section the new defaults. Idempotent. */
@@ -93,7 +218,7 @@ export function seedTestimonialsSection<T extends WebsiteSchema>(site: T): T {
     changed = true
     return {
       ...section,
-      items: seedTestimonialItems(lang),
+      items: seedTestimonialItems(lang, site),
       showAvatars: true,
       pageEnabled: true,
       linkEnabled: true,
@@ -121,15 +246,23 @@ export type ResolvedTestimonials = {
   active: boolean
 }
 
+/** `demo`: showcase demos only. Their clearly labelled example reviews are shown instead of being hidden. */
+export type TestimonialsResolveOptions = { demo?: boolean }
+
+function demoTestimonials(section: Pick<TestimonialsSection, 'items'>): TestimonialItem[] {
+  return section.items.filter((item) => item.quote.trim().length > 0 && item.author.trim().length > 0)
+}
+
 export function resolveTestimonials(
   site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>,
+  options: TestimonialsResolveOptions = {},
 ): ResolvedTestimonials {
   const lang = siteLang(site)
   const page = findTestimonialsPage(site)
   let section: TestimonialsSection | null = null
   let items: TestimonialItem[] = []
   for (const candidate of testimonialSections(site)) {
-    const real = realTestimonials(candidate)
+    const real = options.demo ? demoTestimonials(candidate) : realTestimonials(candidate)
     if (real.length > 0) {
       section = candidate
       items = real
@@ -150,9 +283,10 @@ export function resolveTestimonials(
 export function testimonialsLink(
   site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>,
   section: Pick<TestimonialsSection, 'linkEnabled' | 'linkLabel'>,
+  options: TestimonialsResolveOptions = {},
 ): { href: string; label: string } | null {
   if (section.linkEnabled === false) return null
-  const resolved = resolveTestimonials(site)
+  const resolved = resolveTestimonials(site, options)
   if (!resolved.active) return null
   return {
     href: `/${resolved.slug}`,

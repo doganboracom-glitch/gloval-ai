@@ -15,6 +15,7 @@ import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlu
 import {
   SiteNavProvider,
   isDemoServiceHref,
+  isDemoTestimonialsHref,
   type DemoRoutes,
   type SiteNavHandler,
 } from '@/components/website-renderer/site-nav-context'
@@ -293,7 +294,14 @@ export function WebsiteRenderer({
             onDemoRoute(demoRoutes.about)
             return true
           }
-          if (href === demoRoutes.home && activeSlug === demoRoutes.aboutPageSlug) {
+          if (isDemoTestimonialsHref(href, demoRoutes) && activeSlug !== demoRoutes.testimonials?.slug) {
+            onDemoRoute(href)
+            return true
+          }
+          if (
+            href === demoRoutes.home &&
+            (activeSlug === demoRoutes.aboutPageSlug || activeSlug === demoRoutes.testimonials?.slug)
+          ) {
             onDemoRoute(demoRoutes.home)
             return true
           }
@@ -308,7 +316,14 @@ export function WebsiteRenderer({
               onDemoRoute(demoRoutes.about)
               return true
             }
-            if (demoSlug === homeSlug(parsed.data) && activeSlug === demoRoutes.aboutPageSlug) {
+            if (demoRoutes.testimonials && demoSlug === demoRoutes.testimonials.slug && activeSlug !== demoSlug) {
+              onDemoRoute(demoRoutes.testimonials.list)
+              return true
+            }
+            if (
+              demoSlug === homeSlug(parsed.data) &&
+              (activeSlug === demoRoutes.aboutPageSlug || activeSlug === demoRoutes.testimonials?.slug)
+            ) {
               onDemoRoute(demoRoutes.home)
               return true
             }
@@ -447,6 +462,7 @@ export function WebsiteRenderer({
           if (page.isHome) return demoRoutes.home
           if (page.slug === demoRoutes.aboutPageSlug) return demoRoutes.about
           if (demoRoutes.services && page.slug === demoRoutes.services.listSlug) return demoRoutes.services.list
+          if (demoRoutes.testimonials && page.slug === demoRoutes.testimonials.slug) return demoRoutes.testimonials.list
           // A demo is not a published tenant: any other page has no real URL, so it
           // stays an in-memory switch rather than a link that leaves the demo.
           return undefined

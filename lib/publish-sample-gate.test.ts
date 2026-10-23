@@ -52,6 +52,16 @@ function seedProject(extra: Record<string, unknown> = {}) {
 
 const project = () => fakeDb.rows('projects')[0]
 const ids = (site: WebsiteSchema) => collectSampleFindings(site).flatMap((s) => s.items.map((i) => i.id))
+// Placeholder testimonials can never be approved: the owner has to write real ones (clearing the flag) or remove them.
+const withOwnerTestimonials = (site: WebsiteSchema): WebsiteSchema => ({
+  ...site,
+  sections: site.sections.map((s) =>
+    s.type === 'testimonials'
+      ? ({ ...s, sample: undefined, items: s.items.map((i) => ({ ...i, sample: undefined })) } as Section)
+      : s,
+  ),
+})
+const buildPublishableSite = (sections?: Section[]) => withOwnerTestimonials(buildSampleSite(sections))
 const published = () => fakeDb.rows('project_versions').filter((v) => v.label === 'published')
 
 beforeEach(() => {
@@ -116,7 +126,7 @@ describe('publishProject sample-content gate', () => {
   })
 
   it('publishes once every item is approved and stores flag-free content plus attestations', async () => {
-    const site = buildSampleSite()
+    const site = buildPublishableSite()
     const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })
 
     expect(result).toMatchObject({ ok: true })
@@ -130,7 +140,7 @@ describe('publishProject sample-content gate', () => {
   })
 
   it('does not double-record attestations on a repeat publish and needs no re-approval', async () => {
-    const site = buildSampleSite()
+    const site = buildPublishableSite()
     await publishProject({ id: ID, schema: site, approvals: ids(site) })
     const stored = fakeDb.rows('content_attestations').length
 
@@ -140,10 +150,10 @@ describe('publishProject sample-content gate', () => {
   })
 
   it('asks again when approved content is edited afterwards', async () => {
-    const site = buildSampleSite()
+    const site = buildPublishableSite()
     await publishProject({ id: ID, schema: site, approvals: ids(site) })
 
-    const edited = buildSampleSite(
+    const edited = buildPublishableSite(
       buildSampleSections().map((s) =>
         s.type === 'stats' ? { ...s, items: s.items.map((i, n) => (n === 0 ? { ...i, value: '99 yıl' } : i)) } : s,
       ) as Section[],
@@ -156,7 +166,7 @@ describe('publishProject sample-content gate', () => {
 
   it('fails closed when the approval cannot be written: nothing is saved or published', async () => {
     fakeDb.attestationWriteError = 'insert failed'
-    const site = buildSampleSite()
+    const site = buildPublishableSite()
     const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })
 
     expect(result).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR, attestationFailed: true })
@@ -190,7 +200,7 @@ describe('publishProject sample-content gate', () => {
   })
 
   it('publishes after the owner deletes sample product rows, keeping a valid schema', async () => {
-    let site = buildSampleSite()
+    let site = buildPublishableSite()
     site = removeOrHideSampleItem(site, 4, 2)
     site = removeOrHideSampleItem(site, 4, 1)
     // the products section is hidden now; the rest still needs approval
@@ -311,7 +321,7 @@ describe('getPublishedSite', () => {
   })
 
   it('keeps approved content (flags cleared at publish) as published', async () => {
-    const site = buildSampleSite()
+    const site = buildPublishableSite()
     await publishProject({ id: ID, schema: site, approvals: ids(site) })
     fakeDb.rpcRow = row(published()[0].schema_data)
     const served = await getPublishedSite('kahve')

@@ -6,7 +6,7 @@ import {
   SectionHeading,
   onSiteNavClick,
 } from '@/components/website-renderer/primitives'
-import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useDemoHref, useDemoRoutes, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { TestimonialCard } from '@/components/website-renderer/sections/testimonial-card'
 import { TESTIMONIALS_HOME_PREVIEW, testimonialsLink } from '@/lib/testimonials'
 
@@ -23,15 +23,17 @@ export function TestimonialsSection({
 }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
-  const link = site ? testimonialsLink(site, data) : null
+  const demoHref = useDemoHref()
+  const demo = useDemoRoutes() !== null
+  const link = site ? testimonialsLink(site, data, { demo }) : null
   const items = link ? data.items.slice(0, TESTIMONIALS_HOME_PREVIEW) : data.items
-  const href = link ? normalize(link.href) : ''
+  const href = link ? demoHref(normalize(link.href)) : ''
   return (
     <SectionShell id="testimonials">
       <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item, i) => (
-          <TestimonialCard key={i} item={item} showAvatars={data.showAvatars === true} lang={lang} />
+          <TestimonialCard key={i} item={item} showAvatars={data.showAvatars === true} lang={lang} demo={demo} />
         ))}
       </div>
       {link ? (
