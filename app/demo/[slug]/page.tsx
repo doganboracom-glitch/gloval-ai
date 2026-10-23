@@ -100,8 +100,8 @@ export default async function DemoPage({
         query: langQuery,
       }
     : undefined
-  const resolvedTestimonials = lang === 'tr' ? resolveTestimonials(site, { demo: true }) : null
-  const testimonialsRoutes = resolvedTestimonials?.active
+  const resolvedTestimonials = resolveTestimonials(site, { demo: true })
+  const testimonialsRoutes = resolvedTestimonials.active
     ? { slug: resolvedTestimonials.slug, list: `/demo/${slug}/musteri-yorumlari${langQuery}` }
     : undefined
   if (initialPage === 'testimonials' && !testimonialsRoutes) notFound()

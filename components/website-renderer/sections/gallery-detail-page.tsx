@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ChevronRight, Play } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { onSiteNavClick } from '@/components/website-renderer/primitives'
-import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { Lightbox } from '@/components/website-renderer/lightbox'
 import type { LightboxItem, LightboxLang } from '@/lib/lightbox-nav'
 import {
@@ -18,8 +18,9 @@ import {
 export function useLink() {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
+  const demoHref = useDemoHref()
   return {
-    href: (raw: string) => normalize(raw),
+    href: (raw: string) => demoHref(normalize(raw)),
     onClick: (e: React.MouseEvent<HTMLAnchorElement>, href: string) => onSiteNavClick(e, href, nav),
   }
 }

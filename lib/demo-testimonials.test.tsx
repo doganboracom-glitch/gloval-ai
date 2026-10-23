@@ -93,10 +93,13 @@ describe.each(demos.map((d) => d.slug))('demo %s reviews', (slug) => {
     expect(render(stripped)).toBe(readFileSync(file, 'utf8'))
   })
 
-  it('does not touch the English demo', () => {
+  it('gives the English demo six labelled example reviews and a menu link inside the demo', () => {
     const site = buildDemoSite(demo, 'en')
-    expect(site.sections.some((s) => s.type === 'testimonials' && s.items.some((i) => i.sample))).toBe(false)
-    expect(render(site)).not.toContain('musteri-yorumlari')
+    const section = site.sections.find((s) => s.type === 'testimonials')
+    expect(section && section.type === 'testimonials' && section.items.length).toBe(6)
+    expect(section && section.type === 'testimonials' && section.items.every((i) => i.sample)).toBe(true)
+    const menu = site.navigation.links.filter((l) => l.href.includes('musteri-yorumlari'))
+    expect(menu.map((l) => l.href)).toEqual([`/demo/${slug}/musteri-yorumlari?lang=en`])
   })
 })
 

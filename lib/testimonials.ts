@@ -326,3 +326,18 @@ export function syncTestimonialsPage<T extends WebsiteSchema>(site: T, pageLimit
   const base = pages.length === 0 ? [{ slug: 'home', title: site.meta.name, isHome: true }] : pages
   return { ...site, pages: [...base, created] }
 }
+
+/**
+ * Demo pages only. `normalizeWebsiteSchema` runs `syncTestimonialsPage`, which drops the system page
+ * whenever no REAL review backs it, and every demo review is a labelled example (`sample`). Without the
+ * page the demo route's `initialPage` matches nothing and the renderer falls back to the home page.
+ * The demo renderer puts the page back after normalization; customer sites never call this.
+ */
+export function withDemoTestimonialsPage<T extends WebsiteSchema>(site: T, slug: string | null): T {
+  if (!slug || findTestimonialsPage(site)) return site
+  const lang = siteLang(site)
+  const pages = site.pages ?? []
+  const base = pages.length === 0 ? [{ slug: 'home', title: site.meta.name, isHome: true }] : pages
+  const created = { slug, title: TITLES[lang], kind: 'detail' as const, detailOf: 'testimonials' as const }
+  return { ...site, pages: [...base, created] }
+}
