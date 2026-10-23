@@ -157,11 +157,14 @@ export function UploadButton({
   label,
   onFile,
   icon,
-}: {
+  accept = 'image/*',
+  }: {
   label: string
   onFile: (dataUri: string) => void
   icon?: React.ReactNode
-}) {
+  /** The file picker's `accept` filter. Defaults to any image. */
+  accept?: string
+  }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
     <>

@@ -5,6 +5,7 @@ import { generateStructured } from '@/lib/ai-structured'
 import { resolveGenerationLanguage } from '@/lib/generation-language'
 import { seedTestimonialsSection } from '@/lib/testimonials'
 import { dropAiReferences } from '@/lib/references'
+import { stripAiTeam } from '@/lib/team'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
@@ -179,7 +180,8 @@ async function runGenerate(
         pageLimit,
       })
       // References are owner-only proof: any client the model invents is dropped.
-      const object = dropAiReferences(generatedSite)
+      // Team members are owner-only too: invented people, phones and links are emptied.
+      const object = stripAiTeam(dropAiReferences(generatedSite))
 
       // Attach a dynamic, brief-derived hero/slider image AND every other
       // visual (gallery / portfolio / team) — concurrently. They mutate

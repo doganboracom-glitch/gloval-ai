@@ -165,6 +165,52 @@ export function isAllowedTeamPhotoDataUri(src: string): boolean {
   return isAllowedLogoDataUri(src) && dataUriBytes(src) <= TEAM_PHOTO_MAX_BYTES
 }
 
+/**
+ * Server-side enforcement of the field rules for one person, whatever path wrote the data (editor, AI, import, API):
+ * name <= 50, job title <= 40, phone only digits / + / spaces / dashes / parentheses and <= 20, social links only
+ * when they pass `safeSocialHref`, and a data-URI photo only when its bytes are a real PNG / JPEG / WebP <= 5 MB.
+ * Returns the same object when nothing needed changing.
+ */
+export function clampMember<M extends TeamMemberLike>(member: M): M {
+  let next = member
+  const set = (patch: Partial<TeamMemberLike>) => {
+    next = { ...next, ...patch }
+  }
+  if (member.name.length > TEAM_NAME_MAX) set({ name: clampName(member.name) })
+  if (member.role.length > TEAM_ROLE_MAX) set({ role: clampRole(member.role) })
+  if (member.phone !== undefined) {
+    const phone = sanitizePhone(member.phone)
+    if (phone !== member.phone) set({ phone: phone.trim() ? phone : undefined })
+  }
+  if (member.social) {
+    const kept: Partial<Record<TeamSocialKey, string>> = {}
+    for (const key of TEAM_SOCIAL_KEYS) {
+      const raw = member.social[key]
+      if (raw && safeSocialHref(key, raw)) kept[key] = raw
+    }
+    const same = TEAM_SOCIAL_KEYS.every((key) => (member.social?.[key] || undefined) === kept[key])
+    if (!same) set({ social: Object.keys(kept).length > 0 ? kept : undefined })
+  }
+  if (member.src?.startsWith('data:') && !isAllowedTeamPhotoDataUri(member.src)) {
+    set({ src: undefined, ...(member.avatar === 'photo' ? { avatar: undefined } : {}) })
+  }
+  return next
+}
+
+function clampTeamSections<T extends WebsiteSchema>(site: T): T {
+  let changed = false
+  const clampSection = (section: Section): Section => {
+    if (section.type !== 'team') return section
+    const members = section.members.map(clampMember)
+    if (members.every((m, i) => m === section.members[i])) return section
+    changed = true
+    return { ...section, members }
+  }
+  const sections = site.sections.map(clampSection)
+  const pages = site.pages?.map((page) => (page.sections ? { ...page, sections: page.sections.map(clampSection) } : page))
+  return changed ? { ...site, sections, ...(pages ? { pages } : {}) } : site
+}
+
 // --- Page, visibility and AI guard --------------------------------------------------------------
 
 const SLUGS: Record<Lang, string> = { tr: 'kadromuz', en: 'our-team' }
@@ -243,7 +289,8 @@ export function teamShownOnHome(section: Pick<TeamSection, 'members' | 'showOnHo
  * named person, dropped again when not. Counts toward the plan page limit. Idempotent; returns the same
  * object when nothing changes. A page the owner already runs on the same address is left alone.
  */
-export function syncTeamPage<T extends WebsiteSchema>(site: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
+export function syncTeamPage<T extends WebsiteSchema>(input: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
+  const site = clampTeamSections(input)
   const pages = site.pages ?? []
   const existing = findTeamPage(site)
   const wanted = teamSections(site).some((s) => s.pageEnabled === true && realMembers(s).length > 0)
@@ -289,9 +336,13 @@ export function stripAiTeam<T extends { sections: Section[] }>(next: T, previous
   return changed ? { ...next, sections } : next
 }
 
-export const TEAM_HOME_PREVIEW = 8
+export const TEAM_HOME_PREVIEW = 4
 
-/** "View full team" link under the home block. Only while the system page is live and the home block is truncated. */
+/**
+ * "All team" link under the home block. Shown whenever the `/kadromuz` page is live (so it never points at a 404);
+ * while it is live the home block shows only the first `TEAM_HOME_PREVIEW` people. With the page off, everyone stays
+ * visible on the home block and there is no link.
+ */
 export function teamLink(
   site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>,
   section: TeamSection,
@@ -299,7 +350,7 @@ export function teamLink(
   const resolved = resolveTeam(site)
   if (!resolved.active || resolved.section !== section) return null
   return {
-    label: resolved.lang === 'en' ? 'View full team' : 'Tüm kadroyu gör',
+    label: resolved.lang === 'en' ? 'All team' : 'Tüm kadro',
     href: `/${resolved.slug}`,
   }
 }

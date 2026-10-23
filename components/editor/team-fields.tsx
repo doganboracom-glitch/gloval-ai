@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { ChevronDown, ChevronUp, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
@@ -12,6 +13,7 @@ import {
   TEAM_SUBTITLE_MAX,
   TEAM_TITLE_MAX,
   initialsOf,
+  isAllowedTeamPhotoDataUri,
   realMembers,
   resolveTeamPortrait,
   type TeamSocialKey,
@@ -47,6 +49,12 @@ const COPY = {
     removePhoto: 'Fotoğrafı kaldır',
     photoHint: 'Önerilen: dikey 800×1000 px, PNG, JPG veya WebP, en çok 5 MB.',
     add: 'Kişi ekle',
+    kvkk: 'Çalışanlarınızın adını, telefonunu ve fotoğrafını yalnızca onların izniyle yayınlayın.',
+    limitReached: `En fazla ${MAX} kişi eklenebilir; yeni kişi eklemek için birini silin.`,
+    photoRejected: 'Yalnızca PNG, JPG veya WebP, en çok 5 MB yüklenebilir (SVG kabul edilmez).',
+    namePlaceholder: 'Örn. Ayşe Yılmaz',
+    rolePlaceholder: 'Örn. Uzman Doktor',
+    phonePlaceholder: 'Örn. 0555 555 55 55',
     up: 'Yukarı taşı',
     down: 'Aşağı taşı',
     remove: 'Sil',
@@ -75,6 +83,12 @@ const COPY = {
     removePhoto: 'Remove photo',
     photoHint: 'Recommended: portrait 800×1000 px, PNG, JPG or WebP, 5 MB at most.',
     add: 'Add person',
+    kvkk: 'Publish your employees\u2019 name, phone and photo only with their consent.',
+    limitReached: `You can add up to ${MAX} people; delete one to add another.`,
+    photoRejected: 'Only PNG, JPG or WebP up to 5 MB can be uploaded (SVG is not accepted).',
+    namePlaceholder: 'e.g. Jane Smith',
+    rolePlaceholder: 'e.g. Senior Consultant',
+    phonePlaceholder: 'e.g. 0555 555 55 55',
     up: 'Move up',
     down: 'Move down',
     remove: 'Delete',
@@ -134,6 +148,18 @@ export function TeamFields({
   const total = section.members.length
   const realCount = realMembers(section).length
   const hasSample = section.members.some((m) => m.sample)
+  const [photoError, setPhotoError] = useState<number | null>(null)
+  const atLimit = !canAddEntry('team', total)
+
+  // Content-based check (magic bytes + 5 MB), not the file name or declared type; SVG never passes.
+  const uploadPhoto = (item: number, dataUri: string) => {
+    if (!isAllowedTeamPhotoDataUri(dataUri)) {
+      setPhotoError(item)
+      return
+    }
+    setPhotoError(null)
+    patchMember(item, { photo: dataUri })
+  }
 
   const patchSettings = (patch: Extract<EditOperation, { op: 'updateTeamSettings' }>['patch']) =>
     onDispatch({ op: 'updateTeamSettings', index, patch })
@@ -142,6 +168,9 @@ export function TeamFields({
 
   return (
     <div className="flex flex-col gap-3" data-testid="team-fields">
+      <p className="rounded-md border border-border bg-muted/40 p-2 text-xs leading-relaxed text-muted-foreground" data-testid="team-kvkk">
+        {c.kvkk}
+      </p>
       {hasSample && (
         <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs leading-relaxed text-foreground">
           {c.sampleBanner}
@@ -204,16 +233,39 @@ export function TeamFields({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <TextField label={c.name} value={member.name} maxLength={TEAM_NAME_MAX} onCommit={(v) => patchMember(i, { name: v })} />
-            <TextField label={c.role} value={member.role} maxLength={TEAM_ROLE_MAX} onCommit={(v) => patchMember(i, { role: v })} />
+            <TextField
+              label={c.name}
+              value={member.name}
+              placeholder={c.namePlaceholder}
+              maxLength={TEAM_NAME_MAX}
+              onCommit={(v) => patchMember(i, { name: v })}
+            />
+            <TextField
+              label={c.role}
+              value={member.role}
+              placeholder={c.rolePlaceholder}
+              maxLength={TEAM_ROLE_MAX}
+              onCommit={(v) => patchMember(i, { role: v })}
+            />
           </div>
-          <TextField label={c.phone} value={member.phone ?? ''} maxLength={TEAM_PHONE_MAX} onCommit={(v) => patchMember(i, { phone: v })} />
+          <TextField
+            label={c.phone}
+            value={member.phone ?? ''}
+            placeholder={c.phonePlaceholder}
+            maxLength={TEAM_PHONE_MAX}
+            onCommit={(v) => patchMember(i, { phone: v })}
+          />
 
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">{c.photo}</span>
             <div className="flex flex-wrap items-center gap-2">
               <PortraitPreview member={member} position={i} />
-              <UploadButton label={c.upload} icon={<Upload className="h-3.5 w-3.5" />} onFile={(dataUri) => patchMember(i, { photo: dataUri })} />
+              <UploadButton
+                label={c.upload}
+                accept="image/png,image/jpeg,image/webp"
+                icon={<Upload className="h-3.5 w-3.5" />}
+                onFile={(dataUri) => uploadPhoto(i, dataUri)}
+              />
               {member.src && <GhostButton onClick={() => patchMember(i, { photo: '' })}>{c.removePhoto}</GhostButton>}
               <GhostButton onClick={() => onDispatch({ op: 'cycleTeamAvatar', index, item: i })}>
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -222,6 +274,11 @@ export function TeamFields({
               <GhostButton onClick={() => patchMember(i, { avatar: 'initials' })}>{c.useInitials}</GhostButton>
             </div>
             <p className="text-xs text-muted-foreground">{c.photoHint}</p>
+            {photoError === i && (
+              <p role="alert" className="text-xs text-destructive">
+                {c.photoRejected}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -241,10 +298,11 @@ export function TeamFields({
         </div>
       ))}
 
-      <GhostButton disabled={!canAddEntry('team', total)} onClick={() => onDispatch({ op: 'addItem', index })}>
+      <GhostButton disabled={atLimit} onClick={() => onDispatch({ op: 'addItem', index })}>
         <Plus className="h-3.5 w-3.5" />
         {c.add}
       </GhostButton>
+      {atLimit && <p className="text-xs text-muted-foreground">{c.limitReached}</p>}
     </div>
   )
 }
