@@ -1395,7 +1395,7 @@ const dict = {
       'Ödeme altyapısı şu anda bu ortam için kullanılamıyor. Hiçbir ücret alınmadı; lütfen destek ekibiyle iletişime geçin.',
       buyOrderPendingPayment: 'Ödeme bekleniyor',
       buyOrderPaymentVerified: 'Ödeme onaylandı',
-      buyOrderRegistrationPending: 'Kayıt yap��lıyor',
+      buyOrderRegistrationPending: 'Kayıt yapılıyor',
       buyOrderActive: 'Aktif',
       buyOrderRegistrationFailed: 'Kayıt başarısız',
       buyOrderFailed: 'Başarısız',
