@@ -47,6 +47,7 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
   indexRef.current = index
 
   useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
     const query = window.matchMedia('(prefers-reduced-motion: reduce)')
     const sync = () => setReduced(query.matches)
     sync()

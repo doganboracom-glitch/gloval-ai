@@ -5,6 +5,7 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import { demoImages, applyDemoImages } from '@/lib/demo-images'
 import { getCatalog } from '@/lib/demo-catalog'
 import { addDemoAnnouncement } from '@/lib/demo-announcement'
+import { addDemoHeroStrip } from '@/lib/demo-hero-strip'
 import { applyDemoAbout } from '@/lib/demo-about'
 import { applyDemoServices } from '@/lib/demo-services'
 import { applyDemoTestimonials } from '@/lib/demo-testimonials'
@@ -168,6 +169,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
     demoLang,
     getCatalog(demo.slug) ? `/demo/${demo.slug}/iletisim?lang=${demoLang}` : undefined,
   )
+  addDemoHeroStrip(site, demo.slug, demoLang)
   return site
 }
 

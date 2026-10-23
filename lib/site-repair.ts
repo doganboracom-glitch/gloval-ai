@@ -21,6 +21,7 @@ const KNOWN_SECTION_TYPES: ReadonlySet<string> = new Set(
  * shop never loses its catalog sections.
  */
 const DROP_ORDER: ReadonlyArray<SectionType> = [
+  'heroStrip',
   'stats',
   'process',
   'team',

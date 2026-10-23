@@ -37,6 +37,7 @@ import { GalleryFields, GalleryItemExtras } from '@/components/editor/gallery-fi
 import { TestimonialsFields } from '@/components/editor/testimonials-fields'
 import { ReferencesFields } from '@/components/editor/references-fields'
 import { useProductsManaged } from '@/components/editor/published-context'
+import { HeroStripFields } from '@/components/editor/hero-strip-fields'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
 /**
@@ -305,7 +306,11 @@ export function SectionInspector({
         />
       )}
 
-      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && items.length > 0 && (
+      {section.type === 'heroStrip' && (
+        <HeroStripFields index={index} section={section} lang={site.meta.language} onDispatch={onDispatch} />
+      )}
+
+      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && section.type !== 'heroStrip' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (

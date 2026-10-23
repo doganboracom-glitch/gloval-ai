@@ -39,7 +39,9 @@ describe('demo announcement band', () => {
 
   it('sits above the header, except below the slider on slider demos', () => {
     for (const demo of demos) {
-      const types = buildDemoSite(demo, 'tr').sections.map((s) => s.type)
+      const types = buildDemoSite(demo, 'tr')
+        .sections.map((s) => s.type)
+        .filter((t) => t !== 'heroStrip')
       const at = types.indexOf('announcement')
       if (types.includes('slider')) {
         expect(types.slice(0, at)).toEqual(['hero', 'slider'])

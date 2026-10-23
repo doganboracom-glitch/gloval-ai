@@ -31,6 +31,8 @@ function withoutLayoutFields(site: WebsiteSchema): WebsiteSchema {
   copy.sections = copy.sections.filter((s) => s.type !== 'references')
   copy.pages = (copy.pages ?? []).filter((p) => p.slug !== 'referanslar')
   copy.navigation.links = copy.navigation.links.filter((l) => !l.href.includes('referanslar'))
+  // The demo-only "Slider Altı Kutu" strip is covered by hero-strip.test.tsx; the goldens predate it.
+  copy.sections = copy.sections.filter((s) => s.type !== 'heroStrip')
   for (const section of copy.sections) {
     if (section.type !== 'hero') continue
     const hero = section as Record<string, unknown>

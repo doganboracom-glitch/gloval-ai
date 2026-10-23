@@ -8,6 +8,7 @@ import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 const CORPORATE_ORDER = [
   'slider',
   'hero',
+  'heroStrip',
   'about',
   'services',
   'features',
