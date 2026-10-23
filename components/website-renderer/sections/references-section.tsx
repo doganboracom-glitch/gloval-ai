@@ -21,10 +21,14 @@ import {
   REFERENCES_HOME_PREVIEW,
   realReferences,
   referencesLink,
+  safeReferenceUrl,
   type ReferenceItem,
 } from '@/lib/references'
 
 type ReferencesData = Extract<Section, { type: 'references' }>
+
+/** Upper bound for one slide (.6s) plus slack, in case `transitionend` never fires. */
+const SLIDE_GUARD_MS = 800
 
 const CAROUSEL_CSS = `
 .gv-ref{--gv-n:2}
@@ -37,7 +41,7 @@ const CAROUSEL_CSS = `
 `
 
 /** One logo per step, wrapping seamlessly. Pauses on hover and keyboard focus; still under reduced motion. */
-function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string }) {
+function LogoCarousel({ items, label, lang }: { items: ReferenceItem[]; label: string; lang: 'tr' | 'en' }) {
   const count = items.length
   const [index, setIndex] = useState(0)
   const [instant, setInstant] = useState(false)
@@ -45,6 +49,9 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
   const [reduced, setReduced] = useState(false)
   const indexRef = useRef(0)
   indexRef.current = index
+  // True while a slide is in flight: a logo under the pointer is moving, so a click would hit the wrong one.
+  const slidingRef = useRef(false)
+  const hasLinks = items.some((item) => safeReferenceUrl(item.url))
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
@@ -57,7 +64,13 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
 
   useEffect(() => {
     if (paused || reduced) return
-    const id = window.setInterval(() => setIndex(indexRef.current + 1), REFERENCES_CAROUSEL_INTERVAL_MS)
+    const id = window.setInterval(() => {
+      slidingRef.current = true
+      window.setTimeout(() => {
+        slidingRef.current = false
+      }, SLIDE_GUARD_MS)
+      setIndex(indexRef.current + 1)
+    }, REFERENCES_CAROUSEL_INTERVAL_MS)
     return () => window.clearInterval(id)
   }, [paused, reduced])
 
@@ -67,7 +80,10 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
     return () => window.cancelAnimationFrame(frame)
   }, [instant])
 
-  const onTransitionEnd = () => {
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLUListElement>) => {
+    // Hover transitions of linked logos bubble up here; only the track's own slide counts.
+    if (e.target !== e.currentTarget) return
+    slidingRef.current = false
     if (indexRef.current >= count) {
       setInstant(true)
       setIndex(indexRef.current - count)
@@ -76,10 +92,16 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
 
   return (
     <div
-      className={`gv-ref mt-10 ${reduced ? 'overflow-x-auto' : 'overflow-hidden'}`}
+      className={`gv-ref ${hasLinks ? 'mt-8 py-2' : 'mt-10'} ${reduced ? 'overflow-x-auto' : 'overflow-hidden'}`}
       role="group"
       aria-roledescription="carousel"
       aria-label={label}
+      onClickCapture={(e) => {
+        if (slidingRef.current && (e.target as Element).closest('a')) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
+      }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -94,14 +116,14 @@ function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string 
       >
         {items.map((item, i) => (
           <li key={`a-${i}`} className="gv-ref-item">
-            <ReferenceLogo item={item} index={i} />
+            <ReferenceLogo item={item} index={i} lang={lang} />
           </li>
         ))}
         {reduced
           ? null
           : items.map((item, i) => (
               <li key={`b-${i}`} className="gv-ref-item" aria-hidden="true">
-                <ReferenceLogo item={item} index={i} />
+                <ReferenceLogo item={item} index={i} lang={lang} focusable={false} />
               </li>
             ))}
       </ul>
@@ -133,12 +155,12 @@ export function ReferencesSection({ data, site = null }: { data: ReferencesData;
       <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
       {showTag ? <ReferenceExampleTag lang={lang} /> : null}
       {moving ? (
-        <LogoCarousel items={items} label={data.title} />
+        <LogoCarousel items={items} label={data.title} lang={lang} />
       ) : (
         <ul className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-4">
           {items.map((item, i) => (
             <li key={i} className="w-[calc(50%-0.5rem)] sm:w-44">
-              <ReferenceLogo item={item} index={i} />
+              <ReferenceLogo item={item} index={i} lang={lang} />
             </li>
           ))}
         </ul>

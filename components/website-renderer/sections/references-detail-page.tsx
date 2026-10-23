@@ -30,7 +30,7 @@ export function ReferencesDetailPage({ site }: { site: WebsiteSchema }) {
         <ul className="mx-auto mt-6 grid w-full max-w-5xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((item, i) => (
             <li key={i} hidden={!expanded && i >= REFERENCES_PAGE_INITIAL} className="flex flex-col items-center gap-2">
-              <ReferenceLogo item={item} index={i} />
+              <ReferenceLogo item={item} index={i} lang={lang} />
               {item.logo?.src && item.name.trim() ? (
                 <p className="text-center text-sm font-medium" style={{ color: 'var(--site-fg)' }}>
                   {item.name.trim()}

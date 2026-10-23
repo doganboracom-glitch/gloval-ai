@@ -93,6 +93,7 @@ import {
   REFERENCE_SUBTITLE_MAX,
   REFERENCE_TITLE_MAX,
   isAllowedLogoDataUri,
+  validateReferenceUrl,
 } from '@/lib/references'
 import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
@@ -344,7 +345,8 @@ export type EditOperation =
       op: 'updateReference'
       index: number
       item: number
-      patch: { name?: string; logo?: string; logoAlt?: string }
+      /** `url`: optional website; normalized, and ignored when it fails `validateReferenceUrl`. `''` removes the link. */
+      patch: { name?: string; logo?: string; logoAlt?: string; url?: string }
     }
   /** "Change avatar": the next ready-made illustration for one review (wraps after 12). Free of credits. */
   | { op: 'cycleTestimonialAvatar'; index: number; item: number }
@@ -876,6 +878,13 @@ export function applyOperation(
       const { patch } = operation
       const updated = { ...item }
       if (patch.name !== undefined) updated.name = patch.name.slice(0, REFERENCE_NAME_MAX)
+      if (patch.url !== undefined) {
+        const checked = validateReferenceUrl(patch.url)
+        if (checked.ok) {
+          if (checked.url) updated.url = checked.url
+          else delete updated.url
+        }
+      }
       if (patch.logo !== undefined) {
         updated.logo = patch.logo ? { src: patch.logo, alt: patch.logoAlt?.trim() || updated.logo?.alt } : undefined
       } else if (patch.logoAlt !== undefined && updated.logo) {
