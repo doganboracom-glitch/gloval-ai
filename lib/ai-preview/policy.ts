@@ -12,6 +12,21 @@
  */
 export const PREVIEW_COSTS = { newPreview: 2, regenerate: 1, useFree: 2 } as const
 
+export const SUPPORTED_TARGETS = ['about', 'services', 'products', 'productsbanner'] as const
+
+/**
+ * `ai_image_previews.target` is guarded by a live CHECK constraint
+ * (`target in ('about','services','gallery')`, scripts/070). Catalog targets
+ * therefore persist as `gallery`; the generator is chosen from the
+ * distinctive `section_key` prefix (`products:2.1`, `productsbanner:2`).
+ */
+export const DB_PREVIEW_TARGETS = ['about', 'services', 'gallery'] as const
+
+export function previewDbTarget(target: string): (typeof DB_PREVIEW_TARGETS)[number] {
+  if (target === 'about' || target === 'services') return target
+  return 'gallery'
+}
+
 /** How long a preview can be recovered after a page refresh. */
 export const PREVIEW_TTL_MS = 30 * 60 * 1000
 

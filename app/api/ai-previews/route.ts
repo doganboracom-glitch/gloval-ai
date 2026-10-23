@@ -6,7 +6,7 @@ import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/fre
 import { MAX_ABOUT_IMAGES } from '@/lib/about-media'
 import { serviceItemAt } from '@/lib/service-image'
 import { catalogSectionAt, productItemAt } from '@/lib/product-image'
-import { createPreviewDeps, parseSectionKey, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
+import { createPreviewDeps, parseSectionKey, previewDbTarget, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
 import {
   discardPreview,
   getPreviewState,
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       userId,
       projectId,
       sectionKey,
-      target: section.target,
+      target: previewDbTarget(section.target),
       request: body.request ?? '',
     })
     return respond(result, result.ok ? { preview: result.preview, resumed: result.resumed } : {})

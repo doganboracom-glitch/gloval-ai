@@ -21,7 +21,7 @@ export function parseSectionKey(sectionKey: string): { target: string; index: nu
   return match[3] === undefined ? base : { ...base, item: Number(match[3]) }
 }
 
-export const SUPPORTED_TARGETS = ['about', 'services', 'products', 'productsbanner'] as const
+export { SUPPORTED_TARGETS, previewDbTarget } from '@/lib/ai-preview/policy'
 
 /**
  * Real dependencies for one request. `beforeGenerate` runs right before the

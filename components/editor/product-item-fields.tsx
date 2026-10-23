@@ -32,8 +32,8 @@ const COPY = {
     bannerAlt: 'Görsel açıklaması (alt metin)',
     bannerUpload: 'Görsel yükle',
     bannerReplace: 'Görseli değiştir',
-    shortNotePlaceholder: 'Örn. Aynı gün kargo',
-    descriptionPlaceholder: 'Ürünü kısaca anlatın: özellikleri, kullanım alanı, kimler için uygun olduğu…',
+  shortNotePlaceholder: 'Aynı gün kargo',
+  descriptionPlaceholder: 'Ürün Açıklaması Giriniz',
     itemPage: 'Ana sayfada göster',
     homeFull: 'Ana sayfa vitrini dolu. Yeni bir ürün göstermek için önce başka birini kapatın ya da vitrin sayısını artırın.',
     sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
@@ -70,8 +70,8 @@ const COPY = {
     bannerAlt: 'Image description (alt text)',
     bannerUpload: 'Upload image',
     bannerReplace: 'Replace image',
-    shortNotePlaceholder: 'e.g. Same-day shipping',
-    descriptionPlaceholder: 'Describe the product briefly: features, how it is used, who it is for…',
+  shortNotePlaceholder: 'Same-day shipping',
+  descriptionPlaceholder: 'Enter product description',
     itemPage: 'Show on the home page',
     homeFull: 'The home showcase is full. Turn another product off or raise the showcase count to show this one.',
     sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
@@ -345,6 +345,7 @@ export function ProductItemFields({
                           label={c.shortNote}
                           value={item.shortNote ?? ''}
                           placeholder={c.shortNotePlaceholder}
+                          hidePlaceholderOnFocus
                           maxLength={PRODUCT_SHORT_NOTE_MAX}
                           onCommit={(v) => patchItem(i, { shortNote: v })}
                         />
@@ -363,6 +364,7 @@ export function ProductItemFields({
                             label={c.description}
                             hint={c.descriptionHint}
                             placeholder={c.descriptionPlaceholder}
+                            hidePlaceholderOnFocus
                             value={mergedProductDescription(item)}
                             multiline
                             rows={6}

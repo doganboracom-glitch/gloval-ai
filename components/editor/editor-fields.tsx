@@ -21,10 +21,13 @@ export function TextField({
   hint,
   mono = false,
   maxLength,
+  hidePlaceholderOnFocus = false,
 }: {
   label: string
   value: string
   onCommit: (value: string) => void
+  /** Clears the placeholder as soon as the field is focused, not only once typing starts. */
+  hidePlaceholderOnFocus?: boolean
   /** Caps the number of characters the field accepts. */
   maxLength?: number
   multiline?: boolean
@@ -37,10 +40,13 @@ export function TextField({
 }) {
   const [draft, setDraft] = useState(value)
   const dirtyRef = useRef(false)
+  const [focused, setFocused] = useState(false)
   if (!dirtyRef.current && draft !== value) setDraft(value)
+  const shownPlaceholder = hidePlaceholderOnFocus && focused ? '' : placeholder
 
   function commit() {
     dirtyRef.current = false
+    setFocused(false)
     if (draft !== value) onCommit(draft)
   }
 
@@ -55,7 +61,8 @@ export function TextField({
         <textarea
           rows={rows}
           value={draft}
-          placeholder={placeholder}
+          placeholder={shownPlaceholder}
+          onFocus={() => setFocused(true)}
           spellCheck={mono ? false : undefined}
           onChange={(e) => {
             dirtyRef.current = true
@@ -68,7 +75,8 @@ export function TextField({
         <input
           type="text"
           value={draft}
-          placeholder={placeholder}
+          placeholder={shownPlaceholder}
+          onFocus={() => setFocused(true)}
           maxLength={maxLength}
           onChange={(e) => {
             dirtyRef.current = true
