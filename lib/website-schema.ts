@@ -452,8 +452,10 @@ export const referencesSection = z.object({
     .array(
       z.object({
         name: z.string().max(80).describe('Client or partner name. Never invent one.'),
-        logo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
-        /** Showcase demos only: fictional brand shown with an "Example content" tag. */
+  logo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
+  /** Optional website of the client; owner-only, checked by `validateReferenceUrl` before it is saved or linked. */
+  url: z.string().optional(),
+  /** Showcase demos only: fictional brand shown with an "Example content" tag. */
         sample: sampleFlag,
       }),
     )

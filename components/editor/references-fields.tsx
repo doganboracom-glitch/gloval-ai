@@ -12,8 +12,10 @@ import {
   REFERENCE_NAME_MAX,
   REFERENCE_SUBTITLE_MAX,
   REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
   realReferences,
   referencesPageTitle,
+  validateReferenceUrl,
 } from '@/lib/references'
 import { GhostButton, IconBtn, TextField } from '@/components/editor/editor-fields'
 
@@ -42,6 +44,17 @@ export const REFERENCES_COPY = {
     overflow: (n: number) => `Sınıra ulaşıldığı için ${n} logo eklenmedi.`,
     namePlaceholder: 'İsim (isteğe bağlı)',
     nameLabel: 'İsim',
+    urlLabel: 'Web sitesi (isteğe bağlı)',
+    urlPlaceholder: 'ornek.com',
+    urlHint: 'Doluysa logo bu adrese yeni sekmede bağlanır.',
+    urlErrors: {
+      invalid: 'Geçerli bir web adresi girin (ör. ornek.com).',
+      scheme: 'Yalnızca http:// veya https:// adresleri kullanılabilir.',
+      credentials: 'Adres kullanıcı adı veya şifre içeremez.',
+      local: 'Yerel adresler kullanılamaz.',
+      private: 'Özel ağ (IP) adresleri kullanılamaz.',
+      too_long: `Adres en fazla ${REFERENCE_URL_MAX} karakter olabilir.`,
+    },
     up: 'Yukarı taşı',
     down: 'Aşağı taşı',
     remove: 'Sil',
@@ -67,6 +80,17 @@ export const REFERENCES_COPY = {
     overflow: (n: number) => `${n} logo(s) were not added because the limit was reached.`,
     namePlaceholder: 'Name (optional)',
     nameLabel: 'Name',
+    urlLabel: 'Website (optional)',
+    urlPlaceholder: 'example.com',
+    urlHint: 'When filled, the logo links to this address in a new tab.',
+    urlErrors: {
+      invalid: 'Enter a valid web address (e.g. example.com).',
+      scheme: 'Only http:// or https:// addresses are allowed.',
+      credentials: 'The address cannot contain a username or password.',
+      local: 'Local addresses are not allowed.',
+      private: 'Private network (IP) addresses are not allowed.',
+      too_long: `The address can be at most ${REFERENCE_URL_MAX} characters.`,
+    },
     up: 'Move up',
     down: 'Move down',
     remove: 'Delete',
@@ -301,6 +325,18 @@ export function ReferencesFields({
               </IconBtn>
             </div>
           </div>
+          <TextField
+            label={c.urlLabel}
+            placeholder={c.urlPlaceholder}
+            hint={c.urlHint}
+            hidePlaceholderOnFocus
+            value={item.url ?? ''}
+            validate={(draft) => {
+              const checked = validateReferenceUrl(draft)
+              return checked.ok ? null : c.urlErrors[checked.error]
+            }}
+            onCommit={(v) => onDispatch({ op: 'updateReference', index, item: itemIndex, patch: { url: v } })}
+          />
         </div>
       ))}
     </div>

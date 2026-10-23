@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 
 /**
  * Shared editor primitives
@@ -22,10 +22,16 @@ export function TextField({
   mono = false,
   maxLength,
   hidePlaceholderOnFocus = false,
+  validate,
 }: {
   label: string
   value: string
   onCommit: (value: string) => void
+  /**
+   * Live check of the draft. A returned message is shown under the field right away and the draft is not
+   * committed on blur (it stays on screen so it can be fixed); `null` means valid.
+   */
+  validate?: (draft: string) => string | null
   /** Clears the placeholder as soon as the field is focused, not only once typing starts. */
   hidePlaceholderOnFocus?: boolean
   /** Caps the number of characters the field accepts. */
@@ -41,12 +47,15 @@ export function TextField({
   const [draft, setDraft] = useState(value)
   const dirtyRef = useRef(false)
   const [focused, setFocused] = useState(false)
+  const errorId = useId()
   if (!dirtyRef.current && draft !== value) setDraft(value)
   const shownPlaceholder = hidePlaceholderOnFocus && focused ? '' : placeholder
+  const error = validate ? validate(draft) : null
 
   function commit() {
-    dirtyRef.current = false
     setFocused(false)
+    if (error) return
+    dirtyRef.current = false
     if (draft !== value) onCommit(draft)
   }
 
@@ -78,6 +87,8 @@ export function TextField({
           placeholder={shownPlaceholder}
           onFocus={() => setFocused(true)}
           maxLength={maxLength}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           onChange={(e) => {
             dirtyRef.current = true
             setDraft(e.target.value)
@@ -89,9 +100,14 @@ export function TextField({
               ;(e.target as HTMLInputElement).blur()
             }
           }}
-          className={className}
+          className={error ? `${className} border-destructive focus:border-destructive` : className}
         />
       )}
+      {error ? (
+        <span id={errorId} role="alert" className="text-[11px] leading-snug text-destructive">
+          {error}
+        </span>
+      ) : null}
       {hint ? <span className="text-[11px] leading-snug text-muted-foreground/80">{hint}</span> : null}
     </label>
   )
