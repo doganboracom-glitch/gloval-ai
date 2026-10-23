@@ -9,6 +9,13 @@
 
 export const ANNOUNCEMENT_MAX_ITEMS = 5
 
+/** Gallery: images, albums that group them, and videos a section may hold. */
+export const GALLERY_IMAGES_MAX = 60
+export const GALLERY_ALBUMS_MAX = 12
+export const GALLERY_VIDEOS_MAX = 12
+export const GALLERY_ALBUM_NAME_MAX = 40
+export const GALLERY_VIDEO_NAME_MAX = 80
+
 export type ListLimit = { readonly min: number; readonly max: number }
 
 /**
@@ -33,7 +40,7 @@ export const LIST_LIMITS = {
   stats: { min: 1, max: 6 },
   pricing: { min: 1, max: 4 },
   testimonials: { min: 1, max: 6 },
-  gallery: { min: 1, max: 12 },
+  gallery: { min: 1, max: GALLERY_IMAGES_MAX },
   portfolio: { min: 1, max: 9 },
   products: { min: 1, max: 12 },
   categories: { min: 1, max: 8 },
