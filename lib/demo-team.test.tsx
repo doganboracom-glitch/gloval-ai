@@ -5,11 +5,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import { buildDemoSite, demos } from '@/lib/demos'
 import type { WebsiteSchema } from '@/lib/website-schema'
-import { resolveTeam } from '@/lib/team'
+import { memberSocials, resolveTeam } from '@/lib/team'
 import { MENU_MAX } from '@/lib/site-menu'
 
 const BEFORE_DIR = join(__dirname, '__fixtures__', 'demos-before')
 const TEAM_DEMOS = ['dis-klinigi', 'hukuk', 'guzellik']
+const SAMPLE_SOCIAL: Record<string, string> = {
+  facebook: 'https://www.facebook.com',
+  instagram: 'https://www.instagram.com',
+  x: 'https://x.com',
+  linkedin: 'https://www.linkedin.com',
+  email: 'mailto:ornek@ornek.example',
+}
+const RENDERED_SAMPLE_SOCIAL = Object.values(SAMPLE_SOCIAL).map((h) => (h.startsWith('mailto:') ? h : `${h}/`))
 const OTHER_DEMOS = demos.map((d) => d.slug).filter((s) => !TEAM_DEMOS.includes(s))
 
 const renderDemo = (site: WebsiteSchema, slug: string, initialPage: string | null = null, lang = 'tr') =>
@@ -35,7 +43,7 @@ const teamOf = (site: WebsiteSchema) => site.sections.find((s) => s.type === 'te
 describe.each(TEAM_DEMOS)('demo %s Kadromuz', (slug) => {
   const demo = demos.find((d) => d.slug === slug)!
 
-  it('has 7-8 fictional people with avatars, sample phones and no social links', () => {
+  it('has 6-8 fictional people with avatars, sample phones and 2-4 sample social links', () => {
     const section = teamOf(buildDemoSite(demo, 'tr'))
     expect(section?.type).toBe('team')
     if (section?.type !== 'team') return
@@ -47,7 +55,38 @@ describe.each(TEAM_DEMOS)('demo %s Kadromuz', (slug) => {
       expect(m.phone).toMatch(/^0555 555 55 5\d$/)
       expect(m.role.trim().length).toBeGreaterThan(0)
       expect(m.src).toBeUndefined()
-      expect(m.social).toBeUndefined()
+      const links = Object.entries(m.social ?? {})
+      expect(links.length).toBeGreaterThanOrEqual(2)
+      expect(links.length).toBeLessThanOrEqual(4)
+      for (const [key, href] of links) expect(SAMPLE_SOCIAL[key]).toBe(href)
+      expect(memberSocials(m)).toHaveLength(links.length)
+      expect(memberSocials(m).map((l) => l.href).sort()).toEqual(
+        links.map(([k]) => RENDERED_SAMPLE_SOCIAL[Object.keys(SAMPLE_SOCIAL).indexOf(k)]).sort(),
+      )
+    }
+    const sets = new Set(section.members.map((m) => Object.keys(m.social ?? {}).join()))
+    expect(sets.size).toBeGreaterThan(1)
+  })
+
+  it('renders each person a hover stack on the image edge and a touch row under the card, same links in both', () => {
+    const html = renderDemo(buildDemoSite(demo, 'tr'), slug, 'kadromuz')
+    const cards = html.match(/<li[^>]*data-team-card[^>]*>[^]*?<\/li>/g) ?? []
+    expect(cards.length).toBeGreaterThanOrEqual(6)
+    for (const card of cards) {
+      const hover = card.match(/<div data-team-socials="hover" class="([^"]*)">([^]*?)<\/div>/)
+      const touch = card.match(/<div data-team-socials="touch" class="([^"]*)"[^>]*>([^]*?)<\/div>/)
+      expect(hover && touch).toBeTruthy()
+      if (!hover || !touch) continue
+      const hrefsOf = (markup: string) => [...markup.matchAll(/href="([^"]+)"/g)].map((m) => m[1])
+      expect(hrefsOf(hover[2]).length).toBeGreaterThanOrEqual(2)
+      expect(hrefsOf(hover[2])).toEqual(hrefsOf(touch[2]))
+      // hover stack: vertical, on the right edge, revealed by hover and by keyboard focus, only where hover exists
+      for (const cls of ['right-3', 'flex-col', 'hidden', 'group-hover:opacity-100', 'focus-within:opacity-100', '[@media(hover:hover)]:flex']) {
+        expect(hover[1]).toContain(cls)
+      }
+      // touch row: a visible row, removed where hover exists
+      expect(touch[1]).toContain('flex')
+      expect(touch[1]).toContain('[@media(hover:hover)]:hidden')
     }
   })
 
@@ -65,7 +104,7 @@ describe.each(TEAM_DEMOS)('demo %s Kadromuz', (slug) => {
     }
   })
 
-  it('keeps every Kadromuz link inside the demo and links no external profile', () => {
+  it('keeps every Kadromuz link inside the demo and links only platform home pages, never a person profile', () => {
     const site = buildDemoSite(demo, 'tr')
     const own = `/demo/${slug}/kadromuz`
     // The menus of these demos are already full (MENU_MAX), so the page is reached from the home block's "see all" link.
@@ -77,7 +116,11 @@ describe.each(TEAM_DEMOS)('demo %s Kadromuz', (slug) => {
     const pageHrefs = [...renderDemo(site, slug, 'kadromuz').matchAll(/href="([^"]*kadromuz[^"]*)"/g)].map((m) => m[1])
     for (const href of pageHrefs) expect(href.startsWith(own)).toBe(true)
     const block = renderDemo(site, slug, 'kadromuz')
-    expect(block).not.toMatch(/href="https?:\/\/(?:www\.)?(?:facebook|instagram|x|twitter|linkedin)\./)
+    const cards = (block.match(/<li[^>]*data-team-card[^>]*>[^]*?<\/li>/g) ?? []).join(' ')
+    expect(cards.length).toBeGreaterThan(0)
+    const external = [...cards.matchAll(/href="((?:https?:|mailto:)[^"]*)"/g)].map((m) => m[1])
+    expect(external.length).toBeGreaterThan(0)
+    for (const href of external) expect(RENDERED_SAMPLE_SOCIAL).toContain(href)
   })
 
   it('leaves the rest of the demo home page HTML unchanged', () => {

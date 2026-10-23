@@ -4,6 +4,7 @@ import type { EditOperation } from '@/lib/website-edit-operations'
 import { fallbackWebsite } from '@/lib/website-schema'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { LIST_LIMITS, canAddEntry, canRemoveEntry } from '@/lib/list-limits'
+import { findTeamPage, resolveTeam, stripAiTeam, syncTeamPage, teamShownOnHome } from '@/lib/team'
 
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
@@ -146,11 +147,57 @@ describe('team panel operations', () => {
     const out = run(site, {
       op: 'updateTeamSettings',
       index,
-      patch: { title: 'Ekibimiz', subtitle: 'Bizimle tanışın', showOnHome: false, page: true },
-    } as EditOperation)
+      patch: { title: 'Ekibimiz', subtitle: 'Bizimle tanışın', showOnHome: false, pageEnabled: true },
+    })
     const section = out.sections[index]
     expect(section.type === 'team' && section.title).toBe('Ekibimiz')
     expect(section.type === 'team' && section.subtitle).toBe('Bizimle tanışın')
     expect(section.type === 'team' && section.showOnHome).toBe(false)
+  })
+
+  it('hides an empty section publicly and creates /kadromuz only with a person and the switch on', () => {
+    const { site, index } = withTeam()
+    const empty = syncTeamPage(site)
+    const section = empty.sections[index]
+    expect(section.type === 'team' && teamShownOnHome(section)).toBe(false)
+    expect(resolveTeam(empty).active).toBe(false)
+    expect(findTeamPage(empty)).toBeNull()
+
+    const named = run(site, { op: 'addItem', index }, { op: 'updateTeamMember', index, item: 0, patch: { name: 'Ayşe Demir' } })
+    const switchedOff = syncTeamPage(named)
+    expect(findTeamPage(switchedOff)).toBeNull()
+    expect(resolveTeam(switchedOff).active).toBe(false)
+
+    const on = syncTeamPage(run(named, { op: 'updateTeamSettings', index, patch: { pageEnabled: true } }))
+    expect(findTeamPage(on)?.slug).toBe('kadromuz')
+    expect(resolveTeam(on).active).toBe(true)
+    const shown = on.sections[index]
+    expect(shown.type === 'team' && teamShownOnHome(shown)).toBe(true)
+
+    const removed = syncTeamPage(run(on, { op: 'removeItem', index, itemIndex: 0 }))
+    expect(findTeamPage(removed)).toBeNull()
+    expect(resolveTeam(removed).active).toBe(false)
+  })
+
+  it('is never added to generated sites and the AI cannot invent or alter people', () => {
+    for (const prompt of ['Hukuk bürosu için site', 'Diş kliniği web sitesi', 'Güzellik salonu', 'Kafe']) {
+      expect(fallbackWebsite(prompt, 'tr').sections.some((s) => s.type === 'team')).toBe(false)
+    }
+
+    const { site, index } = withTeam()
+    const owner = run(site, { op: 'addItem', index }, { op: 'updateTeamMember', index, item: 0, patch: { name: 'Gerçek Kişi', phone: '0555 555 55 51' } })
+    const invented = {
+      ...owner,
+      sections: owner.sections.map((s) =>
+        s.type === 'team' ? { ...s, title: 'Ekibimiz', members: [{ name: 'Uydurma Kişi', role: 'Avukat', phone: '0555 000 00 00' }] } : s,
+      ),
+    } as WebsiteSchema
+    const guarded = stripAiTeam(invented, owner)
+    const kept = guarded.sections[index]
+    expect(kept.type === 'team' && kept.title).toBe('Ekibimiz')
+    expect(kept.type === 'team' && kept.members.map((m) => m.name)).toEqual(['Gerçek Kişi'])
+
+    const noPrior = stripAiTeam(invented, null).sections[index]
+    expect(noPrior.type === 'team' && noPrior.members).toHaveLength(0)
   })
 })

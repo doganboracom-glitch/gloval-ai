@@ -1,15 +1,15 @@
 import { countCappedSections, type Section, type WebsiteSchema } from '@/lib/website-schema'
 import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { MENU_MAX } from '@/lib/site-menu'
-import { findTeamPage, teamPageTitle } from '@/lib/team'
+import { findTeamPage, teamPageTitle, type TeamSocialKey } from '@/lib/team'
 
 /**
  * Showcase demo team
  * ------------------
  * Only the dental clinic, law firm and beauty demos carry a team: 6-8 made-up people each, with roles that fit
  * the sector, so the home block, the "view full team" link and the `/kadromuz` page can be judged on realistic
- * content. Every person is flagged `sample`, gets a sample phone (`0555 555 55 5N`), no photo and no social
- * links, and the demo shows one "Örnek içerik" tag. Demo-only: generation never reads this file.
+ * content. Every person is flagged `sample`, gets a sample phone (`0555 555 55 5N`), no photo and 2-4 sample
+ * social links (platform home pages only), and the demo shows one "Örnek içerik" tag. Demo-only: generation never reads this file.
  */
 
 type Person = { name: string; role: { tr: string; en: string } }
@@ -46,6 +46,26 @@ const PEOPLE: Readonly<Record<string, ReadonlyArray<Person>>> = {
   ],
 }
 
+/** Sample links only: each platform's home page (never a real person's profile) and a reserved `.example` address. */
+const DEMO_SOCIAL_LINKS: ReadonlyArray<readonly [TeamSocialKey, string]> = [
+  ['facebook', 'https://www.facebook.com'],
+  ['instagram', 'https://www.instagram.com'],
+  ['x', 'https://x.com'],
+  ['linkedin', 'https://www.linkedin.com'],
+  ['email', 'mailto:ornek@ornek.example'],
+]
+
+/** 2, 3 or 4 links per person, starting at a different platform each time so the icon stacks differ. */
+function demoSocials(position: number): Partial<Record<TeamSocialKey, string>> {
+  const count = 2 + (position % 3)
+  const out: Partial<Record<TeamSocialKey, string>> = {}
+  for (let k = 0; k < count; k++) {
+    const [key, href] = DEMO_SOCIAL_LINKS[(position + k) % DEMO_SOCIAL_LINKS.length]
+    out[key] = href
+  }
+  return out
+}
+
 function insertionIndex(sections: Section[]): number {
   const contact = sections.findIndex((s) => s.type === 'contact')
   if (contact !== -1) return contact
@@ -75,6 +95,7 @@ export function applyDemoTeam(site: WebsiteSchema, slug: string, lang: 'tr' | 'e
       name: p.name,
       role: p.role[lang],
       phone: `0555 555 55 5${i + 1}`,
+      social: demoSocials(i),
       sample: true as const,
     })),
   }
