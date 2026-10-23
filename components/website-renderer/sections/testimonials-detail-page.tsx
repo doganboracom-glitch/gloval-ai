@@ -22,7 +22,7 @@ export function TestimonialsDetailPage({ site }: { site: WebsiteSchema }) {
       <div className="px-6 py-12 sm:py-16">
         <div className="mx-auto grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item, i) => (
-            <TestimonialCard key={i} item={item} showAvatars={section.showAvatars === true} lang={lang} demo={demo} />
+            <TestimonialCard key={i} item={item} showAvatars={section.showAvatars === true} lang={lang} demo={demo} index={i} />
           ))}
         </div>
       </div>
