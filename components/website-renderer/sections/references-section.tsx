@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import {
   SectionShell,
@@ -14,17 +15,102 @@ import {
 } from '@/components/website-renderer/site-nav-context'
 import { ReferenceLogo } from '@/components/website-renderer/sections/reference-logo'
 import { ReferenceExampleTag } from '@/components/website-renderer/sections/reference-example-tag'
-import { REFERENCES_HOME_PREVIEW, realReferences, referencesLink } from '@/lib/references'
+import {
+  REFERENCES_CAROUSEL_INTERVAL_MS,
+  REFERENCES_CAROUSEL_VISIBLE,
+  REFERENCES_HOME_PREVIEW,
+  realReferences,
+  referencesLink,
+  type ReferenceItem,
+} from '@/lib/references'
 
 type ReferencesData = Extract<Section, { type: 'references' }>
 
-/** Fewer logos than this fit one row, so a moving strip would only repeat them. */
-const MARQUEE_MIN = 5
+const CAROUSEL_CSS = `
+.gv-ref{--gv-n:2}
+@media (min-width:640px){.gv-ref{--gv-n:3}}
+@media (min-width:1024px){.gv-ref{--gv-n:${REFERENCES_CAROUSEL_VISIBLE}}}
+.gv-ref-item{flex:0 0 calc(100% / var(--gv-n));padding:0 .5rem}
+.gv-ref-track{display:flex;transition:transform .6s ease}
+.gv-ref-track[data-instant="true"]{transition:none}
+@media (prefers-reduced-motion:reduce){.gv-ref-track{transition:none}}
+`
+
+/** One logo per step, wrapping seamlessly. Pauses on hover and keyboard focus; still under reduced motion. */
+function LogoCarousel({ items, label }: { items: ReferenceItem[]; label: string }) {
+  const count = items.length
+  const [index, setIndex] = useState(0)
+  const [instant, setInstant] = useState(false)
+  const [paused, setPaused] = useState(false)
+  const [reduced, setReduced] = useState(false)
+  const indexRef = useRef(0)
+  indexRef.current = index
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync = () => setReduced(query.matches)
+    sync()
+    query.addEventListener('change', sync)
+    return () => query.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    if (paused || reduced) return
+    const id = window.setInterval(() => setIndex(indexRef.current + 1), REFERENCES_CAROUSEL_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [paused, reduced])
+
+  useEffect(() => {
+    if (!instant) return
+    const frame = window.requestAnimationFrame(() => setInstant(false))
+    return () => window.cancelAnimationFrame(frame)
+  }, [instant])
+
+  const onTransitionEnd = () => {
+    if (indexRef.current >= count) {
+      setInstant(true)
+      setIndex(indexRef.current - count)
+    }
+  }
+
+  return (
+    <div
+      className={`gv-ref mt-10 ${reduced ? 'overflow-x-auto' : 'overflow-hidden'}`}
+      role="group"
+      aria-roledescription="carousel"
+      aria-label={label}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <style>{CAROUSEL_CSS}</style>
+      <ul
+        className="gv-ref-track"
+        data-instant={instant}
+        style={{ transform: reduced ? undefined : `translateX(calc(-1 * ${index} * 100% / var(--gv-n)))` }}
+        onTransitionEnd={onTransitionEnd}
+      >
+        {items.map((item, i) => (
+          <li key={`a-${i}`} className="gv-ref-item">
+            <ReferenceLogo item={item} index={i} />
+          </li>
+        ))}
+        {reduced
+          ? null
+          : items.map((item, i) => (
+              <li key={`b-${i}`} className="gv-ref-item" aria-hidden="true">
+                <ReferenceLogo item={item} index={i} />
+              </li>
+            ))}
+      </ul>
+    </div>
+  )
+}
 
 /**
  * Home carousel of client logos. Renders nothing while the owner has not added a real reference,
- * so a freshly generated site never shows an empty block. Motion respects `prefers-reduced-motion`
- * and pauses on hover and keyboard focus.
+ * so a freshly generated site never shows an empty block. Four or fewer logos sit still in a row.
  */
 export function ReferencesSection({ data, site = null }: { data: ReferencesData; site?: WebsiteSchema | null }) {
   const nav = useSiteNav()
@@ -38,45 +124,20 @@ export function ReferencesSection({ data, site = null }: { data: ReferencesData;
   const showTag = demo && all.some((item) => item.sample)
 
   const items = all.slice(0, REFERENCES_HOME_PREVIEW)
-  const moving = data.autoplay !== false && items.length >= MARQUEE_MIN
+  const moving = data.autoplay !== false && items.length > REFERENCES_CAROUSEL_VISIBLE
   const href = link ? demoHref(normalize(link.href)) : ''
-  const duration = `${Math.max(20, items.length * 4)}s`
 
   return (
     <SectionShell id="references">
       <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
       {showTag ? <ReferenceExampleTag lang={lang} /> : null}
       {moving ? (
-        <div
-          className="gv-ref-marquee mt-10 overflow-hidden"
-          style={{ ['--gv-ref-duration' as string]: duration }}
-          role="group"
-          aria-label={data.title}
-        >
-          <style>{`
-            .gv-ref-track{display:flex;width:max-content;gap:1rem;animation:gv-ref-scroll var(--gv-ref-duration) linear infinite}
-            .gv-ref-marquee:hover .gv-ref-track,.gv-ref-marquee:focus-within .gv-ref-track{animation-play-state:paused}
-            @keyframes gv-ref-scroll{from{transform:translateX(0)}to{transform:translateX(calc(-50% - .5rem))}}
-            @media (prefers-reduced-motion:reduce){.gv-ref-marquee{overflow-x:auto}.gv-ref-track{animation:none}.gv-ref-dup{display:none}}
-          `}</style>
-          <ul className="gv-ref-track">
-            {items.map((item, i) => (
-              <li key={`a-${i}`} className="w-44 shrink-0">
-                <ReferenceLogo item={item} />
-              </li>
-            ))}
-            {items.map((item, i) => (
-              <li key={`b-${i}`} className="gv-ref-dup w-44 shrink-0" aria-hidden="true">
-                <ReferenceLogo item={item} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <LogoCarousel items={items} label={data.title} />
       ) : (
-        <ul className="mt-10 flex flex-wrap justify-center gap-4">
+        <ul className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-4">
           {items.map((item, i) => (
-            <li key={i} className="w-40 sm:w-44">
-              <ReferenceLogo item={item} />
+            <li key={i} className="w-[calc(50%-0.5rem)] sm:w-44">
+              <ReferenceLogo item={item} index={i} />
             </li>
           ))}
         </ul>

@@ -84,7 +84,7 @@ import {
   REFERENCE_NAME_MAX,
   REFERENCE_SUBTITLE_MAX,
   REFERENCE_TITLE_MAX,
-  REFERENCE_URL_MAX,
+  isAllowedLogoDataUri,
 } from '@/lib/references'
 import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
@@ -331,12 +331,12 @@ export type EditOperation =
     }
   /** Bulk logo upload: appends one entry per logo (data URIs), stopping at the section's limit. */
   | { op: 'addReferenceLogos'; index: number; logos: string[] }
-  /** One client logo. `logo: ''` removes the image, `url: ''` removes the link. Owner-only data. */
+  /** One client logo. `logo: ''` removes the image. Owner-only data. */
   | {
       op: 'updateReference'
       index: number
       item: number
-      patch: { name?: string; logo?: string; logoAlt?: string; url?: string }
+      patch: { name?: string; logo?: string; logoAlt?: string }
     }
   /** "Change avatar": the next ready-made illustration for one review (wraps after 12). Free of credits. */
   | { op: 'cycleTestimonialAvatar'; index: number; item: number }
@@ -851,7 +851,7 @@ export function applyOperation(
       const section = next.sections[operation.index]
       if (!section || section.type !== 'references') return next
       const room = LIST_LIMITS.references.max - section.items.length
-      const logos = operation.logos.filter((src) => src.trim().length > 0).slice(0, Math.max(0, room))
+      const logos = operation.logos.filter(isAllowedLogoDataUri).slice(0, Math.max(0, room))
       if (logos.length === 0) return next
       next.sections[operation.index] = {
         ...section,
@@ -868,7 +868,6 @@ export function applyOperation(
       const { patch } = operation
       const updated = { ...item }
       if (patch.name !== undefined) updated.name = patch.name.slice(0, REFERENCE_NAME_MAX)
-      if (patch.url !== undefined) updated.url = patch.url.trim().slice(0, REFERENCE_URL_MAX) || undefined
       if (patch.logo !== undefined) {
         updated.logo = patch.logo ? { src: patch.logo, alt: patch.logoAlt?.trim() || updated.logo?.alt } : undefined
       } else if (patch.logoAlt !== undefined && updated.logo) {

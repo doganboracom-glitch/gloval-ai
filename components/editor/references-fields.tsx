@@ -8,6 +8,7 @@ import { LIST_LIMITS, canRemoveEntry } from '@/lib/list-limits'
 import {
   REFERENCE_LOGO_MAX_BYTES,
   REFERENCE_LOGO_TYPES,
+  sniffLogoType,
   REFERENCE_NAME_MAX,
   REFERENCE_SUBTITLE_MAX,
   REFERENCE_TITLE_MAX,
@@ -138,7 +139,9 @@ export function ReferencesFields({
     const problems: string[] = []
     const accepted: File[] = []
     for (const file of files) {
-      if (!(REFERENCE_LOGO_TYPES as readonly string[]).includes(file.type)) problems.push(c.badType(file.name))
+      const head = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+      const realType = sniffLogoType(head)
+      if (!(REFERENCE_LOGO_TYPES as readonly string[]).includes(file.type) || !realType) problems.push(c.badType(file.name))
       else if (file.size > REFERENCE_LOGO_MAX_BYTES) problems.push(c.tooBig(file.name))
       else accepted.push(file)
     }

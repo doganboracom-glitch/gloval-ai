@@ -16,7 +16,6 @@ export function ReferencesDetailPage({ site }: { site: WebsiteSchema }) {
   if (!active || !section) return null
 
   const hidden = Math.max(0, items.length - REFERENCES_PAGE_INITIAL)
-  const visible = expanded ? items : items.slice(0, REFERENCES_PAGE_INITIAL)
   const showTag = demo && items.some((item) => item.sample)
   return (
     <div id="references-detail" data-gv-detail-page>
@@ -29,9 +28,14 @@ export function ReferencesDetailPage({ site }: { site: WebsiteSchema }) {
       <div className="px-6 py-12 sm:py-16">
         {showTag ? <ReferenceExampleTag lang={lang} /> : null}
         <ul className="mx-auto mt-6 grid w-full max-w-5xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {visible.map((item, i) => (
-            <li key={i}>
-              <ReferenceLogo item={item} size="lg" />
+          {items.map((item, i) => (
+            <li key={i} hidden={!expanded && i >= REFERENCES_PAGE_INITIAL} className="flex flex-col items-center gap-2">
+              <ReferenceLogo item={item} index={i} />
+              {item.logo?.src && item.name.trim() ? (
+                <p className="text-center text-sm font-medium" style={{ color: 'var(--site-fg)' }}>
+                  {item.name.trim()}
+                </p>
+              ) : null}
             </li>
           ))}
         </ul>

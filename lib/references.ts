@@ -18,10 +18,13 @@ export type ReferenceItem = ReferencesSection['items'][number]
 
 export const REFERENCE_TITLE_MAX = 80
 export const REFERENCE_NAME_MAX = 80
-export const REFERENCE_URL_MAX = 300
 export const REFERENCE_LINK_LABEL_MAX = 40
 export const REFERENCE_SUBTITLE_MAX = 200
-export const REFERENCES_HOME_PREVIEW = 12
+/** Logos visible at once in the home carousel (desktop). Tablet shows 3, mobile 2. With this many or fewer it stays still. */
+export const REFERENCES_CAROUSEL_VISIBLE = 4
+/** Milliseconds between one-logo steps. */
+export const REFERENCES_CAROUSEL_INTERVAL_MS = 4000
+export const REFERENCES_HOME_PREVIEW = 20
 /** The references page shows this many logos first; the rest sit behind a "show more" button. */
 export const REFERENCES_PAGE_INITIAL = 10
 /** Logo uploads: PNG / JPG / WebP, at most 2 MB each. */
@@ -53,11 +56,30 @@ export function realReferences(section: Pick<ReferencesSection, 'items'>): Refer
   return section.items.filter(isRealReference)
 }
 
-/** Only http(s) links are ever rendered as an anchor. */
-export function safeReferenceUrl(url: string | undefined): string | null {
-  const value = url?.trim()
-  if (!value) return null
-  return /^https?:\/\//i.test(value) ? value : null
+export type ReferenceLogoType = (typeof REFERENCE_LOGO_TYPES)[number]
+
+/** Detects PNG / JPEG / WebP from the first bytes, whatever the file name or declared MIME says. SVG and anything else is `null`. */
+export function sniffLogoType(bytes: ArrayLike<number>): ReferenceLogoType | null {
+  const b = (i: number) => bytes[i] ?? -1
+  if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) return 'image/png'
+  if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'image/jpeg'
+  if (b(0) === 0x52 && b(1) === 0x49 && b(2) === 0x46 && b(3) === 0x46 && b(8) === 0x57 && b(9) === 0x45 && b(10) === 0x42 && b(11) === 0x50) {
+    return 'image/webp'
+  }
+  return null
+}
+
+/** True for a base64 data URI whose bytes really are PNG / JPEG / WebP. Used server-side by the edit operation. */
+export function isAllowedLogoDataUri(src: string): boolean {
+  const match = /^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/]{24})/i.exec(src.trim())
+  if (!match) return false
+  try {
+    const raw = atob(match[1])
+    const bytes = Array.from(raw, (ch) => ch.charCodeAt(0))
+    return sniffLogoType(bytes) !== null
+  } catch {
+    return false
+  }
 }
 
 function referenceSections(site: Pick<WebsiteSchema, 'sections' | 'pages'>): ReferencesSection[] {
