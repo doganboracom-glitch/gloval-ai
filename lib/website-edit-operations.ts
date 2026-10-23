@@ -1892,7 +1892,7 @@ export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?:
     case 'testimonials':
       return {
         type: 'testimonials',
-        title: pick(lang, 'Yorumlar', 'Testimonials'),
+        title: pick(lang, 'Müşteri Yorumları', 'Customer Reviews'),
         items: [
           { quote: pick(lang, 'Harika bir deneyim.', 'A great experience.'), author: pick(lang, 'Müşteri', 'Customer') },
         ],

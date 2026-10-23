@@ -362,7 +362,7 @@ const SECTION_LABELS: Record<string, { tr: string; en: string }> = {
   about: { tr: 'Hakkımızda', en: 'About' },
   services: { tr: 'Hizmetler', en: 'Services' },
   features: { tr: 'Özellikler', en: 'Features' },
-  testimonials: { tr: 'Referanslar', en: 'Testimonials' },
+  testimonials: { tr: 'Müşteri Yorumları', en: 'Customer Reviews' },
   gallery: { tr: 'Galeri', en: 'Gallery' },
   portfolio: { tr: 'Portföy', en: 'Portfolio' },
   products: { tr: 'Ürünler (bölüm)', en: 'Products (section)' },
