@@ -103,6 +103,9 @@ export function HeroLayoutField({
           onChange={(imageFit) => patch({ imageFit })}
         />
       )}
+      {settings.layout === 'light-cover' && (
+        <p className="-mt-1 text-xs text-muted-foreground">{ui.heroImageFitNote}</p>
+      )}
       {settings.layout === 'full-bleed' && (
         <div className="flex flex-col gap-1">
           <label htmlFor={sliderId} className="flex justify-between text-xs text-muted-foreground">

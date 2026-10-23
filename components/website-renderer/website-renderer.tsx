@@ -28,6 +28,7 @@ import {
   themeToCssVars,
 } from '@/components/website-renderer/theme'
 import { SectionRenderer } from '@/components/website-renderer/section-renderer'
+import { isHeroUnderHeader } from '@/lib/hero-layout'
 import type { ContactFormLive } from '@/components/website-renderer/sections/contact-form'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
@@ -421,6 +422,11 @@ export function WebsiteRenderer({
   const announcementBar = announcement ? (
     <AnnouncementBar data={announcement} lang={data.meta.language} colors={theme} />
   ) : null
+  const heroUnderHeader = isHeroUnderHeader(sections, {
+    detailPage: activeIsDetail,
+    announcementBelowHeader: Boolean(announcement && !announcementAboveHeader && !announcementOnPage),
+  })
+  const heroUnderHeaderIndex = sections[0]?.type === 'announcement' ? 1 : 0
   const announcementNode =
     announcementBar && editSelection && announcementIndex >= 0 ? (
       <div
@@ -472,6 +478,7 @@ export function WebsiteRenderer({
         actions={headerActions}
         socialLinks={resolveHeaderSocialLinks(data)}
         contact={resolveMenuContact(data)}
+        overHero={heroUnderHeader}
       />
       {announcement && !announcementAboveHeader && !announcementOnPage && announcementNode}
       {activeIsDetail &&
@@ -500,6 +507,7 @@ export function WebsiteRenderer({
             showBranding={showBranding}
             paymentBadges={paymentBadges}
             contactForm={contactForm}
+            {...(heroUnderHeader && i === heroUnderHeaderIndex ? { underHeader: true } : {})}
           />
         )
         // Editor/landing preview only (`preview` is null on published and demo

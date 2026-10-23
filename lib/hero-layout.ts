@@ -48,9 +48,30 @@ export function resolveHeroLayout(
     layout,
     align: normalizeAlign(layout, hero.align),
     overlay: clampOverlay(hero.overlay),
-    imageFit: hero.imageFit === 'cover' ? 'cover' : 'contain',
+    // Only an explicit "contain" letterboxes; unset (new sites, older records
+    // that never picked) fills its half edge to edge.
+    imageFit: hero.imageFit === 'contain' ? 'contain' : 'cover',
   }
 }
+
+/**
+ * Whether the page's opening hero runs behind the sticky header: only the
+ * light-cover style, and only when the hero is the first thing under the header
+ * (an announcement bar above the header does not count; one below it does).
+ */
+export function isHeroUnderHeader(
+  sections: readonly Pick<Section, 'type'>[],
+  opts: { announcementBelowHeader?: boolean; detailPage?: boolean } = {},
+): boolean {
+  if (opts.detailPage || opts.announcementBelowHeader) return false
+  const first = sections[0]?.type === 'announcement' ? 1 : 0
+  const hero = sections[first] as Section | undefined
+  return hero?.type === 'hero' && hero.layout === 'light-cover'
+}
+
+/** Opacity (%) of the themed header backdrop: standard bar, or while it floats over a hero image. */
+export const HEADER_BACKDROP = { standard: 82, overHero: 92 } as const
+
 
 /* -------------------------------------------------------------------------- */
 /*  Contrast (WCAG 2.x)                                                       */

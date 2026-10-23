@@ -70,7 +70,7 @@ function resolveVariant(data: HeroData): NonNullable<HeroData['variant']> {
   return 'centered'
 }
 
-export function HeroSection({ data }: { data: HeroData }) {
+export function HeroSection({ data, underHeader = false }: { data: HeroData; underHeader?: boolean }) {
   const variant = resolveVariant(data)
 
   // An owner-picked layout takes over rendering; `variant` still decides whether
@@ -87,7 +87,7 @@ export function HeroSection({ data }: { data: HeroData }) {
       primaryButton,
       image,
     }))
-    return <HeroLayoutView slides={slides} settings={resolveHeroLayout(data)} />
+    return <HeroLayoutView slides={slides} settings={resolveHeroLayout(data)} underHeader={underHeader} />
   }
 
   if (variant === 'slider') {

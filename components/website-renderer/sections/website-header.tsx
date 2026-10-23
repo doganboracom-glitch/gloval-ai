@@ -23,6 +23,7 @@ import {
   hamburgerBreakpoint,
   type MobileMenuItem,
 } from '@/components/website-renderer/sections/mobile-menu'
+import { HEADER_BACKDROP } from '@/lib/hero-layout'
 import { StoreAccountLink } from '@/components/website-renderer/store-account-link'
 import {
   isCartCta,
@@ -47,6 +48,7 @@ export function WebsiteHeader({
   contact,
   commerce = true,
   productCategories,
+  overHero = false,
 }: {
   /** Categories to list under the products entry; falls back to the live catalog in context. */
   productCategories?: MenuCategory[]
@@ -76,6 +78,8 @@ export function WebsiteHeader({
   homeHref?: string
   /** Extra header controls rendered just before the CTA (demo cart/account buttons). */
   actions?: React.ReactNode
+  /** The opening hero image runs behind the bar: a firmer backdrop keeps the menu readable on any photo. */
+  overHero?: boolean
 }) {
   const nav = useSiteNav()
   const normalizeHref = useHrefNormalizer()
@@ -159,7 +163,9 @@ export function WebsiteHeader({
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 backdrop-blur"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--site-bg) 82%, transparent)' }}
+        style={{
+          backgroundColor: `color-mix(in srgb, var(--site-bg) ${overHero ? HEADER_BACKDROP.overHero : HEADER_BACKDROP.standard}%, transparent)`,
+        }}
       />
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         {storeSlug ? (
