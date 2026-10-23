@@ -168,6 +168,28 @@ export function formatCatalogPrice(priceCents: number, currency: string): string
   }
 }
 
+/** Groups digits by thousands with a dot: 1299 -> "1.299". */
+function groupThousands(whole: number): string {
+  return String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+/**
+ * Customer-facing price: "1.299 TL" (TRY has no symbol, only the TL suffix), "1.299,90 TL" when it has kuruş,
+ * "$1,299" for other currencies. Unreadable or zero -> null so the caller hides the price instead of showing "0".
+ */
+export function formatPriceCents(cents: number, currency: string): string | null {
+  if (!Number.isFinite(cents) || cents <= 0) return null
+  const whole = Math.floor(cents / 100)
+  const rest = cents % 100
+  if (currency === 'TRY') {
+    return `${groupThousands(whole)}${rest ? `,${String(rest).padStart(2, '0')}` : ''} TL`
+  }
+  const symbol = ({ USD: '$', EUR: '€', GBP: '£' } as Record<string, string>)[currency]
+  const digits = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const decimals = rest ? `.${String(rest).padStart(2, '0')}` : ''
+  return symbol ? `${symbol}${digits}${decimals}` : `${digits}${decimals} ${currency}`
+}
+
 /** The label that replaces a price. */
 export const ASK_PRICE_LABEL = 'Fiyat için sor'
 export const WHATSAPP_ORDER_LABEL = 'WhatsApp ile sipariş ver'
@@ -182,7 +204,9 @@ export function buildWhatsappOrderUrl(input: {
   currency: string
 }): string {
   const price =
-    input.priceMode === 'ask' ? ASK_PRICE_LABEL : formatCatalogPrice(input.priceCents, input.currency)
+    input.priceMode === 'ask'
+      ? ASK_PRICE_LABEL
+      : (formatPriceCents(input.priceCents, input.currency) ?? ASK_PRICE_LABEL)
   const text = [
     `Merhaba, "${input.productName}" ürünü hakkında sipariş vermek istiyorum.`,
     `Fiyat: ${price}`,

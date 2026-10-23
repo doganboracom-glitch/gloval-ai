@@ -78,14 +78,22 @@ export function CatalogProductView({
   const summary = paragraphs[0] ?? null
 
   const tabs: { key: TabKey; label: string }[] = []
-  if (paragraphs.length) tabs.push({ key: 'description', label: 'Açıklama' })
-  if (item.specs.length) tabs.push({ key: 'specs', label: 'Özellikler' })
-  if (video) tabs.push({ key: 'video', label: 'Video' })
+  const blocks = item.blocks ?? []
+  if (paragraphs.length || blocks.length) tabs.push({ key: 'description', label: 'Açıklama' })
+  if (item.specs.length) tabs.push({ key: 'specs', label: 'Ürün Özellikleri' })
+  if (video) tabs.push({ key: 'video', label: 'Ürün Videosu' })
   const [active, setActive] = useState<TabKey | null>(null)
   const currentTab = tabs.find((t) => t.key === active)?.key ?? tabs[0]?.key ?? null
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-12 px-4 py-6 pb-28 md:py-10 md:pb-10">
+    <div className="flex flex-col">
+    <header className="border-b border-border bg-muted/40">
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 md:py-8">
+        <p className="text-sm font-medium text-muted-foreground">Ürün Detayı</p>
+        <p className="text-2xl font-bold md:text-3xl" style={{ fontFamily: 'var(--site-heading-font, inherit)' }}>{item.name}</p>
+      </div>
+    </header>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-4 py-6 pb-28 md:py-10 md:pb-10">
       <nav aria-label="Kırıntı yolu" className="text-sm text-muted-foreground">
         <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <li><a href="/" className="hover:underline">Ana sayfa</a></li>
@@ -102,24 +110,20 @@ export function CatalogProductView({
         <ProductGallery images={item.images} name={item.name} />
 
         <section className="flex flex-col gap-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--site-primary, var(--primary))' }}>
-            {storeName}
-          </p>
+          {discount !== null && (
+            <span data-sale-badge className="self-start rounded-full bg-destructive px-3 py-1 text-xs font-bold text-destructive-foreground">İndirimli</span>
+          )}
           <h1 className="text-balance text-3xl font-bold leading-tight md:text-4xl" style={{ fontFamily: 'var(--site-heading-font, inherit)' }}>
             {item.name}
           </h1>
           <div className="flex flex-wrap items-end gap-3">
             <span className="text-3xl font-bold">{catalogPriceText(item, labels.askPrice)}</span>
             {discount !== null && item.compareAtCents != null && (
-              <>
-                <span className="text-sm text-muted-foreground line-through">
-                  {catalogPriceText({ ...item, priceCents: item.compareAtCents })}
-                </span>
-                <span className="rounded-full bg-destructive px-2.5 py-1 text-xs font-bold text-destructive-foreground">%{discount} indirim</span>
-              </>
+              <span className="text-lg text-muted-foreground line-through" data-old-price>
+                {catalogPriceText({ ...item, priceCents: item.compareAtCents })}
+              </span>
             )}
           </div>
-          {summary && <p className="line-clamp-4 leading-relaxed text-muted-foreground">{summary}</p>}
 
           <div className="grid gap-2 sm:grid-cols-2">
             {whatsappHref && (
@@ -140,6 +144,8 @@ export function CatalogProductView({
               </a>
             )}
           </div>
+
+          {summary && <p className="line-clamp-4 leading-relaxed text-muted-foreground">{summary}</p>}
 
           <dl className="divide-y divide-border rounded-[var(--site-radius,0.75rem)] border border-border text-sm">
             {item.sku && (
@@ -180,6 +186,16 @@ export function CatalogProductView({
             {currentTab === 'description' && (
               <div className="flex flex-col gap-4 leading-relaxed text-muted-foreground">
                 {paragraphs.map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}
+                {blocks.map((block, i) => (
+                  <div key={`block-${i}`} className="flex flex-col gap-2">
+                    {block.heading && (
+                      block.level === 'h3'
+                        ? <h3 className="text-lg font-semibold text-foreground">{block.heading}</h3>
+                        : <h2 className="text-xl font-bold text-foreground">{block.heading}</h2>
+                    )}
+                    {block.body.split(/\n\s*\n/).map((part, k) => part.trim() && <p key={k} className="whitespace-pre-line">{part.trim()}</p>)}
+                  </div>
+                ))}
               </div>
             )}
             {currentTab === 'specs' && (
@@ -209,6 +225,7 @@ export function CatalogProductView({
           </ul>
         </section>
       )}
+    </div>
     </div>
   )
 }

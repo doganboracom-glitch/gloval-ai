@@ -42,9 +42,10 @@ import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { makeProductsInline, withProductSlugs } from '@/lib/product-items'
+import { homeHasRoom, makeProductsInline, withHomeFlags, withProductSlugs, withRenamedProduct } from '@/lib/product-items'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -220,7 +221,7 @@ export type EditOperation =
         slug?: string
         sku?: string
         priceMode?: 'show' | 'ask'
-        pageEnabled?: boolean
+        showOnHome?: boolean
         seoTitle?: string
         seoDescription?: string
         videoUrl?: string
@@ -617,10 +618,9 @@ export function applyOperation(
       if (!item) return next
       const { patch } = operation
       const updated = { ...item }
-      if (patch.slug !== undefined) updated.slug = cleanServiceSlug(patch.slug, item.name)
       if (patch.sku !== undefined) updated.sku = patch.sku.trim().slice(0, 60) || undefined
       if (patch.priceMode !== undefined) updated.priceMode = patch.priceMode
-      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.showOnHome !== undefined) updated.showOnHome = patch.showOnHome
       if (patch.seoTitle !== undefined) updated.seoTitle = patch.seoTitle.trim().slice(0, SERVICE_ITEM_LIMITS.seoTitle) || undefined
       if (patch.seoDescription !== undefined) {
         updated.seoDescription = patch.seoDescription.trim().slice(0, SERVICE_ITEM_LIMITS.seoDescription) || undefined
@@ -634,15 +634,19 @@ export function applyOperation(
         const images = patch.images
           .filter((image) => isUsableImageSrc(image.src))
           .slice(0, PRODUCT_IMAGES_MAX)
-          .map((image) => ({
+          .map((image, position) => ({
             src: image.src.trim(),
-            ...(image.alt?.trim() ? { alt: image.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) } : {}),
+            // Alt text is required per image: an empty one falls back to a name-based suggestion.
+            alt: (image.alt?.trim() || suggestProductImageAlt(item.name, position)).slice(0, SERVICE_ITEM_LIMITS.alt),
           }))
         updated.images = images.length > 0 ? images : undefined
-        // The showcase card reads `src`, so it follows the first gallery image.
+        // The showcase card reads `src`, so it follows the first gallery image (the cover); an emptied gallery clears it.
         if (images.length > 0) {
           updated.src = images[0].src
-          updated.alt = images[0].alt ?? updated.alt
+          updated.alt = images[0].alt
+        } else {
+          updated.src = undefined
+          updated.alt = undefined
         }
       }
       if (patch.specs !== undefined) {
@@ -653,8 +657,9 @@ export function applyOperation(
       }
       if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
       if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
-      const items = section.items.map((it, i) => (i === operation.item ? updated : it))
-      const edited = { ...section, items }
+      // Turning one product off on a legacy site (no flags yet) must not hide the rest.
+      const base = patch.showOnHome !== undefined && section.inline ? withHomeFlags(section) : section
+      const edited = { ...base, items: base.items.map((it, i) => (i === operation.item ? updated : it)) }
       next.sections[operation.index] = edited.inline ? withProductSlugs(edited) : edited
       return next
     }
@@ -845,6 +850,10 @@ export function applyOperation(
     case 'updateItemField': {
       const section = next.sections[operation.index]
       const item = collectionOf(section)?.[operation.itemIndex]
+      if (section?.type === 'products' && section.inline && operation.field === 'name' && item) {
+        next.sections[operation.index] = withRenamedProduct(section, operation.itemIndex, operation.value)
+        return next
+      }
       if (item) {
   const value =
   section?.type === 'announcement' && operation.field === 'text'
@@ -905,7 +914,16 @@ export function applyOperation(
       const section = next.sections[operation.index]
       const list = collectionOf(section)
       if (section && list && !canAddEntry(section.type, list.length)) return next
-      if (section && list) list.push(blankItem(section.type, next.meta.language))
+      if (section && list) {
+        const blank = blankItem(section.type, next.meta.language)
+        if (section.type === 'products' && section.inline) {
+          // A new product starts on the home page only while the showcase still has room.
+          const flagged = withHomeFlags(section)
+          flagged.items.forEach((it, i) => { section.items[i] = it })
+          Object.assign(blank, { showOnHome: homeHasRoom(section) })
+        }
+        list.push(blank)
+      }
       return next
     }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { guardEdit, vetAiSuggestion } from '@/lib/edit-guard'
+import { countPlaceholderProducts } from '@/lib/product-items'
 import { INVALID_SCHEMA_ERROR, INVALID_SCHEMA_MESSAGE, checkPublishable } from '@/lib/publish-gate'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readImageStorageFailure } from '@/lib/image-storage-error'
@@ -594,6 +595,10 @@ export function WebsitePreview({
     if (!checkPublishable(siteToPublish).ok) {
       flashToast('err', INVALID_SCHEMA_MESSAGE)
       return
+    }
+    const skippedDrafts = countPlaceholderProducts(siteToPublish)
+    if (skippedDrafts > 0) {
+      flashToast('ok', `${skippedDrafts} boş ürün taslağı yayınlanmayacak.`)
     }
     setPublishState('publishing')
     try {

@@ -1,4 +1,7 @@
 import { slugify } from '@/lib/slug'
+import { formatPriceCents } from '@/lib/commerce-mode'
+
+export { formatPriceCents }
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import {
   categoryIdentity,
@@ -9,7 +12,12 @@ import {
   type CatalogGroup,
   type CatalogItem,
 } from '@/lib/catalog-public'
-import { PRODUCT_CATALOG_LIMIT, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import {
+  PRODUCT_CATALOG_LIMIT,
+  PRODUCT_HOME_DEFAULT_LIMIT,
+  PRODUCT_IMAGES_MAX,
+  PRODUCT_SPECS_MAX,
+} from '@/lib/list-limits'
 import { isUsableImageSrc } from '@/lib/about-media'
 
 /**
@@ -67,6 +75,43 @@ export function parsePriceToCents(text: string | undefined): number {
   return Number.isFinite(cents) ? Math.round(cents) : 0
 }
 
+export function formatProductPrice(text: string | undefined): string | null {
+  return formatPriceCents(parsePriceToCents(text), inferPriceCurrency(text))
+}
+
+const PLACEHOLDER_NAMES = new Set(['yeni urun', 'new product'])
+
+/**
+ * An untouched row: no name, or still the "Yeni ürün" default with no photo, price or description.
+ * Such rows are editor scaffolding: never published, never given an address, listed in the publish warning.
+ */
+type PlaceholderCandidate = {
+  name: string
+  price?: string
+  src?: string
+  images?: { src: string }[]
+  description?: string
+}
+
+export function isPlaceholderProduct(item: PlaceholderCandidate): boolean {
+  const name = item.name.trim()
+  if (!name) return true
+  const folded = name.toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i')
+  if (!PLACEHOLDER_NAMES.has(folded)) return false
+  const hasImage = isUsableImageSrc(item.src) || (item.images ?? []).some((image) => isUsableImageSrc(image.src))
+  return !hasImage && parsePriceToCents(item.price) <= 0 && !item.description?.trim()
+}
+
+export function isRealProduct(item: PlaceholderCandidate): boolean {
+  return !isPlaceholderProduct(item)
+}
+
+/** How many placeholder rows the published catalog would silently skip. */
+export function countPlaceholderProducts(site: Pick<WebsiteSchema, 'sections'>): number {
+  const section = findInlineCatalogSection(site)
+  return section ? section.items.filter(isPlaceholderProduct).length : 0
+}
+
 /**
  * Corner badge for a product card: the owner's own badge wins; otherwise a
  * struck old price that is really higher than the current price earns "İndirimli".
@@ -83,12 +128,18 @@ export function saleBadge(
   return lang === 'en' ? 'Sale' : 'İndirimli'
 }
 
+/** Words the catalog routes already use as path segments; a product can never take one as its address. */
+const RESERVED_PRODUCT_SLUGS = new Set(['urunlerimiz', 'kategori', 'category', 'products', 'new', 'sitemap', 'api'])
+
 /** Stable slugs: keeps a valid stored slug, otherwise derives one from the name, then de-duplicates. */
 export function assignProductSlugs<T extends { name: string; slug?: string }>(items: T[]): string[] {
   const taken = new Set<string>()
   return items.map((item) => {
     const stored = (item.slug ?? '').trim()
-    const base = /^[a-z0-9-]{1,80}$/.test(stored) ? stored : slugify(item.name)
+    // A stored slug that is malformed or collides with a catalog route ("urunlerimiz") is re-derived from the name.
+    const storedOk = /^[a-z0-9-]{1,80}$/.test(stored) && !RESERVED_PRODUCT_SLUGS.has(stored)
+    let base = storedOk ? stored : slugify(item.name)
+    if (!base || RESERVED_PRODUCT_SLUGS.has(base)) base = `${base || 'urun'}-urun`.replace(/^urun-urun$/, 'urun')
     let slug = base
     for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`
     taken.add(slug)
@@ -96,11 +147,87 @@ export function assignProductSlugs<T extends { name: string; slug?: string }>(it
   })
 }
 
-/** Returns the section with every item carrying a stored, unique slug. Same object when nothing changes. */
+/**
+ * Returns the section with every NAMED item carrying a stored, unique slug. Same object when nothing changes.
+ * A draft with no name keeps no slug, so the address is taken from the name the owner finally types and then
+ * stays put: renaming a product later never breaks a link that was already shared or indexed.
+ */
 export function withProductSlugs(section: ProductsSection): ProductsSection {
   const slugs = assignProductSlugs(section.items)
-  if (section.items.every((item, i) => item.slug === slugs[i])) return section
-  return { ...section, items: section.items.map((item, i) => ({ ...item, slug: slugs[i] })) }
+  const needs = (item: InlineProduct, i: number) => isRealProduct(item) && item.slug !== slugs[i]
+  if (!section.items.some(needs)) return section
+  return {
+    ...section,
+    items: section.items.map((item, i) => (needs(item, i) ? { ...item, slug: slugs[i] } : item)),
+  }
+}
+
+const PREVIOUS_SLUGS_MAX = 10
+
+/**
+ * Renames a product. Its address follows the new name and the old address is remembered, so a link that was
+ * already shared or indexed answers with a permanent redirect instead of a 404.
+ */
+export function withRenamedProduct(section: ProductsSection, itemIndex: number, name: string): ProductsSection {
+  const item = section.items[itemIndex]
+  if (!item) return section
+  const renamed = { ...item, name }
+  const oldSlug = item.slug?.trim()
+  let next = { ...section, items: section.items.map((it, i) => (i === itemIndex ? renamed : it)) }
+  if (!oldSlug || !isRealProduct(renamed)) return section.inline ? withProductSlugs(next) : next
+  const others = next.items.filter((_, i) => i !== itemIndex)
+  const taken = new Set(assignProductSlugs(others))
+  let base = slugify(name)
+  if (!base || RESERVED_PRODUCT_SLUGS.has(base)) base = `${base || 'urun'}-urun`
+  let slug = base
+  for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`
+  if (slug === oldSlug) return next
+  const previous = [oldSlug, ...(renamed.previousSlugs ?? [])].filter((p) => p !== slug)
+  next = {
+    ...next,
+    items: next.items.map((it, i) =>
+      i === itemIndex ? { ...it, slug, previousSlugs: [...new Set(previous)].slice(0, PREVIOUS_SLUGS_MAX) } : it,
+    ),
+  }
+  return next
+}
+
+/**
+ * Which products the home showcase shows. Owners pick with `showOnHome`; a site saved before that flag
+ * existed showed every product, so with no flag anywhere the first `limit` (or all) keep showing.
+ */
+export function homeProductIndexes(section: Pick<ProductsSection, 'items' | 'limit'>): number[] {
+  const named = section.items.map((item, i) => ({ item, i })).filter(({ item }) => isRealProduct(item))
+  const flagged = named.some(({ item }) => item.showOnHome !== undefined)
+  const picked = flagged
+    ? named.filter(({ item }) => item.showOnHome === true)
+    : named.slice(0, section.limit ?? named.length)
+  return picked.slice(0, section.limit ?? PRODUCT_HOME_DEFAULT_LIMIT_CAP).map(({ i }) => i)
+}
+
+/** Large enough never to bite a legacy site that shows every product and has no explicit count. */
+const PRODUCT_HOME_DEFAULT_LIMIT_CAP = PRODUCT_CATALOG_LIMIT.max
+
+/** True when a NEW product should start on the home page: only while there is still room. */
+export function homeHasRoom(section: Pick<ProductsSection, 'items' | 'limit'>): boolean {
+  return homeProductIndexes(section).length < (section.limit ?? PRODUCT_HOME_DEFAULT_LIMIT)
+}
+
+/** The products the home showcase renders, each with the address of its own product page. */
+export function homeProductCards(section: ProductsSection): { item: InlineProduct; href: string }[] {
+  const slugs = assignProductSlugs(section.items)
+  return homeProductIndexes(section).map((i) => {
+    const item = section.items[i]
+    const category = categoryIdentity(item.category, undefined)
+    return { item, href: catalogProductPath(category.slug, slugs[i]) }
+  })
+}
+
+/** Writes the legacy "show everything" state out as explicit flags, so one product can then be switched off. */
+export function withHomeFlags(section: ProductsSection): ProductsSection {
+  if (section.items.every((item) => item.showOnHome !== undefined || isPlaceholderProduct(item))) return section
+  const shown = new Set(homeProductIndexes(section))
+  return { ...section, items: section.items.map((item, i) => ({ ...item, showOnHome: shown.has(i) })) }
 }
 
 export function productImages(item: InlineProduct): { url: string; alt: string }[] {
@@ -137,7 +264,20 @@ export function toCatalogItem(item: InlineProduct, slug: string): CatalogItem {
     categorySlug: category.slug,
     seoTitle: item.seoTitle?.trim() || null,
     seoDescription: item.seoDescription?.trim() || null,
+    previousSlugs: item.previousSlugs ?? [],
+    blocks: (item.detail ?? []).filter((block) => block.body.trim() || block.heading?.trim()),
   }
+}
+
+/** Finds a product by its current address, or by an old one it was renamed from (`moved` -> redirect). */
+export function findCatalogItem<T extends { slug: string; previousSlugs?: string[] }>(
+  items: T[],
+  slug: string,
+): { item: T; moved: boolean } | null {
+  const current = items.find((i) => i.slug === slug)
+  if (current) return { item: current, moved: false }
+  const old = items.find((i) => i.previousSlugs?.includes(slug))
+  return old ? { item: old, moved: true } : null
 }
 
 export type InlineCatalog = {
@@ -154,7 +294,7 @@ export function resolveInlineCatalog(site: Pick<WebsiteSchema, 'sections'>): Inl
   const slugs = assignProductSlugs(section.items)
   const items = section.items
     .map((item, i) => ({ item, slug: slugs[i] }))
-    .filter(({ item }) => item.pageEnabled !== false && item.name.trim())
+    .filter(({ item }) => isRealProduct(item))
     .map(({ item, slug }) => toCatalogItem(item, slug))
   if (items.length === 0) return null
   const paths: InlineCatalog['paths'] = { list: '/urunlerimiz', products: {}, categories: {} }

@@ -5,7 +5,7 @@ import {
   ANNOUNCEMENT_MAX_ITEMS,
   LIST_LIMITS,
   PRODUCT_CATALOG_LIMIT,
-  PRODUCT_IMAGES_MAX,
+  PRODUCT_IMAGES_STORED_MAX,
   PRODUCT_SPECS_MAX,
 } from '@/lib/list-limits'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
@@ -474,7 +474,7 @@ export const productsSection = z.object({
         priceMode: z.enum(['show', 'ask']).optional().describe('Managed by the platform. Never set this field yourself.'),
         images: z
           .array(z.object({ src: z.string(), alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional() }))
-          .max(PRODUCT_IMAGES_MAX)
+          .max(PRODUCT_IMAGES_STORED_MAX)
           .optional()
           .describe('Managed by the platform. Never set this field yourself.'),
         specs: z
@@ -489,6 +489,8 @@ export const productsSection = z.object({
           .describe('Managed by the platform. Never set this field yourself.'),
         videoUrl: z.string().max(300).optional().describe('Managed by the platform. Never set this field yourself.'),
         pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        showOnHome: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
+        previousSlugs: z.array(z.string().max(80)).max(10).optional().describe('Managed by the platform. Never set this field yourself.'),
         seoTitle: z.string().max(SERVICE_ITEM_LIMITS.seoTitle).optional().describe('Managed by the platform. Never set this field yourself.'),
         seoDescription: z.string().max(SERVICE_ITEM_LIMITS.seoDescription).optional().describe('Managed by the platform. Never set this field yourself.'),
       }),

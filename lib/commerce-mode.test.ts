@@ -213,7 +213,8 @@ describe('buildWhatsappOrderUrl', () => {
     const text = messageOf(url)
     expect(text).toContain('Seramik Vazo')
     expect(text).toContain('https://demo.gloval.site/store/seramik-vazo')
-    expect(text).toMatch(/Fiyat: .*1\.250,00/)
+    expect(text).toContain('Fiyat: 1.250 TL')
+    expect(text).not.toContain('₺')
   })
 
   it('uses the ask label instead of a price when price_mode=ask', () => {
