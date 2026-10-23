@@ -21,6 +21,7 @@ import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/edit
 import { useEditorProjectId } from '@/components/editor/published-context'
 import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
 import { ProductImagesEditor } from '@/components/editor/product-images-editor'
+import { ProductCategoriesBlock } from '@/components/editor/product-categories-block'
 
 type ProductsData = Extract<WebsiteSchema['sections'][number], { type: 'products' }>
 
@@ -208,6 +209,8 @@ export function ProductItemFields({
               onUse={(image) => setBanner(image.src, image.alt)}
             />
           </div>
+
+          <ProductCategoriesBlock lang={lang} index={index} section={section} onDispatch={onDispatch} />
 
           <div className="flex flex-col gap-2">
             {items.map((item, i) => {

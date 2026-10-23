@@ -24,6 +24,8 @@ export type PublicCatalog = {
   origin: string
   items: CatalogItem[]
   groups: CatalogGroup[]
+  /** Former category address -> current one (inline catalogs only). */
+  categoryRedirects?: Record<string, string>
   whatsappNumber: string | null
   phone: { display: string; href: string } | null
 }
@@ -83,6 +85,7 @@ export async function loadPublicCatalog(slug: string): Promise<PublicCatalog | n
       origin: context.origin,
       items: inline.items,
       groups: inline.groups,
+      categoryRedirects: inline.categoryRedirects,
       whatsappNumber: context.whatsappNumber,
       phone: phone && !isPlaceholderNumber(phone.display) ? phone : null,
     }

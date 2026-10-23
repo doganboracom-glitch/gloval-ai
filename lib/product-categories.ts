@@ -81,6 +81,38 @@ function customNames(section: ProductsSection): string[] {
   return effectiveCategories(section).filter((name) => !isOtherCategory(name))
 }
 
+const CATEGORY_REDIRECTS_MAX = 30
+
+/** Drops the redirect map when it ends up empty so untouched sites keep their stored shape. */
+function withRedirects(section: ProductsSection, redirects: Record<string, string>): ProductsSection {
+  const entries = Object.entries(redirects).filter(([from, to]) => from && to && from !== to)
+  if (entries.length === 0) {
+    const { categoryRedirects: _cleared, ...rest } = section
+    return rest
+  }
+  return { ...section, categoryRedirects: Object.fromEntries(entries.slice(-CATEGORY_REDIRECTS_MAX)) }
+}
+
+/** A live category always wins over an old address that used to point somewhere else. */
+function withoutRedirectFrom(section: ProductsSection, slug: string): ProductsSection {
+  if (!section.categoryRedirects || !(slug in section.categoryRedirects)) return section
+  const { [slug]: _taken, ...rest } = section.categoryRedirects
+  return withRedirects(section, rest)
+}
+
+/** Where an old category address now lives, or null when the address was never a category or points nowhere. */
+export function findCategoryGroup<T extends { slug: string }>(
+  groups: T[],
+  redirects: Record<string, string> | undefined,
+  slug: string,
+): { group: T; moved: boolean } | null {
+  const current = groups.find((g) => g.slug === slug)
+  if (current) return { group: current, moved: false }
+  const target = redirects?.[slug]
+  const moved = target ? groups.find((g) => g.slug === target) : undefined
+  return moved ? { group: moved, moved: true } : null
+}
+
 export function addCategory(section: ProductsSection, raw: string): CategoryResult {
   const name = cleanCategoryName(raw)
   if (!name) return { ok: false, error: 'empty' }
@@ -88,7 +120,7 @@ export function addCategory(section: ProductsSection, raw: string): CategoryResu
   const names = customNames(section)
   if (names.some((existing) => categoryKey(existing) === categoryKey(name))) return { ok: false, error: 'duplicate' }
   if (names.length >= PRODUCT_CATEGORY_MAX) return { ok: false, error: 'full' }
-  return { ok: true, section: { ...section, categories: [...names, name] } }
+  return { ok: true, section: withoutRedirectFrom({ ...section, categories: [...names, name] }, slugify(name)) }
 }
 
 /** Renames a category everywhere: the list and every product that uses it (its page address follows the name). */
@@ -102,14 +134,21 @@ export function renameCategory(section: ProductsSection, from: string, raw: stri
   if (at < 0) return { ok: false, error: 'missing' }
   if (names.some((existing, i) => i !== at && categoryKey(existing) === categoryKey(name))) return { ok: false, error: 'duplicate' }
   const fromKey = categoryKey(from)
-  return {
-    ok: true,
-    section: {
-      ...section,
-      categories: names.map((existing, i) => (i === at ? name : existing)),
-      items: section.items.map((item) => (categoryKey(item.category) === fromKey ? { ...item, category: name } : item)),
-    },
+  // The category address follows the name; every address it ever had keeps answering with a redirect.
+  const fromSlug = slugify(names[at])
+  const toSlug = slugify(name)
+  const redirects: Record<string, string> = {}
+  for (const [old, target] of Object.entries(section.categoryRedirects ?? {})) {
+    redirects[old] = target === fromSlug ? toSlug : target
   }
+  if (fromSlug && toSlug && fromSlug !== toSlug) redirects[fromSlug] = toSlug
+  delete redirects[toSlug]
+  const renamed: ProductsSection = {
+    ...section,
+    categories: names.map((existing, i) => (i === at ? name : existing)),
+    items: section.items.map((item) => (categoryKey(item.category) === fromKey ? { ...item, category: name } : item)),
+  }
+  return { ok: true, section: withRedirects(renamed, redirects) }
 }
 
 export function moveCategory(section: ProductsSection, name: string, direction: -1 | 1): CategoryResult {
