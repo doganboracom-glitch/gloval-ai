@@ -19,6 +19,7 @@ import {
   PRODUCT_SPECS_MAX,
 } from '@/lib/list-limits'
 import { isUsableImageSrc } from '@/lib/about-media'
+import { orderCatalogGroups } from '@/lib/product-categories'
 
 /**
  * Corporate product catalog
@@ -230,6 +231,41 @@ export function withHomeFlags(section: ProductsSection): ProductsSection {
   return { ...section, items: section.items.map((item, i) => ({ ...item, showOnHome: shown.has(i) })) }
 }
 
+export const PRODUCT_DESCRIPTION_MAX = 2000
+export const PRODUCT_SHORT_NOTE_MAX = 80
+
+/** One-line note shown under the price: collapsed whitespace, capped at 80 characters. */
+export function cleanShortNote(raw: string | undefined | null): string {
+  return (raw ?? '').replace(/\s+/g, ' ').trim().slice(0, PRODUCT_SHORT_NOTE_MAX)
+}
+
+/**
+ * The single "Açıklama" text of a product. Older products kept a short line (`description`) and separate
+ * long blocks (`detail`); both are folded into one text, oldest data first, nothing dropped (up to the cap).
+ */
+export function mergedProductDescription(item: Pick<InlineProduct, 'description' | 'detail'>): string {
+  const parts: string[] = []
+  const short = item.description?.trim()
+  if (short) parts.push(short)
+  for (const block of item.detail ?? []) {
+    const heading = block.heading?.trim()
+    const body = block.body?.trim()
+    if (heading) parts.push(heading)
+    if (body) parts.push(body)
+  }
+  return parts.join('\n\n').slice(0, PRODUCT_DESCRIPTION_MAX)
+}
+
+/** Normalises what the owner typed: line breaks kept, trailing space trimmed, capped at 2000. */
+export function cleanProductDescription(raw: string | undefined | null): string {
+  return (raw ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, PRODUCT_DESCRIPTION_MAX)
+}
+
 export function productImages(item: InlineProduct): { url: string; alt: string }[] {
   const own = (item.images ?? [])
     .filter((image) => isUsableImageSrc(image.src))
@@ -266,6 +302,7 @@ export function toCatalogItem(item: InlineProduct, slug: string): CatalogItem {
     seoDescription: item.seoDescription?.trim() || null,
     previousSlugs: item.previousSlugs ?? [],
     blocks: (item.detail ?? []).filter((block) => block.body.trim() || block.heading?.trim()),
+    ...(cleanShortNote(item.shortNote) ? { shortNote: cleanShortNote(item.shortNote) } : {}),
   }
 }
 
@@ -302,7 +339,7 @@ export function resolveInlineCatalog(site: Pick<WebsiteSchema, 'sections'>): Inl
     paths.products[item.slug] = catalogProductPath(item.categorySlug, item.slug)
     paths.categories[item.categoryName] = catalogCategoryPath(item.categorySlug)
   }
-  return { items, groups: groupByCategory(items), paths }
+  return { items, groups: orderCatalogGroups(groupByCategory(items), section), paths }
 }
 
 /** Every public path of the catalog, for the tenant sitemap. */
