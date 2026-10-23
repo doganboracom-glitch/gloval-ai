@@ -39,7 +39,21 @@ function catalog(categories: string[]): StoreCatalog {
 
 function publishedHtml(lang: 'tr' | 'en', categories: string[], page: string | null): string {
   const demo = demos.find((d) => d.slug === 'eticaret')!
-  const site = buildDemoSite(demo, lang)
+  const built = buildDemoSite(demo, lang)
+  // The English demo now carries labelled example reviews; the pre-feature English snapshot has none, so take
+  // them out to keep this fixture the pre-feature HTML. The Turkish demo already had them when it was captured.
+  const site =
+    lang === 'en'
+      ? {
+          ...built,
+          sections: built.sections.filter((s) => !(s.type === 'testimonials' && s.items.some((i) => i.sample))),
+          pages: (built.pages ?? []).filter((p) => p.slug !== 'musteri-yorumlari'),
+          navigation: {
+            ...built.navigation,
+            links: built.navigation.links.filter((l) => !l.href.includes('musteri-yorumlari')),
+          },
+        }
+      : built
   return renderToStaticMarkup(
     <WebsiteRenderer site={site} pageRouting initialPage={page} store={catalog(categories)} />,
   )
