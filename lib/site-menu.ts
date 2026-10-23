@@ -51,6 +51,25 @@ export function withProductChildren(
   })
 }
 
+/**
+ * "Galeri" gets a two-item sub-menu (Resimler, Videolar) when both system pages are live; the separate
+ * "Videolar" entry then folds into it. With only one of the two live, nothing changes: that page is a plain entry.
+ */
+export function withGalleryChildren(
+  entries: MenuEntry[],
+  hrefOf: (page: PageItem) => string,
+): MenuEntry[] {
+  const gallery = entries.find((e) => e.kind === 'page' && e.page.detailOf === 'gallery')
+  const videos = entries.find((e) => e.kind === 'page' && e.page.detailOf === 'videos')
+  if (!gallery || !videos || gallery.kind !== 'page' || videos.kind !== 'page') return entries
+  const english = videos.page.title === 'Videos'
+  const children: MenuChild[] = [
+    { key: `${gallery.key}:photos`, label: english ? 'Photos' : 'Resimler', href: hrefOf(gallery.page) },
+    { key: `${videos.key}:videos`, label: videos.label, href: hrefOf(videos.page) },
+  ]
+  return entries.filter((e) => e !== videos).map((e) => (e === gallery ? { ...gallery, children } : e))
+}
+
 /** Turns the sub-menu on for a site that has never made a choice (new generations, unpublished drafts). */
 export function seedProductsSubmenu<T extends Pick<WebsiteSchema, 'navigation'>>(site: T): T {
   if (site.navigation.productsSubmenu !== undefined) return site

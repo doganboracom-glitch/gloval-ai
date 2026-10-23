@@ -25,6 +25,12 @@ import {
   serviceDescription,
   servicePath,
 } from "@/lib/service-pages";
+import {
+  findPublicAlbum,
+  galleryAlbumPath,
+  galleryDescription,
+  resolveGalleryPages,
+} from "@/lib/gallery-pages";
 
 /**
  * Metadata for the home page (`pageSlug` null) or one real page. Titles,
@@ -44,6 +50,37 @@ export async function buildSitePageMetadata(
       title: "Sayfa bulunamadı",
       robots: { index: false, follow: false },
     };
+
+  if (page && itemSlug && page.detailOf === "gallery") {
+    const album = findPublicAlbum(site.schema, page.slug, itemSlug);
+    if (!album || album.kind !== "album")
+      return {
+        title: "Sayfa bulunamadı",
+        robots: { index: false, follow: false },
+      };
+    const { origin } = await getSiteSeoContext(slug);
+    const canonical = `${origin}${galleryAlbumPath(page.slug, album.entry.slug)}`;
+    const title = `${album.entry.name} | ${page.title} | ${site.name}`;
+    const description = galleryDescription(
+      site.schema,
+      "gallery",
+      `${site.name} - ${album.entry.name}`,
+      album.entry.photos.length,
+    );
+    return {
+      title,
+      description,
+      metadataBase: new URL(origin),
+      alternates: { canonical },
+      openGraph: {
+        title,
+        description,
+        url: canonical,
+        images: [album.entry.cover.src],
+      },
+      robots: { index: isPageIndexable(page), follow: true },
+    };
+  }
 
   if (page && itemSlug) {
     const found = findPublicService(site.schema, page.slug, itemSlug);
@@ -77,9 +114,26 @@ export async function buildSitePageMetadata(
 
   const aboutDetail =
     page?.kind === "detail" ? resolveAboutDetail(site.schema) : null;
+  const galleryKind =
+    page?.detailOf === "gallery" || page?.detailOf === "videos"
+      ? page.detailOf
+      : null;
+  const galleryPages = galleryKind ? resolveGalleryPages(site.schema) : null;
+  const galleryText =
+    galleryKind && galleryPages
+      ? galleryDescription(
+          site.schema,
+          galleryKind,
+          site.name,
+          galleryKind === "videos"
+            ? galleryPages.videos.items.length
+            : galleryPages.gallery.photos.length,
+        )
+      : "";
   const description =
     page?.seo?.description?.trim() ||
     (aboutDetail ? detailDescription(aboutDetail) : "") ||
+    galleryText ||
     site.schema.meta.description ||
     site.schema.meta.tagline;
   const seoTitle = site.schema.meta.seoTitle?.trim();
@@ -142,7 +196,12 @@ export async function PublicSiteView({
   }
 
   let service: ReturnType<typeof findPublicService> = null;
-  if (itemSlug) {
+  let album: ReturnType<typeof findPublicAlbum> = null;
+  if (itemSlug && page?.detailOf === "gallery") {
+    album = findPublicAlbum(site.schema, page.slug, itemSlug);
+    if (album?.kind === "moved") permanentRedirect(album.to);
+    if (!album) notFound();
+  } else if (itemSlug) {
     service = page ? findPublicService(site.schema, page.slug, itemSlug) : null;
     if (!service) {
       const moved = site.schema.pageRedirects?.find(
@@ -183,6 +242,19 @@ export async function PublicSiteView({
       providerName: site.name,
     });
     if (ld) serviceJsonLd.push(ld);
+  }
+  if (page && album?.kind === "album") {
+    serviceBreadcrumb = buildBreadcrumbTrailJsonLd({
+      origin,
+      trail: [
+        { name: site.name, path: "" },
+        { name: page.title, path: pagePath(site.schema, page.slug) },
+        {
+          name: album.entry.name,
+          path: galleryAlbumPath(page.slug, album.entry.slug),
+        },
+      ],
+    });
   }
   const breadcrumb = serviceBreadcrumb
     ? serviceBreadcrumb
@@ -263,6 +335,7 @@ export async function PublicSiteView({
         contactForm={contactForm}
         initialPage={page?.slug ?? null}
         initialService={service?.entry.slug ?? null}
+        initialAlbum={album?.kind === "album" ? album.entry.slug : null}
         blog={blog}
         pageRouting
       />

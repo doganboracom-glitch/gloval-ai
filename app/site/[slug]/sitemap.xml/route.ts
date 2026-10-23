@@ -7,6 +7,7 @@ import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { findPublicPage, isPageIndexable, pagePath } from '@/lib/website-pages'
 import { getLiveBlogPosts } from '@/lib/blog-server'
 import { resolveServices, servicePath } from '@/lib/service-pages'
+import { galleryAlbumPath, resolveGalleryPages } from '@/lib/gallery-pages'
 import { blogPostPath, indexablePosts } from '@/lib/blog'
 import { loadPublicCatalog } from '@/lib/catalog-public-server'
 import { catalogCategoryPath, catalogListPath, catalogProductPath } from '@/lib/catalog-public'
@@ -81,6 +82,17 @@ export async function GET(
           loc: `${base}${servicePath(services!.listSlug, item.slug)}`,
           changefreq: 'monthly',
           priority: '0.6',
+          lastmod: lastModified,
+        })
+      }
+    }
+    if (resolved.detailOf === 'gallery') {
+      const { gallery } = resolveGalleryPages(site.schema)
+      for (const album of gallery.active && gallery.hasAlbums ? gallery.albums : []) {
+        entries.push({
+          loc: `${base}${galleryAlbumPath(gallery.slug, album.slug)}`,
+          changefreq: 'monthly',
+          priority: '0.5',
           lastmod: lastModified,
         })
       }

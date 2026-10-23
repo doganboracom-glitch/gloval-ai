@@ -1022,7 +1022,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about', 'services']).optional(),
+  detailOf: z.enum(['about', 'services', 'gallery', 'videos']).optional(),
   /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
   id: z.string().max(60).optional(),
   /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */

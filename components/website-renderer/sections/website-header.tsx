@@ -7,7 +7,7 @@ import { useHrefNormalizer, useSiteNav } from '@/components/website-renderer/sit
 import { SocialLinks } from '@/components/website-renderer/social-links'
 import { useBlogLink } from '@/components/website-renderer/site-blog-context'
 import { withoutBlogLinks } from '@/lib/blog-site'
-import { resolveHeaderMenu, withProductChildren, type MenuCategory, type MenuChild, type MenuEntry } from '@/lib/site-menu'
+import { resolveHeaderMenu, withGalleryChildren, withProductChildren, type MenuCategory, type MenuChild, type MenuEntry } from '@/lib/site-menu'
 import { useStoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { categoryNames } from '@/lib/store-discovery'
 import { DesktopSubmenuItem } from '@/components/website-renderer/sections/header-submenu'
@@ -98,14 +98,17 @@ export function WebsiteHeader({
       : undefined)
   const menuItems = buildMenuItems({
     entries: withProductChildren(
-      resolveHeaderMenu({
-        pages,
-        links: withoutBlogLinks(navigation.links),
-        blog: Boolean(blog),
-        blogLabel: blog?.label ?? '',
-        menuOrder: navigation.menuOrder,
-        rawPages: Boolean(storeSlug),
-      }),
+      withGalleryChildren(
+        resolveHeaderMenu({
+          pages,
+          links: withoutBlogLinks(navigation.links),
+          blog: Boolean(blog),
+          blogLabel: blog?.label ?? '',
+          menuOrder: navigation.menuOrder,
+          rawPages: Boolean(storeSlug),
+        }),
+        (page) => pageHref?.(page) ?? `/${page.slug}`,
+      ),
       categories,
       navigation.productsSubmenu,
     ),
