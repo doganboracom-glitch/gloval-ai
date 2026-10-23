@@ -79,6 +79,7 @@ import {
   TESTIMONIAL_QUOTE_MAX,
   TESTIMONIAL_ROLE_MAX,
 } from '@/lib/testimonials'
+import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
@@ -303,8 +304,12 @@ export type EditOperation =
         rating?: number | null
         photo?: string
         photoAlt?: string
+        /** 'preset:1'..'preset:12' | 'initials' | 'photo'; anything else clears the choice. */
+        avatar?: string
       }
     }
+  /** "Change avatar": the next ready-made illustration for one review (wraps after 12). Free of credits. */
+  | { op: 'cycleTestimonialAvatar'; index: number; item: number }
   /**
    * Corporate product catalog (inline `products` section, no cart): switches the
    * section's own /urunlerimiz pages on or off. Never touches a storefront.
@@ -777,10 +782,15 @@ export function applyOperation(
       }
       if (patch.role !== undefined) updated.role = patch.role.slice(0, TESTIMONIAL_ROLE_MAX).trim() || undefined
       if (patch.rating !== undefined) updated.rating = patch.rating === null ? undefined : clampRating(patch.rating)
+      if (patch.avatar !== undefined) {
+        const choice = parseAvatar(patch.avatar)
+        updated.avatar = choice && (choice.kind !== 'photo' || updated.photo?.src) ? patch.avatar.trim() : undefined
+      }
       if (patch.photo !== undefined) {
         updated.photo = patch.photo
           ? { src: patch.photo, alt: patch.photoAlt?.trim() || updated.photo?.alt }
           : undefined
+        if (!updated.photo && parseAvatar(updated.avatar)?.kind === 'photo') updated.avatar = undefined
       } else if (patch.photoAlt !== undefined && updated.photo) {
         updated.photo = { ...updated.photo, alt: patch.photoAlt.trim() || undefined }
       }
@@ -789,6 +799,20 @@ export function applyOperation(
         items: section.items.map((it, i) => (i === operation.item ? updated : it)),
       }
       return syncSectionPages(next)
+    }
+
+    case 'cycleTestimonialAvatar': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'testimonials') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      next.sections[operation.index] = {
+        ...section,
+        items: section.items.map((it, i) =>
+          i === operation.item ? { ...it, avatar: cycleAvatar(it.avatar, operation.item) } : it,
+        ),
+      }
+      return next
     }
 
     case 'dismissHint': {
@@ -1304,6 +1328,7 @@ export function applyOperation(
           flagged.items.forEach((it, i) => { section.items[i] = it })
           Object.assign(blank, { showOnHome: homeHasRoom(section) })
         }
+        if (section.type === 'testimonials') Object.assign(blank, { avatar: nextAvatarForNewItem(list.length) })
         list.push(blank)
       }
       return next
@@ -1873,7 +1898,7 @@ export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?:
     case 'testimonials':
       return {
         type: 'testimonials',
-        title: pick(lang, 'Yorumlar', 'Testimonials'),
+        title: pick(lang, 'Müşteri Yorumları', 'Customer Reviews'),
         items: [
           { quote: pick(lang, 'Harika bir deneyim.', 'A great experience.'), author: pick(lang, 'Müşteri', 'Customer') },
         ],

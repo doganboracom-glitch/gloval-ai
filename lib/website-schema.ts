@@ -418,6 +418,8 @@ export const testimonialsSection = z.object({
         rating: z.number().int().min(1).max(5).optional(),
         /** Owner-uploaded photo. Never AI generated: no human faces are synthesised. */
         photo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
+        /** 'preset:1'..'preset:12' | 'initials' | 'photo' (the uploaded photo). Unset on legacy items: see lib/testimonial-avatars. */
+        avatar: z.string().max(16).optional(),
         sample: sampleFlag,
       }),
     )

@@ -35,6 +35,7 @@ import { resolveTheme, googleFontsHref } from '@/components/website-renderer/the
 import { WebsiteEditorPanel, type ChatMessage } from '@/components/website-editor-panel'
 import { PublishedContext } from '@/components/editor/published-context'
 import { applyOperation, type EditOperation } from '@/lib/website-edit-operations'
+import { pushHistory, redoHistory, undoHistory, type History as HistoryOf } from '@/lib/schema-history'
 import { parseCommand } from '@/lib/website-command-parser'
 import {
   detectImageEditIntent,
@@ -84,12 +85,7 @@ function debug(...args: unknown[]) {
   if (process.env.NODE_ENV !== 'production') console.log('[v0]', ...args)
 }
 
-/** Undo/redo history for the schema. `present` is the live schema. */
-type History = {
-  past: WebsiteSchema[]
-  present: WebsiteSchema | null
-  future: WebsiteSchema[]
-}
+type History = HistoryOf<WebsiteSchema>
 
 /**
  * Renders children into an <iframe> via a React portal. The app's stylesheets
@@ -454,28 +450,13 @@ export function WebsitePreview({
     setHistory((h) => {
       if (!h.present) return h
       // A sample item the owner edits by hand becomes their own content.
-      const next = clearEditedSampleFlags(h.present, applyOperation(h.present, op))
-      // Skip no-op operations so undo never has empty steps.
-      if (JSON.stringify(next) === JSON.stringify(h.present)) return h
-      return { past: [...h.past, h.present], present: next, future: [] }
+      return pushHistory(h, clearEditedSampleFlags(h.present, applyOperation(h.present, op)))
     })
   }, [])
 
-  const undo = useCallback(() => {
-    setHistory((h) => {
-      if (!h.past.length || !h.present) return h
-      const prev = h.past[h.past.length - 1]
-      return { past: h.past.slice(0, -1), present: prev, future: [h.present, ...h.future] }
-    })
-  }, [])
+  const undo = useCallback(() => setHistory(undoHistory), [])
 
-  const redo = useCallback(() => {
-    setHistory((h) => {
-      if (!h.future.length || !h.present) return h
-      const nextPresent = h.future[0]
-      return { past: [...h.past, h.present], present: nextPresent, future: h.future.slice(1) }
-    })
-  }, [])
+  const redo = useCallback(() => setHistory(redoHistory), [])
 
   // Commits a completed schema edit as ONE history entry (so an AI edit or a
   // multi-operation command can be undone in a single step).

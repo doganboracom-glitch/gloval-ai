@@ -1,6 +1,7 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Plus, Trash2, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, RefreshCw, Trash2, Upload } from 'lucide-react'
+import { resolveAvatar } from '@/lib/testimonial-avatars'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { canAddEntry, canRemoveEntry } from '@/lib/list-limits'
@@ -34,8 +35,13 @@ const COPY = {
     rating: 'Puan',
     noRating: 'Puan yok',
     star: (n: number) => `${n} yıldız`,
+    avatar: 'Avatar',
+    changeAvatar: 'Avatarı değiştir',
+    useInitials: 'Baş harfler',
+    usePhoto: 'Fotoğrafı kullan',
+    avatarHint: 'Hazır çizimler arasında gezinir; ücretsizdir, kredi harcamaz. Kartlarda avatar açıksa görünür.',
     photo: 'Fotoğraf',
-    photoHint: 'İsteğe bağlı. Yüklemezseniz baş harfli daire gösterilir.',
+    photoHint: 'İsteğe bağlı. Yüklediğiniz fotoğraf, avatar yerine kullanılabilir.',
     upload: 'Fotoğraf yükle',
     removePhoto: 'Fotoğrafı kaldır',
     photoAlt: 'Fotoğraf açıklaması',
@@ -66,8 +72,13 @@ const COPY = {
     rating: 'Rating',
     noRating: 'No rating',
     star: (n: number) => `${n} star${n === 1 ? '' : 's'}`,
+    avatar: 'Avatar',
+    changeAvatar: 'Change avatar',
+    useInitials: 'Initials',
+    usePhoto: 'Use photo',
+    avatarHint: 'Steps through the ready-made illustrations; free, no credits used. Shown when card avatars are on.',
     photo: 'Photo',
-    photoHint: 'Optional. Without one, an initials circle is shown.',
+    photoHint: 'Optional. An uploaded photo can be used instead of an avatar.',
     upload: 'Upload photo',
     removePhoto: 'Remove photo',
     photoAlt: 'Photo description',
@@ -82,6 +93,28 @@ const COPY = {
     linkLabel: '"All reviews" link text',
   },
 } as const
+
+function AvatarPreview({ item, position }: { item: TestimonialsSection['items'][number]; position: number }) {
+  const avatar = resolveAvatar(item, position, true)
+  if (avatar.kind === 'preset') {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={avatar.src} alt="" width={40} height={40} className="h-10 w-10 rounded-full border border-border object-cover" />
+    )
+  }
+  if (avatar.kind === 'photo' && item.photo?.src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={item.photo.src} alt="" width={40} height={40} className="h-10 w-10 rounded-full border border-border object-cover" />
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-muted-foreground"
+    >
+      {authorInitials(item.author)}
+    </span>
+  )
+}
 
 function Check({
   label,
@@ -274,6 +307,22 @@ export function TestimonialsFields({
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">{c.avatar}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <AvatarPreview item={item} position={itemIndex} />
+                <GhostButton onClick={() => onDispatch({ op: 'cycleTestimonialAvatar', index, item: itemIndex })}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {c.changeAvatar}
+                </GhostButton>
+                <GhostButton onClick={() => patchItem(itemIndex, { avatar: 'initials' })}>{c.useInitials}</GhostButton>
+                {item.photo?.src && (
+                  <GhostButton onClick={() => patchItem(itemIndex, { avatar: 'photo' })}>{c.usePhoto}</GhostButton>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">{c.avatarHint}</p>
             </div>
 
             <div className="flex flex-col gap-1.5">
