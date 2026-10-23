@@ -103,7 +103,7 @@ describe('resolveInlineCatalog', () => {
   it('is null for a classic showcase, hidden section or no products', () => {
     expect(resolveInlineCatalog(site([product()], false))).toBeNull()
     expect(resolveInlineCatalog(site([product()], true, true))).toBeNull()
-    expect(resolveInlineCatalog(site([product({ pageEnabled: false })]))).toBeNull()
+    expect(resolveInlineCatalog(site([product({ name: '  ' })]))).toBeNull()
   })
   it('groups by category and builds canonical paths', () => {
     const catalog = resolveInlineCatalog(site([product({ category: 'Vanalar' }), product({ name: 'Boru' })]))!

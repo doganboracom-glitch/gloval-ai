@@ -6,9 +6,9 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
-import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import { PRODUCT_HOME_DEFAULT_LIMIT, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { withProductSlugs } from '@/lib/product-items'
+import { homeProductIndexes, withProductSlugs } from '@/lib/product-items'
 import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { useEditorProjectId } from '@/components/editor/published-context'
 import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
@@ -20,7 +20,8 @@ const COPY = {
     heading: 'Ürün sayfaları',
     toggle: 'Her ürün için ayrı sayfa oluştur',
     off: 'Kapalıyken ürünler yalnızca ana sayfada kart olarak görünür; ürün adresleri 404 döner.',
-    itemPage: 'Bu ürünün sayfası açık',
+    itemPage: 'Ana sayfada göster',
+    homeFull: 'Ana sayfa vitrini dolu. Yeni bir ürün göstermek için önce başka birini kapatın ya da vitrin sayısını artırın.',
     sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
     approve: 'İçeriği onayla',
     slug: 'Sayfa adresi',
@@ -55,7 +56,8 @@ const COPY = {
     heading: 'Product pages',
     toggle: 'Create a separate page for each product',
     off: 'While off, products only appear as cards on the home page; product addresses return 404.',
-    itemPage: 'This product has its own page',
+    itemPage: 'Show on the home page',
+    homeFull: 'The home showcase is full. Turn another product off or raise the showcase count to show this one.',
     sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
     approve: 'Approve content',
     slug: 'Page address',
@@ -104,6 +106,8 @@ export function ProductItemFields({
   const projectId = useEditorProjectId()
   const inline = section.inline === true
   const items = withProductSlugs(section).items
+  const onHome = new Set(homeProductIndexes(section))
+  const homeLimit = section.limit ?? PRODUCT_HOME_DEFAULT_LIMIT
   const [writing, setWriting] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -128,7 +132,7 @@ export function ProductItemFields({
         thinFacts?: boolean
       }
       if (!Array.isArray(data.blocks) || data.blocks.length === 0) throw new Error(c.aiFailed)
-      patchItem(item, { blocks: data.blocks, pageEnabled: true })
+      patchItem(item, { blocks: data.blocks })
       if (data.thinFacts) setNotice(c.aiThin)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : c.aiFailed)
@@ -165,7 +169,8 @@ export function ProductItemFields({
               const blocks = item.detail ?? []
               const specs = item.specs ?? []
               const gallery = item.images ?? (isUsableImageSrc(item.src) ? [{ src: item.src, alt: item.alt }] : [])
-              const itemOn = item.pageEnabled !== false
+              const shownOnHome = onHome.has(i)
+              const homeLocked = !shownOnHome && onHome.size >= homeLimit
               const videoValue = item.videoUrl ?? ''
               const updateBlock = (b: number, next: Partial<(typeof blocks)[number]>) =>
                 patchItem(i, { blocks: blocks.map((x, k) => (k === b ? { ...x, ...next } : x)) })
@@ -181,13 +186,15 @@ export function ProductItemFields({
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-[var(--color-brand)]"
-                        checked={itemOn}
-                        onChange={(e) => patchItem(i, { pageEnabled: e.target.checked })}
+                        checked={shownOnHome}
+                        disabled={homeLocked}
+                        onChange={(e) => patchItem(i, { showOnHome: e.target.checked })}
                       />
                       {c.itemPage}
                     </label>
+                    {homeLocked ? <p className="text-xs text-muted-foreground">{c.homeFull}</p> : null}
 
-                    {itemOn && (
+                    {(
                       <>
                         {item.sample ? (
                           <div role="note" className="flex flex-col gap-2 rounded-md border border-brand/40 bg-brand/10 p-3 text-xs">

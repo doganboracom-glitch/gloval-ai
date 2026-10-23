@@ -26,7 +26,7 @@ import { ProductCard as StoreProductCard } from '@/components/store/product-card
 import type { StoreProduct } from '@/lib/store'
 import { resolveShowcaseSettings, selectShowcase } from '@/lib/store-showcase'
 import { useSiteNav } from '@/components/website-renderer/site-nav-context'
-import { saleBadge } from '@/lib/product-items'
+import { homeProductCards, saleBadge } from '@/lib/product-items'
 import { resolveViewAllLabel, storeListHref } from '@/lib/store-header-links'
 
 type ProductsData = Extract<Section, { type: 'products' }>
@@ -138,7 +138,10 @@ function CatalogShowcase({
 
 function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
   const carousel = data.layout === 'carousel'
-  const single = data.items.length === 1
+  const cards = data.inline
+    ? homeProductCards(data)
+    : data.items.map((item) => ({ item, href: undefined as string | undefined }))
+  const single = cards.length === 1
 
   return (
     <SectionShell id="products">
@@ -146,7 +149,7 @@ function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
 
       {single ? (
         <div className="mx-auto mt-10 grid max-w-xs gap-5" data-single-item="true">
-          <ProductCard item={data.items[0]} seed={1} />
+          <ProductCard item={cards[0].item} href={cards[0].href} seed={1} />
         </div>
       ) : carousel ? (
         // Mobile: contained horizontal snap-scroll (bleeds to the section
@@ -155,19 +158,19 @@ function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
         <div
           className="mt-10 flex gap-5 overflow-x-auto overscroll-x-contain pb-4 snap-x snap-mandatory [scrollbar-width:thin] lg:grid lg:grid-cols-4 lg:gap-5 lg:overflow-visible"
         >
-          {data.items.map((item, i) => (
+          {cards.map(({ item, href }, i) => (
             <div
               key={i}
               className="w-60 shrink-0 snap-start sm:w-64 lg:w-auto"
             >
-              <ProductCard item={item} seed={i + 1} />
+              <ProductCard item={item} href={href} seed={i + 1} />
             </div>
           ))}
         </div>
       ) : (
         <div className="mt-10 grid grid-cols-2 gap-5 lg:grid-cols-4">
-          {data.items.map((item, i) => (
-            <ProductCard key={i} item={item} seed={i + 1} />
+          {cards.map(({ item, href }, i) => (
+            <ProductCard key={i} item={item} href={href} seed={i + 1} />
           ))}
         </div>
       )}
@@ -175,7 +178,17 @@ function SchemaProducts({ data, lang }: { data: ProductsData; lang?: string }) {
   )
 }
 
-function ProductCard({ item, seed, lang }: { item: ProductItem; seed: number; lang?: string }) {
+function ProductCard({
+  item,
+  seed,
+  lang,
+  href,
+}: {
+  item: ProductItem
+  seed: number
+  lang?: string
+  href?: string
+}) {
   const badge = saleBadge(item, lang)
   const nav = useSiteNav()
   const cart = useOptionalCart()
@@ -191,7 +204,7 @@ function ProductCard({ item, seed, lang }: { item: ProductItem; seed: number; la
   const detailHref =
     entry && catalog
       ? (catalog.catalogPaths?.products[entry.slug] ?? `/site/${catalog.slug}/store/${entry.slug}`)
-      : (item.href || '').trim()
+      : (href ?? item.href ?? '').trim()
   const isDetailLink = detailHref.startsWith('/')
 
   // The cart id MUST be the DB product id for a real store; otherwise checkout

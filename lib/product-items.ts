@@ -9,7 +9,12 @@ import {
   type CatalogGroup,
   type CatalogItem,
 } from '@/lib/catalog-public'
-import { PRODUCT_CATALOG_LIMIT, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import {
+  PRODUCT_CATALOG_LIMIT,
+  PRODUCT_HOME_DEFAULT_LIMIT,
+  PRODUCT_IMAGES_MAX,
+  PRODUCT_SPECS_MAX,
+} from '@/lib/list-limits'
 import { isUsableImageSrc } from '@/lib/about-media'
 
 /**
@@ -83,12 +88,16 @@ export function saleBadge(
   return lang === 'en' ? 'Sale' : 'İndirimli'
 }
 
+/** Words the catalog routes already use as path segments; a product can never take one as its address. */
+const RESERVED_PRODUCT_SLUGS = new Set(['urunlerimiz', 'kategori', 'category', 'products', 'new', 'sitemap', 'api'])
+
 /** Stable slugs: keeps a valid stored slug, otherwise derives one from the name, then de-duplicates. */
 export function assignProductSlugs<T extends { name: string; slug?: string }>(items: T[]): string[] {
   const taken = new Set<string>()
   return items.map((item) => {
     const stored = (item.slug ?? '').trim()
-    const base = /^[a-z0-9-]{1,80}$/.test(stored) ? stored : slugify(item.name)
+    let base = /^[a-z0-9-]{1,80}$/.test(stored) ? stored : slugify(item.name)
+    if (RESERVED_PRODUCT_SLUGS.has(base)) base = `${base}-urun`
     let slug = base
     for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`
     taken.add(slug)
@@ -96,11 +105,57 @@ export function assignProductSlugs<T extends { name: string; slug?: string }>(it
   })
 }
 
-/** Returns the section with every item carrying a stored, unique slug. Same object when nothing changes. */
+/**
+ * Returns the section with every NAMED item carrying a stored, unique slug. Same object when nothing changes.
+ * A draft with no name keeps no slug, so the address is taken from the name the owner finally types and then
+ * stays put: renaming a product later never breaks a link that was already shared or indexed.
+ */
 export function withProductSlugs(section: ProductsSection): ProductsSection {
   const slugs = assignProductSlugs(section.items)
-  if (section.items.every((item, i) => item.slug === slugs[i])) return section
-  return { ...section, items: section.items.map((item, i) => ({ ...item, slug: slugs[i] })) }
+  const changed = section.items.some((item, i) => item.name.trim() && item.slug !== slugs[i])
+  if (!changed) return section
+  return {
+    ...section,
+    items: section.items.map((item, i) => (item.name.trim() && item.slug !== slugs[i] ? { ...item, slug: slugs[i] } : item)),
+  }
+}
+
+/**
+ * Which products the home showcase shows. Owners pick with `showOnHome`; a site saved before that flag
+ * existed showed every product, so with no flag anywhere the first `limit` (or all) keep showing.
+ */
+export function homeProductIndexes(section: Pick<ProductsSection, 'items' | 'limit'>): number[] {
+  const named = section.items.map((item, i) => ({ item, i })).filter(({ item }) => item.name.trim())
+  const flagged = named.some(({ item }) => item.showOnHome !== undefined)
+  const picked = flagged
+    ? named.filter(({ item }) => item.showOnHome === true)
+    : named.slice(0, section.limit ?? named.length)
+  return picked.slice(0, section.limit ?? PRODUCT_HOME_DEFAULT_LIMIT_CAP).map(({ i }) => i)
+}
+
+/** Large enough never to bite a legacy site that shows every product and has no explicit count. */
+const PRODUCT_HOME_DEFAULT_LIMIT_CAP = PRODUCT_CATALOG_LIMIT.max
+
+/** True when a NEW product should start on the home page: only while there is still room. */
+export function homeHasRoom(section: Pick<ProductsSection, 'items' | 'limit'>): boolean {
+  return homeProductIndexes(section).length < (section.limit ?? PRODUCT_HOME_DEFAULT_LIMIT)
+}
+
+/** The products the home showcase renders, each with the address of its own product page. */
+export function homeProductCards(section: ProductsSection): { item: InlineProduct; href: string }[] {
+  const slugs = assignProductSlugs(section.items)
+  return homeProductIndexes(section).map((i) => {
+    const item = section.items[i]
+    const category = categoryIdentity(item.category, undefined)
+    return { item, href: catalogProductPath(category.slug, slugs[i]) }
+  })
+}
+
+/** Writes the legacy "show everything" state out as explicit flags, so one product can then be switched off. */
+export function withHomeFlags(section: ProductsSection): ProductsSection {
+  if (section.items.every((item) => item.showOnHome !== undefined || !item.name.trim())) return section
+  const shown = new Set(homeProductIndexes(section))
+  return { ...section, items: section.items.map((item, i) => ({ ...item, showOnHome: shown.has(i) })) }
 }
 
 export function productImages(item: InlineProduct): { url: string; alt: string }[] {
@@ -154,7 +209,7 @@ export function resolveInlineCatalog(site: Pick<WebsiteSchema, 'sections'>): Inl
   const slugs = assignProductSlugs(section.items)
   const items = section.items
     .map((item, i) => ({ item, slug: slugs[i] }))
-    .filter(({ item }) => item.pageEnabled !== false && item.name.trim())
+    .filter(({ item }) => item.name.trim())
     .map(({ item, slug }) => toCatalogItem(item, slug))
   if (items.length === 0) return null
   const paths: InlineCatalog['paths'] = { list: '/urunlerimiz', products: {}, categories: {} }

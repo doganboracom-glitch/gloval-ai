@@ -17,7 +17,12 @@ export type ListLimit = { readonly min: number; readonly max: number }
  * accepts the larger number; stores keep `LIST_LIMITS.products` through the edit ops.
  */
 export const PRODUCT_CATALOG_LIMIT: ListLimit = { min: 1, max: 40 }
-export const PRODUCT_IMAGES_MAX = 6
+/** Images an owner can keep per product (first one is the cover). */
+export const PRODUCT_IMAGES_MAX = 5
+/** The schema still accepts what earlier saves may hold; the renderer and edit ops cap at PRODUCT_IMAGES_MAX. */
+export const PRODUCT_IMAGES_STORED_MAX = 6
+/** Home-page product counts an inline catalog can pick from; also the default-on threshold when unset. */
+export const PRODUCT_HOME_DEFAULT_LIMIT = 8
 export const PRODUCT_SPECS_MAX = 20
 
 export const LIST_LIMITS = {
