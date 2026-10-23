@@ -94,7 +94,7 @@ export function SectionRenderer({
         />
       )
     case 'testimonials':
-      return <TestimonialsSection data={section} />
+      return <TestimonialsSection data={section} site={site} lang={meta.language} />
     case 'gallery': {
       const resolved = site ? resolveGalleryPages(site) : null
       const moreLink =

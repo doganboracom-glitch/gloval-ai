@@ -32,6 +32,8 @@ export type DemoRoutes = {
   aboutPageSlug: string | null
   /** The services list page slug and the demo's own list / per-service URLs. */
   services?: { listSlug: string; list: string; itemBase: string; query: string }
+  /** The demo's reviews page: its slug on the site and the demo's own URL for it. */
+  testimonials?: { slug: string; list: string }
 }
 
 /**
@@ -44,6 +46,7 @@ export function mapDemoHref(href: string, routes: DemoRoutes | null): string {
   if (href === '/') return routes.home
   if (href.startsWith('/#')) return `${routes.home}${href.slice(1)}`
   if (routes.aboutPageSlug && href === `/${routes.aboutPageSlug}`) return routes.about
+  if (routes.testimonials && href === `/${routes.testimonials.slug}`) return routes.testimonials.list
   const services = routes.services
   if (services) {
     const path = href.split(/[?#]/)[0]
@@ -62,6 +65,13 @@ export function isDemoServiceHref(href: string, routes: DemoRoutes | null): bool
   if (!services) return false
   const path = href.split(/[?#]/)[0]
   return path === services.list.split('?')[0] || path.startsWith(`${services.itemBase}/`)
+}
+
+/** True for the demo's own reviews page URL (already mapped). */
+export function isDemoTestimonialsHref(href: string, routes: DemoRoutes | null): boolean {
+  const list = routes?.testimonials?.list
+  if (!list) return false
+  return href.split(/[?#]/)[0] === list.split('?')[0]
 }
 
 const DemoRoutesContext = createContext<DemoRoutes | null>(null)
@@ -107,6 +117,11 @@ export function useHrefNormalizer(): (href: string) => string {
 export function useDemoHref(): (href: string) => string {
   const routes = useContext(DemoRoutesContext)
   return useCallback((href: string) => mapDemoHref(href, routes), [routes])
+}
+
+/** The demo's own routes on demo pages; null on every customer site. */
+export function useDemoRoutes(): DemoRoutes | null {
+  return useContext(DemoRoutesContext)
 }
 
 /** True when the site renders inside the editor preview. */

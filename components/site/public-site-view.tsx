@@ -31,6 +31,7 @@ import {
   galleryDescription,
   resolveGalleryPages,
 } from "@/lib/gallery-pages";
+import { resolveTestimonials, testimonialsDescription } from "@/lib/testimonials";
 
 /**
  * Metadata for the home page (`pageSlug` null) or one real page. Titles,
@@ -130,10 +131,19 @@ export async function buildSitePageMetadata(
             : galleryPages.gallery.photos.length,
         )
       : "";
+  const testimonialsText =
+    page?.detailOf === "testimonials"
+      ? testimonialsDescription(
+          site.schema,
+          site.name,
+          resolveTestimonials(site.schema).items.length,
+        )
+      : "";
   const description =
     page?.seo?.description?.trim() ||
     (aboutDetail ? detailDescription(aboutDetail) : "") ||
     galleryText ||
+    testimonialsText ||
     site.schema.meta.description ||
     site.schema.meta.tagline;
   const seoTitle = site.schema.meta.seoTitle?.trim();

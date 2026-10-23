@@ -98,6 +98,12 @@ export type SampleItemFinding = {
   source?: string
   /** False for values that can never be real (the shared demo line); the owner can only hide or edit. */
   confirmable?: boolean
+  /**
+   * False for platform placeholders that can never be approved as the owner's content
+   * (customer reviews are claims by real people). The owner edits, deletes or hides them;
+   * unapproved they never reach the public site.
+   */
+  approvable?: boolean
 }
 
 export type SampleSectionFinding = {
@@ -426,6 +432,7 @@ export function collectSampleFindings(site: WebsiteSchema, context?: DetectionCo
         itemIndex,
         kind: spec.kind(item),
         label: spec.label(item),
+        ...(section.type === 'testimonials' ? { approvable: false } : {}),
       })
     })
     if (items.length) findings.push({ sectionIndex, sectionType: section.type, items })
@@ -576,6 +583,7 @@ export function approveSampleFindings(site: WebsiteSchema, approvedIds: Readonly
         item.sample && approvedIds.has(serviceDetailDigest(item)) ? { ...item, sample: undefined } : item,
       )
     }
+    if (section.type === 'testimonials') return section
     const spec = ITEM_SPECS[section.type]
     if (!spec) return section
     const items = itemsOf(section, spec)

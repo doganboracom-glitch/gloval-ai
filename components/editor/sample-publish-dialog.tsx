@@ -25,6 +25,8 @@ const COPY = {
     publish: 'Yayınla',
     approveAndPublish: 'Onayla ve yayınla',
     hideAllAndPublish: 'Tümünü gizle ve yayınla',
+    noApprove:
+      'Örnek yorumlar onaylanamaz: yalnızca gerçek müşteri yorumları yayınlanır. Düzenleyin, silin ya da bölümü gizleyin.',
     contactNote:
       'İletişim bölümündeki telefon, e-posta, adres veya harita örnek değerdir. Gerçek bilgilerinizi girmediğiniz sürece sitede GÖRÜNMEZ; arama, WhatsApp ve harita düğmeleri de gösterilmez. Form mesajları hesap e-postanıza düşer.',
     contactEdit: 'İletişim bölümüne git',
@@ -94,6 +96,8 @@ const COPY = {
     publish: 'Publish',
     approveAndPublish: 'Approve and publish',
     hideAllAndPublish: 'Hide all and publish',
+    noApprove:
+      'Sample reviews cannot be approved: only real customer reviews are published. Edit or delete them, or hide the section.',
     contactNote:
       'The phone, email, address or map in the contact section are placeholders. They are NOT shown on your site until you enter real details; call, WhatsApp and map buttons are hidden too. Form messages go to your account email.',
     contactEdit: 'Go to contact section',
@@ -205,9 +209,11 @@ export function SamplePublishDialog({
   )
 
   const allItems = sections.flatMap((section) => section.items)
-  const regularIds = allItems.filter((item) => !item.detected).map((item) => item.id)
+  const regularIds = allItems.filter((item) => !item.detected && item.approvable !== false).map((item) => item.id)
+  const blockedCount = allItems.filter((item) => item.approvable === false).length
   const detectedIds = allItems.filter((item) => item.detected).map((item) => item.id)
   const pending =
+    blockedCount +
     regularIds.filter((id) => !approved.has(id)).length +
     detectedIds.filter((id) => !hiddenValues.has(id) && !realValues.has(id)).length
   const hasProducts = sections.some((section) => section.sectionType === 'products')
@@ -294,7 +300,8 @@ export function SamplePublishDialog({
 
         <ul className="flex flex-1 flex-col gap-3 overflow-y-auto p-6 py-4">
           {sections.map((section) => {
-            const ids = section.items.filter((item) => !item.detected).map((item) => item.id)
+            const ids = section.items.filter((item) => !item.detected && item.approvable !== false).map((item) => item.id)
+            const blocked = section.items.some((item) => item.approvable === false)
             const isApproved = ids.length > 0 && ids.every((id) => approved.has(id))
             const isContact = section.sectionType === 'contact'
             const hasDetectedItems = section.items.some((item) => item.detected)
@@ -373,6 +380,9 @@ export function SamplePublishDialog({
                     )
                   })}
                 </ul>
+                {blocked && (
+                  <p className="text-[11px] leading-relaxed text-amber-400">{c.noApprove}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {ids.length > 0 && (
                   <button

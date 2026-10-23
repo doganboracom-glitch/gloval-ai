@@ -107,7 +107,9 @@ export function WebsiteHeader({
           menuOrder: navigation.menuOrder,
           rawPages: Boolean(storeSlug),
         }),
-        (page) => pageHref?.(page) ?? `/${page.slug}`,
+        (page) =>
+          pageHref?.(page) ??
+          (!onNavigate && storeSlug ? `${storeHomeHref(storeSlug)}/${page.slug}` : `/${page.slug}`),
         pages,
       ),
       categories,
@@ -409,16 +411,23 @@ function buildMenuItems({
         ...(entry.children ? { children: toMenuChildren(entry.children, asAnchorClick) } : {}),
       }
     }
+    const children = entry.children ? { children: toMenuChildren(entry.children, asAnchorClick) } : {}
     // Store sub-pages (blog, legal, product list) have no in-memory page switcher,
     // so a real link to the page is the only way the entry can work there.
     if (!onNavigate && storeSlug) {
       const home = storeHomeHref(storeSlug)
-      return { key: entry.key, label: entry.label, href: page.isHome ? home : `${home}/${page.slug}` }
+      return { key: entry.key, label: entry.label, href: page.isHome ? home : `${home}/${page.slug}`, ...children }
     }
-    const active = page.slug === activeSlug
+    const active = page.slug === activeSlug || (Boolean(entry.children) && activeSlug !== undefined && entry.children!.some((c) => c.pageSlug === activeSlug))
     const href = pageHref?.(page)
     if (href) {
-      return { key: entry.key, label: entry.label, href, active, onSelect: asAnchorClick(href) }
+      return { key: entry.key, label: entry.label, href, active, onSelect: asAnchorClick(href), ...children }
+    }
+    // An entry that owns a sub-menu must stay a real link (the parent of the sub-menu is an <a>);
+    // the click still switches the page in memory.
+    if (entry.children) {
+      const fallback = `/${page.slug}`
+      return { key: entry.key, label: entry.label, href: fallback, active, onSelect: asAnchorClick(fallback), ...children }
     }
     return { key: entry.key, label: entry.label, active, onSelect: () => onNavigate?.(page.slug) }
   })

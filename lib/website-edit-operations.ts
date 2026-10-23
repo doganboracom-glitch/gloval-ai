@@ -72,6 +72,13 @@ import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
+import {
+  clampRating,
+  TESTIMONIAL_AUTHOR_MAX,
+  TESTIMONIAL_LINK_LABEL_MAX,
+  TESTIMONIAL_QUOTE_MAX,
+  TESTIMONIAL_ROLE_MAX,
+} from '@/lib/testimonials'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
@@ -272,6 +279,30 @@ export type EditOperation =
         seoDescription?: string
         blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
         approve?: boolean
+      }
+    }
+  /** Customer reviews section settings: page on/off, "all reviews" link, avatars. */
+  | {
+      op: 'updateTestimonialsSettings'
+      index: number
+      patch: { pageEnabled?: boolean; linkEnabled?: boolean; linkLabel?: string; showAvatars?: boolean }
+    }
+  /**
+   * One customer review. Editing the quote or the author turns a platform `sample`
+   * placeholder into a real review (clears the flag). `rating: null` removes the stars,
+   * `photo: ''` removes the photo.
+   */
+  | {
+      op: 'updateTestimonial'
+      index: number
+      item: number
+      patch: {
+        quote?: string
+        author?: string
+        role?: string
+        rating?: number | null
+        photo?: string
+        photoAlt?: string
       }
     }
   /**
@@ -713,6 +744,50 @@ export function applyOperation(
       if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
       const items = section.items.map((it, i) => (i === operation.item ? updated : it))
       next.sections[operation.index] = { ...section, items }
+      return syncSectionPages(next)
+    }
+
+    case 'updateTestimonialsSettings': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'testimonials') return next
+      const { patch } = operation
+      const updated = { ...section }
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.linkEnabled !== undefined) updated.linkEnabled = patch.linkEnabled
+      if (patch.showAvatars !== undefined) updated.showAvatars = patch.showAvatars
+      if (patch.linkLabel !== undefined) updated.linkLabel = patch.linkLabel.trim().slice(0, TESTIMONIAL_LINK_LABEL_MAX) || undefined
+      next.sections[operation.index] = updated
+      return syncSectionPages(next)
+    }
+
+    case 'updateTestimonial': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'testimonials') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      const { patch } = operation
+      const updated = { ...item }
+      if (patch.quote !== undefined) {
+        updated.quote = patch.quote.slice(0, TESTIMONIAL_QUOTE_MAX)
+        updated.sample = undefined
+      }
+      if (patch.author !== undefined) {
+        updated.author = patch.author.slice(0, TESTIMONIAL_AUTHOR_MAX)
+        updated.sample = undefined
+      }
+      if (patch.role !== undefined) updated.role = patch.role.slice(0, TESTIMONIAL_ROLE_MAX).trim() || undefined
+      if (patch.rating !== undefined) updated.rating = patch.rating === null ? undefined : clampRating(patch.rating)
+      if (patch.photo !== undefined) {
+        updated.photo = patch.photo
+          ? { src: patch.photo, alt: patch.photoAlt?.trim() || updated.photo?.alt }
+          : undefined
+      } else if (patch.photoAlt !== undefined && updated.photo) {
+        updated.photo = { ...updated.photo, alt: patch.photoAlt.trim() || undefined }
+      }
+      next.sections[operation.index] = {
+        ...section,
+        items: section.items.map((it, i) => (i === operation.item ? updated : it)),
+      }
       return syncSectionPages(next)
     }
 

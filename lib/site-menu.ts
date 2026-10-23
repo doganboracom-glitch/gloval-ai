@@ -10,7 +10,13 @@ export const MENU_MAX = 7
 export const BLOG_MENU_KEY = 'blog'
 
 /** One single-level sub-menu item (a product category under "Ürünler"). */
-export type MenuChild = { key: string; label: string; href: string }
+export type MenuChild = {
+  key: string
+  label: string
+  href: string
+  /** Slug of the site page the child points at (page children only), so the parent can light up while it is open. */
+  pageSlug?: string
+}
 
 /** A product category the header can list under the products entry. */
 export type MenuCategory = { key: string; label: string; href: string }
@@ -71,11 +77,17 @@ export function withGalleryChildren(
   if (!videosPage) return entries
   const english = videosPage.title === 'Videos'
   const children: MenuChild[] = [
-    { key: `${gallery.key}:photos`, label: english ? 'Photos' : 'Resimler', href: hrefOf(gallery.page) },
+    {
+      key: `${gallery.key}:photos`,
+      label: english ? 'Photos' : 'Resimler',
+      href: hrefOf(gallery.page),
+      pageSlug: gallery.page.slug,
+    },
     {
       key: `${pageMenuKey(videosPage)}:videos`,
       label: listedPage?.label ?? pageMenuLabel(videosPage),
       href: hrefOf(videosPage),
+      pageSlug: videosPage.slug,
     },
   ]
   return entries.filter((e) => e !== listedPage).map((e) => (e === gallery ? { ...gallery, children } : e))

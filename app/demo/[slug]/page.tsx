@@ -7,6 +7,7 @@ import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { resolveServices } from '@/lib/service-pages'
+import { resolveTestimonials } from '@/lib/testimonials'
 import { DemoSiteRenderer } from '@/components/demo-site/demo-site-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
@@ -54,7 +55,7 @@ export default async function DemoPage({
   params: Promise<{ slug: string }>
   searchParams: Promise<{ lang?: string; preview?: string }>
   /** Set by the /hakkimizda and /hizmetler routes so the demo opens on that page. */
-  initialPage?: 'about' | 'services' | null
+  initialPage?: 'about' | 'services' | 'testimonials' | null
   /** With `initialPage="services"`: the service whose own page opens. */
   initialService?: string | null
 }) {
@@ -99,8 +100,19 @@ export default async function DemoPage({
         query: langQuery,
       }
     : undefined
+  const resolvedTestimonials = lang === 'tr' ? resolveTestimonials(site, { demo: true }) : null
+  const testimonialsRoutes = resolvedTestimonials?.active
+    ? { slug: resolvedTestimonials.slug, list: `/demo/${slug}/musteri-yorumlari${langQuery}` }
+    : undefined
+  if (initialPage === 'testimonials' && !testimonialsRoutes) notFound()
   const initialSlug =
-    initialPage === 'about' ? aboutPageSlug : initialPage === 'services' ? (resolvedServices?.listSlug ?? null) : null
+    initialPage === 'about'
+      ? aboutPageSlug
+      : initialPage === 'services'
+        ? (resolvedServices?.listSlug ?? null)
+        : initialPage === 'testimonials'
+          ? (testimonialsRoutes?.slug ?? null)
+          : null
 
   const content = (
     <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
@@ -118,6 +130,7 @@ export default async function DemoPage({
           about: `/demo/${slug}/hakkimizda${langQuery}`,
           aboutPageSlug,
           services: servicesRoutes,
+          testimonials: testimonialsRoutes,
         }}
         initialPage={initialSlug}
         initialService={initialPage === 'services' ? initialService : null}
