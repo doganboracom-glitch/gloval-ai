@@ -8,6 +8,8 @@ import { NEW_TICKET_PATH } from '@/lib/support/prefill'
 import { SectionDetailPage } from '@/components/website-renderer/sections/section-detail-page'
 import { ServicesDetailPage } from '@/components/website-renderer/sections/services-detail-page'
 import { matchServiceHref } from '@/lib/service-pages'
+import { matchAlbumHref } from '@/lib/gallery-pages'
+import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import {
   SiteNavProvider,
@@ -109,6 +111,7 @@ export function WebsiteRenderer({
   contactForm = null,
   initialPage = null,
   initialService = null,
+  initialAlbum = null,
   pageRouting = false,
   blog = null,
   demoRoutes,
@@ -128,6 +131,8 @@ export function WebsiteRenderer({
   initialPage?: string | null
   /** Published site only: the service page slug under the services list page. */
   initialService?: string | null
+  /** Album slug under `/galeri/<album>` on the published site. */
+  initialAlbum?: string | null
   /**
    * Published site only: page links are real URLs (`/<slug>`), so switching
    * pages navigates for real instead of swapping sections in memory.
@@ -198,6 +203,7 @@ export function WebsiteRenderer({
   }, [site])
   const [activeSlug, setActiveSlug] = useState<string | null>(initialPage)
   const [activeService, setActiveService] = useState<string | null>(initialService)
+  const [activeAlbum, setActiveAlbum] = useState<string | null>(initialAlbum)
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Page switches always land at the top of the new page, exactly like a real
@@ -211,6 +217,7 @@ export function WebsiteRenderer({
       }
       setActiveSlug(slug)
       setActiveService(null)
+      setActiveAlbum(null)
       scrollSiteToTop(rootRef.current)
     },
     [pageRouting, parsed],
@@ -257,6 +264,16 @@ export function WebsiteRenderer({
         if (pageRouting) return false
         setActiveSlug(service.listSlug)
         setActiveService(service.itemSlug)
+        setActiveAlbum(null)
+        scrollSiteToTop(rootRef.current)
+        return true
+      }
+      const album = parsed.success ? matchAlbumHref(parsed.data, href) : null
+      if (album) {
+        if (pageRouting) return false
+        setActiveSlug(album.listSlug)
+        setActiveService(null)
+        setActiveAlbum(album.albumSlug)
         scrollSiteToTop(rootRef.current)
         return true
       }
@@ -443,6 +460,10 @@ export function WebsiteRenderer({
       {activeIsDetail &&
         (activePage?.detailOf === 'services' ? (
           <ServicesDetailPage site={data} itemSlug={activeService} />
+        ) : activePage?.detailOf === 'gallery' ? (
+          <GalleryDetailPage site={data} albumSlug={activeAlbum} />
+        ) : activePage?.detailOf === 'videos' ? (
+          <VideosDetailPage site={data} />
         ) : (
           <SectionDetailPage site={data} />
         ))}

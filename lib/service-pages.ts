@@ -4,6 +4,7 @@ import { isUsableImageSrc } from '@/lib/about-media'
 import { cleanDetailBlocks, syncDetailPages, type DetailBlock } from '@/lib/section-detail'
 import { slugifyPageSlug, uniquePageSlug } from '@/lib/page-slugs'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
+import { syncGalleryPages } from '@/lib/gallery-pages'
 
 /**
  * Service pages
@@ -349,5 +350,5 @@ export function collectServiceRedirects(
 
 /** Keeps every section detail page (about + services) in step with its section. */
 export function syncSectionPages<T extends WebsiteSchema>(site: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
-  return syncServicesPage(syncDetailPages(site, pageLimit), pageLimit)
+  return syncGalleryPages(syncServicesPage(syncDetailPages(site, pageLimit), pageLimit), pageLimit)
 }

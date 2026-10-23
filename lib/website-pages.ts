@@ -2,6 +2,18 @@ import type { Section, SectionType, WebsiteSchema } from '@/lib/website-schema'
 import { collectSlugRedirects } from '@/lib/page-slugs'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { collectServiceRedirects, resolveServices } from '@/lib/service-pages'
+import { resolveGalleryPages, type ResolvedGalleryPages } from '@/lib/gallery-pages'
+
+/** Whether a system page's public URL answers: its content exists and its switch is on. */
+function detailPageLive(
+  detailOf: PageItem['detailOf'],
+  live: { aboutLive: boolean; servicesLive: boolean; gallery: ResolvedGalleryPages },
+): boolean {
+  if (detailOf === 'services') return live.servicesLive
+  if (detailOf === 'gallery') return live.gallery.gallery.active
+  if (detailOf === 'videos') return live.gallery.videos.active
+  return live.aboutLive
+}
 
 /**
  * Multi-page preview routing.
@@ -21,7 +33,7 @@ export type PageItem = {
   title: string
   isHome: boolean
   detail?: boolean
-  detailOf?: 'about' | 'services'
+  detailOf?: 'about' | 'services' | 'gallery' | 'videos'
   id?: string
   showInHeader?: boolean
   showInFooter?: boolean
@@ -138,10 +150,11 @@ export function pageNavItems(site: WebsiteSchema): PageItem[] {
   let homeFound = false
   const aboutLive = resolveAboutDetail(site)?.pageActive === true
   const servicesLive = resolveServices(site)?.pageActive === true
+  const gallery = resolveGalleryPages(site)
   const items: PageItem[] = pages.map((p, i) => {
     const isHome = p.isHome === true || (!pages.some((x) => x.isHome) && i === 0)
     if (isHome) homeFound = true
-    const live = p.detailOf === 'services' ? servicesLive : aboutLive
+    const live = detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery })
     return {
       slug: p.slug || `page-${i}`,
       title: p.title,
@@ -252,10 +265,11 @@ export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
   // `stripSampleContent` turns the switch off for unapproved text, so it 404s.
   const aboutLive = resolveAboutDetail(site)?.pageActive === true
   const servicesLive = resolveServices(site)?.pageActive === true
+  const gallery = resolveGalleryPages(site)
   return (
     (site.pages ?? []).find((p, i) => {
       const slug = p.slug || `page-${i}`
-      if (p.kind === 'detail' && !(p.detailOf === 'services' ? servicesLive : aboutLive)) return false
+      if (p.kind === 'detail' && !detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery })) return false
       return slug.toLowerCase() === wanted && slug !== home
     }) ?? null
   )

@@ -1,8 +1,13 @@
 import { z } from 'zod'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { GALLERY_VIDEO_URL_MAX, isGalleryVideoUrl } from '@/lib/gallery-video'
 import {
   ANNOUNCEMENT_MAX_ITEMS,
+  GALLERY_ALBUMS_MAX,
+  GALLERY_ALBUM_NAME_MAX,
+  GALLERY_VIDEOS_MAX,
+  GALLERY_VIDEO_NAME_MAX,
   LIST_LIMITS,
   PRODUCT_CATALOG_LIMIT,
   PRODUCT_IMAGES_STORED_MAX,
@@ -384,6 +389,25 @@ export const testimonialsSection = z.object({
     .max(LIST_LIMITS.testimonials.max),
 })
 
+const gallerySlug = z.string().regex(/^[a-z0-9-]{1,60}$/)
+
+/** A named group of gallery images. "Genel" is implicit and never stored here. */
+export const galleryAlbumSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(GALLERY_ALBUM_NAME_MAX),
+  slug: gallerySlug,
+  previousSlugs: z.array(gallerySlug).max(20).optional(),
+})
+
+export const galleryVideoSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().max(GALLERY_VIDEO_NAME_MAX),
+  url: z.string().max(GALLERY_VIDEO_URL_MAX).refine(isGalleryVideoUrl, 'unsupported_video_url'),
+  provider: z.enum(['youtube', 'vimeo']),
+  videoId: z.string().min(1).max(40),
+  cover: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
+})
+
 export const gallerySection = z.object({
   type: z.literal('gallery'),
   ...sectionEditorMeta,
@@ -393,14 +417,30 @@ export const gallerySection = z.object({
     .array(
       z.object({
         caption: z.string().optional(),
-        imagePrompt: z.string().describe('A prompt describing this gallery image'),
+        // Optional: an image the owner uploaded has a `src` and no generation prompt.
+        imagePrompt: z.string().optional().describe('A prompt describing this gallery image'),
         src: z.string().optional().describe('A resolved image URL or path, if available'),
         alt: z.string().optional(),
         aspectRatio: z.enum(['1/1', '4/3', '3/2', '16/9', '3/4', '9/16']).optional(),
+        album: z
+          .string()
+          .max(GALLERY_ALBUM_NAME_MAX)
+          .optional()
+          .describe('Managed by the platform. Never set this field yourself.'),
       }),
     )
     .min(LIST_LIMITS.gallery.min)
     .max(LIST_LIMITS.gallery.max),
+  albums: z
+    .array(galleryAlbumSchema)
+    .max(GALLERY_ALBUMS_MAX)
+    .optional()
+    .describe('Managed by the platform. Never set this field yourself.'),
+  videos: z
+    .array(galleryVideoSchema)
+    .max(GALLERY_VIDEOS_MAX)
+    .optional()
+    .describe('Managed by the platform. Never set this field yourself.'),
 })
 
 export const portfolioSection = z.object({
@@ -982,7 +1022,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about', 'services']).optional(),
+  detailOf: z.enum(['about', 'services', 'gallery', 'videos']).optional(),
   /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
   id: z.string().max(60).optional(),
   /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */

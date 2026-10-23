@@ -45,6 +45,7 @@ import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
+import { addGalleryImages } from '@/lib/gallery-editor'
 import {
   cleanProductDescription,
   cleanShortNote,
@@ -62,6 +63,18 @@ import {
   renameCategory,
   withCategories,
 } from '@/lib/product-categories'
+import {
+  addAlbum,
+  addVideo,
+  moveAlbum,
+  moveVideo,
+  removeAlbum,
+  removeVideo,
+  renameAlbum,
+  setImageAlbum,
+  updateVideo,
+  type GalleryResult,
+} from '@/lib/gallery-albums'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -258,6 +271,26 @@ export type EditOperation =
   | { op: 'renameProductCategory'; index: number; from: string; name: string }
   | { op: 'moveProductCategory'; index: number; name: string; direction: -1 | 1 }
   | { op: 'removeProductCategory'; index: number; name: string }
+  | { op: 'addAlbum'; index: number; name: string }
+  | { op: 'renameAlbum'; index: number; albumId: string; name: string }
+  | { op: 'moveAlbum'; index: number; albumId: string; direction: 'up' | 'down' }
+  | { op: 'removeAlbum'; index: number; albumId: string }
+  /** `albumId` omitted puts the image into "Genel". */
+  | { op: 'setImageAlbum'; index: number; itemIndex: number; albumId?: string }
+  /** Several uploaded photos at once; photos past the 60-image limit are skipped. */
+  | { op: 'addGalleryImages'; index: number; images: { src: string; alt?: string; album?: string }[] }
+  | { op: 'addVideo'; index: number; url: string; name?: string; cover?: { src: string; alt?: string } }
+  | {
+      op: 'updateVideo'
+      index: number
+      id: string
+      name?: string
+      url?: string
+      /** `null` clears the cover image. */
+      cover?: { src: string; alt?: string } | null
+    }
+  | { op: 'moveVideo'; index: number; id: string; direction: 'up' | 'down' }
+  | { op: 'removeVideo'; index: number; id: string }
   /** Banner image above the /urunlerimiz list, category and product pages. Empty `src` restores the default. */
   | { op: 'updateProductsPageImage'; index: number; src: string; alt?: string }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
@@ -717,6 +750,60 @@ export function applyOperation(
               : removeCategory(section, operation.name)
       if (!result.ok) return next
       next.sections[operation.index] = result.section.inline ? withProductSlugs(result.section) : result.section
+      return next
+    }
+
+    case 'addGalleryImages': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'gallery') return next
+      next.sections[operation.index] = addGalleryImages(section, operation.images, {
+        businessName: next.meta.name,
+        lang: next.meta.language === 'en' ? 'en' : 'tr',
+      }).section
+      return next
+    }
+
+    case 'addAlbum':
+    case 'renameAlbum':
+    case 'moveAlbum':
+    case 'removeAlbum':
+    case 'setImageAlbum':
+    case 'addVideo':
+    case 'updateVideo':
+    case 'moveVideo':
+    case 'removeVideo': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'gallery') return next
+      let result: GalleryResult
+      switch (operation.op) {
+        case 'addAlbum':
+          result = addAlbum(section, operation.name)
+          break
+        case 'renameAlbum':
+          result = renameAlbum(section, operation.albumId, operation.name)
+          break
+        case 'moveAlbum':
+          result = moveAlbum(section, operation.albumId, operation.direction)
+          break
+        case 'removeAlbum':
+          result = removeAlbum(section, operation.albumId)
+          break
+        case 'setImageAlbum':
+          result = setImageAlbum(section, operation.itemIndex, operation.albumId)
+          break
+        case 'addVideo':
+          result = addVideo(section, operation, (n) => pick(next.meta.language, `Video ${n}`, `Video ${n}`))
+          break
+        case 'updateVideo':
+          result = updateVideo(section, operation.id, operation)
+          break
+        case 'moveVideo':
+          result = moveVideo(section, operation.id, operation.direction)
+          break
+        default:
+          result = removeVideo(section, operation.id)
+      }
+      if (result.ok) next.sections[operation.index] = result.section
       return next
     }
 
