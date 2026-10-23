@@ -5,6 +5,7 @@ import { toPlanCode } from '@/lib/pricing-config'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { MAX_ABOUT_IMAGES } from '@/lib/about-media'
 import { serviceItemAt } from '@/lib/service-image'
+import { catalogSectionAt, productItemAt } from '@/lib/product-image'
 import { createPreviewDeps, parseSectionKey, SUPPORTED_TARGETS } from '@/lib/ai-preview/server'
 import {
   discardPreview,
@@ -96,6 +97,14 @@ export async function POST(req: Request) {
     const target = site.sections[section.index]
     if (section.target === 'services') {
       if (section.item === undefined || !serviceItemAt(site, section.index, section.item)) {
+        return Response.json({ error: 'Invalid request' }, { status: 400 })
+      }
+    } else if (section.target === 'products') {
+      if (section.item === undefined || !productItemAt(site, section.index, section.item)) {
+        return Response.json({ error: 'Invalid request' }, { status: 400 })
+      }
+    } else if (section.target === 'productsbanner') {
+      if (section.item !== undefined || !catalogSectionAt(site, section.index)) {
         return Response.json({ error: 'Invalid request' }, { status: 400 })
       }
     } else {

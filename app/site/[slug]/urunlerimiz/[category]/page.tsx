@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { loadPublicCatalog } from '@/lib/catalog-public-server'
 import { buildBreadcrumbJsonLd, catalogCategoryPath, catalogListPath, jsonLdScripts } from '@/lib/catalog-public'
-import { catalogLabels, catalogPageHref, findHeroImage, paginate, parsePage } from '@/lib/catalog-view'
+import { catalogLabels, catalogPageHref, findCatalogBandImage, paginate, parsePage } from '@/lib/catalog-view'
 import { CatalogPageShell } from '@/components/catalog/catalog-page-shell'
 import { CatalogListView } from '@/components/catalog/catalog-list-view'
 
@@ -48,7 +48,7 @@ export default async function CatalogCategoryPage({ params, searchParams }: Para
         activeSlug={group.slug}
         labels={labels}
         page={parsePage(sayfa)}
-        heroImage={findHeroImage(catalog.site.schema)}
+        heroImage={findCatalogBandImage(catalog.site.schema)}
       />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumb }} />
     </CatalogPageShell>
