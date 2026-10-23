@@ -27,6 +27,8 @@ function fingerprint(html: string): string {
 /** Hero layout fields are the only thing a demo is allowed to differ by. */
 function withoutLayoutFields(site: WebsiteSchema): WebsiteSchema {
   const copy = structuredClone(site)
+  // The demo-only "Slider Altı Kutu" strip is covered by hero-strip.test.tsx; the goldens predate it.
+  copy.sections = copy.sections.filter((s) => s.type !== 'heroStrip')
   for (const section of copy.sections) {
     if (section.type !== 'hero') continue
     const hero = section as Record<string, unknown>

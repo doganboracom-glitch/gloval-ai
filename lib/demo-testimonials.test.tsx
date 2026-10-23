@@ -84,7 +84,7 @@ describe.each(demos.map((d) => d.slug))('demo %s reviews', (slug) => {
     const stripped: WebsiteSchema = {
       ...site,
       sections: site.sections
-        .filter((s) => s.type !== 'testimonials')
+        .filter((s) => s.type !== 'testimonials' && s.type !== 'heroStrip')
         .map((s) => {
           if (s.type !== 'hero') return s
           // Hero style fields belong to the hero layout feature; the rest of the page must stay identical.

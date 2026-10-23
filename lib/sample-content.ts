@@ -1,5 +1,7 @@
 import { stripAnnouncementHint } from '@/lib/announcement'
 import { DEMO_PHONE } from '@/lib/contact-links'
+import { isRealHeroStripItem } from '@/lib/hero-strip'
+import { HERO_STRIP_ITEM_COUNT } from '@/lib/list-limits'
 import {
   isPlaceholderAddress,
   isPlaceholderEmail,
@@ -166,6 +168,13 @@ const ITEM_SPECS: Partial<Record<Section['type'], ItemSpec>> = {
     kind: () => 'info',
     fields: (i) => [i.text, i.link],
     label: (i) => truncate(str(i.text)),
+  },
+  heroStrip: {
+    key: 'items',
+    minItems: HERO_STRIP_ITEM_COUNT,
+    kind: () => 'info',
+    fields: (i) => [i.icon, i.title, i.text],
+    label: (i) => truncate(`${str(i.title)} ${str(i.text)}`),
   },
   products: {
     key: 'items',
@@ -704,6 +713,15 @@ export function stripSampleContent(site: WebsiteSchema): WebsiteSchema {
       )
       if (out !== section) changed = true
       return [out]
+    }
+    if (section.type === 'heroStrip') {
+      if (!section.items.some((item) => item.sample)) return [section]
+      changed = true
+      // The strip keeps exactly four slots, so unconfirmed boxes are emptied (and not rendered) rather than removed.
+      const items = section.items.map((item) =>
+        item.sample ? { ...item, title: '', text: '', sample: undefined } : item,
+      )
+      return items.some((item) => isRealHeroStripItem(item)) ? [{ ...section, items }] : []
     }
     const spec = ITEM_SPECS[section.type]
     if (!spec) return [section]

@@ -162,6 +162,7 @@ function detectColorRole(textLower: string): PaletteRole {
 const SECTION_SYNONYMS: [SectionType, string[]][] = [
   ['faq', ['sss', 'sik soru', 'sik sorulan soru', 'sikca sorulan soru', 'sikca soru', 'soru cevap', 'soru-cevap', 'faq', 'faqs', 'frequently asked question', 'frequently asked', 'questions']],
   ['blogLatest', ['blogdan son yazi', 'son blog yazi', 'son yazilar', 'blog yazilari', 'latest post', 'latest blog', 'recent post']],
+  ['heroStrip', ['slider alti', 'slayt alti', 'hero alti', 'kapak alti', 'dort kutu', '4 kutu', 'kutu bolum', 'hero feature', 'hero strip', 'below the slider', 'under the slider', 'below the hero', 'under the hero', 'four box']],
   ['services', ['hizmet', 'service']],
   ['categories', ['kategori', 'kategoriler', 'category', 'categories', 'departman', 'reyon']],
   ['products', ['urun', 'urunler', 'product', 'products', 'magaza', 'vitrin', 'katalog', 'shop', 'store']],
@@ -184,6 +185,7 @@ const SECTION_SYNONYMS: [SectionType, string[]][] = [
 export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
   announcement: { tr: 'Duyuru Bandı', en: 'Announcement bar' },
   hero: { tr: 'Hero', en: 'Hero' },
+  heroStrip: { tr: 'Slider Altı Kutu', en: 'Hero Features' },
   slider: { tr: 'Kayan Görsel', en: 'Slider' },
   about: { tr: 'Hakkımızda', en: 'About' },
   services: { tr: 'Hizmetler', en: 'Services' },
