@@ -16,11 +16,17 @@ type Lang = 'tr' | 'en'
 type ReferencesSection = Extract<Section, { type: 'references' }>
 export type ReferenceItem = ReferencesSection['items'][number]
 
+export const REFERENCE_TITLE_MAX = 80
 export const REFERENCE_NAME_MAX = 80
 export const REFERENCE_URL_MAX = 300
 export const REFERENCE_LINK_LABEL_MAX = 40
 export const REFERENCE_SUBTITLE_MAX = 200
 export const REFERENCES_HOME_PREVIEW = 12
+/** The references page shows this many logos first; the rest sit behind a "show more" button. */
+export const REFERENCES_PAGE_INITIAL = 10
+/** Logo uploads: PNG / JPG / WebP, at most 2 MB each. */
+export const REFERENCE_LOGO_MAX_BYTES = 2 * 1024 * 1024
+export const REFERENCE_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const
 
 const SLUGS: Record<Lang, string> = { tr: 'referanslar', en: 'references' }
 const TITLES: Record<Lang, string> = { tr: 'Referanslar', en: 'References' }
@@ -30,6 +36,9 @@ const siteLang = (site: Pick<WebsiteSchema, 'meta'>): Lang => (site.meta.languag
 
 export function referencesPageTitle(lang: Lang): string {
   return TITLES[lang]
+}
+export function referencesExampleTagLabel(lang: Lang): string {
+  return lang === 'en' ? 'Example content' : 'Örnek içerik'
 }
 export function referencesLinkDefaultLabel(lang: Lang): string {
   return LINK_LABELS[lang]
@@ -70,7 +79,13 @@ export type ResolvedReferences = {
   active: boolean
 }
 
-export function resolveReferences(site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>): ResolvedReferences {
+/** `demo`: reserved for symmetry with reviews; demo logos are real entries flagged `sample`. */
+export type ReferencesResolveOptions = { demo?: boolean }
+
+export function resolveReferences(
+  site: Pick<WebsiteSchema, 'sections' | 'pages' | 'meta'>,
+  _options: ReferencesResolveOptions = {},
+): ResolvedReferences {
   const lang = siteLang(site)
   const page = findReferencesPage(site)
   let section: ReferencesSection | null = null

@@ -1,14 +1,23 @@
 'use client'
 
+import { useState } from 'react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { PageHeader } from '@/components/website-renderer/sections/gallery-detail-page'
 import { ReferenceLogo } from '@/components/website-renderer/sections/reference-logo'
-import { resolveReferences } from '@/lib/references'
+import { ReferenceExampleTag } from '@/components/website-renderer/sections/reference-example-tag'
+import { useDemoRoutes } from '@/components/website-renderer/site-nav-context'
+import { REFERENCES_PAGE_INITIAL, resolveReferences } from '@/lib/references'
 
-/** `/referanslar`: every real reference as a logo grid. */
+/** `/referanslar`: the first logos as a grid, the rest behind a "show more" button. */
 export function ReferencesDetailPage({ site }: { site: WebsiteSchema }) {
-  const { lang, items, section, title, active } = resolveReferences(site)
+  const demo = useDemoRoutes() !== null
+  const { lang, items, section, title, active } = resolveReferences(site, { demo })
+  const [expanded, setExpanded] = useState(false)
   if (!active || !section) return null
+
+  const hidden = Math.max(0, items.length - REFERENCES_PAGE_INITIAL)
+  const visible = expanded ? items : items.slice(0, REFERENCES_PAGE_INITIAL)
+  const showTag = demo && items.some((item) => item.sample)
   return (
     <div id="references-detail" data-gv-detail-page>
       <PageHeader
@@ -18,13 +27,38 @@ export function ReferencesDetailPage({ site }: { site: WebsiteSchema }) {
         subtitle={section.subtitle?.trim() || undefined}
       />
       <div className="px-6 py-12 sm:py-16">
-        <ul className="mx-auto grid w-full max-w-5xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((item, i) => (
+        {showTag ? <ReferenceExampleTag lang={lang} /> : null}
+        <ul className="mx-auto mt-6 grid w-full max-w-5xl grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {visible.map((item, i) => (
             <li key={i}>
               <ReferenceLogo item={item} size="lg" />
             </li>
           ))}
         </ul>
+        {hidden > 0 ? (
+          <div className="mt-8 text-center">
+            <button
+              type="button"
+              aria-expanded={expanded}
+              data-references-more
+              onClick={() => setExpanded((value) => !value)}
+              className="inline-flex cursor-pointer items-center justify-center px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90"
+              style={{
+                border: '1px solid var(--site-border)',
+                borderRadius: 'var(--site-radius)',
+                color: 'var(--site-fg)',
+              }}
+            >
+              {expanded
+                ? lang === 'en'
+                  ? 'Show fewer'
+                  : 'Daha az göster'
+                : lang === 'en'
+                  ? `Show more (${hidden})`
+                  : `Devamını göster (${hidden})`}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

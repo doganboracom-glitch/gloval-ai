@@ -444,12 +444,16 @@ export const referencesSection = z.object({
   linkLabel: z.string().max(40).optional(),
   /** Home carousel auto-scrolls. Unset = on. */
   autoplay: z.boolean().optional(),
+  /** Home carousel visible. Unset = shown; `false` hides only the home block, never the page. */
+  showOnHome: z.boolean().optional(),
   items: z
     .array(
       z.object({
         name: z.string().max(80).describe('Client or partner name. Never invent one.'),
         logo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
         url: z.string().max(300).optional(),
+        /** Showcase demos only: fictional brand shown with an "Example content" tag. */
+        sample: sampleFlag,
       }),
     )
     .min(LIST_LIMITS.references.min)

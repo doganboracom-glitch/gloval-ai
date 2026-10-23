@@ -79,10 +79,16 @@ import {
   TESTIMONIAL_QUOTE_MAX,
   TESTIMONIAL_ROLE_MAX,
 } from '@/lib/testimonials'
-import { REFERENCE_LINK_LABEL_MAX, REFERENCE_NAME_MAX, REFERENCE_SUBTITLE_MAX, REFERENCE_URL_MAX } from '@/lib/references'
+import {
+  REFERENCE_LINK_LABEL_MAX,
+  REFERENCE_NAME_MAX,
+  REFERENCE_SUBTITLE_MAX,
+  REFERENCE_TITLE_MAX,
+  REFERENCE_URL_MAX,
+} from '@/lib/references'
 import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
-import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
+import { LIST_LIMITS, PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
@@ -318,9 +324,13 @@ export type EditOperation =
         linkEnabled?: boolean
         linkLabel?: string
         autoplay?: boolean
+        showOnHome?: boolean
+        title?: string
         subtitle?: string
       }
     }
+  /** Bulk logo upload: appends one entry per logo (data URIs), stopping at the section's limit. */
+  | { op: 'addReferenceLogos'; index: number; logos: string[] }
   /** One client logo. `logo: ''` removes the image, `url: ''` removes the link. Owner-only data. */
   | {
       op: 'updateReference'
@@ -829,9 +839,24 @@ export function applyOperation(
       if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
       if (patch.linkEnabled !== undefined) updated.linkEnabled = patch.linkEnabled
       if (patch.autoplay !== undefined) updated.autoplay = patch.autoplay
+      if (patch.showOnHome !== undefined) updated.showOnHome = patch.showOnHome
+      if (patch.title !== undefined) updated.title = patch.title.trim().slice(0, REFERENCE_TITLE_MAX)
       if (patch.subtitle !== undefined) updated.subtitle = patch.subtitle.trim().slice(0, REFERENCE_SUBTITLE_MAX) || undefined
       if (patch.linkLabel !== undefined) updated.linkLabel = patch.linkLabel.trim().slice(0, REFERENCE_LINK_LABEL_MAX) || undefined
       next.sections[operation.index] = updated
+      return syncSectionPages(next)
+    }
+
+    case 'addReferenceLogos': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'references') return next
+      const room = LIST_LIMITS.references.max - section.items.length
+      const logos = operation.logos.filter((src) => src.trim().length > 0).slice(0, Math.max(0, room))
+      if (logos.length === 0) return next
+      next.sections[operation.index] = {
+        ...section,
+        items: [...section.items, ...logos.map((src) => ({ name: '', logo: { src } }))],
+      }
       return syncSectionPages(next)
     }
 

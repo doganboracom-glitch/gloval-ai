@@ -6,8 +6,14 @@ import {
   SectionHeading,
   onSiteNavClick,
 } from '@/components/website-renderer/primitives'
-import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
+import {
+  useDemoHref,
+  useDemoRoutes,
+  useHrefNormalizer,
+  useSiteNav,
+} from '@/components/website-renderer/site-nav-context'
 import { ReferenceLogo } from '@/components/website-renderer/sections/reference-logo'
+import { ReferenceExampleTag } from '@/components/website-renderer/sections/reference-example-tag'
 import { REFERENCES_HOME_PREVIEW, realReferences, referencesLink } from '@/lib/references'
 
 type ReferencesData = Extract<Section, { type: 'references' }>
@@ -24,9 +30,12 @@ export function ReferencesSection({ data, site = null }: { data: ReferencesData;
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
   const demoHref = useDemoHref()
+  const demo = useDemoRoutes() !== null
   const all = realReferences(data)
   const link = site ? referencesLink(site, data) : null
-  if (all.length === 0) return null
+  if (all.length === 0 || data.showOnHome === false) return null
+  const lang = site?.meta.language === 'en' ? 'en' : 'tr'
+  const showTag = demo && all.some((item) => item.sample)
 
   const items = all.slice(0, REFERENCES_HOME_PREVIEW)
   const moving = data.autoplay !== false && items.length >= MARQUEE_MIN
@@ -36,6 +45,7 @@ export function ReferencesSection({ data, site = null }: { data: ReferencesData;
   return (
     <SectionShell id="references">
       <SectionHeading title={data.title} subtitle={data.subtitle?.trim() || undefined} />
+      {showTag ? <ReferenceExampleTag lang={lang} /> : null}
       {moving ? (
         <div
           className="gv-ref-marquee mt-10 overflow-hidden"

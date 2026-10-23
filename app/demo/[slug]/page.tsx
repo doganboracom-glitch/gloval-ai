@@ -8,6 +8,7 @@ import { getCatalog } from '@/lib/demo-catalog'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { resolveServices } from '@/lib/service-pages'
 import { resolveTestimonials } from '@/lib/testimonials'
+import { resolveReferences } from '@/lib/references'
 import { DemoSiteRenderer } from '@/components/demo-site/demo-site-renderer'
 import { DemoFloatingActions } from '@/components/demo-site/demo-floating-actions'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
@@ -55,7 +56,7 @@ export default async function DemoPage({
   params: Promise<{ slug: string }>
   searchParams: Promise<{ lang?: string; preview?: string }>
   /** Set by the /hakkimizda and /hizmetler routes so the demo opens on that page. */
-  initialPage?: 'about' | 'services' | 'testimonials' | null
+  initialPage?: 'about' | 'services' | 'testimonials' | 'references' | null
   /** With `initialPage="services"`: the service whose own page opens. */
   initialService?: string | null
 }) {
@@ -105,6 +106,11 @@ export default async function DemoPage({
     ? { slug: resolvedTestimonials.slug, list: `/demo/${slug}/musteri-yorumlari${langQuery}` }
     : undefined
   if (initialPage === 'testimonials' && !testimonialsRoutes) notFound()
+  const resolvedReferences = resolveReferences(site, { demo: true })
+  const referencesRoutes = resolvedReferences.active
+    ? { slug: resolvedReferences.slug, list: `/demo/${slug}/referanslar${langQuery}` }
+    : undefined
+  if (initialPage === 'references' && !referencesRoutes) notFound()
   const initialSlug =
     initialPage === 'about'
       ? aboutPageSlug
@@ -112,7 +118,9 @@ export default async function DemoPage({
         ? (resolvedServices?.listSlug ?? null)
         : initialPage === 'testimonials'
           ? (testimonialsRoutes?.slug ?? null)
-          : null
+          : initialPage === 'references'
+            ? (referencesRoutes?.slug ?? null)
+            : null
 
   const content = (
     <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
@@ -131,6 +139,7 @@ export default async function DemoPage({
           aboutPageSlug,
           services: servicesRoutes,
           testimonials: testimonialsRoutes,
+          references: referencesRoutes,
         }}
         initialPage={initialSlug}
         initialService={initialPage === 'services' ? initialService : null}

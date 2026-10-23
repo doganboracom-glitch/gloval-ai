@@ -34,6 +34,8 @@ export type DemoRoutes = {
   services?: { listSlug: string; list: string; itemBase: string; query: string }
   /** The demo's reviews page: its slug on the site and the demo's own URL for it. */
   testimonials?: { slug: string; list: string }
+  /** The demo's references page: its slug on the site and the demo's own URL for it. */
+  references?: { slug: string; list: string }
 }
 
 /**
@@ -47,6 +49,7 @@ export function mapDemoHref(href: string, routes: DemoRoutes | null): string {
   if (href.startsWith('/#')) return `${routes.home}${href.slice(1)}`
   if (routes.aboutPageSlug && href === `/${routes.aboutPageSlug}`) return routes.about
   if (routes.testimonials && href === `/${routes.testimonials.slug}`) return routes.testimonials.list
+  if (routes.references && href === `/${routes.references.slug}`) return routes.references.list
   const services = routes.services
   if (services) {
     const path = href.split(/[?#]/)[0]
@@ -70,6 +73,13 @@ export function isDemoServiceHref(href: string, routes: DemoRoutes | null): bool
 /** True for the demo's own reviews page URL (already mapped). */
 export function isDemoTestimonialsHref(href: string, routes: DemoRoutes | null): boolean {
   const list = routes?.testimonials?.list
+  if (!list) return false
+  return href.split(/[?#]/)[0] === list.split('?')[0]
+}
+
+/** True for the demo's own references page URL (already mapped). */
+export function isDemoReferencesHref(href: string, routes: DemoRoutes | null): boolean {
+  const list = routes?.references?.list
   if (!list) return false
   return href.split(/[?#]/)[0] === list.split('?')[0]
 }
