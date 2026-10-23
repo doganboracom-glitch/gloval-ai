@@ -1073,7 +1073,13 @@ export function applyOperation(
       const hero = next.sections.find((s) => s.type === 'hero')
       if (hero && hero.type === 'hero') {
         const p = operation.patch
+        const previousLayout = hero.layout
         if (p.layout !== undefined && HERO_LAYOUTS.includes(p.layout)) hero.layout = p.layout
+        // Moving onto light-cover fills the half by default; an explicit
+        // imageFit in the same patch, or a record already on light-cover, wins.
+        if (hero.layout === 'light-cover' && previousLayout !== 'light-cover' && p.imageFit === undefined) {
+          hero.imageFit = 'cover'
+        }
         if (p.align !== undefined) hero.align = p.align
         if (p.overlay !== undefined) hero.overlay = clampOverlay(p.overlay)
         if (p.imageFit !== undefined) hero.imageFit = p.imageFit

@@ -40,9 +40,12 @@ export function SectionRenderer({
   paymentBadges = null,
   site = null,
   contactForm = null,
+  underHeader = false,
 }: {
   /** Live form wiring (slug + signed token); null in preview/demo, where the form is inert. */
   contactForm?: ContactFormLive | null
+  /** Opening light-cover hero that runs behind the sticky header. */
+  underHeader?: boolean
   section: Section
   meta: WebsiteSchema['meta']
   /** Whole site, so the footer can verify its link targets. */
@@ -56,7 +59,7 @@ export function SectionRenderer({
     case 'announcement':
       return <AnnouncementBar data={section} lang={meta.language} colors={site ? resolveTheme(site) : null} />
     case 'hero':
-      return <HeroSection data={section} />
+      return <HeroSection data={section} underHeader={underHeader} />
     case 'slider':
       return <SliderSection data={section} />
     case 'about':
