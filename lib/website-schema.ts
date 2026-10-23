@@ -427,6 +427,35 @@ export const testimonialsSection = z.object({
     .max(LIST_LIMITS.testimonials.max),
 })
 
+/**
+ * Client / partner logos ("Referanslar"). Owner-supplied only: the AI never
+ * writes entries, so the list is empty until the owner adds real clients, and an
+ * empty section never shows on the public site.
+ */
+export const referencesSection = z.object({
+  type: z.literal('references'),
+  ...sectionEditorMeta,
+  title: z.string(),
+  subtitle: z.string().optional(),
+  /** `/referanslar` system page. Only `true` creates it. */
+  pageEnabled: z.boolean().optional(),
+  /** "All references" link under the home carousel. Needs a live page; `false` hides it. */
+  linkEnabled: z.boolean().optional(),
+  linkLabel: z.string().max(40).optional(),
+  /** Home carousel auto-scrolls. Unset = on. */
+  autoplay: z.boolean().optional(),
+  items: z
+    .array(
+      z.object({
+        name: z.string().max(80).describe('Client or partner name. Never invent one.'),
+        logo: z.object({ src: z.string(), alt: z.string().optional() }).optional(),
+        url: z.string().max(300).optional(),
+      }),
+    )
+    .min(LIST_LIMITS.references.min)
+    .max(LIST_LIMITS.references.max),
+})
+
 const gallerySlug = z.string().regex(/^[a-z0-9-]{1,60}$/)
 
 /** A named group of gallery images. "Genel" is implicit and never stored here. */
@@ -823,6 +852,7 @@ export const sectionSchema = z.discriminatedUnion('type', [
   featuresSection,
   statsSection,
   testimonialsSection,
+  referencesSection,
   gallerySection,
   portfolioSection,
   productsSection,
@@ -1064,7 +1094,7 @@ export const pageSchema = z.object({
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
-  detailOf: z.enum(['about', 'services', 'gallery', 'videos', 'testimonials']).optional(),
+  detailOf: z.enum(['about', 'services', 'gallery', 'videos', 'testimonials', 'references']).optional(),
   /** Stable identity, so menu entries survive a slug change. Filled in by `normalizeWebsiteSchema`. */
   id: z.string().max(60).optional(),
   /** Menu switches. Unset keeps the pre-existing behaviour (see `lib/site-menu.ts`). */
@@ -1235,6 +1265,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
     features: ['Özellikler', 'Features'],
     stats: ['İstatistikler', 'Stats'],
     testimonials: ['Yorumlar', 'Testimonials'],
+    references: ['Referanslar', 'References'],
     gallery: ['Galeri', 'Gallery'],
     portfolio: ['Portföy', 'Portfolio'],
     products: ['Ürünler', 'Products'],
@@ -1276,6 +1307,7 @@ function sectionSummary(section: Section): string {
     case 'team':
       return section.subtitle ?? section.title
     case 'testimonials':
+    case 'references':
     case 'gallery':
     case 'faq':
       return section.title

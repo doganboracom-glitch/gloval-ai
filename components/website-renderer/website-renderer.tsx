@@ -11,6 +11,7 @@ import { matchServiceHref } from '@/lib/service-pages'
 import { matchAlbumHref } from '@/lib/gallery-pages'
 import { withDemoTestimonialsPage } from '@/lib/testimonials'
 import { TestimonialsDetailPage } from '@/components/website-renderer/sections/testimonials-detail-page'
+import { ReferencesDetailPage } from '@/components/website-renderer/sections/references-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
 import {
@@ -492,6 +493,8 @@ export function WebsiteRenderer({
           <VideosDetailPage site={data} />
         ) : activePage?.detailOf === 'testimonials' ? (
           <TestimonialsDetailPage site={data} />
+        ) : activePage?.detailOf === 'references' ? (
+          <ReferencesDetailPage site={data} />
         ) : (
           <SectionDetailPage site={data} />
         ))}

@@ -190,6 +190,7 @@ export const SECTION_LABEL: Record<SectionType, { tr: string; en: string }> = {
   features: { tr: 'Özellikler', en: 'Features' },
   stats: { tr: 'İstatistikler', en: 'Stats' },
   testimonials: { tr: 'Müşteri Yorumları', en: 'Customer Reviews' },
+  references: { tr: 'Referanslar', en: 'References' },
   gallery: { tr: 'Galeri', en: 'Gallery' },
   portfolio: { tr: 'Portföy', en: 'Portfolio' },
   products: { tr: 'Ürünler', en: 'Products' },

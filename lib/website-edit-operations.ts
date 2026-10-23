@@ -79,6 +79,7 @@ import {
   TESTIMONIAL_QUOTE_MAX,
   TESTIMONIAL_ROLE_MAX,
 } from '@/lib/testimonials'
+import { REFERENCE_LINK_LABEL_MAX, REFERENCE_NAME_MAX, REFERENCE_SUBTITLE_MAX, REFERENCE_URL_MAX } from '@/lib/references'
 import { cycleAvatar, nextAvatarForNewItem, parseAvatar } from '@/lib/testimonial-avatars'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
@@ -307,6 +308,25 @@ export type EditOperation =
         /** 'preset:1'..'preset:12' | 'initials' | 'photo'; anything else clears the choice. */
         avatar?: string
       }
+    }
+  /** References (client logos) section settings: page on/off, "all references" link, autoplay, titles. */
+  | {
+      op: 'updateReferencesSettings'
+      index: number
+      patch: {
+        pageEnabled?: boolean
+        linkEnabled?: boolean
+        linkLabel?: string
+        autoplay?: boolean
+        subtitle?: string
+      }
+    }
+  /** One client logo. `logo: ''` removes the image, `url: ''` removes the link. Owner-only data. */
+  | {
+      op: 'updateReference'
+      index: number
+      item: number
+      patch: { name?: string; logo?: string; logoAlt?: string; url?: string }
     }
   /** "Change avatar": the next ready-made illustration for one review (wraps after 12). Free of credits. */
   | { op: 'cycleTestimonialAvatar'; index: number; item: number }
@@ -793,6 +813,41 @@ export function applyOperation(
         if (!updated.photo && parseAvatar(updated.avatar)?.kind === 'photo') updated.avatar = undefined
       } else if (patch.photoAlt !== undefined && updated.photo) {
         updated.photo = { ...updated.photo, alt: patch.photoAlt.trim() || undefined }
+      }
+      next.sections[operation.index] = {
+        ...section,
+        items: section.items.map((it, i) => (i === operation.item ? updated : it)),
+      }
+      return syncSectionPages(next)
+    }
+
+    case 'updateReferencesSettings': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'references') return next
+      const { patch } = operation
+      const updated = { ...section }
+      if (patch.pageEnabled !== undefined) updated.pageEnabled = patch.pageEnabled
+      if (patch.linkEnabled !== undefined) updated.linkEnabled = patch.linkEnabled
+      if (patch.autoplay !== undefined) updated.autoplay = patch.autoplay
+      if (patch.subtitle !== undefined) updated.subtitle = patch.subtitle.trim().slice(0, REFERENCE_SUBTITLE_MAX) || undefined
+      if (patch.linkLabel !== undefined) updated.linkLabel = patch.linkLabel.trim().slice(0, REFERENCE_LINK_LABEL_MAX) || undefined
+      next.sections[operation.index] = updated
+      return syncSectionPages(next)
+    }
+
+    case 'updateReference': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'references') return next
+      const item = section.items[operation.item]
+      if (!item) return next
+      const { patch } = operation
+      const updated = { ...item }
+      if (patch.name !== undefined) updated.name = patch.name.slice(0, REFERENCE_NAME_MAX)
+      if (patch.url !== undefined) updated.url = patch.url.trim().slice(0, REFERENCE_URL_MAX) || undefined
+      if (patch.logo !== undefined) {
+        updated.logo = patch.logo ? { src: patch.logo, alt: patch.logoAlt?.trim() || updated.logo?.alt } : undefined
+      } else if (patch.logoAlt !== undefined && updated.logo) {
+        updated.logo = { ...updated.logo, alt: patch.logoAlt.trim() || undefined }
       }
       next.sections[operation.index] = {
         ...section,
@@ -1633,6 +1688,7 @@ export const SECTION_COLLECTION_KEY: Partial<Record<SectionType, string>> = {
   features: 'items',
   stats: 'items',
   testimonials: 'items',
+  references: 'items',
   gallery: 'items',
   portfolio: 'items',
   products: 'items',
@@ -1685,6 +1741,8 @@ export function blankItem(type: SectionType, lang: Lang): Record<string, unknown
         author: pick(lang, 'Müşteri', 'Customer'),
         role: '',
       }
+    case 'references':
+      return { name: '' }
     case 'gallery':
       return {
         caption: '',
@@ -1777,6 +1835,7 @@ export const ADDABLE_SECTION_TYPES: SectionType[] = [
   'portfolio',
   'gallery',
   'testimonials',
+  'references',
   'pricing',
   'process',
   'team',
@@ -1902,6 +1961,12 @@ export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?:
         items: [
           { quote: pick(lang, 'Harika bir deneyim.', 'A great experience.'), author: pick(lang, 'Müşteri', 'Customer') },
         ],
+      }
+    case 'references':
+      return {
+        type: 'references',
+        title: pick(lang, 'Referanslarımız', 'Our References'),
+        items: [{ name: '' }],
       }
     case 'gallery':
       return {

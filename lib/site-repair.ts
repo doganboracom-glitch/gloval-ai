@@ -27,6 +27,7 @@ const DROP_ORDER: ReadonlyArray<SectionType> = [
   'portfolio',
   'gallery',
   'slider',
+  'references',
   'testimonials',
   'faq',
   'cta',

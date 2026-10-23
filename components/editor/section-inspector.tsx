@@ -35,6 +35,7 @@ import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
 import { ProductItemFields } from '@/components/editor/product-item-fields'
 import { GalleryFields, GalleryItemExtras } from '@/components/editor/gallery-fields'
 import { TestimonialsFields } from '@/components/editor/testimonials-fields'
+import { ReferencesFields } from '@/components/editor/references-fields'
 import { useProductsManaged } from '@/components/editor/published-context'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
@@ -265,6 +266,10 @@ export function SectionInspector({
         <TestimonialsFields site={site} index={index} section={section} onDispatch={onDispatch} />
       )}
 
+      {section.type === 'references' && (
+        <ReferencesFields site={site} index={index} section={section} onDispatch={onDispatch} />
+      )}
+
       {section.type === 'products' && !managedProducts && (
         <ProductItemFields site={site} index={index} section={section} onDispatch={onDispatch} />
       )}
@@ -300,7 +305,7 @@ export function SectionInspector({
         />
       )}
 
-      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && items.length > 0 && (
+      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (
