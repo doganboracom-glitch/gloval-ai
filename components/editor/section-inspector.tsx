@@ -33,6 +33,7 @@ import { AboutMediaFields } from '@/components/editor/about-media-fields'
 import { AboutDetailFields } from '@/components/editor/about-detail-fields'
 import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
 import { ProductItemFields } from '@/components/editor/product-item-fields'
+import { GalleryFields, GalleryItemExtras } from '@/components/editor/gallery-fields'
 import { useProductsManaged } from '@/components/editor/published-context'
 import { FooterLinksEditor } from '@/components/editor/footer-links-editor'
 
@@ -240,6 +241,10 @@ export function SectionInspector({
         <ServiceDetailFields site={site} index={index} section={section} onDispatch={onDispatch} />
       )}
 
+      {section.type === 'gallery' && (
+        <GalleryFields site={site} index={index} section={section} onDispatch={onDispatch} />
+      )}
+
       {section.type === 'products' && !managedProducts && (
         <ProductItemFields site={site} index={index} section={section} onDispatch={onDispatch} />
       )}
@@ -287,6 +292,7 @@ export function SectionInspector({
               total={items.length}
               sectionType={section.type}
               hasImages={hasImages}
+              gallery={section.type === 'gallery' ? { site, section } : undefined}
               working={workingItem === `${index}:${itemIndex}`}
               onDispatch={onDispatch}
               onRegenerateItemImage={onRegenerateItemImage}
@@ -608,6 +614,7 @@ function ItemCard({
   total,
   sectionType,
   hasImages,
+  gallery,
   working,
   onDispatch,
   onRegenerateItemImage,
@@ -618,6 +625,8 @@ function ItemCard({
   total: number
   sectionType: string
   hasImages: boolean
+  /** Gallery items get an album picker and a required alt text instead of the generic alt field. */
+  gallery?: { site: WebsiteSchema; section: Extract<WebsiteSchema['sections'][number], { type: 'gallery' }> }
   working: boolean
   onDispatch: (op: EditOperation) => void
   onRegenerateItemImage?: (index: number, itemIndex: number, request: string) => void
@@ -675,6 +684,16 @@ function ItemCard({
           onCommit={(v) => onDispatch({ op: 'updateItemField', index, itemIndex, field: field, value: v })}
         />
       ))}
+
+      {gallery && (
+        <GalleryItemExtras
+          site={gallery.site}
+          index={index}
+          itemIndex={itemIndex}
+          section={gallery.section}
+          onDispatch={onDispatch}
+        />
+      )}
 
       {features && (
         <TextField

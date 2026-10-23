@@ -45,6 +45,7 @@ import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
+import { addGalleryImages } from '@/lib/gallery-editor'
 import {
   cleanProductDescription,
   cleanShortNote,
@@ -276,6 +277,8 @@ export type EditOperation =
   | { op: 'removeAlbum'; index: number; albumId: string }
   /** `albumId` omitted puts the image into "Genel". */
   | { op: 'setImageAlbum'; index: number; itemIndex: number; albumId?: string }
+  /** Several uploaded photos at once; photos past the 60-image limit are skipped. */
+  | { op: 'addGalleryImages'; index: number; images: { src: string; alt?: string; album?: string }[] }
   | { op: 'addVideo'; index: number; url: string; name?: string; cover?: { src: string; alt?: string } }
   | {
       op: 'updateVideo'
@@ -747,6 +750,16 @@ export function applyOperation(
               : removeCategory(section, operation.name)
       if (!result.ok) return next
       next.sections[operation.index] = result.section.inline ? withProductSlugs(result.section) : result.section
+      return next
+    }
+
+    case 'addGalleryImages': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'gallery') return next
+      next.sections[operation.index] = addGalleryImages(section, operation.images, {
+        businessName: next.meta.name,
+        lang: next.meta.language === 'en' ? 'en' : 'tr',
+      }).section
       return next
     }
 
