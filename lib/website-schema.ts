@@ -803,11 +803,11 @@ export const heroStripSection = z.object({
 })
 
 /**
- * The announcement band never counts toward the section limit, so adding one can neither fill the cap nor block
- * another section.
+ * The announcement band and the thin "Slider Altı Kutu" strip never count toward the section limit, so adding one
+ * can neither fill the cap nor block another section.
  */
 export function countsTowardSectionCap(section: { type: string }): boolean {
-  return section.type !== 'announcement'
+  return section.type !== 'announcement' && section.type !== 'heroStrip'
 }
 
 export function countCappedSections(sections: readonly { type: string }[]): number {
@@ -815,21 +815,28 @@ export function countCappedSections(sections: readonly { type: string }[]): numb
 }
 
 export function countAnnouncements(sections: readonly { type: string }[]): number {
-  return sections.length - countCappedSections(sections)
+  return sections.filter((s) => s.type === 'announcement').length
+}
+
+export function countHeroStrips(sections: readonly { type: string }[]): number {
+  return sections.filter((s) => s.type === 'heroStrip').length
 }
 
 /**
  * Applies the section limit to a list: at most SITE_SECTION_HARD_CAP regular
- * sections plus at most one announcement. The array max is cap + 1 so the
+ * sections plus at most one announcement and one hero strip. The array max is cap + 2 so the
  * bound still reaches the AI JSON schema; the refinements are the real rule.
  */
 function limitedSections<T extends z.ZodType<{ type: string }[]>>(schema: T) {
   return schema
     .refine((sections) => countCappedSections(sections) <= SITE_SECTION_HARD_CAP, {
-      message: `At most ${SITE_SECTION_HARD_CAP} sections (the announcement band does not count)`,
+      message: `At most ${SITE_SECTION_HARD_CAP} sections (the announcement band and hero strip do not count)`,
     })
     .refine((sections) => countAnnouncements(sections) <= 1, {
       message: 'At most one announcement section',
+    })
+    .refine((sections) => countHeroStrips(sections) <= 1, {
+      message: 'At most one hero strip section',
     })
 }
 
@@ -1080,7 +1087,7 @@ export const pageSchema = z.object({
   title: z.string(),
   isHome: z.boolean().optional(),
   kind: z.enum(PAGE_KINDS).optional(),
-  sections: limitedSections(z.array(sectionSchema).max(SITE_SECTION_HARD_CAP + 1)).optional(),
+  sections: limitedSections(z.array(sectionSchema).max(SITE_SECTION_HARD_CAP + 2)).optional(),
   seo: pageSeoSchema.optional(),
   indexable: z.boolean().optional(),
   /** Set on `kind: 'detail'` pages: which section type this page is the long-form view of. */
@@ -1134,7 +1141,7 @@ export const websiteSchema = z.object({
     .describe('Floating phone + WhatsApp buttons shown on every page'),
   social: socialSchema.optional().describe('Owner-supplied social media links'),
   pages: z.array(pageSchema).min(1).max(SITE_PAGE_HARD_CAP),
-  sections: limitedSections(z.array(sectionSchema).min(3).max(SITE_SECTION_HARD_CAP + 1)).describe(
+  sections: limitedSections(z.array(sectionSchema).min(3).max(SITE_SECTION_HARD_CAP + 2)).describe(
     'The ordered homepage sections',
   ),
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),

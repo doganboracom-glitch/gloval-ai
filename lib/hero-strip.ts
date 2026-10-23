@@ -24,6 +24,26 @@ export const HERO_STRIP_ICONS = [
   'leaf',
   'wrench',
   'badge-check',
+  'coffee',
+  'utensils',
+  'house',
+  'building-2',
+  'stethoscope',
+  'scale',
+  'palette',
+  'scissors',
+  'camera',
+  'gift',
+  'globe',
+  'mail',
+  'calendar',
+  'thumbs-up',
+  'zap',
+  'lock',
+  'refresh-cw',
+  'message-circle',
+  'hammer',
+  'ruler',
 ] as const
 
 export type HeroStripIcon = (typeof HERO_STRIP_ICONS)[number]
@@ -47,6 +67,51 @@ export const HERO_STRIP_ICON_LABELS: Record<HeroStripIcon, [tr: string, en: stri
   leaf: ['Doğal', 'Natural'],
   wrench: ['Servis', 'Service'],
   'badge-check': ['Onay', 'Verified'],
+  coffee: ['Kahve', 'Coffee'],
+  utensils: ['Yemek', 'Dining'],
+  house: ['Ev', 'Home'],
+  'building-2': ['Bina', 'Building'],
+  stethoscope: ['Sağlık', 'Health'],
+  scale: ['Hukuk', 'Legal'],
+  palette: ['Tasarım', 'Design'],
+  scissors: ['Bakım', 'Styling'],
+  camera: ['Kamera', 'Camera'],
+  gift: ['Hediye', 'Gift'],
+  globe: ['Dünya', 'Globe'],
+  mail: ['E-posta', 'Email'],
+  calendar: ['Randevu', 'Booking'],
+  'thumbs-up': ['Beğeni', 'Like'],
+  zap: ['Hızlı', 'Fast'],
+  lock: ['Gizlilik', 'Privacy'],
+  'refresh-cw': ['Yenileme', 'Refresh'],
+  'message-circle': ['Mesaj', 'Message'],
+  hammer: ['İnşaat', 'Build'],
+  ruler: ['Ölçü', 'Measure'],
+}
+
+/** Icons whose Turkish/English label or key contains the (case-insensitive) query. */
+export function filterHeroStripIcons(query: string): HeroStripIcon[] {
+  const q = query.trim().toLocaleLowerCase('tr')
+  if (!q) return [...HERO_STRIP_ICONS]
+  return HERO_STRIP_ICONS.filter((key) => {
+    const [tr, en] = HERO_STRIP_ICON_LABELS[key]
+    return [key, tr, en].some((v) => v.toLocaleLowerCase('tr').includes(q))
+  })
+}
+
+/** Any stored value resolves to a preset icon; an unknown key falls back to the default. */
+export function resolveHeroStripIcon(value: unknown): HeroStripIcon {
+  return isHeroStripIcon(value) ? value : HERO_STRIP_DEFAULT_ICON
+}
+
+/**
+ * Where "Bölüm ekle" puts a new strip: right under the hero when the hero is
+ * the first section, otherwise at the very top. A hero that follows an
+ * announcement band is not "first", so the strip lands above everything else
+ * only when there is no hero at index 0.
+ */
+export function heroStripInsertIndex(sections: ReadonlyArray<{ type: string }>): number {
+  return sections[0]?.type === 'hero' ? 1 : 0
 }
 
 export type HeroStripItemLike = {
@@ -72,10 +137,10 @@ export function clampHeroStripText(value: string): string {
 export function blankHeroStripItems(lang: 'tr' | 'en'): HeroStripItemLike[] {
   const tr = lang === 'tr'
   return [
-    { icon: 'shield-check', title: tr ? 'Başlık 1' : 'Heading 1', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
-    { icon: 'truck', title: tr ? 'Başlık 2' : 'Heading 2', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
-    { icon: 'headphones', title: tr ? 'Başlık 3' : 'Heading 3', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
-    { icon: 'award', title: tr ? 'Başlık 4' : 'Heading 4', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
+    { icon: 'shield-check', title: tr ? 'Başlık' : 'Heading', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
+    { icon: 'truck', title: tr ? 'Başlık' : 'Heading', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
+    { icon: 'headphones', title: tr ? 'Başlık' : 'Heading', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
+    { icon: 'award', title: tr ? 'Başlık' : 'Heading', text: tr ? 'Kısa açıklama' : 'Short description', sample: true },
   ]
 }
 

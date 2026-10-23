@@ -162,6 +162,7 @@ function detectColorRole(textLower: string): PaletteRole {
 const SECTION_SYNONYMS: [SectionType, string[]][] = [
   ['faq', ['sss', 'sik soru', 'sik sorulan soru', 'sikca sorulan soru', 'sikca soru', 'soru cevap', 'soru-cevap', 'faq', 'faqs', 'frequently asked question', 'frequently asked', 'questions']],
   ['blogLatest', ['blogdan son yazi', 'son blog yazi', 'son yazilar', 'blog yazilari', 'latest post', 'latest blog', 'recent post']],
+  ['heroStrip', ['slider alti', 'slayt alti', 'hero alti', 'kapak alti', 'dort kutu', '4 kutu', 'kutu bolum', 'hero feature', 'hero strip', 'below the slider', 'under the slider', 'below the hero', 'under the hero', 'four box']],
   ['services', ['hizmet', 'service']],
   ['categories', ['kategori', 'kategoriler', 'category', 'categories', 'departman', 'reyon']],
   ['products', ['urun', 'urunler', 'product', 'products', 'magaza', 'vitrin', 'katalog', 'shop', 'store']],

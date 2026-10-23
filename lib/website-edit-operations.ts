@@ -4,6 +4,7 @@ import {
   blankHeroStripItems,
   clampHeroStripText,
   clampHeroStripTitle,
+  heroStripInsertIndex,
   isHeroStripIcon,
 } from '@/lib/hero-strip'
 import {
@@ -1578,7 +1579,9 @@ export function applyOperation(
       const insertAt =
         operation.index !== undefined
           ? operation.index
-          : defaultInsertIndex(next.sections)
+          : operation.sectionType === 'heroStrip'
+            ? heroStripInsertIndex(next.sections)
+            : defaultInsertIndex(next.sections)
       next.sections.splice(insertAt, 0, section)
       return next
     }
