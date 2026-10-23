@@ -82,6 +82,120 @@ export function isAllowedLogoDataUri(src: string): boolean {
   }
 }
 
+export const REFERENCE_URL_MAX = 200
+
+export type ReferenceUrlError = 'invalid' | 'scheme' | 'credentials' | 'local' | 'private' | 'too_long'
+export type ReferenceUrlResult = { ok: true; url: string } | { ok: false; error: ReferenceUrlError }
+
+const LOCAL_SUFFIXES = ['.localhost', '.local', '.localdomain', '.internal', '.lan', '.home.arpa']
+const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+const TLD = /^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/
+
+function isPrivateIpv4(host: string): boolean {
+  const [a, b] = host.split('.').map(Number)
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  )
+}
+
+/**
+ * Strict check for a reference's optional website address, shared by the editor (live warning), the edit
+ * operation and the server-side page sync. Only http/https; a missing scheme becomes `https://`; credentials,
+ * local names and private IPs are refused. An empty input is valid and means "no link" (`url: ''`).
+ */
+export function validateReferenceUrl(input: string): ReferenceUrlResult {
+  const raw = input.trim()
+  if (raw === '') return { ok: true, url: '' }
+  const fail = (error: ReferenceUrlError): ReferenceUrlResult => ({ ok: false, error })
+  if (raw.length > REFERENCE_URL_MAX) return fail('too_long')
+  if (/[\s\u0000-\u001f\u007f\\]/.test(raw)) return fail('invalid')
+
+  // `host:8080` is a port, not a scheme, so a scheme is only a word followed by a colon and a non-digit.
+  const scheme = /^([a-z][a-z0-9+.-]*):(?!\d)/i.exec(raw)?.[1]?.toLowerCase()
+  let withScheme: string
+  if (scheme) {
+    if (scheme !== 'http' && scheme !== 'https') return fail('scheme')
+    if (!/^https?:\/\//i.test(raw)) return fail('invalid')
+    withScheme = raw
+  } else {
+    withScheme = raw.startsWith('//') ? `https:${raw}` : `https://${raw}`
+  }
+  if (/^https?:\/\/[^/?#]*@/i.test(withScheme)) return fail('credentials')
+
+  let parsed: URL
+  try {
+    parsed = new URL(withScheme)
+  } catch {
+    return fail('invalid')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return fail('scheme')
+  if (parsed.username || parsed.password) return fail('credentials')
+
+  const host = parsed.hostname.replace(/\.$/, '').toLowerCase()
+  if (host.startsWith('[')) return fail('private')
+  if (host === 'localhost' || LOCAL_SUFFIXES.some((suffix) => host.endsWith(suffix))) return fail('local')
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
+    if (isPrivateIpv4(host)) return fail('private')
+  } else {
+    const labels = host.split('.')
+    if (host.length > 253 || labels.length < 2) return fail('invalid')
+    if (!labels.every((label) => DOMAIN_LABEL.test(label)) || !TLD.test(labels[labels.length - 1])) return fail('invalid')
+  }
+
+  const bare = parsed.pathname === '/' && !parsed.search && !parsed.hash
+  const url = bare ? parsed.href.replace(/\/$/, '') : parsed.href
+  return url.length > REFERENCE_URL_MAX ? fail('too_long') : { ok: true, url }
+}
+
+/** The normalized link target for a stored value, or `null` when it is empty or not allowed (never a link). */
+export function safeReferenceUrl(value: string | undefined): string | null {
+  if (!value) return null
+  const checked = validateReferenceUrl(value)
+  return checked.ok && checked.url ? checked.url : null
+}
+
+function sanitizeSectionList(sections: Section[]): Section[] {
+  let changed = false
+  const out = sections.map((section): Section => {
+    if (section.type !== 'references') return section
+    let touched = false
+    const items = section.items.map((item) => {
+      if (item.url === undefined) return item
+      const next = safeReferenceUrl(item.url)
+      if (next === item.url) return item
+      touched = true
+      const { url: _dropped, ...rest } = item
+      return next ? { ...rest, url: next } : rest
+    })
+    if (!touched) return section
+    changed = true
+    return { ...section, items }
+  })
+  return changed ? out : sections
+}
+
+/** Server-side guard: drops or normalizes any reference address that fails `validateReferenceUrl`. Same object when nothing changes. */
+export function sanitizeReferenceUrls<T extends WebsiteSchema>(site: T): T {
+  const sections = sanitizeSectionList(site.sections)
+  let pagesChanged = false
+  const pages = site.pages?.map((page) => {
+    if (!page.sections) return page
+    const next = sanitizeSectionList(page.sections)
+    if (next === page.sections) return page
+    pagesChanged = true
+    return { ...page, sections: next }
+  })
+  if (sections === site.sections && !pagesChanged) return site
+  return { ...site, sections, ...(pagesChanged ? { pages } : {}) }
+}
+
 function referenceSections(site: Pick<WebsiteSchema, 'sections' | 'pages'>): ReferencesSection[] {
   const all = [...site.sections, ...(site.pages ?? []).flatMap((p) => p.sections ?? [])]
   return all.filter((s): s is ReferencesSection => s.type === 'references' && !s.hidden)
@@ -153,7 +267,8 @@ export function referencesDescription(site: Pick<WebsiteSchema, 'meta'>, name: s
  * reference, dropped again when not. New pages count toward the plan page limit. Idempotent; returns the
  * same object when nothing changes. A page the owner already runs on the same address is left alone.
  */
-export function syncReferencesPage<T extends WebsiteSchema>(site: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
+export function syncReferencesPage<T extends WebsiteSchema>(input: T, pageLimit: number = SITE_PAGE_HARD_CAP): T {
+  const site = sanitizeReferenceUrls(input)
   const pages = site.pages ?? []
   const existing = findReferencesPage(site)
   const wanted = referenceSections(site).some((s) => s.pageEnabled === true && realReferences(s).length > 0)
