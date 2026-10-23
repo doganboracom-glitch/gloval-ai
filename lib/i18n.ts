@@ -557,6 +557,7 @@ const dict = {
       },
       sectionNames: {
         announcement: 'Duyuru Bandı',
+        heroStrip: 'Slider Altı Kutu',
         hero: 'Hero',
         slider: 'Kayan Görsel',
         about: 'Hakkımızda',
@@ -2160,6 +2161,7 @@ const dict = {
     },
     sectionNames: {
       announcement: 'Announcement bar',
+      heroStrip: 'Hero Features',
       hero: 'Hero',
       slider: 'Slider',
       about: 'About',

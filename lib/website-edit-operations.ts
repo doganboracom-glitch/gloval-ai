@@ -1,5 +1,12 @@
 import { canAddEntry, canRemoveEntry } from '@/lib/list-limits'
 import {
+  HERO_STRIP_DEFAULT_ICON,
+  blankHeroStripItems,
+  clampHeroStripText,
+  clampHeroStripTitle,
+  isHeroStripIcon,
+} from '@/lib/hero-strip'
+import {
   HERO_LAYOUTS,
   clampOverlay,
   type HeroAlign,
@@ -1242,8 +1249,18 @@ export function applyOperation(
   ? operation.value.slice(0, ANNOUNCEMENT_TEXT_MAX)
   : section?.type === 'announcement' && operation.field === 'link'
   ? operation.value.trim().slice(0, 500)
+  : section?.type === 'heroStrip' && operation.field === 'title'
+  ? clampHeroStripTitle(operation.value)
+  : section?.type === 'heroStrip' && operation.field === 'text'
+  ? clampHeroStripText(operation.value)
+  : section?.type === 'heroStrip' && operation.field === 'icon'
+  ? (isHeroStripIcon(operation.value) ? operation.value : HERO_STRIP_DEFAULT_ICON)
   : operation.value
         ;(item as Record<string, unknown>)[operation.field] = value
+        // An owner edit makes the box real, so it shows on the public page.
+        if (section?.type === 'heroStrip' && operation.field !== 'icon') {
+          delete (item as Record<string, unknown>).sample
+        }
       }
       return next
     }
@@ -1603,6 +1620,7 @@ export function applyOperation(
  */
 export const SECTION_COLLECTION_KEY: Partial<Record<SectionType, string>> = {
   announcement: 'items',
+  heroStrip: 'items',
   slider: 'slides',
   services: 'items',
   features: 'items',
@@ -1643,6 +1661,8 @@ export function blankItem(type: SectionType, lang: Lang): Record<string, unknown
   switch (type) {
     case 'announcement':
       return { text: pick(lang, 'Yeni duyuru', 'New announcement'), sample: true }
+    case 'heroStrip':
+      return { icon: 'sparkles', title: pick(lang, 'Başlık', 'Heading'), text: pick(lang, 'Kısa açıklama', 'Short description'), sample: true }
     case 'slider':
       return {
         caption: pick(lang, 'Yeni', 'New'),
@@ -1742,6 +1762,7 @@ const pick = (lang: Lang, tr: string, en: string) => (lang === 'tr' ? tr : en)
 export const ADDABLE_SECTION_TYPES: SectionType[] = [
   'announcement',
   'hero',
+  'heroStrip',
   'slider',
   'about',
   'services',
@@ -1795,6 +1816,12 @@ export function blankSection(type: SectionType, lang: Lang, opts?: { corporate?:
         description: pick(lang, 'Kısa açıklama metni buraya gelir.', 'A short supporting description goes here.'),
         primaryButton: { label: pick(lang, 'Başla', 'Get started'), href: '#' },
       }
+    case 'heroStrip':
+      return {
+        type: 'heroStrip',
+        items: blankHeroStripItems(lang),
+        sample: true,
+      } as Section
     case 'slider':
       return {
         type: 'slider',

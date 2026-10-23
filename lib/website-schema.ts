@@ -8,6 +8,8 @@ import {
   GALLERY_ALBUM_NAME_MAX,
   GALLERY_VIDEOS_MAX,
   GALLERY_VIDEO_NAME_MAX,
+  HERO_STRIP_TEXT_MAX,
+  HERO_STRIP_TITLE_MAX,
   LIST_LIMITS,
   PRODUCT_CATALOG_LIMIT,
   PRODUCT_IMAGES_STORED_MAX,
@@ -782,6 +784,25 @@ export const announcementSection = z.object({
 })
 
 /**
+ * "Slider Altı Kutu": a strip of exactly four fixed boxes under the opening hero. It is an
+ * optional, owner-added section: no generation path creates it, so published sites are
+ * unaffected. A box that is still `sample` never reaches the public site, and the section
+ * itself stays hidden there until at least one real box exists.
+ */
+export const heroStripItemSchema = z.object({
+  icon: z.string().max(40).describe('A key of the preset icon set'),
+  title: z.string().max(HERO_STRIP_TITLE_MAX),
+  text: z.string().max(HERO_STRIP_TEXT_MAX),
+  sample: sampleFlag,
+})
+
+export const heroStripSection = z.object({
+  type: z.literal('heroStrip'),
+  ...sectionEditorMeta,
+  items: z.array(heroStripItemSchema).min(LIST_LIMITS.heroStrip.min).max(LIST_LIMITS.heroStrip.max),
+})
+
+/**
  * The announcement band never counts toward the section limit, so adding one can neither fill the cap nor block
  * another section.
  */
@@ -815,6 +836,7 @@ function limitedSections<T extends z.ZodType<{ type: string }[]>>(schema: T) {
 export const sectionSchema = z.discriminatedUnion('type', [
   announcementSection,
   heroSection,
+  heroStripSection,
   sliderSection,
   aboutSection,
   servicesSection,
@@ -1227,6 +1249,7 @@ function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
   const map: Record<SectionType, [tr: string, en: string]> = {
     announcement: ['Duyuru Bandı', 'Announcement bar'],
     hero: ['Kahraman', 'Hero'],
+    heroStrip: ['Slider Altı Kutu', 'Hero Features'],
     slider: ['Kayan Görsel', 'Slider'],
     about: ['Hakkında', 'About'],
     services: ['Hizmetler', 'Services'],
@@ -1257,6 +1280,8 @@ function sectionSummary(section: Section): string {
       return section.items[0]?.text ?? ''
     case 'hero':
       return section.title
+    case 'heroStrip':
+      return section.items.map((i) => i.title).filter(Boolean).join(', ')
     case 'slider':
       return section.subtitle ?? section.title ?? section.slides[0]?.title ?? ''
     case 'about':

@@ -16,6 +16,11 @@ export const GALLERY_VIDEOS_MAX = 12
 export const GALLERY_ALBUM_NAME_MAX = 40
 export const GALLERY_VIDEO_NAME_MAX = 80
 
+/** "Slider Altı Kutu" strip: exactly four fixed boxes, with short copy. */
+export const HERO_STRIP_ITEM_COUNT = 4
+export const HERO_STRIP_TITLE_MAX = 30
+export const HERO_STRIP_TEXT_MAX = 50
+
 export type ListLimit = { readonly min: number; readonly max: number }
 
 /**
@@ -48,6 +53,7 @@ export const LIST_LIMITS = {
   team: { min: 1, max: 8 },
   faq: { min: 1, max: 10 },
   announcement: { min: 1, max: ANNOUNCEMENT_MAX_ITEMS },
+  heroStrip: { min: HERO_STRIP_ITEM_COUNT, max: HERO_STRIP_ITEM_COUNT },
 } as const satisfies Record<string, ListLimit>
 
 /**

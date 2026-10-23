@@ -8,6 +8,7 @@ import { resolveServices, servicePath } from '@/lib/service-pages'
 import { resolveGalleryPages } from '@/lib/gallery-pages'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
 import { HeroSection } from '@/components/website-renderer/sections/hero-section'
+import { HeroStripSection } from '@/components/website-renderer/sections/hero-strip-section'
 import { SliderSection } from '@/components/website-renderer/sections/slider-section'
 import { AboutSection } from '@/components/website-renderer/sections/about-section'
 import { ServicesSection } from '@/components/website-renderer/sections/services-section'
@@ -60,6 +61,8 @@ export function SectionRenderer({
       return <AnnouncementBar data={section} lang={meta.language} colors={site ? resolveTheme(site) : null} />
     case 'hero':
       return <HeroSection data={section} underHeader={underHeader} />
+    case 'heroStrip':
+      return <HeroStripSection data={section} />
     case 'slider':
       return <SliderSection data={section} />
     case 'about':
