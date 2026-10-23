@@ -57,6 +57,8 @@ import {
 } from '@/components/editor/company-fields'
 import { LegalDocsFields } from '@/components/editor/legal-docs-fields'
 import { SocialLinksFields } from '@/components/editor/social-links-fields'
+import { HeroLayoutField } from '@/components/hero-layout-field'
+import { HeroSlidesField } from '@/components/hero-slides-field'
 import { canUseTrackingCode } from '@/lib/site-tracking'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
@@ -547,6 +549,7 @@ function DesignTab({
 
       {hero && (
         <Group title={ui.groupHero}>
+          <HeroLayoutField hero={hero} onDispatch={onDispatch} />
           <TextField
             label={ui.heroBadge}
             value={hero.badge ?? ''}
@@ -568,20 +571,15 @@ function DesignTab({
             value={hero.trustText ?? ''}
             onCommit={(v) => onDispatch({ op: 'updateHero', patch: { trustText: v } })}
           />
-          <HeroImageField
+          <HeroSlidesField
             hero={hero}
+            site={site}
             onDispatch={onDispatch}
-            onRegenerate={onRegenerateHeroImage}
-            working={heroImageWorking}
+            onRegenerateHeroImage={onRegenerateHeroImage}
+            onRegenerateSlideImage={onRegenerateSlideImage}
+            heroImageWorking={heroImageWorking}
+            workingSlide={workingSlide}
           />
-          {(hero.slides?.length ?? 0) > 1 && (
-            <SlideImagesField
-              hero={hero}
-              onDispatch={onDispatch}
-              onRegenerate={onRegenerateSlideImage}
-              workingSlide={workingSlide}
-            />
-          )}
         </Group>
       )}
 
@@ -802,249 +800,6 @@ function ContactActionsFields({
         </>
       )}
     </>
-  )
-}
-
-/**
- * Manual hero image control.
- *
- * Gives the user two independent, always-available paths to the main slider
- * visual — an AI description ("beyaz kamyonete koli yükleyen personel") and a
- * direct image URL — so a failed generation never leaves them stuck. The
- * description is stored on the schema immediately (so it survives even when
- * generation is unavailable) and regeneration is delegated to the parent.
- */
-function HeroImageField({
-  hero,
-  onDispatch,
-  onRegenerate,
-  working,
-}: {
-  hero: HeroSection
-  onDispatch: (op: EditOperation) => void
-  onRegenerate?: (request: string) => void
-  working: boolean
-}) {
-  const { t } = useLanguage()
-  const ui = t.editor.ui
-  const current = hero.image?.imagePrompt ?? hero.imagePrompt ?? ''
-  const [draft, setDraft] = useState(current)
-  const dirtyRef = useRef(false)
-  if (!dirtyRef.current && draft !== current) setDraft(current)
-
-  const src = hero.image?.src ?? ''
-
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">{ui.heroImage}</span>
-        <textarea
-          rows={3}
-          value={draft}
-          placeholder={ui.heroImageHint}
-          onChange={(e) => {
-            dirtyRef.current = true
-            setDraft(e.target.value)
-          }}
-          onBlur={() => {
-            dirtyRef.current = false
-            if (draft !== current) onDispatch({ op: 'updateHeroImage', patch: { imagePrompt: draft } })
-          }}
-          className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary placeholder:text-muted-foreground"
-        />
-      </label>
-
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote/data URI preview
-        <img
-          src={src || '/placeholder.svg'}
-          alt={hero.image?.alt ?? ''}
-          className="h-24 w-full rounded-lg border border-border object-cover"
-        />
-      ) : null}
-
-      {onRegenerate && (
-        <button
-          type="button"
-          onClick={() => {
-            const request = draft.trim()
-            dirtyRef.current = false
-            if (request && request !== current) {
-              onDispatch({ op: 'updateHeroImage', patch: { imagePrompt: request } })
-            }
-            onRegenerate(request)
-          }}
-          disabled={working}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          {working ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ImageIcon className="h-4 w-4" />
-          )}
-          {working ? ui.heroImageWorking : ui.heroImageRegenerate}
-        </button>
-      )}
-
-      <UploadButton
-        label={ui.heroImageUpload}
-        icon={<Upload className="h-4 w-4" />}
-        onFile={(dataUri) => onDispatch({ op: 'updateHeroImage', patch: { src: dataUri } })}
-      />
-    </div>
-  )
-}
-
-/**
- * Per-slide image controls for a multi-slide slider hero.
- *
- * When the hero rotates through several slides, each slide is a self-contained
- * visual — so the owner needs to set each one independently instead of only the
- * first. This renders one upload + AI-generate + description block per slide,
- * dispatching a slide-scoped `updateSlideImage` op (and delegating regeneration
- * to the parent, keyed by slide index) so touching one slide never disturbs the
- * others. The first slide is tagged as the one shown first.
- */
-function SlideImagesField({
-  hero,
-  onDispatch,
-  onRegenerate,
-  workingSlide,
-}: {
-  hero: HeroSection
-  onDispatch: (op: EditOperation) => void
-  onRegenerate?: (slideIndex: number, request: string) => void
-  workingSlide?: number | null
-}) {
-  const { t } = useLanguage()
-  const ui = t.editor.ui
-  const slides = hero.slides ?? []
-
-  return (
-    <div className="flex flex-col gap-3 border-t border-border pt-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium">{ui.slideImagesTitle}</span>
-        <p className="text-[11px] leading-snug text-muted-foreground">{ui.slideImagesIntro}</p>
-      </div>
-      {slides.map((slide, slideIndex) => (
-        <SlideImageRow
-          key={slideIndex}
-          label={`${ui.slideLabel} ${slideIndex + 1}`}
-          firstBadge={slideIndex === 0 ? ui.slideFirstBadge : null}
-          title={slide.title}
-          image={slide.image}
-          working={workingSlide === slideIndex}
-          onCommitPrompt={(imagePrompt) =>
-            onDispatch({ op: 'updateSlideImage', slideIndex, patch: { imagePrompt } })
-          }
-          onUpload={(dataUri) =>
-            onDispatch({ op: 'updateSlideImage', slideIndex, patch: { src: dataUri } })
-          }
-          onRegenerate={
-            onRegenerate ? (request) => onRegenerate(slideIndex, request) : undefined
-          }
-        />
-      ))}
-    </div>
-  )
-}
-
-/** A single slide's image editor: description + preview + AI regen + upload. */
-function SlideImageRow({
-  label,
-  firstBadge,
-  title,
-  image,
-  working,
-  onCommitPrompt,
-  onUpload,
-  onRegenerate,
-}: {
-  label: string
-  firstBadge: string | null
-  title?: string
-  image?: { src?: string; alt?: string; imagePrompt?: string }
-  working: boolean
-  onCommitPrompt: (imagePrompt: string) => void
-  onUpload: (dataUri: string) => void
-  onRegenerate?: (request: string) => void
-}) {
-  const { t } = useLanguage()
-  const ui = t.editor.ui
-  const current = image?.imagePrompt ?? ''
-  const [draft, setDraft] = useState(current)
-  const dirtyRef = useRef(false)
-  if (!dirtyRef.current && draft !== current) setDraft(current)
-
-  const src = image?.src ?? ''
-
-  return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold">{label}</span>
-        {firstBadge && (
-          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
-            {firstBadge}
-          </span>
-        )}
-      </div>
-      {title && (
-        <p className="truncate text-[11px] text-muted-foreground" title={title}>
-          {title}
-        </p>
-      )}
-
-      <textarea
-        rows={2}
-        value={draft}
-        placeholder={ui.heroImageHint}
-        onChange={(e) => {
-          dirtyRef.current = true
-          setDraft(e.target.value)
-        }}
-        onBlur={() => {
-          dirtyRef.current = false
-          if (draft !== current) onCommitPrompt(draft)
-        }}
-        className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary placeholder:text-muted-foreground"
-      />
-
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- arbitrary remote/data URI preview
-        <img
-          src={src || '/placeholder.svg'}
-          alt={image?.alt ?? ''}
-          className="h-20 w-full rounded-lg border border-border object-cover"
-        />
-      ) : null}
-
-      {onRegenerate && (
-        <button
-          type="button"
-          onClick={() => {
-            const request = draft.trim()
-            dirtyRef.current = false
-            if (request && request !== current) onCommitPrompt(request)
-            onRegenerate(request)
-          }}
-          disabled={working}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2 text-sm font-medium transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          {working ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ImageIcon className="h-4 w-4" />
-          )}
-          {working ? ui.heroImageWorking : ui.heroImageRegenerate}
-        </button>
-      )}
-
-      <UploadButton
-        label={ui.heroImageUpload}
-        icon={<Upload className="h-4 w-4" />}
-        onFile={onUpload}
-      />
-    </div>
   )
 }
 

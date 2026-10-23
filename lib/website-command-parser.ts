@@ -1,5 +1,6 @@
 import type { SectionType, WebsiteSchema } from '@/lib/website-schema'
-import type { EditOperation } from '@/lib/website-edit-operations'
+import type { EditOperation, HeroLayoutPatch } from '@/lib/website-edit-operations'
+import { clampOverlay, resolveHeroLayout, type HeroLayout } from '@/lib/hero-layout'
 import { pickLang, type Lang } from '@/lib/i18n'
 import { classifyEditInstruction } from '@/lib/edit-intent-gates'
 
@@ -534,6 +535,105 @@ function targetsHeroField(textNorm: string): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Hero layout ("hero tarzını tam ekran yap", "yazıyı ortala", ...)           */
+/* -------------------------------------------------------------------------- */
+
+const HERO_LAYOUT_LABEL: Record<HeroLayout, { tr: string; en: string }> = {
+  split: { tr: 'standart', en: 'standard' },
+  'light-cover': { tr: 'açık yan görselli', en: 'light cover' },
+  'full-bleed': { tr: 'tam ekran', en: 'full-screen' },
+}
+
+const OVERLAY_STEP = 10
+
+function parseHeroLayoutCommand(textNorm: string, site: WebsiteSchema, lang: Lang): ParsedCommand | null {
+  if (/\blogo\w*|\bmenu\w*|\bfooter\b|\bseo\b/.test(textNorm)) return null
+  if (!targetsHeroField(textNorm)) return null
+
+  const heroWord = /\b(hero|kapak|tarz\w*|duzen\w*|layout|style|gorunum\w*)\b/.test(textNorm)
+  const textWord = /\b(yazi\w*|metin\w*|baslik\w*|icerik\w*|text|copy)\b/.test(textNorm) || /\bhero\b/.test(textNorm)
+
+  let layout: HeroLayout | undefined
+  if (heroWord) {
+    if (/(tam ekran|full[- ]?bleed|full[- ]?screen)/.test(textNorm)) layout = 'full-bleed'
+    else if (/(acik kapak|acik yan|light[- ]?cover)/.test(textNorm)) layout = 'light-cover'
+    else if (/(standart|klasik|varsayilan|bolunmus|\bsplit\b|default|standard)/.test(textNorm)) layout = 'split'
+  }
+
+  let align: 'left' | 'center' | 'right' | undefined
+  if (textWord) {
+    if (/(ortala|ortaya|\bortada\b|\bcent(?:er|re)\b)/.test(textNorm)) align = 'center'
+    else if (/(\bsola\b|\bsol\b|\bleft\b)/.test(textNorm)) align = 'left'
+    else if (/(\bsaga\b|\bsag\b|\bright\b)/.test(textNorm)) align = 'right'
+  }
+
+  let overlayRequest: { kind: 'step'; delta: number } | { kind: 'set'; value: number } | undefined
+  if (/(karart|overlay|karanlik)/.test(textNorm)) {
+    const percent = textNorm.match(/%\s*(\d{1,3})|(\d{1,3})\s*%/)
+    if (percent) overlayRequest = { kind: 'set', value: Number(percent[1] ?? percent[2]) }
+    else if (/(kaldir|kapat|sifirla|\bsil\b|remove|\boff\b|\bnone\b)/.test(textNorm)) overlayRequest = { kind: 'set', value: 0 }
+    else if (/(azalt|kis\b|dusur|hafiflet|acalim|decrease|reduce|\bless\b|lighter)/.test(textNorm)) overlayRequest = { kind: 'step', delta: -OVERLAY_STEP }
+    else if (/(artir|arttir|fazla|yukselt|guclendir|increase|\bmore\b|darker)/.test(textNorm)) overlayRequest = { kind: 'step', delta: OVERLAY_STEP }
+  }
+
+  if (!layout && !align && !overlayRequest) return null
+
+  const hero = site.sections.find((s) => s.type === 'hero')
+  if (!hero || hero.type !== 'hero') {
+    return {
+      operations: [],
+      feedback: say(lang, 'Bu sitede hero bölümü bulunmuyor.', "This site doesn't have a hero section."),
+    }
+  }
+
+  const current = resolveHeroLayout(hero)
+  const effectiveLayout = layout ?? current.layout
+  const patch: HeroLayoutPatch = {}
+  const done: { tr: string; en: string }[] = []
+  const refused: { tr: string; en: string }[] = []
+
+  if (layout) {
+    patch.layout = layout
+    done.push({
+      tr: `Hero tarzı ${HERO_LAYOUT_LABEL[layout].tr} yapıldı`,
+      en: `Hero style set to ${HERO_LAYOUT_LABEL[layout].en}`,
+    })
+  }
+  if (align) {
+    if (align === 'center' && effectiveLayout !== 'full-bleed') {
+      refused.push({
+        tr: 'Yazı yalnızca tam ekran tarzında ortalanabilir; önce tam ekran tarzını seçin',
+        en: 'Text can only be centered in the full-screen style; pick full-screen first',
+      })
+    } else {
+      patch.align = align
+      const label = { left: { tr: 'sola', en: 'left' }, center: { tr: 'ortaya', en: 'center' }, right: { tr: 'sağa', en: 'right' } }[align]
+      done.push({ tr: `Yazı ${label.tr} hizalandı`, en: `Text aligned ${label.en}` })
+    }
+  }
+  if (overlayRequest) {
+    if (effectiveLayout !== 'full-bleed') {
+      refused.push({
+        tr: 'Karartma yalnızca tam ekran tarzında etkilidir',
+        en: 'The dark overlay only applies to the full-screen style',
+      })
+    } else {
+      const value = overlayRequest.kind === 'set' ? overlayRequest.value : current.overlay + overlayRequest.delta
+      const next = clampOverlay(value)
+      patch.overlay = next
+      done.push({ tr: `Karartma %${next} yapıldı`, en: `Overlay set to ${next}%` })
+    }
+  }
+
+  const tr = [...done, ...refused].map((m) => m.tr).join('. ') + '.'
+  const en = [...done, ...refused].map((m) => m.en).join('. ') + '.'
+  return {
+    operations: Object.keys(patch).length > 0 ? [{ op: 'updateHeroLayout', patch }] : [],
+    feedback: say(lang, tr, en),
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Main parser                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -555,6 +655,9 @@ export function parseCommand(
 
   const targetedMove = parseTargetedMove(textNorm, site, lang)
   if (targetedMove) return targetedMove
+
+  const heroLayout = parseHeroLayoutCommand(textNorm, site, lang)
+  if (heroLayout) return heroLayout
 
   /* 1. Structural section operations (add / remove / hide / show / move) ---- */
   const wantsAdd = /(\bekle\b|\bekler misin\b|\badd\b|\binsert\b)/.test(text)

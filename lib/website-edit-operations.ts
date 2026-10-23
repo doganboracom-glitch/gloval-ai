@@ -1,5 +1,12 @@
 import { canAddEntry, canRemoveEntry } from '@/lib/list-limits'
 import {
+  HERO_LAYOUTS,
+  clampOverlay,
+  type HeroAlign,
+  type HeroImageFit,
+  type HeroLayout,
+} from '@/lib/hero-layout'
+import {
   ANNOUNCEMENT_MAX_ITEMS,
   ANNOUNCEMENT_SPEEDS,
   ANNOUNCEMENT_TEXT_MAX,
@@ -27,6 +34,31 @@ import {
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 import { uniquePageSlug } from '@/lib/page-slugs'
 import { addMissingToMenu } from '@/lib/site-menu'
+
+type HeroSection = Extract<Section, { type: 'hero' }>
+
+/** The hero's own copy as a slide, used when a single hero first becomes a slider. */
+function slideFromHero(hero: HeroSection): NonNullable<HeroSection['slides']>[number] {
+  return {
+    badge: hero.badge,
+    title: hero.title,
+    description: hero.description,
+    primaryButton: hero.primaryButton,
+    secondaryButton: hero.secondaryButton,
+    image: hero.image ? { ...hero.image } : undefined,
+    imagePrompt: hero.imagePrompt,
+  }
+}
+
+/** The first slide is what the hero shows first, so its copy mirrors the hero's own fields. */
+function mirrorFirstSlide(hero: HeroSection): void {
+  const first = hero.slides?.[0]
+  if (!first) return
+  hero.title = first.title
+  hero.description = first.description ?? ''
+  hero.primaryButton = first.primaryButton
+  if (first.image) hero.image = { ...first.image }
+}
 
 function newPageId(pages: { id?: string }[], slug: string): string {
   const used = new Set(pages.map((p) => p.id))
@@ -168,9 +200,19 @@ export type EditOperation =
   /** The browser-tab favicon. `src: null` removes it (falls back to the platform default). */
   | { op: 'updateFavicon'; src: string | null }
   | { op: 'updateHero'; patch: HeroPatch }
+  | { op: 'updateHeroLayout'; patch: HeroLayoutPatch }
   | { op: 'updateHeroImage'; patch: HeroImagePatch }
   /** A single slider slide's image (slider hero variant). */
   | { op: 'updateSlideImage'; slideIndex: number; patch: HeroImagePatch }
+  /**
+   * Text + button of one hero slide. A hero without a `slides` list is its own
+   * single slide (index 0), so the same op edits it in place. An empty button
+   * label AND href removes the button.
+   */
+  | { op: 'updateHeroSlide'; slideIndex: number; patch: HeroSlidePatch }
+  | { op: 'addHeroSlide' }
+  | { op: 'removeHeroSlide'; slideIndex: number }
+  | { op: 'moveHeroSlide'; from: number; to: number }
   | { op: 'updateSectionField'; index: number; field: SectionTextField; value: string }
   /**
    * The about section's imagery block. Only the given keys change; `cta`
@@ -459,6 +501,14 @@ export type HeroPatch = {
   secondaryButtonLabel?: string
 }
 
+/** Visual style of the hero; values are normalized by `lib/hero-layout.ts`. */
+export type HeroLayoutPatch = {
+  layout?: HeroLayout
+  align?: HeroAlign
+  overlay?: number
+  imageFit?: HeroImageFit
+}
+
 /**
  * A manual hero image change. `imagePrompt` is the human description of the
  * desired visual, `src` a direct image URL. Setting `src` to an empty string
@@ -468,6 +518,14 @@ export type HeroImagePatch = {
   imagePrompt?: string
   src?: string
   alt?: string
+}
+
+/** Text + primary button of a single hero slide; only the given keys change. */
+export type HeroSlidePatch = {
+  title?: string
+  description?: string
+  buttonLabel?: string
+  buttonHref?: string
 }
 
 /** String fields that the generic section text editor can set. */
@@ -1011,6 +1069,21 @@ export function applyOperation(
       return next
     }
 
+    case 'updateHeroLayout': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero') {
+        const p = operation.patch
+        if (p.layout !== undefined && HERO_LAYOUTS.includes(p.layout)) hero.layout = p.layout
+        if (p.align !== undefined) hero.align = p.align
+        if (p.overlay !== undefined) hero.overlay = clampOverlay(p.overlay)
+        if (p.imageFit !== undefined) hero.imageFit = p.imageFit
+        // Centered copy is only valid on full-bleed; never persist it elsewhere.
+        const layout = hero.layout ?? 'split'
+        if (hero.align === 'center' && layout !== 'full-bleed') hero.align = 'left'
+      }
+      return next
+    }
+
     case 'updateHeroImage': {
       const hero = next.sections.find((s) => s.type === 'hero')
       if (hero && hero.type === 'hero') {
@@ -1049,6 +1122,74 @@ export function applyOperation(
           // The first slide is what a slider shows initially, so it mirrors the
           // hero's own image field — keep the two in sync when it changes.
           if (operation.slideIndex === 0) hero.image = { ...image }
+        }
+      }
+      return next
+    }
+
+    case 'updateHeroSlide': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero') {
+        const p = operation.patch
+        const slide = hero.slides?.[operation.slideIndex]
+        const target: {
+          title: string
+          description?: string
+          primaryButton?: { label: string; href: string }
+        } | undefined = hero.slides?.length ? slide : operation.slideIndex === 0 ? hero : undefined
+        if (target) {
+          if (p.title !== undefined) target.title = p.title
+          if (p.description !== undefined) target.description = p.description
+          if (p.buttonLabel !== undefined || p.buttonHref !== undefined) {
+            const label = p.buttonLabel ?? target.primaryButton?.label ?? ''
+            const href = (p.buttonHref ?? target.primaryButton?.href ?? '').trim()
+            target.primaryButton = label || href ? { label, href: href || '#' } : undefined
+          }
+          if (hero.slides?.length && operation.slideIndex === 0) mirrorFirstSlide(hero)
+        }
+      }
+      return next
+    }
+
+    case 'addHeroSlide': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero') {
+        const current = hero.slides?.length ? hero.slides : [slideFromHero(hero)]
+        if (canAddEntry('heroSlides', current.length)) {
+          const fresh = {
+            title: next.meta.language === 'en' ? 'New slide' : 'Yeni slayt',
+            description: '',
+            image: { imagePrompt: next.meta.name, alt: '', aspectRatio: '16/9' as const },
+          }
+          hero.slides = [...current, fresh]
+          hero.variant = 'slider'
+        }
+      }
+      return next
+    }
+
+    case 'removeHeroSlide': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero' && hero.slides && canRemoveEntry('heroSlides', hero.slides.length)) {
+        if (operation.slideIndex >= 0 && operation.slideIndex < hero.slides.length) {
+          hero.slides = hero.slides.filter((_, i) => i !== operation.slideIndex)
+          mirrorFirstSlide(hero)
+        }
+      }
+      return next
+    }
+
+    case 'moveHeroSlide': {
+      const hero = next.sections.find((s) => s.type === 'hero')
+      if (hero && hero.type === 'hero' && hero.slides) {
+        const { from, to } = operation
+        const last = hero.slides.length - 1
+        if (from !== to && from >= 0 && to >= 0 && from <= last && to <= last) {
+          const slides = [...hero.slides]
+          const [moved] = slides.splice(from, 1)
+          slides.splice(to, 0, moved)
+          hero.slides = slides
+          mirrorFirstSlide(hero)
         }
       }
       return next
