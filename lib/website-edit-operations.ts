@@ -45,7 +45,23 @@ import { PRODUCT_IMAGES_MAX, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { suggestProductImageAlt } from '@/lib/product-image-rules'
 import { isUsableImageSrc } from '@/lib/about-media'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { homeHasRoom, makeProductsInline, withHomeFlags, withProductSlugs, withRenamedProduct } from '@/lib/product-items'
+import {
+  cleanProductDescription,
+  cleanShortNote,
+  homeHasRoom,
+  makeProductsInline,
+  withHomeFlags,
+  withProductSlugs,
+  withRenamedProduct,
+} from '@/lib/product-items'
+import {
+  addCategory,
+  categoryPatchValue,
+  moveCategory,
+  removeCategory,
+  renameCategory,
+  withCategories,
+} from '@/lib/product-categories'
 
 const COMPANY_FIELDS: readonly CompanyField[] = [
   'businessType',
@@ -229,8 +245,21 @@ export type EditOperation =
         specs?: { name: string; value: string }[]
         blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
         approve?: boolean
+        /** The single "Açıklama" text (replaces the short line and the long blocks). */
+        description?: string
+        /** One-line note under the price on the product page, at most 80 characters. */
+        shortNote?: string
+        /** Category name; empty or "Diğer" files the product under "Diğer". */
+        category?: string
       }
     }
+  /** Corporate catalog categories: add, rename (products follow), reorder and delete (products fall back to "Diğer"). */
+  | { op: 'addProductCategory'; index: number; name: string }
+  | { op: 'renameProductCategory'; index: number; from: string; name: string }
+  | { op: 'moveProductCategory'; index: number; name: string; direction: -1 | 1 }
+  | { op: 'removeProductCategory'; index: number; name: string }
+  /** Banner image above the /urunlerimiz list, category and product pages. Empty `src` restores the default. */
+  | { op: 'updateProductsPageImage'; index: number; src: string; alt?: string }
   /** Closes an editor suggestion for good. Stored on the draft, never rendered. */
   | { op: 'dismissHint'; hint: 'aboutImage' | 'serviceDetail' }
   /** Any scalar (string) field on the section, including ones outside the text set. */
@@ -656,11 +685,54 @@ export function applyOperation(
         updated.specs = specs.length > 0 ? specs : undefined
       }
       if (patch.blocks !== undefined) updated.detail = cleanDetailBlocks(patch.blocks)
-      if (patch.approve || patch.blocks !== undefined) updated.sample = undefined
+      if (patch.description !== undefined) {
+        // One text replaces the short line and the long blocks; the blocks were already folded into the editor box.
+        updated.description = cleanProductDescription(patch.description) || undefined
+        updated.detail = undefined
+      }
+      if (patch.shortNote !== undefined) updated.shortNote = cleanShortNote(patch.shortNote) || undefined
+      if (patch.category !== undefined) updated.category = categoryPatchValue(section, patch.category)
+      if (patch.approve || patch.blocks !== undefined || patch.description !== undefined) updated.sample = undefined
       // Turning one product off on a legacy site (no flags yet) must not hide the rest.
       const base = patch.showOnHome !== undefined && section.inline ? withHomeFlags(section) : section
       const edited = { ...base, items: base.items.map((it, i) => (i === operation.item ? updated : it)) }
-      next.sections[operation.index] = edited.inline ? withProductSlugs(edited) : edited
+      const withList = patch.category !== undefined ? withCategories(edited) : edited
+      next.sections[operation.index] = withList.inline ? withProductSlugs(withList) : withList
+      return next
+    }
+
+    case 'addProductCategory':
+    case 'renameProductCategory':
+    case 'moveProductCategory':
+    case 'removeProductCategory': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'products') return next
+      const result =
+        operation.op === 'addProductCategory'
+          ? addCategory(section, operation.name)
+          : operation.op === 'renameProductCategory'
+            ? renameCategory(section, operation.from, operation.name)
+            : operation.op === 'moveProductCategory'
+              ? moveCategory(section, operation.name, operation.direction)
+              : removeCategory(section, operation.name)
+      if (!result.ok) return next
+      next.sections[operation.index] = result.section.inline ? withProductSlugs(result.section) : result.section
+      return next
+    }
+
+    case 'updateProductsPageImage': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'products') return next
+      const src = operation.src.trim()
+      if (!src || !isUsableImageSrc(src)) {
+        const { pageImage: _cleared, ...rest } = section
+        next.sections[operation.index] = rest
+        return next
+      }
+      next.sections[operation.index] = {
+        ...section,
+        pageImage: { src, ...(operation.alt?.trim() ? { alt: operation.alt.trim().slice(0, SERVICE_ITEM_LIMITS.alt) } : {}) },
+      }
       return next
     }
 

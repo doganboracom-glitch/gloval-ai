@@ -454,6 +454,11 @@ export const productsSection = z.object({
   limit: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional().describe('Number of products: 4, 8 or 12'),
   /** Label of the "view all products" link on a storefront. Unset = default text; empty string = hidden. */
   viewAllLabel: z.string().optional().describe('Label of the link to the full product list, e.g. "Tüm ürünleri gör". Empty hides the link.'),
+  categories: z.array(z.string().max(40)).max(30).optional().describe('Managed by the platform. Never set this field yourself.'),
+  pageImage: z
+  .object({ src: z.string(), alt: z.string().max(SERVICE_ITEM_LIMITS.alt).optional() })
+  .optional()
+  .describe('Managed by the platform. Never set this field yourself.'),
   items: z
     .array(
       z.object({
@@ -488,6 +493,7 @@ export const productsSection = z.object({
           .optional()
           .describe('Managed by the platform. Never set this field yourself.'),
         videoUrl: z.string().max(300).optional().describe('Managed by the platform. Never set this field yourself.'),
+        shortNote: z.string().max(80).optional().describe('Managed by the platform. Never set this field yourself.'),
         pageEnabled: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
         showOnHome: z.boolean().optional().describe('Managed by the platform. Never set this field yourself.'),
         previousSlugs: z.array(z.string().max(80)).max(10).optional().describe('Managed by the platform. Never set this field yourself.'),

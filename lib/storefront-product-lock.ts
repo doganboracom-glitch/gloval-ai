@@ -20,6 +20,11 @@ const ITEM_OPERATIONS = new Set<EditOperation['op']>([
   'moveItem',
   'updateProductItem',
   'updateProductsCatalog',
+  'addProductCategory',
+  'renameProductCategory',
+  'moveProductCategory',
+  'removeProductCategory',
+  'updateProductsPageImage',
 ])
 
 /** True when the operation edits one item of a storefront's product section. */

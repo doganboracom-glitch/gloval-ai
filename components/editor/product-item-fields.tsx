@@ -7,7 +7,15 @@ import type { EditOperation } from '@/lib/website-edit-operations'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 import { PRODUCT_HOME_DEFAULT_LIMIT, PRODUCT_SPECS_MAX } from '@/lib/list-limits'
 import { parseVideoUrl } from '@/lib/catalog-public'
-import { homeProductIndexes, isPlaceholderProduct, withProductSlugs } from '@/lib/product-items'
+import {
+  PRODUCT_DESCRIPTION_MAX,
+  PRODUCT_SHORT_NOTE_MAX,
+  homeProductIndexes,
+  isPlaceholderProduct,
+  mergedProductDescription,
+  withProductSlugs,
+} from '@/lib/product-items'
+import { effectiveCategories, selectedCategory } from '@/lib/product-categories'
 import { GhostButton, IconBtn, TextField } from '@/components/editor/editor-fields'
 import { useEditorProjectId } from '@/components/editor/published-context'
 import { ProductImagesEditor } from '@/components/editor/product-images-editor'
@@ -34,10 +42,10 @@ const COPY = {
     addSpec: 'Özellik ekle',
     video: 'Ürün videosu (YouTube veya Vimeo bağlantısı)',
     videoInvalid: 'Bu bağlantı tanınmadı; yalnızca YouTube veya Vimeo bağlantıları kabul edilir.',
-    blocks: 'İçerik blokları',
-    blockHeading: 'Alt başlık',
-    blockBody: 'Metin (madde için satır başına "- " kullanın)',
-    addBlock: 'Blok ekle',
+    description: 'Açıklama',
+    descriptionHint: 'İlk paragraf ürün sayfasında fiyatın altında özet olarak görünür.',
+    shortNote: 'Kısa not (fiyatın altında, en çok 80 karakter)',
+    category: 'Kategori',
     remove: 'Kaldır',
     aiWrite: 'AI ile metin yaz',
     aiWriting: 'Yazılıyor…',
@@ -65,10 +73,10 @@ const COPY = {
     addSpec: 'Add specification',
     video: 'Product video (YouTube or Vimeo link)',
     videoInvalid: 'This link was not recognized; only YouTube or Vimeo links are accepted.',
-    blocks: 'Content blocks',
-    blockHeading: 'Subheading',
-    blockBody: 'Text (use "- " per line for a list)',
-    addBlock: 'Add block',
+    description: 'Description',
+    descriptionHint: 'The first paragraph appears as the summary under the price on the product page.',
+    shortNote: 'Short note (under the price, up to 80 characters)',
+    category: 'Category',
     remove: 'Remove',
     aiWrite: 'Write text with AI',
     aiWriting: 'Writing…',
@@ -120,7 +128,11 @@ export function ProductItemFields({
         thinFacts?: boolean
       }
       if (!Array.isArray(data.blocks) || data.blocks.length === 0) throw new Error(c.aiFailed)
-      patchItem(item, { blocks: data.blocks })
+      const written = data.blocks
+        .flatMap((block) => [block.heading?.trim(), block.body.trim()])
+        .filter(Boolean)
+        .join('\n\n')
+      patchItem(item, { description: written })
       if (data.thinFacts) setNotice(c.aiThin)
     } catch (err) {
       setNotice(err instanceof Error ? err.message : c.aiFailed)
@@ -143,13 +155,11 @@ export function ProductItemFields({
 
           <div className="flex flex-col gap-2">
             {items.map((item, i) => {
-              const blocks = item.detail ?? []
               const specs = item.specs ?? []
+              const categories = effectiveCategories(section)
               const shownOnHome = onHome.has(i)
               const homeLocked = !shownOnHome && onHome.size >= homeLimit
               const videoValue = item.videoUrl ?? ''
-              const updateBlock = (b: number, next: Partial<(typeof blocks)[number]>) =>
-                patchItem(i, { blocks: blocks.map((x, k) => (k === b ? { ...x, ...next } : x)) })
               const updateSpec = (s: number, next: Partial<(typeof specs)[number]>) =>
                 patchItem(i, { specs: specs.map((x, k) => (k === s ? { ...x, ...next } : x)) })
               return (
@@ -260,8 +270,29 @@ export function ProductItemFields({
                           onCommit={(v) => patchItem(i, { videoUrl: v })}
                         />
 
+                        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                          {c.category}
+                          <select
+                            className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                            value={selectedCategory(section, item.category)}
+                            onChange={(e) => patchItem(i, { category: e.target.value })}
+                          >
+                            {categories.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <TextField
+                          label={c.shortNote}
+                          value={item.shortNote ?? ''}
+                          maxLength={PRODUCT_SHORT_NOTE_MAX}
+                          onCommit={(v) => patchItem(i, { shortNote: v })}
+                        />
+
                         <div className="flex flex-col gap-2">
-                          <span className="text-xs font-medium text-muted-foreground">{c.blocks}</span>
                           <button
                             type="button"
                             disabled={writing !== null}
@@ -271,39 +302,15 @@ export function ProductItemFields({
                             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
                             {writing === i ? c.aiWriting : c.aiWrite}
                           </button>
-                          {blocks.map((block, b) => (
-                            <div key={b} className="flex flex-col gap-2 rounded-md border border-border p-2">
-                              <div className="flex items-end gap-2">
-                                <div className="flex-1">
-                                  <TextField
-                                    label={c.blockHeading}
-                                    value={block.heading ?? ''}
-                                    onCommit={(v) => updateBlock(b, { heading: v })}
-                                  />
-                                </div>
-                                <IconBtn
-                                  label={c.remove}
-                                  small
-                                  onClick={() => patchItem(i, { blocks: blocks.filter((_, k) => k !== b) })}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </IconBtn>
-                              </div>
-                              <TextField
-                                label={c.blockBody}
-                                value={block.body}
-                                multiline
-                                rows={4}
-                                onCommit={(v) => updateBlock(b, { body: v })}
-                              />
-                            </div>
-                          ))}
-                          {blocks.length < SERVICE_ITEM_LIMITS.blocks && (
-                            <GhostButton onClick={() => patchItem(i, { blocks: [...blocks, { level: 'h2', body: '' }] })}>
-                              <Plus className="h-3.5 w-3.5" />
-                              {c.addBlock}
-                            </GhostButton>
-                          )}
+                          <TextField
+                            label={c.description}
+                            hint={c.descriptionHint}
+                            value={mergedProductDescription(item)}
+                            multiline
+                            rows={6}
+                            maxLength={PRODUCT_DESCRIPTION_MAX}
+                            onCommit={(v) => patchItem(i, { description: v })}
+                          />
                         </div>
                       </>
                     )}

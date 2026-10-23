@@ -70,6 +70,8 @@ export type CatalogItem = {
   seoDescription: string | null
   /** Former addresses of a renamed product; they answer with a permanent redirect. */
   previousSlugs?: string[]
+  /** One-line note under the price on the product page (never on cards). */
+  shortNote?: string
   /** Long-form description blocks written in the editor. */
   blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
 }
