@@ -183,3 +183,21 @@ describe('WebsiteHeader hamburger on storefronts', () => {
     expect(within(dialog).getByRole('link', { name: 'Hakkımızda' }).getAttribute('href')).toBe('/site/dukkan/hakkimizda')
   })
 })
+
+describe('WebsiteHeader gallery sub-menu', () => {
+  const pages = [
+    { slug: 'home', title: 'Ana Sayfa', isHome: true, id: 'pg-home' },
+    { slug: 'galeri', title: 'Galeri', detailOf: 'gallery', id: 'pg-galeri' },
+    { slug: 'videolar', title: 'Videolar', detailOf: 'videos', id: 'pg-videolar' },
+  ] as unknown as NonNullable<React.ComponentProps<typeof WebsiteHeader>['pages']>
+
+  it('nests Resimler and Videolar under Galeri as real links when both pages are live', () => {
+    renderHeader({ pages, pageHref: (page) => `/${page.slug}`, onNavigate: () => {} })
+    const desktopNav = document.querySelector('header > div:nth-of-type(2) > nav') as HTMLElement
+    const hrefs = within(desktopNav).getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(hrefs).toContain('/galeri')
+    expect(hrefs).toContain('/videolar')
+    expect(within(desktopNav).getByRole('link', { name: 'Resimler' })).toBeTruthy()
+    expect(within(desktopNav).getAllByRole('link', { name: 'Videolar' })).toHaveLength(1)
+  })
+})

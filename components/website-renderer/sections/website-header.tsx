@@ -418,7 +418,14 @@ function buildMenuItems({
     const active = page.slug === activeSlug
     const href = pageHref?.(page)
     if (href) {
-      return { key: entry.key, label: entry.label, href, active, onSelect: asAnchorClick(href) }
+      return {
+        key: entry.key,
+        label: entry.label,
+        href,
+        active,
+        onSelect: asAnchorClick(href),
+        ...(entry.children ? { children: toMenuChildren(entry.children, asAnchorClick) } : {}),
+      }
     }
     return { key: entry.key, label: entry.label, active, onSelect: () => onNavigate?.(page.slug) }
   })
