@@ -293,6 +293,9 @@ export async function logUserEvent(input: {
   type: string
   subject: string
   body?: string | null
+  /** Customer-facing wording for the email to the user; the log row and admin mail keep `subject`/`body`. */
+  userSubject?: string
+  userBody?: string
   emailAdmin?: boolean
   includeBillingProfileReminder?: boolean
   adminSubject?: (userEmail: string) => string
@@ -340,7 +343,9 @@ export async function logUserEvent(input: {
     })
   }
 
-  const html = emailShell(input.subject, `<p>${body}</p>`)
+  const userSubject = input.userSubject ?? input.subject
+  const userBody = input.userBody ?? body
+  const html = emailShell(userSubject, `<p>${userBody}</p>`)
   const admin = createAdminClient()
   const {
     data: { user },
@@ -349,8 +354,8 @@ export async function logUserEvent(input: {
   if (user?.email) {
     await sendTransactionalEmail({
       to: user.email,
-      subject: input.subject,
-      text: body,
+      subject: userSubject,
+      text: userBody,
       html,
     })
   }

@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
+import { peekPendingProject } from '@/lib/pending-project'
+import { createSignupDraft } from '@/lib/signup-draft-actions'
+import { storeSignupDraftToken } from '@/lib/signup-draft-client'
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
@@ -38,25 +42,69 @@ function SignUpForm() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const [suggestion, setSuggestion] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
+  const [typoAcknowledged, setTypoAcknowledged] = useState(false)
+
+  function checkEmail(value: string): boolean {
+    const check = validateEmail(value)
+    setSuggestion(check.suggestion ?? null)
+    if (!check.ok) {
+      setEmailError(t.auth.emailInvalid)
+      return false
+    }
+    setEmailError(null)
+    return true
+  }
+
+  function applySuggestion() {
+    if (!suggestion) return
+    setEmail(suggestion)
+    setSuggestion(null)
+    setEmailError(null)
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!checkEmail(email)) return
+    // A likely provider typo (gmial.com) is flagged once; a second submit goes through.
+    if (validateEmail(email).suggestion && !typoAcknowledged) {
+      setTypoAcknowledged(true)
+      return
+    }
     setLoading(true)
     const supabase = createClient()
+    // Park the visitor's unsaved draft on the server, bound to this e-mail, so the
+    // verification link can restore it from any tab or device. Never blocks sign-up.
+    let draftToken: string | null = null
+    const pending = peekPendingProject()
+    if (pending) {
+      const draft = await createSignupDraft({ email, draft: pending }).catch(() => null)
+      if (draft?.ok) {
+        draftToken = draft.token
+        storeSignupDraftToken(draft.token)
+      }
+    }
+    const callbackParams = new URLSearchParams()
+    if (next !== '/dashboard') callbackParams.set('next', next)
+    if (draftToken) callbackParams.set('draft', draftToken)
+    const callbackQuery = callbackParams.toString()
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim().toLowerCase(),
       password,
       options: {
-        emailRedirectTo:
-          next === '/dashboard'
-            ? getAuthCallbackUrl()
-            : `${getAuthCallbackUrl()}?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: callbackQuery
+          ? `${getAuthCallbackUrl()}?${callbackQuery}`
+          : getAuthCallbackUrl(),
         data: { full_name: fullName },
       },
     })
     if (error) {
       const msg = error.message.toLowerCase()
       if (msg.includes('rate') || error.status === 429) setError(t.auth.tooManyRequests)
+      else if (error.code === 'email_address_invalid' || msg.includes('invalid') && msg.includes('email'))
+        setEmailError(t.auth.emailInvalid)
       else if (msg.includes('already') || msg.includes('registered')) setError(t.auth.invalidCreds)
       else setError(t.auth.unexpected)
       setLoading(false)
@@ -70,6 +118,10 @@ function SignUpForm() {
     trackSignUp('email')
     // If email confirmation is off, a session already exists → go to dashboard.
     if (data.session) {
+      if (draftToken) {
+        window.location.assign(`/auth/resume?draft=${draftToken}`)
+        return
+      }
       router.push(next)
       router.refresh()
       return
@@ -99,10 +151,29 @@ function SignUpForm() {
             label={t.auth.email}
             type="email"
             value={email}
-            onChange={setEmail}
+            onChange={(v) => {
+              setEmail(v)
+              setEmailError(null)
+              setSuggestion(null)
+              setTypoAcknowledged(false)
+            }}
+            onBlur={() => email && checkEmail(email)}
             autoComplete="email"
             required
+            error={emailError}
           />
+          {suggestion && (
+            <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+              <span>{t.auth.emailDidYouMean.replace('{email}', suggestion)}</span>
+              <button
+                type="button"
+                onClick={applySuggestion}
+                className="font-medium text-primary hover:underline"
+              >
+                {t.auth.emailUseSuggestion}
+              </button>
+            </p>
+          )}
           <Field
             label={t.auth.password}
             type="password"
@@ -139,6 +210,8 @@ function Field({
   onChange,
   autoComplete,
   required,
+  onBlur,
+  error,
 }: {
   label: string
   type: string
@@ -146,6 +219,8 @@ function Field({
   onChange: (v: string) => void
   autoComplete?: string
   required?: boolean
+  onBlur?: () => void
+  error?: string | null
 }) {
   return (
     <label className="flex flex-col gap-1.5">
@@ -154,10 +229,17 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         autoComplete={autoComplete}
         required={required}
-        className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
+        aria-invalid={error ? true : undefined}
+        className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-destructive"
       />
+      {error && (
+        <span role="alert" className="text-sm text-destructive">
+          {error}
+        </span>
+      )}
     </label>
   )
 }
