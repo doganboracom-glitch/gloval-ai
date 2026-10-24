@@ -35,7 +35,7 @@ import { countCappedSections, isStorefront } from '@/lib/website-schema'
 import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
 import type { BackupItem } from '@/lib/project-backups-core'
 import { resolveTheme } from '@/components/website-renderer/theme'
-import { type EditOperation, ADDABLE_SECTION_TYPES } from '@/lib/website-edit-operations'
+import { type EditOperation, ADDABLE_SECTION_TYPES, addedSectionIndex } from '@/lib/website-edit-operations'
 import { SectionInspector } from '@/components/editor/section-inspector'
 import { contactSectionCopy, hasContactSection } from '@/lib/contact-section'
 import { aboutSectionCopy, hasAboutSection } from '@/lib/about-section'
@@ -984,8 +984,10 @@ function SectionManager({
               <button
                 key={type}
                 onClick={() => {
+                  const insertedAt = addedSectionIndex(sections, type)
                   onDispatch({ op: 'addSection', sectionType: type })
                   setAdding(false)
+                  setOpenIndex(insertedAt)
                 }}
                 className="rounded-md border border-border px-2 py-1.5 text-xs font-medium transition-colors hover:bg-secondary"
               >

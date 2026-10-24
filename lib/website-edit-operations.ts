@@ -1989,6 +1989,12 @@ function defaultInsertIndex(sections: Section[]): number {
   return last && last.type === 'footer' ? sections.length - 1 : sections.length
 }
 
+/** Index a section added with "Bölüm ekle" lands at: the bottom of the page content (the footer stays last). */
+export function addedSectionIndex(sections: Section[], sectionType: SectionType): number {
+  if (sectionType === 'announcement') return 0
+  return sectionType === 'heroStrip' ? heroStripInsertIndex(sections) : defaultInsertIndex(sections)
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Blank-section templates (for "+ Add Section" and type conversion)         */
 /* -------------------------------------------------------------------------- */
