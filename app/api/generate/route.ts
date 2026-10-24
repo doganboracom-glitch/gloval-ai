@@ -12,6 +12,7 @@ import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
+import { ensureServicesSection } from '@/lib/services-section'
 import { seedAboutMedia } from '@/lib/about-media'
 import { attachAboutImage } from '@/lib/about-image'
 import { seedAboutDetail } from '@/lib/section-detail'
@@ -200,7 +201,7 @@ async function runGenerate(
       // reusable image does the existing image pipeline run once. No extra
       // credits are charged and a failure leaves the text-only layout.
       const seededAbout = await attachAboutImage(
-        seedAboutMedia(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(object)))), prompt), prompt),
+        seedAboutMedia(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(ensureServicesSection(object))))), prompt), prompt),
         prompt,
       )
       // Long-form About body written only from the site's own facts; any
@@ -245,7 +246,7 @@ async function runGenerate(
         attachSectionImages(website, prompt),
       ])
       const seededAbout = await attachAboutImage(
-        seedAboutMedia(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(website)))), prompt), prompt),
+        seedAboutMedia(flagPlaceholderContact(withBlogOffByDefault(normalizeCorporateSectionOrder(ensureStoreAboutSection(ensureContactSection(ensureServicesSection(website))))), prompt), prompt),
         prompt,
       )
       return Response.json({
