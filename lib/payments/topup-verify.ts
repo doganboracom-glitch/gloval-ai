@@ -22,8 +22,8 @@ export type TopUpVerdict =
  * pending top-up charge. The pack (and so the credit amount) is derived ONLY
  * from the server-written idempotency key and the server-side catalog; the
  * amount the provider says was captured must equal the catalog price.
- * Provider fields are optional because not every provider echoes them back —
- * when present they must match, when absent the server-side row is the truth.
+ * Provider amount and currency fields are mandatory for real-provider
+ * settlement; missing or malformed facts fail closed before credits release.
  */
 export function verifyTopUpPayment(
   charge: TopUpChargeRow,
@@ -42,7 +42,7 @@ export function verifyTopUpPayment(
       orderRef: charge.idempotency_key ?? undefined,
     },
     facts,
-    { require: 'when_present' },
+    { require: 'all' },
   )
   if (!verdict.ok) {
     return { ok: false, reason: verdict.reason as 'amount_mismatch' | 'currency_mismatch' | 'order_mismatch' }
