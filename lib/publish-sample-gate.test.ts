@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ATTESTATION_ITEM_KINDS } from '@/lib/content-attestations'
 import { fakeDb } from '@/lib/__fixtures__/fake-db'
 import { buildCleanSite, buildSampleSections, buildSampleSite } from '@/lib/__fixtures__/sample-site'
 import { getPublishedSite, publishProject } from '@/lib/projects'
@@ -173,6 +176,107 @@ describe('publishProject sample-content gate', () => {
     expect(project().published).toBe(false)
     expect(published()).toEqual([])
     expect(project().schema_data).toEqual(DRAFT)
+  })
+
+  describe('item_kind CHECK constraint (root cause of the false "could not be saved" error)', () => {
+    const LEGACY_KINDS = ['testimonials', 'stats', 'pricing', 'discount', 'badge', 'trust', 'product'] as const
+    const withBase = (extra: Section[]) => {
+      const base = buildCleanSite().sections
+      return buildSampleSite([
+        ...base.filter((s) => s.type !== 'contact'),
+        ...extra,
+        ...base.filter((s) => s.type === 'contact'),
+      ])
+    }
+    const faqSite = () =>
+      withBase([
+        {
+          type: 'faq',
+          title: 'SSS',
+          sample: true,
+          items: [
+            { question: 'Soru 1?', answer: 'Cevap 1', sample: true },
+            { question: 'Soru 2?', answer: 'Cevap 2', sample: true },
+          ],
+        },
+      ] as Section[])
+
+    it('reproduces: the pre-073 constraint rejects "info" attestations, so the publish is refused and nothing is saved', async () => {
+      fakeDb.attestationKindCheck = LEGACY_KINDS
+      const site = faqSite()
+      expect(collectSampleFindings(site).flatMap((s) => s.items.map((i) => i.kind))).toContain('info')
+
+      const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })
+
+      expect(result).toMatchObject({ ok: false, reason: SAMPLE_CONTENT_ERROR, attestationFailed: true })
+      expect(project().published).toBe(false)
+      expect(project().slug).toBeNull()
+      expect(published()).toEqual([])
+      expect(fakeDb.rows('content_attestations')).toEqual([])
+    })
+
+    it('reproduces: the same constraint rejects a "contact" acknowledgement too', async () => {
+      fakeDb.attestationKindCheck = LEGACY_KINDS
+      const base = buildCleanSite()
+      const site = {
+        ...base,
+        sections: [
+          ...base.sections.filter((s) => s.type !== 'contact'),
+          { type: 'contact', title: 'İletişim', phone: '+90 532 111 22 33', sample: true, sampleFields: ['phone'] },
+        ],
+      } as WebsiteSchema
+      const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })
+      // contact placeholders are published empty and never attested, so this still works
+      expect(result).toMatchObject({ ok: true })
+      expect(fakeDb.rows('content_attestations')).toEqual([])
+    })
+
+    it('with the 073 constraint the same approval succeeds, with no error flag', async () => {
+      fakeDb.attestationKindCheck = ATTESTATION_ITEM_KINDS
+      const site = faqSite()
+      const result = await publishProject({ id: ID, schema: site, approvals: ids(site) })
+
+      expect(result).toMatchObject({ ok: true })
+      expect(result).not.toHaveProperty('attestationFailed')
+      expect(project().published).toBe(true)
+      expect(fakeDb.rows('content_attestations')).toHaveLength(2)
+    })
+
+    it('a retry after a failed attempt writes no duplicates', async () => {
+      const site = faqSite()
+      const approvals = ids(site)
+
+      fakeDb.attestationKindCheck = LEGACY_KINDS
+      expect(await publishProject({ id: ID, schema: site, approvals })).toMatchObject({ ok: false })
+      expect(fakeDb.rows('content_attestations')).toEqual([])
+
+      fakeDb.attestationKindCheck = ATTESTATION_ITEM_KINDS
+      expect(await publishProject({ id: ID, schema: site, approvals })).toMatchObject({ ok: true })
+      expect(await publishProject({ id: ID, schema: site, approvals })).toMatchObject({ ok: true })
+      expect(await publishProject({ id: ID, schema: site, approvals })).toMatchObject({ ok: true })
+      expect(fakeDb.rows('content_attestations')).toHaveLength(approvals.length)
+    })
+
+    it('every kind the gate can emit is allowed by the app list and by migration 073', () => {
+      const sites = [
+        buildSampleSite(),
+        faqSite(),
+        withBase([
+          {
+            type: 'announcement',
+            sample: true,
+            items: [{ text: 'Büyük indirim', sample: true }],
+          },
+        ] as Section[]),
+      ]
+      const emitted = new Set(sites.flatMap((s) => collectSampleFindings(s).flatMap((f) => f.items.map((i) => i.kind))))
+      const sql = readFileSync(join(process.cwd(), 'scripts/073-content-attestation-kinds.sql'), 'utf8')
+      for (const kind of emitted) {
+        expect(ATTESTATION_ITEM_KINDS).toContain(kind)
+        expect(sql).toContain(`'${kind}'`)
+      }
+      for (const kind of ATTESTATION_ITEM_KINDS) expect(sql).toContain(`'${kind}'`)
+    })
   })
 
   it('fails closed when stored attestations cannot be read', async () => {

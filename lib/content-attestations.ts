@@ -11,6 +11,24 @@ import {
  * readable content: just who, when, which item kind and the content digest.
  */
 
+/**
+ * Values the `item_kind` CHECK in the database accepts
+ * (scripts/059 plus scripts/073). A test keeps this list, the SQL and the kinds
+ * the gate can produce in sync, because a kind outside the CHECK makes every
+ * approval of that kind fail to store.
+ */
+export const ATTESTATION_ITEM_KINDS = [
+  'testimonials',
+  'stats',
+  'pricing',
+  'discount',
+  'badge',
+  'trust',
+  'product',
+  'info',
+  'contact',
+] as const
+
 /** Digests already approved for this project under the current statement version. */
 export async function loadAttestedDigests(
   projectId: string,
