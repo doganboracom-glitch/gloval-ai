@@ -43,6 +43,7 @@ import {
 } from '@/lib/social-links'
 import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-legal-docs'
 import { uniquePageSlug } from '@/lib/page-slugs'
+import { sectionsOfKind, type CanonicalKind } from '@/lib/canonical-pages'
 import { addMissingToMenu } from '@/lib/site-menu'
 
 type HeroSection = Extract<Section, { type: 'hero' }>
@@ -526,7 +527,7 @@ export type EditOperation =
    * Real pages: each one is served at its own clean URL. Adding is subject to
    * the plan page limit, which the server checks on the resulting page count.
    */
-  | { op: 'addPage'; title: string; slug?: string }
+  | { op: 'addPage'; title: string; slug?: string; kind?: CanonicalKind }
   /**
    * Adds a ready-made info page (FAQ, About, Shipping, ...) built by
    * `buildInfoPage`. Placeholder items carry `sample: true`, so they stay
@@ -1628,7 +1629,10 @@ export function applyOperation(
       const title = operation.title.trim().slice(0, 60)
       if (!title || next.pages.length >= SITE_PAGE_HARD_CAP) return next
       const slug = uniquePageSlug(operation.slug?.trim() || title, next.pages.map((p) => p.slug))
-      next.pages.push({ slug, title, kind: 'custom', sections: [], id: newPageId(next.pages, slug) })
+      // A page of a known kind starts with a copy of the matching sections; a blank
+      // page has none and stays unpublished until the owner adds content.
+      const sections = operation.kind ? sectionsOfKind(next, operation.kind) : []
+      next.pages.push({ slug, title, kind: 'custom', sections, id: newPageId(next.pages, slug) })
       return next
     }
 

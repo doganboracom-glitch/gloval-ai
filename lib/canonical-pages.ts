@@ -21,6 +21,25 @@ export const CANONICAL_SLUGS: Record<CanonicalKind, Record<Lang, string>> = {
   gallery: { tr: 'galeri', en: 'gallery' },
 }
 
+export const CANONICAL_KINDS = Object.keys(CANONICAL_SLUGS) as CanonicalKind[]
+
+export const CANONICAL_TITLES: Record<CanonicalKind, Record<Lang, string>> = {
+  about: { tr: 'Hakkımızda', en: 'About' },
+  services: { tr: 'Hizmetlerimiz', en: 'Services' },
+  faq: { tr: 'Sıkça Sorulan Sorular', en: 'FAQ' },
+  contact: { tr: 'İletişim', en: 'Contact' },
+  gallery: { tr: 'Galeri', en: 'Gallery' },
+}
+
+/**
+ * The address suggested for a new page of this kind: `/hakkimizda` (`/about` on an
+ * English site), or `-2`, `-3`... when a page already uses it. Only a suggestion:
+ * the owner can edit it, and existing pages' addresses are never touched.
+ */
+export function suggestPageSlug(kind: CanonicalKind, lang: Lang, takenSlugs: Iterable<string>): string {
+  return uniquePageSlug(CANONICAL_SLUGS[kind][lang], takenSlugs)
+}
+
 /** Sections a page of this kind shows (besides the shared footer). */
 export const CANONICAL_SECTION_TYPES: Record<CanonicalKind, SectionType[]> = {
   about: ['about', 'stats'],
@@ -135,7 +154,7 @@ function rewriteHref(href: string, rename: Map<string, string>, dropped: Map<str
   return href
 }
 
-function sectionsOfKind(site: Pick<WebsiteSchema, 'sections'>, kind: CanonicalKind): Section[] {
+export function sectionsOfKind(site: Pick<WebsiteSchema, 'sections'>, kind: CanonicalKind): Section[] {
   const types = new Set<SectionType>(CANONICAL_SECTION_TYPES[kind])
   return site.sections.filter((s) => types.has(s.type) && !s.hidden).map((s) => JSON.parse(JSON.stringify(s)) as Section)
 }

@@ -1,7 +1,8 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { AddPageForm } from '@/components/editor/add-page-form'
 import { IconBtn, TextField } from '@/components/editor/editor-fields'
 import { InfoPageTemplates } from '@/components/editor/info-page-templates'
 import type { EditOperation } from '@/lib/website-edit-operations'
@@ -287,16 +288,7 @@ export function PagesManager({
         </div>
       )}
 
-      <button
-        type="button"
-        disabled={!canAdd}
-        onClick={() => onDispatch({ op: 'addPage', title: c.newPage })}
-        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        {c.add}
-      </button>
-
+      <AddPageForm takenSlugs={site.pages.map((p) => p.slug)} canAdd={canAdd} onDispatch={onDispatch} />
       <InfoPageTemplates site={site} projectId={projectId} canAdd={canAdd} onDispatch={onDispatch} />
     </div>
   )
