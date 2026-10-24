@@ -8,7 +8,7 @@ import { ensureServicesSection } from '@/lib/services-section'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { resolveFooterColumns, resolveFooterLegal } from '@/lib/footer-links'
 import { pageMenuLabel, resolveFooterPages, resolveHeaderMenu } from '@/lib/site-menu'
-import { findPublicPage, homeSlug, pageNavItems, pagePath } from '@/lib/website-pages'
+import { findPublicPage, homeSlug, pageNavItems, pagePath, sectionsForPage } from '@/lib/website-pages'
 import type { NavLink, Section, WebsiteSchema } from '@/lib/website-schema'
 
 const asSite = (json: unknown) => json as unknown as WebsiteSchema
@@ -116,9 +116,17 @@ describe('sites with no dead page keep their menu exactly', () => {
       const pruned = withLivePageLinks(site)
       expect(renderedMenu(pruned)).toEqual(renderedMenu(site))
       expect(pruned.pages).toBe(site.pages)
-      expect(pruned.navigation).toBe(site.navigation)
+      if (json === dbajans) expect(pruned.navigation).toBe(site.navigation)
     })
   }
+
+  it('luna: the only navigation difference is the unrendered #deals schema link (the header is built from pages)', () => {
+    const site = asSite(luna)
+    const pruned = withLivePageLinks(site)
+    expect(site.navigation.links.filter((l) => !pruned.navigation.links.includes(l)).map((l) => l.href)).toEqual(['#deals'])
+    expect(pruned.navigation.cta).toBe(site.navigation.cta)
+    expect(pruned.navigation.menuOrder).toEqual(site.navigation.menuOrder)
+  })
 
   it('dbajans.com.tr: the whole schema is returned untouched', () => {
     const site = asSite(dbajans)
@@ -180,9 +188,17 @@ describe('hero and CTA buttons follow the menu rule', () => {
     expect(before.secondaryButton).toEqual({ ...before.secondaryButton!, href: '/contact' })
     expect(after.secondaryButton).toEqual({ ...before.secondaryButton!, href: '#contact' })
 
+    // Undo every approved change; the rest of luna must be identical.
     const restore = JSON.parse(JSON.stringify(pruned))
+    const original = JSON.parse(JSON.stringify(site))
+    const ctaIndex = original.sections.findIndex((s: Section) => s.type === 'cta')
     restore.sections[0].slides[2].secondaryButton.href = '/contact'
-    expect(restore).toEqual(JSON.parse(JSON.stringify(site)))
+    restore.sections[0].slides[1].secondaryButton.href = '#featured'
+    restore.sections[0].secondaryButton.href = '#featured'
+    restore.sections[0].primaryButton = original.sections[0].primaryButton
+    restore.sections[ctaIndex].secondaryButton = original.sections[ctaIndex].secondaryButton
+    restore.navigation.links = original.navigation.links
+    expect(restore).toEqual(original)
   })
 
   it('ay-yildiz: hero "Hakkımızda" -> /about is hidden (no about section on home)', () => {
@@ -249,18 +265,88 @@ describe('every #anchor on the page has a target section', () => {
     })
   }
 
-  it('dbajans keeps every anchor; luna only gains the approved #contact (Hızlı Hediye Paketi) and loses none', () => {
+  it('dbajans keeps every anchor and its schema is returned untouched', () => {
     const dba = asSite(dbajans)
+    expect(deadAnchors(dba)).toEqual([])
     expect(withLivePageLinks(dba)).toBe(dba)
+  })
 
+  it('luna: reproduces the report (#featured and #deals have no element with that id)', () => {
     const site = asSite(luna)
-    expect(deadAnchors(site)).toEqual([])
-    const before = anchorsOf(site).map((l) => l.href)
-    const after = anchorsOf(withLivePageLinks(site)).map((l) => l.href)
-    const withoutApproved = [...after]
-    withoutApproved.splice(withoutApproved.indexOf('#contact'), 1)
-    expect([...withoutApproved].sort()).toEqual([...before].sort())
-    expect(after).toHaveLength(before.length + 1)
+    const dead = deadAnchors(site)
+    expect([...new Set(dead.map((l) => l.href))].sort()).toEqual(['#deals', '#featured'])
+    const byPath = Object.fromEntries(dead.map((l) => [l.path, l.href]))
+    expect(byPath['sections[0].slides[1].secondaryButton.href']).toBe('#featured')
+    const ctaIndex = site.sections.findIndex((s) => s.type === 'cta')
+    expect(byPath[`sections[${ctaIndex}].secondaryButton.href`]).toBe('#deals')
+    const types = new Set(site.sections.map((s) => s.type))
+    expect(types.has('products')).toBe(true)
+    expect(site.sections.filter((s) => s.type === 'products')).toHaveLength(2)
+  })
+
+  it('luna: #featured goes to the real product list id, #deals is hidden (several product sections share that id)', () => {
+    const site = asSite(luna)
+    const pruned = withLivePageLinks(site)
+    expect(deadAnchors(pruned)).toEqual([])
+
+    const heroOf = (s: WebsiteSchema) => s.sections.find((x) => x.type === 'hero') as Extract<Section, { type: 'hero' }>
+    const before = heroOf(site)
+    const after = heroOf(pruned)
+    expect(before.slides![1].secondaryButton).toEqual({ href: '#featured', label: 'Sepete Ekle' })
+    expect(after.slides![1].secondaryButton).toEqual({ href: '#products', label: 'Sepete Ekle' })
+    expect(after.secondaryButton).toEqual({ href: '#products', label: 'Öne Çıkan Ürünler' })
+    expect(after.primaryButton).toBeUndefined()
+
+    const cta = pruned.sections.find((s) => s.type === 'cta') as Extract<Section, { type: 'cta' }>
+    expect(cta.secondaryButton).toBeUndefined()
+    expect(cta.primaryButton?.href).toBe('#contact')
+  })
+
+  it('luna: the /products page shows no #deals button either (its CTA is the shared section)', () => {
+    const site = asSite(luna)
+    const pruned = withLivePageLinks(site)
+    const ctaOn = (s: WebsiteSchema, slug: string) =>
+      sectionsForPage(s, slug).find((x) => x.type === 'cta') as Extract<Section, { type: 'cta' }> | undefined
+
+    const before = ctaOn(site, 'products')
+    expect(before?.secondaryButton?.href).toBe('#deals')
+    expect(before?.primaryButton?.href).toBe('#contact')
+
+    const after = ctaOn(pruned, 'products')
+    expect(after?.secondaryButton).toBeUndefined()
+    expect(after?.primaryButton).toEqual(before?.primaryButton)
+
+    for (const page of pruned.pages) {
+      const view = { ...pruned, sections: sectionsForPage(pruned, page.slug) } as WebsiteSchema
+      expect(anchorsOf(view).filter((l) => l.href === '#deals' || l.href === '#featured'), page.slug).toEqual([])
+    }
+  })
+
+  it('luna: every #anchor that is left points at an id the page renders', () => {
+    const pruned = withLivePageLinks(asSite(luna))
+    const rendered = new Set(pruned.sections.filter((s) => !s.hidden).map((s) => s.type))
+    const onPage = anchorsOf(pruned).filter((l) => l.path.startsWith('sections'))
+    for (const link of onPage) {
+      expect(rendered.has(link.href.slice(1) as Section['type']), `${link.path} -> ${link.href}`).toBe(true)
+    }
+    expect([...new Set(onPage.map((l) => l.href))].sort()).toEqual([
+      '#categories',
+      '#contact',
+      '#faq',
+      '#products',
+    ])
+  })
+
+  it('a #featured link is hidden when the site has no product section at all', () => {
+    const site = asSite(ayYildiz)
+    const withFeatured = {
+      ...site,
+      sections: site.sections.map((s) =>
+        s.type === 'cta' ? { ...s, primaryButton: { label: 'Öne Çıkanlar', href: '#featured' } } : s,
+      ),
+    } as WebsiteSchema
+    const cta = withLivePageLinks(withFeatured).sections.find((s) => s.type === 'cta') as { primaryButton?: unknown }
+    expect(cta.primaryButton).toBeUndefined()
   })
 
   it('menu, CTA, card and footer anchors to a missing section are hidden too', () => {

@@ -79,11 +79,37 @@ export function liveSectionTypes(site: WebsiteSchema): Set<string> {
   return live
 }
 
+/**
+ * Storefront hero/CTA buttons are generated with ids that no renderer element ever
+ * carries (the renderer only emits section-type ids). They are always dead as written.
+ * `null` = no meaningful target, hide; a section type = that section's real id when it
+ * is live. Only `featured` has an unambiguous target (the product list); campaign-style
+ * ids are not mapped because several product sections share the `products` id.
+ */
+const ORPHAN_STORE_ANCHORS: Record<string, Section['type'] | null> = {
+  featured: 'products',
+  featuredproducts: 'products',
+  deals: null,
+  campaigns: null,
+  sale: null,
+  offers: null,
+  newarrivals: null,
+  bestsellers: null,
+  collections: null,
+}
+
+function orphanStoreAnchor(id: string): string | undefined {
+  const key = id.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+  return Object.hasOwn(ORPHAN_STORE_ANCHORS, key) ? key : undefined
+}
+
 /** True when an `#anchor` href points at a section that does not exist on the live site. */
 export function isDeadAnchor(href: string, live: ReadonlySet<string>): boolean {
   const trimmed = href.trim()
   if (!trimmed.startsWith('#') || trimmed.length < 2) return false
-  const type = anchorSectionType(trimmed.slice(1))
+  const id = trimmed.slice(1)
+  if (!ANCHOR_IDS.has(id.trim().toLowerCase()) && orphanStoreAnchor(id)) return true
+  const type = anchorSectionType(id)
   return type !== null && !live.has(type)
 }
 
@@ -93,6 +119,12 @@ type Verdict = { keep: true } | { keep: false; anchor: string | null }
 
 const KEEP: Verdict = { keep: true }
 
+function deadAnchorVerdict(href: string, live: ReadonlySet<string>): Verdict {
+  const orphan = orphanStoreAnchor(href.trim().slice(1))
+  const target = orphan ? ORPHAN_STORE_ANCHORS[orphan] : null
+  return { keep: false, anchor: target && live.has(target) ? `#${target}` : null }
+}
+
 function dead(site: WebsiteSchema, kind: CanonicalKind | null): Verdict {
   if (!kind) return { keep: false, anchor: null }
   const type = ANCHOR_TYPE[kind]
@@ -101,7 +133,7 @@ function dead(site: WebsiteSchema, kind: CanonicalKind | null): Verdict {
 }
 
 function verdictFor(site: WebsiteSchema, href: string, ctx: Context): Verdict {
-  if (isDeadAnchor(href, ctx.live)) return { keep: false, anchor: null }
+  if (isDeadAnchor(href, ctx.live)) return deadAnchorVerdict(href, ctx.live)
   const match = /^\/([^/?#]+)\/?(?:[?#].*)?$/.exec(href.trim())
   if (!match) return KEEP
   let token = match[1].toLowerCase()
