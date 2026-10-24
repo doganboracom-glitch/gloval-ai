@@ -26,9 +26,6 @@ const LIST_KEY: Partial<Record<Section['type'], string>> = {
   faq: 'items',
 }
 
-/** Types that are a single block of copy: hidden as a whole while untouched. */
-const WHOLE_SECTION_TYPES: ReadonlyArray<Section['type']> = ['about', 'contact', 'cta', 'hero']
-
 /** Keys the platform may add to an untouched entry (e.g. a slug on save). */
 const PLATFORM_KEYS = new Set(['slug', 'sample'])
 const LANGS = ['tr', 'en'] as const
@@ -67,19 +64,11 @@ function isPlaceholderEntry(type: Section['type'], listKey: string, entry: unkno
   })
 }
 
-function isUntouchedWholeSection(section: Section): boolean {
-  const { hidden: _hidden, sample: _sample, ...rest } = section as Section & { hidden?: boolean; sample?: boolean }
-  return LANGS.some((lang) => {
-    const { hidden: _h, sample: _s, ...blank } = blankFor(section.type, lang) as Record<string, unknown>
-    return sameValue(rest, blank)
-  })
-}
-
-/** The section as the public site should draw it, or null when nothing real is left in it. */
+/**
+ * The section as the public site should draw it, or null when a list section has no real entry left.
+ * Single-copy sections (hero, about, contact, cta, ...) are never touched, even when equal to the blank template.
+ */
 function publicSection(section: Section): Section | null {
-  if (WHOLE_SECTION_TYPES.includes(section.type)) {
-    return isUntouchedWholeSection(section) ? null : section
-  }
   const listKey = LIST_KEY[section.type]
   if (!listKey) return section
   const list = (section as unknown as Record<string, unknown>)[listKey]
@@ -101,7 +90,7 @@ export function stripPlaceholdersFromSections(sections: readonly Section[]): Sec
   return changed ? next : (sections as Section[])
 }
 
-/** Public view of a site: placeholder entries and untouched blank sections removed. Same object when there are none. */
+/** Public view of a site: placeholder list entries (and list sections left with none) removed. Same object when there are none. */
 export function stripPlaceholders(site: WebsiteSchema): WebsiteSchema {
   const sections = stripPlaceholdersFromSections(site.sections)
   const pages = site.pages?.map((page) => {

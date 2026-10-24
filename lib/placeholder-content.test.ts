@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { stripPlaceholders } from './placeholder-content'
-import { ADDABLE_SECTION_TYPES, addedSectionIndex, applyOperation } from './website-edit-operations'
+import { ADDABLE_SECTION_TYPES, addedSectionIndex, applyOperation, blankSection } from './website-edit-operations'
 import type { WebsiteSchema } from './website-schema'
 
 function site(language: 'tr' | 'en' = 'tr'): WebsiteSchema {
@@ -43,12 +43,20 @@ describe('stripPlaceholders', () => {
     }
   })
 
-  it('hides untouched about, cta and contact sections', () => {
-    for (const type of ['about', 'cta', 'contact'] as const) {
-      const live = applyOperation(site(), { op: 'addSection', sectionType: type })
-      const shown = stripPlaceholders(live)
-      expect(shown.sections.filter((s) => s.type === type).length).toBe(type === 'about' ? 1 : 0)
+  it('never hides single-copy sections, even when equal to the blank template', () => {
+    for (const lang of ['tr', 'en'] as const) {
+      for (const type of ['hero', 'about', 'contact', 'cta'] as const) {
+        const blank = blankSection(type, lang, { corporate: true })
+        const live = { ...site(lang), sections: [blank, { type: 'footer' }] } as unknown as WebsiteSchema
+        expect(stripPlaceholders(live), `${lang}:${type}`).toBe(live)
+      }
     }
+  })
+
+  it('keeps an added contact section visible on the public site', () => {
+    const live = applyOperation(site(), { op: 'addSection', sectionType: 'contact' })
+    const shown = stripPlaceholders(live)
+    expect(shown.sections.filter((s) => s.type === 'contact')).toHaveLength(1)
   })
 
   it('shows a section as soon as an entry is edited, dropping only the untouched ones', () => {
