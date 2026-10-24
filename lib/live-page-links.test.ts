@@ -3,7 +3,9 @@ import ayYildiz from '@/lib/__fixtures__/published/ay-yildiz.json'
 import dbajans from '@/lib/__fixtures__/published/dbajans.json'
 import luna from '@/lib/__fixtures__/published/luna-mucevher.json'
 import { canonicalRedirectTarget } from '@/lib/canonical-pages'
-import { emptyPageSlugs, isEmptyPage, withLivePageLinks } from '@/lib/live-page-links'
+import { emptyPageSlugs, isDeadAnchor, isEmptyPage, liveSectionTypes, withLivePageLinks } from '@/lib/live-page-links'
+import { ensureServicesSection } from '@/lib/services-section'
+import { fallbackWebsite } from '@/lib/website-schema'
 import { resolveFooterColumns, resolveFooterLegal } from '@/lib/footer-links'
 import { pageMenuLabel, resolveFooterPages, resolveHeaderMenu } from '@/lib/site-menu'
 import { findPublicPage, homeSlug, pageNavItems, pagePath } from '@/lib/website-pages'
@@ -215,3 +217,111 @@ function withoutDeadPages(site: WebsiteSchema): WebsiteSchema {
   const dead = new Set(emptyPageSlugs(site))
   return { ...site, pages: site.pages.filter((p) => !dead.has(p.slug)) }
 }
+
+const anchorsOf = (site: WebsiteSchema) =>
+  allLinks(site).filter((l) => l.href.trim().startsWith('#') && l.href.trim().length > 1)
+
+const deadAnchors = (site: WebsiteSchema) => {
+  const live = liveSectionTypes(site)
+  return anchorsOf(site).filter((l) => isDeadAnchor(l.href, live))
+}
+
+describe('every #anchor on the page has a target section', () => {
+  it('ay-yildiz: reproduces the report (two #services buttons, no visible services section)', () => {
+    const site = asSite(ayYildiz)
+    expect(deadAnchors(site).map((l) => l.href)).toEqual(['#services', '#services'])
+    expect(site.sections.some((s) => s.type === 'services' && s.hidden === true)).toBe(true)
+  })
+
+  it('ay-yildiz: after the rule no #anchor is left without a target and the buttons are hidden', () => {
+    const pruned = withLivePageLinks(asSite(ayYildiz))
+    expect(deadAnchors(pruned)).toEqual([])
+    expect(anchorsOf(pruned).some((l) => l.href === '#services')).toBe(false)
+  })
+
+  for (const [name, json] of [
+    ['ay-yildiz-tasimacilik', ayYildiz],
+    ['dbajans.com.tr', dbajans],
+    ['luna-mucevher.gloval.site', luna],
+  ] as const) {
+    it(`${name}: all #anchors resolve to a rendered section`, () => {
+      expect(deadAnchors(withLivePageLinks(asSite(json)))).toEqual([])
+    })
+  }
+
+  it('dbajans keeps every anchor; luna only gains the approved #contact (Hızlı Hediye Paketi) and loses none', () => {
+    const dba = asSite(dbajans)
+    expect(withLivePageLinks(dba)).toBe(dba)
+
+    const site = asSite(luna)
+    expect(deadAnchors(site)).toEqual([])
+    const before = anchorsOf(site).map((l) => l.href)
+    const after = anchorsOf(withLivePageLinks(site)).map((l) => l.href)
+    const withoutApproved = [...after]
+    withoutApproved.splice(withoutApproved.indexOf('#contact'), 1)
+    expect([...withoutApproved].sort()).toEqual([...before].sort())
+    expect(after).toHaveLength(before.length + 1)
+  })
+
+  it('menu, CTA, card and footer anchors to a missing section are hidden too', () => {
+    const site = asSite(luna)
+    const withDead = {
+      ...site,
+      navigation: {
+        ...site.navigation,
+        links: [...site.navigation.links, { label: 'Hizmetler', href: '#services' }],
+        cta: { label: 'Hizmetler', href: '#services' },
+      },
+      sections: site.sections.map((s) =>
+        s.type === 'footer'
+          ? { ...s, columns: [{ title: 'Menü', links: [{ label: 'Hizmetler', href: '#services' }, { label: 'İletişim', href: '#contact' }] }] }
+          : s,
+      ),
+    } as WebsiteSchema
+    expect(deadAnchors(withDead).length).toBeGreaterThanOrEqual(3)
+    const pruned = withLivePageLinks(withDead)
+    expect(deadAnchors(pruned)).toEqual([])
+    expect(pruned.navigation.cta).toBeUndefined()
+    expect(footerOf(pruned)?.columns?.[0].links).toEqual([{ label: 'İletişim', href: '#contact' }])
+  })
+})
+
+describe('generation always leaves a #services target when services are linked', () => {
+  const withoutServices = (site: WebsiteSchema): WebsiteSchema => ({
+    ...site,
+    sections: site.sections.filter((s) => s.type !== 'services'),
+  })
+
+  it('ay-yildiz without its services section: the generated features list becomes the services list (nothing invented)', () => {
+    const generated = withoutServices(asSite(ayYildiz))
+    expect(deadAnchors(generated).map((l) => l.href)).toEqual(['#services', '#services'])
+    const features = generated.sections.find((s) => s.type === 'features') as Extract<Section, { type: 'features' }>
+    const ensured = ensureServicesSection(generated)
+    const services = ensured.sections.find((s) => s.type === 'services') as Extract<Section, { type: 'services' }>
+    expect(services).toBeDefined()
+    expect(services.hidden).toBeUndefined()
+    expect(services.items.map((i) => [i.title, i.description])).toEqual(
+      features.items.slice(0, 8).map((i) => [i.title, i.description]),
+    )
+    expect(deadAnchors(ensured)).toEqual([])
+    expect(anchorsOf(withLivePageLinks(ensured)).filter((l) => l.href === '#services').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('a hidden services section is shown again at generation time', () => {
+    const ensured = ensureServicesSection(asSite(ayYildiz))
+    expect(ensured.sections.find((s) => s.type === 'services')?.hidden).toBeUndefined()
+    expect(deadAnchors(ensured)).toEqual([])
+  })
+
+  it('a site that never links to services gets nothing added; storefronts are skipped', () => {
+    const quiet = withoutServices(asSite(dbajans))
+    expect(ensureServicesSection(quiet)).toBe(quiet)
+  })
+
+  it('deterministic fallback site: no dead #anchor after ensure + publish rule', () => {
+    for (const prompt of ['nakliyat ve taşımacılık firması', 'diş kliniği', 'hukuk bürosu']) {
+      const site = withLivePageLinks(ensureServicesSection(fallbackWebsite(prompt, 'tr')))
+      expect(deadAnchors(site)).toEqual([])
+    }
+  })
+})
