@@ -50,7 +50,7 @@ export async function addOverdueContactNote(input: {
 
   const admin = createAdminClient()
   const { data: sub } = await admin.from('billing_subscriptions').select('id, user_id').eq('id', input.subscriptionId).maybeSingle()
-  if (!sub) return { ok: false, error: 'subscription_not_found' }
+  if (!sub || !sub.user_id) return { ok: false, error: 'subscription_not_found' }
 
   const { error } = await admin.from('admin_overdue_contact_notes').insert({
     subscription_id: sub.id,

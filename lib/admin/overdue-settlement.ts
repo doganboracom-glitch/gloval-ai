@@ -54,7 +54,7 @@ export async function settleSubscriptionManually(input: {
     .eq('id', input.subscriptionId)
     .maybeSingle()
   const sub = subData as SubRow | null
-  if (!sub) return { ok: false, error: 'subscription_not_found' }
+  if (!sub || !sub.user_id) return { ok: false, error: 'subscription_not_found' }
 
   const { data: plan } = await admin
     .from('billing_plans')

@@ -200,6 +200,7 @@ export async function reconcileSubscriptionLifecycle(now = new Date()): Promise<
     .from('billing_subscriptions')
     .select('id, user_id, status, current_period_end, grace_period_ends_at')
     .in('status', ['active', 'past_due'])
+    .not('user_id', 'is', null)
     .lte('current_period_end', nowIso)
 
   for (const sub of (expired ?? []) as SweepSub[]) {
@@ -232,6 +233,7 @@ export async function reconcileSubscriptionLifecycle(now = new Date()): Promise<
     .from('billing_subscriptions')
     .select('id, user_id, current_period_end, suspended_project_ids')
     .eq('status', 'suspended')
+    .not('user_id', 'is', null)
     .lte('current_period_end', nowIso)
 
   for (const sub of suspendedSubs ?? []) {
@@ -373,6 +375,9 @@ export async function settleSubscriptionRenewal(input: {
   const { charge } = input
   const now = input.now ?? new Date()
   const ticket = formatTicketNumber(input.reference)
+
+  // An anonymized charge (deleted account) has no owner to renew or notify.
+  if (!charge.user_id) return { kind: 'rejected', reason: 'subscription_not_renewable' }
 
   if (input.status === 'failed') {
     const { data: claimed } = await admin

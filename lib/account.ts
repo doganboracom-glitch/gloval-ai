@@ -189,7 +189,27 @@ async function cleanupExternalAssets(admin: Admin, userId: string, targets: Clea
   }
 }
 
+const LIVE_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'suspended']
+
+/**
+ * Ends every live subscription BEFORE the rows are detached from the user, so
+ * the lifecycle sweep and renewal settlement can never act on an anonymized
+ * (user_id NULL) subscription. Renewals are user-initiated one-off iyzico
+ * checkout payments (`renewSubscription`); the adapter has no recurring
+ * provider-side subscription to cancel, so ending the row is what stops them.
+ */
+async function cancelLiveSubscriptions(admin: Admin, userId: string) {
+  const { error } = await admin
+    .from('billing_subscriptions')
+    .update({ status: 'canceled', cancel_at_period_end: false })
+    .eq('user_id', userId)
+    .in('status', LIVE_SUBSCRIPTION_STATUSES)
+  if (error) stageFailure('cancel_subscriptions', error)
+}
+
 async function anonymizeFinancialRecords(admin: Admin, userId: string): Promise<string[]> {
+  await cancelLiveSubscriptions(admin, userId)
+
   const { data: ownedProjects, error: projectsError } = await admin
     .from('projects')
     .select('id')
