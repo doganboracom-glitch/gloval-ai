@@ -17,6 +17,7 @@ import { attachAboutImage } from '@/lib/about-image'
 import { seedAboutDetail } from '@/lib/section-detail'
 import { seedServicesDetail, syncSectionPages } from '@/lib/service-pages'
 import { generateAboutDetail } from '@/lib/about-detail-ai'
+import { generateAboutCopy, seedAboutCopy } from '@/lib/about-copy-ai'
 import { normalizeCorporateSectionOrder, withBlogOffByDefault } from '@/lib/section-order'
 import { deriveSeoTitle, detectSector } from '@/lib/sector-profiles'
 import { buildSiteGenerateSystem } from '@/lib/site-generate-prompt'
@@ -204,7 +205,10 @@ async function runGenerate(
       )
       // Long-form About body written only from the site's own facts; any
       // failure falls back to the deterministic starter inside the helper.
-      const aboutDetail = await generateAboutDetail(seededAbout, planCode)
+      const [aboutDetail, aboutCopy] = await Promise.all([
+        generateAboutDetail(seededAbout, planCode),
+        generateAboutCopy(seededAbout, planCode),
+      ])
 
       return Response.json({
         // Seeds the floating phone + WhatsApp buttons from the site's own
@@ -213,7 +217,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail))), pageLimit), normalizedLang, pageLimit))),
+              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seedAboutCopy(seededAbout, aboutCopy), aboutDetail))), pageLimit), normalizedLang, pageLimit))),
               normalizedLang,
             ),
             normalizedLang,

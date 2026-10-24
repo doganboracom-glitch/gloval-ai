@@ -65,8 +65,22 @@ const COPY = {
       stats: 'Rakamlar',
       pricing: 'Fiyat planları',
       products: 'Ürünler',
-      faq: 'Bilgi sayfası',
+      faq: 'Sık sorulan sorular',
       contact: 'İletişim bilgileri',
+      services: 'Hizmetler',
+      about: 'Hakkımızda',
+      features: 'Özellikler',
+      slider: 'Kayan görsel',
+      references: 'Referanslar',
+      gallery: 'Galeri',
+      portfolio: 'Portföy',
+      categories: 'Kategoriler',
+      process: 'Süreç',
+      team: 'Kadromuz',
+      blogLatest: 'Blog',
+      cta: 'Eylem çağrısı',
+      announcement: 'Duyuru bandı',
+      heroStrip: 'Slider altı kutular',
     } as Record<string, string>,
     kinds: {
       contact: 'İletişim',
@@ -135,8 +149,22 @@ const COPY = {
       stats: 'Statistics',
       pricing: 'Pricing plans',
       products: 'Products',
-      faq: 'Info page',
+      faq: 'FAQ',
       contact: 'Contact details',
+      services: 'Services',
+      about: 'About',
+      features: 'Features',
+      slider: 'Slider',
+      references: 'References',
+      gallery: 'Gallery',
+      portfolio: 'Portfolio',
+      categories: 'Categories',
+      process: 'Process',
+      team: 'Our Team',
+      blogLatest: 'Blog',
+      cta: 'Call to action',
+      announcement: 'Announcement bar',
+      heroStrip: 'Hero feature boxes',
     } as Record<string, string>,
     kinds: {
       contact: 'Contact',
@@ -470,3 +498,5 @@ export function SamplePublishDialog({
     </div>
   )
 }
+
+export { COPY as SAMPLE_PUBLISH_COPY }

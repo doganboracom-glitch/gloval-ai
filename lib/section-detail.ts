@@ -1,6 +1,7 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUsableImageSrc, usableAboutImages } from '@/lib/about-media'
+import { readMoreLabel, resolveAboutCopy } from '@/lib/about-copy'
 
 /**
  * Section detail pages
@@ -112,7 +113,8 @@ export function resolveAboutDetail(
   const page = findDetailPage(site)
   const pageActive = !section.hidden && section.detail.pageEnabled !== false && !!page
   const pageSlug = page?.slug || SLUGS.about[lang]
-  const label = section.detail.linkLabel?.trim() || LINK_LABELS[lang]
+  const copy = resolveAboutCopy(section)
+  const label = section.detail.linkLabel?.trim() || (copy.shortText ? readMoreLabel(lang) : LINK_LABELS[lang])
   return {
     section,
     detail: section.detail,

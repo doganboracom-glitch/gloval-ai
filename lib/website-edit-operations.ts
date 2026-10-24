@@ -81,6 +81,7 @@ function newPageId(pages: { id?: string }[], slug: string): string {
 import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
+import { ABOUT_COPY_FIELDS, ABOUT_COPY_LIMITS, hasAboutCopy } from '@/lib/about-copy'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
 import { cleanServiceSlug, syncSectionPages } from '@/lib/service-pages'
 import {
@@ -279,6 +280,16 @@ export type EditOperation =
         images?: { src?: string; alt?: string }[]
         approve?: boolean
       }
+    }
+  /**
+   * The about section's short home text, long page text, vision and mission.
+   * Only the given keys change; '' clears one. Filling any of them switches the
+   * "Devamını oku" link and the /hakkimizda page on (via `detail`).
+   */
+  | {
+      op: 'updateAboutCopy'
+      index: number
+      patch: { shortText?: string; longText?: string; vision?: string; mission?: string }
     }
   /** The services section's list page + links ("Tüm hizmetlerimiz", /hizmetlerimiz). */
   | {
@@ -794,6 +805,24 @@ export function applyOperation(
         detail.sample = undefined
       }
       next.sections[operation.index] = { ...section, detail }
+      return syncSectionPages(next)
+    }
+
+    case 'updateAboutCopy': {
+      const section = next.sections[operation.index]
+      if (!section || section.type !== 'about') return next
+      const updated = { ...section }
+      for (const field of ABOUT_COPY_FIELDS) {
+        const value = operation.patch[field]
+        if (value === undefined) continue
+        updated[field] = value.replace(/[ \t]+\n/g, '\n').trim().slice(0, ABOUT_COPY_LIMITS[field]) || undefined
+      }
+      if (hasAboutCopy(updated)) {
+        // Starter filler is replaced by the owner's own copy; a fresh detail turns the link and page on.
+        const base = updated.detail?.sample ? { ...updated.detail, blocks: undefined, sample: undefined } : updated.detail
+        updated.detail = base ?? { linkEnabled: true, pageEnabled: true }
+      }
+      next.sections[operation.index] = updated
       return syncSectionPages(next)
     }
 

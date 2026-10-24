@@ -31,6 +31,7 @@ import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/edit
 import { MapEmbedField } from '@/components/editor/map-embed-field'
 import { AboutMediaFields } from '@/components/editor/about-media-fields'
 import { AboutDetailFields } from '@/components/editor/about-detail-fields'
+import { AboutCopyFields } from '@/components/editor/about-copy-fields'
 import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
 import { ProductItemFields } from '@/components/editor/product-item-fields'
 import { GalleryFields, GalleryItemExtras } from '@/components/editor/gallery-fields'
@@ -252,6 +253,7 @@ export function SectionInspector({
       {section.type === 'about' && (
         <>
           <AboutMediaFields site={site} index={index} section={section} onDispatch={onDispatch} />
+          <AboutCopyFields site={site} index={index} section={section} onDispatch={onDispatch} />
           <AboutDetailFields site={site} index={index} section={section} onDispatch={onDispatch} />
         </>
       )}
