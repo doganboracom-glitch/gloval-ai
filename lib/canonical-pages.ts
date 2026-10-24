@@ -88,7 +88,7 @@ export function canonicalKindOfPage(page: Pick<PageEntry, 'slug' | 'title' | 'is
   return kindOfText(`${page.slug} ${page.title}`)
 }
 
-const LEGACY_ALIASES: Record<string, CanonicalKind> = {
+export const LEGACY_ALIASES: Record<string, CanonicalKind> = {
   about: 'about',
   hakkimizda: 'about',
   hakkinda: 'about',

@@ -17,6 +17,7 @@ import {
   resolveHeaderMenu,
 } from '@/lib/site-menu'
 import { pageNavItems } from '@/lib/website-pages'
+import { isEmptyPage } from '@/lib/live-page-links'
 import { SITE_PAGE_HARD_CAP, type PlanCode } from '@/lib/pricing-config'
 
 const COPY = {
@@ -48,6 +49,9 @@ const COPY = {
     contactHint: (labels: string) => `Üst menünüzde ${labels} yok. Ziyaretçilerin kolayca bulması için eklemek ister misiniz?`,
     contactAdd: 'Sayfaları üst menüye ekle',
     contactDismiss: 'Gerek yok',
+    emptyBadge: 'İçeriği boş',
+    emptyHint:
+      'Bu sayfanın kendi bölümü yok: yayında görünmez, menüden ve alt bilgiden kaldırılır. Sayfaya bir bölüm ekleyin.',
   },
   en: {
     title: 'Pages',
@@ -77,6 +81,9 @@ const COPY = {
     contactHint: (labels: string) => `Your header has no ${labels}. Add them so visitors can find them easily?`,
     contactAdd: 'Add pages to the header menu',
     contactDismiss: 'No thanks',
+    emptyBadge: 'Empty',
+    emptyHint:
+      'This page has no section of its own: it is not visible once published and is removed from the menu and footer. Add a section to it.',
   },
 } as const
 
@@ -154,15 +161,26 @@ export function PagesManager({
       {site.pages.map((page, pageIndex) => {
         const isHome = pageIndex === homeIndex
         const inHeader = menu.some((entry) => entry.key === pageMenuKey(page))
+        const isEmpty = isEmptyPage(site, page, pageIndex)
         return (
           <details key={`${page.slug}-${pageIndex}`} className="rounded-lg border border-border bg-card/40">
             <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
               <span className="min-w-0 flex-1 truncate">{page.title}</span>
+              {isEmpty && (
+                <span className="shrink-0 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-medium text-brand">
+                  {c.emptyBadge}
+                </span>
+              )}
               <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                 {isHome ? '/' : `/${page.slug}`}
               </span>
             </summary>
             <div className="flex flex-col gap-2 border-t border-border p-3">
+              {isEmpty && (
+                <p role="status" className="rounded-md border border-brand/40 bg-brand/10 p-2 text-[11px] leading-snug text-foreground">
+                  {c.emptyHint}
+                </p>
+              )}
               <TextField
                 label={c.name}
                 value={page.title}

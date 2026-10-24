@@ -15,6 +15,7 @@ import { ReferencesDetailPage } from '@/components/website-renderer/sections/ref
 import { TeamDetailPage } from '@/components/website-renderer/sections/team-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
+import { withLivePageLinks } from '@/lib/live-page-links'
 import {
   SiteNavProvider,
   isDemoServiceHref,
@@ -400,7 +401,10 @@ export function WebsiteRenderer({
 
   // The editor preview keeps placeholder entries so the owner can fill them in;
   // every public render (published site, demo) leaves them out.
-  const data: WebsiteSchema = preview || editSelection ? parsed.data : stripPlaceholders(parsed.data)
+  const shown: WebsiteSchema = preview || editSelection ? parsed.data : stripPlaceholders(parsed.data)
+  // Published pages only: a menu/header/footer link to a page the site answers
+  // with a 404 is hidden or sent to the matching home section.
+  const data: WebsiteSchema = pageRouting && !preview && !editSelection ? withLivePageLinks(shown) : shown
   const theme = resolveTheme(data)
   const pages = pageNavItems(data)
 
