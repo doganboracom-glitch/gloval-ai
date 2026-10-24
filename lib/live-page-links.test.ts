@@ -8,7 +8,7 @@ import { ensureServicesSection } from '@/lib/services-section'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { resolveFooterColumns, resolveFooterLegal } from '@/lib/footer-links'
 import { pageMenuLabel, resolveFooterPages, resolveHeaderMenu } from '@/lib/site-menu'
-import { findPublicPage, homeSlug, pageNavItems, pagePath } from '@/lib/website-pages'
+import { findPublicPage, homeSlug, pageNavItems, pagePath, sectionsForPage } from '@/lib/website-pages'
 import type { NavLink, Section, WebsiteSchema } from '@/lib/website-schema'
 
 const asSite = (json: unknown) => json as unknown as WebsiteSchema
@@ -300,6 +300,26 @@ describe('every #anchor on the page has a target section', () => {
     const cta = pruned.sections.find((s) => s.type === 'cta') as Extract<Section, { type: 'cta' }>
     expect(cta.secondaryButton).toBeUndefined()
     expect(cta.primaryButton?.href).toBe('#contact')
+  })
+
+  it('luna: the /products page shows no #deals button either (its CTA is the shared section)', () => {
+    const site = asSite(luna)
+    const pruned = withLivePageLinks(site)
+    const ctaOn = (s: WebsiteSchema, slug: string) =>
+      sectionsForPage(s, slug).find((x) => x.type === 'cta') as Extract<Section, { type: 'cta' }> | undefined
+
+    const before = ctaOn(site, 'products')
+    expect(before?.secondaryButton?.href).toBe('#deals')
+    expect(before?.primaryButton?.href).toBe('#contact')
+
+    const after = ctaOn(pruned, 'products')
+    expect(after?.secondaryButton).toBeUndefined()
+    expect(after?.primaryButton).toEqual(before?.primaryButton)
+
+    for (const page of pruned.pages) {
+      const view = { ...pruned, sections: sectionsForPage(pruned, page.slug) } as WebsiteSchema
+      expect(anchorsOf(view).filter((l) => l.href === '#deals' || l.href === '#featured'), page.slug).toEqual([])
+    }
   })
 
   it('luna: every #anchor that is left points at an id the page renders', () => {
