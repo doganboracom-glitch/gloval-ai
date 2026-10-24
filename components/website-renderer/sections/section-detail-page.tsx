@@ -12,7 +12,16 @@ import {
   type DetailImage,
 } from '@/lib/section-detail'
 
+import { aboutCardTitles, resolveAboutCopy } from '@/lib/about-copy'
+
 const CONTACT_PAGE_SLUGS = new Set(['iletisim', 'contact', 'contact-us'])
+
+function paragraphs(text: string): string[] {
+  return text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+}
 
 function Photo({ image, className = '' }: { image: DetailImage; className?: string }) {
   return (
@@ -95,6 +104,7 @@ export function SectionDetailPage({ site }: { site: WebsiteSchema }) {
   const lead = detailLeadImage(section, altBase)
   const strip = detailStripImages(section, altBase)
   const highlights = (section.highlights ?? []).filter(Boolean)
+  const copy = resolveAboutCopy(section)
 
   const contactPage = (site.pages ?? []).find((p) => CONTACT_PAGE_SLUGS.has((p.slug ?? '').toLowerCase()))
   const hasContact = site.sections.some((s) => s.type === 'contact' && !s.hidden)
@@ -128,6 +138,68 @@ export function SectionDetailPage({ site }: { site: WebsiteSchema }) {
       </header>
 
       <div className="px-6 py-12 sm:py-16">
+        {copy.detailLayout ? (
+          <div data-gv-about-copy className="mx-auto grid w-full max-w-5xl gap-8">
+            {lead ? <Photo image={lead} className="aspect-[16/9]" /> : null}
+            <div className="grid max-w-3xl gap-5">
+              {paragraphs(section.body).map((text) => (
+                <p key={text} className="text-pretty text-base leading-relaxed sm:text-lg" style={{ color: 'var(--site-fg)' }}>
+                  {text}
+                </p>
+              ))}
+              {paragraphs(copy.longText ?? '').map((text) => (
+                <p key={text} data-gv-about-long className="text-pretty text-base leading-relaxed" style={{ color: 'var(--site-muted-fg)' }}>
+                  {text}
+                </p>
+              ))}
+            </div>
+            {copy.vision || copy.mission ? (
+              <div data-gv-about-cards className={`grid gap-4 ${copy.vision && copy.mission ? 'md:grid-cols-2' : ''}`}>
+                {(['vision', 'mission'] as const).map((key) =>
+                  copy[key] ? (
+                    <section
+                      key={key}
+                      data-gv-about-card={key}
+                      className="p-6"
+                      style={{
+                        borderRadius: 'var(--site-radius)',
+                        border: '1px solid var(--site-border)',
+                        backgroundColor: 'var(--site-card)',
+                      }}
+                    >
+                      <h2
+                        className="text-xl font-bold sm:text-2xl"
+                        style={{ fontFamily: 'var(--site-heading-font)', color: 'var(--site-fg)' }}
+                      >
+                        {aboutCardTitles(lang)[key]}
+                      </h2>
+                      <p className="mt-3 text-pretty text-base leading-relaxed" style={{ color: 'var(--site-muted-fg)' }}>
+                        {copy[key]}
+                      </p>
+                    </section>
+                  ) : null,
+                )}
+              </div>
+            ) : null}
+            {blocks.length > 0 ? (
+              <article className="grid max-w-3xl gap-10">
+                {blocks.map((block, i) => (
+                  <section key={`${block.heading ?? 'block'}-${i}`}>
+                    {block.heading ? (
+                      <h2
+                        className="text-pretty text-xl font-bold sm:text-2xl"
+                        style={{ fontFamily: 'var(--site-heading-font)', color: 'var(--site-fg)' }}
+                      >
+                        {block.heading}
+                      </h2>
+                    ) : null}
+                    {block.body ? <BlockBody body={block.body} /> : null}
+                  </section>
+                ))}
+              </article>
+            ) : null}
+          </div>
+        ) : (
         <div className="mx-auto grid w-full max-w-5xl gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-14">
           <article className="grid gap-10">
             {blocks.map((block, i) => {
@@ -173,6 +245,7 @@ export function SectionDetailPage({ site }: { site: WebsiteSchema }) {
             </aside>
           ) : null}
         </div>
+        )}
 
         {strip.length > 0 ? (
           <div
