@@ -1,6 +1,7 @@
 import { isAddOnCode, isAddOnEligible, ADD_ONS, type AddOnPrice } from '@/lib/add-ons'
 import { toPlanCode } from '@/lib/pricing-config'
 import { addOnOrderRef } from '@/lib/addon-purchases'
+import { normalizeCurrency, verifyPaidFacts } from './paid-facts'
 
 /** Facts the provider-verified payment result carries (iyzico retrieve echoes all three). */
 export type AddOnPaymentFacts = {
@@ -24,9 +25,7 @@ export type AddOnRejectReason =
 
 export type AddOnVerdict = { ok: true } | { ok: false; reason: AddOnRejectReason }
 
-export function normalizeCurrency(currency: string): string {
-  return currency.toUpperCase().replace('TL', 'TRY')
-}
+export { normalizeCurrency }
 
 /**
  * Checks the verified provider result against the purchase snapshot the server
@@ -38,19 +37,11 @@ export function verifyAddOnPaymentFacts(
   purchase: { id: string; amount: number; currency: string },
   facts: AddOnPaymentFacts,
 ): AddOnVerdict {
-  if (
-    facts.paidAmountCents === undefined ||
-    facts.paidCurrency === undefined ||
-    facts.orderRef === undefined
-  ) {
-    return { ok: false, reason: 'unverified_payment' }
-  }
-  if (facts.orderRef !== addOnOrderRef(purchase.id)) return { ok: false, reason: 'order_mismatch' }
-  if (facts.paidAmountCents !== purchase.amount) return { ok: false, reason: 'amount_mismatch' }
-  if (normalizeCurrency(facts.paidCurrency) !== purchase.currency.toUpperCase()) {
-    return { ok: false, reason: 'currency_mismatch' }
-  }
-  return { ok: true }
+  return verifyPaidFacts(
+    { amountCents: purchase.amount, currency: purchase.currency, orderRef: addOnOrderRef(purchase.id) },
+    facts,
+    { require: 'all' },
+  )
 }
 
 export type AddOnSubscriptionFacts = {

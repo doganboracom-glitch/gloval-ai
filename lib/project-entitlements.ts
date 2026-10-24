@@ -8,7 +8,8 @@ import {
   getPlatformPaymentProvider,
   getPlatformPaymentProviderId,
 } from '@/lib/payments'
-import { BRANDING_REMOVAL_CODE } from '@/lib/billing-utils'
+import { BRANDING_REMOVAL_CODE, MULTILANG_CODE } from '@/lib/billing-utils'
+import { isMultilangFeatureUiEnabled } from '@/lib/multilang-feature-flag'
 import type { CheckoutBuyer } from '@/lib/billing'
 import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
 import type { BuyerField } from '@/lib/payments/types'
@@ -122,6 +123,7 @@ export type BuyEntitlementResult =
       ok: false
       error:
         | 'not_found'
+        | 'feature_disabled'
         | 'already_owned'
         | 'failed'
         | 'payment_init_failed'
@@ -139,7 +141,28 @@ export async function purchaseBrandingRemoval(
   projectId: string,
   buyer?: CheckoutBuyer,
 ): Promise<BuyEntitlementResult> {
+  return purchaseSiteRight(BRANDING_REMOVAL_CODE, projectId, buyer)
+}
+
+/**
+ * Buy the one-time Çoklu Dil Paketi for a single project the caller owns.
+ * Refuses before any auth or database access while the feature flag is off.
+ */
+export async function purchaseMultilangPackage(
+  projectId: string,
+  buyer?: CheckoutBuyer,
+): Promise<BuyEntitlementResult> {
+  if (!isMultilangFeatureUiEnabled()) return { ok: false, error: 'feature_disabled' }
+  return purchaseSiteRight(MULTILANG_CODE, projectId, buyer)
+}
+
+async function purchaseSiteRight(
+  code: typeof BRANDING_REMOVAL_CODE | typeof MULTILANG_CODE,
+  projectId: string,
+  buyer?: CheckoutBuyer,
+): Promise<BuyEntitlementResult> {
   const { supabase, userId, email } = await requireUser()
+  const flow = code === MULTILANG_CODE ? 'multilang' : 'branding_removal'
 
   // Ownership check through the caller's own (RLS-scoped) client.
   const { data: project, error: projectErr } = await supabase
@@ -154,16 +177,20 @@ export async function purchaseBrandingRemoval(
   const { data: plan, error: planErr } = await admin
     .from('billing_plans')
     .select('code, name, price_cents, currency, active')
-    .eq('code', BRANDING_REMOVAL_CODE)
+    .eq('code', code)
     .maybeSingle()
-  if (planErr || !plan || !plan.active) return { ok: false, error: 'not_found' }
+  // The multilang row ships inactive so legacy catalog readers skip it; its
+  // feature flag (checked by the caller) is what allows selling it.
+  if (planErr || !plan || (code !== MULTILANG_CODE && !plan.active)) {
+    return { ok: false, error: 'not_found' }
+  }
 
   // One right per project, enforced again by a unique (project_id, code) index.
   const { data: existing } = await admin
     .from('project_entitlements')
     .select('id')
     .eq('project_id', projectId)
-    .eq('code', BRANDING_REMOVAL_CODE)
+    .eq('code', code)
     .eq('status', 'active')
     .maybeSingle()
   if (existing) return { ok: false, error: 'already_owned' }
@@ -177,7 +204,7 @@ export async function purchaseBrandingRemoval(
     providerId = getPlatformPaymentProviderId()
     provider = getPlatformPaymentProvider()
   } catch (error) {
-    const failure = await reportPaymentInitFailure('branding_removal', error)
+    const failure = await reportPaymentInitFailure(flow, error)
     return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
   // Guarded the same way as subscribeToPlan/changePlan in lib/billing.ts: a
@@ -187,7 +214,7 @@ export async function purchaseBrandingRemoval(
   let intent
   try {
     intent = await provider.createIntent({
-      orderId: `ent_${projectId}_${BRANDING_REMOVAL_CODE}`,
+      orderId: `ent_${projectId}_${code}`,
       amountCents: plan.price_cents,
       currency: plan.currency,
       customerEmail: email,
@@ -205,7 +232,7 @@ export async function purchaseBrandingRemoval(
         : undefined,
     })
   } catch (error) {
-    const failure = await reportPaymentInitFailure('branding_removal', error, providerId)
+    const failure = await reportPaymentInitFailure(flow, error, providerId)
     return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
   }
   if (intent.status === 'failed') return { ok: false, error: 'failed' }
@@ -221,7 +248,7 @@ export async function purchaseBrandingRemoval(
       {
         project_id: projectId,
         user_id: userId,
-        code: BRANDING_REMOVAL_CODE,
+        code,
         name: plan.name,
         status: 'inactive',
         provider: providerId,
@@ -242,7 +269,7 @@ export async function purchaseBrandingRemoval(
         status: 'pending',
         provider: providerId,
         provider_ref: intent.reference,
-        idempotency_key: `ent_${projectId}_${BRANDING_REMOVAL_CODE}`,
+        idempotency_key: `ent_${projectId}_${code}`,
         description: `${plan.name} — ${project.name}`,
       },
       { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
@@ -255,7 +282,7 @@ export async function purchaseBrandingRemoval(
   const { error: grantErr } = await admin.from('project_entitlements').insert({
     project_id: projectId,
     user_id: userId,
-    code: BRANDING_REMOVAL_CODE,
+    code,
     name: plan.name,
     status: 'active',
     provider: providerId,
@@ -274,7 +301,7 @@ export async function purchaseBrandingRemoval(
     provider: providerId,
     provider_ref: intent.reference,
     // Idempotent per project: a retry can never double-charge the same site.
-    idempotency_key: `ent_${projectId}_${BRANDING_REMOVAL_CODE}`,
+    idempotency_key: `ent_${projectId}_${code}`,
     description: `${plan.name} — ${project.name}`,
   })
 

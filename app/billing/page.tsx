@@ -9,6 +9,7 @@ import {
   getMyEntitlements,
 } from '@/lib/billing'
 import { getMyProjectEntitlements } from '@/lib/project-entitlements'
+import { getMultilangPlanIfEnabled } from '@/lib/site-addons'
 import { getAddOnOverview } from '@/lib/effective-limits'
 import { getCreditLedger } from '@/lib/ai-credits'
 import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
@@ -52,6 +53,7 @@ export default async function BillingPage({
     entitlementsResult,
     projectEntitlementsResult,
     projectsResult,
+    multilangPlanResult,
   ] = await Promise.allSettled([
     getPlans(),
     getMySubscription(),
@@ -60,6 +62,7 @@ export default async function BillingPage({
     getMyEntitlements(),
     getMyProjectEntitlements(),
     listProjects(),
+    getMultilangPlanIfEnabled(),
   ])
 
   function unwrap<T>(result: PromiseSettledResult<T>, fallback: T, label: string): T {
@@ -68,7 +71,8 @@ export default async function BillingPage({
     return fallback
   }
 
-  const plans = unwrap(plansResult, [], 'plans')
+  const multilangPlan = unwrap(multilangPlanResult, null, 'multilang plan')
+  const plans = [...unwrap(plansResult, [], 'plans'), ...(multilangPlan ? [multilangPlan] : [])]
   const subscription = unwrap(subscriptionResult, null, 'subscription')
   const currentPlan = unwrap(currentPlanResult, null, 'current plan')
   const transactions = unwrap(transactionsResult, [], 'transactions')

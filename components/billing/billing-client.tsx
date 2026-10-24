@@ -39,7 +39,7 @@ import type {
   PlanChangePreview,
 } from '@/lib/billing'
 import { tenantHost } from '@/lib/domains'
-import { purchaseBrandingRemoval } from '@/lib/project-entitlements'
+import { purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
 import { PlanGrid } from '@/components/pricing/plan-grid'
 import {
@@ -60,6 +60,7 @@ import {
   formatSignedMoney,
   daysUntil,
   BRANDING_REMOVAL_CODE,
+  MULTILANG_CODE,
   BILLING_TIME_ZONE,
 } from '@/lib/billing-utils'
 
@@ -445,33 +446,38 @@ export function BillingClient({
     )
   }
 
-  // Sites that do not already hold the branding-removal right.
-  const brandingOwnedIds = useMemo(
-    () =>
-      new Set(
+  // Sites that do not already hold the given per-site right (an active
+  // entitlement for that exact code; other add-ons do not affect eligibility).
+  const eligibleProjectsFor = useMemo(() => {
+    return (code: string) => {
+      const ownedIds = new Set(
         projectEntitlements
-          .filter((e) => e.code === BRANDING_REMOVAL_CODE && e.status === 'active')
+          .filter((e) => e.code === code && e.status === 'active')
           .map((e) => e.project_id),
-      ),
-    [projectEntitlements],
-  )
-
-  const eligibleProjects = useMemo(
-    () => projects.filter((p) => !brandingOwnedIds.has(p.id)),
-    [projects, brandingOwnedIds],
-  )
+      )
+      return projects.filter((p) => !ownedIds.has(p.id))
+    }
+  }, [projects, projectEntitlements])
 
   function openSitePicker(plan: PlanRow) {
     setError(null)
-    setPickedProjectId(eligibleProjects[0]?.id ?? '')
+    setPickedProjectId(eligibleProjectsFor(plan.code)[0]?.id ?? '')
     setSitePicker(plan)
   }
 
-  function runSitePurchase(projectId: string, planId: string, buyer?: CheckoutBuyerInfo, paymentWindow?: Window | null) {
+  function runSitePurchase(
+    code: string,
+    projectId: string,
+    planId: string,
+    buyer?: CheckoutBuyerInfo,
+    paymentWindow?: Window | null,
+  ) {
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
-        const res = await purchaseBrandingRemoval(
+        const purchase =
+          code === MULTILANG_CODE ? purchaseMultilangPackage : purchaseBrandingRemoval
+        const res = await purchase(
           projectId,
           buyer
             ? {
@@ -529,7 +535,8 @@ export function BillingClient({
       recurring: false,
     })
     setCheckoutRun(
-      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) => runSitePurchase(projectId, plan.id, buyer, paymentWindow),
+      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) =>
+        runSitePurchase(plan.code, projectId, plan.id, buyer, paymentWindow),
     )
   }
 
@@ -1188,7 +1195,7 @@ export function BillingClient({
                         <Button variant="outline" className="w-full" disabled>
                           {b.noSites}
                         </Button>
-                      ) : eligibleProjects.length === 0 ? (
+                      ) : eligibleProjectsFor(p.code).length === 0 ? (
                         <Button variant="outline" className="w-full" disabled>
                           {b.owned}
                         </Button>
@@ -1328,7 +1335,7 @@ export function BillingClient({
             <fieldset className="mt-5">
               <legend className="sr-only">{b.pickSitePlaceholder}</legend>
               <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-                {eligibleProjects.map((p) => (
+                {eligibleProjectsFor(sitePicker.code).map((p) => (
                   <label
                     key={p.id}
                     className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors ${
@@ -1339,7 +1346,7 @@ export function BillingClient({
                   >
                     <input
                       type="radio"
-                      name="branding-project"
+                      name={`site-addon-${sitePicker.code}`}
                       value={p.id}
                       checked={pickedProjectId === p.id}
                       onChange={() => setPickedProjectId(p.id)}
