@@ -11,6 +11,7 @@ import {
 import { useDemoHref, useHrefNormalizer, useSiteNav } from '@/components/website-renderer/site-nav-context'
 import { announcementTextColor } from '@/components/website-renderer/sections/announcement-contrast'
 import { resolveAboutMedia, type ResolvedAbout } from '@/lib/about-media'
+import { resolveAboutCopy } from '@/lib/about-copy'
 
 /** Text on the primary badge chip. Falls back to the shared token when the theme is unknown. */
 const ON_PRIMARY = 'var(--about-on-primary, var(--site-primary-fg))'
@@ -97,7 +98,7 @@ function Copy({
         className="mt-4 text-pretty text-sm leading-relaxed sm:text-base"
         style={{ color: 'var(--site-muted-fg)' }}
       >
-        {data.body}
+        {resolveAboutCopy(data).shortText ?? data.body}
       </p>
       {cta ? (
         <div className="mt-6">
@@ -209,7 +210,7 @@ export function AboutSection({
               className="mt-4 text-pretty text-sm leading-relaxed sm:text-base"
               style={{ color: 'var(--site-muted-fg)' }}
             >
-              {data.body}
+              {resolveAboutCopy(data).shortText ?? data.body}
             </p>
             {moreLink ? <MoreLink link={moreLink} /> : null}
           </div>

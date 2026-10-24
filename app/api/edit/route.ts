@@ -21,6 +21,7 @@ import {
 } from '@/lib/storefront-product-lock'
 import { guardCorporateCatalog } from '@/lib/corporate-products'
 import { preserveResolvedImages } from '@/lib/hero-image'
+import { preserveAboutCopy } from '@/lib/about-copy'
 import { stripAiReferences } from '@/lib/references'
 import { stripAiTeam } from '@/lib/team'
 import { createClient } from '@/lib/supabase/server'
@@ -320,7 +321,7 @@ export async function POST(req: Request) {
     const guarded = guardCorporateCatalog(original, locked.schema, instruction)
     const finalSchema = stripAiTeam(
       stripAiReferences(
-        sanitizeGeneratedProofContent(preserveResolvedImages(original, guarded), original),
+        sanitizeGeneratedProofContent(preserveAboutCopy(original, preserveResolvedImages(original, guarded)), original),
         original,
       ),
       original,

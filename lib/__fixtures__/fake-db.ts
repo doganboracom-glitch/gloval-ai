@@ -12,6 +12,8 @@ export const fakeDb = {
   user: { id: 'user-1', email: 'owner@example.com' } as { id: string; email: string } | null,
   attestationWriteError: null as string | null,
   attestationReadError: false,
+  /** When set, mirrors the item_kind CHECK: a row outside the list fails with 23514. */
+  attestationKindCheck: null as readonly string[] | null,
   rpcRow: null as Row | null,
   reads: [] as string[],
   writes: [] as Array<{ table: string; op: string }>,
@@ -22,6 +24,7 @@ export const fakeDb = {
     this.user = { id: 'user-1', email: 'owner@example.com' }
     this.attestationWriteError = null
     this.attestationReadError = false
+    this.attestationKindCheck = null
     this.rpcRow = null
     this.reads = []
     this.writes = []
@@ -73,6 +76,17 @@ export const fakeDb = {
           return { data: null, error: { message: db.attestationWriteError } }
         }
         const list: Row[] = Array.isArray(payload) ? payload : [payload]
+        const kinds = table === 'content_attestations' ? db.attestationKindCheck : null
+        const bad = kinds ? list.find((row) => !kinds.includes(row.item_kind)) : undefined
+        if (bad) {
+          return {
+            data: null,
+            error: {
+              message: 'new row for relation "content_attestations" violates check constraint "content_attestations_item_kind_check"',
+              code: '23514',
+            },
+          }
+        }
         for (const row of list) {
           const exists = db.rows(table).some((r) => upsertKeys.every((k) => r[k] === row[k]))
           if (exists && ignoreDuplicates) continue
