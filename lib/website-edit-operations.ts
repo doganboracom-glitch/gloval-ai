@@ -19,6 +19,8 @@ import {
   ANNOUNCEMENT_SPEEDS,
   ANNOUNCEMENT_TEXT_MAX,
   countAnnouncements,
+  countCappedSections,
+  countsTowardSectionCap,
   type AnnouncementSpeed,
   type BlogProfile,
   type BlogSettings,
@@ -75,7 +77,7 @@ function newPageId(pages: { id?: string }[], slug: string): string {
   for (let n = 2; used.has(id); n++) id = `${base}-${n}`
   return id
 }
-import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
+import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
@@ -1801,6 +1803,12 @@ export function applyOperation(
         next.sections.unshift(blankSection('announcement', next.meta.language))
         return next
       }
+      if (
+        countsTowardSectionCap({ type: operation.sectionType }) &&
+        countCappedSections(next.sections) >= SITE_SECTION_HARD_CAP
+      ) {
+        return next
+      }
       const section = blankSection(operation.sectionType, next.meta.language, { corporate: !isStorefront(next) })
       const insertAt =
         operation.index !== undefined
@@ -1979,6 +1987,12 @@ export function blankItem(type: SectionType, lang: Lang): Record<string, unknown
 function defaultInsertIndex(sections: Section[]): number {
   const last = sections[sections.length - 1]
   return last && last.type === 'footer' ? sections.length - 1 : sections.length
+}
+
+/** Index a section added with "Bölüm ekle" lands at: the bottom of the page content (the footer stays last). */
+export function addedSectionIndex(sections: Section[], sectionType: SectionType): number {
+  if (sectionType === 'announcement') return 0
+  return sectionType === 'heroStrip' ? heroStripInsertIndex(sections) : defaultInsertIndex(sections)
 }
 
 /* -------------------------------------------------------------------------- */

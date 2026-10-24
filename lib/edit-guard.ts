@@ -1,5 +1,6 @@
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { limitReason, listLimitFor } from '@/lib/list-limits'
+import { SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 
 /**
  * Edit guard: every edit result is checked against the website schema before
@@ -58,9 +59,15 @@ export type GuardResult = { ok: true } | { ok: false; message: string; issues: I
 /** Human-readable (Turkish) explanation for the first new problem. */
 function describe(site: WebsiteSchema, issue: Issue): string {
   const [root, sectionIndex] = issue.path
+  if (root === 'sections' && issue.path.length === 1) {
+    return `Bir sitede en fazla ${SITE_SECTION_HARD_CAP} bölüm olabilir; yeni bölüm eklenmedi.`
+  }
   if (root === 'sections' && typeof sectionIndex === 'number') {
     const section = site.sections[sectionIndex]
     if (section) {
+      const kind = issue.code === 'too_small' ? 'remove' : issue.code === 'too_big' ? 'add' : null
+      const reason = kind ? limitReason(section.type, kind) : null
+      if (reason) return `${reason} Değişiklik geri alındı.`
       if (issue.code === 'too_small') return 'Bu bölümde bu kadar az öğe bırakılamaz; değişiklik geri alındı.'
       if (issue.code === 'too_big') return 'Bu bölümde bu kadar çok öğe olamaz; değişiklik geri alındı.'
     }

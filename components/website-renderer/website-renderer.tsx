@@ -52,6 +52,7 @@ import {
 import { SiteCartIsland } from '@/components/website-renderer/site-cart-island'
 import { isKeepInteractiveTarget } from '@/lib/preview-interactive'
 import { sectionHasSample } from '@/lib/sample-content'
+import { stripPlaceholders } from '@/lib/placeholder-content'
 import { resolveHeaderSocialLinks } from '@/lib/social-links'
 import { resolveMenuContact } from '@/lib/menu-contact'
 
@@ -397,7 +398,9 @@ export function WebsiteRenderer({
     return <RendererError onUndo={onUndoLastChange} />
   }
 
-  const data: WebsiteSchema = parsed.data
+  // The editor preview keeps placeholder entries so the owner can fill them in;
+  // every public render (published site, demo) leaves them out.
+  const data: WebsiteSchema = preview || editSelection ? parsed.data : stripPlaceholders(parsed.data)
   const theme = resolveTheme(data)
   const pages = pageNavItems(data)
 
