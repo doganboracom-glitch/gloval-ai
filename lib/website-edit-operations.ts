@@ -19,6 +19,8 @@ import {
   ANNOUNCEMENT_SPEEDS,
   ANNOUNCEMENT_TEXT_MAX,
   countAnnouncements,
+  countCappedSections,
+  countsTowardSectionCap,
   type AnnouncementSpeed,
   type BlogProfile,
   type BlogSettings,
@@ -75,7 +77,7 @@ function newPageId(pages: { id?: string }[], slug: string): string {
   for (let n = 2; used.has(id); n++) id = `${base}-${n}`
   return id
 }
-import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
+import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { isUnsafeTrackingCode } from '@/lib/site-tracking'
 import { MAX_ABOUT_IMAGES, isAboutLayout } from '@/lib/about-media'
 import { MAX_DETAIL_IMAGES, cleanDetailBlocks } from '@/lib/section-detail'
@@ -1799,6 +1801,12 @@ export function applyOperation(
         // owner can move it anywhere in the list afterwards.
         if (countAnnouncements(next.sections) > 0) return next
         next.sections.unshift(blankSection('announcement', next.meta.language))
+        return next
+      }
+      if (
+        countsTowardSectionCap({ type: operation.sectionType }) &&
+        countCappedSections(next.sections) >= SITE_SECTION_HARD_CAP
+      ) {
         return next
       }
       const section = blankSection(operation.sectionType, next.meta.language, { corporate: !isStorefront(next) })

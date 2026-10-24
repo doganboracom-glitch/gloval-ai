@@ -7,7 +7,7 @@ import {
 } from '@/lib/ai-generation-events'
 import { resolveAiModel } from '@/lib/ai-models'
 import { siteLimitsPromptHint } from '@/lib/page-limits'
-import { SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
+import { SITE_PAGE_HARD_CAP, SITE_SECTION_AI_SUGGESTED } from '@/lib/pricing-config'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 describe('toAiEventRow', () => {
@@ -53,7 +53,7 @@ describe('siteLimitsPromptHint', () => {
   it('states the plan page limit and the section cap explicitly', () => {
     const hint = siteLimitsPromptHint(5)
     expect(hint).toContain('at most 5 entries')
-    expect(hint).toContain(`at most ${SITE_SECTION_HARD_CAP} entries`)
+    expect(hint).toContain(`at most ${SITE_SECTION_AI_SUGGESTED} entries`)
   })
 
   it('never states more pages than the schema allows', () => {

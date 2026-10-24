@@ -1,4 +1,4 @@
-import { PAGE_LIMITS, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP, toPlanCode } from '@/lib/pricing-config'
+import { PAGE_LIMITS, SITE_PAGE_HARD_CAP, SITE_SECTION_AI_SUGGESTED, toPlanCode } from '@/lib/pricing-config'
 
 /**
  * Single enforcement layer for the per-plan page limit. The numbers themselves
@@ -45,7 +45,7 @@ export function siteLimitsPromptHint(pageLimit: number): string {
   return (
     `HARD LIMITS, never exceed them: the "pages" array has at most ${pages} entries ` +
     `(the owner's plan limit); keep the home page first and drop the least important pages first. ` +
-    `The homepage "sections" array has at most ${SITE_SECTION_HARD_CAP} entries in total, ` +
+    `The homepage "sections" array has at most ${SITE_SECTION_AI_SUGGESTED} entries in total, ` +
     `counting the hero, contact and footer; aim for 7-10. ` +
     `Count your sections before answering and merge or drop the least important ones rather than exceeding the limit. `
   )

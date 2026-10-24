@@ -127,11 +127,21 @@ export const SITE_PAGE_HARD_CAP = 15
 export const NAV_LINK_MAX = 10
 
 /**
- * Anasayfa bölüm sayısının tek üst sınırı. Şema (`websiteSchema.sections`),
- * AI istemi (`siteLimitsPromptHint`) ve onarım katmanı (`site-repair`) bunu
- * kullanır; başka yerde 12 yazılmaz.
+ * Anasayfaya elle eklenebilecek bölüm sayısının tek üst sınırı. Şema
+ * (`websiteSchema.sections`), editör ("Bölüm Ekle") ve onarım katmanı
+ * (`site-repair`) bunu kullanır. Karşılama bandı ve "Slider Altı Kutu" sayılmaz.
  */
-export const SITE_SECTION_HARD_CAP = 12
+export const SITE_SECTION_HARD_CAP = 30
+
+/**
+ * AI'nın YENİ site üretirken hedeflediği üst sınır (`siteLimitsPromptHint`).
+ * Üretilen site kompakt kalır; sahibi sonradan `SITE_SECTION_HARD_CAP`'e kadar
+ * elle bölüm ekleyebilir.
+ */
+export const SITE_SECTION_AI_SUGGESTED = 12
+
+/** Editör, sayaç bu değere ulaşınca "X / 30 bölüm" uyarısını gösterir. */
+export const SITE_SECTION_WARN_AT = SITE_SECTION_HARD_CAP - 4
 
 export function effectivePageLimit(code: PlanCode): number {
   return Math.min(PAGE_LIMITS[code], SITE_PAGE_HARD_CAP)

@@ -31,7 +31,7 @@ import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import type { BlogSettings, WebsiteSchema, Section } from '@/lib/website-schema'
-import { isStorefront } from '@/lib/website-schema'
+import { countCappedSections, isStorefront } from '@/lib/website-schema'
 import type { ProjectVersionItem, RestoreBackupResult } from '@/lib/projects'
 import type { BackupItem } from '@/lib/project-backups-core'
 import { resolveTheme } from '@/components/website-renderer/theme'
@@ -64,6 +64,8 @@ import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
   canUseContactActions,
+  SITE_SECTION_HARD_CAP,
+  SITE_SECTION_WARN_AT,
   type LockedFeatureKey,
   type PlanCode,
 } from '@/lib/pricing-config'
@@ -828,6 +830,9 @@ function SectionManager({
   const openIndex = onOpenIndexChange ? controlledOpenIndex : internalOpenIndex
   const setOpenIndex = onOpenIndexChange ?? setInternalOpenIndex
   const sections = site.sections
+  const cappedCount = countCappedSections(sections)
+  const atSectionCap = cappedCount >= SITE_SECTION_HARD_CAP
+  const nearSectionCap = cappedCount >= SITE_SECTION_WARN_AT
 
   const removeSection = (index: number) => {
     if (sections[index]?.type === 'contact' && !window.confirm(contactCopy.removeWarning)) return
@@ -998,11 +1003,26 @@ function SectionManager({
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+          disabled={atSectionCap}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground"
         >
           <Plus className="h-4 w-4" />
           {ui.addSection}
         </button>
+      )}
+      {nearSectionCap && (
+        <p
+          role="status"
+          className={`px-1 text-xs ${atSectionCap ? 'text-destructive' : 'text-muted-foreground'}`}
+        >
+          {atSectionCap
+            ? lang === 'tr'
+              ? `Bölüm sınırına ulaştınız (${cappedCount} / ${SITE_SECTION_HARD_CAP}). Yeni bölüm eklemek için birini silin.`
+              : `Section limit reached (${cappedCount} / ${SITE_SECTION_HARD_CAP}). Remove one to add another.`
+            : lang === 'tr'
+              ? `${cappedCount} / ${SITE_SECTION_HARD_CAP} bölüm kullanıldı.`
+              : `${cappedCount} / ${SITE_SECTION_HARD_CAP} sections used.`}
+        </p>
       )}
     </div>
   )
