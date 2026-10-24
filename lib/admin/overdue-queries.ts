@@ -91,6 +91,7 @@ export async function listOverdue(filters: OverdueFilters = {}, now: Date = new 
       'id, user_id, status, provider, current_period_end, grace_period_ends_at, cancel_at_period_end, suspension_reason, suspended_project_ids, billing_plans!billing_subscriptions_plan_id_fkey(name, code, price_cents, currency, interval)',
     )
     .in('status', ['past_due', 'suspended', 'active', 'trialing'])
+    .not('user_id', 'is', null)
     .or(`status.in.(past_due,suspended),current_period_end.lte.${now.toISOString()}`)
 
   type Candidate = {

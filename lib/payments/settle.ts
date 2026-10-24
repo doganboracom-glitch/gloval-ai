@@ -70,6 +70,8 @@ export async function settlePaymentResult(
         .eq('pending_change_ref', ref)
         .maybeSingle()
   const sub = directSub ?? pendingUpgradeSub
+  // A late payment callback for a deleted account's (anonymized) subscription must not revive it.
+  if (sub && !sub.user_id) return 'subscription'
   const isUpgrade = Boolean(pendingUpgradeSub)
   console.log('[v0] settlePaymentResult: subscription lookup', {
     refMasked,
@@ -90,6 +92,7 @@ export async function settlePaymentResult(
     if (
       renewalCharge &&
       renewalCharge.subscription_id &&
+      renewalCharge.user_id &&
       String(renewalCharge.idempotency_key ?? '').startsWith('renew_')
     ) {
       const outcome = await settleSubscriptionRenewal({

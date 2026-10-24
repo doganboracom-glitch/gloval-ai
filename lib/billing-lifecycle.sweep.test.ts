@@ -36,6 +36,10 @@ function makeBuilder(table: string) {
       filters.push((r) => vs.includes(r[c]))
       return b
     },
+    not(c: string, op: string, v: unknown) {
+      if (op === 'is' && v === null) filters.push((r) => r[c] !== null && r[c] !== undefined)
+      return b
+    },
     lte(c: string, v: string) {
       filters.push((r) => typeof r[c] === 'string' && (r[c] as string) <= v)
       return b

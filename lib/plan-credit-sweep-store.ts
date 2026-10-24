@@ -45,6 +45,7 @@ export const supabasePlanCreditStore: PlanCreditStore = {
       .from('billing_subscriptions')
       .select(COLUMNS)
       .eq('status', 'active')
+      .not('user_id', 'is', null)
       .order('id', { ascending: true })
       .limit(limit)
     if (afterId) query = query.gt('id', afterId)
@@ -106,7 +107,8 @@ export async function loadPlanCreditSubscription(subscriptionId: string): Promis
     .eq('id', subscriptionId)
     .maybeSingle()
   if (error) throw new Error('plan_credit_store_read_failed')
-  return data ? toSubscription(data as unknown as SubscriptionDbRow) : null
+  const row = data as unknown as SubscriptionDbRow | null
+  return row?.user_id ? toSubscription(row) : null
 }
 
 /** Cron entry point. Writes nothing unless AI_CREDIT_GRANT_DRY_RUN is exactly "false". */
