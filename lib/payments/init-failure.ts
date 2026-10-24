@@ -30,6 +30,7 @@ export type PaymentInitFlow =
   | 'renew'
   | 'topup'
   | 'branding_removal'
+  | 'multilang'
   | 'addon'
 
 export type PaymentInitUserError = 'payment_not_ready' | 'buyer_invalid' | 'payment_init_failed'

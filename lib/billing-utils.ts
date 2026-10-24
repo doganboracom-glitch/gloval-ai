@@ -45,6 +45,12 @@ export function intervalSuffix(
 export const BRANDING_REMOVAL_CODE = 'branding_removal'
 
 /**
+ * Plan code of the one-time, per-site "Çoklu Dil Paketi" right. Only sold while
+ * `MULTILANG_FEATURE_UI=true` (see `lib/multilang-feature-flag.ts`).
+ */
+export const MULTILANG_CODE = 'multilang'
+
+/**
  * Separates the renewal ledger key from the catalog plan id a renewal moves the
  * subscription to (monthly -> yearly of the same tier). The key is written
  * server-side only; settlement re-validates the plan it names.
