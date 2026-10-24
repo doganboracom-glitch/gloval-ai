@@ -1,3 +1,4 @@
+import { finalizeGeneratedPages } from '@/lib/canonical-pages'
 import { z } from 'zod'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { generateSiteObject } from '@/lib/site-generate'
@@ -212,7 +213,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail))), pageLimit))),
+              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout, aboutDetail))), pageLimit), normalizedLang, pageLimit))),
               normalizedLang,
             ),
             normalizedLang,
@@ -247,7 +248,7 @@ async function runGenerate(
         website: addMissingToMenu(
           seedFooterLegal(
             seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout)))))),
+              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout))), pageLimit), normalizedLang, pageLimit))),
               normalizedLang,
             ),
             normalizedLang,
