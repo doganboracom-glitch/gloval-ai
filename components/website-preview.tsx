@@ -18,6 +18,7 @@ import { createClient } from '@/lib/supabase/client'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
 import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
+import { PublishedSiteBanner } from '@/components/editor/published-site-banner'
 import {
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
@@ -582,6 +583,7 @@ export function WebsitePreview({
       flashToast('ok', `${skippedDrafts} boş ürün taslağı yayınlanmayacak.`)
     }
     setPublishState('publishing')
+    setSampleAttestationFailed(false)
     try {
       const result = await persist.publish(siteToPublish, approvals, confirmedReal)
       if ('error' in result) {
@@ -1576,19 +1578,7 @@ export function WebsitePreview({
 
       {/* Published link banner: always uses the active canonical subdomain. */}
       {activePublishedUrl && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-accent/30 bg-accent/10 px-4 py-2 text-sm">
-          <Rocket className="h-4 w-4 text-accent" />
-          <span className="text-foreground">{t.publish.liveAt}</span>
-          <a
-            href={activePublishedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 font-medium text-accent underline underline-offset-2"
-          >
-            {activePublishedUrl.replace(/^https?:\/\//, '')}
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-        </div>
+        <PublishedSiteBanner url={activePublishedUrl} label={t.publish.liveAt} lang={lang === 'en' ? 'en' : 'tr'} />
       )}
 
       {sampleGateIds && currentSite && (
