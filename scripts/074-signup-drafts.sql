@@ -15,11 +15,22 @@ create table if not exists public.signup_drafts (
   expires_at timestamptz not null default (now() + interval '7 days'),
   consumed_at timestamptz,
   claimed_by uuid references auth.users(id) on delete cascade,
-  project_id uuid references public.projects(id) on delete set null
+  project_id uuid references public.projects(id) on delete set null,
+  ip_hash text
 );
+
+-- Safe on a table created by an earlier revision of this script.
+alter table public.signup_drafts add column if not exists ip_hash text;
 
 create index if not exists signup_drafts_expires_at_idx
   on public.signup_drafts (expires_at);
+
+-- Abuse limits: drafts per IP per hour, and active drafts per e-mail.
+create index if not exists signup_drafts_ip_hash_created_at_idx
+  on public.signup_drafts (ip_hash, created_at) where ip_hash is not null;
+
+create index if not exists signup_drafts_email_active_idx
+  on public.signup_drafts (email) where consumed_at is null;
 
 alter table public.signup_drafts enable row level security;
 

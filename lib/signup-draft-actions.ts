@@ -3,27 +3,43 @@
 import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { checkRateLimit } from '@/lib/rate-limit'
 import { validateEmail } from '@/lib/email-validation'
 import { createProject } from '@/lib/projects'
-import { isValidClaimToken, parseDraftPayload } from '@/lib/signup-draft-core'
-import { claimDraft, completeDraft, createDraft, releaseDraft } from '@/lib/signup-draft-store'
+import { hashDraftIp, isMissingTableError, isValidClaimToken, parseDraftPayload } from '@/lib/signup-draft-core'
+import { checkDraftLimits, claimDraft, completeDraft, createDraft, releaseDraft } from '@/lib/signup-draft-store'
+
+export type CreateDraftResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: 'invalid' | 'limited' | 'storage_unavailable' }
 
 /** Called from the sign-up form (no session yet) to park the visitor's draft server-side. */
 export async function createSignupDraft(input: {
   email: string
   draft: unknown
-}): Promise<{ ok: true; token: string } | { ok: false }> {
+}): Promise<CreateDraftResult> {
   try {
     const payload = parseDraftPayload(input.draft)
-    if (!payload || !validateEmail(input.email).ok) return { ok: false }
+    if (!payload || !validateEmail(input.email).ok) return { ok: false, reason: 'invalid' }
     const h = await headers()
-    const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    if (!checkRateLimit(`signup-draft:${ip}`, 5, 10 * 60 * 1000).allowed) return { ok: false }
-    const token = await createDraft(createAdminClient(), { email: input.email, payload })
+    const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+    const ipHash = ip ? hashDraftIp(ip) : null
+    const admin = createAdminClient()
+    const limit = await checkDraftLimits(admin, { email: input.email, ipHash })
+    if (limit) {
+      console.log(`[signup-draft] rejected: ${limit} limit reached`)
+      return { ok: false, reason: 'limited' }
+    }
+    const token = await createDraft(admin, { email: input.email, payload, ipHash })
     return { ok: true, token }
-  } catch {
-    return { ok: false }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : (error as { message?: string } | null)?.message
+    console.log(
+      isMissingTableError(error)
+        ? '[signup-draft] signup_drafts table is missing - run scripts/074-signup-drafts.sql:'
+        : '[signup-draft] could not save draft:',
+      detail ?? 'unknown',
+    )
+    return { ok: false, reason: 'storage_unavailable' }
   }
 }
 

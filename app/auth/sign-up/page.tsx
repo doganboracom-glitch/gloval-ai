@@ -10,7 +10,7 @@ import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
 import { createSignupDraft } from '@/lib/signup-draft-actions'
-import { storeSignupDraftToken } from '@/lib/signup-draft-client'
+import { markSignupDraftUnsaved, storeSignupDraftToken } from '@/lib/signup-draft-client'
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
@@ -84,6 +84,8 @@ function SignUpForm() {
       if (draft?.ok) {
         draftToken = draft.token
         storeSignupDraftToken(draft.token)
+      } else {
+        markSignupDraftUnsaved()
       }
     }
     const callbackParams = new URLSearchParams()

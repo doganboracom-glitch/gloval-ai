@@ -18,6 +18,7 @@ import { finalizeDueCustomerDeletions } from '@/lib/store-customer-grace'
 import { sweepOldContactMessages } from '@/lib/site-contact-store'
 import { sweepOldAiGenerationEvents } from '@/lib/ai-generation-events'
 import { sweepOldSignupAttribution } from '@/lib/signup-attribution-store'
+import { sweepSignupDrafts } from '@/lib/signup-draft-store'
 import { sweepExpiredRateLimitCounters } from '@/lib/rate-limit-sweep'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { INDEXNOW_BUDGET_MS } from '@/lib/indexnow'
@@ -164,6 +165,15 @@ export async function GET(request: Request) {
     signupAttribution = { error: 'signup_attribution_sweep_failed' }
   }
 
+  // Isolated: deletes expired and already-consumed sign-up hand-off drafts (logs the count).
+  let signupDrafts: { deleted: number } | { error: string }
+  try {
+    signupDrafts = { deleted: await sweepSignupDrafts(createAdminClient(), Date.now()) }
+  } catch (error) {
+    console.log('[signup-drafts] cleanup failed:', error instanceof Error ? error.message : 'unknown')
+    signupDrafts = { error: 'signup_drafts_sweep_failed' }
+  }
+
   // Isolated and time-boxed: deletes expired voice-dictation rate-limit counters
   // (at most 5000 rows per run).
   let rateLimitCounters: { deleted: number } | { error: string }
@@ -217,7 +227,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, signupDrafts, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

@@ -1,7 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
-export const MAX_DRAFT_BYTES = 600_000
+export const MAX_DRAFT_BYTES = 200_000
+export const MAX_DRAFTS_PER_IP_PER_HOUR = 10
+export const MAX_ACTIVE_DRAFTS_PER_EMAIL = 3
+export const DRAFT_IP_WINDOW_MS = 60 * 60 * 1000
+/** Consumed drafts are kept briefly so a second tab can still learn the project id. */
+export const CONSUMED_DRAFT_GRACE_MS = 24 * 60 * 60 * 1000
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
@@ -26,6 +31,25 @@ export function hashClaimToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+export function hashDraftIp(ip: string): string {
+  return createHash('sha256').update(`signup-draft-ip:${ip}`).digest('hex')
+}
+
+/** Postgres undefined_table, or PostgREST's "table not found in schema cache". */
+export function isMissingTableError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return code === '42P01' || code === 'PGRST205'
+}
+
+function jsonBytes(value: unknown): number {
+  try {
+    const json = JSON.stringify(value)
+    return json === undefined ? 0 : Buffer.byteLength(json, 'utf8')
+  } catch {
+    return Number.POSITIVE_INFINITY
+  }
+}
+
 export function normalizeDraftEmail(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -40,6 +64,7 @@ export function parseDraftPayload(raw: unknown): DraftPayload | null {
   const r = raw as Record<string, unknown>
   if (!r.schema || typeof r.schema !== 'object') return null
   const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : null)
+  if (jsonBytes(r) > MAX_DRAFT_BYTES) return null
   const payload: DraftPayload = {
     name: str(r.name, 200) ?? 'Untitled',
     sector: str(r.sector, 200),
@@ -48,10 +73,6 @@ export function parseDraftPayload(raw: unknown): DraftPayload | null {
     schema: r.schema,
     publishIntent: r.publishIntent === true,
   }
-  try {
-    if (JSON.stringify(payload).length > MAX_DRAFT_BYTES) return null
-  } catch {
-    return null
-  }
+  if (jsonBytes(payload) > MAX_DRAFT_BYTES) return null
   return payload
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Info, Loader2, MailCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { resumeSignupDraft } from '@/lib/signup-draft-actions'
-import { clearSignupDraftToken, readSignupDraftToken } from '@/lib/signup-draft-client'
+import { clearSignupDraftToken, consumeSignupDraftUnsaved, readSignupDraftToken } from '@/lib/signup-draft-client'
 import { clearPendingProject } from '@/lib/pending-project'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -18,6 +18,11 @@ export default function SignUpSuccessPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const [resuming, setResuming] = useState(false)
+  const [draftUnsaved, setDraftUnsaved] = useState(false)
+
+  useEffect(() => {
+    setDraftUnsaved(consumeSignupDraftUnsaved())
+  }, [])
   const runningRef = useRef(false)
 
   // The verification link may be opened in another tab: the session cookie is
@@ -78,6 +83,14 @@ export default function SignUpSuccessPage() {
           <p role="status" className="flex items-center gap-2 text-sm text-foreground">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             {t.auth.resumingDraft}
+          </p>
+        )}
+        {draftUnsaved && (
+          <p
+            role="alert"
+            className="w-full rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-left text-sm leading-relaxed text-foreground"
+          >
+            {t.auth.draftNotSaved}
           </p>
         )}
         <div className="flex w-full items-start gap-3 rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-left">

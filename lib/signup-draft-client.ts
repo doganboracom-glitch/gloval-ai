@@ -23,3 +23,24 @@ export function clearSignupDraftToken() {
     // non-fatal
   }
 }
+
+const UNSAVED_KEY = 'gloval:signup-draft-unsaved'
+
+/** Remembers that the draft could not be parked server-side, for the next screen. */
+export function markSignupDraftUnsaved() {
+  try {
+    sessionStorage.setItem(UNSAVED_KEY, '1')
+  } catch {
+    // non-fatal
+  }
+}
+
+export function consumeSignupDraftUnsaved(): boolean {
+  try {
+    const flagged = sessionStorage.getItem(UNSAVED_KEY) === '1'
+    if (flagged) sessionStorage.removeItem(UNSAVED_KEY)
+    return flagged
+  } catch {
+    return false
+  }
+}
