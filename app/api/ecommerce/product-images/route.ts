@@ -7,7 +7,7 @@ import { createProductImageStore } from '@/lib/product-image-store'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 /** Multipart overhead allowance on top of the file limit; stays under Vercel's ~4.5 MB body cap. */
 const BODY_SLACK_BYTES = 256 * 1024

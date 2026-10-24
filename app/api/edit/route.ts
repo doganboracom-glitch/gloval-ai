@@ -97,7 +97,7 @@ function stripSectionImagePayload(section: Section): Section {
   return copy
 }
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * POST /api/edit

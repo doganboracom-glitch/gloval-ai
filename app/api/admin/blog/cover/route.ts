@@ -10,7 +10,7 @@ import { DEFAULT_COVER_MODEL, parseCoverStyle } from '@/lib/blog-cover'
 import { inspectCover } from '@/lib/blog-cover-inspect'
 import { runCoverGeneration } from '@/lib/blog-cover-run'
 
-export const maxDuration = 180
+export const maxDuration = 300
 
 const CONCEPT_TIMEOUT_MS = 10_000
 

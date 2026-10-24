@@ -4,7 +4,7 @@ import { requireAdminResponse } from '@/lib/mail/admin-guard'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-export const maxDuration = 10
+export const maxDuration = 60
 
 const REQUEST_TIMEOUT_MS = 1800
 const TOTAL_TIMEOUT_MS = 7000

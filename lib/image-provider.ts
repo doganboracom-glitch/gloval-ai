@@ -246,7 +246,7 @@ export async function generateTryOnImage({
   productName,
   // `openai/gpt-image-1` (see the model comment below) measured ~43s for a
   // single edit call directly against the gateway — 80s leaves comfortable
-  // headroom under the route's `maxDuration = 90`.
+  // headroom under the route's `maxDuration = 300`.
   timeoutMs = 80_000,
 }: {
   personPhotoDataUrl: string

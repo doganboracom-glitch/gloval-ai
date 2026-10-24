@@ -13,7 +13,7 @@ import { createStoreAiPort } from '@/lib/store-ai-port'
 import { findProhibitedTopic } from '@/lib/store-ai-text'
 
 export const runtime = 'nodejs'
-export const maxDuration = 90
+export const maxDuration = 300
 
 type FailureKey = keyof typeof STORE_AI_ERROR_MESSAGES
 

@@ -6,7 +6,7 @@ import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-cred
 // `openai/gpt-image-1` (the model this route uses; see image-provider.ts for
 // why) measured ~43s for a single edit call directly against the gateway.
 // Keep comfortable headroom over generateTryOnImage's internal 80s timeout.
-export const maxDuration = 90
+export const maxDuration = 300
 
 /**
  * POST /api/try-on

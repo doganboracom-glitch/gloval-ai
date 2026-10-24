@@ -13,7 +13,7 @@ import { createStoreAiPort } from '@/lib/store-ai-port'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 function fail(error: keyof typeof STORE_AI_ERROR_MESSAGES, status: number, message?: string) {
   return NextResponse.json({ ok: false, error, message: message ?? STORE_AI_ERROR_MESSAGES[error] }, { status })

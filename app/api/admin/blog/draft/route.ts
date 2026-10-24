@@ -15,7 +15,7 @@ import {
 } from '@/lib/blog-ai-draft'
 import { readingTimeMinutes } from '@/lib/blog-markup'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 const DRAFT_MODEL = process.env.BLOG_DRAFT_MODEL || 'google/gemini-2.5-flash'
 
