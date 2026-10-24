@@ -88,6 +88,17 @@ const CATEGORY_SECTION_TYPES: Record<Category, SectionType[]> = {
   team: ['team', 'about', 'stats'],
 }
 
+/** At least one of these must exist for a category page to have real content. */
+const CATEGORY_PRIMARY_TYPES: Record<Category, SectionType[]> = {
+  products: ['categories', 'products'],
+  services: ['services', 'pricing'],
+  about: ['about', 'team'],
+  portfolio: ['portfolio', 'gallery'],
+  contact: ['contact'],
+  pricing: ['pricing'],
+  team: ['team', 'about'],
+}
+
 const ANCHOR_ALIASES: Record<string, SectionType> = {
   portfolio: 'portfolio',
   portfoy: 'portfolio',
@@ -288,8 +299,10 @@ export function findPublicPage(site: WebsiteSchema, pathSlug: string) {
   return (
     (site.pages ?? []).find((p, i) => {
       const slug = p.slug || `page-${i}`
-      if (p.kind === 'detail' && !detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive, teamLive })) return false
-      return slug.toLowerCase() === wanted && slug !== home
+      if (slug.toLowerCase() !== wanted || slug === home) return false
+      if (p.kind === 'detail') return detailPageLive(p.detailOf, { aboutLive, servicesLive, gallery, testimonialsLive, referencesLive, teamLive })
+      // A page with no content of its own is a 404 (never home or another page's content).
+      return pageHasContent(site, slug)
     }) ?? null
   )
 }
@@ -391,23 +404,30 @@ export function sectionsForPage(
     return [...own.sections.filter((s) => !s.hidden && s.type !== 'footer'), ...footer]
   }
 
+  // A page without sections of its own shows only what its category defines.
+  // It NEVER falls back to the home page or to another page's content: a page
+  // with nothing to show renders just the footer and is not publicly served
+  // (see `pageHasContent`). The old fallbacks ("unknown category -> whole home
+  // page", "contact -> FAQ when there is no contact section") are what made
+  // /faq show the home page and /contact show the FAQ.
   const category = categoryFor(active)
-
-  if (!category) {
-    // Unknown page category: show the full homepage so the page is never empty.
-    return visible
-  }
+  if (!category) return footer
 
   const allowed = new Set(CATEGORY_SECTION_TYPES[category])
   const matched = visible.filter((s) => allowed.has(s.type) && s.type !== 'footer')
+  const primary = new Set(CATEGORY_PRIMARY_TYPES[category])
+  if (!matched.some((s) => primary.has(s.type))) return footer
 
-  // Sub-pages lead with their OWN content (no repeated hero) so navigating
-  // visibly changes the page. Fall back to all non-hero/footer sections if the
-  // category matched nothing, so a page is never blank.
-  const body =
-    matched.length > 0
-      ? matched
-      : visible.filter((s) => s.type !== 'footer' && s.type !== 'hero')
+  return [...matched, ...footer]
+}
 
-  return [...body, ...footer]
+/**
+ * Whether a non-home page has content of its own to serve. Section detail pages
+ * draw their own body and are gated separately (`detailPageLive`); every other
+ * page needs at least one visible, non-footer section.
+ */
+export function pageHasContent(site: WebsiteSchema, slug: string): boolean {
+  const page = (site.pages ?? []).find((p, i) => (p.slug || `page-${i}`) === slug)
+  if (page?.kind === 'detail') return true
+  return sectionsForPage(site, slug).some((s) => s.type !== 'footer')
 }

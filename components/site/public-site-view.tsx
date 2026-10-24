@@ -14,6 +14,7 @@ import { isStorefront } from "@/lib/website-schema";
 import { getStorePaymentBadges } from "@/lib/store-payment-badges";
 import { contactSecret, signContactToken } from "@/lib/site-contact-guard";
 import { findPublicPage, isPageIndexable, pagePath } from "@/lib/website-pages";
+import { canonicalRedirectTarget } from "@/lib/canonical-pages";
 import { detailDescription, resolveAboutDetail } from "@/lib/section-detail";
 import {
   buildBreadcrumbJsonLd,
@@ -217,6 +218,9 @@ export async function PublicSiteView({
       );
       if (moved && findPublicPage(site.schema, moved.to.replace(/^\//, "")))
         permanentRedirect(moved.to);
+      // Old or alternative address of a canonical page (/about -> /hakkimizda).
+      const alias = canonicalRedirectTarget(site.schema, pageSlug);
+      if (alias) permanentRedirect(alias);
       notFound();
     }
   }
