@@ -102,25 +102,56 @@ export function withLivePageLinks(site: WebsiteSchema): WebsiteSchema {
     next = { ...next, navigation: { ...next.navigation, links, cta } }
   }
 
-  let sectionsChanged = false
-  const sections = site.sections.map((section) => {
-    if (section.type !== 'footer') return section
-    const columns = section.columns?.map((column) => {
-      const columnLinks = rewriteLinks(site, column.links, empty)
-      return columnLinks === column.links ? column : { ...column, links: columnLinks }
-    })
-    const columnsChanged = columns?.some((c, i) => c !== section.columns?.[i]) ?? false
-    const legalLinks = section.legal?.links ? rewriteLinks(site, section.legal.links, empty) : undefined
-    const legalChanged = legalLinks !== undefined && legalLinks !== section.legal?.links
-    if (!columnsChanged && !legalChanged) return section
-    sectionsChanged = true
-    return {
-      ...section,
-      ...(columnsChanged ? { columns } : {}),
-      ...(legalChanged ? { legal: { ...section.legal, links: legalLinks } } : {}),
-    }
+  const sections = rewriteList(site, site.sections, empty)
+  if (sections !== site.sections) next = { ...next, sections }
+
+  const pageSource = next.pages ?? []
+  const pages = pageSource.map((page) => {
+    const pageSections = (page as { sections?: Section[] }).sections
+    if (!Array.isArray(pageSections)) return page
+    const rewritten = rewriteList(site, pageSections, empty)
+    return rewritten === pageSections ? page : { ...page, sections: rewritten }
   })
-  if (sectionsChanged) next = { ...next, sections }
+  if (pages.some((p, i) => p !== pageSource[i])) next = { ...next, pages }
 
   return next
+}
+
+const REMOVED = Symbol('removed')
+
+/**
+ * Walks section data and applies the same verdict to every internal link it finds
+ * (hero and slide buttons, CTA buttons, cards, footer columns, legal links...). A
+ * link object is rewritten to its anchor or removed; a removed button simply
+ * disappears from its parent. Untouched data keeps its identity.
+ */
+function rewriteNode(site: WebsiteSchema, node: unknown, empty: Set<string>): unknown {
+  if (Array.isArray(node)) return rewriteList(site, node, empty)
+  if (!node || typeof node !== 'object') return node
+  const record = node as Record<string, unknown>
+  if (typeof record.href === 'string') {
+    const verdict = verdictFor(site, record.href, empty)
+    if (!verdict.keep) return verdict.anchor ? { ...record, href: verdict.anchor } : REMOVED
+    return node
+  }
+  let copy: Record<string, unknown> | null = null
+  for (const [key, value] of Object.entries(record)) {
+    const result = rewriteNode(site, value, empty)
+    if (result === value) continue
+    copy ??= { ...record }
+    if (result === REMOVED) delete copy[key]
+    else copy[key] = result
+  }
+  return copy ?? node
+}
+
+function rewriteList<T>(site: WebsiteSchema, list: T[], empty: Set<string>): T[] {
+  let changed = false
+  const out: T[] = []
+  for (const item of list) {
+    const result = rewriteNode(site, item, empty)
+    if (result !== item) changed = true
+    if (result !== REMOVED) out.push(result as T)
+  }
+  return changed ? out : list
 }

@@ -108,14 +108,107 @@ describe('sites with no dead page keep their menu exactly', () => {
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
   ] as const) {
-    it(`${name}: same object, same header, footer and CTA`, () => {
+    it(`${name}: same header, footer and CTA`, () => {
       const site = asSite(json)
       expect(emptyPageSlugs(site)).toEqual([])
       const pruned = withLivePageLinks(site)
-      expect(pruned).toBe(site)
       expect(renderedMenu(pruned)).toEqual(renderedMenu(site))
+      expect(pruned.pages).toBe(site.pages)
+      expect(pruned.navigation).toBe(site.navigation)
     })
   }
+
+  it('dbajans.com.tr: the whole schema is returned untouched', () => {
+    const site = asSite(dbajans)
+    expect(withLivePageLinks(site)).toBe(site)
+  })
+})
+
+type Json = unknown
+
+/** Every `href` string in a piece of schema, with where it was found. */
+function collectHrefs(node: Json, path = '$'): { path: string; href: string }[] {
+  if (Array.isArray(node)) return node.flatMap((v, i) => collectHrefs(v, `${path}[${i}]`))
+  if (!node || typeof node !== 'object') return []
+  return Object.entries(node as Record<string, Json>).flatMap(([k, v]) =>
+    k === 'href' && typeof v === 'string' ? [{ path: `${path}.href`, href: v }] : collectHrefs(v, `${path}.${k}`),
+  )
+}
+
+/** Every internal link of the page: menu, header CTA, hero, CTA, cards, footer, and each page's own sections. */
+function allLinks(site: WebsiteSchema) {
+  return [
+    ...collectHrefs(site.navigation, 'navigation'),
+    ...collectHrefs(site.sections, 'sections'),
+    ...collectHrefs(
+      (site.pages ?? []).map((p) => (p as { sections?: Section[] }).sections ?? []),
+      'pages',
+    ),
+  ]
+}
+
+describe('no internal link anywhere points at a page without content', () => {
+  for (const [name, json] of [
+    ['ay-yildiz-tasimacilik', ayYildiz],
+    ['dbajans.com.tr', dbajans],
+    ['luna-mucevher.gloval.site', luna],
+  ] as const) {
+    it(`${name}: menu, hero, CTA, footer and sections have no dead link`, () => {
+      const pruned = withLivePageLinks(asSite(json))
+      const dead = allLinks(pruned).filter((l) => isDeadPageHref(pruned, l.href))
+      expect(dead).toEqual([])
+    })
+  }
+
+  it('the scan really catches a dead link on an unpruned site', () => {
+    const site = asSite(luna)
+    expect(allLinks(site).filter((l) => isDeadPageHref(site, l.href)).map((l) => l.href)).toEqual(['/contact'])
+  })
+})
+
+describe('hero and CTA buttons follow the menu rule', () => {
+  const heroOf = (site: WebsiteSchema) =>
+    site.sections.find((s): s is Extract<Section, { type: 'hero' }> => s.type === 'hero')!
+
+  it('luna: "Hızlı Hediye Paketi" -> /contact becomes #contact (home has a contact section); nothing else changes', () => {
+    const site = asSite(luna)
+    const pruned = withLivePageLinks(site)
+    const before = heroOf(site).slides![2]
+    const after = heroOf(pruned).slides![2]
+    expect(before.secondaryButton).toEqual({ ...before.secondaryButton!, href: '/contact' })
+    expect(after.secondaryButton).toEqual({ ...before.secondaryButton!, href: '#contact' })
+
+    const restore = JSON.parse(JSON.stringify(pruned))
+    restore.sections[0].slides[2].secondaryButton.href = '/contact'
+    expect(restore).toEqual(JSON.parse(JSON.stringify(site)))
+  })
+
+  it('ay-yildiz: hero "Hakkımızda" -> /about is hidden (no about section on home)', () => {
+    const site = asSite(ayYildiz)
+    const before = heroOf(site).slides![2]
+    expect(before.secondaryButton?.href).toBe('/about')
+    const after = heroOf(withLivePageLinks(site)).slides![2]
+    expect('secondaryButton' in after).toBe(false)
+    expect(after.primaryButton).toEqual(before.primaryButton)
+  })
+
+  it('a CTA section button to an empty page is anchored or removed the same way', () => {
+    const site = asSite(ayYildiz)
+    const withCta = {
+      ...site,
+      sections: site.sections.map((s) =>
+        s.type === 'cta'
+          ? { ...s, primaryButton: { label: 'SSS', href: '/faq' }, secondaryButton: { label: 'Biz', href: '/about' } }
+          : s,
+      ),
+    } as WebsiteSchema
+    const cta = withLivePageLinks(withCta).sections.find((s) => s.type === 'cta') as {
+      primaryButton: { href: string }
+      secondaryButton?: unknown
+    }
+    expect(cta.primaryButton.href).toBe('#faq')
+    expect(cta.secondaryButton).toBeUndefined()
+  })
 })
 
 function withoutDeadPages(site: WebsiteSchema): WebsiteSchema {
