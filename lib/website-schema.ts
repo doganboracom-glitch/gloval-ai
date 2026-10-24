@@ -297,6 +297,10 @@ export const aboutSection = z.object({
   detail: sectionDetailSchema
     .optional()
     .describe('Managed by the platform after generation. Never set this field yourself.'),
+  shortText: z.string().max(600).optional().describe('Managed by the platform. Never set this field yourself.'),
+  longText: z.string().max(1500).optional().describe('Managed by the platform. Never set this field yourself.'),
+  vision: z.string().max(600).optional().describe('Managed by the platform. Never set this field yourself.'),
+  mission: z.string().max(600).optional().describe('Managed by the platform. Never set this field yourself.'),
   })
 
 export const servicesSection = z.object({
