@@ -2,6 +2,7 @@
 
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { pageNavItems } from '@/lib/website-pages'
+import { withLivePageLinks } from '@/lib/live-page-links'
 import { resolveTheme, themeToCssVars } from '@/components/website-renderer/theme'
 import { WebsiteHeader } from '@/components/website-renderer/sections/website-header'
 import { WebsiteFooter } from '@/components/website-renderer/sections/website-footer'
@@ -16,7 +17,7 @@ import { SiteBlogProvider } from '@/components/website-renderer/site-blog-contex
 import type { SiteBlogData } from '@/lib/blog-site'
 
 export function StoreSiteShell({
-  site,
+  site: publishedSite,
   slug,
   shipping,
   mode = 'ecommerce',
@@ -38,6 +39,7 @@ export function StoreSiteShell({
   origin?: string
   children: React.ReactNode
 }) {
+  const site = withLivePageLinks(publishedSite)
   const pages = pageNavItems(site)
   const footer = site.sections.find((section): section is Extract<Section, { type: 'footer' }> => section.type === 'footer')
   const transactions = modeHasTransactions(mode)
