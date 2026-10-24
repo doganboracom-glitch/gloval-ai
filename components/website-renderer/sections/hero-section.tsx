@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CTAButton, Section, SiteImageRef } from '@/lib/website-schema'
-import { SiteButton, SiteImage } from '@/components/website-renderer/primitives'
+import { SiteButton, SiteImage, onSiteNavClick } from '@/components/website-renderer/primitives'
+import {
+  useHrefNormalizer,
+  useIsSitePreview,
+  useSiteNav,
+} from '@/components/website-renderer/site-nav-context'
 import { useCarouselGestures } from '@/components/website-renderer/use-carousel-gestures'
 import { KEEP_INTERACTIVE_PROPS } from '@/lib/preview-interactive'
 import { hasHeroLayout, resolveHeroLayout } from '@/lib/hero-layout'
@@ -138,14 +143,26 @@ function Badge({ text, onImage = false }: { text: string; onImage?: boolean }) {
 
 /** Buttons rendered over a dark image overlay need guaranteed contrast. */
 function OverlayButtons({ slide }: { slide: Slide }) {
+  const nav = useSiteNav()
+  const normalize = useHrefNormalizer()
+  const isPreview = useIsSitePreview()
   if (!slide.primaryButton && !slide.secondaryButton) return null
+  // The editor preview has no router, so a real navigation would blank its
+  // iframe; on a published site the button must behave like every other CTA.
+  const onSecondaryClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isPreview) {
+      e.preventDefault()
+      return
+    }
+    onSiteNavClick(e, normalize(slide.secondaryButton?.href || ''), nav)
+  }
   return (
     <div className="mt-8 flex flex-wrap justify-center gap-3">
       {slide.primaryButton && <SiteButton button={slide.primaryButton} />}
       {slide.secondaryButton && (
         <a
           href={slide.secondaryButton.href || '#'}
-          onClick={(e) => e.preventDefault()}
+          onClick={onSecondaryClick}
           className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
           style={{
             borderRadius: 'var(--site-radius)',
