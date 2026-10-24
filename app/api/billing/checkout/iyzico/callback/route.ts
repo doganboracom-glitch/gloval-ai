@@ -109,7 +109,7 @@ function callbackResponse(
 
 /** Pulls the authoritative charged amount/currency/order ref out of iyzico's retrieve response. */
 function extractPaidDetails(raw: Record<string, unknown>) {
-  const paid = Number(raw.paidPrice)
+  const paid = typeof raw.paidPrice === 'number' || typeof raw.paidPrice === 'string' ? Number(raw.paidPrice) : Number.NaN
   const currency = typeof raw.currency === 'string' ? raw.currency.trim().toUpperCase() : undefined
   const orderRef =
     typeof raw.basketId === 'string' && raw.basketId

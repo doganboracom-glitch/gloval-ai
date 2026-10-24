@@ -132,9 +132,37 @@ export async function settlePaymentResult(
     const alreadySettled =
       !isUpgrade &&
       (pendingCharge?.status === 'succeeded' || sub.status === 'past_due' || sub.status === 'suspended')
+    if (pendingCharge && pendingCharge.status !== 'pending' && result.status === 'paid') return 'subscription'
     if (alreadySettled && result.status === 'paid') return 'subscription'
 
     if (result.status === 'paid') {
+      const verdict = verifyPaidFacts(
+        {
+          amountCents: pendingCharge?.amount_cents ?? plan?.price_cents ?? -1,
+          currency: pendingCharge?.currency ?? plan?.currency ?? '',
+          orderRef: pendingCharge?.idempotency_key ?? undefined,
+        },
+        result,
+        { require: 'amount_and_currency' },
+      )
+      if (!verdict.ok) {
+        await admin
+          .from('billing_transactions')
+          .update({ status: 'failed', description: `Abonelik ödemesi doğrulanamadı (${verdict.reason})` })
+          .eq('provider_ref', ref)
+          .eq('status', 'pending')
+        await logUserEvent({
+          userId: sub.user_id,
+          type: 'payment_failed',
+          subject: 'Ödeme doğrulanamadı',
+          body: `Abonelik ödemesi doğrulanamadı; paket değişikliği uygulanmadı. İşlem No: ${formatTicketNumber(ref)}.`,
+          dedupeKey: `payment-rejected:${ref}`,
+          emailAdmin: true,
+          adminSubject: (userEmail) => `${userEmail} abonelik ödeme doğrulaması başarısız`,
+          adminBody: (userEmail) => `Kullanıcı e-posta adresi: ${userEmail}\nSebep: ${verdict.reason}\nİşlem No: ${formatTicketNumber(ref)}`,
+        })
+        return 'payment_rejected'
+      }
       // The idempotent ledger upsert runs BEFORE the status flip: an upgrade's
       // `pending_change_ref` is cleared by the flip, so if the ledger write failed
       // afterwards the PSP retry could no longer match this row and the charge
@@ -217,7 +245,13 @@ export async function settlePaymentResult(
     .maybeSingle()
 
   if (ent) {
+    const { data: entCharge } = await admin
+      .from('billing_transactions')
+      .select('status')
+      .eq('provider_ref', ref)
+      .maybeSingle()
     if (result.status === 'paid') {
+      if (ent.status === 'active' || entCharge?.status === 'failed' || entCharge?.status === 'succeeded') return 'entitlement'
       // A right is released only when the PSP's retrieved charge matches the
       // amount/currency/order the server recorded before checkout (strict, to
       // the kuruş). An already-active right is never touched again by a replay.
@@ -300,18 +334,15 @@ export async function settlePaymentResult(
       // Never fulfil unless the PSP-reported charge matches the server-side
       // order snapshot. Fields are only present when the verified provider
       // response carried them (iyzico retrieve does).
-      const amountMismatch =
-        result.paidAmountCents !== undefined && result.paidAmountCents !== domainOrder.price_cents
-      const currencyMismatch =
-        result.paidCurrency !== undefined &&
-        result.paidCurrency.replace('TL', 'TRY') !== String(domainOrder.currency).toUpperCase()
-      const refMismatch = result.orderRef !== undefined && result.orderRef !== `domreg_${domainOrder.id}`
-      if (amountMismatch || currencyMismatch || refMismatch) {
+      const verdict = verifyPaidFacts(
+        { amountCents: domainOrder.price_cents, currency: domainOrder.currency, orderRef: `domreg_${domainOrder.id}` },
+        result,
+        { require: 'all' },
+      )
+      if (!verdict.ok) {
         console.log('[v0] settlePaymentResult: domain payment mismatch, not fulfilling', {
           orderId: domainOrder.id,
-          amountMismatch,
-          currencyMismatch,
-          refMismatch,
+          reason: verdict.reason,
         })
         await admin
           .from('domain_orders')
@@ -364,12 +395,12 @@ export async function settlePaymentResult(
 
   if (transferRow) {
     if (result.status === 'paid') {
-      const mismatch =
-        (result.paidAmountCents !== undefined && result.paidAmountCents !== transferRow.price_cents) ||
-        (result.paidCurrency !== undefined &&
-          result.paidCurrency.replace('TL', 'TRY') !== String(transferRow.currency).toUpperCase()) ||
-        (result.orderRef !== undefined && result.orderRef !== `domtrf_${transferRow.id}`)
-      if (mismatch) {
+      const verdict = verifyPaidFacts(
+        { amountCents: transferRow.price_cents, currency: transferRow.currency, orderRef: `domtrf_${transferRow.id}` },
+        result,
+        { require: 'all' },
+      )
+      if (!verdict.ok) {
         await admin
           .from('domain_transfers')
           .update({ status: 'failed', error_message: 'payment_mismatch', auth_code_enc: null })
@@ -415,14 +446,14 @@ export async function settlePaymentResult(
 
   if (renewalRow) {
     if (result.status === 'paid') {
-      const mismatch =
-        (result.paidAmountCents !== undefined && result.paidAmountCents !== renewalRow.price_cents) ||
-        (result.paidCurrency !== undefined &&
-          result.paidCurrency.replace('TL', 'TRY') !== String(renewalRow.currency).toUpperCase()) ||
-        (result.orderRef !== undefined && result.orderRef !== `domren_${renewalRow.id}`)
+const verdict = verifyPaidFacts(
+        { amountCents: renewalRow.price_cents, currency: renewalRow.currency, orderRef: `domren_${renewalRow.id}` },
+        result,
+        { require: 'all' },
+      )
       // The buyer was charged, so a mismatch is never a plain "failed": it needs a
       // human to refund or correct it, and nothing is sent to the registrar.
-      if (mismatch) {
+      if (!verdict.ok) {
         await admin
           .from('domain_renewals')
           .update({

@@ -50,7 +50,7 @@ export function verifyPaidFacts(
   facts: PaidFacts,
   options: PaidFactsOptions,
 ): PaidFactsVerdict {
-  const needsAmountAndCurrency = options.require !== 'when_present'
+  const needsAmountAndCurrency = true
   const needsOrderRef = options.require === 'all'
 
   if (needsAmountAndCurrency && (facts.paidAmountCents === undefined || facts.paidCurrency === undefined)) {
