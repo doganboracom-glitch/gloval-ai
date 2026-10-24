@@ -43,3 +43,25 @@ export function readSignupDraftFailed(): boolean {
     return false
   }
 }
+
+export type PostSignUpStep =
+  | { kind: 'resume'; token: string }
+  | { kind: 'warn-draft-lost' }
+  | { kind: 'dashboard' }
+  | { kind: 'verify-email' }
+
+/**
+ * Decides what happens right after a successful sign-up. A session that already exists
+ * (e-mail confirmation off, or direct redirect) skips the verification page, which is
+ * where the "draft not saved" notice normally lives, so that case must warn here.
+ */
+export function resolvePostSignUp(input: {
+  hasSession: boolean
+  draftToken: string | null
+  draftFailed: boolean
+}): PostSignUpStep {
+  if (!input.hasSession) return { kind: 'verify-email' }
+  if (input.draftToken) return { kind: 'resume', token: input.draftToken }
+  if (input.draftFailed) return { kind: 'warn-draft-lost' }
+  return { kind: 'dashboard' }
+}

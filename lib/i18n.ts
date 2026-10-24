@@ -627,6 +627,9 @@ const dict = {
       resumingDraft: 'E-postan doğrulandı, taslağına dönüyoruz…',
       draftNotSaved:
         'Taslağınız kaydedilemedi. E-postanızı doğrulayıp giriş yaptıktan sonra sitenizi yeniden yayınlayın.',
+      draftNotSavedSignedIn:
+        'Taslağınız kaydedilemedi. Giriş yapıp sitenizi yeniden yayınlayın.',
+      draftNotSavedContinue: 'Devam et',
       verifiedTitle: 'E-posta adresiniz başarıyla doğrulandı!',
       verifiedBody: 'GLOVAL AI hesabınız artık aktif. Giriş yapmak için giriş sayfasına yönlendiriliyorsunuz.',
       verifiedRedirecting: '{s} sn. içinde giriş sayfasına yönlendirileceksiniz...',
@@ -2237,6 +2240,9 @@ const dict = {
     resumingDraft: 'Email verified, taking you back to your draft…',
     draftNotSaved:
       'Your draft could not be saved. After verifying your email and signing in, publish your site again.',
+    draftNotSavedSignedIn:
+      'Your draft could not be saved. Sign in and publish your site again.',
+    draftNotSavedContinue: 'Continue',
     verifiedTitle: 'Your Email Is Verified!',
     verifiedBody: 'Your GLOVAL AI account is now active. Taking you to the login page to sign in.',
     verifiedRedirecting: 'Redirecting to the login page in {s}s...',
