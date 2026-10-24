@@ -100,6 +100,9 @@ const privacy: LegalDoc = {
           p(
             'Verilerinizi yalnızca işleme amacının gerektirdiği ve mevzuatın öngördüğü süre boyunca saklarız. Hesap ve içerik verileri hesabınız aktif olduğu sürece; faturalama ve işlem kayıtları ilgili vergi/ticaret mevzuatının öngördüğü süre boyunca (genel olarak on yıla varan süreler) tutulur. Süre dolduğunda veriler silinir, yok edilir veya anonim hâle getirilir.',
           ),
+          p(
+            'Kayıt tamamlanmadan önce oluşturulan site taslağı ve e-posta adresiniz, kaydı tamamlamanız için en fazla 7 gün saklanır ve sonra silinir.',
+          ),
         ],
       },
       {
@@ -204,6 +207,9 @@ const privacy: LegalDoc = {
         blocks: [
           p(
             'We keep your data only for as long as the processing purpose requires and applicable law prescribes. Account and content data are kept while your account is active; invoicing and transaction records are kept for the period required by tax/commercial legislation (generally up to ten years). Once the period expires, data is deleted, destroyed or anonymised.',
+          ),
+          p(
+            'The site draft created before sign-up is completed and your e-mail address are kept for at most 7 days so that you can complete your registration, and are then deleted.',
           ),
         ],
       },
