@@ -346,6 +346,9 @@ export function BillingClient({
   const shownPlan =
     currentPlan ?? (subscription ? (plans.find((p) => p.id === subscription.plan_id) ?? null) : null)
 
+  // FREE never renews or cancels: no renewal date, no cancel link.
+  const isFreeShown = shownPlan != null && shownPlan.price_cents === 0
+
   // Payment is owed for the next period: failed renewal (past_due), suspended
   // after the grace window, or a period that ended without a settled renewal.
   const needsRenewal =
@@ -802,6 +805,15 @@ export function BillingClient({
     // yok.
     if (!dbPlan) {
       if (code === 'free') {
+        // "Mevcut" only when the user really is on FREE; otherwise it would
+        // contradict the "no active subscription" card above.
+        if (!hasActiveSub) {
+          return (
+            <Button variant="outline" className="w-full" onClick={() => window.location.assign('/dashboard')}>
+              {b.subscribe}
+            </Button>
+          )
+        }
         return (
           <Button variant="outline" className="w-full" disabled>
             {b.currentBadge}
@@ -972,7 +984,7 @@ export function BillingClient({
                       {daysUntil(subscription!.trial_ends_at)} {b.trialDaysLeft})
                     </span>
                   )}
-                  {subscription!.status !== 'trialing' && subscription!.current_period_end && (
+                  {!isFreeShown && subscription!.status !== 'trialing' && subscription!.current_period_end && (
                     <span className="text-muted-foreground">
                       {subscription!.period_expired ? b.periodEndedOn : b.renews}:{' '}
                       {dateFmt.format(new Date(subscription!.current_period_end))}
@@ -1003,7 +1015,7 @@ export function BillingClient({
                 {subscription!.cancel_at_period_end && (
                   <p className="mt-3 text-sm text-destructive">{b.willCancel}</p>
                 )}
-                {!subscription!.cancel_at_period_end && (
+                {!isFreeShown && !subscription!.cancel_at_period_end && (
                   <button
                     type="button"
                     onClick={() => setShowCancel(true)}

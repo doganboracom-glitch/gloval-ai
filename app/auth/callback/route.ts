@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { isValidClaimToken } from '@/lib/signup-draft-core'
 
 /**
  * Supabase email-confirmation callback.
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
   const rawNext = searchParams.get('next') ?? '/dashboard'
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
   const isRecovery = type === 'recovery' || rawNext === '/auth/reset-password'
+  const rawDraft = searchParams.get('draft')
+  const draft = isValidClaimToken(rawDraft) ? rawDraft : null
 
   const supabase = await createClient()
 
@@ -31,9 +34,13 @@ export async function GET(request: NextRequest) {
   // still needs the new-session cookie, but has nothing to "verify" for the
   // user). Everything else (signup confirmation, resend) is a real email
   // verification and gets the branded success screen first.
+  // A sign-up that carries a draft stays signed in and resumes it directly.
+  const keepSession = isRecovery || draft !== null
   const successRedirect = isRecovery
     ? `${origin}/auth/reset-password`
-    : `${origin}/auth/verified?next=${encodeURIComponent(next)}`
+    : draft
+      ? `${origin}/auth/resume?draft=${draft}`
+      : `${origin}/auth/verified?next=${encodeURIComponent(next)}`
 
   let verifyError: { message: string } | null = null
   if (tokenHash && type) {
@@ -54,7 +61,7 @@ export async function GET(request: NextRequest) {
   // send the user to a real login screen. A recovery link is different: the
   // reset-password page genuinely needs that session to let the user set a
   // new password.
-  if (!isRecovery) {
+  if (!keepSession) {
     await supabase.auth.signOut()
   }
 
