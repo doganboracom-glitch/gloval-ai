@@ -10,7 +10,7 @@ import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
 import { createSignupDraft } from '@/lib/signup-draft-actions'
-import { storeSignupDraftToken } from '@/lib/signup-draft-client'
+import { setSignupDraftFailed, storeSignupDraftToken } from '@/lib/signup-draft-client'
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
@@ -79,11 +79,15 @@ function SignUpForm() {
     // verification link can restore it from any tab or device. Never blocks sign-up.
     let draftToken: string | null = null
     const pending = peekPendingProject()
+    setSignupDraftFailed(false)
     if (pending) {
       const draft = await createSignupDraft({ email, draft: pending }).catch(() => null)
       if (draft?.ok) {
         draftToken = draft.token
         storeSignupDraftToken(draft.token)
+      } else {
+        // Sign-up still proceeds; the success page tells the user to re-publish.
+        setSignupDraftFailed(true)
       }
     }
     const callbackParams = new URLSearchParams()

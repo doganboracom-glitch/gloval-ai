@@ -52,10 +52,14 @@ function verifyCookie(raw: string | undefined): string | null {
   return id
 }
 
-export function hashedIp(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  const ip = forwarded || req.headers.get('x-real-ip') || 'unknown'
+export function hashedIpFromHeaders(headers: Pick<Headers, 'get'>): string {
+  const forwarded = headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  const ip = forwarded || headers.get('x-real-ip') || 'unknown'
   return createHmac('sha256', secret()).update(`ip:${ip}`).digest('base64url').slice(0, 32)
+}
+
+export function hashedIp(req: Request): string {
+  return hashedIpFromHeaders(req.headers)
 }
 
 export type AnonReservation =

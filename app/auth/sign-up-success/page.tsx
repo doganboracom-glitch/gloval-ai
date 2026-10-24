@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Info, Loader2, MailCheck } from 'lucide-react'
+import { Info, Loader2, MailCheck, TriangleAlert } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { resumeSignupDraft } from '@/lib/signup-draft-actions'
-import { clearSignupDraftToken, readSignupDraftToken } from '@/lib/signup-draft-client'
+import {
+  clearSignupDraftToken,
+  readSignupDraftFailed,
+  readSignupDraftToken,
+} from '@/lib/signup-draft-client'
 import { clearPendingProject } from '@/lib/pending-project'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -18,7 +22,12 @@ export default function SignUpSuccessPage() {
   const { t } = useLanguage()
   const router = useRouter()
   const [resuming, setResuming] = useState(false)
+  const [draftFailed, setDraftFailed] = useState(false)
   const runningRef = useRef(false)
+
+  useEffect(() => {
+    setDraftFailed(readSignupDraftFailed())
+  }, [])
 
   // The verification link may be opened in another tab: the session cookie is
   // shared, so this tab notices the sign-in and continues with the same draft.
@@ -79,6 +88,15 @@ export default function SignUpSuccessPage() {
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             {t.auth.resumingDraft}
           </p>
+        )}
+        {draftFailed && (
+          <div
+            role="alert"
+            className="flex w-full items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-left"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+            <p className="text-sm leading-relaxed text-foreground">{t.auth.draftNotSaved}</p>
+          </div>
         )}
         <div className="flex w-full items-start gap-3 rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-left">
           <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

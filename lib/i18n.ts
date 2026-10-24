@@ -625,6 +625,8 @@ const dict = {
       emailDidYouMean: 'Bunu mu demek istediniz: {email}?',
       emailUseSuggestion: 'Düzelt',
       resumingDraft: 'E-postan doğrulandı, taslağına dönüyoruz…',
+      draftNotSaved:
+        'Taslağınız kaydedilemedi. E-postanızı doğrulayıp giriş yaptıktan sonra sitenizi yeniden yayınlayın.',
       verifiedTitle: 'E-posta adresiniz başarıyla doğrulandı!',
       verifiedBody: 'GLOVAL AI hesabınız artık aktif. Giriş yapmak için giriş sayfasına yönlendiriliyorsunuz.',
       verifiedRedirecting: '{s} sn. içinde giriş sayfasına yönlendirileceksiniz...',
@@ -1388,7 +1390,7 @@ const dict = {
       upgradeCta: 'Planları Gör',
 
       addTitle: 'Alan Adı Bağla',
-      addDescription: 'Sahibi olduğunuz alan adını girin; adresi sizin i��in düzenleriz.',
+      addDescription: 'Sahibi olduğunuz alan adını girin; adresi sizin için düzenleriz.',
       addLabel: 'Alan Adı',
       addPlaceholder: 'firma.com',
       addSubmit: 'Bağla',
@@ -2233,6 +2235,8 @@ const dict = {
     emailDidYouMean: 'Did you mean {email}?',
     emailUseSuggestion: 'Fix it',
     resumingDraft: 'Email verified, taking you back to your draft…',
+    draftNotSaved:
+      'Your draft could not be saved. After verifying your email and signing in, publish your site again.',
     verifiedTitle: 'Your Email Is Verified!',
     verifiedBody: 'Your GLOVAL AI account is now active. Taking you to the login page to sign in.',
     verifiedRedirecting: 'Redirecting to the login page in {s}s...',

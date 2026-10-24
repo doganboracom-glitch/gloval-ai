@@ -23,3 +23,23 @@ export function clearSignupDraftToken() {
     // non-fatal
   }
 }
+
+const FAILED_KEY = 'gloval:signup-draft-failed'
+
+/** Remembers that the draft could not be parked, so the post-sign-up page can say so. */
+export function setSignupDraftFailed(failed: boolean) {
+  try {
+    if (failed) sessionStorage.setItem(FAILED_KEY, '1')
+    else sessionStorage.removeItem(FAILED_KEY)
+  } catch {
+    // non-fatal
+  }
+}
+
+export function readSignupDraftFailed(): boolean {
+  try {
+    return sessionStorage.getItem(FAILED_KEY) === '1'
+  } catch {
+    return false
+  }
+}

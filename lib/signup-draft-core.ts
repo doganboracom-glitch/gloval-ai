@@ -1,7 +1,25 @@
 import { createHash, randomBytes } from 'node:crypto'
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
-export const MAX_DRAFT_BYTES = 600_000
+/** UTF-8 size of the serialized payload (the DB check allows 256 KB as a second line of defence). */
+export const MAX_DRAFT_BYTES = 200_000
+/** Durable per-IP budget for the logged-out draft endpoint. */
+export const DRAFT_IP_LIMIT = 10
+export const DRAFT_IP_WINDOW_SECONDS = 60 * 60
+/** Unclaimed, unexpired drafts a single e-mail may hold at once. */
+export const DRAFT_EMAIL_ACTIVE_LIMIT = 3
+/** Backstop against distributed abuse: total unclaimed, unexpired drafts. */
+export const DRAFT_GLOBAL_ACTIVE_LIMIT = 2000
+/** A consumed row stays this long so a second tab can still learn its project id. */
+export const DRAFT_CONSUMED_GRACE_MS = 60 * 60 * 1000
+
+export type DraftFailure =
+  | 'invalid'
+  | 'rate_limited'
+  | 'email_limit'
+  | 'capacity'
+  | 'table_missing'
+  | 'storage'
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
@@ -49,7 +67,7 @@ export function parseDraftPayload(raw: unknown): DraftPayload | null {
     publishIntent: r.publishIntent === true,
   }
   try {
-    if (JSON.stringify(payload).length > MAX_DRAFT_BYTES) return null
+    if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > MAX_DRAFT_BYTES) return null
   } catch {
     return null
   }
