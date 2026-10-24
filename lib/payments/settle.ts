@@ -9,6 +9,7 @@ import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import { grantPlanCreditsAfterPayment } from '@/lib/plan-credit-instant-store'
 import { settleTopUpResult } from './topup-fulfillment'
 import { settleAddOnResult } from './addon-fulfillment'
+import { verifyPaidFacts } from './paid-facts'
 import type { PaymentProviderId, PaymentWebhookResult } from './types'
 
 export type SettleOutcome =
@@ -18,6 +19,7 @@ export type SettleOutcome =
   | 'addon_purchase'
   | 'domain_purchase'
   | 'renewal'
+  | 'payment_rejected'
   | 'no_match'
 
 /**
@@ -216,7 +218,43 @@ export async function settlePaymentResult(
 
   if (ent) {
     if (result.status === 'paid') {
+      // A right is released only when the PSP's retrieved charge matches the
+      // amount/currency/order the server recorded before checkout (strict, to
+      // the kuruş). An already-active right is never touched again by a replay.
       if (ent.status !== 'active') {
+        const verdict = verifyPaidFacts(
+          {
+            amountCents: ent.amount_cents,
+            currency: ent.currency,
+            orderRef: `ent_${ent.project_id}_${ent.code}`,
+          },
+          result,
+          { require: 'amount_and_currency' },
+        )
+        if (!verdict.ok) {
+          console.log('[v0] settlePaymentResult: entitlement payment rejected, not granting', {
+            refMasked,
+            reason: verdict.reason,
+            expectedAmountCents: ent.amount_cents,
+            paidAmountCents: result.paidAmountCents,
+          })
+          await admin
+            .from('billing_transactions')
+            .update({ status: 'failed', description: `${ent.name} — ödeme reddedildi (${verdict.reason})` })
+            .eq('provider_ref', ref)
+            .neq('status', 'succeeded')
+          await logUserEvent({
+            userId: ent.user_id,
+            type: 'payment_failed',
+            subject: 'Ödeme doğrulanamadı',
+            body: `${ent.name} ödemesi tutar doğrulamasından geçemedi; hak etkinleştirilmedi. Tahsilat varsa destek ekibimiz sizinle iletişime geçecektir.`,
+            emailAdmin: true,
+            adminSubject: (userEmail) => `${userEmail} ödeme tutar uyuşmazlığı (${ent.code})`,
+            adminBody: (userEmail) =>
+              `Kullanıcı e-posta adresi: ${userEmail}\nHak: ${ent.name}\nSebep: ${verdict.reason}\nBeklenen tutar (kuruş): ${ent.amount_cents}\nÖdenen tutar (kuruş): ${result.paidAmountCents ?? '-'}\nİşlem No: ${formatTicketNumber(ref)}\nİşlem tarihi: ${new Date().toLocaleString('tr-TR')}\nİşlem sonucu: Reddedildi — iade/manuel inceleme gerekir`,
+          })
+          return 'payment_rejected'
+        }
         await admin
           .from('project_entitlements')
           .update({ status: 'active', granted_at: new Date().toISOString() })

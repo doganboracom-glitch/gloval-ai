@@ -1,4 +1,5 @@
 import { parseTopUpOrderRef, type CreditTopUp } from '@/lib/pricing-config'
+import { verifyPaidFacts } from './paid-facts'
 
 export type TopUpChargeRow = {
   amount_cents: number
@@ -34,17 +35,17 @@ export function verifyTopUpPayment(
   if (charge.amount_cents !== pack.priceCents || charge.currency.toUpperCase() !== pack.currency) {
     return { ok: false, reason: 'ledger_mismatch' }
   }
-  if (facts.paidAmountCents !== undefined && facts.paidAmountCents !== pack.priceCents) {
-    return { ok: false, reason: 'amount_mismatch' }
-  }
-  if (
-    facts.paidCurrency !== undefined &&
-    facts.paidCurrency.toUpperCase().replace('TL', 'TRY') !== pack.currency
-  ) {
-    return { ok: false, reason: 'currency_mismatch' }
-  }
-  if (facts.orderRef !== undefined && facts.orderRef !== charge.idempotency_key) {
-    return { ok: false, reason: 'order_mismatch' }
+  const verdict = verifyPaidFacts(
+    {
+      amountCents: pack.priceCents,
+      currency: pack.currency,
+      orderRef: charge.idempotency_key ?? undefined,
+    },
+    facts,
+    { require: 'when_present' },
+  )
+  if (!verdict.ok) {
+    return { ok: false, reason: verdict.reason as 'amount_mismatch' | 'currency_mismatch' | 'order_mismatch' }
   }
   return { ok: true, pack }
 }

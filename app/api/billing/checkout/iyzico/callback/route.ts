@@ -223,11 +223,15 @@ async function handle(request: Request) {
 
   console.log('[v0] iyzico callback: settle outcome', { outcome })
 
+  // A charge whose amount did not match the order is never shown as a success:
+  // no right was granted, so the buyer must not be told otherwise.
+  const succeeded = retrieved.paid && outcome !== 'payment_rejected'
+
   return callbackResponse(
     request,
-    retrieved.paid ? 'success' : 'failed',
+    succeeded ? 'success' : 'failed',
     destination ?? (domainPurchase ? 'domains' : 'billing'),
-    retrieved.paid ? buildPurchaseSignal(outcome, paidDetails, token) : undefined,
+    succeeded ? buildPurchaseSignal(outcome, paidDetails, token) : undefined,
   )
 }
 
