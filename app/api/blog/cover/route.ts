@@ -13,7 +13,7 @@ import { inspectCover } from '@/lib/blog-cover-inspect'
 import { runCoverGeneration } from '@/lib/blog-cover-run'
 
 // The pipeline gives up (and refuses to charge) after COVER_BUDGET_MS, well inside this limit.
-export const maxDuration = 180
+export const maxDuration = 300
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024

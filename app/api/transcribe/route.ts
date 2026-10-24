@@ -13,7 +13,7 @@ import {
 } from '@/lib/voice/audio-limits'
 
 export const runtime = 'nodejs'
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * Cheapest Gateway transcription model verified to support Turkish

@@ -10,7 +10,7 @@ import { generateStructured } from '@/lib/ai-structured'
 import { detectSector } from '@/lib/sector-profiles'
 import { sectorNoun, suggestAboutAlt } from '@/lib/about-media'
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 const altSchema = z.object({ alt: z.string().min(8).max(140) })
 

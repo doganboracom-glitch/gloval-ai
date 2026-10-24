@@ -3,7 +3,7 @@ import { persistImageDataUri } from '@/lib/image-storage'
 import { fetchGalleryVideoCover } from '@/lib/gallery-video-cover'
 import { parseGalleryVideoUrl } from '@/lib/gallery-video'
 
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * POST /api/gallery-video-cover  { url }
