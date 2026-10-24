@@ -10,7 +10,12 @@ import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
 import { createSignupDraft } from '@/lib/signup-draft-actions'
-import { setSignupDraftFailed, storeSignupDraftToken } from '@/lib/signup-draft-client'
+import {
+  readSignupDraftFailed,
+  resolvePostSignUp,
+  setSignupDraftFailed,
+  storeSignupDraftToken,
+} from '@/lib/signup-draft-client'
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
@@ -41,6 +46,7 @@ function SignUpForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [draftLost, setDraftLost] = useState(false)
 
   const [suggestion, setSuggestion] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
@@ -121,16 +127,53 @@ function SignUpForm() {
     }
     trackSignUp('email')
     // If email confirmation is off, a session already exists → go to dashboard.
-    if (data.session) {
-      if (draftToken) {
-        window.location.assign(`/auth/resume?draft=${draftToken}`)
-        return
-      }
+    const step = resolvePostSignUp({
+      hasSession: !!data.session,
+      draftToken,
+      draftFailed: readSignupDraftFailed(),
+    })
+    if (step.kind === 'resume') {
+      window.location.assign(`/auth/resume?draft=${step.token}`)
+      return
+    }
+    if (step.kind === 'warn-draft-lost') {
+      // Session is open, so the verification page (and its notice) is skipped: warn here.
+      setSignupDraftFailed(false)
+      setDraftLost(true)
+      setLoading(false)
+      return
+    }
+    if (step.kind === 'dashboard') {
       router.push(next)
       router.refresh()
       return
     }
     router.push('/auth/sign-up-success')
+  }
+
+  if (draftLost) {
+    return (
+      <AuthShell title={t.auth.signupTitle} subtitle={t.auth.signupSubtitle}>
+        <div className="flex flex-col gap-4">
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm leading-relaxed text-foreground"
+          >
+            {t.auth.draftNotSavedSignedIn}
+          </p>
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={() => {
+              router.push(next)
+              router.refresh()
+            }}
+          >
+            {t.auth.draftNotSavedContinue}
+          </Button>
+        </div>
+      </AuthShell>
+    )
   }
 
   return (
