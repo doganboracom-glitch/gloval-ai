@@ -1,5 +1,5 @@
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
-import { sanitizeNextPath } from '@/lib/safe-redirect'
+import { sanitizeNextPathWithDecoding } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
 import { EmailConfirmationPrompt } from './prompt'
 
@@ -17,7 +17,7 @@ export default async function AuthConfirmPage({
   searchParams: SearchParams
 }) {
   const params = await searchParams
-  const next = sanitizeNextPath(firstValue(params.next))
+  const next = sanitizeNextPathWithDecoding(firstValue(params.next))
   const rawDraft = firstValue(params.draft)
   const draft =
     (isValidClaimToken(rawDraft) ? rawDraft : null) ?? getSignupDraftTokenFromNextPath(next)

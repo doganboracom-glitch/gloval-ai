@@ -27,4 +27,17 @@ describe('GET /auth/confirm page', () => {
       next: '/dashboard',
     })
   })
+
+  it('decodes a double-encoded internal next path', async () => {
+    await expect(pageProps({ next: '%252Fdashboard' })).resolves.toMatchObject({
+      next: '/dashboard',
+    })
+  })
+
+  it.each(['//attacker.example', 'https://attacker.example', '%252F%252Fattacker.example'])(
+    'rejects open redirect target %s',
+    async (next) => {
+      await expect(pageProps({ next })).resolves.toMatchObject({ next: '/dashboard' })
+    },
+  )
 })
