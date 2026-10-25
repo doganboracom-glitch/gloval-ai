@@ -83,7 +83,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl"
+        className="max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
       >
         <h2 id={titleId} className="text-base font-semibold text-foreground">
           {title}

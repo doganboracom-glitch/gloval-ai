@@ -1,7 +1,7 @@
 'use client'
 
 import { resolveGenerationLanguage } from '@/lib/generation-language'
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -17,7 +17,8 @@ import {
   Settings,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { createProject, deleteProject } from '@/lib/projects'
+import { createProject } from '@/lib/projects'
+import { DeleteSiteDialog, type SiteToDelete } from '@/components/dashboard/delete-site-dialog'
 import { createEcommerceProject } from '@/lib/ecommerce'
 import type { ProjectListItem } from '@/lib/projects'
 import { getCommerceMode } from '@/lib/commerce-mode'
@@ -57,8 +58,8 @@ export function DashboardClient({
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [siteToDelete, setSiteToDelete] = useState<SiteToDelete | null>(null)
+  const [deletedNotice, setDeletedNotice] = useState<string | null>(null)
   const [creatingPending, setCreatingPending] = useState(false)
   const [pendingError, setPendingError] = useState(false)
   // Tracks the idempotency token currently being created so neither a Strict
@@ -129,15 +130,17 @@ export function DashboardClient({
     router.refresh()
   }
 
-  function handleDelete(id: string) {
-    if (!window.confirm(t.dash.deleteConfirm)) return
-    setPendingId(id)
-    startTransition(async () => {
-      await deleteProject(id)
-      setPendingId(null)
-      router.refresh()
-    })
+  function handleDeleted(site: SiteToDelete) {
+    setSiteToDelete(null)
+    setDeletedNotice(`${t.dash.deleteSite.deleted}: ${site.name}`)
+    router.refresh()
   }
+
+  useEffect(() => {
+    if (!deletedNotice) return
+    const timer = window.setTimeout(() => setDeletedNotice(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [deletedNotice])
 
   const dateFmt = new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     day: 'numeric',
@@ -195,6 +198,21 @@ export function DashboardClient({
         )}
 
         <BillingProfileBanner show={showBillingProfileReminder} />
+
+        {deletedNotice && (
+          <div
+            role="status"
+            className="mt-6 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-foreground"
+          >
+            {deletedNotice}
+          </div>
+        )}
+
+        <DeleteSiteDialog
+          site={siteToDelete}
+          onClose={() => setSiteToDelete(null)}
+          onDeleted={handleDeleted}
+        />
 
         {pendingError && (
           <div
@@ -288,16 +306,18 @@ export function DashboardClient({
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleDelete(p.id)}
-                    disabled={isPending && pendingId === p.id}
-                    aria-label={t.dash.delete}
-                    className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover:opacity-100"
+                    onClick={() =>
+                      setSiteToDelete({
+                        id: p.id,
+                        name: p.name || t.dash.untitled,
+                        slug: p.slug ?? null,
+                        isStore: getCommerceMode(p) === 'ecommerce',
+                      })
+                    }
+                    aria-label={t.dash.deleteSite.triggerLabel.replace('{name}', p.name || t.dash.untitled)}
+                    className="rounded-md p-1.5 text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                   >
-                    {isPending && pendingId === p.id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
+                    <Trash2 className="size-4" />
                   </button>
                 </div>
 
