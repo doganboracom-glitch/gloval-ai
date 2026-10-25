@@ -727,8 +727,14 @@ export function BillingClient({
   const marketingCycle = billingInterval === 'year' ? 'yearly' : 'monthly'
 
   // Kullanıcının içinde bulunduğu paket kademesi (kart vurgusu için).
+  // Abonelik satiri olmayan hesap otomatik FREE paketindedir: FREE karti
+  // "Mevcut" olmali, "Abone ol" asla gorunmemeli.
   const activePlanCode: PlanCode | undefined =
-    hasActiveSub && currentPlan ? toPlanCode(currentPlan.code) : undefined
+    hasActiveSub && currentPlan
+      ? toPlanCode(currentPlan.code)
+      : implicitFreePlan
+        ? 'free'
+        : undefined
 
   // Kullanıcının sahip olduğu (askıya alınmış dahil) ücretli paket ve kademesi.
   const ownedPlan =
@@ -748,11 +754,11 @@ export function BillingClient({
   // Kart vurgusu yalnızca aynı faturalama dönemindeki karta verilir (FREE
   // yalnızca aylık sunulduğu için her sekmede vurgulanır).
   const highlightedPlanCode: PlanCode | undefined =
-    activePlanCode &&
-    currentPlan &&
-    (activePlanCode === 'free' || currentPlan.interval === billingInterval)
-      ? activePlanCode
-      : undefined
+    activePlanCode === 'free'
+      ? 'free'
+      : activePlanCode && currentPlan && currentPlan.interval === billingInterval
+        ? activePlanCode
+        : undefined
 
   // Paket kademesi sıralaması (PLANS dizi düzeni: free < starter < pro <
   // ecommerce). Kullanıcı yalnızca içinde bulunduğundan daha üst bir pakete
