@@ -34,6 +34,7 @@ export function EditorClient({
   language,
   published,
   slug,
+  customOrigin = null,
   initialVersions,
   initialBackups = [],
   historyEnabled = false,
@@ -52,6 +53,8 @@ export function EditorClient({
   /** Public site slug (null before the first publish). Used to build the live
    * store URL that preview product/cart links open. */
   slug: string | null
+  /** Origin of a live, verified custom domain (published sites only). */
+  customOrigin?: string | null
   initialVersions: ProjectVersionItem[]
   initialBackups?: BackupItem[]
   /** PRO / E-Ticaret only: enables the version list, backups and restore. */
@@ -144,6 +147,7 @@ export function EditorClient({
         },
         published,
         slug,
+        customOrigin,
         initialVersions,
         ...(historyEnabled
           ? {
