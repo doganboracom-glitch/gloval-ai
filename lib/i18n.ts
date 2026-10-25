@@ -558,7 +558,7 @@ const dict = {
       sectionNames: {
         announcement: 'Duyuru Bandı',
         heroStrip: 'Slider Altı Kutu',
-        hero: 'Hero',
+        hero: 'Açılış',
         slider: 'Kayan Görsel',
         about: 'Hakkımızda',
         services: 'Hizmetler',
