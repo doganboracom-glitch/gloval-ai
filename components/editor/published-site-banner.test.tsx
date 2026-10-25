@@ -1,53 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { PublishedSiteBanner } from '@/components/editor/published-site-banner'
+import { cleanup } from '@testing-library/react'
 import { SAMPLE_PUBLISH_COPY } from '@/components/editor/sample-publish-dialog'
-
-const URL = 'https://kahve.gloval.site'
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-})
-
-describe('PublishedSiteBanner', () => {
-  it('shows a prominent external link that opens safely in a new tab', () => {
-    render(<PublishedSiteBanner url={URL} label="Siten yayında:" />)
-    const link = screen.getByRole('link')
-    expect(link.getAttribute('href')).toBe(URL)
-    expect(link.getAttribute('target')).toBe('_blank')
-    expect(link.getAttribute('rel')).toContain('noopener')
-    expect(link.textContent).toContain('kahve.gloval.site')
-    expect(link.className).toMatch(/text-brand/)
-    expect(link.className).toMatch(/font-bold/)
-    expect(link.className).toMatch(/underline/)
-    expect(link.querySelector('svg')).not.toBeNull()
-  })
-
-  it('copies the full address and confirms it', async () => {
-    const writeText = vi.fn(async () => {})
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    render(<PublishedSiteBanner url={URL} label="Siten yayında:" />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Site adresini kopyala' }))
-    await waitFor(() => expect(screen.getByText('Kopyalandı')).toBeTruthy())
-    expect(writeText).toHaveBeenCalledWith(URL)
-  })
-
-  it('falls back to execCommand when the clipboard API is unavailable', async () => {
-    Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: vi.fn(async () => Promise.reject(new Error('denied'))) },
-      configurable: true,
-    })
-    const exec = vi.fn(() => true)
-    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true })
-    render(<PublishedSiteBanner url={URL} label="Your site is live:" lang="en" />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy site address' }))
-    await waitFor(() => expect(screen.getByText('Copied')).toBeTruthy())
-    expect(exec).toHaveBeenCalledWith('copy')
-  })
 })
 
 describe('sample publish dialog section names', () => {

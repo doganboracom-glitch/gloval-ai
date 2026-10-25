@@ -115,13 +115,14 @@ export default async function EditorPage({
   // tenant subdomain); the sitemap hint must show the same address Search Console needs.
   // Before publishing there is no live origin yet, so the tenant subdomain is
   // shown (the card labels it "valid once published").
+  const liveSeo =
+    project.published && project.slug ? await getSiteSeoContext(project.slug) : null
   const sitemapOrigin =
-    canManageBlog && project.slug
-      ? project.published
-        ? (await getSiteSeoContext(project.slug)).origin
-        : tenantUrl(project.slug)
-      : null
+    canManageBlog && project.slug ? (liveSeo ? liveSeo.origin : tenantUrl(project.slug)) : null
   const sitemapUrl = sitemapOrigin ? `${sitemapOrigin}/sitemap.xml` : null
+  // Only a live, verified custom domain replaces the tenant subdomain in the
+  // address banner; getSiteSeoContext already falls back on any failure.
+  const customOrigin = liveSeo?.isCustomDomain ? liveSeo.origin : null
 
   return (
     <EditorClient
@@ -130,6 +131,7 @@ export default async function EditorPage({
       language={language}
       published={project.published}
       slug={project.slug}
+      customOrigin={customOrigin}
       initialVersions={initialVersions}
       initialBackups={initialBackups}
       historyEnabled={historyEnabled}
