@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
+import { isSignupDraftToken, MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** UTF-8 size of the serialized payload (the DB check allows 256 KB as a second line of defence). */
@@ -21,8 +21,6 @@ export type DraftFailure =
   | 'capacity'
   | 'table_missing'
   | 'storage'
-
-const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
 export type SiteDraftPayload = {
   name: string
@@ -64,7 +62,7 @@ export function newClaimToken(): string {
 }
 
 export function isValidClaimToken(value: unknown): value is string {
-  return typeof value === 'string' && TOKEN_RE.test(value)
+  return isSignupDraftToken(value)
 }
 
 export function hashClaimToken(token: string): string {

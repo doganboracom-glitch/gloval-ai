@@ -347,7 +347,7 @@ const it: DeepPartial<Dict> = {
     resent: 'Email di verifica inviata di nuovo.',
     resendWait: 'Attendi {s}s prima di inviare di nuovo.',
     resendError: 'Impossibile inviare l\u2019email di verifica. Riprova.',
-    expiredBody: 'Il link di verifica email potrebbe non essere valido o essere scaduto.',
+    expiredBody: 'La tua email potrebbe essere già verificata. Accedi per continuare.',
     sendNewLink: 'Invia un nuovo link di verifica',
     tooManyRequests: 'Troppi tentativi. Riprova tra poco.',
     sessionExpired: 'La tua sessione è scaduta. Accedi di nuovo.',

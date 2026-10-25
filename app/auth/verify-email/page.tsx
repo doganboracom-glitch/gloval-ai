@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, MailWarning } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import { isSignupDraftToken } from '@/lib/signup-draft-shared'
+import { readSignupDraftToken } from '@/lib/signup-draft-client'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
@@ -25,6 +28,14 @@ function VerifyEmail() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const rawDraft = searchParams.get('draft')
+  const storedDraft = readSignupDraftToken()
+  const draftToken = isSignupDraftToken(rawDraft)
+    ? rawDraft
+    : isSignupDraftToken(storedDraft)
+      ? storedDraft
+      : null
+  const next = sanitizeNextPath(searchParams.get('next'))
 
   const [email, setEmail] = useState(searchParams.get('email') ?? '')
   const [cooldown, setCooldown] = useState(0)
@@ -33,8 +44,8 @@ function VerifyEmail() {
   const [error, setError] = useState<string | null>(null)
   const resolvedRef = useRef(false)
 
-  // If a session exists, prefer the real authenticated email over the query
-  // param, and bounce already-verified users straight to the dashboard.
+  // Prefer the authenticated email, then send verified users to their safe
+  // destination (including any pending draft resume).
   useEffect(() => {
     if (resolvedRef.current) return
     resolvedRef.current = true
@@ -42,12 +53,12 @@ function VerifyEmail() {
     supabase.auth.getUser().then(({ data }) => {
       const user = data.user
       if (user?.email_confirmed_at) {
-        router.replace('/dashboard')
+        router.replace(draftToken ? `/auth/resume?draft=${encodeURIComponent(draftToken)}` : next)
         return
       }
       if (user?.email) setEmail(user.email)
     })
-  }, [router])
+  }, [draftToken, next, router])
 
   // Tick down the resend cooldown.
   useEffect(() => {
@@ -61,12 +72,17 @@ function VerifyEmail() {
     setSending(true)
     setError(null)
     setNotice(null)
+    const redirectUrl = new URL(getAuthCallbackUrl())
+    redirectUrl.searchParams.delete('draft')
+    redirectUrl.searchParams.delete('next')
+    if (draftToken) redirectUrl.searchParams.set('draft', draftToken)
+    if (next !== '/dashboard') redirectUrl.searchParams.set('next', next)
     const supabase = createClient()
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: getAuthCallbackUrl(),
+        emailRedirectTo: redirectUrl.toString(),
       },
     })
     if (error) {
@@ -84,7 +100,11 @@ function VerifyEmail() {
   async function handleSignOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/auth/login')
+    const params = new URLSearchParams()
+    if (draftToken) params.set('draft', draftToken)
+    else if (next !== '/dashboard') params.set('next', next)
+    const query = params.toString()
+    router.push(query ? `/auth/login?${query}` : '/auth/login')
     router.refresh()
   }
 

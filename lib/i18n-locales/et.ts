@@ -347,7 +347,7 @@ const et: DeepPartial<Dict> = {
     resent: 'Kinnitusmeil saadetud uuesti.',
     resendWait: 'Oota {s} sek uuesti saatmiseks.',
     resendError: 'Kinnitusmeili ei õnnestunud saata. Proovi uuesti.',
-    expiredBody: 'Kinnituslink on kehtetu või aegunud.',
+    expiredBody: 'Sinu e-posti aadress võib olla juba kinnitatud. Jätkamiseks logi sisse.',
     sendNewLink: 'Saada uus kinnituslink',
     tooManyRequests: 'Liiga palju katseid. Proovi hiljem uuesti.',
     sessionExpired: 'Sinu seanss on aegunud. Palun logi uuesti sisse.',

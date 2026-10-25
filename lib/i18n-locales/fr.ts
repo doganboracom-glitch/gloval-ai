@@ -349,7 +349,7 @@ const fr: DeepPartial<Dict> = {
     resent: 'E-mail de vérification renvoyé.',
     resendWait: 'Attendez {s} s avant de renvoyer.',
     resendError: 'L’e-mail de vérification n’a pas pu être envoyé. Veuillez réessayer.',
-    expiredBody: 'Le lien de vérification est invalide ou a expiré.',
+    expiredBody: 'Votre adresse e-mail est peut-être déjà confirmée. Connectez-vous pour continuer.',
     sendNewLink: 'Envoyer un nouveau lien de vérification',
     tooManyRequests: 'Trop de tentatives. Veuillez réessayer plus tard.',
     sessionExpired: 'Votre session a expiré. Veuillez vous reconnecter.',

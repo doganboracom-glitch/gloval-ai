@@ -7,6 +7,6 @@
  */
 export function sanitizeNextPath(raw: string | null | undefined, fallback = '/dashboard'): string {
   if (!raw) return fallback
-  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return fallback
   return raw
 }

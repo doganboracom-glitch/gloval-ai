@@ -151,10 +151,35 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
   const user = data.user
   if (!user?.email) return { status: 'unauthenticated' }
 
+  const clearTemporarySignupMetadata = async () => {
+    if (user.user_metadata?.signup_draft_token !== token) return
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { signup_draft_token: null, signup_next_path: null },
+      })
+      if (error) {
+        console.warn('[signup draft] metadata cleanup failed', {
+          code: error.code ?? 'unknown',
+          status: error.status ?? null,
+        })
+      }
+    } catch {
+      console.warn('[signup draft] metadata cleanup failed', {
+        code: 'unexpected_exception',
+        status: null,
+      })
+    }
+  }
+
   const admin = createAdminClient()
   const claim = await claimDraft(admin, { token, userId: user.id, email: user.email })
-  if (claim.status === 'done_idea') return { status: 'idea', prompt: claim.prompt }
+  if (claim.status === 'done_idea') {
+    await clearTemporarySignupMetadata()
+    return { status: 'idea', prompt: claim.prompt }
+  }
   if (claim.status === 'done') {
+    await clearTemporarySignupMetadata()
     return {
       status: 'ok',
       projectId: claim.projectId,
@@ -167,6 +192,7 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
   if (isSignupIdeaDraftPayload(claim.payload)) {
     try {
       await completeIdeaDraft(admin, claim.id, claim.payload)
+      await clearTemporarySignupMetadata()
       return { status: 'idea', prompt: claim.payload.prompt }
     } catch {
       await releaseDraft(admin, claim.id)
@@ -183,6 +209,7 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
       schema: claim.payload.schema as Parameters<typeof createProject>[0]['schema'],
     })
     await completeDraft(admin, claim.id, projectId, claim.payload.publishIntent, claim.payload.editIntent)
+    await clearTemporarySignupMetadata()
     return {
       status: 'ok',
       projectId,
