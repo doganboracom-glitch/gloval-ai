@@ -347,7 +347,7 @@ const de: DeepPartial<Dict> = {
     resent: 'Bestätigungs-E-Mail erneut gesendet.',
     resendWait: 'Warten Sie {s} Sek., um erneut zu senden.',
     resendError: 'Bestätigungs-E-Mail konnte nicht gesendet werden. Bitte erneut versuchen.',
-    expiredBody: 'Der Bestätigungslink ist ungültig oder abgelaufen.',
+    expiredBody: 'Deine E-Mail-Adresse ist möglicherweise bereits bestätigt. Melde dich an, um fortzufahren.',
     sendNewLink: 'Neuen Bestätigungslink senden',
     tooManyRequests: 'Zu viele Versuche. Bitte versuchen Sie es später erneut.',
     sessionExpired: 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.',

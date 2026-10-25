@@ -347,7 +347,7 @@ const az: DeepPartial<Dict> = {
     resent: 'Təsdiq e-poçtu yenidən göndərildi.',
     resendWait: 'Yenidən göndərmək üçün {s} saniyə gözləyin.',
     resendError: 'Təsdiq e-poçtu göndərilə bilmədi. Zəhmət olmasa yenidən cəhd edin.',
-    expiredBody: 'Təsdiq linki etibarsızdır və ya vaxtı bitib.',
+    expiredBody: 'E-poçt ünvanınız artıq təsdiqlənmiş ola bilər. Davam etmək üçün daxil olun.',
     sendNewLink: 'Yeni təsdiq linki göndər',
     tooManyRequests: 'Çox sayda cəhd edildi. Zəhmət olmasa sonra yenidən cəhd edin.',
     sessionExpired: 'Sessiyanızın vaxtı bitib. Zəhmət olmasa yenidən daxil olun.',

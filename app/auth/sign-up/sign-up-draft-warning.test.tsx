@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { dictionary } from '@/lib/i18n'
 
 const t = dictionary.tr
+const DRAFT_TOKEN = 'a'.repeat(43)
 
 const push = vi.fn()
 const replace = vi.fn()
@@ -100,7 +101,7 @@ describe('sign-up with a draft that could not be saved', () => {
   it('parks an idea-only draft before sign-up and preserves it with the server token', async () => {
     sessionStorage.removeItem('gloval:pending-project')
     sessionStorage.setItem('gloval:signup-idea', 'Bir kahve sitesi kur')
-    createSignupDraft.mockResolvedValue({ ok: true, token: 'idea-token' })
+    createSignupDraft.mockResolvedValue({ ok: true, token: DRAFT_TOKEN })
     signUp.mockResolvedValue({ data: { user: { id: 'u1' }, session: null }, error: null })
 
     await submitSignUp()
@@ -111,8 +112,20 @@ describe('sign-up with a draft that could not be saved', () => {
       draft: { kind: 'idea', prompt: 'Bir kahve sitesi kur' },
     })
     expect(createSignupDraft.mock.invocationCallOrder[0]).toBeLessThan(signUp.mock.invocationCallOrder[0])
-    expect(sessionStorage.getItem('gloval:signup-draft')).toBe('idea-token')
+    expect(sessionStorage.getItem('gloval:signup-draft')).toBe(DRAFT_TOKEN)
     expect(sessionStorage.getItem('gloval:signup-idea')).toBeNull()
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          emailRedirectTo: expect.stringContaining(`draft=${DRAFT_TOKEN}`),
+          data: expect.objectContaining({
+            email_locale: 'tr',
+            signup_draft_token: DRAFT_TOKEN,
+            signup_next_path: encodeURIComponent('/dashboard'),
+          }),
+        }),
+      }),
+    )
   })
 
   it('restores a verified idea on the homepage without generating a project', async () => {

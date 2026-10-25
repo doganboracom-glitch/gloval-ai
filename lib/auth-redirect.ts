@@ -1,3 +1,6 @@
+import { isSignupDraftToken } from '@/lib/signup-draft-shared'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
+
 /**
  * Resolves where Supabase should redirect the browser after an email link
  * (signup confirmation, resend, password reset) is clicked.
@@ -16,4 +19,12 @@ export function getAuthCallbackUrl(path = '/auth/callback'): string {
   const devOverride = process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL?.trim()
   if (isLocalHost && devOverride) return devOverride
   return `${origin}${path}`
+}
+
+export function resolveLoginNextPath(draft: string | null, requestedNext: string | null): string {
+  if (isSignupDraftToken(draft)) {
+    return `/auth/resume?draft=${encodeURIComponent(draft)}`
+  }
+
+  return sanitizeNextPath(requestedNext)
 }

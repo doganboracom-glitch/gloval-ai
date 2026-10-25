@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { resolveLoginNextPath } from '@/lib/auth-redirect'
+import { isSignupDraftToken } from '@/lib/signup-draft-shared'
 import { useLanguage } from '@/components/language-provider'
 import { Suspense, useEffect } from 'react'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -26,13 +28,17 @@ function LoginForm() {
   const { t } = useLanguage()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const rawNext = searchParams.get('next') || '/dashboard'
-  // Yalnızca aynı origin içi yollar; açık yönlendirmeyi engeller.
-  const next =
-    rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\')
-      ? rawNext
-      : '/dashboard'
+  const requestedDraft = searchParams.get('draft')
+  const draftToken = isSignupDraftToken(requestedDraft) ? requestedDraft : null
+  const next = resolveLoginNextPath(requestedDraft, searchParams.get('next'))
   const signUpHref = next === '/dashboard' ? '/auth/sign-up' : `/auth/sign-up?next=${encodeURIComponent(next)}`
+
+  function verifyEmailHref(email: string) {
+    const params = new URLSearchParams({ email })
+    if (draftToken) params.set('draft', draftToken)
+    if (next !== '/dashboard') params.set('next', next)
+    return `/auth/verify-email?${params.toString()}`
+  }
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -55,7 +61,7 @@ function LoginForm() {
       // Unconfirmed email → send them to the verification screen (with the
       // email so they can resend) instead of the dashboard.
       if (msg.includes('confirm') || msg.includes('verify')) {
-        router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`)
+        router.push(verifyEmailHref(email))
         return
       }
       if (msg.includes('rate') || error.status === 429) setError(t.auth.tooManyRequests)
@@ -65,7 +71,7 @@ function LoginForm() {
     }
     // Defense-in-depth: even if a session was issued, block unverified users.
     if (data.user && !data.user.email_confirmed_at) {
-      router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`)
+      router.push(verifyEmailHref(email))
       return
     }
     router.push(next)

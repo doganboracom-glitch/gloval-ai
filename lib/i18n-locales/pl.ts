@@ -347,7 +347,7 @@ const pl: DeepPartial<Dict> = {
     resent: 'E-mail potwierdzający wysłany ponownie.',
     resendWait: 'Poczekaj {s} sek., aby wysłać ponownie.',
     resendError: 'Nie udało się wysłać e-maila potwierdzającego. Spróbuj ponownie.',
-    expiredBody: 'Link potwierdzający jest nieprawidłowy lub wygasł.',
+    expiredBody: 'Twój adres e-mail może być już potwierdzony. Zaloguj się, aby kontynuować.',
     sendNewLink: 'Wyślij nowy link potwierdzający',
     tooManyRequests: 'Zbyt wiele prób. Spróbuj ponownie później.',
     sessionExpired: 'Twoja sesja wygasła. Zaloguj się ponownie.',

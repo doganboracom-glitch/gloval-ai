@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   cookieGet: vi.fn(),
   cookieSet: vi.fn(),
   cookieDelete: vi.fn(),
+  updateUser: vi.fn(),
 }))
 
 vi.mock('next/headers', () => ({
@@ -21,7 +22,7 @@ vi.mock('next/headers', () => ({
   cookies: mocks.cookies,
 }))
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ auth: { getUser: mocks.getUser } }),
+  createClient: async () => ({ auth: { getUser: mocks.getUser, updateUser: mocks.updateUser } }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => mocks.admin }))
 vi.mock('@/lib/anon-ai-limit', () => ({ hashedIpFromHeaders: mocks.hashIp }))
@@ -67,6 +68,7 @@ beforeEach(() => {
   mocks.hashIp.mockReturnValue('hashed-ip')
   mocks.cookies.mockResolvedValue(cookieStore)
   mocks.cookieGet.mockReturnValue({ value: TOKEN })
+  mocks.updateUser.mockResolvedValue({ error: null })
 })
 
 describe('resumeSignupDraft for idea-only payloads', () => {
@@ -77,6 +79,50 @@ describe('resumeSignupDraft for idea-only payloads', () => {
       prompt: PROMPT,
     })
     expect(mocks.createProject).not.toHaveBeenCalled()
+  })
+
+  it('clears matching temporary metadata after a draft is claimed by the signed-in email', async () => {
+    mocks.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          email: 'ada@gloval.ai',
+          user_metadata: { signup_draft_token: TOKEN, signup_next_path: '%2Fdashboard' },
+        },
+      },
+    })
+
+    await expect(resumeSignupDraft(TOKEN)).resolves.toEqual({ status: 'idea', prompt: PROMPT })
+
+    expect(mocks.claimDraft).toHaveBeenCalledWith(mocks.admin, {
+      token: TOKEN,
+      userId: 'user-1',
+      email: 'ada@gloval.ai',
+    })
+    expect(mocks.updateUser).toHaveBeenCalledWith({
+      data: { signup_draft_token: null, signup_next_path: null },
+    })
+  })
+
+  it('leaves temporary metadata intact when the email-bound claim is rejected', async () => {
+    mocks.getUser.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          email: 'ada@gloval.ai',
+          user_metadata: { signup_draft_token: TOKEN },
+        },
+      },
+    })
+    mocks.claimDraft.mockResolvedValue({ status: 'invalid' })
+
+    await expect(resumeSignupDraft(TOKEN)).resolves.toEqual({ status: 'invalid' })
+    expect(mocks.claimDraft).toHaveBeenCalledWith(mocks.admin, {
+      token: TOKEN,
+      userId: 'user-1',
+      email: 'ada@gloval.ai',
+    })
+    expect(mocks.updateUser).not.toHaveBeenCalled()
   })
 
   it('persists a logged-in visitor idea through the existing draft limits', async () => {
@@ -104,3 +150,4 @@ describe('resumeSignupDraft for idea-only payloads', () => {
     expect(mocks.createProject).not.toHaveBeenCalled()
   })
 })
+

@@ -21,6 +21,7 @@ import {
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { useLanguage } from '@/components/language-provider'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
 import { OAuthButtons, OAuthDivider } from '@/components/auth/oauth-buttons'
@@ -34,13 +35,9 @@ export default function SignUpPage() {
 }
 
 function SignUpForm() {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const router = useRouter()
-  const rawNext = useSearchParams().get('next') || ''
-  const next =
-    rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\')
-      ? rawNext
-      : '/dashboard'
+  const next = sanitizeNextPath(useSearchParams().get('next'))
   const [hasSignupIdea, setHasSignupIdea] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -112,15 +109,19 @@ function SignUpForm() {
     const callbackParams = new URLSearchParams()
     if (next !== '/dashboard') callbackParams.set('next', next)
     if (draftToken) callbackParams.set('draft', draftToken)
-    const callbackQuery = callbackParams.toString()
+    const callbackUrl = new URL(getAuthCallbackUrl())
+    for (const [key, value] of callbackParams) callbackUrl.searchParams.set(key, value)
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
-        emailRedirectTo: callbackQuery
-          ? `${getAuthCallbackUrl()}?${callbackQuery}`
-          : getAuthCallbackUrl(),
-        data: { full_name: fullName },
+        emailRedirectTo: callbackUrl.toString(),
+        data: {
+          full_name: fullName,
+          email_locale: lang,
+          signup_next_path: encodeURIComponent(next),
+          ...(draftToken ? { signup_draft_token: draftToken } : {}),
+        },
       },
     })
     if (error) {

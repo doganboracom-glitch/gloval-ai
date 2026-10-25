@@ -1,15 +1,100 @@
-<!--
-  GLOVAL AI — "Confirm signup" email template.
-
-  Paste this into Supabase Dashboard → Authentication → Email Templates →
-  "Confirm signup" (Message body, HTML). Supabase renders `{{ .ConfirmationURL }}`
-  server-side before sending, so it must be left exactly as-is — it is NOT a
-  placeholder to replace with a real URL.
-
-  This template intentionally does not touch SMTP: whatever sender/relay is
-  already configured (Resend) keeps sending exactly as before. Only the
-  message content and branding change.
--->
+{{- $l := "tr" -}}{{- with .Data.email_locale -}}{{- $l = . -}}{{- end -}}
+{{- $title := "E-posta adresinizi doğrulayın" -}}
+{{- $intro := "GLOVAL AI hesabınızı etkinleştirmek için e-posta adresinizi doğrulayın. Kayıt sırasında bir taslak kaydettiyseniz, doğrulama tamamlandığında kaldığınız yerden devam edebilirsiniz." -}}
+{{- $primary := "E-posta adresimi doğrula" -}}
+{{- $fallback := "Düğme çalışmıyorsa alternatif bağlantıyı kullanın." -}}
+{{- $secondary := "Doğrulama bağlantısını aç" -}}
+{{- $footer := "Bu hesabı siz oluşturmadıysanız bu e-postayı güvenle yok sayabilirsiniz." -}}
+{{- $dir := "ltr" -}}
+{{ if eq $l "en" }}
+  {{- $title = "Verify your email address" -}}
+  {{- $intro = "Confirm your email address to activate your GLOVAL AI account. If you saved a draft while signing up, you can continue where you left off after verification." -}}
+  {{- $primary = "Verify my email" -}}
+  {{- $fallback = "If the button does not work, use the alternative link." -}}
+  {{- $secondary = "Open verification link" -}}
+  {{- $footer = "If you did not create this account, you can safely ignore this email." -}}
+{{ end }}
+{{ if eq $l "fr" }}
+  {{- $title = "Vérifiez votre adresse e-mail" -}}
+  {{- $intro = "Confirmez votre adresse e-mail pour activer votre compte GLOVAL AI. Si vous avez enregistré un brouillon lors de votre inscription, vous pourrez reprendre là où vous en étiez après la vérification." -}}
+  {{- $primary = "Confirmer mon adresse e-mail" -}}
+  {{- $fallback = "Si le bouton ne fonctionne pas, utilisez le lien alternatif." -}}
+  {{- $secondary = "Ouvrir le lien de vérification" -}}
+  {{- $footer = "Si vous n’avez pas créé ce compte, vous pouvez ignorer cet e-mail en toute sécurité." -}}
+{{ end }}
+{{ if eq $l "de" }}
+  {{- $title = "E-Mail-Adresse bestätigen" -}}
+  {{- $intro = "Bestätigen Sie Ihre E-Mail-Adresse, um Ihr GLOVAL AI-Konto zu aktivieren. Wenn Sie sich bei der Registrierung einen Entwurf gespeichert haben, können Sie nach der Bestätigung dort weitermachen, wo Sie aufgehört haben." -}}
+  {{- $primary = "E-Mail-Adresse bestätigen" -}}
+  {{- $fallback = "Falls die Schaltfläche nicht funktioniert, nutzen Sie den alternativen Link." -}}
+  {{- $secondary = "Bestätigungslink öffnen" -}}
+  {{- $footer = "Wenn Sie dieses Konto nicht erstellt haben, können Sie diese E-Mail ignorieren." -}}
+{{ end }}
+{{ if eq $l "it" }}
+  {{- $title = "Verifica il tuo indirizzo e-mail" -}}
+  {{- $intro = "Conferma il tuo indirizzo e-mail per attivare il tuo account GLOVAL AI. Se hai salvato una bozza durante la registrazione, dopo la verifica potrai riprendere da dove avevi lasciato." -}}
+  {{- $primary = "Verifica la mia e-mail" -}}
+  {{- $fallback = "Se il pulsante non funziona, usa il link alternativo." -}}
+  {{- $secondary = "Apri il link di verifica" -}}
+  {{- $footer = "Se non hai creato questo account, puoi ignorare questa e-mail in sicurezza." -}}
+{{ end }}
+{{ if eq $l "et" }}
+  {{- $title = "Kinnita oma e-posti aadress" -}}
+  {{- $intro = "Kinnita oma e-posti aadress, et aktiveerida GLOVAL AI konto. Kui salvestasid registreerumisel mustandi, saad pärast kinnitamist jätkata sealt, kus pooleli jäid." -}}
+  {{- $primary = "Kinnita e-post" -}}
+  {{- $fallback = "Kui nupp ei tööta, kasuta alternatiivset linki." -}}
+  {{- $secondary = "Ava kinnituslink" -}}
+  {{- $footer = "Kui sa seda kontot ei loonud, võid selle e-kirja turvaliselt kustutada." -}}
+{{ end }}
+{{ if eq $l "pl" }}
+  {{- $title = "Potwierdź swój adres e-mail" -}}
+  {{- $intro = "Potwierdź swój adres e-mail, aby aktywować konto GLOVAL AI. Jeśli podczas rejestracji zapisano wersję roboczą, po potwierdzeniu możesz kontynuować od miejsca, w którym przerwano." -}}
+  {{- $primary = "Potwierdź mój e-mail" -}}
+  {{- $fallback = "Jeśli przycisk nie działa, skorzystaj z alternatywnego linku." -}}
+  {{- $secondary = "Otwórz link potwierdzający" -}}
+  {{- $footer = "Jeśli nie utworzono tego konta, możesz bezpiecznie zignorować tę wiadomość." -}}
+{{ end }}
+{{ if eq $l "es" }}
+  {{- $title = "Verifica tu correo electrónico" -}}
+  {{- $intro = "Confirma tu correo electrónico para activar tu cuenta de GLOVAL AI. Si guardaste un borrador durante el registro, podrás continuar donde lo dejaste después de verificarlo." -}}
+  {{- $primary = "Verificar mi correo" -}}
+  {{- $fallback = "Si el botón no funciona, utiliza el enlace alternativo." -}}
+  {{- $secondary = "Abrir enlace de verificación" -}}
+  {{- $footer = "Si no creaste esta cuenta, puedes ignorar este correo de forma segura." -}}
+{{ end }}
+{{ if eq $l "pt" }}
+  {{- $title = "Confirme o seu e-mail" -}}
+  {{- $intro = "Confirme o seu e-mail para ativar a sua conta GLOVAL AI. Se guardou um rascunho durante o registo, poderá continuar de onde parou depois da confirmação." -}}
+  {{- $primary = "Confirmar o meu e-mail" -}}
+  {{- $fallback = "Se o botão não funcionar, utilize o link alternativo." -}}
+  {{- $secondary = "Abrir link de confirmação" -}}
+  {{- $footer = "Se não criou esta conta, pode ignorar este e-mail em segurança." -}}
+{{ end }}
+{{ if eq $l "ar" }}
+  {{- $title = "أكّد بريدك الإلكتروني" -}}
+  {{- $intro = "أكّد بريدك الإلكتروني لتفعيل حسابك في GLOVAL AI. إذا حفظت مسودة أثناء التسجيل، يمكنك المتابعة من حيث توقفت بعد التأكيد." -}}
+  {{- $primary = "تأكيد بريدي الإلكتروني" -}}
+  {{- $fallback = "إذا لم يعمل الزر، استخدم الرابط البديل." -}}
+  {{- $secondary = "فتح رابط التأكيد" -}}
+  {{- $footer = "إذا لم تنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة بأمان." -}}
+  {{- $dir = "rtl" -}}
+{{ end }}
+{{ if eq $l "ru" }}
+  {{- $title = "Подтвердите адрес электронной почты" -}}
+  {{- $intro = "Подтвердите адрес электронной почты, чтобы активировать аккаунт GLOVAL AI. Если при регистрации вы сохранили черновик, после подтверждения сможете продолжить с того места, где остановились." -}}
+  {{- $primary = "Подтвердить почту" -}}
+  {{- $fallback = "Если кнопка не работает, воспользуйтесь альтернативной ссылкой." -}}
+  {{- $secondary = "Открыть ссылку подтверждения" -}}
+  {{- $footer = "Если вы не создавали этот аккаунт, это письмо можно безопасно проигнорировать." -}}
+{{ end }}
+{{ if eq $l "az" }}
+  {{- $title = "E-poçt ünvanınızı təsdiqləyin" -}}
+  {{- $intro = "GLOVAL AI hesabınızı aktivləşdirmək üçün e-poçt ünvanınızı təsdiqləyin. Qeydiyyat zamanı qaralama saxlamısınızsa, təsdiqdən sonra qaldığınız yerdən davam edə bilərsiniz." -}}
+  {{- $primary = "E-poçtumu təsdiqlə" -}}
+  {{- $fallback = "Düymə işləmirsə, alternativ keçiddən istifadə edin." -}}
+  {{- $secondary = "Təsdiq keçidini aç" -}}
+  {{- $footer = "Bu hesabı siz yaratmamısınızsa, bu məktubu təhlükəsiz şəkildə gözardı edə bilərsiniz." -}}
+{{ end }}
 <div style="background-color:#0a0a0f;padding:40px 16px;font-family:Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background-color:#13131a;border-radius:16px;overflow:hidden;">
     <tr>
@@ -18,43 +103,33 @@
       </td>
     </tr>
     <tr>
-      <td style="padding:0 32px 8px 32px;">
-        <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;text-align:center;">
-          E-posta adresinizi doğrulayın
-        </h1>
+      <td lang="{{ $l }}" dir="{{ $dir }}" style="padding:0 32px 8px 32px;font-family:Helvetica,Arial,sans-serif;">
+        <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;text-align:center;font-family:Helvetica,Arial,sans-serif;">{{ $title }}</h1>
+        <p style="margin:12px 0 0 0;color:#a1a1aa;font-size:14px;line-height:1.6;text-align:center;font-family:Helvetica,Arial,sans-serif;">{{ $intro }}</p>
       </td>
     </tr>
     <tr>
-      <td style="padding:8px 32px 28px 32px;">
-        <p style="margin:0;color:#a1a1aa;font-size:14px;line-height:1.6;text-align:center;">
-          GLOVAL AI hesabınızı oluşturdunuz. Hesabınızı etkinleştirmek ve
-          panelinize giriş yapmak için aşağıdaki butona tıklayın.
-        </p>
+      <td align="center" style="padding:20px 32px 0 32px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+          <td align="center" bgcolor="#7c3aed" style="background-color:#7c3aed;border-radius:10px;">
+            <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=signup&amp;draft={{ .Data.signup_draft_token }}&amp;next={{ .Data.signup_next_path }}" style="display:inline-block;background-color:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:10px;font-family:Helvetica,Arial,sans-serif;">{{ $primary }}</a>
+          </td>
+        </tr></table>
       </td>
     </tr>
     <tr>
-      <td style="padding:0 32px 28px 32px;text-align:center;">
-        <a href="{{ .ConfirmationURL }}"
-           style="display:inline-block;background-color:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:10px;">
-          E-postamı doğrula
-        </a>
+      <td lang="{{ $l }}" dir="{{ $dir }}" align="center" style="padding:20px 32px 0 32px;font-family:Helvetica,Arial,sans-serif;">
+        <p style="margin:0 0 10px 0;color:#71717a;font-size:12px;line-height:1.6;text-align:center;font-family:Helvetica,Arial,sans-serif;">{{ $fallback }}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+          <td align="center" bgcolor="#f5f3ff" style="background-color:#f5f3ff;border:1px solid #7c3aed;border-radius:10px;">
+            <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=signup&amp;draft={{ .Data.signup_draft_token }}&amp;next={{ .Data.signup_next_path }}" style="display:inline-block;background-color:#f5f3ff;color:#6d28d9;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;font-family:Helvetica,Arial,sans-serif;">{{ $secondary }}</a>
+          </td>
+        </tr></table>
       </td>
     </tr>
     <tr>
-      <td style="padding:0 32px 32px 32px;">
-        <p style="margin:0;color:#71717a;font-size:12px;line-height:1.6;text-align:center;">
-          Bu bağlantı 24 saat içinde geçerliliğini kaybeder. Buton
-          çalışmıyorsa aşağıdaki adresi tarayıcınıza kopyalayabilirsiniz:<br />
-          <a href="{{ .ConfirmationURL }}" style="color:#a78bfa;word-break:break-all;">{{ .ConfirmationURL }}</a>
-        </p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:20px 32px;border-top:1px solid #26262f;text-align:center;">
-        <p style="margin:0;color:#52525b;font-size:12px;">
-          Bu e-postayı siz talep etmediyseniz güvenle yok sayabilirsiniz.<br />
-          © GLOVAL AI
-        </p>
+      <td lang="{{ $l }}" dir="{{ $dir }}" style="padding:20px 32px 24px 32px;font-family:Helvetica,Arial,sans-serif;">
+        <p style="margin:0;color:#71717a;font-size:12px;line-height:1.6;text-align:center;font-family:Helvetica,Arial,sans-serif;">{{ $footer }}</p>
       </td>
     </tr>
   </table>
