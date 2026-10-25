@@ -14,8 +14,8 @@ import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
 import { AUTO_ENABLE_PATCH, shouldAutoEnableBlog } from '@/lib/starter-blog-card'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
-import { decideEditEntry } from '@/lib/edit-entry'
 import { createClient } from '@/lib/supabase/client'
+import { useEditorGate, type EditorSessionSource } from '@/components/editor/use-editor-gate'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
 import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
@@ -85,6 +85,28 @@ const DEVICE_MAX_WIDTH: Record<Device, string> = {
 /** Dev-only editor tracing. Never logs in production. */
 function debug(...args: unknown[]) {
   if (process.env.NODE_ENV !== 'production') console.log('[v0]', ...args)
+}
+
+const browserEditorSession: EditorSessionSource = {
+  async hasSession() {
+    try {
+      const { data } = await createClient().auth.getUser()
+      return Boolean(data.user)
+    } catch (err) {
+      debug('auth check before edit failed:', err instanceof Error ? err.message : err)
+      return false
+    }
+  },
+  onSignedOut(onSignedOut) {
+    try {
+      const { data } = createClient().auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_OUT') onSignedOut()
+      })
+      return () => data.subscription.unsubscribe()
+    } catch {
+      return () => {}
+    }
+  },
 }
 
 type History = HistoryOf<WebsiteSchema>
@@ -283,16 +305,26 @@ export function WebsitePreview({
   const router = useRouter()
   const pathname = usePathname()
   const [device, setDevice] = useState<Device>('desktop')
-  const [showEdit, setShowEdit] = useState(initialEditorOpen)
+  // Single owner of the editor panel + the anonymous edit gate. Nothing in this
+  // component sets the panel state directly: every entry point goes through it.
+  const {
+    open: showEdit,
+    gateOpen: showEditGate,
+    toggle: toggleEditor,
+    requestOpen: requestEditorOpen,
+    close: closeEditor,
+    closeGate: closeEditGate,
+  } = useEditorGate({
+    persisted: Boolean(persist),
+    initialOpen: initialEditorOpen,
+    session: browserEditorSession,
+  })
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [publishState, setPublishState] = useState<'idle' | 'publishing'>('idle')
   // Shown when Publish is clicked but there is no authenticated, persisted
   // project to publish yet (anonymous landing preview), or an authenticated
   // session was lost mid-edit (publish call came back UNAUTHENTICATED).
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
-  // Anonymous visitors cannot open the editor panel: the edit button opens
-  // this gate instead (create a free account / sign in / cancel).
-  const [showEditGate, setShowEditGate] = useState(false)
   const autoPublishedRef = useRef(false)
   // Digests of the sample items the server refused to publish without approval.
   // Non-null opens the approval dialog.
@@ -704,31 +736,8 @@ export function WebsitePreview({
     setShowAuthPrompt(true)
   }
 
-  // Edit button entry point. Persisted projects (real editor) toggle the panel
-  // directly. In the anonymous landing preview the panel never opens: we check
-  // the session and either allow it (already signed in) or show the gate.
-  async function handleEditClick() {
-    if (decideEditEntry({ persisted: Boolean(persist), panelOpen: showEdit, hasUser: false }) === 'toggle') {
-      setShowEdit((v) => !v)
-      return
-    }
-    let hasUser = false
-    try {
-      const supabase = createClient()
-      const { data } = await supabase.auth.getUser()
-      hasUser = Boolean(data.user)
-    } catch (err) {
-      debug('auth check before edit failed:', err instanceof Error ? err.message : err)
-    }
-    if (decideEditEntry({ persisted: false, panelOpen: false, hasUser }) === 'open') {
-      setShowEdit(true)
-      return
-    }
-    setShowEditGate(true)
-  }
-
   function goToEditAuth(kind: 'login' | 'signup') {
-    setShowEditGate(false)
+    closeEditGate()
     const handler = kind === 'login' ? onEditLoginRequired : onEditSignupRequired
     if (handler && currentSite) {
       handler(currentSite)
@@ -1566,7 +1575,7 @@ export function WebsitePreview({
             </ToggleButton>
           </div>
           <button
-            onClick={() => void handleEditClick()}
+            onClick={() => void toggleEditor()}
             aria-pressed={showEdit}
             className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
               showEdit
@@ -1656,7 +1665,7 @@ export function WebsitePreview({
           }
           onEditSection={(index) => {
             setSampleGateIds(null)
-            setShowEdit(true)
+            void requestEditorOpen()
             setSelectedSectionIndex(index)
           }}
           onPublish={(approvals, hideIndexes, confirmedReal) => {
@@ -1798,7 +1807,7 @@ export function WebsitePreview({
               </button>
               <button
                 type="button"
-                onClick={() => setShowEditGate(false)}
+                onClick={closeEditGate}
                 className="mt-1 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 {t.publish.authRequiredCancel}
@@ -1876,7 +1885,7 @@ export function WebsitePreview({
                 onSubmitAi={applyEdit}
                 onUndo={undo}
                 onRedo={redo}
-                onClose={() => setShowEdit(false)}
+                onClose={closeEditor}
               versions={persist?.listVersions ? versions : null}
               backups={persist?.listBackups ? backups : null}
               onRestoreBackup={persist?.restoreBackup}
