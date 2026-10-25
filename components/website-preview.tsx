@@ -19,7 +19,8 @@ import { useEditorGate, type EditorSessionSource } from '@/components/editor/use
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
 import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
-import { PublishedSiteBanner } from '@/components/editor/published-site-banner'
+import { SiteAddressBanner } from '@/components/editor/site-address-banner'
+import { resolveSiteAddress } from '@/lib/site-address'
 import {
   SAMPLE_CONTENT_ERROR,
   approveSampleFindings,
@@ -257,6 +258,8 @@ export function WebsitePreview({
     /** Public site slug (null before first publish). Lets storefront preview
      * links open the real live store. */
     slug?: string | null
+    /** Origin of a live, verified custom domain bound to the published site. */
+    customOrigin?: string | null
     /** Version snapshots loaded server-side, seeding the change-history panel. */
     initialVersions?: ProjectVersionItem[]
     /** Re-fetches version snapshots after a save/publish. */
@@ -1505,7 +1508,15 @@ export function WebsitePreview({
     : currentSite
       ? `${slugifyProjectName(currentSite.meta.name)}.${TENANT_ROOT_DOMAIN}`
       : `preview.${TENANT_ROOT_DOMAIN}`
-  const activePublishedUrl = livePublished && liveSlug ? tenantUrl(liveSlug) : publishedUrl
+  // The custom domain origin was resolved for the slug loaded with the page; it
+  // is only valid while that is still the active slug.
+  const siteAddress = resolveSiteAddress({
+    published: livePublished,
+    slug: liveSlug,
+    draftSlug: currentSite ? slugifyProjectName(currentSite.meta.name) : 'preview',
+    customOrigin: liveSlug && liveSlug === persist?.slug ? persist?.customOrigin : null,
+    publishedUrl,
+  })
 
   // Preview navigation for the renderer. The preview iframe has no router, so
   // page links switch in-memory, while a storefront's product/cart/checkout
@@ -1646,11 +1657,6 @@ export function WebsitePreview({
           </button>
         </div>
       </div>
-
-      {/* Published link banner: always uses the active canonical subdomain. */}
-      {activePublishedUrl && (
-        <PublishedSiteBanner url={activePublishedUrl} label={t.publish.liveAt} lang={lang === 'en' ? 'en' : 'tr'} />
-      )}
 
       {sampleGateIds && currentSite && (
         <SamplePublishDialog
@@ -1821,8 +1827,11 @@ export function WebsitePreview({
       <div className="relative flex min-h-0 flex-1">
         <div className="flex flex-1 justify-center overflow-hidden bg-muted/30 p-4 sm:p-6">
           <div
-            className={`flex w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl transition-[max-width] duration-300 ${DEVICE_MAX_WIDTH[device]}`}
+            className={`flex min-h-0 w-full flex-col gap-3 transition-[max-width] duration-300 ${DEVICE_MAX_WIDTH[device]}`}
           >
+            {/* Editor only: the anonymous landing preview keeps its plain frame. */}
+            {persist && <SiteAddressBanner address={siteAddress} lang={lang === 'en' ? 'en' : 'tr'} />}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
             {/* Browser chrome */}
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">
               <span className="flex gap-1.5">
@@ -1830,9 +1839,21 @@ export function WebsitePreview({
                 <span className="h-3 w-3 rounded-full bg-chart-5/70" />
                 <span className="h-3 w-3 rounded-full bg-accent/70" />
               </span>
-              <span className="mx-auto max-w-[70%] truncate rounded-md bg-background/70 px-3 py-1 text-center text-xs text-muted-foreground">
-                {urlLabel}
-              </span>
+              {persist && siteAddress.published ? (
+                <a
+                  href={siteAddress.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${lang === 'en' ? 'Open site in a new tab' : 'Siteyi yeni sekmede aç'}: ${siteAddress.host}`}
+                  className="mx-auto max-w-[70%] truncate rounded-md bg-background/70 px-3 py-1 text-center text-xs text-brand underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-brand"
+                >
+                  {siteAddress.host}
+                </a>
+              ) : (
+                <span className="mx-auto max-w-[70%] truncate rounded-md bg-background/70 px-3 py-1 text-center text-xs text-muted-foreground">
+                  {persist ? siteAddress.host : urlLabel}
+                </span>
+              )}
             </div>
 
             {/* Rendered website inside an isolated, responsive iframe */}
@@ -1860,6 +1881,7 @@ export function WebsitePreview({
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
 
