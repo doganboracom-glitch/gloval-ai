@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { listProjects } from '@/lib/projects'
+import { getPublishOptions, listProjects } from '@/lib/projects'
+import { resolvePublishBanner } from '@/lib/billing-publish-banner'
+import { freeChosenSecret, signFreeChosenIntent } from '@/lib/free-chosen-intent'
 import {
   getPlans,
   getMySubscription,
@@ -80,6 +82,26 @@ export default async function BillingPage({
   const projectEntitlements = unwrap(projectEntitlementsResult, [], 'project entitlements')
   const projects = unwrap(projectsResult, [], 'project list')
 
+  // Arriving from the editor's Publish button: an account without a subscription
+  // is on FREE, so the banner offers FREE publishing (or the packages) instead
+  // of demanding a plan. The signed token lets the editor skip its own choice
+  // dialog afterwards; limits are still enforced by publishProject.
+  const publishProjectId = projects.find((p) => p.id === publish)?.id ?? null
+  const publishOptions = publishProjectId
+    ? await getPublishOptions({ id: publishProjectId }).catch(() => null)
+    : null
+  const publishBanner = resolvePublishBanner({
+    hasProject: Boolean(publishProjectId),
+    suspended: subscription?.status === 'suspended',
+    hasPaidSubscription: subscription?.status === 'active' && (currentPlan?.price_cents ?? 0) > 0,
+    options: publishOptions,
+  })
+  const secret = freeChosenSecret()
+  const freeChosenToken =
+    publishProjectId && publishBanner?.kind === 'free_choice' && secret
+      ? signFreeChosenIntent(secret, publishProjectId, user.id, Date.now())
+      : null
+
   const addOns = await getAddOnOverview(user.id, currentPlan?.code).catch((err) => {
     console.error('[billing] add-on overview unavailable', err)
     return null
@@ -132,7 +154,9 @@ export default async function BillingPage({
       billingProfileStorageAvailable={billingProfileStorageAvailable}
       billingProfileDefaultFullName={defaultBillingName}
       hasActivePaidSubscription={subscription?.status === 'active' && (currentPlan?.price_cents ?? 0) > 0}
-      publishProjectId={projects.find((p) => p.id === publish)?.id ?? null}
+      publishProjectId={publishProjectId}
+      publishBanner={publishBanner}
+      freeChosenToken={freeChosenToken}
       initialTopUpId={topup ?? null}
     />
     </>

@@ -19,6 +19,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { SiteCapacityCard, CreditSummaryCard } from '@/components/billing/capacity-credits-cards'
 import type { AddOnOverview } from '@/lib/add-ons'
+import type { PublishBanner } from '@/lib/billing-publish-banner'
 import { isFreePlanShown, resolveImplicitFreePlan, type CreditSummary, type SiteCapacity } from '@/lib/billing-summary'
 import { Button } from '@/components/ui/button'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
@@ -138,6 +139,8 @@ export function BillingClient({
   billingProfileDefaultFullName,
   hasActivePaidSubscription = false,
   publishProjectId = null,
+  publishBanner = null,
+  freeChosenToken = null,
   initialTopUpId = null,
 }: {
   plans: PlanRow[]
@@ -160,6 +163,9 @@ export function BillingClient({
   billingProfileDefaultFullName: string
   hasActivePaidSubscription?: boolean
   publishProjectId?: string | null
+  publishBanner?: PublishBanner | null
+  /** Signed proof that the owner chose "publish with FREE" for this project. */
+  freeChosenToken?: string | null
   /** Pack chosen in the out-of-credits modal; opens its checkout on arrival. */
   initialTopUpId?: string | null
 }) {
@@ -721,8 +727,14 @@ export function BillingClient({
   const marketingCycle = billingInterval === 'year' ? 'yearly' : 'monthly'
 
   // Kullanıcının içinde bulunduğu paket kademesi (kart vurgusu için).
+  // Abonelik satiri olmayan hesap otomatik FREE paketindedir: FREE karti
+  // "Mevcut" olmali, "Abone ol" asla gorunmemeli.
   const activePlanCode: PlanCode | undefined =
-    hasActiveSub && currentPlan ? toPlanCode(currentPlan.code) : undefined
+    hasActiveSub && currentPlan
+      ? toPlanCode(currentPlan.code)
+      : implicitFreePlan
+        ? 'free'
+        : undefined
 
   // Kullanıcının sahip olduğu (askıya alınmış dahil) ücretli paket ve kademesi.
   const ownedPlan =
@@ -742,11 +754,11 @@ export function BillingClient({
   // Kart vurgusu yalnızca aynı faturalama dönemindeki karta verilir (FREE
   // yalnızca aylık sunulduğu için her sekmede vurgulanır).
   const highlightedPlanCode: PlanCode | undefined =
-    activePlanCode &&
-    currentPlan &&
-    (activePlanCode === 'free' || currentPlan.interval === billingInterval)
-      ? activePlanCode
-      : undefined
+    activePlanCode === 'free'
+      ? 'free'
+      : activePlanCode && currentPlan && currentPlan.interval === billingInterval
+        ? activePlanCode
+        : undefined
 
   // Paket kademesi sıralaması (PLANS dizi düzeni: free < starter < pro <
   // ecommerce). Kullanıcı yalnızca içinde bulunduğundan daha üst bir pakete
@@ -918,13 +930,35 @@ export function BillingClient({
           <p className="mt-1 text-muted-foreground">{b.subtitle}</p>
         </div>
 
-        {publishProjectId && (
+        {publishProjectId && publishBanner && (
           <div
             role="status"
             className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3 text-sm"
           >
-            <span>{hasActiveSub ? t.publish.planActivated : t.publish.planRequiredBody}</span>
-            {hasActiveSub && (
+            <span>
+              {publishBanner.kind === 'free_choice'
+                ? t.publish.freeBannerBody
+                : publishBanner.kind === 'blocked'
+                  ? publishBanner.options.block === 'storefront'
+                    ? t.publish.freeBlockedStorefront
+                    : t.publish.freeBlockedPages.replace('{limit}', String(publishBanner.options.limit ?? ''))
+                  : publishBanner.kind === 'suspended'
+                    ? t.billing.publishSuspended
+                    : publishBanner.paid
+                      ? t.publish.planActivated
+                      : t.publish.continueBody}
+            </span>
+            {publishBanner.kind === 'free_choice' && (
+              <Link
+                href={`/editor/${publishProjectId}?autopublish=1${
+                  freeChosenToken ? `&freeChosen=${encodeURIComponent(freeChosenToken)}` : ''
+                }`}
+                className="rounded-lg bg-brand px-3 py-1.5 font-medium text-brand-foreground"
+              >
+                {t.publish.choicePublishFree}
+              </Link>
+            )}
+            {publishBanner.kind === 'continue' && (
               <Link
                 href={`/editor/${publishProjectId}?autopublish=1`}
                 className="rounded-lg bg-brand px-3 py-1.5 font-medium text-brand-foreground"
