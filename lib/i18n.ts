@@ -772,6 +772,16 @@ const dict = {
       continuePublish: 'Yayınlamaya devam et',
       paymentIncomplete: 'Ödeme tamamlanmadı. Siteniz henüz yayınlanmadı.',
       planUnsupported: 'Mevcut paketiniz bu işlemi desteklemiyor.',
+      choiceTitle: 'Sitenizi nasıl yayınlamak istersiniz?',
+      choiceBody:
+        'FREE paketle sitenizi hemen yayınlayabilirsiniz. Daha fazla sayfa, mağaza veya ek özellikler için paketlere göz atın. Düzenlemeleriniz her iki durumda da korunur.',
+      choicePublishFree: 'FREE ile yayınla',
+      choiceBrowsePackages: 'Paketlere göz at',
+      packagesOnlyTitle: 'Bu site için bir paket gerekiyor',
+      freeBlockedStorefront:
+        'E-ticaret mağazaları FREE pakette yayınlanamaz. Mağazanızı yayınlamak için bir paket seçin; düzenlemeleriniz korunur.',
+      freeBlockedPages:
+        'Siteniz FREE paketin {limit} sayfa sınırını aşıyor. Yayınlamak için bir paket seçin veya sayfa sayısını azaltın; düzenlemeleriniz korunur.',
     },
     logos: 'Ekiplerin ve girişimcilerin tercihi',
     features: {
@@ -2390,6 +2400,16 @@ const dict = {
     continuePublish: 'Continue publishing',
     paymentIncomplete: 'Payment was not completed. Your site has not been published yet.',
     planUnsupported: 'Your current plan does not support this action.',
+    choiceTitle: 'How would you like to publish your site?',
+    choiceBody:
+      'You can publish your site right away on the FREE plan. Browse the packages for more pages, a store or extra features. Your edits are kept either way.',
+    choicePublishFree: 'Publish with FREE',
+    choiceBrowsePackages: 'Browse packages',
+    packagesOnlyTitle: 'This site needs a package',
+    freeBlockedStorefront:
+      'Online stores cannot be published on the FREE plan. Choose a package to publish your store; your edits are kept.',
+    freeBlockedPages:
+      'Your site exceeds the FREE plan limit of {limit} pages. Choose a package to publish, or reduce the number of pages; your edits are kept.',
   },
   logos: 'Trusted by teams and founders',
     features: {

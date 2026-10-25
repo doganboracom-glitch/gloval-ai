@@ -17,6 +17,13 @@ import { INVALID_SCHEMA_ERROR, INVALID_SCHEMA_MESSAGE, checkPublishable } from '
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
 import { materializePages, withPageRedirects } from '@/lib/website-pages'
+import {
+  FREE_PAGE_LIMIT_ERROR,
+  FREE_STOREFRONT_ERROR,
+  evaluateFreePublish,
+  publishOptionsFromVerdict,
+  type PublishOptions,
+} from '@/lib/free-publish'
 import { getEffectiveSiteLimit, getEffectiveProductLimit } from '@/lib/effective-limits'
 import {
   SITE_LIMIT_ERROR,
@@ -597,6 +604,61 @@ export async function deleteProject(id: string): Promise<void> {
   revalidatePath('/dashboard')
 }
 
+/**
+ * Tells the editor how to handle the "Yayınla" press. Paid owners (and admins
+ * acting on another tenant's site, and re-publishes of a live site) publish
+ * directly. An owner on the automatic FREE plan either gets the
+ * "publish with FREE / browse packages" choice, or, when FREE cannot publish
+ * this site at all (store, too many pages, site slot taken), only the packages.
+ * Advisory only: `publishProject` enforces the same rules on the server.
+ */
+export async function getPublishOptions(input: { id: string; schema: WebsiteSchema }): Promise<PublishOptions> {
+  const { db, elevated } = await clientForProject(input.id)
+  if (elevated) return { mode: 'direct' }
+
+  const { data: project, error } = await db
+    .from('projects')
+    .select('id, published, owner_id')
+    .eq('id', input.id)
+    .maybeSingle()
+  if (error || !project) return { mode: 'direct' }
+
+  let planCode: string
+  try {
+    planCode = toPlanCode((await getMyCurrentPlan())?.code ?? 'free')
+  } catch {
+    return { mode: 'direct' }
+  }
+  if (planCode !== 'free') return { mode: 'direct' }
+
+  let requested: WebsiteSchema
+  try {
+    requested = parseWebsiteForSave(input.schema)
+  } catch {
+    return { mode: 'direct' }
+  }
+
+  const ownerId = project.owner_id as string
+  const siteLimit = await getEffectiveSiteLimit(ownerId, 'free')
+  const { count, error: countErr } = await db
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('published', true)
+    .neq('id', input.id)
+  if (countErr) return { mode: 'direct' }
+
+  const verdict = evaluateFreePublish({
+    alreadyLive: Boolean(project.published),
+    isStorefront: isStorefront(requested),
+    pageCount: requested.pages.length,
+    pageLimit: pageLimitForPlan('free'),
+    otherPublished: count ?? 0,
+    siteLimit,
+  })
+  if (verdict.ok && project.published) return { mode: 'direct' }
+  return publishOptionsFromVerdict(verdict)
+}
+
 export type PublishResult =
   | { ok: true; slug: string; publishedAt: string }
   | {
@@ -605,8 +667,11 @@ export type PublishResult =
         | typeof SITE_LIMIT_ERROR
         | typeof PLAN_REQUIRED_ERROR
         | typeof SUBSCRIPTION_SUSPENDED_ERROR
+        | typeof FREE_STOREFRONT_ERROR
+        | typeof FREE_PAGE_LIMIT_ERROR
       used?: number
       total?: number
+      limit?: number
     }
   | {
       /** The schema is not valid; nothing was saved or published. */
@@ -676,22 +741,34 @@ export async function publishProject(input: {
   // varsayılan olarak yayına İZİN VERİLMEZ (UNAUTHENTICATED hariç, o yukarı taşınır).
   let currentPlanCode: string | undefined
   if (!elevated) {
+    // An account with no subscription row is on the automatic FREE plan, so a
+    // successful lookup that finds nothing publishes as FREE (with FREE's
+    // limits below). Only a FAILED lookup denies, because the plan is unknown.
     let currentPlan: Awaited<ReturnType<typeof getMyCurrentPlan>> = null
+    let lookupFailed = false
     try {
       currentPlan = await getMyCurrentPlan()
     } catch (err) {
       if (err instanceof Error && err.message === 'UNAUTHENTICATED') throw err
+      lookupFailed = true
       console.log('[v0] plan lookup failed, denying publish:', err)
     }
-    if (!currentPlan) return { ok: false, reason: PLAN_REQUIRED_ERROR }
+    if (lookupFailed) return { ok: false, reason: PLAN_REQUIRED_ERROR }
     if (await isSubscriptionSuspended(project.owner_id as string)) {
       return { ok: false, reason: SUBSCRIPTION_SUSPENDED_ERROR }
     }
-    currentPlanCode = currentPlan.code
+    currentPlanCode = currentPlan?.code ?? 'free'
   }
 
   if (!project.published && !elevated) {
     const planCode = toPlanCode(currentPlanCode)
+    if (planCode === 'free') {
+      if (isStorefront(requested)) return { ok: false, reason: FREE_STOREFRONT_ERROR }
+      const pageLimit = pageLimitForPlan(planCode)
+      if (requested.pages.length > pageLimit) {
+        return { ok: false, reason: FREE_PAGE_LIMIT_ERROR, limit: pageLimit }
+      }
+    }
     // Admin-granted per-user exception (user_limit_overrides) wins over the plan
     // default while unexpired; active "Ek Site" add-ons are added on top. The
     // plan definition itself is never modified.

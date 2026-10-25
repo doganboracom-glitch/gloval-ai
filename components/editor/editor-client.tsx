@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { WebsitePreview } from '@/components/website-preview'
 import {
+  getPublishOptions,
   listProjectBackups,
   listProjectVersions,
   publishProject,
@@ -131,7 +132,7 @@ export function EditorClient({
             if (result.reason === 'INVALID_SCHEMA') {
               return { error: result.reason, message: result.message }
             }
-            return { error: result.reason }
+            return { error: result.reason, used: result.used, total: result.total, limit: result.limit }
           }
           // Canonical public address of a published site is always its own
           // tenant subdomain (e.g. nakliyat.gloval.site), never the platform
@@ -139,6 +140,8 @@ export function EditorClient({
           trackPublishSite()
           return { url: tenantUrl(result.slug) }
         },
+        getPublishOptions: (next) => getPublishOptions({ id: projectId, schema: next }),
+        browsePackages: () => router.push(`/billing?publish=${encodeURIComponent(projectId)}`),
         unpublish: async () => {
           await unpublishProject(projectId)
         },

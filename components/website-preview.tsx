@@ -19,6 +19,8 @@ import { useEditorGate, type EditorSessionSource } from '@/components/editor/use
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
 import { SamplePublishDialog } from '@/components/editor/sample-publish-dialog'
+import { PublishChoiceDialog } from '@/components/editor/publish-choice-dialog'
+import type { PublishOptions } from '@/lib/free-publish'
 import { PublishedSiteBanner } from '@/components/editor/published-site-banner'
 import {
   SAMPLE_CONTENT_ERROR,
@@ -194,6 +196,7 @@ export function WebsitePreview({
   catalogFeature = null,
   persist,
   autoPublish = false,
+  autoPublishConfirmed = false,
   onAuthenticatedPublish,
   onLoginRequired,
   onSignupRequired,
@@ -246,10 +249,18 @@ export function WebsitePreview({
           message?: string
           used?: number
           total?: number
+          limit?: number
           sections?: SampleSectionFinding[]
           attestationFailed?: boolean
         }
     >
+    /**
+     * Asks the server how "Yayınla" should behave for this owner (direct, the
+     * FREE-or-packages choice, or packages only). Absent = always direct.
+     */
+    getPublishOptions?: (schema: WebsiteSchema) => Promise<PublishOptions>
+    /** Opens the package picker, remembering which site is waiting to publish. */
+    browsePackages?: () => void
     /** Takes the public site offline. The draft is left untouched. */
     unpublish?: () => Promise<void>
     /** Whether the project is already published (controls button label). */
@@ -276,6 +287,8 @@ export function WebsitePreview({
    * project from their stashed draft on their behalf.
    */
   autoPublish?: boolean
+  /** The owner already chose "publish with FREE" (billing screen): skip the choice dialog. */
+  autoPublishConfirmed?: boolean
   /**
    * Publish was clicked with no `persist` (anonymous landing preview) but the
    * visitor turns out to already be signed in. The parent should create the
@@ -321,6 +334,10 @@ export function WebsitePreview({
   })
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [publishState, setPublishState] = useState<'idle' | 'publishing'>('idle')
+  // FREE-only owners get a choice before the first publish; this is that dialog
+  // plus the short server lookup that decides whether to show it.
+  const [publishChoice, setPublishChoice] = useState<Exclude<PublishOptions, { mode: 'direct' }> | null>(null)
+  const [publishChoiceBusy, setPublishChoiceBusy] = useState(false)
   // Shown when Publish is clicked but there is no authenticated, persisted
   // project to publish yet (anonymous landing preview), or an authenticated
   // session was lost mid-edit (publish call came back UNAUTHENTICATED).
@@ -655,19 +672,27 @@ export function WebsitePreview({
           return
         }
         setSampleGateIds(null)
-  const siteLimitMessage = t.publish.siteLimit
-    .replace('{used}', String(result.used ?? '—'))
-    .replace('{total}', String(result.total ?? '—'))
-  flashToast(
-    'err',
-    result.error === 'PLAN_REQUIRED'
-      ? t.publish.planRequired
-      : result.error === 'SUBSCRIPTION_SUSPENDED'
-        ? t.billing.publishSuspended
-        : siteLimitMessage,
-  )
-  return
-  }
+        if (result.error === 'FREE_PLAN_STOREFRONT') {
+          setPublishChoice({ mode: 'packages_only', block: 'storefront' })
+          return
+        }
+        if (result.error === 'PAGE_LIMIT_REACHED') {
+          setPublishChoice({ mode: 'packages_only', block: 'page_limit', limit: result.limit })
+          return
+        }
+        const siteLimitMessage = t.publish.siteLimit
+          .replace('{used}', String(result.used ?? '—'))
+          .replace('{total}', String(result.total ?? '—'))
+        flashToast(
+          'err',
+          result.error === 'PLAN_REQUIRED'
+            ? t.publish.planRequired
+            : result.error === 'SUBSCRIPTION_SUSPENDED'
+              ? t.billing.publishSuspended
+              : siteLimitMessage,
+        )
+        return
+      }
       // The server stored the approved items as the owner's content (flag
       // cleared); mirror that locally so the draft and the live site agree.
       const detectedIds = new Set(
@@ -716,9 +741,34 @@ export function WebsitePreview({
   // Otherwise (anonymous landing preview) we first need a real, authenticated
   // project — check the session and either hand off to the parent to create
   // one (already signed in) or show the sign-in-required prompt.
+  async function startPublish(skipChoice = false) {
+    if (!persist?.publish) return
+    if (skipChoice || livePublished || !persist.getPublishOptions || !currentSite) {
+      void handlePublish()
+      return
+    }
+    if (publishChoiceBusy || publishState === 'publishing') return
+    setPublishChoiceBusy(true)
+    try {
+      let options: PublishOptions = { mode: 'direct' }
+      try {
+        options = await persist.getPublishOptions(currentSite)
+      } catch (err) {
+        debug('publish options lookup failed:', err instanceof Error ? err.message : err)
+      }
+      if (options.mode === 'direct') {
+        void handlePublish()
+      } else {
+        setPublishChoice(options)
+      }
+    } finally {
+      setPublishChoiceBusy(false)
+    }
+  }
+
   async function handlePublishClick() {
     if (persist?.publish) {
-      void handlePublish()
+      void startPublish()
       return
     }
     if (onAuthenticatedPublish) {
@@ -775,9 +825,9 @@ export function WebsitePreview({
     if (!autoPublish || autoPublishedRef.current) return
     if (!persist?.publish || !currentSite) return
     autoPublishedRef.current = true
-    void handlePublish()
+    void startPublish(autoPublishConfirmed)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPublish, persist, currentSite])
+  }, [autoPublish, autoPublishConfirmed, persist, currentSite])
 
   // Unpublish: takes the public page offline. Only ever reached via the
   // confirmation modal, never straight from the toolbar button.
@@ -1625,10 +1675,10 @@ export function WebsitePreview({
               it without a persisted project routes through auth first. */}
           <button
             onClick={handlePublishClick}
-            disabled={publishState === 'publishing'}
+            disabled={publishState === 'publishing' || publishChoiceBusy}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            {publishState === 'publishing' ? (
+            {publishState === 'publishing' || publishChoiceBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Rocket className="h-4 w-4" />
@@ -1650,6 +1700,21 @@ export function WebsitePreview({
       {/* Published link banner: always uses the active canonical subdomain. */}
       {activePublishedUrl && (
         <PublishedSiteBanner url={activePublishedUrl} label={t.publish.liveAt} lang={lang === 'en' ? 'en' : 'tr'} />
+      )}
+
+      {publishChoice && (
+        <PublishChoiceDialog
+          choice={publishChoice}
+          onPublishFree={() => {
+            setPublishChoice(null)
+            void handlePublish()
+          }}
+          onBrowsePackages={() => {
+            setPublishChoice(null)
+            persist?.browsePackages?.()
+          }}
+          onClose={() => setPublishChoice(null)}
+        />
       )}
 
       {sampleGateIds && currentSite && (
