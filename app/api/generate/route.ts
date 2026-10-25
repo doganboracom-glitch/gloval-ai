@@ -73,7 +73,7 @@ function fallbackPlan(prompt: string, lang: 'tr' | 'en') {
     audience: 'Markanı keşfeden yeni ziyaretçiler',
     pages: ['Ana Sayfa', 'Hakkımızda', 'Hizmetler', 'İletişim'],
     sections: [
-      { title: 'Kahraman Bölümü', description: 'Net bir başlık, kısa açıklama ve birincil eylem çağrısı.' },
+      { title: 'Açılış Bölümü', description: 'Net bir başlık, kısa açıklama ve birincil eylem çağrısı.' },
       { title: 'Öne Çıkanlar', description: 'Fikri güçlü kılan üç ana değer önermesi.' },
       { title: 'Sosyal Kanıt', description: 'Referanslar veya güven veren rakamlar.' },
       { title: 'Kapanış CTA', description: 'Ziyaretçiyi harekete geçiren son çağrı.' },

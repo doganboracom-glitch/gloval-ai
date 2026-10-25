@@ -1318,7 +1318,7 @@ export type WebsitePlan = {
 function sectionLabel(type: SectionType, lang: 'tr' | 'en'): string {
   const map: Record<SectionType, [tr: string, en: string]> = {
     announcement: ['Duyuru Bandı', 'Announcement bar'],
-    hero: ['Kahraman', 'Hero'],
+    hero: ['Açılış', 'Hero'],
     heroStrip: ['Slider Altı Kutu', 'Hero Features'],
     slider: ['Kayan Görsel', 'Slider'],
     about: ['Hakkında', 'About'],
