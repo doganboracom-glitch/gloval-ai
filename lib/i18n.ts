@@ -945,7 +945,7 @@ const dict = {
       noPlan: 'Aktif aboneliğin yok',
       noPlanCta: 'Aşağıdan sana uygun bir plan seçerek başla.',
       freeAutoNote:
-        'FREE paket hesabınla birlikte otomatik aktif oldu. Yenileme ve iptal yok; sitenizi yayınlarken paket seçeceksiniz.',
+        'FREE paket hesabınla birlikte otomatik aktif oldu. Yenileme ve iptal yok. Siteni ücretsiz olarak adin.gloval.site adresinde yayınlayabilirsin; kendi alan adında (örn. www.firmaadi.com) yayınlamak istersen üst paketlerden birini seçmelisin.',
       pendingPlanCta: 'Ödemeniz tamamlandığında paketiniz aktif olacaktır.',
       status: 'Durum',
       renews: 'Yenilenme',
@@ -2562,7 +2562,7 @@ const dict = {
       noPlan: 'No active subscription',
       noPlanCta: 'Pick the plan that fits you below to get started.',
       freeAutoNote:
-        'The FREE plan was activated automatically with your account. No renewal or cancellation; you will pick a plan when you publish your site.',
+        'The FREE plan was activated automatically with your account. No renewal or cancellation. You can publish your site for free at adin.gloval.site; to publish it on your own domain (e.g. www.firmaadi.com), you need to choose one of the higher-tier plans.',
       pendingPlanCta: 'Your package will be activated once your payment is completed.',
       status: 'Status',
       renews: 'Renews',

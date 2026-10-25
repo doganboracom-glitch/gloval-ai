@@ -65,6 +65,21 @@ import {
   BILLING_TIME_ZONE,
 } from '@/lib/billing-utils'
 
+function formatFreeAutoNote(note: string) {
+  return note.split(/(adin\.gloval\.site|www\.firmaadi\.com)/g).map((part, index) =>
+    part === 'adin.gloval.site' || part === 'www.firmaadi.com' ? (
+      <code
+        key={`${part}-${index}`}
+        className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground"
+      >
+        {part}
+      </code>
+    ) : (
+      part
+    ),
+  )
+}
+
 /**
  * The legal-gate dialog opens `window.open('about:blank', '_blank')`
  * synchronously on click (before the async server action resolves) so the
@@ -1094,7 +1109,9 @@ export function BillingClient({
                     {statusLabel('active')}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">{b.freeAutoNote}</p>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {formatFreeAutoNote(b.freeAutoNote)}
+                </p>
               </>
             ) : (
               <>
