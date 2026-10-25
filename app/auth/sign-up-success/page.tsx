@@ -9,6 +9,8 @@ import {
   clearSignupDraftToken,
   readSignupDraftFailed,
   readSignupDraftToken,
+  readSignupIdea,
+  storeSignupIdea,
 } from '@/lib/signup-draft-client'
 import { clearPendingProject } from '@/lib/pending-project'
 import { resumeTargetPath } from '@/lib/signup-draft-core'
@@ -24,10 +26,17 @@ export default function SignUpSuccessPage() {
   const router = useRouter()
   const [resuming, setResuming] = useState(false)
   const [draftFailed, setDraftFailed] = useState(false)
+  const [loginHref, setLoginHref] = useState('/auth/login')
   const runningRef = useRef(false)
 
   useEffect(() => {
     setDraftFailed(readSignupDraftFailed())
+    const token = readSignupDraftToken()
+    if (token) {
+      setLoginHref(`/auth/login?next=${encodeURIComponent(`/auth/resume?draft=${token}`)}`)
+    } else if (readSignupIdea()) {
+      setLoginHref(`/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`)
+    }
   }, [])
 
   // The verification link may be opened in another tab: the session cookie is
@@ -44,6 +53,18 @@ export default function SignUpSuccessPage() {
       setResuming(true)
       for (let attempt = 0; attempt < MAX_BUSY_RETRIES && !cancelled; attempt++) {
         const result = await resumeSignupDraft(token).catch(() => null)
+        if (result?.status === 'idea') {
+          if (!storeSignupIdea(result.prompt)) {
+            setDraftFailed(true)
+            runningRef.current = false
+            setResuming(false)
+            return
+          }
+          clearSignupDraftToken()
+          clearPendingProject()
+          router.replace('/')
+          return
+        }
         if (result?.status === 'ok') {
           clearSignupDraftToken()
           clearPendingProject()
@@ -101,7 +122,7 @@ export default function SignUpSuccessPage() {
           <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm leading-relaxed text-muted-foreground">{t.auth.checkEmailSpam}</p>
         </div>
-        <LinkButton href="/auth/login" variant="secondary" className="w-full">
+        <LinkButton href={loginHref} variant="secondary" className="w-full">
           {t.auth.toLogin}
         </LinkButton>
       </div>

@@ -1,3 +1,5 @@
+import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
+
 const KEY = 'gloval:signup-draft'
 
 export function storeSignupDraftToken(token: string) {
@@ -19,6 +21,48 @@ export function readSignupDraftToken(): string | null {
 export function clearSignupDraftToken() {
   try {
     sessionStorage.removeItem(KEY)
+  } catch {
+    // non-fatal
+  }
+}
+
+const IDEA_KEY = 'gloval:signup-idea'
+
+export function storeSignupIdea(idea: string): boolean {
+  const normalized = idea.trim()
+  if (!normalized || normalized.length > MAX_SIGNUP_IDEA_CHARS) return false
+  try {
+    sessionStorage.setItem(IDEA_KEY, normalized)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function readSignupIdea(): string | null {
+  try {
+    const idea = sessionStorage.getItem(IDEA_KEY)
+    if (!idea) return null
+    const normalized = idea.trim()
+    if (!normalized || normalized.length > MAX_SIGNUP_IDEA_CHARS) {
+      sessionStorage.removeItem(IDEA_KEY)
+      return null
+    }
+    return normalized
+  } catch {
+    return null
+  }
+}
+
+export function takeSignupIdea(): string | null {
+  const idea = readSignupIdea()
+  clearSignupIdea()
+  return idea
+}
+
+export function clearSignupIdea() {
+  try {
+    sessionStorage.removeItem(IDEA_KEY)
   } catch {
     // non-fatal
   }

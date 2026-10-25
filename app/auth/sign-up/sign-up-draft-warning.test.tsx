@@ -6,12 +6,15 @@ import { dictionary } from '@/lib/i18n'
 const t = dictionary.tr
 
 const push = vi.fn()
+const replace = vi.fn()
 const refresh = vi.fn()
 const signUp = vi.fn()
 const createSignupDraft = vi.fn()
+const resumeSignupDraft = vi.fn()
+const getSession = vi.fn()
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push, refresh }),
+  useRouter: () => ({ push, replace, refresh }),
   useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('next/link', () => ({
@@ -29,14 +32,14 @@ vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
     auth: {
       signUp,
-      getSession: async () => ({ data: { session: null } }),
+      getSession,
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     },
   }),
 }))
 vi.mock('@/lib/signup-draft-actions', () => ({
   createSignupDraft: (...args: unknown[]) => createSignupDraft(...args),
-  resumeSignupDraft: vi.fn(),
+  resumeSignupDraft: (...args: unknown[]) => resumeSignupDraft(...args),
 }))
 vi.mock('@/lib/auth-redirect', () => ({ getAuthCallbackUrl: () => 'https://gloval.ai/auth/callback' }))
 vi.mock('@/lib/analytics', () => ({ trackSignUp: vi.fn() }))
@@ -57,6 +60,8 @@ beforeEach(() => {
   sessionStorage.clear()
   sessionStorage.setItem('gloval:pending-project', JSON.stringify({ token: 'p1', schema: {}, name: 'Kahve' }))
   createSignupDraft.mockResolvedValue({ ok: false })
+  resumeSignupDraft.mockResolvedValue(null)
+  getSession.mockResolvedValue({ data: { session: null } })
 })
 
 afterEach(() => {
@@ -90,6 +95,37 @@ describe('sign-up with a draft that could not be saved', () => {
     render(<SignUpSuccessPage />)
     const notice = await screen.findByRole('alert')
     expect(notice.textContent).toBe(t.auth.draftNotSaved)
+  })
+
+  it('parks an idea-only draft before sign-up and preserves it with the server token', async () => {
+    sessionStorage.removeItem('gloval:pending-project')
+    sessionStorage.setItem('gloval:signup-idea', 'Bir kahve sitesi kur')
+    createSignupDraft.mockResolvedValue({ ok: true, token: 'idea-token' })
+    signUp.mockResolvedValue({ data: { user: { id: 'u1' }, session: null }, error: null })
+
+    await submitSignUp()
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/auth/sign-up-success'))
+    expect(createSignupDraft).toHaveBeenCalledWith({
+      email: 'ada@example.com',
+      draft: { kind: 'idea', prompt: 'Bir kahve sitesi kur' },
+    })
+    expect(createSignupDraft.mock.invocationCallOrder[0]).toBeLessThan(signUp.mock.invocationCallOrder[0])
+    expect(sessionStorage.getItem('gloval:signup-draft')).toBe('idea-token')
+    expect(sessionStorage.getItem('gloval:signup-idea')).toBeNull()
+  })
+
+  it('restores a verified idea on the homepage without generating a project', async () => {
+    sessionStorage.removeItem('gloval:pending-project')
+    sessionStorage.setItem('gloval:signup-draft', 'idea-token')
+    getSession.mockResolvedValue({ data: { session: { access_token: 'x' } } })
+    resumeSignupDraft.mockResolvedValue({ status: 'idea', prompt: 'Bir kahve sitesi kur' })
+
+    render(<SignUpSuccessPage />)
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/'))
+    expect(sessionStorage.getItem('gloval:signup-idea')).toBe('Bir kahve sitesi kur')
+    expect(sessionStorage.getItem('gloval:signup-draft')).toBeNull()
   })
 
   it('shows no warning on either path when the draft was saved', async () => {
