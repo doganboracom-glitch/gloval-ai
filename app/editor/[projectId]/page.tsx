@@ -16,16 +16,17 @@ import { isStarterPending } from '@/lib/blog-site'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
 import { tenantUrl } from '@/lib/domains'
 import { canManageProducts } from '@/lib/site-kind'
+import { freeChosenSecret, verifyFreeChosenIntent } from '@/lib/free-chosen-intent'
 
 export default async function EditorPage({
   params,
   searchParams,
 }: {
   params: Promise<{ projectId: string }>
-  searchParams: Promise<{ autopublish?: string }>
+  searchParams: Promise<{ autopublish?: string; freeChosen?: string }>
 }) {
   const { projectId } = await params
-  const { autopublish } = await searchParams
+  const { autopublish, freeChosen } = await searchParams
 
   const supabase = await createClient()
   const {
@@ -134,6 +135,10 @@ export default async function EditorPage({
       historyEnabled={historyEnabled}
       planCode={planCode}
       autoPublish={autopublish === '1'}
+      autoPublishConfirmed={
+        autopublish === '1' &&
+        verifyFreeChosenIntent(freeChosenSecret(), projectId, user.id, freeChosen, Date.now())
+      }
       payments={canManagePayments ? { projectId, initialSummary: paymentSummary } : null}
       catalog={catalog}
       catalogFeature={catalogFeature}

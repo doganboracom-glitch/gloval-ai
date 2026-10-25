@@ -40,6 +40,7 @@ export function EditorClient({
   historyEnabled = false,
   planCode,
   autoPublish,
+  autoPublishConfirmed = false,
   payments,
   blog,
   catalog,
@@ -66,6 +67,8 @@ export function EditorClient({
    * originally made actually completes instead of just opening a draft.
    */
   autoPublish?: boolean
+  /** Server-verified: the owner already chose "FREE ile yayınla", so the choice dialog is skipped. */
+  autoPublishConfirmed?: boolean
   /** Non-null only for a store's owner/admin: enables the Sanal Poslar tab. */
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Enables the Blog tab (project owner/admin). */
@@ -89,6 +92,7 @@ export function EditorClient({
       initialEditorOpen
       planCode={planCode}
       autoPublish={autoPublish}
+      autoPublishConfirmed={autoPublishConfirmed}
       payments={payments ?? null}
       blog={blog ?? null}
       catalog={catalog ?? null}
@@ -122,9 +126,6 @@ export function EditorClient({
                 sections: result.sections,
                 attestationFailed: result.attestationFailed,
               }
-            }
-            if (result.reason === 'PLAN_REQUIRED') {
-              router.push(`/billing?publish=${encodeURIComponent(projectId)}`)
             }
             if (result.reason === 'SUBSCRIPTION_SUSPENDED') {
               router.push('/billing')

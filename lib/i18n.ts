@@ -765,9 +765,9 @@ const dict = {
       editGateBody:
         'Ücretsiz pakette 50 AI kredisi hediye. Hesabını oluşturduktan sonra sitenle tam olarak buradan, editörde devam edersin.',
       editGateSignup: 'Hesap oluştur',
-      planRequired: 'Yayınlamadan önce bir paket seçin.',
-      planRequiredBody:
-        'Sitenizi yayınlamak için bir paket seçmeniz gerekiyor. Düzenlemeleriniz korunuyor; paketi seçtikten sonra yayınlamaya devam edebilirsiniz.',
+      freeBannerBody:
+        'Sitenizi FREE paketle hemen yayınlayabilir ya da aşağıdan bir paket seçebilirsiniz. Düzenlemeleriniz korunuyor.',
+      continueBody: 'Düzenlemeleriniz korunuyor. Sitenizi yayınlamaya devam edebilirsiniz.',
       planActivated: 'Paketiniz etkinleştirildi. Sitenizi yayınlamaya devam edebilirsiniz.',
       continuePublish: 'Yayınlamaya devam et',
       paymentIncomplete: 'Ödeme tamamlanmadı. Siteniz henüz yayınlanmadı.',
@@ -2393,9 +2393,9 @@ const dict = {
     editGateBody:
       'The free plan includes 50 AI credits. Once your account is ready you will pick up right here, in the editor.',
     editGateSignup: 'Create account',
-    planRequired: 'Choose a plan before publishing.',
-    planRequiredBody:
-      'You need to pick a plan to publish your site. Your edits are safe; once a plan is active you can continue publishing.',
+    freeBannerBody:
+      'You can publish your site right away on the FREE plan, or pick a package below. Your edits are kept.',
+    continueBody: 'Your edits are kept. You can continue publishing your site.',
     planActivated: 'Your plan is active. You can continue publishing your site.',
     continuePublish: 'Continue publishing',
     paymentIncomplete: 'Payment was not completed. Your site has not been published yet.',

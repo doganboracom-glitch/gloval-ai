@@ -612,13 +612,14 @@ export async function deleteProject(id: string): Promise<void> {
  * this site at all (store, too many pages, site slot taken), only the packages.
  * Advisory only: `publishProject` enforces the same rules on the server.
  */
-export async function getPublishOptions(input: { id: string; schema: WebsiteSchema }): Promise<PublishOptions> {
+export async function getPublishOptions(input: { id: string; schema?: WebsiteSchema }): Promise<PublishOptions> {
   const { db, elevated } = await clientForProject(input.id)
   if (elevated) return { mode: 'direct' }
 
+  // Without a schema (the billing screen) the stored draft is what would publish.
   const { data: project, error } = await db
     .from('projects')
-    .select('id, published, owner_id')
+    .select('id, published, owner_id, schema_data')
     .eq('id', input.id)
     .maybeSingle()
   if (error || !project) return { mode: 'direct' }
@@ -633,7 +634,7 @@ export async function getPublishOptions(input: { id: string; schema: WebsiteSche
 
   let requested: WebsiteSchema
   try {
-    requested = parseWebsiteForSave(input.schema)
+    requested = parseWebsiteForSave(input.schema ?? project.schema_data)
   } catch {
     return { mode: 'direct' }
   }

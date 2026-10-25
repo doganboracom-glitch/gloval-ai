@@ -685,11 +685,7 @@ export function WebsitePreview({
           .replace('{total}', String(result.total ?? '—'))
         flashToast(
           'err',
-          result.error === 'PLAN_REQUIRED'
-            ? t.publish.planRequired
-            : result.error === 'SUBSCRIPTION_SUSPENDED'
-              ? t.billing.publishSuspended
-              : siteLimitMessage,
+          result.error === 'SUBSCRIPTION_SUSPENDED' ? t.billing.publishSuspended : siteLimitMessage,
         )
         return
       }
