@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
@@ -11,7 +11,9 @@ import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
 import { createSignupDraft } from '@/lib/signup-draft-actions'
 import {
+  clearSignupIdea,
   readSignupDraftFailed,
+  readSignupIdea,
   resolvePostSignUp,
   setSignupDraftFailed,
   storeSignupDraftToken,
@@ -39,8 +41,7 @@ function SignUpForm() {
     rawNext.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\')
       ? rawNext
       : '/dashboard'
-  const loginHref = next === '/dashboard' ? '/auth/login' : `/auth/login?next=${encodeURIComponent(next)}`
-
+  const [hasSignupIdea, setHasSignupIdea] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -51,6 +52,16 @@ function SignUpForm() {
   const [suggestion, setSuggestion] = useState<string | null>(null)
   const [emailError, setEmailError] = useState<string | null>(null)
   const [typoAcknowledged, setTypoAcknowledged] = useState(false)
+
+  useEffect(() => {
+    setHasSignupIdea(Boolean(readSignupIdea()))
+  }, [])
+
+  const loginHref = hasSignupIdea
+    ? `/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`
+    : next === '/dashboard'
+      ? '/auth/login'
+      : `/auth/login?next=${encodeURIComponent(next)}`
 
   function checkEmail(value: string): boolean {
     const check = validateEmail(value)
@@ -85,14 +96,16 @@ function SignUpForm() {
     // verification link can restore it from any tab or device. Never blocks sign-up.
     let draftToken: string | null = null
     const pending = peekPendingProject()
+    const idea = pending ? null : readSignupIdea()
+    const draftPayload = pending ?? (idea ? { kind: 'idea', prompt: idea } : null)
     setSignupDraftFailed(false)
-    if (pending) {
-      const draft = await createSignupDraft({ email, draft: pending }).catch(() => null)
+    if (draftPayload) {
+      const draft = await createSignupDraft({ email, draft: draftPayload }).catch(() => null)
       if (draft?.ok) {
         draftToken = draft.token
         storeSignupDraftToken(draft.token)
       } else {
-        // Sign-up still proceeds; the success page tells the user to re-publish.
+        // Sign-up still proceeds; the success page tells the user the draft could not be saved.
         setSignupDraftFailed(true)
       }
     }
@@ -120,6 +133,7 @@ function SignUpForm() {
       setLoading(false)
       return
     }
+    if (draftToken) clearSignupIdea()
     // Fire-and-forget: attribution and measurement must never block sign-up.
     if (data.user?.id) {
       const attribution = readAttribution()
@@ -165,7 +179,7 @@ function SignUpForm() {
             size="lg"
             className="w-full"
             onClick={() => {
-              router.push(next)
+              router.push(hasSignupIdea ? '/auth/restore-idea' : next)
               router.refresh()
             }}
           >
@@ -190,7 +204,10 @@ function SignUpForm() {
       }
     >
       <div className="flex flex-col gap-5">
-        <OAuthButtons mode="signup" next={next === '/dashboard' ? undefined : next} />
+        <OAuthButtons
+          mode="signup"
+          next={hasSignupIdea ? '/auth/restore-idea' : next === '/dashboard' ? undefined : next}
+        />
         <OAuthDivider />
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <Field label={t.auth.fullName} type="text" value={fullName} onChange={setFullName} autoComplete="name" />

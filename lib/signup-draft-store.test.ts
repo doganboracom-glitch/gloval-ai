@@ -5,14 +5,17 @@ import {
   DRAFT_IP_LIMIT,
   MAX_DRAFT_BYTES,
   hashClaimToken,
+  isSignupIdeaDraftPayload,
   isValidClaimToken,
   newClaimToken,
   parseDraftPayload,
 } from '@/lib/signup-draft-core'
+import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
 import {
   DraftStoreError,
   claimDraft,
   completeDraft,
+  completeIdeaDraft,
   createDraft,
   releaseDraft,
   reserveDraftIpSlot,
@@ -106,6 +109,17 @@ describe('claim token helpers', () => {
     expect(a).not.toBe(newClaimToken())
     expect(hashClaimToken(a)).toMatch(/^[0-9a-f]{64}$/)
     expect(isValidClaimToken('short')).toBe(false)
+  })
+})
+
+describe('idea-only draft payload', () => {
+  it('trims the idea and enforces the 2,000-character cap', () => {
+    expect(MAX_SIGNUP_IDEA_CHARS).toBe(2000)
+    const idea = parseDraftPayload({ kind: 'idea', prompt: `  ${'x'.repeat(2000)}  ` })
+    expect(idea).toEqual({ kind: 'idea', prompt: 'x'.repeat(2000) })
+    expect(isSignupIdeaDraftPayload(idea)).toBe(true)
+    expect(parseDraftPayload({ kind: 'idea', prompt: 'x'.repeat(2001) })).toBeNull()
+    expect(parseDraftPayload({ kind: 'idea', prompt: '   ' })).toBeNull()
   })
 })
 
@@ -227,6 +241,26 @@ describe('signup draft claim', () => {
       publishIntent: true,
       editIntent: false,
     })
+  })
+
+  it('restores an idea only for its claimant without creating a project', async () => {
+    const { admin, rows } = fakeAdmin()
+    const idea = parseDraftPayload({ kind: 'idea', prompt: 'Bir kahve sitesi kur' })
+    if (!isSignupIdeaDraftPayload(idea)) throw new Error('expected idea payload')
+    const token = await createDraft(admin, { email: 'a@b.com', payload: idea })
+    const first = await claimDraft(admin, { token, userId: 'u1', email: 'a@b.com' })
+    if (first.status !== 'claimed' || !isSignupIdeaDraftPayload(first.payload)) {
+      throw new Error('expected claimed idea')
+    }
+
+    await completeIdeaDraft(admin, first.id, first.payload)
+    expect(rows[0].email).toBe('')
+    expect(rows[0].payload).toEqual({ kind: 'idea', prompt: 'Bir kahve sitesi kur' })
+    expect(await claimDraft(admin, { token, userId: 'u1', email: 'a@b.com' })).toEqual({
+      status: 'done_idea',
+      prompt: 'Bir kahve sitesi kur',
+    })
+    expect((await claimDraft(admin, { token, userId: 'u2', email: 'a@b.com' })).status).toBe('invalid')
   })
 
   it('never reveals a draft to a different user or e-mail', async () => {

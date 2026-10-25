@@ -18,6 +18,12 @@ import {
   peekPendingProject,
   clearPendingProject,
 } from '@/lib/pending-project'
+import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
+import {
+  clearSignupIdea,
+  storeSignupIdea,
+  takeSignupIdea,
+} from '@/lib/signup-draft-client'
 
 export function Hero() {
   const { t, lang } = useLanguage()
@@ -29,6 +35,7 @@ export function Hero() {
   const [source, setSource] = useState<'ai' | 'fallback' | null>(null)
   const [error, setError] = useState(false)
   const [anonLimitReached, setAnonLimitReached] = useState(false)
+  const [signupHandoffError, setSignupHandoffError] = useState<'too-long' | 'unavailable' | null>(null)
   // Hero image outcome for the current site: 'completed' (real image),
   // 'failed' (provider on but no image — show retry), 'skipped' (no provider),
   // or null. Drives the failure banner + "regenerate image" retry button.
@@ -96,7 +103,12 @@ export function Hero() {
   // "Save & edit" re-stashes the same identity without creating duplicates.
   useEffect(() => {
     const pending = peekPendingProject()
-    if (!pending?.schema?.meta) return
+    if (!pending?.schema?.meta) {
+      const signupIdea = takeSignupIdea()
+      if (signupIdea) setPrompt(signupIdea)
+      return
+    }
+    clearSignupIdea()
     try {
       const restoredPlan = websiteToPlan(pending.schema)
       restoredTokenRef.current = pending.token
@@ -295,10 +307,7 @@ export function Hero() {
     setLoading(true)
     setError(false)
     setAnonLimitReached(false)
-    setPlan(null)
-    setWebsite(null)
-    setSource(null)
-    setImageStatus(null)
+    setSignupHandoffError(null)
     trackGenerateSiteStarted()
     try {
       const res = await fetch('/api/generate', {
@@ -369,6 +378,36 @@ export function Hero() {
     }
   }
 
+  function prepareAnonLimitAuthHandoff(event: React.MouseEvent<HTMLAnchorElement>) {
+    setSignupHandoffError(null)
+    stopAllVoiceInput()
+
+    if (website) {
+      clearSignupIdea()
+      stashPendingProject({
+        name: website.meta.name,
+        sector: website.meta.audience ?? null,
+        language: website.meta.language,
+        prompt: prompt.trim() || null,
+        schema: website,
+        token: restoredTokenRef.current ?? undefined,
+        editIntent: true,
+      })
+      return
+    }
+
+    const idea = prompt.trim()
+    if (idea.length > MAX_SIGNUP_IDEA_CHARS) {
+      event.preventDefault()
+      setSignupHandoffError('too-long')
+      return
+    }
+    if (!storeSignupIdea(idea)) {
+      event.preventDefault()
+      setSignupHandoffError('unavailable')
+    }
+  }
+
   return (
     <section id="top" className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 grid-bg [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_60%,transparent_100%)]" />
@@ -403,7 +442,10 @@ export function Hero() {
             <textarea
               ref={textareaRef}
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => {
+                setPrompt(e.target.value)
+                setSignupHandoffError(null)
+              }}
               onKeyDown={onKeyDown}
               onFocus={keepPromptBoxVisible}
               rows={3}
@@ -509,19 +551,41 @@ export function Hero() {
                     </p>
                     <p className="text-muted-foreground">
                       {lang === 'en'
-                        ? 'Log in or create a free account to keep building. Your current draft stays safe.'
-                        : 'Devam etmek için giriş yap veya ücretsiz hesap oluştur. Mevcut taslağın korunur.'}
+                        ? 'Log in or create a free account to keep building.'
+                        : 'Devam etmek için giriş yap veya ücretsiz hesap oluştur.'}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {website
+                        ? lang === 'en'
+                          ? 'Your current draft will be preserved.'
+                          : 'Mevcut taslağın korunur.'
+                        : lang === 'en'
+                          ? 'Your idea will be saved to your account.'
+                          : 'Yazdığın fikir hesabına kaydedilecek.'}
                     </p>
                   </div>
+                  {signupHandoffError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {signupHandoffError === 'too-long'
+                        ? lang === 'en'
+                          ? 'Shorten your idea to 2,000 characters or less before continuing.'
+                          : 'Devam etmeden önce fikrini 2.000 karaktere indir.'
+                        : lang === 'en'
+                          ? 'We could not preserve your draft in this tab. Copy your idea and try again.'
+                          : 'Taslağı bu sekmede koruyamadık. Fikrini kopyalayıp tekrar dene.'}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <a
                       href="/auth/sign-up"
+                      onClick={prepareAnonLimitAuthHandoff}
                       className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                     >
                       {lang === 'en' ? 'Create free account' : 'Ücretsiz hesap oluştur'}
                     </a>
                     <a
-                      href="/auth/login?next=/dashboard"
+                      href={website ? '/auth/login?next=/dashboard' : '/auth/login?next=%2Fauth%2Frestore-idea'}
+                      onClick={prepareAnonLimitAuthHandoff}
                       className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground"
                     >
                       {lang === 'en' ? 'Log in' : 'Giriş yap'}

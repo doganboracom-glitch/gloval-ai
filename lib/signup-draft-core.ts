@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** UTF-8 size of the serialized payload (the DB check allows 256 KB as a second line of defence). */
@@ -23,7 +24,7 @@ export type DraftFailure =
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/
 
-export type DraftPayload = {
+export type SiteDraftPayload = {
   name: string
   sector: string | null
   language: string
@@ -31,6 +32,19 @@ export type DraftPayload = {
   schema: unknown
   publishIntent: boolean
   editIntent: boolean
+}
+
+export type SignupIdeaDraftPayload = {
+  kind: 'idea'
+  prompt: string
+}
+
+export type DraftPayload = SiteDraftPayload | SignupIdeaDraftPayload
+
+export function isSignupIdeaDraftPayload(
+  payload: DraftPayload | null | undefined,
+): payload is SignupIdeaDraftPayload {
+  return Boolean(payload && 'kind' in payload && payload.kind === 'idea')
 }
 
 /**
@@ -69,17 +83,26 @@ export function draftExpiry(now: number): string {
 export function parseDraftPayload(raw: unknown): DraftPayload | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
-  if (!r.schema || typeof r.schema !== 'object') return null
-  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : null)
-  const payload: DraftPayload = {
-    name: str(r.name, 200) ?? 'Untitled',
-    sector: str(r.sector, 200),
-    language: str(r.language, 10) ?? 'tr',
-    prompt: str(r.prompt, 4000),
-    schema: r.schema,
-    publishIntent: r.publishIntent === true,
-    editIntent: r.editIntent === true,
+  let payload: DraftPayload
+
+  if (r.kind === 'idea') {
+    const prompt = typeof r.prompt === 'string' ? r.prompt.trim() : ''
+    if (!prompt || prompt.length > MAX_SIGNUP_IDEA_CHARS) return null
+    payload = { kind: 'idea', prompt }
+  } else {
+    if (r.kind !== undefined || !r.schema || typeof r.schema !== 'object') return null
+    const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : null)
+    payload = {
+      name: str(r.name, 200) ?? 'Untitled',
+      sector: str(r.sector, 200),
+      language: str(r.language, 10) ?? 'tr',
+      prompt: str(r.prompt, 4000),
+      schema: r.schema,
+      publishIntent: r.publishIntent === true,
+      editIntent: r.editIntent === true,
+    }
   }
+
   try {
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > MAX_DRAFT_BYTES) return null
   } catch {

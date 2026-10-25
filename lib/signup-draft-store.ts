@@ -6,6 +6,10 @@ import {
   DRAFT_IP_WINDOW_SECONDS,
   type DraftFailure,
   type DraftPayload,
+  type SignupIdeaDraftPayload,
+  type SiteDraftPayload,
+  isSignupIdeaDraftPayload,
+  parseDraftPayload,
   draftExpiry,
   hashClaimToken,
   newClaimToken,
@@ -17,6 +21,7 @@ type Admin = Pick<SupabaseClient, 'from' | 'rpc'>
 export type ClaimResult =
   | { status: 'claimed'; id: string; payload: DraftPayload }
   | { status: 'done'; projectId: string; publishIntent: boolean; editIntent: boolean }
+  | { status: 'done_idea'; prompt: string }
   | { status: 'busy' }
   | { status: 'invalid' }
 
@@ -97,9 +102,9 @@ export async function createDraft(
 
 /**
  * One-time, owner-bound claim. The atomic UPDATE only matches an unconsumed,
- * unexpired draft whose e-mail equals the signed-in user's verified e-mail, so a
- * different account (or a replay) can never read the payload. A second call by
- * the SAME user only learns the outcome of their own earlier claim.
+ * unexpired draft whose e-mail equals the signed-in user's e-mail, so a different
+ * account (or a replay) can never read the payload. A second call by the SAME
+ * user only learns the outcome of their own earlier claim.
  */
 export async function claimDraft(
   admin: Admin,
@@ -127,13 +132,16 @@ export async function claimDraft(
     .maybeSingle()
   if (!own) return { status: 'invalid' }
   if (own.project_id) {
+    const payload = own.payload as Partial<SiteDraftPayload> | null
     return {
       status: 'done',
       projectId: own.project_id as string,
-      publishIntent: (own.payload as DraftPayload | null)?.publishIntent === true,
-      editIntent: (own.payload as DraftPayload | null)?.editIntent === true,
+      publishIntent: payload?.publishIntent === true,
+      editIntent: payload?.editIntent === true,
     }
   }
+  const payload = parseDraftPayload(own.payload)
+  if (isSignupIdeaDraftPayload(payload)) return { status: 'done_idea', prompt: payload.prompt }
   return { status: 'busy' }
 }
 
@@ -153,6 +161,19 @@ export async function completeDraft(
     .from('signup_drafts')
     .update({ project_id: projectId, email: '', payload: { publishIntent, editIntent } })
     .eq('id', id)
+}
+
+/** Scrubs the e-mail after restore while retaining the idea through the retry grace window. */
+export async function completeIdeaDraft(
+  admin: Admin,
+  id: string,
+  payload: SignupIdeaDraftPayload,
+): Promise<void> {
+  const { error } = await admin
+    .from('signup_drafts')
+    .update({ email: '', payload: { kind: 'idea', prompt: payload.prompt } })
+    .eq('id', id)
+  if (error) throw storageError(error)
 }
 
 /** Reopens a claimed draft after a failed project insert so the user can retry. */
