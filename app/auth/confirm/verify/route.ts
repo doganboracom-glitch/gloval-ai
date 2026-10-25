@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
-import { sanitizeNextPath } from '@/lib/safe-redirect'
+import { sanitizeNextPathWithDecoding } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   const rawTokenHash = formString(formData, 'token_hash')?.trim() ?? ''
   const tokenHash = rawTokenHash && rawTokenHash.length <= 512 ? rawTokenHash : null
   const type = parseConfirmationType(formData.get('type'))
-  const next = sanitizeNextPath(formString(formData, 'next'))
+  const next = sanitizeNextPathWithDecoding(formString(formData, 'next'))
   const rawDraft = formString(formData, 'draft')
   const draft =
     (isValidClaimToken(rawDraft) ? rawDraft : null) ?? getSignupDraftTokenFromNextPath(next)

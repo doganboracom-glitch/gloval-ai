@@ -10,3 +10,26 @@ export function sanitizeNextPath(raw: string | null | undefined, fallback = '/da
   if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return fallback
   return raw
 }
+
+/** Auth confirmation links may be nested-encoded by their email template. */
+export function sanitizeNextPathWithDecoding(
+  raw: string | null | undefined,
+  fallback = '/dashboard',
+): string {
+  if (!raw) return fallback
+
+  let candidate = raw
+  for (let decodeCount = 0; decodeCount < 2 && candidate.includes('%'); decodeCount += 1) {
+    try {
+      candidate = decodeURIComponent(candidate)
+    } catch {
+      return fallback
+    }
+  }
+
+  if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) {
+    return fallback
+  }
+
+  return candidate
+}

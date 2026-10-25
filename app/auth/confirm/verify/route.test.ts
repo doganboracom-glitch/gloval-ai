@@ -112,4 +112,30 @@ describe('POST /auth/confirm/verify', () => {
     expect(location(failed).pathname).toBe('/auth/error')
     expect(location(failed).searchParams.get('draft')).toBe(DRAFT_TOKEN)
   })
+
+  it('decodes a double-encoded internal next path before redirecting', async () => {
+    const response = await POST(
+      postForm({
+        token_hash: 'opaque-token-hash',
+        type: 'signup',
+        draft: '',
+        next: '%252Fdashboard',
+      }),
+    )
+
+    expect(location(response).pathname).toBe('/auth/verified')
+    expect(location(response).searchParams.get('next')).toBe('/dashboard')
+  })
+
+  it.each(['//attacker.example', 'https://attacker.example', '%252F%252Fattacker.example'])(
+    'rejects open redirect target %s',
+    async (next) => {
+      const response = await POST(
+        postForm({ token_hash: 'opaque-token-hash', type: 'signup', draft: '', next }),
+      )
+
+      expect(location(response).pathname).toBe('/auth/verified')
+      expect(location(response).searchParams.get('next')).toBe('/dashboard')
+    },
+  )
 })
