@@ -194,6 +194,7 @@ const dict = {
       phaseAnalyzing: 'Analiz ediliyor...',
       success: 'Site güncellendi.',
       failure: 'Değişiklik uygulanamadı. Mevcut tasarım korunuyor.',
+      imageFailedNoCharge: 'Görsel şu an üretilemedi, kredi düşülmedi, tekrar deneyin.',
       history: {
         tab: 'Geçmiş',
         description: 'Kaydettiğin sürümler burada listelenir. Otomatik kayıt taslak olarak saklanır.',
@@ -760,6 +761,10 @@ const dict = {
       authRequiredBody:
         'Sitenizi yayınlamak için önce giriş yapın veya ücretsiz hesap oluşturun. Yaptığınız değişiklikler kaybolmaz, giriş yaptıktan sonra tam olarak buradan devam edersiniz.',
       authRequiredCancel: 'Vazgeç',
+      editGateTitle: 'Siteyi düzenlemek için ücretsiz hesap oluştur',
+      editGateBody:
+        'Ücretsiz pakette 50 AI kredisi hediye. Hesabını oluşturduktan sonra sitenle tam olarak buradan, editörde devam edersin.',
+      editGateSignup: 'Hesap oluştur',
       planRequired: 'Yayınlamadan önce bir paket seçin.',
       planRequiredBody:
         'Sitenizi yayınlamak için bir paket seçmeniz gerekiyor. Düzenlemeleriniz korunuyor; paketi seçtikten sonra yayınlamaya devam edebilirsiniz.',
@@ -929,6 +934,8 @@ const dict = {
       currentPlan: 'Mevcut plan',
       noPlan: 'Aktif aboneliğin yok',
       noPlanCta: 'Aşağıdan sana uygun bir plan seçerek başla.',
+      freeAutoNote:
+        'FREE paket hesabınla birlikte otomatik aktif oldu. Yenileme ve iptal yok; sitenizi yayınlarken paket seçeceksiniz.',
       pendingPlanCta: 'Ödemeniz tamamlandığında paketiniz aktif olacaktır.',
       status: 'Durum',
       renews: 'Yenilenme',
@@ -1810,6 +1817,7 @@ const dict = {
     phaseAnalyzing: 'Analyzing...',
     success: 'Website updated.',
     failure: 'Could not apply the change. Your current design is preserved.',
+    imageFailedNoCharge: 'The image could not be generated right now. No credits were used, please try again.',
     history: {
       tab: 'History',
       description: 'Your saved versions are listed here. Autosaves are kept as a draft.',
@@ -2371,6 +2379,10 @@ const dict = {
     authRequiredBody:
       'Sign in or create a free account to publish your site. Your changes are safe — you\'ll land right back here once you\'re signed in.',
     authRequiredCancel: 'Cancel',
+    editGateTitle: 'Create a free account to edit your site',
+    editGateBody:
+      'The free plan includes 50 AI credits. Once your account is ready you will pick up right here, in the editor.',
+    editGateSignup: 'Create account',
     planRequired: 'Choose a plan before publishing.',
     planRequiredBody:
       'You need to pick a plan to publish your site. Your edits are safe; once a plan is active you can continue publishing.',
@@ -2529,6 +2541,8 @@ const dict = {
       currentPlan: 'Current plan',
       noPlan: 'No active subscription',
       noPlanCta: 'Pick the plan that fits you below to get started.',
+      freeAutoNote:
+        'The FREE plan was activated automatically with your account. No renewal or cancellation; you will pick a plan when you publish your site.',
       pendingPlanCta: 'Your package will be activated once your payment is completed.',
       status: 'Status',
       renews: 'Renews',

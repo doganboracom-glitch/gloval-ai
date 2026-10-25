@@ -166,3 +166,24 @@ export function buildCreditSummary(input: {
     nextRenewal: next ? next.toISOString() : null,
   }
 }
+
+/* ------------------------------ Automatic FREE ---------------------------- */
+
+/**
+ * A signed-up account without any subscription row is on the automatic FREE
+ * plan (the 50 signup credits are already granted). Returns that plan so the
+ * billing screen shows ONE consistent state instead of "no subscription" next
+ * to "current package FREE". A plan is only chosen at publish time.
+ */
+export function resolveImplicitFreePlan<P extends { code: string; price_cents: number }>(
+  subscription: unknown,
+  plans: ReadonlyArray<P>,
+): P | null {
+  if (subscription != null) return null
+  return plans.find((p) => p.price_cents === 0 && toPlanCode(p.code) === 'free') ?? null
+}
+
+/** FREE never renews and has nothing to cancel. */
+export function isFreePlanShown(plan: { price_cents: number } | null | undefined): boolean {
+  return plan != null && plan.price_cents === 0
+}

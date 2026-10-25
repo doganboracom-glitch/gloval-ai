@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
@@ -47,6 +48,9 @@ async function readSourceDataUrl(url: string): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return fail('invalid_request')
 

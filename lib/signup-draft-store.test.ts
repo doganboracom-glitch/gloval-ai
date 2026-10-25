@@ -220,11 +220,12 @@ describe('signup draft claim', () => {
     expect((await claimDraft(admin, { token, userId: 'u1', email: 'a@b.com' })).status).toBe('busy')
     await completeDraft(admin, first.id, 'p1', true)
     expect(rows[0].email).toBe('')
-    expect(rows[0].payload).toEqual({ publishIntent: true })
+    expect(rows[0].payload).toEqual({ publishIntent: true, editIntent: false })
     expect(await claimDraft(admin, { token, userId: 'u1', email: 'a@b.com' })).toEqual({
       status: 'done',
       projectId: 'p1',
       publishIntent: true,
+      editIntent: false,
     })
   })
 

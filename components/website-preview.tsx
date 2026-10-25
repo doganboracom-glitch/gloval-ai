@@ -14,6 +14,7 @@ import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
 import { AUTO_ENABLE_PATCH, shouldAutoEnableBlog } from '@/lib/starter-blog-card'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
+import { decideEditEntry } from '@/lib/edit-entry'
 import { createClient } from '@/lib/supabase/client'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
@@ -175,6 +176,8 @@ export function WebsitePreview({
   onLoginRequired,
   onSignupRequired,
   onPreserveDraft,
+  onEditLoginRequired,
+  onEditSignupRequired,
 }: {
   site: unknown
   onClose: () => void
@@ -268,6 +271,13 @@ export function WebsitePreview({
    * the draft for the login → dashboard handoff. Does not publish.
    */
   onPreserveDraft?: (schema: WebsiteSchema) => void
+  /**
+   * Anonymous preview only: the visitor chose Login / Create account in the
+   * edit gate. The parent stashes the draft with edit intent (no publish
+   * intent) and navigates to auth.
+   */
+  onEditLoginRequired?: (schema: WebsiteSchema) => void
+  onEditSignupRequired?: (schema: WebsiteSchema) => void
 }) {
   const { t } = useLanguage()
   const router = useRouter()
@@ -280,6 +290,9 @@ export function WebsitePreview({
   // project to publish yet (anonymous landing preview), or an authenticated
   // session was lost mid-edit (publish call came back UNAUTHENTICATED).
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
+  // Anonymous visitors cannot open the editor panel: the edit button opens
+  // this gate instead (create a free account / sign in / cancel).
+  const [showEditGate, setShowEditGate] = useState(false)
   const autoPublishedRef = useRef(false)
   // Digests of the sample items the server refused to publish without approval.
   // Non-null opens the approval dialog.
@@ -323,6 +336,18 @@ export function WebsitePreview({
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   // AI kredisi tükendiğinde açılan yükseltme / kredi satın alma ekranı.
   const [outOfCredits, setOutOfCredits] = useState(false)
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+  const showOutOfCredits = useCallback((res: Response) => {
+    setCreditBalance(null)
+    setOutOfCredits(true)
+    void res
+      .clone()
+      .json()
+      .then((body: { balance?: unknown } | null) => {
+        if (typeof body?.balance === 'number') setCreditBalance(body.balance)
+      })
+      .catch(() => undefined)
+  }, [])
   // Erişilebilir onay penceresi: blog işlemleri 3 AI kredisi harcamadan önce sorar.
   const [blogConfirm, setBlogConfirm] = useState<{ text: string; resolve: (ok: boolean) => void } | null>(null)
   const askBlogConfirm = (text: string) =>
@@ -679,6 +704,43 @@ export function WebsitePreview({
     setShowAuthPrompt(true)
   }
 
+  // Edit button entry point. Persisted projects (real editor) toggle the panel
+  // directly. In the anonymous landing preview the panel never opens: we check
+  // the session and either allow it (already signed in) or show the gate.
+  async function handleEditClick() {
+    if (decideEditEntry({ persisted: Boolean(persist), panelOpen: showEdit, hasUser: false }) === 'toggle') {
+      setShowEdit((v) => !v)
+      return
+    }
+    let hasUser = false
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.auth.getUser()
+      hasUser = Boolean(data.user)
+    } catch (err) {
+      debug('auth check before edit failed:', err instanceof Error ? err.message : err)
+    }
+    if (decideEditEntry({ persisted: false, panelOpen: false, hasUser }) === 'open') {
+      setShowEdit(true)
+      return
+    }
+    setShowEditGate(true)
+  }
+
+  function goToEditAuth(kind: 'login' | 'signup') {
+    setShowEditGate(false)
+    const handler = kind === 'login' ? onEditLoginRequired : onEditSignupRequired
+    if (handler && currentSite) {
+      handler(currentSite)
+      return
+    }
+    if (kind === 'login') {
+      router.push(`/auth/login?next=${encodeURIComponent(pathname || '/dashboard')}`)
+    } else {
+      router.push('/auth/sign-up')
+    }
+  }
+
   function goToLogin() {
     setShowAuthPrompt(false)
     if (onLoginRequired) {
@@ -750,7 +812,7 @@ export function WebsitePreview({
         // Same explanatory upgrade screen as the text/design AI editor, not a
         // generic error toast — see applyEdit's 402 handling above.
         if (res.status === 402) {
-          setOutOfCredits(true)
+          showOutOfCredits(res)
           return false
         }
         // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -782,11 +844,11 @@ export function WebsitePreview({
           flashToast('ok', t.editor.success)
           return true
         }
-        flashToast('err', t.editor.failure)
+        flashToast('err', t.editor.imageFailedNoCharge)
         return false
       } catch (err) {
         debug('hero image error:', err instanceof Error ? err.message : err)
-        flashToast('err', t.editor.failure)
+        flashToast('err', t.editor.imageFailedNoCharge)
         return false
       } finally {
         setHeroImageWorking(false)
@@ -816,7 +878,7 @@ export function WebsitePreview({
           // Same explanatory upgrade screen as the text/design AI editor, not a
           // generic error toast — see applyEdit's 402 handling above.
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return
           }
           // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -842,11 +904,11 @@ export function WebsitePreview({
           commitSchema(parsed.data)
           flashToast(
             status === 'generated' || status === 'linked' ? 'ok' : 'err',
-            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.failure,
+            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.imageFailedNoCharge,
           )
         } catch (err) {
           debug('section image error:', err instanceof Error ? err.message : err)
-          flashToast('err', t.editor.failure)
+          flashToast('err', t.editor.imageFailedNoCharge)
         } finally {
           setWorkingItem(null)
         }
@@ -883,7 +945,7 @@ export function WebsitePreview({
           // Same explanatory upgrade screen as the text/design AI editor, not a
           // generic error toast — see applyEdit's 402 handling above.
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return
           }
           // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -911,11 +973,11 @@ export function WebsitePreview({
           commitSchema(parsed.data)
           flashToast(
             status === 'generated' || status === 'linked' ? 'ok' : 'err',
-            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.failure,
+            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.imageFailedNoCharge,
           )
         } catch (err) {
           debug('slide image error:', err instanceof Error ? err.message : err)
-          flashToast('err', t.editor.failure)
+          flashToast('err', t.editor.imageFailedNoCharge)
         } finally {
           setWorkingSlide(null)
         }
@@ -952,7 +1014,7 @@ export function WebsitePreview({
             }),
           })
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return false
           }
           if (res.status === 429) {
@@ -997,7 +1059,7 @@ export function WebsitePreview({
           }),
         })
         if (res.status === 402) {
-          setOutOfCredits(true)
+          showOutOfCredits(res)
           return false
         }
         if (res.status === 429) {
@@ -1271,7 +1333,7 @@ export function WebsitePreview({
       // devreye girdiğinde 402 döndürmesi yeterli — burada başka değişiklik
       // gerekmez.
       if (res.status === 402) {
-        setOutOfCredits(true)
+        showOutOfCredits(res)
         setEditing(false)
         setAiPhase(null)
         return false
@@ -1504,7 +1566,7 @@ export function WebsitePreview({
             </ToggleButton>
           </div>
           <button
-            onClick={() => setShowEdit((v) => !v)}
+            onClick={() => void handleEditClick()}
             aria-pressed={showEdit}
             className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
               showEdit
@@ -1700,6 +1762,52 @@ export function WebsitePreview({
         </div>
       )}
 
+      {showEditGate && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-gate-title"
+          aria-describedby="edit-gate-body"
+          data-testid="edit-gate"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <h2 id="edit-gate-title" className="text-base font-semibold text-foreground">
+              {t.publish.editGateTitle}
+            </h2>
+            <p id="edit-gate-body" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {t.publish.editGateBody}
+            </p>
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => goToEditAuth('signup')}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <UserPlus className="h-4 w-4" />
+                {t.publish.editGateSignup}
+              </button>
+              <button
+                type="button"
+                onClick={() => goToEditAuth('login')}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                <LogIn className="h-4 w-4" />
+                {t.auth.login}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditGate(false)}
+                className="mt-1 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {t.publish.authRequiredCancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Body: stage + docked editor */}
       <div className="relative flex min-h-0 flex-1">
         <div className="flex flex-1 justify-center overflow-hidden bg-muted/30 p-4 sm:p-6">
@@ -1809,7 +1917,11 @@ export function WebsitePreview({
       )}
 
         {/* AI kredisi tükendiğinde hata yerine gösterilen açıklayıcı ekran. */}
-        <OutOfCreditsModal open={outOfCredits} onClose={() => setOutOfCredits(false)} />
+        <OutOfCreditsModal
+          open={outOfCredits}
+          balance={creditBalance}
+          onClose={() => setOutOfCredits(false)}
+        />
         <ConfirmDialog
           open={blogConfirm !== null}
           title={blogConfirmCopy(lang).creditsTitle}

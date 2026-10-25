@@ -7,6 +7,7 @@ import { Loader2, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CreditRulesLink } from '@/components/pricing/credit-rules-link'
 import { formatMoney } from '@/lib/billing-utils'
+import { outOfCreditsMessage } from '@/lib/image-failure'
 import {
   CREDIT_TOPUPS,
   OUT_OF_CREDITS,
@@ -23,9 +24,11 @@ import {
 export function OutOfCreditsPanel({
   onPurchase,
   className,
+  balance,
 }: {
   onPurchase?: (topUp: CreditTopUp) => Promise<void> | void
   className?: string
+  balance?: number | null
 }) {
   const router = useRouter()
   const [pendingId, setPendingId] = useState<CreditTopUp['id'] | null>(null)
@@ -56,7 +59,15 @@ export function OutOfCreditsPanel({
         {OUT_OF_CREDITS.title}
       </h2>
       <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">
-        {OUT_OF_CREDITS.description}
+        {typeof balance === 'number' ? outOfCreditsMessage(balance) : OUT_OF_CREDITS.description}
+      </p>
+      <p className="mt-2 text-sm">
+        <Link
+          href="/billing"
+          className="font-semibold text-brand underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {OUT_OF_CREDITS.upgradeCta}
+        </Link>
       </p>
 
       <div className="mt-5 grid gap-2 sm:grid-cols-3">
@@ -106,10 +117,12 @@ export function OutOfCreditsModal({
   open,
   onClose,
   onPurchase,
+  balance,
 }: {
   open: boolean
   onClose: () => void
   onPurchase?: (topUp: CreditTopUp) => Promise<void> | void
+  balance?: number | null
 }) {
   if (!open) return null
 
@@ -133,7 +146,7 @@ export function OutOfCreditsModal({
         >
           <X className="h-4 w-4" />
         </button>
-        <OutOfCreditsPanel onPurchase={onPurchase} />
+        <OutOfCreditsPanel onPurchase={onPurchase} balance={balance} />
       </div>
     </div>
   )

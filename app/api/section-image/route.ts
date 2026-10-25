@@ -1,3 +1,5 @@
+import { rejectAnonymous } from '@/lib/api-auth'
+import { imageGenerationFailedResponse } from '@/lib/image-failure'
 import { websiteSchema } from '@/lib/website-schema'
 import { applyItemImageRequest, attachSectionImages } from '@/lib/section-images'
 import { generateAboutImageAt } from '@/lib/about-image'
@@ -20,6 +22,9 @@ export const maxDuration = 60
  * never touched — only image fields — so this can never undo a manual edit.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const { schema, index, itemIndex, request, about } = (await req.json().catch(() => ({}))) as {
     schema?: unknown
     /** `true` with `index`: generate one image for the about section at `index`. */
@@ -116,6 +121,6 @@ export async function POST(req: Request) {
   } catch (err) {
     console.log('[v0] section-image error:', err instanceof Error ? err.message : err)
     if (err instanceof ImageStorageError) return imageStorageErrorResponse()
-    return Response.json({ error: 'Image generation failed' }, { status: 500 })
+    return imageGenerationFailedResponse('section-image', err)
   }
 }

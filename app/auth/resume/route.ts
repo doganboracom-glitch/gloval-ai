@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isValidClaimToken } from '@/lib/signup-draft-core'
+import { isValidClaimToken, resumeTargetPath } from '@/lib/signup-draft-core'
 import { resumeSignupDraft } from '@/lib/signup-draft-actions'
 
 /**
@@ -14,9 +14,7 @@ export async function GET(request: NextRequest) {
 
   const result = await resumeSignupDraft(token)
   if (result.status === 'ok') {
-    const target = result.publishIntent
-      ? `/editor/${result.projectId}?autopublish=1`
-      : `/editor/${result.projectId}`
+    const target = resumeTargetPath(result.projectId, result)
     return NextResponse.redirect(`${origin}${target}`)
   }
   if (result.status === 'unauthenticated') {

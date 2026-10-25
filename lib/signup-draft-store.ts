@@ -16,7 +16,7 @@ type Admin = Pick<SupabaseClient, 'from' | 'rpc'>
 
 export type ClaimResult =
   | { status: 'claimed'; id: string; payload: DraftPayload }
-  | { status: 'done'; projectId: string; publishIntent: boolean }
+  | { status: 'done'; projectId: string; publishIntent: boolean; editIntent: boolean }
   | { status: 'busy' }
   | { status: 'invalid' }
 
@@ -131,6 +131,7 @@ export async function claimDraft(
       status: 'done',
       projectId: own.project_id as string,
       publishIntent: (own.payload as DraftPayload | null)?.publishIntent === true,
+      editIntent: (own.payload as DraftPayload | null)?.editIntent === true,
     }
   }
   return { status: 'busy' }
@@ -146,10 +147,11 @@ export async function completeDraft(
   id: string,
   projectId: string,
   publishIntent: boolean,
+  editIntent = false,
 ): Promise<void> {
   await admin
     .from('signup_drafts')
-    .update({ project_id: projectId, email: '', payload: { publishIntent } })
+    .update({ project_id: projectId, email: '', payload: { publishIntent, editIntent } })
     .eq('id', id)
 }
 

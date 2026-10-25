@@ -30,6 +30,19 @@ export type DraftPayload = {
   prompt: string | null
   schema: unknown
   publishIntent: boolean
+  editIntent: boolean
+}
+
+/**
+ * Where a resumed draft lands. A publish intent keeps the existing autopublish
+ * flow untouched; an edit intent (or none) opens the plain editor, which never
+ * shows a publish prompt.
+ */
+export function resumeTargetPath(
+  projectId: string,
+  intent: { publishIntent?: boolean; editIntent?: boolean },
+): string {
+  return intent.publishIntent ? `/editor/${projectId}?autopublish=1` : `/editor/${projectId}`
 }
 
 export function newClaimToken(): string {
@@ -65,6 +78,7 @@ export function parseDraftPayload(raw: unknown): DraftPayload | null {
     prompt: str(r.prompt, 4000),
     schema: r.schema,
     publishIntent: r.publishIntent === true,
+    editIntent: r.editIntent === true,
   }
   try {
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > MAX_DRAFT_BYTES) return null

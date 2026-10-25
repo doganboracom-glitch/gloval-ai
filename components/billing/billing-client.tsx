@@ -19,7 +19,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { SiteCapacityCard, CreditSummaryCard } from '@/components/billing/capacity-credits-cards'
 import type { AddOnOverview } from '@/lib/add-ons'
-import type { CreditSummary, SiteCapacity } from '@/lib/billing-summary'
+import { isFreePlanShown, resolveImplicitFreePlan, type CreditSummary, type SiteCapacity } from '@/lib/billing-summary'
 import { Button } from '@/components/ui/button'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { BillingProfileCard } from '@/components/billing/billing-profile-card'
@@ -346,8 +346,10 @@ export function BillingClient({
   const shownPlan =
     currentPlan ?? (subscription ? (plans.find((p) => p.id === subscription.plan_id) ?? null) : null)
 
+  const implicitFreePlan = resolveImplicitFreePlan(subscription, plans)
+
   // FREE never renews or cancels: no renewal date, no cancel link.
-  const isFreeShown = shownPlan != null && shownPlan.price_cents === 0
+  const isFreeShown = isFreePlanShown(shownPlan)
 
   // Payment is owed for the next period: failed renewal (past_due), suspended
   // after the grace window, or a period that ended without a settled renewal.
@@ -1045,6 +1047,20 @@ export function BillingClient({
                 >
                   Tekrar ödeme yap
                 </Button>
+              </>
+            ) : implicitFreePlan ? (
+              // No subscription row means the account is on the automatic
+              // FREE plan: shown as one consistent state, never as "no
+              // subscription" next to "current package FREE". FREE has no
+              // renewal date and nothing to cancel.
+              <>
+                <p className="mt-2 font-display text-2xl font-bold">{implicitFreePlan.name}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 font-medium text-primary">
+                    {statusLabel('active')}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-muted-foreground">{b.freeAutoNote}</p>
               </>
             ) : (
               <>

@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { websiteSchema, isStorefront } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
@@ -18,6 +19,9 @@ export const maxDuration = 60
  * their catalog lives in the database.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const { schema, item } = (await req.json().catch(() => ({}))) as { schema?: unknown; item?: unknown }
   const parsed = websiteSchema.safeParse(schema)
   if (!parsed.success || typeof item !== 'number' || !Number.isInteger(item) || item < 0) {

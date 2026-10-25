@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { NextResponse } from 'next/server'
 import { resolveAiModel } from '@/lib/ai-models'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -43,6 +44,9 @@ function parseSpecs(value: unknown): StoreAiTextInput['specs'] {
 }
 
 export async function POST(request: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return fail('invalid_request')
 

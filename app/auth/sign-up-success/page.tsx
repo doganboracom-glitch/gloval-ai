@@ -11,6 +11,7 @@ import {
   readSignupDraftToken,
 } from '@/lib/signup-draft-client'
 import { clearPendingProject } from '@/lib/pending-project'
+import { resumeTargetPath } from '@/lib/signup-draft-core'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { LinkButton } from '@/components/link-button'
@@ -47,9 +48,7 @@ export default function SignUpSuccessPage() {
           clearSignupDraftToken()
           clearPendingProject()
           router.push(
-            result.publishIntent
-              ? `/editor/${result.projectId}?autopublish=1`
-              : `/editor/${result.projectId}`,
+            resumeTargetPath(result.projectId, result),
           )
           return
         }

@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { BLOG_AI_LIMITS } from '@/lib/blog-ai'
@@ -24,6 +25,9 @@ const bodySchema = z.object({
  * DRAFT: the owner reviews it and publishes through the normal gate.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'invalid_input' }, { status: 400 })
   const { projectId, requestId, topic, answers } = parsed.data

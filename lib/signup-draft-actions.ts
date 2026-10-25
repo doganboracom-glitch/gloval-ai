@@ -53,7 +53,7 @@ export async function createSignupDraft(input: {
 }
 
 export type ResumeResult =
-  | { status: 'ok'; projectId: string; publishIntent: boolean }
+  | { status: 'ok'; projectId: string; publishIntent: boolean; editIntent: boolean }
   | { status: 'busy' }
   | { status: 'unauthenticated' }
   | { status: 'invalid' }
@@ -72,7 +72,14 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
 
   const admin = createAdminClient()
   const claim = await claimDraft(admin, { token, userId: user.id, email: user.email })
-  if (claim.status === 'done') return { status: 'ok', projectId: claim.projectId, publishIntent: claim.publishIntent }
+  if (claim.status === 'done') {
+    return {
+      status: 'ok',
+      projectId: claim.projectId,
+      publishIntent: claim.publishIntent,
+      editIntent: claim.editIntent,
+    }
+  }
   if (claim.status !== 'claimed') return { status: claim.status }
 
   try {
@@ -83,8 +90,13 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
       prompt: claim.payload.prompt,
       schema: claim.payload.schema as Parameters<typeof createProject>[0]['schema'],
     })
-    await completeDraft(admin, claim.id, projectId, claim.payload.publishIntent)
-    return { status: 'ok', projectId, publishIntent: claim.payload.publishIntent }
+    await completeDraft(admin, claim.id, projectId, claim.payload.publishIntent, claim.payload.editIntent)
+    return {
+      status: 'ok',
+      projectId,
+      publishIntent: claim.payload.publishIntent,
+      editIntent: claim.payload.editIntent,
+    }
   } catch {
     await releaseDraft(admin, claim.id)
     return { status: 'error' }

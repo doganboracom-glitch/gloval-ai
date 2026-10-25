@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
@@ -25,6 +26,9 @@ function fail(error: keyof typeof STORE_AI_ERROR_MESSAGES, status: number, messa
  * then is deleted from the candidate area. No credit moves here.
  */
 export async function POST(request: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return fail('invalid_request', 400)
 

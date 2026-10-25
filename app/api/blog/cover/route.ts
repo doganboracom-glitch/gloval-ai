@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
@@ -76,6 +77,9 @@ async function completeConcepts({ system, prompt }: { system: string; prompt: st
  * server actions, never from here.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const contentType = req.headers.get('content-type') ?? ''
 
   if (contentType.startsWith('multipart/form-data')) {
