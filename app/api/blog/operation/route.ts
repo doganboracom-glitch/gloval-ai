@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { loadBlogRouteContext } from '@/lib/blog-route'
@@ -25,6 +26,9 @@ const bodySchema = z.object({
  * profile, never from the request.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return Response.json({ error: 'invalid_input' }, { status: 400 })
   const { projectId, requestId, operation, confirmed } = parsed.data

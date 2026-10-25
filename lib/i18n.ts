@@ -194,6 +194,7 @@ const dict = {
       phaseAnalyzing: 'Analiz ediliyor...',
       success: 'Site güncellendi.',
       failure: 'Değişiklik uygulanamadı. Mevcut tasarım korunuyor.',
+      imageFailedNoCharge: 'Görsel şu an üretilemedi, kredi düşülmedi, tekrar deneyin.',
       history: {
         tab: 'Geçmiş',
         description: 'Kaydettiğin sürümler burada listelenir. Otomatik kayıt taslak olarak saklanır.',
@@ -933,6 +934,8 @@ const dict = {
       currentPlan: 'Mevcut plan',
       noPlan: 'Aktif aboneliğin yok',
       noPlanCta: 'Aşağıdan sana uygun bir plan seçerek başla.',
+      freeAutoNote:
+        'FREE paket hesabınla birlikte otomatik aktif oldu. Yenileme ve iptal yok; sitenizi yayınlarken paket seçeceksiniz.',
       pendingPlanCta: 'Ödemeniz tamamlandığında paketiniz aktif olacaktır.',
       status: 'Durum',
       renews: 'Yenilenme',
@@ -1814,6 +1817,7 @@ const dict = {
     phaseAnalyzing: 'Analyzing...',
     success: 'Website updated.',
     failure: 'Could not apply the change. Your current design is preserved.',
+    imageFailedNoCharge: 'The image could not be generated right now. No credits were used, please try again.',
     history: {
       tab: 'History',
       description: 'Your saved versions are listed here. Autosaves are kept as a draft.',
@@ -2537,6 +2541,8 @@ const dict = {
       currentPlan: 'Current plan',
       noPlan: 'No active subscription',
       noPlanCta: 'Pick the plan that fits you below to get started.',
+      freeAutoNote:
+        'The FREE plan was activated automatically with your account. No renewal or cancellation; you will pick a plan when you publish your site.',
       pendingPlanCta: 'Your package will be activated once your payment is completed.',
       status: 'Status',
       renews: 'Renews',

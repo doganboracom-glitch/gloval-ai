@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { requireOwnedEcommerceProject } from '@/lib/ecommerce-access'
@@ -17,6 +18,9 @@ function fail(error: string, status: number, headers?: Record<string, string>) {
 }
 
 export async function POST(request: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   try {
     const declared = Number(request.headers.get('content-length') ?? 0)
     if (declared > PRODUCT_IMAGE_LIMITS.maxBytes + BODY_SLACK_BYTES) {

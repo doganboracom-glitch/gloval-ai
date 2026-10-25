@@ -1,3 +1,5 @@
+import { rejectAnonymous } from '@/lib/api-auth'
+import { imageGenerationFailedResponse } from '@/lib/image-failure'
 import { websiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance, hasLedgerReason, refundCredits } from '@/lib/ai-credits'
@@ -55,6 +57,9 @@ function distinctAccent(primary: string, accent: string, foreground: string): st
  * `lib/logo-studio/paid-round.ts`). A `requestId` makes retries idempotent.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const body = (await req.json().catch(() => ({}))) as {
     schema?: unknown
     companyName?: string
@@ -201,6 +206,6 @@ export async function POST(req: Request) {
     if (userId && charged > 0) {
       await refundRound(creditPort, userId, charged, chargeReason).catch(() => undefined)
     }
-    return Response.json({ error: 'Logo generation failed' }, { status: 500 })
+    return imageGenerationFailedResponse('logo-image', err)
   }
 }

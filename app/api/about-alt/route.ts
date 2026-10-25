@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { z } from 'zod'
 import { websiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/server'
@@ -21,6 +22,9 @@ const altSchema = z.object({ alt: z.string().min(8).max(140) })
  * returned. On model failure the deterministic suggestion is returned for free.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const { schema, index, imageIndex } = (await req.json().catch(() => ({}))) as {
     schema?: unknown
     index?: number

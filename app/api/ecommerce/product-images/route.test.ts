@@ -5,6 +5,7 @@ import { PRODUCT_IMAGE_LIMITS, PRODUCT_IMAGE_UPLOAD_RATE } from '@/lib/product-i
 const requireOwned = vi.fn()
 const upload = vi.fn(async () => ({}))
 
+vi.mock('@/lib/api-auth', () => ({ rejectAnonymous: async () => null }))
 vi.mock('@/lib/ecommerce-access', () => ({
   requireOwnedEcommerceProject: (...args: unknown[]) => requireOwned(...args),
 }))

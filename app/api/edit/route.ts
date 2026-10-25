@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { z } from 'zod'
 import { generateStructured } from '@/lib/ai-structured'
 import { siteRepairOptions } from '@/lib/site-repair'
@@ -126,6 +127,9 @@ export const maxDuration = 60
  *    actually spent once the AI successfully produces a result.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const body = (await req.json().catch(() => ({}))) as {
     schema?: unknown
     instruction?: string

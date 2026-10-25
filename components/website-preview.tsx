@@ -14,6 +14,7 @@ import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
 import { AUTO_ENABLE_PATCH, shouldAutoEnableBlog } from '@/lib/starter-blog-card'
 import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
+import { decideEditEntry } from '@/lib/edit-entry'
 import { createClient } from '@/lib/supabase/client'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { useLanguage } from '@/components/language-provider'
@@ -335,6 +336,18 @@ export function WebsitePreview({
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   // AI kredisi tükendiğinde açılan yükseltme / kredi satın alma ekranı.
   const [outOfCredits, setOutOfCredits] = useState(false)
+  const [creditBalance, setCreditBalance] = useState<number | null>(null)
+  const showOutOfCredits = useCallback((res: Response) => {
+    setCreditBalance(null)
+    setOutOfCredits(true)
+    void res
+      .clone()
+      .json()
+      .then((body: { balance?: unknown } | null) => {
+        if (typeof body?.balance === 'number') setCreditBalance(body.balance)
+      })
+      .catch(() => undefined)
+  }, [])
   // Erişilebilir onay penceresi: blog işlemleri 3 AI kredisi harcamadan önce sorar.
   const [blogConfirm, setBlogConfirm] = useState<{ text: string; resolve: (ok: boolean) => void } | null>(null)
   const askBlogConfirm = (text: string) =>
@@ -695,19 +708,21 @@ export function WebsitePreview({
   // directly. In the anonymous landing preview the panel never opens: we check
   // the session and either allow it (already signed in) or show the gate.
   async function handleEditClick() {
-    if (showEdit || persist) {
+    if (decideEditEntry({ persisted: Boolean(persist), panelOpen: showEdit, hasUser: false }) === 'toggle') {
       setShowEdit((v) => !v)
       return
     }
+    let hasUser = false
     try {
       const supabase = createClient()
       const { data } = await supabase.auth.getUser()
-      if (data.user) {
-        setShowEdit(true)
-        return
-      }
+      hasUser = Boolean(data.user)
     } catch (err) {
       debug('auth check before edit failed:', err instanceof Error ? err.message : err)
+    }
+    if (decideEditEntry({ persisted: false, panelOpen: false, hasUser }) === 'open') {
+      setShowEdit(true)
+      return
     }
     setShowEditGate(true)
   }
@@ -797,7 +812,7 @@ export function WebsitePreview({
         // Same explanatory upgrade screen as the text/design AI editor, not a
         // generic error toast — see applyEdit's 402 handling above.
         if (res.status === 402) {
-          setOutOfCredits(true)
+          showOutOfCredits(res)
           return false
         }
         // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -829,11 +844,11 @@ export function WebsitePreview({
           flashToast('ok', t.editor.success)
           return true
         }
-        flashToast('err', t.editor.failure)
+        flashToast('err', t.editor.imageFailedNoCharge)
         return false
       } catch (err) {
         debug('hero image error:', err instanceof Error ? err.message : err)
-        flashToast('err', t.editor.failure)
+        flashToast('err', t.editor.imageFailedNoCharge)
         return false
       } finally {
         setHeroImageWorking(false)
@@ -863,7 +878,7 @@ export function WebsitePreview({
           // Same explanatory upgrade screen as the text/design AI editor, not a
           // generic error toast — see applyEdit's 402 handling above.
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return
           }
           // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -889,11 +904,11 @@ export function WebsitePreview({
           commitSchema(parsed.data)
           flashToast(
             status === 'generated' || status === 'linked' ? 'ok' : 'err',
-            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.failure,
+            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.imageFailedNoCharge,
           )
         } catch (err) {
           debug('section image error:', err instanceof Error ? err.message : err)
-          flashToast('err', t.editor.failure)
+          flashToast('err', t.editor.imageFailedNoCharge)
         } finally {
           setWorkingItem(null)
         }
@@ -930,7 +945,7 @@ export function WebsitePreview({
           // Same explanatory upgrade screen as the text/design AI editor, not a
           // generic error toast — see applyEdit's 402 handling above.
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return
           }
           // FREE plan daily action limit — see lib/free-daily-limit.ts.
@@ -958,11 +973,11 @@ export function WebsitePreview({
           commitSchema(parsed.data)
           flashToast(
             status === 'generated' || status === 'linked' ? 'ok' : 'err',
-            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.failure,
+            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.imageFailedNoCharge,
           )
         } catch (err) {
           debug('slide image error:', err instanceof Error ? err.message : err)
-          flashToast('err', t.editor.failure)
+          flashToast('err', t.editor.imageFailedNoCharge)
         } finally {
           setWorkingSlide(null)
         }
@@ -999,7 +1014,7 @@ export function WebsitePreview({
             }),
           })
           if (res.status === 402) {
-            setOutOfCredits(true)
+            showOutOfCredits(res)
             return false
           }
           if (res.status === 429) {
@@ -1044,7 +1059,7 @@ export function WebsitePreview({
           }),
         })
         if (res.status === 402) {
-          setOutOfCredits(true)
+          showOutOfCredits(res)
           return false
         }
         if (res.status === 429) {
@@ -1318,7 +1333,7 @@ export function WebsitePreview({
       // devreye girdiğinde 402 döndürmesi yeterli — burada başka değişiklik
       // gerekmez.
       if (res.status === 402) {
-        setOutOfCredits(true)
+        showOutOfCredits(res)
         setEditing(false)
         setAiPhase(null)
         return false
@@ -1902,7 +1917,11 @@ export function WebsitePreview({
       )}
 
         {/* AI kredisi tükendiğinde hata yerine gösterilen açıklayıcı ekran. */}
-        <OutOfCreditsModal open={outOfCredits} onClose={() => setOutOfCredits(false)} />
+        <OutOfCreditsModal
+          open={outOfCredits}
+          balance={creditBalance}
+          onClose={() => setOutOfCredits(false)}
+        />
         <ConfirmDialog
           open={blogConfirm !== null}
           title={blogConfirmCopy(lang).creditsTitle}

@@ -1,3 +1,4 @@
+import { rejectAnonymous } from '@/lib/api-auth'
 import { createClient } from '@/lib/supabase/server'
 import { persistImageDataUri } from '@/lib/image-storage'
 import { fetchGalleryVideoCover } from '@/lib/gallery-video-cover'
@@ -11,6 +12,9 @@ export const maxDuration = 60
  * `{ cover: { src } | null }` for a valid video address, so a missing thumbnail never blocks adding the video.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const { url } = (await req.json().catch(() => ({}))) as { url?: unknown }
   if (typeof url !== 'string' || !parseGalleryVideoUrl(url)) {
     return Response.json({ error: 'invalid_url' }, { status: 400 })

@@ -1,3 +1,5 @@
+import { IMAGE_FAILED_CODE, IMAGE_FAILED_USER_MESSAGE } from '@/lib/image-failure'
+
 /**
  * Client-safe half of the image-storage failure contract (no Node/Supabase
  * imports), shared by the server routes and the browser UI.
@@ -20,6 +22,9 @@ export async function readImageStorageFailure(res: Response): Promise<string | n
     .clone()
     .json()
     .catch(() => null)) as { error?: string; message?: string } | null
+  if (body?.error === IMAGE_FAILED_CODE) {
+    return typeof body.message === 'string' && body.message ? body.message : IMAGE_FAILED_USER_MESSAGE
+  }
   if (body?.error !== IMAGE_STORAGE_ERROR_CODE) return null
   return typeof body.message === 'string' && body.message ? body.message : IMAGE_STORAGE_USER_MESSAGE
 }

@@ -1,3 +1,5 @@
+import { rejectAnonymous } from '@/lib/api-auth'
+import { imageGenerationFailedResponse } from '@/lib/image-failure'
 import { websiteSchema } from '@/lib/website-schema'
 import {
   applyHeroImageRequest,
@@ -25,6 +27,9 @@ export const maxDuration = 60
  * failed image never forces the user to rebuild the whole site.
  */
 export async function POST(req: Request) {
+  const anonymous = await rejectAnonymous()
+  if (anonymous) return anonymous
+
   const { schema, prompt, request, slideIndex } = (await req
     .json()
     .catch(() => ({}))) as {
@@ -106,7 +111,7 @@ export async function POST(req: Request) {
     } catch (err) {
       console.log('[v0] slide-image request error:', err instanceof Error ? err.message : err)
       if (err instanceof ImageStorageError) return imageStorageErrorResponse()
-      return Response.json({ error: 'Image generation failed' }, { status: 500 })
+      return imageGenerationFailedResponse('hero-image', err)
     }
   }
 
@@ -132,7 +137,7 @@ export async function POST(req: Request) {
     } catch (err) {
       console.log('[v0] hero-image request error:', err instanceof Error ? err.message : err)
       if (err instanceof ImageStorageError) return imageStorageErrorResponse()
-      return Response.json({ error: 'Image generation failed' }, { status: 500 })
+      return imageGenerationFailedResponse('hero-image', err)
     }
   }
   const basis =
@@ -187,6 +192,6 @@ export async function POST(req: Request) {
   } catch (err) {
     console.log('[v0] hero-image retry error:', err instanceof Error ? err.message : err)
     if (err instanceof ImageStorageError) return imageStorageErrorResponse()
-    return Response.json({ error: 'Image generation failed' }, { status: 500 })
+    return imageGenerationFailedResponse('hero-image', err)
   }
 }
