@@ -23,6 +23,7 @@ import type { ProjectListItem } from '@/lib/projects'
 import { getCommerceMode } from '@/lib/commerce-mode'
 import { canManageProducts } from '@/lib/site-kind'
 import { peekPendingProject, clearPendingProject } from '@/lib/pending-project'
+import { resumeTargetPath } from '@/lib/signup-draft-core'
 import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
@@ -84,7 +85,7 @@ export function DashboardClient({
       // The visitor's original action was Publish, not just "edit" — carry
       // that intent through so the editor finishes the publish automatically
       // instead of stranding them on a freshly created but still-draft site.
-      router.push(pending.publishIntent ? `/editor/${id}?autopublish=1` : `/editor/${id}`)
+      router.push(resumeTargetPath(id, pending))
     } catch {
       // Leave the stash in place so the site is preserved; allow a retry.
       inFlightTokenRef.current = null

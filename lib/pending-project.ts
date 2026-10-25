@@ -29,6 +29,12 @@ export type PendingProject = {
    * actually completes, instead of just landing back on a draft.
    */
   publishIntent?: boolean
+  /**
+   * Set when the visitor clicked "Siteyi Düzenle" in the anonymous preview and
+   * was routed through login/sign-up. After the project is created they land
+   * in the editor with no publish warning. `publishIntent` wins when both set.
+   */
+  editIntent?: boolean
 }
 
 function newToken(): string {

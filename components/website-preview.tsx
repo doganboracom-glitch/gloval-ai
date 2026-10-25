@@ -175,6 +175,8 @@ export function WebsitePreview({
   onLoginRequired,
   onSignupRequired,
   onPreserveDraft,
+  onEditLoginRequired,
+  onEditSignupRequired,
 }: {
   site: unknown
   onClose: () => void
@@ -268,6 +270,13 @@ export function WebsitePreview({
    * the draft for the login → dashboard handoff. Does not publish.
    */
   onPreserveDraft?: (schema: WebsiteSchema) => void
+  /**
+   * Anonymous preview only: the visitor chose Login / Create account in the
+   * edit gate. The parent stashes the draft with edit intent (no publish
+   * intent) and navigates to auth.
+   */
+  onEditLoginRequired?: (schema: WebsiteSchema) => void
+  onEditSignupRequired?: (schema: WebsiteSchema) => void
 }) {
   const { t } = useLanguage()
   const router = useRouter()
@@ -280,6 +289,9 @@ export function WebsitePreview({
   // project to publish yet (anonymous landing preview), or an authenticated
   // session was lost mid-edit (publish call came back UNAUTHENTICATED).
   const [showAuthPrompt, setShowAuthPrompt] = useState(false)
+  // Anonymous visitors cannot open the editor panel: the edit button opens
+  // this gate instead (create a free account / sign in / cancel).
+  const [showEditGate, setShowEditGate] = useState(false)
   const autoPublishedRef = useRef(false)
   // Digests of the sample items the server refused to publish without approval.
   // Non-null opens the approval dialog.
@@ -677,6 +689,41 @@ export function WebsitePreview({
       }
     }
     setShowAuthPrompt(true)
+  }
+
+  // Edit button entry point. Persisted projects (real editor) toggle the panel
+  // directly. In the anonymous landing preview the panel never opens: we check
+  // the session and either allow it (already signed in) or show the gate.
+  async function handleEditClick() {
+    if (showEdit || persist) {
+      setShowEdit((v) => !v)
+      return
+    }
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.auth.getUser()
+      if (data.user) {
+        setShowEdit(true)
+        return
+      }
+    } catch (err) {
+      debug('auth check before edit failed:', err instanceof Error ? err.message : err)
+    }
+    setShowEditGate(true)
+  }
+
+  function goToEditAuth(kind: 'login' | 'signup') {
+    setShowEditGate(false)
+    const handler = kind === 'login' ? onEditLoginRequired : onEditSignupRequired
+    if (handler && currentSite) {
+      handler(currentSite)
+      return
+    }
+    if (kind === 'login') {
+      router.push(`/auth/login?next=${encodeURIComponent(pathname || '/dashboard')}`)
+    } else {
+      router.push('/auth/sign-up')
+    }
   }
 
   function goToLogin() {
@@ -1504,7 +1551,7 @@ export function WebsitePreview({
             </ToggleButton>
           </div>
           <button
-            onClick={() => setShowEdit((v) => !v)}
+            onClick={() => void handleEditClick()}
             aria-pressed={showEdit}
             className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
               showEdit
@@ -1691,6 +1738,52 @@ export function WebsitePreview({
               <button
                 type="button"
                 onClick={() => setShowAuthPrompt(false)}
+                className="mt-1 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {t.publish.authRequiredCancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditGate && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-gate-title"
+          aria-describedby="edit-gate-body"
+          data-testid="edit-gate"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <h2 id="edit-gate-title" className="text-base font-semibold text-foreground">
+              {t.publish.editGateTitle}
+            </h2>
+            <p id="edit-gate-body" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {t.publish.editGateBody}
+            </p>
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => goToEditAuth('signup')}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <UserPlus className="h-4 w-4" />
+                {t.publish.editGateSignup}
+              </button>
+              <button
+                type="button"
+                onClick={() => goToEditAuth('login')}
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium transition-colors hover:bg-secondary"
+              >
+                <LogIn className="h-4 w-4" />
+                {t.auth.login}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditGate(false)}
                 className="mt-1 inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 {t.publish.authRequiredCancel}

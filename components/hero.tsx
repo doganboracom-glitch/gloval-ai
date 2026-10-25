@@ -224,6 +224,36 @@ export function Hero() {
     restoredTokenRef.current = peekPendingProject()?.token ?? token ?? null
   }
 
+  /**
+   * Edit gate: stash the draft with edit intent only (no publish intent) so
+   * after sign-up/login the user's draft opens in the editor without the
+   * publish flow.
+   */
+  function stashDraftForEdit(schema: WebsiteSchema) {
+    stopAllVoiceInput()
+    const stashed = peekPendingProject()
+    stashPendingProject({
+      name: schema.meta.name,
+      sector: schema.meta.audience ?? null,
+      language: schema.meta.language,
+      prompt: prompt.trim() || null,
+      schema,
+      token: restoredTokenRef.current ?? stashed?.token,
+      publishIntent: stashed?.publishIntent,
+      editIntent: true,
+    })
+  }
+
+  function handleEditLoginRequired(schema: WebsiteSchema) {
+    stashDraftForEdit(schema)
+    router.push('/auth/login?next=/dashboard')
+  }
+
+  function handleEditSignupRequired(schema: WebsiteSchema) {
+    stashDraftForEdit(schema)
+    router.push('/auth/sign-up')
+  }
+
   function handlePublishLoginRequired() {
     stashDraftForPublish()
     router.push('/auth/login?next=/dashboard')
@@ -597,6 +627,8 @@ export function Hero() {
           onLoginRequired={handlePublishLoginRequired}
           onSignupRequired={handlePublishSignupRequired}
           onPreserveDraft={preserveDraft}
+          onEditLoginRequired={handleEditLoginRequired}
+          onEditSignupRequired={handleEditSignupRequired}
         />
       )}
     </section>

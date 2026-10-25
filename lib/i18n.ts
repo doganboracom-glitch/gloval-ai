@@ -760,6 +760,10 @@ const dict = {
       authRequiredBody:
         'Sitenizi yayınlamak için önce giriş yapın veya ücretsiz hesap oluşturun. Yaptığınız değişiklikler kaybolmaz, giriş yaptıktan sonra tam olarak buradan devam edersiniz.',
       authRequiredCancel: 'Vazgeç',
+      editGateTitle: 'Siteyi düzenlemek için ücretsiz hesap oluştur',
+      editGateBody:
+        'Ücretsiz pakette 50 AI kredisi hediye. Hesabını oluşturduktan sonra sitenle tam olarak buradan, editörde devam edersin.',
+      editGateSignup: 'Hesap oluştur',
       planRequired: 'Yayınlamadan önce bir paket seçin.',
       planRequiredBody:
         'Sitenizi yayınlamak için bir paket seçmeniz gerekiyor. Düzenlemeleriniz korunuyor; paketi seçtikten sonra yayınlamaya devam edebilirsiniz.',
@@ -2371,6 +2375,10 @@ const dict = {
     authRequiredBody:
       'Sign in or create a free account to publish your site. Your changes are safe — you\'ll land right back here once you\'re signed in.',
     authRequiredCancel: 'Cancel',
+    editGateTitle: 'Create a free account to edit your site',
+    editGateBody:
+      'The free plan includes 50 AI credits. Once your account is ready you will pick up right here, in the editor.',
+    editGateSignup: 'Create account',
     planRequired: 'Choose a plan before publishing.',
     planRequiredBody:
       'You need to pick a plan to publish your site. Your edits are safe; once a plan is active you can continue publishing.',
