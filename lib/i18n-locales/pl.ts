@@ -752,7 +752,7 @@ const pl: DeepPartial<Dict> = {
       buy: 'Kup',
       buying: 'Przygotowywanie...',
       checkoutItem: 'Usługa dodatkowa: {item}',
-      validityNote: 'Ta usługa obowiązuje do ko��ca bieżącego okresu subskrypcji i nie odnawia się automatycznie.',
+      validityNote: 'Ta usługa obowiązuje do końca bieżącego okresu subskrypcji i nie odnawia się automatycznie.',
       errUnauthenticated: 'Zaloguj się, aby dokonać zakupu.',
       errNoSubscription: 'Aby kupić usługę dodatkową, potrzebujesz aktywnej subskrypcji.',
       errSubscriptionInactive: 'Twoja subskrypcja nie jest aktywna, więc zakup usługi dodatkowej jest teraz niemożliwy.',

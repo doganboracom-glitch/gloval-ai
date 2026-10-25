@@ -1,14 +1,3 @@
-<!--
-  GLOVAL AI — Confirm signup email template.
-  Prepared for manual paste into Supabase Authentication → Email Templates → Confirm signup.
-  Subject (TR): GLOVAL AI e-posta adresinizi doğrulayın
-  Subject (EN): Verify your GLOVAL AI email address
-
-  Language comes from user_metadata.email_locale; supported locales mirror the
-  existing reset-password template. The signup flow supplies signup_draft_token
-  and URL-encoded signup_next_path so this link can resume drafts across devices.
-  This file is not applied to Supabase automatically.
--->
 {{- $l := "tr" -}}{{- with .Data.email_locale -}}{{- $l = . -}}{{- end -}}
 {{- $title := "E-posta adresinizi doğrulayın" -}}
 {{- $intro := "GLOVAL AI hesabınızı etkinleştirmek için e-posta adresinizi doğrulayın. Kayıt sırasında bir taslak kaydettiyseniz, doğrulama tamamlandığında kaldığınız yerden devam edebilirsiniz." -}}

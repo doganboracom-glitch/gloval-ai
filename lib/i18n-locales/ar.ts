@@ -578,7 +578,7 @@ const ar: DeepPartial<Dict> = {
     genericError: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
     noPlan: 'لا يوجد اشتراك نشط',
     noPlanCta: 'اختر الباقة المناسبة لك أدناه للبدء.',
-    pendingPlanCta: 'سيتم تفعيل باقتك بمجرد اكتمال الدف��.',
+    pendingPlanCta: 'سيتم تفعيل باقتك بمجرد اكتمال الدفع.',
     status: 'الحالة',
     renews: 'التجديد',
     trialEnds: 'نهاية الفترة التجريبية',

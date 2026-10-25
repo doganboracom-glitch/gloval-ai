@@ -612,6 +612,9 @@ const dict = {
       verifyTitle: 'E-posta Adresinizi Doğrulayın',
       verifyBody:
         'GLOVAL AI hesabınızı kullanmaya devam etmek için e-posta adresinizi doğrulamanız gerekiyor.',
+      confirmEmail: 'E-postamı doğrula',
+      confirmLinkMissing:
+        'Bu doğrulama bağlantısı eksik veya geçersiz. Yeni bir doğrulama e-postası isteyebilirsiniz.',
       resend: 'Doğrulama E-postasını Tekrar Gönder',
       resending: 'Gönderiliyor...',
       resent: 'Doğrulama e-postası tekrar gönderildi.',
@@ -1035,7 +1038,7 @@ const dict = {
   buyerInvalidGeneric: 'Fatura bilgileriniz ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen kontrol edin.',
   renewPastDueBody: 'Ödemeniz alınamadı. Hizmetleriniz geçici olarak aktif tutuluyor.',
   renewPastDueCta: 'Ödemeyi tamamla',
-  renewSuspendedBody: 'Ödeme alınamadığı için siteleriniz geçici olarak yay��ndan kaldırıldı.',
+  renewSuspendedBody: 'Ödeme alınamadığı için siteleriniz geçici olarak yayından kaldırıldı.',
   renewSuspendedCta: 'Aboneliği yeniden etkinleştir',
   dashPastDueBody: 'Ödemenizi tamamlayın. Hizmetleriniz geçici olarak aktif tutuluyor.',
   dashSuspendedBody: 'Ödeme yapılmadığı için siteleriniz yayından kaldırıldı. Ödeme yaparak hizmetlerinizi yeniden etkinleştirin.',
@@ -2242,6 +2245,9 @@ const dict = {
       'Your email address has not been verified yet. Please verify your email to continue using GLOVAL AI.',
     verifyTitle: 'Verify Your Email Address',
     verifyBody: 'You need to verify your email address to continue using your GLOVAL AI account.',
+    confirmEmail: 'Verify my email',
+    confirmLinkMissing:
+      'This verification link is missing or invalid. Request a new verification email to continue.',
     resend: 'Resend Verification Email',
     resending: 'Sending...',
     resent: 'Verification email sent again.',

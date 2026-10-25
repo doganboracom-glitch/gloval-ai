@@ -6,16 +6,18 @@ import { isValidClaimToken } from '@/lib/signup-draft-core'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
-function parseConfirmationType(value: string | null): EmailOtpType | null {
+function parseConfirmationType(value: FormDataEntryValue | null): EmailOtpType | null {
   if (value === 'signup' || value === 'email') return value
   return null
 }
 
-function secureRedirect(url: URL): NextResponse {
-  const response = NextResponse.redirect(url)
-  response.headers.set('Referrer-Policy', 'no-referrer')
-  response.headers.set('Cache-Control', 'no-store')
-  return response
+function formString(formData: FormData, name: string): string | null {
+  const value = formData.get(name)
+  return typeof value === 'string' ? value : null
+}
+
+function redirect(url: URL): NextResponse {
+  return NextResponse.redirect(url, 303)
 }
 
 function errorUrl(origin: string, draft: string | null): URL {
@@ -24,18 +26,27 @@ function errorUrl(origin: string, draft: string | null): URL {
   return url
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
-  const tokenHash = searchParams.get('token_hash')
-  const type = parseConfirmationType(searchParams.get('type'))
-  const next = sanitizeNextPath(searchParams.get('next'))
-  const rawDraft = searchParams.get('draft')
+export async function POST(request: NextRequest) {
+  const { origin } = request.nextUrl
+  let formData: FormData
+
+  try {
+    formData = await request.formData()
+  } catch {
+    return redirect(errorUrl(origin, null))
+  }
+
+  const rawTokenHash = formString(formData, 'token_hash')?.trim() ?? ''
+  const tokenHash = rawTokenHash && rawTokenHash.length <= 512 ? rawTokenHash : null
+  const type = parseConfirmationType(formData.get('type'))
+  const next = sanitizeNextPath(formString(formData, 'next'))
+  const rawDraft = formString(formData, 'draft')
   const draft =
     (isValidClaimToken(rawDraft) ? rawDraft : null) ?? getSignupDraftTokenFromNextPath(next)
 
   if (!tokenHash || !type) {
-    console.warn('[auth confirm] confirmation link is missing a supported token hash or type')
-    return secureRedirect(errorUrl(origin, draft))
+    console.warn('[auth confirm] POST is missing a supported token hash or type')
+    return redirect(errorUrl(origin, draft))
   }
 
   const supabase = await createClient()
@@ -44,17 +55,17 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
     if (error) {
       logSupabaseAuthFailure('auth confirm', error)
-      return secureRedirect(errorUrl(origin, draft))
+      return redirect(errorUrl(origin, draft))
     }
   } catch (error) {
     logSupabaseAuthFailure('auth confirm', error)
-    return secureRedirect(errorUrl(origin, draft))
+    return redirect(errorUrl(origin, draft))
   }
 
   if (draft) {
     const resumeUrl = new URL('/auth/resume', origin)
     resumeUrl.searchParams.set('draft', draft)
-    return secureRedirect(resumeUrl)
+    return redirect(resumeUrl)
   }
 
   try {
@@ -66,5 +77,5 @@ export async function GET(request: NextRequest) {
 
   const verifiedUrl = new URL('/auth/verified', origin)
   verifiedUrl.searchParams.set('next', next)
-  return secureRedirect(verifiedUrl)
+  return redirect(verifiedUrl)
 }

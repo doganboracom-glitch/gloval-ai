@@ -65,6 +65,14 @@ const nextConfig = {
         source: '/:path*',
         headers: baseSecurityHeaders,
       },
+      {
+        // Confirmation URLs carry a one-time hash until the explicit POST.
+        source: '/auth/confirm/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
       platformMicrophoneRule,
       // Demo imagery. Anything under a stable url may be replaced later, so it
       // gets a short, revalidated cache; files carrying a content hash

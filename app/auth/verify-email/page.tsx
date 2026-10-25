@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
 import { isSignupDraftToken } from '@/lib/signup-draft-shared'
 import { readSignupDraftToken } from '@/lib/signup-draft-client'
+import { validateEmail } from '@/lib/email-validation'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -42,6 +43,7 @@ function VerifyEmail() {
   const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [emailError, setEmailError] = useState<string | null>(null)
   const resolvedRef = useRef(false)
 
   // Prefer the authenticated email, then send verified users to their safe
@@ -68,9 +70,16 @@ function VerifyEmail() {
   }, [cooldown])
 
   async function handleResend() {
-    if (cooldown > 0 || sending || !email) return
+    if (cooldown > 0 || sending) return
+    const validatedEmail = validateEmail(email)
+    if (!validatedEmail.ok) {
+      setEmailError(t.auth.emailInvalid)
+      return
+    }
+
     setSending(true)
     setError(null)
+    setEmailError(null)
     setNotice(null)
     const redirectUrl = new URL(getAuthCallbackUrl())
     redirectUrl.searchParams.delete('draft')
@@ -80,7 +89,7 @@ function VerifyEmail() {
     const supabase = createClient()
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email,
+      email: validatedEmail.email,
       options: {
         emailRedirectTo: redirectUrl.toString(),
       },
@@ -115,12 +124,6 @@ function VerifyEmail() {
           <MailWarning className="size-7" />
         </div>
 
-        {email && (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{email}</span>
-          </p>
-        )}
-
         {notice && (
           <p className="w-full rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary">
             {notice}
@@ -132,13 +135,36 @@ function VerifyEmail() {
           </p>
         )}
 
-        <div className="flex w-full flex-col gap-3">
-          <Button
-            onClick={handleResend}
-            disabled={sending || cooldown > 0 || !email}
-            size="lg"
-            className="w-full"
-          >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleResend()
+          }}
+          className="flex w-full flex-col gap-3"
+        >
+          <label className="flex flex-col gap-1.5 text-left">
+            <span className="text-sm font-medium text-foreground">{t.auth.email}</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setEmailError(null)
+                setError(null)
+              }}
+              autoComplete="email"
+              aria-invalid={emailError ? true : undefined}
+              aria-describedby={emailError ? 'resend-email-error' : undefined}
+              required
+              className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-destructive"
+            />
+          </label>
+          {emailError && (
+            <p id="resend-email-error" role="alert" className="text-left text-sm text-destructive">
+              {emailError}
+            </p>
+          )}
+          <Button type="submit" disabled={sending || cooldown > 0 || !email} size="lg" className="w-full">
             {sending ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
@@ -150,10 +176,10 @@ function VerifyEmail() {
               t.auth.resend
             )}
           </Button>
-          <Button onClick={handleSignOut} variant="secondary" size="lg" className="w-full">
-            {t.auth.logout}
-          </Button>
-        </div>
+        </form>
+        <Button onClick={handleSignOut} variant="secondary" size="lg" className="w-full">
+          {t.auth.logout}
+        </Button>
       </div>
     </AuthShell>
   )
