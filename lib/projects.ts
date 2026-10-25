@@ -35,6 +35,7 @@ import {
 import { backupIfDue, loadBackupSchema, recordBackup } from '@/lib/project-backups'
 import { BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS, type BackupItem } from '@/lib/project-backups-core'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isDeleteConfirmation } from '@/lib/site-delete-confirm'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
@@ -596,12 +597,53 @@ export async function restoreLastValidVersion(projectId: string): Promise<Restor
   return { ok: true }
 }
 
-/** Deletes a project (cascades to its versions). */
-export async function deleteProject(id: string): Promise<void> {
-  const { db } = await clientForProject(id)
-  const { error } = await db.from('projects').delete().eq('id', id)
-  if (error) throw error
+export type DeleteProjectResult =
+  | { ok: true }
+  | { ok: false; reason: 'CONFIRMATION_REQUIRED' | 'UNAUTHENTICATED' | 'NOT_FOUND' | 'FAILED' }
+
+/**
+ * Permanently deletes a project (cascades to its versions).
+ *
+ * Server-enforced guards, independent of the UI: the typed confirmation must be
+ * valid, and only the site's OWNER may delete it. Unlike the other project
+ * actions there is deliberately no admin elevation here: ownership is checked on
+ * the row itself and the delete runs on the RLS-scoped session client, filtered
+ * by `owner_id`. A site that is not the caller's reports NOT_FOUND, so it is
+ * indistinguishable from one that does not exist. The delete is a single
+ * statement, so a failure leaves the site fully intact.
+ */
+export async function deleteProject(id: string, confirmation: string): Promise<DeleteProjectResult> {
+  if (typeof id !== 'string' || id.length === 0) return { ok: false, reason: 'NOT_FOUND' }
+  if (!isDeleteConfirmation(confirmation)) return { ok: false, reason: 'CONFIRMATION_REQUIRED' }
+
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  let userId: string
+  try {
+    ;({ supabase, userId } = await requireUser())
+  } catch {
+    return { ok: false, reason: 'UNAUTHENTICATED' }
+  }
+
+  const { data: owned, error: lookupErr } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('id', id)
+    .eq('owner_id', userId)
+    .maybeSingle()
+  if (lookupErr) return { ok: false, reason: 'FAILED' }
+  if (!owned) return { ok: false, reason: 'NOT_FOUND' }
+
+  const { data: removed, error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', id)
+    .eq('owner_id', userId)
+    .select('id')
+  if (error) return { ok: false, reason: 'FAILED' }
+  if (!removed || removed.length === 0) return { ok: false, reason: 'NOT_FOUND' }
+
   revalidatePath('/dashboard')
+  return { ok: true }
 }
 
 /**
