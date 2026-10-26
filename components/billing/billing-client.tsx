@@ -41,6 +41,7 @@ import type {
 } from '@/lib/billing'
 import { tenantHost } from '@/lib/domains'
 import { PermanentRightsSection } from '@/components/billing/permanent-rights-section'
+import { CollapsibleAddOnsSection } from '@/components/billing/collapsible-add-ons-section'
 import { purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
 import { PlanGrid } from '@/components/pricing/plan-grid'
@@ -1201,12 +1202,12 @@ export function BillingClient({
 
         {/* Abonelik dışı eklentiler (tek seferlik marka kaldırma) korunur. */}
         {addonPlans.length > 0 && (
-          <section className="mt-10">
-            <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Sparkles className="size-5 text-primary" />
-              {b.catAddon}
-            </h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <CollapsibleAddOnsSection
+            title={b.catAddonMore}
+            summary={b.catAddonCount.replace('{n}', String(addonPlans.length))}
+            forceOpen={publishProjectId !== null}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
               {addonPlans.map((p) => {
                 const busy = busyPlanId === p.id && (isPending || previewing)
                 return (
@@ -1257,7 +1258,7 @@ export function BillingClient({
                 )
               })}
             </div>
-          </section>
+          </CollapsibleAddOnsSection>
         )}
 
         {/* Permanent entitlements */}
