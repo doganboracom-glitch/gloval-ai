@@ -363,6 +363,7 @@ export function WebsiteEditorPanel({
             projectId={payments.projectId}
             summary={paySummary}
             onSummaryChange={setPaySummary}
+            onOpenDesign={() => setTab('design')}
           />
         )}
         {tab === 'history' && historyEnabled && (

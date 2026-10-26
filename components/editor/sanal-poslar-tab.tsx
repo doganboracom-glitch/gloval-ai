@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { CreditCard, Settings2, Info } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { IyzicoApplicationCard } from '@/components/ecommerce/iyzico-application-card'
 import { PaymentSettingsDialog } from '@/components/ecommerce/payment-settings-dialog'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { PaymentModuleBadges, closedReasonText, formatTry } from '@/components/ecommerce/payment-summary-parts'
@@ -44,10 +45,12 @@ export function SanalPoslarTab({
   projectId,
   summary,
   onSummaryChange,
+  onOpenDesign,
 }: {
   projectId: string
   summary: PaymentSummary | null
   onSummaryChange: (s: PaymentSummary) => void
+  onOpenDesign?: () => void
 }) {
   const { lang } = useLanguage()
   const l = lang === 'en' ? 'en' : 'tr'
@@ -115,6 +118,8 @@ export function SanalPoslarTab({
         <Info className="mt-0.5 size-3.5 shrink-0" />
         {c.independent}
       </p>
+
+      <IyzicoApplicationCard projectId={projectId} lang={l} onOpenDesign={onOpenDesign} />
 
       {open && (
         <PaymentSettingsDialog
