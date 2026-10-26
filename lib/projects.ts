@@ -62,6 +62,7 @@ import {
 import { loadAttestedDigests, recordAttestations, selectApproved } from '@/lib/content-attestations'
 import { getDomainProvider } from '@/lib/custom-domains/provider'
 import { seedProductsSubmenu } from '@/lib/site-menu'
+import { enqueueProjectFirstPublishedEmail, enqueueProjectUnpublishedEmail } from '@/lib/email-outbox'
 
 /** Hosts connected to the project; e-mail on them is the owner's own. Fails to none (stricter). */
 async function connectedHosts(projectId: string): Promise<string[]> {
@@ -1018,6 +1019,12 @@ export async function publishProject(input: {
     console.log('[v0] store sync on publish failed (non-fatal):', err)
   }
 
+  // Lifecycle email: queued only the first time a project goes live. The
+  // enqueue helper swallows its own errors, so it can never fail a publish.
+  if (firstPublish) {
+    await enqueueProjectFirstPublishedEmail({ projectId: input.id, ownerId: project.owner_id as string })
+  }
+
   revalidatePath('/dashboard')
   if (slug) {
     revalidatePath(`/site/${slug}`, 'layout')
@@ -1041,6 +1048,15 @@ export async function publishProject(input: {
 /** Unpublishes a project: the public page 404s but the draft is untouched. */
 export async function unpublishProject(id: string): Promise<void> {
   const { db } = await clientForProject(id)
+  // Read the previous state so the removal email is only queued for a site that
+  // was really live. A failed lookup just skips the email, never the unpublish.
+  let removedLiveSite: { ownerId: string } | null = null
+  try {
+    const { data: before } = await db.from('projects').select('owner_id, published').eq('id', id).maybeSingle()
+    if (before?.published === true && before.owner_id) removedLiveSite = { ownerId: before.owner_id as string }
+  } catch (err) {
+    console.log('[v0] unpublish email pre-check failed (non-fatal):', err instanceof Error ? err.message : err)
+  }
   const { data, error } = await db
     .from('projects')
     .update({ published: false, status: 'draft' })
@@ -1048,6 +1064,11 @@ export async function unpublishProject(id: string): Promise<void> {
     .select('slug, schema_data')
     .maybeSingle()
   if (error) throw error
+  // Billing-driven bulk suspensions update `projects` directly (lib/billing-lifecycle.ts)
+  // and never reach this function, so they never send this email.
+  if (removedLiveSite) {
+    await enqueueProjectUnpublishedEmail({ projectId: id, ownerId: removedLiveSite.ownerId })
+  }
   revalidatePath('/dashboard')
   if (data?.slug) {
     revalidatePath(`/site/${data.slug}`, 'layout')
