@@ -310,6 +310,9 @@ export const iyzicoProvider: PaymentProvider = {
     }
     const creds = readCredentials(requestOptions)
     const isSandbox = creds.baseUrl.includes('sandbox')
+    // Sandbox test fixtures never apply to a production deployment, even one
+    // that still points at the sandbox host: real buyer data is required there.
+    const allowSandboxFixtures = isSandbox && process.env.VERCEL_ENV !== 'production'
 
     const buyerInput = (input.publicConfig?.buyer ?? {}) as IyzicoBuyerInput
     const currency = input.currency.trim().toUpperCase()
@@ -322,7 +325,7 @@ export const iyzicoProvider: PaymentProvider = {
     // Live: throws PaymentBuyerError (nothing is sent) unless every buyer field is real.
     const buyerBlocks = buildIyzicoBuyerPayload(
       { orderId: input.orderId, customerEmail: input.customerEmail, buyer: buyerInput },
-      { isSandbox },
+      { isSandbox: allowSandboxFixtures },
     )
 
     console.log('[v0] iyzico createIntent: resolved callback origin', {

@@ -2,7 +2,6 @@
 
 import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
@@ -33,20 +32,6 @@ export type CheckoutBuyer = {
   phone: string
   address: string
   taxId?: string
-}
-
-/** Best-effort client IP for PSPs that require one (e.g. iyzico's buyer.ip). */
-async function resolveClientIp(): Promise<string> {
-  try {
-    const h = await headers()
-    const fwd = h.get('x-forwarded-for')
-    if (fwd) return fwd.split(',')[0].trim()
-    const real = h.get('x-real-ip')
-    if (real) return real.trim()
-  } catch {
-    // ignore — headers() is unavailable outside a request context
-  }
-  return '127.0.0.1'
 }
 
 /**
