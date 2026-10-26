@@ -642,7 +642,7 @@ const fr: DeepPartial<Dict> = {
     txnStatusPending: 'En attente',
     txnStatusFailed: 'Échoué',
     entitlements: 'Droits permanents',
-    entitlementHint: 'Usage illimité et permanent via un paiement unique (bientôt disponible).',
+    entitlementHint: 'Les services achetés avec un paiement unique apparaîtront ici.',
     entitlementInactive: 'Inactif',
     entitlementActive: 'Actif',
     comingSoon: 'Bientôt disponible',
