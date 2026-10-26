@@ -10,7 +10,7 @@ import {
 import {
   IYZICO_ONBOARDING_URL,
   buildIyzicoInstantHeaders,
-  classifyIyzicoStatus,
+  classifyIyzicoResponse,
   cleanName,
   isIyzicoCampaignEnabled,
   readIyzicoInstantCredentials,
@@ -24,9 +24,20 @@ import {
  * the server: they never reach the client, a URL, a log line or an error. The
  * feature is off when any secret is missing OR the request table does not exist
  * yet. Only { contactName, contactSurname, registrationEmail, gsmNumber } is sent,
- * to one fixed host; none of it is stored, and iyzico's response body is never
- * read, shown or logged (only a status code is).
+ * to one fixed host; none of it is stored. iyzico's response body is read only to
+ * decide success (status / errorCode); it is never shown or stored, and only the
+ * sanitized key NAMES and a vetted errorCode are logged, never values.
  */
+
+const MAX_BODY_CHARS = 16_384
+
+async function readBodyText(response: Response): Promise<string> {
+  try {
+    return (await response.text()).slice(0, MAX_BODY_CHARS)
+  } catch {
+    return ''
+  }
+}
 
 export type IyzicoInstantPrefill = {
   enabled: boolean
@@ -102,9 +113,10 @@ export async function submitIyzicoInstant(
       redirect: 'error',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
-    await response.body?.cancel().catch(() => undefined)
+    const bodyText = await readBodyText(response)
 
-    const outcome = classifyIyzicoStatus(response.status)
+    const outcome = classifyIyzicoResponse(response.status, bodyText)
+    console.info('[iyzico-instant] response_shape', response.status, JSON.stringify(outcome.shape))
     if (outcome.ok) {
       await finalizeOnboardingRequest(claim.id, 'submitted', response.status)
       return { ok: true }

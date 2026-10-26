@@ -4,6 +4,7 @@ import {
   IYZICO_ONBOARDING_URL,
   IYZICO_CAMPAIGN_COPY,
   buildIyzicoInstantHeaders,
+  classifyIyzicoResponse,
   classifyIyzicoStatus,
   isIyzicoCampaignEnabled,
   normalizeIyzicoPhone,
@@ -167,5 +168,43 @@ describe('readIyzicoInstantCredentials', () => {
       expect(readIyzicoInstantCredentials({ ...full, [key]: undefined })).toBeNull()
       expect(readIyzicoInstantCredentials({ ...full, [key]: '' })).toBeNull()
     }
+  })
+})
+
+describe('classifyIyzicoResponse', () => {
+  it('treats a plain 2xx body as success and reports only key names', () => {
+    const out = classifyIyzicoResponse(200, JSON.stringify({ merchant: 'x', contact: { email: 'a@b.co' } }))
+    expect(out).toMatchObject({ ok: true, shape: ['merchant', 'contact', 'contact.email'] })
+    expect(JSON.stringify(out)).not.toContain('a@b.co')
+  })
+
+  it('does not call a 2xx with status failure or an errorCode a success', () => {
+    expect(classifyIyzicoResponse(200, '{"status":"failure"}')).toMatchObject({ ok: false, error: 'rejected' })
+    expect(classifyIyzicoResponse(200, '{"status":"success","errorCode":"5001"}')).toMatchObject({
+      ok: false,
+      error: 'rejected',
+      code: 'iyzico_error_5001',
+    })
+  })
+
+  it('ignores an empty errorCode on success', () => {
+    expect(classifyIyzicoResponse(200, '{"status":"success","errorCode":""}')).toMatchObject({ ok: true })
+  })
+
+  it('maps 132052 to email_exists and 1203 to config_error whatever the HTTP status', () => {
+    expect(classifyIyzicoResponse(200, '{"errorCode":132052}')).toMatchObject({ error: 'email_exists' })
+    expect(classifyIyzicoResponse(400, '{"errorCode":"132052"}')).toMatchObject({ error: 'email_exists' })
+    expect(classifyIyzicoResponse(400, '{"errorCode":"1203"}')).toMatchObject({ error: 'config_error' })
+    expect(classifyIyzicoResponse(200, '{"errorCode":"1203"}')).toMatchObject({ error: 'config_error' })
+  })
+
+  it('falls back to the HTTP status when the body is empty or not JSON', () => {
+    expect(classifyIyzicoResponse(204, '')).toMatchObject({ ok: true })
+    expect(classifyIyzicoResponse(500, '<html>')).toMatchObject({ ok: false, error: 'unavailable' })
+  })
+
+  it('never logs an errorCode that is not a plain code', () => {
+    const out = classifyIyzicoResponse(400, JSON.stringify({ errorCode: 'ayse@example.com' }))
+    expect(out).toMatchObject({ ok: false, code: 'iyzico_error_unparsable' })
   })
 })

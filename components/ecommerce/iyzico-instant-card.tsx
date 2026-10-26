@@ -23,8 +23,10 @@ const copy = {
     kvkk: 'KVKK Aydınlatma Metni',
     submit: 'Ön başvuru gönder',
     sending: 'Gönderiliyor...',
-    success: 'Ön başvurunuz iyzico\'ya iletildi. İletişim için teşekkürler.',
+    success: 'iyzico hesabın açıldı; e-postanı kontrol et, iyzico ekibi seninle iletişime geçecek.',
     errors: {
+      email_exists: "Bu e-posta adresiyle iyzico'da zaten bir hesap var. Farklı bir e-posta dene ya da mevcut hesabının API anahtarlarını aşağıya gir.",
+      config_error: 'Şu an başvuru alınamıyor, daha sonra tekrar dene.',
       invalid_name: 'Ad ve soyad gerekli ve çok uzun olamaz.',
       invalid_email: 'Geçerli bir e-posta adresi girin.',
       invalid_phone: 'Geçerli bir Türkiye telefon numarası girin.',
@@ -32,7 +34,7 @@ const copy = {
       already_submitted: 'Başvurunuz zaten iletildi, iyzico ekibi sizinle iletişime geçecek.',
       in_progress: 'Başvurunuz şu anda iletiliyor. Lütfen birkaç dakika bekleyin.',
       rate_limited: 'Bu mağaza veya hesap için çok fazla başvuru denendi. Lütfen 24 saat sonra tekrar deneyin.',
-      rejected: 'iyzico bilgileri kabul etmedi. Bilgilerinizi kontrol edip tekrar deneyin.',
+      rejected: 'iyzico bilgileri kabul etmedi. Bilgilerini kontrol edip tekrar dene.',
       unavailable: 'Başvuru şu anda gönderilemedi. Lütfen daha sonra tekrar deneyin.',
     } as Record<string, string>,
   },
@@ -47,8 +49,10 @@ const copy = {
     kvkk: 'KVKK disclosure text',
     submit: 'Send application',
     sending: 'Sending...',
-    success: 'Your application was sent to iyzico. Thank you.',
+    success: 'Your iyzico account has been opened; check your email, the iyzico team will contact you.',
     errors: {
+      email_exists: 'An iyzico account already exists for this email address. Try a different email, or enter the API keys of your existing account below.',
+      config_error: 'Applications cannot be accepted right now, please try again later.',
       invalid_name: 'First and last name are required and cannot be too long.',
       invalid_email: 'Enter a valid email address.',
       invalid_phone: 'Enter a valid Turkish phone number.',
@@ -64,16 +68,28 @@ const copy = {
 
 type FormField = 'firstName' | 'lastName' | 'email' | 'phone'
 
-export function IyzicoInstantCard({ projectId }: { projectId: string }) {
-  const { lang } = useLanguage()
-  const c = copy[lang === 'en' ? 'en' : 'tr']
-  const { data: prefill } = useSWR<IyzicoInstantPrefill>(
+export function useIyzicoInstantPrefill(projectId: string) {
+  return useSWR<IyzicoInstantPrefill>(
     ['iyzico-instant-prefill', projectId],
     () => getIyzicoInstantPrefill(projectId),
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
+}
+
+export function IyzicoInstantCard({
+  projectId,
+  onSubmitted,
+}: {
+  projectId: string
+  /** Called once iyzico accepted the application, so the host can tick "I have applied". */
+  onSubmitted?: () => void
+}) {
+  const { lang } = useLanguage()
+  const c = copy[lang === 'en' ? 'en' : 'tr']
+  const { data: prefill } = useIyzicoInstantPrefill(projectId)
   const [edits, setEdits] = useState<Partial<Record<FormField, string>>>({})
   const [consent, setConsent] = useState(false)
+  const [done, setDone] = useState(false)
   const [message, setMessage] = useState<{ kind: 'success' | 'info' | 'error'; text: string } | null>(null)
   const [sending, startSending] = useTransition()
 
@@ -91,13 +107,15 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
   }
 
   function submit() {
-    if (!consent || sending) return
+    if (!consent || sending || done) return
     setMessage(null)
     startSending(async () => {
       try {
         const result = await submitIyzicoInstant(projectId, form, consent)
         if (result.ok) {
+          setDone(true)
           setMessage({ kind: 'success', text: c.success })
+          onSubmitted?.()
         } else {
           const informational = result.error === 'already_submitted' || result.error === 'in_progress'
           setMessage({
@@ -137,7 +155,7 @@ export function IyzicoInstantCard({ projectId }: { projectId: string }) {
         <span>{c.consent}{' '}<a href="/yasal/kvkk" target="_blank" rel="noopener noreferrer" className="font-medium text-foreground underline underline-offset-2">{c.kvkk}</a></span>
       </label>
       {message && <p role={message.kind === 'error' ? 'alert' : 'status'} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${message.kind === 'error' ? 'border-destructive/40 bg-destructive/10 text-destructive' : message.kind === 'info' ? 'border-border bg-muted text-foreground' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>{message.kind === 'success' ? <CheckCircle2 className="size-4 shrink-0" /> : message.kind === 'info' ? <Info className="size-4 shrink-0" /> : null}{message.text}</p>}
-      <button type="button" onClick={submit} disabled={!consent || sending} className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+      <button type="button" onClick={submit} disabled={!consent || sending || done} className="inline-flex h-10 items-center justify-center gap-2 self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
         {sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
         {sending ? c.sending : c.submit}
       </button>
