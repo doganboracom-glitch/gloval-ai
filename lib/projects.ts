@@ -36,6 +36,7 @@ import { backupIfDue, loadBackupSchema, recordBackup } from '@/lib/project-backu
 import { BACKUP_RESTORE_LIMIT, BACKUP_RESTORE_WINDOW_MS, type BackupItem } from '@/lib/project-backups-core'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isDeleteConfirmation } from '@/lib/site-delete-confirm'
+import { describeError, hostingDetachSteps, runCleanupSteps, siteAssetSteps, type CleanupStep } from '@/lib/external-cleanup'
 import { isSubscriptionSuspended } from '@/lib/billing-lifecycle'
 import { syncStoreFromSchema } from '@/lib/store-sync'
 import { enqueueLiveBlog, enqueueSitePages } from '@/lib/indexnow-server'
@@ -611,6 +612,15 @@ export type DeleteProjectResult =
  * by `owner_id`. A site that is not the caller's reports NOT_FOUND, so it is
  * indistinguishable from one that does not exist. The delete is a single
  * statement, so a failure leaves the site fully intact.
+ *
+ * After the row is gone, the same external cleanup as account deletion runs for
+ * this one site (`lib/external-cleanup.ts`): its custom domains (apex + www) are
+ * detached from hosting and its product / AI-candidate images are removed.
+ * Those steps are best effort: a failure is logged and never fails the delete.
+ * The domain itself, its registration and any mailboxes on it belong to the
+ * owner's account (like account deletion, Mailcow is not touched) and are kept.
+ * A domain whose hosting detach failed keeps its non-`not_configured` hosting
+ * status with no project, which is how a later sweep finds it.
  */
 export async function deleteProject(id: string, confirmation: string): Promise<DeleteProjectResult> {
   if (typeof id !== 'string' || id.length === 0) return { ok: false, reason: 'NOT_FOUND' }
@@ -633,6 +643,8 @@ export async function deleteProject(id: string, confirmation: string): Promise<D
   if (lookupErr) return { ok: false, reason: 'FAILED' }
   if (!owned) return { ok: false, reason: 'NOT_FOUND' }
 
+  const domains = await collectSiteDomains(id, userId)
+
   const { data: removed, error } = await supabase
     .from('projects')
     .delete()
@@ -642,8 +654,53 @@ export async function deleteProject(id: string, confirmation: string): Promise<D
   if (error) return { ok: false, reason: 'FAILED' }
   if (!removed || removed.length === 0) return { ok: false, reason: 'NOT_FOUND' }
 
+  await cleanupDeletedSite(id, userId, domains)
+
   revalidatePath('/dashboard')
   return { ok: true }
+}
+
+/** Custom domains bound to the site, read BEFORE the delete (the FK nulls the binding afterwards). */
+async function collectSiteDomains(projectId: string, userId: string): Promise<Array<{ id: string; domain: string }>> {
+  try {
+    const { data, error } = await createAdminClient()
+      .from('custom_domains')
+      .select('id, domain')
+      .eq('website_project_id', projectId)
+      .eq('user_id', userId)
+    if (error) throw error
+    return (data ?? []).map((row) => ({ id: String(row.id), domain: String(row.domain).toLowerCase() }))
+  } catch (error) {
+    console.error('[site-delete] cleanup lookup failed', { step: 'domains', ...describeError(error) })
+    return []
+  }
+}
+
+async function cleanupDeletedSite(projectId: string, userId: string, domains: Array<{ id: string; domain: string }>) {
+  try {
+    const admin = createAdminClient()
+    const idByDomain = new Map(domains.map((d) => [d.domain, d.id]))
+    const steps: CleanupStep[] = [
+      ...hostingDetachSteps(
+        domains.map((d) => d.domain),
+        async (domain) => {
+          const rowId = idByDomain.get(domain)
+          if (!rowId) return
+          const { error } = await admin
+            .from('custom_domains')
+            .update({ vercel_status: 'not_configured', dns_status: 'pending', ssl_status: 'pending', last_error: null })
+            .eq('id', rowId)
+            .eq('user_id', userId)
+            .is('website_project_id', null)
+          if (error) throw error
+        },
+      ),
+      ...siteAssetSteps(admin, projectId),
+    ]
+    await runCleanupSteps('[site-delete]', steps)
+  } catch (error) {
+    console.error('[site-delete] cleanup failed to start', describeError(error))
+  }
 }
 
 /**

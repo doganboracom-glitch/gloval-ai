@@ -2,7 +2,16 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getVercelClient } from '@/lib/custom-domains/vercel'
+import {
+  describeError,
+  hostingDetachSteps,
+  removeStoragePrefix,
+  runCleanupSteps,
+  siteAssetSteps,
+  SITE_BUCKET,
+  type Admin,
+  type CleanupStep,
+} from '@/lib/external-cleanup'
 
 export type DeleteAccountResult = { ok: true } | { ok: false; error: string }
 export type UpdateProfileResult = { ok: true } | { ok: false; error: string }
@@ -49,30 +58,9 @@ export async function updateOwnProfile(input: { fullName: string }): Promise<Upd
  * was the *buyer* on someone else's store — that is the user's own purchase
  * history and is expected to be removed with the rest of their account.
  */
-type Admin = ReturnType<typeof createAdminClient>
-
 class DeleteStageError extends Error {
   constructor(readonly stage: string) {
     super(stage)
-  }
-}
-
-/**
- * Reduces a Postgres/PostgREST/Auth error to the fields that identify WHY it
- * failed (SQLSTATE, table, column, constraint) without `details`/`hint`, which
- * embed the offending row's values and would leak personal data into logs.
- */
-function describeError(error: unknown) {
-  const e = (error ?? {}) as { code?: unknown; message?: unknown; status?: unknown; name?: unknown }
-  const message = typeof e.message === 'string' ? e.message : ''
-  const pick = (re: RegExp) => re.exec(message)?.[1] ?? null
-  return {
-    code: typeof e.code === 'string' ? e.code : null,
-    status: typeof e.status === 'number' ? e.status : null,
-    name: typeof e.name === 'string' ? e.name : null,
-    table: pick(/(?:of relation|on table|relation) "([^"]+)"/),
-    column: pick(/column "([^"]+)"/),
-    constraint: pick(/constraint "([^"]+)"/),
   }
 }
 
@@ -82,7 +70,6 @@ function stageFailure(stage: string, error: unknown): never {
 }
 
 const SUPPORT_BUCKET = 'support-attachments'
-const SITE_BUCKET = 'site-images'
 
 type CleanupTargets = {
   projectIds: string[]
@@ -123,27 +110,15 @@ async function collectCleanupTargets(
   return targets
 }
 
-async function removeStoragePrefix(admin: Admin, bucket: string, prefix: string) {
-  const { data, error } = await admin.storage.from(bucket).list(prefix, { limit: 1000 })
-  if (error) throw error
-  const paths = (data ?? []).map((o) => `${prefix}/${o.name}`)
-  if (paths.length === 0) return
-  const { error: removeError } = await admin.storage.from(bucket).remove(paths)
-  if (removeError) throw removeError
-}
-
 /**
  * Post-deletion cleanup of everything the cascade cannot reach. Every step is
  * independent and failure-tolerant: the account is already gone by now, so a
  * failure is logged for follow-up instead of being reported to the user.
  */
 async function cleanupExternalAssets(admin: Admin, userId: string, targets: CleanupTargets) {
-  const steps: Array<[string, () => Promise<unknown>]> = []
+  const steps: CleanupStep[] = []
 
-  for (const projectId of targets.projectIds) {
-    steps.push([`products/${projectId}`, () => removeStoragePrefix(admin, SITE_BUCKET, `products/${projectId}`)])
-    steps.push([`ai-candidates/${projectId}`, () => removeStoragePrefix(admin, SITE_BUCKET, `ai-candidates/${projectId}`)])
-  }
+  for (const projectId of targets.projectIds) steps.push(...siteAssetSteps(admin, projectId))
   steps.push(['previews', () => removeStoragePrefix(admin, SITE_BUCKET, `previews/${userId}`)])
 
   if (targets.supportPaths.length > 0) {
@@ -156,19 +131,7 @@ async function cleanupExternalAssets(admin: Admin, userId: string, targets: Clea
     ])
   }
 
-  if (targets.domains.length > 0) {
-    const hosting = getVercelClient()
-    const hosts = new Set(targets.domains.flatMap((d) => (d.startsWith('www.') ? [d] : [d, `www.${d}`])))
-    for (const host of hosts) {
-      steps.push([
-        'hosting-domain',
-        async () => {
-          const result = await hosting.removeDomain(host)
-          if (!result.ok) throw { code: result.code, status: result.status, message: result.message }
-        },
-      ])
-    }
-  }
+  steps.push(...hostingDetachSteps(targets.domains))
 
   if (targets.email) {
     steps.push([
@@ -180,13 +143,7 @@ async function cleanupExternalAssets(admin: Admin, userId: string, targets: Clea
     ])
   }
 
-  for (const [step, run] of steps) {
-    try {
-      await run()
-    } catch (error) {
-      console.error('[account-delete] cleanup step failed', { step: step.replace(/[0-9a-f-]{36}/gi, ':id'), ...describeError(error) })
-    }
-  }
+  await runCleanupSteps('[account-delete]', steps)
 }
 
 const LIVE_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'suspended']
