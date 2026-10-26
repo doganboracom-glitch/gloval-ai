@@ -92,10 +92,13 @@ export function IyzicoSettingsPanel({
   projectId,
   initial,
   onChanged,
+  showInstant = true,
 }: {
   projectId: string
   initial: IyzicoSettingsView
   onChanged: (view: IyzicoSettingsView) => void
+  /** The application assistant shows the Instant form in its own step 2, so it turns this off. */
+  showInstant?: boolean
 }) {
   const { lang } = useLanguage()
   const c = copy[lang === 'en' ? 'en' : 'tr']
@@ -171,7 +174,7 @@ export function IyzicoSettingsPanel({
     <div className="flex flex-col gap-5">
       <p className="text-sm text-muted-foreground">{c.intro}</p>
 
-      {!view.apiKeyPresent && !view.secretKeyPresent && <IyzicoInstantCard projectId={projectId} />}
+      {showInstant && !view.apiKeyPresent && !view.secretKeyPresent && <IyzicoInstantCard projectId={projectId} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <span

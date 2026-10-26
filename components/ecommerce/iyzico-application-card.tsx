@@ -21,6 +21,7 @@ import {
   type ReadinessProblem,
 } from '@/lib/iyzico-application-shared'
 import { IyzicoSettingsPanel } from '@/components/ecommerce/iyzico-settings-panel'
+import { IyzicoInstantCard, useIyzicoInstantPrefill } from '@/components/ecommerce/iyzico-instant-card'
 
 type Lang = 'tr' | 'en'
 
@@ -81,6 +82,7 @@ const copy = {
     s2: 'iyzico\u2019ya başvur',
     s2d: 'Başvuruyu iyzico\u2019nun sitesinde sen yaparsın. Hazır bulundurman gerekenler:',
     apply: 'iyzico\u2019da başvur',
+    orApply: 'veya iyzico.com üzerinden başvur',
     applied: 'Başvurumu yaptım',
     appliedDone: 'Başvuru yapıldı olarak işaretlendi',
     undo: 'Geri al',
@@ -117,6 +119,7 @@ const copy = {
     s2: 'Apply at iyzico',
     s2d: 'You apply on iyzico\u2019s own website. Have these ready:',
     apply: 'Apply at iyzico',
+    orApply: 'or apply on iyzico.com',
     applied: 'I have applied',
     appliedDone: 'Marked as applied',
     undo: 'Undo',
@@ -264,17 +267,21 @@ export function IyzicoApplicationCard({
   projectId,
   lang,
   onOpenDesign,
+  recheckKey = 0,
 }: {
   projectId: string
   lang: Lang
   onOpenDesign?: () => void
+  /** Bumped after saved site content changes; a new key re-runs the check automatically. */
+  recheckKey?: number
 }) {
   const c = copy[lang]
   const { data, error, isValidating, mutate } = useSWR<ApplicationOverview>(
-    ['iyzico-application', projectId],
+    ['iyzico-application', projectId, recheckKey],
     () => getIyzicoApplicationOverview(projectId),
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, keepPreviousData: true },
   )
+  const { data: instantPrefill } = useIyzicoInstantPrefill(projectId)
   const [markerBusy, setMarkerBusy] = useState<ApplicationMarker | null>(null)
   const [markerError, setMarkerError] = useState(false)
 
@@ -313,6 +320,8 @@ export function IyzicoApplicationCard({
 
   const ready = data.items.every((item) => item.ok)
   const keysDone = data.iyzico.tested
+  const instantPrimary =
+    instantPrefill?.enabled === true && !data.iyzico.apiKeyPresent && !data.iyzico.secretKeyPresent
 
   return (
     <section aria-labelledby="iyzico-application-title" className="flex flex-col gap-4 rounded-lg border border-border p-3">
@@ -354,14 +363,21 @@ export function IyzicoApplicationCard({
             </li>
           ))}
         </ul>
+        {instantPrimary && (
+          <IyzicoInstantCard projectId={projectId} onSubmitted={() => void toggle('applied', true)} />
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <a
             href={IYZICO_APPLY_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            className={
+              instantPrimary
+                ? 'inline-flex items-center gap-1.5 text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground'
+                : 'inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90'
+            }
           >
-            {c.apply}
+            {instantPrimary ? c.orApply : c.apply}
             <ExternalLink className="size-4" aria-hidden />
           </a>
           {data.state.appliedAt ? (
@@ -410,6 +426,7 @@ export function IyzicoApplicationCard({
         {markerError && <p role="alert" className="text-xs text-destructive">{c.saveFail}</p>}
         <IyzicoSettingsPanel
           projectId={projectId}
+          showInstant={false}
           initial={data.iyzico}
           onChanged={(view) => void mutate((prev) => (prev ? { ...prev, iyzico: view } : prev), { revalidate: false })}
         />
