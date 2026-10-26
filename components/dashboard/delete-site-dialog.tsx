@@ -103,6 +103,8 @@ function DeleteSiteDialogBody({ site, onClose, onDeleted }: Props & { site: Site
         ))}
       </ul>
 
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{d.keepsNote}</p>
+
       <p className="mt-4 text-sm font-bold text-destructive">{d.irreversible}</p>
 
       <label className="mt-4 block text-sm font-medium text-foreground">

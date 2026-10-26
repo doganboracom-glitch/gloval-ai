@@ -659,11 +659,13 @@ const dict = {
         addressNone: 'Henüz yayınlanmadı',
         consequencesTitle: 'Silince şunları kaybedersin:',
         lossLive: 'Yayındaki site yayından kalkar.',
-        lossDomain: 'Alt alan adı ve bağlı alan adı siteden kopar.',
-        lossContent: 'Sayfalar, blog yazıları, ürünler ve tüm içerik silinir.',
+        lossDomain: 'Alt alan adı kaldırılır; bağlı özel alan adı (www dahil) siteden ve barındırmadan ayrılır.',
+        lossContent:
+          'Sayfalar, blog yazıları, ürünler ve tüm içerik ile yüklenen ürün görselleri ve yapay zekâ görsel adayları silinir.',
         lossAddons:
           'Siteye bağlı ek paketler (örn. Copyright Kaldırma) geri alınamaz ve iade edilmez.',
         lossOrders: 'Mağaza sitelerinde sipariş kayıtları yasal saklama gereği korunur.',
+        keepsNote: 'Alan adı kaydın ve bu alan adındaki posta kutuların hesabında kalır; silinmez.',
         irreversible: 'Bu işlem geri alınamaz.',
         inputLabel: 'Onaylamak için SİL yazın',
         inputPlaceholder: 'SİL',
@@ -2316,11 +2318,13 @@ const dict = {
       addressNone: 'Not published yet',
       consequencesTitle: 'Deleting it means you lose:',
       lossLive: 'The live site goes offline.',
-      lossDomain: 'The subdomain and any connected domain are detached from the site.',
-      lossContent: 'Pages, blog posts, products and all content are deleted.',
+      lossDomain: 'The subdomain is removed; any connected custom domain (including www) is detached from the site and from hosting.',
+      lossContent:
+        'Pages, blog posts, products and all content, plus uploaded product images and AI image candidates, are deleted.',
       lossAddons:
         'Add-ons attached to the site (e.g. Copyright Removal) cannot be recovered and are not refunded.',
       lossOrders: 'For store sites, order records are kept as required by law.',
+      keepsNote: 'Your domain registration and the mailboxes on that domain stay in your account; they are not deleted.',
       irreversible: 'This action cannot be undone.',
       inputLabel: 'Type DELETE to confirm',
       inputPlaceholder: 'DELETE',

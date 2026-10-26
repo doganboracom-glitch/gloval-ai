@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getVercelClient } from '@/lib/custom-domains/vercel'
+import { isProtectedDomain } from '@/lib/external-cleanup'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -20,12 +21,6 @@ export const maxDuration = 60
  * GET  -> dry run (lists candidates, changes nothing)
  * POST -> applies, optionally limited with ?domain=example.com
  */
-
-const PROTECTED = new Set(['gloval.ai', 'gloval.site', 'dbajans.com.tr'])
-
-function isProtected(domain: string): boolean {
-  return PROTECTED.has(domain) || domain.endsWith('.gloval.site') || domain.endsWith('.gloval.ai')
-}
 
 async function requireAdminResponse(): Promise<NextResponse | null> {
   const supabase = await createClient()
@@ -56,7 +51,7 @@ async function findCandidates(only?: string | null): Promise<Candidate[]> {
     .neq('vercel_status', 'not_configured')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return ((data ?? []) as Candidate[]).filter((row) => !isProtected(row.domain) && (!only || row.domain === only))
+  return ((data ?? []) as Candidate[]).filter((row) => !isProtectedDomain(row.domain) && (!only || row.domain === only))
 }
 
 export async function GET() {
