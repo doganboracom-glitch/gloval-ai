@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
@@ -128,17 +129,7 @@ export async function startMyDomainRenewal(
       currency,
       customerEmail: user.email,
       returnUrl: `/dashboard/domains`,
-      publicConfig: buyer
-        ? {
-            buyer: {
-              fullName: buyer.fullName,
-              phone: buyer.phone,
-              address: buyer.address,
-              identityNumber: buyer.taxId,
-              ip: await resolveClientIp(),
-            },
-          }
-        : undefined,
+      publicConfig: await resolvePlatformBuyerPublicConfig(user.userId),
     })
   } catch {
     warnOnError(

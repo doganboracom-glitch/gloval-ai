@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
@@ -163,17 +164,7 @@ export async function startMyTransferIn(
       currency: pricing.paymentAmount.currency,
       customerEmail: email,
       returnUrl: '/dashboard/domains',
-      publicConfig: buyer
-        ? {
-            buyer: {
-              fullName: buyer.fullName,
-              phone: buyer.phone,
-              address: buyer.address,
-              identityNumber: buyer.taxId,
-              ip: await resolveClientIp(),
-            },
-          }
-        : undefined,
+      publicConfig: await resolvePlatformBuyerPublicConfig(userId),
     })
   } catch {
     await abort('payment_init_failed')

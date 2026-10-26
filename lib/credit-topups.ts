@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
@@ -35,9 +36,11 @@ export type PurchaseCreditTopUpResult =
         | 'payment_init_failed'
         | 'payment_not_ready'
         | 'buyer_invalid'
+        | 'billing_profile_incomplete'
         | 'failed'
       detail?: string
       field?: BuyerField
+      profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'>
     }
 
 /**
@@ -70,7 +73,7 @@ export async function purchaseCreditTopUp(
     provider = getPlatformPaymentProvider()
   } catch (error) {
     const failure = await reportPaymentInitFailure('topup', error)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
   const orderRef = buildTopUpOrderRef(pack.id, randomUUID())
 
@@ -82,21 +85,11 @@ export async function purchaseCreditTopUp(
       currency: pack.currency,
       customerEmail: user.email ?? '',
       returnUrl: '/billing',
-      publicConfig: buyer
-        ? {
-            buyer: {
-              fullName: buyer.fullName,
-              phone: buyer.phone,
-              address: buyer.address,
-              identityNumber: buyer.taxId,
-              ip: await resolveClientIp(),
-            },
-          }
-        : undefined,
+      publicConfig: await resolvePlatformBuyerPublicConfig(user.id),
     })
   } catch (error) {
     const failure = await reportPaymentInitFailure('topup', error, providerId)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
   if (intent.status === 'failed') {
     return { ok: false, error: 'payment_init_failed', detail: 'provider_intent_failed' }

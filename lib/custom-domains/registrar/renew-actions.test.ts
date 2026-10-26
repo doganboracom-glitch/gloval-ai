@@ -11,6 +11,9 @@ const m = vi.hoisted(() => ({
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }) }))
+vi.mock('@/lib/platform-buyer', () => ({
+  resolvePlatformBuyerPublicConfig: async () => ({ buyer: { fullName: 'Ali Veli' } }),
+}))
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: m.user } }) } }),
 }))

@@ -46,7 +46,6 @@ import { PlanGrid } from '@/components/pricing/plan-grid'
 import {
   CheckoutConfirmDialog,
   type CheckoutItem,
-  type CheckoutBuyerInfo,
 } from '@/components/billing/checkout-confirm-dialog'
 import { purchaseCreditTopUp } from '@/lib/credit-topups'
 import {
@@ -103,6 +102,7 @@ type PaymentInitErrorCopy = {
   buyerInvalidTaxId: string
   buyerInvalidAddress: string
   buyerInvalidGeneric: string
+  billingProfileIncomplete: string
   genericError: string
 }
 
@@ -116,6 +116,8 @@ function paymentInitErrorMessage(
       return copy.paymentInitFailed
     case 'payment_not_ready':
       return copy.paymentNotReady
+    case 'billing_profile_incomplete':
+      return copy.billingProfileIncomplete
     case 'buyer_invalid':
       if (res.field === 'phone') return copy.buyerInvalidPhone
       if (res.field === 'taxId') return copy.buyerInvalidTaxId
@@ -204,12 +206,12 @@ export function BillingClient({
 
   // Pre-purchase legal gate. `checkout` holds the item summary shown in the
   // dialog; `checkoutRun` is the real purchase action executed only after the
-  // buyer fills billing info and ticks every consent.
+  // buyer has a complete saved billing profile and ticks every consent.
   const [checkout, setCheckout] = useState<CheckoutItem | null>(null)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
   const [checkoutRun, setCheckoutRun] = useState<
-    ((buyer: CheckoutBuyerInfo, paymentWindow: Window | null) => void) | null
+    ((paymentWindow: Window | null) => void) | null
   >(null)
 
   // Faturalama donemi secimi. Kullanici yillik bir pakete aboneyse panel
@@ -286,21 +288,13 @@ export function BillingClient({
   // The real subscription action. For paid plans this runs only after the
   // legal gate is satisfied; free/trial plans call it directly (no buyer info
   // needed since nothing is charged).
-  function runSubscribe(planId: string, buyer?: CheckoutBuyerInfo, paymentWindow?: Window | null) {
+  function runSubscribe(planId: string, paymentWindow?: Window | null) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
         const res = await subscribeToPlan(
           planId,
-          buyer
-            ? {
-                fullName: buyer.fullName,
-                phone: buyer.phone,
-                address: buyer.address,
-                taxId: buyer.taxId,
-              }
-            : undefined,
         )
         setBusyPlanId(null)
         if (!res.ok) {
@@ -359,7 +353,7 @@ export function BillingClient({
       currency: plan.currency,
       recurring: plan.interval !== 'once',
     })
-    setCheckoutRun(() => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) => runSubscribe(planId, buyer, paymentWindow))
+    setCheckoutRun(() => (paymentWindow: Window | null) => runSubscribe(planId, paymentWindow))
   }
 
   // The plan shown on the subscription card. A suspended subscription is not
@@ -385,7 +379,6 @@ export function BillingClient({
     shownPlan.interval !== 'once'
 
   function runRenew(
-    buyer?: CheckoutBuyerInfo,
     paymentWindow?: Window | null,
     yearlyPlanId?: string,
   ) {
@@ -394,14 +387,7 @@ export function BillingClient({
     startTransition(async () => {
       try {
         const res = await renewSubscription(
-          buyer
-            ? {
-                fullName: buyer.fullName,
-                phone: buyer.phone,
-                address: buyer.address,
-                taxId: buyer.taxId,
-              }
-            : undefined,
+          undefined,
           yearlyPlanId,
         )
         setBusyPlanId(null)
@@ -449,8 +435,8 @@ export function BillingClient({
       recurring: true,
     })
     setCheckoutRun(
-      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) =>
-        runRenew(buyer, paymentWindow),
+      () => (paymentWindow: Window | null) =>
+        runRenew(paymentWindow),
     )
   }
 
@@ -467,8 +453,8 @@ export function BillingClient({
       recurring: true,
     })
     setCheckoutRun(
-      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) =>
-        runRenew(buyer, paymentWindow, yearlyPlan.id),
+      () => (paymentWindow: Window | null) =>
+        runRenew(paymentWindow, yearlyPlan.id),
     )
   }
 
@@ -495,7 +481,6 @@ export function BillingClient({
     code: string,
     projectId: string,
     planId: string,
-    buyer?: CheckoutBuyerInfo,
     paymentWindow?: Window | null,
   ) {
     setBusyPlanId(planId)
@@ -505,14 +490,6 @@ export function BillingClient({
           code === MULTILANG_CODE ? purchaseMultilangPackage : purchaseBrandingRemoval
         const res = await purchase(
           projectId,
-          buyer
-            ? {
-                fullName: buyer.fullName,
-                phone: buyer.phone,
-                address: buyer.address,
-                taxId: buyer.taxId,
-              }
-            : undefined,
         )
         setBusyPlanId(null)
         if (!res.ok) {
@@ -561,26 +538,18 @@ export function BillingClient({
       recurring: false,
     })
     setCheckoutRun(
-      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) =>
-        runSitePurchase(plan.code, projectId, plan.id, buyer, paymentWindow),
+      () => (paymentWindow: Window | null) =>
+        runSitePurchase(plan.code, projectId, plan.id, paymentWindow),
     )
   }
 
-  function runTopUpPurchase(packId: string, buyer?: CheckoutBuyerInfo, paymentWindow?: Window | null) {
+  function runTopUpPurchase(packId: string, paymentWindow?: Window | null) {
     setError(null)
     setBusyPlanId(packId)
     startTransition(async () => {
       try {
         const res = await purchaseCreditTopUp(
           packId,
-          buyer
-            ? {
-                fullName: buyer.fullName,
-                phone: buyer.phone,
-                address: buyer.address,
-                taxId: buyer.taxId,
-              }
-            : undefined,
         )
         setBusyPlanId(null)
         if (!res.ok) {
@@ -626,8 +595,8 @@ export function BillingClient({
       recurring: false,
     })
     setCheckoutRun(
-      () => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) =>
-        runTopUpPurchase(pack.id, buyer, paymentWindow),
+      () => (paymentWindow: Window | null) =>
+        runTopUpPurchase(pack.id, paymentWindow),
     )
   }
 
@@ -657,17 +626,12 @@ export function BillingClient({
     }
   }
 
-  function runChange(planId: string, buyer?: CheckoutBuyerInfo, paymentWindow?: Window | null) {
+  function runChange(planId: string, paymentWindow?: Window | null) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
-        const res = await changePlan(
-          planId,
-          buyer
-            ? { fullName: buyer.fullName, phone: buyer.phone, address: buyer.address, taxId: buyer.taxId }
-            : undefined,
-        )
+        const res = await changePlan(planId)
         setBusyPlanId(null)
         if (!res.ok) {
           closePaymentWindow(paymentWindow)
@@ -710,7 +674,7 @@ export function BillingClient({
       currency: currentPreview.currency,
       recurring: false,
     })
-    setCheckoutRun(() => (buyer: CheckoutBuyerInfo, paymentWindow: Window | null) => runChange(currentPreview.planId, buyer, paymentWindow))
+    setCheckoutRun(() => (paymentWindow: Window | null) => runChange(currentPreview.planId, paymentWindow))
   }
 
   function handleCancel(immediate: boolean) {
@@ -1573,14 +1537,20 @@ export function BillingClient({
         </div>
       )}
 
-      {/* Pre-purchase legal gate: buyer info + contracts + required consents. */}
+      {/* Pre-purchase legal gate: saved billing profile + contracts + required consents. */}
       <CheckoutConfirmDialog
   open={checkout != null}
   item={checkout}
   defaultEmail={userEmail}
   pending={isPending}
+  profileComplete={billingProfileComplete}
+  onEditProfile={() => {
+    setCheckout(null)
+    setCheckoutRun(null)
+    setBillingProfileOpenRequest((count) => count + 1)
+  }}
   paymentResult={paymentResult}
-  onConfirm={(buyer, paymentWindow) => checkoutRun?.(buyer, paymentWindow)}
+  onConfirm={(paymentWindow) => checkoutRun?.(paymentWindow)}
   onRetry={() => {
     setPaymentResult(null)
     setPaymentUrl(null)

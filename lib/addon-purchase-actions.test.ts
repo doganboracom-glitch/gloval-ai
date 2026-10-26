@@ -12,6 +12,9 @@ const m = vi.hoisted(() => ({
 }))
 
 vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }) }))
+vi.mock('@/lib/platform-buyer', () => ({
+  resolvePlatformBuyerPublicConfig: async () => ({ buyer: { fullName: 'Ali Veli' } }),
+}))
 vi.mock('@/lib/notify', () => ({
   logUserEvent: vi.fn(),
   formatTicketNumber: (ref: string) => ref,
@@ -237,7 +240,7 @@ describe('purchaseAddOn rejections (no payment, no rows)', () => {
 
 describe('purchaseAddOn happy path', () => {
   it('creates the pending purchase from server data and opens an iyzico intent with the same amount', async () => {
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', buyer })
+    const res = await purchaseAddOn({ addonCode: 'extra_site_1' })
 
     expect(res).toEqual({ ok: true, purchaseId: 'p1', redirectUrl: 'https://sandbox-cpp.iyzipay.com/pay/tok_1' })
     expect(purchases()).toHaveLength(1)

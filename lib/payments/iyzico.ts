@@ -7,8 +7,8 @@ import {
   IYZICO_SANDBOX_KEY_PREFIX,
   mayUseSandboxIyzicoInProduction,
 } from './domain-e2e-mode'
+import { buildIyzicoBuyerPayload, type IyzicoBuyerInput } from './iyzico-buyer'
 import {
-  PaymentBuyerError,
   PaymentConfigError,
   PaymentProviderError,
   type PaymentIntentInput,
@@ -244,20 +244,6 @@ async function iyzicoFetch(
 
 const IYZICO_REQUEST_TIMEOUT_MS = 20_000
 
-/** buyer.ip must be a public IPv4; anything else (IPv6, loopback, private) uses iyzico's documented sample. */
-const IYZICO_FALLBACK_BUYER_IP = '85.34.78.112'
-function toBuyerIp(raw: string | undefined | null): string {
-  const ip = (raw ?? '').trim()
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip)
-  if (!m) return IYZICO_FALLBACK_BUYER_IP
-  const [a, b, c, d] = m.slice(1).map(Number)
-  if ([a, b, c, d].some((n) => n > 255)) return IYZICO_FALLBACK_BUYER_IP
-  if (a === 0 || a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)) {
-    return IYZICO_FALLBACK_BUYER_IP
-  }
-  return ip
-}
-
 /**
  * Resolve the absolute origin for iyzico's callbackUrl.
  *
@@ -306,51 +292,6 @@ export function resolveCallbackOrigin(): string {
   return `http://localhost:${port}`
 }
 
-/**
- * iyzico's own documented sandbox test GSM number. Used ONLY as a last
- * resort in the sandbox environment when the buyer did not supply a usable
- * phone number — mirrors `toIdentityNumber`'s sandbox-only fallback below.
- * `500` (the old fallback) is not a valid Turkish mobile operator prefix and
- * iyzico's Sandbox validator rejects it outright (errorCode 200310).
- */
-const IYZICO_SANDBOX_TEST_GSM = '+905350000000'
-
-/**
- * Turkish mobile phone -> iyzico's required `+90XXXXXXXXXX` gsmNumber format.
- * Returns null when `raw` does not normalize to a valid 10-digit `5XXXXXXXXX`
- * number, so the caller can decide how to handle a genuinely missing/invalid
- * phone number instead of silently sending iyzico a fabricated one.
- */
-function toGsmNumber(raw: string | undefined | null): string | null {
-  const digits = (raw ?? '').replace(/[^0-9]/g, '')
-  if (!digits) return null
-  let national = digits
-  if (national.startsWith('90') && national.length > 10) national = national.slice(2)
-  if (national.startsWith('0')) national = national.slice(1)
-  national = national.slice(-10)
-  if (national.length !== 10 || !national.startsWith('5')) return null
-  return `+90${national}`
-}
-
-/**
- * iyzico requires an 11-digit TC identity number for individual buyers. When
- * the buyer did not supply one (e.g. a company/tax-id buyer), fall back to
- * iyzico's own well-known sandbox test identity number so Checkout Form
- * initialize does not reject the request in the SANDBOX environment.
- */
-function toIdentityNumber(raw: string | undefined | null): string {
-  const digits = (raw ?? '').replace(/[^0-9]/g, '')
-  return digits.length === 11 ? digits : '11111111111'
-}
-
-type IyzicoBuyerInput = {
-  fullName?: string
-  phone?: string
-  address?: string
-  identityNumber?: string
-  ip?: string
-}
-
 export const iyzicoProvider: PaymentProvider = {
   id: 'iyzico',
 
@@ -369,40 +310,30 @@ export const iyzicoProvider: PaymentProvider = {
     }
     const creds = readCredentials(requestOptions)
     const isSandbox = creds.baseUrl.includes('sandbox')
+    // Sandbox test fixtures never apply to a production deployment, even one
+    // that still points at the sandbox host: real buyer data is required there.
+    const allowSandboxFixtures = isSandbox && process.env.VERCEL_ENV !== 'production'
 
-    const buyer = (input.publicConfig?.buyer ?? {}) as IyzicoBuyerInput
-    const rawName = (buyer.fullName || input.customerEmail.split('@')[0] || 'Müşteri').trim()
-    const [firstName, ...rest] = rawName.split(/\s+/)
-    const surname = rest.join(' ') || firstName
-
+    const buyerInput = (input.publicConfig?.buyer ?? {}) as IyzicoBuyerInput
     const currency = input.currency.trim().toUpperCase()
     const priceStr = (input.amountCents / 100).toFixed(2)
     const conversationId = input.orderId
-    const address = buyer.address?.trim() || 'Belirtilmedi'
 
     const callbackOrigin = resolveCallbackOrigin()
     const callbackUrl = `${callbackOrigin}/api/billing/checkout/iyzico/callback`
 
-    const normalizedGsm = toGsmNumber(buyer.phone)
-    let gsmNumber: string
-    if (normalizedGsm) {
-      gsmNumber = normalizedGsm
-    } else if (isSandbox) {
-      // No usable phone number; safe in sandbox only — never used for a real
-      // charge.
-      gsmNumber = IYZICO_SANDBOX_TEST_GSM
-    } else {
-      // A live charge must not proceed with a fabricated phone number.
-      throw new PaymentBuyerError('phone')
-    }
+    // Live: throws PaymentBuyerError (nothing is sent) unless every buyer field is real.
+    const buyerBlocks = buildIyzicoBuyerPayload(
+      { orderId: input.orderId, customerEmail: input.customerEmail, buyer: buyerInput },
+      { isSandbox: allowSandboxFixtures },
+    )
 
-    console.log('[v0] iyzico createIntent: resolved callback origin + gsm', {
+    console.log('[v0] iyzico createIntent: resolved callback origin', {
       callbackOrigin,
       usedExplicitEnv: Boolean(
         process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim(),
       ),
       isSandbox,
-      gsmNumberWasFallback: !normalizedGsm,
     })
 
     const body = {
@@ -414,30 +345,7 @@ export const iyzicoProvider: PaymentProvider = {
       basketId: conversationId,
       paymentGroup: 'PRODUCT',
       callbackUrl,
-      buyer: {
-        id: conversationId,
-        name: firstName || 'Müşteri',
-        surname,
-        identityNumber: toIdentityNumber(buyer.identityNumber),
-        email: input.customerEmail,
-        gsmNumber,
-        registrationAddress: address,
-        city: 'Istanbul',
-        country: 'Turkey',
-        ip: toBuyerIp(buyer.ip),
-      },
-      shippingAddress: {
-        contactName: rawName,
-        city: 'Istanbul',
-        country: 'Turkey',
-        address,
-      },
-      billingAddress: {
-        contactName: rawName,
-        city: 'Istanbul',
-        country: 'Turkey',
-        address,
-      },
+      ...buyerBlocks,
       basketItems: [
         {
           id: conversationId,
