@@ -46,11 +46,14 @@ export function SanalPoslarTab({
   summary,
   onSummaryChange,
   onOpenDesign,
+  recheckKey = 0,
 }: {
   projectId: string
   summary: PaymentSummary | null
   onSummaryChange: (s: PaymentSummary) => void
   onOpenDesign?: () => void
+  /** Changes whenever saved site content changes, re-running the readiness check. */
+  recheckKey?: number
 }) {
   const { lang } = useLanguage()
   const l = lang === 'en' ? 'en' : 'tr'
@@ -119,7 +122,7 @@ export function SanalPoslarTab({
         {c.independent}
       </p>
 
-      <IyzicoApplicationCard projectId={projectId} lang={l} onOpenDesign={onOpenDesign} />
+      <IyzicoApplicationCard projectId={projectId} lang={l} onOpenDesign={onOpenDesign} recheckKey={recheckKey} />
 
       {open && (
         <PaymentSettingsDialog

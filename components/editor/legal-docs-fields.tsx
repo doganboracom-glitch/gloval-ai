@@ -38,15 +38,22 @@ const rowButton =
 export function LegalDocsFields({
   site,
   publicSlug,
-  onDispatch,
+  onDispatch: dispatchOperation,
+  onLegalChange,
 }: {
   site: WebsiteSchema
   /** Live subdomain slug, or null before the first publish. */
   publicSlug: string | null
   onDispatch: (op: EditOperation) => void
+  /** Fires after any legal-page edit (save / reset / hide) is dispatched. */
+  onLegalChange?: () => void
 }) {
   const [editing, setEditing] = useState<LegalDocSlug | null>(null)
   const siteName = site.meta.name
+  const onDispatch = (op: EditOperation) => {
+    dispatchOperation(op)
+    onLegalChange?.()
+  }
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -250,7 +257,7 @@ function LegalDocEditorModal({
         )
       }
     >
-      <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Biçimlendirme">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5" role="toolbar" aria-label="Biçimlendirme">
         {TOOLBAR.map(({ format: kind, label, Icon }) => (
           <button
             key={kind}
@@ -275,27 +282,33 @@ function LegalDocEditorModal({
         </button>
       </div>
 
-      {preview ? (
-        <div className="min-h-[40vh] rounded-lg border border-border bg-background p-4">
-          <LegalBlocks blocks={parseLegalMarkup(text)} />
-        </div>
-      ) : (
-        <textarea
-          ref={areaRef}
-          value={text}
-          maxLength={LEGAL_BODY_MAX}
-          onChange={(e) => setText(e.target.value)}
-          aria-label={`${title} metni`}
-          spellCheck
-          className="min-h-[40vh] w-full flex-1 resize-y rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus:border-primary"
-        />
-      )}
+      <div className="flex h-[45dvh] min-h-44 shrink-0 flex-col">
+        {preview ? (
+          <div
+            aria-label={`${title} önizleme`}
+            tabIndex={0}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain break-words rounded-lg border border-border bg-background p-4"
+          >
+            <LegalBlocks blocks={parseLegalMarkup(text)} />
+          </div>
+        ) : (
+          <textarea
+            ref={areaRef}
+            value={text}
+            maxLength={LEGAL_BODY_MAX}
+            onChange={(e) => setText(e.target.value)}
+            aria-label={`${title} metni`}
+            spellCheck
+            className="min-h-0 w-full flex-1 resize-none overflow-y-auto rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus:border-primary"
+          />
+        )}
+      </div>
       {LEGAL_DRAFT_NOTES[slug] ? (
-        <p role="note" className="text-[11px] leading-snug text-muted-foreground">
+        <p role="note" className="shrink-0 text-[11px] leading-snug text-muted-foreground">
           {LEGAL_DRAFT_NOTES[slug]}
         </p>
       ) : null}
-      <p className="text-[11px] leading-snug text-muted-foreground">{LEGAL_RESPONSIBILITY_NOTE}</p>
+      <p className="shrink-0 text-[11px] leading-snug text-muted-foreground">{LEGAL_RESPONSIBILITY_NOTE}</p>
     </EditorModal>
   )
 }
