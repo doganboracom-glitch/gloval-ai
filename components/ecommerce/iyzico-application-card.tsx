@@ -264,16 +264,19 @@ export function IyzicoApplicationCard({
   projectId,
   lang,
   onOpenDesign,
+  recheckKey = 0,
 }: {
   projectId: string
   lang: Lang
   onOpenDesign?: () => void
+  /** Bumped after saved site content changes; a new key re-runs the check automatically. */
+  recheckKey?: number
 }) {
   const c = copy[lang]
   const { data, error, isValidating, mutate } = useSWR<ApplicationOverview>(
-    ['iyzico-application', projectId],
+    ['iyzico-application', projectId, recheckKey],
     () => getIyzicoApplicationOverview(projectId),
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, keepPreviousData: true },
   )
   const [markerBusy, setMarkerBusy] = useState<ApplicationMarker | null>(null)
   const [markerError, setMarkerError] = useState(false)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Wand2,
   Loader2,
@@ -196,6 +196,20 @@ export function WebsiteEditorPanel({
   )
   const locked = pendingAiEdit !== null
 
+  // The iyzico readiness check reads the saved draft, so a legal-page edit only
+  // triggers a re-check once the autosave that carries it has landed.
+  const [legalRevision, setLegalRevision] = useState(0)
+  const legalPendingRef = useRef(false)
+  const markLegalChanged = useCallback(() => {
+    legalPendingRef.current = true
+  }, [])
+  useEffect(() => {
+    if (saveState === 'saved' && legalPendingRef.current) {
+      legalPendingRef.current = false
+      setLegalRevision((r) => r + 1)
+    }
+  }, [saveState])
+
   // A canvas click always jumps to the Design tab so the selected section's
   // inspector is immediately visible, whether the panel was on AI or History.
   useEffect(() => {
@@ -330,6 +344,7 @@ export function WebsiteEditorPanel({
             onBeforeUpgrade={onBeforeUpgrade}
             publicSlug={publicSlug}
             projectId={payments?.projectId ?? blog?.projectId ?? null}
+            onLegalChange={markLegalChanged}
           />
         )}
         {tab === 'ai' && (
@@ -364,6 +379,7 @@ export function WebsiteEditorPanel({
             summary={paySummary}
             onSummaryChange={setPaySummary}
             onOpenDesign={() => setTab('design')}
+            recheckKey={legalRevision}
           />
         )}
         {tab === 'history' && historyEnabled && (
@@ -399,8 +415,10 @@ function DesignTab({
   onBeforeUpgrade,
   publicSlug = null,
   projectId = null,
+  onLegalChange,
 }: {
   site: WebsiteSchema
+  onLegalChange?: () => void
   publicSlug?: string | null
   /** Owner/admin project id; enables store-fed info page drafts. */
   projectId?: string | null
@@ -622,7 +640,7 @@ function DesignTab({
       </div>
 
       <Group title="Resmi metinler">
-        <LegalDocsFields site={site} publicSlug={publicSlug} onDispatch={onDispatch} />
+        <LegalDocsFields site={site} publicSlug={publicSlug} onDispatch={onDispatch} onLegalChange={onLegalChange} />
       </Group>
 
       <Group title={ui.groupCode}>
