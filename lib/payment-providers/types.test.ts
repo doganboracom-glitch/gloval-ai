@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveSetupStatus,
+  isHelpFormOpen,
   shouldShowInstantForm,
   type ProviderSettingsView,
   type ProviderSetupOverview,
@@ -18,6 +19,21 @@ function settings(partial: Partial<ProviderSettingsView> = {}): ProviderSettings
     ...partial,
   }
 }
+
+describe('isHelpFormOpen', () => {
+  it('is collapsed while the Instant form is visible', () => {
+    expect(isHelpFormOpen(true, false)).toBe(false)
+  })
+
+  it('opens when the owner asks for help', () => {
+    expect(isHelpFormOpen(true, true)).toBe(true)
+  })
+
+  it('stays open when the Instant form is not visible', () => {
+    expect(isHelpFormOpen(false, false)).toBe(true)
+    expect(isHelpFormOpen(false, true)).toBe(true)
+  })
+})
 
 describe('shouldShowInstantForm', () => {
   it('shows when there are no keys', () => {

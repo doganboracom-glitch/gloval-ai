@@ -16,6 +16,7 @@ import { ShippingSettingsPanel } from '@/components/ecommerce/shipping-settings-
 import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
 import { PAYMENT_PROVIDERS, getPaymentProvider } from '@/components/ecommerce/provider-setup/registry'
 import { ProviderSetupAssistant } from '@/components/ecommerce/provider-setup/provider-setup-assistant'
+import { PAYMENT_DIALOG_LAYOUT } from '@/components/ecommerce/payment-settings-layout'
 
 /** `general`, `shipping`, or the id of a registered payment provider. */
 export type PaymentSettingsTabId = string
@@ -145,9 +146,9 @@ export function PaymentSettingsDialog({
         aria-modal="true"
         aria-label={c.title}
         tabIndex={-1}
-        className="flex max-h-[92svh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-border bg-background shadow-2xl outline-none sm:rounded-2xl"
+        className={PAYMENT_DIALOG_LAYOUT.panel}
       >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+        <header className={PAYMENT_DIALOG_LAYOUT.header}>
           <h2 className="font-display text-lg font-semibold">{c.title}</h2>
           <button
             type="button"
@@ -159,7 +160,7 @@ export function PaymentSettingsDialog({
           </button>
         </header>
 
-        <div role="tablist" aria-label={c.title} className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2 sm:px-5">
+        <div role="tablist" aria-label={c.title} className={PAYMENT_DIALOG_LAYOUT.tabList}>
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -168,7 +169,7 @@ export function PaymentSettingsDialog({
               aria-selected={tab === t.id}
               disabled={t.disabled}
               onClick={() => selectTab(t.id)}
-              className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`${PAYMENT_DIALOG_LAYOUT.tab} ${
                 tab === t.id
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-secondary'
@@ -184,11 +185,9 @@ export function PaymentSettingsDialog({
           ))}
         </div>
 
-        <p className="border-b border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground sm:px-6">
-          {c.independent}
-        </p>
+        <p className={PAYMENT_DIALOG_LAYOUT.info}>{c.independent}</p>
 
-        <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        <div role="tabpanel" className={PAYMENT_DIALOG_LAYOUT.body}>
           {isLoading && (
             <div className="flex justify-center py-16" role="status">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />

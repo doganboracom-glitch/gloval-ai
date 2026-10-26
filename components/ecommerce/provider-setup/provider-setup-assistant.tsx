@@ -272,7 +272,13 @@ export function ProviderSetupAssistant({
               </button>
             )}
           </div>
-          <ProviderHelpForm config={config} projectId={projectId} overview={data} lang={lang} />
+          <ProviderHelpForm
+            config={config}
+            projectId={projectId}
+            overview={data}
+            lang={lang}
+            collapsedByDefault={showInstant && Boolean(InstantForm)}
+          />
         </div>
       </div>
 

@@ -2,10 +2,12 @@
 
 import { useState, type FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
+import { isHelpFormOpen } from '@/lib/payment-providers/types'
 import type { Lang, ProviderSetupConfig, ProviderSetupOverview } from '@/lib/payment-providers/types'
 
 const copy = {
   tr: {
+    reveal: 'Yardım gerekirse',
     title: 'Başvuruda yardım ister misin?',
     description: 'Bilgilerini bırak, platform ekibi seninle e-posta ile iletişime geçsin.',
     name: 'Ad soyad',
@@ -21,6 +23,7 @@ const copy = {
     fallbackError: 'Talep şu an gönderilemedi. Biraz sonra tekrar dene.',
   },
   en: {
+    reveal: 'Need help?',
     title: 'Want help with the application?',
     description: 'Leave your details and the platform team will contact you by e-mail.',
     name: 'Full name',
@@ -42,13 +45,17 @@ export function ProviderHelpForm({
   projectId,
   overview,
   lang,
+  collapsedByDefault = false,
 }: {
   config: ProviderSetupConfig
   projectId: string
   overview: ProviderSetupOverview
   lang: Lang
+  /** True while the Instant form is visible: the help form hides behind a link. */
+  collapsedByDefault?: boolean
 }) {
   const c = copy[lang]
+  const [userOpened, setUserOpened] = useState(false)
   const [name, setName] = useState(overview.help.prefill.name)
   const [email, setEmail] = useState(overview.help.prefill.email)
   const [phone, setPhone] = useState(overview.help.prefill.phone)
@@ -82,6 +89,18 @@ export function ProviderHelpForm({
     )
   }
   if (!overview.help.enabled) return <p className="text-xs text-muted-foreground">{c.off}</p>
+  if (!isHelpFormOpen(collapsedByDefault, userOpened)) {
+    return (
+      <button
+        type="button"
+        onClick={() => setUserOpened(true)}
+        aria-expanded={false}
+        className="self-start text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        {c.reveal}
+      </button>
+    )
+  }
 
   const field =
     'h-10 rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary'
