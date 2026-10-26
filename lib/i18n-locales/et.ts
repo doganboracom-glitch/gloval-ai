@@ -682,7 +682,7 @@ const et: DeepPartial<Dict> = {
     txnStatusPending: 'Ootel',
     txnStatusFailed: 'Ebaõnnestus',
     entitlements: 'Püsiõigused',
-    entitlementHint: 'Piiramatu, püsiv kasutamine ühekordse maksega (peagi saadaval).',
+    entitlementHint: 'Ühekordse maksega ostetud teenused ilmuvad siia.',
     entitlementInactive: 'Mitteaktiivne',
     entitlementActive: 'Aktiivne',
     comingSoon: 'Peagi saadaval',

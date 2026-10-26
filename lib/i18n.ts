@@ -1032,7 +1032,7 @@ const dict = {
     txnStatusFailed: 'Başarısız',
       entitlements: 'Kalıcı Haklar',
       entitlementHint:
-        'Tek seferlik ödemeyle sınırsız ve kalıcı kullanım (yakında).',
+        'Tek seferlik ödeme ile aldığın bir hizmet olursa burada görünecek.',
       entitlementInactive: 'Pasif',
       entitlementActive: 'Aktif',
       comingSoon: 'Yakında',
@@ -2683,11 +2683,11 @@ const dict = {
     txnStatusFailed: 'Failed',
       entitlements: 'Permanent Rights',
       entitlementHint:
-        'Unlimited, permanent usage via a one-time payment (coming soon).',
+        'Services you buy with a one-time payment will appear here.',
       entitlementInactive: 'Inactive',
       entitlementActive: 'Active',
       comingSoon: 'Coming soon',
-      noPermanentRights: 'You have no permanent rights yet.',
+      noPermanentRights: 'You have no lifetime entitlements yet.',
       brandingRight: 'Copyright removed',
       brandingRightHint: 'The "Built with Gloval AI" credit is hidden on this site.',
       buy: 'Buy',
