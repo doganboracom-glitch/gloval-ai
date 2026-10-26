@@ -188,6 +188,29 @@ describe('iyzico checkout-form initialize (simulated server-side, fake buyer)', 
     })
   })
 
+  it('rejects the observed private or missing buyer IP before calling iyzico', async () => {
+    setEnv({
+      VERCEL_ENV: 'production',
+      IYZICO_BASE_URL: LIVE,
+      IYZICO_API_KEY: 'fakelivekey',
+      IYZICO_SECRET_KEY: 'fakelivesecret',
+    })
+    const fetchMock = stubIyzicoFetch(SUCCESS)
+
+    for (const ip of ['172.23.40.86', null]) {
+      const error = await iyzicoProvider
+        .createIntent(intent({ ...FAKE_BUYER, ip }))
+        .catch((e) => e)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(classifyPaymentInitFailure(error)).toEqual({
+        code: 'billing_buyer_invalid:ip',
+        userError: 'buyer_invalid',
+        field: 'ip',
+      })
+    }
+  })
+
   it('maps an iyzico rejection to a billing_psp_rejected / buyer code', async () => {
     setEnv({
       VERCEL_ENV: 'preview',
