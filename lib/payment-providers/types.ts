@@ -148,6 +148,14 @@ export function shouldShowInstantForm(
   return !liveAndTested
 }
 
+/**
+ * The help request form starts collapsed while the Instant pre-application form
+ * is on screen (so the two forms don't compete), and stays open otherwise.
+ */
+export function isHelpFormOpen(instantFormVisible: boolean, userOpened: boolean): boolean {
+  return !instantFormVisible || userOpened
+}
+
 /** One-line summary shown outside the settings window. */
 export function deriveSetupStatus(overview: ProviderSetupOverview): ProviderSetupStatus {
   if (overview.settings.tested) return 'connected'
