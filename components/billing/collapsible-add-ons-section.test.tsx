@@ -4,7 +4,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
   ADD_ONS_ANCHOR,
   CollapsibleAddOnsSection,
+  CollapsibleSection,
+  HISTORY_ANCHOR,
+  PLANS_ANCHOR,
   wantsAddOnsOpen,
+  wantsHistoryOpen,
+  wantsPlansOpen,
+  wantsPlansScroll,
 } from '@/components/billing/collapsible-add-ons-section'
 
 const scrollIntoView = vi.fn()
@@ -106,5 +112,107 @@ describe('Ek Paketler açılır bölümü', () => {
       screen.getByRole('button', { name: /Diğer Ek Paketler/ }).getAttribute('aria-expanded'),
     ).toBe('false')
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('wantsPlansOpen / wantsHistoryOpen', () => {
+  it('plans open for anchors and plan flows, not for add-on or history links', () => {
+    expect(wantsPlansOpen(`#${PLANS_ANCHOR}`, '')).toBe(true)
+    expect(wantsPlansOpen('#plan-pro', '')).toBe(true)
+    expect(wantsPlansOpen('', '?plan=pro')).toBe(true)
+    expect(wantsPlansOpen('', '?upgrade=1')).toBe(true)
+    expect(wantsPlansOpen('', '?publish=abc')).toBe(true)
+    expect(wantsPlansOpen('', '')).toBe(false)
+    expect(wantsPlansOpen(`#${ADD_ONS_ANCHOR}`, '')).toBe(false)
+    expect(wantsPlansOpen(`#${HISTORY_ANCHOR}`, '')).toBe(false)
+  })
+
+  it('plans scroll only for anchors, never for flow params', () => {
+    expect(wantsPlansScroll('#paketler')).toBe(true)
+    expect(wantsPlansScroll('#plan-starter')).toBe(true)
+    expect(wantsPlansScroll('')).toBe(false)
+  })
+
+  it('history opens only for its own anchor', () => {
+    expect(wantsHistoryOpen(`#${HISTORY_ANCHOR}`, '')).toBe(true)
+    expect(wantsHistoryOpen('', '?plan=pro')).toBe(false)
+    expect(wantsHistoryOpen(`#${PLANS_ANCHOR}`, '')).toBe(false)
+  })
+})
+
+function renderHistory() {
+  return render(
+    <CollapsibleSection
+      id={HISTORY_ANCHOR}
+      title="İşlem geçmişi"
+      summary="3 işlem"
+      opensOn={wantsHistoryOpen}
+    >
+      <p>Kayıt</p>
+    </CollapsibleSection>,
+  )
+}
+
+describe('Ödeme geçmişi açılır bölümü', () => {
+  it('varsayılan kapalı; başlıkta gerçek kayıt sayısı görünür', () => {
+    renderHistory()
+    const toggle = screen.getByRole('button', { name: /İşlem geçmişi/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByText('3 işlem')).toBeTruthy()
+  })
+
+  it('#odeme-gecmisi ile açılır ve kayar', () => {
+    window.history.replaceState(null, '', `/billing#${HISTORY_ANCHOR}`)
+    renderHistory()
+    expect(
+      screen.getByRole('button', { name: /İşlem geçmişi/ }).getAttribute('aria-expanded'),
+    ).toBe('true')
+    expect(scrollIntoView).toHaveBeenCalled()
+  })
+})
+
+describe('Paketler açılır bölümü', () => {
+  function renderPlans(forceOpen: boolean) {
+    return render(
+      <CollapsibleSection
+        id={PLANS_ANCHOR}
+        title="Paketler"
+        forceOpen={forceOpen}
+        opensOn={wantsPlansOpen}
+        scrollsOn={wantsPlansScroll}
+      >
+        <p>Plan kartları</p>
+      </CollapsibleSection>,
+    )
+  }
+
+  it('ücretli planı olmayanda (forceOpen) açık gelir', () => {
+    renderPlans(true)
+    expect(screen.getByRole('button', { name: 'Paketler' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    )
+  })
+
+  it('ücretli planlıda kapalı gelir', () => {
+    renderPlans(false)
+    expect(screen.getByRole('button', { name: 'Paketler' }).getAttribute('aria-expanded')).toBe(
+      'false',
+    )
+  })
+
+  it('?plan= açar ama kaydırmaz; #plan-pro hem açar hem kaydırır', () => {
+    window.history.replaceState(null, '', '/billing?plan=pro')
+    renderPlans(false)
+    expect(screen.getByRole('button', { name: 'Paketler' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    )
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    cleanup()
+    window.history.replaceState(null, '', '/billing#plan-pro')
+    renderPlans(false)
+    expect(screen.getByRole('button', { name: 'Paketler' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    )
+    expect(scrollIntoView).toHaveBeenCalled()
   })
 })
