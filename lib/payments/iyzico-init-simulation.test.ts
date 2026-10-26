@@ -11,6 +11,7 @@ const FAKE_BUYER = {
   fullName: 'Test Alici',
   phone: '0532 000 00 00',
   address: 'Test Mah. Deneme Sok. No:1 Kadikoy Istanbul',
+  city: 'Istanbul',
   identityNumber: '11111111110',
   ip: '85.34.78.112',
 }
@@ -129,7 +130,7 @@ describe('iyzico checkout-form initialize (simulated server-side, fake buyer)', 
     expect(basketTotal.toFixed(2)).toBe(body.price)
   })
 
-  it('still sends a fully populated request when the buyer gave nothing (sandbox)', async () => {
+  it('sandbox fills only phone/identity/ip/address/city from labelled fixtures; the name must be real', async () => {
     setEnv({
       VERCEL_ENV: 'preview',
       IYZICO_BASE_URL: SANDBOX,
@@ -138,13 +139,13 @@ describe('iyzico checkout-form initialize (simulated server-side, fake buyer)', 
     })
     const fetchMock = stubIyzicoFetch(SUCCESS)
 
-    await iyzicoProvider.createIntent(intent(null))
+    await iyzicoProvider.createIntent(intent({ fullName: 'Test Alici' }))
 
     const body = sentBody(fetchMock)
     expect(body.buyer.gsmNumber).toMatch(/^\+905\d{9}$/)
     expect(body.buyer.identityNumber).toMatch(/^\d{11}$/)
-    expect(body.buyer.name).toBe('fake.buyer')
-    expect(body.buyer.surname).toBe('fake.buyer')
+    expect(body.buyer.name).toBe('Test')
+    expect(body.buyer.surname).toBe('Alici')
     expect(body.buyer.registrationAddress).toBeTruthy()
   })
 

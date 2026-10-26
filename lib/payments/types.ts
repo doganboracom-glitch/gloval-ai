@@ -26,13 +26,25 @@ export class PaymentConfigError extends Error {
   }
 }
 
-export type BuyerField = 'fullName' | 'phone' | 'address' | 'taxId'
+export type BuyerField = 'fullName' | 'phone' | 'address' | 'taxId' | 'city' | 'email' | 'ip'
 
 /** The buyer's own input is unusable for the PSP; fixable by the buyer. */
 export class PaymentBuyerError extends Error {
   constructor(public field: BuyerField) {
     super(`buyer_invalid_${field.toLowerCase()}`)
     this.name = 'PaymentBuyerError'
+  }
+}
+
+/**
+ * The buyer has no saved invoice profile, or it fails the payment-grade
+ * checks. Thrown BEFORE any PSP call so no payment starts; `fieldErrors` maps
+ * billing-profile form fields to a validation key for field-level messages.
+ */
+export class BillingProfileIncompleteError extends Error {
+  constructor(public fieldErrors: Record<string, 'required' | 'invalid' | 'too_long'>) {
+    super('billing_profile_incomplete')
+    this.name = 'BillingProfileIncompleteError'
   }
 }
 

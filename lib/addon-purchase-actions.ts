@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -23,7 +24,6 @@ import type { BuyerField } from '@/lib/payments/types'
  */
 export type PurchaseAddOnInput = {
   addonCode: string
-  buyer?: CheckoutBuyer
 }
 
 export type PurchaseAddOnError =
@@ -37,11 +37,12 @@ export type PurchaseAddOnError =
   | 'payment_init_failed'
   | 'payment_not_ready'
   | 'buyer_invalid'
+  | 'billing_profile_incomplete'
   | 'failed'
 
 export type PurchaseAddOnResult =
   | { ok: true; purchaseId: string; redirectUrl: string }
-  | { ok: false; error: PurchaseAddOnError; detail?: string; field?: BuyerField }
+  | { ok: false; error: PurchaseAddOnError; detail?: string; field?: BuyerField; profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'> }
 
 const ENTITLED_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due']
 
@@ -179,7 +180,7 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
     provider = getPlatformPaymentProvider()
   } catch (error) {
     const failure = await reportPaymentInitFailure('addon', error)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
 
   // Open purchases of this user for this add-on on this subscription. Scoped by
@@ -248,7 +249,6 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
     purchase = inserted as typeof purchase
   }
 
-  const buyer = input.buyer
   let intent: Awaited<ReturnType<typeof provider.createIntent>>
   try {
     intent = await provider.createIntent({
@@ -257,22 +257,12 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
       currency: purchase.currency,
       customerEmail: user.email ?? '',
       returnUrl: '/billing',
-      publicConfig: buyer
-        ? {
-            buyer: {
-              fullName: buyer.fullName,
-              phone: buyer.phone,
-              address: buyer.address,
-              identityNumber: buyer.taxId,
-              ip: await resolveClientIp(),
-            },
-          }
-        : undefined,
+      publicConfig: await resolvePlatformBuyerPublicConfig(user.id),
     })
   } catch (error) {
     await failPending(admin, user.id, purchase.id, true)
     const failure = await reportPaymentInitFailure('addon', error, providerId)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
 
   // Add-ons are only fulfilled by the verified callback, so the intent must be

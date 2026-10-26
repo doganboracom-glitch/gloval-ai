@@ -1,4 +1,5 @@
 import {
+  BillingProfileIncompleteError,
   PaymentBuyerError,
   PaymentConfigError,
   PaymentProviderError,
@@ -33,12 +34,18 @@ export type PaymentInitFlow =
   | 'multilang'
   | 'addon'
 
-export type PaymentInitUserError = 'payment_not_ready' | 'buyer_invalid' | 'payment_init_failed'
+export type PaymentInitUserError =
+  | 'payment_not_ready'
+  | 'buyer_invalid'
+  | 'billing_profile_incomplete'
+  | 'payment_init_failed'
 
 export type PaymentInitFailure = {
   code: string
   userError: PaymentInitUserError
   field?: BuyerField
+  /** Billing-profile form fields to highlight when `userError` is `billing_profile_incomplete`. */
+  profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'>
 }
 
 const NOT_READY_MESSAGES = new Set([
@@ -65,6 +72,14 @@ function slug(value: string): string {
 }
 
 export function classifyPaymentInitFailure(error: unknown): PaymentInitFailure {
+  if (error instanceof BillingProfileIncompleteError) {
+    return {
+      code: 'billing_profile_incomplete',
+      userError: 'billing_profile_incomplete',
+      profileFieldErrors: error.fieldErrors,
+    }
+  }
+
   if (error instanceof PaymentBuyerError) {
     return {
       code: `billing_buyer_invalid:${error.field}`,

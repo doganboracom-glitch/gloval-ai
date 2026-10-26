@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
@@ -239,7 +240,7 @@ function computeProration(params: {
 
 export type SubscribeResult =
   | { ok: true; status: SubscriptionStatus; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string; field?: BuyerField }
+  | { ok: false; error: string; detail?: string; field?: BuyerField; profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'> }
 
 /**
  * Start a subscription to a plan. Free plans and plans with a trial activate
@@ -336,7 +337,7 @@ export async function subscribeToPlan(
   } catch (error) {
     if (!isFree && !hasTrial) {
       const failure = await reportPaymentInitFailure('subscribe', error)
-      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
     }
     throw error
   }
@@ -405,17 +406,7 @@ export async function subscribeToPlan(
         currency: plan.currency,
         customerEmail: email,
         returnUrl: '/billing',
-        publicConfig: buyer
-          ? {
-              buyer: {
-                fullName: buyer.fullName,
-                phone: buyer.phone,
-                address: buyer.address,
-                identityNumber: buyer.taxId,
-                ip: await resolveClientIp(),
-              },
-            }
-          : undefined,
+        publicConfig: await resolvePlatformBuyerPublicConfig(userId),
       })
 
       initialPaymentReference = intent.reference
@@ -489,7 +480,7 @@ export async function subscribeToPlan(
       // so it must not survive to block a retry.
       warnOnError('billing.subscribe.rollback', await admin.from('billing_subscriptions').delete().eq('id', sub.id))
       const failure = await reportPaymentInitFailure('subscribe', error, providerId)
-      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
     }
   }
 
@@ -517,7 +508,7 @@ export async function subscribeToPlan(
 
 export type ChangePlanResult =
   | { ok: true; status: SubscriptionStatus; netCents: number; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string; field?: BuyerField }
+  | { ok: false; error: string; detail?: string; field?: BuyerField; profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'> }
 
 /**
  * Upgrade or downgrade the current subscription to another plan, applying a
@@ -571,7 +562,7 @@ export async function changePlan(
   } catch (error) {
     if (isUpgrade && netCents > 0) {
       const failure = await reportPaymentInitFailure('change_plan', error)
-      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
     }
     throw error
   }
@@ -585,7 +576,6 @@ export async function changePlan(
   // The subscription's status/plan_id stay untouched until the PSP result
   // settles; only these two columns record the in-flight change.
   if (isUpgrade && netCents > 0) {
-    if (!buyer) return { ok: false, error: 'buyer_required' }
 
     // Clear any previous, abandoned pending-change attempt for this
     // subscription so its old `pending_change_ref` (unique when non-null)
@@ -605,15 +595,7 @@ export async function changePlan(
         currency: newPlan.currency,
         customerEmail: email,
         returnUrl: '/billing',
-        publicConfig: {
-          buyer: {
-            fullName: buyer.fullName,
-            phone: buyer.phone,
-            address: buyer.address,
-            identityNumber: buyer.taxId,
-            ip: await resolveClientIp(),
-          },
-        },
+        publicConfig: await resolvePlatformBuyerPublicConfig(userId),
       })
       const { error: pendingErr } = await admin
         .from('billing_subscriptions')
@@ -653,7 +635,7 @@ export async function changePlan(
           .eq('id', sub.id),
       )
       const failure = await reportPaymentInitFailure('change_plan', error, providerId)
-      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+      return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
     }
   }
 
@@ -722,7 +704,7 @@ export async function changePlan(
 
 export type RenewResult =
   | { ok: true; redirectUrl?: string }
-  | { ok: false; error: string; detail?: string; field?: BuyerField }
+  | { ok: false; error: string; detail?: string; field?: BuyerField; profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'> }
 
 /**
  * Starts payment for the NEXT period of the user's current paid plan. It only
@@ -764,7 +746,6 @@ export async function renewSubscription(
     }
     plan = target
   }
-  if (!buyer) return { ok: false, error: 'buyer_required' }
 
   const staleCutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
   // A failed read would look like "no open renewal" and allow a double charge.
@@ -794,15 +775,7 @@ export async function renewSubscription(
       currency: plan.currency,
       customerEmail: email,
       returnUrl: '/billing',
-      publicConfig: {
-        buyer: {
-          fullName: buyer.fullName,
-          phone: buyer.phone,
-          address: buyer.address,
-          identityNumber: buyer.taxId,
-          ip: await resolveClientIp(),
-        },
-      },
+      publicConfig: await resolvePlatformBuyerPublicConfig(userId),
     })
     const { error: txnErr } = await admin.from('billing_transactions').insert({
       subscription_id: subData.id,
@@ -845,7 +818,7 @@ export async function renewSubscription(
       environment,
     })
     const failure = await reportPaymentInitFailure('renew', error, providerId)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
 }
 

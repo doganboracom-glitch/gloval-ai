@@ -30,7 +30,7 @@ export const BILLING_PROFILE_COLUMNS =
 const BILLING_PROFILE_COMPLETION_COLUMNS =
   'customer_type, full_name, company_title, tax_office, tax_number, national_id, address_line, district, city, country, phone, invoice_email, e_invoice_payer'
 
-function rowAsForm(row: Partial<BillingProfileDatabaseRow>) {
+export function billingProfileRowAsForm(row: Partial<BillingProfileDatabaseRow>) {
   return {
     customerType: row.customer_type,
     fullName: row.full_name ?? '',
@@ -50,7 +50,7 @@ function rowAsForm(row: Partial<BillingProfileDatabaseRow>) {
 }
 
 export function isBillingProfileRowComplete(row: Partial<BillingProfileDatabaseRow>): boolean {
-  return isBillingProfileComplete(rowAsForm(row))
+  return isBillingProfileComplete(billingProfileRowAsForm(row))
 }
 
 export function toBillingProfileSummary(row: BillingProfileDatabaseRow): BillingProfileSummary {

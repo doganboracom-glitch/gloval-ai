@@ -70,6 +70,7 @@ export type PurchaseErrorCopy = {
   paymentInitFailed: string
   paymentNotReady?: string
   buyerInvalid?: string
+  billingProfileIncomplete?: string
   generic: string
 }
 
@@ -93,6 +94,8 @@ export function purchaseErrorMessage(error: PurchaseAddOnError, copy: PurchaseEr
       return copy.paymentInitFailed
     case 'payment_not_ready':
       return copy.paymentNotReady ?? copy.paymentInitFailed
+    case 'billing_profile_incomplete':
+      return copy.billingProfileIncomplete ?? copy.buyerInvalid ?? copy.paymentInitFailed
     case 'buyer_invalid':
       return copy.buyerInvalid ?? copy.paymentInitFailed
     default:

@@ -20,7 +20,6 @@ import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
 import {
   CheckoutConfirmDialog,
-  type CheckoutBuyerInfo,
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
 import { formatMoney } from '@/lib/billing-utils'
@@ -289,6 +288,7 @@ export function AddOnsPanel({
   planName,
   userEmail = '',
   outcome = null,
+  profileComplete = false,
 }: {
   overview: AddOnOverview
   variant: Variant
@@ -296,6 +296,8 @@ export function AddOnsPanel({
   userEmail?: string
   /** Server-derived result of the buyer's last purchase, from the stored status. */
   outcome?: AddOnPurchaseOutcome | null
+  /** Whether the saved billing profile is complete enough to pay. */
+  profileComplete?: boolean
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -326,6 +328,7 @@ export function AddOnsPanel({
     paymentInitFailed: t.billing.paymentInitFailed,
     paymentNotReady: t.billing.paymentNotReady,
     buyerInvalid: t.billing.buyerInvalidGeneric,
+    billingProfileIncomplete: t.billing.billingProfileIncomplete,
     generic: t.billing.genericError,
   }
 
@@ -370,7 +373,7 @@ export function AddOnsPanel({
     setCheckoutCode(code)
   }
 
-  function runPurchase(buyer: CheckoutBuyerInfo, paymentWindow: Window | null) {
+  function runPurchase(paymentWindow: Window | null) {
     const code = checkoutCode
     if (!code) {
       closePaymentWindow(paymentWindow)
@@ -380,15 +383,7 @@ export function AddOnsPanel({
     setBusyCode(code)
     startTransition(async () => {
       try {
-        const res = await purchaseAddOn({
-          addonCode: code,
-          buyer: {
-            fullName: buyer.fullName,
-            phone: buyer.phone,
-            address: buyer.address,
-            taxId: buyer.taxId,
-          },
-        })
+        const res = await purchaseAddOn({ addonCode: code })
         setBusyCode(null)
         if (!res.ok) {
           closePaymentWindow(paymentWindow)
@@ -683,6 +678,8 @@ export function AddOnsPanel({
             item={checkoutItem}
             defaultEmail={userEmail}
             pending={isPending}
+            profileComplete={profileComplete}
+            onEditProfile={() => router.push('/billing')}
             onConfirm={runPurchase}
             onClose={() => setCheckoutCode(null)}
           />

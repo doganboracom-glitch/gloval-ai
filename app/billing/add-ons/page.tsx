@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getMyCurrentPlan } from '@/lib/billing'
+import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
 import { getAddOnOverview } from '@/lib/effective-limits'
 import { getLatestAddOnPurchaseOutcome } from '@/lib/addon-purchase-outcome-loader'
 import { BrandLogo } from '@/components/brand-logo'
@@ -24,6 +25,7 @@ export default async function AddOnsPage({
   const { payment } = await searchParams
   const currentPlan = await getMyCurrentPlan().catch(() => null)
   const overview = await getAddOnOverview(user.id, currentPlan?.code)
+  const billingProfileResult = await getMyBillingProfileAction().catch(() => null)
   // The query param only asks us to look; what is shown comes from the stored,
   // callback-verified purchase status.
   const outcome =
@@ -50,6 +52,7 @@ export default async function AddOnsPage({
           planName={currentPlan?.name ?? null}
           userEmail={user.email ?? ''}
           outcome={outcome}
+          profileComplete={billingProfileResult?.profile?.complete ?? false}
         />
       </main>
     </div>

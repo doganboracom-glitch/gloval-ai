@@ -1,5 +1,6 @@
 'use server'
 
+import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
@@ -129,8 +130,10 @@ export type BuyEntitlementResult =
         | 'payment_init_failed'
         | 'payment_not_ready'
         | 'buyer_invalid'
+        | 'billing_profile_incomplete'
       detail?: string
       field?: BuyerField
+      profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'>
     }
 
 /**
@@ -205,7 +208,7 @@ async function purchaseSiteRight(
     provider = getPlatformPaymentProvider()
   } catch (error) {
     const failure = await reportPaymentInitFailure(flow, error)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
   // Guarded the same way as subscribeToPlan/changePlan in lib/billing.ts: a
   // PSP-side failure here must come back as a controlled `{ ok: false }`
@@ -219,21 +222,11 @@ async function purchaseSiteRight(
       currency: plan.currency,
       customerEmail: email,
       returnUrl: '/billing',
-      publicConfig: buyer
-        ? {
-            buyer: {
-              fullName: buyer.fullName,
-              phone: buyer.phone,
-              address: buyer.address,
-              identityNumber: buyer.taxId,
-              ip: await resolveClientIp(),
-            },
-          }
-        : undefined,
+      publicConfig: await resolvePlatformBuyerPublicConfig(userId),
     })
   } catch (error) {
     const failure = await reportPaymentInitFailure(flow, error, providerId)
-    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field }
+    return { ok: false, error: failure.userError, detail: failure.code, field: failure.field, profileFieldErrors: failure.profileFieldErrors }
   }
   if (intent.status === 'failed') return { ok: false, error: 'failed' }
 

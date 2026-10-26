@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { X, Loader2, ArrowLeft, CheckCircle2, CircleX, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,15 +8,6 @@ import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
 import { legalPath } from '@/lib/legal/documents'
-
-export interface CheckoutBuyerInfo {
-  buyerType: 'individual' | 'company'
-  fullName: string
-  email: string
-  phone: string
-  address: string
-  taxId: string
-}
 
 export interface CheckoutItem {
   name: string
@@ -43,6 +34,8 @@ export function CheckoutConfirmDialog({
   item,
   defaultEmail,
   pending,
+  profileComplete,
+  onEditProfile,
   paymentResult,
   onConfirm,
   onRetry,
@@ -52,43 +45,24 @@ export function CheckoutConfirmDialog({
   item: CheckoutItem | null
   defaultEmail: string
   pending: boolean
+  profileComplete: boolean
+  onEditProfile: () => void
   paymentResult?: 'success' | 'failed' | null
-  onConfirm: (info: CheckoutBuyerInfo, paymentWindow: Window | null) => void
+  onConfirm: (paymentWindow: Window | null) => void
   onRetry?: () => void
   onClose: () => void
 }) {
   const { t } = useLanguage()
   const c = t.billing.checkout
 
-  const [buyerType, setBuyerType] = useState<'individual' | 'company'>('individual')
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState(defaultEmail)
-  const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
-  const [taxId, setTaxId] = useState('')
-
   const [okPreInfo, setOkPreInfo] = useState(false)
   const [okDistance, setOkDistance] = useState(false)
 
   const [touched, setTouched] = useState(false)
-  const fieldRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   if (!open || !item) return null
 
-  const fieldErrors = {
-    fullName: fullName.trim().length <= 1,
-    email: !/.+@.+\..+/.test(email.trim()),
-    phone: phone.trim().length <= 5,
-    address: address.trim().length <= 5,
-    taxId: taxId.trim().length === 0,
-  }
-  const infoComplete = !Object.values(fieldErrors).some(Boolean)
   const consentsGiven = okPreInfo && okDistance
-  const requiredMessage = 'Bu alan zorunludur.'
-
-  function fieldClass(field: keyof typeof fieldErrors) {
-    return `${inputCls} ${touched && fieldErrors[field] ? 'border-destructive ring-1 ring-destructive/40' : ''}`
-  }
 
   if (paymentResult) {
     const success = paymentResult === 'success'
@@ -121,16 +95,7 @@ export function CheckoutConfirmDialog({
 
   function submit() {
     setTouched(true)
-    const firstInvalid = (Object.keys(fieldErrors) as Array<keyof typeof fieldErrors>).find(
-      (field) => fieldErrors[field],
-    )
-    if (firstInvalid) {
-      requestAnimationFrame(() => {
-        fieldRefs.current[firstInvalid]?.focus()
-        fieldRefs.current[firstInvalid]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-      return
-    }
+    if (!profileComplete) return
     if (!consentsGiven) return
     // Opened synchronously (before the async server action) so Chrome's popup
     // blocker sees it as a direct result of this click. The server round trip
@@ -157,7 +122,7 @@ export function CheckoutConfirmDialog({
         item_category: item.recurring ? 'subscription' : 'one_time',
       })
     }
-    onConfirm({ buyerType, fullName, email, phone, address, taxId }, paymentWindow)
+    onConfirm(paymentWindow)
   }
 
   const inputCls =
@@ -197,102 +162,17 @@ export function CheckoutConfirmDialog({
             </div>
           </div>
 
-          {/* Buyer info */}
+          {/* Billing profile status */}
           <h3 className="mt-6 text-sm font-semibold text-foreground">{c.buyerInfo}</h3>
-
-          <div className="mt-3 flex gap-2">
-            {(['individual', 'company'] as const).map((bt) => (
-              <button
-                key={bt}
-                type="button"
-                onClick={() => setBuyerType(bt)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                  buyerType === bt
-                    ? 'border-primary bg-primary/5 text-foreground'
-                    : 'border-border text-muted-foreground hover:border-primary/50'
-                }`}
-              >
-                {bt === 'individual' ? c.individual : c.company}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="sm:col-span-2 block">
-              <span className="mb-1 block text-xs text-muted-foreground">
-                {c.fullName}
-              </span>
-              <input
-                className={fieldClass('fullName')}
-                ref={(element) => { fieldRefs.current.fullName = element }}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                aria-invalid={touched && fieldErrors.fullName}
-              />
-              {touched && fieldErrors.fullName && (
-                <span className="mt-1 block text-xs text-destructive">{requiredMessage}</span>
-              )}
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-muted-foreground">{c.email}</span>
-              <input
-                type="email"
-                className={fieldClass('email')}
-                ref={(element) => { fieldRefs.current.email = element }}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                aria-invalid={touched && fieldErrors.email}
-              />
-              {touched && fieldErrors.email && (
-                <span className="mt-1 block text-xs text-destructive">{requiredMessage}</span>
-              )}
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-muted-foreground">{c.phone}</span>
-              <input
-                type="tel"
-                className={fieldClass('phone')}
-                ref={(element) => { fieldRefs.current.phone = element }}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                autoComplete="tel"
-                aria-invalid={touched && fieldErrors.phone}
-              />
-              {touched && fieldErrors.phone && (
-                <span className="mt-1 block text-xs text-destructive">{requiredMessage}</span>
-              )}
-            </label>
-            <label className="sm:col-span-2 block">
-              <span className="mb-1 block text-xs text-muted-foreground">
-                {c.address}
-              </span>
-              <input
-                className={fieldClass('address')}
-                ref={(element) => { fieldRefs.current.address = element }}
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                autoComplete="street-address"
-                aria-invalid={touched && fieldErrors.address}
-              />
-              {touched && fieldErrors.address && (
-                <span className="mt-1 block text-xs text-destructive">{requiredMessage}</span>
-              )}
-            </label>
-            <label className="sm:col-span-2 block">
-              <span className="mb-1 block text-xs text-muted-foreground">{c.taxId}</span>
-              <input
-                className={fieldClass('taxId')}
-                ref={(element) => { fieldRefs.current.taxId = element }}
-                value={taxId}
-                onChange={(e) => setTaxId(e.target.value)}
-                aria-invalid={touched && fieldErrors.taxId}
-              />
-              {touched && fieldErrors.taxId && (
-                <span className="mt-1 block text-xs text-destructive">{requiredMessage}</span>
-              )}
-            </label>
+          <div
+            className={`mt-3 flex flex-col gap-3 rounded-xl border p-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+              profileComplete ? 'border-border' : 'border-destructive ring-1 ring-destructive/40'
+            }`}
+          >
+            <p className="text-pretty text-foreground">{profileComplete ? c.profileReady : c.profileMissing}</p>
+            <Button type="button" variant="outline" size="sm" onClick={onEditProfile} disabled={pending}>
+              {profileComplete ? c.editProfile : c.completeProfile}
+            </Button>
           </div>
 
           {/* Legal consents */}
@@ -326,7 +206,7 @@ export function CheckoutConfirmDialog({
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             {c.back}
           </Button>
-          <Button onClick={submit} disabled={pending} className="gap-2">
+          <Button onClick={submit} disabled={pending || !profileComplete} className="gap-2">
             {pending && <Loader2 className="size-4 animate-spin" />}
             {c.pay}
           </Button>
