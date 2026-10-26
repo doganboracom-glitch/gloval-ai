@@ -13,6 +13,8 @@ import {
   Info,
   X,
   BadgeCheck,
+  Layers,
+  Receipt,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -41,7 +43,15 @@ import type {
 } from '@/lib/billing'
 import { tenantHost } from '@/lib/domains'
 import { PermanentRightsSection } from '@/components/billing/permanent-rights-section'
-import { CollapsibleAddOnsSection } from '@/components/billing/collapsible-add-ons-section'
+import {
+  CollapsibleAddOnsSection,
+  CollapsibleSection,
+  HISTORY_ANCHOR,
+  PLANS_ANCHOR,
+  wantsHistoryOpen,
+  wantsPlansOpen,
+  wantsPlansScroll,
+} from '@/components/billing/collapsible-add-ons-section'
 import { purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
 import { PlanGrid } from '@/components/pricing/plan-grid'
@@ -724,6 +734,8 @@ export function BillingClient({
       ? shownPlan
       : null
   const ownedTier: PlanCode | undefined = ownedPlan ? toPlanCode(ownedPlan.code) : undefined
+  // Free / planless accounts see the plans open; paid ones start collapsed.
+  const hasPaidPlan = hasActiveSub && shownPlan != null && shownPlan.price_cents > 0
   const canSwitchToYearly =
     subscription != null &&
     ['active', 'past_due', 'suspended'].includes(subscription.status) &&
@@ -1117,9 +1129,18 @@ export function BillingClient({
           <CreditSummaryCard summary={creditSummary} />
         </section>
 
+        {/* Paketler: ücretli planı olmayanda açık, olanda kapalı açılır bölüm. */}
+        <CollapsibleSection
+          id={PLANS_ANCHOR}
+          title={hasPaidPlan ? b.plansTitleChange : b.plansTitle}
+          icon={Layers}
+          forceOpen={!hasPaidPlan || publishProjectId !== null}
+          opensOn={wantsPlansOpen}
+          scrollsOn={wantsPlansScroll}
+        >
         {/* Faturalama donemi gecisi */}
         {hasYearlyPlans && (
-          <div className="mt-10 flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3">
             <div
               role="tablist"
               aria-label={b.catCorporate}
@@ -1155,13 +1176,14 @@ export function BillingClient({
 
         {/* Ana sayfadaki paketlerin birebir tasarımı; CTA'lar gerçek abonelik
             aksiyonlarına bağlı. */}
-        <section className="mt-8">
+        <div className="mt-8">
           <PlanGrid
             cycle={marketingCycle}
             currentPlanCode={highlightedPlanCode}
             renderCta={({ code }) => renderPlanCta(code)}
           />
-        </section>
+        </div>
+        </CollapsibleSection>
 
         {/* Tek seferlik ek AI işlemi paketleri */}
         <section className="mt-10" aria-labelledby="ai-topups-title">
@@ -1265,14 +1287,19 @@ export function BillingClient({
         <PermanentRightsSection items={projectEntitlements} copy={b} />
 
         {/* Transaction history */}
-        <section className="mt-10">
-          <h2 className="font-display text-lg font-semibold">{b.transactions}</h2>
+        <CollapsibleSection
+          id={HISTORY_ANCHOR}
+          title={b.transactions}
+          summary={b.txnCount.replace('{n}', String(transactions.length))}
+          icon={Receipt}
+          opensOn={wantsHistoryOpen}
+        >
           {transactions.length === 0 ? (
-            <p className="mt-4 rounded-2xl border border-border bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
+            <p className="rounded-2xl border border-border bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
               {b.noTransactions}
             </p>
           ) : (
-            <ul className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card/70">
+            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card/70">
               {transactions.map((txn) => (
                 <li key={txn.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
                   <div>
@@ -1310,7 +1337,7 @@ export function BillingClient({
               ))}
             </ul>
           )}
-        </section>
+        </CollapsibleSection>
       </div>
 
       {/* "Which site?" dialog for the one-time per-site right */}
