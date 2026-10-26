@@ -319,6 +319,8 @@ export async function logUserEvent(input: {
   /** Customer-facing wording for the email to the user; the log row and admin mail keep `subject`/`body`. */
   userSubject?: string
   userBody?: string
+  /** Log (and optionally admin-mail) only; the user gets no email from this event. */
+  skipUserEmail?: boolean
   emailAdmin?: boolean
   includeBillingProfileReminder?: boolean
   adminSubject?: (userEmail: string) => string
@@ -374,7 +376,7 @@ export async function logUserEvent(input: {
     data: { user },
   } = await admin.auth.admin.getUserById(input.userId)
 
-  if (user?.email) {
+  if (user?.email && !input.skipUserEmail) {
     await sendTransactionalEmail({
       to: user.email,
       subject: userSubject,

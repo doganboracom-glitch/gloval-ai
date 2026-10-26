@@ -6,6 +6,8 @@ import { tenantUrl } from '@/lib/domains'
 import { SUPPORT_EMAIL, sendTransactionalEmailDetailed } from '@/lib/notify'
 import { renderEmailLayout, renderStepCard, renderTable, escape } from '@/lib/email/layout'
 import { resolveEmailLang } from '@/lib/email/lang'
+import { getPlanCodeForUser } from '@/lib/billing'
+import { toPlanCode } from '@/lib/pricing-config'
 import {
   buildLifecycleCopy,
   firstNameOf,
@@ -252,6 +254,12 @@ async function deliver(row: EventRow): Promise<Outcome> {
     siteUrl = project.slug ? tenantUrl(project.slug as string) : undefined
   }
 
+  // Only the first-publish email differs by plan (soft upgrade hint vs. domain link).
+  let plan: 'free' | 'paid' = 'free'
+  if (row.kind === 'project_first_published') {
+    plan = toPlanCode(await getPlanCodeForUser(row.user_id)) === 'free' ? 'free' : 'paid'
+  }
+
   const copy = buildLifecycleCopy({
     kind: row.kind,
     lang,
@@ -260,12 +268,16 @@ async function deliver(row: EventRow): Promise<Outcome> {
     siteUrl,
     dashboardUrl: DASHBOARD_URL,
     supportEmail: SUPPORT_EMAIL,
+    plan,
   })
 
   const body = [
     ...copy.paragraphs.map((p) => `<p style="margin:0 0 14px;">${escape(p)}</p>`),
     copy.steps ? renderStepCard(copy.steps.title, copy.steps.items) : '',
     copy.details ? renderTable(copy.details) : '',
+    copy.note
+      ? `<p style="margin:0 0 14px;">${escape(copy.note.text)} <a class="link" href="${escape(copy.note.href)}" style="color:#6d43bd;text-decoration:underline;">${escape(copy.note.label)}</a></p>`
+      : '',
   ].join('')
 
   const html = renderEmailLayout({
