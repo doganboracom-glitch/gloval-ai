@@ -14,10 +14,12 @@ import { GeneralPaymentSettings } from '@/components/ecommerce/general-payment-s
 import { PaymentSettingsClient } from '@/components/ecommerce/payment-settings-client'
 import { ShippingSettingsPanel } from '@/components/ecommerce/shipping-settings-panel'
 import { getShippingSettings } from '@/lib/store-payments/shipping-settings'
-import { getIyzicoSettings } from '@/lib/store-payments/iyzico-settings'
-import { IyzicoSettingsPanel } from '@/components/ecommerce/iyzico-settings-panel'
+import { PAYMENT_PROVIDERS, getPaymentProvider } from '@/components/ecommerce/provider-setup/registry'
+import { ProviderSetupAssistant } from '@/components/ecommerce/provider-setup/provider-setup-assistant'
 
-type TabId = 'general' | 'shipping' | 'iyzico'
+/** `general`, `shipping`, or the id of a registered payment provider. */
+export type PaymentSettingsTabId = string
+type TabId = PaymentSettingsTabId
 
 const copy = {
   tr: {
@@ -47,13 +49,12 @@ const copy = {
 }
 
 async function loadAll(projectId: string) {
-  const [general, bank, shipping, iyzico] = await Promise.all([
+  const [general, bank, shipping] = await Promise.all([
     getGeneralPaymentSettings(projectId),
     getPaymentSettingsForOwner(projectId),
     getShippingSettings(projectId),
-    getIyzicoSettings(projectId),
   ])
-  return { general, bank, shipping, iyzico }
+  return { general, bank, shipping }
 }
 
 /**
@@ -66,14 +67,22 @@ export function PaymentSettingsDialog({
   projectId,
   onClose,
   onSummaryChange,
+  initialTab = 'general',
+  onOpenDesign,
+  recheckKey = 0,
 }: {
   projectId: string
   onClose: () => void
   onSummaryChange?: (s: PaymentSummary) => void
+  initialTab?: PaymentSettingsTabId
+  /** Closes the window and takes the owner to the editor's Design tab. */
+  onOpenDesign?: () => void
+  recheckKey?: number
 }) {
   const { lang } = useLanguage()
-  const c = copy[lang === 'en' ? 'en' : 'tr']
-  const [tab, setTab] = useState<TabId>('general')
+  const l = lang === 'en' ? 'en' : 'tr'
+  const c = copy[l]
+  const [tab, setTab] = useState<TabId>(initialTab)
   const [bankOpen, setBankOpen] = useState(false)
   const [version, setVersion] = useState(0)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -124,8 +133,9 @@ export function PaymentSettingsDialog({
   const tabs: { id: TabId; label: string; disabled?: boolean }[] = [
     { id: 'general', label: c.general },
     { id: 'shipping', label: c.shipping },
-    { id: 'iyzico', label: 'iyzico' },
+    ...PAYMENT_PROVIDERS.map((p) => ({ id: p.id, label: p.name })),
   ]
+  const activeProvider = getPaymentProvider(tab)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur-sm sm:items-center sm:p-6">
@@ -244,16 +254,22 @@ export function PaymentSettingsDialog({
             />
           )}
 
-          {data && tab === 'iyzico' && (
-            <IyzicoSettingsPanel
-              key={`iyzico-${version}`}
+          {data && activeProvider && (
+            <ProviderSetupAssistant
+              key={activeProvider.id}
+              config={activeProvider}
               projectId={projectId}
-              initial={data.iyzico}
-              onChanged={(view) =>
-                void mutate((prev) => (prev ? { ...prev, iyzico: view } : prev), {
-                  revalidate: true,
-                })
+              lang={l}
+              recheckKey={recheckKey}
+              onOpenDesign={
+                onOpenDesign
+                  ? () => {
+                      onClose()
+                      onOpenDesign()
+                    }
+                  : undefined
               }
+              onSettingsChanged={() => void mutate()}
             />
           )}
         </div>

@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { CreditCard, Settings2, Info } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { IyzicoApplicationCard } from '@/components/ecommerce/iyzico-application-card'
 import { PaymentSettingsDialog } from '@/components/ecommerce/payment-settings-dialog'
+import { PAYMENT_PROVIDERS } from '@/components/ecommerce/provider-setup/registry'
+import { ProviderStatusSummary } from '@/components/ecommerce/provider-setup/provider-status-summary'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { PaymentModuleBadges, closedReasonText, formatTry } from '@/components/ecommerce/payment-summary-parts'
 
@@ -58,7 +59,7 @@ export function SanalPoslarTab({
   const { lang } = useLanguage()
   const l = lang === 'en' ? 'en' : 'tr'
   const c = copy[l]
-  const [open, setOpen] = useState(false)
+  const [openTab, setOpenTab] = useState<string | null>(null)
 
   const cardModule = summary?.modules.find((m) => m.id === 'card')
   const activeProvider = cardModule?.enabled ? 'iyzico' : c.none
@@ -110,7 +111,7 @@ export function SanalPoslarTab({
 
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpenTab('general')}
         className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <Settings2 className="size-4" />
@@ -122,13 +123,25 @@ export function SanalPoslarTab({
         {c.independent}
       </p>
 
-      <IyzicoApplicationCard projectId={projectId} lang={l} onOpenDesign={onOpenDesign} recheckKey={recheckKey} />
+      {PAYMENT_PROVIDERS.map((provider) => (
+        <ProviderStatusSummary
+          key={provider.id}
+          config={provider}
+          projectId={projectId}
+          lang={l}
+          recheckKey={recheckKey}
+          onOpen={() => setOpenTab(provider.id)}
+        />
+      ))}
 
-      {open && (
+      {openTab && (
         <PaymentSettingsDialog
           projectId={projectId}
-          onClose={() => setOpen(false)}
+          initialTab={openTab}
+          onClose={() => setOpenTab(null)}
           onSummaryChange={onSummaryChange}
+          onOpenDesign={onOpenDesign}
+          recheckKey={recheckKey}
         />
       )}
     </div>
