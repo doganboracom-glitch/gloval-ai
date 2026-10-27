@@ -78,7 +78,7 @@ describe('getMultilangPlanIfEnabled', () => {
 describe('purchaseMultilangPackage (forged call while the flag is off)', () => {
   it.each([undefined, 'false', '1'])('flag %j: refuses before auth and database access', async (value) => {
     vi.stubEnv('MULTILANG_FEATURE_UI', value ?? '')
-    const result = await purchaseMultilangPackage(PROJECT_ID)
+    const result = await purchaseMultilangPackage(PROJECT_ID, { preInfo: true, distance: true, withdrawal: true })
     expect(result).toMatchObject({ ok: false, error: 'feature_disabled' })
     expect(mocks.requireUserCalls).toBe(0)
     expect(mocks.adminCalls).toBe(0)

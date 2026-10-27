@@ -12,6 +12,12 @@ import type { BuyerField } from '@/lib/payments/types'
 import { grantTopUpCredits } from '@/lib/payments/topup-fulfillment'
 import { buildTopUpOrderRef, getCreditTopUp } from '@/lib/pricing-config'
 import type { CheckoutBuyer } from '@/lib/billing'
+import {
+  buildConsentColumns,
+  CONSENT_REQUIRED_ERROR,
+  hasAllCheckoutConsents,
+  type CheckoutConsents,
+} from '@/lib/checkout-consent'
 
 async function resolveClientIp(): Promise<string> {
   try {
@@ -32,6 +38,7 @@ export type PurchaseCreditTopUpResult =
       ok: false
       error:
         | 'unauthenticated'
+        | typeof CONSENT_REQUIRED_ERROR
         | 'not_found'
         | 'payment_init_failed'
         | 'payment_not_ready'
@@ -54,6 +61,7 @@ export type PurchaseCreditTopUpResult =
  */
 export async function purchaseCreditTopUp(
   packId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<PurchaseCreditTopUpResult> {
   const pack = getCreditTopUp(packId)
@@ -64,6 +72,7 @@ export async function purchaseCreditTopUp(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'unauthenticated' }
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
 
   const admin = createAdminClient()
   let providerId: ReturnType<typeof getPlatformPaymentProviderId>
@@ -107,6 +116,7 @@ export async function purchaseCreditTopUp(
       provider_ref: intent.reference,
       idempotency_key: orderRef,
       description: `AI Ek Paket ${pack.credits}`,
+      ...buildConsentColumns(),
     })
     .select('id, user_id, amount_cents, currency, status, provider_ref, idempotency_key')
     .single()

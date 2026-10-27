@@ -163,14 +163,14 @@ describe('transfer-in: pricing', () => {
   it('blocks when the provider has no transfer price (null) and never falls back to the register price', async () => {
     mocks.getTransferPrice.mockResolvedValue(null)
     expect(await checkMyTransferIn('example.com', EPP)).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
-    const started = await startMyTransferIn('example.com', EPP)
+    const started = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
     expect(started).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
     expect(ops('domain_transfers', 'insert')).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
   it('charges the transfer price: 8 USD * 50 = 400 TRY cost, +50% margin, +20% VAT = 720.00 TRY', async () => {
-    const result = await startMyTransferIn('example.com', EPP)
+    const result = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
     expect(result).toEqual({ ok: true, transferId: 'tr-1', redirectUrl: 'https://sandbox-pay.example/checkout' })
 
     const [insert] = ops('domain_transfers', 'insert')
@@ -189,7 +189,7 @@ describe('transfer-in: pricing', () => {
   })
 
   it('stores the EPP code only encrypted and never in the intent, ledger or client response', async () => {
-    const result = await startMyTransferIn('example.com', EPP)
+    const result = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
     expect(JSON.stringify(result)).not.toContain(EPP)
     const [insert] = ops('domain_transfers', 'insert')
     expect(insert.payload.auth_code_enc).toBeTruthy()
@@ -199,20 +199,20 @@ describe('transfer-in: pricing', () => {
   })
 
   it('does not submit the transfer before payment completes', async () => {
-    await startMyTransferIn('example.com', EPP)
+    await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
     expect(mocks.startTransferIn).not.toHaveBeenCalled()
     expect(mocks.finalizeTransferIn).not.toHaveBeenCalled()
   })
 
   it('reports PENDING_EXISTS on a duplicate open transfer (unique index)', async () => {
     mocks.insertError = { code: '23505' }
-    expect(await startMyTransferIn('example.com', EPP)).toEqual({ ok: false, error: 'PENDING_EXISTS' })
+    expect(await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'PENDING_EXISTS' })
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
   it('fails the order and clears the code when the payment provider throws', async () => {
     mocks.createIntent.mockRejectedValue(new Error('psp down'))
-    expect(await startMyTransferIn('example.com', EPP)).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
     const failed = ops('domain_transfers', 'update').find((o) => o.payload.status === 'failed')
     expect(failed?.payload).toMatchObject({ status: 'failed', auth_code_enc: null, error_message: 'payment_init_failed' })
   })

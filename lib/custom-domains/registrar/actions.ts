@@ -13,6 +13,7 @@ import { describeIyzicoEnvironment } from '@/lib/payments/iyzico'
 import { evaluateDomainPaymentStackFromEnv } from '@/lib/payments/domain-e2e-mode'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { getMyCurrentPlan, getMySubscription, type CheckoutBuyer } from '@/lib/billing'
+import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } from '@/lib/checkout-consent'
 import { getDomainEntitlement } from '../access'
 import { listDomainsForUser } from '../service'
 import { getDomainRegistrarProvider, isLiveDomainRegistrar } from './provider'
@@ -89,6 +90,7 @@ export async function searchMyDomainAvailability(query: string): Promise<DomainS
 }
 
 export type PurchaseErrorCode =
+  | 'CONSENT_REQUIRED'
   | 'NOT_CONFIGURED'
   | 'INVALID_DOMAIN'
   | 'UNAVAILABLE'
@@ -115,9 +117,11 @@ export async function startMyDomainPurchase(
   domainInput: string,
   periodYears: number,
   contact: RegistrantContact,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<StartPurchaseResult> {
   const { userId, email } = await requireUser()
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
 
   const registrar = getDomainRegistrarProvider()
   if (!registrar) return { ok: false, error: 'NOT_CONFIGURED' }
@@ -257,6 +261,7 @@ export async function startMyDomainPurchase(
         provider_ref: intent.reference,
         idempotency_key: `domreg_${order.id}`,
         description: `Alan adı kaydı — ${parsed.domain}`,
+        ...buildConsentColumns(),
       },
       { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
     ),

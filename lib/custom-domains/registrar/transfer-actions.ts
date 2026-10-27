@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import type { CheckoutBuyer } from '@/lib/billing'
+import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } from '@/lib/checkout-consent'
 import { listDomainsForUser } from '../service'
 import { toQuoteView, type DomainQuoteView } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
@@ -26,6 +27,7 @@ import { isTransferCapable } from './types'
  */
 
 export type TransferErrorCode =
+  | 'CONSENT_REQUIRED'
   | 'NOT_CONFIGURED'
   | 'INVALID_DOMAIN'
   | 'UNSUPPORTED_TLD'
@@ -117,8 +119,10 @@ export type StartTransferInResult =
 export async function startMyTransferIn(
   domainInput: string,
   authCode: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<StartTransferInResult> {
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
   // Everything (eligibility, lock, price) is re-derived server-side here.
   const prepared = await prepareTransferIn(domainInput, authCode)
   if (!prepared.ok) return prepared
@@ -191,6 +195,7 @@ export async function startMyTransferIn(
       provider_ref: intent.reference,
       idempotency_key: `domtrf_${row.id}`,
       description: `Alan adı transferi — ${domain}`,
+      ...buildConsentColumns(),
     },
     { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
   )

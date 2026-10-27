@@ -211,6 +211,8 @@ export type AddDomainInput = {
 
 export type DomainErrorCode =
   | 'DOMAIN_EXISTS'
+  /** A payment was requested without all three checkout consents; nothing was written. */
+  | 'CONSENT_REQUIRED'
   /** No server-side renewal price could be resolved (provider price or FX/VAT missing). */
   | 'PRICING_UNAVAILABLE'
   /** An unfinished renewal already exists for this domain. */

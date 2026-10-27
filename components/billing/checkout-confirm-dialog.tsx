@@ -9,6 +9,7 @@ import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
 import { legalPath } from '@/lib/legal/documents'
+import type { CheckoutConsents } from '@/lib/checkout-consent'
 import {
   buildIyzicoIframeSrc,
   IYZICO_IFRAME_FALLBACK_DELAY_MS,
@@ -59,8 +60,8 @@ export function CheckoutConfirmDialog({
   paymentUrl: string | null
   iframeRef: RefObject<HTMLIFrameElement | null>
   paymentResult?: 'success' | 'failed' | null
-  onConfirm: () => void
-  onRetry: () => void
+  onConfirm: (consents: CheckoutConsents) => void
+  onRetry: (consents: CheckoutConsents) => void
   onClose: () => void
 }) {
   const { t } = useLanguage()
@@ -68,6 +69,7 @@ export function CheckoutConfirmDialog({
 
   const [okPreInfo, setOkPreInfo] = useState(false)
   const [okDistance, setOkDistance] = useState(false)
+  const [okWithdrawal, setOkWithdrawal] = useState(false)
   const [touched, setTouched] = useState(false)
   const [paymentStarted, setPaymentStarted] = useState(false)
   const [paymentMode, setPaymentMode] = useState<'idle' | 'iframe' | 'redirect'>('idle')
@@ -145,7 +147,7 @@ export function CheckoutConfirmDialog({
 
   if (!open || !item) return null
 
-  const consentsGiven = okPreInfo && okDistance
+  const consentsGiven = okPreInfo && okDistance && okWithdrawal
 
   function closeCheckout() {
     if (pending) return
@@ -161,8 +163,9 @@ export function CheckoutConfirmDialog({
   }
 
   function retryPayment() {
+    if (!consentsGiven) return
     setPaymentStarted(true)
-    onRetry()
+    onRetry({ preInfo: okPreInfo, distance: okDistance, withdrawal: okWithdrawal })
   }
 
   if (paymentResult === 'success') {
@@ -377,7 +380,7 @@ export function CheckoutConfirmDialog({
         item_category: item.recurring ? 'subscription' : 'one_time',
       })
     }
-    onConfirm()
+    onConfirm({ preInfo: okPreInfo, distance: okDistance, withdrawal: okWithdrawal })
   }
 
   const inputCls =
@@ -454,6 +457,12 @@ export function CheckoutConfirmDialog({
               href={legalPath('mesafeli-satis-sozlesmesi')}
               linkLabel={c.viewContract}
               invalid={touched && !okDistance}
+            />
+            <ConsentRow
+              checked={okWithdrawal}
+              onChange={setOkWithdrawal}
+              label={c.consentWithdrawal}
+              invalid={touched && !okWithdrawal}
             />
           </div>
 

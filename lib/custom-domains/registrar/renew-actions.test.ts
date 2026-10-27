@@ -70,20 +70,20 @@ beforeEach(() => {
 describe('startMyDomainRenewal', () => {
   it('rejects an anonymous caller before pricing or inserting anything', async () => {
     m.user = null
-    expect(await startMyDomainRenewal('example.com', 1)).toEqual({ ok: false, error: 'UNAUTHENTICATED' })
+    expect(await startMyDomainRenewal('example.com', 1, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'UNAUTHENTICATED' })
     expect(m.quote).not.toHaveBeenCalled()
     expect(m.inserts).toHaveLength(0)
   })
 
   it('a second open renewal hits the unique index and opens no payment', async () => {
     m.insertResult = { data: null, error: { code: '23505' } }
-    expect(await startMyDomainRenewal('example.com', 1)).toEqual({ ok: false, error: 'RENEWAL_IN_PROGRESS' })
+    expect(await startMyDomainRenewal('example.com', 1, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'RENEWAL_IN_PROGRESS' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(m.finalizeRenewal).not.toHaveBeenCalled()
   })
 
   it('charges the server-computed amount and never renews before the payment is confirmed', async () => {
-    const res = await startMyDomainRenewal('example.com', 1)
+    const res = await startMyDomainRenewal('example.com', 1, { preInfo: true, distance: true, withdrawal: true })
     expect(res).toEqual({ ok: true, renewalId: 'r1', redirectUrl: 'https://pay.example/x' })
     expect(m.createIntent).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 54000, currency: 'TRY', orderId: 'domren_r1' }))
     expect(m.inserts[0]).toMatchObject({ status: 'pending_payment', price_cents: 54000 })
@@ -92,7 +92,7 @@ describe('startMyDomainRenewal', () => {
 
   it('a payment that cannot be opened fails the row and never reaches the registrar', async () => {
     m.createIntent.mockRejectedValue(new Error('psp down'))
-    expect(await startMyDomainRenewal('example.com', 1)).toEqual({ ok: false, error: 'TEMPORARY_FAILURE' })
+    expect(await startMyDomainRenewal('example.com', 1, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'TEMPORARY_FAILURE' })
     expect(m.finalizeRenewal).not.toHaveBeenCalled()
   })
 })

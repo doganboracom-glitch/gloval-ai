@@ -53,6 +53,7 @@ import {
   wantsPlansScroll,
 } from '@/components/billing/collapsible-add-ons-section'
 import { purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
+import type { CheckoutConsents } from '@/lib/checkout-consent'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
 import { PlanGrid } from '@/components/pricing/plan-grid'
 import {
@@ -207,7 +208,7 @@ export function BillingClient({
   const [checkout, setCheckout] = useState<CheckoutItem | null>(null)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
-  const [checkoutRun, setCheckoutRun] = useState<(() => void) | null>(null)
+  const [checkoutRun, setCheckoutRun] = useState<((consents: CheckoutConsents) => void) | null>(null)
   const paymentIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   // Faturalama donemi secimi. Kullanici yillik bir pakete aboneyse panel
@@ -295,12 +296,12 @@ export function BillingClient({
   // The real subscription action. For paid plans this runs only after the
   // legal gate is satisfied; free/trial plans call it directly (no buyer info
   // needed since nothing is charged).
-  function runSubscribe(planId: string) {
+  function runSubscribe(planId: string, consents?: CheckoutConsents) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
-        const res = await subscribeToPlan(planId)
+        const res = await subscribeToPlan(planId, consents)
         setBusyPlanId(null)
         if (!res.ok) {
           setCheckout(null)
@@ -346,7 +347,7 @@ export function BillingClient({
       currency: plan.currency,
       recurring: plan.interval !== 'once',
     })
-    setCheckoutRun(() => () => runSubscribe(planId))
+    setCheckoutRun(() => (consents: CheckoutConsents) => runSubscribe(planId, consents))
   }
 
   // The plan shown on the subscription card. A suspended subscription is not
@@ -371,12 +372,12 @@ export function BillingClient({
     shownPlan.price_cents > 0 &&
     shownPlan.interval !== 'once'
 
-  function runRenew(yearlyPlanId?: string) {
+  function runRenew(consents: CheckoutConsents, yearlyPlanId?: string) {
     setError(null)
     setBusyPlanId(yearlyPlanId ?? null)
     startTransition(async () => {
       try {
-        const res = await renewSubscription(undefined, yearlyPlanId)
+        const res = await renewSubscription(consents, undefined, yearlyPlanId)
         setBusyPlanId(null)
         if (!res.ok) {
           setCheckout(null)
@@ -413,7 +414,7 @@ export function BillingClient({
       currency: shownPlan.currency,
       recurring: true,
     })
-    setCheckoutRun(() => () => runRenew())
+    setCheckoutRun(() => (consents: CheckoutConsents) => runRenew(consents))
   }
 
   // Monthly -> yearly of the same tier goes through the renewal checkout; the
@@ -428,7 +429,7 @@ export function BillingClient({
       currency: yearlyPlan.currency,
       recurring: true,
     })
-    setCheckoutRun(() => () => runRenew(yearlyPlan.id))
+    setCheckoutRun(() => (consents: CheckoutConsents) => runRenew(consents, yearlyPlan.id))
   }
 
   // Sites that do not already hold the given per-site right (an active
@@ -450,13 +451,13 @@ export function BillingClient({
     setSitePicker(plan)
   }
 
-  function runSitePurchase(code: string, projectId: string, planId: string) {
+  function runSitePurchase(code: string, projectId: string, planId: string, consents: CheckoutConsents) {
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
         const purchase =
           code === MULTILANG_CODE ? purchaseMultilangPackage : purchaseBrandingRemoval
-        const res = await purchase(projectId)
+        const res = await purchase(projectId, consents)
         setBusyPlanId(null)
         if (!res.ok) {
           setCheckout(null)
@@ -495,15 +496,15 @@ export function BillingClient({
       currency: plan.currency,
       recurring: false,
     })
-    setCheckoutRun(() => () => runSitePurchase(plan.code, projectId, plan.id))
+    setCheckoutRun(() => (consents: CheckoutConsents) => runSitePurchase(plan.code, projectId, plan.id, consents))
   }
 
-  function runTopUpPurchase(packId: string) {
+  function runTopUpPurchase(packId: string, consents: CheckoutConsents) {
     setError(null)
     setBusyPlanId(packId)
     startTransition(async () => {
       try {
-        const res = await purchaseCreditTopUp(packId)
+        const res = await purchaseCreditTopUp(packId, consents)
         setBusyPlanId(null)
         if (!res.ok) {
           setCheckout(null)
@@ -538,7 +539,7 @@ export function BillingClient({
       currency: pack.currency,
       recurring: false,
     })
-    setCheckoutRun(() => () => runTopUpPurchase(pack.id))
+    setCheckoutRun(() => (consents: CheckoutConsents) => runTopUpPurchase(pack.id, consents))
   }
 
   useEffect(() => {
@@ -567,12 +568,12 @@ export function BillingClient({
     }
   }
 
-  function runChange(planId: string) {
+  function runChange(planId: string, consents?: CheckoutConsents) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
-        const res = await changePlan(planId)
+        const res = await changePlan(planId, consents)
         setBusyPlanId(null)
         if (!res.ok) {
           setCheckout(null)
@@ -607,7 +608,7 @@ export function BillingClient({
       currency: currentPreview.currency,
       recurring: false,
     })
-    setCheckoutRun(() => () => runChange(currentPreview.planId))
+    setCheckoutRun(() => (consents: CheckoutConsents) => runChange(currentPreview.planId, consents))
   }
 
   function handleCancel(immediate: boolean) {
@@ -1457,11 +1458,11 @@ export function BillingClient({
         paymentResult={paymentResult}
         paymentUrl={paymentUrl}
         iframeRef={paymentIframeRef}
-        onConfirm={() => checkoutRun?.()}
-        onRetry={() => {
+        onConfirm={(consents) => checkoutRun?.(consents)}
+        onRetry={(consents) => {
           setPaymentResult(null)
           setPaymentUrl(null)
-          checkoutRun?.()
+          checkoutRun?.(consents)
         }}
         onClose={() => {
           if (isPending) return
