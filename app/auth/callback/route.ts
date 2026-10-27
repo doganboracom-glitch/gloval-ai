@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
@@ -38,14 +39,17 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
   let verifyError: unknown = null
+  let verifiedUser: { id: string; email_confirmed_at?: string | null; created_at?: string | null } | null = null
 
   try {
     if (tokenHash && type) {
       const result = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
       verifyError = result.error
+      verifiedUser = result.data?.user ?? null
     } else if (code) {
       const result = await supabase.auth.exchangeCodeForSession(code)
       verifyError = result.error
+      verifiedUser = result.data?.user ?? null
     } else {
       console.warn('[auth callback] Supabase callback is missing a code or token hash')
       return secureRedirect(errorUrl(origin, draft))
@@ -59,6 +63,8 @@ export async function GET(request: NextRequest) {
     logSupabaseAuthFailure('auth callback', verifyError)
     return secureRedirect(errorUrl(origin, draft))
   }
+
+  if (!isRecovery) scheduleWelcomeEmail(verifiedUser)
 
   const keepSession = isRecovery || draft !== null
   const successUrl = isRecovery

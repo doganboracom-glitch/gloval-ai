@@ -165,6 +165,7 @@ vi.mock('@/lib/supabase/admin', () => {
 })
 
 import {
+  ensureAndSendWelcomeEmail,
   enqueueProjectFirstPublishedEmail,
   enqueueProjectUnpublishedEmail,
   processDueEmailEvents,
@@ -364,5 +365,57 @@ describe('email outbox content', () => {
     expect(event.status).toBe('failed')
     expect(event.last_error).toBe('user_missing')
     expect(db.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('welcome email after verification', () => {
+  const fresh = () => ({
+    id: USER,
+    email_confirmed_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  })
+
+  it('queues and sends once when the trigger left no row', async () => {
+    db.send.mockResolvedValue(ok())
+
+    await Promise.all([ensureAndSendWelcomeEmail(fresh()), ensureAndSendWelcomeEmail(fresh())])
+
+    const rows = db.events.filter((row) => row.kind === 'account_welcome')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('sent')
+    expect(db.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends a pending trigger row immediately and never twice', async () => {
+    const event = seedEvent()
+    db.send.mockResolvedValue(ok())
+
+    await ensureAndSendWelcomeEmail(fresh())
+    await ensureAndSendWelcomeEmail(fresh())
+
+    expect(event.status).toBe('sent')
+    expect(db.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing for an unverified address', async () => {
+    await ensureAndSendWelcomeEmail({ ...fresh(), email_confirmed_at: null })
+    expect(db.events).toHaveLength(0)
+    expect(db.send).not.toHaveBeenCalled()
+  })
+
+  it('does not backfill a welcome email for an account older than 24 hours', async () => {
+    const old = new Date(Date.now() - 25 * 60 * 60_000).toISOString()
+    await ensureAndSendWelcomeEmail({ ...fresh(), created_at: old })
+    expect(db.events).toHaveLength(0)
+    expect(db.send).not.toHaveBeenCalled()
+  })
+
+  it('leaves a failed send pending for the cron retry', async () => {
+    db.send.mockResolvedValue({ ok: false, reason: 'http', status: 503 })
+
+    await ensureAndSendWelcomeEmail(fresh())
+
+    expect(db.events[0].status).toBe('pending')
+    expect(db.events[0].last_error).toBe('http_503')
   })
 })

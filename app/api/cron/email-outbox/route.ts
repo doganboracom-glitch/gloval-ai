@@ -16,6 +16,9 @@ export async function GET(request: Request) {
 
   try {
     const result = await processDueEmailEvents({ deadlineMs: Date.now() + OUTBOX_BUDGET_MS })
+    console.log(
+      `[email-outbox] sweep processed=${result.sent + result.retry + result.failed + result.deferred} sent=${result.sent} retry=${result.retry} failed=${result.failed} deferred=${result.deferred}`,
+    )
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
     console.log('[email-outbox] sweep failed:', error instanceof Error ? error.message : 'unknown')
