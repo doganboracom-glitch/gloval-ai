@@ -1241,19 +1241,21 @@ export function BillingClient({
                     >
                       {formatSignedMoney(txn.amount_cents, txn.currency)}
                     </span>
-                    {txn.status !== 'succeeded' && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          txn.status === 'failed'
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        txn.status === 'succeeded'
+                          ? 'bg-success/15 text-success'
+                          : txn.status === 'failed'
                             ? 'bg-destructive/15 text-destructive'
                             : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {txn.status === 'failed'
+                      }`}
+                    >
+                      {txn.status === 'succeeded'
+                        ? b.txnStatusSucceeded
+                        : txn.status === 'failed'
                           ? b.txnStatusFailed
                           : b.txnStatusPending}
-                      </span>
-                    )}
+                    </span>
                   </div>
                 </li>
               ))}

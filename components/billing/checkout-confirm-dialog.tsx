@@ -387,7 +387,7 @@ export function CheckoutConfirmDialog({
                 }`}
               >
                 <ExternalLink className="size-4" aria-hidden="true" />
-                {fallbackSuggested ? 'Ödeme ekranı açılmıyor mu? iyzico’da aç' : 'Tam sayfada aç (GLOVAL logolu)'}
+                {fallbackSuggested ? 'Ödeme ekranı açılmıyor mu? iyzico’da aç' : 'iyzico ödeme sayfasını yeni sekmede aç'}
               </a>
             ) : (
               <p role="status" className="text-sm text-muted-foreground">Ödeme sayfası hazırlanıyor…</p>

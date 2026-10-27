@@ -161,7 +161,7 @@ describe('CheckoutConfirmDialog payment step', () => {
 
   it('labels the fallback link as the full-page GLOVAL checkout and keeps new-tab behaviour', () => {
     openPaymentStep()
-    const link = screen.getByRole('link', { name: 'Tam sayfada aç (GLOVAL logolu)' })
+    const link = screen.getByRole('link', { name: 'iyzico ödeme sayfasını yeni sekmede aç' })
     expect(link.getAttribute('target')).toBe('_blank')
     expect(link.getAttribute('rel')).toContain('noopener')
   })
