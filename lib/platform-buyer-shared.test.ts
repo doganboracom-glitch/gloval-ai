@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildPlatformBuyer, extractPublicClientIp, isPublicIPv4 } from '@/lib/platform-buyer-shared'
+import {
+  buildPlatformBuyer,
+  extractPublicClientIp,
+  isPublicIPv4,
+  maskPublicIPv4ForLog,
+  resolvePublicClientIp,
+} from '@/lib/platform-buyer-shared'
 import { buildIyzicoBuyerPayload, IYZICO_SANDBOX_TEST_FIXTURES } from '@/lib/payments/iyzico-buyer'
 import { PaymentBuyerError } from '@/lib/payments/types'
 
@@ -39,25 +45,116 @@ function fieldsOf(result: ReturnType<typeof buildPlatformBuyer>) {
 }
 
 describe('extractPublicClientIp', () => {
-  it('uses the first public IPv4 from the forwarded chain', () => {
-    expect(extractPublicClientIp(headersOf({ 'x-forwarded-for': '10.0.0.4, 88.230.1.9, 172.16.0.2' }))).toBe('88.230.1.9')
+  it('prefers Cloudflare client IP over the other request headers', () => {
+    expect(
+      resolvePublicClientIp(
+        headersOf({
+          'cf-connecting-ip': '88.230.1.9',
+          'x-real-ip': '9.9.9.9',
+          'x-vercel-forwarded-for': '1.1.1.1',
+          'x-forwarded-for': '8.8.8.8',
+        }),
+      ),
+    ).toEqual({ ip: '88.230.1.9', header: 'cf-connecting-ip' })
   })
 
-  it('prefers the platform header and strips ports and IPv4-mapped prefixes', () => {
-    expect(extractPublicClientIp(headersOf({ 'x-vercel-forwarded-for': '::ffff:88.230.1.9', 'x-forwarded-for': '1.2.3.4' }))).toBe('88.230.1.9')
-    expect(extractPublicClientIp(headersOf({ 'x-real-ip': '88.230.1.9:51234' }))).toBe('88.230.1.9')
+  it('checks x-real-ip, x-vercel-forwarded-for, then x-forwarded-for', () => {
+    expect(
+      resolvePublicClientIp(
+        headersOf({
+          'x-real-ip': '9.9.9.9',
+          'x-vercel-forwarded-for': '1.1.1.1',
+          'x-forwarded-for': '8.8.8.8',
+        }),
+      ),
+    ).toEqual({ ip: '9.9.9.9', header: 'x-real-ip' })
+
+    expect(
+      resolvePublicClientIp(
+        headersOf({
+          'x-real-ip': '172.23.40.86',
+          'x-vercel-forwarded-for': '1.1.1.1',
+          'x-forwarded-for': '8.8.8.8',
+        }),
+      ),
+    ).toEqual({ ip: '1.1.1.1', header: 'x-vercel-forwarded-for' })
+  })
+
+  it('uses the first public IPv4 from the forwarded chain after filtering private entries', () => {
+    expect(
+      extractPublicClientIp(
+        headersOf({ 'x-forwarded-for': '10.0.0.4, 172.23.40.86, 88.230.1.9, 172.16.0.2' }),
+      ),
+    ).toBe('88.230.1.9')
+  })
+
+  it('normalizes dotted and hexadecimal IPv4-mapped IPv6 addresses', () => {
+    expect(extractPublicClientIp(headersOf({ 'cf-connecting-ip': '::ffff:88.230.1.9' }))).toBe('88.230.1.9')
+    expect(extractPublicClientIp(headersOf({ 'cf-connecting-ip': '::ffff:58e6:109' }))).toBe('88.230.1.9')
+    expect(extractPublicClientIp(headersOf({ 'cf-connecting-ip': '0:0:0:0:0:ffff:58e6:109' }))).toBe('88.230.1.9')
+    expect(extractPublicClientIp(headersOf({ 'cf-connecting-ip': '::ffff:ac17:2856' }))).toBeNull()
   })
 
   it('returns null when no public IP exists (never a sample IP)', () => {
     expect(extractPublicClientIp(headersOf({}))).toBeNull()
-    expect(extractPublicClientIp(headersOf({ 'x-forwarded-for': '127.0.0.1, 192.168.1.5, ::1' }))).toBeNull()
+    expect(
+      extractPublicClientIp(
+        headersOf({
+          'cf-connecting-ip': '172.23.40.86',
+          'x-real-ip': '10.0.0.1',
+          'x-vercel-forwarded-for': '100.64.0.1',
+          'x-forwarded-for': '127.0.0.1, 192.168.1.5, ::1',
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      extractPublicClientIp(
+        headersOf({
+          'cf-connecting-ip': '',
+          'x-real-ip': '...',
+          'x-vercel-forwarded-for': '::ffff:999.1.1.1',
+          'x-forwarded-for': ', 1.2.3, 999.999.999.999',
+        }),
+      ),
+    ).toBeNull()
   })
 
-  it('rejects non-public ranges', () => {
-    for (const ip of ['0.0.0.0', '10.1.1.1', '127.0.0.1', '169.254.1.1', '172.20.0.1', '192.168.0.1', '100.64.0.1', '224.0.0.1', '999.1.1.1', 'abc']) {
-      expect(isPublicIPv4(ip)).toBe(false)
+  it('rejects private, reserved, loopback and link-local IPv4 and IPv6', () => {
+    for (const ip of [
+      '0.0.0.0',
+      '0.1.2.3',
+      '10.1.1.1',
+      '127.0.0.1',
+      '169.254.1.1',
+      '172.16.0.1',
+      '172.23.40.86',
+      '172.31.255.254',
+      '192.168.0.1',
+      '100.64.0.1',
+      '100.127.255.254',
+      '192.0.2.1',
+      '192.88.99.1',
+      '198.18.0.1',
+      '198.51.100.1',
+      '203.0.113.1',
+      '224.0.0.1',
+      '999.1.1.1',
+      '::1',
+      'fc00::1',
+      'fd12:3456::1',
+      'fe80::1',
+      '::ffff:172.23.40.86',
+      '::ffff:ac17:2856',
+      'abc',
+    ]) {
+      expect(isPublicIPv4(ip), ip).toBe(false)
     }
     expect(isPublicIPv4('88.230.1.9')).toBe(true)
+  })
+
+  it('masks the final IPv4 octet before logging', () => {
+    expect(maskPublicIPv4ForLog('88.230.1.9')).toBe('88.230.1.xxx')
+    expect(maskPublicIPv4ForLog('172.23.40.86')).toBeNull()
   })
 })
 

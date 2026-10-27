@@ -7,13 +7,35 @@ import {
   billingProfileRowAsForm,
   type BillingProfileDatabaseRow,
 } from '@/lib/billing-profile-store'
-import { buildPlatformBuyer, extractPublicClientIp, type PlatformBuyer } from '@/lib/platform-buyer-shared'
+import {
+  buildPlatformBuyer,
+  maskPublicIPv4ForLog,
+  resolvePublicClientIp,
+  type PlatformBuyer,
+} from '@/lib/platform-buyer-shared'
 import { BillingProfileIncompleteError } from '@/lib/payments/types'
 
 async function readClientIp(): Promise<string | null> {
   try {
-    return extractPublicClientIp(await headers())
+    const resolved = resolvePublicClientIp(await headers())
+    if (!resolved) {
+      console.warn('[platform-payment] no public buyer IP resolved', {
+        header: null,
+        maskedIp: null,
+      })
+      return null
+    }
+
+    console.info('[platform-payment] buyer IP resolved', {
+      header: resolved.header,
+      maskedIp: maskPublicIPv4ForLog(resolved.ip),
+    })
+    return resolved.ip
   } catch {
+    console.warn('[platform-payment] request IP headers unavailable', {
+      header: null,
+      maskedIp: null,
+    })
     return null
   }
 }
