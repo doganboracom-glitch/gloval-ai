@@ -64,7 +64,7 @@ describe('startMyDomainPurchase pricing guard', () => {
   ])('returns PRICING_UNAVAILABLE and writes nothing (%s)', async (_label, context) => {
     mocks.loadPricingContext.mockResolvedValue(context)
 
-    const result = await startMyDomainPurchase('example.com', 1, contact)
+    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
 
     expect(result).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
     expect(mocks.adminFrom).not.toHaveBeenCalled()
@@ -81,7 +81,7 @@ describe('startMyDomainPurchase pricing guard', () => {
     mocks.checkAvailability.mockResolvedValue([
       { domain: 'example.com', status: 'available', price: { registerCents: 1000, currency: 'EUR' } },
     ])
-    const result = await startMyDomainPurchase('example.com', 1, contact)
+    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
     expect(result).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
     expect(mocks.adminFrom).not.toHaveBeenCalled()
     expect(mocks.createIntent).not.toHaveBeenCalled()
@@ -90,7 +90,7 @@ describe('startMyDomainPurchase pricing guard', () => {
   it('ignores any extra client-supplied price arguments', async () => {
     mocks.loadPricingContext.mockResolvedValue({ vatBps: null, rates: {} })
     const call = startMyDomainPurchase as unknown as (...args: unknown[]) => Promise<unknown>
-    const result = await call('example.com', 1, contact, undefined, { priceCents: 1, vatBps: 0 })
+    const result = await call('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true }, { priceCents: 1, vatBps: 0 })
     expect(result).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
     expect(mocks.adminFrom).not.toHaveBeenCalled()
   })

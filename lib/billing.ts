@@ -5,6 +5,12 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
+import {
+  buildConsentColumns,
+  CONSENT_REQUIRED_ERROR,
+  hasAllCheckoutConsents,
+  type CheckoutConsents,
+} from '@/lib/checkout-consent'
 import { formatTicketNumber, logUserEvent } from '@/lib/notify'
 import {
   getPlatformPaymentProvider,
@@ -234,11 +240,18 @@ export type SubscribeResult =
  */
 export async function subscribeToPlan(
   planId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<SubscribeResult> {
   const { userId, email } = await requireUser()
   const plan = await getPlanById(planId)
   if (!plan || !plan.active) return { ok: false, error: 'plan_not_found' }
+
+  // Only a first charge needs the legal consents; free and trial plans start
+  // without payment. Rejected before any row is written.
+  if (plan.price_cents > 0 && plan.trial_days === 0 && !hasAllCheckoutConsents(consents)) {
+    return { ok: false, error: CONSENT_REQUIRED_ERROR }
+  }
 
   const admin = createAdminClient()
   const now = new Date()
@@ -433,6 +446,7 @@ export async function subscribeToPlan(
             provider_ref: intent.reference,
             idempotency_key: `sub_${sub.id}_initial`,
             description: `${plan.name} aboneliği`,
+            ...buildConsentColumns(),
           }),
         )
         redirectUrl = intent.redirectUrl
@@ -451,6 +465,7 @@ export async function subscribeToPlan(
             provider_ref: intent.reference,
             idempotency_key: `sub_${sub.id}_initial`,
             description: `${plan.name} aboneliği`,
+            ...buildConsentColumns(),
           }),
         )
       }
@@ -502,6 +517,7 @@ export type ChangePlanResult =
  */
 export async function changePlan(
   planId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<ChangePlanResult> {
   const { userId, email } = await requireUser()
@@ -539,6 +555,13 @@ export async function changePlan(
     now,
   })
   const isUpgrade = newPlan.price_cents >= currentPlan.price_cents
+
+  // Only a paid upgrade starts a payment; downgrades and zero-difference
+  // changes move no money and need no consent. Rejected before any write.
+  if (isUpgrade && netCents > 0 && !hasAllCheckoutConsents(consents)) {
+    return { ok: false, error: CONSENT_REQUIRED_ERROR }
+  }
+
   let provider: ReturnType<typeof getPlatformPaymentProvider>
   let providerId: PaymentProviderId
   try {
@@ -600,6 +623,7 @@ export async function changePlan(
           provider_ref: intent.reference,
           idempotency_key: `upgrade_${sub.id}_${now.getTime()}`,
           description: `${currentPlan.name} → ${newPlan.name} paket yükseltme ara farkı`,
+          ...buildConsentColumns(),
         }),
       )
       return { ok: true, status: 'incomplete', netCents, redirectUrl: intent.redirectUrl }
@@ -698,10 +722,12 @@ export type RenewResult =
  * verified server-side (see `settleSubscriptionRenewal`).
  */
 export async function renewSubscription(
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
   yearlyPlanId?: string,
 ): Promise<RenewResult> {
   const { userId, email } = await requireUser()
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
   const admin = createAdminClient()
 
   const { data: subData, error: subErr } = await admin
@@ -773,6 +799,7 @@ export async function renewSubscription(
       provider_ref: intent.reference,
       idempotency_key: key,
       description: `${plan.name} yenileme`,
+      ...buildConsentColumns(),
     })
     if (txnErr) throw txnErr
 

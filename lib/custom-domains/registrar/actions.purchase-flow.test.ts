@@ -95,7 +95,7 @@ beforeEach(() => {
 
 describe('startMyDomainPurchase - order creation before payment', () => {
   it('persists a consistent price_snapshot and charges exactly the snapshot gross (1 USD = 50 TRY, +50% margin, +20% VAT)', async () => {
-    const result = await startMyDomainPurchase('example.com', 2, contact)
+    const result = await startMyDomainPurchase('example.com', 2, contact, { preInfo: true, distance: true, withdrawal: true })
 
     expect(result).toEqual({ ok: true, orderId: 'order-1', redirectUrl: 'https://sandbox-pay.example/checkout' })
 
@@ -138,11 +138,16 @@ describe('startMyDomainPurchase - order creation before payment', () => {
       currency: 'TRY',
       status: 'pending',
       idempotency_key: 'domreg_order-1',
+      consent_pre_info: true,
+      consent_distance: true,
+      consent_withdrawal: true,
     })
+    expect(typeof tx.payload.consent_version).toBe('string')
+    expect(typeof tx.payload.consented_at).toBe('string')
   })
 
   it('never registers the domain before payment is confirmed (redirect flow)', async () => {
-    await startMyDomainPurchase('example.com', 1, contact)
+    await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
 
     expect(mocks.registerDomain).not.toHaveBeenCalled()
     expect(mocks.finalizeDomainOrder).not.toHaveBeenCalled()
@@ -154,7 +159,7 @@ describe('startMyDomainPurchase - order creation before payment', () => {
   it('only finalizes immediately when the provider reports the charge completed synchronously', async () => {
     mocks.createIntent.mockResolvedValue({ status: 'paid', action: 'completed', reference: 'sync-ref' })
 
-    const result = await startMyDomainPurchase('example.com', 1, contact)
+    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
 
     expect(result).toEqual({ ok: true, orderId: 'order-1' })
     expect(mocks.finalizeDomainOrder).toHaveBeenCalledTimes(1)
@@ -166,7 +171,7 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
   it('rejects an unauthenticated caller before touching the registrar, DB or PSP', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null } })
 
-    await expect(startMyDomainPurchase('example.com', 1, contact)).rejects.toThrow('UNAUTHENTICATED')
+    await expect(startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).rejects.toThrow('UNAUTHENTICATED')
 
     expect(mocks.checkAvailability).not.toHaveBeenCalled()
     expect(mocks.ops).toHaveLength(0)
@@ -177,13 +182,13 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
     mocks.getDomainEntitlement.mockReturnValue({ allowed: false, maxDomains: 0 })
     mocks.listDomainsForUser.mockResolvedValue([{ domain: 'other.com' }])
 
-    const result = await startMyDomainPurchase('example.com', 1, contact)
+    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
     expect(result).toMatchObject({ ok: true })
   })
 
   it('returns ALREADY_OWNED without any write or payment', async () => {
     mocks.listDomainsForUser.mockResolvedValue([{ domain: 'example.com' }])
-    expect(await startMyDomainPurchase('example.com', 1, contact)).toEqual({ ok: false, error: 'ALREADY_OWNED' })
+    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'ALREADY_OWNED' })
 
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
@@ -196,7 +201,7 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
   ])('returns UNAVAILABLE when the domain is %s', async (_label, rows) => {
     mocks.checkAvailability.mockResolvedValue(rows)
 
-    expect(await startMyDomainPurchase('example.com', 1, contact)).toEqual({ ok: false, error: 'UNAVAILABLE' })
+    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'UNAVAILABLE' })
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
@@ -204,13 +209,13 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
   it('returns FAILED without any write when the availability re-check throws', async () => {
     mocks.checkAvailability.mockRejectedValue(new Error('registrar down'))
 
-    expect(await startMyDomainPurchase('example.com', 1, contact)).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
   it('normalises an invalid period to 1 year instead of trusting the client', async () => {
-    await startMyDomainPurchase('example.com', 99, contact)
+    await startMyDomainPurchase('example.com', 99, contact, { preInfo: true, distance: true, withdrawal: true })
 
     const [insert] = tableOps('domain_orders', 'insert')
     expect(insert.payload.period_years).toBe(1)
@@ -222,7 +227,7 @@ describe('startMyDomainPurchase - payment initialisation failures keep records c
   it('marks the order failed and writes no billing transaction when createIntent throws', async () => {
     mocks.createIntent.mockRejectedValue(new Error('psp unreachable'))
 
-    expect(await startMyDomainPurchase('example.com', 1, contact)).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
 
     expect(tableOps('domain_orders', 'insert')).toHaveLength(1)
     expect(tableOps('domain_orders', 'update').map((o) => o.payload)).toEqual([
@@ -235,7 +240,7 @@ describe('startMyDomainPurchase - payment initialisation failures keep records c
   it('marks the order failed and writes no billing transaction when the intent comes back failed', async () => {
     mocks.createIntent.mockResolvedValue({ status: 'failed', action: 'none', reference: 'x' })
 
-    expect(await startMyDomainPurchase('example.com', 1, contact)).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
 
     expect(tableOps('domain_orders', 'update').map((o) => o.payload.status)).toEqual(['failed'])
     expect(tableOps('billing_transactions')).toHaveLength(0)

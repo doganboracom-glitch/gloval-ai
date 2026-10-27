@@ -122,6 +122,7 @@ export function DomainsClient({
 
   const errorText = (code: DomainErrorCode): string =>
     ({
+      CONSENT_REQUIRED: t.billing.checkout.required,
       DOMAIN_EXISTS: d.errExists,
       INVALID_DOMAIN: d.errInvalidFormat,
       RESERVED_DOMAIN: d.errReserved,

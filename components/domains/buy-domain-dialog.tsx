@@ -6,6 +6,8 @@ import { CheckCircle2, ChevronLeft, Loader2, Search, ShoppingCart, X } from 'luc
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
 import { fill } from '@/components/domains/domain-chrome'
+import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
+import type { CheckoutConsents } from '@/lib/checkout-consent'
 import {
   searchMyDomainAvailability,
   startMyDomainPurchase,
@@ -177,12 +179,12 @@ export function BuyDomainDialog({ onClose }: { onClose: () => void }) {
                 setPurchaseError(null)
                 setStep({ name: 'search' })
               }}
-              onSubmit={(periodYears, contact) => {
+              onSubmit={(periodYears, contact, consents) => {
                 setPurchaseError(null)
                 startTransition(async () => {
-                  const res = await startMyDomainPurchase(step.result.domain, periodYears, contact)
+                  const res = await startMyDomainPurchase(step.result.domain, periodYears, contact, consents)
                   if (!res.ok) {
-                    setPurchaseError(purchaseErrorText(res.error, d))
+                    setPurchaseError(purchaseErrorText(res.error, d, t.billing.checkout.required))
                     return
                   }
                   if (res.redirectUrl) {
@@ -218,9 +220,10 @@ export function BuyDomainDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-function purchaseErrorText(code: PurchaseErrorCode, d: Dict['domains']): string {
+function purchaseErrorText(code: PurchaseErrorCode, d: Dict['domains'], consentRequired: string): string {
   return (
     {
+      CONSENT_REQUIRED: consentRequired,
       NOT_CONFIGURED: d.buyNotConfigured,
       INVALID_DOMAIN: d.buyErrInvalidDomain,
       UNAVAILABLE: d.buyErrUnavailable,
@@ -263,12 +266,13 @@ function ContactStep({
   pending: boolean
   error: string | null
   onBack: () => void
-  onSubmit: (periodYears: number, contact: RegistrantContact) => void
+  onSubmit: (periodYears: number, contact: RegistrantContact, consents: CheckoutConsents) => void
 }) {
   const { t } = useLanguage()
   const d = t.domains
   const [periodYears, setPeriodYears] = useState(1)
   const [contact, setContact] = useState<RegistrantContact>(emptyContact)
+  const consent = useCheckoutConsents()
 
   // Display only: the server recomputes and charges its own total.
   const price = result.quote
@@ -294,7 +298,9 @@ function ContactStep({
   function submit(event: React.FormEvent) {
     event.preventDefault()
     if (!isValid || pending || !price) return
-    onSubmit(periodYears, contact)
+    consent.markTouched()
+    if (!consent.allGiven) return
+    onSubmit(periodYears, contact, consent.consents)
   }
 
   return (
@@ -358,6 +364,8 @@ function ContactStep({
           <Field label={d.buyCountry} value={contact.country} onChange={(v) => update('country', v.toUpperCase())} />
         </div>
       </div>
+
+      <CheckoutConsentFields consents={consent.consents} touched={consent.touched} onChange={consent.setConsent} />
 
       {error && (
         <p role="alert" className="text-sm text-destructive">

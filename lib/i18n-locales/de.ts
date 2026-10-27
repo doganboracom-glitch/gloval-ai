@@ -801,7 +801,7 @@ const de: DeepPartial<Dict> = {
       consentPreInfo: 'Ich habe das vorvertragliche Informationsformular gelesen und verstanden.',
       consentDistance: 'Ich habe den Fernabsatzvertrag gelesen und akzeptiere ihn.',
       consentWithdrawal:
-        'Ich stimme zu, dass die Leistungserbringung sofort beginnt und mein 14-tägiges Widerrufsrecht mit Abschluss der Lieferung endet.',
+        'Ich verlange, dass mit der Ausführung der Leistung sofort begonnen wird. Ich nehme zur Kenntnis, dass ich bei Ausübung meines Widerrufsrechts innerhalb dieser Frist den Wert der bereits erbrachten Leistung zu bezahlen habe und mein Widerrufsrecht erlischt, sobald die Leistung vollständig erbracht ist.',
       viewContract: 'Ansehen',
       pay: 'Weiter zur Zahlung',
       back: 'Abbrechen',

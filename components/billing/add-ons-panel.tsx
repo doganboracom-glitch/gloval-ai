@@ -27,6 +27,7 @@ import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
 import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'
 import { purchaseAddOn } from '@/lib/addon-purchase-actions'
+import type { CheckoutConsents } from '@/lib/checkout-consent'
 import {
   fillTemplate as fill,
   purchaseErrorMessage,
@@ -378,14 +379,14 @@ export function AddOnsPanel({
     setCheckoutCode(code)
   }
 
-  function runPurchase() {
+  function runPurchase(consents: CheckoutConsents) {
     const code = checkoutCode
     if (!code) return
     setError(null)
     setBusyCode(code)
     startTransition(async () => {
       try {
-        const res = await purchaseAddOn({ addonCode: code })
+        const res = await purchaseAddOn({ addonCode: code, consents })
         setBusyCode(null)
         if (!res.ok) {
           setCheckoutCode(null)
@@ -679,10 +680,10 @@ export function AddOnsPanel({
             iframeRef={paymentIframeRef}
             paymentResult={paymentResult}
             onConfirm={runPurchase}
-            onRetry={() => {
+            onRetry={(consents) => {
               setPaymentResult(null)
               setError(null)
-              runPurchase()
+              runPurchase(consents)
             }}
             onClose={() => {
               setCheckoutCode(null)

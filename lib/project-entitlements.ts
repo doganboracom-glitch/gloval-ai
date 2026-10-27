@@ -14,6 +14,12 @@ import { isMultilangFeatureUiEnabled } from '@/lib/multilang-feature-flag'
 import type { CheckoutBuyer } from '@/lib/billing'
 import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
 import type { BuyerField } from '@/lib/payments/types'
+import {
+  buildConsentColumns,
+  CONSENT_REQUIRED_ERROR,
+  hasAllCheckoutConsents,
+  type CheckoutConsents,
+} from '@/lib/checkout-consent'
 
 async function resolveClientIp(): Promise<string> {
   try {
@@ -123,6 +129,7 @@ export type BuyEntitlementResult =
   | {
       ok: false
       error:
+        | typeof CONSENT_REQUIRED_ERROR
         | 'not_found'
         | 'feature_disabled'
         | 'already_owned'
@@ -142,9 +149,10 @@ export type BuyEntitlementResult =
  */
 export async function purchaseBrandingRemoval(
   projectId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<BuyEntitlementResult> {
-  return purchaseSiteRight(BRANDING_REMOVAL_CODE, projectId, buyer)
+  return purchaseSiteRight(BRANDING_REMOVAL_CODE, projectId, consents, buyer)
 }
 
 /**
@@ -153,18 +161,21 @@ export async function purchaseBrandingRemoval(
  */
 export async function purchaseMultilangPackage(
   projectId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<BuyEntitlementResult> {
   if (!isMultilangFeatureUiEnabled()) return { ok: false, error: 'feature_disabled' }
-  return purchaseSiteRight(MULTILANG_CODE, projectId, buyer)
+  return purchaseSiteRight(MULTILANG_CODE, projectId, consents, buyer)
 }
 
 async function purchaseSiteRight(
   code: typeof BRANDING_REMOVAL_CODE | typeof MULTILANG_CODE,
   projectId: string,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<BuyEntitlementResult> {
   const { supabase, userId, email } = await requireUser()
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
   const flow = code === MULTILANG_CODE ? 'multilang' : 'branding_removal'
 
   // Ownership check through the caller's own (RLS-scoped) client.
@@ -264,6 +275,7 @@ async function purchaseSiteRight(
         provider_ref: intent.reference,
         idempotency_key: `ent_${projectId}_${code}`,
         description: `${plan.name} — ${project.name}`,
+        ...buildConsentColumns(),
       },
       { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
     )
@@ -296,6 +308,7 @@ async function purchaseSiteRight(
     // Idempotent per project: a retry can never double-charge the same site.
     idempotency_key: `ent_${projectId}_${code}`,
     description: `${plan.name} — ${project.name}`,
+    ...buildConsentColumns(),
   })
 
   revalidatePath('/billing')

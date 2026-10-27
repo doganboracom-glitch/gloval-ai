@@ -21,6 +21,7 @@ vi.mock('@/components/language-provider', () => ({
           legalTitle: 'Sözleşmeler ve onaylar',
           consentPreInfo: 'Ön Bilgilendirme Formu’nu okudum, anladım.',
           consentDistance: 'Mesafeli Satış Sözleşmesi’ni okudum ve kabul ediyorum.',
+          consentWithdrawal: 'Cayma hakkı bilgilendirmesini okudum.',
           viewContract: 'Görüntüle',
           required: 'Bu alan zorunludur.',
           pay: 'Ödeme yap',
@@ -61,6 +62,7 @@ function acceptConsentsAndPay() {
   const checkboxes = screen.getAllByRole('checkbox')
   fireEvent.click(checkboxes[0])
   fireEvent.click(checkboxes[1])
+  fireEvent.click(checkboxes[2])
   fireEvent.click(screen.getByRole('button', { name: 'Ödeme yap' }))
 }
 
@@ -127,8 +129,10 @@ describe('CheckoutConfirmDialog payment step', () => {
   })
 
   it('shows a generic Turkish failure and retries without exposing provider details', () => {
-    const props = makeProps({ paymentResult: 'failed' })
-    render(<CheckoutConfirmDialog {...props} />)
+    const props = makeProps()
+    const { rerender } = render(<CheckoutConfirmDialog {...props} />)
+    acceptConsentsAndPay()
+    rerender(<CheckoutConfirmDialog {...props} paymentResult="failed" />)
 
     expect(
       screen.getByText(

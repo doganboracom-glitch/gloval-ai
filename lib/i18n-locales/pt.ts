@@ -802,7 +802,7 @@ const pt: DeepPartial<Dict> = {
       consentPreInfo: 'Li e entendi o formulário de informação pré-contratual.',
       consentDistance: 'Li e aceito o contrato de venda à distância.',
       consentWithdrawal:
-        'Concordo que a prestação do serviço comece imediatamente e que meu direito de arrependimento de 14 dias termine com a conclusão da entrega.',
+        'Solicito que a execução do serviço comece imediatamente. Reconheço que, se exercer o meu direito de arrependimento dentro deste prazo, pagarei pela parte já executada e que o meu direito de arrependimento termina quando o serviço for totalmente executado.',
       viewContract: 'Ver',
       pay: 'Continuar para o pagamento',
       back: 'Cancelar',

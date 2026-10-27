@@ -12,6 +12,12 @@ import { verifyAddOnFulfillmentContext } from '@/lib/payments/addon-verify'
 import type { CheckoutBuyer } from '@/lib/billing'
 import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
 import type { BuyerField } from '@/lib/payments/types'
+import {
+  buildConsentColumns,
+  CONSENT_REQUIRED_ERROR,
+  hasAllCheckoutConsents,
+  type CheckoutConsents,
+} from '@/lib/checkout-consent'
 
 /**
  * Starts the purchase of one add-on through the existing iyzico Checkout Form.
@@ -24,10 +30,12 @@ import type { BuyerField } from '@/lib/payments/types'
  */
 export type PurchaseAddOnInput = {
   addonCode: string
+  consents?: CheckoutConsents
 }
 
 export type PurchaseAddOnError =
   | 'unauthenticated'
+  | typeof CONSENT_REQUIRED_ERROR
   | 'invalid_addon'
   | 'no_subscription'
   | 'subscription_inactive'
@@ -108,6 +116,7 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
 
   const addonCode = input?.addonCode
   if (!isAddOnCode(addonCode)) return { ok: false, error: 'invalid_addon' }
+  if (!hasAllCheckoutConsents(input?.consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
 
   const admin = createAdminClient()
   const now = Date.now()
@@ -218,6 +227,7 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
         currency: PURCHASE_CURRENCY,
         period_end_snapshot: periodEnd,
         provider: providerId,
+        ...buildConsentColumns(),
       })
       .eq('id', reusable.id)
       .eq('user_id', user.id)
@@ -239,6 +249,7 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
         period_end_snapshot: periodEnd,
         status: 'pending',
         provider: providerId,
+        ...buildConsentColumns(),
       })
       .select('id, amount, currency')
       .single()

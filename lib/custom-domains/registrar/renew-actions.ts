@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import type { CheckoutBuyer } from '@/lib/billing'
+import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } from '@/lib/checkout-consent'
 import type { DomainErrorCode } from '../types'
 import { finalizeRenewal, getLatestRenewal, quoteRenewal, type RenewalView } from './renewal-service'
 
@@ -84,10 +85,12 @@ export type StartRenewalResult =
 export async function startMyDomainRenewal(
   domain: string,
   years: number,
+  consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<StartRenewalResult> {
   const user = await requireUser()
   if (!user) return { ok: false, error: 'UNAUTHENTICATED' }
+  if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
 
   const result = await quoteRenewal(user.userId, domain, years)
   if (!result.ok) return result
@@ -173,6 +176,7 @@ export async function startMyDomainRenewal(
         provider_ref: intent.reference,
         idempotency_key: `domren_${row.id}`,
         description: `Alan adı yenileme — ${quote.domain} (${quote.years} yıl)`,
+        ...buildConsentColumns(),
       },
       { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
     ),

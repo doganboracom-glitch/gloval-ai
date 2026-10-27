@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
+import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import {
   checkMyTransferIn,
   startMyTransferIn,
@@ -15,9 +16,10 @@ import type { Dict } from '@/lib/i18n'
 
 type Step = { name: 'form' } | { name: 'confirm'; domain: string; quote: DomainQuoteView } | { name: 'success' }
 
-function transferErrorText(code: TransferErrorCode, d: Dict['domains']): string {
+function transferErrorText(code: TransferErrorCode, d: Dict['domains'], consentRequired: string): string {
   return (
     {
+      CONSENT_REQUIRED: consentRequired,
       NOT_CONFIGURED: d.transferErrNotConfigured,
       INVALID_DOMAIN: d.transferErrInvalidDomain,
       UNSUPPORTED_TLD: d.transferErrUnsupportedTld,
@@ -48,6 +50,7 @@ export function TransferDomainDialog({ onClose }: { onClose: () => void }) {
   const [authCode, setAuthCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const consent = useCheckoutConsents()
 
   function handleCheck(event: React.FormEvent) {
     event.preventDefault()
@@ -55,16 +58,18 @@ export function TransferDomainDialog({ onClose }: { onClose: () => void }) {
     setError(null)
     startTransition(async () => {
       const res = await checkMyTransferIn(domain, authCode)
-      if (!res.ok) return setError(transferErrorText(res.error, d))
+      if (!res.ok) return setError(transferErrorText(res.error, d, t.billing.checkout.required))
       setStep({ name: 'confirm', domain: res.domain, quote: res.quote })
     })
   }
 
   function handlePay() {
+    consent.markTouched()
+    if (!consent.allGiven) return
     setError(null)
     startTransition(async () => {
-      const res = await startMyTransferIn(domain, authCode)
-      if (!res.ok) return setError(transferErrorText(res.error, d))
+      const res = await startMyTransferIn(domain, authCode, consent.consents)
+      if (!res.ok) return setError(transferErrorText(res.error, d, t.billing.checkout.required))
       // The code is only needed in memory until now.
       setAuthCode('')
       if (res.redirectUrl) {
@@ -149,6 +154,11 @@ export function TransferDomainDialog({ onClose }: { onClose: () => void }) {
                 <span className="font-medium">{total}</span>
               </div>
               <p className="text-xs text-muted-foreground">{d.transferNote}</p>
+              <CheckoutConsentFields
+                consents={consent.consents}
+                touched={consent.touched}
+                onChange={consent.setConsent}
+              />
               {error && (
                 <p role="alert" className="text-sm text-destructive">
                   {error}

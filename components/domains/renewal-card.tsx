@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
 import { fill } from '@/components/domains/domain-chrome'
+import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import {
   getMyLatestRenewal,
   getMyRenewalQuote,
@@ -30,6 +31,7 @@ export function RenewalCard({
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const consent = useCheckoutConsents()
 
   const {
     data: latest,
@@ -57,9 +59,11 @@ export function RenewalCard({
           : d.mgRenewStInProgress
 
   function pay() {
+    consent.markTouched()
+    if (!consent.allGiven) return
     setError(null)
     startTransition(async () => {
-      const res = await startMyDomainRenewal(domain, years)
+      const res = await startMyDomainRenewal(domain, years, consent.consents)
       if (!res.ok) {
         setError(errorText(res.error))
         setConfirming(false)
@@ -130,6 +134,12 @@ export function RenewalCard({
           </p>
         ) : null}
       </div>
+
+      {confirming && (
+        <div className="mt-4">
+          <CheckoutConsentFields consents={consent.consents} touched={consent.touched} onChange={consent.setConsent} />
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="mt-2 text-sm text-destructive">
