@@ -198,6 +198,18 @@ describe('transfer-in: pricing', () => {
     expect(JSON.stringify(ops('billing_transactions'))).not.toContain(EPP)
   })
 
+  it('writes the consent evidence on the transfer ledger row', async () => {
+    await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+    const [tx] = ops('billing_transactions', 'upsert')
+    expect(tx.payload).toMatchObject({
+      consent_pre_info: true,
+      consent_distance: true,
+      consent_withdrawal: true,
+    })
+    expect(typeof tx.payload.consent_version).toBe('string')
+    expect(typeof tx.payload.consented_at).toBe('string')
+  })
+
   it('does not submit the transfer before payment completes', async () => {
     await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
     expect(mocks.startTransferIn).not.toHaveBeenCalled()

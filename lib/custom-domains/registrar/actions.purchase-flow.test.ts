@@ -138,7 +138,12 @@ describe('startMyDomainPurchase - order creation before payment', () => {
       currency: 'TRY',
       status: 'pending',
       idempotency_key: 'domreg_order-1',
+      consent_pre_info: true,
+      consent_distance: true,
+      consent_withdrawal: true,
     })
+    expect(typeof tx.payload.consent_version).toBe('string')
+    expect(typeof tx.payload.consented_at).toBe('string')
   })
 
   it('never registers the domain before payment is confirmed (redirect flow)', async () => {

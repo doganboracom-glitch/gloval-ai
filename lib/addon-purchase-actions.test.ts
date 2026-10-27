@@ -268,6 +268,17 @@ describe('purchaseAddOn happy path', () => {
     )
   })
 
+  it('stores the three-box consent evidence on the purchase row', async () => {
+    await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    expect(purchases()[0]).toMatchObject({
+      consent_pre_info: true,
+      consent_distance: true,
+      consent_withdrawal: true,
+    })
+    expect(typeof purchases()[0].consent_version).toBe('string')
+    expect(typeof purchases()[0].consented_at).toBe('string')
+  })
+
   it('grants nothing and never moves past pending', async () => {
     await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
     expect(purchases()[0].status).toBe('pending')

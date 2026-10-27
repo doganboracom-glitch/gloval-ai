@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   createIntent: vi.fn(),
   finalizeRenewal: vi.fn(),
   inserts: [] as Array<Record<string, unknown>>,
+  upserts: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
@@ -27,7 +28,10 @@ vi.mock('@/lib/supabase/admin', () => ({
       }
       for (const name of ['select', 'update', 'eq']) chain[name] = () => chain
       chain.single = () => Promise.resolve(m.insertResult)
-      chain.upsert = () => Promise.resolve({ data: null, error: null })
+      chain.upsert = (values: Record<string, unknown>) => {
+        m.upserts.push(values)
+        return Promise.resolve({ data: null, error: null })
+      }
       chain.then = (resolve: (r: unknown) => unknown) => resolve({ data: null, error: null })
       return chain
     },
@@ -63,6 +67,7 @@ beforeEach(() => {
   m.user = { id: 'u1', email: 'a@example.com' }
   m.insertResult = { data: { id: 'r1' }, error: null }
   m.inserts = []
+  m.upserts = []
   m.quote.mockResolvedValue(quote)
   m.createIntent.mockResolvedValue({ status: 'pending', action: 'redirect', reference: 'tok_1', redirectUrl: 'https://pay.example/x' })
 })
@@ -88,6 +93,19 @@ describe('startMyDomainRenewal', () => {
     expect(m.createIntent).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 54000, currency: 'TRY', orderId: 'domren_r1' }))
     expect(m.inserts[0]).toMatchObject({ status: 'pending_payment', price_cents: 54000 })
     expect(m.finalizeRenewal).not.toHaveBeenCalled()
+  })
+
+  it('writes the consent evidence on the renewal ledger row', async () => {
+    await startMyDomainRenewal('example.com', 1, { preInfo: true, distance: true, withdrawal: true })
+    expect(m.upserts).toHaveLength(1)
+    expect(m.upserts[0]).toMatchObject({
+      idempotency_key: 'domren_r1',
+      consent_pre_info: true,
+      consent_distance: true,
+      consent_withdrawal: true,
+    })
+    expect(typeof m.upserts[0].consent_version).toBe('string')
+    expect(typeof m.upserts[0].consented_at).toBe('string')
   })
 
   it('a payment that cannot be opened fails the row and never reaches the registrar', async () => {
