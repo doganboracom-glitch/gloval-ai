@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -89,22 +89,6 @@ function formatFreeAutoNote(note: string) {
       part
     ),
   )
-}
-
-/**
- * The legal-gate dialog opens `window.open('about:blank', '_blank')`
- * synchronously on click (before the async server action resolves) so the
- * browser's popup blocker sees it as a direct result of user input. That
- * popup is only ever navigated to the real PSP redirect URL once the server
- * action succeeds; on any failure path it must be closed instead of left
- * sitting on a permanent blank tab.
- */
-function closePaymentWindow(win?: Window | null) {
-  try {
-    if (win && !win.closed) win.close()
-  } catch {
-    // ignore — closing a window we no longer control is a no-op, not an error
-  }
 }
 
 type PaymentInitErrorCopy = {
@@ -222,9 +206,8 @@ export function BillingClient({
   const [checkout, setCheckout] = useState<CheckoutItem | null>(null)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
-  const [checkoutRun, setCheckoutRun] = useState<
-    ((paymentWindow: Window | null) => void) | null
-  >(null)
+  const [checkoutRun, setCheckoutRun] = useState<(() => void) | null>(null)
+  const paymentIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   // Faturalama donemi secimi. Kullanici yillik bir pakete aboneyse panel
   // dogrudan yillik sekmesiyle acilir, boylece mevcut paketi gorunur kalir.
@@ -239,31 +222,36 @@ export function BillingClient({
   const b = t.billing
 
   useEffect(() => {
+    if (!paymentUrl) return
+
     function handlePaymentMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return
+      if (event.source !== paymentIframeRef.current?.contentWindow) return
       if (event.data?.source !== 'gloval-payment') return
-      if (!paymentUrl) return
+      if (!['success', 'failed', 'error'].includes(event.data?.status)) return
 
-      if (event.data.status === 'success' || event.data.status === 'failed') {
-        setPaymentResult(event.data.status)
-        window.setTimeout(() => {
-          setPaymentResult(null)
-          setPaymentUrl(null)
-          setCheckout(null)
-          setCheckoutRun(null)
-          setBusyPlanId(null)
-          router.refresh()
-        }, 1400)
-      } else {
-        setPaymentResult('failed')
-        setPaymentUrl(null)
-        setBusyPlanId(null)
-      }
+      setPaymentResult(event.data.status === 'success' ? 'success' : 'failed')
+      setPaymentUrl(null)
+      setBusyPlanId(null)
     }
 
     window.addEventListener('message', handlePaymentMessage)
     return () => window.removeEventListener('message', handlePaymentMessage)
-  }, [paymentUrl, router, b.genericError])
+  }, [paymentUrl])
+
+  useEffect(() => {
+    if (paymentResult !== 'success') return
+
+    const timeout = window.setTimeout(() => {
+      setPaymentResult(null)
+      setCheckout(null)
+      setCheckoutRun(null)
+      setBusyPlanId(null)
+      router.refresh()
+    }, 1400)
+
+    return () => window.clearTimeout(timeout)
+  }, [paymentResult, router])
 
   const intervalLabel = (p: PlanRow) =>
     p.interval === 'once' ? ` ${b.oneTime}` : p.interval === 'year' ? b.perYear : b.perMonth
@@ -300,21 +288,14 @@ export function BillingClient({
   // The real subscription action. For paid plans this runs only after the
   // legal gate is satisfied; free/trial plans call it directly (no buyer info
   // needed since nothing is charged).
-  function runSubscribe(planId: string, paymentWindow?: Window | null) {
+  function runSubscribe(planId: string) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
-        const res = await subscribeToPlan(
-          planId,
-        )
+        const res = await subscribeToPlan(planId)
         setBusyPlanId(null)
         if (!res.ok) {
-          // The legal-gate dialog opens a blank popup up front (before the
-          // async server action resolves) so the browser doesn't treat it as
-          // a blocked popup. On any failure that popup must be closed rather
-          // than left showing a permanent blank/about:blank tab.
-          closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
           setError(
@@ -327,18 +308,11 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          if (paymentWindow && !paymentWindow.closed) {
-            paymentWindow.location.replace(res.redirectUrl)
-          } else {
-            window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
-          }
           setPaymentUrl(res.redirectUrl)
           return
         }
         router.refresh()
-      } catch (err) {
-        console.log('[v0] runSubscribe: unexpected error', err)
-        closePaymentWindow(paymentWindow)
+      } catch {
         setBusyPlanId(null)
         setCheckout(null)
         setCheckoutRun(null)
@@ -365,7 +339,7 @@ export function BillingClient({
       currency: plan.currency,
       recurring: plan.interval !== 'once',
     })
-    setCheckoutRun(() => (paymentWindow: Window | null) => runSubscribe(planId, paymentWindow))
+    setCheckoutRun(() => () => runSubscribe(planId))
   }
 
   // The plan shown on the subscription card. A suspended subscription is not
@@ -390,21 +364,14 @@ export function BillingClient({
     shownPlan.price_cents > 0 &&
     shownPlan.interval !== 'once'
 
-  function runRenew(
-    paymentWindow?: Window | null,
-    yearlyPlanId?: string,
-  ) {
+  function runRenew(yearlyPlanId?: string) {
     setError(null)
     setBusyPlanId(yearlyPlanId ?? null)
     startTransition(async () => {
       try {
-        const res = await renewSubscription(
-          undefined,
-          yearlyPlanId,
-        )
+        const res = await renewSubscription(undefined, yearlyPlanId)
         setBusyPlanId(null)
         if (!res.ok) {
-          closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
           setError(
@@ -415,20 +382,13 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          if (paymentWindow && !paymentWindow.closed) {
-            paymentWindow.location.replace(res.redirectUrl)
-          } else {
-            window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
-          }
           setPaymentUrl(res.redirectUrl)
           return
         }
         setCheckout(null)
         setCheckoutRun(null)
         router.refresh()
-      } catch (err) {
-        console.log('[v0] runRenew: unexpected error', err)
-        closePaymentWindow(paymentWindow)
+      } catch {
         setCheckout(null)
         setCheckoutRun(null)
         setError(b.genericError)
@@ -446,10 +406,7 @@ export function BillingClient({
       currency: shownPlan.currency,
       recurring: true,
     })
-    setCheckoutRun(
-      () => (paymentWindow: Window | null) =>
-        runRenew(paymentWindow),
-    )
+    setCheckoutRun(() => () => runRenew())
   }
 
   // Monthly -> yearly of the same tier goes through the renewal checkout; the
@@ -464,10 +421,7 @@ export function BillingClient({
       currency: yearlyPlan.currency,
       recurring: true,
     })
-    setCheckoutRun(
-      () => (paymentWindow: Window | null) =>
-        runRenew(paymentWindow, yearlyPlan.id),
-    )
+    setCheckoutRun(() => () => runRenew(yearlyPlan.id))
   }
 
   // Sites that do not already hold the given per-site right (an active
@@ -489,23 +443,15 @@ export function BillingClient({
     setSitePicker(plan)
   }
 
-  function runSitePurchase(
-    code: string,
-    projectId: string,
-    planId: string,
-    paymentWindow?: Window | null,
-  ) {
+  function runSitePurchase(code: string, projectId: string, planId: string) {
     setBusyPlanId(planId)
     startTransition(async () => {
       try {
         const purchase =
           code === MULTILANG_CODE ? purchaseMultilangPackage : purchaseBrandingRemoval
-        const res = await purchase(
-          projectId,
-        )
+        const res = await purchase(projectId)
         setBusyPlanId(null)
         if (!res.ok) {
-          closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
           setError(
@@ -516,18 +462,11 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          if (paymentWindow && !paymentWindow.closed) {
-            paymentWindow.location.replace(res.redirectUrl)
-          } else {
-            window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
-          }
           setPaymentUrl(res.redirectUrl)
           return
         }
         router.refresh()
-      } catch (err) {
-        console.log('[v0] runSitePurchase: unexpected error', err)
-        closePaymentWindow(paymentWindow)
+      } catch {
         setBusyPlanId(null)
         setCheckout(null)
         setCheckoutRun(null)
@@ -549,44 +488,30 @@ export function BillingClient({
       currency: plan.currency,
       recurring: false,
     })
-    setCheckoutRun(
-      () => (paymentWindow: Window | null) =>
-        runSitePurchase(plan.code, projectId, plan.id, paymentWindow),
-    )
+    setCheckoutRun(() => () => runSitePurchase(plan.code, projectId, plan.id))
   }
 
-  function runTopUpPurchase(packId: string, paymentWindow?: Window | null) {
+  function runTopUpPurchase(packId: string) {
     setError(null)
     setBusyPlanId(packId)
     startTransition(async () => {
       try {
-        const res = await purchaseCreditTopUp(
-          packId,
-        )
+        const res = await purchaseCreditTopUp(packId)
         setBusyPlanId(null)
         if (!res.ok) {
-          closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
           setError(paymentInitErrorMessage(res, b) ?? b.genericError)
           return
         }
         if (res.redirectUrl) {
-          if (paymentWindow && !paymentWindow.closed) {
-            paymentWindow.location.replace(res.redirectUrl)
-          } else {
-            window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
-          }
           setPaymentUrl(res.redirectUrl)
           return
         }
-        closePaymentWindow(paymentWindow)
         setCheckout(null)
         setCheckoutRun(null)
         router.refresh()
-      } catch (err) {
-        console.log('[v0] runTopUpPurchase: unexpected error', err)
-        closePaymentWindow(paymentWindow)
+      } catch {
         setBusyPlanId(null)
         setCheckout(null)
         setCheckoutRun(null)
@@ -606,10 +531,7 @@ export function BillingClient({
       currency: pack.currency,
       recurring: false,
     })
-    setCheckoutRun(
-      () => (paymentWindow: Window | null) =>
-        runTopUpPurchase(pack.id, paymentWindow),
-    )
+    setCheckoutRun(() => () => runTopUpPurchase(pack.id))
   }
 
   useEffect(() => {
@@ -638,7 +560,7 @@ export function BillingClient({
     }
   }
 
-  function runChange(planId: string, paymentWindow?: Window | null) {
+  function runChange(planId: string) {
     setError(null)
     setBusyPlanId(planId)
     startTransition(async () => {
@@ -646,18 +568,12 @@ export function BillingClient({
         const res = await changePlan(planId)
         setBusyPlanId(null)
         if (!res.ok) {
-          closePaymentWindow(paymentWindow)
           setCheckout(null)
           setCheckoutRun(null)
           setError(paymentInitErrorMessage(res, b) ?? b.genericError)
           return
         }
         if (res.redirectUrl) {
-          if (paymentWindow && !paymentWindow.closed) {
-            paymentWindow.location.replace(res.redirectUrl)
-          } else {
-            window.open(res.redirectUrl, '_blank', 'noopener,noreferrer')
-          }
           setPaymentUrl(res.redirectUrl)
           return
         }
@@ -665,9 +581,7 @@ export function BillingClient({
         setCheckoutRun(null)
         setPreview(null)
         router.refresh()
-      } catch (err) {
-        console.log('[v0] runChange: unexpected error', err)
-        closePaymentWindow(paymentWindow)
+      } catch {
         setBusyPlanId(null)
         setCheckout(null)
         setCheckoutRun(null)
@@ -686,7 +600,7 @@ export function BillingClient({
       currency: currentPreview.currency,
       recurring: false,
     })
-    setCheckoutRun(() => (paymentWindow: Window | null) => runChange(currentPreview.planId, paymentWindow))
+    setCheckoutRun(() => () => runChange(currentPreview.planId))
   }
 
   function handleCancel(immediate: boolean) {
@@ -1424,7 +1338,7 @@ export function BillingClient({
                 type="button"
                 onClick={() => {
                   setPreview(null)
-                  setBusyPlanId(null)
+          setBusyPlanId(null)
                 }}
                 aria-label={b.keepPlan}
                 className="rounded-md p-1 text-muted-foreground hover:text-foreground"
@@ -1469,7 +1383,7 @@ export function BillingClient({
                 variant="ghost"
                 onClick={() => {
                   setPreview(null)
-                  setBusyPlanId(null)
+          setBusyPlanId(null)
                 }}
                 disabled={isPending}
               >
@@ -1523,28 +1437,31 @@ export function BillingClient({
 
       {/* Pre-purchase legal gate: saved billing profile + contracts + required consents. */}
       <CheckoutConfirmDialog
-  open={checkout != null}
-  item={checkout}
-  defaultEmail={userEmail}
-  pending={isPending}
-  profileComplete={billingProfileComplete}
-  onEditProfile={() => {
-    setCheckout(null)
-    setCheckoutRun(null)
-    setBillingProfileOpenRequest((count) => count + 1)
-  }}
-  paymentResult={paymentResult}
-  onConfirm={(paymentWindow) => checkoutRun?.(paymentWindow)}
-  onRetry={() => {
-    setPaymentResult(null)
-    setPaymentUrl(null)
-  }}
+        open={checkout != null}
+        item={checkout}
+        defaultEmail={userEmail}
+        pending={isPending}
+        profileComplete={billingProfileComplete}
+        onEditProfile={() => {
+          setCheckout(null)
+          setCheckoutRun(null)
+          setBillingProfileOpenRequest((count) => count + 1)
+        }}
+        paymentResult={paymentResult}
+        paymentUrl={paymentUrl}
+        iframeRef={paymentIframeRef}
+        onConfirm={() => checkoutRun?.()}
+        onRetry={() => {
+          setPaymentResult(null)
+          setPaymentUrl(null)
+          checkoutRun?.()
+        }}
         onClose={() => {
-  if (isPending) return
-  setCheckout(null)
-  setPaymentUrl(null)
-  setCheckoutRun(null)
-  setBusyPlanId(null)
+          if (isPending) return
+          setCheckout(null)
+          setPaymentUrl(null)
+          setCheckoutRun(null)
+          setBusyPlanId(null)
         }}
       />
     </div>
