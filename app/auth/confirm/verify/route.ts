@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
 import { sanitizeNextPathWithDecoding } from '@/lib/safe-redirect'
@@ -52,11 +53,12 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient()
 
   try {
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
     if (error) {
       logSupabaseAuthFailure('auth confirm', error)
       return redirect(errorUrl(origin, draft))
     }
+    scheduleWelcomeEmail(data?.user)
   } catch (error) {
     logSupabaseAuthFailure('auth confirm', error)
     return redirect(errorUrl(origin, draft))

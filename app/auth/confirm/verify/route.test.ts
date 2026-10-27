@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   signOut: vi.fn(),
+  scheduleWelcomeEmail: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -15,6 +16,8 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }))
+
+vi.mock('@/lib/email-outbox', () => ({ scheduleWelcomeEmail: mocks.scheduleWelcomeEmail }))
 
 import { POST } from './route'
 

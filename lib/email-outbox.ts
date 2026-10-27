@@ -58,7 +58,7 @@ const EVENT_COLUMNS = 'id, user_id, kind, project_id, status, attempts, lease_un
 async function insertEvent(row: {
   user_id: string
   kind: LifecycleKind
-  project_id: string
+  project_id?: string
   transition_id?: string
 }): Promise<string | null> {
   const admin = createAdminClient()
@@ -128,6 +128,74 @@ export async function enqueueProjectUnpublishedEmail(input: {
     if (id) scheduleImmediateAttempt(id)
   } catch (error) {
     console.log('[email-outbox] enqueue unpublish failed:', error instanceof Error ? error.message : 'unknown')
+  }
+}
+
+/* ------------------------------ welcome email ------------------------------ */
+
+/** Accounts older than this never get a backfilled welcome email. */
+export const WELCOME_BACKFILL_WINDOW_MS = 24 * 60 * 60_000
+
+export function isWithinWelcomeWindow(createdAt: string | null | undefined, now: Date = new Date()): boolean {
+  const created = createdAt ? new Date(createdAt).getTime() : Number.NaN
+  return Number.isFinite(created) && now.getTime() - created <= WELCOME_BACKFILL_WINDOW_MS
+}
+
+export type WelcomeCandidate = {
+  id: string
+  email_confirmed_at?: string | null
+  created_at?: string | null
+}
+
+/**
+ * Delivers the welcome email for a user whose address was just verified.
+ *
+ * - A row already exists (queued by the database trigger): it is claimed and
+ *   sent now. A row that is sent, failed, processing or not yet due is left alone.
+ * - No row exists (trigger did not fire): one is inserted only when the address
+ *   is verified AND the account is younger than 24 hours, then sent now. The
+ *   partial unique index on (user_id) for `account_welcome` makes a concurrent
+ *   insert a no-op, so a second caller can never queue or send a duplicate.
+ *
+ * A failed send leaves the row `pending`; the cron sweep retries it. Never throws.
+ */
+export async function ensureAndSendWelcomeEmail(user: WelcomeCandidate, now: Date = new Date()): Promise<void> {
+  try {
+    if (!user.id || !user.email_confirmed_at) return
+
+    const admin = createAdminClient()
+    const { data: existing, error } = await admin
+      .from('email_events')
+      .select('id, status')
+      .eq('user_id', user.id)
+      .eq('kind', 'account_welcome')
+      .limit(1)
+    if (error) throw error
+
+    const row = (existing as { id: string; status: string }[] | null)?.[0]
+    if (row) {
+      if (row.status === 'pending') await processEventById(row.id)
+      return
+    }
+
+    if (!isWithinWelcomeWindow(user.created_at, now)) return
+
+    const id = await insertEvent({ user_id: user.id, kind: 'account_welcome' })
+    if (id) await processEventById(id)
+  } catch (error) {
+    console.log('[email-outbox] welcome failed:', error instanceof Error ? error.message : 'unknown')
+  }
+}
+
+/** Runs {@link ensureAndSendWelcomeEmail} after the response; a no-op outside a request scope. */
+export function scheduleWelcomeEmail(user: WelcomeCandidate | null | undefined): void {
+  if (!user?.id) return
+  try {
+    after(async () => {
+      await ensureAndSendWelcomeEmail(user)
+    })
+  } catch {
+    // Not inside a request scope; the trigger row plus the cron sweep still deliver it.
   }
 }
 

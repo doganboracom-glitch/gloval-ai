@@ -7,6 +7,7 @@ import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isWithinWelcomeWindow, scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
@@ -26,6 +27,10 @@ export default async function DashboardPage() {
   if (!user.email_confirmed_at) {
     redirect(`/auth/verify-email?email=${encodeURIComponent(user.email ?? '')}`)
   }
+
+  // Safety net for a missed trigger/session hook: only accounts inside the
+  // 24-hour welcome window can be affected, so older users cost no query.
+  if (isWithinWelcomeWindow(user.created_at)) scheduleWelcomeEmail(user)
 
   const [projects, unreadMessages] = await Promise.all([
     listProjects(),
