@@ -1170,7 +1170,7 @@ const dict = {
         consentDistance:
           'Mesafeli Satış Sözleşmesi\'ni okudum ve kabul ediyorum.',
         consentWithdrawal:
-          'Hizmetin ifasına hemen başlanmasını, dijital içerik/hizmette 14 günlük cayma hakkımın ifa tamamlandığında sona ereceğini kabul ediyorum.',
+          'Hizmetin ifasına hemen başlanmasını talep ediyorum. Cayma hakkımı bu süre içinde kullanırsam ifa edilen kısım için bedelin ödeneceğini ve hizmet tamamen ifa edildiğinde cayma hakkımın sona ereceğini kabul ediyorum.',
         viewContract: 'Görüntüle',
         pay: 'Ödemeye geç',
         back: 'Vazgeç',
@@ -2825,7 +2825,7 @@ const dict = {
         consentDistance:
           'I have read and accept the Distance Sales Agreement.',
         consentWithdrawal:
-          'I agree that service delivery begins immediately and my 14-day right of withdrawal ends once delivery is complete.',
+          'I request that performance of the service begin immediately. I acknowledge that if I exercise my right of withdrawal within this period, I will pay for the part already performed, and that my right of withdrawal ends once the service has been fully performed.',
         viewContract: 'View',
         pay: 'Continue to payment',
         back: 'Cancel',

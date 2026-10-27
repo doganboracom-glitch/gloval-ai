@@ -801,7 +801,7 @@ const et: DeepPartial<Dict> = {
       consentPreInfo: 'Olen lugenud ja mõistnud lepingueelset teabevormi.',
       consentDistance: 'Olen lugenud ja nõustun kaugmüügilepinguga.',
       consentWithdrawal:
-        'Nõustun, et teenuse osutamine algab koheselt ja minu 14-päevane taganemisõigus lõpeb tarne lõpetamisel.',
+        'Nõuan teenuse osutamisega kohe alustamist. Kinnitan, et kui kasutan taganemisõigust selle aja jooksul, tasun juba osutatud osa eest ning et mu taganemisõigus lõpeb, kui teenus on täielikult osutatud.',
       viewContract: 'Vaata',
       pay: 'Jätka maksele',
       back: 'Tühista',

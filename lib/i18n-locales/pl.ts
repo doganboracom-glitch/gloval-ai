@@ -801,7 +801,7 @@ const pl: DeepPartial<Dict> = {
       consentPreInfo: 'Przeczytałem i zrozumiałem formularz informacji przedumownych.',
       consentDistance: 'Przeczytałem i akceptuję umowę sprzedaży na odległość.',
       consentWithdrawal:
-        'Zgadzam się, że realizacja usługi rozpocznie się natychmiast, a moje 14-dniowe prawo odstąpienia wygasa po zakończeniu dostawy.',
+        'Żądam niezwłocznego rozpoczęcia świadczenia usługi. Przyjmuję do wiadomości, że jeśli skorzystam z prawa odstąpienia w tym terminie, zapłacę za część już zrealizowaną, a moje prawo odstąpienia wygasa z chwilą pełnego wykonania usługi.',
       viewContract: 'Zobacz',
       pay: 'Przejdź do płatności',
       back: 'Anuluj',

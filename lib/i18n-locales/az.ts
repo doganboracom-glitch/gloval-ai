@@ -801,7 +801,7 @@ const az: DeepPartial<Dict> = {
       consentPreInfo: 'Ön məlumatlandırma formasını oxudum və anladım.',
       consentDistance: 'Məsafəli satış müqaviləsini oxudum və qəbul edirəm.',
       consentWithdrawal:
-        'Xidmətin göstərilməsinin dərhal başlamasına razıyam və 14 günlük imtina hüququmun xidmətin tamamlanması ilə başa çatacağını qəbul edirəm.',
+        'Xidmətin icrasına dərhal başlanmasını tələb edirəm. Bu müddət ərzində imtina hüququmdan istifadə etsəm, icra olunmuş hissənin haqqının ödəniləcəyini və xidmət tam icra edildikdə imtina hüququmun sona çatacağını qəbul edirəm.',
       viewContract: 'Bax',
       pay: 'Ödənişə keç',
       back: 'Ləğv et',

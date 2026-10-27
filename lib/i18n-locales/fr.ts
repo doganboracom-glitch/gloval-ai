@@ -761,7 +761,7 @@ const fr: DeepPartial<Dict> = {
       consentPreInfo: 'J’ai lu et compris le formulaire d’information précontractuelle.',
       consentDistance: 'J’ai lu et j’accepte le contrat de vente à distance.',
       consentWithdrawal:
-        'J’accepte que la prestation débute immédiatement et que mon droit de rétractation de 14 jours prenne fin une fois la prestation terminée.',
+        'Je demande que l’exécution du service commence immédiatement. Je reconnais que si j’exerce mon droit de rétractation dans ce délai, je paierai la part déjà exécutée, et que mon droit de rétractation prend fin lorsque le service a été pleinement exécuté.',
       viewContract: 'Consulter',
       pay: 'Continuer vers le paiement',
       back: 'Annuler',
