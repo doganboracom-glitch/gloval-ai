@@ -33,18 +33,11 @@ import {
   type AddOnPurchaseOutcome,
   type PurchaseErrorCopy,
 } from '@/lib/addon-purchase-outcome'
+import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 
 type Variant = 'summary' | 'full'
 
 const ADD_ONS_PATH = '/billing/add-ons'
-
-function closePaymentWindow(win?: Window | null) {
-  try {
-    if (win && !win.closed) win.close()
-  } catch {
-    // a window we no longer control cannot be closed; nothing to do
-  }
-}
 
 function CapacityRow({
   label,
@@ -314,8 +307,9 @@ export function AddOnsPanel({
   const [busyCode, setBusyCode] = useState<AddOnCode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [awaitingUrl, setAwaitingUrl] = useState<string | null>(null)
+  const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
   const [isPending, startTransition] = useTransition()
-  const paymentWindowRef = useRef<Window | null>(null)
+  const paymentIframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const errorCopy: PurchaseErrorCopy = {
     unauthenticated: a.errUnauthenticated,
@@ -339,33 +333,44 @@ export function AddOnsPanel({
 
   function showResult() {
     setAwaitingUrl(null)
-    paymentWindowRef.current = null
+    setPaymentResult(null)
+    setCheckoutCode(null)
     router.replace(`${ADD_ONS_PATH}?payment=return`)
     router.refresh()
   }
 
-  // The popup posts a message when the callback finishes, and closing it by
-  // hand ends the wait too. Neither carries the result: both just ask the
-  // server to re-read the stored purchase status.
   useEffect(() => {
     if (!awaitingUrl) return
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return
-      if (event.data?.source !== 'gloval-payment') return
-      showResult()
+      if (
+        !isTrustedIyzicoCheckoutMessage(
+          event,
+          window.location.origin,
+          paymentIframeRef.current?.contentWindow ?? null,
+        )
+      ) {
+        return
+      }
+      const status = event.data.status
+      setPaymentResult(status === 'success' ? 'success' : 'failed')
+      setAwaitingUrl(null)
+      setBusyCode(null)
     }
     window.addEventListener('message', onMessage)
-    const timer = window.setInterval(() => {
-      const win = paymentWindowRef.current
-      if (win && win.closed) showResult()
-    }, 1000)
-    return () => {
-      window.removeEventListener('message', onMessage)
-      window.clearInterval(timer)
-    }
-    // showResult only uses stable refs/router
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => window.removeEventListener('message', onMessage)
   }, [awaitingUrl])
+
+  useEffect(() => {
+    if (paymentResult !== 'success') return
+    const timer = window.setTimeout(() => {
+      setPaymentResult(null)
+      setCheckoutCode(null)
+      setAwaitingUrl(null)
+      router.replace(`${ADD_ONS_PATH}?payment=return`)
+      router.refresh()
+    }, 1400)
+    return () => window.clearTimeout(timer)
+  }, [paymentResult, router])
 
   function openCheckout(code: AddOnCode) {
     if (!isAddOnCode(code)) return
@@ -373,12 +378,9 @@ export function AddOnsPanel({
     setCheckoutCode(code)
   }
 
-  function runPurchase(paymentWindow: Window | null) {
+  function runPurchase() {
     const code = checkoutCode
-    if (!code) {
-      closePaymentWindow(paymentWindow)
-      return
-    }
+    if (!code) return
     setError(null)
     setBusyCode(code)
     startTransition(async () => {
@@ -386,23 +388,16 @@ export function AddOnsPanel({
         const res = await purchaseAddOn({ addonCode: code })
         setBusyCode(null)
         if (!res.ok) {
-          closePaymentWindow(paymentWindow)
           setCheckoutCode(null)
           setError(purchaseErrorMessage(res.error, errorCopy))
           return
         }
-        if (paymentWindow && !paymentWindow.closed) {
-          paymentWindow.location.replace(res.redirectUrl)
-          paymentWindowRef.current = paymentWindow
-        } else {
-          paymentWindowRef.current = window.open(res.redirectUrl, '_blank')
-        }
-        setCheckoutCode(null)
+        setPaymentResult(null)
         setAwaitingUrl(res.redirectUrl)
       } catch {
-        closePaymentWindow(paymentWindow)
         setBusyCode(null)
         setCheckoutCode(null)
+        setPaymentResult(null)
         setError(t.billing.genericError)
       }
     })
@@ -500,7 +495,7 @@ export function AddOnsPanel({
         </p>
       ) : null}
 
-      {variant === 'full' && awaitingUrl ? (
+      {variant === 'full' && awaitingUrl && checkoutCode === null ? (
         <div
           role="status"
           data-awaiting-payment
@@ -680,8 +675,19 @@ export function AddOnsPanel({
             pending={isPending}
             profileComplete={profileComplete}
             onEditProfile={() => router.push('/billing')}
+            paymentUrl={awaitingUrl}
+            iframeRef={paymentIframeRef}
+            paymentResult={paymentResult}
             onConfirm={runPurchase}
-            onClose={() => setCheckoutCode(null)}
+            onRetry={() => {
+              setPaymentResult(null)
+              setError(null)
+              runPurchase()
+            }}
+            onClose={() => {
+              setCheckoutCode(null)
+              setPaymentResult(null)
+            }}
           />
         </>
       ) : null}
