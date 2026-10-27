@@ -705,6 +705,15 @@ const et: DeepPartial<Dict> = {
     paymentPending:
       'Sul on juba pooleliolev makse. Palun lõpeta see protsess või oota mõni minut ja proovi uuesti.',
     paymentInitFailed: 'Makselehte ei õnnestunud käivitada. Proovi uuesti.',
+    paymentNotice: {
+      successCredits: "Makse laekus. Sinu kontole lisati +{credits} tehisintellekti toimingut.",
+      successNamed: "Makse laekus. {name} on nüüd sinu kontol aktiivne.",
+      failed: "Makset ei õnnestunud lõpule viia. Probleem võib olla sinu kaardiga või makselahendus pole ajutiselt saadaval. Proovi teist kaarti või võta ühendust toega.",
+      dismiss: "Sulge teade",
+      resultTitle: "Makse õnnestus",
+      resultDesc: "Sinu makse laekus ja konto on uuendatud. Värske olekut näed arvelduse lehel.",
+      backToBilling: "Tagasi arvelduse juurde",
+    },
   renewPastDueBody: 'Teie makset ei õnnestunud vastu võtta. Teie teenused jäävad ajutiselt aktiivseks.',
   renewPastDueCta: 'Lõpeta makse',
   renewSuspendedBody: 'Kuna makset ei laekunud, eemaldati teie saidid ajutiselt avalikust vaatest.',

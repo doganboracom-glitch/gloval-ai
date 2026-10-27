@@ -10,6 +10,7 @@ import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
 import { legalPath } from '@/lib/legal/documents'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
+import type { PaymentNoticeTarget } from '@/lib/payment-notice'
 import {
   buildIyzicoIframeSrc,
   IYZICO_IFRAME_FALLBACK_DELAY_MS,
@@ -32,6 +33,8 @@ export interface CheckoutItem {
   currency: string
   /** true for subscriptions (recurring), false for one-time rights */
   recurring: boolean
+  /** What the result notice names after payment; defaults to `name`. */
+  notice?: PaymentNoticeTarget
 }
 
 /**

@@ -705,6 +705,15 @@ const az: DeepPartial<Dict> = {
     paymentPending:
       'Davam edən ödənişiniz var. Zəhmət olmasa bu əməliyyatı tamamlayın və ya bir neçə dəqiqə gözləyib yenidən cəhd edin.',
     paymentInitFailed: 'Ödəniş səhifəsi başladıla bilmədi. Zəhmət olmasa yenidən cəhd edin.',
+    paymentNotice: {
+      successCredits: "Ödəniş qəbul edildi. Hesabınıza +{credits} Sİ əməliyyatı əlavə olundu.",
+      successNamed: "Ödəniş qəbul edildi. {name} hesabınızda aktivləşdirildi.",
+      failed: "Ödənişi tamamlamaq mümkün olmadı. Kartla bağlı problem ola bilər və ya ödəniş sistemi müvəqqəti əlçatan deyil. Başqa kartla cəhd edin və ya dəstəyə müraciət edin.",
+      dismiss: "Bildirişi bağla",
+      resultTitle: "Ödəniş uğurlu oldu",
+      resultDesc: "Ödənişiniz qəbul edildi və hesabınız yeniləndi. Cari vəziyyəti faturalandırma səhifəsində görə bilərsiniz.",
+      backToBilling: "Faturalandırmaya qayıt",
+    },
   renewPastDueBody: 'Ödənişiniz alınmadı. Xidmətləriniz müvəqqəti olaraq aktiv saxlanılır.',
   renewPastDueCta: 'Ödənişi tamamla',
   renewSuspendedBody: 'Ödəniş alınmadığı üçün saytlarınız müvəqqəti olaraq yayımdan çıxarıldı.',
