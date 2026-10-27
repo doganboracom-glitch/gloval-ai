@@ -705,6 +705,15 @@ const es: DeepPartial<Dict> = {
     paymentPending:
       'Ya tienes un pago en curso. Por favor, completa ese proceso o espera unos minutos y vuelve a intentarlo.',
     paymentInitFailed: 'No se pudo iniciar la página de pago. Vuelve a intentarlo.',
+    paymentNotice: {
+      successCredits: "Pago recibido. Se añadieron +{credits} acciones de IA a tu cuenta.",
+      successNamed: "Pago recibido. {name} ya está activo en tu cuenta.",
+      failed: "No se pudo completar el pago. Puede haber un problema con tu tarjeta o el sistema de pago no está disponible temporalmente. Prueba con otra tarjeta o contacta con soporte.",
+      dismiss: "Cerrar aviso",
+      resultTitle: "Pago correcto",
+      resultDesc: "Hemos recibido tu pago y tu cuenta se ha actualizado. Puedes ver el estado actual en la página de facturación.",
+      backToBilling: "Volver a facturación",
+    },
   renewPastDueBody: 'No se pudo cobrar tu pago. Tus servicios se mantienen activos temporalmente.',
   renewPastDueCta: 'Completar el pago',
   renewSuspendedBody: 'Como no se recibió el pago, tus sitios se han retirado temporalmente de publicación.',

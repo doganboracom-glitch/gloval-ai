@@ -705,6 +705,15 @@ const pl: DeepPartial<Dict> = {
     paymentPending:
       'Masz już trwającą płatność. Dokończ ten proces lub poczekaj kilka minut i spróbuj ponownie.',
     paymentInitFailed: 'Nie udało się uruchomić strony płatności. Spróbuj ponownie.',
+    paymentNotice: {
+      successCredits: "Płatność otrzymana. +{credits} akcji AI dodano do Twojego konta.",
+      successNamed: "Płatność otrzymana. {name} jest teraz aktywny na Twoim koncie.",
+      failed: "Nie udało się dokończyć płatności. Może występować problem z kartą lub system płatności jest chwilowo niedostępny. Spróbuj innej karty lub skontaktuj się z pomocą techniczną.",
+      dismiss: "Zamknij powiadomienie",
+      resultTitle: "Płatność udana",
+      resultDesc: "Twoja płatność została otrzymana, a konto zaktualizowane. Aktualny stan zobaczysz na stronie rozliczeń.",
+      backToBilling: "Wróć do rozliczeń",
+    },
   renewPastDueBody: 'Nie udało się pobrać płatności. Twoje usługi są tymczasowo utrzymywane jako aktywne.',
   renewPastDueCta: 'Dokończ płatność',
   renewSuspendedBody: 'Z powodu braku płatności Twoje strony zostały tymczasowo wyłączone z publikacji.',

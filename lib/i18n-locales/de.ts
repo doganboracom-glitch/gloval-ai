@@ -705,6 +705,15 @@ const de: DeepPartial<Dict> = {
     paymentPending:
       'Sie haben bereits eine laufende Zahlung. Bitte schließen Sie diesen Vorgang ab oder warten Sie einige Minuten und versuchen Sie es erneut.',
     paymentInitFailed: 'Die Zahlungsseite konnte nicht gestartet werden. Bitte erneut versuchen.',
+    paymentNotice: {
+      successCredits: "Zahlung eingegangen. +{credits} KI-Aktionen wurden Ihrem Konto hinzugefügt.",
+      successNamed: "Zahlung eingegangen. {name} ist jetzt in Ihrem Konto aktiv.",
+      failed: "Die Zahlung konnte nicht abgeschlossen werden. Möglicherweise liegt ein Problem mit Ihrer Karte vor oder das Zahlungssystem ist vorübergehend nicht verfügbar. Versuchen Sie eine andere Karte oder kontaktieren Sie den Support.",
+      dismiss: "Hinweis schließen",
+      resultTitle: "Zahlung erfolgreich",
+      resultDesc: "Ihre Zahlung ist eingegangen und Ihr Konto wurde aktualisiert. Den aktuellen Stand sehen Sie auf der Abrechnungsseite.",
+      backToBilling: "Zurück zur Abrechnung",
+    },
   renewPastDueBody: 'Ihre Zahlung konnte nicht eingezogen werden. Ihre Dienste bleiben vorübergehend aktiv.',
   renewPastDueCta: 'Zahlung abschließen',
   renewSuspendedBody: 'Da keine Zahlung eingegangen ist, wurden Ihre Websites vorübergehend offline genommen.',

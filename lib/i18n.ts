@@ -1062,6 +1062,15 @@ const dict = {
   paymentPending:
     'Devam eden bir ödeme denemen var. Lütfen ödeme sayfasını tamamla ya da birkaç dakika bekleyip tekrar dene.',
   paymentInitFailed: 'Ödeme işlemi şu anda başlatılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.',
+  paymentNotice: {
+    successCredits: "Ödemen alındı. +{credits} AI işlemi hesabına eklendi.",
+    successNamed: "Ödemen alındı. {name} hesabında etkinleştirildi.",
+    failed: "Ödeme tamamlanamadı. Kartınla ilgili bir sorun olabilir veya ödeme sistemi geçici olarak kullanılamıyor. Başka bir kartla dene ya da destek ile iletişime geç.",
+    dismiss: "Bildirimi kapat",
+    resultTitle: "Ödeme başarılı",
+    resultDesc: "Ödemen alındı ve hesabın güncellendi. Güncel durumu faturalandırma sayfasında görebilirsin.",
+    backToBilling: "Faturalandırmaya dön",
+  },
   paymentNotReady: 'Ödeme altyapısı şu anda hazır değil. Ekibimiz bilgilendirildi; lütfen daha sonra tekrar deneyin.',
   buyerInvalidPhone: 'Telefon numaranız ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen geçerli bir cep numarası girin.',
   buyerInvalidTaxId: 'Kimlik / vergi numaranız ödeme sağlayıcısı tarafından kabul edilmedi. Lütfen kontrol edin.',
@@ -2718,6 +2727,15 @@ const dict = {
   paymentPending:
     'You have a payment already in progress. Please finish that checkout, or wait a few minutes and try again.',
   paymentInitFailed: 'The payment cannot be started right now. Please try again in a few minutes.',
+  paymentNotice: {
+    successCredits: "Payment received. +{credits} AI actions were added to your account.",
+    successNamed: "Payment received. {name} is now active on your account.",
+    failed: "Payment could not be completed. There may be an issue with your card, or the payment system is temporarily unavailable. Try another card or contact support.",
+    dismiss: "Dismiss notice",
+    resultTitle: "Payment successful",
+    resultDesc: "Your payment was received and your account has been updated. You can see the latest status on the billing page.",
+    backToBilling: "Back to billing",
+  },
   paymentNotReady: 'Payments are not available right now. Our team has been notified; please try again later.',
   buyerInvalidPhone: 'The payment provider did not accept your phone number. Please enter a valid mobile number.',
   buyerInvalidTaxId: 'The payment provider did not accept your ID / tax number. Please check it.',

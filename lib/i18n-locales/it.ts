@@ -705,6 +705,15 @@ const it: DeepPartial<Dict> = {
     paymentPending:
       'Hai già un pagamento in corso. Completa quella procedura di checkout oppure attendi qualche minuto e riprova.',
     paymentInitFailed: 'Impossibile avviare la pagina di pagamento. Riprova.',
+    paymentNotice: {
+      successCredits: "Pagamento ricevuto. +{credits} azioni IA sono state aggiunte al tuo account.",
+      successNamed: "Pagamento ricevuto. {name} è ora attivo sul tuo account.",
+      failed: "Il pagamento non è stato completato. Potrebbe esserci un problema con la carta o il sistema di pagamento è temporaneamente non disponibile. Prova con un’altra carta o contatta il supporto.",
+      dismiss: "Chiudi avviso",
+      resultTitle: "Pagamento riuscito",
+      resultDesc: "Il pagamento è stato ricevuto e il tuo account è stato aggiornato. Puoi vedere lo stato aggiornato nella pagina di fatturazione.",
+      backToBilling: "Torna alla fatturazione",
+    },
   renewPastDueBody: 'Il pagamento non è andato a buon fine. I tuoi servizi restano temporaneamente attivi.',
   renewPastDueCta: 'Completa il pagamento',
   renewSuspendedBody: 'Poiché il pagamento non è stato ricevuto, i tuoi siti sono stati temporaneamente rimossi dalla pubblicazione.',

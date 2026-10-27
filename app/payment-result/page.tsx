@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useLanguage } from '@/components/language-provider'
 import { CheckCircle2, CircleX, Clock3 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -32,32 +32,36 @@ export default function PaymentResultPage({
 }: {
   searchParams: Promise<{ checkout?: string }>
 }) {
-  const router = useRouter()
+  const { t } = useLanguage()
   const [checkout, setCheckout] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     searchParams.then((params) => setCheckout(params.checkout))
   }, [searchParams])
 
-  useEffect(() => {
-    if (checkout === 'success') {
-      const timeout = window.setTimeout(() => router.replace('/billing'), 1400)
-      return () => window.clearTimeout(timeout)
-    }
-  }, [checkout, router])
-
   const params = { checkout }
   const status: Status = params.checkout === 'success' || params.checkout === 'failed' ? params.checkout : 'error'
-  const result = content[status]
+  const notice = t.billing.paymentNotice
+  const result =
+    status === 'success'
+      ? { ...content.success, title: notice.resultTitle, description: notice.resultDesc }
+      : content[status]
   const Icon = result.icon
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-16 text-foreground">
       <section className="w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-xl sm:p-10">
-        <Icon className={`mx-auto size-16 ${status === 'success' ? 'text-emerald-500' : status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`} aria-hidden="true" />
+        <Icon className={`mx-auto size-16 ${status === 'success' ? 'text-success' : status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`} aria-hidden="true" />
         <p className="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">GLOVAL AI</p>
         <h1 className="mt-3 text-balance text-3xl font-bold">{result.title}</h1>
         <p className="mx-auto mt-4 max-w-md text-pretty leading-7 text-muted-foreground">{result.description}</p>
+        {status === 'success' && (
+          <div className="mt-8 flex justify-center">
+            <Link href="/billing" className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+              {notice.backToBilling}
+            </Link>
+          </div>
+        )}
         {status !== 'success' && (
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link href="/auth/login" className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground transition-opacity hover:opacity-90">

@@ -62,6 +62,15 @@ import {
 } from '@/components/billing/checkout-confirm-dialog'
 import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 import { purchaseCreditTopUp } from '@/lib/credit-topups'
+import { PaymentNoticeBanner, type PaymentNotice } from '@/components/billing/payment-notice-banner'
+import { getPaymentOutcomeSince } from '@/lib/payment-notice-actions'
+import {
+  clearPendingPayment,
+  formatPaymentSuccess,
+  readPendingPayment,
+  savePendingPayment,
+  type PaymentNoticeTarget,
+} from '@/lib/payment-notice'
 import {
   CREDIT_TOPUPS,
   PLANS,
@@ -208,6 +217,7 @@ export function BillingClient({
   const [checkout, setCheckout] = useState<CheckoutItem | null>(null)
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
   const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
+  const [notice, setNotice] = useState<PaymentNotice | null>(null)
   const [checkoutRun, setCheckoutRun] = useState<((consents: CheckoutConsents) => void) | null>(null)
   const paymentIframeRef = useRef<HTMLIFrameElement | null>(null)
 
@@ -223,29 +233,93 @@ export function BillingClient({
 
   const b = t.billing
 
+  const checkoutRef = useRef<CheckoutItem | null>(null)
+  useEffect(() => {
+    checkoutRef.current = checkout
+  }, [checkout])
+
+  function startPayment(redirectUrl: string) {
+    const item = checkoutRef.current
+    if (item) savePendingPayment(item.notice ?? { kind: 'named', name: item.name })
+    setPaymentUrl(redirectUrl)
+  }
+
+  // Shared by the iframe postMessage path and the new-tab (server check) path.
+  function applyPaymentOutcome(status: 'success' | 'failed', target: PaymentNoticeTarget | null) {
+    clearPendingPayment()
+    const item = checkoutRef.current
+    const resolved = target ?? (item ? (item.notice ?? { kind: 'named', name: item.name }) : null)
+    setNotice({
+      status,
+      text:
+        status === 'success' && resolved
+          ? formatPaymentSuccess(b.paymentNotice, resolved)
+          : b.paymentNotice.failed,
+    })
+    setPaymentResult(status)
+    setPaymentUrl(null)
+    setBusyPlanId(null)
+    // The dialog's success timer refreshes the balance; with no dialog open, refresh here.
+    if (status === 'success' && !item) router.refresh()
+  }
+  const applyPaymentOutcomeRef = useRef(applyPaymentOutcome)
+  useEffect(() => {
+    applyPaymentOutcomeRef.current = applyPaymentOutcome
+  })
+
   useEffect(() => {
     if (!paymentUrl) return
 
-  function handlePaymentMessage(event: MessageEvent) {
-    if (
-      !isTrustedIyzicoCheckoutMessage(
-        event,
-        window.location.origin,
-        paymentIframeRef.current?.contentWindow ?? null,
-      )
-    ) {
-      return
-    }
+    function handlePaymentMessage(event: MessageEvent) {
+      if (
+        !isTrustedIyzicoCheckoutMessage(
+          event,
+          window.location.origin,
+          paymentIframeRef.current?.contentWindow ?? null,
+        )
+      ) {
+        return
+      }
 
-    setPaymentResult(event.data.status === 'success' ? 'success' : 'failed')
-
-      setPaymentUrl(null)
-      setBusyPlanId(null)
+      applyPaymentOutcomeRef.current(event.data.status === 'success' ? 'success' : 'failed', null)
     }
 
     window.addEventListener('message', handlePaymentMessage)
     return () => window.removeEventListener('message', handlePaymentMessage)
   }, [paymentUrl])
+
+  // The provider page may have run in another tab (no postMessage reaches us):
+  // when this tab is visible again, ask the server how that checkout ended.
+  useEffect(() => {
+    let inFlight = false
+
+    async function checkPendingPayment() {
+      if (inFlight || document.visibilityState !== 'visible') return
+      const pending = readPendingPayment()
+      if (!pending) return
+      inFlight = true
+      try {
+        const outcome = await getPaymentOutcomeSince(pending.since)
+        if (outcome === 'success' || outcome === 'failed') {
+          applyPaymentOutcomeRef.current(outcome, pending.target)
+        } else if (outcome === 'none') {
+          clearPendingPayment()
+        }
+      } catch {
+        // Transient; the next focus retries.
+      } finally {
+        inFlight = false
+      }
+    }
+
+    void checkPendingPayment()
+    document.addEventListener('visibilitychange', checkPendingPayment)
+    window.addEventListener('focus', checkPendingPayment)
+    return () => {
+      document.removeEventListener('visibilitychange', checkPendingPayment)
+      window.removeEventListener('focus', checkPendingPayment)
+    }
+  }, [])
 
   useEffect(() => {
     if (paymentResult !== 'success') return
@@ -316,7 +390,7 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          setPaymentUrl(res.redirectUrl)
+          startPayment(res.redirectUrl)
           return
         }
         router.refresh()
@@ -390,7 +464,7 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          setPaymentUrl(res.redirectUrl)
+          startPayment(res.redirectUrl)
           return
         }
         setCheckout(null)
@@ -470,7 +544,7 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          setPaymentUrl(res.redirectUrl)
+          startPayment(res.redirectUrl)
           return
         }
         router.refresh()
@@ -513,7 +587,7 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          setPaymentUrl(res.redirectUrl)
+          startPayment(res.redirectUrl)
           return
         }
         setCheckout(null)
@@ -538,6 +612,7 @@ export function BillingClient({
       priceCents: pack.priceCents,
       currency: pack.currency,
       recurring: false,
+      notice: { kind: 'credits', credits: pack.credits },
     })
     setCheckoutRun(() => (consents: CheckoutConsents) => runTopUpPurchase(pack.id, consents))
   }
@@ -582,7 +657,7 @@ export function BillingClient({
           return
         }
         if (res.redirectUrl) {
-          setPaymentUrl(res.redirectUrl)
+          startPayment(res.redirectUrl)
           return
         }
         setCheckout(null)
@@ -844,6 +919,16 @@ export function BillingClient({
           </h1>
           <p className="mt-1 text-muted-foreground">{b.subtitle}</p>
         </div>
+
+        {notice && (
+          <div className="mt-6">
+            <PaymentNoticeBanner
+              notice={notice}
+              dismissLabel={b.paymentNotice.dismiss}
+              onDismiss={() => setNotice(null)}
+            />
+          </div>
+        )}
 
         {publishProjectId && publishBanner && (
           <div
@@ -1244,7 +1329,7 @@ export function BillingClient({
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                         txn.status === 'succeeded'
-                          ? 'bg-success/15 text-success'
+                          ? 'bg-success/15 text-success-strong'
                           : txn.status === 'failed'
                             ? 'bg-destructive/15 text-destructive'
                             : 'bg-muted text-muted-foreground'
