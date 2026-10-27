@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { X, Loader2, CheckCircle2, CircleX, ExternalLink, ShieldCheck } from 'lucide-react'
@@ -16,6 +16,15 @@ import {
   isTrustedIyzicoCheckoutMessage,
   redirectIyzicoCheckoutToTopLevel,
 } from '@/lib/iyzico-checkout-ui'
+
+/**
+ * How far (px) below the top of the iyzico iframe the dialog body is scrolled
+ * once the iframe has loaded. iyzico renders its own "iyzico ile Öde" intro
+ * banner at the top of the frame (~280-340px tall) and the card fields sit
+ * right below it. We only scroll the dialog body past it so the card fields are
+ * in view; the banner stays fully intact and the user can scroll back up.
+ */
+export const IYZICO_IFRAME_CARD_FIELDS_SCROLL_OFFSET_PX = 300
 
 export interface CheckoutItem {
   name: string
@@ -75,6 +84,27 @@ export function CheckoutConfirmDialog({
   const [paymentMode, setPaymentMode] = useState<'idle' | 'iframe' | 'redirect'>('idle')
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [fallbackSuggested, setFallbackSuggested] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const iframeFrameRef = useRef<HTMLDivElement>(null)
+  const autoScrolledRef = useRef(false)
+
+  function scrollToCardFieldsOnce() {
+    const body = bodyRef.current
+    const frame = iframeFrameRef.current
+    if (!body || !frame || autoScrolledRef.current) return
+    autoScrolledRef.current = true
+    if (body.scrollTop > 0) return
+    const frameTop = frame.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    body.scrollTo({
+      top: frameTop + IYZICO_IFRAME_CARD_FIELDS_SCROLL_OFFSET_PX,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    })
+  }
+
+  useEffect(() => {
+    autoScrolledRef.current = false
+  }, [open, paymentUrl])
 
   useEffect(() => {
     if (!open) {
@@ -256,15 +286,17 @@ export function CheckoutConfirmDialog({
         >
           <header className="flex shrink-0 items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-brand-foreground">
-                <ShieldCheck aria-hidden="true" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-bold tracking-[0.14em] text-brand">GLOVAL</p>
-                <h2 id="checkout-payment-title" className="truncate font-display text-lg font-bold text-foreground sm:text-xl">
-                  Güvenli ödeme
-                </h2>
-              </div>
+              <Image
+                src="/logo.png"
+                alt="GLOVAL AI"
+                width={1650}
+                height={195}
+                className="h-[22px] w-auto shrink-0 select-none"
+              />
+              <span aria-hidden="true" className="h-5 w-px shrink-0 bg-border" />
+              <h2 id="checkout-payment-title" className="truncate font-display text-base font-bold text-foreground sm:text-lg">
+                Güvenli ödeme
+              </h2>
             </div>
             <button
               type="button"
@@ -277,38 +309,37 @@ export function CheckoutConfirmDialog({
             </button>
           </header>
 
-          <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border bg-muted/30 px-4 py-3 sm:px-6">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{c.product}</p>
-              <p className="truncate font-medium text-foreground">{item.name}</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="font-mono text-lg font-bold text-foreground">
-                {formatMoney(item.priceCents, item.currency)}
-              </p>
-              <p className="text-[11px] text-muted-foreground">{c.vatIncluded}</p>
-            </div>
+          <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-border bg-muted/30 px-4 py-2 sm:px-6">
+            <p className="min-w-0 truncate text-sm font-medium text-foreground">{item.name}</p>
+            <p className="shrink-0 text-sm text-foreground">
+              <span className="font-mono font-bold">{formatMoney(item.priceCents, item.currency)}</span>{' '}
+              <span className="text-xs text-muted-foreground">{c.vatIncluded}</span>
+            </p>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:gap-4 sm:p-5">
-            <div role="group" aria-label="Ödeme altyapıları" className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3">
-                <Image src="/payment/iyzico-logo.svg" alt="iyzico" width={72} height={22} className="h-4 w-auto" />
-              </span>
-              <span className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3">
-                <Image src="/payment/visa.svg" alt="Visa" width={42} height={24} className="h-5 w-auto" />
-              </span>
-              <span className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3">
-                <Image src="/payment/mastercard.svg" alt="Mastercard" width={42} height={24} className="h-5 w-auto" />
-              </span>
+          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div role="group" aria-label="Ödeme altyapıları" className="flex shrink-0 items-center gap-1.5">
+                <span className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2">
+                  <Image src="/payment/iyzico-logo.svg" alt="iyzico" width={72} height={22} className="h-3.5 w-auto" />
+                </span>
+                <span className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2">
+                  <Image src="/payment/visa.svg" alt="Visa" width={42} height={24} className="h-4 w-auto" />
+                </span>
+                <span className="inline-flex h-7 items-center rounded-md border border-border bg-background px-2">
+                  <Image src="/payment/mastercard.svg" alt="Mastercard" width={42} height={24} className="h-4 w-auto" />
+                </span>
+              </div>
+              <p className="flex min-w-0 flex-1 basis-64 items-center gap-1.5 text-xs leading-5 text-muted-foreground">
+                <ShieldCheck className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
+                <span>Ödemeniz iyzico güvencesiyle alınır, kart bilgileriniz GLOVAL&apos;a iletilmez.</span>
+              </p>
             </div>
 
-            <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-sm leading-6 text-muted-foreground">
-              <ShieldCheck className="mt-1 size-4 shrink-0 text-brand" aria-hidden="true" />
-              <span>Ödemeniz iyzico güvencesiyle alınır, kart bilgileriniz GLOVAL&apos;a iletilmez.</span>
-            </p>
-
-            <div className="relative h-[min(56dvh,600px)] min-h-[220px] overflow-hidden rounded-xl border border-border bg-background">
+            <div
+              ref={iframeFrameRef}
+              className="relative h-[min(56dvh,600px)] min-h-[220px] shrink-0 overflow-hidden rounded-xl border border-border bg-background sm:h-[960px] sm:min-h-[720px]"
+            >
               {paymentMode === 'iframe' && iframeSrc ? (
                 <>
                   <iframe
@@ -318,6 +349,7 @@ export function CheckoutConfirmDialog({
                     onLoad={() => {
                       setIframeLoaded(true)
                       setFallbackSuggested(false)
+                      scrollToCardFieldsOnce()
                     }}
                     className={`size-full border-0 ${iframeLoaded ? 'opacity-100' : 'opacity-0'}`}
                     referrerPolicy="strict-origin-when-cross-origin"
@@ -355,7 +387,7 @@ export function CheckoutConfirmDialog({
                 }`}
               >
                 <ExternalLink className="size-4" aria-hidden="true" />
-                {fallbackSuggested ? 'Ödeme ekranı açılmıyor mu? iyzico’da aç' : 'iyzico ödeme sayfasını yeni sekmede aç'}
+                {fallbackSuggested ? 'Ödeme ekranı açılmıyor mu? iyzico’da aç' : 'Tam sayfada aç (GLOVAL logolu)'}
               </a>
             ) : (
               <p role="status" className="text-sm text-muted-foreground">Ödeme sayfası hazırlanıyor…</p>
