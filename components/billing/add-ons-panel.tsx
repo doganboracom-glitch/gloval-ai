@@ -33,6 +33,7 @@ import {
   type AddOnPurchaseOutcome,
   type PurchaseErrorCopy,
 } from '@/lib/addon-purchase-outcome'
+import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 
 type Variant = 'summary' | 'full'
 
@@ -341,11 +342,16 @@ export function AddOnsPanel({
   useEffect(() => {
     if (!awaitingUrl) return
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return
-      if (event.source !== paymentIframeRef.current?.contentWindow) return
-      if (event.data?.source !== 'gloval-payment') return
-      const status = event.data?.status
-      if (status !== 'success' && status !== 'failed' && status !== 'error') return
+      if (
+        !isTrustedIyzicoCheckoutMessage(
+          event,
+          window.location.origin,
+          paymentIframeRef.current?.contentWindow ?? null,
+        )
+      ) {
+        return
+      }
+      const status = event.data.status
       setPaymentResult(status === 'success' ? 'success' : 'failed')
       setAwaitingUrl(null)
       setBusyCode(null)

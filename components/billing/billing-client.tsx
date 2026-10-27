@@ -59,6 +59,7 @@ import {
   CheckoutConfirmDialog,
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
+import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 import { purchaseCreditTopUp } from '@/lib/credit-topups'
 import {
   CREDIT_TOPUPS,
@@ -224,13 +225,19 @@ export function BillingClient({
   useEffect(() => {
     if (!paymentUrl) return
 
-    function handlePaymentMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return
-      if (event.source !== paymentIframeRef.current?.contentWindow) return
-      if (event.data?.source !== 'gloval-payment') return
-      if (!['success', 'failed', 'error'].includes(event.data?.status)) return
+  function handlePaymentMessage(event: MessageEvent) {
+    if (
+      !isTrustedIyzicoCheckoutMessage(
+        event,
+        window.location.origin,
+        paymentIframeRef.current?.contentWindow ?? null,
+      )
+    ) {
+      return
+    }
 
-      setPaymentResult(event.data.status === 'success' ? 'success' : 'failed')
+    setPaymentResult(event.data.status === 'success' ? 'success' : 'failed')
+
       setPaymentUrl(null)
       setBusyPlanId(null)
     }

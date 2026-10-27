@@ -9,6 +9,12 @@ import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
 import { legalPath } from '@/lib/legal/documents'
+import {
+  buildIyzicoIframeSrc,
+  IYZICO_IFRAME_FALLBACK_DELAY_MS,
+  isTrustedIyzicoCheckoutMessage,
+  redirectIyzicoCheckoutToTopLevel,
+} from '@/lib/iyzico-checkout-ui'
 
 export interface CheckoutItem {
   name: string
@@ -16,13 +22,6 @@ export interface CheckoutItem {
   currency: string
   /** true for subscriptions (recurring), false for one-time rights */
   recurring: boolean
-}
-
-function withIframeFlag(paymentUrl: string) {
-  const hashIndex = paymentUrl.indexOf('#')
-  const baseUrl = hashIndex === -1 ? paymentUrl : paymentUrl.slice(0, hashIndex)
-  const hash = hashIndex === -1 ? '' : paymentUrl.slice(hashIndex)
-  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}iframe=true${hash}`
 }
 
 /**
@@ -95,18 +94,17 @@ export function CheckoutConfirmDialog({
     setFallbackSuggested(false)
     const redirectUrl = paymentUrl
     const userAgent = navigator.userAgent
-    const inAppBrowser =
-      /(Instagram|FBAN|FBAV|FB_IAB|FB4A|WhatsApp|Line\/|TikTok|Snapchat|Twitter|LinkedInApp|MicroMessenger|KAKAOTALK|; wv\))/i.test(
-        userAgent,
-      )
     let redirected = false
 
     function redirectOnUnsupportedDevice() {
       if (redirected) return
-      if (!inAppBrowser && !window.matchMedia('(max-width: 639px)').matches) return
-      redirected = true
-      setPaymentMode('redirect')
-      window.location.replace(redirectUrl)
+      redirected = redirectIyzicoCheckoutToTopLevel(
+        redirectUrl,
+        userAgent,
+        window.innerWidth,
+        (url) => window.location.replace(url),
+      )
+      if (redirected) setPaymentMode('redirect')
     }
 
     redirectOnUnsupportedDevice()
@@ -117,7 +115,10 @@ export function CheckoutConfirmDialog({
 
   useEffect(() => {
     if (!open || !paymentUrl || paymentMode !== 'iframe' || iframeLoaded) return
-    const timeout = window.setTimeout(() => setFallbackSuggested(true), 12_000)
+    const timeout = window.setTimeout(
+      () => setFallbackSuggested(true),
+      IYZICO_IFRAME_FALLBACK_DELAY_MS,
+    )
     return () => window.clearTimeout(timeout)
   }, [open, paymentUrl, paymentMode, iframeLoaded])
 
@@ -125,9 +126,15 @@ export function CheckoutConfirmDialog({
     if (!open || !paymentUrl || paymentMode !== 'iframe') return
 
     function handleIframeMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return
-      if (event.source !== iframeRef.current?.contentWindow) return
-      if (event.data?.source !== 'gloval-payment') return
+      if (
+        !isTrustedIyzicoCheckoutMessage(
+          event,
+          window.location.origin,
+          iframeRef.current?.contentWindow ?? null,
+        )
+      ) {
+        return
+      }
       setIframeLoaded(true)
       setFallbackSuggested(false)
     }
@@ -234,7 +241,7 @@ export function CheckoutConfirmDialog({
   }
 
   if (paymentStarted) {
-    const iframeSrc = paymentUrl ? withIframeFlag(paymentUrl) : null
+    const iframeSrc = paymentUrl ? buildIyzicoIframeSrc(paymentUrl) : null
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-2 backdrop-blur-sm sm:p-4">
