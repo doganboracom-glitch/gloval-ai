@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { formatTicketNumber, logUserEvent } from '@/lib/notify'
-import { freePlanWelcomeEmail } from '@/lib/free-plan-email'
 import {
   getPlatformPaymentProvider,
   getPlatformPaymentProviderId,
@@ -477,7 +476,8 @@ export async function subscribeToPlan(
     subject: `${plan.name} aboneliği başlatıldı`,
     body: `Kullanıcı ${plan.name} planına abone oldu (durum: ${subscriptionStatusLabelTr(status)}).`,
     emailAdmin: true,
-    ...(isFree ? freePlanWelcomeEmail() : {}),
+    // The customer's FREE welcome comes from the email outbox (account_welcome).
+    ...(isFree ? { skipUserEmail: true } : {}),
     ...(paymentPending
       ? {
           adminSubject: (userEmail: string) => `${userEmail} üye abonelik başlatma talebi`,

@@ -58,7 +58,11 @@ type NotificationStatus = 'sent' | 'queued' | 'failed'
  * No-ops (returns false) when the API key, from address or recipient is missing
  * so local/dev environments degrade gracefully instead of throwing.
  */
-export async function sendTransactionalEmail(input: {
+export async function sendTransactionalEmail(input: TransactionalEmailInput): Promise<boolean> {
+  return (await sendTransactionalEmailDetailed(input)).ok
+}
+
+export type TransactionalEmailInput = {
   to: string
   subject: string
   html: string
@@ -66,14 +70,31 @@ export async function sendTransactionalEmail(input: {
   replyTo?: string
   /** Store name shown as "<name> via GLOVAL AI"; the address stays MAIL_FROM. */
   fromName?: string
-}): Promise<boolean> {
+  /** Sent as Resend's `Idempotency-Key`, so a retried request can never deliver twice. */
+  idempotencyKey?: string
+}
+
+export type TransactionalEmailResult =
+  | { ok: true; messageId: string | null }
+  | { ok: false; reason: 'not_configured' }
+  | { ok: false; reason: 'http'; status: number }
+  | { ok: false; reason: 'network' }
+
+/**
+ * Same send as `sendTransactionalEmail`, but reports WHY it failed (status code,
+ * missing configuration, network) and returns the provider message id, which the
+ * email outbox needs to decide between retrying and giving up.
+ */
+export async function sendTransactionalEmailDetailed(
+  input: TransactionalEmailInput,
+): Promise<TransactionalEmailResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   const mailFrom = process.env.MAIL_FROM?.trim()
   const from =
     mailFrom && input.fromName ? composeStoreFrom(mailFrom, input.fromName) : mailFrom
   const to = input.to?.trim()
 
-  if (!apiKey || !from || !to) return false
+  if (!apiKey || !from || !to) return { ok: false, reason: 'not_configured' }
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -81,6 +102,7 @@ export async function sendTransactionalEmail(input: {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -93,12 +115,13 @@ export async function sendTransactionalEmail(input: {
     })
     if (!res.ok) {
       console.log('[v0] resend send failed:', res.status, await res.text().catch(() => ''))
-      return false
+      return { ok: false, reason: 'http', status: res.status }
     }
-    return true
+    const payload = (await res.json().catch(() => null)) as { id?: unknown } | null
+    return { ok: true, messageId: typeof payload?.id === 'string' ? payload.id : null }
   } catch (error) {
     console.log('[v0] resend send error:', error)
-    return false
+    return { ok: false, reason: 'network' }
   }
 }
 
@@ -296,6 +319,8 @@ export async function logUserEvent(input: {
   /** Customer-facing wording for the email to the user; the log row and admin mail keep `subject`/`body`. */
   userSubject?: string
   userBody?: string
+  /** Log (and optionally admin-mail) only; the user gets no email from this event. */
+  skipUserEmail?: boolean
   emailAdmin?: boolean
   includeBillingProfileReminder?: boolean
   adminSubject?: (userEmail: string) => string
@@ -351,7 +376,7 @@ export async function logUserEvent(input: {
     data: { user },
   } = await admin.auth.admin.getUserById(input.userId)
 
-  if (user?.email) {
+  if (user?.email && !input.skipUserEmail) {
     await sendTransactionalEmail({
       to: user.email,
       subject: userSubject,

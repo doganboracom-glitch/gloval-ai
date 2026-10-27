@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -23,11 +24,13 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
     return NextResponse.redirect(`${origin}/auth/login?error=oauth`)
   }
+
+  scheduleWelcomeEmail(data?.user)
 
   return NextResponse.redirect(`${origin}${next}`)
 }
