@@ -43,6 +43,8 @@ export type PaymentReceiptCopy = {
   /** Billing-profile reminder; present only while the profile is incomplete. */
   reminder?: TextLink
   support: TextLink
+  /** Second contact option shown right after `support` (e.g. the support address next to a ticket link). */
+  supportAlternative?: TextLink
   footer: string
 }
 
@@ -131,6 +133,13 @@ export function paymentReceiptToText(copy: PaymentReceiptCopy): string {
   const parts = [copy.title, ...copy.paragraphs, copy.details.map(([label, value]) => `${label}: ${value}`).join('\n')]
   parts.push(`${copy.cta.label}: ${copy.cta.href}`)
   if (copy.reminder) parts.push(`${copy.reminder.text}\n${copy.reminder.href}`)
-  parts.push(`${copy.support.text} ${copy.support.label}`, copy.footer)
+  const supportLines = [
+    // A mailto label already is the address; any other link needs its URL spelled out in plain text.
+    copy.support.href.startsWith('mailto:')
+      ? `${copy.support.text} ${copy.support.label}`
+      : `${copy.support.text} ${copy.support.label}: ${copy.support.href}`,
+  ]
+  if (copy.supportAlternative) supportLines.push(`${copy.supportAlternative.text} ${copy.supportAlternative.label}`)
+  parts.push(supportLines.join('\n'), copy.footer)
   return parts.join('\n\n')
 }

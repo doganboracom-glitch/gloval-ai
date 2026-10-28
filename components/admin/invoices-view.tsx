@@ -7,7 +7,13 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { PageHeader } from '@/components/admin/admin-ui'
 import { InvoicesTable } from '@/components/admin/invoices-table'
-import { InvoiceDetailsDialog, NotRequiredDialog, ReopenDialog, UploadInvoiceDialog } from '@/components/admin/invoice-dialogs'
+import {
+  InvoiceDetailsDialog,
+  NotRequiredDialog,
+  ReopenDialog,
+  ResendEmailDialog,
+  UploadInvoiceDialog,
+} from '@/components/admin/invoice-dialogs'
 import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
 import { exportInvoicesCsvAction } from '@/lib/invoices/actions'
 import type { AdminInvoiceRow, InvoiceFilters, InvoiceListResult, InvoiceStatusFilter } from '@/lib/invoices/types'
@@ -17,6 +23,7 @@ const fieldClass = 'rounded-md border border-border bg-background px-3 py-2 text
 type DialogState =
   | { kind: 'upload'; row: AdminInvoiceRow }
   | { kind: 'details'; row: AdminInvoiceRow }
+  | { kind: 'resend'; row: AdminInvoiceRow }
   | { kind: 'mark'; ids: string[]; convert?: boolean }
   | { kind: 'reopen'; ids: string[] }
   | null
@@ -244,6 +251,7 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
       ) : null}
 
       {dialog?.kind === 'upload' ? <UploadInvoiceDialog row={dialog.row} onClose={() => setDialog(null)} onDone={done} /> : null}
+      {dialog?.kind === 'resend' ? <ResendEmailDialog row={dialog.row} onClose={() => setDialog(null)} onDone={done} /> : null}
       {dialog?.kind === 'details' ? <InvoiceDetailsDialog row={dialog.row} onClose={() => setDialog(null)} /> : null}
       {dialog?.kind === 'mark' ? <NotRequiredDialog transactionIds={dialog.ids} convertUploaded={dialog.convert} onClose={() => setDialog(null)} onDone={done} /> : null}
       {dialog?.kind === 'reopen' ? <ReopenDialog transactionIds={dialog.ids} onClose={() => setDialog(null)} onDone={done} /> : null}

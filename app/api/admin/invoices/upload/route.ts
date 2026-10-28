@@ -69,10 +69,11 @@ export async function POST(request: Request) {
     fileBytes: new Uint8Array(await file.arrayBuffer()),
     fileName: file.name,
     refreshSnapshot: form.get('refreshSnapshot') === '1',
+    sendEmail: form.get('sendEmail') === '1',
   })
   if (!outcome.ok) {
     return NextResponse.json({ ok: false, error: outcome.error }, { status: STATUS[outcome.error] ?? 400, headers })
   }
   revalidatePath('/admin/billing/invoices')
-  return NextResponse.json({ ok: true, replaced: outcome.replaced }, { headers })
+  return NextResponse.json({ ok: true, replaced: outcome.replaced, email: outcome.email }, { headers })
 }

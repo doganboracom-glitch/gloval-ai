@@ -72,6 +72,8 @@ export type TransactionalEmailInput = {
   fromName?: string
   /** Sent as Resend's `Idempotency-Key`, so a retried request can never deliver twice. */
   idempotencyKey?: string
+  /** Base64 file content; kept off every log line. */
+  attachments?: Array<{ filename: string; content: string }>
 }
 
 export type TransactionalEmailResult =
@@ -111,6 +113,7 @@ export async function sendTransactionalEmailDetailed(
         html: input.html,
         ...(input.text ? { text: input.text } : {}),
         ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
       }),
     })
     if (!res.ok) {

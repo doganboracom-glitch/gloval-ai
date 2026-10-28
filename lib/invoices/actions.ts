@@ -11,6 +11,7 @@ import {
   exportInvoicesCsv,
   markNotRequired,
   reopenNotRequired,
+  resendInvoiceEmail,
   type MarkNotRequiredResult,
   type ReopenResult,
 } from '@/lib/invoices/service'
@@ -64,6 +65,17 @@ export async function reopenInvoicesAction(
   revalidatePath('/admin/billing/invoices')
   const { ok: _ok, ...result } = outcome
   return { ok: true, result }
+}
+
+export async function resendInvoiceEmailAction(
+  transactionId: unknown,
+): Promise<{ ok: true } | { ok: false; error: InvoiceActionError }> {
+  const access = await guard('write')
+  if (!access.ok) return access
+  const outcome = await resendInvoiceEmail(access.actor, transactionId)
+  if (!outcome.ok) return outcome
+  revalidatePath('/admin/billing/invoices')
+  return { ok: true }
 }
 
 export async function exportInvoicesCsvAction(

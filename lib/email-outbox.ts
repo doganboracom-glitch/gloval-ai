@@ -23,6 +23,7 @@ import {
   decideRetry,
   sanitizeErrorCode,
 } from '@/lib/email-outbox-policy'
+import { deliverInvoiceReady, type InvoiceDeliveryOutcome } from '@/lib/invoices/email-delivery'
 
 /**
  * Lifecycle email outbox backed by `public.email_events`.
@@ -41,25 +42,32 @@ const DASHBOARD_URL = 'https://gloval.ai/dashboard'
 const UNIQUE_VIOLATION = '23505'
 const CRON_BATCH_LIMIT = 25
 
+type EventKind = LifecycleKind | 'invoice_ready'
+
 type EventRow = {
   id: string
   user_id: string
-  kind: LifecycleKind
+  kind: EventKind
   project_id: string | null
+  invoice_id: string | null
+  file_sha256: string | null
   status: 'pending' | 'processing' | 'sent' | 'failed'
   attempts: number
   lease_until: string | null
 }
 
-const EVENT_COLUMNS = 'id, user_id, kind, project_id, status, attempts, lease_until'
+const EVENT_COLUMNS = 'id, user_id, kind, project_id, invoice_id, file_sha256, status, attempts, lease_until'
 
 /* -------------------------------- producers ------------------------------- */
 
 async function insertEvent(row: {
   user_id: string
-  kind: LifecycleKind
+  kind: EventKind
   project_id?: string
   transition_id?: string
+  invoice_id?: string
+  dedupe_key?: string
+  file_sha256?: string
 }): Promise<string | null> {
   const admin = createAdminClient()
   const { data, error } = await admin.from('email_events').insert(row).select('id').single()
@@ -128,6 +136,68 @@ export async function enqueueProjectUnpublishedEmail(input: {
     if (id) scheduleImmediateAttempt(id)
   } catch (error) {
     console.log('[email-outbox] enqueue unpublish failed:', error instanceof Error ? error.message : 'unknown')
+  }
+}
+
+/* ---------------------------- invoice-ready email --------------------------- */
+
+export type InvoiceEmailQueueResult = 'queued' | 'duplicate' | 'in_progress' | 'no_recipient' | 'failed'
+
+/** 'unknown' means the lookup itself failed; delivery retries it, so callers still queue. */
+export async function resolveInvoiceRecipient(userId: string | null): Promise<'ok' | 'no_recipient' | 'unknown'> {
+  if (!userId) return 'no_recipient'
+  try {
+    const { data, error } = await createAdminClient().auth.admin.getUserById(userId)
+    if (error) return error.status === 404 ? 'no_recipient' : 'unknown'
+    return data?.user?.email ? 'ok' : 'no_recipient'
+  } catch {
+    return 'unknown'
+  }
+}
+
+export async function hasActiveInvoiceEmail(invoiceId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from('email_events')
+    .select('id')
+    .eq('kind', 'invoice_ready')
+    .eq('invoice_id', invoiceId)
+    .in('status', ['pending', 'processing'])
+    .limit(1)
+  if (error) throw error
+  return Boolean(data && data.length > 0)
+}
+
+/**
+ * Queues the "invoice ready" email for one uploaded file. The automatic send is
+ * deduplicated per invoice AND file checksum, so retrying an upload cannot send
+ * twice while a replacement file still gets its own email. A resend (explicit
+ * admin action) gets a unique key but is refused while another email for the
+ * same invoice is still in flight. Never throws.
+ */
+export async function enqueueInvoiceReadyEmail(input: {
+  invoiceId: string
+  userId: string | null
+  fileSha256: string
+  resend?: boolean
+}): Promise<InvoiceEmailQueueResult> {
+  try {
+    if ((await resolveInvoiceRecipient(input.userId)) === 'no_recipient' || !input.userId) return 'no_recipient'
+    if (input.resend && (await hasActiveInvoiceEmail(input.invoiceId))) return 'in_progress'
+
+    const baseKey = `invoice:${input.invoiceId}:${input.fileSha256}`
+    const id = await insertEvent({
+      user_id: input.userId,
+      kind: 'invoice_ready',
+      invoice_id: input.invoiceId,
+      file_sha256: input.fileSha256,
+      dedupe_key: input.resend ? `${baseKey}:resend:${crypto.randomUUID()}` : baseKey,
+    })
+    if (!id) return 'duplicate'
+    scheduleImmediateAttempt(id)
+    return 'queued'
+  } catch (error) {
+    console.log('[email-outbox] enqueue invoice email failed:', error instanceof Error ? error.message : 'unknown')
+    return 'failed'
   }
 }
 
@@ -246,12 +316,17 @@ function ownedUpdate(row: EventRow, patch: Record<string, unknown>) {
     .eq('attempts', row.attempts)
 }
 
-async function markSent(row: EventRow, messageId: string | null) {
+async function markSent(
+  row: EventRow,
+  messageId: string | null,
+  attachment?: { state: 'attached' | 'omitted'; reason: string | null },
+) {
   const { error } = await ownedUpdate(row, {
     status: 'sent',
     sent_at: new Date().toISOString(),
     provider_message_id: messageId,
     last_error: null,
+    ...(attachment ? { attachment_state: attachment.state, attachment_reason: attachment.reason } : {}),
   })
   if (error) console.log('[email-outbox] mark sent failed:', error.message)
 }
@@ -286,7 +361,7 @@ async function markDeferred(row: EventRow) {
 /* -------------------------------- delivery --------------------------------- */
 
 type Outcome =
-  | { type: 'sent'; messageId: string | null }
+  | { type: 'sent'; messageId: string | null; attachment?: { state: 'attached' | 'omitted'; reason: string | null } }
   | { type: 'retry'; code: string }
   | { type: 'fail'; code: string }
   | { type: 'defer' }
@@ -306,6 +381,11 @@ async function deliver(row: EventRow): Promise<Outcome> {
   const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
   const lang = resolveEmailLang(metadata.email_locale)
   const name = firstNameOf(metadata.full_name ?? metadata.name ?? metadata.display_name)
+
+  if (row.kind === 'invoice_ready') {
+    const outcome: InvoiceDeliveryOutcome = await deliverInvoiceReady(row, { email: user.email, lang, name })
+    return outcome
+  }
 
   let siteName: string | undefined
   let siteUrl: string | undefined
@@ -383,7 +463,7 @@ async function processClaimed(row: EventRow): Promise<'sent' | 'retry' | 'failed
 
   switch (outcome.type) {
     case 'sent':
-      await markSent(row, outcome.messageId)
+      await markSent(row, outcome.messageId, outcome.attachment)
       return 'sent'
     case 'defer':
       await markDeferred(row)

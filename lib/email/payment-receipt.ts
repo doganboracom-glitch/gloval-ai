@@ -24,7 +24,12 @@ export function renderPaymentReceiptEmail(copy: PaymentReceiptCopy, lang: EmailL
     ...copy.paragraphs.map((text) => paragraph(escape(text))),
     renderTable(copy.details),
     copy.reminder ? paragraph(`${escape(copy.reminder.text)} ${link(copy.reminder.href, copy.reminder.label)}`) : '',
-    paragraph(`${escape(copy.support.text)} ${link(copy.support.href, copy.support.label)}`),
+    paragraph(
+      `${escape(copy.support.text)} ${link(copy.support.href, copy.support.label)}` +
+        (copy.supportAlternative
+          ? ` ${escape(copy.supportAlternative.text)} ${link(copy.supportAlternative.href, copy.supportAlternative.label)}`
+          : ''),
+    ),
   ].join('')
 
   const html = renderEmailLayout({

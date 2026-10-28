@@ -4,12 +4,13 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
-import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
+import { getInvoiceCopy, invoiceErrorText, type InvoiceCopy } from '@/lib/invoices/copy'
 import {
   convertInvoiceToNotRequiredAction,
   getInvoiceDetailAction,
   markInvoicesNotRequiredAction,
   reopenInvoicesAction,
+  resendInvoiceEmailAction,
   type InvoiceDetail,
 } from '@/lib/invoices/actions'
 import { revealBillingProfileIdentifierAction } from '@/lib/billing-profile-actions'
@@ -51,6 +52,23 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
+/** The invoice is always saved by this point; the message only reports what happened to the email. */
+function uploadMessage(c: InvoiceCopy, replaced: boolean, email: string | undefined): string {
+  switch (email) {
+    case 'queued':
+      return c.uploadedEmailQueued
+    case 'duplicate':
+      return c.uploadedEmailDuplicate
+    case 'no_recipient':
+      return c.uploadedEmailNoRecipient
+    case 'failed':
+    case 'in_progress':
+      return c.uploadedEmailFailed
+    default:
+      return email === 'skipped' ? c.uploadedEmailSkipped : replaced ? c.replaced : c.uploaded
+  }
+}
+
 export function UploadInvoiceDialog({
   row,
   onClose,
@@ -67,6 +85,7 @@ export function UploadInvoiceDialog({
   const [invoiceDate, setInvoiceDate] = useState(row.invoice?.invoiceDate ?? '')
   const [file, setFile] = useState<File | null>(null)
   const [refreshSnapshot, setRefreshSnapshot] = useState(false)
+  const [sendEmail, setSendEmail] = useState(!replacing)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -83,13 +102,16 @@ export function UploadInvoiceDialog({
       body.set('invoiceDate', invoiceDate)
       body.set('file', file)
       if (refreshSnapshot) body.set('refreshSnapshot', '1')
+      if (sendEmail) body.set('sendEmail', '1')
       const response = await fetch('/api/admin/invoices/upload', { method: 'POST', body })
-      const result = (await response.json().catch(() => null)) as { ok: boolean; error?: string; replaced?: boolean } | null
+      const result = (await response.json().catch(() => null)) as
+        | { ok: boolean; error?: string; replaced?: boolean; email?: string }
+        | null
       if (!result?.ok) {
         setError(invoiceErrorText(c, result?.error ?? 'save_failed'))
         return
       }
-      onDone(result.replaced ? c.replaced : c.uploaded)
+      onDone(uploadMessage(c, result.replaced ?? false, result.email))
     } catch {
       setError(c.errors.save_failed)
     } finally {
@@ -134,6 +156,13 @@ export function UploadInvoiceDialog({
             </span>
           </label>
         ) : null}
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
+          <span>
+            {c.sendEmailLabel}
+            <span className="block text-xs text-muted-foreground">{c.sendEmailHint}</span>
+          </span>
+        </label>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -270,6 +299,61 @@ export function ReopenDialog({
           <Button type="submit" disabled={pending}>
             {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {c.reopenSubmit}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+export function ResendEmailDialog({
+  row,
+  onClose,
+  onDone,
+}: {
+  row: AdminInvoiceRow
+  onClose: () => void
+  onDone: (message: string) => void
+}) {
+  const { lang } = useLanguage()
+  const c = getInvoiceCopy(lang)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setPending(true)
+    setError(null)
+    try {
+      const response = await resendInvoiceEmailAction(row.transactionId)
+      if (!response.ok) return setError(invoiceErrorText(c, response.error))
+      onDone(c.emailQueued)
+    } catch {
+      setError(c.errors.unavailable)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Modal title={c.emailResendTitle} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-muted-foreground">
+          {row.transactionNumber} · {row.email}
+        </p>
+        <p className="text-sm">{c.emailResendConfirm}</p>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+            {c.cancel}
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {c.emailResendSubmit}
           </Button>
         </div>
       </form>

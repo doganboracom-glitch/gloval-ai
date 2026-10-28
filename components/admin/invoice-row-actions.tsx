@@ -6,7 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import type { InvoiceCopy } from '@/lib/invoices/copy'
 import type { AdminInvoiceRow } from '@/lib/invoices/types'
 
-export type InvoiceRowAction = 'upload' | 'details' | 'convert' | 'reopen'
+export type InvoiceRowAction = 'upload' | 'details' | 'convert' | 'reopen' | 'resend'
 
 /** Width of the primary-action slot; identical in every row so the actions column never changes size. */
 export const PRIMARY_SLOT_CLASS = 'flex w-28 justify-end'
@@ -55,6 +55,11 @@ export function InvoiceRowActions({ row, copy: c, onAction }: Props) {
                 >
                   {c.myInvoiceDownload}
                 </Menu.LinkItem>
+              ) : null}
+              {uploaded ? (
+                <Menu.Item className={ITEM_CLASS} onClick={() => onAction('resend', row)}>
+                  {row.emailStatus?.state === 'failed' ? c.emailRetry : row.emailStatus?.state === 'not_sent' ? c.emailSend : c.emailResend}
+                </Menu.Item>
               ) : null}
               {uploaded ? (
                 <Menu.Item className={ITEM_CLASS} onClick={() => onAction('convert', row)}>

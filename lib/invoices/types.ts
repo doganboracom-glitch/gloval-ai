@@ -37,6 +37,15 @@ export type InvoiceRecordSummary = {
   updatedAt: string
 }
 
+/** Delivery state of the latest "invoice ready" email for an uploaded invoice. */
+export type InvoiceEmailState = 'not_sent' | 'sending' | 'sent' | 'sent_without_attachment' | 'failed'
+
+export type InvoiceEmailStatus = {
+  state: InvoiceEmailState
+  /** ISO time the latest event was sent, when it was. */
+  sentAt: string | null
+}
+
 export type AdminInvoiceRow = {
   transactionId: string
   transactionNumber: string
@@ -54,6 +63,8 @@ export type AdminInvoiceRow = {
   invoice: InvoiceRecordSummary | null
   /** null until the page rows are enriched. */
   profileComplete: boolean | null
+  /** Only set for uploaded invoices once the page rows are enriched. */
+  emailStatus?: InvoiceEmailStatus | null
 }
 
 export type InvoiceCounts = { pending: number; uploaded: number; not_required: number; total: number }
@@ -87,4 +98,6 @@ export type InvoiceActionError =
   | 'storage_failed'
   | 'save_failed'
   | 'audit_failed'
+  | 'no_recipient'
+  | 'email_in_progress'
   | 'unavailable'

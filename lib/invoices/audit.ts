@@ -10,6 +10,7 @@ export type InvoiceAuditAction =
   | 'invoice.download_customer'
   | 'invoice.export_csv'
   | 'invoice.reopen'
+  | 'invoice.email_resend'
 
 export type InvoiceAuditEntry = {
   actor: { userId: string; email: string }
