@@ -18,6 +18,7 @@ import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
 import { BillingClient } from '@/components/billing/billing-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
+import { getMyInvoicesByTransaction } from '@/lib/invoices/customer'
 import { reconcilePendingPayments } from '@/lib/payments/reconcile-store'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
@@ -107,6 +108,8 @@ export default async function BillingPage({
       ? signFreeChosenIntent(secret, publishProjectId, user.id, Date.now())
       : null
 
+  const invoicesByTransaction = await getMyInvoicesByTransaction()
+
   const addOns = await getAddOnOverview(user.id, currentPlan?.code).catch((err) => {
     console.error('[billing] add-on overview unavailable', err)
     return null
@@ -142,6 +145,7 @@ export default async function BillingPage({
       subscription={subscription}
       currentPlan={currentPlan}
       transactions={transactions}
+      invoicesByTransaction={invoicesByTransaction}
       entitlements={entitlements}
       projectEntitlements={projectEntitlements}
       projects={projects.map((p) => ({

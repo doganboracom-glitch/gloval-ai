@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Check,
+  FileDown,
   Loader2,
   Building2,
   ShoppingBag,
@@ -17,6 +18,8 @@ import {
   Receipt,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { getInvoiceCopy } from '@/lib/invoices/copy'
+import type { MyInvoice } from '@/lib/invoices/customer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { SiteCapacityCard, CreditSummaryCard } from '@/components/billing/capacity-credits-cards'
@@ -151,6 +154,7 @@ export function BillingClient({
   subscription,
   currentPlan,
   transactions,
+  invoicesByTransaction = {},
   entitlements,
   projectEntitlements,
   projects,
@@ -172,6 +176,8 @@ export function BillingClient({
   subscription: SubscriptionRow | null
   currentPlan: PlanRow | null
   transactions: TransactionRow[]
+  /** Uploaded invoices of this customer, keyed by billing transaction id. */
+  invoicesByTransaction?: Record<string, MyInvoice>
   entitlements: EntitlementRow[]
   projectEntitlements: ProjectEntitlementItem[]
   projects: BillingProject[]
@@ -879,6 +885,7 @@ export function BillingClient({
 
   // Pinned to GLOVAL AI's billing timezone (not the viewer's local one) so a
   // renewal date computed server-side never appears a day early/late here.
+  const invoiceCopy = getInvoiceCopy(lang)
   const dateFmt = new Intl.DateTimeFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     day: 'numeric',
     month: 'short',
@@ -1321,6 +1328,17 @@ export function BillingClient({
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {dateFmt.format(new Date(txn.created_at))}
                     </p>
+                    {invoicesByTransaction[txn.id] ? (
+                      <a
+                        href={`/api/invoices/${invoicesByTransaction[txn.id].id}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand underline-offset-2 hover:underline"
+                      >
+                        <FileDown className="size-3.5" aria-hidden />
+                        {invoiceCopy.myInvoiceDownload} · {invoicesByTransaction[txn.id].invoiceNumber}
+                      </a>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span
