@@ -1,6 +1,7 @@
 export function escapeCsvCell(value: string | number | boolean | null | undefined): string {
   let text = value == null ? '' : String(value)
-  if (/^[\s]*[=+\-@]/u.test(text)) text = `'${text}`
+  // A leading tab or carriage return is itself a spreadsheet injection vector (OWASP), even when no formula character follows.
+  if (/^[\t\r]|^\s*[=+\-@]/u.test(text)) text = `'${text}`
   return `"${text.replace(/"/g, '""')}"`
 }
 

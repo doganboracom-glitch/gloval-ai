@@ -22,7 +22,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   }
 
   const { id } = await context.params
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404, headers })
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404, headers })
 
   // Read with the customer's own session: row level security only returns their rows.
   const { data } = await supabase

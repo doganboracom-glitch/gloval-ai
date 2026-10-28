@@ -300,55 +300,63 @@ export async function saveInvoice(input: SaveInvoiceInput): Promise<Result<{ inv
     return { ok: false, error: 'storage_failed' }
   }
 
-  const keepSnapshot = existing?.status === 'uploaded' && existing.billing_snapshot && !input.refreshSnapshot
-  const snapshot = keepSnapshot
-    ? existing.billing_snapshot
-    : buildBillingSnapshot(await loadProfile(tx.user_id), (await loadPeople(tx.user_id ? [tx.user_id] : [])).get(tx.user_id ?? '')?.email ?? null)
-
-  const issued = await getInvoiceProvider().issue({
-    billingTransactionId: tx.id,
-    invoiceNumber,
-    invoiceDate,
-    pdf: input.fileBytes,
-    fileName: downloadFileName(invoiceNumber),
-  })
-
-  const fields = {
-    status: 'uploaded' as const,
-    invoice_number: invoiceNumber,
-    invoice_date: invoiceDate,
-    amount_kurus: tx.amount_cents,
-    currency: /^[A-Z]{3}$/.test(tx.currency ?? '') ? (tx.currency as string) : 'TRY',
-    billing_snapshot: snapshot,
-    file_path: filePath,
-    file_name: sanitizeUploadedFileName(input.fileName),
-    file_size: input.fileBytes.length,
-    file_sha256: sha256,
-    source: issued.source,
-    provider_ref: issued.providerRef,
-    not_required_reason: null,
-    uploaded_by: input.actor.userId,
-  }
-
+  let keepSnapshot = false
   let invoiceId: string
-  if (existing) {
-    const { error } = await admin.from('invoices').update(fields).eq('id', existing.id)
-    if (error) {
-      await admin.storage.from(INVOICE_BUCKET).remove([filePath])
-      return { ok: false, error: mapWriteError(error.message) }
+  try {
+    keepSnapshot = Boolean(existing?.status === 'uploaded' && existing.billing_snapshot && !input.refreshSnapshot)
+    const snapshot = keepSnapshot
+      ? existing?.billing_snapshot
+      : buildBillingSnapshot(await loadProfile(tx.user_id), (await loadPeople(tx.user_id ? [tx.user_id] : [])).get(tx.user_id ?? '')?.email ?? null)
+
+    const issued = await getInvoiceProvider().issue({
+      billingTransactionId: tx.id,
+      invoiceNumber,
+      invoiceDate,
+      pdf: input.fileBytes,
+      fileName: downloadFileName(invoiceNumber),
+    })
+
+    const fields = {
+      status: 'uploaded' as const,
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      amount_kurus: tx.amount_cents,
+      currency: /^[A-Z]{3}$/.test(tx.currency ?? '') ? (tx.currency as string) : 'TRY',
+      billing_snapshot: snapshot,
+      file_path: filePath,
+      file_name: sanitizeUploadedFileName(input.fileName),
+      file_size: input.fileBytes.length,
+      file_sha256: sha256,
+      source: issued.source,
+      provider_ref: issued.providerRef,
+      not_required_reason: null,
+      uploaded_by: input.actor.userId,
     }
-    invoiceId = existing.id
-  } else {
-    const { data, error } = await admin
-      .from('invoices')
-      .insert({ ...fields, user_id: tx.user_id, billing_transaction_id: tx.id })
-      .select('id')
-      .single()
-    if (error || !data) {
-      await admin.storage.from(INVOICE_BUCKET).remove([filePath])
-      return { ok: false, error: mapWriteError(error?.message ?? '') }
+
+    if (existing) {
+      const { error } = await admin.from('invoices').update(fields).eq('id', existing.id)
+      if (error) {
+        await admin.storage.from(INVOICE_BUCKET).remove([filePath])
+        return { ok: false, error: mapWriteError(error.message) }
+      }
+      invoiceId = existing.id
+    } else {
+      const { data, error } = await admin
+        .from('invoices')
+        .insert({ ...fields, user_id: tx.user_id, billing_transaction_id: tx.id })
+        .select('id')
+        .single()
+      if (error || !data) {
+        await admin.storage.from(INVOICE_BUCKET).remove([filePath])
+        return { ok: false, error: mapWriteError(error?.message ?? '') }
+      }
+      invoiceId = (data as { id: string }).id
     }
-    invoiceId = (data as { id: string }).id
+  } catch (error) {
+    // Anything thrown after the upload (profile lookup, provider) must not leave an orphan file; the previous file is untouched.
+    console.error('[invoices] save failed after upload:', error instanceof Error ? error.message : error)
+    await admin.storage.from(INVOICE_BUCKET).remove([filePath])
+    return { ok: false, error: 'save_failed' }
   }
 
   if (existing?.file_path && existing.file_path !== filePath) {
@@ -567,7 +575,7 @@ export async function createAdminDownload(actor: Actor, invoiceId: string): Prom
     .eq('id', invoiceId)
     .maybeSingle()
   const invoice = data as { id: string; billing_transaction_id: string; status: string; invoice_number: string | null; file_path: string | null } | null
-  if (!invoice || invoice.status !== 'uploaded') return { ok: false, error: 'not_found' }
+  if (!invoice || invoice.status !== 'uploaded' || !isInvoiceStoragePath(invoice.file_path)) return { ok: false, error: 'not_found' }
   const audited = await recordInvoiceAudit({
     actor,
     action: 'invoice.download_admin',
@@ -597,6 +605,8 @@ export async function createCustomerDownload(
     .maybeSingle()
   const row = data as { invoice_number: string | null; file_path: string | null; user_id: string | null } | null
   if (!row || row.user_id !== actor.userId) return { ok: false, error: 'not_found' }
+  // No servable file means nothing is handed out, so nothing is audited as a download either.
+  if (!isInvoiceStoragePath(row.file_path)) return { ok: false, error: 'not_found' }
   const audited = await recordInvoiceAudit({
     actor,
     action: 'invoice.download_customer',

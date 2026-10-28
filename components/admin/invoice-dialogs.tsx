@@ -111,7 +111,11 @@ export function UploadInvoiceDialog({
             type="file"
             accept="application/pdf,.pdf"
             className={fieldClass}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const picked = e.target.files?.[0] ?? null
+              setFile(picked)
+              setError(picked && picked.size > INVOICE_MAX_BYTES ? c.errors.too_large : null)
+            }}
             required
           />
         </label>

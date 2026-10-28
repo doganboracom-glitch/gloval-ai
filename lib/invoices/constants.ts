@@ -1,5 +1,7 @@
 export const INVOICE_BUCKET = 'invoices'
-export const INVOICE_MAX_BYTES = 5 * 1024 * 1024
+/** Upload cap. Kept under Vercel's 4.5 MB request body limit; the storage bucket's own 5 MB limit stays as an outer bound. */
+export const INVOICE_MAX_MB = 4
+export const INVOICE_MAX_BYTES = INVOICE_MAX_MB * 1024 * 1024
 export const INVOICE_SIGNED_URL_SECONDS = 60
 export const INVOICE_PAGE_SIZE = 25
 /** Candidate rows scanned per list request; payment volume is small, filtering happens in memory. */
