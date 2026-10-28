@@ -4,12 +4,14 @@ const LABELS = {
     paid: 'Ödendi',
     failed: 'Başarısız',
     refunded: 'İade edildi',
+    abandoned: 'Tamamlanmadı',
   },
   en: {
     pending: 'Pending',
     paid: 'Paid',
     failed: 'Failed',
     refunded: 'Refunded',
+    abandoned: 'Not completed',
   },
 } as const
 

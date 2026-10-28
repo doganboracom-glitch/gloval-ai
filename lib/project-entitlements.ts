@@ -270,10 +270,13 @@ async function purchaseSiteRight(
         kind: 'charge',
         amount_cents: plan.price_cents,
         currency: plan.currency,
-        status: 'pending',
-        provider: providerId,
-        provider_ref: intent.reference,
-        idempotency_key: `ent_${projectId}_${code}`,
+  status: 'pending',
+  // The key is fixed per project and right, so a retry reuses an old row; a fresh
+  // created_at restarts its 35-minute reconciliation window.
+  created_at: new Date().toISOString(),
+  provider: providerId,
+  provider_ref: intent.reference,
+  idempotency_key: `ent_${projectId}_${code}`,
         description: `${plan.name} — ${project.name}`,
         ...buildConsentColumns(),
       },

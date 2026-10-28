@@ -626,6 +626,7 @@ const ar: DeepPartial<Dict> = {
     txnStatusSucceeded: 'ناجحة',
     txnStatusPending: 'قيد الانتظار',
     txnStatusFailed: 'فاشلة',
+    txnStatusAbandoned: 'غير مكتملة',
     entitlements: 'الحقوق الدائمة',
     entitlementHint: 'الخدمات التي تشتريها بدفعة واحدة ستظهر هنا.',
     entitlementInactive: 'غير مفعّل',

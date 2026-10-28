@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isDomainE2ETestModeEnabled } from '@/lib/payments/domain-e2e-mode'
 import { retrieveIyzicoCheckoutForm } from '@/lib/payments/iyzico'
+import { extractPaidDetails } from '@/lib/payments/iyzico-paid-details'
 import { createHash } from 'node:crypto'
 import { settlePaymentResult, type SettleOutcome } from '@/lib/payments/settle'
 
@@ -105,23 +106,6 @@ function callbackResponse(
     status: 200,
     headers: { 'content-type': 'text/html; charset=utf-8' },
   })
-}
-
-/** Pulls the authoritative charged amount/currency/order ref out of iyzico's retrieve response. */
-function extractPaidDetails(raw: Record<string, unknown>) {
-  const paid = typeof raw.paidPrice === 'number' || typeof raw.paidPrice === 'string' ? Number(raw.paidPrice) : Number.NaN
-  const currency = typeof raw.currency === 'string' ? raw.currency.trim().toUpperCase() : undefined
-  const orderRef =
-    typeof raw.basketId === 'string' && raw.basketId
-      ? raw.basketId
-      : typeof raw.conversationId === 'string' && raw.conversationId
-        ? raw.conversationId
-        : undefined
-  return {
-    paidAmountCents: Number.isFinite(paid) ? Math.round(paid * 100) : undefined,
-    paidCurrency: currency,
-    orderRef,
-  }
 }
 
 async function extractToken(request: Request): Promise<string | null> {

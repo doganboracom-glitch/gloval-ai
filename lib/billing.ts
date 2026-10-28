@@ -116,7 +116,7 @@ export type TransactionRow = {
   kind: 'charge' | 'proration_credit' | 'proration_debit' | 'refund'
   amount_cents: number
   currency: string
-  status: 'pending' | 'succeeded' | 'failed'
+  status: 'pending' | 'succeeded' | 'failed' | 'abandoned'
   provider: string
   description: string | null
   created_at: string

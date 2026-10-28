@@ -7,6 +7,7 @@ describe('paymentStatusLabel', () => {
     ['pending', 'Beklemede'],
     ['paid', 'Ödendi'],
     ['refunded', 'İade edildi'],
+    ['abandoned', 'Tamamlanmadı'],
   ])('shows %s as %s in Turkish', (status, label) => {
     expect(paymentStatusLabel(status, 'tr')).toBe(label)
     expect(paymentStatusLabel(status)).toBe(label)

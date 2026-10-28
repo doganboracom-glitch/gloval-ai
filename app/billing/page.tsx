@@ -18,6 +18,7 @@ import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
 import { BillingClient } from '@/components/billing/billing-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
+import { reconcilePendingPayments } from '@/lib/payments/reconcile-store'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
 // made moments earlier is never served from a stale cache.
@@ -34,6 +35,10 @@ export default async function BillingPage({
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login?next=/billing')
+
+  // Settles a paid-but-unconfirmed payment (e.g. the iyzico tab never returned)
+  // before the balance is read; bounded so the page never waits long on iyzico.
+  await reconcilePendingPayments({ userId: user.id, limit: 5, budgetMs: 8000 })
 
   const [billingProfileResult, accountProfileResult] = await Promise.all([
     getMyBillingProfileAction(),

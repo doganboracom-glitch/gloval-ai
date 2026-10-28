@@ -681,6 +681,7 @@ const it: DeepPartial<Dict> = {
     txnStatusSucceeded: 'Riuscito',
     txnStatusPending: 'In attesa',
     txnStatusFailed: 'Fallito',
+    txnStatusAbandoned: 'Non completato',
     entitlements: 'Diritti permanenti',
     entitlementHint: 'I servizi acquistati con un pagamento unico compariranno qui.',
     entitlementInactive: 'Inattivo',

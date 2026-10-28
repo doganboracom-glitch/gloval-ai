@@ -680,6 +680,7 @@ const ru: DeepPartial<Dict> = {
     txnStatusSucceeded: 'Успешно',
     txnStatusPending: 'В ожидании',
     txnStatusFailed: 'Ошибка',
+    txnStatusAbandoned: 'Не завершено',
     entitlements: 'Постоянные права',
     entitlementHint: 'Услуги, купленные за разовый платёж, появятся здесь.',
     entitlementInactive: 'Неактивно',

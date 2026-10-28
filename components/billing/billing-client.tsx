@@ -1339,7 +1339,9 @@ export function BillingClient({
                         ? b.txnStatusSucceeded
                         : txn.status === 'failed'
                           ? b.txnStatusFailed
-                          : b.txnStatusPending}
+                          : txn.status === 'abandoned'
+                            ? b.txnStatusAbandoned
+                            : b.txnStatusPending}
                     </span>
                   </div>
                 </li>
