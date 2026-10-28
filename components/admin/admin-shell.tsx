@@ -14,6 +14,7 @@ import {
   LifeBuoy,
   Mail,
   Newspaper,
+  Receipt,
   Sparkles,
   Users,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import { adminT } from '@/lib/admin/i18n'
 import { overdueT } from '@/lib/admin/overdue-copy'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
+import { getInvoiceCopy } from '@/lib/invoices/copy'
 import { cn } from '@/lib/utils'
 
 /**
@@ -52,6 +54,7 @@ export function AdminShell({
     { href: '/admin/sites', label: t.nav.sites, icon: LayoutTemplate },
     { href: '/admin/billing', label: t.nav.billing, icon: CreditCard, exact: true },
     { href: '/admin/billing/profiles', label: billingProfileCopy.adminNav, icon: FileText },
+    { href: '/admin/billing/invoices', label: getInvoiceCopy(lang).nav, icon: Receipt },
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe },
