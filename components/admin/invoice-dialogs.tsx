@@ -5,7 +5,13 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
-import { convertInvoiceToNotRequiredAction, getInvoiceDetailAction, markInvoicesNotRequiredAction, type InvoiceDetail } from '@/lib/invoices/actions'
+import {
+  convertInvoiceToNotRequiredAction,
+  getInvoiceDetailAction,
+  markInvoicesNotRequiredAction,
+  reopenInvoicesAction,
+  type InvoiceDetail,
+} from '@/lib/invoices/actions'
 import { revealBillingProfileIdentifierAction } from '@/lib/billing-profile-actions'
 import { INVOICE_MAX_BYTES } from '@/lib/invoices/constants'
 import type { AdminInvoiceRow } from '@/lib/invoices/types'
@@ -206,6 +212,64 @@ export function NotRequiredDialog({
           <Button type="submit" disabled={pending || reason.trim().length < 3}>
             {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {c.reasonSubmit}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+export function ReopenDialog({
+  transactionIds,
+  onClose,
+  onDone,
+}: {
+  transactionIds: string[]
+  onClose: () => void
+  onDone: (message: string) => void
+}) {
+  const { lang } = useLanguage()
+  const c = getInvoiceCopy(lang)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setPending(true)
+    setError(null)
+    try {
+      const response = await reopenInvoicesAction(transactionIds)
+      if (!response.ok) return setError(invoiceErrorText(c, response.error))
+      const skipped = response.result.skipped.length
+      onDone(
+        [c.reopened.replace('{n}', String(response.result.reopened)), skipped ? c.markedSkipped.replace('{n}', String(skipped)) : '']
+          .filter(Boolean)
+          .join(' '),
+      )
+    } catch {
+      setError(c.errors.save_failed)
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Modal title={c.reopenTitle} onClose={onClose}>
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-muted-foreground">{c.selected.replace('{n}', String(transactionIds.length))}</p>
+        <p className="text-sm">{c.reopenConfirm}</p>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+            {c.cancel}
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {c.reopenSubmit}
           </Button>
         </div>
       </form>

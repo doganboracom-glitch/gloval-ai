@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { PageHeader } from '@/components/admin/admin-ui'
 import { InvoicesTable } from '@/components/admin/invoices-table'
-import { InvoiceDetailsDialog, NotRequiredDialog, UploadInvoiceDialog } from '@/components/admin/invoice-dialogs'
+import { InvoiceDetailsDialog, NotRequiredDialog, ReopenDialog, UploadInvoiceDialog } from '@/components/admin/invoice-dialogs'
 import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
 import { exportInvoicesCsvAction } from '@/lib/invoices/actions'
 import type { AdminInvoiceRow, InvoiceFilters, InvoiceListResult, InvoiceStatusFilter } from '@/lib/invoices/types'
@@ -18,6 +18,7 @@ type DialogState =
   | { kind: 'upload'; row: AdminInvoiceRow }
   | { kind: 'details'; row: AdminInvoiceRow }
   | { kind: 'mark'; ids: string[]; convert?: boolean }
+  | { kind: 'reopen'; ids: string[] }
   | null
 
 export function InvoicesView({ result, filters }: { result: InvoiceListResult; filters: InvoiceFilters }) {
@@ -58,7 +59,12 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
     { id: 'all', label: c.tabAll, count: result.counts.total },
   ]
 
-  const selectable = result.rows.filter((row) => row.expectsInvoice ? !row.invoice : !row.invoice || row.invoice.status !== 'uploaded')
+  const markable = (row: AdminInvoiceRow) => !row.invoice
+  const reopenable = (row: AdminInvoiceRow) => row.invoice?.status === 'not_required'
+  const selectable = result.rows.filter((row) => markable(row) || reopenable(row))
+  const selectedRows = result.rows.filter((row) => selected.has(row.transactionId))
+  const canBulkMark = selectedRows.length > 0 && selectedRows.every(markable)
+  const canBulkReopen = selectedRows.length > 0 && selectedRows.every(reopenable)
   const allSelected = selectable.length > 0 && selectable.every((row) => selected.has(row.transactionId))
   const pages = Math.max(1, Math.ceil(result.total / result.pageSize))
 
@@ -189,9 +195,17 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
       {selected.size > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card/70 px-3 py-2">
           <span className="text-sm">{c.selected.replace('{n}', String(selected.size))}</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: 'mark', ids: [...selected] })}>
-            {c.bulkMark}
-          </Button>
+          {canBulkMark ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: 'mark', ids: [...selected] })}>
+              {c.bulkMark}
+            </Button>
+          ) : null}
+          {canBulkReopen ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: 'reopen', ids: [...selected] })}>
+              {c.bulkReopen}
+            </Button>
+          ) : null}
+          {!canBulkMark && !canBulkReopen ? <span className="text-xs text-muted-foreground">{c.bulkMixed}</span> : null}
         </div>
       ) : null}
 
@@ -208,9 +222,11 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
             dateFmt={dateFmt}
             onToggle={toggle}
             onToggleAll={() => setSelected(allSelected ? new Set() : new Set(selectable.map((row) => row.transactionId)))}
-            onAction={(action, row) =>
-              setDialog(action === 'convert' ? { kind: 'mark', ids: [row.transactionId], convert: true } : { kind: action, row })
-            }
+            onAction={(action, row) => {
+              if (action === 'convert') return setDialog({ kind: 'mark', ids: [row.transactionId], convert: true })
+              if (action === 'reopen') return setDialog({ kind: 'reopen', ids: [row.transactionId] })
+              setDialog({ kind: action, row })
+            }}
           />
         )}
       </div>
@@ -230,6 +246,7 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
       {dialog?.kind === 'upload' ? <UploadInvoiceDialog row={dialog.row} onClose={() => setDialog(null)} onDone={done} /> : null}
       {dialog?.kind === 'details' ? <InvoiceDetailsDialog row={dialog.row} onClose={() => setDialog(null)} /> : null}
       {dialog?.kind === 'mark' ? <NotRequiredDialog transactionIds={dialog.ids} convertUploaded={dialog.convert} onClose={() => setDialog(null)} onDone={done} /> : null}
+      {dialog?.kind === 'reopen' ? <ReopenDialog transactionIds={dialog.ids} onClose={() => setDialog(null)} onDone={done} /> : null}
     </div>
   )
 }

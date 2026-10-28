@@ -555,6 +555,81 @@ export async function convertUploadedToNotRequired(
   return { ok: true }
 }
 
+export type ReopenResult = {
+  reopened: number
+  skipped: Array<{ transactionId: string; reason: 'not_found' | 'audit_failed' | 'save_failed' }>
+}
+
+/**
+ * Sends "not required" payments back to Pending. Pending means "no invoices
+ * row", so this deletes the row, and only a `not_required` one: an uploaded
+ * invoice is refused up front (nothing in the request changes) and the
+ * database trigger enforces the same rule. Per row: the audit entry is written
+ * first (previous reason and payment id; no identity data), and if it cannot be
+ * written processing stops and nothing more is deleted. The delete is
+ * conditional on status so a row uploaded in the meantime survives.
+ */
+export async function reopenNotRequired(actor: Actor, transactionIds: unknown): Promise<Result<ReopenResult>> {
+  if (!Array.isArray(transactionIds)) return { ok: false, error: 'invalid_input' }
+  const ids = transactionIds.filter((id): id is string => typeof id === 'string' && UUID.test(id))
+  if (ids.length === 0 || ids.length !== transactionIds.length || new Set(ids).size !== ids.length || ids.length > 100) {
+    return { ok: false, error: 'invalid_input' }
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('invoices')
+    .select('id, billing_transaction_id, status, not_required_reason')
+    .in('billing_transaction_id', ids)
+  if (error) {
+    console.error('[invoices] reopen lookup failed:', error.message)
+    return { ok: false, error: 'unavailable' }
+  }
+  const rows = (data ?? []) as Array<{ id: string; billing_transaction_id: string; status: string; not_required_reason: string | null }>
+  if (rows.some((row) => row.status !== 'not_required')) return { ok: false, error: 'not_reopenable' }
+  const byTransaction = new Map(rows.map((row) => [row.billing_transaction_id, row]))
+
+  const skipped: ReopenResult['skipped'] = []
+  let reopened = 0
+  let halted = false
+  for (const id of ids) {
+    if (halted) {
+      skipped.push({ transactionId: id, reason: 'audit_failed' })
+      continue
+    }
+    const row = byTransaction.get(id)
+    if (!row) {
+      skipped.push({ transactionId: id, reason: 'not_found' })
+      continue
+    }
+    const auditBase = { actor, action: 'invoice.reopen' as const, invoiceId: row.id, billingTransactionId: id }
+    const audited = await recordInvoiceAudit({
+      ...auditBase,
+      detail: { outcome: 'attempt', previousReason: row.not_required_reason, billingTransactionId: id, bulk: ids.length > 1 },
+    })
+    if (!audited) {
+      halted = true
+      skipped.push({ transactionId: id, reason: 'audit_failed' })
+      continue
+    }
+    const { data: deleted, error: deleteError } = await admin
+      .from('invoices')
+      .delete()
+      .eq('id', row.id)
+      .eq('status', 'not_required')
+      .select('id')
+    if (deleteError || !deleted || deleted.length === 0) {
+      console.error('[invoices] reopen delete failed:', deleteError?.message)
+      await recordInvoiceAudit({ ...auditBase, detail: { outcome: 'aborted_delete_failed', billingTransactionId: id } })
+      skipped.push({ transactionId: id, reason: 'save_failed' })
+      continue
+    }
+    reopened += 1
+  }
+  if (reopened === 0 && halted) return { ok: false, error: 'audit_failed' }
+  return { ok: true, reopened, skipped }
+}
+
 async function signedUrlFor(filePath: string | null, invoiceNumber: string | null) {
   if (!isInvoiceStoragePath(filePath)) return null
   const { data, error } = await createAdminClient()

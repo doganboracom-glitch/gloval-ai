@@ -27,6 +27,11 @@ describe('müşteri ödeme geçmişi fatura eylemi', () => {
     expect(resolveHistoryInvoiceAction(charge, state({ notRequiredIds: ['t1'] }))).toBeNull()
   })
 
+  it('"Fatura gerekmez" satırı yeniden açılıp silinince (artık kümede yok) -> "hazırlanıyor"', () => {
+    expect(resolveHistoryInvoiceAction(charge, state({ notRequiredIds: ['t1'] }))).toBeNull()
+    expect(resolveHistoryInvoiceAction(charge, state({ notRequiredIds: [] }))).toEqual({ kind: 'preparing' })
+  })
+
   it.each(['failed', 'abandoned', 'pending'])('%s ödeme -> eylem yok', (status) => {
     expect(resolveHistoryInvoiceAction({ ...charge, status }, state({ byTransaction: { t1: INVOICE } }))).toBeNull()
   })

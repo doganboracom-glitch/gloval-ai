@@ -81,6 +81,7 @@ export type InvoiceActionError =
   | 'not_found'
   | 'not_eligible'
   | 'already_invoiced'
+  | 'not_reopenable'
   | 'number_taken'
   | 'conflict'
   | 'storage_failed'
