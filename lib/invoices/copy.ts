@@ -1,3 +1,4 @@
+import { INVOICE_MAX_MB } from '@/lib/invoices/constants'
 import type { InvoiceActionError } from '@/lib/invoices/types'
 
 type Lang = 'tr' | 'en'
@@ -67,7 +68,7 @@ const copy = {
     replaceTitle: 'Faturayı değiştir',
     invoiceNumber: 'Fatura numarası',
     invoiceDate: 'Fatura tarihi',
-    file: 'PDF dosyası (en fazla 5 MB)',
+    file: `PDF dosyası (en fazla ${INVOICE_MAX_MB} MB)`,
     refreshSnapshot: 'Güncel fatura profilini yeniden al',
     refreshSnapshotHint: 'İşaretlenmezse faturanın ilk kaydedilen müşteri bilgileri korunur.',
     save: 'Kaydet',
@@ -96,7 +97,7 @@ const copy = {
       invalid_number: 'Fatura numarası geçersiz.',
       invalid_date: 'Fatura tarihi geçersiz.',
       invalid_reason: 'Gerekçe en az 3 karakter olmalı.',
-      too_large: 'Dosya 5 MB sınırını aşıyor.',
+      too_large: `Dosya ${INVOICE_MAX_MB} MB sınırını aşıyor. Lütfen daha küçük bir PDF seçin.`,
       unsupported_type: 'Yalnızca PDF dosyası yüklenebilir.',
       active_content: 'PDF etkin içerik (script, form) barındırıyor; reddedildi.',
       not_found: 'Kayıt bulunamadı.',
@@ -174,7 +175,7 @@ const copy = {
     replaceTitle: 'Replace invoice',
     invoiceNumber: 'Invoice number',
     invoiceDate: 'Invoice date',
-    file: 'PDF file (max 5 MB)',
+    file: `PDF file (max ${INVOICE_MAX_MB} MB)`,
     refreshSnapshot: 'Take the current billing profile again',
     refreshSnapshotHint: 'If unchecked, the customer details saved with the invoice are kept.',
     save: 'Save',
@@ -203,7 +204,7 @@ const copy = {
       invalid_number: 'The invoice number is not valid.',
       invalid_date: 'The invoice date is not valid.',
       invalid_reason: 'The reason needs at least 3 characters.',
-      too_large: 'The file is over the 5 MB limit.',
+      too_large: `The file is over the ${INVOICE_MAX_MB} MB limit. Please choose a smaller PDF.`,
       unsupported_type: 'Only PDF files can be uploaded.',
       active_content: 'The PDF contains active content (script, form) and was rejected.',
       not_found: 'Record not found.',

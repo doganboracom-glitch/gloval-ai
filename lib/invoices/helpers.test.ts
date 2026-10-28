@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { INVOICE_MAX_BYTES } from '@/lib/invoices/constants'
+import { INVOICE_MAX_BYTES, INVOICE_MAX_MB } from '@/lib/invoices/constants'
 import { buildInvoicesCsv } from '@/lib/invoices/csv'
 import { redactAuditDetail } from '@/lib/invoices/audit-redact'
 import {
@@ -21,10 +21,15 @@ describe('inspectPdf', () => {
     expect(inspectPdf(new TextEncoder().encode(' %PDF-1.4 leading space'))).toEqual({ ok: false, error: 'unsupported_type' })
   })
 
-  it('enforces the 5 MB limit and blocks script or launch actions', () => {
+  it('enforces the 4 MB limit and blocks script or launch actions', () => {
+    expect(INVOICE_MAX_MB).toBe(4)
+    expect(INVOICE_MAX_BYTES).toBe(4 * 1024 * 1024)
     const big = new Uint8Array(INVOICE_MAX_BYTES + 1)
     big.set([0x25, 0x50, 0x44, 0x46, 0x2d])
     expect(inspectPdf(big)).toEqual({ ok: false, error: 'too_large' })
+    const exact = new Uint8Array(INVOICE_MAX_BYTES)
+    exact.set([0x25, 0x50, 0x44, 0x46, 0x2d])
+    expect(inspectPdf(exact)).toEqual({ ok: true })
     expect(inspectPdf(pdf('/JavaScript (app.alert(1))'))).toEqual({ ok: false, error: 'active_content' })
   })
 })
