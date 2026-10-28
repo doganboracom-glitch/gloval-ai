@@ -672,7 +672,7 @@ const az: DeepPartial<Dict> = {
     confirmChange: 'Dəyişikliyi təsdiqlə',
     upgrade: 'Yüksəlt',
     downgrade: 'Aşağı sal',
-    transactions: 'Ödəniş tarixçəsi',
+    transactions: 'Ödəniş tarixçəsi və fakturalar',
     noTransactions: 'Hələ əməliyyat yoxdur.',
     txnCharge: 'Hesablaşma',
     txnProrationCredit: 'Mütənasib kredit',

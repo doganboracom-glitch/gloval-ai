@@ -672,7 +672,7 @@ const pl: DeepPartial<Dict> = {
     confirmChange: 'Potwierdź zmianę',
     upgrade: 'Podwyższ',
     downgrade: 'Obniż',
-    transactions: 'Historia płatności',
+    transactions: 'Historia płatności i faktury',
     noTransactions: 'Brak transakcji.',
     txnCharge: 'Obciążenie',
     txnProrationCredit: 'Proporcjonalna wpłata',
