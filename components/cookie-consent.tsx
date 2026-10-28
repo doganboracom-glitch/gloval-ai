@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
-import { X } from 'lucide-react'
+import { Cookie, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useCookieBannerDoc } from '@/components/cookie-banner-doc-context'
 import { COOKIE_BANNER_DOC_LABEL, cookieBannerHref } from '@/lib/cookie-policy-link'
@@ -17,10 +17,9 @@ import {
   type CookieConsent as ConsentChoice,
 } from '@/lib/cookie-consent-storage'
 import {
-  COOKIE_BANNER_ACTIONS_CLASS,
+  COOKIE_BANNER_BODY_CLASS,
   COOKIE_BANNER_CLASS,
-  COOKIE_BANNER_INNER_CLASS,
-  COOKIE_BANNER_INNER_EXPANDED_CLASS,
+  COOKIE_BANNER_FOOTER_CLASS,
   applyBannerInset,
 } from '@/lib/cookie-banner-layout'
 
@@ -75,7 +74,7 @@ function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cookie-focus ${
         checked ? 'cookie-toggle-on' : 'cookie-toggle-off'
       }`}
     >
@@ -148,7 +147,7 @@ export function CookieConsent() {
     bannerDoc && bannerDoc !== 'cerez-politikasi'
       ? COOKIE_BANNER_DOC_LABEL[bannerDoc][lang === 'en' ? 'en' : 'tr']
       : c.policyLink
-  // Reserve room for the banner at the bottom of the page so the last controls
+  // Reserve room for the card (phones only, see globals.css) at the bottom of the page so the last controls
   // (sign-up / pay / publish buttons) can always be scrolled above it.
   const bannerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -168,8 +167,8 @@ export function CookieConsent() {
     }
   }, [open, customize])
 
-  const buttonSize =
-    'h-9 px-3 text-sm sm:px-4 max-sm:min-w-[8.5rem] max-sm:flex-1'
+  const buttonBase =
+    'cookie-focus inline-flex h-9 items-center justify-center rounded-xl px-3 text-sm font-semibold transition-colors'
 
   return (
     <>
@@ -183,24 +182,23 @@ export function CookieConsent() {
           role="dialog"
           aria-modal="false"
           aria-labelledby="cookie-title"
+          aria-describedby="cookie-desc"
         >
-          <div className={customize ? COOKIE_BANNER_INNER_EXPANDED_CLASS : COOKIE_BANNER_INNER_CLASS}>
-            <div className={`flex items-start gap-3 ${customize ? '' : 'sm:min-w-0 sm:flex-1'}`}>
+          <div className={COOKIE_BANNER_BODY_CLASS}>
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="cookie-icon-tile cookie-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              >
+                <Cookie className="h-5 w-5" />
+              </span>
               <div className="min-w-0 flex-1">
-                <h2 id="cookie-title" className="font-display text-sm font-semibold sm:text-base">
+                <h2
+                  id="cookie-title"
+                  className="font-display text-balance text-sm font-semibold leading-9"
+                >
                   {c.title}
                 </h2>
-                <p className="cookie-muted mt-0.5 text-pretty text-xs leading-snug sm:text-sm sm:leading-relaxed">
-                  {c.description}
-                  {cookiePolicyHref && (
-                    <>
-                      {' '}
-                      <Link href={cookiePolicyHref} className="cookie-link font-medium">
-                        {policyLabel}
-                      </Link>
-                    </>
-                  )}
-                </p>
               </div>
               {consent && (
                 <button
@@ -210,100 +208,94 @@ export function CookieConsent() {
                     setCustomize(false)
                   }}
                   aria-label="Kapat"
-                  className="cookie-close rounded-lg p-1 transition-colors"
+                  className="cookie-close cookie-focus -mr-1 -mt-0.5 rounded-lg p-1.5 transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
+            <p
+              id="cookie-desc"
+              className="cookie-muted mt-1 text-pretty break-words text-xs leading-relaxed"
+            >
+              {c.description}
+              {cookiePolicyHref && (
+                <>
+                  {' '}
+                  <Link href={cookiePolicyHref} className="cookie-link cookie-focus rounded-sm font-medium">
+                    {policyLabel}
+                  </Link>
+                </>
+              )}
+            </p>
 
             {customize && (
-              <div className="cookie-divider mt-5 space-y-3 border-t pt-5">
+              <div className="cookie-divider mt-4 space-y-3 border-t pt-4">
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">{c.necessary}</p>
-                    <p className="cookie-muted mt-0.5 text-xs">
-                      {c.necessaryDesc}
-                    </p>
+                    <p className="cookie-muted mt-0.5 text-xs">{c.necessaryDesc}</p>
                   </div>
-                  <span className="cookie-muted shrink-0 rounded-full border cookie-divider px-2.5 py-1 text-[11px] font-medium">
+                  <span className="cookie-muted cookie-divider shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium">
                     {c.always}
                   </span>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">{c.analytics}</p>
-                    <p className="cookie-muted mt-0.5 text-xs">
-                      {c.analyticsDesc}
-                    </p>
+                    <p className="cookie-muted mt-0.5 text-xs">{c.analyticsDesc}</p>
                   </div>
-                  <Toggle
-                    checked={draftAnalytics}
-                    onChange={setDraftAnalytics}
-                    label={c.analytics}
-                  />
+                  <Toggle checked={draftAnalytics} onChange={setDraftAnalytics} label={c.analytics} />
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">{c.marketing}</p>
-                    <p className="cookie-muted mt-0.5 text-xs">
-                      {c.marketingDesc}
-                    </p>
+                    <p className="cookie-muted mt-0.5 text-xs">{c.marketingDesc}</p>
                   </div>
-                  <Toggle
-                    checked={draftMarketing}
-                    onChange={setDraftMarketing}
-                    label={c.marketing}
-                  />
+                  <Toggle checked={draftMarketing} onChange={setDraftMarketing} label={c.marketing} />
                 </div>
               </div>
             )}
+          </div>
 
-            <div
-              className={
-                customize
-                  ? 'mt-4 flex flex-wrap gap-2 sm:justify-end'
-                  : COOKIE_BANNER_ACTIONS_CLASS
-              }
-            >
-              {customize ? (
+          <div className={`${COOKIE_BANNER_FOOTER_CLASS}${customize ? ' cookie-divider border-t pt-3' : ''}`}>
+            {customize ? (
+              <button
+                type="button"
+                onClick={saveCustom}
+                className={`cookie-btn-primary hover:opacity-90 max-sm:flex-1 sm:ml-auto ${buttonBase}`}
+              >
+                {c.save}
+              </button>
+            ) : (
+              <>
                 <button
                   type="button"
-                  onClick={saveCustom}
-                  className={`cookie-btn-primary inline-flex items-center justify-center rounded-xl font-semibold transition-opacity hover:opacity-90 ${buttonSize}`}
+                  onClick={acceptAll}
+                  className={`cookie-btn-primary min-w-[8rem] flex-1 hover:opacity-90 ${buttonBase}`}
                 >
-                  {c.save}
+                  {c.acceptAll}
                 </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftAnalytics(consent?.analytics ?? false)
-                      setDraftMarketing(consent?.marketing ?? false)
-                      setCustomize(true)
-                    }}
-                    className={`cookie-btn-outline inline-flex items-center justify-center rounded-xl border font-semibold transition-colors ${buttonSize}`}
-                  >
-                    {c.customize}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={rejectAll}
-                    className={`cookie-btn-outline inline-flex items-center justify-center rounded-xl border font-semibold transition-colors ${buttonSize}`}
-                  >
-                    {c.rejectAll}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={acceptAll}
-                    className={`cookie-btn-primary inline-flex items-center justify-center rounded-xl font-semibold transition-opacity hover:opacity-90 ${buttonSize}`}
-                  >
-                    {c.acceptAll}
-                  </button>
-                </>
-              )}
-            </div>
+                <button
+                  type="button"
+                  onClick={rejectAll}
+                  className={`cookie-btn-outline min-w-[8rem] flex-1 border ${buttonBase}`}
+                >
+                  {c.rejectAll}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftAnalytics(consent?.analytics ?? false)
+                    setDraftMarketing(consent?.marketing ?? false)
+                    setCustomize(true)
+                  }}
+                  className={`cookie-btn-text h-8 w-full text-xs ${buttonBase}`}
+                >
+                  {c.customize}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
