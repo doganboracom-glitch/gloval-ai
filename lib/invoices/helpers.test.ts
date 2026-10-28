@@ -86,4 +86,10 @@ describe('buildInvoicesCsv', () => {
     expect(csv).toContain(`"'@SUM(A1)"`)
     expect(csv.toLowerCase()).not.toMatch(/tckn|vkn|vergi no|kimlik/)
   })
+
+  it('also neutralises cells that start with a tab or carriage return', () => {
+    const csv = buildInvoicesCsv([row({ fullName: '\tcmd', description: '\r=1+1' })])
+    expect(csv).toContain(`"'\tcmd"`)
+    expect(csv).toContain(`"'\r=1+1"`)
+  })
 })
