@@ -7,8 +7,15 @@ import { MAX_ATTEMPTS, classifyHttpFailure } from '@/lib/email-outbox-policy'
 import { INVOICE_BUCKET, INVOICE_MAX_BYTES } from '@/lib/invoices/constants'
 import { downloadFileName, isInvoiceStoragePath, sha256Hex } from '@/lib/invoices/pdf'
 import { transactionNumberFor } from '@/lib/invoices/transaction-number'
+import { newTicketHref } from '@/lib/support/prefill'
 
-const BILLING_URL = 'https://gloval.ai/billing'
+const SITE_URL = 'https://gloval.ai'
+const BILLING_URL = `${SITE_URL}/billing`
+
+/** The customer's new-ticket page with the billing department and the invoice number pre-filled. */
+export function supportTicketUrl(invoiceNumber: string, lang: EmailLang): string {
+  return `${SITE_URL}${newTicketHref({ department: 'billing', subject: `${lang === 'tr' ? 'Fatura' : 'Invoice'} ${invoiceNumber}` })}`
+}
 const TX_COLUMNS = 'id, user_id, kind, amount_cents, currency, status, provider, provider_ref, description, idempotency_key, created_at'
 
 export type InvoiceEventRow = {
@@ -101,6 +108,7 @@ export async function deliverInvoiceReady(
     transactionNumber,
     attachmentIncluded: attachment.ok,
     billingUrl: BILLING_URL,
+    supportTicketUrl: supportTicketUrl(invoice.invoice_number, recipient.lang),
     supportEmail: SUPPORT_EMAIL,
   })
 

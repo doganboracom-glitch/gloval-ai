@@ -20,6 +20,8 @@ export type InvoiceReadyInput = {
   /** False when the PDF could not be attached: the email then points to the billing page. */
   attachmentIncluded: boolean
   billingUrl: string
+  /** Absolute URL of the customer's new-ticket page. */
+  supportTicketUrl: string
   supportEmail: string
 }
 
@@ -65,7 +67,12 @@ export function buildInvoiceReadyCopy(input: InvoiceReadyInput): PaymentReceiptC
     ],
     cta: { label: tr ? 'Faturalandırmayı görüntüle' : 'View billing', href: input.billingUrl },
     support: {
-      text: tr ? 'Faturayla ilgili bir sorunuz olursa bize yazabilirsiniz:' : 'If you have a question about the invoice, write to us at',
+      text: tr ? 'Faturayla ilgili bir sorunuz olursa' : 'If you have a question about the invoice,',
+      label: tr ? 'destek talebi oluşturun' : 'create a support ticket',
+      href: input.supportTicketUrl,
+    },
+    supportAlternative: {
+      text: tr ? 'veya bize e-posta ile yazın:' : 'or write to us at',
       label: input.supportEmail,
       href: `mailto:${input.supportEmail}`,
     },

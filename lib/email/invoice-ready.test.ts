@@ -11,6 +11,7 @@ const base: InvoiceReadyInput = {
   transactionNumber: 'GLV-8F4K2M',
   attachmentIncluded: true,
   billingUrl: 'https://gloval.ai/billing',
+  supportTicketUrl: 'https://gloval.ai/support/new?department=billing&subject=Fatura+GLV2026000042',
   supportEmail: 'support@gloval.ai',
 }
 
@@ -70,6 +71,31 @@ describe('invoice ready email', () => {
     })
     expect(html).not.toContain('<script>')
     expect(html).not.toContain('<img src=x')
+  })
+
+  it('links "destek talebi oluşturun" to the absolute ticket URL and offers the support address as the second option', () => {
+    const { html, text } = buildInvoiceReadyEmail(base)
+    expect(html).toContain(`href="${base.supportTicketUrl.replaceAll('&', '&amp;')}"`)
+    expect(html).toMatch(/>destek talebi oluşturun<\/a> veya bize e-posta ile yazın: <a [^>]*href="mailto:support@gloval\.ai"[^>]*>support@gloval\.ai<\/a>/)
+    expect(text).toContain(`destek talebi oluşturun: ${base.supportTicketUrl}`)
+    expect(text).toContain('veya bize e-posta ile yazın: support@gloval.ai')
+  })
+
+  it('renders the same two support options in English', () => {
+    const { html, text } = buildInvoiceReadyEmail({ ...base, lang: 'en' })
+    expect(html).toMatch(/>create a support ticket<\/a> or write to us at <a [^>]*href="mailto:support@gloval\.ai"/)
+    expect(text).toContain(`create a support ticket: ${base.supportTicketUrl}`)
+  })
+
+  it('carries only invoice facts: no tax number, national id, address or phone', () => {
+    for (const lang of ['tr', 'en'] as const) {
+      const { html, text } = buildInvoiceReadyEmail({ ...base, lang })
+      for (const output of [html, text]) {
+        expect(output).not.toMatch(/\b\d{10,11}\b/)
+        expect(output).not.toMatch(/TCKN|VKN|Vergi|Tax (number|office)|Mah\.|Sok\.|Cad\./i)
+        expect(output).not.toMatch(/\+?90\s?5\d{2}/)
+      }
+    }
   })
 
   it('formats the invoice date per language and leaves malformed input untouched', () => {
