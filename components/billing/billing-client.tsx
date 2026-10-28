@@ -19,6 +19,7 @@ import {
 import { useLanguage } from '@/components/language-provider'
 import { getInvoiceCopy } from '@/lib/invoices/copy'
 import { HistoryInvoiceActionButton } from '@/components/billing/history-invoice-action'
+import { PaymentHistoryRow } from '@/components/billing/payment-history-row'
 import type { MyInvoice } from '@/lib/invoices/customer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
@@ -1325,52 +1326,33 @@ export function BillingClient({
           ) : (
             <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card/70">
               {transactions.map((txn) => (
-                <li key={txn.id} className="flex items-center justify-between gap-4 px-5 py-3.5">
-                  <div>
-                    <p className="text-sm font-medium">{txnKindLabel(txn.kind)}</p>
-                    {txn.description && (
-                      <p className="text-xs text-muted-foreground">{txn.description}</p>
-                    )}
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {dateFmt.format(new Date(txn.created_at))}
-                    </p>
-                    <div className="mt-2 empty:hidden">
-                      <HistoryInvoiceActionButton
-                        txn={txn}
-                        copy={invoiceCopy}
-                        invoicesByTransaction={invoicesByTransaction}
-                        invoiceNotRequiredIds={invoiceNotRequiredIds}
-                        invoicesAvailable={invoicesAvailable}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span
-                      className={`font-mono text-sm font-medium ${
-                        txn.amount_cents < 0 ? 'text-accent' : 'text-foreground'
-                      }`}
-                    >
-                      {formatSignedMoney(txn.amount_cents, txn.currency)}
-                    </span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                        txn.status === 'succeeded'
-                          ? 'bg-success/15 text-success-strong'
-                          : txn.status === 'failed'
-                            ? 'bg-destructive/15 text-destructive'
-                            : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {txn.status === 'succeeded'
-                        ? b.txnStatusSucceeded
-                        : txn.status === 'failed'
-                          ? b.txnStatusFailed
-                          : txn.status === 'abandoned'
-                            ? b.txnStatusAbandoned
-                            : b.txnStatusPending}
-                    </span>
-                  </div>
-                </li>
+                <PaymentHistoryRow
+                  key={txn.id}
+                  title={txnKindLabel(txn.kind)}
+                  description={txn.description}
+                  dateText={dateFmt.format(new Date(txn.created_at))}
+                  amountText={formatSignedMoney(txn.amount_cents, txn.currency)}
+                  amountNegative={txn.amount_cents < 0}
+                  statusTone={txn.status === 'succeeded' ? 'success' : txn.status === 'failed' ? 'failed' : 'neutral'}
+                  statusLabel={
+                    txn.status === 'succeeded'
+                      ? b.txnStatusSucceeded
+                      : txn.status === 'failed'
+                        ? b.txnStatusFailed
+                        : txn.status === 'abandoned'
+                          ? b.txnStatusAbandoned
+                          : b.txnStatusPending
+                  }
+                  invoiceAction={
+                    <HistoryInvoiceActionButton
+                      txn={txn}
+                      copy={invoiceCopy}
+                      invoicesByTransaction={invoicesByTransaction}
+                      invoiceNotRequiredIds={invoiceNotRequiredIds}
+                      invoicesAvailable={invoicesAvailable}
+                    />
+                  }
+                />
               ))}
             </ul>
           )}
