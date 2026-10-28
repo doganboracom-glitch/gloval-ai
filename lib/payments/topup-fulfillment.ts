@@ -1,9 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
-import { logUserEvent, formatTicketNumber } from '@/lib/notify'
+import { logUserEvent, formatTicketNumber, SUPPORT_EMAIL } from '@/lib/notify'
+import { resolveEmailLang } from '@/lib/email/lang'
+import { buildPaymentReceiptEmail } from '@/lib/email/payment-receipt'
 import { TOPUP_ORDER_PREFIX, type CreditTopUp } from '@/lib/pricing-config'
 import { verifyTopUpPayment, type TopUpPaymentFacts } from './topup-verify'
 import type { PaymentProviderId, PaymentWebhookResult } from './types'
+
+const BILLING_URL = 'https://gloval.ai/billing'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -65,12 +69,27 @@ export async function grantTopUpCredits(
     throw new Error(`topup_ledger_failed: ${ledgerError.message}`)
   }
 
+  const ticketNumber = formatTicketNumber(charge.provider_ref ?? charge.id)
+
   await logUserEvent({
     userId: charge.user_id,
   type: 'payment_succeeded',
   subject: 'Ödeme başarılı — AI işlemleri eklendi',
   includeBillingProfileReminder: true,
-    body: `Ek AI paketi ödemeniz onaylandı ve hesabınıza ${pack.credits} AI işlemi eklendi. İşlem No: ${formatTicketNumber(charge.provider_ref ?? charge.id)}.`,
+    body: `Ek AI paketi ödemeniz onaylandı ve hesabınıza ${pack.credits} AI işlemi eklendi. İşlem No: ${ticketNumber}.`,
+    userEmail: ({ emailLocale, billingProfileIncomplete }) =>
+      buildPaymentReceiptEmail({
+        kind: 'ai_topup',
+        lang: resolveEmailLang(emailLocale),
+        credits: pack.credits,
+        amountCents: pack.priceCents,
+        currency: pack.currency,
+        paidAt: new Date(),
+        ticketNumber,
+        supportEmail: SUPPORT_EMAIL,
+        billingUrl: BILLING_URL,
+        billingProfileIncomplete,
+      }),
     emailAdmin: false,
   })
 

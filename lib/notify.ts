@@ -323,6 +323,16 @@ export async function logUserEvent(input: {
   skipUserEmail?: boolean
   emailAdmin?: boolean
   includeBillingProfileReminder?: boolean
+  /**
+   * Builds the complete customer email (subject, HTML, text) with the shared
+   * email layout instead of the plain `userBody` shell. Receives the language
+   * hint stored on the account and whether the billing profile is incomplete.
+   * If it throws, the email falls back to the plain `userBody` version.
+   */
+  userEmail?: (context: {
+    emailLocale: unknown
+    billingProfileIncomplete: boolean
+  }) => { subject: string; html: string; text: string }
   adminSubject?: (userEmail: string) => string
   adminBody?: (userEmail: string) => string
   /**
@@ -335,11 +345,13 @@ export async function logUserEvent(input: {
 }): Promise<boolean> {
   let body = input.body ?? input.subject
   let notificationBody = input.body ?? null
+  let billingProfileIncomplete = false
 
   if (input.includeBillingProfileReminder) {
     try {
       const profileStatus = await getBillingProfileStatusForUser(input.userId)
       if (profileStatus.available && !profileStatus.complete) {
+        billingProfileIncomplete = true
         body = appendBillingProfileReminder(body, true, 'tr')
         notificationBody = body
       }
@@ -368,13 +380,27 @@ export async function logUserEvent(input: {
     })
   }
 
-  const userSubject = input.userSubject ?? input.subject
-  const userBody = input.userBody ?? body
-  const html = emailShell(userSubject, `<p>${userBody}</p>`)
   const admin = createAdminClient()
   const {
     data: { user },
   } = await admin.auth.admin.getUserById(input.userId)
+
+  let userSubject = input.userSubject ?? input.subject
+  let userBody = input.userBody ?? body
+  let html = emailShell(userSubject, `<p>${userBody}</p>`)
+  if (input.userEmail) {
+    try {
+      const custom = input.userEmail({
+        emailLocale: (user?.user_metadata as Record<string, unknown> | undefined)?.email_locale,
+        billingProfileIncomplete,
+      })
+      userSubject = custom.subject
+      userBody = custom.text
+      html = custom.html
+    } catch (error) {
+      console.log('[notify] custom user email failed, using plain email:', error instanceof Error ? error.message : 'unknown')
+    }
+  }
 
   if (user?.email && !input.skipUserEmail) {
     await sendTransactionalEmail({
