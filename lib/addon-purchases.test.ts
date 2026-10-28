@@ -10,10 +10,22 @@ import {
 } from '@/lib/addon-purchases'
 
 const sql = readFileSync(join(process.cwd(), 'scripts/019-addon-purchases.sql'), 'utf8')
+const reconciliationSql = readFileSync(
+  join(process.cwd(), 'scripts/077-payment-reconciliation-abandoned.sql'),
+  'utf8',
+)
 
 describe('migration 019 (static contract)', () => {
   it('keeps the status check constraint in sync with ADDON_PURCHASE_STATUSES', () => {
     const match = sql.match(/status in \(([^)]*)\)\)/)
+    expect(match).not.toBeNull()
+    const inSql = [...match![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    // 019 is the original constraint; 'abandoned' was added later by migration 077.
+    expect([...inSql, 'abandoned']).toEqual([...ADDON_PURCHASE_STATUSES])
+  })
+
+  it('migration 077 widens the check constraint to exactly ADDON_PURCHASE_STATUSES', () => {
+    const match = reconciliationSql.match(/addon_purchases_status_check\s+check \(status = any \(array\[([^\]]*)\]/)
     expect(match).not.toBeNull()
     const inSql = [...match![1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
     expect(inSql).toEqual([...ADDON_PURCHASE_STATUSES])
@@ -68,7 +80,7 @@ describe('addon purchase model', () => {
     updated_at: '2029-12-01T00:00:00Z',
   }
 
-  it('recognises only the five valid statuses', () => {
+  it('recognises only the valid statuses', () => {
     for (const s of ADDON_PURCHASE_STATUSES) expect(isAddOnPurchaseStatus(s)).toBe(true)
     expect(isAddOnPurchaseStatus('bogus')).toBe(false)
     expect(isAddOnPurchaseStatus(undefined)).toBe(false)

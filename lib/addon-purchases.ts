@@ -7,6 +7,7 @@ export const ADDON_PURCHASE_STATUSES = [
   'granted',
   'failed',
   'manual_refund_required',
+  'abandoned',
 ] as const
 
 export type AddOnPurchaseStatus = (typeof ADDON_PURCHASE_STATUSES)[number]

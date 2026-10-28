@@ -681,6 +681,7 @@ const az: DeepPartial<Dict> = {
     txnStatusSucceeded: 'Uğurlu',
     txnStatusPending: 'Gözləmədə',
     txnStatusFailed: 'Uğursuz',
+    txnStatusAbandoned: 'Tamamlanmayıb',
     entitlements: 'Daimi hüquqlar',
     entitlementHint: 'Birdəfəlik ödənişlə aldığınız xidmətlər burada görünəcək.',
     entitlementInactive: 'Qeyri-aktiv',

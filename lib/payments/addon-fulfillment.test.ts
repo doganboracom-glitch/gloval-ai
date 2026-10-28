@@ -178,6 +178,26 @@ beforeEach(() => {
   seed()
 })
 
+describe('settlePaymentResult - payment arriving after the sweep wrote the purchase off', () => {
+  it('still grants an abandoned purchase on a verified payment, exactly once', async () => {
+    seed({ purchaseStatus: 'abandoned' })
+    expect(await settlePaymentResult('iyzico', paid())).toBe('addon_purchase')
+    expect(purchase().status).toBe('granted')
+    expect(entitlements()).toHaveLength(1)
+
+    await settlePaymentResult('iyzico', paid())
+    expect(purchase().status).toBe('granted')
+    expect(entitlements()).toHaveLength(1)
+  })
+
+  it('still rejects an abandoned purchase when the paid amount does not match', async () => {
+    seed({ purchaseStatus: 'abandoned' })
+    await settlePaymentResult('iyzico', paid({ paidAmountCents: 100 }))
+    expect(purchase().status).toBe('manual_refund_required')
+    expect(entitlements()).toHaveLength(0)
+  })
+})
+
 describe('settlePaymentResult - successful add-on payment', () => {
   it('moves pending -> paid -> granted and creates exactly one entitlement', async () => {
     expect(await settlePaymentResult('iyzico', paid())).toBe('addon_purchase')

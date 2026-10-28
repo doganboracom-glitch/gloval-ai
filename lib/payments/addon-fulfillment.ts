@@ -159,12 +159,13 @@ async function fulfilPaidPurchase(
     orderRef: result.orderRef,
   })
   if (!facts.ok) {
-    return rejectForRefund(admin, purchase, facts.reason, ['pending', 'paid'], result.reference)
+    return rejectForRefund(admin, purchase, facts.reason, ['pending', 'paid', 'abandoned'], result.reference)
   }
 
-  // Record the verified payment durably before anything that can fail.
-  if (purchase.status === 'pending') {
-    const claimed = await transition(admin, purchase.id, ['pending'], 'paid')
+  // Record the verified payment durably before anything that can fail. A row the
+  // sweep wrote off as abandoned is still claimable by a verified payment.
+  if (purchase.status === 'pending' || purchase.status === 'abandoned') {
+    const claimed = await transition(admin, purchase.id, ['pending', 'abandoned'], 'paid')
     if (!claimed) {
       const { data: current, error: currentError } = await admin
         .from('addon_purchases')

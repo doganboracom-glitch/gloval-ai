@@ -135,7 +135,16 @@ export async function settlePaymentResult(
     const alreadySettled =
       !isUpgrade &&
       (pendingCharge?.status === 'succeeded' || sub.status === 'past_due' || sub.status === 'suspended')
-    if (pendingCharge && pendingCharge.status !== 'pending' && result.status === 'paid') return 'subscription'
+    // An abandoned charge is treated like a pending one: a verified payment that
+    // arrives after the sweep wrote it off must still activate the plan.
+    if (
+      pendingCharge &&
+      pendingCharge.status !== 'pending' &&
+      pendingCharge.status !== 'abandoned' &&
+      result.status === 'paid'
+    ) {
+      return 'subscription'
+    }
     if (alreadySettled && result.status === 'paid') return 'subscription'
 
     if (result.status === 'paid') {
@@ -198,6 +207,7 @@ export async function settlePaymentResult(
         type: isUpgrade ? 'plan_upgraded' : 'payment_succeeded',
   subject: isUpgrade ? 'Paket yükseltme başarılı' : 'Ödeme başarılı — paket aktif edildi',
   includeBillingProfileReminder: true,
+  dedupeKey: `payment-succeeded:${ref}`,
   body: isUpgrade
           ? `Paket yükseltmeniz onaylandı. Yeni paket: ${plan?.name ?? 'Bilinmiyor'}. Ödenen ara fark: ${((pendingCharge?.amount_cents ?? 0) / 100).toFixed(2)} ${pendingCharge?.currency ?? plan?.currency ?? 'TRY'}. İşlem No: ${formatTicketNumber(ref)}.`
           : `Abonelik ödemeniz onaylandı ve paketiniz etkinleştirildi. İşlem No: ${formatTicketNumber(ref)}.`,
@@ -316,6 +326,7 @@ export async function settlePaymentResult(
         type: 'payment_succeeded',
   subject: 'Ödeme başarılı — hak etkinleştirildi',
   includeBillingProfileReminder: true,
+  dedupeKey: `payment-succeeded:${ref}`,
   body: `Tek seferlik hak ödemesi onaylandı (${ent.name}).`,
         emailAdmin: true,
         adminSubject: (userEmail) => `${userEmail} üye ödemesi başarılı`,

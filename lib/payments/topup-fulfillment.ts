@@ -38,7 +38,7 @@ export async function grantTopUpCredits(
     .from('billing_transactions')
     .update({ status: 'succeeded', provider: providerId })
     .eq('id', charge.id)
-    .eq('status', 'pending')
+    .in('status', ['pending', 'abandoned'])
     .select('id')
 
   if (claimError) throw new Error(`topup_claim_failed: ${claimError.message}`)
@@ -120,7 +120,7 @@ export async function settleTopUpResult(
           .from('billing_transactions')
           .update({ status: 'failed' })
           .eq('id', charge.id)
-          .eq('status', 'pending'),
+          .in('status', ['pending', 'abandoned']),
       )
       return true
     }

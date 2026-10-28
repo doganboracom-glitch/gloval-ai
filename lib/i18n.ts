@@ -1035,6 +1035,7 @@ const dict = {
     txnStatusSucceeded: 'Başarılı',
     txnStatusPending: 'Bekliyor',
     txnStatusFailed: 'Başarısız',
+    txnStatusAbandoned: 'Tamamlanmadı',
       entitlements: 'Kalıcı Haklar',
       entitlementHint:
         'Tek seferlik ödeme ile aldığın bir hizmet olursa burada görünecek.',
@@ -2700,6 +2701,7 @@ const dict = {
     txnStatusSucceeded: 'Succeeded',
     txnStatusPending: 'Pending',
     txnStatusFailed: 'Failed',
+    txnStatusAbandoned: 'Not completed',
       entitlements: 'Permanent Rights',
       entitlementHint:
         'Services you buy with a one-time payment will appear here.',
