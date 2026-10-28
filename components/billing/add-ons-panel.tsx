@@ -27,6 +27,7 @@ import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
 import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'
 import { purchaseAddOn } from '@/lib/addon-purchase-actions'
+import { closePendingCheckout } from '@/lib/payments/close-checkout-actions'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
 import {
   fillTemplate as fill,
@@ -311,6 +312,7 @@ export function AddOnsPanel({
   const [paymentResult, setPaymentResult] = useState<'success' | 'failed' | null>(null)
   const [isPending, startTransition] = useTransition()
   const paymentIframeRef = useRef<HTMLIFrameElement | null>(null)
+  const paymentStartedAtRef = useRef<number | null>(null)
 
   const errorCopy: PurchaseErrorCopy = {
     unauthenticated: a.errUnauthenticated,
@@ -394,6 +396,7 @@ export function AddOnsPanel({
           return
         }
         setPaymentResult(null)
+        paymentStartedAtRef.current = Date.now() - 60_000
         setAwaitingUrl(res.redirectUrl)
       } catch {
         setBusyCode(null)
@@ -686,6 +689,17 @@ export function AddOnsPanel({
               runPurchase(consents)
             }}
             onClose={() => {
+              if (awaitingUrl && !paymentResult) {
+                const since = paymentStartedAtRef.current ?? Date.now() - 60_000
+                void closePendingCheckout(since)
+                  .then((outcome) => {
+                    if (outcome === 'paid') showResult()
+                  })
+                  .catch(() => {
+                    // Transient; the cron still reconciles it.
+                  })
+              }
+              paymentStartedAtRef.current = null
               setCheckoutCode(null)
               setPaymentResult(null)
             }}

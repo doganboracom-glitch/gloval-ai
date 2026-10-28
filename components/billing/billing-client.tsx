@@ -64,6 +64,7 @@ import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 import { purchaseCreditTopUp } from '@/lib/credit-topups'
 import { PaymentNoticeBanner, type PaymentNotice } from '@/components/billing/payment-notice-banner'
 import { getPaymentOutcomeSince } from '@/lib/payment-notice-actions'
+import { closePendingCheckout } from '@/lib/payments/close-checkout-actions'
 import {
   clearPendingPayment,
   formatPaymentSuccess,
@@ -238,7 +239,10 @@ export function BillingClient({
     checkoutRef.current = checkout
   }, [checkout])
 
+  const paymentStartedAtRef = useRef<number | null>(null)
+
   function startPayment(redirectUrl: string) {
+    paymentStartedAtRef.current = Date.now() - 60_000
     const item = checkoutRef.current
     if (item) savePendingPayment(item.notice ?? { kind: 'named', name: item.name })
     setPaymentUrl(redirectUrl)
@@ -1555,6 +1559,22 @@ export function BillingClient({
         }}
         onClose={() => {
           if (isPending) return
+          if (paymentUrl && !paymentResult) {
+            const item = checkoutRef.current
+            const target: PaymentNoticeTarget | null = item
+              ? (item.notice ?? { kind: 'named', name: item.name })
+              : null
+            const since = paymentStartedAtRef.current ?? readPendingPayment()?.since ?? Date.now() - 60_000
+            void closePendingCheckout(since)
+              .then((outcome) => {
+                if (outcome === 'paid') applyPaymentOutcomeRef.current('success', target)
+                else if (outcome === 'abandoned') clearPendingPayment()
+              })
+              .catch(() => {
+                // Transient; the cron and the focus check still reconcile it.
+              })
+          }
+          paymentStartedAtRef.current = null
           setCheckout(null)
           setPaymentUrl(null)
           setCheckoutRun(null)

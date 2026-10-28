@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   RECONCILE_GRACE_MS,
+  abandonedRescanSinceIso,
   classifyRetrieval,
+  decideCloseAction,
   decideReconcileAction,
   isReconcilableLedgerKey,
   runReconciliation,
@@ -52,6 +54,45 @@ describe('classifyRetrieval', () => {
     expect(
       classifyRetrieval({ paid: false, raw: { status: 'failure', errorMessage: 'Checkout form bulunamadı' } }),
     ).toEqual({ kind: 'unknown_token' })
+    expect(
+      classifyRetrieval({ paid: false, raw: { status: 'failure', errorCode: '5124', errorMessage: 'token bulunamadı' } }),
+    ).toEqual({ kind: 'unknown_token' })
+  })
+
+  it('reads iyzico errorCode 5122 (no payment on the token) as no_payment', () => {
+    expect(
+      classifyRetrieval({
+        paid: false,
+        raw: { status: 'failure', errorCode: '5122', errorMessage: 'Gönderilen tokena ait ödeme bilgisi bulunamadı' },
+      }),
+    ).toEqual({ kind: 'no_payment' })
+    expect(classifyRetrieval({ paid: false, raw: { status: 'failure', errorCode: 5122 } })).toEqual({ kind: 'no_payment' })
+  })
+})
+
+describe('decideCloseAction', () => {
+  it('settles a paid record', () => {
+    expect(decideCloseAction({ kind: 'paid', raw: {} })).toBe('settle_paid')
+  })
+
+  it('abandons only on positive evidence: no payment on the token or an explicit FAILURE', () => {
+    expect(decideCloseAction({ kind: 'no_payment' })).toBe('abandon')
+    expect(decideCloseAction({ kind: 'not_paid', explicitFailure: true })).toBe('abandon')
+  })
+
+  it('keeps the record pending when 3D Secure may be in flight or the answer is ambiguous', () => {
+    expect(decideCloseAction({ kind: 'not_paid', explicitFailure: false })).toBe('keep_pending')
+    expect(decideCloseAction({ kind: 'unknown_token' })).toBe('keep_pending')
+  })
+
+  it('leaves the record alone on provider trouble', () => {
+    expect(decideCloseAction({ kind: 'transient' })).toBe('skip_transient')
+  })
+})
+
+describe('abandonedRescanSinceIso', () => {
+  it('reaches back exactly 24 hours', () => {
+    expect(abandonedRescanSinceIso(NOW)).toBe(new Date(NOW - 24 * 60 * 60 * 1000).toISOString())
   })
 })
 
@@ -85,6 +126,8 @@ describe('decideReconcileAction', () => {
   it('abandons an unpaid or unknown-token payment once the window has passed', () => {
     expect(decide({ kind: 'not_paid', explicitFailure: false }, RECONCILE_GRACE_MS)).toBe('abandon')
     expect(decide({ kind: 'unknown_token' }, 2 * 60 * MIN)).toBe('abandon')
+    expect(decide({ kind: 'no_payment' }, 2 * 60 * MIN)).toBe('abandon')
+    expect(decide({ kind: 'no_payment' }, 10 * MIN)).toBe('skip_young')
   })
 })
 
@@ -138,6 +181,7 @@ describe('runReconciliation', () => {
       paid: 1,
       failed: 1,
       abandoned: 1,
+      skippedAbandoned: 0,
       skippedYoung: 1,
       skippedTransient: 1,
       errors: 0,

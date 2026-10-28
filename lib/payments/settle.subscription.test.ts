@@ -164,6 +164,17 @@ describe('settlePaymentResult - first subscription payment', () => {
     expect(state.db.billing_subscriptions[0].status).toBe('active')
     expect(ledger()[0].status).toBe('succeeded')
   })
+
+  it('an abandoned charge settled by the callback and again by the cron is processed once', async () => {
+    seed('abandoned')
+    await settlePaymentResult('iyzico', result())
+    vi.mocked(logUserEvent).mockClear()
+    vi.mocked(grantPlanCreditsAfterPayment).mockClear()
+    await settlePaymentResult('iyzico', result())
+    expect(events()).toHaveLength(0)
+    expect(grantPlanCreditsAfterPayment).not.toHaveBeenCalled()
+    expect(ledger()[0].status).toBe('succeeded')
+  })
 })
 
 describe('settlePaymentResult - failed subscription payment', () => {
