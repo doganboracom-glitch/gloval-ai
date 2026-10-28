@@ -138,6 +138,7 @@ describe('runReconciliation', () => {
       paid: 1,
       failed: 1,
       abandoned: 1,
+      skippedAbandoned: 0,
       skippedYoung: 1,
       skippedTransient: 1,
       errors: 0,
