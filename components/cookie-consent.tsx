@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Analytics } from '@vercel/analytics/next'
-import { Cookie, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useCookieBannerDoc } from '@/components/cookie-banner-doc-context'
 import { COOKIE_BANNER_DOC_LABEL, cookieBannerHref } from '@/lib/cookie-policy-link'
@@ -17,8 +17,11 @@ import {
   type CookieConsent as ConsentChoice,
 } from '@/lib/cookie-consent-storage'
 import {
+  COOKIE_BANNER_ACTIONS_CLASS,
+  COOKIE_BANNER_CLASS,
+  COOKIE_BANNER_INNER_CLASS,
+  COOKIE_BANNER_INNER_EXPANDED_CLASS,
   applyBannerInset,
-  shouldUseCompactBanner,
 } from '@/lib/cookie-banner-layout'
 
 /**
@@ -145,16 +148,6 @@ export function CookieConsent() {
     bannerDoc && bannerDoc !== 'cerez-politikasi'
       ? COOKIE_BANNER_DOC_LABEL[bannerDoc][lang === 'en' ? 'en' : 'tr']
       : c.policyLink
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
-  useEffect(() => {
-    const update = () => setViewportHeight(window.innerHeight)
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-  const compact = shouldUseCompactBanner(pathname, viewportHeight)
-  const sideBySide = compact && !customize
-
   // Reserve room for the banner at the bottom of the page so the last controls
   // (sign-up / pay / publish buttons) can always be scrolled above it.
   const bannerRef = useRef<HTMLDivElement>(null)
@@ -173,11 +166,10 @@ export function CookieConsent() {
       observer.disconnect()
       applyBannerInset(root, null)
     }
-  }, [open, compact, customize])
+  }, [open, customize])
 
-  const buttonSize = compact
-    ? 'h-9 px-3 text-xs sm:px-4 sm:text-sm'
-    : 'h-10 px-5 text-sm'
+  const buttonSize =
+    'h-9 px-3 text-sm sm:px-4 max-sm:min-w-[8.5rem] max-sm:flex-1'
 
   return (
     <>
@@ -187,42 +179,18 @@ export function CookieConsent() {
       {open && (
         <div
           ref={bannerRef}
-          className={
-            compact
-              ? 'cookie-surface fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto border-t shadow-lg shadow-black/20'
-              : 'fixed inset-x-0 bottom-0 z-[60] max-h-[85dvh] overflow-y-auto px-3 pb-3 sm:px-4 sm:pb-4'
-          }
+          className={COOKIE_BANNER_CLASS}
           role="dialog"
           aria-modal="false"
           aria-labelledby="cookie-title"
         >
-          <div
-            className={
-              compact
-                ? `mx-auto max-w-5xl px-4 py-3 ${sideBySide ? 'sm:flex sm:items-center sm:gap-4' : ''}`
-                : 'cookie-surface mx-auto max-w-3xl rounded-2xl border p-5 shadow-lg shadow-black/20 sm:p-6'
-            }
-          >
-            <div className={`flex items-start gap-3 ${sideBySide ? 'sm:min-w-0 sm:flex-1' : ''}`}>
-              {!compact && (
-                <span className="cookie-icon mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12">
-                  <Cookie className="h-5 w-5" aria-hidden="true" />
-                </span>
-              )}
+          <div className={customize ? COOKIE_BANNER_INNER_EXPANDED_CLASS : COOKIE_BANNER_INNER_CLASS}>
+            <div className={`flex items-start gap-3 ${customize ? '' : 'sm:min-w-0 sm:flex-1'}`}>
               <div className="min-w-0 flex-1">
-                <h2
-                  id="cookie-title"
-                  className={`font-display font-semibold ${compact ? 'text-sm' : 'text-base'}`}
-                >
+                <h2 id="cookie-title" className="font-display text-sm font-semibold sm:text-base">
                   {c.title}
                 </h2>
-                <p
-                  className={`cookie-muted text-pretty ${
-                    compact
-                      ? 'mt-0.5 line-clamp-2 text-xs leading-snug'
-                      : 'mt-1 text-sm leading-relaxed'
-                  }`}
-                >
+                <p className="cookie-muted mt-0.5 text-pretty text-xs leading-snug sm:text-sm sm:leading-relaxed">
                   {c.description}
                   {cookiePolicyHref && (
                     <>
@@ -293,9 +261,9 @@ export function CookieConsent() {
 
             <div
               className={
-                compact
-                  ? `mt-2 flex gap-2 sm:justify-end ${sideBySide ? 'sm:mt-0 sm:shrink-0' : 'sm:mt-3'} ${customize ? '' : 'max-sm:[&>button]:flex-1'}`
-                  : 'mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end'
+                customize
+                  ? 'mt-4 flex flex-wrap gap-2 sm:justify-end'
+                  : COOKIE_BANNER_ACTIONS_CLASS
               }
             >
               {customize ? (

@@ -1,10 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   COOKIE_BANNER_ATTR,
+  COOKIE_BANNER_CLASS,
   COOKIE_BANNER_HEIGHT_VAR,
+  COOKIE_BANNER_Z_CLASS,
   applyBannerInset,
-  isCriticalActionPath,
-  shouldUseCompactBanner,
   type BannerInsetRoot,
 } from './cookie-banner-layout'
 
@@ -46,22 +48,36 @@ describe('applyBannerInset', () => {
   })
 })
 
-describe('compact banner selection', () => {
-  it('is compact on auth, billing and publish routes', () => {
-    for (const p of ['/auth/sign-up', '/auth/login', '/billing', '/billing/add-ons', '/editor/abc', '/payment-result']) {
-      expect(isCriticalActionPath(p)).toBe(true)
-    }
+describe('single banner design', () => {
+  const classes = COOKIE_BANNER_CLASS.split(' ')
+
+  it('is pinned to the bottom edge at full width', () => {
+    for (const c of ['fixed', 'inset-x-0', 'bottom-0']) expect(classes).toContain(c)
   })
 
-  it('is not matched by look-alike prefixes', () => {
-    expect(isCriticalActionPath('/billingx')).toBe(false)
-    expect(isCriticalActionPath('/')).toBe(false)
-    expect(isCriticalActionPath(null)).toBe(false)
+  it('is never the floating-card variant', () => {
+    expect(COOKIE_BANNER_CLASS).not.toMatch(/rounded|max-w-|mx-auto|sticky|translate|absolute/)
   })
 
-  it('is compact on short viewports anywhere', () => {
-    expect(shouldUseCompactBanner('/', 636)).toBe(true)
-    expect(shouldUseCompactBanner('/', 900)).toBe(false)
-    expect(shouldUseCompactBanner('/auth/login', 1200)).toBe(true)
+  it('caps its height at 40% of the screen and respects the iOS safe area', () => {
+    expect(classes).toContain('max-h-[40dvh]')
+    expect(COOKIE_BANNER_CLASS).toContain('env(safe-area-inset-bottom)')
+  })
+
+  it('stays below modal / checkout overlays (z-50 and above)', () => {
+    expect(COOKIE_BANNER_Z_CLASS).toBe('z-[45]')
+    expect(classes).toContain(COOKIE_BANNER_Z_CLASS)
+  })
+})
+
+describe('stylesheet rules', () => {
+  const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
+
+  it('reserves bottom space only while the banner attribute is set', () => {
+    expect(css).toMatch(/html\[data-cookie-banner\] body\s*\{\s*padding-bottom:\s*var\(--cookie-banner-h\)/)
+  })
+
+  it('does not shrink modal overlays to make room for the banner', () => {
+    expect(css).not.toMatch(/html\[data-cookie-banner\] \.fixed\.inset-0/)
   })
 })

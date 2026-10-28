@@ -1,17 +1,17 @@
 /**
  * Layout rules of the cookie banner. Kept free of React so they can be tested.
  *
- * The banner is pinned to the bottom of the viewport. On pages whose primary
- * action sits low on the screen (sign-up, login, checkout, publish) it used to
- * land on top of that button and swallow the click. Three rules prevent that:
- *   1. while the banner is visible the page reserves space equal to its
- *      measured height (`--cookie-banner-h`, applied as body padding-bottom by
- *      `html[data-cookie-banner]` in globals.css) and the reservation is
- *      removed again as soon as the banner closes,
- *   2. full-height page shells and modal dialogs shrink by the same amount, so
- *      the reserved space does not add a scrollbar on top of the page, and
- *   3. on those pages — and on short viewports — the banner is a compact strip
- *      instead of a floating card.
+ * There is exactly ONE banner design: a full-width bar pinned to the bottom of
+ * the viewport, on every page and at every width. Nothing about it depends on
+ * the route, the viewport size, the scroll position or the page height; only
+ * Tailwind's responsive prefixes re-flow the contents (stacked below `sm`,
+ * text on the left and buttons on the right from `sm` up).
+ *
+ * While the banner is visible the page reserves space equal to its measured
+ * height (`--cookie-banner-h`, applied as body padding-bottom by
+ * `html[data-cookie-banner]` in globals.css) so the last controls (sign-up /
+ * login links, pay / publish buttons) can always be scrolled above it. The
+ * reservation is removed again as soon as the banner closes.
  */
 
 export const COOKIE_BANNER_HEIGHT_VAR = '--cookie-banner-h'
@@ -19,46 +19,42 @@ export const COOKIE_BANNER_HEIGHT_VAR = '--cookie-banner-h'
 /** Attribute toggled on <html> only while the banner occupies screen space. */
 export const COOKIE_BANNER_ATTR = 'data-cookie-banner'
 
-/** Viewports at or below this height always get the compact strip. */
-export const SHORT_VIEWPORT_MAX_HEIGHT = 700
+/**
+ * Stacking: below every modal / checkout overlay (`z-50` and above) so an open
+ * dialog always covers the banner, above ordinary page content.
+ */
+export const COOKIE_BANNER_Z_CLASS = 'z-[45]'
 
-export const SHORT_VIEWPORT_QUERY = `(max-height: ${SHORT_VIEWPORT_MAX_HEIGHT}px)`
+/**
+ * The single wrapper class list. Fixed to the bottom edge, full width, never
+ * taller than 40% of the screen (scrolls internally if the preference panel is
+ * open on a very small screen) and padded for the iOS home-indicator.
+ */
+export const COOKIE_BANNER_CLASS = [
+  'cookie-surface',
+  'fixed',
+  'inset-x-0',
+  'bottom-0',
+  COOKIE_BANNER_Z_CLASS,
+  'max-h-[40dvh]',
+  'overflow-y-auto',
+  'overscroll-contain',
+  'border-t',
+  'shadow-lg',
+  'shadow-black/20',
+  'pb-[env(safe-area-inset-bottom)]',
+].join(' ')
 
-/** Route prefixes whose primary action button must never be covered. */
-const CRITICAL_ACTION_PREFIXES = [
-  '/auth',
-  '/forgot-password',
-  '/billing',
-  '/payment-result',
-  '/editor',
-  '/ecommerce',
-  '/kayit',
-  '/giris',
-  '/signup',
-  '/login',
-  '/odeme',
-  '/yayin',
-  '/publish',
-  '/checkout',
-] as const
+/** Inner container: stacked on mobile, text left / buttons right from `sm`. */
+export const COOKIE_BANNER_INNER_CLASS =
+  'mx-auto max-w-6xl px-4 py-3 sm:flex sm:items-center sm:gap-6 sm:py-4'
 
-export function isCriticalActionPath(pathname: string | null | undefined): boolean {
-  if (!pathname) return false
-  const path = pathname.toLowerCase()
-  return CRITICAL_ACTION_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
-  )
-}
+/** Inner container while the preference toggles are expanded (always stacked). */
+export const COOKIE_BANNER_INNER_EXPANDED_CLASS = 'mx-auto max-w-6xl px-4 py-3 sm:py-4'
 
-export function shouldUseCompactBanner(
-  pathname: string | null | undefined,
-  viewportHeight: number | null | undefined,
-): boolean {
-  if (isCriticalActionPath(pathname)) return true
-  return (
-    typeof viewportHeight === 'number' && viewportHeight <= SHORT_VIEWPORT_MAX_HEIGHT
-  )
-}
+/** Button row: wraps on narrow screens, right-aligned from `sm`. */
+export const COOKIE_BANNER_ACTIONS_CLASS =
+  'mt-3 flex flex-wrap gap-2 sm:mt-0 sm:shrink-0 sm:flex-nowrap sm:justify-end'
 
 /** The slice of `document.documentElement` the inset logic needs. */
 export type BannerInsetRoot = {

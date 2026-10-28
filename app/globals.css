@@ -508,11 +508,9 @@ html[data-cookie-banner] .min-h-svh,
 html[data-cookie-banner] .min-h-screen {
   min-height: calc(100svh - var(--cookie-banner-h));
 }
-/* Modal dialogs are fixed overlays above the page padding; keep them (and
-   their action buttons) inside the area the banner leaves free. */
-html[data-cookie-banner] .fixed.inset-0 {
-  bottom: var(--cookie-banner-h);
-}
+  /* Modal / checkout overlays are z-50+ and the banner is z-[45], so an open
+  dialog always covers the banner; no inset adjustment is needed. */
+
 /* Short viewports: tighten the auth screens so sign-up / login submit buttons
    are visible without scrolling while the banner is showing. */
 @media (max-height: 760px) {
