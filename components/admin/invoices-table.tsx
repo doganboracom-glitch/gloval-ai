@@ -1,6 +1,5 @@
-import { Ban, Download, Info, Upload } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
 import { StatusBadge } from '@/components/admin/admin-ui'
+import { InvoiceRowActions, type InvoiceRowAction } from '@/components/admin/invoice-row-actions'
 import type { InvoiceCopy } from '@/lib/invoices/copy'
 import { formatKurus } from '@/lib/invoices/scope'
 import type { AdminInvoiceRow } from '@/lib/invoices/types'
@@ -8,15 +7,29 @@ import type { AdminInvoiceRow } from '@/lib/invoices/types'
 /**
  * Same fixed layout for every filter combination: the table never sizes itself
  * from its content, so long reasons or names can't push the actions out of view.
+ * `px` is the real width of each column; the table's min-width is their sum, so
+ * the sticky actions column only overlaps others once the user scrolls sideways.
  */
-export const INVOICES_TABLE_SCROLL_CLASS = 'max-w-full overflow-x-auto rounded-xl border border-border bg-card/70'
-export const INVOICES_TABLE_CLASS = 'w-full min-w-[1040px] table-fixed border-collapse text-sm'
+export const INVOICES_TABLE_COLUMNS = [
+  { key: 'select', widthClass: 'w-11', px: 44 },
+  { key: 'date', widthClass: 'w-40', px: 160 },
+  { key: 'customer', widthClass: 'w-56', px: 224 },
+  { key: 'type', widthClass: 'w-48', px: 192 },
+  { key: 'amount', widthClass: 'w-28', px: 112 },
+  { key: 'invoice', widthClass: 'w-44', px: 176 },
+  { key: 'actions', widthClass: 'w-44', px: 176 },
+] as const
+
+export const INVOICES_TABLE_MIN_WIDTH_PX = INVOICES_TABLE_COLUMNS.reduce((sum, column) => sum + column.px, 0)
+
+export const INVOICES_TABLE_SCROLL_CLASS = 'max-w-full overflow-x-auto rounded-xl border border-border bg-card'
+export const INVOICES_TABLE_CLASS = 'w-full min-w-[1084px] table-fixed border-collapse text-sm'
 export const INVOICES_ACTIONS_CELL_CLASS =
   'sticky right-0 z-10 bg-card px-3 py-3 text-right align-middle shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.35)]'
+export const INVOICES_ACTIONS_HEAD_CLASS =
+  'sticky right-0 z-10 bg-card px-3 py-2.5 text-right font-medium whitespace-nowrap shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.35)]'
 
-const COLUMN_WIDTHS = ['w-11', 'w-40', 'w-56', 'w-48', 'w-28', 'w-44', 'w-60']
-
-export type InvoiceRowAction = 'upload' | 'details' | 'convert'
+export type { InvoiceRowAction }
 
 type Props = {
   rows: AdminInvoiceRow[]
@@ -42,8 +55,8 @@ export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected
     <div className={INVOICES_TABLE_SCROLL_CLASS}>
       <table className={INVOICES_TABLE_CLASS}>
         <colgroup>
-          {COLUMN_WIDTHS.map((width) => (
-            <col key={width} className={width} />
+          {INVOICES_TABLE_COLUMNS.map((column) => (
+            <col key={column.key} className={column.widthClass} />
           ))}
         </colgroup>
         <thead>
@@ -56,7 +69,7 @@ export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected
             <th className="px-4 py-2.5 font-medium whitespace-nowrap">{c.colType}</th>
             <th className="px-4 py-2.5 text-right font-medium whitespace-nowrap">{c.colAmount}</th>
             <th className="px-4 py-2.5 font-medium whitespace-nowrap">{c.colStatus}</th>
-            <th className="sticky right-0 z-10 bg-card px-3 py-2.5 text-right font-medium whitespace-nowrap">{c.colActions}</th>
+            <th className={INVOICES_ACTIONS_HEAD_CLASS}>{c.colActions}</th>
           </tr>
         </thead>
         <tbody>
@@ -104,6 +117,9 @@ export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected
                       {row.invoice.invoiceNumber}
                     </span>
                   ) : null}
+                  {uploaded && row.invoice?.invoiceDate ? (
+                    <span className="block truncate text-xs text-muted-foreground">{dateFmt.format(new Date(`${row.invoice.invoiceDate}T12:00:00`))}</span>
+                  ) : null}
                   {row.invoice?.notRequiredReason ? (
                     <span className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground" title={row.invoice.notRequiredReason}>
                       {row.invoice.notRequiredReason}
@@ -111,35 +127,7 @@ export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected
                   ) : null}
                 </td>
                 <td className={`${INVOICES_ACTIONS_CELL_CLASS} group-hover:bg-muted`}>
-                  <div className="flex flex-nowrap items-center justify-end gap-1.5">
-                    {row.expectsInvoice ? (
-                      <Button type="button" size="sm" variant="outline" onClick={() => onAction('upload', row)}>
-                        <Upload className="size-3.5" aria-hidden />
-                        {uploaded ? c.replace : c.upload}
-                      </Button>
-                    ) : null}
-                    {uploaded && row.invoice ? (
-                      <a
-                        href={`/api/admin/invoices/${row.invoice.id}/download`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={c.download}
-                        aria-label={c.download}
-                        className={buttonVariants({ size: 'icon-sm', variant: 'ghost' })}
-                      >
-                        <Download className="size-4" aria-hidden />
-                      </a>
-                    ) : null}
-                    {uploaded ? (
-                      <Button type="button" size="icon-sm" variant="ghost" title={c.convert} aria-label={c.convert} onClick={() => onAction('convert', row)}>
-                        <Ban className="size-4" aria-hidden />
-                      </Button>
-                    ) : null}
-                    <Button type="button" size="sm" variant="ghost" onClick={() => onAction('details', row)}>
-                      <Info className="size-3.5" aria-hidden />
-                      {c.details}
-                    </Button>
-                  </div>
+                  <InvoiceRowActions row={row} copy={c} onAction={onAction} />
                 </td>
               </tr>
             )

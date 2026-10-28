@@ -91,6 +91,9 @@ const copy = {
     myInvoicePending: 'Faturanız hazırlanıyor',
     myInvoicePendingHint: 'Faturanız hazırlandığında burada indirilebilir olacak ve e-posta ile bildirilecek.',
     myInvoiceNumber: 'Fatura no',
+    myInvoiceDownloadShort: 'İndir',
+    myInvoicePendingShort: 'Hazırlanıyor',
+    moreActions: 'Diğer işlemler',
     errors: {
       unauthorized: 'Bu işlem için yetkiniz yok.',
       rate_limited: 'Çok fazla istek. Biraz bekleyip tekrar deneyin.',
@@ -199,6 +202,9 @@ const copy = {
     myInvoicePending: 'Your invoice is being prepared',
     myInvoicePendingHint: 'Your invoice will be available to download here once it is ready, and we will notify you by email.',
     myInvoiceNumber: 'Invoice no',
+    myInvoiceDownloadShort: 'Download',
+    myInvoicePendingShort: 'Preparing',
+    moreActions: 'More actions',
     errors: {
       unauthorized: 'You are not allowed to do this.',
       rate_limited: 'Too many requests. Wait a moment and try again.',
