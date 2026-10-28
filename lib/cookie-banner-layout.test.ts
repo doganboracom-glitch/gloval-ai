@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   COOKIE_BANNER_ATTR,
+  COOKIE_BANNER_BODY_CLASS,
   COOKIE_BANNER_CLASS,
+  COOKIE_BANNER_FOOTER_CLASS,
+  COOKIE_BANNER_MOBILE_MAX_WIDTH,
   COOKIE_BANNER_HEIGHT_VAR,
   COOKIE_BANNER_Z_CLASS,
   applyBannerInset,
@@ -48,36 +51,68 @@ describe('applyBannerInset', () => {
   })
 })
 
-describe('single banner design', () => {
+describe('single floating card design', () => {
   const classes = COOKIE_BANNER_CLASS.split(' ')
 
-  it('is pinned to the bottom edge at full width', () => {
-    for (const c of ['fixed', 'inset-x-0', 'bottom-0']) expect(classes).toContain(c)
+  it('is a rounded, glass, shadowed card', () => {
+    for (const c of ['rounded-2xl', 'border', 'backdrop-blur-xl', 'shadow-2xl', 'fixed']) {
+      expect(classes).toContain(c)
+    }
   })
 
-  it('is never the floating-card variant', () => {
-    expect(COOKIE_BANNER_CLASS).not.toMatch(/rounded|max-w-|mx-auto|sticky|translate|absolute/)
+  it('mobile (<640px): 12px gutters, full width, not stuck to the bottom edge', () => {
+    expect(classes).toContain('inset-x-3')
+    expect(classes).not.toContain('bottom-0')
+    expect(classes).not.toContain('inset-x-0')
+    expect(COOKIE_BANNER_CLASS).toContain('bottom-[max(0.75rem,env(safe-area-inset-bottom))]')
+    expect(classes).toContain('max-h-[45dvh]')
   })
 
-  it('caps its height at 40% of the screen and respects the iOS safe area', () => {
-    expect(classes).toContain('max-h-[40dvh]')
-    expect(COOKIE_BANNER_CLASS).toContain('env(safe-area-inset-bottom)')
+  it('desktop (>=640px): bottom-left corner, 20px from the edges, 400px wide, 70vh tall at most', () => {
+    for (const c of ['sm:inset-x-auto', 'sm:left-5', 'sm:bottom-5', 'sm:max-w-[400px]', 'sm:max-h-[70vh]']) {
+      expect(classes).toContain(c)
+    }
+    expect(COOKIE_BANNER_CLASS).not.toMatch(/sm:right-|sm:bottom-0|sm:inset-x-0/)
+  })
+
+  it('has no route / scroll dependent variants', () => {
+    expect(classes.filter((c) => /^(sticky|absolute|hidden|translate|md:|lg:|xl:)/.test(c))).toEqual([])
   })
 
   it('stays below modal / checkout overlays (z-50 and above)', () => {
     expect(COOKIE_BANNER_Z_CLASS).toBe('z-[45]')
     expect(classes).toContain(COOKIE_BANNER_Z_CLASS)
   })
+
+  it('keeps the card body scrollable and the buttons visible', () => {
+    expect(COOKIE_BANNER_BODY_CLASS).toContain('overflow-y-auto')
+    expect(COOKIE_BANNER_FOOTER_CLASS).toContain('shrink-0')
+  })
 })
 
 describe('stylesheet rules', () => {
   const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
 
-  it('reserves bottom space only while the banner attribute is set', () => {
-    expect(css).toMatch(/html\[data-cookie-banner\] body\s*\{\s*padding-bottom:\s*var\(--cookie-banner-h\)/)
+  it('reserves bottom space only while the card attribute is set', () => {
+    expect(css).toMatch(/html\[data-cookie-banner\] body\s*\{\s*padding-bottom:\s*var\(--cookie-banner-space\)/)
   })
 
-  it('does not shrink modal overlays to make room for the banner', () => {
+  it('reserves bottom space on phones only', () => {
+    const mediaStart = css.indexOf(`@media (max-width: ${COOKIE_BANNER_MOBILE_MAX_WIDTH}px) {`)
+    const mediaEnd = css.indexOf('\n}\n', mediaStart)
+    const phoneBlock = css.slice(mediaStart, mediaEnd)
+    expect(mediaStart).toBeGreaterThan(-1)
+    expect(phoneBlock).toContain('html[data-cookie-banner] body')
+    const occurrences = css.split('html[data-cookie-banner] body').length - 1
+    expect(occurrences).toBe(1)
+  })
+
+  it('does not shrink modal overlays to make room for the card', () => {
     expect(css).not.toMatch(/html\[data-cookie-banner\] \.fixed\.inset-0/)
+  })
+
+  it('animates only once and not with reduced motion', () => {
+    expect(css).toMatch(/\.cookie-card-enter\s*\{\s*animation:\s*cookie-card-in 200ms ease-out backwards/)
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*\.cookie-card-enter\s*\{\s*animation:\s*none/)
   })
 })

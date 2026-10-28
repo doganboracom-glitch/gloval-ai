@@ -1,60 +1,74 @@
 /**
- * Layout rules of the cookie banner. Kept free of React so they can be tested.
+ * Layout rules of the cookie card. Kept free of React so they can be tested.
  *
- * There is exactly ONE banner design: a full-width bar pinned to the bottom of
- * the viewport, on every page and at every width. Nothing about it depends on
- * the route, the viewport size, the scroll position or the page height; only
- * Tailwind's responsive prefixes re-flow the contents (stacked below `sm`,
- * text on the left and buttons on the right from `sm` up).
+ * There is exactly ONE design: a small floating card ("balon"), on every page
+ * and at every width. Nothing about it depends on the route, the scroll
+ * position or the page height; only Tailwind's responsive prefixes move it:
  *
- * While the banner is visible the page reserves space equal to its measured
- * height (`--cookie-banner-h`, applied as body padding-bottom by
- * `html[data-cookie-banner]` in globals.css) so the last controls (sign-up /
- * login links, pay / publish buttons) can always be scrolled above it. The
- * reservation is removed again as soon as the banner closes.
+ *  - below `sm` (<640px): 12px from the left / right / bottom edge, full width,
+ *    lifted by the iOS home-indicator inset, at most 45% of the screen tall;
+ *  - from `sm` (>=640px): pinned to the bottom-LEFT corner, 20px from the
+ *    edges, 400px wide, at most 70vh tall (the preference panel expands inside
+ *    the card and scrolls there).
+ *
+ * Only on phones does the card cover a meaningful part of the page, so only
+ * there the page reserves space equal to the card's measured height
+ * (`--cookie-banner-h`, applied as body padding-bottom by
+ * `html[data-cookie-banner]` inside a max-width media query in globals.css).
+ * The reservation is removed again as soon as the card closes.
  */
 
 export const COOKIE_BANNER_HEIGHT_VAR = '--cookie-banner-h'
 
-/** Attribute toggled on <html> only while the banner occupies screen space. */
+/** Attribute toggled on <html> only while the card is on screen. */
 export const COOKIE_BANNER_ATTR = 'data-cookie-banner'
+
+/** Largest viewport width (px) that gets the full-width mobile card. */
+export const COOKIE_BANNER_MOBILE_MAX_WIDTH = 639
 
 /**
  * Stacking: below every modal / checkout overlay (`z-50` and above) so an open
- * dialog always covers the banner, above ordinary page content.
+ * dialog always covers the card, above ordinary page content.
  */
 export const COOKIE_BANNER_Z_CLASS = 'z-[45]'
 
 /**
- * The single wrapper class list. Fixed to the bottom edge, full width, never
- * taller than 40% of the screen (scrolls internally if the preference panel is
- * open on a very small screen) and padded for the iOS home-indicator.
+ * The single wrapper class list. `cookie-card` (glass surface) and
+ * `cookie-card-enter` (one-shot 200ms entrance, disabled for reduced motion)
+ * live in globals.css.
  */
 export const COOKIE_BANNER_CLASS = [
-  'cookie-surface',
+  'cookie-card',
+  'cookie-card-enter',
   'fixed',
-  'inset-x-0',
-  'bottom-0',
   COOKIE_BANNER_Z_CLASS,
-  'max-h-[40dvh]',
-  'overflow-y-auto',
-  'overscroll-contain',
-  'border-t',
-  'shadow-lg',
-  'shadow-black/20',
-  'pb-[env(safe-area-inset-bottom)]',
+  'flex',
+  'flex-col',
+  'overflow-hidden',
+  'rounded-2xl',
+  'border',
+  'shadow-2xl',
+  'shadow-black/30',
+  'backdrop-blur-xl',
+  // mobile: 12px gutters, lifted above the iOS home indicator
+  'inset-x-3',
+  'bottom-[max(0.75rem,env(safe-area-inset-bottom))]',
+  'max-h-[45dvh]',
+  // desktop: bottom-left corner, 20px from the edges
+  'sm:inset-x-auto',
+  'sm:left-5',
+  'sm:bottom-5',
+  'sm:w-full',
+  'sm:max-w-[400px]',
+  'sm:max-h-[70vh]',
 ].join(' ')
 
-/** Inner container: stacked on mobile, text left / buttons right from `sm`. */
-export const COOKIE_BANNER_INNER_CLASS =
-  'mx-auto max-w-6xl px-4 py-3 sm:flex sm:items-center sm:gap-6 sm:py-4'
+/** Scrollable content area (title, text, preference toggles). */
+export const COOKIE_BANNER_BODY_CLASS =
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain p-4'
 
-/** Inner container while the preference toggles are expanded (always stacked). */
-export const COOKIE_BANNER_INNER_EXPANDED_CLASS = 'mx-auto max-w-6xl px-4 py-3 sm:py-4'
-
-/** Button row: wraps on narrow screens, right-aligned from `sm`. */
-export const COOKIE_BANNER_ACTIONS_CLASS =
-  'mt-3 flex flex-wrap gap-2 sm:mt-0 sm:shrink-0 sm:flex-nowrap sm:justify-end'
+/** Button area; stays visible while the body scrolls. */
+export const COOKIE_BANNER_FOOTER_CLASS = 'shrink-0 flex flex-wrap items-center gap-2 px-4 pb-4'
 
 /** The slice of `document.documentElement` the inset logic needs. */
 export type BannerInsetRoot = {
@@ -67,9 +81,9 @@ export type BannerInsetRoot = {
 }
 
 /**
- * Reserve (height > 0) or release (null / 0) the banner's bottom space.
+ * Reserve (height > 0) or release (null / 0) the card's bottom space.
  * Both the CSS variable and the attribute are always changed together so the
- * padding can never outlive a closed banner.
+ * padding can never outlive a closed card.
  */
 export function applyBannerInset(
   root: BannerInsetRoot,

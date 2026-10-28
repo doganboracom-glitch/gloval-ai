@@ -416,10 +416,44 @@
    Published customer sites set --cookie-* on :root from their own theme (see
    lib/cookie-banner-theme.ts). Where nothing sets them (gloval.ai) every rule
    falls back to the GLOVAL tokens, so the platform banner is unchanged. */
-.cookie-surface {
-  background-color: var(--cookie-bg, var(--color-card));
-  border-color: var(--cookie-border, var(--color-border));
+.cookie-card {
+  background-color: color-mix(in oklab, var(--cookie-bg, var(--color-card)) 90%, transparent);
+  border-color: color-mix(in oklab, var(--cookie-border, var(--color-border)) 70%, transparent);
   color: var(--cookie-fg, inherit);
+}
+/* One-shot entrance on first paint. `backwards` (not `both`) so no transform
+   is left on the element afterwards; nothing re-triggers it on route change,
+   scroll or resize because the node is never re-mounted. */
+.cookie-card-enter {
+  animation: cookie-card-in 200ms ease-out backwards;
+}
+@keyframes cookie-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cookie-card-enter {
+    animation: none;
+  }
+}
+.cookie-focus:focus-visible {
+  outline: 2px solid var(--cookie-brand, var(--color-brand));
+  outline-offset: 2px;
+}
+.cookie-icon-tile {
+  background-color: color-mix(in oklab, var(--cookie-brand, var(--color-brand)) 16%, transparent);
+}
+.cookie-btn-text {
+  color: var(--cookie-fg, inherit);
+}
+.cookie-btn-text:hover {
+  background-color: var(--cookie-hover, color-mix(in oklab, var(--color-secondary) 60%, transparent));
 }
 .cookie-muted {
   color: var(--cookie-muted, var(--color-muted-foreground));
@@ -494,26 +528,35 @@
   }
 }
 
-/* ---- Cookie banner inset -------------------------------------------------
+/* ---- Cookie card inset ---------------------------------------------------
    `html[data-cookie-banner]` and `--cookie-banner-h` exist only while the
-   banner is on screen (see lib/cookie-banner-layout.ts), so none of this
-   applies once it is closed. Unlayered on purpose: it must beat the
-   min-height utilities. */
-html[data-cookie-banner] body {
-  padding-bottom: var(--cookie-banner-h);
+   card is on screen (see lib/cookie-banner-layout.ts), so none of this applies
+   once it is closed. On phones (<640px) the card spans the full width, so the
+   page reserves its height plus the 12px / safe-area gutter below it. From
+   640px up the card is a small bottom-left bubble and nothing is reserved.
+   Unlayered on purpose: it must beat the min-height utilities. */
+@media (max-width: 639px) {
+  html[data-cookie-banner] {
+    --cookie-banner-space: calc(
+      var(--cookie-banner-h) + max(0.75rem, env(safe-area-inset-bottom)) + 0.5rem
+    );
+  }
+  html[data-cookie-banner] body {
+    padding-bottom: var(--cookie-banner-space);
+  }
+  /* Full-height shells give the reserved space back, so the padding above does
+     not turn a page that fits the viewport into one that scrolls. */
+  html[data-cookie-banner] .min-h-svh,
+  html[data-cookie-banner] .min-h-screen {
+    min-height: calc(100svh - var(--cookie-banner-space));
+  }
 }
-/* Full-height shells give the reserved space back, so the padding above does
-   not turn a page that fits the viewport into one that scrolls. */
-html[data-cookie-banner] .min-h-svh,
-html[data-cookie-banner] .min-h-screen {
-  min-height: calc(100svh - var(--cookie-banner-h));
-}
-  /* Modal / checkout overlays are z-50+ and the banner is z-[45], so an open
-  dialog always covers the banner; no inset adjustment is needed. */
+/* Modal / checkout overlays are z-50+ and the card is z-[45], so an open
+   dialog always covers the card; no inset adjustment is needed. */
 
-/* Short viewports: tighten the auth screens so sign-up / login submit buttons
-   are visible without scrolling while the banner is showing. */
-@media (max-height: 760px) {
+/* Short phones: tighten the auth screens so sign-up / login submit buttons are
+   visible without scrolling while the card is showing. */
+@media (max-width: 639px) and (max-height: 760px) {
   html[data-cookie-banner] .auth-shell {
     padding-block: 0.75rem;
     align-items: flex-start;

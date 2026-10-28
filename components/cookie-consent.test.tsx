@@ -18,7 +18,7 @@ vi.mock('@/components/language-provider', () => ({
     lang: 'tr',
     t: {
       cookie: {
-        title: 'Çerezler',
+        title: 'Çerez tercihleriniz',
         description: 'Deneyiminizi iyileştirmek için çerez kullanıyoruz.',
         policyLink: 'Çerez Politikası',
         customize: 'Tercihleri yönet',
@@ -38,8 +38,14 @@ vi.mock('@/components/language-provider', () => ({
 }))
 
 import { CookieConsent } from './cookie-consent'
+import { COOKIE_BANNER_ATTR, COOKIE_BANNER_HEIGHT_VAR } from '@/lib/cookie-banner-layout'
+
+let observed: (() => void) | null = null
 
 class RO {
+  constructor(cb: () => void) {
+    observed = cb
+  }
   observe() {}
   disconnect() {}
 }
@@ -55,19 +61,22 @@ beforeEach(() => {
   document.cookie = 'gloval_cookie_consent=; max-age=0; path=/'
   window.localStorage.clear()
   mockPath = '/'
+  observed = null
 })
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  document.documentElement.removeAttribute(COOKIE_BANNER_ATTR)
+  document.documentElement.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
 })
 
-function bannerClass() {
+function cardClass() {
   return screen.getByRole('dialog').className
 }
 
-describe('CookieConsent banner', () => {
-  it('renders the identical bottom-pinned bar at 360 / 768 / 1280 / 1920 wide', () => {
+describe('CookieConsent floating card', () => {
+  it('renders the identical floating card at 360 / 768 / 1280 / 1920 wide', () => {
     const seen = new Set<string>()
     for (const [w, h] of [
       [360, 640],
@@ -77,52 +86,101 @@ describe('CookieConsent banner', () => {
     ]) {
       setViewport(w, h)
       const { unmount } = render(<CookieConsent />)
-      const cls = bannerClass()
+      const cls = cardClass()
       seen.add(cls)
-      expect(cls).toContain('fixed')
-      expect(cls).toContain('bottom-0')
-      expect(cls).toContain('inset-x-0')
-      expect(cls).not.toContain('rounded')
+      for (const c of ['fixed', 'rounded-2xl', 'inset-x-3', 'sm:left-5', 'sm:bottom-5', 'sm:max-w-[400px]']) {
+        expect(cls.split(' ')).toContain(c)
+      }
+      expect(cls.split(' ')).not.toContain('bottom-0')
       unmount()
     }
     expect(seen.size).toBe(1)
   })
 
-  it('looks the same on the home page and on auth pages', () => {
+  it('looks the same on the home page, auth, billing and editor routes', () => {
     const seen = new Set<string>()
-    for (const p of ['/', '/auth/login', '/auth/sign-up', '/billing', '/dashboard']) {
+    for (const p of ['/', '/auth/login', '/auth/sign-up', '/billing', '/editor/abc', '/dashboard']) {
       mockPath = p
       const { unmount } = render(<CookieConsent />)
-      seen.add(bannerClass())
+      seen.add(cardClass())
       unmount()
     }
     expect(seen.size).toBe(1)
   })
 
-  it('does not change its styling when the page scrolls or resizes', () => {
-    render(<CookieConsent />)
-    const before = bannerClass()
+  it('does not re-mount or restyle on route change, scroll or resize', () => {
+    const { rerender } = render(<CookieConsent />)
+    const node = screen.getByRole('dialog')
+    const before = node.className
+    act(() => {
+      mockPath = '/billing'
+    })
+    rerender(<CookieConsent />)
     act(() => {
       window.dispatchEvent(new Event('scroll'))
       setViewport(390, 540)
     })
-    expect(bannerClass()).toBe(before)
+    expect(screen.getByRole('dialog')).toBe(node)
+    expect(node.className).toBe(before)
+  })
+
+  it('sits below modal overlays (z-45 < z-50) and is a non-modal, labelled dialog', () => {
+    render(<CookieConsent />)
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className.split(' ')).toContain('z-[45]')
+    expect(dialog.getAttribute('aria-modal')).toBe('false')
+    const title = document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')
+    const desc = document.getElementById(dialog.getAttribute('aria-describedby') ?? '')
+    expect(title?.textContent).toBe('Çerez tercihleriniz')
+    expect(desc?.textContent).toContain('çerez kullanıyoruz')
+  })
+
+  it('has no focus trap: every action is a plain focusable button', () => {
+    render(<CookieConsent />)
+    for (const label of ['Tümünü kabul et', 'Yalnızca zorunlu', 'Tercihleri yönet']) {
+      const btn = screen.getByText(label)
+      expect(btn.tagName).toBe('BUTTON')
+      expect(btn.getAttribute('tabindex')).toBeNull()
+      expect(btn.className).toContain('cookie-focus')
+    }
   })
 
   it('reserves bottom space while visible and releases it once a choice is made', () => {
-    render(<CookieConsent />)
-    expect(document.documentElement.hasAttribute('data-cookie-banner')).toBe(false)
-    // jsdom has no layout, so offsetHeight is 0 and the inset stays released.
+    const root = document.documentElement
+    const node = render(<CookieConsent />) && screen.getByRole('dialog')
+    Object.defineProperty(node, 'offsetHeight', { configurable: true, value: 180 })
+    act(() => observed?.())
+    expect(root.hasAttribute(COOKIE_BANNER_ATTR)).toBe(true)
+    expect(root.style.getPropertyValue(COOKIE_BANNER_HEIGHT_VAR)).toBe('180px')
+
     fireEvent.click(screen.getByText('Tümünü kabul et'))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.documentElement.hasAttribute('data-cookie-banner')).toBe(false)
-    expect(document.documentElement.style.getPropertyValue('--cookie-banner-h')).toBe('')
+    expect(root.hasAttribute(COOKIE_BANNER_ATTR)).toBe(false)
+    expect(root.style.getPropertyValue(COOKIE_BANNER_HEIGHT_VAR)).toBe('')
   })
 
-  it('keeps the three actions', () => {
+  it('releases the reserved space when "Yalnızca zorunlu" is chosen', () => {
+    const root = document.documentElement
+    const node = render(<CookieConsent />) && screen.getByRole('dialog')
+    Object.defineProperty(node, 'offsetHeight', { configurable: true, value: 180 })
+    act(() => observed?.())
+    fireEvent.click(screen.getByText('Yalnızca zorunlu'))
+    expect(root.hasAttribute(COOKIE_BANNER_ATTR)).toBe(false)
+  })
+
+  it('expands the preferences inside the same card (no second dialog)', () => {
     render(<CookieConsent />)
-    expect(screen.getByText('Tercihleri yönet')).toBeTruthy()
-    expect(screen.getByText('Yalnızca zorunlu')).toBeTruthy()
-    expect(screen.getByText('Tümünü kabul et')).toBeTruthy()
+    const node = screen.getByRole('dialog')
+    fireEvent.click(screen.getByText('Tercihleri yönet'))
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('dialog')).toBe(node)
+    expect(screen.getAllByRole('switch')).toHaveLength(2)
+    expect(screen.getByText('Kaydet')).toBeTruthy()
+  })
+
+  it('keeps the three actions with the primary one first', () => {
+    render(<CookieConsent />)
+    const labels = screen.getAllByRole('button').map((b) => b.textContent)
+    expect(labels).toEqual(['Tümünü kabul et', 'Yalnızca zorunlu', 'Tercihleri yönet'])
   })
 })
