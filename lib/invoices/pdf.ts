@@ -1,4 +1,4 @@
-import { INVOICE_MAX_BYTES, UNASSIGNED_FOLDER } from '@/lib/invoices/constants'
+import { ARCHIVE_FOLDER, INVOICE_MAX_BYTES, UNASSIGNED_FOLDER } from '@/lib/invoices/constants'
 
 export type PdfError = 'invalid_input' | 'too_large' | 'unsupported_type' | 'active_content'
 
@@ -54,4 +54,15 @@ export function invoiceStoragePath(userId: string | null, fileId: string): strin
 
 export function isInvoiceStoragePath(path: unknown): path is string {
   return typeof path === 'string' && INVOICE_PATH.test(path)
+}
+
+const ARCHIVE_PATH = new RegExp(`^${ARCHIVE_FOLDER}/${UUID}-\\d{10,11}\\.pdf$`)
+
+/** `_archived/<invoice_id>-<unix_ts>.pdf`; deliberately not matched by `isInvoiceStoragePath`, so it can never be signed for download. */
+export function archiveStoragePath(invoiceId: string, unixSeconds: number): string {
+  return `${ARCHIVE_FOLDER}/${invoiceId}-${Math.floor(unixSeconds)}.pdf`
+}
+
+export function isArchiveStoragePath(path: unknown): path is string {
+  return typeof path === 'string' && ARCHIVE_PATH.test(path)
 }

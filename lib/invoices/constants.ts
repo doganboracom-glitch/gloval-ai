@@ -14,3 +14,6 @@ export const INVOICE_ELIGIBLE_KINDS = ['charge', 'proration_debit'] as const
 export const LIVE_PROVIDER = 'iyzico'
 
 export const UNASSIGNED_FOLDER = '_unassigned'
+
+/** Server-only holding area for PDFs of invoices turned back into "not required". Never signed, never listed to customers. */
+export const ARCHIVE_FOLDER = '_archived'

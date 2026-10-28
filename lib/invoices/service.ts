@@ -13,6 +13,7 @@ import {
 import { buildInvoicesCsv } from '@/lib/invoices/csv'
 import { applyInvoiceFilters, countByStatus, inScope, isValidDateInput, paginate } from '@/lib/invoices/filter'
 import {
+  archiveStoragePath,
   downloadFileName,
   inspectPdf,
   invoiceStoragePath,
@@ -449,9 +450,11 @@ export async function markNotRequired(
 
 /**
  * Turns an uploaded invoice back into "not required" (a wrong or test upload).
- * The audit row is written first and the change is refused without it: the
- * previous number and file hash live there afterwards. The PDF is removed from
- * storage only after the row no longer points at it.
+ * Order: audit row (refused without it; it carries the previous number, hash
+ * and archive path), then the PDF is moved to `_archived/<invoice_id>-<ts>.pdf`
+ * in the same private bucket (never deleted, never signed), then the row is
+ * updated. A failed move leaves the row untouched; a failed update moves the
+ * PDF back.
  */
 export async function convertUploadedToNotRequired(
   actor: Actor,
@@ -478,22 +481,36 @@ export async function convertUploadedToNotRequired(
   } | null
   if (!current || current.status !== 'uploaded') return { ok: false, error: 'not_found' }
 
+  const archivePath = isInvoiceStoragePath(current.file_path) ? archiveStoragePath(current.id, Date.now() / 1000) : null
+  const auditBase = { actor, action: 'invoice.mark_not_required' as const, invoiceId: current.id, billingTransactionId: transactionId }
+
+  // 1. Audit first: without the trail (previous number, hash, archive path) nothing changes.
   const audited = await recordInvoiceAudit({
-    actor,
-    action: 'invoice.mark_not_required',
-    invoiceId: current.id,
-    billingTransactionId: transactionId,
+    ...auditBase,
     detail: {
       reason,
+      outcome: 'attempt',
       previousStatus: 'uploaded',
       previousInvoiceNumber: current.invoice_number,
       previousInvoiceDate: current.invoice_date,
       previousSha256: current.file_sha256,
+      archivePath,
       bulk: false,
     },
   })
   if (!audited) return { ok: false, error: 'audit_failed' }
 
+  // 2. Move the PDF into the server-only archive. A failure aborts with the row untouched.
+  if (archivePath && current.file_path) {
+    const { error: moveError } = await admin.storage.from(INVOICE_BUCKET).move(current.file_path, archivePath)
+    if (moveError) {
+      console.error('[invoices] archive move failed:', moveError.message)
+      await recordInvoiceAudit({ ...auditBase, detail: { reason, outcome: 'aborted_archive_failed', archivePath } })
+      return { ok: false, error: 'storage_failed' }
+    }
+  }
+
+  // 3. Only now change the row. If that fails, put the PDF back so the row and its file agree again.
   const { data: updated, error } = await admin
     .from('invoices')
     .update({
@@ -515,12 +532,17 @@ export async function convertUploadedToNotRequired(
     .select('id')
   if (error || !updated || updated.length === 0) {
     console.error('[invoices] convert to not required failed:', error?.message)
+    let restored = archivePath === null
+    if (archivePath && current.file_path) {
+      const { error: restoreError } = await admin.storage.from(INVOICE_BUCKET).move(archivePath, current.file_path)
+      restored = !restoreError
+      if (restoreError) console.error('[invoices] archive restore failed:', restoreError.message)
+    }
+    await recordInvoiceAudit({
+      ...auditBase,
+      detail: { reason, outcome: restored ? 'aborted_save_failed' : 'aborted_save_failed_file_in_archive', archivePath },
+    })
     return { ok: false, error: 'save_failed' }
-  }
-
-  if (current.file_path) {
-    const { error: removeError } = await admin.storage.from(INVOICE_BUCKET).remove([current.file_path])
-    if (removeError) console.error('[invoices] converted file cleanup failed:', removeError.message)
   }
   return { ok: true }
 }
