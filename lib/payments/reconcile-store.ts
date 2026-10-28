@@ -3,8 +3,8 @@ import { retrieveIyzicoCheckoutForm } from './iyzico'
 import { extractPaidDetails } from './iyzico-paid-details'
 import { settlePaymentResult } from './settle'
 import {
-  ABANDONED_RESCAN_WINDOW_MS,
   RECONCILABLE_KEY_PREFIXES,
+  abandonedRescanSinceIso,
   classifyRetrieval,
   emptyReconcileSummary,
   isReconcilableLedgerKey,
@@ -95,7 +95,7 @@ async function listForSweep(limit: number, userId?: string): Promise<PendingPaym
     status: 'abandoned',
     limit: remaining,
     userId,
-    sinceIso: new Date(Date.now() - ABANDONED_RESCAN_WINDOW_MS).toISOString(),
+    sinceIso: abandonedRescanSinceIso(Date.now()),
     newestFirst: true,
   })
   return [...pending, ...abandoned]
