@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LanguageProvider } from '@/components/language-provider'
 import { fallbackWebsite, type WebsiteSchema } from '@/lib/website-schema'
 
 const state = vi.hoisted(() => ({
@@ -43,7 +44,8 @@ async function renderHead(slug: string) {
     children: createElement('main', null, 'sayfa'),
     params,
   })
-  const full = renderToStaticMarkup(element)
+  // The root layout supplies LanguageProvider in the real app; the card reads it.
+  const full = renderToStaticMarkup(createElement(LanguageProvider, { initialLang: 'tr', children: element }))
   // The platform's own cookie-banner theme <style> is not owner head code.
   const html = full.replace(/<style>:root\{--cookie-[^<]*\}<\/style>/, '')
   return { metadata, html, full }
