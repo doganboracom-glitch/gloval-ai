@@ -2,7 +2,7 @@ import { StatusBadge } from '@/components/admin/admin-ui'
 import { InvoiceRowActions, type InvoiceRowAction } from '@/components/admin/invoice-row-actions'
 import type { InvoiceCopy } from '@/lib/invoices/copy'
 import { formatKurus } from '@/lib/invoices/scope'
-import type { AdminInvoiceRow } from '@/lib/invoices/types'
+import type { AdminInvoiceRow, InvoiceEmailState, InvoiceEmailStatus } from '@/lib/invoices/types'
 
 /**
  * Narrowest width the admin content column ever has at the `lg` breakpoint and
@@ -57,6 +57,29 @@ function RowStatus({ row, copy }: { row: AdminInvoiceRow; copy: InvoiceCopy }) {
   if (row.invoice?.status === 'not_required') return <StatusBadge tone="muted" label={copy.statusNotRequired} />
   if (!row.expectsInvoice) return <StatusBadge tone="muted" label={copy.statusTest} />
   return <StatusBadge tone="warning" label={copy.statusPending} />
+}
+
+const EMAIL_TONE: Record<InvoiceEmailState, string> = {
+  not_sent: 'text-muted-foreground',
+  sending: 'text-muted-foreground',
+  sent: 'text-muted-foreground',
+  sent_without_attachment: 'text-amber-600 dark:text-amber-400',
+  failed: 'text-destructive',
+}
+
+function EmailStatusLine({ status, copy }: { status: InvoiceEmailStatus; copy: InvoiceCopy }) {
+  const label = {
+    not_sent: copy.emailNotSent,
+    sending: copy.emailSending,
+    sent: copy.emailSent,
+    sent_without_attachment: copy.emailSentNoAttachment,
+    failed: copy.emailFailed,
+  }[status.state]
+  return (
+    <span data-slot="invoice-email-status" className={`mt-1 block truncate text-xs ${EMAIL_TONE[status.state]}`} title={label}>
+      {label}
+    </span>
+  )
 }
 
 export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected, dateFmt, onToggle, onToggleAll, onAction }: Props) {
@@ -129,6 +152,7 @@ export function InvoicesTable({ rows, copy: c, selectable, selected, allSelected
                   {uploaded && row.invoice?.invoiceDate ? (
                     <span className="block truncate text-xs text-muted-foreground">{dateFmt.format(new Date(`${row.invoice.invoiceDate}T12:00:00`))}</span>
                   ) : null}
+                  {uploaded && row.emailStatus ? <EmailStatusLine status={row.emailStatus} copy={c} /> : null}
                   {row.invoice?.notRequiredReason ? (
                     <span className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground" title={row.invoice.notRequiredReason}>
                       {row.invoice.notRequiredReason}

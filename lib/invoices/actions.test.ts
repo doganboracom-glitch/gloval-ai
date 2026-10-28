@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   markNotRequired: vi.fn(),
   convertUploadedToNotRequired: vi.fn(),
   reopenNotRequired: vi.fn(),
+  resendInvoiceEmail: vi.fn(),
   exportInvoicesCsv: vi.fn(),
 }))
 
@@ -20,6 +21,7 @@ vi.mock('@/lib/invoices/service', () => ({
   markNotRequired: mocks.markNotRequired,
   convertUploadedToNotRequired: mocks.convertUploadedToNotRequired,
   reopenNotRequired: mocks.reopenNotRequired,
+  resendInvoiceEmail: mocks.resendInvoiceEmail,
   exportInvoicesCsv: mocks.exportInvoicesCsv,
 }))
 
@@ -29,6 +31,7 @@ import {
   getInvoiceDetailAction,
   markInvoicesNotRequiredAction,
   reopenInvoicesAction,
+  resendInvoiceEmailAction,
 } from '@/lib/invoices/actions'
 
 const TX = '33333333-3333-4333-8333-333333333333'
@@ -37,6 +40,7 @@ const calls: Array<[string, () => Promise<unknown>]> = [
   ['markInvoicesNotRequiredAction', () => markInvoicesNotRequiredAction([TX], 'x')],
   ['convertInvoiceToNotRequiredAction', () => convertInvoiceToNotRequiredAction(TX, 'x')],
   ['reopenInvoicesAction', () => reopenInvoicesAction([TX])],
+  ['resendInvoiceEmailAction', () => resendInvoiceEmailAction(TX)],
   ['exportInvoicesCsvAction', () => exportInvoicesCsvAction({})],
   ['getInvoiceDetailAction', () => getInvoiceDetailAction(TX)],
 ]
@@ -55,6 +59,7 @@ describe('admin invoice server actions', () => {
     expect(mocks.markNotRequired).not.toHaveBeenCalled()
     expect(mocks.convertUploadedToNotRequired).not.toHaveBeenCalled()
     expect(mocks.reopenNotRequired).not.toHaveBeenCalled()
+    expect(mocks.resendInvoiceEmail).not.toHaveBeenCalled()
     expect(mocks.exportInvoicesCsv).not.toHaveBeenCalled()
   })
 

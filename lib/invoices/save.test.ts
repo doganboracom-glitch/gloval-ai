@@ -98,7 +98,7 @@ describe('saveInvoice failure handling', () => {
   })
 
   it('deletes the old file only after the row points at the new one, and stores a sanitised name', async () => {
-    await expect(saveInvoice(input)).resolves.toEqual({ ok: true, invoiceId: INVOICE, replaced: true })
+    await expect(saveInvoice(input)).resolves.toEqual({ ok: true, invoiceId: INVOICE, replaced: true, email: 'skipped' })
     expect(mocks.remove).toHaveBeenCalledWith([OLD_PATH])
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'invoice.replace' }))
   })

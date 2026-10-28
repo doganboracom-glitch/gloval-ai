@@ -4,6 +4,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { BILLING_PROFILE_COLUMNS, isBillingProfileRowComplete, type BillingProfileDatabaseRow } from '@/lib/billing-profile-store'
 import { recordInvoiceAudit } from '@/lib/invoices/audit'
 import {
+  enqueueInvoiceReadyEmail,
+  hasActiveInvoiceEmail,
+  resolveInvoiceRecipient,
+  type InvoiceEmailQueueResult,
+} from '@/lib/email-outbox'
+import { deriveInvoiceEmailStatus, type InvoiceEmailEvent } from '@/lib/invoices/email-status'
+import {
   INVOICE_BUCKET,
   INVOICE_ELIGIBLE_KINDS,
   INVOICE_PAGE_SIZE,
@@ -169,6 +176,37 @@ async function enrichProfileCompleteness(rows: AdminInvoiceRow[]): Promise<Admin
   return rows.map((row) => ({ ...row, profileComplete: row.userId ? (complete.get(row.userId) ?? false) : null }))
 }
 
+/** Adds the delivery state of the "invoice ready" email to uploaded rows; on any read error the badge is simply omitted. */
+async function enrichEmailStatus(rows: AdminInvoiceRow[]): Promise<AdminInvoiceRow[]> {
+  const invoiceIds = rows.map((row) => row.invoice?.id).filter((id): id is string => Boolean(id && rows.find((r) => r.invoice?.id === id)?.invoice?.status === 'uploaded'))
+  if (invoiceIds.length === 0) return rows
+  const admin = createAdminClient()
+  const [invoices, events] = await Promise.all([
+    admin.from('invoices').select('id, file_sha256').in('id', invoiceIds),
+    admin
+      .from('email_events')
+      .select('invoice_id, status, attachment_state, file_sha256, sent_at, created_at')
+      .eq('kind', 'invoice_ready')
+      .in('invoice_id', invoiceIds),
+  ])
+  if (invoices.error || events.error) {
+    console.error('[invoices] email status lookup failed:', invoices.error?.message ?? events.error?.message)
+    return rows
+  }
+  const shaById = new Map(((invoices.data ?? []) as Array<{ id: string; file_sha256: string | null }>).map((row) => [row.id, row.file_sha256]))
+  const eventsById = new Map<string, InvoiceEmailEvent[]>()
+  for (const event of (events.data ?? []) as Array<InvoiceEmailEvent & { invoice_id: string }>) {
+    const list = eventsById.get(event.invoice_id) ?? []
+    list.push(event)
+    eventsById.set(event.invoice_id, list)
+  }
+  return rows.map((row) => {
+    const id = row.invoice?.id
+    if (!id || row.invoice?.status !== 'uploaded') return row
+    return { ...row, emailStatus: deriveInvoiceEmailStatus(eventsById.get(id) ?? [], shaById.get(id) ?? null) }
+  })
+}
+
 export async function listInvoiceRows(filters: InvoiceFilters): Promise<InvoiceListResult> {
   const empty: InvoiceListResult = {
     available: false,
@@ -186,7 +224,7 @@ export async function listInvoiceRows(filters: InvoiceFilters): Promise<InvoiceL
   const { items, page } = paginate(filtered, filters.page)
   return {
     available: true,
-    rows: await enrichProfileCompleteness(items),
+    rows: await enrichEmailStatus(await enrichProfileCompleteness(items)),
     total: filtered.length,
     page,
     pageSize: INVOICE_PAGE_SIZE,
@@ -251,7 +289,11 @@ export type SaveInvoiceInput = {
   fileName: unknown
   /** Replace only: take a fresh copy of the customer's current billing profile. */
   refreshSnapshot: boolean
+  /** Queue the "invoice ready" email after the invoice is saved. */
+  sendEmail?: boolean
 }
+
+export type InvoiceEmailOutcome = 'skipped' | InvoiceEmailQueueResult
 
 function mapWriteError(message: string): InvoiceActionError {
   if (message.includes('invoices_number_uidx')) return 'number_taken'
@@ -260,7 +302,9 @@ function mapWriteError(message: string): InvoiceActionError {
 }
 
 /** Creates the invoice for a payment, or replaces the PDF and details of an existing one. */
-export async function saveInvoice(input: SaveInvoiceInput): Promise<Result<{ invoiceId: string; replaced: boolean }>> {
+export async function saveInvoice(
+  input: SaveInvoiceInput,
+): Promise<Result<{ invoiceId: string; replaced: boolean; email: InvoiceEmailOutcome }>> {
   if (!UUID.test(input.transactionId)) return { ok: false, error: 'invalid_input' }
   const invoiceNumber = validateInvoiceNumber(input.invoiceNumber)
   if (!invoiceNumber) return { ok: false, error: 'invalid_number' }
@@ -378,9 +422,63 @@ export async function saveInvoice(input: SaveInvoiceInput): Promise<Result<{ inv
       category: classifyPayment(tx.idempotency_key),
       snapshotRefreshed: !keepSnapshot,
       previousStatus: existing?.status ?? null,
+      emailRequested: Boolean(input.sendEmail),
     },
   })
-  return { ok: true, invoiceId, replaced }
+
+  // The invoice is already saved: an email problem is reported, never rolled back.
+  const email: InvoiceEmailOutcome = input.sendEmail
+    ? await enqueueInvoiceReadyEmail({ invoiceId, userId: tx.user_id, fileSha256: sha256 })
+    : 'skipped'
+  return { ok: true, invoiceId, replaced, email }
+}
+
+/** Sends the "invoice ready" email again. The audit row is written first; no audit, no email. */
+export async function resendInvoiceEmail(actor: Actor, transactionId: unknown): Promise<Result<{ status: 'queued' }>> {
+  if (typeof transactionId !== 'string' || !UUID.test(transactionId)) return { ok: false, error: 'invalid_input' }
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('invoices')
+    .select('id, status, user_id, invoice_number, file_sha256, billing_transaction_id')
+    .eq('billing_transaction_id', transactionId)
+    .maybeSingle()
+  if (error) return { ok: false, error: 'unavailable' }
+  const invoice = data as {
+    id: string
+    status: string
+    user_id: string | null
+    invoice_number: string | null
+    file_sha256: string | null
+    billing_transaction_id: string
+  } | null
+  if (!invoice || invoice.status !== 'uploaded' || !invoice.file_sha256) return { ok: false, error: 'not_found' }
+
+  if ((await resolveInvoiceRecipient(invoice.user_id)) === 'no_recipient') return { ok: false, error: 'no_recipient' }
+  try {
+    if (await hasActiveInvoiceEmail(invoice.id)) return { ok: false, error: 'email_in_progress' }
+  } catch {
+    return { ok: false, error: 'unavailable' }
+  }
+
+  const audited = await recordInvoiceAudit({
+    actor,
+    action: 'invoice.email_resend',
+    invoiceId: invoice.id,
+    billingTransactionId: invoice.billing_transaction_id,
+    detail: { invoiceNumber: invoice.invoice_number, sha256: invoice.file_sha256 },
+  })
+  if (!audited) return { ok: false, error: 'audit_failed' }
+
+  const queued = await enqueueInvoiceReadyEmail({
+    invoiceId: invoice.id,
+    userId: invoice.user_id,
+    fileSha256: invoice.file_sha256,
+    resend: true,
+  })
+  if (queued === 'queued') return { ok: true, status: 'queued' }
+  if (queued === 'in_progress') return { ok: false, error: 'email_in_progress' }
+  if (queued === 'no_recipient') return { ok: false, error: 'no_recipient' }
+  return { ok: false, error: 'unavailable' }
 }
 
 export type MarkNotRequiredResult = {
