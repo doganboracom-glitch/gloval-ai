@@ -4,6 +4,7 @@ import { getPublishedSite } from '@/lib/projects'
 import { SiteCustomCode } from '@/components/site-custom-code'
 import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
+import { CookieConsent } from '@/components/cookie-consent'
 import { resolveCookieBannerDoc } from '@/lib/cookie-policy-link'
 import { extractMetaTags, safeTrackingCode, sanitizeTracking, stripMetaTags } from '@/lib/site-tracking'
 
@@ -61,7 +62,10 @@ export default async function PublishedSiteLayout({
       {cookieCss && <style dangerouslySetInnerHTML={{ __html: cookieCss }} />}
       <SiteCustomCode code={stripMetaTags(tracking?.head)} />
       <SiteCustomCode code={tracking?.bodyStart} />
-      <CookieBannerDocProvider doc={resolveCookieBannerDoc(site.schema)}>{children}</CookieBannerDocProvider>
+      <CookieBannerDocProvider doc={resolveCookieBannerDoc(site.schema)}>
+        {children}
+        <CookieConsent variant="site" />
+      </CookieBannerDocProvider>
       <SiteCustomCode code={tracking?.bodyEnd} />
     </>
   )

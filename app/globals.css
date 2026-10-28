@@ -586,3 +586,45 @@
     margin-top: 0.5rem;
   }
 }
+
+/* ---- Cookie card, SITE variant (published customer sites) ----------------
+   `html[data-cookie-banner-site]` + `--cookie-banner-h` exist only while the
+   centered site card is on screen. Phones: same space reservation as the
+   platform card (it is full width there). Wider screens: the card is
+   `min(920px, 100% - 32px)` wide, so the fixed site controls
+   (phone / WhatsApp / back-to-top = `.fixed.z-[9998]`, floating credit =
+   `[data-gloval-badge].fixed`; matched by their existing markup so published
+   HTML stays byte-identical) sit under it
+   until the viewport is wide enough (>=1100px) for the corners to be free;
+   below that they are raised by the card's height with the individual
+   `translate` property (it cannot clash with their own `transform`). */
+@media (max-width: 639px) {
+  html[data-cookie-banner-site] {
+    --cookie-banner-space: calc(
+      var(--cookie-banner-h) + max(0.75rem, env(safe-area-inset-bottom)) + 0.5rem
+    );
+  }
+  html[data-cookie-banner-site] body {
+    padding-bottom: var(--cookie-banner-space);
+  }
+}
+@media (max-width: 1099px) {
+  html[data-cookie-banner-site] {
+    --cookie-site-lift: calc(var(--cookie-banner-h) + 1.25rem);
+  }
+  html[data-cookie-banner-site] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+    translate: 0 calc(-1 * var(--cookie-site-lift));
+  }
+}
+@media (max-width: 639px) {
+  html[data-cookie-banner-site] {
+    --cookie-site-lift: calc(
+      var(--cookie-banner-h) + max(0.75rem, env(safe-area-inset-bottom)) - 0.5rem
+    );
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html[data-cookie-banner-site] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+    transition: translate 200ms ease-out;
+  }
+}

@@ -18,9 +18,11 @@ import {
 } from '@/lib/cookie-consent-storage'
 import {
   COOKIE_BANNER_BODY_CLASS,
-  COOKIE_BANNER_CLASS,
-  COOKIE_BANNER_FOOTER_CLASS,
   applyBannerInset,
+  cookieBannerButtonClasses,
+  cookieBannerClass,
+  cookieBannerFooterClass,
+  type CookieBannerVariant,
 } from '@/lib/cookie-banner-layout'
 
 /**
@@ -87,7 +89,12 @@ function Toggle({
   )
 }
 
-export function CookieConsent() {
+/**
+ * `variant` only changes where and how the card is laid out; consent logic,
+ * copy, storage and animation are identical. The caller picks it by the layout
+ * it renders in: root layout -> 'platform', tenant layout -> 'site'.
+ */
+export function CookieConsent({ variant = 'platform' }: { variant?: CookieBannerVariant }) {
   const { t, lang } = useLanguage()
   const c = t.cookie
 
@@ -142,7 +149,7 @@ export function CookieConsent() {
   const pathname = usePathname()
   const siteDoc = useCookieBannerDoc()
   const bannerDoc = siteDoc === undefined ? 'cerez-politikasi' : siteDoc
-  const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname)
+  const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname ?? '')
   const policyLabel =
     bannerDoc && bannerDoc !== 'cerez-politikasi'
       ? COOKIE_BANNER_DOC_LABEL[bannerDoc][lang === 'en' ? 'en' : 'tr']
@@ -157,7 +164,7 @@ export function CookieConsent() {
       applyBannerInset(root, null)
       return
     }
-    const apply = () => applyBannerInset(root, node.offsetHeight)
+    const apply = () => applyBannerInset(root, node.offsetHeight, variant)
     apply()
     const observer = new ResizeObserver(apply)
     observer.observe(node)
@@ -165,10 +172,11 @@ export function CookieConsent() {
       observer.disconnect()
       applyBannerInset(root, null)
     }
-  }, [open, customize])
+  }, [open, customize, variant])
 
   const buttonBase =
     'cookie-focus inline-flex h-9 items-center justify-center rounded-xl px-3 text-sm font-semibold transition-colors'
+  const buttonSizing = cookieBannerButtonClasses(variant)
 
   return (
     <>
@@ -178,7 +186,8 @@ export function CookieConsent() {
       {open && (
         <div
           ref={bannerRef}
-          className={COOKIE_BANNER_CLASS}
+          className={cookieBannerClass(variant, customize)}
+          data-cookie-variant={variant}
           role="dialog"
           aria-modal="false"
           aria-labelledby="cookie-title"
@@ -258,7 +267,7 @@ export function CookieConsent() {
             )}
           </div>
 
-          <div className={`${COOKIE_BANNER_FOOTER_CLASS}${customize ? ' cookie-divider border-t pt-3' : ''}`}>
+          <div className={`${cookieBannerFooterClass(variant, customize)}${customize ? ' cookie-divider border-t pt-3' : ''}`}>
             {customize ? (
               <button
                 type="button"
@@ -272,14 +281,14 @@ export function CookieConsent() {
                 <button
                   type="button"
                   onClick={acceptAll}
-                  className={`cookie-btn-primary min-w-[8rem] flex-1 hover:opacity-90 ${buttonBase}`}
+                  className={`cookie-btn-primary ${buttonSizing.primary} hover:opacity-90 ${buttonBase}`}
                 >
                   {c.acceptAll}
                 </button>
                 <button
                   type="button"
                   onClick={rejectAll}
-                  className={`cookie-btn-outline min-w-[8rem] flex-1 border ${buttonBase}`}
+                  className={`cookie-btn-outline ${buttonSizing.outline} border ${buttonBase}`}
                 >
                   {c.rejectAll}
                 </button>
@@ -290,7 +299,7 @@ export function CookieConsent() {
                     setDraftMarketing(consent?.marketing ?? false)
                     setCustomize(true)
                   }}
-                  className={`cookie-btn-text h-8 w-full text-xs ${buttonBase}`}
+                  className={`cookie-btn-text h-8 ${buttonSizing.text} text-xs ${buttonBase}`}
                 >
                   {c.customize}
                 </button>
