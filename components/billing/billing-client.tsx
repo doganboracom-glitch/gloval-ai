@@ -155,6 +155,8 @@ export function BillingClient({
   currentPlan,
   transactions,
   invoicesByTransaction = {},
+  invoiceNotRequiredIds = [],
+  invoicesAvailable = false,
   entitlements,
   projectEntitlements,
   projects,
@@ -178,6 +180,10 @@ export function BillingClient({
   transactions: TransactionRow[]
   /** Uploaded invoices of this customer, keyed by billing transaction id. */
   invoicesByTransaction?: Record<string, MyInvoice>
+  /** Payments the site owner marked as not needing an invoice. */
+  invoiceNotRequiredIds?: string[]
+  /** False when the invoice lookup failed; hides the "being prepared" note. */
+  invoicesAvailable?: boolean
   entitlements: EntitlementRow[]
   projectEntitlements: ProjectEntitlementItem[]
   projects: BillingProject[]
@@ -1338,6 +1344,13 @@ export function BillingClient({
                         <FileDown className="size-3.5" aria-hidden />
                         {invoiceCopy.myInvoiceDownload} · {invoicesByTransaction[txn.id].invoiceNumber}
                       </a>
+                    ) : invoicesAvailable &&
+                      txn.status === 'succeeded' &&
+                      txn.provider === 'iyzico' &&
+                      (txn.kind === 'charge' || txn.kind === 'proration_debit') &&
+                      txn.amount_cents > 0 &&
+                      !invoiceNotRequiredIds.includes(txn.id) ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{invoiceCopy.myInvoicePending}</p>
                     ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">

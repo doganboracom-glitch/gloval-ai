@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
-import { getInvoiceDetailAction, markInvoicesNotRequiredAction, type InvoiceDetail } from '@/lib/invoices/actions'
+import { convertInvoiceToNotRequiredAction, getInvoiceDetailAction, markInvoicesNotRequiredAction, type InvoiceDetail } from '@/lib/invoices/actions'
 import { revealBillingProfileIdentifierAction } from '@/lib/billing-profile-actions'
 import { INVOICE_MAX_BYTES } from '@/lib/invoices/constants'
 import type { AdminInvoiceRow } from '@/lib/invoices/types'
@@ -145,10 +145,12 @@ export function UploadInvoiceDialog({
 
 export function NotRequiredDialog({
   transactionIds,
+  convertUploaded = false,
   onClose,
   onDone,
 }: {
   transactionIds: string[]
+  convertUploaded?: boolean
   onClose: () => void
   onDone: (message: string) => void
 }) {
@@ -162,6 +164,12 @@ export function NotRequiredDialog({
     event.preventDefault()
     setPending(true)
     setError(null)
+    if (convertUploaded) {
+      const converted = await convertInvoiceToNotRequiredAction(transactionIds[0], reason)
+      setPending(false)
+      if (!converted.ok) return setError(invoiceErrorText(c, converted.error))
+      return onDone(c.marked.replace('{n}', '1'))
+    }
     const result = await markInvoicesNotRequiredAction(transactionIds, reason)
     setPending(false)
     if (!result.ok) return setError(invoiceErrorText(c, result.error))
@@ -170,9 +178,13 @@ export function NotRequiredDialog({
   }
 
   return (
-    <Modal title={c.reasonTitle} onClose={onClose}>
+    <Modal title={convertUploaded ? c.convertTitle : c.reasonTitle} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-xs text-muted-foreground">{c.selected.replace('{n}', String(transactionIds.length))}</p>
+        {convertUploaded ? (
+          <p className="text-sm text-destructive">{c.convertWarning}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">{c.selected.replace('{n}', String(transactionIds.length))}</p>
+        )}
         <label className="block text-sm">
           <span className="mb-1 block text-xs text-muted-foreground">{c.reasonLabel}</span>
           <textarea className={fieldClass} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} required />

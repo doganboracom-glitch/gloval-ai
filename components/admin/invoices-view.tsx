@@ -17,7 +17,7 @@ const fieldClass = 'rounded-md border border-border bg-background px-3 py-2 text
 type DialogState =
   | { kind: 'upload'; row: AdminInvoiceRow }
   | { kind: 'details'; row: AdminInvoiceRow }
-  | { kind: 'mark'; ids: string[] }
+  | { kind: 'mark'; ids: string[]; convert?: boolean }
   | null
 
 export function InvoicesView({ result, filters }: { result: InvoiceListResult; filters: InvoiceFilters }) {
@@ -273,6 +273,11 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
                         {c.download}
                       </a>
                     ) : null}
+                    {uploaded ? (
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setDialog({ kind: 'mark', ids: [row.transactionId], convert: true })}>
+                        {c.convert}
+                      </Button>
+                    ) : null}
                     <Button type="button" size="sm" variant="ghost" onClick={() => setDialog({ kind: 'details', row })}>
                       {c.details}
                     </Button>
@@ -298,7 +303,7 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
 
       {dialog?.kind === 'upload' ? <UploadInvoiceDialog row={dialog.row} onClose={() => setDialog(null)} onDone={done} /> : null}
       {dialog?.kind === 'details' ? <InvoiceDetailsDialog row={dialog.row} onClose={() => setDialog(null)} /> : null}
-      {dialog?.kind === 'mark' ? <NotRequiredDialog transactionIds={dialog.ids} onClose={() => setDialog(null)} onDone={done} /> : null}
+      {dialog?.kind === 'mark' ? <NotRequiredDialog transactionIds={dialog.ids} convertUploaded={dialog.convert} onClose={() => setDialog(null)} onDone={done} /> : null}
     </div>
   )
 }

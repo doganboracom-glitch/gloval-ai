@@ -447,6 +447,84 @@ export async function markNotRequired(
   return { ok: true, marked, skipped }
 }
 
+/**
+ * Turns an uploaded invoice back into "not required" (a wrong or test upload).
+ * The audit row is written first and the change is refused without it: the
+ * previous number and file hash live there afterwards. The PDF is removed from
+ * storage only after the row no longer points at it.
+ */
+export async function convertUploadedToNotRequired(
+  actor: Actor,
+  transactionId: unknown,
+  reasonRaw: unknown,
+): Promise<Result> {
+  const reason = typeof reasonRaw === 'string' ? reasonRaw.trim() : ''
+  if (reason.length < 3 || reason.length > 500) return { ok: false, error: 'invalid_reason' }
+  if (typeof transactionId !== 'string' || !UUID.test(transactionId)) return { ok: false, error: 'invalid_input' }
+
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('invoices')
+    .select('id, status, invoice_number, invoice_date, file_path, file_sha256')
+    .eq('billing_transaction_id', transactionId)
+    .maybeSingle()
+  const current = data as {
+    id: string
+    status: string
+    invoice_number: string | null
+    invoice_date: string | null
+    file_path: string | null
+    file_sha256: string | null
+  } | null
+  if (!current || current.status !== 'uploaded') return { ok: false, error: 'not_found' }
+
+  const audited = await recordInvoiceAudit({
+    actor,
+    action: 'invoice.mark_not_required',
+    invoiceId: current.id,
+    billingTransactionId: transactionId,
+    detail: {
+      reason,
+      previousStatus: 'uploaded',
+      previousInvoiceNumber: current.invoice_number,
+      previousInvoiceDate: current.invoice_date,
+      previousSha256: current.file_sha256,
+      bulk: false,
+    },
+  })
+  if (!audited) return { ok: false, error: 'audit_failed' }
+
+  const { data: updated, error } = await admin
+    .from('invoices')
+    .update({
+      status: 'not_required',
+      not_required_reason: reason,
+      invoice_number: null,
+      invoice_date: null,
+      file_path: null,
+      file_name: null,
+      file_size: null,
+      file_sha256: null,
+      billing_snapshot: null,
+      source: 'manual',
+      provider_ref: null,
+      uploaded_by: actor.userId,
+    })
+    .eq('id', current.id)
+    .eq('status', 'uploaded')
+    .select('id')
+  if (error || !updated || updated.length === 0) {
+    console.error('[invoices] convert to not required failed:', error?.message)
+    return { ok: false, error: 'save_failed' }
+  }
+
+  if (current.file_path) {
+    const { error: removeError } = await admin.storage.from(INVOICE_BUCKET).remove([current.file_path])
+    if (removeError) console.error('[invoices] converted file cleanup failed:', removeError.message)
+  }
+  return { ok: true }
+}
+
 async function signedUrlFor(filePath: string | null, invoiceNumber: string | null) {
   if (!isInvoiceStoragePath(filePath)) return null
   const { data, error } = await createAdminClient()
