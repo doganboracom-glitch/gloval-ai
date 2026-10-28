@@ -6,7 +6,14 @@ import { getAdminUser } from '@/lib/mail/admin-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { BILLING_PROFILE_COLUMNS, toBillingProfileSummary, type BillingProfileDatabaseRow } from '@/lib/billing-profile-store'
 import { checkInvoiceLimit, type InvoiceLimitKind } from '@/lib/invoices/limit'
-import { convertUploadedToNotRequired, exportInvoicesCsv, markNotRequired, type MarkNotRequiredResult } from '@/lib/invoices/service'
+import {
+  convertUploadedToNotRequired,
+  exportInvoicesCsv,
+  markNotRequired,
+  reopenNotRequired,
+  type MarkNotRequiredResult,
+  type ReopenResult,
+} from '@/lib/invoices/service'
 import { parseInvoiceFilters } from '@/lib/invoices/filter'
 import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 import type { BillingSnapshot } from '@/lib/invoices/snapshot'
@@ -45,6 +52,18 @@ export async function convertInvoiceToNotRequiredAction(
   if (!outcome.ok) return outcome
   revalidatePath('/admin/billing/invoices')
   return { ok: true }
+}
+
+export async function reopenInvoicesAction(
+  transactionIds: unknown,
+): Promise<{ ok: true; result: ReopenResult } | { ok: false; error: InvoiceActionError }> {
+  const access = await guard('write')
+  if (!access.ok) return access
+  const outcome = await reopenNotRequired(access.actor, transactionIds)
+  if (!outcome.ok) return outcome
+  revalidatePath('/admin/billing/invoices')
+  const { ok: _ok, ...result } = outcome
+  return { ok: true, result }
 }
 
 export async function exportInvoicesCsvAction(

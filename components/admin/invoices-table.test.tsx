@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
+  ADMIN_CONTENT_WIDTH_PX,
   INVOICES_ACTIONS_CELL_CLASS,
   INVOICES_TABLE_CLASS,
   INVOICES_TABLE_COLUMNS,
@@ -47,6 +48,17 @@ const uploadedInvoice = {
   updatedAt: '2026-01-02T10:00:00Z',
 }
 
+const notRequiredInvoice = {
+  id: 'inv-2',
+  status: 'not_required' as const,
+  invoiceNumber: null,
+  invoiceDate: null,
+  fileName: null,
+  source: 'manual',
+  notRequiredReason: 'Müşteri fatura istemedi',
+  updatedAt: '2026-01-02T10:00:00Z',
+}
+
 function renderTable(rows: AdminInvoiceRow[]) {
   return renderToStaticMarkup(
     <InvoicesTable
@@ -64,18 +76,46 @@ function renderTable(rows: AdminInvoiceRow[]) {
 }
 
 describe('admin fatura tablosu düzeni', () => {
-  it('sütun genişliklerinin toplamı tablonun min-genişliğine eşit', () => {
-    expect(INVOICES_TABLE_MIN_WIDTH_PX).toBe(1084)
+  it('sütun genişliklerinin toplamı tablonun min-genişliğine eşit ve 1280/1920px içerik sütununa (864px) sığar', () => {
+    expect(INVOICES_TABLE_MIN_WIDTH_PX).toBe(858)
     expect(INVOICES_TABLE_CLASS).toContain(`min-w-[${INVOICES_TABLE_MIN_WIDTH_PX}px]`)
     expect(INVOICES_TABLE_CLASS).toContain('table-fixed')
+    expect(INVOICES_TABLE_MIN_WIDTH_PX).toBeLessThanOrEqual(ADMIN_CONTENT_WIDTH_PX)
   })
 
-  it('işlem sütunu sabit genişlikte ve sticky; sadece o sütun sticky', () => {
+  it('hiçbir sütun sticky değil; işlem sütunu Tutar/Fatura sütunlarının üstüne binemez', () => {
     const actions = INVOICES_TABLE_COLUMNS.find((column) => column.key === 'actions')
-    expect(actions?.px).toBe(176)
-    const html = renderTable([row()])
-    expect(INVOICES_ACTIONS_CELL_CLASS).toContain('sticky right-0')
-    expect(html.match(/sticky/g)?.length).toBe(2) // başlık + gövde hücresi
+    expect(actions?.px).toBe(188)
+    expect(INVOICES_ACTIONS_CELL_CLASS).not.toContain('sticky')
+    for (const status of [row(), row({ invoice: uploadedInvoice }), row({ invoice: notRequiredInvoice })]) {
+      expect(renderTable([status])).not.toContain('sticky')
+    }
+  })
+
+  it('Tutar sütunu en az 110px ve tutar tek satırda, kısaltılmadan yazılır', () => {
+    const amount = INVOICES_TABLE_COLUMNS.find((column) => column.key === 'amount')
+    expect(amount?.px).toBeGreaterThanOrEqual(110)
+    const html = renderTable([row({ amountKurus: 2999900 })])
+    const cell = html.match(/<td class="[^"]*whitespace-nowrap[^"]*">29999,00<\/td>/)?.[0] ?? ''
+    expect(cell).toContain('font-mono')
+    expect(cell).not.toContain('truncate')
+  })
+
+  it('bekleyen, yüklenen ve "fatura gerekmez" satırlarında tüm başlıklar ve durum sütunu görünür', () => {
+    const html = renderTable([row(), row({ transactionId: 't2', invoice: uploadedInvoice }), row({ transactionId: 't3', invoice: notRequiredInvoice })])
+    for (const label of [c.colDate, c.colCustomer, c.colType, c.colAmount, c.colStatus, c.colActions]) {
+      expect(html).toContain(label)
+    }
+    expect(html).toContain(c.statusPending)
+    expect(html).toContain(c.statusUploaded)
+    expect(html).toContain(c.statusNotRequired)
+  })
+
+  it('uzun "fatura gerekmez" gerekçesi 2 satırla sınırlı ve tamamı tooltip\'te', () => {
+    const reason = 'Müşteri kurumsal fatura istemedi, ödeme iade edilecek. '.repeat(4).trim()
+    const html = renderTable([row({ invoice: { ...notRequiredInvoice, notRequiredReason: reason } })])
+    expect(html).toContain('line-clamp-2')
+    expect(html).toContain(`title="${reason}"`)
   })
 
   it('tüm sütun başlıkları görünür', () => {
