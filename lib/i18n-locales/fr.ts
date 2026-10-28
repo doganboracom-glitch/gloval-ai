@@ -632,7 +632,7 @@ const fr: DeepPartial<Dict> = {
     confirmChange: 'Confirmer le changement',
     upgrade: 'Améliorer',
     downgrade: 'Rétrograder',
-    transactions: 'Historique des paiements',
+    transactions: 'Historique des paiements et factures',
     noTransactions: 'Aucune transaction pour l’instant.',
     txnCharge: 'Paiement',
     txnProrationCredit: 'Crédit au prorata',
@@ -718,7 +718,7 @@ const fr: DeepPartial<Dict> = {
       perMonth: '/ mois',
   periodNote:
   'Les services additionnels sont valables pour la période de facturation de votre abonnement principal et ne comptent plus dans votre capacité à son terme.',
-  expiredHint: 'Les services expirés ne sont pas comptés dans votre capacité.',
+  expiredHint: 'Les services expirés ne sont pas compt��s dans votre capacité.',
       buy: 'Acheter',
       buying: 'Préparation...',
       checkoutItem: 'Service supplémentaire : {item}',

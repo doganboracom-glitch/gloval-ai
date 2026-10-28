@@ -672,7 +672,7 @@ const et: DeepPartial<Dict> = {
     confirmChange: 'Kinnita muudatus',
     upgrade: 'Uuenda',
     downgrade: 'Alanda',
-    transactions: 'Maksete ajalugu',
+    transactions: 'Maksete ajalugu ja arved',
     noTransactions: 'Tehinguid pole veel.',
     txnCharge: 'Tasu',
     txnProrationCredit: 'Proportsionaalne krediit',

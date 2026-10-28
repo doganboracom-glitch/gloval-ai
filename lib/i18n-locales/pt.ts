@@ -673,7 +673,7 @@ const pt: DeepPartial<Dict> = {
     confirmChange: 'Confirmar mudança',
     upgrade: 'Fazer upgrade',
     downgrade: 'Fazer downgrade',
-    transactions: 'Histórico de pagamentos',
+    transactions: 'Histórico de pagamentos e faturas',
     noTransactions: 'Ainda não há transações.',
     txnCharge: 'Cobrança',
     txnProrationCredit: 'Crédito proporcional',
@@ -1011,7 +1011,7 @@ const pt: DeepPartial<Dict> = {
       emailTitle: "Não mexa nos seus registros de e-mail",
       emailBody: "Não exclua nem altere seus registros MX, SPF, DKIM e DMARC existentes. Os registros do site e de verificação acima são separados e não afetam seu e-mail.",
       needsOwnership: "Os registros do site (A/CNAME) são obtidos do provedor de hospedagem depois que a propriedade é verificada. Por enquanto, adicione apenas o registro TXT de verificação.",
-      hostingMissing: "A hospedagem não está configurada neste ambiente, então os registros do site não podem ser obtidos. Os valores nunca são presumidos.",
+      hostingMissing: "A hospedagem não est�� configurada neste ambiente, então os registros do site não podem ser obtidos. Os valores nunca são presumidos.",
       recordsPending: "Os registros do site ainda não foram recebidos do provedor de hospedagem. Clique em «Verificar status» para tentar de novo; enquanto isso, nenhum registro presumido é exibido.",
     },
     connection: {

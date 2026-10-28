@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Check,
-  FileDown,
   Loader2,
   Building2,
   ShoppingBag,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { getInvoiceCopy } from '@/lib/invoices/copy'
+import { HistoryInvoiceActionButton } from '@/components/billing/history-invoice-action'
 import type { MyInvoice } from '@/lib/invoices/customer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
@@ -1334,24 +1334,15 @@ export function BillingClient({
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {dateFmt.format(new Date(txn.created_at))}
                     </p>
-                    {invoicesByTransaction[txn.id] ? (
-                      <a
-                        href={`/api/invoices/${invoicesByTransaction[txn.id].id}/download`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-brand underline-offset-2 hover:underline"
-                      >
-                        <FileDown className="size-3.5" aria-hidden />
-                        {invoiceCopy.myInvoiceDownload} · {invoicesByTransaction[txn.id].invoiceNumber}
-                      </a>
-                    ) : invoicesAvailable &&
-                      txn.status === 'succeeded' &&
-                      txn.provider === 'iyzico' &&
-                      (txn.kind === 'charge' || txn.kind === 'proration_debit') &&
-                      txn.amount_cents > 0 &&
-                      !invoiceNotRequiredIds.includes(txn.id) ? (
-                      <p className="mt-1 text-xs text-muted-foreground">{invoiceCopy.myInvoicePending}</p>
-                    ) : null}
+                    <div className="mt-2 empty:hidden">
+                      <HistoryInvoiceActionButton
+                        txn={txn}
+                        copy={invoiceCopy}
+                        invoicesByTransaction={invoicesByTransaction}
+                        invoiceNotRequiredIds={invoiceNotRequiredIds}
+                        invoicesAvailable={invoicesAvailable}
+                      />
+                    </div>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span

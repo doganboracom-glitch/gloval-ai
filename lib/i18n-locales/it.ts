@@ -672,7 +672,7 @@ const it: DeepPartial<Dict> = {
     confirmChange: 'Conferma modifica',
     upgrade: 'Aggiorna',
     downgrade: 'Declassa',
-    transactions: 'Cronologia pagamenti',
+    transactions: 'Cronologia pagamenti e fatture',
     noTransactions: 'Nessuna transazione ancora.',
     txnCharge: 'Addebito',
     txnProrationCredit: 'Credito proporzionale',

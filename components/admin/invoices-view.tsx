@@ -3,13 +3,13 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Download, Loader2 } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
-import { DataTable, PageHeader, StatusBadge, Td, Th, Tr } from '@/components/admin/admin-ui'
+import { PageHeader } from '@/components/admin/admin-ui'
+import { InvoicesTable } from '@/components/admin/invoices-table'
 import { InvoiceDetailsDialog, NotRequiredDialog, UploadInvoiceDialog } from '@/components/admin/invoice-dialogs'
 import { getInvoiceCopy, invoiceErrorText } from '@/lib/invoices/copy'
 import { exportInvoicesCsvAction } from '@/lib/invoices/actions'
-import { formatKurus } from '@/lib/invoices/scope'
 import type { AdminInvoiceRow, InvoiceFilters, InvoiceListResult, InvoiceStatusFilter } from '@/lib/invoices/types'
 
 const fieldClass = 'rounded-md border border-border bg-background px-3 py-2 text-sm'
@@ -92,13 +92,6 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
     setSelected(new Set())
     setFeedback({ type: 'success', text: message })
     router.refresh()
-  }
-
-  function statusBadge(row: AdminInvoiceRow) {
-    if (row.invoice?.status === 'uploaded') return <StatusBadge tone="success" label={c.statusUploaded} />
-    if (row.invoice?.status === 'not_required') return <StatusBadge tone="muted" label={c.statusNotRequired} />
-    if (!row.expectsInvoice) return <StatusBadge tone="muted" label={c.statusTest} />
-    return <StatusBadge tone="warning" label={c.statusPending} />
   }
 
   return (
@@ -203,90 +196,23 @@ export function InvoicesView({ result, filters }: { result: InvoiceListResult; f
       ) : null}
 
       <div className={isPending ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-        <DataTable
-          isEmpty={result.rows.length === 0}
-          empty={c.empty}
-          head={
-            <>
-              <Th className="w-10">
-                <input
-                  type="checkbox"
-                  aria-label={c.selectAll}
-                  checked={allSelected}
-                  onChange={() => setSelected(allSelected ? new Set() : new Set(selectable.map((row) => row.transactionId)))}
-                />
-              </Th>
-              <Th>{c.colDate}</Th>
-              <Th>{c.colCustomer}</Th>
-              <Th>{c.colType}</Th>
-              <Th className="text-right">{c.colAmount}</Th>
-              <Th>{c.colStatus}</Th>
-              <Th className="text-right">{c.colActions}</Th>
-            </>
-          }
-        >
-          {result.rows.map((row) => {
-            const uploaded = row.invoice?.status === 'uploaded'
-            const canSelect = selectable.includes(row)
-            return (
-              <Tr key={row.transactionId}>
-                <Td>
-                  {canSelect ? (
-                    <input type="checkbox" aria-label={c.selectRow} checked={selected.has(row.transactionId)} onChange={() => toggle(row.transactionId)} />
-                  ) : null}
-                </Td>
-                <Td className="whitespace-nowrap text-xs text-muted-foreground">
-                  {dateFmt.format(new Date(row.createdAt))}
-                  <span className="block font-mono">{row.transactionNumber}</span>
-                </Td>
-                <Td>
-                  <span className="block font-medium">{row.fullName || row.email}</span>
-                  {row.fullName ? <span className="block text-xs text-muted-foreground">{row.email}</span> : null}
-                  {row.expectsInvoice && !uploaded && row.profileComplete === false ? (
-                    <span className="mt-1 inline-block text-xs text-amber-600 dark:text-amber-400">{c.profileIncomplete}</span>
-                  ) : null}
-                </Td>
-                <Td>
-                  <span className="block">{c.categories[row.category]}</span>
-                  <span className="block max-w-56 truncate text-xs text-muted-foreground">{row.description}</span>
-                </Td>
-                <Td className="whitespace-nowrap text-right font-mono">{formatKurus(row.amountKurus)}</Td>
-                <Td>
-                  {statusBadge(row)}
-                  {row.invoice?.invoiceNumber ? <span className="mt-1 block font-mono text-xs text-muted-foreground">{row.invoice.invoiceNumber}</span> : null}
-                  {row.invoice?.notRequiredReason ? <span className="mt-1 block max-w-48 truncate text-xs text-muted-foreground">{row.invoice.notRequiredReason}</span> : null}
-                </Td>
-                <Td className="text-right">
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    {row.expectsInvoice ? (
-                      <Button type="button" size="sm" variant="outline" onClick={() => setDialog({ kind: 'upload', row })}>
-                        {uploaded ? c.replace : c.upload}
-                      </Button>
-                    ) : null}
-                    {uploaded && row.invoice ? (
-                      <a
-                        href={`/api/admin/invoices/${row.invoice.id}/download`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={buttonVariants({ size: 'sm', variant: 'ghost' })}
-                      >
-                        {c.download}
-                      </a>
-                    ) : null}
-                    {uploaded ? (
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setDialog({ kind: 'mark', ids: [row.transactionId], convert: true })}>
-                        {c.convert}
-                      </Button>
-                    ) : null}
-                    <Button type="button" size="sm" variant="ghost" onClick={() => setDialog({ kind: 'details', row })}>
-                      {c.details}
-                    </Button>
-                  </div>
-                </Td>
-              </Tr>
-            )
-          })}
-        </DataTable>
+        {result.rows.length === 0 ? (
+          <p className="rounded-xl border border-border bg-card/70 px-4 py-6 text-sm text-muted-foreground">{c.empty}</p>
+        ) : (
+          <InvoicesTable
+            rows={result.rows}
+            copy={c}
+            selectable={selectable}
+            selected={selected}
+            allSelected={allSelected}
+            dateFmt={dateFmt}
+            onToggle={toggle}
+            onToggleAll={() => setSelected(allSelected ? new Set() : new Set(selectable.map((row) => row.transactionId)))}
+            onAction={(action, row) =>
+              setDialog(action === 'convert' ? { kind: 'mark', ids: [row.transactionId], convert: true } : { kind: action, row })
+            }
+          />
+        )}
       </div>
 
       {pages > 1 ? (

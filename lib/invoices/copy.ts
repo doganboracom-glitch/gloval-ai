@@ -87,8 +87,9 @@ const copy = {
     next: 'Sonraki',
     pageOf: 'Sayfa {page} / {pages}',
     myInvoices: 'Faturalarım',
-    myInvoiceDownload: 'Fatura indir',
-    myInvoicePending: 'Fatura hazırlanıyor',
+    myInvoiceDownload: 'Faturayı indir',
+    myInvoicePending: 'Faturanız hazırlanıyor',
+    myInvoicePendingHint: 'Faturanız hazırlandığında burada indirilebilir olacak ve e-posta ile bildirilecek.',
     myInvoiceNumber: 'Fatura no',
     errors: {
       unauthorized: 'Bu işlem için yetkiniz yok.',
@@ -195,7 +196,8 @@ const copy = {
     pageOf: 'Page {page} of {pages}',
     myInvoices: 'My invoices',
     myInvoiceDownload: 'Download invoice',
-    myInvoicePending: 'Invoice being prepared',
+    myInvoicePending: 'Your invoice is being prepared',
+    myInvoicePendingHint: 'Your invoice will be available to download here once it is ready, and we will notify you by email.',
     myInvoiceNumber: 'Invoice no',
     errors: {
       unauthorized: 'You are not allowed to do this.',
