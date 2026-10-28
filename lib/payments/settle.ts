@@ -224,11 +224,21 @@ export async function settlePaymentResult(
           .update({ pending_plan_id: null, pending_change_ref: null })
           .eq('id', sub.id)
       }
-      await admin.from('billing_transactions').update({ status: 'failed' }).eq('user_id', sub.user_id).eq('provider_ref', ref)
+      // Conditional on `pending`: a late or replayed FAILED callback must never
+      // turn an already succeeded charge into a failed one, nor mail the buyer again.
+      const { data: failedRows } = await admin
+        .from('billing_transactions')
+        .update({ status: 'failed' })
+        .eq('user_id', sub.user_id)
+        .eq('provider_ref', ref)
+        .eq('status', 'pending')
+        .select('id')
+      if (!failedRows || failedRows.length === 0) return 'subscription'
       await logUserEvent({
         userId: sub.user_id,
         type: 'payment_failed',
         subject: 'Ödeme başarısız',
+        dedupeKey: `payment-failed:${ref}`,
         body: `Ödeme tamamlanamadı; mevcut paketiniz korunuyor. İşlem No: ${formatTicketNumber(ref)}.`,
         emailAdmin: true,
         adminSubject: (userEmail) => `${userEmail} üye ödemesi başarısız`,
@@ -294,6 +304,7 @@ export async function settlePaymentResult(
             userId: ent.user_id,
             type: 'payment_failed',
             subject: 'Ödeme doğrulanamadı',
+            dedupeKey: `payment-rejected:${ref}`,
             body: `${ent.name} ödemesi tutar doğrulamasından geçemedi; hak etkinleştirilmedi. Tahsilat varsa destek ekibimiz sizinle iletişime geçecektir.`,
             emailAdmin: true,
             adminSubject: (userEmail) => `${userEmail} ödeme tutar uyuşmazlığı (${ent.code})`,
@@ -306,6 +317,7 @@ export async function settlePaymentResult(
           .from('project_entitlements')
           .update({ status: 'active', granted_at: new Date().toISOString() })
           .eq('id', ent.id)
+          .neq('status', 'active')
       }
       await admin.from('billing_transactions').upsert(
         {

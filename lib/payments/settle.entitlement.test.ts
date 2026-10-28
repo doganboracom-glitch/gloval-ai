@@ -64,6 +64,7 @@ vi.mock('@/lib/notify', () => ({
 }))
 
 import { settlePaymentResult } from './settle'
+import { logUserEvent } from '@/lib/notify'
 import type { PaymentWebhookResult } from './types'
 
 const REF = 'tok_entitlement_abcdef'
@@ -171,6 +172,30 @@ describe.each(['branding_removal', 'multilang'])('settlePaymentResult - per-site
     await settlePaymentResult('iyzico', paid({ paidAmountCents: 1 }, code))
     expect(ent().status).toBe('active')
     expect(ent().granted_at).toBe(firstGrant)
+  })
+
+  it('concurrent paid results grant once: granted_at is not rewritten and the mail key is shared', async () => {
+    let tick = 0
+    const stamp = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(() => `2026-01-01T00:00:0${++tick}.000Z`)
+    try {
+      await Promise.all([
+        settlePaymentResult('iyzico', paid({}, code)),
+        settlePaymentResult('iyzico', paid({}, code)),
+      ])
+    } finally {
+      stamp.mockRestore()
+    }
+    expect(ent().status).toBe('active')
+    expect(ent().granted_at).toBe('2026-01-01T00:00:01.000Z')
+    expect(tx()).toHaveLength(1)
+    const keys = new Set(vi.mocked(logUserEvent).mock.calls.map(([input]) => input.dedupeKey))
+    expect(keys).toEqual(new Set([`payment-succeeded:${REF}`]))
+  })
+
+  it('claims the rejection mail under a per-payment dedupe key', async () => {
+    await settlePaymentResult('iyzico', paid({ paidAmountCents: PRICE - 1 }, code))
+    const [input] = vi.mocked(logUserEvent).mock.calls[0]
+    expect(input.dedupeKey).toBe(`payment-rejected:${REF}`)
   })
 
   it('does nothing for a failed payment', async () => {
