@@ -19,6 +19,19 @@ import { Button } from '@/components/ui/button'
 import { COMPANY, isPlaceholder } from '@/lib/legal/company'
 import { submitContactRequest } from '@/lib/support/contact'
 
+const FORM_ID = 'bize-yazin'
+
+/** Smooth-scrolls to the form; users who prefer reduced motion jump without animation. */
+function scrollToForm(event: React.MouseEvent<HTMLAnchorElement>) {
+  const target = document.getElementById(FORM_ID)
+  if (!target) return
+  event.preventDefault()
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+  window.history.replaceState(null, '', `#${FORM_ID}`)
+  target.querySelector<HTMLInputElement>('#contact-name')?.focus({ preventScroll: true })
+}
+
 /**
  * İletişim sayfası. İletişim kanalları merkezi `COMPANY` yapılandırmasından
  * gelir; bir alan hâlâ placeholder ise yanında "eksik" etiketi gösterilir.
@@ -110,25 +123,28 @@ export function ContactPageClient() {
               </div>
             )
           })}
-          <Link
-            href="/support/new"
-            className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-4 transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+          <a
+            href={`#${FORM_ID}`}
+            onClick={scrollToForm}
+            className={`flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-4 transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50${
+              (rows.length + 1) % 2 === 1 ? ' sm:col-span-2' : ''
+            }`}
           >
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
               <Send className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0">
               <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {tr ? 'Destek' : 'Support'}
+                {tr ? 'İletişim formu' : 'Contact form'}
               </span>
               <span className="mt-1 block text-sm font-medium text-foreground">
-                {tr ? 'Destek talebi oluştur' : 'Create a support ticket'}
+                {tr ? 'Bize yazın' : 'Write to us'}
               </span>
               <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                {tr ? 'Oturum açarak ekibimize yazın.' : 'Sign in to message our team.'}
+                {tr ? 'Aşağıdaki formu doldurun, size e-posta ile dönelim.' : 'Fill in the form below and we will reply by email.'}
               </span>
             </span>
-          </Link>
+          </a>
         </div>
 
         <ContactForm tr={tr} />
@@ -188,7 +204,7 @@ function ContactForm({ tr }: { tr: boolean }) {
     'w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/40'
 
   return (
-    <section className="mt-12">
+    <section id={FORM_ID} className="mt-12 scroll-mt-24">
       <h2 className="font-display text-xl font-semibold tracking-tight">
         {tr ? 'Bize Yazın' : 'Send us a message'}
       </h2>
