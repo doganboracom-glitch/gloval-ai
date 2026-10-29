@@ -23,7 +23,7 @@ import {
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
 import { formatMoney } from '@/lib/billing-utils'
-import { BILLING_PROFILE_HREF } from '@/components/billing/billing-profile-gate'
+import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
 import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'

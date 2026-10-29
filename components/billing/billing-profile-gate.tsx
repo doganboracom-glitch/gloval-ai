@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
+import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 
-export const BILLING_PROFILE_HREF = '/billing?fatura=1#fatura-bilgileri'
+export { BILLING_PROFILE_HREF }
 
 /**
  * Whether the signed-in buyer still has to complete the billing profile.

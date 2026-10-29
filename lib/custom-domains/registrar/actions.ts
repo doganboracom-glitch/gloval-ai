@@ -1,6 +1,12 @@
 'use server'
 
-import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
+import {
+  checkPlatformBuyerProfile,
+  resolvePlatformBuyerPublicConfig,
+  type PlatformBuyerProfileStatus,
+} from '@/lib/platform-buyer'
+import { getBillingProfileForUser } from '@/lib/billing-profile-store'
+import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
@@ -8,7 +14,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
-import { PaymentConfigError } from '@/lib/payments/types'
+import { BillingProfileIncompleteError, PaymentConfigError } from '@/lib/payments/types'
 import { describeIyzicoEnvironment } from '@/lib/payments/iyzico'
 import { evaluateDomainPaymentStackFromEnv } from '@/lib/payments/domain-e2e-mode'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
@@ -19,6 +25,7 @@ import { listDomainsForUser } from '../service'
 import { getDomainRegistrarProvider, isLiveDomainRegistrar } from './provider'
 import { finalizeDomainOrder, parsePurchaseDomain, searchDomainAvailability } from './service'
 import { RegistrarError, type RegistrantContact } from './types'
+import { purchaseCodeFromRegistrarError } from './purchase-errors'
 import type { PricedDomainResult } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
 import { priceAvailabilityRows, resolveOrderPricing } from '../pricing/order'
@@ -100,7 +107,51 @@ export type PurchaseErrorCode =
   | 'PRICING_UNAVAILABLE'
   /** The payment provider is misconfigured for this environment (e.g. sandbox host in production). */
   | 'PAYMENT_UNAVAILABLE'
+  /** The buyer's invoice profile is missing or fails the payment-grade checks; no order was created. */
+  | 'BILLING_PROFILE_INCOMPLETE'
+  | 'RATE_LIMITED'
+  /** Registrar unreachable, out of balance or otherwise refusing; details stay server-side. */
+  | 'REGISTRAR_ERROR'
   | 'FAILED'
+
+export type DomainPurchasePrecheck = {
+  billingProfile: PlatformBuyerProfileStatus
+  profile: BillingProfileSummary | null
+  storageAvailable: boolean
+  defaultFullName: string
+  defaultEmail: string
+}
+
+/**
+ * Read-only pre-flight for the buy dialog: tells it whether the invoice profile
+ * is payment-ready BEFORE the buyer fills the form, so no `domain_orders` row is
+ * created for a purchase that cannot be charged. Creates and changes nothing.
+ */
+export async function getMyDomainPurchasePrecheck(): Promise<DomainPurchasePrecheck> {
+  const fallback: DomainPurchasePrecheck = {
+    billingProfile: 'unavailable',
+    profile: null,
+    storageAvailable: false,
+    defaultFullName: '',
+    defaultEmail: '',
+  }
+  try {
+    const { userId, email } = await requireUser()
+    const [status, stored] = await Promise.all([
+      checkPlatformBuyerProfile(userId),
+      getBillingProfileForUser(userId),
+    ])
+    return {
+      billingProfile: status,
+      profile: stored.profile,
+      storageAvailable: stored.available,
+      defaultFullName: '',
+      defaultEmail: email,
+    }
+  } catch {
+    return fallback
+  }
+}
 
 export type StartPurchaseResult =
   | { ok: true; orderId: string; redirectUrl?: string }
@@ -140,6 +191,12 @@ export async function startMyDomainPurchase(
     return { ok: false, error: 'NOT_CONFIGURED' }
   }
 
+  // Fail before any registrar call or `domain_orders` insert: a profile that the
+  // payment step would reject must not leave an orphan order behind.
+  if ((await checkPlatformBuyerProfile(userId)) === 'incomplete') {
+    return { ok: false, error: 'BILLING_PROFILE_INCOMPLETE' }
+  }
+
   const parsed = parsePurchaseDomain(domainInput)
   if (!parsed) return { ok: false, error: 'INVALID_DOMAIN' }
   const safePeriod = Number.isInteger(periodYears) && periodYears >= 1 && periodYears <= 10 ? periodYears : 1
@@ -154,7 +211,7 @@ export async function startMyDomainPurchase(
     availability = await registrar.checkAvailability(parsed.domain)
   } catch (error) {
     console.log('[v0] startMyDomainPurchase: availability re-check failed', error)
-    return { ok: false, error: 'FAILED' }
+    return { ok: false, error: purchaseCodeFromRegistrarError(error) }
   }
   const match = availability.find((a) => a.domain === parsed.domain) ?? availability[0]
   if (!match || match.status !== 'available' || !match.price) return { ok: false, error: 'UNAVAILABLE' }
@@ -218,17 +275,25 @@ export async function startMyDomainPurchase(
     // PaymentConfigError messages are fixed machine codes (no secrets), so they
     // are safe to persist and make the real stage/cause visible on the order.
     const isConfigError = error instanceof PaymentConfigError
+    const isProfileError = error instanceof BillingProfileIncompleteError
     warnOnError(
       'domainPurchase.markInitFailed',
       await admin
         .from('domain_orders')
         .update({
           status: 'failed',
-          error_message: isConfigError ? `payment_config:${error.message}` : 'payment_init_failed',
+          error_message: isProfileError
+            ? 'billing_profile_incomplete'
+            : isConfigError
+              ? `payment_config:${error.message}`
+              : 'payment_init_failed',
         })
         .eq('id', order.id),
     )
-    return { ok: false, error: isConfigError ? 'PAYMENT_UNAVAILABLE' : 'FAILED' }
+    return {
+      ok: false,
+      error: isProfileError ? 'BILLING_PROFILE_INCOMPLETE' : isConfigError ? 'PAYMENT_UNAVAILABLE' : 'FAILED',
+    }
   }
   if (intent.status === 'failed') {
     warnOnError(
