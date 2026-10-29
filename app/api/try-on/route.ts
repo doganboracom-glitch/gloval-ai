@@ -92,26 +92,39 @@ export async function POST(req: Request) {
     const slug = (body.storeSlug ?? '').trim()
     if (!slug) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
 
-    const config = await getTryOnConfigForStore(slug)
-    if (!config) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
-    ownerId = config.ownerId
+    // An uncaught throw here would surface as a non-JSON 500 that the client
+    // can only show as a generic error, so lookups always answer with JSON.
+    try {
+      const config = await getTryOnConfigForStore(slug)
+      if (!config) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
+      ownerId = config.ownerId
 
-    const balance = await getCreditBalance(ownerId)
-    if (balance < cost) {
-      // Generic message — never expose the owner's internal credit balance
-      // to a storefront visitor.
-      return Response.json({ ok: false, error: 'not_available' }, { status: 503 })
+      const balance = await getCreditBalance(ownerId)
+      if (balance < cost) {
+        // Generic message — never expose the owner's internal credit balance
+        // to a storefront visitor.
+        return Response.json({ ok: false, error: 'not_available' }, { status: 503 })
+      }
+    } catch (err) {
+      console.error('[try-on] store lookup threw', err)
+      return Response.json({ ok: false, error: 'failed' }, { status: 500 })
     }
   } else {
     const slug = (body.demoSlug ?? '').trim()
     if (!slug) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
   }
 
-  const result = await generateTryOnImage({
-    personPhotoDataUrl: personPhoto,
-    productPhotoUrl: productImage,
-    productName,
-  })
+  let result: Awaited<ReturnType<typeof generateTryOnImage>>
+  try {
+    result = await generateTryOnImage({
+      personPhotoDataUrl: personPhoto,
+      productPhotoUrl: productImage,
+      productName,
+    })
+  } catch (err) {
+    console.error('[try-on] generateTryOnImage threw', err)
+    return Response.json({ ok: false, error: 'failed' }, { status: 500 })
+  }
 
   if ('error' in result) {
     const status = result.error === 'unavailable' ? 503 : 500
@@ -121,7 +134,11 @@ export async function POST(req: Request) {
   // Charge only after a real generation succeeded — a real store never pays
   // for a failed attempt.
   if (mode === 'store' && ownerId) {
-    await consumeCredits(ownerId, cost, 'tryOn')
+    try {
+      await consumeCredits(ownerId, cost, 'tryOn')
+    } catch (err) {
+      console.error('[try-on] consumeCredits threw', err)
+    }
   }
 
   return Response.json({ ok: true, dataUrl: result.dataUrl })
