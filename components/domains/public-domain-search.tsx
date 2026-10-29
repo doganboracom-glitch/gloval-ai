@@ -1,12 +1,15 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Loader2, Search } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { fill } from '@/components/domains/domain-chrome'
 import { DomainResultCard } from '@/components/domains/domain-result-card'
+import { DomainTldChips } from '@/components/domains/domain-tld-chips'
+import { QualityScoreBadge } from '@/components/domains/quality-score-badge'
+import { PUBLIC_SEARCH_TLDS, type PublicSearchTld } from '@/lib/custom-domains/public-search/validate'
 import { searchDomainsPublic } from '@/lib/custom-domains/public-search/actions'
 import { buildBuyHref } from '@/lib/custom-domains/public-search/buy-link'
 import type { PublicSearchErrorCode, PublicSearchResponse } from '@/lib/custom-domains/public-search/service'
@@ -34,13 +37,44 @@ function errorText(
   }
 }
 
-export function PublicDomainSearch({ authenticated, initialQuery }: { authenticated: boolean; initialQuery: string }) {
+export type SearchRequest = { query: string; nonce: number }
+
+export function PublicDomainSearch({
+  authenticated,
+  initialQuery,
+  request,
+  onOpenScore,
+  demo = false,
+}: {
+  /** Preview-only fake results: buying is replaced by a disabled label. */
+  demo?: boolean
+  authenticated: boolean
+  initialQuery: string
+  /** Moves a query into the box and focuses it; it never submits. */
+  request?: SearchRequest | null
+  onOpenScore?: (domain: string) => void
+}) {
   const { t, lang } = useLanguage()
   const copy = t.domainSearch
   const [query, setQuery] = useState(initialQuery)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTlds, setSelectedTlds] = useState<readonly PublicSearchTld[]>(PUBLIC_SEARCH_TLDS)
   const [isPending, startTransition] = useTransition()
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!request) return
+    setQuery(request.query)
+    inputRef.current?.focus()
+  }, [request])
+
+  function toggleTld(tld: PublicSearchTld) {
+    setSelectedTlds((current) => {
+      if (!current.includes(tld)) return PUBLIC_SEARCH_TLDS.filter((item) => item === tld || current.includes(item))
+      return current.length > 1 ? current.filter((item) => item !== tld) : current
+    })
+  }
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -65,8 +99,13 @@ export function PublicDomainSearch({ authenticated, initialQuery }: { authentica
     })
   }
 
-  const availableCount = outcome?.results.filter((r) => r.status === 'available').length ?? 0
-  const firstTaken = outcome?.results.find((r) => r.status === 'unavailable')
+  // The chips narrow a brand-only search; an explicit "brand.ext" query is shown as typed.
+  const explicitExtension = outcome?.query.includes('.') ?? false
+  const visibleResults = (outcome?.results ?? []).filter(
+    (r) => explicitExtension || (selectedTlds as readonly string[]).includes(r.tld),
+  )
+  const availableCount = visibleResults.filter((r) => r.status === 'available').length
+  const firstTaken = visibleResults.find((r) => r.status === 'unavailable')
 
   return (
     <div>
@@ -76,6 +115,7 @@ export function PublicDomainSearch({ authenticated, initialQuery }: { authentica
             {copy.inputLabel}
           </label>
           <input
+            ref={inputRef}
             id="domain-search-input"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -96,6 +136,9 @@ export function PublicDomainSearch({ authenticated, initialQuery }: { authentica
       <p id="domain-search-hint" className="mt-3 text-pretty text-sm text-muted-foreground">
         {copy.hint}
       </p>
+      <div className="mt-3">
+        <DomainTldChips label={copy.extChipsLabel} selected={selectedTlds} onToggle={toggleTld} />
+      </div>
 
       <div aria-live="polite" className="mt-8">
         {error && (
@@ -118,14 +161,24 @@ export function PublicDomainSearch({ authenticated, initialQuery }: { authentica
             </h2>
             {!outcome.pricingAvailable && <p className="mt-2 text-sm text-muted-foreground">{copy.errPricing}</p>}
             <ul className="mt-4 flex flex-col gap-3">
-              {outcome.results.map((result) => (
+              {visibleResults.map((result) => (
                 <DomainResultCard
                   key={result.domain}
                   result={result}
                   locale={lang}
                   copy={copy}
+                  badge={
+                    onOpenScore ? <QualityScoreBadge domain={result.domain} copy={copy} onOpen={onOpenScore} /> : null
+                  }
                   actions={
-                    result.status === 'available' && result.quote ? (
+                    result.status === 'available' && result.quote && demo ? (
+                      <span
+                        aria-disabled="true"
+                        className={`${buttonVariants({ size: 'sm', variant: 'outline' })} pointer-events-none opacity-60`}
+                      >
+                        {lang === 'tr' ? 'Demo: satın alma kapalı' : 'Demo: purchase disabled'}
+                      </span>
+                    ) : result.status === 'available' && result.quote ? (
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={buildBuyHref(result.domain, authenticated, 'sign-up')}

@@ -1,3 +1,4 @@
+import { resolveDomainSearchDemo } from '@/lib/domains/flag-resolvers.mjs'
 import { decideRegistrarMode, isProductionRuntime } from '@/lib/custom-domains/registrar/test-mode'
 
 /**
@@ -40,6 +41,7 @@ export type DomainStackReason =
   | 'sandbox_iyzico_with_live_registrar'
   | 'e2e_flag_off'
   | 'e2e_requires_sandbox_credentials'
+  | 'demo_mode'
 
 export type DomainStackVerdict =
   | { allowed: true; mode: 'normal' | 'e2e_test' | 'non_production' }
@@ -126,6 +128,8 @@ export function readDomainStackInput(env: StackEnv = process.env): DomainStackIn
 }
 
 export function evaluateDomainPaymentStackFromEnv(env: StackEnv = process.env): DomainStackVerdict {
+  // Demo mode shows fake results only; no purchase, renewal or transfer may run.
+  if (resolveDomainSearchDemo(env)) return { allowed: false, reason: 'demo_mode' }
   return evaluateDomainPaymentStack(readDomainStackInput(env))
 }
 

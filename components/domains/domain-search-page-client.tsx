@@ -1,23 +1,45 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Globe } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
-import { PublicDomainSearch } from '@/components/domains/public-domain-search'
+import { PublicDomainSearch, type SearchRequest } from '@/components/domains/public-domain-search'
+import { DomainQualityScore, type ScoreSeed } from '@/components/domains/domain-quality-score'
+import { DomainWhySection } from '@/components/domains/domain-why-section'
+import { DomainChooseGuide } from '@/components/domains/domain-choose-guide'
+import { DomainPurchaseSteps } from '@/components/domains/domain-purchase-steps'
+import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 
 export function DomainSearchPageClient({
   open,
+  demo = false,
   authenticated,
   initialQuery,
 }: {
   open: boolean
+  /** Preview-only: fake results, no purchase. Never true in production. */
+  demo?: boolean
   authenticated: boolean
   initialQuery: string
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const copy = t.domainSearch
+  const [scoreSeed, setScoreSeed] = useState<ScoreSeed | null>(null)
+  const [searchRequest, setSearchRequest] = useState<SearchRequest | null>(null)
+
+  function openScore(domain: string) {
+    setScoreSeed({ domain, nonce: Date.now() })
+    document.getElementById('domain-quality-score')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function requestSearch(query: string) {
+    setSearchRequest({ query, nonce: Date.now() })
+    document.getElementById('domain-search-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
   const faq = [
     { q: copy.faqPeriodQ, a: copy.faqPeriodA },
     { q: copy.faqWhoisQ, a: copy.faqWhoisA },
@@ -27,7 +49,7 @@ export function DomainSearchPageClient({
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <main className="mx-auto max-w-3xl px-4 py-16 sm:py-20">
+      <main className="mx-auto max-w-5xl px-4 py-16 sm:py-20">
         <Link
           href="/"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -36,7 +58,7 @@ export function DomainSearchPageClient({
           {t.nav.backHome}
         </Link>
 
-        <header className="mt-8">
+        <header className="mt-8 max-w-3xl">
           <Globe className="size-8 text-brand" aria-hidden="true" />
           <h1 className="mt-4 text-balance font-display text-4xl font-bold tracking-tight sm:text-5xl">
             {open ? copy.title : copy.comingSoonTitle}
@@ -56,13 +78,47 @@ export function DomainSearchPageClient({
           )}
         </header>
 
+        {open && demo && (
+          <p
+            role="note"
+            className="mt-6 max-w-3xl rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-foreground"
+          >
+            {lang === 'tr'
+              ? 'Demo modu (yalnızca önizleme): sonuçlar ve fiyatlar sahtedir. Satın alma ve ödeme çalışmaz.'
+              : 'Demo mode (preview only): results and prices are fake. Purchase and payment are disabled.'}
+          </p>
+        )}
+
         {open && (
-          <div className="mt-10">
-            <PublicDomainSearch authenticated={authenticated} initialQuery={initialQuery} />
+          <div className="mt-10 max-w-3xl">
+            <PublicDomainSearch
+              demo={demo}
+              authenticated={authenticated}
+              initialQuery={initialQuery}
+              request={searchRequest}
+              onOpenScore={openScore}
+            />
           </div>
         )}
 
-        <section className="mt-16" aria-labelledby="domain-faq-title">
+        {open && (
+          <div className="mt-16 flex flex-col gap-16">
+            <DomainWhySection copy={copy} />
+            <DomainQualityScore seed={scoreSeed} onSearch={requestSearch} />
+            <DomainChooseGuide copy={copy} />
+            <DomainPurchaseSteps copy={copy} />
+            {isWhoisLookupEnabled() && (
+              <p className="text-sm text-muted-foreground">
+                {copy.whoisPrompt}{' '}
+                <Link href={WHOIS_LOOKUP_PATH} className="text-brand underline-offset-4 hover:underline">
+                  {copy.whoisLink}
+                </Link>
+              </p>
+            )}
+          </div>
+        )}
+
+        <section className="mt-16 max-w-3xl" aria-labelledby="domain-faq-title">
           <h2 id="domain-faq-title" className="font-display text-xl font-semibold">
             {copy.faqTitle}
           </h2>

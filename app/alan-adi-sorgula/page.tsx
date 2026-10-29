@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { DomainSearchPageClient } from '@/components/domains/domain-search-page-client'
+import { isDomainSearchDemo } from '@/lib/domains/feature-flags'
 import { isPublicDomainSearchOpen } from '@/lib/custom-domains/public-search/defaults'
 import { MAX_QUERY_LENGTH } from '@/lib/custom-domains/public-search/validate'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
@@ -20,6 +21,7 @@ export default async function DomainSearchPage({ searchParams }: { searchParams:
   const { q } = await searchParams
   const initialQuery = (first(q) ?? '').slice(0, MAX_QUERY_LENGTH)
 
+  const demo = isDomainSearchDemo()
   let authenticated = false
   try {
     const supabase = await createClient()
@@ -31,7 +33,8 @@ export default async function DomainSearchPage({ searchParams }: { searchParams:
 
   return (
     <DomainSearchPageClient
-      open={isPublicDomainSearchOpen()}
+      open={demo || isPublicDomainSearchOpen()}
+      demo={demo}
       authenticated={authenticated}
       initialQuery={initialQuery}
     />

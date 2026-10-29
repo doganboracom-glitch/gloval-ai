@@ -26,11 +26,13 @@ export function DomainResultCard({
   locale,
   copy,
   actions,
+  badge,
 }: {
   result: PricedDomainResult
   locale: string
   copy: Dict['domainSearch']
   actions?: ReactNode
+  badge?: ReactNode
 }) {
   const statusLabel =
     result.status === 'available' ? copy.statusAvailable : result.status === 'unavailable' ? copy.statusTaken : copy.statusUnknown
@@ -40,11 +42,12 @@ export function DomainResultCard({
     <li className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <p className="break-all font-mono text-base font-semibold sm:text-lg">{result.domain}</p>
-        <span
-          className={`mt-1.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[result.status]}`}
-        >
-          {statusLabel}
-        </span>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[result.status]}`}>
+            {statusLabel}
+          </span>
+          {badge}
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 sm:items-end">
