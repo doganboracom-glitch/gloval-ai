@@ -5,12 +5,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
-  SUPPORT_EMAIL,
   notifyAccountReactivated,
   notifyAccountSuspended,
   recordNotification,
   sendTransactionalEmail,
 } from '@/lib/notify'
+import { sendTicketReplyEmail } from '@/lib/support/ticket-reply-mail'
 import { TICKET_STATUSES, type TicketStatus } from '@/lib/support/constants'
 import { headers } from 'next/headers'
 import {
@@ -526,7 +526,7 @@ export async function replyToTicket(input: {
 
   const { data: ticket } = await admin
     .from('support_tickets')
-    .select('id, user_id, subject, contact_email, ticket_number')
+    .select('id, user_id, subject, contact_email, contact_name, ticket_number')
     .eq('id', input.ticketId)
     .maybeSingle()
   if (!ticket) return { ok: false, error: 'ticket_not_found' }
@@ -545,25 +545,18 @@ export async function replyToTicket(input: {
     .eq('id', input.ticketId)
     .in('status', ['open', 'in_progress', 'waiting_user', 'answered'])
 
-  const subjectLine = `Destek talebinize yanıt: ${ticket.subject} (${ticket.ticket_number})`
   try {
-    let recipient = (ticket.contact_email as string | null) ?? null
-    if (ticket.user_id) {
-      const {
-        data: { user: owner },
-      } = await admin.auth.admin.getUserById(ticket.user_id as string)
-      recipient = owner?.email ?? recipient
-    }
-    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
-    const sent = recipient
-      ? await sendTransactionalEmail({
-          to: recipient,
-          subject: subjectLine,
-          replyTo: SUPPORT_EMAIL,
-          text: `${body}\n\nTalebinizi panelinizdeki Destek Talepleri bölümünden takip edebilirsiniz.`,
-          html: `<p style="white-space:pre-wrap">${esc(body)}</p><p>Talebinizi panelinizdeki Destek Talepleri bölümünden takip edebilirsiniz.</p>`,
-        })
-      : false
+    const { subject: subjectLine, sent } = await sendTicketReplyEmail(
+      {
+        id: ticket.id as string,
+        user_id: (ticket.user_id as string | null) ?? null,
+        subject: ticket.subject as string,
+        ticket_number: ticket.ticket_number as string,
+        contact_email: (ticket.contact_email as string | null) ?? null,
+        contact_name: (ticket.contact_name as string | null) ?? null,
+      },
+      body,
+    )
 
     await admin.from('notification_logs').insert({
       user_id: ticket.user_id,

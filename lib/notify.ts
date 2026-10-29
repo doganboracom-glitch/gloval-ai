@@ -3,7 +3,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { warnOnError } from '@/lib/db-guard'
-import { composeStoreFrom } from '@/lib/email/from'
+import { composeNamedFrom, composeStoreFrom } from '@/lib/email/from'
 import { appendBillingProfileReminder } from '@/lib/billing-profile-copy'
 import { getBillingProfileStatusForUser } from '@/lib/billing-profile-store'
 
@@ -70,6 +70,8 @@ export type TransactionalEmailInput = {
   replyTo?: string
   /** Store name shown as "<name> via GLOVAL AI"; the address stays MAIL_FROM. */
   fromName?: string
+  /** Exact display name (e.g. "GLOVAL AI Destek"); takes precedence over `fromName`. */
+  fromDisplayName?: string
   /** Sent as Resend's `Idempotency-Key`, so a retried request can never deliver twice. */
   idempotencyKey?: string
   /** Base64 file content; kept off every log line. */
@@ -92,8 +94,13 @@ export async function sendTransactionalEmailDetailed(
 ): Promise<TransactionalEmailResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   const mailFrom = process.env.MAIL_FROM?.trim()
-  const from =
-    mailFrom && input.fromName ? composeStoreFrom(mailFrom, input.fromName) : mailFrom
+  const from = !mailFrom
+    ? mailFrom
+    : input.fromDisplayName
+      ? composeNamedFrom(mailFrom, input.fromDisplayName)
+      : input.fromName
+        ? composeStoreFrom(mailFrom, input.fromName)
+        : mailFrom
   const to = input.to?.trim()
 
   if (!apiKey || !from || !to) return { ok: false, reason: 'not_configured' }

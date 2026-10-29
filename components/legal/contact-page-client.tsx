@@ -143,6 +143,7 @@ function ContactForm({ tr }: { tr: boolean }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [website, setWebsite] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -151,7 +152,7 @@ function ContactForm({ tr }: { tr: boolean }) {
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      const res = await submitContactRequest({ name, email, message })
+      const res = await submitContactRequest({ name, email, message, website, lang: tr ? 'tr' : 'en' })
       if (res.ok) {
         setDone(true)
         setName('')
@@ -171,9 +172,13 @@ function ContactForm({ tr }: { tr: boolean }) {
                 ? tr
                   ? 'Mesajınız en az 10 karakter olmalı.'
                   : 'Your message must be at least 10 characters.'
-                : tr
-                  ? 'Talebiniz gönderilemedi. Lütfen tekrar deneyin.'
-                  : 'Could not send your request. Please try again.',
+                : res.error === 'rate_limited'
+                  ? tr
+                    ? 'Çok fazla talep gönderdiniz. Lütfen biraz sonra tekrar deneyin.'
+                    : 'You have sent too many requests. Please try again a little later.'
+                  : tr
+                    ? 'Talebiniz gönderilemedi. Lütfen tekrar deneyin.'
+                    : 'Could not send your request. Please try again.',
         )
       }
     })
@@ -209,6 +214,17 @@ function ContactForm({ tr }: { tr: boolean }) {
         </div>
       ) : (
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+          <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+            <label htmlFor="contact-website">Website</label>
+            <input
+              id="contact-website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="contact-name" className="text-sm font-medium text-foreground">
