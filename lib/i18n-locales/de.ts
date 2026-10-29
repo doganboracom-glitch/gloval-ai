@@ -1344,7 +1344,8 @@ const de: DeepPartial<Dict> = {
     deleteError: 'Ihr Konto konnte nicht gelöscht werden. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support.',
   },
   domainSearch: {
-    footerLink: 'Domain-Suche',
+    footerLink: 'Domains suchen & kaufen',
+    footerBadgeNew: 'Neu',
     title: 'Domainnamen prüfen',
     subtitle: 'Finden Sie die passende Domain für Ihre Marke. Verfügbarkeit und Jahrespreis sehen Sie in Sekunden.',
     trust1: 'Suche ohne Anmeldung',

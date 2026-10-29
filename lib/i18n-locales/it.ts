@@ -1343,7 +1343,8 @@ const it: DeepPartial<Dict> = {
     deleteError: 'Impossibile eliminare il tuo account. Riprova o contatta il supporto.',
   },
   domainSearch: {
-    footerLink: 'Cerca dominio',
+    footerLink: 'Cerca e acquista domini',
+    footerBadgeNew: 'Novità',
     title: 'Cerca un nome di dominio',
     subtitle: 'Trova il dominio giusto per il tuo brand. Disponibilità e prezzo annuale in pochi secondi.',
     trust1: 'Cerca senza accedere',

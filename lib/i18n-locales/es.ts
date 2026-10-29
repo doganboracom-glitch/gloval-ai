@@ -1344,7 +1344,8 @@ const es: DeepPartial<Dict> = {
     deleteError: 'No se pudo eliminar tu cuenta. Vuelve a intentarlo o contacta con soporte.',
   },
   domainSearch: {
-    footerLink: 'Buscar dominio',
+    footerLink: 'Buscar y comprar dominios',
+    footerBadgeNew: 'Nuevo',
     title: 'Busca un nombre de dominio',
     subtitle: 'Encuentra el dominio adecuado para tu marca. Disponibilidad y precio anual en segundos.',
     trust1: 'Busca sin iniciar sesión',

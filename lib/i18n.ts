@@ -1778,7 +1778,8 @@ const dict = {
       deleteError: 'Hesap silinemedi. Lütfen tekrar dene veya destek ile iletişime geç.',
     },
     domainSearch: {
-      footerLink: 'Alan adı sorgula',
+      footerLink: 'Domain Sorgula ve Satın Al',
+      footerBadgeNew: 'Yeni',
       title: 'Alan adını sorgula',
       subtitle: 'Markan için doğru alan adını bul. Müsaitlik ve yıllık fiyat saniyeler içinde görünür.',
       trust1: 'Giriş yapmadan sorgula',
@@ -3503,7 +3504,8 @@ const dict = {
       deleteError: 'Could not delete your account. Please try again or contact support.',
     },
     domainSearch: {
-      footerLink: 'Domain search',
+      footerLink: 'Search & Buy Domains',
+      footerBadgeNew: 'New',
       title: 'Search for a domain name',
       subtitle: 'Find the right domain for your brand. Availability and the yearly price show up in seconds.',
       trust1: 'Search without signing in',

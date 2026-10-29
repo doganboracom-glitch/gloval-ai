@@ -1344,7 +1344,8 @@ const az: DeepPartial<Dict> = {
     deleteError: 'Hesabınız silinə bilmədi. Zəhmət olmasa yenidən cəhd edin və ya dəstək ilə əlaqə saxlayın.',
   },
   domainSearch: {
-    footerLink: 'Domen axtarışı',
+    footerLink: 'Domen axtar və al',
+    footerBadgeNew: 'Yeni',
     title: 'Domen adını yoxla',
     subtitle: 'Brendiniz üçün uyğun domeni tapın. Mövcudluq və illik qiymət saniyələr içində görünür.',
     trust1: 'Daxil olmadan axtarın',

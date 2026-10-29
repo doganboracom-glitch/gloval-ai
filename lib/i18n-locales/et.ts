@@ -1344,7 +1344,8 @@ const et: DeepPartial<Dict> = {
     deleteError: 'Sinu kontot ei õnnestunud kustutada. Proovi uuesti või võta ühendust toega.',
   },
   domainSearch: {
-    footerLink: 'Domeeniotsing',
+    footerLink: 'Otsi ja osta domeene',
+    footerBadgeNew: 'Uus',
     title: 'Otsi domeeninime',
     subtitle: 'Leia oma brändile sobiv domeen. Saadavus ja aastahind näed sekunditega.',
     trust1: 'Otsi ilma sisse logimata',
