@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
+import { BillingProfileGate } from '@/components/billing/billing-profile-gate'
 import { legalPath } from '@/lib/legal/documents'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
 import type { PaymentNoticeTarget } from '@/lib/payment-notice'
@@ -463,16 +464,18 @@ export function CheckoutConfirmDialog({
 
           {/* Billing profile status */}
           <h3 className="mt-6 text-sm font-semibold text-foreground">{c.buyerInfo}</h3>
-          <div
-            className={`mt-3 flex flex-col gap-3 rounded-xl border p-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
-              profileComplete ? 'border-border' : 'border-destructive ring-1 ring-destructive/40'
-            }`}
-          >
-            <p className="text-pretty text-foreground">{profileComplete ? c.profileReady : c.profileMissing}</p>
-            <Button type="button" variant="outline" size="sm" onClick={onEditProfile} disabled={pending}>
-              {profileComplete ? c.editProfile : c.completeProfile}
-            </Button>
-          </div>
+          {profileComplete ? (
+            <div className="mt-3 flex flex-col gap-3 rounded-xl border border-border p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-pretty text-foreground">{c.profileReady}</p>
+              <Button type="button" variant="outline" size="sm" onClick={onEditProfile} disabled={pending}>
+                {c.editProfile}
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <BillingProfileGate onEnter={onEditProfile} disabled={pending} />
+            </div>
+          )}
 
           {/* Legal consents */}
           <h3 className="mt-6 text-sm font-semibold text-foreground">{c.legalTitle}</h3>
