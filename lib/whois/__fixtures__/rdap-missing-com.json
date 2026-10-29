@@ -1,0 +1,10 @@
+{
+  "_note": "Observed live against https://rdap.verisign.com/com/v1/domain/gloval-yok-b7q2x9k4m1.com on 2026-10-29: HTTP 404. The server closed the TLS stream without a readable body, so the body below is the RFC 9083 error shape, not a captured payload. The lookup only depends on the 404 status.",
+  "status": 404,
+  "body": {
+    "errorCode": 404,
+    "title": "Not Found",
+    "description": ["The requested domain was not found."],
+    "rdapConformance": ["rdap_level_0"]
+  }
+}
