@@ -142,6 +142,67 @@ describe('POST /api/try-on origin and abuse guards', () => {
     expect(mocks.generateTryOnImage).not.toHaveBeenCalled()
   })
 
+  it('meters a store on its own daily subject with the default cap of 100', async () => {
+    mocks.getTryOnConfigForStore.mockResolvedValue({ projectId: 'p1', ownerId: 'owner-1' })
+    mocks.getCreditBalance.mockResolvedValue(100)
+    mocks.generateTryOnImage.mockResolvedValue({ dataUrl: 'data:image/png;base64,AAAA' })
+    await post(storeBody, 'luna-mucevher.gloval.site')
+
+    expect(mocks.reserveAnonSubjects).toHaveBeenCalledWith([
+      { subject: 'tryon-ip:hashed-ip', limit: 12 },
+      { subject: 'tryon-store:luna-mucevher', limit: 100 },
+    ])
+  })
+
+  it('does not meter the shared store counter in demo mode', async () => {
+    mocks.generateTryOnImage.mockResolvedValue({ dataUrl: 'data:image/png;base64,AAAA' })
+    await post(demoBody)
+
+    expect(mocks.reserveAnonSubjects).toHaveBeenCalledWith([{ subject: 'tryon-ip:hashed-ip', limit: 12 }])
+  })
+
+  it('returns store_daily_limit and keeps the owner credits when the store cap is reached', async () => {
+    mocks.getTryOnConfigForStore.mockResolvedValue({ projectId: 'p1', ownerId: 'owner-1' })
+    mocks.getCreditBalance.mockResolvedValue(100)
+    mocks.reserveAnonSubjects.mockResolvedValue({
+      allowed: false,
+      limit: 100,
+      resetAt: new Date().toISOString(),
+      failedSubject: 'tryon-store:luna-mucevher',
+    })
+    const res = await post(storeBody, 'luna-mucevher.gloval.site')
+
+    expect(res.status).toBe(429)
+    expect(await res.json()).toEqual({ ok: false, error: 'store_daily_limit' })
+    expect(mocks.generateTryOnImage).not.toHaveBeenCalled()
+    expect(mocks.consumeCredits).not.toHaveBeenCalled()
+  })
+
+  it('keeps reporting rate_limited when the per-IP cap is what was hit in a store', async () => {
+    mocks.getTryOnConfigForStore.mockResolvedValue({ projectId: 'p1', ownerId: 'owner-1' })
+    mocks.getCreditBalance.mockResolvedValue(100)
+    mocks.reserveAnonSubjects.mockResolvedValue({
+      allowed: false,
+      limit: 12,
+      resetAt: new Date().toISOString(),
+      failedSubject: 'tryon-ip:hashed-ip',
+    })
+    const res = await post(storeBody, 'luna-mucevher.gloval.site')
+
+    expect(await res.json()).toEqual({ ok: false, error: 'rate_limited' })
+  })
+
+  it('honours the TRY_ON_STORE_DAILY_LIMIT override', async () => {
+    vi.stubEnv('TRY_ON_STORE_DAILY_LIMIT', '7')
+    mocks.getTryOnConfigForStore.mockResolvedValue({ projectId: 'p1', ownerId: 'owner-1' })
+    mocks.getCreditBalance.mockResolvedValue(100)
+    mocks.generateTryOnImage.mockResolvedValue({ dataUrl: 'data:image/png;base64,AAAA' })
+    await post(storeBody, 'luna-mucevher.gloval.site')
+    vi.unstubAllEnvs()
+
+    expect(mocks.reserveAnonSubjects.mock.calls[0][0][1]).toEqual({ subject: 'tryon-store:luna-mucevher', limit: 7 })
+  })
+
   it('releases the reserved slot when generation fails', async () => {
     mocks.generateTryOnImage.mockResolvedValue({ error: 'failed' })
     await post(demoBody)

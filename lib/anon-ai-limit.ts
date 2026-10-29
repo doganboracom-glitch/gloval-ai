@@ -64,7 +64,7 @@ export function hashedIp(req: Request): string {
 
 export type AnonReservation =
   | { allowed: true; subjects: string[] }
-  | { allowed: false; limit: number; resetAt: string }
+  | { allowed: false; limit: number; resetAt: string; failedSubject?: string }
 
 async function reserve(subject: string, limit: number) {
   const admin = createAdminClient()
@@ -127,6 +127,7 @@ export async function reserveAnonSubjects(
         allowed: false,
         limit,
         resetAt: row?.reset_at ?? new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        failedSubject: subject,
       }
     }
     reserved.push(subject)

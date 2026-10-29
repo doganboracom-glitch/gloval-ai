@@ -1,4 +1,10 @@
-export type TryOnGenericKey = 'unavailable' | 'failed' | 'rate_limited' | 'not_available' | 'default'
+export type TryOnGenericKey =
+  | 'unavailable'
+  | 'failed'
+  | 'rate_limited'
+  | 'store_daily_limit'
+  | 'not_available'
+  | 'default'
 
 export type TryOnCopy = {
   cta: string
@@ -34,6 +40,7 @@ export const TRY_ON_COPY: Record<'tr' | 'en', TryOnCopy> = {
       unavailable: 'Bu özellik şu anda kullanılamıyor.',
       failed: 'Görsel oluşturulamadı. Lütfen tekrar dene.',
       rate_limited: 'Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar dene.',
+      store_daily_limit: 'Bu mağaza için günlük deneme sınırına ulaşıldı, yarın tekrar dene.',
       not_available: 'Bu özellik şu anda kullanılamıyor.',
       default: 'Bir şeyler ters gitti. Lütfen tekrar dene.',
     },
@@ -55,6 +62,7 @@ export const TRY_ON_COPY: Record<'tr' | 'en', TryOnCopy> = {
       unavailable: 'This feature is not available right now.',
       failed: 'Could not generate the image. Please try again.',
       rate_limited: 'Too many attempts. Please try again in a few minutes.',
+      store_daily_limit: 'This store has reached its daily try-on limit. Please try again tomorrow.',
       not_available: 'This feature is not available right now.',
       default: 'Something went wrong. Please try again.',
     },
