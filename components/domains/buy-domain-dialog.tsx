@@ -2,16 +2,27 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import useSWR from 'swr'
 import { CheckCircle2, ChevronLeft, Loader2, Search, ShoppingCart, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
+import { LinkButton } from '@/components/link-button'
+import { BillingProfileCard } from '@/components/billing/billing-profile-card'
 import { fill } from '@/components/domains/domain-chrome'
+import {
+  buildBillingProfileHref,
+  describePurchaseError,
+  SUPPORT_EMAIL,
+  SUPPORT_PATH,
+  type PurchaseErrorView,
+} from '@/components/domains/purchase-error'
 import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
 import {
+  getMyDomainPurchasePrecheck,
   searchMyDomainAvailability,
   startMyDomainPurchase,
-  type PurchaseErrorCode,
+  type DomainPurchasePrecheck,
 } from '@/lib/custom-domains/registrar/actions'
 import type { PricedDomainResult } from '@/lib/custom-domains/pricing/calc'
 import type { RegistrantContact } from '@/lib/custom-domains/registrar/types'
@@ -50,8 +61,18 @@ export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => voi
   const [query, setQuery] = useState(initialDomain ?? '')
   const [results, setResults] = useState<PricedDomainResult[] | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [purchaseError, setPurchaseError] = useState<string | null>(null)
+  const [purchaseError, setPurchaseError] = useState<PurchaseErrorView | null>(null)
+  const [profileSaved, setProfileSaved] = useState(false)
   const [isPending, startTransition] = useTransition()
+
+  // Read-only: lets the contact step block an unpayable purchase before any
+  // order exists, instead of failing after the buyer filled the whole form.
+  const { data: precheck, mutate: refreshPrecheck } = useSWR<DomainPurchasePrecheck>(
+    step.name === 'contact' ? 'domain-purchase-precheck' : null,
+    () => getMyDomainPurchasePrecheck(),
+    { revalidateOnFocus: false },
+  )
+  const profileIncomplete = precheck?.billingProfile === 'incomplete'
 
   function runSearch(value: string, autoSelect?: string) {
     setSearchError(null)
@@ -187,31 +208,58 @@ export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => voi
           )}
 
           {step.name === 'contact' && (
-            <ContactStep
-              result={step.result}
-              locale={locale}
-              pending={isPending}
-              error={purchaseError}
-              onBack={() => {
-                setPurchaseError(null)
-                setStep({ name: 'search' })
-              }}
-              onSubmit={(periodYears, contact, consents) => {
-                setPurchaseError(null)
-                startTransition(async () => {
-                  const res = await startMyDomainPurchase(step.result.domain, periodYears, contact, consents)
-                  if (!res.ok) {
-                    setPurchaseError(purchaseErrorText(res.error, d, t.billing.checkout.required))
-                    return
-                  }
-                  if (res.redirectUrl) {
-                    window.location.href = res.redirectUrl
-                    return
-                  }
-                  setStep({ name: 'success', domain: step.result.domain })
-                })
-              }}
-            />
+            <>
+              {profileIncomplete && precheck && (
+                <BillingProfileGate
+                  domain={step.result.domain}
+                  precheck={precheck}
+                  onSaved={async () => {
+                    const next = await refreshPrecheck()
+                    if (next?.billingProfile === 'complete') {
+                      setProfileSaved(true)
+                      setPurchaseError(null)
+                    }
+                  }}
+                />
+              )}
+              {!profileIncomplete && profileSaved && (
+                <p role="status" className="mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-500">
+                  {d.buyBillingProfileSaved}
+                </p>
+              )}
+              <ContactStep
+                result={step.result}
+                locale={locale}
+                pending={isPending}
+                blocked={profileIncomplete}
+                error={purchaseError}
+                domain={step.result.domain}
+                onBack={() => {
+                  setPurchaseError(null)
+                  setStep({ name: 'search' })
+                }}
+                onSubmit={(periodYears, contact, consents) => {
+                  setPurchaseError(null)
+                  startTransition(async () => {
+                    try {
+                      const res = await startMyDomainPurchase(step.result.domain, periodYears, contact, consents)
+                      if (!res.ok) {
+                        if (res.error === 'BILLING_PROFILE_INCOMPLETE') await refreshPrecheck()
+                        setPurchaseError(describePurchaseError(res.error, d, t.billing.checkout.required))
+                        return
+                      }
+                      if (res.redirectUrl) {
+                        window.location.href = res.redirectUrl
+                        return
+                      }
+                      setStep({ name: 'success', domain: step.result.domain })
+                    } catch {
+                      setPurchaseError(describePurchaseError('UNKNOWN', d, t.billing.checkout.required))
+                    }
+                  })
+                }}
+              />
+            </>
           )}
 
           {step.name === 'success' && (
@@ -237,20 +285,53 @@ export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => voi
   )
 }
 
-function purchaseErrorText(code: PurchaseErrorCode, d: Dict['domains'], consentRequired: string): string {
+function BillingProfileGate({
+  domain,
+  precheck,
+  onSaved,
+}: {
+  domain: string
+  precheck: DomainPurchasePrecheck
+  onSaved: () => void
+}) {
+  const { t } = useLanguage()
+  const d = t.domains
   return (
-    {
-      CONSENT_REQUIRED: consentRequired,
-      NOT_CONFIGURED: d.buyNotConfigured,
-      INVALID_DOMAIN: d.buyErrInvalidDomain,
-      UNAVAILABLE: d.buyErrUnavailable,
-      ALREADY_OWNED: d.buyErrAlreadyOwned,
-      LIMIT_REACHED: d.buyErrLimitReached,
-      NOT_ENTITLED: d.buyErrNotEntitled,
-      PRICING_UNAVAILABLE: d.buyPricingUnavailable,
-      PAYMENT_UNAVAILABLE: d.buyErrPaymentUnavailable,
-      FAILED: d.buyErrFailed,
-    }[code] ?? d.buyErrFailed
+    <div className="mb-4 flex flex-col gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
+      <p role="alert" className="text-sm text-pretty text-destructive">
+        {d.buyErrBillingProfile}
+      </p>
+      {precheck.storageAvailable ? (
+        <BillingProfileCard
+          initialProfile={precheck.profile}
+          storageAvailable={precheck.storageAvailable}
+          defaultFullName={precheck.defaultFullName}
+          defaultEmail={precheck.defaultEmail}
+          onSaved={onSaved}
+        />
+      ) : (
+        <LinkButton href={buildBillingProfileHref(domain)} variant="secondary" size="sm" className="self-start">
+          {d.buyBillingProfileCta}
+        </LinkButton>
+      )}
+    </div>
+  )
+}
+
+function SupportHint() {
+  const { t } = useLanguage()
+  const d = t.domains
+  return (
+    <p className="mt-2 text-xs text-muted-foreground">
+      {d.buySupportHint}{' '}
+      <a href={SUPPORT_PATH} className="font-medium text-foreground underline underline-offset-2">
+        {d.buySupportCta}
+      </a>
+      {' · '}
+      <a href={`mailto:${SUPPORT_EMAIL}`} className="underline underline-offset-2">
+        {SUPPORT_EMAIL}
+      </a>
+    </p>
   )
 }
 
@@ -274,14 +355,18 @@ function ContactStep({
   result,
   locale,
   pending,
+  blocked,
   error,
+  domain,
   onBack,
   onSubmit,
 }: {
   result: PricedDomainResult
   locale: string
   pending: boolean
-  error: string | null
+  blocked: boolean
+  error: PurchaseErrorView | null
+  domain: string
   onBack: () => void
   onSubmit: (periodYears: number, contact: RegistrantContact, consents: CheckoutConsents) => void
 }) {
@@ -314,7 +399,7 @@ function ContactStep({
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
-    if (!isValid || pending || !price) return
+    if (!isValid || pending || blocked || !price) return
     consent.markTouched()
     if (!consent.allGiven) return
     onSubmit(periodYears, contact, consent.consents)
@@ -385,9 +470,15 @@ function ContactStep({
       <CheckoutConsentFields consents={consent.consents} touched={consent.touched} onChange={consent.setConsent} />
 
       {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
+        <div role="alert">
+          <p className="text-sm text-destructive">{error.message}</p>
+          {error.action === 'billing' && (
+            <LinkButton href={buildBillingProfileHref(domain)} variant="secondary" size="sm" className="mt-2">
+              {d.buyBillingProfileCta}
+            </LinkButton>
+          )}
+          {error.action === 'support' && <SupportHint />}
+        </div>
       )}
 
       <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
@@ -403,7 +494,7 @@ function ContactStep({
             {price ? formatPrice(grossTotal, 'TRY', locale) : '—'}
           </p>
         </div>
-        <Button type="submit" disabled={!isValid || pending} className="gap-2">
+        <Button type="submit" disabled={!isValid || pending || blocked} className="gap-2">
           {pending && <Loader2 className="size-4 animate-spin" />}
           {pending ? d.buyProcessing : d.buySubmit}
         </Button>

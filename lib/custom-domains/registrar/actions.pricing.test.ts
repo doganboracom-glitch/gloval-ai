@@ -15,6 +15,10 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: mocks.adminFrom }) }))
+vi.mock('@/lib/platform-buyer', () => ({
+  resolvePlatformBuyerPublicConfig: async () => ({ buyer: { fullName: 'Ali Veli' } }),
+  checkPlatformBuyerProfile: async () => 'complete',
+}))
 vi.mock('@/lib/payments', () => ({
   getPlatformPaymentProvider: () => ({ createIntent: mocks.createIntent }),
   getPlatformPaymentProviderId: () => 'mock',

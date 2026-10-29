@@ -40,6 +40,33 @@ async function readClientIp(): Promise<string | null> {
   }
 }
 
+export type PlatformBuyerProfileStatus = 'complete' | 'incomplete' | 'unavailable'
+
+/**
+ * Read-only pre-flight for `resolvePlatformBuyerPublicConfig`: applies the SAME
+ * payment-grade checks without needing a client IP and without throwing, so a
+ * purchase flow can tell the buyer to finish their invoice profile BEFORE any
+ * order row exists. `unavailable` means the profile could not be read; callers
+ * must not block on it (the payment step still enforces the check).
+ */
+export async function checkPlatformBuyerProfile(userId: string): Promise<PlatformBuyerProfileStatus> {
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('billing_profiles')
+      .select(BILLING_PROFILE_COLUMNS)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) return 'unavailable'
+    if (!data) return 'incomplete'
+    return buildPlatformBuyer(billingProfileRowAsForm(data as BillingProfileDatabaseRow), null).ok
+      ? 'complete'
+      : 'incomplete'
+  } catch {
+    return 'unavailable'
+  }
+}
+
 /**
  * `publicConfig` for a platform payment, built ONLY from the signed-in user's
  * saved billing profile and the request's real client IP. Throws

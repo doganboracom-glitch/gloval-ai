@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
+import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 
 type BillingProfileBannerProps = {
   show: boolean
@@ -41,7 +42,7 @@ export function BillingProfileBanner({ show, onEnter }: BillingProfileBannerProp
           <ArrowRight aria-hidden="true" data-icon="inline-end" />
         </button>
       ) : (
-        <Link href="/billing?fatura=1#fatura-bilgileri" className={ctaClassName}>
+        <Link href={BILLING_PROFILE_HREF} className={ctaClassName}>
           {copy.bannerCta}
           <ArrowRight aria-hidden="true" data-icon="inline-end" />
         </Link>
