@@ -7,8 +7,17 @@
  */
 export function sanitizeNextPath(raw: string | null | undefined, fallback = '/dashboard'): string {
   if (!raw) return fallback
-  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return fallback
+  if (!isSameSitePath(raw)) return fallback
   return raw
+}
+
+// URL parsers strip tab/CR/LF anywhere in the string, so "/\t/evil.com" would
+// collapse to the protocol-relative "//evil.com" after this check has passed.
+// eslint-disable-next-line no-control-regex
+const CONTROL_OR_SPACE = /[\u0000-\u0020\u007f]/
+
+function isSameSitePath(value: string): boolean {
+  return value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') && !CONTROL_OR_SPACE.test(value)
 }
 
 /** Auth confirmation links may be nested-encoded by their email template. */
@@ -27,9 +36,5 @@ export function sanitizeNextPathWithDecoding(
     }
   }
 
-  if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('\\')) {
-    return fallback
-  }
-
-  return candidate
+  return isSameSitePath(candidate) ? candidate : fallback
 }

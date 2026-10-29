@@ -18,6 +18,7 @@ export function SiteFooter() {
         { label: l.features, href: '/#features' },
         { label: l.pricing, href: '/#pricing' },
         { label: l.showcase, href: '/#showcase' },
+        { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula' },
       ],
     },
     {

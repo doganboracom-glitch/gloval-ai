@@ -15,7 +15,7 @@ import { platformUrl } from '@/lib/domains'
  */
 
 export type SeoLang = 'tr' | 'en'
-export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact'
+export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch'
 
 type PageCopy = {
   /** <title> and og:title / twitter:title. */
@@ -100,6 +100,23 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
       description:
         'Get in touch with the GLOVAL AI team: support email, phone, address and company details.',
       heading: 'Contact',
+      tagline: TAGLINE.en,
+    },
+  },
+  domainSearch: {
+    path: '/alan-adi-sorgula',
+    tr: {
+      title: 'Alan Adı Sorgula: Müsaitlik ve Fiyat | GLOVAL AI',
+      description:
+        'Markan için alan adını sorgula. .com, .net, .org, .co, .com.tr ve .info uzantılarının müsaitliğini ve yıllık Türk lirası fiyatını giriş yapmadan gör.',
+      heading: 'Alan adını sorgula',
+      tagline: TAGLINE.tr,
+    },
+    en: {
+      title: 'Domain Name Search: Availability and Price | GLOVAL AI',
+      description:
+        'Search for your brand domain. See availability and the yearly price in Turkish lira for .com, .net, .org, .co, .com.tr and .info without signing in.',
+      heading: 'Search for a domain name',
       tagline: TAGLINE.en,
     },
   },
