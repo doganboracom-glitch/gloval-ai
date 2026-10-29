@@ -76,8 +76,17 @@ describe('middleware: unchanged behaviour', () => {
       expect(await run(host, '/blog?sayfa=2')).toEqual({ kind: 'rewrite', path: '/site/dbajans/blog?sayfa=2' })
     })
 
-    it.each(['/api/store/session', '/api/site-contact'])('passes %s through untouched', async (path) => {
+    it.each(['/api/store/session', '/api/site-contact', '/api/try-on'])('passes %s through untouched', async (path) => {
       expect(await run(host, path)).toEqual({ kind: 'next' })
+    })
+
+    it.each([
+      ['/api/try-on/', '/site/dbajans/api/try-on/'],
+      ['/api/try-on/extra', '/site/dbajans/api/try-on/extra'],
+      ['/api/generate', '/site/dbajans/api/generate'],
+      ['/api/billing/plan', '/site/dbajans/api/billing/plan'],
+    ])('keeps %s off the API surface by rewriting it to %s', async (path, expected) => {
+      expect(await run(host, path)).toEqual({ kind: 'rewrite', path: expected })
     })
 
     it('308-redirects the legacy refund path', async () => {
@@ -114,7 +123,7 @@ describe('middleware: unchanged behaviour', () => {
       expect(getPublishedSlugForProjectId).toHaveBeenCalledWith('p1')
     })
 
-    it.each(['/api/store/session', '/api/site-contact'])('passes %s through without a lookup', async (path) => {
+    it.each(['/api/store/session', '/api/site-contact', '/api/try-on'])('passes %s through without a lookup', async (path) => {
       expect(await run(host, path)).toEqual({ kind: 'next' })
       expect(resolveActiveDomainForHost).not.toHaveBeenCalled()
     })

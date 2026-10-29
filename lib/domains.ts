@@ -168,8 +168,14 @@ export function getTenantSlugFromHost(hostHeader: string | null | undefined): st
  * custom domain). The tenant rewrite would otherwise turn them into
  * `/site/<slug>/api/...` (a 404 page), so they are served as-is. Kept to an
  * explicit allow-list: the rest of `/api` is never exposed on tenant hosts.
+ *
+ * Every entry must be public, rate limited and free of cookie-authenticated
+ * side effects: passthrough skips the platform session middleware, so these
+ * handlers never see (or refresh) a Supabase session on a tenant host.
+ * `/api/try-on` is the buyer-facing "try it on" call; the route itself checks
+ * Origin/Host against the store and meters usage.
  */
-const TENANT_PASSTHROUGH_PATHS = new Set(['/api/store/session', '/api/site-contact'])
+const TENANT_PASSTHROUGH_PATHS = new Set(['/api/store/session', '/api/site-contact', '/api/try-on'])
 
 export function isTenantPassthroughPath(pathname: string): boolean {
   return TENANT_PASSTHROUGH_PATHS.has(pathname)

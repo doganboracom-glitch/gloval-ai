@@ -141,10 +141,21 @@ describe('tenant host routing', () => {
   it('serves the contact API as-is on tenant hosts instead of rewriting it to /site/<slug>/api', () => {
     expect(isTenantPassthroughPath('/api/site-contact')).toBe(true)
     expect(isTenantPassthroughPath('/api/store/session')).toBe(true)
+    expect(isTenantPassthroughPath('/api/try-on')).toBe(true)
   })
 
   it('does not expose the rest of /api on tenant hosts', () => {
-    for (const path of ['/api/generate', '/api/site-contact/extra', '/api/edit', '/api/cron/domain-reconciliation']) {
+    for (const path of [
+      '/api/generate',
+      '/api/site-contact/extra',
+      '/api/try-on/',
+      '/api/try-on/extra',
+      '/api/edit',
+      '/api/cron/domain-reconciliation',
+      '/api/billing/plan',
+      '/api/admin/domains/detach-unbound',
+      '/api/store/payment-return/iyzico/x',
+    ]) {
       expect(isTenantPassthroughPath(path)).toBe(false)
     }
   })
