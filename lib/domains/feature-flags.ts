@@ -1,6 +1,3 @@
-/**
- * The public WHOIS lookup page does not exist yet, so its link stays hidden.
- * Flip this and set the path once the route ships.
- */
-export const WHOIS_LOOKUP_ENABLED = false
+/** Public WHOIS/RDAP lookup page. Turning this off hides every link and the sitemap entry. */
+export const WHOIS_LOOKUP_ENABLED = true
 export const WHOIS_LOOKUP_PATH = '/whois'

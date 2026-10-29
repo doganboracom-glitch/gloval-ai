@@ -1,0 +1,1 @@
+export const MAX_WHOIS_INPUT_LENGTH = 253

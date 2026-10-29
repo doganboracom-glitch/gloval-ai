@@ -15,7 +15,7 @@ import { platformUrl } from '@/lib/domains'
  */
 
 export type SeoLang = 'tr' | 'en'
-export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch'
+export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch' | 'whois'
 
 type PageCopy = {
   /** <title> and og:title / twitter:title. */
@@ -117,6 +117,23 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
       description:
         'Search for your brand domain. See availability and the yearly price in Turkish lira for .com, .net, .org, .co, .com.tr and .info without signing in.',
       heading: 'Search for a domain name',
+      tagline: TAGLINE.en,
+    },
+  },
+  whois: {
+    path: '/whois',
+    tr: {
+      title: 'WHOIS Sorgula: Alan Adı Kayıt Bilgisi | GLOVAL AI',
+      description:
+        'Bir alan adının kayıtlı olup olmadığını, kayıt kuruluşunu, bitiş tarihini ve ad sunucularını ücretsiz gör. Kişisel iletişim bilgileri gösterilmez.',
+      heading: 'WHOIS sorgula',
+      tagline: TAGLINE.tr,
+    },
+    en: {
+      title: 'WHOIS Lookup: Domain Registration Details | GLOVAL AI',
+      description:
+        'See for free whether a domain is registered, its registrar, expiry date and name servers. Personal contact details are never shown.',
+      heading: 'WHOIS lookup',
       tagline: TAGLINE.en,
     },
   },
