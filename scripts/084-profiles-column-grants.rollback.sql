@@ -1,3 +1,4 @@
+-- STATUS: NOT APPLIED / UYGULANMADI. Only relevant after 084 itself has been applied.
 -- Rollback for 084.
 begin;
 
