@@ -597,7 +597,7 @@ const az: DeepPartial<Dict> = {
       cookies: 'Kuki siyasəti',
       cookiePrefs: 'Kuki seçimləri',
       kvkk: 'Məlumatların qorunması bildirişi',
-      distanceSales: 'Məsafəli satış müqavil��si',
+      distanceSales: 'Məsafəli satış müqaviləsi',
       preInfo: 'Ön məlumatlandırma forması',
       refund: 'İmtina və geri ödəmə',
       delivery: 'Xidmətin göstərilməsi',

@@ -731,7 +731,7 @@ const de: DeepPartial<Dict> = {
       backToBilling: 'Zurück zur Abrechnung',
       planLabel: 'Aktuelles Paket',
       siteGroup: 'Zusätzliche Websites',
-      siteGroupDesc: 'Erhöht die Gesamtzahl der Websites, die Sie veröffentlichen k��nnen.',
+      siteGroupDesc: 'Erhöht die Gesamtzahl der Websites, die Sie veröffentlichen können.',
       productGroup: 'Zusätzliche Produkte',
       productGroupDesc: 'Erhöht die Gesamtzahl der Produkte, die Ihr Shop enthalten kann.',
       siteUnit: '+{n} Website',
