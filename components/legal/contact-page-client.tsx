@@ -4,21 +4,19 @@ import { useState, useTransition } from 'react'
 import {
   ArrowLeft,
   Mail,
-  Phone,
   MapPin,
   Building2,
   ShieldCheck,
   Send,
   CheckCircle2,
   Receipt,
-  Landmark,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
-import { COMPANY, isPlaceholder, toTelHref } from '@/lib/legal/company'
+import { COMPANY, isPlaceholder } from '@/lib/legal/company'
 import { submitContactRequest } from '@/lib/support/contact'
 
 /**
@@ -41,10 +39,8 @@ export function ContactPageClient() {
   }> = [
     { icon: Building2, label: tr ? 'Şirket unvanı' : 'Legal name', value: COMPANY.legalName },
     { icon: Receipt, label: tr ? 'Vergi No' : 'Tax number', value: COMPANY.taxNumber, hideIfPlaceholder: true },
-    { icon: Landmark, label: tr ? 'Vergi Dairesi' : 'Tax office', value: COMPANY.taxOffice, hideIfPlaceholder: true },
     { icon: Mail, label: tr ? 'Destek e-postası' : 'Support email', value: COMPANY.supportEmail, href: `mailto:${COMPANY.supportEmail}` },
     { icon: ShieldCheck, label: tr ? 'KVKK başvuru' : 'Data requests', value: COMPANY.kvkkEmail, href: `mailto:${COMPANY.kvkkEmail}` },
-    { icon: Phone, label: tr ? 'Telefon' : 'Phone', value: COMPANY.phone, href: toTelHref(COMPANY.phone) },
     { icon: MapPin, label: tr ? 'Adres' : 'Address', value: COMPANY.address },
   ]
 
@@ -114,6 +110,25 @@ export function ContactPageClient() {
               </div>
             )
           })}
+          <Link
+            href="/support/new"
+            className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-4 transition-colors hover:border-brand/50 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+          >
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-brand">
+              <Send className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {tr ? 'Destek' : 'Support'}
+              </span>
+              <span className="mt-1 block text-sm font-medium text-foreground">
+                {tr ? 'Destek talebi oluştur' : 'Create a support ticket'}
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                {tr ? 'Oturum açarak ekibimize yazın.' : 'Sign in to message our team.'}
+              </span>
+            </span>
+          </Link>
         </div>
 
         <ContactForm tr={tr} />

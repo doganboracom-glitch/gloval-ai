@@ -28,13 +28,6 @@ export function isPlaceholder(value: string): boolean {
   return value.startsWith('[') && value.endsWith(']')
 }
 
-/** Yerel gösterim biçimini ("0850 308 40 88") uluslararası tel: bağlantısına çevirir. */
-export function toTelHref(display: string): string {
-  const digits = display.replace(/\D+/g, '')
-  const e164 = digits.startsWith('90') ? digits : `90${digits.replace(/^0/, '')}`
-  return `tel:+${e164}`
-}
-
 export const COMPANY = {
   /** Markanın görünen adı. Bu gerçek ve sabittir. */
   brandName: 'GLOVAL AI',
@@ -70,7 +63,7 @@ export const COMPANY = {
     process.env.NEXT_PUBLIC_KVKK_EMAIL ?? process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
     'info@gloval.ai',
   ),
-  phone: field(process.env.NEXT_PUBLIC_COMPANY_PHONE, '0850 308 40 88'),
+  phone: process.env.NEXT_PUBLIC_COMPANY_PHONE?.trim() || undefined,
 
   /** Platform alan adı ve kanonik URL. */
   domain: 'gloval.ai',
