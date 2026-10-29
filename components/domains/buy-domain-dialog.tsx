@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, ChevronLeft, Loader2, Search, ShoppingCart, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
@@ -40,25 +40,23 @@ function formatPrice(cents: number, currency: string, locale: string): string {
   }
 }
 
-export function BuyDomainDialog({ onClose }: { onClose: () => void }) {
+export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => void; initialDomain?: string }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
   const d = t.domains
   const locale = lang === 'tr' ? 'tr-TR' : 'en-US'
 
   const [step, setStep] = useState<Step>({ name: 'search' })
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialDomain ?? '')
   const [results, setResults] = useState<PricedDomainResult[] | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [purchaseError, setPurchaseError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleSearch(event: React.FormEvent) {
-    event.preventDefault()
-    if (!query.trim() || isPending) return
+  function runSearch(value: string, autoSelect?: string) {
     setSearchError(null)
     startTransition(async () => {
-      const res = await searchMyDomainAvailability(query)
+      const res = await searchMyDomainAvailability(value)
       if (!res.ok) {
         setResults(null)
         setSearchError(
@@ -72,8 +70,27 @@ export function BuyDomainDialog({ onClose }: { onClose: () => void }) {
       }
       setResults(res.results)
       if (!res.pricingAvailable) setSearchError(d.buyPricingUnavailable)
+      const match = autoSelect
+        ? res.results.find((r) => r.domain === autoSelect && r.status === 'available' && r.quote)
+        : undefined
+      if (match) setStep({ name: 'contact', result: match })
     })
   }
+
+  function handleSearch(event: React.FormEvent) {
+    event.preventDefault()
+    if (!query.trim() || isPending) return
+    runSearch(query)
+  }
+
+  // Arriving from the public search page: jump straight to the chosen domain.
+  const autoStarted = useRef(false)
+  useEffect(() => {
+    if (!initialDomain || autoStarted.current) return
+    autoStarted.current = true
+    runSearch(initialDomain, initialDomain)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDomain])
 
   return (
     <div

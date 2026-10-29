@@ -41,10 +41,12 @@ export function DomainsClient({
   overview,
   userEmail,
   paymentResult = null,
+  initialBuyDomain = null,
 }: {
   overview: DomainsOverview
   userEmail: string
   paymentResult?: 'success' | 'failed' | 'error' | null
+  initialBuyDomain?: string | null
 }) {
   const { t } = useLanguage()
   const router = useRouter()
@@ -53,7 +55,7 @@ export function DomainsClient({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [showBuy, setShowBuy] = useState(false)
+  const [showBuy, setShowBuy] = useState(Boolean(initialBuyDomain))
   const [showTransfer, setShowTransfer] = useState(false)
   const [removing, setRemoving] = useState<CustomDomain | null>(null)
   const [current, setCurrent] = useState<DomainPage>(overview.domainsPage)
@@ -260,7 +262,7 @@ export function DomainsClient({
             onSubmit={handleAdd}
           />
         )}
-        {showBuy && <BuyDomainDialog onClose={() => setShowBuy(false)} />}
+        {showBuy && <BuyDomainDialog onClose={() => setShowBuy(false)} initialDomain={initialBuyDomain ?? undefined} />}
         {showTransfer && <TransferDomainDialog onClose={() => setShowTransfer(false)} />}
       </DomainShell>
     )
@@ -414,7 +416,7 @@ export function DomainsClient({
           onSubmit={handleAdd}
         />
       )}
-      {showBuy && <BuyDomainDialog onClose={() => setShowBuy(false)} />}
+      {showBuy && <BuyDomainDialog onClose={() => setShowBuy(false)} initialDomain={initialBuyDomain ?? undefined} />}
         {showTransfer && <TransferDomainDialog onClose={() => setShowTransfer(false)} />}
 
       {removing && (

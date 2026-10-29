@@ -63,6 +63,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry('/blog', { changeFrequency: 'weekly', priority: 0.8 }),
     entry('/sss', { changeFrequency: 'monthly', priority: 0.7 }),
     entry('/iletisim', { changeFrequency: 'yearly', priority: 0.5 }),
+    entry('/alan-adi-sorgula', { changeFrequency: 'monthly', priority: 0.6 }),
   ]
 
   // Legal / corporate pages required for a production SaaS (and payment provider review).
