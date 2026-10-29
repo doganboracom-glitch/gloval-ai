@@ -1304,7 +1304,8 @@ const fr: DeepPartial<Dict> = {
     deleteError: 'Impossible de supprimer votre compte. Veuillez réessayer ou contacter le support.',
   },
   domainSearch: {
-    footerLink: 'Recherche de domaine',
+    footerLink: 'Chercher et acheter un domaine',
+    footerBadgeNew: 'Nouveau',
     title: 'Rechercher un nom de domaine',
     subtitle: 'Trouvez le bon domaine pour votre marque. Disponibilité et prix annuel en quelques secondes.',
     trust1: 'Recherche sans connexion',

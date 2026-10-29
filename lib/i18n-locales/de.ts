@@ -731,7 +731,7 @@ const de: DeepPartial<Dict> = {
       backToBilling: 'Zurück zur Abrechnung',
       planLabel: 'Aktuelles Paket',
       siteGroup: 'Zusätzliche Websites',
-      siteGroupDesc: 'Erhöht die Gesamtzahl der Websites, die Sie veröffentlichen können.',
+      siteGroupDesc: 'Erhöht die Gesamtzahl der Websites, die Sie veröffentlichen k��nnen.',
       productGroup: 'Zusätzliche Produkte',
       productGroupDesc: 'Erhöht die Gesamtzahl der Produkte, die Ihr Shop enthalten kann.',
       siteUnit: '+{n} Website',
@@ -1344,7 +1344,8 @@ const de: DeepPartial<Dict> = {
     deleteError: 'Ihr Konto konnte nicht gelöscht werden. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support.',
   },
   domainSearch: {
-    footerLink: 'Domain-Suche',
+    footerLink: 'Domains suchen & kaufen',
+    footerBadgeNew: 'Neu',
     title: 'Domainnamen prüfen',
     subtitle: 'Finden Sie die passende Domain für Ihre Marke. Verfügbarkeit und Jahrespreis sehen Sie in Sekunden.',
     trust1: 'Suche ohne Anmeldung',

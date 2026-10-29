@@ -1345,7 +1345,8 @@ const pt: DeepPartial<Dict> = {
     deleteError: 'Não foi possível excluir sua conta. Tente novamente ou entre em contato com o suporte.',
   },
   domainSearch: {
-    footerLink: 'Pesquisar domínio',
+    footerLink: 'Pesquisar e comprar domínios',
+    footerBadgeNew: 'Novo',
     title: 'Pesquise um nome de domínio',
     subtitle: 'Encontre o domínio certo para a sua marca. Disponibilidade e preço anual em segundos.',
     trust1: 'Pesquise sem entrar na conta',
