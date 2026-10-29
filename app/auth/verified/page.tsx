@@ -6,6 +6,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { LinkButton } from '@/components/link-button'
 import { useLanguage } from '@/components/language-provider'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 
 const REDIRECT_DELAY_SECONDS = 3
 
@@ -31,8 +32,7 @@ function VerifiedContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const rawNext = searchParams.get('next') ?? '/dashboard'
-  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/dashboard'
+  const next = sanitizeNextPath(searchParams.get('next'))
   const loginHref = `/auth/login?next=${encodeURIComponent(next)}`
   const [secondsLeft, setSecondsLeft] = useState(REDIRECT_DELAY_SECONDS)
 

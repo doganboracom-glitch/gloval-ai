@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const mocks = vi.hoisted(() => ({
@@ -18,62 +18,46 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }))
-
 vi.mock('@/lib/email-outbox', () => ({ scheduleWelcomeEmail: mocks.scheduleWelcomeEmail }))
 
 import { GET } from './route'
 
-const DRAFT_TOKEN = 'b'.repeat(43)
+function call(next: string | null, extra = '') {
+  const url = new URL(`https://gloval.ai/auth/callback?code=abc${extra}`)
+  if (next !== null) url.searchParams.set('next', next)
+  return GET(new NextRequest(url))
+}
 
-function location(response: Response) {
-  const value = response.headers.get('location')
-  if (!value) throw new Error('Expected a redirect location')
-  return new URL(value)
+function target(response: Response) {
+  return new URL(response.headers.get('location') ?? '')
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.exchangeCodeForSession.mockResolvedValue({ error: null })
-  mocks.verifyOtp.mockResolvedValue({ error: null })
+  mocks.exchangeCodeForSession.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null })
   mocks.signOut.mockResolvedValue({ error: null })
 })
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
-describe('GET /auth/callback', () => {
-  it('continues to accept existing PKCE links and keeps the draft session', async () => {
-    const request = new NextRequest(
-      `https://gloval.ai/auth/callback?code=legacy-pkce-code&draft=${DRAFT_TOKEN}`,
-    )
-
-    const response = await GET(request)
-
-    expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith('legacy-pkce-code')
-    expect(mocks.verifyOtp).not.toHaveBeenCalled()
-    expect(mocks.signOut).not.toHaveBeenCalled()
-    expect(location(response).pathname).toBe('/auth/resume')
-    expect(location(response).searchParams.get('draft')).toBe(DRAFT_TOKEN)
+describe('GET /auth/callback (email verification / password reset)', () => {
+  it.each(['/dashboard', '/billing', '/editor/abc-123'])('carries the legitimate path %s to /auth/verified', async (path) => {
+    const out = target(await call(path))
+    expect(out.origin).toBe('https://gloval.ai')
+    expect(out.pathname).toBe('/auth/verified')
+    expect(out.searchParams.get('next')).toBe(path)
   })
 
-  it('logs a safe Supabase diagnostic and keeps the draft for login fallback', async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mocks.exchangeCodeForSession.mockResolvedValue({
-      error: { code: 'code_verifier_not_found', status: 400, message: 'private@example.com' },
-    })
-    const request = new NextRequest(
-      `https://gloval.ai/auth/callback?code=legacy-pkce-code&draft=${DRAFT_TOKEN}`,
-    )
+  it.each(['//evil.com', 'https://evil.com', '/\\evil.com', '/\t/evil.com', null])(
+    'replaces %j with /dashboard',
+    async (value) => {
+      const out = target(await call(value))
+      expect(out.origin).toBe('https://gloval.ai')
+      expect(out.searchParams.get('next')).toBe('/dashboard')
+    },
+  )
 
-    const response = await GET(request)
-
-    expect(log).toHaveBeenCalledWith('[auth callback] Supabase Auth operation failed', {
-      code: 'code_verifier_not_found',
-      status: 400,
-    })
-    expect(JSON.stringify(log.mock.calls)).not.toContain('private@example.com')
-    expect(location(response).pathname).toBe('/auth/error')
-    expect(location(response).searchParams.get('draft')).toBe(DRAFT_TOKEN)
+  it('password reset still lands on /auth/reset-password', async () => {
+    const out = target(await call('/auth/reset-password', '&type=recovery'))
+    expect(out.origin).toBe('https://gloval.ai')
+    expect(out.pathname).toBe('/auth/reset-password')
   })
 })
