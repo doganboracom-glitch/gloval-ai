@@ -194,7 +194,7 @@ const dict = {
       phaseAnalyzing: 'Analiz ediliyor...',
       success: 'Site güncellendi.',
       failure: 'Değişiklik uygulanamadı. Mevcut tasarım korunuyor.',
-      imageFailedNoCharge: 'Görsel şu an üretilemedi, kredi dü��ülmedi, tekrar deneyin.',
+      imageFailedNoCharge: 'Görsel şu an üretilemedi, kredi düşülmedi, tekrar deneyin.',
       history: {
         tab: 'Geçmiş',
         description: 'Kaydettiğin sürümler burada listelenir. Otomatik kayıt taslak olarak saklanır.',
@@ -1635,7 +1635,7 @@ const dict = {
       statusRegistered: 'Kayıtlı',
       pdRegisteredLine: 'Bu alan adı GLOVAL AI üzerinden satın alındı ve hesabınıza kayıtlı.',
       pdProjectLabel: 'Bağlı proje',
-      pdNoProject: 'Henüz bir projeye ba����lanmadı',
+      pdNoProject: 'Henüz bir projeye bağlanmadı',
       pdConnected: 'Projeye bağlı',
       pdSyncTitle: 'Projeye senkronize et',
       pdSyncBody:

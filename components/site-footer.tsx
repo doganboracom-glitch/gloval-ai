@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Globe } from 'lucide-react'
-import { WHOIS_LOOKUP_ENABLED, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
+import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 import { useLanguage } from '@/components/language-provider'
 import { BrandLogo } from '@/components/brand-logo'
 import { openCookiePreferences } from '@/components/cookie-consent'
@@ -34,7 +34,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: l.pricing, href: '/#pricing' },
         { label: l.showcase, href: '/#showcase' },
         { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', featured: true },
-        ...(WHOIS_LOOKUP_ENABLED ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH, featured: false }] : []),
+        ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH, featured: false }] : []),
       ],
     },
     {

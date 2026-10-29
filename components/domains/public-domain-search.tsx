@@ -44,7 +44,10 @@ export function PublicDomainSearch({
   initialQuery,
   request,
   onOpenScore,
+  demo = false,
 }: {
+  /** Preview-only fake results: buying is replaced by a disabled label. */
+  demo?: boolean
   authenticated: boolean
   initialQuery: string
   /** Moves a query into the box and focuses it; it never submits. */
@@ -168,7 +171,14 @@ export function PublicDomainSearch({
                     onOpenScore ? <QualityScoreBadge domain={result.domain} copy={copy} onOpen={onOpenScore} /> : null
                   }
                   actions={
-                    result.status === 'available' && result.quote ? (
+                    result.status === 'available' && result.quote && demo ? (
+                      <span
+                        aria-disabled="true"
+                        className={`${buttonVariants({ size: 'sm', variant: 'outline' })} pointer-events-none opacity-60`}
+                      >
+                        {lang === 'tr' ? 'Demo: satın alma kapalı' : 'Demo: purchase disabled'}
+                      </span>
+                    ) : result.status === 'available' && result.quote ? (
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={buildBuyHref(result.domain, authenticated, 'sign-up')}

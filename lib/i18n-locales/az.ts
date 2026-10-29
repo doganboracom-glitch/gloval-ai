@@ -1277,7 +1277,7 @@ const az: DeepPartial<Dict> = {
     mgRenewRefresh: 'Statusu yenilə',
     mgRenewStDone: 'Son yeniləmə tamamlandı.',
     mgRenewStFailed: 'Son yeniləmə tamamlanmadı.',
-    mgRenewStRefund: 'Son yeniləməni tətbiq etmək mümkün olmadı; dəstək komandası ödəni��inizin geri qaytarılması ilə məşğul olacaq.',
+    mgRenewStRefund: 'Son yeniləməni tətbiq etmək mümkün olmadı; dəstək komandası ödənişinizin geri qaytarılması ilə məşğul olacaq.',
     mgAutoTitle: 'Avtomatik yeniləmə',
     mgAutoBody: 'Registrator API-si avtomatik yeniləmə parametrini dəstəkləmir, buna görə burada dəyişdirilə bilməz.',
     mgDnsTitle: 'DNS qeydləri',

@@ -1,3 +1,5 @@
+import { resolveWhoisEnabled } from './lib/domains/flag-resolvers.mjs'
+
 /** @type {import('next').NextConfig} */
 
 // Baseline, defense-in-depth response headers. These are safe for every
@@ -36,6 +38,10 @@ const platformMicrophoneRule = {
 }
 
 const nextConfig = {
+  // Resolved here so server and client bundles see the same /whois decision.
+  env: {
+    NEXT_PUBLIC_WHOIS_LOOKUP_ENABLED: resolveWhoisEnabled(process.env) ? '1' : '0',
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },

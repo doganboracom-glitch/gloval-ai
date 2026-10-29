@@ -726,7 +726,7 @@ const pl: DeepPartial<Dict> = {
     addOns: {
       title: 'Usługi dodatkowe',
       subtitle: 'Dodaj dodatkową pojemność stron i produktów ponad limity swojego planu.',
-      summaryHint: 'Twoja aktywna dodatkowa pojemno��ć i usługi dostępne w Twoim planie.',
+      summaryHint: 'Twoja aktywna dodatkowa pojemność i usługi dostępne w Twoim planie.',
       manage: 'Zobacz usługi dodatkowe',
       backToBilling: 'Wróć do rozliczeń',
       planLabel: 'Obecny plan',

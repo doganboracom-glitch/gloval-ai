@@ -11,18 +11,21 @@ import { DomainQualityScore, type ScoreSeed } from '@/components/domains/domain-
 import { DomainWhySection } from '@/components/domains/domain-why-section'
 import { DomainChooseGuide } from '@/components/domains/domain-choose-guide'
 import { DomainPurchaseSteps } from '@/components/domains/domain-purchase-steps'
-import { WHOIS_LOOKUP_ENABLED, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
+import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 
 export function DomainSearchPageClient({
   open,
+  demo = false,
   authenticated,
   initialQuery,
 }: {
   open: boolean
+  /** Preview-only: fake results, no purchase. Never true in production. */
+  demo?: boolean
   authenticated: boolean
   initialQuery: string
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const copy = t.domainSearch
   const [scoreSeed, setScoreSeed] = useState<ScoreSeed | null>(null)
   const [searchRequest, setSearchRequest] = useState<SearchRequest | null>(null)
@@ -75,9 +78,21 @@ export function DomainSearchPageClient({
           )}
         </header>
 
+        {open && demo && (
+          <p
+            role="note"
+            className="mt-6 max-w-3xl rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-foreground"
+          >
+            {lang === 'tr'
+              ? 'Demo modu (yalnızca önizleme): sonuçlar ve fiyatlar sahtedir. Satın alma ve ödeme çalışmaz.'
+              : 'Demo mode (preview only): results and prices are fake. Purchase and payment are disabled.'}
+          </p>
+        )}
+
         {open && (
           <div className="mt-10 max-w-3xl">
             <PublicDomainSearch
+              demo={demo}
               authenticated={authenticated}
               initialQuery={initialQuery}
               request={searchRequest}
@@ -92,7 +107,7 @@ export function DomainSearchPageClient({
             <DomainQualityScore seed={scoreSeed} onSearch={requestSearch} />
             <DomainChooseGuide copy={copy} />
             <DomainPurchaseSteps copy={copy} />
-            {WHOIS_LOOKUP_ENABLED && (
+            {isWhoisLookupEnabled() && (
               <p className="text-sm text-muted-foreground">
                 {copy.whoisPrompt}{' '}
                 <Link href={WHOIS_LOOKUP_PATH} className="text-brand underline-offset-4 hover:underline">

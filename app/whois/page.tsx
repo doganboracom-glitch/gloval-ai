@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+import { isWhoisLookupEnabled } from '@/lib/domains/feature-flags'
 import { WhoisPageClient } from '@/components/whois/whois-page-client'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 import { MAX_WHOIS_INPUT_LENGTH } from '@/lib/whois/constants'
@@ -15,6 +17,7 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
 }
 
 export default async function WhoisPage({ searchParams }: { searchParams: SearchParams }) {
+  if (!isWhoisLookupEnabled()) notFound()
   const { q } = await searchParams
   const initialQuery = (first(q) ?? '').slice(0, MAX_WHOIS_INPUT_LENGTH)
   return <WhoisPageClient initialQuery={initialQuery} />

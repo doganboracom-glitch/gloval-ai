@@ -748,7 +748,7 @@ const es: DeepPartial<Dict> = {
       expiresOn: 'Finaliza: {date}',
       noExpiry: 'Sin vencimiento',
       activeBadge: 'Activo',
-      notEligibleSite: 'Los sitios adicionales solo est��n disponibles en los planes PRO y E-commerce.',
+      notEligibleSite: 'Los sitios adicionales solo están disponibles en los planes PRO y E-commerce.',
       notEligibleProduct: 'Los productos adicionales solo están disponibles en los planes PRO y E-commerce.',
       notEligibleBadge: 'No disponible en tu plan',
       upgradeCta: 'Ver planes',
