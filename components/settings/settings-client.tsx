@@ -47,6 +47,7 @@ export function SettingsClient({
   const [confirmValue, setConfirmValue] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(false)
+  const [deleteBlockedByDomains, setDeleteBlockedByDomains] = useState(false)
 
   const canConfirm = confirmValue.trim().toLowerCase() === userEmail.toLowerCase()
   const anyModalOpen = showProfileModal || showEmailModal || showConfirm
@@ -135,6 +136,7 @@ export function SettingsClient({
     if (!result.ok) {
       setIsDeleting(false)
       setDeleteError(true)
+      setDeleteBlockedByDomains(result.error === 'domains_block_deletion')
       return
     }
     const supabase = createClient()
@@ -406,7 +408,7 @@ export function SettingsClient({
 
                 {deleteError && (
                   <p role="alert" className="mt-3 text-sm text-destructive">
-                    {t.settings.deleteError}
+                    {deleteBlockedByDomains ? t.settings.deleteBlockedByDomains : t.settings.deleteError}
                   </p>
                 )}
 

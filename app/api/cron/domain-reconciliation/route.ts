@@ -24,6 +24,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { INDEXNOW_BUDGET_MS } from '@/lib/indexnow'
 import { dispatchIndexQueue, enqueueDueScheduledPosts } from '@/lib/indexnow-server'
 import { runBackupSweep } from '@/lib/project-backups'
+import { isProbeEnabled } from '@/lib/custom-domains/registrar/probe/policy'
+import { purgeExpiredProbeBackups, runProbeSweep } from '@/lib/custom-domains/registrar/probe/service'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -35,6 +37,7 @@ const PLAN_CREDITS_BUDGET_MS = 10_000
 const RATE_LIMIT_SWEEP_BUDGET_MS = 5_000
 const SIGNUP_DRAFTS_SWEEP_BUDGET_MS = 5_000
 const PROJECT_BACKUPS_BUDGET_MS = 8_000
+const PROBE_BUDGET_MS = 10_000
 const CONNECTION_BATCH_LIMIT = 25
 const CONNECTION_BUDGET_MS = 40_000
 
@@ -219,6 +222,26 @@ export async function GET(request: Request) {
     projectBackups = { error: 'project_backups_sweep_failed' }
   }
 
+  // Isolated and inert unless DOMAIN_REGISTRAR_PROBE_ENABLED=true: due registrar-probe
+  // read-backs, then purge of expired contact backups. Read-only toward the registrar.
+  let registrarProbe: Awaited<ReturnType<typeof runProbeSweep>> | { skipped: true } | { error: string }
+  if (isProbeEnabled()) {
+    try {
+      registrarProbe = await runProbeSweep({ deadlineMs: Date.now() + PROBE_BUDGET_MS })
+    } catch (error) {
+      console.log('[registrar-probe] sweep failed:', error instanceof Error ? error.message : 'unknown')
+      registrarProbe = { error: 'registrar_probe_sweep_failed' }
+    }
+  } else {
+    // Switching the probe off must not strand an encrypted contact backup past its expiry.
+    try {
+      await purgeExpiredProbeBackups()
+    } catch {
+      console.log('[registrar-probe] purge while disabled failed')
+    }
+    registrarProbe = { skipped: true }
+  }
+
   try {
     const sweptOrders = await sweepStaleOrders()
     const orders = await reconcileDomainOrders()
@@ -233,7 +256,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, signupDrafts, rateLimitCounters, indexNow, projectBackups, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, signupDrafts, rateLimitCounters, indexNow, projectBackups, registrarProbe, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

@@ -120,6 +120,10 @@ function adminClient() {
           filters.push((r) => vals.includes(r[col]))
           return builder
         },
+        gte: (col: string, val: string) => {
+          filters.push((r) => typeof r[col] === 'string' && r[col] >= val)
+          return builder
+        },
         then: (resolve: (v: unknown) => void) => resolve(run()),
       }
       return builder
@@ -306,6 +310,133 @@ describe('deleteOwnAccount', () => {
       expect(errorLog).toHaveBeenCalled()
     },
   )
+
+  describe('registrar domains', () => {
+    beforeEach(seedPaidAccount)
+
+    it('does not block on history: active orders and completed transfers of a former owner', async () => {
+      db.tables.domain_orders = [{ id: 'do1', user_id: 'user-1', status: 'active' }]
+      db.tables.domain_transfers = [{ id: 'dt1', user_id: 'user-1', status: 'completed' }]
+      db.tables.domain_renewals = [{ id: 'dr1', user_id: 'user-1', status: 'completed' }]
+      db.tables.custom_domains = []
+      expect(await deleteOwnAccount()).toEqual({ ok: true })
+    })
+
+    it('blocks while the user still holds a domainnameapi domain, before touching any data', async () => {
+      db.tables.custom_domains = [{ id: 'cd1', user_id: 'user-1', domain: 'firma.com', provider: 'domainnameapi' }]
+      expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+      expect(db.calls.some((c) => c.startsWith('update:') || c === 'deleteUser')).toBe(false)
+    })
+
+    it('does not block on a domain held by someone else or on another provider', async () => {
+      db.tables.custom_domains = [
+        { id: 'cd1', user_id: 'user-2', domain: 'baska.com', provider: 'domainnameapi' },
+        { id: 'cd2', user_id: 'user-1', domain: 'firma.com', provider: 'supabase' },
+      ]
+      expect(await deleteOwnAccount()).toEqual({ ok: true })
+    })
+
+    it.each([
+      ['domain_orders', 'payment_verified'],
+      ['domain_orders', 'registration_pending'],
+      ['domain_transfers', 'payment_verified'],
+      ['domain_transfers', 'transfer_submitting'],
+      ['domain_transfers', 'transfer_pending'],
+      ['domain_renewals', 'payment_verified'],
+      ['domain_renewals', 'renewal_submitting'],
+      ['domain_renewals', 'renewal_reconciliation_required'],
+      ['domain_renewals', 'manual_refund_required'],
+    ])('blocks on an open %s row in status %s, without touching any data', async (table, status) => {
+      db.tables.custom_domains = []
+      db.tables[table] = [{ id: 'x1', user_id: 'user-1', status }]
+      expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+      expect(db.calls.some((c) => c.startsWith('update:') || c.startsWith('delete:') || c === 'deleteUser')).toBe(false)
+    })
+
+    it.each(['domain_orders', 'domain_transfers', 'domain_renewals'])(
+      'does not block on terminal %s statuses',
+      async (table) => {
+        db.tables.custom_domains = []
+        db.tables[table] = ['active', 'completed', 'failed', 'cancelled', 'registration_failed'].map((status, i) => ({
+          id: `t${i}`,
+          user_id: 'user-1',
+          status,
+        }))
+        expect(await deleteOwnAccount()).toEqual({ ok: true })
+      },
+    )
+
+    describe('pending_payment window', () => {
+      const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+
+      it.each(['domain_orders', 'domain_transfers', 'domain_renewals'])(
+        'blocks on a %s pending_payment row created 30 minutes ago',
+        async (table) => {
+          db.tables.custom_domains = []
+          db.tables[table] = [{ id: 'p1', user_id: 'user-1', status: 'pending_payment', created_at: minutesAgo(30) }]
+          expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+          expect(db.calls).not.toContain('deleteUser')
+        },
+      )
+
+      it.each(['domain_orders', 'domain_transfers', 'domain_renewals'])(
+        'does not block on a %s pending_payment row older than 2 hours',
+        async (table) => {
+          db.tables.custom_domains = []
+          db.tables[table] = [{ id: 'p1', user_id: 'user-1', status: 'pending_payment', created_at: minutesAgo(180) }]
+          expect(await deleteOwnAccount()).toEqual({ ok: true })
+        },
+      )
+
+      it('does not block on a recent pending_payment row of another user', async () => {
+        db.tables.custom_domains = []
+        db.tables.domain_orders = [{ id: 'p1', user_id: 'user-2', status: 'pending_payment', created_at: minutesAgo(5) }]
+        expect(await deleteOwnAccount()).toEqual({ ok: true })
+      })
+    })
+
+    describe('expired registrar domains', () => {
+      const dayMs = 24 * 60 * 60 * 1000
+      const domainRow = (expires_at: string | null) => ({
+        id: 'cd1',
+        user_id: 'user-1',
+        domain: 'firma.com',
+        provider: 'domainnameapi',
+        expires_at,
+      })
+
+      it('does not block on a domain whose registration expired in the past', async () => {
+        db.tables.custom_domains = [domainRow(new Date(Date.now() - dayMs).toISOString())]
+        expect(await deleteOwnAccount()).toEqual({ ok: true })
+      })
+
+      it('still blocks on a domain that has not expired yet', async () => {
+        db.tables.custom_domains = [domainRow(new Date(Date.now() + dayMs).toISOString())]
+        expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+      })
+
+      it.each([null, 'not-a-date'])('keeps blocking when expires_at is %s (fail closed)', async (value) => {
+        db.tables.custom_domains = [domainRow(value)]
+        expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+      })
+
+      it('blocks an expired domain while a renewal for it is open', async () => {
+        db.tables.custom_domains = [domainRow(new Date(Date.now() - dayMs).toISOString())]
+        db.tables.domain_renewals = [{ id: 'r1', user_id: 'user-1', domain: 'firma.com', status: 'renewal_submitting' }]
+        expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'domains_block_deletion' })
+        expect(db.calls).not.toContain('deleteUser')
+      })
+    })
+
+    it.each(['custom_domains', 'domain_orders', 'domain_transfers', 'domain_renewals'])(
+      'fails closed when the %s guard query fails',
+      async (table) => {
+        db.failOn = table
+        expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'delete_failed' })
+        expect(db.calls).not.toContain('deleteUser')
+      },
+    )
+  })
 
   it('reports delete_failed and logs a safe reason when the auth deletion itself fails', async () => {
     db.deleteUserError = 'auth down'

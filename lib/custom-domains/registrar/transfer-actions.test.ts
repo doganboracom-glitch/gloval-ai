@@ -37,6 +37,7 @@ function makeBuilder(table: string) {
     limit: () => builder,
     single: async () =>
       mocks.insertError ? { data: null, error: mocks.insertError } : { data: { id: 'tr-1' }, error: null },
+    maybeSingle: async () => ({ data: mocks.rows[table]?.[0] ?? null, error: null }),
     then: (resolve: (value: unknown) => unknown) => resolve({ data: mocks.rows[table] ?? [], error: null }),
   }
   return builder
@@ -91,8 +92,8 @@ const ops = (table: string, op?: Op['op']) => mocks.ops.filter((o) => o.table ==
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
 
 function ownedByUs(domain: string) {
-  mocks.listDomainsForUser.mockResolvedValue([{ domain }])
-  mocks.rows = { domain_orders: [{ id: 'o-1' }], domain_transfers: [] }
+  mocks.listDomainsForUser.mockResolvedValue([{ id: 'cd-1', domain, source: 'registrar' }])
+  mocks.rows = { custom_domains: [{ order_id: 'o-1' }], domain_orders: [{ id: 'o-1' }], domain_transfers: [] }
 }
 
 beforeEach(() => {
@@ -242,8 +243,8 @@ describe('transfer-out: ownership', () => {
   })
 
   it('rejects a connected-but-not-registered-here domain (no active order or completed transfer)', async () => {
-    mocks.listDomainsForUser.mockResolvedValue([{ domain: 'connected.com' }])
-    mocks.rows = { domain_orders: [], domain_transfers: [] }
+    mocks.listDomainsForUser.mockResolvedValue([{ id: 'cd-2', domain: 'connected.com', source: 'external' }])
+    mocks.rows = { custom_domains: [{ order_id: null }], domain_orders: [], domain_transfers: [] }
     expect(await setMyTransferLock('connected.com', false)).toEqual({ ok: false, error: 'NOT_FOUND' })
     expect(mocks.setTransferLock).not.toHaveBeenCalled()
   })

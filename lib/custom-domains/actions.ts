@@ -388,7 +388,18 @@ export async function removeMyDomain(domainId: string): Promise<DomainResult<nul
   try {
     const user = await requireUser()
     // Ownership assertion; throws FORBIDDEN when the domain is not the caller's.
-    await getOwnedDomain(user.id, domainId)
+    const owned = await getOwnedDomain(user.id, domainId)
+
+    // A registrar-held registration is never deleted from here: the row is the
+    // only link between the paid registration and its owner (renewals, transfer,
+    // account-deletion guard). The owner may only disconnect it from a site.
+    if (owned.source === 'registrar') {
+      if (!owned.websiteProjectId) throw new DomainError('REGISTRAR_OWNED')
+      await getDomainProvider().setWebsiteProject(domainId, null)
+      revalidatePath('/dashboard/domains')
+      revalidatePath(`/dashboard/domains/${domainId}`)
+      return { ok: true, data: null }
+    }
 
     await getDomainProvider().removeDomain(domainId)
 

@@ -227,6 +227,29 @@ export interface DomainManageCapable {
   renewDomain(domain: string, years: number): Promise<{ expiresAtRaw: string | null }>
 }
 
+export type DomainContactRole = 'registrant' | 'admin' | 'tech' | 'billing'
+
+/**
+ * Single-role contact write used ONLY by the admin registrar probe. Unlike
+ * `updateContacts` it leaves the other three roles untouched and verifies that.
+ * `skipValidation` exists for restoring a backed-up contact the registrar itself
+ * returned: a restore must never be blocked by our own stricter field checks.
+ */
+export interface DomainContactProbeCapable {
+  updateContactRole(
+    domain: string,
+    role: DomainContactRole,
+    contact: DomainContact,
+    options?: { skipValidation?: boolean },
+  ): Promise<ManageChange>
+}
+
+export function isContactProbeCapable(
+  provider: DomainRegistrarProvider | null,
+): provider is DomainRegistrarProvider & DomainManageCapable & DomainContactProbeCapable {
+  return isManageCapable(provider) && typeof (provider as unknown as DomainContactProbeCapable).updateContactRole === 'function'
+}
+
 export function isManageCapable(
   provider: DomainRegistrarProvider | null,
 ): provider is DomainRegistrarProvider & DomainManageCapable {
