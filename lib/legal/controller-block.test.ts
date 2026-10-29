@@ -11,8 +11,9 @@ type Section = { heading: string; blocks: Block[] }
 
 const ROOT = process.cwd()
 
-async function load() {
+async function load(phone = '') {
   vi.resetModules()
+  vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', phone)
   const company = await import('@/lib/legal/company')
   const docs = await import('@/lib/legal/documents')
   return { COMPANY: company.COMPANY, docs }
@@ -65,25 +66,25 @@ describe('Gizlilik Politikası — Veri Sorumlusu bloğu', () => {
     expect(enLead).toBe(`${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`)
   })
 
-  it('unvan, adres, telefon ve e-posta company.ts değerleriyle birebir eşleşir', async () => {
+  it('unvan, adres ve e-posta company.ts değerleriyle eşleşir; telefon tanımlı değilse satır eklenmez', async () => {
     const { COMPANY, docs } = await load()
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
     const tr = flatten(privacy.tr.sections[0] as Section)
     const en = flatten(privacy.en.sections[0] as Section)
     expect(tr).toContain(`Adres: ${COMPANY.address}`)
-    expect(tr).toContain(`Telefon: ${COMPANY.phone}`)
+    expect(tr.filter((item) => item.startsWith('Telefon:'))).toEqual([])
     expect(tr).toContain(`E-posta: ${COMPANY.kvkkEmail}`)
     expect(en).toContain(`Address: ${COMPANY.address}`)
-    expect(en).toContain(`Phone: ${COMPANY.phone}`)
+    expect(en.filter((item) => item.startsWith('Phone:'))).toEqual([])
     expect(en).toContain(`Email: ${COMPANY.kvkkEmail}`)
+    expect(COMPANY.phone).toBeUndefined()
   })
 
   it('değerler company.ts kaynağından gelir: ortam değişkeni değişince bloğa yansır', async () => {
     vi.stubEnv('NEXT_PUBLIC_COMPANY_LEGAL_NAME', 'ÖRNEK ŞİRKET A.Ş.')
     vi.stubEnv('NEXT_PUBLIC_COMPANY_ADDRESS', 'Örnek Mah. Örnek Sk. No:1')
-    vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', '0212 111 22 33')
     vi.stubEnv('NEXT_PUBLIC_KVKK_EMAIL', 'kvkk@ornek.com')
-    const { docs } = await load()
+    const { docs } = await load('0212 111 22 33')
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
     const tr = flatten(privacy.tr.sections[0] as Section)
     const en = flatten(privacy.en.sections[0] as Section)
@@ -134,21 +135,18 @@ describe('KVKK Aydınlatma Metni — Veri Sorumlusu kimliği', () => {
     expect(tr).toEqual([
       `Unvan: ${COMPANY.legalName}`,
       `Adres: ${COMPANY.address}`,
-      `Telefon: ${COMPANY.phone}`,
       `Başvuru e-posta: ${COMPANY.kvkkEmail}`,
     ])
     expect(en).toEqual([
       `Legal name: ${COMPANY.legalName}`,
       `Address: ${COMPANY.address}`,
-      `Phone: ${COMPANY.phone}`,
       `Application email: ${COMPANY.kvkkEmail}`,
     ])
   })
 
   it('değerler company.ts kaynağından gelir: ortam değişkeni değişince bloğa yansır', async () => {
-    vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', '0212 111 22 33')
     vi.stubEnv('NEXT_PUBLIC_KVKK_EMAIL', 'kvkk@ornek.com')
-    const { docs } = await load()
+    const { docs } = await load('0212 111 22 33')
     const kvkk = docs.getLegalDoc('kvkk')!
     expect(flatten(kvkk.tr.sections[0] as Section)).toContain('Telefon: 0212 111 22 33')
     expect(flatten(kvkk.tr.sections[0] as Section)).toContain('Başvuru e-posta: kvkk@ornek.com')
@@ -164,13 +162,39 @@ describe('Çerez Politikası ve diğer belgeler etkilenmez', () => {
     const text = JSON.stringify(cookies)
     expect(text).not.toContain('Veri Sorumlusu')
     expect(text).not.toContain('Data Controller')
-    expect(text).not.toContain(COMPANY.phone)
+    expect(text).not.toMatch(/(?:Telefon|Phone):/)
     expect(text).not.toContain(COMPANY.address)
     expect(cookies.tr.sections.map((s) => s.heading)).toEqual([
       '1. Çerez Nedir?',
       '2. Kullandığımız Çerez Türleri',
       '3. Tercihlerinizi Yönetme',
     ])
+  })
+})
+
+describe('Satıcı telefon alanı isteğe bağlıdır', () => {
+  it('telefon tanımlı değilken tüm yasal dokümanlardan telefon satırını çıkarır', async () => {
+    const { docs } = await load()
+    for (const slug of [
+      'gizlilik-politikasi',
+      'kvkk',
+      'kullanim-kosullari',
+      'mesafeli-satis-sozlesmesi',
+      'on-bilgilendirme-formu',
+    ]) {
+      const doc = docs.getLegalDoc(slug)!
+      expect(JSON.stringify(doc.tr)).not.toMatch(/Telefon:/)
+      expect(JSON.stringify(doc.en)).not.toMatch(/Phone:/)
+    }
+  })
+
+  it('telefon tanımlıysa mesafeli satış ve ön bilgilendirme satırlarını gösterir', async () => {
+    const { docs } = await load('0212 111 22 33')
+    for (const slug of ['mesafeli-satis-sozlesmesi', 'on-bilgilendirme-formu']) {
+      const doc = docs.getLegalDoc(slug)!
+      expect(JSON.stringify(doc.tr)).toContain('Telefon: 0212 111 22 33')
+      expect(JSON.stringify(doc.en)).toContain('Phone: 0212 111 22 33')
+    }
   })
 })
 
@@ -201,6 +225,6 @@ describe('yayındaki müşteri siteleri etkilenmez', () => {
     vi.stubEnv('NEXT_PUBLIC_KVKK_EMAIL', 'baska@ornek.com')
     expect(render()).toBe(before)
     expect(before).not.toContain('Veri Sorumlusu')
-    expect(before).not.toContain('0850 308 40 88')
+    expect(before).not.toMatch(/(?:Telefon|Phone):/)
   })
 })
