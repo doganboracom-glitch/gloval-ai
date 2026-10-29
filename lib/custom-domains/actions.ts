@@ -13,6 +13,7 @@ import { checkEmailDns, type EmailDnsStatus } from './email-dns'
 import { getDomainProvider } from './provider'
 import { getVercelClient } from './vercel'
 import { isLiveDomainRegistrar } from './registrar/provider'
+import { isDomainPurchaseEnabled } from './registrar/purchase-flag'
 import { getMyDomainOrders, type MyDomainOrder } from './registrar/actions'
 import { checkRateLimit } from '@/lib/rate-limit'
 import {
@@ -115,7 +116,7 @@ export async function getMyDomainsOverview(): Promise<DomainsOverview> {
     domainsPage,
     entitlement: getDomainEntitlement(plan, subscription),
     live: isLiveDomainProvider(),
-    canBuyDomain: isLiveDomainRegistrar(),
+    canBuyDomain: isDomainPurchaseEnabled() && isLiveDomainRegistrar(),
     recentOrders,
     projects,
   }

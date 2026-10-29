@@ -15,6 +15,7 @@ import { resolveOrderPricing, type OrderPricing } from '../pricing/order'
 import { REGISTRAR_CAPABILITIES } from './capabilities'
 import { requireRegisteredByUs } from './ownership'
 import { getDomainRegistrarProvider } from './provider'
+import { isDomainPurchaseEnabled } from './purchase-flag'
 import { parsePurchaseDomain } from './service'
 import { encryptAuthCode, isTransferSecretConfigured } from './transfer-crypto'
 import { finalizeTransferIn, isTransferSupportedTld, syncTransfersForUser } from './transfer-service'
@@ -70,6 +71,7 @@ type Prepared =
 
 async function prepareTransferIn(domainInput: string, authCode: string): Promise<Prepared> {
   const { userId, email } = await requireUser()
+  if (!isDomainPurchaseEnabled()) return { ok: false, error: 'NOT_CONFIGURED' }
   const registrar = getDomainRegistrarProvider()
   if (!isTransferCapable(registrar) || !isTransferSecretConfigured()) return { ok: false, error: 'NOT_CONFIGURED' }
 

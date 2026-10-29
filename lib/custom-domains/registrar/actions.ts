@@ -17,6 +17,7 @@ import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } fr
 import { getDomainEntitlement } from '../access'
 import { listDomainsForUser } from '../service'
 import { getDomainRegistrarProvider, isLiveDomainRegistrar } from './provider'
+import { isDomainPurchaseEnabled } from './purchase-flag'
 import { finalizeDomainOrder, parsePurchaseDomain, searchDomainAvailability } from './service'
 import { RegistrarError, type RegistrantContact } from './types'
 import type { PricedDomainResult } from '../pricing/calc'
@@ -68,6 +69,7 @@ export type DomainSearchResponse =
 export async function searchMyDomainAvailability(query: string): Promise<DomainSearchResponse> {
   try {
     await requireUser()
+    if (!isDomainPurchaseEnabled()) return { ok: false, error: 'NOT_CONFIGURED' }
     const raw = await searchDomainAvailability(query)
     const context = await loadPricingContext()
     const results = priceAvailabilityRows(raw, context)
@@ -121,6 +123,7 @@ export async function startMyDomainPurchase(
   buyer?: CheckoutBuyer,
 ): Promise<StartPurchaseResult> {
   const { userId, email } = await requireUser()
+  if (!isDomainPurchaseEnabled()) return { ok: false, error: 'NOT_CONFIGURED' }
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
 
   const registrar = getDomainRegistrarProvider()
