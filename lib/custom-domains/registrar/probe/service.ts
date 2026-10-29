@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getDomainRegistrarProvider } from '../provider'
-import { decryptAuthCode, encryptAuthCode } from '../transfer-crypto'
+import { decryptContactBackup, encryptContactBackup } from './backup-crypto'
 import {
   isContactProbeCapable,
   RegistrarError,
@@ -17,6 +17,8 @@ import {
   isRegistrantProbeEnabled,
   maxReadbacks,
   nextReadbackAt,
+  PROBE_DAILY_LIMITS,
+  PROBE_LIMIT_WINDOW_MS,
   readbackPhase,
   roleForContactType,
   type ProbeContactType,
@@ -76,6 +78,7 @@ export type ProbeError =
   | 'note_required'
   | 'submit_failed'
   | 'restore_failed'
+  | 'daily_limit_reached'
   | 'db_error'
 
 export type ProbeResult<T extends object = object> = ({ ok: true } & T) | { ok: false; error: ProbeError; detail?: string }
@@ -131,14 +134,19 @@ function registrarOrNull() {
 }
 
 function readBackup(run: RunWithBackup): DomainContact | null {
-  if (!run.backup_enc) return null
-  const plain = decryptAuthCode(run.backup_enc)
-  if (!plain) return null
-  try {
-    return JSON.parse(plain) as DomainContact
-  } catch {
-    return null
-  }
+  return run.backup_enc ? decryptContactBackup(run.backup_enc) : null
+}
+
+/** Rolling-24h count from the database; null when the lookup itself failed (callers fail closed). */
+async function countSince(
+  table: 'domain_registrar_probe_runs' | 'domain_registrar_probe_events',
+  filter: Record<string, string>,
+): Promise<number | null> {
+  const since = new Date(Date.now() - PROBE_LIMIT_WINDOW_MS).toISOString()
+  let query = createAdminClient().from(table).select('id', { count: 'exact', head: true }).gte('created_at', since)
+  for (const [column, value] of Object.entries(filter)) query = query.eq(column, value)
+  const { count, error } = await query
+  return error || typeof count !== 'number' ? null : count
 }
 
 function apiStatusOf(error: unknown): string {
@@ -161,6 +169,15 @@ export async function startProbeRun(
   const policy = evaluateStartPolicy(input)
   if (!policy.ok) return fail(policy.error)
 
+  const startsToday = await countSince('domain_registrar_probe_runs', {})
+  if (startsToday === null) return fail('db_error')
+  if (startsToday >= PROBE_DAILY_LIMITS.starts) return fail('daily_limit_reached')
+  if (policy.contactType === 'registrant') {
+    const registrantToday = await countSince('domain_registrar_probe_runs', { contact_type: 'registrant' })
+    if (registrantToday === null) return fail('db_error')
+    if (registrantToday >= PROBE_DAILY_LIMITS.registrantStarts) return fail('daily_limit_reached')
+  }
+
   const registrar = registrarOrNull()
   if (!registrar) return fail('registrar_unavailable')
 
@@ -174,7 +191,7 @@ export async function startProbeRun(
   }
   if (!original) return fail('contact_missing')
 
-  const backupEnc = encryptAuthCode(JSON.stringify(original))
+  const backupEnc = encryptContactBackup(original)
   if (!backupEnc) return fail('backup_unavailable')
 
   const now = new Date()
@@ -226,6 +243,10 @@ export async function submitProbeChange(input: {
 
   const blocked = gateError(run)
   if (blocked) return fail(blocked)
+
+  const submitsToday = await countSince('domain_registrar_probe_events', { event: 'change_submitted' })
+  if (submitsToday === null) return fail('db_error')
+  if (submitsToday >= PROBE_DAILY_LIMITS.submits) return fail('daily_limit_reached')
 
   const testEmail = input.testEmail.trim().toLowerCase()
   if (maskEmail(testEmail) !== run.test_contact_email_masked) return fail('test_email_mismatch')
@@ -472,6 +493,15 @@ async function readbackOne(runId: string): Promise<'done' | 'skipped' | 'error'>
     await createAdminClient().from('domain_registrar_probe_runs').update({ status: 'completed' }).eq('id', run.id)
   }
   return 'done'
+}
+
+/**
+ * Runs even while the probe is switched off, so turning the flag off never strands
+ * an encrypted contact backup past its expiry. A no-op when no backup has expired.
+ */
+export async function purgeExpiredProbeBackups(): Promise<number> {
+  const { data } = await createAdminClient().rpc('purge_registrar_probe_backups')
+  return typeof data === 'number' ? data : 0
 }
 
 export type ProbeSweepResult = { readbacks: number; errors: number; purgedBackups: number; flagged: number }

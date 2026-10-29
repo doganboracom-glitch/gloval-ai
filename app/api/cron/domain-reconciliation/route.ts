@@ -25,7 +25,7 @@ import { INDEXNOW_BUDGET_MS } from '@/lib/indexnow'
 import { dispatchIndexQueue, enqueueDueScheduledPosts } from '@/lib/indexnow-server'
 import { runBackupSweep } from '@/lib/project-backups'
 import { isProbeEnabled } from '@/lib/custom-domains/registrar/probe/policy'
-import { runProbeSweep } from '@/lib/custom-domains/registrar/probe/service'
+import { purgeExpiredProbeBackups, runProbeSweep } from '@/lib/custom-domains/registrar/probe/service'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -233,6 +233,12 @@ export async function GET(request: Request) {
       registrarProbe = { error: 'registrar_probe_sweep_failed' }
     }
   } else {
+    // Switching the probe off must not strand an encrypted contact backup past its expiry.
+    try {
+      await purgeExpiredProbeBackups()
+    } catch {
+      console.log('[registrar-probe] purge while disabled failed')
+    }
     registrarProbe = { skipped: true }
   }
 

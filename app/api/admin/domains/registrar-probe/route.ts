@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { isProbeEnabled } from '@/lib/custom-domains/registrar/probe/policy'
+import { isJsonRequest, isSameOriginRequest } from '@/lib/custom-domains/registrar/probe/request-guard'
 import {
   abortProbeRun,
   getProbeRun,
@@ -17,8 +18,16 @@ export const maxDuration = 60
 
 /**
  * Admin-only registrar verification endpoint. Off by default: with
- * DOMAIN_REGISTRAR_PROBE_ENABLED unset it answers 404 to everyone, exactly like
- * a route that does not exist. Non-admins get the same 404.
+ * DOMAIN_REGISTRAR_PROBE_ENABLED unset, or outside a Vercel Production runtime, it
+ * answers 404 to everyone, exactly like a route that does not exist. Non-admins
+ * get the same 404.
+ *
+ * Guard order (every step before the next, nothing below runs if one fails):
+ *   1. flag on AND VERCEL_ENV === 'production'  -> 404 (no Supabase or registrar call)
+ *   2. signed-in admin                          -> 404
+ *   3. POST only: same-origin                   -> 403
+ *   4. POST only: application/json              -> 415
+ *   5. service: domain allow-list, registrant gates, daily limits, then the registrar
  *
  * GET                 -> list runs
  * GET  ?runId=<uuid>  -> one run with its event log
@@ -41,6 +50,9 @@ async function requireAdmin(): Promise<Admin | NextResponse> {
 const STATUS: Partial<Record<ProbeError, number>> = {
   probe_disabled: 404,
   not_found: 404,
+  domain_not_allowed: 403,
+  registrant_probe_disabled: 403,
+  daily_limit_reached: 429,
   invalid_state: 409,
   run_already_active: 409,
   registrar_unavailable: 503,
@@ -75,6 +87,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const admin = await requireAdmin()
   if (admin instanceof NextResponse) return admin
+
+  if (!isSameOriginRequest(request)) return NextResponse.json({ error: 'cross_origin' }, { status: 403 })
+  if (!isJsonRequest(request)) return NextResponse.json({ error: 'json_required' }, { status: 415 })
 
   let body: Record<string, unknown>
   try {

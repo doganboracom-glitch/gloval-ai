@@ -21,10 +21,24 @@ export function isProbeContactType(value: unknown): value is ProbeContactType {
   return typeof value === 'string' && (PROBE_CONTACT_TYPES as readonly string[]).includes(value)
 }
 
-/** Default OFF: only the literal string "true" turns the probe endpoint on. */
-export function isProbeEnabled(env: Env = process.env): boolean {
-  return env.DOMAIN_REGISTRAR_PROBE_ENABLED === 'true'
+/** Preview and Development deployments share the registrar credentials but must never run a probe. */
+export function isProductionRuntime(env: Env = process.env): boolean {
+  return env.VERCEL_ENV === 'production'
 }
+
+/** Default OFF: needs the literal string "true" AND a Vercel Production runtime. */
+export function isProbeEnabled(env: Env = process.env): boolean {
+  return env.DOMAIN_REGISTRAR_PROBE_ENABLED === 'true' && isProductionRuntime(env)
+}
+
+/** Per rolling 24 hours, counted from the database so a restart can not reset them. */
+export const PROBE_DAILY_LIMITS = {
+  starts: 5,
+  registrantStarts: 1,
+  submits: 5,
+} as const
+
+export const PROBE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /** A second, independent switch: registrant probes stay impossible until it is set. */
 export function isRegistrantProbeEnabled(env: Env = process.env): boolean {
