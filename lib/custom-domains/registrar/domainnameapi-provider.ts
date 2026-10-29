@@ -15,6 +15,8 @@ import {
   RegistrarError,
   type DomainAvailabilityResult,
   type DomainContact,
+  type DomainContactProbeCapable,
+  type DomainContactRole,
   type DomainContactSet,
   type DomainListCapable,
   type DomainManageCapable,
@@ -193,9 +195,8 @@ function contactMatches(actual: DomainContact | null, wanted: DomainContact): bo
   return norm(actual) === norm(wanted)
 }
 
-/** Rejects a contact before any provider call. Returns the normalized contact. */
-function validateContact(input: DomainContact): DomainContact {
-  const contact: DomainContact = {
+function normalizeContact(input: DomainContact): DomainContact {
+  return {
     firstName: str(input.firstName),
     lastName: str(input.lastName),
     company: str(input.company),
@@ -208,6 +209,11 @@ function validateContact(input: DomainContact): DomainContact {
     phoneCountryCode: str(input.phoneCountryCode).replace(/^\+/, ''),
     phone: str(input.phone).replace(/\D/g, ''),
   }
+}
+
+/** Rejects a contact before any provider call. Returns the normalized contact. */
+function validateContact(input: DomainContact): DomainContact {
+  const contact = normalizeContact(input)
   const required: Array<[string, string]> = [
     ['firstName', contact.firstName],
     ['lastName', contact.lastName],
@@ -242,7 +248,12 @@ function sdkContactInput(c: DomainContact): Record<string, unknown> {
 }
 
 export class DomainNameApiProvider
-  implements DomainRegistrarProvider, DomainTransferCapable, DomainListCapable, DomainManageCapable
+  implements
+    DomainRegistrarProvider,
+    DomainTransferCapable,
+    DomainListCapable,
+    DomainManageCapable,
+    DomainContactProbeCapable
 {
   readonly id = 'domainnameapi'
   readonly live = true
@@ -770,6 +781,40 @@ export class DomainNameApiProvider
         }),
       async () => allMatch(await this.getContacts(domain)),
       'CONTACTS',
+    )
+    return { changed: true }
+  }
+
+  async updateContactRole(
+    domain: string,
+    role: DomainContactRole,
+    contact: DomainContact,
+    options: { skipValidation?: boolean } = {},
+  ): Promise<ManageChange> {
+    const wanted = options.skipValidation ? normalizeContact(contact) : validateContact(contact)
+
+    const before = await this.getContacts(domain)
+    const roles: DomainContactRole[] = ['registrant', 'admin', 'tech', 'billing']
+    if (roles.some((r) => !before[r])) throw new RegistrarError('INVALID_INPUT', 'contact:role_missing')
+    if (contactMatches(before[role], wanted)) return { changed: false }
+
+    const sdkKey: Record<DomainContactRole, string> = {
+      registrant: 'Registrant',
+      admin: 'Administrative',
+      tech: 'Technical',
+      billing: 'Billing',
+    }
+    const payload: Record<string, Record<string, unknown>> = {}
+    for (const r of roles) payload[sdkKey[r]] = sdkContactInput(r === role ? wanted : (before[r] as DomainContact))
+
+    const client = this.transferClient()
+    await this.applyAndVerify(
+      () => client.SaveContacts(domain, payload),
+      async () => {
+        const after = await this.getContacts(domain)
+        return roles.every((r) => (r === role ? contactMatches(after[r], wanted) : contactMatches(after[r], before[r] as DomainContact)))
+      },
+      'CONTACT_ROLE',
     )
     return { changed: true }
   }

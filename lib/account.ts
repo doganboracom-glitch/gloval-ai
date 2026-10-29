@@ -3,6 +3,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  getDomainDeletionBlockers,
+  hasDomainDeletionBlockers,
+} from '@/lib/custom-domains/registrar/account-deletion-guard'
+import {
   describeError,
   hostingDetachSteps,
   removeStoragePrefix,
@@ -223,6 +227,14 @@ export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
   if (!user) return { ok: false, error: 'not_authenticated' }
 
   const admin = createAdminClient()
+
+  try {
+    const blockers = await getDomainDeletionBlockers(admin, user.id)
+    if (hasDomainDeletionBlockers(blockers)) return { ok: false, error: 'domains_block_deletion' }
+  } catch (error) {
+    console.error('[account-delete] domain guard failed', describeError(error))
+    return { ok: false, error: 'delete_failed' }
+  }
 
   let targets: CleanupTargets
   try {

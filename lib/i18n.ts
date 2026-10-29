@@ -1776,6 +1776,8 @@ const dict = {
       deleteModalConfirm: 'Kalıcı olarak sil',
       deleting: 'Hesap siliniyor…',
       deleteError: 'Hesap silinemedi. Lütfen tekrar dene veya destek ile iletişime geç.',
+      deleteBlockedByDomains:
+        'Hesabında kayıtçıda kayıtlı bir alan adı veya tamamlanmamış bir alan adı işlemi (sipariş, transfer, yenileme) var. Önce alan adını başka bir hesaba devret ya da bekleyen işlemin bitmesini bekle; sonra hesabını silebilirsin.',
     },
     domainSearch: {
       footerLink: 'Domain Sorgula ve Satın Al',
@@ -3502,6 +3504,8 @@ const dict = {
       deleteModalConfirm: 'Permanently delete',
       deleting: 'Deleting account…',
       deleteError: 'Could not delete your account. Please try again or contact support.',
+      deleteBlockedByDomains:
+        'Your account still holds a registrar domain or has an unfinished domain job (order, transfer or renewal). Transfer the domain to another account or wait for the pending job to finish, then delete your account.',
     },
     domainSearch: {
       footerLink: 'Search & Buy Domains',
