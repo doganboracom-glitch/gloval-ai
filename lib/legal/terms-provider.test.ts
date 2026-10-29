@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type Block = { type: 'p'; text: string } | { type: 'list'; items: string[] }
 type Section = { heading: string; blocks: Block[] }
 
-async function load() {
+async function load(phone = '') {
   vi.resetModules()
+  vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', phone)
   const company = await import('@/lib/legal/company')
   const docs = await import('@/lib/legal/documents')
   return { COMPANY: company.COMPANY, LEGAL_LAST_UPDATED: company.LEGAL_LAST_UPDATED, docs }
@@ -47,29 +48,28 @@ describe('Kullanım Koşulları — Hizmet Sağlayıcı bölümü', () => {
     expect(enLead).toBe(`${COMPANY.legalName} (hereinafter referred to as “GLOVAL AI”)`)
   })
 
-  it('unvan, adres, telefon ve e-posta company.ts değerleriyle birebir eşleşir', async () => {
+  it('unvan, adres ve e-posta company.ts değerleriyle eşleşir; varsayılan telefon satırı yoktur', async () => {
     const { COMPANY, docs } = await load()
     const terms = docs.getLegalDoc('kullanim-kosullari')!
     const tr = flatten(terms.tr.sections[0] as Section)
     const en = flatten(terms.en.sections[0] as Section)
     expect(tr).toContain(`Adres: ${COMPANY.address}`)
-    expect(tr).toContain(`Telefon: ${COMPANY.phone}`)
+    expect(tr.filter((item) => item.startsWith('Telefon:'))).toEqual([])
     expect(tr).toContain(`E-posta: ${COMPANY.supportEmail}`)
     expect(en).toContain(`Address: ${COMPANY.address}`)
-    expect(en).toContain(`Phone: ${COMPANY.phone}`)
+    expect(en.filter((item) => item.startsWith('Phone:'))).toEqual([])
     expect(en).toContain(`Email: ${COMPANY.supportEmail}`)
     expect(COMPANY.legalName).toBe(
       'DB AJANS REKLAM MEDYA HİZMETLER BİLİŞİM TEKNOLOJİLERİ SANAYİ VE TİCARET LİMİTED ŞİRKETİ',
     )
-    expect(COMPANY.phone).toBe('0850 308 40 88')
+    expect(COMPANY.phone).toBeUndefined()
   })
 
   it('değerler kopya metin değildir: company.ts ortam değerleri değişince bölüm de değişir', async () => {
     vi.stubEnv('NEXT_PUBLIC_COMPANY_LEGAL_NAME', 'TEST UNVAN LTD. ŞTİ.')
     vi.stubEnv('NEXT_PUBLIC_COMPANY_ADDRESS', 'Test Mah. Deneme Sk. No:1 Kadıköy/İstanbul')
-    vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', '0212 111 22 33')
     vi.stubEnv('NEXT_PUBLIC_SUPPORT_EMAIL', 'destek@example.test')
-    const { docs } = await load()
+    const { docs } = await load('0212 111 22 33')
     const terms = docs.getLegalDoc('kullanim-kosullari')!
     for (const lang of ['tr', 'en'] as const) {
       const text = flatten(terms[lang].sections[0] as Section).join('\n')
@@ -77,7 +77,6 @@ describe('Kullanım Koşulları — Hizmet Sağlayıcı bölümü', () => {
       expect(text).toContain('Test Mah. Deneme Sk. No:1 Kadıköy/İstanbul')
       expect(text).toContain('0212 111 22 33')
       expect(text).toContain('destek@example.test')
-      expect(text).not.toContain('0850 308 40 88')
     }
   })
 })

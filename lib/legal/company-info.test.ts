@@ -11,7 +11,6 @@ const APPROVED = {
   legalName:
     'DB AJANS REKLAM MEDYA HİZMETLER BİLİŞİM TEKNOLOJİLERİ SANAYİ VE TİCARET LİMİTED ŞİRKETİ',
   address: 'Meşrutiyet Mah. Şehit İsmet Armağan Sk. Bingül Apt. No:17/A Şişli/İstanbul',
-  phone: '0850 308 40 88',
   shortName: 'GLOVAL AI',
 }
 
@@ -69,18 +68,12 @@ afterEach(() => {
 })
 
 describe('approved company details', () => {
-  it('ships the approved legal name, address, phone and GLOVAL AI brand', async () => {
+  it('ships the approved legal name and address without a default phone', async () => {
     const { COMPANY } = await loadCompany()
     expect(COMPANY.legalName).toBe(APPROVED.legalName)
     expect(COMPANY.address).toBe(APPROVED.address)
-    expect(COMPANY.phone).toBe(APPROVED.phone)
+    expect(COMPANY.phone).toBeUndefined()
     expect(COMPANY.brandName).toBe(APPROVED.shortName)
-  })
-
-  it('builds the tel: link in international form', async () => {
-    const { toTelHref } = await loadCompany()
-    expect(toTelHref(APPROVED.phone)).toBe('tel:+908503084088')
-    expect(toTelHref('+90 850 308 40 88')).toBe('tel:+908503084088')
   })
 
   it('shows the short name definition next to the legal name in the KVKK and sales texts', async () => {
@@ -89,7 +82,7 @@ describe('approved company details', () => {
     expect(text).toContain(`${APPROVED.legalName} (bundan sonra “GLOVAL AI” olarak anılacaktır)`)
     expect(text).toContain(`${APPROVED.legalName} (hereinafter referred to as “GLOVAL AI”)`)
     expect(text).toContain(APPROVED.address)
-    expect(text).toContain(`Telefon: ${APPROVED.phone}`)
+    expect(text).not.toMatch(/(?:Telefon|Phone):/)
   })
 })
 
@@ -155,9 +148,10 @@ describe('customer sites are independent of the company details', () => {
     vi.stubEnv('NEXT_PUBLIC_COMPANY_PHONE', '0212 000 00 00')
     const after = render()
     expect(after).toBe(before)
-    for (const value of [APPROVED.legalName, APPROVED.address, APPROVED.phone]) {
+    for (const value of [APPROVED.legalName, APPROVED.address]) {
       expect(before).not.toContain(value)
     }
+    expect(before).not.toMatch(/(?:Telefon|Phone):/)
     for (const re of OLD_PATTERNS) expect(before).not.toMatch(re)
   })
 })
