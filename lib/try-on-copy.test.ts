@@ -15,7 +15,7 @@ describe.each(['tr', 'en'] as const)('tryOnErrorMessage (%s)', (lang) => {
     expect(message).not.toBe(copy.errorGeneric.default)
   })
 
-  it.each(['unavailable', 'failed', 'rate_limited', 'not_available'] as const)('maps %s to its own message', (code) => {
+  it.each(['unavailable', 'failed', 'rate_limited', 'store_daily_limit', 'not_available'] as const)('maps %s to its own message', (code) => {
     expect(tryOnErrorMessage(copy, 500, code)).toBe(copy.errorGeneric[code])
   })
 

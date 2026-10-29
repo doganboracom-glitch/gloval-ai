@@ -1,6 +1,10 @@
 import { generateTryOnImage } from '@/lib/image-provider'
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
 import { AI_ACTION_COSTS, consumeCredits, getCreditBalance } from '@/lib/ai-credits'
+import { hashedIp, releaseAnonAiActions, reserveAnonSubjects } from '@/lib/anon-ai-limit'
+import { getPublishedSlugForProjectId, resolveActiveDomainForHost } from '@/lib/custom-domains/service'
+import { isAllowedTryOnOrigin } from '@/lib/try-on-origin'
+import { tryOnStoreDailyLimit, tryOnStoreSubject } from '@/lib/try-on-store-limit'
 
 // Image-conditioned generation is slower than plain text-to-image —
 // `openai/gpt-image-1` (the model this route uses; see image-provider.ts for
@@ -32,6 +36,15 @@ const RATE_LIMIT = 8
 const RATE_WINDOW_MS = 10 * 60 * 1000
 const rateBuckets = new Map<string, RateEntry>()
 
+// Durable (database) per-IP cap. The in-memory bucket above is per serverless
+// instance, so on its own it does not bound a determined caller.
+const TRY_ON_IP_DAILY_LIMIT = 12
+
+async function resolveCustomDomainSlug(host: string): Promise<string | null> {
+  const bound = await resolveActiveDomainForHost(host)
+  return bound?.websiteProjectId ? getPublishedSlugForProjectId(bound.websiteProjectId) : null
+}
+
 function checkRateLimit(key: string): boolean {
   const now = Date.now()
   const entry = rateBuckets.get(key)
@@ -60,6 +73,26 @@ export async function POST(req: Request) {
   }
 
   const mode = body.mode === 'demo' ? 'demo' : 'store'
+
+  let originAllowed = false
+  try {
+    originAllowed = await isAllowedTryOnOrigin(
+      {
+        origin: req.headers.get('origin'),
+        referer: req.headers.get('referer'),
+        host: req.headers.get('host'),
+        mode,
+        storeSlug: (body.storeSlug ?? '').trim(),
+      },
+      { resolveCustomDomainSlug },
+    )
+  } catch (err) {
+    console.error('[try-on] origin check threw', err)
+  }
+  if (!originAllowed) {
+    return Response.json({ ok: false, error: 'forbidden_origin' }, { status: 403 })
+  }
+
   const productName = (body.productName ?? '').trim().slice(0, 200) || 'this product'
   const personPhoto = (body.personPhoto ?? '').trim()
 
@@ -114,6 +147,32 @@ export async function POST(req: Request) {
     if (!slug) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
   }
 
+  let reservedSubjects: string[] = []
+  try {
+    // Per-IP first so a blocked visitor never touches the store's shared
+    // counter; the reservation is all-or-nothing and nothing is charged to the
+    // owner until a generation succeeds.
+    const attempts = [{ subject: `tryon-ip:${hashedIp(req)}`, limit: TRY_ON_IP_DAILY_LIMIT }]
+    if (mode === 'store') {
+      attempts.push({
+        subject: tryOnStoreSubject((body.storeSlug ?? '').trim()),
+        limit: tryOnStoreDailyLimit(),
+      })
+    }
+    const reservation = await reserveAnonSubjects(attempts)
+    if (!reservation.allowed) {
+      const storeCapReached = reservation.failedSubject?.startsWith('tryon-store:') === true
+      return Response.json(
+        { ok: false, error: storeCapReached ? 'store_daily_limit' : 'rate_limited' },
+        { status: 429 },
+      )
+    }
+    reservedSubjects = reservation.subjects
+  } catch (err) {
+    console.error('[try-on] limiter threw', err)
+    return Response.json({ ok: false, error: 'failed' }, { status: 500 })
+  }
+
   let result: Awaited<ReturnType<typeof generateTryOnImage>>
   try {
     result = await generateTryOnImage({
@@ -123,10 +182,12 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     console.error('[try-on] generateTryOnImage threw', err)
+    await releaseAnonAiActions(reservedSubjects).catch(() => {})
     return Response.json({ ok: false, error: 'failed' }, { status: 500 })
   }
 
   if ('error' in result) {
+    await releaseAnonAiActions(reservedSubjects).catch(() => {})
     const status = result.error === 'unavailable' ? 503 : 500
     return Response.json({ ok: false, error: result.error }, { status })
   }

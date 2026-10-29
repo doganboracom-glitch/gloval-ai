@@ -64,7 +64,7 @@ export function hashedIp(req: Request): string {
 
 export type AnonReservation =
   | { allowed: true; subjects: string[] }
-  | { allowed: false; limit: number; resetAt: string }
+  | { allowed: false; limit: number; resetAt: string; failedSubject?: string }
 
 async function reserve(subject: string, limit: number) {
   const admin = createAdminClient()
@@ -108,6 +108,31 @@ export async function getOrCreateAnonId(): Promise<string> {
     })
   }
   return id
+}
+
+/**
+ * Reserves one slot on each named counter, all-or-nothing. Lets a feature meter
+ * itself on its own subjects (e.g. `tryon-ip:<hash>`) without sharing the
+ * `/api/generate` budget.
+ */
+export async function reserveAnonSubjects(
+  attempts: Array<{ subject: string; limit: number }>,
+): Promise<AnonReservation> {
+  const reserved: string[] = []
+  for (const { subject, limit } of attempts) {
+    const row = await reserve(subject, limit)
+    if (!row || !row.allowed) {
+      await releaseAnonAiActions(reserved)
+      return {
+        allowed: false,
+        limit,
+        resetAt: row?.reset_at ?? new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        failedSubject: subject,
+      }
+    }
+    reserved.push(subject)
+  }
+  return { allowed: true, subjects: reserved }
 }
 
 /** Reserves one anonymous AI action for this caller (cookie id + IP backstop). */
