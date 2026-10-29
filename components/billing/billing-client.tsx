@@ -28,7 +28,6 @@ import type { AddOnOverview } from '@/lib/add-ons'
 import type { PublishBanner } from '@/lib/billing-publish-banner'
 import { isFreePlanShown, resolveImplicitFreePlan, type CreditSummary, type SiteCapacity } from '@/lib/billing-summary'
 import { Button } from '@/components/ui/button'
-import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { BillingProfileCard } from '@/components/billing/billing-profile-card'
 import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 import {
@@ -996,22 +995,16 @@ export function BillingClient({
           </div>
         )}
 
-        <BillingProfileBanner
-          show={
-            hasActivePaidSubscription &&
-            billingProfileStorageAvailable &&
-            !billingProfileComplete
-          }
-          onEnter={() => setBillingProfileOpenRequest((count) => count + 1)}
-        />
-        <BillingProfileCard
+        <div className="mt-6">
+          <BillingProfileCard
           openRequest={billingProfileOpenRequest}
           initialProfile={billingProfile}
           storageAvailable={billingProfileStorageAvailable}
           defaultFullName={billingProfileDefaultFullName}
           defaultEmail={userEmail}
           onSaved={(profile) => setBillingProfileComplete(profile.complete)}
-        />
+          />
+        </div>
 
         {/* Current plan + usage summary */}
         <section className="mt-8 grid gap-4 sm:grid-cols-2">
