@@ -20,7 +20,44 @@ import { Button } from '@/components/ui/button'
  * data URL) and sent straight to `/api/try-on` — it is never persisted.
  */
 
-const MAX_FILE_BYTES = 6 * 1024 * 1024
+const MAX_FILE_BYTES = 12 * 1024 * 1024
+
+// Vercel Functions reject request bodies over 4.5MB with a non-JSON 413, which
+// the client can only report as a generic error. Phone photos are routinely
+// 3-8MB (≈4-11MB as a base64 data URL), so the photo is downscaled and
+// re-encoded as JPEG before it is sent. The model doesn't benefit from more.
+const MAX_PHOTO_EDGE = 1536
+const JPEG_QUALITY = 0.85
+
+function compressPhoto(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const scale = Math.min(1, MAX_PHOTO_EDGE / Math.max(img.naturalWidth, img.naturalHeight))
+      const width = Math.max(1, Math.round(img.naturalWidth * scale))
+      const height = Math.max(1, Math.round(img.naturalHeight * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('canvas_unavailable'))
+        return
+      }
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, width, height)
+      ctx.drawImage(img, 0, 0, width, height)
+      resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image_decode_failed'))
+    }
+    img.src = url
+  })
+}
 
 type Copy = {
   cta: string
@@ -43,14 +80,14 @@ const COPY: Record<'tr' | 'en', Copy> = {
     cta: 'AI ile üzerinde dene',
     title: 'Üzerinde dene',
     intro: 'Bir fotoğrafını yükle, yapay zekâ ürünü senin üzerinde göstersin.',
-    uploadHint: 'Fotoğraf yükle (JPG, PNG veya WEBP, en fazla 6MB)',
+    uploadHint: 'Fotoğraf yükle (JPG, PNG veya WEBP, en fazla 12MB)',
     changePhoto: 'Fotoğrafı değiştir',
     generate: 'Oluştur',
     generating: 'Oluşturuluyor…',
     tryAgain: 'Tekrar dene',
     download: 'İndir',
     close: 'Kapat',
-    errorTooLarge: 'Fotoğraf çok büyük. Lütfen 6MB altında bir görsel seç.',
+    errorTooLarge: 'Fotoğraf çok büyük. Lütfen 12MB altında bir görsel seç.',
     errorType: 'Sadece JPG, PNG veya WEBP formatında fotoğraf yükleyebilirsin.',
     errorGeneric: {
       unavailable: 'Bu özellik şu anda kullanılamıyor.',
@@ -64,14 +101,14 @@ const COPY: Record<'tr' | 'en', Copy> = {
     cta: 'Try it on with AI',
     title: 'Try it on',
     intro: 'Upload a photo of yourself and let AI show you wearing the product.',
-    uploadHint: 'Upload a photo (JPG, PNG or WEBP, up to 6MB)',
+    uploadHint: 'Upload a photo (JPG, PNG or WEBP, up to 12MB)',
     changePhoto: 'Change photo',
     generate: 'Generate',
     generating: 'Generating…',
     tryAgain: 'Try again',
     download: 'Download',
     close: 'Close',
-    errorTooLarge: 'That photo is too large. Please choose one under 6MB.',
+    errorTooLarge: 'That photo is too large. Please choose one under 12MB.',
     errorType: 'Please upload a JPG, PNG or WEBP photo.',
     errorGeneric: {
       unavailable: 'This feature is not available right now.',
@@ -137,9 +174,9 @@ export function TryOnButton({
     }
     setErrorMsg(null)
     setResult(null)
-    const reader = new FileReader()
-    reader.onload = () => setPhoto(reader.result as string)
-    reader.readAsDataURL(file)
+    compressPhoto(file)
+      .then(setPhoto)
+      .catch(() => setErrorMsg(t.errorType))
   }
 
   async function generate() {
@@ -161,8 +198,14 @@ export function TryOnButton({
       })
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; dataUrl?: string; error?: string }
       if (!res.ok || !data.ok || !data.dataUrl) {
-        const key = (data.error as keyof Copy['errorGeneric']) ?? 'default'
-        setErrorMsg(t.errorGeneric[key] ?? t.errorGeneric.default)
+        if (res.status === 413) {
+          setErrorMsg(t.errorTooLarge)
+        } else if (data.error === 'invalid_photo') {
+          setErrorMsg(t.errorType)
+        } else {
+          const key = (data.error as keyof Copy['errorGeneric']) ?? 'default'
+          setErrorMsg(t.errorGeneric[key] ?? t.errorGeneric.default)
+        }
         setStatus('error')
         return
       }

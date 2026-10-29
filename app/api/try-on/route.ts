@@ -107,11 +107,17 @@ export async function POST(req: Request) {
     if (!slug) return Response.json({ ok: false, error: 'not_available' }, { status: 404 })
   }
 
-  const result = await generateTryOnImage({
-    personPhotoDataUrl: personPhoto,
-    productPhotoUrl: productImage,
-    productName,
-  })
+  let result: Awaited<ReturnType<typeof generateTryOnImage>>
+  try {
+    result = await generateTryOnImage({
+      personPhotoDataUrl: personPhoto,
+      productPhotoUrl: productImage,
+      productName,
+    })
+  } catch (err) {
+    console.error('[try-on] generateTryOnImage threw', err)
+    return Response.json({ ok: false, error: 'failed' }, { status: 500 })
+  }
 
   if ('error' in result) {
     const status = result.error === 'unavailable' ? 503 : 500
