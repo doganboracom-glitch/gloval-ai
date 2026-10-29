@@ -23,6 +23,7 @@ import {
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
 import { formatMoney } from '@/lib/billing-utils'
+import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
 import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'
@@ -678,7 +679,7 @@ export function AddOnsPanel({
             defaultEmail={userEmail}
             pending={isPending}
             profileComplete={profileComplete}
-            onEditProfile={() => router.push('/billing')}
+            onEditProfile={() => router.push(BILLING_PROFILE_HREF)}
             paymentUrl={awaitingUrl}
             iframeRef={paymentIframeRef}
             paymentResult={paymentResult}
