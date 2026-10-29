@@ -30,6 +30,14 @@ export function composeStoreFrom(mailFrom: string, storeName: string | null | un
   return `"${display}" <${address}>`
 }
 
+/** Fixed display name on the verified sender address, e.g. "GLOVAL AI Destek" <address>. */
+export function composeNamedFrom(mailFrom: string, displayName: string): string {
+  const address = extractAddress(mailFrom)
+  const display = cleanDisplayName(displayName)
+  if (!address || !display) return mailFrom
+  return `"${display}" <${address}>`
+}
+
 /** Only a single, well-formed address is accepted as a reply-to. */
 export function sanitizeReplyTo(value: string | null | undefined): string | undefined {
   const trimmed = (value ?? '').trim()

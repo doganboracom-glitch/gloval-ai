@@ -1,8 +1,13 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordNotification, sendTransactionalEmail } from '@/lib/notify'
 import { COMPANY } from '@/lib/legal/company'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { resolveRateLimitIp } from '@/lib/custom-domains/public-search/limits'
+import { resolveEmailLang } from '@/lib/email/lang'
+import { enqueueContactAck } from '@/lib/support/contact-ack'
 
 /**
  * Public contact form → support ticket.
@@ -15,9 +20,13 @@ import { COMPANY } from '@/lib/legal/company'
  * Each submission becomes a `support_tickets` row (source='contact_form',
  * user_id NULL, sender captured in contact_name/contact_email) plus the opening
  * `support_ticket_messages` row, so it shows up in the admin "Destek" panel
- * exactly like an in-app ticket. We also drop an admin notification and, when
- * configured, email the operator — every step is best-effort and never blocks
- * the user's confirmation.
+ * exactly like an in-app ticket. We also drop an admin notification, email the
+ * operator when configured, and queue the "Talebiniz alındı" acknowledgement
+ * to the sender — every step after the ticket insert is best-effort and never
+ * blocks the visitor's confirmation.
+ *
+ * Abuse protection: a hidden honeypot field (bots get a silent fake success and
+ * no ticket), a per-IP and a per-address rate limit, and strict validation.
  */
 
 export type ContactResult = { ok: true } | { ok: false; error: string }
@@ -26,16 +35,30 @@ const MAX_NAME = 120
 const MAX_EMAIL = 200
 const MAX_MESSAGE = 4000
 
+const IP_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 }
+const EMAIL_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 }
+
 function isValidEmail(value: string): boolean {
   // Deliberately permissive: reject only the obviously malformed.
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
+const escapeHtml = (value: string) =>
+  value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+
 export async function submitContactRequest(input: {
   name: string
   email: string
   message: string
+  /** Honeypot: real visitors never see or fill this field. */
+  website?: string
+  /** Visitor's interface language; only picks the email language. */
+  lang?: string
 }): Promise<ContactResult> {
+  if (typeof input.website === 'string' && input.website.trim() !== '') {
+    return { ok: true }
+  }
+
   const name = input.name?.trim() ?? ''
   const email = input.email?.trim() ?? ''
   const message = input.message?.trim() ?? ''
@@ -47,6 +70,16 @@ export async function submitContactRequest(input: {
   if (message.length < 10 || message.length > MAX_MESSAGE) {
     return { ok: false, error: 'invalid_message' }
   }
+
+  const requestHeaders = await headers()
+  const ip = resolveRateLimitIp((header) => requestHeaders.get(header)) ?? 'unknown'
+  const ipCheck = checkRateLimit(`contact:ip:${ip}`, IP_LIMIT.limit, IP_LIMIT.windowMs)
+  const emailCheck = checkRateLimit(
+    `contact:email:${email.toLowerCase()}`,
+    EMAIL_LIMIT.limit,
+    EMAIL_LIMIT.windowMs,
+  )
+  if (!ipCheck.allowed || !emailCheck.allowed) return { ok: false, error: 'rate_limited' }
 
   const admin = createAdminClient()
 
@@ -63,7 +96,7 @@ export async function submitContactRequest(input: {
       contact_name: name,
       contact_email: email,
     })
-    .select('id')
+    .select('id, ticket_number')
     .single()
 
   if (ticketError || !ticket) {
@@ -103,8 +136,20 @@ export async function submitContactRequest(input: {
       replyTo: email,
       subject: `[Gloval AI] Yeni iletişim talebi — ${name}`,
       text: `Ad: ${name}\nE-posta: ${email}\n\n${message}`,
-      html: `<p><strong>Ad:</strong> ${name}</p><p><strong>E-posta:</strong> ${email}</p><p style="white-space:pre-wrap">${message}</p>`,
+      html: `<p><strong>Ad:</strong> ${escapeHtml(name)}</p><p><strong>E-posta:</strong> ${escapeHtml(email)}</p><p style="white-space:pre-wrap">${escapeHtml(message)}</p>`,
     })
+  }
+
+  // The ticket is already saved: a failing acknowledgement must never fail the form.
+  try {
+    await enqueueContactAck({
+      ticketId: ticket.id,
+      ticketNumber: ticket.ticket_number,
+      email,
+      lang: resolveEmailLang(input.lang),
+    })
+  } catch (error) {
+    console.log('[v0] contact ack enqueue error:', error instanceof Error ? error.message : 'unknown')
   }
 
   return { ok: true }

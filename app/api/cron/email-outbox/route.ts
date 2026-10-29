@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { processDueEmailEvents } from '@/lib/email-outbox'
+import { processContactAcks } from '@/lib/support/contact-ack'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -19,7 +20,11 @@ export async function GET(request: Request) {
     console.log(
       `[email-outbox] sweep processed=${result.sent + result.retry + result.failed + result.deferred} sent=${result.sent} retry=${result.retry} failed=${result.failed} deferred=${result.deferred}`,
     )
-    return NextResponse.json({ ok: true, ...result })
+    const contactAcks = await processContactAcks({ deadlineMs: Date.now() + OUTBOX_BUDGET_MS })
+    console.log(
+      `[email-outbox] contact acks sent=${contactAcks.sent} retry=${contactAcks.retry} gaveUp=${contactAcks.gaveUp} skipped=${contactAcks.skipped}`,
+    )
+    return NextResponse.json({ ok: true, ...result, contactAcks })
   } catch (error) {
     console.log('[email-outbox] sweep failed:', error instanceof Error ? error.message : 'unknown')
     return NextResponse.json({ error: 'email_outbox_failed' }, { status: 500 })

@@ -33,7 +33,13 @@ export function SupportShell({
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <BrandLogo />
+          <Link
+            href="/"
+            aria-label="GLOVAL AI"
+            className="inline-flex rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+          >
+            <BrandLogo />
+          </Link>
           <LanguageSwitcher />
         </div>
       </header>
