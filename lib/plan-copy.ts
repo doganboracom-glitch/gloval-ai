@@ -686,15 +686,6 @@ function buildRawPlanView(
     note: f.versionHistoryRestoreNote,
   })
 
-  // Announced, not built yet: faded row with a "Yakında" pill, never a link.
-  const glovalAdsItem = (): PlanCopyItem => ({
-    id: 'glovalAds',
-    label: GLOVAL_ADS_LABEL,
-    badge: s.comparison.soon,
-    excluded: true,
-    soon: true,
-  })
-
   if (code === 'free') {
     return {
       ...head,
@@ -784,7 +775,6 @@ function buildRawPlanView(
             autoBackupItem(f.autoBackupDaily, f.autoBackupDailyValue),
             versionHistoryRestoreItem(),
             ...advancedAiItems,
-            glovalAdsItem(),
             ...(CATALOG_MODE_LIVE
               ? [{ id: 'catalogOrder', label: f.catalogOrder(CATALOG_PRODUCT_LIMIT) } as PlanCopyItem]
               : []),
@@ -829,7 +819,6 @@ function buildRawPlanView(
           autoBackupItem(f.autoBackupDaily, f.autoBackupDailyValue),
           versionHistoryRestoreItem(),
           ...advancedAiItems,
-          glovalAdsItem(),
         ],
       },
       {
@@ -864,7 +853,6 @@ function buildRawPlanView(
   }
 }
 
-export const GLOVAL_ADS_LABEL = 'GLOVAL ADS'
 
 const PLAN_ORDER: PlanCode[] = ['free', 'starter', 'pro', 'ecommerce']
 

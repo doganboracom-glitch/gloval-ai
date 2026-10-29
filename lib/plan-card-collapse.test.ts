@@ -160,6 +160,18 @@ describe('plan card toggle markup', () => {
   })
 })
 
+describe('retired GLOVAL ADS row', () => {
+  for (const lang of LANGS) {
+    it(`${lang}: the PRO card has no GLOVAL ADS row or soon badge`, () => {
+      for (const expanded of [false, true]) {
+        const html = render('pro', lang, expanded)
+        expect(html).not.toContain('GLOVAL ADS')
+        expect(html).not.toContain(lang === 'tr' ? 'Yakında' : 'Soon')
+      }
+    })
+  }
+})
+
 describe('e-commerce "in addition to PRO" list', () => {
   // Everything STARTER and PRO already list in identical form.
   const INHERITED = [
@@ -176,7 +188,6 @@ describe('e-commerce "in addition to PRO" list', () => {
     'logoStudio',
     'versionHistory',
     'advancedAi',
-    'glovalAds',
     'support',
     'pages',
     'catalogOrder',
