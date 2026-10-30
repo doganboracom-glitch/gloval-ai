@@ -4,12 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SiteFooter } from './site-footer'
 import { dictionary, type Lang } from '@/lib/i18n'
 import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
-import {
-  ADS_LINK_NEW_UNTIL,
-  DOMAIN_LINK_NEW_UNTIL,
-  isAdsLinkNewBadgeActive,
-  isDomainLinkNewBadgeActive,
-} from '@/lib/footer-new-badge'
+import { DOMAIN_LINK_NEW_UNTIL, isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
 
 const state: { lang: Lang } = { lang: 'tr' }
 
@@ -33,23 +28,21 @@ afterEach(() => {
   state.lang = 'tr'
 })
 
-const ADS_BADGE_BEFORE = new Date('2026-12-15T12:00:00+03:00')
-const ADS_BADGE_AFTER = new Date('2026-12-30T00:00:01+03:00')
-
 describe('footer GLOVAL Ads link badge', () => {
-  it('shows the "Yeni" badge next to the link when the flag is on and the date is before the cutoff', () => {
+  it('shows the "Yakında" badge next to the link when the flag is on', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
-    render(<SiteFooter now={ADS_BADGE_BEFORE} />)
+    render(<SiteFooter now={BEFORE} />)
     const link = screen.getByRole('link', { name: /GLOVAL Ads/ })
     expect(link.getAttribute('href')).toBe('/ads')
-    expect(link.contains(screen.getByTestId('ads-new-badge'))).toBe(true)
-    expect(screen.getByTestId('ads-new-badge').textContent).toBe('Yeni')
+    expect(link.contains(screen.getByTestId('ads-soon-badge'))).toBe(true)
+    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('Yakında')
+    expect(screen.queryByTestId('ads-new-badge')).toBeNull()
   })
 
   it('uses the same badge look as the domain link badge', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteFooter now={BEFORE} />)
-    expect(screen.getByTestId('ads-new-badge').className).toBe(
+    expect(screen.getByTestId('ads-soon-badge').className).toBe(
       screen.getByTestId('domain-new-badge').className,
     )
   })
@@ -57,43 +50,25 @@ describe('footer GLOVAL Ads link badge', () => {
   it('shows the English badge text in English', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     state.lang = 'en'
-    render(<SiteFooter now={ADS_BADGE_BEFORE} />)
-    expect(screen.getByTestId('ads-new-badge').textContent).toBe('New')
+    render(<SiteFooter now={BEFORE} />)
+    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('Coming soon')
   })
 
-  it('hides the badge after the cutoff but keeps the link', () => {
+  it('keeps the badge long after the domain badge has expired', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
-    render(<SiteFooter now={ADS_BADGE_AFTER} />)
-    expect(screen.queryByTestId('ads-new-badge')).toBeNull()
-    expect(screen.getByRole('link', { name: /GLOVAL Ads/ }).getAttribute('href')).toBe('/ads')
+    render(<SiteFooter now={AFTER} />)
+    expect(screen.queryByTestId('domain-new-badge')).toBeNull()
+    expect(screen.getByTestId('ads-soon-badge')).toBeTruthy()
   })
 
   it('renders neither the link nor the badge when the flag is off', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '')
-    render(<SiteFooter now={ADS_BADGE_BEFORE} />)
+    render(<SiteFooter now={BEFORE} />)
     expect(screen.queryByRole('link', { name: /GLOVAL Ads/ })).toBeNull()
-    expect(screen.queryByTestId('ads-new-badge')).toBeNull()
+    expect(screen.queryByTestId('ads-soon-badge')).toBeNull()
   })
 
-  it('does not change the domain badge expiry', () => {
-    vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
-    render(<SiteFooter now={new Date('2026-12-29T12:00:00+03:00')} />)
-    expect(screen.queryByTestId('domain-new-badge')).toBeNull()
-    expect(screen.getByTestId('ads-new-badge')).toBeTruthy()
-  })
-})
-
-describe('isAdsLinkNewBadgeActive', () => {
-  it('is on before and at the cutoff, off right after', () => {
-    expect(isAdsLinkNewBadgeActive(ADS_BADGE_BEFORE)).toBe(true)
-    expect(isAdsLinkNewBadgeActive(new Date(ADS_LINK_NEW_UNTIL))).toBe(true)
-    expect(isAdsLinkNewBadgeActive(ADS_BADGE_AFTER)).toBe(false)
-  })
-
-  it('expires 60 days after 2026-10-30 and leaves the domain cutoff untouched', () => {
-    const start = Date.parse('2026-10-30T00:00:00+03:00')
-    const sixtyDays = 60 * 24 * 60 * 60 * 1000
-    expect(Date.parse(ADS_LINK_NEW_UNTIL)).toBe(start + sixtyDays + (24 * 60 * 60 * 1000 - 1000))
+  it('leaves the domain cutoff untouched', () => {
     expect(DOMAIN_LINK_NEW_UNTIL).toBe('2026-12-28T23:59:59+03:00')
   })
 })

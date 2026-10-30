@@ -5,12 +5,6 @@
  */
 export const DOMAIN_LINK_NEW_UNTIL = '2026-12-28T23:59:59+03:00'
 
-/**
- * Last moment (Istanbul time) the "Yeni" badge next to the footer's
- * GLOVAL Ads link is shown: 60 days after the badge was added (2026-10-30).
- */
-export const ADS_LINK_NEW_UNTIL = '2026-12-29T23:59:59+03:00'
-
 function isBefore(untilIso: string, now: Date): boolean {
   const until = Date.parse(untilIso)
   return Number.isFinite(until) && now.getTime() <= until
@@ -18,8 +12,4 @@ function isBefore(untilIso: string, now: Date): boolean {
 
 export function isDomainLinkNewBadgeActive(now: Date = new Date()): boolean {
   return isBefore(DOMAIN_LINK_NEW_UNTIL, now)
-}
-
-export function isAdsLinkNewBadgeActive(now: Date = new Date()): boolean {
-  return isBefore(ADS_LINK_NEW_UNTIL, now)
 }
