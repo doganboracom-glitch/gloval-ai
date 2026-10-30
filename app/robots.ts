@@ -21,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
         '/editor',
         '/ecommerce',
         '/billing',
+        '/ads/dashboard',
         '/admin',
         '/site/',
         '/forgot-password',

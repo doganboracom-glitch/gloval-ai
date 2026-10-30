@@ -15,7 +15,7 @@ import { platformUrl } from '@/lib/domains'
  */
 
 export type SeoLang = 'tr' | 'en'
-export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch' | 'whois'
+export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch' | 'whois' | 'ads'
 
 type PageCopy = {
   /** <title> and og:title / twitter:title. */
@@ -134,6 +134,23 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
       description:
         'See for free whether a domain is registered, its registrar, expiry date and name servers. Personal contact details are never shown.',
       heading: 'WHOIS lookup',
+      tagline: TAGLINE.en,
+    },
+  },
+  ads: {
+    path: '/ads',
+    tr: {
+      title: 'GLOVAL Ads (BETA): AI ile Google Reklamı | GLOVAL AI',
+      description:
+        'Kendi Google Ads hesabınla AI destekli kampanya planı hazırla. Hiçbir şey onayın olmadan yayınlanmaz, reklam bütçesi GLOVAL üzerinden geçmez.',
+      heading: 'GLOVAL Ads (BETA)',
+      tagline: TAGLINE.tr,
+    },
+    en: {
+      title: 'GLOVAL Ads (BETA): AI Google Ads Planning | GLOVAL AI',
+      description:
+        'Prepare an AI-assisted campaign plan for your own Google Ads account. Nothing goes live without your approval, and ad spend never passes through GLOVAL.',
+      heading: 'GLOVAL Ads (BETA)',
       tagline: TAGLINE.en,
     },
   },

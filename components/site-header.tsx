@@ -10,6 +10,7 @@ import { LinkButton } from '@/components/link-button'
 import { BrandLogo } from '@/components/brand-logo'
 import { ScrollToTop, scrollWindowToTop } from '@/components/scroll-to-top'
 import { createClient } from '@/lib/supabase/client'
+import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 
 export function SiteHeader() {
   const { t } = useLanguage()
@@ -48,6 +49,7 @@ export function SiteHeader() {
     { href: '#pricing', label: t.nav.pricing },
     { href: '/blog', label: t.nav.blog, route: true },
     { href: '/sss', label: t.nav.faq, route: true },
+    ...(isAdsFeatureUiEnabled() ? [{ href: ADS_PATH, label: t.ads.navLink, route: true }] : []),
   ]
 
   return (

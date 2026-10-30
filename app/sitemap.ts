@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 import { platformUrl } from '@/lib/domains'
 import { getPosts } from '@/lib/content/blog'
@@ -66,6 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry('/iletisim', { changeFrequency: 'yearly', priority: 0.5 }),
     entry('/alan-adi-sorgula', { changeFrequency: 'monthly', priority: 0.6 }),
     ...(isWhoisLookupEnabled() ? [entry(WHOIS_LOOKUP_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),
+    ...(isAdsFeatureUiEnabled() ? [entry(ADS_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),
   ]
 
   // Legal / corporate pages required for a production SaaS (and payment provider review).
