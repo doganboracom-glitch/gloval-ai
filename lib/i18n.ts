@@ -1212,6 +1212,9 @@ const dict = {
       lockedCta: 'Planları gör',
 
       // Domain empty state
+      heldTitle: 'E-posta hizmeti inceleme altında',
+      heldBody:
+        'Güvenlik nedeniyle bu alan adının e-posta hizmeti şu an kapalı. Bu süre boyunca e-posta kutusu oluşturamaz ve bu alan adına e-posta alamazsın. İnceleme tamamlandığında ayrıca haber vereceğiz.',
       noDomainTitle: 'Bağlı alan adı yok',
       noDomainBody:
         'Kurumsal e-posta için önce kendi alan adını bağlaman gerekiyor. Alan adı bağlandıktan sonra posta kutularını buradan yönetebilirsin.',
@@ -3145,6 +3148,9 @@ const dict = {
       lockedCta: 'View plans',
 
       // Domain empty state
+      heldTitle: 'Email service is under review',
+      heldBody:
+        'For security reasons, email service for this domain is currently turned off. During this time you cannot create mailboxes or receive email on this domain. We will let you know once the review is complete.',
       noDomainTitle: 'No domain connected',
       noDomainBody:
         'Corporate email needs your own domain connected first. Once it is, you can manage mailboxes from here.',

@@ -28,6 +28,8 @@ export type MailAccessDomainRow = {
   graceStartedAt: string | null
   graceEndsAt: string | null
   syncPending: boolean
+  /** Set while the domain sits in transfer quarantine: it may only ever be closed. */
+  transferHoldAt?: string | null
 }
 
 export type MailAccessPatch = {
@@ -192,6 +194,53 @@ function stateFields(state: MailAccessState): Pick<MailAccessPatch, 'graceStarte
 }
 
 /**
+ * Held domains: no source evaluation, the target is always "suspended". The
+ * owner's entitlements are irrelevant while the quarantine lasts.
+ */
+async function syncHeldDomain(
+  row: MailAccessDomainRow,
+  deps: MailAccessSyncDeps,
+  base: Omit<MailAccessSyncResult, 'outcome'>,
+): Promise<MailAccessSyncResult> {
+  const result = { ...base, status: 'suspended' as const }
+  const closedFields = { graceStartedAt: null, graceEndsAt: null }
+
+  if (row.mailAccessStatus === 'suspended' && !row.syncPending) {
+    if (row.graceStartedAt !== null || row.graceEndsAt !== null) {
+      await deps.store.save(row.id, closedFields)
+      return { ...result, outcome: 'saved_only' }
+    }
+    return { ...result, outcome: 'unchanged' }
+  }
+
+  const applied = await applyToProvider(deps.provider, row, 'suspended')
+  const common = {
+    ...result,
+    providerCalled: true,
+    mailboxesUpdated: applied.mailboxesUpdated,
+    mailboxFailures: applied.mailboxFailures,
+  }
+
+  if (applied.outcome === 'applied' || applied.outcome === 'domain_not_found') {
+    await deps.store.save(row.id, {
+      status: 'suspended',
+      ...closedFields,
+      syncPending: false,
+      syncError: applied.outcome === 'domain_not_found' ? 'domain_not_found' : null,
+    })
+    return { ...common, outcome: applied.outcome }
+  }
+
+  await deps.store.save(row.id, {
+    status: 'suspended',
+    ...closedFields,
+    syncPending: true,
+    syncError: applied.outcome,
+  })
+  return { ...common, outcome: applied.outcome }
+}
+
+/**
  * Compute, compare, apply, persist. Idempotent: when the stored state already
  * equals the computed one and nothing is pending, Mailcow is not contacted.
  */
@@ -208,6 +257,10 @@ export async function syncDomainMailAccess(
     mailboxesUpdated: 0,
     mailboxFailures: 0,
   } satisfies Omit<MailAccessSyncResult, 'outcome'>
+
+  // Quarantine wins over everything, including the exempt list: the sweep may
+  // only close a held domain, never reopen it, whatever the owner's plan says.
+  if (row.transferHoldAt) return syncHeldDomain(row, deps, base)
 
   if (deps.exemptDomains.has(row.domain.toLowerCase())) return { ...base, outcome: 'exempt' }
 
@@ -415,7 +468,7 @@ export async function syncAllMailAccess(
 /* ------------------------------ default store ------------------------------ */
 
 const COLUMNS =
-  'id, user_id, domain, mail_access_status, mail_grace_started_at, mail_grace_ends_at, mail_access_sync_pending'
+  'id, user_id, domain, mail_access_status, mail_grace_started_at, mail_grace_ends_at, mail_access_sync_pending, mail_transfer_hold_at'
 
 type DomainDbRow = {
   id: string
@@ -425,6 +478,7 @@ type DomainDbRow = {
   mail_grace_started_at: string | null
   mail_grace_ends_at: string | null
   mail_access_sync_pending: boolean
+  mail_transfer_hold_at: string | null
 }
 
 function toRow(row: DomainDbRow): MailAccessDomainRow {
@@ -436,6 +490,7 @@ function toRow(row: DomainDbRow): MailAccessDomainRow {
     graceStartedAt: row.mail_grace_started_at,
     graceEndsAt: row.mail_grace_ends_at,
     syncPending: row.mail_access_sync_pending,
+    transferHoldAt: row.mail_transfer_hold_at,
   }
 }
 
