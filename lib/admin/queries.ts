@@ -3,7 +3,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { listAllDomains } from '@/lib/custom-domains/service'
-import type { CustomDomain } from '@/lib/custom-domains/types'
+import type { AdminDomainRow } from '@/lib/admin/domain-handover-link'
 
 /**
  * Read layer for the admin back office.
@@ -513,14 +513,46 @@ export async function listCredits(): Promise<{
 }
 
 /** All custom domains across tenants (reuses the shared domain read layer). */
-export async function listDomains(): Promise<
-  Array<CustomDomain & { ownerEmail: string | null }>
-> {
+export async function listDomains(): Promise<AdminDomainRow[]> {
   await requireAdmin()
   const admin = createAdminClient()
   const users = await buildUserLookup(admin)
   const domains = await listAllDomains()
-  return domains.map((d) => ({ ...d, ownerEmail: users.get(d.userId)?.email ?? null }))
+
+  // The shared domain model does not carry provider / order / quarantine; the
+  // "Devret" link needs them, so read those three columns in id-ordered chunks.
+  const extras = new Map<string, { provider: string | null; orderId: string | null; heldAt: string | null }>()
+  const CHUNK = 1000
+  for (let from = 0; ; from += CHUNK) {
+    const { data, error } = await admin
+      .from('custom_domains')
+      .select('id, provider, order_id, mail_transfer_hold_at')
+      .order('id', { ascending: true })
+      .range(from, from + CHUNK - 1)
+    if (error) throw error
+    const chunk = (data ?? []) as Array<{
+      id: string
+      provider: string | null
+      order_id: string | null
+      mail_transfer_hold_at: string | null
+    }>
+    for (const row of chunk) {
+      extras.set(row.id, {
+        provider: row.provider ?? null,
+        orderId: row.order_id ?? null,
+        heldAt: row.mail_transfer_hold_at ?? null,
+      })
+    }
+    if (chunk.length < CHUNK) break
+  }
+
+  return domains.map((d) => ({
+    ...d,
+    ownerEmail: users.get(d.userId)?.email ?? null,
+    provider: extras.get(d.id)?.provider ?? null,
+    orderId: extras.get(d.id)?.orderId ?? null,
+    heldAt: extras.get(d.id)?.heldAt ?? null,
+  }))
 }
 
 /** Support tickets with message counts + owner email. */

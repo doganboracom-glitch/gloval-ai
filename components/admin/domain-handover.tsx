@@ -22,11 +22,21 @@ function Check({ ok }: { ok: boolean | null }) {
   return <span className={`text-xs font-medium ${tone}`}>{label}</span>
 }
 
-export function HandoverClient() {
-  const [domain, setDomain] = useState('')
+export function HandoverClient({
+  initialDomain = '',
+  initialPreview = null,
+  initialError = null,
+}: {
+  initialDomain?: string
+  initialPreview?: HandoverPreview | null
+  initialError?: string | null
+} = {}) {
+  const [domain, setDomain] = useState(initialDomain)
   const [toEmail, setToEmail] = useState('')
-  const [preview, setPreview] = useState<HandoverPreview | null>(null)
-  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [preview, setPreview] = useState<HandoverPreview | null>(initialPreview)
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(
+    initialError ? { tone: 'error', text: initialError } : null,
+  )
   const [pending, startTransition] = useTransition()
 
   const [reason, setReason] = useState('')
@@ -207,7 +217,11 @@ export function HandoverClient() {
           )}
 
           <Panel title="Geçmiş">
-            <DataTable head={<><Th>Olay</Th><Th>Admin</Th><Th>Gerekçe / not</Th><Th>Tarih</Th></>}>
+            <DataTable
+              isEmpty={preview.events.length === 0}
+              empty="Kayıt yok."
+              head={<><Th>Olay</Th><Th>Admin</Th><Th>Gerekçe / not</Th><Th>Tarih</Th></>}
+            >
               {preview.events.map((e) => (
                 <Tr key={e.id}>
                   <Td>{e.event}{e.releaseMode ? ` (${e.releaseMode})` : ''}</Td>

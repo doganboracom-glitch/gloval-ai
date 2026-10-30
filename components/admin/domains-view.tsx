@@ -6,9 +6,11 @@ import { useLanguage } from '@/components/language-provider'
 import { adminT } from '@/lib/admin/i18n'
 import { PageHeader, DataTable, Th, Td, Tr, StatusBadge, type MailStatusTone } from '@/components/admin/admin-ui'
 import { DetachUnboundDomains } from '@/components/admin/detach-unbound-domains'
-import type { CustomDomain } from '@/lib/custom-domains/types'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { handoverHref, handoverLinkState, type AdminDomainRow, type HandoverBlockReason } from '@/lib/admin/domain-handover-link'
 
-type AdminDomain = CustomDomain & { ownerEmail: string | null }
+type AdminDomain = AdminDomainRow
 
 const STATUS_TONE: Record<string, MailStatusTone> = {
   active: 'success',
@@ -16,6 +18,55 @@ const STATUS_TONE: Record<string, MailStatusTone> = {
   pending: 'warning',
   failed: 'danger',
   disabled: 'muted',
+}
+
+function HandoverAction({ row }: { row: AdminDomain }) {
+  const { lang } = useLanguage()
+  const t = adminT(lang)
+  const state = handoverLinkState(row)
+
+  if (state.kind === 'held') {
+    return (
+      <Link
+        href={handoverHref(row.domain)}
+        aria-label={`${t.domains.manageHold}: ${row.domain}`}
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+      >
+        {t.domains.manageHold}
+      </Link>
+    )
+  }
+
+  if (state.kind === 'eligible') {
+    return (
+      <Link
+        href={handoverHref(row.domain)}
+        aria-label={`${t.domains.handover}: ${row.domain}`}
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}
+      >
+        {t.domains.handover}
+      </Link>
+    )
+  }
+
+  const reasons: Record<HandoverBlockReason, string> = {
+    not_registrar: t.domains.handoverBlockedNotRegistrar,
+    no_order: t.domains.handoverBlockedNoOrder,
+    not_active: t.domains.handoverBlockedNotActive,
+  }
+  const reason = reasons[state.reason]
+  return (
+    <span
+      role="link"
+      aria-disabled="true"
+      tabIndex={0}
+      title={reason}
+      className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'cursor-not-allowed opacity-50')}
+    >
+      {t.domains.handover}
+      <span className="sr-only">{`: ${reason}`}</span>
+    </span>
+  )
 }
 
 export function DomainsView({ domains }: { domains: AdminDomain[] }) {
@@ -65,6 +116,7 @@ export function DomainsView({ domains }: { domains: AdminDomain[] }) {
             <Th>{t.common.owner}</Th>
             <Th>{t.common.status}</Th>
             <Th>{t.common.created}</Th>
+            <Th>{t.common.actions}</Th>
           </>
         }
       >
@@ -82,6 +134,11 @@ export function DomainsView({ domains }: { domains: AdminDomain[] }) {
                   {t.domains.mock}
                 </span>
               ) : null}
+              {d.heldAt ? (
+                <StatusBadge tone="warning" className="ml-2">
+                  {t.domains.held}
+                </StatusBadge>
+              ) : null}
             </Td>
             <Td className="text-muted-foreground">
               {d.ownerEmail ? (
@@ -97,6 +154,9 @@ export function DomainsView({ domains }: { domains: AdminDomain[] }) {
             </Td>
             <Td className="whitespace-nowrap text-muted-foreground">
               {dateFmt.format(new Date(d.createdAt))}
+            </Td>
+            <Td className="whitespace-nowrap">
+              <HandoverAction row={d} />
             </Td>
           </Tr>
         ))}
