@@ -48,6 +48,7 @@ import { enforceTrackingPlan, sanitizeTracking } from '@/lib/site-tracking'
 import { slugifyProjectName } from '@/lib/slug'
 import { commerceModeForNewProject, type CommerceMode } from '@/lib/commerce-mode'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
+import { normalizeClientToken } from '@/lib/client-token'
 import { RESERVED_TENANT_SUBDOMAINS } from '@/lib/domains'
 import {
   CONTACT_ATTESTATION_VERSION,
@@ -265,8 +266,15 @@ export async function createProject(input: {
   projectType?: ProjectType
   /** Only the catalog setup flow passes this (`catalog`); otherwise derived from the project type. */
   commerceMode?: CommerceMode
+  /**
+   * Browser-minted idempotency key for one generated site. A repeat call with the
+   * same token (double click, retry, the other sign-up channel) returns the
+   * existing row's id instead of inserting a second project.
+   */
+  clientToken?: string | null
 }): Promise<string> {
   const { supabase, userId } = await requireUser()
+  const clientToken = normalizeClientToken(input.clientToken)
   const parsed = withStoredEffects(parseWebsiteForSave(input.schema), null)
   // The project type MUST reflect the actual generated content. A brief like
   // "…e-ticaret sitesi oluştur" yields a schema with products/categories
@@ -294,14 +302,36 @@ export async function createProject(input: {
     project_type: projectType,
   }
   const commerce_mode = commerceModeForNewProject({ projectType, explicit: input.commerceMode })
-  let { data, error } = await supabase
-    .from('projects')
-    .insert({ ...row, commerce_mode })
-    .select('id')
-    .single()
-  if (isMissingColumnError(error)) {
-    // Migration 063 not applied yet: getCommerceMode derives from project_type.
-    ;({ data, error } = await supabase.from('projects').insert(row).select('id').single())
+  const insertRow = (fields: Record<string, unknown>) =>
+    supabase.from('projects').insert(fields).select('id').single()
+  let withToken = clientToken !== null
+  let withCommerceMode = true
+  let data: { id: unknown } | null = null
+  let error: { code?: string; message?: string } | null = null
+  // A missing column means its migration is not applied yet: drop that column
+  // and retry. At most two columns can be missing, so three attempts suffice.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    ;({ data, error } = await insertRow({
+      ...row,
+      ...(withCommerceMode ? { commerce_mode } : {}),
+      ...(withToken ? { client_token: clientToken } : {}),
+    }))
+    if (!isMissingColumnError(error)) break
+    if (withToken && /client_token/i.test(error?.message ?? '')) withToken = false
+    else if (withCommerceMode && /commerce_mode/i.test(error?.message ?? '')) withCommerceMode = false
+    else if (withCommerceMode) withCommerceMode = false
+    else withToken = false
+  }
+  if (error?.code === '23505' && clientToken !== null) {
+    // The same site was already created with this token (owner-scoped by the
+    // unique index and by this lookup, so another owner's row is never returned).
+    const { data: existing } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('owner_id', userId)
+      .eq('client_token', clientToken)
+      .maybeSingle()
+    if (existing?.id) return existing.id as string
   }
   if (error || !data) throw error ?? new Error('PROJECT_INSERT_FAILED')
   revalidatePath('/dashboard')

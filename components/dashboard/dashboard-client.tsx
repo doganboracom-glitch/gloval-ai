@@ -90,7 +90,7 @@ export function DashboardClient({
     setPendingError(false)
     setCreatingPending(true)
     try {
-      const id = await createProject(pending)
+      const id = await createProject({ ...pending, clientToken: pending.token })
       clearPendingProject()
       router.refresh()
       // The visitor's original action was Publish, not just "edit" — carry

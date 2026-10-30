@@ -17,6 +17,7 @@ import {
   stashPendingProject,
   peekPendingProject,
   clearPendingProject,
+  newToken,
 } from '@/lib/pending-project'
 import { MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
 import {
@@ -57,6 +58,16 @@ export function Hero() {
   // Idempotency token carried over from a restored pending draft, so a later
   // "Save & edit" re-stash keeps the same token instead of minting a new one.
   const restoredTokenRef = useRef<string | null>(null)
+
+  // One token per generated site (reset on every new generation). Every save
+  // path (direct create, publish, login stash) sends it, so repeated clicks or
+  // the sign-up channel resolve to the same project row.
+  function ensureSiteToken(): string {
+    if (!restoredTokenRef.current) {
+      restoredTokenRef.current = peekPendingProject()?.token ?? newToken()
+    }
+    return restoredTokenRef.current
+  }
   // Anchor for the generated "AI plan is ready" card. Once the result is
   // actually in the DOM we smooth-scroll here so the user is taken straight to
   // it (they otherwise miss the card because the button is above the fold).
@@ -144,18 +155,20 @@ export function Hero() {
         data: { user },
       } = await supabase.auth.getUser()
 
+      const clientToken = ensureSiteToken()
       const payload = {
         name: website.meta.name,
         sector: website.meta.audience ?? null,
         language: website.meta.language,
         prompt: prompt.trim() || null,
         schema: website,
+        clientToken,
       }
 
       if (!user) {
         // Preserve the token from a restored draft so a bounce through login
         // stays idempotent and can never create a duplicate project.
-        stashPendingProject({ ...payload, token: restoredTokenRef.current ?? undefined })
+        stashPendingProject({ ...payload, token: clientToken })
         router.push('/auth/login?next=/dashboard')
         return
       }
@@ -292,6 +305,7 @@ export function Hero() {
         language: website.meta.language,
         prompt: prompt.trim() || null,
         schema: website,
+        clientToken: ensureSiteToken(),
       })
       clearPendingProject()
       router.push(`/editor/${id}?autopublish=1`)

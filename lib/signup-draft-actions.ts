@@ -207,6 +207,7 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
       language: claim.payload.language,
       prompt: claim.payload.prompt,
       schema: claim.payload.schema as Parameters<typeof createProject>[0]['schema'],
+      clientToken: claim.payload.clientToken ?? null,
     })
     await completeDraft(admin, claim.id, projectId, claim.payload.publishIntent, claim.payload.editIntent)
     await clearTemporarySignupMetadata()
