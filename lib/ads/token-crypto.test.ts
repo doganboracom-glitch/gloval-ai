@@ -84,12 +84,38 @@ describe('ads token crypto', () => {
     ).toThrow(/32-byte/)
   })
 
-  it('does not put key material in error messages', () => {
-    const bad = 'c2hvcnQ='
-    try {
-      loadAdsTokenKeyring({ ADS_TOKEN_ENC_ACTIVE_VERSION: '1', ADS_TOKEN_ENC_KEY_V1: bad })
-    } catch (error) {
-      expect((error as Error).message).not.toContain(bad)
+  it('rejects auth tags that are not exactly 16 bytes as malformed', () => {
+    const { ciphertext } = encryptAdsToken('secret', ctx, ring)
+    const parts = ciphertext.split(':')
+    const tag = Buffer.from(parts[2], 'base64url')
+    expect(tag.length).toBe(16)
+
+    for (const badTag of [tag.subarray(0, 4), tag.subarray(0, 8), tag.subarray(0, 15), Buffer.concat([tag, Buffer.from([0])])]) {
+      const forged = [parts[0], parts[1], badTag.toString('base64url'), parts[3]].join(':')
+      expect(() => decryptAdsToken(forged, ctx, ring)).toThrow('malformed token envelope')
+      expect(() => decryptAdsToken(forged, ctx, ring)).toThrow(AdsTokenCryptoError)
     }
+    expect(decryptAdsToken(ciphertext, ctx, ring)).toBe('secret')
+  })
+
+  it('does not put key material or plaintext in error messages', () => {
+    const bad = 'c2hvcnQ='
+    const badLoad = () => loadAdsTokenKeyring({ ADS_TOKEN_ENC_ACTIVE_VERSION: '1', ADS_TOKEN_ENC_KEY_V1: bad })
+    expect(badLoad).toThrow(AdsTokenCryptoError)
+    expect(badLoad).toThrow(/32-byte/)
+    expect(badLoad).not.toThrow(bad)
+
+    const k = key()
+    const secret = 'plaintext-refresh-token'
+    const localRing = loadAdsTokenKeyring({ ADS_TOKEN_ENC_ACTIVE_VERSION: '1', ADS_TOKEN_ENC_KEY_V1: k })
+    const { ciphertext } = encryptAdsToken(secret, ctx, localRing)
+    const wrongCtx = () => decryptAdsToken(ciphertext, { ...ctx, userId: 'someone-else' }, localRing)
+    expect(wrongCtx).toThrow('token could not be decrypted')
+    expect(wrongCtx).not.toThrow(secret)
+    expect(wrongCtx).not.toThrow(k)
+
+    const empty = () => encryptAdsToken('', ctx, localRing)
+    expect(empty).toThrow(AdsTokenCryptoError)
+    expect(empty).not.toThrow(k)
   })
 })

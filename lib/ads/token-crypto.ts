@@ -34,6 +34,7 @@ export class AdsTokenCryptoError extends Error {
 
 const KEY_BYTES = 32
 const IV_BYTES = 12
+const TAG_BYTES = 16
 const ENVELOPE = /^v(\d{1,4}):([A-Za-z0-9_-]+):([A-Za-z0-9_-]+):([A-Za-z0-9_-]+)$/
 const KEY_ENV_PREFIX = 'ADS_TOKEN_ENC_KEY_V'
 const ACTIVE_ENV = 'ADS_TOKEN_ENC_ACTIVE_VERSION'
@@ -86,7 +87,7 @@ export function encryptAdsToken(
   if (!key) throw new AdsTokenCryptoError('active key is missing from the keyring')
 
   const iv = randomBytes(IV_BYTES)
-  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES })
   cipher.setAAD(aad(context, keyring.activeVersion))
   const body = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
   const tag = cipher.getAuthTag()
@@ -111,10 +112,16 @@ export function decryptAdsToken(
   const key = keyring.keys.get(version)
   if (!key) throw new AdsTokenCryptoError(`no key for version ${version}`)
 
+  const authTag = Buffer.from(match[3], 'base64url')
+  // Reject truncated (or padded) tags up front: GCM would otherwise accept a short tag.
+  if (authTag.length !== TAG_BYTES) throw new AdsTokenCryptoError('malformed token envelope')
+
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(match[2], 'base64url'))
+    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(match[2], 'base64url'), {
+      authTagLength: TAG_BYTES,
+    })
     decipher.setAAD(aad(context, version))
-    decipher.setAuthTag(Buffer.from(match[3], 'base64url'))
+    decipher.setAuthTag(authTag)
     const body = Buffer.concat([decipher.update(Buffer.from(match[4], 'base64url')), decipher.final()])
     return body.toString('utf8')
   } catch {
