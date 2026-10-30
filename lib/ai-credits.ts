@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isAdsLedgerReason } from '@/lib/ads/credit-costs'
 import { LOGO_EMBLEM_CREDITS } from '@/lib/logo-studio/rules'
 
 /**
@@ -113,6 +114,12 @@ export async function consumeCredits(
   amount: number,
   reason?: string,
 ): Promise<ConsumeCreditsResult> {
+  // `ads:` / `ads_refund:` rows belong to ads_charge_credits / ads_refund_credits,
+  // which carry the idempotency and refund pairing guarantees.
+  if (isAdsLedgerReason(reason)) {
+    console.error('[ai-credits] consumeCredits refused an ads ledger reason')
+    return { ok: false, balance: 0 }
+  }
   const admin = createAdminClient()
   const { data, error } = await admin
     .rpc('consume_ai_credits', {
@@ -146,6 +153,10 @@ export async function refundCredits(
   amount: number,
   reason?: string,
 ): Promise<number> {
+  if (isAdsLedgerReason(reason)) {
+    console.error('[ai-credits] refundCredits refused an ads ledger reason')
+    return 0
+  }
   const admin = createAdminClient()
   const { data, error } = await admin.rpc('refund_ai_credits', {
     p_user_id: userId,
