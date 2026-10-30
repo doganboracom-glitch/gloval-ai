@@ -23,6 +23,11 @@ export type AiFlow =
   | 'productText'
   | 'blogWrite'
   | 'logoEmblem'
+  | 'adsPlanner'
+  | 'adsPreview'
+  | 'adsRevise'
+  | 'adsOptimization'
+  | 'adsAssistant'
 
 const STANDARD_MODEL = 'openai/gpt-5-mini'
 
@@ -83,6 +88,11 @@ export const AI_FLOW_ADVANCED: Record<AiFlow, boolean> = {
   productText: true,
   blogWrite: true,
   logoEmblem: true,
+  adsPlanner: true,
+  adsPreview: true,
+  adsRevise: true,
+  adsOptimization: true,
+  adsAssistant: false,
 }
 
 /**
@@ -96,6 +106,18 @@ export const AI_FLOW_TIER_MODELS: Partial<Record<AiFlow, Record<AiTier, string>>
     standard: 'anthropic/claude-sonnet-5.5',
     advanced: 'anthropic/claude-opus-5.5',
   },
+  /**
+   * GLOVAL Ads (BETA): the plan tier does not change the model, because ad
+   * quality is the product. Planning, preview, revision and optimization run on
+   * Opus; the cheap assistant answers run on Sonnet. Env overrides live in
+   * `lib/ads/ai-models.ts` (server-only), never here, because this file is
+   * imported by client badges.
+   */
+  adsPlanner: { standard: 'anthropic/claude-opus-5.5', advanced: 'anthropic/claude-opus-5.5' },
+  adsPreview: { standard: 'anthropic/claude-opus-5.5', advanced: 'anthropic/claude-opus-5.5' },
+  adsRevise: { standard: 'anthropic/claude-opus-5.5', advanced: 'anthropic/claude-opus-5.5' },
+  adsOptimization: { standard: 'anthropic/claude-opus-5.5', advanced: 'anthropic/claude-opus-5.5' },
+  adsAssistant: { standard: 'anthropic/claude-sonnet-5.5', advanced: 'anthropic/claude-sonnet-5.5' },
 }
 
 /**
@@ -104,6 +126,10 @@ export const AI_FLOW_TIER_MODELS: Partial<Record<AiFlow, Record<AiTier, string>>
  */
 export const AI_FLOW_FALLBACK_MODELS: Partial<Record<AiFlow, Partial<Record<AiTier, string>>>> = {
   logoEmblem: { advanced: 'anthropic/claude-sonnet-5.5' },
+  adsPlanner: { standard: 'anthropic/claude-sonnet-5.5', advanced: 'anthropic/claude-sonnet-5.5' },
+  adsPreview: { standard: 'anthropic/claude-sonnet-5.5', advanced: 'anthropic/claude-sonnet-5.5' },
+  adsRevise: { standard: 'anthropic/claude-sonnet-5.5', advanced: 'anthropic/claude-sonnet-5.5' },
+  adsOptimization: { standard: 'anthropic/claude-sonnet-5.5', advanced: 'anthropic/claude-sonnet-5.5' },
 }
 
 /**

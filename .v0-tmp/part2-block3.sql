@@ -1,4 +1,0 @@
--- ads_usage_events, ads_free_usage and ads_alerts: RLS enabled, no policies,
--- so anon and authenticated see no rows. Only service_role can access them.
--- No INSERT/UPDATE/DELETE policies exist on any ads_* table: clients cannot write.
--- service_role bypasses RLS.

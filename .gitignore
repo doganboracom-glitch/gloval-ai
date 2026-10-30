@@ -11,3 +11,6 @@ node_modules
 # model comparison raw dumps
 reports/*.raw.json
 
+
+# v0 scratch files (never commit)
+.v0-tmp/

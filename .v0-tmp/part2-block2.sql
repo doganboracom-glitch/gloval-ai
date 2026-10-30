@@ -1,4 +1,0 @@
--- KALDIRILDI:
--- create policy ads_usage_events_select_own on public.ads_usage_events
---   for select to authenticated
---   using (user_id = (select auth.uid()));
