@@ -355,8 +355,7 @@ const fr: DeepPartial<Dict> = {
     sessionExpired: 'Votre session a expiré. Veuillez vous reconnecter.',
     unexpected: 'Une erreur inattendue est survenue. Veuillez réessayer.',
     verifiedTitle: 'Votre adresse e-mail a été vérifiée avec succès !',
-    verifiedBody: 'Votre compte GLOVAL AI est maintenant actif. Vous allez être redirigé vers la page de connexion.',
-    verifiedRedirecting: 'Redirection vers la page de connexion dans {s} s...',
+    verifiedBody: 'Votre adresse e-mail est vérifiée. Vous pouvez continuer dans l’onglet de votre ordinateur ou vous connecter ici.',
     goToDashboard: 'Se connecter maintenant',
     continueWithGoogle: 'Continuer avec Google',
 

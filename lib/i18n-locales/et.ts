@@ -353,8 +353,7 @@ const et: DeepPartial<Dict> = {
     sessionExpired: 'Sinu seanss on aegunud. Palun logi uuesti sisse.',
     unexpected: 'Ilmnes ootamatu viga. Proovi uuesti.',
     verifiedTitle: 'Sinu e-posti aadress on edukalt kinnitatud!',
-    verifiedBody: 'Sinu GLOVAL AI konto on nüüd aktiivne. Sind suunatakse sisselogimislehele.',
-    verifiedRedirecting: 'Suunamine sisselogimislehele {s} sek pärast ...',
+    verifiedBody: 'Sinu e-posti aadress on kinnitatud. Saad jätkata arvuti vahekaardil või siin sisse logida.',
     goToDashboard: 'Logi nüüd sisse',
     continueWithGoogle: 'Jätka Google\'iga',
 

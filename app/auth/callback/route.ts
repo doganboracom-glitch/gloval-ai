@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { scheduleWelcomeEmail } from '@/lib/email-outbox'
-import { logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
+import { isPkceVerifierMissingError, logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
+import { buildVerifiedUrl } from '@/lib/auth-verified-url'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
@@ -18,6 +19,17 @@ function errorUrl(origin: string, draft: string | null): URL {
   const url = new URL('/auth/error', origin)
   if (draft) url.searchParams.set('draft', draft)
   return url
+}
+
+/**
+ * The PKCE code was issued by Supabase only after the e-mail address was
+ * verified, but this browser (typically a phone) never started the sign-up and
+ * so lacks the code verifier. No session can be created here; the account is
+ * already verified, so show the success screen and let the user sign in.
+ */
+function pkceVerifierMissingRedirect(origin: string, next: string, draft: string | null): NextResponse {
+  console.warn('[auth callback] PKCE code verifier missing; verified in a different browser or device')
+  return secureRedirect(buildVerifiedUrl(origin, next, draft))
 }
 
 /**
@@ -55,25 +67,28 @@ export async function GET(request: NextRequest) {
       return secureRedirect(errorUrl(origin, draft))
     }
   } catch (error) {
+    if (!isRecovery && isPkceVerifierMissingError(error)) {
+      return pkceVerifierMissingRedirect(origin, next, draft)
+    }
     logSupabaseAuthFailure('auth callback', error)
     return secureRedirect(errorUrl(origin, draft))
   }
 
   if (verifyError) {
+    if (!isRecovery && isPkceVerifierMissingError(verifyError)) {
+      return pkceVerifierMissingRedirect(origin, next, draft)
+    }
     logSupabaseAuthFailure('auth callback', verifyError)
     return secureRedirect(errorUrl(origin, draft))
   }
 
   if (!isRecovery) scheduleWelcomeEmail(verifiedUser)
 
-  const keepSession = isRecovery || draft !== null
   const successUrl = isRecovery
     ? new URL('/auth/reset-password', origin)
-    : draft
-      ? new URL(`/auth/resume?draft=${encodeURIComponent(draft)}`, origin)
-      : new URL(`/auth/verified?next=${encodeURIComponent(next)}`, origin)
+    : buildVerifiedUrl(origin, next, draft)
 
-  if (!keepSession) {
+  if (!isRecovery) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) logSupabaseAuthFailure('auth callback sign-out', error)

@@ -353,8 +353,7 @@ const es: DeepPartial<Dict> = {
     sessionExpired: 'Tu sesión ha expirado. Vuelve a iniciar sesión.',
     unexpected: 'Se produjo un error inesperado. Vuelve a intentarlo.',
     verifiedTitle: '¡Tu dirección de correo se ha verificado correctamente!',
-    verifiedBody: 'Tu cuenta de GLOVAL AI ya está activa. Serás redirigido a la página de inicio de sesión.',
-    verifiedRedirecting: 'Redirigiendo a la página de inicio de sesión en {s} s...',
+    verifiedBody: 'Tu correo se ha verificado. Puedes continuar en la pestaña de tu ordenador o iniciar sesión aquí.',
     goToDashboard: 'Iniciar sesión ahora',
     continueWithGoogle: 'Continuar con Google',
 
