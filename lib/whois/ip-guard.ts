@@ -28,8 +28,10 @@ const V4: Array<[string, number]> = [
   ['240.0.0.0', 4],
 ]
 const V6: Array<[string, number]> = [
-  ['::', 128],
-  ['::1', 128],
+  // ::/96 is the deprecated IPv4-compatible range (::127.0.0.1 would reach loopback); it also covers :: and ::1.
+  ['::', 96],
+  // ::ffff:0:0:0/96 is the deprecated SIIT range (::ffff:0:127.0.0.1).
+  ['::ffff:0:0:0', 96],
   ['64:ff9b::', 96],
   ['64:ff9b:1::', 48],
   ['100::', 64],
