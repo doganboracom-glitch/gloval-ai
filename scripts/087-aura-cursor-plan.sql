@@ -1,4 +1,5 @@
 -- scripts/087-aura-cursor-plan.sql
+-- Fiyat scripts/091-aura-cursor-price-99.sql ile 99 TL'ye güncellendi.
 -- *** UYGULANMADI / NOT APPLIED to any database. Review/PR only. ***
 -- Elle, sırayla ve ancak PR onaylandıktan sonra çalıştırın (bkz. PR açıklaması).
 --
