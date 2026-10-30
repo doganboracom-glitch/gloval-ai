@@ -1809,7 +1809,7 @@ const dict = {
       switchLabel: 'Ürün seçimi',
       switchBuild: 'Website Oluştur',
       switchAds: 'Reklam Ver',
-      heroTitle: 'AI ile Google reklamını kur, iyileştir, raporla',
+      heroTitle: 'AI ile reklamını kur, iyileştir, raporla',
       heroSubtitle:
         'Web sitenin adresini yapıştır, GLOVAL AI sana arama reklamı planı çıkarsın. Reklam hesabın senin, bütçeni doğrudan Google’a ödersin.',
       addressLabel: 'Web sitesi adresi',
@@ -3811,7 +3811,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       switchLabel: 'Product',
       switchBuild: 'Build a Website',
       switchAds: 'Run Ads',
-      heroTitle: 'Set up, improve and report your Google Ads with AI',
+      heroTitle: 'Build, improve and report your ads with AI',
       heroSubtitle:
         'Paste your website address and GLOVAL AI drafts a search campaign plan. The ad account is yours and you pay Google directly.',
       addressLabel: 'Website address',

@@ -43,14 +43,24 @@ export function SiteHeader() {
   const onHome = pathname === '/'
   // "Özellikler" başlıklı link, header'daki yatay sıkışıklığı azaltmak için
   // buradan çıkarıldı. Bölümün kendisi ve footer'daki /#features linki duruyor.
-  const links = [
+  const links: ReadonlyArray<{ href: string; label: string; route?: boolean; soon?: boolean }> = [
     { href: '#how', label: t.nav.how },
     { href: '#showcase', label: t.nav.showcase },
     { href: '#pricing', label: t.nav.pricing },
     { href: '/blog', label: t.nav.blog, route: true },
     { href: '/sss', label: t.nav.faq, route: true },
-    ...(isAdsFeatureUiEnabled() ? [{ href: ADS_PATH, label: t.ads.navLink, route: true }] : []),
+    ...(isAdsFeatureUiEnabled()
+      ? [{ href: ADS_PATH, label: t.ads.navLink, route: true, soon: true }]
+      : []),
   ]
+  const soonBadge = (testId: string) => (
+    <span
+      data-testid={testId}
+      className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
+    >
+      {t.ads.comingSoon}
+    </span>
+  )
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl">
@@ -77,9 +87,14 @@ export function SiteHeader() {
               <Link
                 key={l.href}
                 href={l.href}
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className={
+                  l.soon
+                    ? 'inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground'
+                    : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
+                }
               >
                 {l.label}
+                {l.soon && soonBadge('nav-ads-soon-badge')}
               </Link>
             ) : (
               <a
@@ -142,9 +157,14 @@ export function SiteHeader() {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  className={
+                    l.soon
+                      ? 'flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground'
+                      : 'rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  }
                 >
                   {l.label}
+                  {l.soon && soonBadge('mobile-nav-ads-soon-badge')}
                 </Link>
               ) : (
                 <a

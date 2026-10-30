@@ -10,7 +10,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import { openCookiePreferences } from '@/components/cookie-consent'
 import { PaymentBadges } from '@/components/payment-badges'
 import { PLATFORM_PAYMENT_BADGES } from '@/lib/payment-badges'
-import { isAdsLinkNewBadgeActive, isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
+import { isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
 
 const subscribeNoop = () => () => {}
 const serverBadgeSnapshot = () => false
@@ -26,11 +26,6 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
     () => isDomainLinkNewBadgeActive(now),
     serverBadgeSnapshot,
   )
-  const showAdsBadge = useSyncExternalStore(
-    subscribeNoop,
-    () => isAdsLinkNewBadgeActive(now),
-    serverBadgeSnapshot,
-  )
 
   const columns = [
     {
@@ -42,7 +37,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', featured: true },
         ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH, featured: false }] : []),
         ...(isAdsFeatureUiEnabled()
-          ? [{ label: t.ads.footerLink, href: ADS_PATH, featured: false, newBadge: showAdsBadge }]
+          ? [{ label: t.ads.footerLink, href: ADS_PATH, featured: false, soonBadge: true }]
           : []),
       ],
     },
@@ -110,18 +105,18 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
                     <Link
                       href={item.href}
                       className={
-                        'newBadge' in item && item.newBadge
+                        'soonBadge' in item && item.soonBadge
                           ? 'inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground transition-colors hover:text-foreground'
                           : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
                       }
                     >
                       {item.label}
-                      {'newBadge' in item && item.newBadge && (
+                      {'soonBadge' in item && item.soonBadge && (
                         <span
-                          data-testid="ads-new-badge"
+                          data-testid="ads-soon-badge"
                           className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
                         >
-                          {t.domainSearch.footerBadgeNew}
+                          {t.ads.comingSoon}
                         </span>
                       )}
                     </Link>
