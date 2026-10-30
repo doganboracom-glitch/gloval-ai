@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { Globe } from 'lucide-react'
+import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 import { useLanguage } from '@/components/language-provider'
 import { BrandLogo } from '@/components/brand-logo'
@@ -35,6 +36,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: l.showcase, href: '/#showcase' },
         { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', featured: true },
         ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH, featured: false }] : []),
+        ...(isAdsFeatureUiEnabled() ? [{ label: t.ads.footerLink, href: ADS_PATH, featured: false }] : []),
       ],
     },
     {

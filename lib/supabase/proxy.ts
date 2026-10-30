@@ -48,7 +48,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/dashboard') ||
     path.startsWith('/editor') ||
     path.startsWith('/billing') ||
-    path.startsWith('/ecommerce')
+    path.startsWith('/ecommerce') ||
+    path.startsWith('/ads/dashboard')
 
   if (isProtected) {
     if (!user) {

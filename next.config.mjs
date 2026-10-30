@@ -1,4 +1,4 @@
-import { resolveWhoisEnabled } from './lib/domains/flag-resolvers.mjs'
+import { resolveAdsFeatureUi, resolveWhoisEnabled } from './lib/domains/flag-resolvers.mjs'
 
 /** @type {import('next').NextConfig} */
 
@@ -41,6 +41,7 @@ const nextConfig = {
   // Resolved here so server and client bundles see the same /whois decision.
   env: {
     NEXT_PUBLIC_WHOIS_LOOKUP_ENABLED: resolveWhoisEnabled(process.env) ? '1' : '0',
+    NEXT_PUBLIC_ADS_FEATURE_UI: resolveAdsFeatureUi(process.env) ? '1' : '0',
   },
   eslint: {
     ignoreDuringBuilds: true,
