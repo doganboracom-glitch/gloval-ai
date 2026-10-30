@@ -9,7 +9,8 @@ import {
   getPlatformPaymentProvider,
   getPlatformPaymentProviderId,
 } from '@/lib/payments'
-import { BRANDING_REMOVAL_CODE, MULTILANG_CODE } from '@/lib/billing-utils'
+import { AURA_CURSOR_CODE, BRANDING_REMOVAL_CODE, MULTILANG_CODE } from '@/lib/billing-utils'
+import { isAuraCursorFeatureUiEnabled } from '@/lib/aura-cursor-feature-flag'
 import { isMultilangFeatureUiEnabled } from '@/lib/multilang-feature-flag'
 import type { CheckoutBuyer } from '@/lib/billing'
 import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
@@ -168,15 +169,51 @@ export async function purchaseMultilangPackage(
   return purchaseSiteRight(MULTILANG_CODE, projectId, consents, buyer)
 }
 
+/**
+ * Buy the one-time Aura İmleç right (500 TL, KDV dahil) for a single project
+ * the caller owns. Refuses before any auth or database access while the flag is off.
+ */
+export async function purchaseAuraCursor(
+  projectId: string,
+  consents: CheckoutConsents | undefined,
+  buyer?: CheckoutBuyer,
+): Promise<BuyEntitlementResult> {
+  if (!isAuraCursorFeatureUiEnabled()) return { ok: false, error: 'feature_disabled' }
+  return purchaseSiteRight(AURA_CURSOR_CODE, projectId, consents, buyer)
+}
+
+/** A paid right still held by a site, shown as a warning before the site is deleted. */
+export type SitePaidRight = { code: string; name: string; amount_cents: number; currency: string }
+
+/**
+ * Active rights the caller PAID for on one of their sites (admin grants cost
+ * nothing and are not listed). Read through the caller's RLS-scoped client, so
+ * another user's site always returns an empty list.
+ */
+export async function getSitePaidRights(projectId: string): Promise<SitePaidRight[]> {
+  if (!projectId) return []
+  const { supabase, userId } = await requireUser()
+  const { data, error } = await supabase
+    .from('project_entitlements')
+    .select('code, name, amount_cents, currency')
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .gt('amount_cents', 0)
+  if (error) return []
+  return (data ?? []) as SitePaidRight[]
+}
+
 async function purchaseSiteRight(
-  code: typeof BRANDING_REMOVAL_CODE | typeof MULTILANG_CODE,
+  code: typeof BRANDING_REMOVAL_CODE | typeof MULTILANG_CODE | typeof AURA_CURSOR_CODE,
   projectId: string,
   consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<BuyEntitlementResult> {
   const { supabase, userId, email } = await requireUser()
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
-  const flow = code === MULTILANG_CODE ? 'multilang' : 'branding_removal'
+  const flow =
+    code === MULTILANG_CODE ? 'multilang' : code === AURA_CURSOR_CODE ? 'aura_cursor' : 'branding_removal'
 
   // Ownership check through the caller's own (RLS-scoped) client.
   const { data: project, error: projectErr } = await supabase
@@ -193,9 +230,10 @@ async function purchaseSiteRight(
     .select('code, name, price_cents, currency, active')
     .eq('code', code)
     .maybeSingle()
-  // The multilang row ships inactive so legacy catalog readers skip it; its
-  // feature flag (checked by the caller) is what allows selling it.
-  if (planErr || !plan || (code !== MULTILANG_CODE && !plan.active)) {
+  // The multilang and aura_cursor rows ship inactive so legacy catalog readers
+  // skip them; their feature flags (checked by the caller) are what allow selling.
+  const soldByFlag = code === MULTILANG_CODE || code === AURA_CURSOR_CODE
+  if (planErr || !plan || (!soldByFlag && !plan.active)) {
     return { ok: false, error: 'not_found' }
   }
 

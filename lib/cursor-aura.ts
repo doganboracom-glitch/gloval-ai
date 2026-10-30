@@ -24,6 +24,9 @@ export const cursorAuraSchema = z.object({
     .max(CURSOR_AURA_LIMITS.colors.max),
   intensity: z.number().min(CURSOR_AURA_LIMITS.intensity.min).max(CURSOR_AURA_LIMITS.intensity.max),
   size: z.number().min(CURSOR_AURA_LIMITS.size.min).max(CURSOR_AURA_LIMITS.size.max),
+  // Set only by the owner action. An owner-sourced effect renders only while the
+  // site still holds an active `aura_cursor` right; an admin-sourced one never depends on it.
+  source: z.literal('owner').optional(),
 })
 
 export const effectsSchema = z.object({
@@ -47,7 +50,47 @@ export const DEFAULT_CURSOR_AURA: CursorAuraConfig = {
 export function parseCursorAuraInput(raw: unknown): CursorAuraConfig | null {
   const parsed = cursorAuraSchema.safeParse(raw)
   if (!parsed.success) return null
-  return { ...parsed.data, colors: parsed.data.colors.map((c) => c.toUpperCase()) }
+  const { source: _source, ...config } = parsed.data
+  return { ...config, colors: config.colors.map((c) => c.toUpperCase()) }
+}
+
+/** Who wrote the stored effect: `'owner'` (needs the right to render) or `'admin'` (also legacy values). */
+export function cursorAuraSource(effects: unknown): 'owner' | 'admin' {
+  const parsed = effectsSchema.safeParse(effects)
+  return parsed.success && parsed.data.cursorAura?.source === 'owner' ? 'owner' : 'admin'
+}
+
+/**
+ * Tighter bounds for site OWNERS who hold the paid right (admins keep the wider
+ * `CURSOR_AURA_LIMITS`): at most 3 colours, a gentler intensity and a smaller cloud.
+ */
+export const OWNER_CURSOR_AURA_LIMITS = {
+  colors: { min: 1, max: 3 },
+  intensity: { min: 0.2, max: 0.7 },
+  size: { min: 80, max: 200 },
+} as const
+
+/** Validates owner input against the owner bounds. Null when invalid (never clamps silently). */
+export function parseOwnerCursorAuraInput(raw: unknown): CursorAuraConfig | null {
+  const config = parseCursorAuraInput(raw)
+  if (!config) return null
+  const { colors, intensity, size } = OWNER_CURSOR_AURA_LIMITS
+  if (config.colors.length < colors.min || config.colors.length > colors.max) return null
+  if (config.intensity < intensity.min || config.intensity > intensity.max) return null
+  if (config.size < size.min || config.size > size.max) return null
+  return config
+}
+
+/** Brings a stored (possibly admin-set) config into the owner bounds, for display in the owner editor. */
+export function clampToOwnerLimits(config: CursorAuraConfig): CursorAuraConfig {
+  const { colors, intensity, size } = OWNER_CURSOR_AURA_LIMITS
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+  return {
+    enabled: config.enabled,
+    colors: config.colors.slice(0, colors.max),
+    intensity: clamp(config.intensity, intensity.min, intensity.max),
+    size: clamp(config.size, size.min, size.max),
+  }
 }
 
 /**

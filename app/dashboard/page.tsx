@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { listProjects } from '@/lib/projects'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
+import { AURA_CURSOR_CODE } from '@/lib/billing-utils'
+import { isAuraCursorFeatureUiEnabled } from '@/lib/aura-cursor-feature-flag'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
@@ -36,6 +38,15 @@ export default async function DashboardPage() {
     listProjects(),
     countOwnerUnreadContactMessages(createAdminClient(), user.id),
   ])
+  // Sites holding an active Aura İmleç right get the settings button. RLS
+  // limits this read to the caller's own rights; a failure just hides the button.
+  const { data: auraRights } = await supabase
+    .from('project_entitlements')
+    .select('project_id')
+    .eq('user_id', user.id)
+    .eq('code', AURA_CURSOR_CODE)
+    .eq('status', 'active')
+  const auraSiteIds = (auraRights ?? []).map((row) => row.project_id as string)
   // Aktif abonelik yoksa kullanıcı FREE sayılır. Faturalama sorgusu panelin
   // açılmasını engellememeli, bu yüzden hata durumunda güvenli tarafa düşer.
   const currentPlan = await getMyCurrentPlan().catch(() => null)
@@ -59,6 +70,8 @@ export default async function DashboardPage() {
       <CreditNoticeToast />
       <DashboardClient
         projects={projects}
+        auraSiteIds={auraSiteIds}
+        auraSellingEnabled={isAuraCursorFeatureUiEnabled()}
         userEmail={user.email ?? ''}
         unreadMessages={unreadMessages}
         planCode={toPlanCode(currentPlan?.code)}

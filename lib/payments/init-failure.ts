@@ -32,6 +32,7 @@ export type PaymentInitFlow =
   | 'topup'
   | 'branding_removal'
   | 'multilang'
+  | 'aura_cursor'
   | 'addon'
 
 export type PaymentInitUserError =
