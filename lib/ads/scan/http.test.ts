@@ -256,3 +256,71 @@ describe('the SSRF guard sits on the real connection path', () => {
     await expect(guarded(url(), options())).rejects.toMatchObject({ code: 'NETWORK' })
   })
 })
+
+describe('the guarded lookup in all:true mode (autoSelectFamily) on the real request path', () => {
+  type LookupCall = { options: { all?: boolean }; error: Error | null; address?: unknown; family?: number }
+
+  const PUBLIC_V4 = { address: '93.184.216.34', family: 4 }
+  const PUBLIC_V6 = { address: '2606:2800:220:1:248:1893:25c8:1946', family: 6 }
+
+  /**
+   * Runs the REAL createGuardedLookup (fed by a fake resolver that answers with public IPs)
+   * exactly as Node's http.request invokes it, records what the guard handed back, then
+   * connects the socket to the local test server instead of the public address.
+   */
+  function guardThenLocalhost(resolveAll: (host: string) => Promise<{ address: string; family: number }[]>) {
+    const calls: LookupCall[] = []
+    const guard = createGuardedLookup(resolveAll)
+    const lookup = ((host: string, lookupOptions: { all?: boolean }, cb: (...args: unknown[]) => void) => {
+      guard(host, lookupOptions, (error, address, family) => {
+        calls.push({ options: lookupOptions, error, address, family })
+        if (error) return cb(error)
+        if (lookupOptions?.all) cb(null, [{ address: '127.0.0.1', family: 4 }])
+        else cb(null, '127.0.0.1', 4)
+      })
+    }) as unknown as ReturnType<typeof createGuardedLookup>
+    return { lookup, calls }
+  }
+
+  it('is asked with all:true by Node, answers with the array of validated addresses, and the request completes', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' })
+      res.end('<p>ok</p>')
+    }
+    const resolveAll = vi.fn(async (_host: string) => [PUBLIC_V4])
+    const { lookup, calls } = guardThenLocalhost(resolveAll)
+
+    const response = await createNodeScanGet(lookup)(url(), options())
+
+    expect(response.status).toBe(200)
+    expect(hits).toBe(1)
+    expect(resolveAll).toHaveBeenCalledWith('example.com')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].options.all).toBe(true)
+    expect(calls[0].error).toBeNull()
+    expect(Array.isArray(calls[0].address)).toBe(true)
+    expect(calls[0].address).toEqual([PUBLIC_V4])
+    expect(calls[0].family).toBeUndefined()
+  })
+
+  it('hands a dual-stack public answer over whole, so the socket can pick a family', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/html' })
+      res.end('<p>ok</p>')
+    }
+    const { lookup, calls } = guardThenLocalhost(async () => [PUBLIC_V4, PUBLIC_V6])
+
+    expect((await createNodeScanGet(lookup)(url(), options())).status).toBe(200)
+    expect(calls[0].address).toEqual([PUBLIC_V4, PUBLIC_V6])
+  })
+
+  it('never reaches the server when one entry of the all:true answer is private', async () => {
+    handler = (_req, res) => res.end('secret')
+    const { lookup, calls } = guardThenLocalhost(async () => [PUBLIC_V4, { address: '10.0.0.5', family: 4 }])
+
+    await expect(createNodeScanGet(lookup)(url(), options())).rejects.toMatchObject({ code: 'BLOCKED' })
+    expect(hits).toBe(0)
+    expect(calls[0].error).toMatchObject({ code: 'BLOCKED_ADDRESS' })
+    expect(calls[0].address).toBeUndefined()
+  })
+})
