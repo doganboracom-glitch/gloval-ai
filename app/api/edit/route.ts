@@ -304,6 +304,7 @@ export async function POST(req: Request) {
       // gated by the plan below.
       social: nextSite.social ?? original.social,
       tracking: original.tracking,
+      effects: original.effects,
       // Legal identity and legal texts are owner-only: the AI never sees or edits them.
       company: original.company,
       blogProfile: original.blogProfile,

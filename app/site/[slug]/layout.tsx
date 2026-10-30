@@ -6,6 +6,8 @@ import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
 import { CookieConsent } from '@/components/cookie-consent'
 import { resolveCookieBannerDoc } from '@/lib/cookie-policy-link'
+import { CursorAuraGate } from '@/components/site/cursor-aura-gate'
+import { resolveCursorAura } from '@/lib/cursor-aura'
 import { extractMetaTags, safeTrackingCode, sanitizeTracking, stripMetaTags } from '@/lib/site-tracking'
 
 /**
@@ -56,6 +58,7 @@ export default async function PublishedSiteLayout({
   if (!site) notFound()
   const tracking = sanitizeTracking(site.schema.tracking)
   const cookieCss = cookieBannerCss(site.schema)
+  const cursorAura = resolveCursorAura(site.schema.effects)
 
   return (
     <>
@@ -66,6 +69,7 @@ export default async function PublishedSiteLayout({
         {children}
         <CookieConsent variant="site" />
       </CookieBannerDocProvider>
+      {cursorAura && <CursorAuraGate config={cursorAura} />}
       <SiteCustomCode code={tracking?.bodyEnd} />
     </>
   )

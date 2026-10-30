@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Package, Pencil } from 'lucide-react'
+import { ExternalLink, Package, Pencil, Sparkles } from 'lucide-react'
+import { CursorAuraDialog } from '@/components/admin/cursor-aura-dialog'
 import { previewSiteTypeChange, setSiteType, type SiteTypeImpact } from '@/lib/admin/actions'
 import { MAX_TYPE_CHANGE_NOTE, MIN_TYPE_CHANGE_NOTE, siteKindOf, type SelectableSiteKind, type SiteKind } from '@/lib/site-kind'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -24,6 +25,7 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
   const router = useRouter()
   const [change, setChange] = useState<{ site: AdminSite; impact: SiteTypeImpact | null; error: string | null } | null>(null)
   const [note, setNote] = useState('')
+  const [auraSite, setAuraSite] = useState<{ id: string; name: string } | null>(null)
 
   const kindLabel: Record<SiteKind, string> = {
     corporate: t.sites.corporate,
@@ -199,6 +201,14 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                     {t.sites.products}
                   </Link>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setAuraSite({ id: s.id, name: s.name })}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                >
+                  <Sparkles className="size-3.5" />
+                  {t.sites.auraButton}
+                </button>
                 <Link
                   href={`/editor/${s.id}`}
                   className="inline-flex items-center gap-1 rounded-md border border-brand/40 px-2.5 py-1 text-xs font-medium text-brand transition-colors hover:bg-brand/10"
@@ -211,6 +221,8 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
           </Tr>
         ))}
       </DataTable>
+
+      <CursorAuraDialog site={auraSite} onClose={() => setAuraSite(null)} />
 
       <ConfirmDialog
         open={change !== null}
