@@ -20,6 +20,8 @@
 
 begin;
 
+set local lock_timeout = '5s';
+
 alter table public.projects
   add column if not exists client_token text;
 
