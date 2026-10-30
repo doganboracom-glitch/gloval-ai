@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { isSignupDraftToken, MAX_SIGNUP_IDEA_CHARS } from '@/lib/signup-draft-shared'
+import { normalizeClientToken } from '@/lib/client-token'
 
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 /** UTF-8 size of the serialized payload (the DB check allows 256 KB as a second line of defence). */
@@ -30,6 +31,8 @@ export type SiteDraftPayload = {
   schema: unknown
   publishIntent: boolean
   editIntent: boolean
+  /** Idempotency key of the generated site; absent on drafts stored before it existed. */
+  clientToken?: string | null
 }
 
 export type SignupIdeaDraftPayload = {
@@ -98,6 +101,7 @@ export function parseDraftPayload(raw: unknown): DraftPayload | null {
       schema: r.schema,
       publishIntent: r.publishIntent === true,
       editIntent: r.editIntent === true,
+      clientToken: normalizeClientToken(r.clientToken ?? r.token),
     }
   }
 

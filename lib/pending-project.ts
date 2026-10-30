@@ -37,7 +37,7 @@ export type PendingProject = {
   editIntent?: boolean
 }
 
-function newToken(): string {
+export function newToken(): string {
   try {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
   } catch {

@@ -94,7 +94,7 @@ function SignUpForm() {
     let draftToken: string | null = null
     const pending = peekPendingProject()
     const idea = pending ? null : readSignupIdea()
-    const draftPayload = pending ?? (idea ? { kind: 'idea', prompt: idea } : null)
+    const draftPayload = (pending ? { ...pending, clientToken: pending.token } : null) ?? (idea ? { kind: 'idea', prompt: idea } : null)
     setSignupDraftFailed(false)
     if (draftPayload) {
       const draft = await createSignupDraft({ email, draft: draftPayload }).catch(() => null)
