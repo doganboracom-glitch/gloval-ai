@@ -84,7 +84,7 @@ function seedRight(over: Record<string, unknown> = {}) {
     code: AURA_CURSOR_CODE,
     status: 'active',
     provider: 'iyzico',
-    amount_cents: 50000,
+    amount_cents: 9900,
     ...over,
   })
 }
@@ -166,10 +166,10 @@ describe('selling flag', () => {
   })
 
   it('catalog row is returned while the flag is on', async () => {
-    fakeDb.rows('billing_plans').push({ code: AURA_CURSOR_CODE, price_cents: 50000, active: false })
+    fakeDb.rows('billing_plans').push({ code: AURA_CURSOR_CODE, price_cents: 9900, active: false })
     expect(await getAuraCursorPlanIfEnabled({ AURA_CURSOR_FEATURE_UI: 'true' })).toMatchObject({
       code: AURA_CURSOR_CODE,
-      price_cents: 50000,
+      price_cents: 9900,
     })
   })
 
@@ -292,7 +292,7 @@ describe('admin grant and revoke', () => {
     seedProject()
     seedRight()
     expect(await grantSiteAddon(PROJECT_ID, AURA_CURSOR_CODE)).toEqual({ ok: false, error: 'already_owned' })
-    expect(fakeDb.rows('project_entitlements')[0]).toMatchObject({ provider: 'iyzico', amount_cents: 50000 })
+    expect(fakeDb.rows('project_entitlements')[0]).toMatchObject({ provider: 'iyzico', amount_cents: 9900 })
   })
 
   it('revokes an admin_grant right', async () => {

@@ -72,7 +72,7 @@ export async function getMultilangPlanIfEnabled(
 }
 
 /**
- * The Aura İmleç catalog row (500 TL, KDV dahil, tek seferlik, site başına), or
+ * The Aura İmleç catalog row (99 TL, KDV dahil, tek seferlik, site başına), or
  * null while `AURA_CURSOR_FEATURE_UI` is off. Ships `active = false` for the same
  * reason as the multilang row.
  */

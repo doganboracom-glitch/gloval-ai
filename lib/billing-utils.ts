@@ -51,7 +51,7 @@ export const BRANDING_REMOVAL_CODE = 'branding_removal'
 export const MULTILANG_CODE = 'multilang'
 
 /**
- * Plan code of the one-time, per-site "Aura İmleç" right (500 TL, KDV dahil).
+ * Plan code of the one-time, per-site "Aura İmleç" right (99 TL, KDV dahil).
  * Only sold while `AURA_CURSOR_FEATURE_UI=true` (see `lib/aura-cursor-feature-flag.ts`).
  */
 export const AURA_CURSOR_CODE = 'aura_cursor'
