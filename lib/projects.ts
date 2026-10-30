@@ -407,7 +407,9 @@ export async function snapshotProject(input: {
   label?: string
 }): Promise<void> {
   const { db } = await clientForProject(input.id)
-  const parsed = parseWebsiteForSave(input.schema)
+  const { data: stored } = await db.from('projects').select('schema_data').eq('id', input.id).maybeSingle()
+  // Effects are admin-only: the version row and backup carry the stored value, never the payload's.
+  const parsed = withStoredEffects(parseWebsiteForSave(input.schema), stored?.schema_data)
   await saveProjectSchema({ id: input.id, schema: parsed })
   const { error } = await db.from('project_versions').insert({
     project_id: input.id,
