@@ -1,9 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import useSWR from 'swr'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useLanguage } from '@/components/language-provider'
 import { deleteProject, type DeleteProjectResult } from '@/lib/projects'
+import { getSitePaidRights } from '@/lib/project-entitlements'
+import { formatMoney } from '@/lib/billing-utils'
 import { tenantUrl } from '@/lib/domains'
 import { isDeleteConfirmation, SITE_DELETE_WORD_EN, SITE_DELETE_WORD_TR } from '@/lib/site-delete-confirm'
 
@@ -57,6 +60,9 @@ function DeleteSiteDialogBody({ site, onClose, onDeleted }: Props & { site: Site
   const confirmed = isDeleteConfirmation(text)
   const word = lang === 'tr' ? SITE_DELETE_WORD_TR : SITE_DELETE_WORD_EN
   const address = site.slug ? tenantUrl(site.slug) : null
+  const { data: paidRights } = useSWR(['site-paid-rights', site.id], () => getSitePaidRights(site.id), {
+    revalidateOnFocus: false,
+  })
 
   async function submit() {
     if (!confirmed || pending) return
@@ -102,6 +108,23 @@ function DeleteSiteDialogBody({ site, onClose, onDeleted }: Props & { site: Site
           <li key={loss}>{loss}</li>
         ))}
       </ul>
+
+      {paidRights && paidRights.length > 0 && (
+        <div
+          role="note"
+          className="mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-foreground"
+        >
+          <p className="font-medium">{d.paidRightsTitle}</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-5">
+            {paidRights.map((right) => (
+              <li key={right.code}>
+                {right.name} ({formatMoney(right.amount_cents, right.currency)})
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-muted-foreground">{d.paidRightsNote}</p>
+        </div>
+      )}
 
       <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{d.keepsNote}</p>
 

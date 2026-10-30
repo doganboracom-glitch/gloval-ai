@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { MULTILANG_CODE } from '@/lib/billing-utils'
+import { AURA_CURSOR_CODE, MULTILANG_CODE } from '@/lib/billing-utils'
+import { isAuraCursorFeatureUiEnabled } from '@/lib/aura-cursor-feature-flag'
 import { isMultilangFeatureUiEnabled } from '@/lib/multilang-feature-flag'
 import type { PlanRow } from '@/lib/billing'
 
@@ -43,6 +44,26 @@ export async function getMultilangPlanIfEnabled(
       'id, code, name, description, price_cents, currency, interval, trial_days, features, provider_price_id, product_category, active, sort_order',
     )
     .eq('code', MULTILANG_CODE)
+    .maybeSingle()
+  if (error || !data) return null
+  return data as PlanRow
+}
+
+/**
+ * The İmleç Bulutu catalog row (500 TL, KDV dahil, tek seferlik, site başına), or
+ * null while `AURA_CURSOR_FEATURE_UI` is off. Ships `active = false` for the same
+ * reason as the multilang row.
+ */
+export async function getAuraCursorPlanIfEnabled(
+  env: Record<string, string | undefined> = process.env,
+): Promise<PlanRow | null> {
+  if (!isAuraCursorFeatureUiEnabled(env)) return null
+  const { data, error } = await createAdminClient()
+    .from('billing_plans')
+    .select(
+      'id, code, name, description, price_cents, currency, interval, trial_days, features, provider_price_id, product_category, active, sort_order',
+    )
+    .eq('code', AURA_CURSOR_CODE)
     .maybeSingle()
   if (error || !data) return null
   return data as PlanRow

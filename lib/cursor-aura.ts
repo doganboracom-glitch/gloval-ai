@@ -51,6 +51,39 @@ export function parseCursorAuraInput(raw: unknown): CursorAuraConfig | null {
 }
 
 /**
+ * Tighter bounds for site OWNERS who hold the paid right (admins keep the wider
+ * `CURSOR_AURA_LIMITS`): at most 3 colours, a gentler intensity and a smaller cloud.
+ */
+export const OWNER_CURSOR_AURA_LIMITS = {
+  colors: { min: 1, max: 3 },
+  intensity: { min: 0.2, max: 0.7 },
+  size: { min: 80, max: 200 },
+} as const
+
+/** Validates owner input against the owner bounds. Null when invalid (never clamps silently). */
+export function parseOwnerCursorAuraInput(raw: unknown): CursorAuraConfig | null {
+  const config = parseCursorAuraInput(raw)
+  if (!config) return null
+  const { colors, intensity, size } = OWNER_CURSOR_AURA_LIMITS
+  if (config.colors.length < colors.min || config.colors.length > colors.max) return null
+  if (config.intensity < intensity.min || config.intensity > intensity.max) return null
+  if (config.size < size.min || config.size > size.max) return null
+  return config
+}
+
+/** Brings a stored (possibly admin-set) config into the owner bounds, for display in the owner editor. */
+export function clampToOwnerLimits(config: CursorAuraConfig): CursorAuraConfig {
+  const { colors, intensity, size } = OWNER_CURSOR_AURA_LIMITS
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+  return {
+    enabled: config.enabled,
+    colors: config.colors.slice(0, colors.max),
+    intensity: clamp(config.intensity, intensity.min, intensity.max),
+    size: clamp(config.size, size.min, size.max),
+  }
+}
+
+/**
  * The config the public page should run, or null when the effect is off,
  * missing or invalid. A missing flag means no effect code is ever loaded.
  */

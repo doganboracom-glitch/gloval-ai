@@ -55,7 +55,7 @@ import {
   wantsPlansOpen,
   wantsPlansScroll,
 } from '@/components/billing/collapsible-add-ons-section'
-import { purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
+import { purchaseAuraCursor, purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
 import { PlanGrid } from '@/components/pricing/plan-grid'
@@ -88,6 +88,7 @@ import {
   daysUntil,
   BRANDING_REMOVAL_CODE,
   MULTILANG_CODE,
+  AURA_CURSOR_CODE,
   BILLING_TIME_ZONE,
 } from '@/lib/billing-utils'
 
@@ -546,7 +547,11 @@ export function BillingClient({
     startTransition(async () => {
       try {
         const purchase =
-          code === MULTILANG_CODE ? purchaseMultilangPackage : purchaseBrandingRemoval
+          code === MULTILANG_CODE
+            ? purchaseMultilangPackage
+            : code === AURA_CURSOR_CODE
+              ? purchaseAuraCursor
+              : purchaseBrandingRemoval
         const res = await purchase(projectId, consents)
         setBusyPlanId(null)
         if (!res.ok) {

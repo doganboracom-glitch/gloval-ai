@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { DEFAULT_CURSOR_AURA, effectsSchema, parseCursorAuraInput, type CursorAuraConfig } from '@/lib/cursor-aura'
+import { writeCursorAuraEffect } from '@/lib/cursor-aura-store'
+import { AURA_CURSOR_CODE } from '@/lib/billing-utils'
 import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
   notifyAccountReactivated,
@@ -175,43 +177,140 @@ export async function setSiteCursorAura(projectId: string, raw: unknown): Promis
     if (!config) return { ok: false, error: 'invalid_aura' }
   }
 
-  const admin = createAdminClient()
-  const { data: project } = await admin
-    .from('projects')
-    .select('id, slug, published_version_id, schema_data')
-    .eq('id', projectId)
-    .maybeSingle()
-  if (!project) return { ok: false, error: 'invalid_site' }
-
-  const withEffects = (schema: unknown) => {
-    const { effects: _previous, ...rest } = (schema && typeof schema === 'object' ? schema : {}) as Record<string, unknown>
-    return config ? { ...rest, effects: { cursorAura: config } } : rest
-  }
-
-  const { error } = await admin
-    .from('projects')
-    .update({ schema_data: withEffects(project.schema_data) })
-    .eq('id', projectId)
-  if (error) return { ok: false, error: 'update_failed' }
-
-  if (project.published_version_id) {
-    const { data: version } = await admin
-      .from('project_versions')
-      .select('schema_data')
-      .eq('id', project.published_version_id)
-      .maybeSingle()
-    if (version) {
-      const { error: versionError } = await admin
-        .from('project_versions')
-        .update({ schema_data: withEffects(version.schema_data) })
-        .eq('id', project.published_version_id)
-      if (versionError) return { ok: false, error: 'update_failed' }
-    }
-  }
+  const written = await writeCursorAuraEffect(createAdminClient(), projectId, config)
+  if (!written.ok) return written
 
   revalidatePath('/admin/sites')
-  if (project.slug) revalidatePath(`/site/${project.slug}`, 'layout')
+  if (written.slug) revalidatePath(`/site/${written.slug}`, 'layout')
   return { ok: true }
+}
+
+/* ------------------------- per-site paid add-on rights ------------------------ */
+
+/** Add-on rights an admin may hand out for free. Anything else is refused. */
+const GRANTABLE_SITE_ADDONS: readonly string[] = [AURA_CURSOR_CODE]
+
+export type SiteAddonRight = { status: 'active' | 'inactive' | 'revoked'; provider: string } | null
+
+/** Current state of one per-site right, for the admin dialog. */
+export async function getSiteAddonRight(
+  projectId: string,
+  code: string,
+): Promise<{ ok: true; right: SiteAddonRight } | { ok: false; error: string }> {
+  await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  if (!GRANTABLE_SITE_ADDONS.includes(code)) return { ok: false, error: 'invalid_addon' }
+  const { data } = await createAdminClient()
+    .from('project_entitlements')
+    .select('status, provider')
+    .eq('project_id', projectId)
+    .eq('code', code)
+    .maybeSingle()
+  return { ok: true, right: data ? (data as NonNullable<SiteAddonRight>) : null }
+}
+
+/**
+ * Admin-only: gives a site a per-site right for free (provider `admin_grant`,
+ * amount 0). No `billing_transactions` row is written (nothing was charged), and
+ * a right that is already active is never overwritten, so a paid right keeps its
+ * real provider and amount. The actor is recorded in `provider_ref`.
+ */
+export async function grantSiteAddon(projectId: string, code: string): Promise<AdminActionResult> {
+  const { email: actorEmail, userId: actorId } = await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  if (!GRANTABLE_SITE_ADDONS.includes(code)) return { ok: false, error: 'invalid_addon' }
+
+  const admin = createAdminClient()
+  const { data: project } = await admin.from('projects').select('id, owner_id, slug').eq('id', projectId).maybeSingle()
+  if (!project?.owner_id) return { ok: false, error: 'invalid_site' }
+
+  const { data: existing } = await admin
+    .from('project_entitlements')
+    .select('id, status')
+    .eq('project_id', projectId)
+    .eq('code', code)
+    .maybeSingle()
+  if (existing?.status === 'active') return { ok: false, error: 'already_owned' }
+
+  const { data: plan } = await admin.from('billing_plans').select('name').eq('code', code).maybeSingle()
+  const { error } = await admin.from('project_entitlements').upsert(
+    {
+      project_id: projectId,
+      user_id: project.owner_id,
+      code,
+      name: (plan?.name as string | undefined) ?? 'İmleç Bulutu',
+      status: 'active',
+      provider: 'admin_grant',
+      provider_ref: `admin_grant:${actorId ?? actorEmail}`,
+      amount_cents: 0,
+      currency: 'TRY',
+      granted_at: new Date().toISOString(),
+    },
+    { onConflict: 'project_id,code' },
+  )
+  if (error) return { ok: false, error: 'grant_failed' }
+
+  await recordSiteAddonAudit(admin, project.owner_id as string, 'site_addon_granted', code, projectId, actorEmail)
+  revalidatePath('/admin/sites')
+  revalidatePath('/billing')
+  return { ok: true }
+}
+
+/**
+ * Admin-only: withdraws an `admin_grant` right. A right the owner PAID for is
+ * never revoked here (refunds go through the payment provider). Revoking only
+ * stops the owner from editing; the stored effect keeps rendering until an admin
+ * turns it off, so the owner's site does not visibly change by surprise.
+ */
+export async function revokeSiteAddon(projectId: string, code: string): Promise<AdminActionResult> {
+  const { email: actorEmail } = await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  if (!GRANTABLE_SITE_ADDONS.includes(code)) return { ok: false, error: 'invalid_addon' }
+
+  const admin = createAdminClient()
+  const { data: existing } = await admin
+    .from('project_entitlements')
+    .select('id, user_id, status, provider')
+    .eq('project_id', projectId)
+    .eq('code', code)
+    .maybeSingle()
+  if (!existing || existing.status !== 'active') return { ok: false, error: 'not_granted' }
+  if (existing.provider !== 'admin_grant') return { ok: false, error: 'paid_right' }
+
+  const { error } = await admin
+    .from('project_entitlements')
+    .update({ status: 'revoked' })
+    .eq('id', existing.id)
+    .eq('provider', 'admin_grant')
+  if (error) return { ok: false, error: 'revoke_failed' }
+
+  await recordSiteAddonAudit(admin, existing.user_id as string, 'site_addon_revoked', code, projectId, actorEmail)
+  revalidatePath('/admin/sites')
+  revalidatePath('/billing')
+  return { ok: true }
+}
+
+/** Best-effort audit line in the notification log (same table `grantCredits` uses). */
+async function recordSiteAddonAudit(
+  admin: ReturnType<typeof createAdminClient>,
+  ownerId: string,
+  type: 'site_addon_granted' | 'site_addon_revoked',
+  code: string,
+  projectId: string,
+  actorEmail: string,
+) {
+  try {
+    await admin.from('notification_logs').insert({
+      user_id: ownerId,
+      channel: 'system',
+      type,
+      subject: type === 'site_addon_granted' ? `Site hakkı tanımlandı: ${code}` : `Site hakkı geri alındı: ${code}`,
+      body: `Site: ${projectId} · İşlemi yapan yönetici: ${actorEmail}`,
+      status: 'sent',
+    })
+  } catch {
+    // Audit logging must never mask the grant/revoke result.
+  }
 }
 
 /** Current aura config for the admin dialog (draft value, defaults when unset). */

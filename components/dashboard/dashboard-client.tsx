@@ -15,10 +15,12 @@ import {
   Package,
   LifeBuoy,
   Settings,
+  Sparkles,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { createProject } from '@/lib/projects'
 import { DeleteSiteDialog, type SiteToDelete } from '@/components/dashboard/delete-site-dialog'
+import { CursorAuraOwnerDialog } from '@/components/dashboard/cursor-aura-owner-dialog'
 import { createEcommerceProject } from '@/lib/ecommerce'
 import type { ProjectListItem } from '@/lib/projects'
 import { getCommerceMode } from '@/lib/commerce-mode'
@@ -40,6 +42,7 @@ const headerActionClass =
 
 export function DashboardClient({
   projects,
+  auraSiteIds = [],
   userEmail,
   planCode,
   billingAlert = null,
@@ -47,6 +50,8 @@ export function DashboardClient({
   unreadMessages = 0,
 }: {
   projects: ProjectListItem[]
+  /** Ids of the sites that hold an active İmleç Bulutu right. */
+  auraSiteIds?: string[]
   userEmail: string
   /** Kullanıcının aktif paketi; AI kredi göstergesini besler. */
   planCode: PlanCode
@@ -59,6 +64,7 @@ export function DashboardClient({
   const { t, lang } = useLanguage()
   const router = useRouter()
   const [siteToDelete, setSiteToDelete] = useState<SiteToDelete | null>(null)
+  const [auraSite, setAuraSite] = useState<{ id: string; name: string } | null>(null)
   const [deletedNotice, setDeletedNotice] = useState<string | null>(null)
   const [creatingPending, setCreatingPending] = useState(false)
   const [pendingError, setPendingError] = useState(false)
@@ -214,6 +220,8 @@ export function DashboardClient({
           onDeleted={handleDeleted}
         />
 
+        <CursorAuraOwnerDialog site={auraSite} onClose={() => setAuraSite(null)} />
+
         {pendingError && (
           <div
             role="alert"
@@ -354,6 +362,16 @@ export function DashboardClient({
                     {t.dash.open}
                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
                   </Link>
+                  {auraSiteIds.includes(p.id) && (
+                    <button
+                      type="button"
+                      onClick={() => setAuraSite({ id: p.id, name: p.name || t.dash.untitled })}
+                      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-accent"
+                    >
+                      <Sparkles className="size-3.5" />
+                      {t.dash.cursorAura.button}
+                    </button>
+                  )}
                   {p.published && p.slug && (
                     <a
                       href={tenantUrl(p.slug)}

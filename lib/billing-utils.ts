@@ -51,6 +51,12 @@ export const BRANDING_REMOVAL_CODE = 'branding_removal'
 export const MULTILANG_CODE = 'multilang'
 
 /**
+ * Plan code of the one-time, per-site "İmleç Bulutu" right (500 TL, KDV dahil).
+ * Only sold while `AURA_CURSOR_FEATURE_UI=true` (see `lib/aura-cursor-feature-flag.ts`).
+ */
+export const AURA_CURSOR_CODE = 'aura_cursor'
+
+/**
  * Separates the renewal ledger key from the catalog plan id a renewal moves the
  * subscription to (monthly -> yearly of the same tier). The key is written
  * server-side only; settlement re-validates the plan it names.

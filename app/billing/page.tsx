@@ -11,7 +11,7 @@ import {
   getMyEntitlements,
 } from '@/lib/billing'
 import { getMyProjectEntitlements } from '@/lib/project-entitlements'
-import { getMultilangPlanIfEnabled } from '@/lib/site-addons'
+import { getAuraCursorPlanIfEnabled, getMultilangPlanIfEnabled } from '@/lib/site-addons'
 import { getAddOnOverview } from '@/lib/effective-limits'
 import { getCreditLedger } from '@/lib/ai-credits'
 import { buildCreditSummary, buildSiteCapacity } from '@/lib/billing-summary'
@@ -62,6 +62,7 @@ export default async function BillingPage({
     projectEntitlementsResult,
     projectsResult,
     multilangPlanResult,
+    auraCursorPlanResult,
   ] = await Promise.allSettled([
     getPlans(),
     getMySubscription(),
@@ -71,6 +72,7 @@ export default async function BillingPage({
     getMyProjectEntitlements(),
     listProjects(),
     getMultilangPlanIfEnabled(),
+    getAuraCursorPlanIfEnabled(),
   ])
 
   function unwrap<T>(result: PromiseSettledResult<T>, fallback: T, label: string): T {
@@ -80,7 +82,12 @@ export default async function BillingPage({
   }
 
   const multilangPlan = unwrap(multilangPlanResult, null, 'multilang plan')
-  const plans = [...unwrap(plansResult, [], 'plans'), ...(multilangPlan ? [multilangPlan] : [])]
+  const auraCursorPlan = unwrap(auraCursorPlanResult, null, 'aura cursor plan')
+  const plans = [
+    ...unwrap(plansResult, [], 'plans'),
+    ...(multilangPlan ? [multilangPlan] : []),
+    ...(auraCursorPlan ? [auraCursorPlan] : []),
+  ]
   const subscription = unwrap(subscriptionResult, null, 'subscription')
   const currentPlan = unwrap(currentPlanResult, null, 'current plan')
   const transactions = unwrap(transactionsResult, [], 'transactions')
