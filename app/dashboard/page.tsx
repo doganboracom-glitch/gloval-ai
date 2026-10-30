@@ -11,6 +11,7 @@ import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isWithinWelcomeWindow, scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
+import { nonCritical, withOneRetry } from '@/lib/dashboard-resilience'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
 // stale full-route cache — always render it dynamically so a project created
@@ -34,19 +35,33 @@ export default async function DashboardPage() {
   // 24-hour welcome window can be affected, so older users cost no query.
   if (isWithinWelcomeWindow(user.created_at)) scheduleWelcomeEmail(user)
 
-  const [projects, unreadMessages] = await Promise.all([
-    listProjects(),
-    countOwnerUnreadContactMessages(createAdminClient(), user.id),
+  // Only the projects list is critical (one retry for transient blips); the
+  // unread counter and Aura rights fall back to empty values so a failure in
+  // either can never take the whole panel down.
+  const [projects, unreadMessages, auraSiteIds] = await Promise.all([
+    withOneRetry('listProjects', () => listProjects()),
+    nonCritical(
+      'unreadMessages',
+      () => countOwnerUnreadContactMessages(createAdminClient(), user.id),
+      0,
+    ),
+    // Sites holding an active Aura İmleç right get the settings button. RLS
+    // limits this read to the caller's own rights; a failure just hides the button.
+    nonCritical(
+      'auraRights',
+      async () => {
+        const { data, error } = await supabase
+          .from('project_entitlements')
+          .select('project_id')
+          .eq('user_id', user.id)
+          .eq('code', AURA_CURSOR_CODE)
+          .eq('status', 'active')
+        if (error) throw error
+        return (data ?? []).map((row) => row.project_id as string)
+      },
+      [] as string[],
+    ),
   ])
-  // Sites holding an active Aura İmleç right get the settings button. RLS
-  // limits this read to the caller's own rights; a failure just hides the button.
-  const { data: auraRights } = await supabase
-    .from('project_entitlements')
-    .select('project_id')
-    .eq('user_id', user.id)
-    .eq('code', AURA_CURSOR_CODE)
-    .eq('status', 'active')
-  const auraSiteIds = (auraRights ?? []).map((row) => row.project_id as string)
   // Aktif abonelik yoksa kullanıcı FREE sayılır. Faturalama sorgusu panelin
   // açılmasını engellememeli, bu yüzden hata durumunda güvenli tarafa düşer.
   const currentPlan = await getMyCurrentPlan().catch(() => null)

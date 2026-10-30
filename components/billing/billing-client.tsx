@@ -55,6 +55,8 @@ import {
   wantsPlansOpen,
   wantsPlansScroll,
 } from '@/components/billing/collapsible-add-ons-section'
+import { useAddonDeepLink } from '@/components/billing/use-addon-deep-link'
+import { addonCardId } from '@/lib/billing-addon-focus'
 import { purchaseAuraCursor, purchaseBrandingRemoval, purchaseMultilangPackage } from '@/lib/project-entitlements'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
 import type { ProjectEntitlementItem } from '@/lib/project-entitlements'
@@ -893,6 +895,7 @@ export function BillingClient({
       ),
     [visiblePlans],
   )
+  const highlightedAddonCode = useAddonDeepLink()
 
   // Pinned to GLOVAL AI's billing timezone (not the viewer's local one) so a
   // renewal date computed server-side never appears a day early/late here.
@@ -1258,7 +1261,13 @@ export function BillingClient({
                 return (
                   <div
                     key={p.id}
-                    className="relative flex flex-col rounded-2xl border border-border bg-card/70 p-6 transition-colors hover:border-primary/50"
+                    id={addonCardId(p.code)}
+                    data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
+                    className={`relative flex scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-6 transition-[color,box-shadow,border-color] hover:border-primary/50 ${
+                      highlightedAddonCode === p.code
+                        ? 'border-brand ring-2 ring-brand'
+                        : 'border-border'
+                    }`}
                   >
                     <h3 className="font-display text-xl font-bold">{p.name}</h3>
                     <div className="mt-2 flex items-baseline gap-1">
