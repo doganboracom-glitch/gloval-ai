@@ -13,6 +13,7 @@ import {
   pickLastValidSchema,
   type SchemaCandidate,
 } from '@/lib/website-schema-compat'
+import { withStoredEffects } from '@/lib/cursor-aura'
 import { INVALID_SCHEMA_ERROR, INVALID_SCHEMA_MESSAGE, checkPublishable } from '@/lib/publish-gate'
 import { getMyCurrentPlan, getPlanCodeForUser } from '@/lib/billing'
 import { PAGE_LIMIT_ERROR, isPageGrowthBlocked, pageLimitForPlan } from '@/lib/page-limits'
@@ -266,7 +267,7 @@ export async function createProject(input: {
   commerceMode?: CommerceMode
 }): Promise<string> {
   const { supabase, userId } = await requireUser()
-  const parsed = parseWebsiteForSave(input.schema)
+  const parsed = withStoredEffects(parseWebsiteForSave(input.schema), null)
   // The project type MUST reflect the actual generated content. A brief like
   // "…e-ticaret sitesi oluştur" yields a schema with products/categories
   // sections, but the create payload from the landing hero never carried a
@@ -377,6 +378,9 @@ export async function saveProjectSchema(input: {
     const tracking = sanitizeTracking(parsed.tracking)
     parsed = tracking ? { ...withoutTracking, tracking } : withoutTracking
   }
+
+  // Visual effects are admin-only: autosave never changes them, whoever saves.
+  parsed = withStoredEffects(parsed, existing?.schema_data)
 
   const patch: Record<string, unknown> = {
     schema_data: parsed,
@@ -554,7 +558,7 @@ export async function restoreLastValidVersion(projectId: string): Promise<Restor
 
   const { data: project, error: projectErr } = await db
     .from('projects')
-    .select('id, owner_id, language')
+    .select('id, owner_id, language, schema_data')
     .eq('id', projectId)
     .maybeSingle()
   if (projectErr) throw projectErr
@@ -590,7 +594,10 @@ export async function restoreLastValidVersion(projectId: string): Promise<Restor
 
   const { error: updateErr } = await db
     .from('projects')
-    .update({ schema_data: materializePages(restored), updated_at: new Date().toISOString() })
+    .update({
+      schema_data: withStoredEffects(materializePages(restored), project.schema_data),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', projectId)
   if (updateErr) throw updateErr
 
@@ -823,7 +830,7 @@ export async function publishProject(input: {
   // editing another tenant's site, `db` is the elevated service-role client.
   const { data: project, error: loadErr } = await db
     .from('projects')
-    .select('id, name, slug, published, published_at, language, owner_id')
+    .select('id, name, slug, published, published_at, language, owner_id, schema_data')
     .eq('id', input.id)
     .maybeSingle()
   if (loadErr) throw loadErr
@@ -949,6 +956,9 @@ export async function publishProject(input: {
     // Approved items are the owner's content from here on: drop their flag.
     parsed = approveSampleFindings(resolved, new Set([...attested, ...[...requestedIds].filter((id) => !detectedIds.has(id))]))
   }
+
+  // Effects are admin-only: the snapshot carries the stored value, never the payload's.
+  parsed = withStoredEffects(parsed, project.schema_data)
 
   // Persist the draft first so the published snapshot matches what's on screen.
   await saveProjectSchema({ id: input.id, schema: parsed, name: input.name })

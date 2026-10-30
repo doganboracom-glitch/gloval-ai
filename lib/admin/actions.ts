@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
+import { DEFAULT_CURSOR_AURA, effectsSchema, parseCursorAuraInput, type CursorAuraConfig } from '@/lib/cursor-aura'
 import { triggerMailAccessSync } from '@/lib/mail/access-trigger'
 import {
   notifyAccountReactivated,
@@ -156,6 +157,73 @@ export async function setSiteType(
   revalidatePath('/admin/sites')
   revalidatePath('/dashboard')
   return { ok: true }
+}
+
+/**
+ * Admin-only: turns the per-site cursor aura effect on/off or reconfigures it.
+ * Input is validated (hex colours, bounded numbers) before anything is stored.
+ * The value is written to the draft AND to the live published snapshot, so the
+ * switch takes effect without the owner republishing. Passing `null` removes it.
+ */
+export async function setSiteCursorAura(projectId: string, raw: unknown): Promise<AdminActionResult> {
+  await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+
+  let config: CursorAuraConfig | null = null
+  if (raw !== null) {
+    config = parseCursorAuraInput(raw)
+    if (!config) return { ok: false, error: 'invalid_aura' }
+  }
+
+  const admin = createAdminClient()
+  const { data: project } = await admin
+    .from('projects')
+    .select('id, slug, published_version_id, schema_data')
+    .eq('id', projectId)
+    .maybeSingle()
+  if (!project) return { ok: false, error: 'invalid_site' }
+
+  const withEffects = (schema: unknown) => {
+    const { effects: _previous, ...rest } = (schema && typeof schema === 'object' ? schema : {}) as Record<string, unknown>
+    return config ? { ...rest, effects: { cursorAura: config } } : rest
+  }
+
+  const { error } = await admin
+    .from('projects')
+    .update({ schema_data: withEffects(project.schema_data) })
+    .eq('id', projectId)
+  if (error) return { ok: false, error: 'update_failed' }
+
+  if (project.published_version_id) {
+    const { data: version } = await admin
+      .from('project_versions')
+      .select('schema_data')
+      .eq('id', project.published_version_id)
+      .maybeSingle()
+    if (version) {
+      const { error: versionError } = await admin
+        .from('project_versions')
+        .update({ schema_data: withEffects(version.schema_data) })
+        .eq('id', project.published_version_id)
+      if (versionError) return { ok: false, error: 'update_failed' }
+    }
+  }
+
+  revalidatePath('/admin/sites')
+  if (project.slug) revalidatePath(`/site/${project.slug}`, 'layout')
+  return { ok: true }
+}
+
+/** Current aura config for the admin dialog (draft value, defaults when unset). */
+export async function getSiteCursorAura(projectId: string): Promise<{ ok: true; config: CursorAuraConfig } | { ok: false; error: string }> {
+  await requireAdmin()
+  if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'invalid_site' }
+  const admin = createAdminClient()
+  const { data: project } = await admin.from('projects').select('schema_data').eq('id', projectId).maybeSingle()
+  if (!project) return { ok: false, error: 'invalid_site' }
+  const stored = effectsSchema.safeParse((project.schema_data as { effects?: unknown } | null)?.effects)
+  const aura = stored.success ? stored.data.cursorAura : undefined
+  return { ok: true, config: aura ?? DEFAULT_CURSOR_AURA }
 }
 
 /* --------------------------------- users --------------------------------- */

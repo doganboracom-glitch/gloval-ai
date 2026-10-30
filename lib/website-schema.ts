@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { effectsSchema } from '@/lib/cursor-aura'
 import { buildSectorSite } from '@/lib/sector-profiles'
 import { NAV_LINK_MAX, SITE_PAGE_HARD_CAP, SITE_SECTION_HARD_CAP } from '@/lib/pricing-config'
 import { GALLERY_VIDEO_URL_MAX, isGalleryVideoUrl } from '@/lib/gallery-video'
@@ -1208,6 +1209,7 @@ export const websiteSchema = z.object({
     'The ordered homepage sections',
   ),
   tracking: trackingSchema.optional().describe('Owner-supplied third-party code snippets'),
+  effects: effectsSchema.optional().describe('Admin-only visual effects; owners and the AI never write this'),
   company: companyProfileSchema.optional().describe('Owner-supplied legal company details'),
   legalDocs: legalDocsSchema.optional().describe('Owner edits of the legal pages'),
   blogProfile: blogProfileSchema.optional().describe('Owner answers remembered for the AI blog writer'),
@@ -1233,6 +1235,7 @@ export const websiteSchema = z.object({
 export const websiteGenerationSchema = websiteSchema
   .omit({
     tracking: true,
+    effects: true,
     contactActions: true,
     social: true,
     company: true,
@@ -1262,7 +1265,7 @@ export const websiteGenerationSchema = websiteSchema
  * them back from the current schema instead.
  */
 export const websiteEditSchema = websiteSchema
-  .omit({ tracking: true, company: true, legalDocs: true, blogProfile: true, blogSettings: true, pageRedirects: true })
+  .omit({ tracking: true, effects: true, company: true, legalDocs: true, blogProfile: true, blogSettings: true, pageRedirects: true })
   .extend({
   pages: z.array(leanPageSchema).min(1).max(SITE_PAGE_HARD_CAP),
   meta: siteMetaSchema.omit({ seoTitle: true }),
