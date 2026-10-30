@@ -4,6 +4,7 @@ import { isDomainUsable, type CustomDomain, type DnsRecord } from '@/lib/custom-
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { getMailQuota } from './access'
+import { listHeldDomainIds } from '@/lib/custom-domains/handover/hold'
 import type { MailDomain, MailDomainStatus } from './types'
 
 /**
@@ -58,7 +59,10 @@ function toMailDomain(domain: CustomDomain): MailDomain {
  * provider would then reject.
  */
 export async function getMyMailDomains(userId: string): Promise<MailDomain[]> {
-  const usable = (await listDomainsForUser(userId)).filter(isDomainUsable)
+  // Quarantined domains are never provisioned or offered; every mailbox action
+  // resolves its domain through this list, so this is the single choke point.
+  const held = await listHeldDomainIds(userId)
+  const usable = (await listDomainsForUser(userId)).filter((d) => isDomainUsable(d) && !held.has(d.id))
   if (usable.length === 0) return []
 
   const provider = getMailProvider()
@@ -122,13 +126,19 @@ export type MailDomainGate =
   | { state: 'none' }
   | { state: 'unverified'; domainId: string; domain: string; status: CustomDomain['status'] }
   | { state: 'ready'; domainId: string; domain: string }
+  /** Verified, but its mail service is closed while a domain transfer is under review. */
+  | { state: 'held'; domainId: string; domain: string }
 
 export async function getMyMailDomainGate(userId: string): Promise<MailDomainGate> {
   const domains = await listDomainsForUser(userId)
   if (domains.length === 0) return { state: 'none' }
 
-  const usable = domains.find(isDomainUsable)
+  const held = await listHeldDomainIds(userId)
+  const usable = domains.find((d) => isDomainUsable(d) && !held.has(d.id))
   if (usable) return { state: 'ready', domainId: usable.id, domain: usable.domain }
+
+  const quarantined = domains.find((d) => held.has(d.id))
+  if (quarantined) return { state: 'held', domainId: quarantined.id, domain: quarantined.domain }
 
   // Primary first ordering means this is the domain the customer cares about.
   const pending = domains[0]
