@@ -1,5 +1,5 @@
 /**
- * Gate for SELLING the "İmleç Bulutu" add-on. Off unless
+ * Gate for SELLING the "Aura İmleç" add-on. Off unless
  * AURA_CURSOR_FEATURE_UI is exactly `true`.
  *
  * Read by the /billing page (to list the card) and by the purchase action (to

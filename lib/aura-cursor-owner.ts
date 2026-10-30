@@ -14,7 +14,7 @@ import {
 import { writeCursorAuraEffect } from '@/lib/cursor-aura-store'
 
 /**
- * Site-owner actions for the paid "İmleç Bulutu" right.
+ * Site-owner actions for the paid "Aura İmleç" right.
  *
  * Authorization is checked here, server-side, on every call, in this order:
  *   1. a signed-in user,
@@ -101,7 +101,7 @@ export async function setMyCursorAura(
   const config = parseOwnerCursorAuraInput(raw)
   if (!config) return { ok: false, error: 'invalid_aura' }
 
-  const written = await writeCursorAuraEffect(createAdminClient(), projectId, config)
+  const written = await writeCursorAuraEffect(createAdminClient(), projectId, config, 'owner')
   if (!written.ok) return { ok: false, error: written.error }
 
   revalidatePath('/dashboard', 'layout')

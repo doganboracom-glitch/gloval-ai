@@ -170,7 +170,7 @@ export async function purchaseMultilangPackage(
 }
 
 /**
- * Buy the one-time İmleç Bulutu right (500 TL, KDV dahil) for a single project
+ * Buy the one-time Aura İmleç right (500 TL, KDV dahil) for a single project
  * the caller owns. Refuses before any auth or database access while the flag is off.
  */
 export async function purchaseAuraCursor(

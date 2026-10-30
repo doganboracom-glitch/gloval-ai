@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { Lock } from 'lucide-react'
 import { getMyCursorAura, setMyCursorAura } from '@/lib/aura-cursor-owner'
 import {
   CURSOR_AURA_PRESET_COLORS,
+  DEFAULT_CURSOR_AURA,
   OWNER_CURSOR_AURA_LIMITS,
+  clampToOwnerLimits,
   type CursorAuraConfig,
 } from '@/lib/cursor-aura'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -16,7 +19,7 @@ export function CursorAuraOwnerDialog({
   site,
   onClose,
 }: {
-  site: { id: string; name: string } | null
+  site: { id: string; name: string; locked?: boolean } | null
   onClose: () => void
 }) {
   const { t } = useLanguage()
@@ -27,11 +30,17 @@ export function CursorAuraOwnerDialog({
   const [error, setError] = useState<string | null>(null)
 
   const siteId = site?.id ?? null
+  const locked = site?.locked === true
   useEffect(() => {
     if (!siteId) return
     let cancelled = false
-    setConfig(null)
     setError(null)
+    if (locked) {
+      // No right: show the controls disabled, never read or write the site's effect.
+      setConfig(clampToOwnerLimits(DEFAULT_CURSOR_AURA))
+      return
+    }
+    setConfig(null)
     getMyCursorAura(siteId).then((res) => {
       if (cancelled) return
       if (res.ok) setConfig(res.config)
@@ -40,7 +49,7 @@ export function CursorAuraOwnerDialog({
     return () => {
       cancelled = true
     }
-  }, [siteId, copy.failed, copy.notEntitled])
+  }, [siteId, locked, copy.failed, copy.notEntitled])
 
   function toggleColor(color: string) {
     if (!config) return
@@ -52,6 +61,10 @@ export function CursorAuraOwnerDialog({
 
   function save() {
     if (!site || !config) return
+    if (locked) {
+      router.push('/billing?addon=aura_cursor')
+      return
+    }
     startTransition(async () => {
       const res = await setMyCursorAura(site.id, config)
       if (!res.ok) {
@@ -68,16 +81,22 @@ export function CursorAuraOwnerDialog({
       open={site !== null}
       title={`${copy.title}${site ? ` - ${site.name}` : ''}`}
       description={copy.description}
-      confirmLabel={copy.save}
+      confirmLabel={locked ? copy.buy : copy.save}
       cancelLabel={copy.cancel}
       confirmDisabled={pending || !config}
       onConfirm={save}
       onCancel={onClose}
     >
       <div className="mt-4 flex flex-col gap-4 text-sm">
+        {locked && (
+          <p role="status" className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 p-3 text-muted-foreground">
+            <Lock className="size-4 shrink-0" aria-hidden />
+            {copy.locked}
+          </p>
+        )}
         {!config && !error && <p className="text-muted-foreground">{copy.loading}</p>}
         {config && (
-          <>
+          <fieldset disabled={locked} className={'flex flex-col gap-4 border-0 p-0' + (locked ? ' opacity-60' : '')}>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -140,7 +159,7 @@ export function CursorAuraOwnerDialog({
                 className="accent-[var(--color-brand)]"
               />
             </label>
-          </>
+          </fieldset>
         )}
         {error && (
           <p role="alert" className="text-xs text-destructive">

@@ -1,6 +1,6 @@
 -- scripts/087-grant-aura-cursor-dbajans.sql
 -- *** UYGULANMADI / NOT APPLIED to any database. Review/PR only. ***
--- Tek seferlik: "dbajans" sitesine İmleç Bulutu hakkını ücretsiz tanımlar.
+-- Tek seferlik: "dbajans" sitesine Aura İmleç hakkını ücretsiz tanımlar.
 -- Yönetici arayüzündeki grantSiteAddon eylemiyle aynı sonucu verir:
 --   provider = 'admin_grant', amount_cents = 0, billing_transactions satırı YAZILMAZ.
 --
@@ -18,7 +18,7 @@ begin;
 
 insert into public.project_entitlements
   (project_id, user_id, code, name, status, provider, provider_ref, amount_cents, currency, granted_at)
-select p.id, p.owner_id, 'aura_cursor', 'İmleç Bulutu', 'active', 'admin_grant', 'admin_grant:manual-sql', 0, 'TRY', now()
+select p.id, p.owner_id, 'aura_cursor', 'Aura İmleç', 'active', 'admin_grant', 'admin_grant:manual-sql', 0, 'TRY', now()
 from public.projects p
 where p.id = '495b08b1-49e9-4f88-beb1-722c606c808b'
   and p.slug = 'dbajans'

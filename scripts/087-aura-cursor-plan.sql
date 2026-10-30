@@ -2,7 +2,7 @@
 -- *** UYGULANMADI / NOT APPLIED to any database. Review/PR only. ***
 -- Elle, sırayla ve ancak PR onaylandıktan sonra çalıştırın (bkz. PR açıklaması).
 --
--- 1) billing_plans: "İmleç Bulutu" (aura_cursor) satırı.
+-- 1) billing_plans: "Aura İmleç" (aura_cursor) satırı.
 --    500 TL = 50000 kuruş, KDV dahil, tek seferlik (interval = 'once'), site başına
 --    (project_entitlements üzerinden), product_category = 'addon'.
 --    active = false: eski katalog okuyucuları (getPlans) satırı görmesin; satış
@@ -27,13 +27,13 @@ insert into public.billing_plans
   (code, name, description, price_cents, currency, interval, trial_days, features, product_category, active, sort_order)
 values (
   'aura_cursor',
-  'İmleç Bulutu',
-  'Yayındaki sitenizde fare imlecini renkli bir bulut efektiyle takip eden, tek seferlik ve site başına geçerli eklenti.',
+  'Aura İmleç',
+  'Yayındaki sitenizde fare imlecini renkli bir aura efektiyle takip eden, tek seferlik ve site başına geçerli eklenti.',
   50000,
   'TRY',
   'once',
   0,
-  '["Seçtiğiniz sitede imleci takip eden renkli bulut efekti", "500 TL, KDV dahil, tek seferlik, site başına", "En çok 3 renk, yoğunluk ve boyut ayarı", "Değişiklikleriniz anında yayında", "Abonelikten bağımsız, seçtiğiniz site için süresiz geçerli"]'::jsonb,
+  '["Seçtiğiniz sitede imleci takip eden renkli aura efekti", "500 TL, KDV dahil, tek seferlik, site başına", "En çok 3 renk, yoğunluk (0.2-0.7) ve boyut (80-200) ayarı", "Değişiklikleriniz anında yayında", "Abonelikten bağımsız, seçtiğiniz site için süresiz geçerli"]'::jsonb,
   'addon',
   false,
   30

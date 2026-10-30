@@ -4,6 +4,7 @@ import { listProjects } from '@/lib/projects'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import { AURA_CURSOR_CODE } from '@/lib/billing-utils'
+import { isAuraCursorFeatureUiEnabled } from '@/lib/aura-cursor-feature-flag'
 import { DashboardClient } from '@/components/dashboard/dashboard-client'
 import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
@@ -37,7 +38,7 @@ export default async function DashboardPage() {
     listProjects(),
     countOwnerUnreadContactMessages(createAdminClient(), user.id),
   ])
-  // Sites holding an active İmleç Bulutu right get the settings button. RLS
+  // Sites holding an active Aura İmleç right get the settings button. RLS
   // limits this read to the caller's own rights; a failure just hides the button.
   const { data: auraRights } = await supabase
     .from('project_entitlements')
@@ -70,6 +71,7 @@ export default async function DashboardPage() {
       <DashboardClient
         projects={projects}
         auraSiteIds={auraSiteIds}
+        auraSellingEnabled={isAuraCursorFeatureUiEnabled()}
         userEmail={user.email ?? ''}
         unreadMessages={unreadMessages}
         planCode={toPlanCode(currentPlan?.code)}

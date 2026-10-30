@@ -663,7 +663,7 @@ const dict = {
         lossContent:
           'Sayfalar, blog yazıları, ürünler ve tüm içerik ile yüklenen ürün görselleri ve yapay zekâ görsel adayları silinir.',
         lossAddons:
-          'Siteye bağlı ek paketler (örn. Copyright Kaldırma) geri alınamaz ve iade edilmez.',
+          'Siteye bağlı ek paketler (örn. Copyright Kaldırma, Aura İmleç) geri alınamaz ve iade edilmez.',
         lossOrders: 'Mağaza sitelerinde sipariş kayıtları yasal saklama gereği korunur.',
         paidRightsTitle: 'Bu sitede ödediğin haklar var:',
         paidRightsNote: 'Site silinirse bu haklar da silinir; geri alınamaz ve ücret iadesi yapılmaz.',
@@ -682,8 +682,8 @@ const dict = {
         triggerLabel: '“{name}” sitesini sil',
       },
       cursorAura: {
-        button: 'İmleç bulutu',
-        title: 'İmleç bulutu',
+        button: 'Aura İmleç',
+        title: 'Aura İmleç',
         description:
           'Yayındaki sitende fareyi yumuşak bir gecikmeyle izleyen renkli toz bulutu. Değişiklik kaydedildiği anda yayındaki sitede görünür. Dokunmatik cihazlarda ve hareket azaltma açıkken çalışmaz.',
         enabled: 'Efekt açık',
@@ -694,7 +694,9 @@ const dict = {
         cancel: 'Vazgeç',
         loading: 'Ayar yükleniyor...',
         failed: 'Ayar kaydedilemedi. Lütfen tekrar dene.',
-        notEntitled: 'Bu site için İmleç Bulutu hakkın bulunmuyor.',
+        notEntitled: 'Bu site için Aura İmleç hakkın bulunmuyor.',
+        locked: 'Bu site için Aura İmleç hakkın yok. Ayarları düzenlemek için hakkı satın al.',
+        buy: 'Satın al',
       },
       updated: 'Güncellendi',
       created: 'Oluşturuldu',
@@ -2630,7 +2632,7 @@ const dict = {
       lossContent:
         'Pages, blog posts, products and all content, plus uploaded product images and AI image candidates, are deleted.',
       lossAddons:
-        'Add-ons attached to the site (e.g. Copyright Removal) cannot be recovered and are not refunded.',
+        'Add-ons attached to the site (e.g. Copyright Removal, Aura Cursor) cannot be recovered and are not refunded.',
       lossOrders: 'For store sites, order records are kept as required by law.',
       paidRightsTitle: 'This site holds rights you paid for:',
       paidRightsNote: 'If the site is deleted these rights are deleted with it; they cannot be restored and are not refunded.',
@@ -2649,8 +2651,8 @@ const dict = {
       triggerLabel: 'Delete site "{name}"',
     },
     cursorAura: {
-      button: 'Cursor aura',
-      title: 'Cursor aura',
+      button: 'Aura Cursor',
+      title: 'Aura Cursor',
       description:
         'A soft, coloured dust trail that follows the mouse on your live site. Changes appear on the live site the moment you save. Disabled on touch devices and with reduced motion.',
       enabled: 'Effect enabled',
@@ -2661,7 +2663,9 @@ const dict = {
       cancel: 'Cancel',
       loading: 'Loading settings...',
       failed: 'Could not save the settings. Please try again.',
-      notEntitled: 'You do not have the Cursor Aura right for this site.',
+      notEntitled: 'You do not have the Aura Cursor right for this site.',
+      locked: 'This site does not have the Aura Cursor right. Buy it to edit these settings.',
+      buy: 'Buy',
     },
     updated: 'Updated',
     created: 'Created',

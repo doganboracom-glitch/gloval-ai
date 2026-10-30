@@ -20,6 +20,7 @@ export async function writeCursorAuraEffect(
   admin: AdminClient,
   projectId: string,
   config: CursorAuraConfig | null,
+  source: 'owner' | 'admin' = 'admin',
 ): Promise<WriteAuraResult> {
   const { data: project } = await admin
     .from('projects')
@@ -30,7 +31,8 @@ export async function writeCursorAuraEffect(
 
   const withEffects = (schema: unknown) => {
     const { effects: _previous, ...rest } = (schema && typeof schema === 'object' ? schema : {}) as Record<string, unknown>
-    return config ? { ...rest, effects: { cursorAura: config } } : rest
+    const stored = config && source === 'owner' ? { ...config, source } : config
+    return stored ? { ...rest, effects: { cursorAura: stored } } : rest
   }
 
   const { error } = await admin

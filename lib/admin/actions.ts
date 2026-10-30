@@ -238,7 +238,7 @@ export async function grantSiteAddon(projectId: string, code: string): Promise<A
       project_id: projectId,
       user_id: project.owner_id,
       code,
-      name: (plan?.name as string | undefined) ?? 'İmleç Bulutu',
+      name: (plan?.name as string | undefined) ?? 'Aura İmleç',
       status: 'active',
       provider: 'admin_grant',
       provider_ref: `admin_grant:${actorId ?? actorEmail}`,

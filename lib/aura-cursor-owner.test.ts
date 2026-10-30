@@ -97,6 +97,35 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('owner bounds', () => {
+  it('are exactly: max 3 colours, intensity 0.2-0.7, size 80-200', () => {
+    expect(OWNER_CURSOR_AURA_LIMITS).toEqual({
+      colors: { min: 1, max: 3 },
+      intensity: { min: 0.2, max: 0.7 },
+      size: { min: 80, max: 200 },
+    })
+  })
+
+  it.each([
+    ['intensity at min', { intensity: 0.2 }],
+    ['intensity at max', { intensity: 0.7 }],
+    ['size at min', { size: 80 }],
+    ['size at max', { size: 200 }],
+    ['three colours', { colors: ['#111111', '#222222', '#333333'] }],
+  ])('accepts the boundary value: %s', (_label, over) => {
+    expect(parseOwnerCursorAuraInput({ ...VALID_OWNER, ...over })).not.toBeNull()
+  })
+
+  it.each([
+    ['intensity 0.75', { intensity: 0.75 }],
+    ['intensity 0.8', { intensity: 0.8 }],
+    ['intensity 0.19', { intensity: 0.19 }],
+    ['size 201', { size: 201 }],
+    ['size 240', { size: 240 }],
+    ['size 79', { size: 79 }],
+  ])('rejects just outside the bounds: %s', (_label, over) => {
+    expect(parseOwnerCursorAuraInput({ ...VALID_OWNER, ...over })).toBeNull()
+  })
+
   it('accepts a config inside the owner bounds and upper-cases colours', () => {
     expect(parseOwnerCursorAuraInput(VALID_OWNER)).toEqual({ ...VALID_OWNER, colors: ['#EF4444', '#22C55E'] })
   })
@@ -201,7 +230,7 @@ describe('owner action authorization', () => {
     seedProject()
     seedRight()
     expect(await setMyCursorAura(PROJECT_ID, VALID_OWNER)).toEqual({ ok: true })
-    const expected = { cursorAura: { ...VALID_OWNER, colors: ['#EF4444', '#22C55E'] } }
+    const expected = { cursorAura: { ...VALID_OWNER, colors: ['#EF4444', '#22C55E'], source: 'owner' } }
     expect(fakeDb.rows('projects')[0].schema_data).toEqual({ sections: [], effects: expected })
     expect(fakeDb.rows('project_versions')[0].schema_data).toEqual({ sections: [], effects: expected })
   })

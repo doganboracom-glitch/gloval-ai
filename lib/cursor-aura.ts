@@ -24,6 +24,9 @@ export const cursorAuraSchema = z.object({
     .max(CURSOR_AURA_LIMITS.colors.max),
   intensity: z.number().min(CURSOR_AURA_LIMITS.intensity.min).max(CURSOR_AURA_LIMITS.intensity.max),
   size: z.number().min(CURSOR_AURA_LIMITS.size.min).max(CURSOR_AURA_LIMITS.size.max),
+  // Set only by the owner action. An owner-sourced effect renders only while the
+  // site still holds an active `aura_cursor` right; an admin-sourced one never depends on it.
+  source: z.literal('owner').optional(),
 })
 
 export const effectsSchema = z.object({
@@ -47,7 +50,14 @@ export const DEFAULT_CURSOR_AURA: CursorAuraConfig = {
 export function parseCursorAuraInput(raw: unknown): CursorAuraConfig | null {
   const parsed = cursorAuraSchema.safeParse(raw)
   if (!parsed.success) return null
-  return { ...parsed.data, colors: parsed.data.colors.map((c) => c.toUpperCase()) }
+  const { source: _source, ...config } = parsed.data
+  return { ...config, colors: config.colors.map((c) => c.toUpperCase()) }
+}
+
+/** Who wrote the stored effect: `'owner'` (needs the right to render) or `'admin'` (also legacy values). */
+export function cursorAuraSource(effects: unknown): 'owner' | 'admin' {
+  const parsed = effectsSchema.safeParse(effects)
+  return parsed.success && parsed.data.cursorAura?.source === 'owner' ? 'owner' : 'admin'
 }
 
 /**
