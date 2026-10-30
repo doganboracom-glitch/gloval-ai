@@ -30,7 +30,7 @@ export const ADS_FREE_LIMITS = {
   /** Backstop per hashed IP per day, so clearing cookies is not an unlimited bypass. */
   anonPerIpPerDay: 15,
   /** Global anonymous ceiling per day; `ADS_ANON_DAILY_CAP` overrides it. */
-  anonGlobalPerDayDefault: 300,
+  anonGlobalPerDayDefault: 100,
 } as const
 
 /**

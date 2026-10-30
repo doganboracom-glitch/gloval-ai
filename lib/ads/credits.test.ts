@@ -162,7 +162,7 @@ describe('free quota subjects', () => {
     expect(anonymousSubjects({ anonId: 'a', ip: 'b' }, {})).toBeNull()
     expect(anonymousSubjects({ anonId: 'a', ip: 'b' }, { ADS_ANON_HASH_SECRET: 'short' })).toBeNull()
     const s = anonymousSubjects({ anonId: 'a', ip: 'b' }, { ADS_ANON_HASH_SECRET: SECRET, ADS_ANON_DAILY_CAP: 'abc' })
-    expect(s!.limits[2]).toBe(300)
+    expect(s!.limits[2]).toBe(100)
   })
 })
 
