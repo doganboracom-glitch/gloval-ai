@@ -1,23 +1,21 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { LinkButton } from '@/components/link-button'
 import { useLanguage } from '@/components/language-provider'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 
-const REDIRECT_DELAY_SECONDS = 3
-
 /**
- * Landing screen after `/auth/callback` finishes a successful email
- * verification (signup confirmation). The callback route signs the
- * just-created session back out before redirecting here, so this is purely
- * the branded "you're verified" moment — it then hands off to a real login
- * screen (carrying `next` through so login lands wherever the user was
- * originally headed) after a short countdown, with an immediate manual
- * escape hatch via the button.
+ * Landing screen after an email verification (signup confirmation) finishes.
+ * The verifying route signs the just-created session back out before
+ * redirecting here, so this is purely the branded "you're verified" moment.
+ * It never redirects on its own: the link may have been opened on a different
+ * device than the one that started the sign-up, so the user chooses whether to
+ * continue in their original tab or sign in here (`next` is carried through,
+ * including any pending signup draft resume path).
  */
 export default function VerifiedPage() {
   return (
@@ -29,25 +27,10 @@ export default function VerifiedPage() {
 
 function VerifiedContent() {
   const { t } = useLanguage()
-  const router = useRouter()
   const searchParams = useSearchParams()
 
   const next = sanitizeNextPath(searchParams.get('next'))
   const loginHref = `/auth/login?next=${encodeURIComponent(next)}`
-  const [secondsLeft, setSecondsLeft] = useState(REDIRECT_DELAY_SECONDS)
-
-  useEffect(() => {
-    const tick = window.setInterval(() => {
-      setSecondsLeft((current) => Math.max(0, current - 1))
-    }, 1000)
-    const redirect = window.setTimeout(() => {
-      router.replace(loginHref)
-    }, REDIRECT_DELAY_SECONDS * 1000)
-    return () => {
-      window.clearInterval(tick)
-      window.clearTimeout(redirect)
-    }
-  }, [loginHref, router])
 
   return (
     <AuthShell title={t.auth.verifiedTitle} subtitle={t.auth.verifiedBody}>
@@ -58,9 +41,6 @@ function VerifiedContent() {
         >
           <CheckCircle2 className="size-7" />
         </div>
-        <p role="status" className="text-sm text-muted-foreground">
-          {t.auth.verifiedRedirecting.replace('{s}', String(secondsLeft))}
-        </p>
         <LinkButton href={loginHref} className="w-full">
           {t.auth.goToDashboard}
         </LinkButton>

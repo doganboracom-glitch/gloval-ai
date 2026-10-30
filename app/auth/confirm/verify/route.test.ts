@@ -49,7 +49,7 @@ afterEach(() => {
 })
 
 describe('POST /auth/confirm/verify', () => {
-  it('verifies the token only after form submission and resumes a valid draft', async () => {
+  it('verifies only after form submission and, with a draft, shows the success screen instead of resuming', async () => {
     const response = await POST(
       postForm({ token_hash: 'opaque-token-hash', type: 'signup', draft: DRAFT_TOKEN, next: '' }),
     )
@@ -58,10 +58,10 @@ describe('POST /auth/confirm/verify', () => {
       token_hash: 'opaque-token-hash',
       type: 'signup',
     })
-    expect(mocks.signOut).not.toHaveBeenCalled()
+    expect(mocks.signOut).toHaveBeenCalledOnce()
     expect(response.status).toBe(303)
-    expect(location(response).pathname).toBe('/auth/resume')
-    expect(location(response).searchParams.get('draft')).toBe(DRAFT_TOKEN)
+    expect(location(response).pathname).toBe('/auth/verified')
+    expect(location(response).searchParams.get('next')).toBe(`/auth/resume?draft=${DRAFT_TOKEN}`)
   })
 
   it('handles empty draft and next as a normal, non-draft confirmation', async () => {
@@ -87,8 +87,8 @@ describe('POST /auth/confirm/verify', () => {
       }),
     )
 
-    expect(location(response).pathname).toBe('/auth/resume')
-    expect(location(response).searchParams.get('draft')).toBe(DRAFT_TOKEN)
+    expect(location(response).pathname).toBe('/auth/verified')
+    expect(location(response).searchParams.get('next')).toBe(`/auth/resume?draft=${DRAFT_TOKEN}`)
   })
 
   it('does not verify an unsupported type and logs only the Supabase code and status on failure', async () => {

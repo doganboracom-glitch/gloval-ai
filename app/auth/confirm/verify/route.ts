@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { logSupabaseAuthFailure } from '@/lib/supabase/auth-error'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
+import { buildVerifiedUrl } from '@/lib/auth-verified-url'
 import { sanitizeNextPathWithDecoding } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
 import { type EmailOtpType } from '@supabase/supabase-js'
@@ -64,12 +65,6 @@ export async function POST(request: NextRequest) {
     return redirect(errorUrl(origin, draft))
   }
 
-  if (draft) {
-    const resumeUrl = new URL('/auth/resume', origin)
-    resumeUrl.searchParams.set('draft', draft)
-    return redirect(resumeUrl)
-  }
-
   try {
     const { error: signOutError } = await supabase.auth.signOut()
     if (signOutError) logSupabaseAuthFailure('auth confirm sign-out', signOutError)
@@ -77,7 +72,5 @@ export async function POST(request: NextRequest) {
     logSupabaseAuthFailure('auth confirm sign-out', error)
   }
 
-  const verifiedUrl = new URL('/auth/verified', origin)
-  verifiedUrl.searchParams.set('next', next)
-  return redirect(verifiedUrl)
+  return redirect(buildVerifiedUrl(origin, next, draft))
 }

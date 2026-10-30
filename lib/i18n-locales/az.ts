@@ -353,8 +353,7 @@ const az: DeepPartial<Dict> = {
     sessionExpired: 'Sessiyanızın vaxtı bitib. Zəhmət olmasa yenidən daxil olun.',
     unexpected: 'Gözlənilməz xəta baş verdi. Zəhmət olmasa yenidən cəhd edin.',
     verifiedTitle: 'E-poçt ünvanınız uğurla təsdiqləndi!',
-    verifiedBody: 'GLOVAL AI hesabınız indi aktivdir. Daxil olma səhifəsinə yönləndiriləcəksiniz.',
-    verifiedRedirecting: '{s} saniyə sonra daxil olma səhifəsinə yönləndirilir...',
+    verifiedBody: 'E-poçt ünvanınız təsdiqləndi. Kompüterinizdəki sekmədən davam edə və ya buradan daxil ola bilərsiniz.',
     goToDashboard: 'İndi daxil ol',
     continueWithGoogle: 'Google ilə davam et',
 
