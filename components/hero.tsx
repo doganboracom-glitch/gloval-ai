@@ -445,7 +445,7 @@ export function Hero() {
           </p>
         </div>
 
-        <AdsProductSwitch active="build" className="mx-auto mb-6" />
+        <AdsProductSwitch active="build" className="mx-auto mt-6 -mb-7 sm:mt-8 sm:-mb-6" />
 
         {/* AI prompt box */}
         <div
