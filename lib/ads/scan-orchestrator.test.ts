@@ -97,6 +97,20 @@ describe('runScan: quota and rate limits', () => {
     expect(calls.reserve).toBe(0)
   })
 
+  it('fails closed when the policy counter throws and releases the regular scan allowance', async () => {
+    const { deps, calls } = makeDeps({
+      reservePolicyBlocked: async () => {
+        throw new Error('database unavailable')
+      },
+    })
+    expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({
+      ok: false,
+      error: { code: 'service_unavailable' },
+    })
+    expect(calls.release).toBe(1)
+    expect(calls.generate).toHaveLength(0)
+  })
+
   it('treats a repeated reservation as a duplicate and releases nothing', async () => {
     const { deps, calls } = makeDeps({ reserveFree: async () => ({ allowed: true, alreadyReserved: true }) })
     expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({ ok: false, error: { code: 'duplicate' } })
@@ -175,19 +189,117 @@ describe('runScan: refunds on failure', () => {
       scanSite: async () => ({ ok: true, snapshot: { ...SNAPSHOT, host: 'bahis-sitesi.com', finalHost: 'bahis-sitesi.com', title: 'Casino ve canlı bahis' } }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
-    expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: false } })
+    expect(outcome).toEqual({
+      ok: false,
+      error: { code: 'policy_blocked', consumed: false, blockedCategories: ['gambling'] },
+    })
     expect(calls.generate).toHaveLength(0)
+    expect(calls.policyReserve).toBe(0)
+    expect(calls.charge).toBe(0)
     expect(calls.release).toBe(1)
   })
 
-  it('consumes the attempt when only the model flags a blocked category', async () => {
+  it('counts a model-confirmed block only against the separate policy counter', async () => {
     const { deps, calls } = makeDeps({
       generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'weapons' }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
-    expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: true } })
-    expect(calls.release).toBe(0)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ free_quota_used: true, error_code: 'policy_blocked' })
+    expect(outcome).toEqual({
+      ok: false,
+      error: { code: 'policy_blocked', consumed: true, blockedCategories: ['weapons'] },
+    })
+    expect(calls.release).toBe(1)
+    expect(calls.policyReserve).toBe(1)
+    expect(calls.policyRelease).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'error',
+      free_quota_used: false,
+      error_code: 'policy_blocked',
+    })
+  })
+
+  it('refunds a paid scan and keeps only the model-confirmed policy attempt', async () => {
+    const { deps, calls } = makeDeps({
+      reserveFree: async () => ({ allowed: false, reason: 'limit_reached', blockedSubject: 'ads:user:x' }),
+      generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'adult' }),
+    })
+    const outcome = await runScan({ ...REQUEST, actor: USER_ACTOR }, deps)
+    expect(outcome).toEqual({
+      ok: false,
+      error: { code: 'policy_blocked', consumed: true, blockedCategories: ['adult'] },
+    })
+    expect(calls.charge).toBe(1)
+    expect(calls.refund).toBe(1)
+    expect(calls.policyRelease).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'refunded',
+      credits_charged: 0,
+      free_quota_used: false,
+      error_code: 'policy_blocked',
+    })
+  })
+
+  it('alerts when a model-confirmed block uses the final global policy slot', async () => {
+    const { deps, calls } = makeDeps({
+      readGlobalPolicyBlockedUsed: async () => 60,
+      generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'adult' }),
+    })
+    expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toMatchObject({
+      ok: false,
+      error: { code: 'policy_blocked', consumed: true },
+    })
+    expect(calls.policyAlerts).toEqual([60])
+  })
+
+  it('rejects a fourth model-policy attempt before calling the model after three confirmed blocks', async () => {
+    let blockedAttempts = 0
+    let modelCalls = 0
+    const { deps, calls } = makeDeps({
+      reservePolicyBlocked: async () => {
+        if (blockedAttempts >= 3) {
+          return { allowed: false, reason: 'limit_reached', blockedSubject: 'ads:policy:user:user-1' }
+        }
+        blockedAttempts++
+        return { allowed: true, alreadyReserved: false }
+      },
+      generate: (async () => {
+        modelCalls++
+        return {
+          object: { ...PLANNER_OUTPUT, policyCategory: 'adult' },
+          usage: { inputTokens: 20, outputTokens: 10 },
+        }
+      }) as unknown as ScanDeps['generate'],
+    })
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const outcome = await runScan(
+        { ...REQUEST, requestId: `req_policy_${attempt}abcdef`, actor: USER_ACTOR },
+        deps,
+      )
+      expect(outcome).toMatchObject({ ok: false, error: { code: 'policy_blocked', consumed: true } })
+    }
+    expect(
+      await runScan({ ...REQUEST, requestId: 'req_policy_fourth_abcdef', actor: USER_ACTOR }, deps),
+    ).toEqual({ ok: false, error: { code: 'policy_limit' } })
+    expect(modelCalls).toBe(3)
+    expect(blockedAttempts).toBe(3)
+    expect(calls.release).toBe(4)
+    expect(calls.charge).toBe(0)
+  })
+
+  it('rejects before the model and alerts when the global blocked-attempt cap is full', async () => {
+    const { deps, calls } = makeDeps({
+      reserveFree: async () => ({ allowed: false, reason: 'limit_reached', blockedSubject: 'ads:user:x' }),
+      reservePolicyBlocked: async () => ({
+        allowed: false,
+        reason: 'limit_reached',
+        blockedSubject: 'ads:policy:global',
+      }),
+    })
+    expect(await runScan({ ...REQUEST, actor: USER_ACTOR }, deps)).toEqual({ ok: false, error: { code: 'policy_limit' } })
+    expect(calls.charge).toBe(0)
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.policyAlerts).toEqual([60])
   })
 
   it('adds a restricted category the model found, never removes one', async () => {

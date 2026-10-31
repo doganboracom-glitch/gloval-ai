@@ -43,12 +43,15 @@ export const COPY_OUTPUT: AdCopyOutput = {
   path2: 'dolap',
 }
 
-export const USER_ACTOR: ScanActor = { kind: 'user', userId: 'user-1', planCode: 'free' }
+export const USER_ACTOR: ScanActor = { kind: 'user', userId: 'user-1', planCode: 'free', ip: '203.0.113.0/24' }
 export const ANON_ACTOR: ScanActor = { kind: 'anon', anonId: 'A'.repeat(22), ip: '203.0.113.0/24' }
 
 export type FakeCalls = {
   reserve: number
   release: number
+  policyReserve: number
+  policyRelease: number
+  policyAlerts: number[]
   charge: number
   refund: number
   generate: Array<{ system: string; prompt: string }>
@@ -57,7 +60,18 @@ export type FakeCalls = {
 }
 
 export function makeDeps(overrides: Partial<ScanDeps> = {}): { deps: ScanDeps; calls: FakeCalls } {
-  const calls: FakeCalls = { reserve: 0, release: 0, charge: 0, refund: 0, generate: [], usage: [], alerts: [] }
+  const calls: FakeCalls = {
+    reserve: 0,
+    release: 0,
+    policyReserve: 0,
+    policyRelease: 0,
+    policyAlerts: [],
+    charge: 0,
+    refund: 0,
+    generate: [],
+    usage: [],
+    alerts: [],
+  }
   const deps: ScanDeps = {
     now: () => 1_000_000,
     rateLimit: () => ({ allowed: true, retryAfterMs: 0 }),
@@ -70,6 +84,16 @@ export function makeDeps(overrides: Partial<ScanDeps> = {}): { deps: ScanDeps; c
       calls.release++
       return true
     },
+    policySubjectsFor: () => ({ subjects: ['policy:user', 'policy:ip', 'policy:global'], limits: [3, 10, 60], anonSubjectHash: null }),
+    reservePolicyBlocked: async () => {
+      calls.policyReserve++
+      return { allowed: true, alreadyReserved: false }
+    },
+    releasePolicyBlocked: async () => {
+      calls.policyRelease++
+      return true
+    },
+    policyBlockedDailyCap: () => 60,
     charge: async () => {
       calls.charge++
       return { ok: true, balance: 10, alreadyCharged: false, chargedAmount: 2, reason: 'ok' }
@@ -92,6 +116,10 @@ export function makeDeps(overrides: Partial<ScanDeps> = {}): { deps: ScanDeps; c
     readGlobalAnonUsed: async () => 1,
     notifyAnonCap: async (level) => {
       calls.alerts.push(level)
+    },
+    readGlobalPolicyBlockedUsed: async () => 1,
+    notifyPolicyBlockedCap: async (cap) => {
+      calls.policyAlerts.push(cap)
     },
     ...overrides,
   }

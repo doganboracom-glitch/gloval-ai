@@ -13,8 +13,11 @@ import {
 import { chargeAdsCredits, refundAdsCredits, type AdsRpcClient } from '@/lib/ads/credits'
 import {
   anonymousSubjects,
+  policyBlockedSubjects,
   releaseAdsFreeActions,
+  releaseAdsPolicyBlockedAttempt,
   reserveAdsFreeActions,
+  reserveAdsPolicyBlockedAttempt,
   signedInSubjects,
 } from '@/lib/ads/free-quota'
 
@@ -164,6 +167,19 @@ describe('free quota subjects', () => {
     const s = anonymousSubjects({ anonId: 'a', ip: 'b' }, { ADS_ANON_HASH_SECRET: SECRET, ADS_ANON_DAILY_CAP: 'abc' })
     expect(s!.limits[2]).toBe(100)
   })
+
+  it('uses separate 3-per-identity and 10-per-IP policy counters with a configurable global cap', () => {
+    const env = { ADS_ANON_HASH_SECRET: SECRET, ADS_POLICY_BLOCKED_DAILY_CAP: '80' }
+    const anonymous = policyBlockedSubjects({ kind: 'anon', anonId: 'cookie-123', ip: '203.0.113.9' }, env)
+    const signedIn = policyBlockedSubjects({ kind: 'user', userId: 'user-1', ip: '203.0.113.9' }, env)
+
+    expect(anonymous?.limits).toEqual([3, 10, 80])
+    expect(anonymous?.subjects[2]).toBe('ads:policy:global')
+    expect(anonymous?.subjects.join('|')).not.toContain('cookie-123')
+    expect(anonymous?.subjects.join('|')).not.toContain('203.0.113.9')
+    expect(signedIn?.subjects[0]).toBe('ads:policy:user:user-1')
+    expect(signedIn?.limits).toEqual([3, 10, 80])
+  })
 })
 
 describe('reserve / release', () => {
@@ -197,6 +213,31 @@ describe('reserve / release', () => {
       blockedSubject: null,
     })
     spy.mockRestore()
+  })
+
+  it('namespaces policy reservations and scopes their idempotency key to the identity', async () => {
+    const policySubjects = {
+      subjects: ['ads:policy:user:user-1', 'ads:policy:ip:hashed', 'ads:policy:global'],
+      limits: [3, 10, 60],
+      anonSubjectHash: null,
+    }
+    const userTwo = { ...policySubjects, subjects: ['ads:policy:user:user-2', 'ads:policy:ip:hashed', 'ads:policy:global'] }
+    const result = { data: { allowed: true, blocked_subject: null, already_reserved: false }, error: null }
+    const first = fakeClient(result)
+    const second = fakeClient(result)
+
+    expect(await reserveAdsPolicyBlockedAttempt(REQ, policySubjects, first.client)).toEqual({
+      allowed: true,
+      alreadyReserved: false,
+    })
+    await reserveAdsPolicyBlockedAttempt(REQ, userTwo, second.client)
+    const internalId = String(first.calls[0].args.p_request_id)
+    expect(internalId).toMatch(/^ads-policy:[a-f0-9]{64}$/)
+    expect(second.calls[0].args.p_request_id).not.toBe(internalId)
+
+    const release = fakeClient({ data: true, error: null })
+    expect(await releaseAdsPolicyBlockedAttempt(REQ, policySubjects, release.client)).toBe(true)
+    expect(release.calls[0].args.p_request_id).toBe(internalId)
   })
 
   it('release reports whether anything was given back and validates the request id', async () => {

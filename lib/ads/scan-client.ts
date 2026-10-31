@@ -1,5 +1,6 @@
 import { ADS_SCAN_ERROR_STATUS, type AdsScanError, type AdsScanErrorCode } from '@/lib/ads/public-errors'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
+import { POLICY_CATEGORIES, type PolicyCategory } from '@/lib/ads/policy-terms'
 
 export const ADS_SCAN_PATH = '/api/ads/scan'
 export const ADS_SESSION_PATH = '/api/ads/session'
@@ -21,6 +22,7 @@ export type ScanClientDeps = {
 }
 
 const KNOWN_CODES = new Set<string>(Object.keys(ADS_SCAN_ERROR_STATUS))
+const KNOWN_POLICY_CATEGORIES = new Set<string>(POLICY_CATEGORIES.map(({ category }) => category))
 
 function isScanResult(value: unknown): value is PublicScanResult {
   if (!value || typeof value !== 'object') return false
@@ -54,6 +56,12 @@ async function parse(response: Response): Promise<ClientScanOutcome> {
   const error: AdsScanError = { code: code as AdsScanErrorCode }
   if (typeof body.error?.balance === 'number') error.balance = body.error.balance
   if (typeof body.error?.consumed === 'boolean') error.consumed = body.error.consumed
+  if (Array.isArray(body.error?.blockedCategories)) {
+    const categories = body.error.blockedCategories.filter(
+      (category): category is PolicyCategory => typeof category === 'string' && KNOWN_POLICY_CATEGORIES.has(category),
+    )
+    if (categories.length > 0) error.blockedCategories = [...new Set(categories)]
+  }
   if (typeof body.error?.retryAfterSeconds === 'number') error.retryAfterSeconds = body.error.retryAfterSeconds
   return { ok: false, error }
 }

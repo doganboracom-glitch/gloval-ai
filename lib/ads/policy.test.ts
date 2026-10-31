@@ -193,12 +193,18 @@ describe('policy block messages', () => {
       'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
     )
     expect(dictionary.en.ads.errPolicyBlocked).toBe(
-      "This site appears to be in a category that cannot be advertised under Google Ads policies, so we didn't prepare a plan.",
+      'This site appears to be in a category that cannot be advertised under Google Ads policies, so we did not prepare a plan.',
     )
   })
 
   it.each(SUPPORTED_LOCALES)('%s has localized blocked-policy copy', (locale) => {
-    const keys = ['errPolicyBlocked', 'errPolicyBlockedAdultConsumed', 'errPolicyBlockedAdultNotConsumed'] as const
+    const keys = [
+      'errPolicyBlocked',
+      'errPolicyBlockedAdultConsumed',
+      'errPolicyBlockedAdultNotConsumed',
+      'errPolicyBlockedLimit',
+      'errPolicyConsumed',
+    ] as const
     for (const key of keys) {
       const message = dictionary[locale].ads[key]
       expect(message.trim()).not.toBe('')

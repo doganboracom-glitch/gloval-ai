@@ -24,7 +24,7 @@ import {
 } from '@/lib/ads/ad-copy'
 import type { AdsScanError } from '@/lib/ads/public-errors'
 import type { AdsChargeResult, AdsRefundResult } from '@/lib/ads/credits'
-import type { AdsFreeReservation, AdsFreeSubjects } from '@/lib/ads/free-quota'
+import { POLICY_BLOCKED_GLOBAL_SUBJECT, type AdsFreeReservation, type AdsFreeSubjects } from '@/lib/ads/free-quota'
 import { halfCapThreshold } from '@/lib/ads/admin-alert'
 import type { AdsUsageRow } from '@/lib/ads/usage-events'
 import type { ScanSiteResult, SiteSnapshot } from '@/lib/ads/scan/scan-site'
@@ -40,7 +40,7 @@ import type { ScanSiteResult, SiteSnapshot } from '@/lib/ads/scan/scan-site'
  */
 
 export type ScanActor =
-  | { kind: 'user'; userId: string; planCode: string | null }
+  | { kind: 'user'; userId: string; planCode: string | null; ip: string }
   | { kind: 'anon'; anonId: string; ip: string }
 
 export type ScanRequest = { address: string; requestId: string; actor: ScanActor }
@@ -83,6 +83,10 @@ export type ScanDeps = {
   subjectsFor: (actor: ScanActor) => AdsFreeSubjects | null
   reserveFree: (requestId: string, subjects: AdsFreeSubjects) => Promise<AdsFreeReservation>
   releaseFree: (requestId: string) => Promise<boolean>
+  policySubjectsFor: (actor: ScanActor) => AdsFreeSubjects | null
+  reservePolicyBlocked: (requestId: string, subjects: AdsFreeSubjects) => Promise<AdsFreeReservation>
+  releasePolicyBlocked: (requestId: string, subjects: AdsFreeSubjects) => Promise<boolean>
+  policyBlockedDailyCap: () => number
   charge: (userId: string, requestId: string) => Promise<AdsChargeResult>
   refund: (userId: string, requestId: string) => Promise<AdsRefundResult>
   scanSite: (address: string) => Promise<ScanSiteResult>
@@ -92,6 +96,8 @@ export type ScanDeps = {
   anonCap: () => number
   readGlobalAnonUsed: () => Promise<number | null>
   notifyAnonCap: (level: 'half' | 'full', cap: number) => Promise<void>
+  readGlobalPolicyBlockedUsed: () => Promise<number | null>
+  notifyPolicyBlockedCap: (cap: number) => Promise<void>
 }
 
 export const SCAN_TOTAL_BUDGET_MS = 110_000
@@ -147,7 +153,10 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
   let mode: 'free' | 'paid'
   let ownsFree = false
   let ownsCharge = false
-  let kept = false // true once the attempt is consumed on purpose (success or post-model policy block)
+  let ownsPolicyReservation = false
+  let policyReservationSubjects: AdsFreeSubjects | null = null
+  let keepPolicyReservation = false
+  let kept = false // true only when the scan action succeeds
 
   const reservation = await deps.reserveFree(requestId, subjects)
   if (reservation.allowed) {
@@ -250,9 +259,44 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     const pre = evaluateSnapshotPolicy(snapshot)
     if (pre.verdict === 'blocked') {
       finalCode = 'policy_blocked'
-      return fail({ code: 'policy_blocked', consumed: false })
+      return fail({ code: 'policy_blocked', consumed: false, blockedCategories: pre.blocked })
     }
     const restricted = new Set<PolicyCategory>(pre.restricted)
+
+    // Reserve one separate attempt before any AI call. It is kept only if the model confirms a block.
+    const policySubjects = deps.policySubjectsFor(actor)
+    if (!policySubjects) {
+      finalCode = 'service_unavailable'
+      return fail({ code: 'service_unavailable' })
+    }
+    policyReservationSubjects = policySubjects
+    let policyReservation: AdsFreeReservation
+    try {
+      policyReservation = await deps.reservePolicyBlocked(requestId, policySubjects)
+    } catch {
+      finalCode = 'service_unavailable'
+      return fail({ code: 'service_unavailable' })
+    }
+    if (policyReservation.allowed) {
+      if (policyReservation.alreadyReserved) {
+        finalCode = 'duplicate'
+        return fail({ code: 'duplicate' })
+      }
+      ownsPolicyReservation = true
+    } else if (policyReservation.reason === 'quota_unavailable') {
+      finalCode = 'service_unavailable'
+      return fail({ code: 'service_unavailable' })
+    } else {
+      finalCode = 'policy_limit'
+      if (policyReservation.blockedSubject === POLICY_BLOCKED_GLOBAL_SUBJECT) {
+        try {
+          await deps.notifyPolicyBlockedCap(deps.policyBlockedDailyCap())
+        } catch {
+          // Alerting must never change the scan outcome.
+        }
+      }
+      return fail({ code: 'policy_limit' })
+    }
 
     // ---- credits (paid mode only, after the cheap checks) -------------------------
     if (mode === 'paid' && userId) {
@@ -291,9 +335,10 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     // The model may only tighten the policy, never loosen it.
     if (plan.modelPolicyCategory) {
       if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked') {
-        kept = true
+        keepPolicyReservation = true
         finalCode = 'policy_blocked'
-        return fail({ code: 'policy_blocked', consumed: true })
+        await notifyPolicyCapIfReached(deps)
+        return fail({ code: 'policy_blocked', consumed: true, blockedCategories: [plan.modelPolicyCategory] })
       }
       restricted.add(plan.modelPolicyCategory)
     }
@@ -340,6 +385,14 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
       },
     }
   } finally {
+    // Policy slots count only when the model confirms a blocked category.
+    if (ownsPolicyReservation && !keepPolicyReservation && policyReservationSubjects) {
+      try {
+        await deps.releasePolicyBlocked(requestId, policyReservationSubjects)
+      } catch {
+        // A quota cleanup failure must not skip scan-credit refunds.
+      }
+    }
     // One place gives back whatever this request took and did not use.
     if (!kept) {
       if (ownsFree) await deps.releaseFree(requestId)
@@ -394,6 +447,16 @@ function mergeByFlow(rows: AdsUsageRow[]): AdsUsageRow[] {
     existing.error_code = row.error_code
   }
   return [...merged.values()]
+}
+
+async function notifyPolicyCapIfReached(deps: ScanDeps): Promise<void> {
+  try {
+    const cap = deps.policyBlockedDailyCap()
+    const used = await deps.readGlobalPolicyBlockedUsed()
+    if (used !== null && used >= cap) await deps.notifyPolicyBlockedCap(cap)
+  } catch {
+    // Alerting must never change the scan outcome.
+  }
 }
 
 /** Warns the admin at 50 % and 100 % of the anonymous daily ceiling (once per day each, enforced in the database). */

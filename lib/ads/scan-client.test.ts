@@ -29,6 +29,24 @@ describe('requestScan', () => {
     expect(outcome).toEqual({ ok: false, error: { code: 'credits_required', balance: 1 } })
   })
 
+  it('keeps only known blocked categories on policy errors', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ error: { code: 'policy_blocked', consumed: true, blockedCategories: ['adult', 'weapons', 'unknown'] } }, 422),
+    )
+    expect(await requestScan(input, { fetchImpl, sleep: noSleep })).toEqual({
+      ok: false,
+      error: { code: 'policy_blocked', consumed: true, blockedCategories: ['adult', 'weapons'] },
+    })
+  })
+
+  it('recognizes the blocked-attempt daily limit code', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ error: { code: 'policy_limit' } }, 429))
+    expect(await requestScan(input, { fetchImpl, sleep: noSleep })).toEqual({
+      ok: false,
+      error: { code: 'policy_limit' },
+    })
+  })
+
   it('maps an unknown code or a non-JSON body to service_unavailable', async () => {
     const unknown = vi.fn(async () => jsonResponse({ error: { code: 'weird' } }, 500))
     expect(await requestScan(input, { fetchImpl: unknown, sleep: noSleep })).toEqual({

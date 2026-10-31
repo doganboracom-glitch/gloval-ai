@@ -1446,9 +1446,12 @@ const pl: DeepPartial<Dict> = {
     errPolicyBlocked:
       'Ta witryna wydaje się należeć do kategorii, której nie można reklamować zgodnie z zasadami Google Ads, dlatego nie przygotowaliśmy planu.',
     errPolicyBlockedAdultConsumed:
-      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta próba została zaliczona do Twojego limitu.',
+      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta zablokowana próba wlicza się do dziennego limitu nieobsługiwanych kategorii; zwróciliśmy limit skanowania lub kredyty.',
     errPolicyBlockedAdultNotConsumed:
-      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta próba nie została zaliczona do Twojego limitu.',
+      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta próba nie wlicza się do dziennego limitu zablokowanych prób i nie wykorzystano limitu skanowania ani kredytów.',
+    errPolicyBlockedLimit: 'Osiągnięto dzienny limit prób dla nieobsługiwanych kategorii. Spróbuj ponownie jutro.',
+    errPolicyConsumed:
+      'Ta zablokowana próba wlicza się do dziennego limitu nieobsługiwanych kategorii; zwróciliśmy limit skanowania lub kredyty.',
   },
 }
 

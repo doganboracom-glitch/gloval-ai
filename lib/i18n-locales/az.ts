@@ -1446,9 +1446,11 @@ const az: DeepPartial<Dict> = {
     errPolicyBlocked:
       'Bu sayt Google Ads siyasətlərinə əsasən reklam verilməsi qadağan olunan kateqoriyaya aid görünür, buna görə də plan hazırlamadıq.',
     errPolicyBlockedAdultConsumed:
-      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu cəhd gündəlik limitinə daxil edildi.',
+      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu bloklanmış cəhd gündəlik dəstəklənməyən kateqoriya limitinə daxil edildi; skan haqqı və ya kreditlər geri qaytarıldı.',
     errPolicyBlockedAdultNotConsumed:
-      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu cəhd gündəlik limitinə daxil edilmədi.',
+      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu cəhd gündəlik bloklanmış cəhd limitinə daxil edilmədi və heç bir skan haqqı və ya kredit istifadə olunmadı.',
+    errPolicyBlockedLimit: 'Bu gün dəstəklənməyən kateqoriya cəhdlərinin gündəlik limitinə çatılıb. Sabah yenidən cəhd edin.',
+    errPolicyConsumed: 'Bu bloklanmış cəhd gündəlik dəstəklənməyən kateqoriya limitinə daxil edildi; skan haqqı və ya kreditlər geri qaytarıldı.',
   },
 }
 

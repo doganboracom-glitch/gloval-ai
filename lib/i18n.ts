@@ -1900,10 +1900,11 @@ const dict = {
       errPolicyBlocked:
         'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
       errPolicyBlockedAdultConsumed:
-        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşüldü.',
+        'GLOVAL Ads beta sürümünde yetişkin ürünleri kategorisi henüz desteklenmiyor. Bu engelli deneme günlük kategori sınırına sayıldı; tarama hakkın veya kredin iade edildi.',
       errPolicyBlockedAdultNotConsumed:
-        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşülmedi.',
-      errPolicyConsumed: 'Bu deneme hakkından düşüldü.',
+        'GLOVAL Ads beta sürümünde yetişkin ürünleri kategorisi henüz desteklenmiyor. Bu deneme günlük engelli kategori sınırına sayılmadı ve tarama hakkın veya kredin kullanılmadı.',
+      errPolicyBlockedLimit: 'Bugün desteklenmeyen kategori denemesi sınırına ulaştın. Yarın tekrar dene.',
+      errPolicyConsumed: 'Bu engelli deneme günlük kategori sınırına sayıldı; tarama hakkın veya kredin iade edildi.',
       errGenerationFailed: 'Plan hazırlanırken bir sorun oluştu. Hakkın iade edildi, tekrar deneyebilirsin.',
       errTimeout: 'Plan zamanında hazırlanamadı. Hakkın iade edildi, tekrar deneyebilirsin.',
       errServiceUnavailable: 'Servis şu an kullanılamıyor. Lütfen biraz sonra tekrar dene.',
@@ -3960,10 +3961,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       errPolicyBlocked:
         'This site appears to be in a category that cannot be advertised under Google Ads policies, so we did not prepare a plan.',
       errPolicyBlockedAdultConsumed:
-        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt counted against your allowance.',
+        'Adult products are not yet supported in the GLOVAL Ads beta. This blocked attempt counts toward today’s unsupported-category limit; your scan allowance or credits were returned.',
       errPolicyBlockedAdultNotConsumed:
-        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt did not count against your allowance.',
-      errPolicyConsumed: 'This attempt was counted.',
+        'Adult products are not yet supported in the GLOVAL Ads beta. This attempt did not count toward today’s blocked-attempt limit, and no scan allowance or credits were used.',
+      errPolicyBlockedLimit: 'Today’s unsupported-category attempt limit has been reached. Please try again tomorrow.',
+      errPolicyConsumed:
+        'This blocked attempt counts toward today’s unsupported-category limit; your scan allowance or credits were returned.',
       errGenerationFailed: 'Something went wrong while preparing the plan. Your allowance was returned, so you can try again.',
       errTimeout: 'The plan could not be prepared in time. Your allowance was returned, so you can try again.',
       errServiceUnavailable: 'The service is unavailable right now. Please try again shortly.',

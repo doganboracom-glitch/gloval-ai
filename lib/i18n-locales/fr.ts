@@ -1406,9 +1406,12 @@ const fr: DeepPartial<Dict> = {
     errPolicyBlocked:
       'Ce site semble appartenir à une catégorie qui ne peut pas faire l’objet de publicités selon les règles de Google Ads ; nous n’avons donc pas préparé de plan.',
     errPolicyBlockedAdultConsumed:
-      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative a été décomptée de votre quota.',
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative bloquée compte dans la limite quotidienne des catégories non prises en charge ; votre quota de scan ou vos crédits ont été restitués.',
     errPolicyBlockedAdultNotConsumed:
-      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative n’a pas été décomptée de votre quota.',
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative ne compte pas dans la limite quotidienne des tentatives bloquées et aucun quota de scan ni crédit n’a été utilisé.',
+    errPolicyBlockedLimit: 'La limite quotidienne de tentatives pour les catégories non prises en charge est atteinte. Réessayez demain.',
+    errPolicyConsumed:
+      'Cette tentative bloquée compte dans la limite quotidienne des catégories non prises en charge ; votre quota de scan ou vos crédits ont été restitués.',
   },
 }
 

@@ -1446,9 +1446,12 @@ const et: DeepPartial<Dict> = {
     errPolicyBlocked:
       'See veebisait näib kuuluvat kategooriasse, mida Google Adsi eeskirjade järgi ei saa reklaamida, seega me plaani ei koostanud.',
     errPolicyBlockedAdultConsumed:
-      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset arvestati sinu limiidi hulka.',
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. See blokeeritud katse läheb tänase mittetoetatud kategooriate piirmäära arvestusse; skannimise kasutuskord või krediidid tagastati.',
     errPolicyBlockedAdultNotConsumed:
-      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset ei arvestatud sinu limiidi hulka.',
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset ei arvestatud päevase blokeeritud katsete limiidi hulka ning skannimise kasutuskorda ega krediite ei kasutatud.',
+    errPolicyBlockedLimit: 'Tänane mittetoetatud kategooriatega seotud katsete piirmäär on täis. Proovi homme uuesti.',
+    errPolicyConsumed:
+      'See blokeeritud katse läheb tänase mittetoetatud kategooriate piirmäära arvestusse; skannimise kasutuskord või krediidid tagastati.',
   },
 }
 

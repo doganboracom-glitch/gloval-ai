@@ -610,11 +610,50 @@ describe('free quota RPCs', () => {
     expect(await usage()).toEqual({ 's:c': 1 })
   })
 
+  it('counts concurrent duplicate policy requests once', async () => {
+    const results = await Promise.all([
+      reserve('ads-policy:req-duplicate-123', ['policy:user:a', 'policy:global'], [3, 60]),
+      reserve('ads-policy:req-duplicate-123', ['policy:user:a', 'policy:global'], [3, 60]),
+    ])
+    expect(results.filter((result) => result.allowed)).toHaveLength(2)
+    expect(results.filter((result) => result.already_reserved)).toHaveLength(1)
+    expect(await usage()).toEqual({ 'policy:user:a': 1, 'policy:global': 1 })
+  })
+
+  it('atomically admits only one concurrent request when the global cap has one slot', async () => {
+    const results = await Promise.all([
+      reserve('ads-policy:req-global-0001', ['policy:user:a', 'policy:global'], [3, 1]),
+      reserve('ads-policy:req-global-0002', ['policy:user:b', 'policy:global'], [3, 1]),
+    ])
+    expect(results.filter((result) => result.allowed)).toHaveLength(1)
+    expect(results.filter((result) => !result.allowed)).toHaveLength(1)
+    expect(await usage()).toEqual(expect.objectContaining({ 'policy:global': 1 }))
+  })
+
   it('validates its inputs', async () => {
     await expect(reserve('', ['x'], [1])).rejects.toThrow(/request id/)
     await expect(reserve('req-0000-0004', ['x', 'x'], [1, 1])).rejects.toThrow(/distinct/)
     await expect(reserve('req-0000-0004', ['x'], [0])).rejects.toThrow(/positive/)
     await expect(reserve('req-0000-0004', ['x', 'y'], [1])).rejects.toThrow(/equal length/)
+  })
+})
+
+describe('admin alerts', () => {
+  it('records a policy-cap alert only once for the day', async () => {
+    const record = async () =>
+      (
+        await db.query<{ recorded: boolean }>(
+          `select public.ads_record_alert_once($1, $2::jsonb) as recorded`,
+          ['ads_policy_blocked_global_cap', JSON.stringify({ cap: 60 })],
+        )
+      ).rows[0].recorded
+
+    expect(await record()).toBe(true)
+    expect(await record()).toBe(false)
+    const { rows } = await db.query<{ count: number }>(
+      `select count(*)::int as count from public.ads_alerts where kind = 'ads_policy_blocked_global_cap'`,
+    )
+    expect(rows[0].count).toBe(1)
   })
 })
 

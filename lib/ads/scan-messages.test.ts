@@ -45,6 +45,27 @@ describe('describeScanError', () => {
     expect(tr).toContain('hakkından düşülmedi')
   })
 
+  it('uses adult-specific copy only for model-confirmed adult blocks', () => {
+    const copy = dictionary.en.ads
+    const adult = describeScanError(
+      { code: 'policy_blocked', consumed: true, blockedCategories: ['adult'] },
+      copy,
+    )
+    const deterministicAdult = describeScanError(
+      { code: 'policy_blocked', consumed: false, blockedCategories: ['adult'] },
+      copy,
+    )
+    const other = describeScanError(
+      { code: 'policy_blocked', consumed: true, blockedCategories: ['weapons'] },
+      copy,
+    )
+
+    expect(adult.message).toBe(copy.errPolicyBlockedAdultConsumed)
+    expect(deterministicAdult.message).toBe(copy.errPolicyBlockedAdultNotConsumed)
+    expect(other.message).toBe(`${copy.errPolicyBlocked} ${copy.errPolicyConsumed}`)
+    expect(describeScanError({ code: 'policy_limit' }, copy).message).toBe(copy.errPolicyBlockedLimit)
+  })
+
   it('sends visitors who ran out to sign in and signed-in users without credits to billing', () => {
     expect(describeScanError({ code: 'login_required' }, dictionary.tr.ads).action).toBe('login')
     expect(describeScanError({ code: 'anon_capacity' }, dictionary.tr.ads).action).toBe('login')

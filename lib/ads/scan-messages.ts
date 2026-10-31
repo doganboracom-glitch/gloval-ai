@@ -1,4 +1,5 @@
 import { ADS_CREDIT_COSTS } from '@/lib/ads/credit-costs'
+import { policyBlockedMessageKey } from '@/lib/ads/policy-message'
 import type { ClientScanError } from '@/lib/ads/scan-client'
 
 export type ScanErrorAction = 'retry' | 'login' | 'credits' | 'newScan' | 'none'
@@ -15,6 +16,9 @@ export type ScanErrorCopy = {
   errUnreachable: string
   errInsufficientContent: string
   errPolicyBlocked: string
+  errPolicyBlockedAdultConsumed: string
+  errPolicyBlockedAdultNotConsumed: string
+  errPolicyBlockedLimit: string
   errPolicyConsumed: string
   errGenerationFailed: string
   errTimeout: string
@@ -52,11 +56,18 @@ export function describeScanError(error: ClientScanError, copy: ScanErrorCopy): 
       return { message: copy.errUnreachable, action: 'retry' }
     case 'insufficient_content':
       return { message: copy.errInsufficientContent, action: 'none' }
-    case 'policy_blocked':
-      return {
-        message: error.consumed ? `${copy.errPolicyBlocked} ${copy.errPolicyConsumed}` : copy.errPolicyBlocked,
-        action: 'none',
-      }
+    case 'policy_blocked': {
+      const key = policyBlockedMessageKey(error.blockedCategories ?? [], Boolean(error.consumed))
+      const message =
+        key === 'errPolicyBlocked'
+          ? error.consumed
+            ? `${copy.errPolicyBlocked} ${copy.errPolicyConsumed}`
+            : copy.errPolicyBlocked
+          : copy[key]
+      return { message, action: 'none' }
+    }
+    case 'policy_limit':
+      return { message: copy.errPolicyBlockedLimit, action: 'none' }
     case 'generation_failed':
       return { message: copy.errGenerationFailed, action: 'retry' }
     case 'timeout':

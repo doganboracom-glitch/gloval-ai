@@ -7,8 +7,8 @@ export type PolicyBlockedMessageKey =
 
 export function policyBlockedMessageKey(
   blockedCategories: readonly PolicyCategory[],
-  quotaConsumed: boolean,
+  blockedAttemptCounted: boolean,
 ): PolicyBlockedMessageKey {
   if (!blockedCategories.includes('adult')) return 'errPolicyBlocked'
-  return quotaConsumed ? 'errPolicyBlockedAdultConsumed' : 'errPolicyBlockedAdultNotConsumed'
+  return blockedAttemptCounted ? 'errPolicyBlockedAdultConsumed' : 'errPolicyBlockedAdultNotConsumed'
 }

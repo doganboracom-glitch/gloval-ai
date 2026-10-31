@@ -52,16 +52,17 @@ export async function handleScanRequest(request: Request, env: ScanHandlerEnv): 
   const body = bodySchema.safeParse(json)
   if (!body.success) return errorResponse({ code: 'invalid_request' })
 
+  const ip = clientIpFromHeaders(request.headers)
+  if (!ip) return errorResponse({ code: 'service_unavailable' })
+
   let actor: ScanActor
   const user = await env.getUser()
   if (user) {
-    actor = { kind: 'user', userId: user.userId, planCode: user.planCode }
+    actor = { kind: 'user', userId: user.userId, planCode: user.planCode, ip }
   } else {
     const cookie = verifyAnonCookie(env.getCookie(ADS_ANON_COOKIE))
     if (cookie.status === 'unconfigured') return errorResponse({ code: 'service_unavailable' })
     if (cookie.status !== 'valid') return errorResponse({ code: 'session_required' })
-    const ip = clientIpFromHeaders(request.headers)
-    if (!ip) return errorResponse({ code: 'service_unavailable' })
     actor = { kind: 'anon', anonId: cookie.id, ip }
   }
 

@@ -70,7 +70,7 @@ describe('POST /api/ads/scan handler', () => {
     expect((await handleScanRequest(post(VALID, { origin: 'https://gloval.ai' }), env)).status).toBe(200)
   })
 
-  it('fails closed for a visitor without a usable IP', async () => {
+  it('fails closed for visitors and signed-in users without a usable IP', async () => {
     const issued = issueAnonCookie({ ADS_ANON_HASH_SECRET: SECRET })!
     const { env } = setup({}, issued.value)
     const request = new Request('https://gloval.ai/api/ads/scan', {
@@ -79,6 +79,14 @@ describe('POST /api/ads/scan handler', () => {
       body: JSON.stringify(VALID),
     })
     expect((await handleScanRequest(request, env)).status).toBe(503)
+
+    const signedIn = setup({ getUser: async () => ({ userId: 'u1', planCode: 'free' }) })
+    const signedInRequest = new Request('https://gloval.ai/api/ads/scan', {
+      method: 'POST',
+      headers: { host: 'gloval.ai' },
+      body: JSON.stringify(VALID),
+    })
+    expect((await handleScanRequest(signedInRequest, signedIn.env)).status).toBe(503)
   })
 
   it('sends Retry-After with a rate-limit response', async () => {

@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { ADS_FREE_LIMITS } from '@/lib/ads/credit-costs'
+import { ADS_FREE_LIMITS, ADS_POLICY_BLOCKED_LIMITS } from '@/lib/ads/credit-costs'
 
 /** Names of every GLOVAL Ads environment variable. Values are never logged. */
 export const ADS_ENV = {
@@ -9,6 +9,7 @@ export const ADS_ENV = {
   tokenEncActiveVersion: 'ADS_TOKEN_ENC_ACTIVE_VERSION',
   anonHashSecret: 'ADS_ANON_HASH_SECRET',
   anonDailyCap: 'ADS_ANON_DAILY_CAP',
+  policyBlockedDailyCap: 'ADS_POLICY_BLOCKED_DAILY_CAP',
   plannerModel: 'ADS_PLANNER_MODEL',
   previewModel: 'ADS_PREVIEW_MODEL',
   assistantModel: 'ADS_ASSISTANT_MODEL',
@@ -22,6 +23,14 @@ export function resolveAnonDailyCap(env: Env = process.env): number {
   if (!raw || !/^\d{1,6}$/.test(raw)) return ADS_FREE_LIMITS.anonGlobalPerDayDefault
   const value = Number(raw)
   return value >= 1 ? value : ADS_FREE_LIMITS.anonGlobalPerDayDefault
+}
+
+/** Global daily ceiling for model-confirmed blocked attempts. */
+export function resolvePolicyBlockedDailyCap(env: Env = process.env): number {
+  const raw = env[ADS_ENV.policyBlockedDailyCap]?.trim()
+  if (!raw || !/^\d{1,6}$/.test(raw)) return ADS_POLICY_BLOCKED_LIMITS.globalPerDayDefault
+  const value = Number(raw)
+  return value >= 1 ? value : ADS_POLICY_BLOCKED_LIMITS.globalPerDayDefault
 }
 
 /**

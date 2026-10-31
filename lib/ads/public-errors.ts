@@ -5,6 +5,8 @@
  * response cannot be used to map a private network.
  */
 
+import type { PolicyCategory } from '@/lib/ads/policy-terms'
+
 export const ADS_SCAN_ERROR_STATUS = {
   invalid_request: 400,
   session_required: 428,
@@ -16,6 +18,7 @@ export const ADS_SCAN_ERROR_STATUS = {
   unreachable: 422,
   insufficient_content: 422,
   policy_blocked: 422,
+  policy_limit: 429,
   generation_failed: 502,
   timeout: 504,
   service_unavailable: 503,
@@ -27,8 +30,10 @@ export type AdsScanError = {
   code: AdsScanErrorCode
   /** `credits_required`: current balance. */
   balance?: number
-  /** `policy_blocked`: true when the check ran after the model and the attempt was used up. */
+  /** `policy_blocked`: true when the model confirmed a category and its separate attempt counter was used. */
   consumed?: boolean
+  /** `policy_blocked`: the blocked categories, used to select precise translated copy. */
+  blockedCategories?: PolicyCategory[]
   /** `rate_limited`: seconds until a retry makes sense. */
   retryAfterSeconds?: number
 }
@@ -37,6 +42,7 @@ export function adsScanErrorBody(error: AdsScanError): { error: AdsScanError } {
   const body: AdsScanError = { code: error.code }
   if (error.balance !== undefined) body.balance = error.balance
   if (error.consumed !== undefined) body.consumed = error.consumed
+  if (error.blockedCategories !== undefined) body.blockedCategories = error.blockedCategories
   if (error.retryAfterSeconds !== undefined) body.retryAfterSeconds = error.retryAfterSeconds
   return { error: body }
 }

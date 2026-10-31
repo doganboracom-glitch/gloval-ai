@@ -33,6 +33,16 @@ export const ADS_FREE_LIMITS = {
   anonGlobalPerDayDefault: 100,
 } as const
 
+/** Separate daily ceilings for requests that the policy model confirms are blocked. */
+export const ADS_POLICY_BLOCKED_LIMITS = {
+  /** Per signed-in account or anonymous cookie. */
+  perIdentityPerDay: 3,
+  /** Shared backstop across accounts/cookies on one client network. */
+  perIpPerDay: 10,
+  /** Global daily ceiling; `ADS_POLICY_BLOCKED_DAILY_CAP` overrides it. */
+  globalPerDayDefault: 60,
+} as const
+
 /**
  * Ledger reason formats. They must match the regex enforced inside the RPCs:
  * `^ads:[a-z_]{1,32}:[A-Za-z0-9_-]{8,128}$`.
