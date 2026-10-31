@@ -579,15 +579,12 @@ const pl: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Powiedz, otrzymaj prawdziwą stronę.',
-    product: 'Produkt',
+    product: 'Produkty',
     company: 'Firma',
     legal: 'Informacje prawne',
     rights: 'Wszelkie prawa zastrzeżone.',
     securePayment: 'Bezpieczna płatność',
     links: {
-      features: 'Funkcje',
-      pricing: 'Cennik',
-      showcase: 'Przykłady',
       about: 'O nas',
       blog: 'Blog',
       contact: 'Kontakt',

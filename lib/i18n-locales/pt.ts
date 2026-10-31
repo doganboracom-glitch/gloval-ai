@@ -580,15 +580,12 @@ const pt: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Fale, tenha um site real.',
-    product: 'Produto',
+    product: 'Produtos',
     company: 'Empresa',
     legal: 'Jurídico',
     rights: 'Todos os direitos reservados.',
     securePayment: 'Pagamento seguro',
     links: {
-      features: 'Funcionalidades',
-      pricing: 'Preços',
-      showcase: 'Exemplos',
       about: 'Sobre nós',
       blog: 'Blog',
       contact: 'Contato',

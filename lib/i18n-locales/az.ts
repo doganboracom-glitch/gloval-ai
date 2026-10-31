@@ -579,15 +579,12 @@ const az: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Danış, əsl veb sayt qur.',
-    product: 'Məhsul',
+    product: 'Məhsullar',
     company: 'Şirkət',
     legal: 'Hüquqi',
     rights: 'Bütün hüquqlar qorunur.',
     securePayment: 'Təhlükəsiz ödəniş',
     links: {
-      features: 'Xüsusiyyətlər',
-      pricing: 'Qiymətlər',
-      showcase: 'Nümunələr',
       about: 'Haqqımızda',
       blog: 'Bloq',
       contact: 'Əlaqə',

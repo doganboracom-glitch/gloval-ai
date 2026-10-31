@@ -58,10 +58,9 @@ export function SiteHeader() {
   // a standalone route (/blog, /sss) they are prefixed with "/" to navigate home
   // first. Real routes are marked so they render as <Link> instead.
   const onHome = pathname === '/'
-  // "Özellikler" başlıklı link, header'daki yatay sıkışıklığı azaltmak için
-  // buradan çıkarıldı. Bölümün kendisi ve footer'daki /#features linki duruyor.
   const desktopLinks: ReadonlyArray<HeaderLink> = [
     { href: '#how', label: t.nav.how },
+    { href: '#features', label: t.nav.features },
     { href: '#showcase', label: t.nav.showcase },
     { href: '#pricing', label: t.nav.pricing },
     { href: '/blog', label: t.nav.blog, route: true },
@@ -110,7 +109,7 @@ export function SiteHeader() {
           <BrandLogo priority />
         </Link>
 
-        <nav className="hidden items-center gap-6 md:flex">
+        <nav className="hidden items-center gap-4 md:flex lg:gap-6">
           {desktopLinks.map((l) =>
             l.route ? (
               <Link
