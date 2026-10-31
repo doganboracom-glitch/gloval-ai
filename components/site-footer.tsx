@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from 'react'
 import Link from 'next/link'
-import { Globe } from 'lucide-react'
 import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 import { useLanguage } from '@/components/language-provider'
@@ -34,8 +33,8 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: l.features, href: '/#features' },
         { label: l.pricing, href: '/#pricing' },
         { label: l.showcase, href: '/#showcase' },
-        { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', featured: true },
-        ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH, featured: false }] : []),
+        { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', newBadge: true },
+        ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH }] : []),
         ...(isAdsFeatureUiEnabled()
           ? [{ label: t.ads.footerLink, href: ADS_PATH, featured: false, soonBadge: true }]
           : []),
@@ -79,50 +78,39 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
           <div key={col.title}>
             <h4 className="text-sm font-semibold">{col.title}</h4>
             <ul className="mt-3 space-y-2">
-              {col.items.map((item) =>
-                'featured' in item && item.featured ? (
-                  <li key={item.label}>
-                    <Link
-                      href={item.href}
-                      className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm text-sm font-medium text-violet-300 transition-colors hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <Globe className="size-4 shrink-0" aria-hidden="true" />
-                        {item.label}
-                      </span>
-                      {showDomainBadge && (
+              {col.items.map((item) => (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    className={
+                      'soonBadge' in item && item.soonBadge
+                        ? 'inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground transition-colors hover:text-foreground'
+                        : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
+                    }
+                  >
+                    {item.label}
+                    {'newBadge' in item && item.newBadge && showDomainBadge && (
+                      <>
+                        {' '}
                         <span
                           data-testid="domain-new-badge"
                           className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
                         >
                           {t.domainSearch.footerBadgeNew}
                         </span>
-                      )}
-                    </Link>
-                  </li>
-                ) : (
-                  <li key={item.label}>
-                    <Link
-                      href={item.href}
-                      className={
-                        'soonBadge' in item && item.soonBadge
-                          ? 'inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground transition-colors hover:text-foreground'
-                          : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
-                      }
-                    >
-                      {item.label}
-                      {'soonBadge' in item && item.soonBadge && (
-                        <span
-                          data-testid="ads-soon-badge"
-                          className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
-                        >
-                          {t.ads.comingSoon}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                ),
-              )}
+                      </>
+                    )}
+                    {'soonBadge' in item && item.soonBadge && (
+                      <span
+                        data-testid="ads-soon-badge"
+                        className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
+                      >
+                        {t.ads.comingSoon}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
               {/* Legal sütununun sonunda çerez tercihlerini yeniden açan buton:
                   banner kapatıldıktan sonra kullanıcının tercihini değiştirmesinin
                   tek yolu budur ve her sayfada erişilebilir olmalıdır. */}
