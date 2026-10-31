@@ -65,7 +65,7 @@ export function parseTicketPrefill(params: RawParams, ownProjectIds: readonly st
   }
 }
 
-/** Re-serialises raw query params so a login redirect can come back with the prefill intact. */
+/** Re-serialises raw query params so a signup redirect can return with the prefill intact. */
 export function newTicketPathWithParams(params: RawParams): string {
   const qs = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {
@@ -74,6 +74,11 @@ export function newTicketPathWithParams(params: RawParams): string {
   }
   const s = qs.toString()
   return s ? `${NEW_TICKET_PATH}?${s}` : NEW_TICKET_PATH
+}
+
+/** Signup redirect that preserves the support form query string as a safe same-site next path. */
+export function newTicketSignupHref(params: RawParams): string {
+  return `/auth/sign-up?next=${encodeURIComponent(newTicketPathWithParams(params))}`
 }
 
 /**

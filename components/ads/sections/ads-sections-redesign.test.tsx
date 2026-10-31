@@ -159,6 +159,6 @@ describe('Ads platform and information sections', () => {
     expect(supportLink.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['border', 'border-border/70']),
     )
-    expect(supportLink.getAttribute('href')).toBe('/yasal/iletisim')
+    expect(supportLink.getAttribute('href')).toBe('/support/new?department=gloval-ads')
   })
 })

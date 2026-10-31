@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import { getAuthCallbackUrl, getSignupLoginHref } from '@/lib/auth-redirect'
 import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
@@ -37,7 +37,9 @@ export default function SignUpPage() {
 function SignUpForm() {
   const { t, lang } = useLanguage()
   const router = useRouter()
-  const next = sanitizeNextPath(useSearchParams().get('next'))
+  const searchParams = useSearchParams()
+  const requestedNext = searchParams.get('next')
+  const next = sanitizeNextPath(requestedNext)
   const [hasSignupIdea, setHasSignupIdea] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -54,11 +56,7 @@ function SignUpForm() {
     setHasSignupIdea(Boolean(readSignupIdea()))
   }, [])
 
-  const loginHref = hasSignupIdea
-    ? `/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`
-    : next === '/dashboard'
-      ? '/auth/login'
-      : `/auth/login?next=${encodeURIComponent(next)}`
+  const loginHref = getSignupLoginHref(requestedNext, hasSignupIdea)
 
   function checkEmail(value: string): boolean {
     const check = validateEmail(value)

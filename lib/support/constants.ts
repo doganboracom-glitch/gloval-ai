@@ -4,7 +4,16 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number]
 export const TICKET_PRIORITIES = ['low', 'normal', 'high'] as const
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number]
 
-export const TICKET_DEPARTMENTS = ['technical', 'billing', 'domain', 'website', 'ai', 'account', 'other'] as const
+export const TICKET_DEPARTMENTS = [
+  'technical',
+  'billing',
+  'domain',
+  'website',
+  'ai',
+  'gloval-ads',
+  'account',
+  'other',
+] as const
 export type TicketDepartment = (typeof TICKET_DEPARTMENTS)[number]
 
 export const TICKET_SERVICES = [

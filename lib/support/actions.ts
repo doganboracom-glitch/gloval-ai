@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordNotification, sendTransactionalEmail } from '@/lib/notify'
+import { getSupportCopy } from '@/components/support/support-copy'
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_FILES,
@@ -15,6 +16,7 @@ import {
   TICKET_PRIORITIES,
   TICKET_SERVICES,
   isOneOf,
+  type TicketDepartment,
 } from '@/lib/support/constants'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
@@ -103,6 +105,7 @@ async function notifyAdminOfUserActivity(input: {
   userId: string
   userEmail: string | null
   ticketNumber: string
+  department: TicketDepartment
   subject: string
   message: string
   isNew: boolean
@@ -118,13 +121,15 @@ async function sendAdminNotification(input: {
   userId: string
   userEmail: string | null
   ticketNumber: string
+  department: TicketDepartment
   subject: string
   message: string
   isNew: boolean
 }) {
+  const departmentName = getSupportCopy('tr').departments[input.department]
   const title = input.isNew
-    ? `Yeni destek talebi ${input.ticketNumber}`
-    : `Destek talebine yeni mesaj ${input.ticketNumber}`
+    ? `Yeni destek talebi ${input.ticketNumber} · ${departmentName}`
+    : `Destek talebine yeni mesaj ${input.ticketNumber} · ${departmentName}`
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim()
   let sent = false
   if (adminEmail) {
@@ -133,8 +138,8 @@ async function sendAdminNotification(input: {
       to: adminEmail,
       subject: `[Gloval AI] ${title}`,
       replyTo: input.userEmail ?? undefined,
-      text: `${input.subject}\n\n${input.message}`,
-      html: `<p><strong>${esc(input.subject)}</strong></p><p>${esc(input.userEmail ?? '')}</p><p style="white-space:pre-wrap">${esc(input.message)}</p>`,
+      text: `Departman: ${departmentName}\n\nKonu: ${input.subject}\n\n${input.message}`,
+      html: `<p><strong>Departman:</strong> ${esc(departmentName)}</p><p><strong>${esc(input.subject)}</strong></p><p>${esc(input.userEmail ?? '')}</p><p style="white-space:pre-wrap">${esc(input.message)}</p>`,
     })
   }
   await recordNotification({
@@ -142,7 +147,7 @@ async function sendAdminNotification(input: {
     channel: adminEmail ? 'email' : 'system',
     type: input.isNew ? 'ticket_created' : 'ticket_user_message',
     subject: title,
-    body: input.subject,
+    body: `Departman: ${departmentName}\n\n${input.subject}`,
     status: adminEmail ? (sent ? 'sent' : 'failed') : 'sent',
   })
 }
@@ -271,6 +276,7 @@ export async function createSupportTicket(
     userId: user.id,
     userEmail: user.email,
     ticketNumber: ticket.ticket_number as string,
+    department,
     subject,
     message,
     isNew: true,
@@ -297,7 +303,7 @@ export async function replyToOwnTicket(formData: FormData): Promise<Result> {
   const admin = createAdminClient()
   const { data: ticket } = await admin
     .from('support_tickets')
-    .select('id, user_id, subject, ticket_number')
+    .select('id, user_id, subject, ticket_number, department')
     .eq('id', ticketId)
     .maybeSingle()
   if (!ticket || ticket.user_id !== user.id) return { ok: false, error: 'ticket_not_found' }
@@ -344,6 +350,7 @@ export async function replyToOwnTicket(formData: FormData): Promise<Result> {
     userId: user.id,
     userEmail: user.email,
     ticketNumber: ticket.ticket_number as string,
+    department: ticket.department as TicketDepartment,
     subject: ticket.subject as string,
     message,
     isNew: false,

@@ -42,7 +42,10 @@ vi.mock('@/lib/signup-draft-actions', () => ({
   createSignupDraft: (...args: unknown[]) => createSignupDraft(...args),
   resumeSignupDraft: (...args: unknown[]) => resumeSignupDraft(...args),
 }))
-vi.mock('@/lib/auth-redirect', () => ({ getAuthCallbackUrl: () => 'https://gloval.ai/auth/callback' }))
+vi.mock('@/lib/auth-redirect', () => ({
+  getAuthCallbackUrl: () => 'https://gloval.ai/auth/callback',
+  getSignupLoginHref: () => '/auth/login',
+}))
 vi.mock('@/lib/analytics', () => ({ trackSignUp: vi.fn() }))
 vi.mock('@/lib/attribution', () => ({ readAttribution: () => null }))
 vi.mock('@/lib/signup-attribution', () => ({ saveSignupAttribution: vi.fn() }))

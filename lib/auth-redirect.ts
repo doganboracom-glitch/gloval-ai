@@ -28,3 +28,10 @@ export function resolveLoginNextPath(draft: string | null, requestedNext: string
 
   return sanitizeNextPath(requestedNext)
 }
+
+export function getSignupLoginHref(requestedNext: string | null, hasSignupIdea: boolean): string {
+  const next = sanitizeNextPath(requestedNext)
+  if (hasSignupIdea) return `/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`
+  if (next === '/dashboard') return '/auth/login'
+  return `/auth/login?next=${encodeURIComponent(next)}`
+}

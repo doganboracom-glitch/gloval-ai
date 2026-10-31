@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Paperclip } from 'lucide-react'
 import type { TicketStatus } from '@/lib/support/constants'
 import { useLanguage } from '@/components/language-provider'
+import { getSupportCopy } from '@/components/support/support-copy'
 import { adminT } from '@/lib/admin/i18n'
 import { replyToTicket, setTicketStatus } from '@/lib/admin/actions'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ export function TicketDetailView({
 }) {
   const { lang } = useLanguage()
   const t = adminT(lang)
+  const supportCopy = getSupportCopy(lang)
   const router = useRouter()
   const [body, setBody] = useState('')
   const [replyPending, startReply] = useTransition()
@@ -91,7 +93,7 @@ export function TicketDetailView({
         ) : null}
       </div>
       <p className="font-mono text-xs text-muted-foreground">
-        {ticket.ticketNumber} · {ticket.department}
+        {ticket.ticketNumber} · {supportCopy.departments[ticket.department]}
         {ticket.service ? ` · ${ticket.service}` : ''}
         {ticket.projectName ? ` · ${ticket.projectName}` : ''}
       </p>
