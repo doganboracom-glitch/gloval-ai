@@ -10,6 +10,7 @@ const db = vi.hoisted(() => ({
   notNull: new Set<string>(),
   failOn: null as string | null,
   deleteUserError: null as string | null,
+  googleAdsRevokeFails: false,
   storageFiles: {} as Record<string, string[]>,
   storageFailOn: null as string | null,
   removedHosts: [] as string[],
@@ -23,6 +24,7 @@ function seedFreeAccount() {
   db.notNull = new Set()
   db.failOn = null
   db.deleteUserError = null
+  db.googleAdsRevokeFails = false
   db.storageFailOn = null
   db.removedHosts = []
   db.calls = []
@@ -54,6 +56,7 @@ function seedFreeAccount() {
     custom_domains: [],
     support_tickets: [{ id: 't1', user_id: 'user-1' }],
     support_ticket_attachments: [{ id: 'att1', ticket_id: 't1', storage_path: 't1/f1' }],
+    ads_free_usage: [{ subject: 'ads:user:user-1', day: '2026-10-31', used: 2 }],
   }
 }
 
@@ -179,6 +182,15 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: db.user } }) } }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => adminClient() }))
+vi.mock('@/lib/ads/google-connections', () => ({
+  revokeGoogleAdsConnectionsForDeletion: async () => {
+    db.calls.push('revokeGoogleAdsConnectionsForDeletion')
+    if (db.googleAdsRevokeFails) throw new Error('revocation failed')
+  },
+  revokeGoogleAdsOAuthFlowsForDeletion: async () => {
+    db.calls.push('revokeGoogleAdsOAuthFlowsForDeletion')
+  },
+}))
 vi.mock('@/lib/custom-domains/vercel', () => ({
   getVercelClient: () => ({
     removeDomain: async (host: string) => {
@@ -212,6 +224,23 @@ describe('deleteOwnAccount', () => {
     expect(db.tables.signup_drafts.map((d) => d.id)).toEqual(['d3'])
     expect(db.tables.billing_subscriptions).toEqual([{ id: 's1', user_id: null, plan: 'FREE' }])
     expect(errorLog).not.toHaveBeenCalled()
+  })
+
+  it('revokes Google Ads access and removes the free-use subject before deleting the account', async () => {
+    expect(await deleteOwnAccount()).toEqual({ ok: true })
+    expect(db.calls.indexOf('revokeGoogleAdsConnectionsForDeletion')).toBeLessThan(db.calls.indexOf('deleteUser'))
+    expect(db.calls.indexOf('revokeGoogleAdsOAuthFlowsForDeletion')).toBeLessThan(db.calls.indexOf('deleteUser'))
+    expect(db.calls.indexOf('delete:ads_free_usage')).toBeLessThan(db.calls.indexOf('deleteUser'))
+    expect(db.tables.ads_free_usage).toEqual([])
+  })
+
+  it('stops account deletion before financial changes when Google revocation fails', async () => {
+    db.googleAdsRevokeFails = true
+    expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'google_revoke_failed' })
+    expect(db.calls).toContain('revokeGoogleAdsConnectionsForDeletion')
+    expect(db.calls).not.toContain('deleteUser')
+    expect(db.calls).not.toContain('update:ecommerce_orders')
+    expect(db.tables.ads_free_usage).toHaveLength(1)
   })
 
   it('takes the owner published sites down with the account', async () => {

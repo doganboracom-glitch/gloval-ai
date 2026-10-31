@@ -4,14 +4,15 @@ import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * Runs scripts/089-ads-core-part1.sql and scripts/090-ads-core-part2.sql, exactly
- * as applied to production, against an in-process Postgres (PGlite) with a
- * minimal stand-in for the tables they depend on. No real database is touched.
+ * Runs the Ads SQL migrations, exactly as applied to production, against an
+ * in-process Postgres (PGlite) with a minimal stand-in for their dependencies.
+ * No real database is touched.
  */
 
 const ROOT = process.cwd()
 const PART1 = readFileSync(path.join(ROOT, 'scripts/089-ads-core-part1.sql'), 'utf8')
 const PART2 = readFileSync(path.join(ROOT, 'scripts/090-ads-core-part2.sql'), 'utf8')
+const PART3 = readFileSync(path.join(ROOT, 'scripts/091-ads-google-readonly.sql'), 'utf8')
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;
@@ -36,6 +37,7 @@ beforeAll(async () => {
   await db.exec(BASE_SCHEMA)
   await db.exec(PART1)
   await db.exec(PART2)
+  await db.exec(PART3)
 })
 
 afterAll(async () => {
@@ -44,6 +46,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.exec(`
+    delete from public.ads_google_api_operations;
+    delete from public.ads_google_oauth_flows;
     delete from public.ads_actions;
     delete from public.ads_recommendations;
     delete from public.ads_plans;
@@ -426,6 +430,8 @@ describe('ads_purge_expired', () => {
     anon_hashes: number
     usage_events: number
     alerts: number
+    google_oauth_flows: number
+    google_api_operations: number
     batch: number
   }
   const purge = async (args = '') =>
@@ -483,6 +489,27 @@ describe('ads_purge_expired', () => {
     expect(await count('ads_usage_events')).toBe(2)
     expect(await count('ads_usage_events', `anon_subject_hash is not null`)).toBe(1)
     expect(await count('ads_usage_events', `anon_subject_hash = 'recent'`)).toBe(1)
+  })
+
+  it('purges expired OAuth flows and operation history after the quota window', async () => {
+    const userId = await newUser()
+    await db.query(
+      `insert into public.ads_google_oauth_flows (user_id, state_hash, code_verifier_enc, expires_at, created_at)
+       values ($1, repeat('a', 64), 'encrypted-verifier', now() - interval '1 minute', now() - interval '20 minutes'),
+              ($1, repeat('b', 64), 'encrypted-verifier', now() + interval '10 minutes', now())`,
+      [userId],
+    )
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, created_at)
+       values (gen_random_uuid(), $1, 'googleAds.search', now() - interval '26 hours'),
+              (gen_random_uuid(), $1, 'googleAds.search', now())`,
+      [userId],
+    )
+
+    const result = await purge()
+    expect(result).toMatchObject({ google_oauth_flows: 1, google_api_operations: 1 })
+    expect(await count('ads_google_oauth_flows')).toBe(1)
+    expect(await count('ads_google_api_operations')).toBe(1)
   })
 
   it('rejects invalid retention and batch values', async () => {
@@ -640,6 +667,83 @@ describe('free quota RPCs', () => {
   })
 })
 
+describe('Google Ads API operation quotas', () => {
+  const reserve = async (requestId: string, userId: string, connectionId: string | null = null) =>
+    (
+      await db.query<{ allowed: boolean; global_used: number; user_used: number }>(
+        `select * from public.ads_reserve_google_api_operation($1, $2, $3, 'googleAds.search')`,
+        [requestId, userId, connectionId],
+      )
+    ).rows[0]
+
+  it('reserves each attempted operation once and returns rolling totals', async () => {
+    const userId = await newUser()
+    expect(await reserve('00000000-0000-4000-8000-000000000001', userId)).toEqual({
+      allowed: true,
+      global_used: 1,
+      user_used: 1,
+    })
+    expect(await reserve('00000000-0000-4000-8000-000000000002', userId)).toEqual({
+      allowed: true,
+      global_used: 2,
+      user_used: 2,
+    })
+  })
+
+  it('enforces the per-user rolling cap without inserting a denied operation', async () => {
+    const userId = await newUser()
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, created_at)
+       select gen_random_uuid(), $1, 'googleAds.search', now() - interval '1 hour'
+         from generate_series(1, 119)`,
+      [userId],
+    )
+    expect(await reserve('00000000-0000-4000-8000-000000000003', userId)).toMatchObject({
+      allowed: true,
+      global_used: 120,
+      user_used: 120,
+    })
+    expect(await reserve('00000000-0000-4000-8000-000000000004', userId)).toMatchObject({
+      allowed: false,
+      global_used: 120,
+      user_used: 120,
+    })
+    expect(
+      (await db.query<{ n: number }>(`select count(*)::int as n from public.ads_google_api_operations`)).rows[0].n,
+    ).toBe(120)
+  })
+
+  it('enforces the shared project rolling cap across users', async () => {
+    const owner = await newUser()
+    const nextUser = await newUser()
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, created_at)
+       select gen_random_uuid(), $1, 'googleAds.search', now() - interval '1 hour'
+         from generate_series(1, 2399)`,
+      [owner],
+    )
+    expect(await reserve('00000000-0000-4000-8000-000000000005', nextUser)).toMatchObject({
+      allowed: true,
+      global_used: 2400,
+      user_used: 1,
+    })
+    expect(await reserve('00000000-0000-4000-8000-000000000006', nextUser)).toMatchObject({
+      allowed: false,
+      global_used: 2400,
+      user_used: 1,
+    })
+  })
+
+  it('rejects a connection owned by another user', async () => {
+    const owner = await newUser()
+    const other = await newUser()
+    const connectionId = await newConnection(owner)
+    await expect(reserve('00000000-0000-4000-8000-000000000007', other, connectionId)).rejects.toThrow(
+      /does not belong to user/,
+    )
+  })
+})
+
 describe('grants', () => {
   it('keeps token columns and server-only tables away from authenticated', async () => {
     const priv = async (role: string, sql: string) =>
@@ -658,7 +762,14 @@ describe('grants', () => {
         `select has_column_privilege('$ROLE','public.ads_connections'::regclass,'status','SELECT') as ok`,
       ),
     ).toBe(true)
-    for (const table of ['ads_usage_events', 'ads_free_usage', 'ads_alerts', 'ads_free_reservations']) {
+    for (const table of [
+      'ads_usage_events',
+      'ads_free_usage',
+      'ads_alerts',
+      'ads_free_reservations',
+      'ads_google_oauth_flows',
+      'ads_google_api_operations',
+    ]) {
       expect(await priv('authenticated', `select has_table_privilege('$ROLE','public.${table}','SELECT') as ok`)).toBe(
         false,
       )
@@ -673,6 +784,7 @@ describe('grants', () => {
       'release_ads_free_actions(text)',
       'ads_record_alert_once(text,jsonb)',
       'ads_purge_expired(integer,integer,integer,integer,integer,integer)',
+      'ads_reserve_google_api_operation(uuid,uuid,uuid,text)',
     ]
     for (const fn of fns) {
       const { rows } = await db.query<{ a: boolean; u: boolean; s: boolean }>(

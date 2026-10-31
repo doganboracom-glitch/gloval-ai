@@ -48,6 +48,7 @@ export function SettingsClient({
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(false)
   const [deleteBlockedByDomains, setDeleteBlockedByDomains] = useState(false)
+  const [deleteGoogleRevokeFailed, setDeleteGoogleRevokeFailed] = useState(false)
 
   const canConfirm = confirmValue.trim().toLowerCase() === userEmail.toLowerCase()
   const anyModalOpen = showProfileModal || showEmailModal || showConfirm
@@ -125,6 +126,8 @@ export function SettingsClient({
     setDeleteStep(1)
     setConfirmValue('')
     setDeleteError(false)
+    setDeleteBlockedByDomains(false)
+    setDeleteGoogleRevokeFailed(false)
     setShowConfirm(true)
   }
 
@@ -132,11 +135,14 @@ export function SettingsClient({
     if (!canConfirm || isDeleting) return
     setIsDeleting(true)
     setDeleteError(false)
+    setDeleteBlockedByDomains(false)
+    setDeleteGoogleRevokeFailed(false)
     const result = await deleteOwnAccount()
     if (!result.ok) {
       setIsDeleting(false)
       setDeleteError(true)
       setDeleteBlockedByDomains(result.error === 'domains_block_deletion')
+      setDeleteGoogleRevokeFailed(result.error === 'google_revoke_failed')
       return
     }
     const supabase = createClient()
@@ -408,7 +414,11 @@ export function SettingsClient({
 
                 {deleteError && (
                   <p role="alert" className="mt-3 text-sm text-destructive">
-                    {deleteBlockedByDomains ? t.settings.deleteBlockedByDomains : t.settings.deleteError}
+                    {deleteBlockedByDomains
+                      ? t.settings.deleteBlockedByDomains
+                      : deleteGoogleRevokeFailed
+                        ? t.settings.deleteGoogleAdsRevokeFailed
+                        : t.settings.deleteError}
                   </p>
                 )}
 

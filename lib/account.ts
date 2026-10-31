@@ -3,6 +3,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  revokeGoogleAdsConnectionsForDeletion,
+  revokeGoogleAdsOAuthFlowsForDeletion,
+} from '@/lib/ads/google-connections'
+import {
   getDomainDeletionBlockers,
   hasDomainDeletionBlockers,
 } from '@/lib/custom-domains/registrar/account-deletion-guard'
@@ -236,15 +240,36 @@ export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
     return { ok: false, error: 'delete_failed' }
   }
 
+  try {
+    await revokeGoogleAdsConnectionsForDeletion(admin, user.id)
+    await revokeGoogleAdsOAuthFlowsForDeletion(admin, user.id)
+  } catch {
+    console.error('[account-delete] Google Ads revocation failed')
+    return { ok: false, error: 'google_revoke_failed' }
+  }
+
   let targets: CleanupTargets
   try {
     const projectIds = await anonymizeFinancialRecords(admin, user.id)
     targets = await collectCleanupTargets(admin, user.id, user.email?.toLowerCase() ?? null, projectIds)
+    const { error: freeUsageError } = await admin
+      .from('ads_free_usage')
+      .delete()
+      .eq('subject', `ads:user:${user.id}`)
+    if (freeUsageError) stageFailure('ads_free_usage_cleanup', freeUsageError)
   } catch (error) {
     if (!(error instanceof DeleteStageError)) {
       console.error('[account-delete] unexpected failure', describeError(error))
     }
     return { ok: false, error: 'delete_failed' }
+  }
+
+  try {
+    await revokeGoogleAdsConnectionsForDeletion(admin, user.id)
+    await revokeGoogleAdsOAuthFlowsForDeletion(admin, user.id)
+  } catch {
+    console.error('[account-delete] Google Ads revocation failed')
+    return { ok: false, error: 'google_revoke_failed' }
   }
 
   const { error } = await admin.auth.admin.deleteUser(user.id)

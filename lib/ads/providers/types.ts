@@ -22,9 +22,9 @@ export class AdsProviderError extends Error {
 }
 
 export type AdsOAuthStartInput = {
-  /** Opaque, signed value the callback route verifies. */
   state: string
   redirectUri: string
+  codeChallenge?: string
 }
 
 export type AdsTokenSet = {
@@ -39,8 +39,38 @@ export type AdsAccountSummary = {
   externalAccountId: string
   name: string | null
   currency: string | null
-  /** Manager account id to send as login-customer-id, when the account sits under one. */
+  isManager: boolean
   loginCustomerId: string | null
+}
+
+export type AdsApiOperationContext = {
+  userId: string
+  connectionId: string | null
+}
+
+export type GoogleAdsDateRange = '7d' | '30d'
+
+export type AdsCampaignPerformance = {
+  id: string
+  name: string
+  status: 'ENABLED' | 'PAUSED' | 'UNKNOWN'
+  impressions: number
+  clicks: number
+  costMicros: number
+  conversions: number
+}
+
+export type AdsPerformanceSummary = {
+  range: GoogleAdsDateRange
+  currency: string | null
+  totals: Omit<AdsCampaignPerformance, 'id' | 'name' | 'status'>
+  campaigns: AdsCampaignPerformance[]
+}
+
+export type GoogleAdsRefreshResult = {
+  accessToken: string
+  expiresAt: string | null
+  refreshToken: string | null
 }
 
 /** Money is always in minor units (kuruş) plus an ISO 4217 code. */
@@ -69,9 +99,9 @@ export interface AdsProvider {
   readonly displayName: string
 
   buildAuthUrl(input: AdsOAuthStartInput): string
-  exchangeCode(input: { code: string; redirectUri: string }): Promise<AdsTokenSet>
+  exchangeCode(input: { code: string; redirectUri: string; codeVerifier?: string }): Promise<AdsTokenSet>
   refreshAccessToken(refreshToken: string): Promise<Pick<AdsTokenSet, 'accessToken' | 'expiresAt'>>
-  listAccounts(accessToken: string): Promise<AdsAccountSummary[]>
+  listAccounts(accessToken: string, context?: AdsApiOperationContext): Promise<AdsAccountSummary[]>
   publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult>
   setCampaignStatus(input: {
     externalAccountId: string
@@ -81,4 +111,25 @@ export interface AdsProvider {
     status: 'paused' | 'enabled'
   }): Promise<void>
   revoke(refreshToken: string): Promise<void>
+}
+
+export interface GoogleAdsProvider extends AdsProvider {
+  exchangeCodeWithVerifier(input: {
+    code: string
+    redirectUri: string
+    codeVerifier: string
+  }): Promise<AdsTokenSet>
+  refreshAccessTokenWithRotation(refreshToken: string): Promise<GoogleAdsRefreshResult>
+  listAccountsForUser(
+    accessToken: string,
+    context: AdsApiOperationContext,
+  ): Promise<AdsAccountSummary[]>
+  getPerformance(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    range: GoogleAdsDateRange
+    currency: string | null
+    context: AdsApiOperationContext
+  }): Promise<AdsPerformanceSummary>
 }

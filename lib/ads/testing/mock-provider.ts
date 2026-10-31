@@ -36,7 +36,7 @@ export function createMockAdsProvider(
     }),
     refreshAccessToken: async () => ({ accessToken: 'access-refreshed', expiresAt: null }),
     listAccounts: async () => [
-      { externalAccountId: '1234567890', name: 'Mock account', currency: 'TRY', loginCustomerId: null },
+      { externalAccountId: '1234567890', name: 'Mock account', currency: 'TRY', isManager: false, loginCustomerId: null },
     ],
     publishCampaign: async (input) => {
       if (options.failPublishWith) throw options.failPublishWith
