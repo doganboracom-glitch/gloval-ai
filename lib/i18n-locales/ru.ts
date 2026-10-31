@@ -578,15 +578,12 @@ const ru: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Расскажите — получите настоящий сайт.',
-    product: 'Продукт',
+    product: 'Продукты',
     company: 'Компания',
     legal: 'Юридическая информация',
     rights: 'Все права защищены.',
     securePayment: 'Безопасная оплата',
     links: {
-      features: 'Возможности',
-      pricing: 'Тарифы',
-      showcase: 'Примеры',
       about: 'О нас',
       blog: 'Блог',
       contact: 'Контакты',

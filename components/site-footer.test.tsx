@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SiteFooter } from './site-footer'
 import { dictionary, type Lang } from '@/lib/i18n'
@@ -21,6 +21,20 @@ vi.mock('next/link', () => ({
 
 const BEFORE = new Date('2026-11-15T12:00:00+03:00')
 const AFTER = new Date('2026-12-29T00:00:01+03:00')
+const PRODUCT_TITLES: Record<Lang, string> = {
+  tr: 'Ürünler',
+  en: 'Products',
+  ar: 'المنتجات',
+  az: 'Məhsullar',
+  de: 'Produkte',
+  es: 'Productos',
+  et: 'Tooted',
+  fr: 'Produits',
+  it: 'Prodotti',
+  pl: 'Produkty',
+  pt: 'Produtos',
+  ru: 'Продукты',
+}
 
 afterEach(() => {
   cleanup()
@@ -77,7 +91,7 @@ describe('footer domain link', () => {
   it('shows the new Turkish label with the same link styling as the other footer links', () => {
     render(<SiteFooter now={BEFORE} />)
     const link = screen.getByRole('link', { name: /Domain Sorgula ve Satın Al/ })
-    const regularLink = screen.getAllByRole('link').find((item) => item.getAttribute('href') === '/#features')
+    const regularLink = screen.getAllByRole('link').find((item) => item.getAttribute('href') === '/yasal/hakkimizda')
     expect(link.getAttribute('href')).toBe('/alan-adi-sorgula')
     expect(regularLink).toBeDefined()
     expect(link.className).toBe(regularLink?.className)
@@ -95,11 +109,46 @@ describe('footer domain link', () => {
     expect(screen.getByRole('link', { name: 'Domain Sorgula ve Satın Al' })).toBeTruthy()
   })
 
-  it('does not change the other product links', () => {
+  it('keeps only Domain, WHOIS, and Ads in the product column', () => {
+    vi.stubEnv('NEXT_PUBLIC_WHOIS_LOOKUP_ENABLED', '1')
+    vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteFooter now={BEFORE} />)
-    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'))
-    const productHrefs = hrefs.filter((h) => h?.startsWith('/#') || h === '/alan-adi-sorgula')
-    expect(productHrefs).toEqual(['/#features', '/#pricing', '/#showcase', '/alan-adi-sorgula'])
+
+    const productColumn = screen.getByRole('heading', { name: 'Ürünler' }).parentElement as HTMLElement
+    const productLinks = within(productColumn).getAllByRole('link')
+
+    expect(productLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/alan-adi-sorgula',
+      '/whois',
+      '/ads',
+    ])
+    expect(within(productColumn).queryByRole('link', { name: /Özellikler/ })).toBeNull()
+    expect(within(productColumn).queryByRole('link', { name: /Fiyatlar/ })).toBeNull()
+    expect(within(productColumn).queryByRole('link', { name: /Örnekler/ })).toBeNull()
+    expect(within(productColumn).getByRole('link', { name: /Domain Sorgula ve Satın Al/ })).toBeTruthy()
+    expect(within(productColumn).getByRole('link', { name: /WHOIS Sorgula/ })).toBeTruthy()
+    expect(within(productColumn).getByRole('link', { name: /GLOVAL Ads/ })).toBeTruthy()
+  })
+
+  it.each(SUPPORTED_LOCALES)('renders the plural product heading for %s', (locale) => {
+    state.lang = locale
+    render(<SiteFooter now={BEFORE} />)
+    const expectedHeading = PRODUCT_TITLES[locale]
+
+    expect(dictionary[locale].footer.product).toBe(expectedHeading)
+    expect(screen.getByRole('heading', { name: expectedHeading })).toBeTruthy()
+  })
+
+  it('keeps footer link keys aligned and removes the unused section keys', () => {
+    const expectedKeys = Object.keys(dictionary.en.footer.links).sort()
+
+    for (const locale of SUPPORTED_LOCALES) {
+      const localeKeys = Object.keys(dictionary[locale].footer.links).sort()
+      expect(localeKeys, locale).toEqual(expectedKeys)
+      expect(localeKeys, locale).not.toContain('features')
+      expect(localeKeys, locale).not.toContain('pricing')
+      expect(localeKeys, locale).not.toContain('showcase')
+    }
   })
 })
 

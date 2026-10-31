@@ -524,15 +524,12 @@ const ar: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'تحدث، وأنشئ موقعًا حقيقيًا.',
-    product: 'المنتج',
+    product: 'المنتجات',
     company: 'الشركة',
     legal: 'قانوني',
     rights: 'جميع الحقوق محفوظة.',
     securePayment: 'دفع آمن',
     links: {
-      features: 'الميزات',
-      pricing: 'الأسعار',
-      showcase: 'أمثلة',
       about: 'من نحن',
       blog: 'المدونة',
       contact: 'التواصل',

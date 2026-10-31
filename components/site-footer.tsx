@@ -30,13 +30,10 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
     {
       title: t.footer.product,
       items: [
-        { label: l.features, href: '/#features' },
-        { label: l.pricing, href: '/#pricing' },
-        { label: l.showcase, href: '/#showcase' },
         { label: t.domainSearch.footerLink, href: '/alan-adi-sorgula', newBadge: true },
         ...(isWhoisLookupEnabled() ? [{ label: t.whois.footerLink, href: WHOIS_LOOKUP_PATH }] : []),
         ...(isAdsFeatureUiEnabled()
-          ? [{ label: t.ads.footerLink, href: ADS_PATH, featured: false, soonBadge: true }]
+          ? [{ label: t.ads.footerLink, href: ADS_PATH, soonBadge: true }]
           : []),
       ],
     },

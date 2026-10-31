@@ -579,15 +579,12 @@ const et: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Räägi, saa päris veebileht.',
-    product: 'Toode',
+    product: 'Tooted',
     company: 'Ettevõte',
     legal: 'Juriidiline teave',
     rights: 'Kõik õigused kaitstud.',
     securePayment: 'Turvaline makse',
     links: {
-      features: 'Funktsioonid',
-      pricing: 'Hinnad',
-      showcase: 'Näited',
       about: 'Meist',
       blog: 'Blogi',
       contact: 'Kontakt',

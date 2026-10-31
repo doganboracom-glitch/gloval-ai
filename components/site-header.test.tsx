@@ -61,6 +61,20 @@ afterEach(() => {
 })
 
 describe('site header navigation', () => {
+  it('keeps all landing page sections accessible in desktop and mobile menus', () => {
+    render(<SiteHeader />)
+    const expectedHrefs = ['#how', '#features', '#showcase', '#pricing']
+    const desktopNav = document.querySelector<HTMLElement>('header nav')!
+    const desktopHrefs = within(desktopNav).getAllByRole('link').map((link) => link.getAttribute('href'))
+
+    expect(desktopHrefs).toEqual(expect.arrayContaining(expectedHrefs))
+
+    const mobileNav = openMobileMenu()
+    const mobileHrefs = within(mobileNav).getAllByRole('link').map((link) => link.getAttribute('href'))
+
+    expect(mobileHrefs).toEqual(expect.arrayContaining(expectedHrefs))
+  })
+
   it('keeps the domain and Ads links out of the desktop navigation', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteHeader />)
