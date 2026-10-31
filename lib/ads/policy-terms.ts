@@ -40,6 +40,8 @@ export type PolicyCategoryDefinition = {
   terms: string[]
   /** Lower-confidence signals that only produce a restricted finding. */
   reviewTerms?: string[]
+  /** Direct terms that snapshot checks may block, but a model quote cannot prove alone. */
+  modelEvidenceExclusions?: string[]
 }
 
 export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
@@ -55,6 +57,8 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
       'cinsel icerik', 'cinsel oyuncak*', 'cinsel urun*', 'yetiskin urun*', 'yetiskin oyuncak*', 'vibrator*', 'dildo*',
       'masturbator*',
     ],
+    reviewTerms: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
+    modelEvidenceExclusions: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
   },
   {
     category: 'weapons',

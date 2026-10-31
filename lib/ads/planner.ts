@@ -111,7 +111,9 @@ function normalizeEvidenceText(value: string): string {
 }
 
 function quoteContainsHardPolicyTerm(category: PolicyCategory, quote: string): boolean {
-  const terms = POLICY_CATEGORIES.find((definition) => definition.category === category)?.terms ?? []
+  const definition = POLICY_CATEGORIES.find((entry) => entry.category === category)
+  const excludedTerms = new Set(definition?.modelEvidenceExclusions ?? [])
+  const terms = (definition?.terms ?? []).filter((term) => !excludedTerms.has(term))
   const normalizedQuote = normalizeEvidenceText(quote)
   return terms.some((term) => {
     const prefix = term.endsWith('*')
