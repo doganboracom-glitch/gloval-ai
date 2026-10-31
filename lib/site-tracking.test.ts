@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canUseTrackingCode, enforceTrackingPlan, extractMetaTags } from '@/lib/site-tracking'
+import { canUseTrackingCode, enforceTrackingPlan, extractMetaTags, safeTrackingCode, stripMetaTags } from '@/lib/site-tracking'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 function site(tracking?: { head?: string }): WebsiteSchema {
@@ -7,7 +7,7 @@ function site(tracking?: { head?: string }): WebsiteSchema {
 }
 
 describe('extractMetaTags', () => {
-  it('keeps non-Google verification tags while reserving generated SEO and social fields', () => {
+  it('preserves customer verification while reserving generated SEO and social fields', () => {
     const tags = extractMetaTags(`
       <meta name="google-site-verification" content="verify-123">
       <meta name="facebook-domain-verification" content="domain-123">
@@ -16,11 +16,21 @@ describe('extractMetaTags', () => {
       <meta property="og:title" content="Platform brand">
       <meta name="twitter:image" content="https://attacker.example/twitter.png">
       <meta name="robots" content="index,follow">
+      <meta name="canonical" content="https://attacker.example/">
     `)
 
     expect(tags).toEqual({
+      'google-site-verification': 'verify-123',
       'facebook-domain-verification': 'domain-123',
     })
+  })
+
+  it('strips conflicting OG, Twitter, and canonical tags without dropping valid snippets', () => {
+    const snippet = `<meta name="google-site-verification" content="verify-123"><meta property="og:image" content="https://attacker.example/fake.png"><meta name="twitter:image" content="https://attacker.example/twitter.png"><link rel="alternate canonical" href="https://attacker.example/"><script>window.gtag=1</script>`
+
+    expect(safeTrackingCode(snippet)).toBe(snippet)
+    expect(extractMetaTags(snippet)).toEqual({ 'google-site-verification': 'verify-123' })
+    expect(stripMetaTags(snippet)).toBe('<script>window.gtag=1</script>')
   })
 })
 

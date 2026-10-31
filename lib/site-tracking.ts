@@ -2,31 +2,29 @@ import type { TrackingCodes, WebsiteSchema } from '@/lib/website-schema'
 import type { PlanCode } from '@/lib/pricing-config'
 
 /**
- * Owner-supplied third-party code (analytics, tag manager, pixels, and
- * verification other than Google Search Console) is stored verbatim on the
+ * Owner-supplied third-party code (analytics, tag manager, pixels, and site
+ * verification, including Google Search Console) is stored verbatim on the
  * website schema and injected into the PUBLISHED site only. These helpers keep
  * that injection predictable:
  *
- *  - Allowed `<meta name="..." content="...">` tags are lifted into Next.js
- *    metadata. Google Search Console and generated SEO/social tags remain owned
- *    by platform metadata and cannot be injected from a site snippet.
- *  - Everything else (scripts, noscript, links) is injected as raw HTML into the
- *    document exactly as pasted — no escaping, no rewriting — so scripts execute
- *    during the initial page parse.
+ *  - Customer verification tags are preserved. Generated OG/Twitter tags and
+ *    canonical links are owned by site metadata and filtered from snippets.
+ *  - Everything else (scripts, noscript, and non-canonical links) is injected
+ *    as raw HTML into the document exactly as pasted — no escaping, no rewriting.
  */
 
 const META_TAG = /<meta\b[^>]*>/gi
 
 function attr(tag: string, name: string): string | null {
-  const match = tag.match(new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, 'i'))
+  const match = tag.match(new RegExp(`(?:\\s|^)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'))
   if (!match) return null
-  return match[2] ?? match[3] ?? null
+  return match[1] ?? match[2] ?? match[3] ?? null
 }
 
 /**
- * Extracts safe `<meta name|property="…" content="…">` pairs from a head
- * snippet for Next.js metadata (`other`). Charset, viewport, robots, description,
- * and generated Open Graph/Twitter fields stay owned by the site's metadata.
+ * Extracts `<meta name|property="…" content="…">` pairs into Next.js
+ * metadata. Customer verification tags are preserved; generated descriptions,
+ * robots, Open Graph, Twitter, and canonical metadata remain platform-owned.
  */
 export function extractMetaTags(code?: string | null): Record<string, string> {
   if (!code) return {}
@@ -37,7 +35,7 @@ export function extractMetaTags(code?: string | null): Record<string, string> {
     if (!name || content === null) continue
     const normalizedName = name.trim().toLowerCase()
     if (
-      ['viewport', 'charset', 'description', 'robots', 'googlebot', 'google-site-verification'].includes(normalizedName) ||
+      ['viewport', 'charset', 'description', 'robots', 'googlebot', 'canonical'].includes(normalizedName) ||
       normalizedName.startsWith('og:') ||
       normalizedName.startsWith('twitter:')
     ) {
@@ -48,10 +46,16 @@ export function extractMetaTags(code?: string | null): Record<string, string> {
   return result
 }
 
-/** The head snippet without its `<meta>` tags (those go through metadata). */
+/** The head snippet without meta tags or canonical links owned by site metadata. */
 export function stripMetaTags(code?: string | null): string {
   if (!code) return ''
-  return code.replace(META_TAG, '').trim()
+  return code
+    .replace(META_TAG, '')
+    .replace(/<link\b[^>]*>/gi, (tag) => {
+      const rel = attr(tag, 'rel')
+      return rel?.split(/\s+/).some((value) => value.toLowerCase() === 'canonical') ? '' : tag
+    })
+    .trim()
 }
 
 const UNSAFE_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
@@ -61,14 +65,13 @@ const UNSAFE_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
   ['base_tag', /<\s*base\b/i],
   ['form_tag', /<\s*form\b/i],
   ['object_embed', /<\s*(object|embed)\b/i],
-  ['canonical_link', /<\s*link\b[^>]*rel\s*=\s*["']?\s*canonical/i],
   ['insecure_script', /<\s*script\b[^>]*\bsrc\s*=\s*["']?\s*http:\/\//i],
 ]
 
 /**
- * Names of the harmful patterns found in an owner snippet. Analytics, tag
- * manager, pixel and verification snippets never need any of these; they
- * redirect visitors, hijack relative URLs, spoof the canonical or phish.
+ * Names of harmful patterns that invalidate an owner snippet. A conflicting
+ * canonical link is stripped separately so the rest of a valid snippet survives.
+ * These patterns redirect visitors, hijack relative URLs, or phish.
  */
 export function findUnsafeTrackingPatterns(code?: string | null): string[] {
   if (!code) return []
