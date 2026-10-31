@@ -74,13 +74,14 @@ describe('footer GLOVAL Ads link badge', () => {
 })
 
 describe('footer domain link', () => {
-  it('shows the new Turkish label and keeps the target', () => {
+  it('shows the new Turkish label with the same link styling as the other footer links', () => {
     render(<SiteFooter now={BEFORE} />)
     const link = screen.getByRole('link', { name: /Domain Sorgula ve Satın Al/ })
+    const regularLink = screen.getAllByRole('link').find((item) => item.getAttribute('href') === '/#features')
     expect(link.getAttribute('href')).toBe('/alan-adi-sorgula')
-    expect(link.className).toContain('text-violet-300')
-    expect(link.className).toContain('font-medium')
-    expect(link.querySelector('svg')).not.toBeNull()
+    expect(regularLink).toBeDefined()
+    expect(link.className).toBe(regularLink?.className)
+    expect(link.querySelector('svg')).toBeNull()
   })
 
   it('shows the "Yeni" badge before the cutoff date', () => {

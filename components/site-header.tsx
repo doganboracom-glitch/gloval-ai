@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, LayoutGrid } from 'lucide-react'
@@ -11,11 +11,28 @@ import { BrandLogo } from '@/components/brand-logo'
 import { ScrollToTop, scrollWindowToTop } from '@/components/scroll-to-top'
 import { createClient } from '@/lib/supabase/client'
 import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
+import { isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
+
+const subscribeNoop = () => () => {}
+const serverBadgeSnapshot = () => false
+
+type HeaderLink = {
+  href: string
+  label: string
+  route?: boolean
+  soon?: boolean
+  newBadge?: boolean
+}
 
 export function SiteHeader() {
   const { t } = useLanguage()
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const showDomainBadge = useSyncExternalStore(
+    subscribeNoop,
+    isDomainLinkNewBadgeActive,
+    serverBadgeSnapshot,
+  )
   // Auth-aware header: logged-in visitors get a "My Projects" shortcut to the
   // dashboard; anonymous visitors keep the original sign-in + CTA exactly.
   const [signedIn, setSignedIn] = useState(false)
@@ -43,12 +60,16 @@ export function SiteHeader() {
   const onHome = pathname === '/'
   // "Özellikler" başlıklı link, header'daki yatay sıkışıklığı azaltmak için
   // buradan çıkarıldı. Bölümün kendisi ve footer'daki /#features linki duruyor.
-  const links: ReadonlyArray<{ href: string; label: string; route?: boolean; soon?: boolean }> = [
+  const desktopLinks: ReadonlyArray<HeaderLink> = [
     { href: '#how', label: t.nav.how },
     { href: '#showcase', label: t.nav.showcase },
     { href: '#pricing', label: t.nav.pricing },
     { href: '/blog', label: t.nav.blog, route: true },
     { href: '/sss', label: t.nav.faq, route: true },
+  ]
+  const mobileLinks: ReadonlyArray<HeaderLink> = [
+    ...desktopLinks,
+    { href: '/alan-adi-sorgula', label: t.domainSearch.footerLink, route: true, newBadge: true },
     ...(isAdsFeatureUiEnabled()
       ? [{ href: ADS_PATH, label: t.ads.navLink, route: true, soon: true }]
       : []),
@@ -59,6 +80,14 @@ export function SiteHeader() {
       className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
     >
       {t.ads.comingSoon}
+    </span>
+  )
+  const domainNewBadge = () => (
+    <span
+      data-testid="mobile-nav-domain-new-badge"
+      className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
+    >
+      {t.domainSearch.footerBadgeNew}
     </span>
   )
 
@@ -82,7 +111,7 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex">
-          {links.map((l) =>
+          {desktopLinks.map((l) =>
             l.route ? (
               <Link
                 key={l.href}
@@ -151,20 +180,21 @@ export function SiteHeader() {
       {open && (
         <div className="border-t border-border/60 bg-background md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3">
-            {links.map((l) =>
+            {mobileLinks.map((l) =>
               l.route ? (
                 <Link
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
                   className={
-                    l.soon
+                    l.soon || (l.newBadge && showDomainBadge)
                       ? 'flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground'
                       : 'rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground'
                   }
                 >
                   {l.label}
                   {l.soon && soonBadge('mobile-nav-ads-soon-badge')}
+                  {l.newBadge && showDomainBadge && domainNewBadge()}
                 </Link>
               ) : (
                 <a
