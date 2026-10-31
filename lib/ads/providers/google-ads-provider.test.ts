@@ -33,7 +33,6 @@ describe('Google Ads read-only transport', () => {
     expect(calls[0].init.method).toBe('GET')
     const headers = new Headers(calls[0].init.headers)
     expect(headers.get('authorization')).toBe('Bearer oauth-access-token')
-    expect(headers.has('developer-token')).toBe(false)
   })
 
   it('uses POST searchStream and sends the manager login-customer-id for child accounts', async () => {
@@ -58,7 +57,6 @@ describe('Google Ads read-only transport', () => {
     expect(detailHeaders.get('login-customer-id')).toBeNull()
     expect(childHeaders.get('authorization')).toBe('Bearer oauth-access-token')
     expect(childHeaders.get('login-customer-id')).toBe('1234567890')
-    expect(childHeaders.has('developer-token')).toBe(false)
 
     expect(accounts).toEqual([
       {

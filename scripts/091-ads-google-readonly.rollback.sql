@@ -35,4 +35,29 @@ alter table public.ads_connections
   drop column if exists api_lease_id,
   drop column if exists api_lease_expires_at;
 
+-- Restore the pre-091 client-visible account metadata grant from migration 089.
+grant select (
+  id,
+  user_id,
+  platform,
+  external_account_id,
+  external_account_name,
+  login_customer_id,
+  scopes,
+  status,
+  last_error,
+  created_at,
+  updated_at
+) on table public.ads_connections to authenticated;
+
+-- Restore the pre-091 distinction between callable RPCs and trigger-only functions.
+revoke all on function public.ads_touch_updated_at() from service_role;
+revoke all on function public.ads_forbid_owner_change() from service_role;
+revoke all on function public.ads_plans_check_owners() from service_role;
+revoke all on function public.ads_actions_guard() from service_role;
+revoke all on function public.ads_actions_check_owners() from service_role;
+revoke all on function public.ads_audit_plan_status() from service_role;
+revoke all on function public.ads_audit_connection_status() from service_role;
+revoke all on function public.ads_recommendations_check_owner() from service_role;
+
 commit;

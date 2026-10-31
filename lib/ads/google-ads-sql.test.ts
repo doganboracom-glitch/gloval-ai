@@ -28,6 +28,8 @@ beforeAll(async () => {
       refresh_token_enc text,
       token_key_version smallint not null default 1
     );
+    grant select (id, user_id, platform, external_account_id)
+      on table public.ads_connections to authenticated;
     create function public.ads_test_marker() returns boolean
       language sql immutable as $$ select true $$;
   `)
@@ -57,16 +59,20 @@ async function createUser(): Promise<string> {
 }
 
 describe('scripts/091-ads-google-readonly.sql', () => {
-  it('adds the Google Ads connection metadata columns', async () => {
-    const { rows } = await db.query<{ column_name: string }>(`
-      select column_name
+  it('adds Google Ads connection metadata with a safe manager default', async () => {
+    const { rows } = await db.query<{
+      column_name: string
+      is_nullable: string
+      column_default: string | null
+    }>(`
+      select column_name, is_nullable, column_default
       from information_schema.columns
       where table_schema = 'public' and table_name = 'ads_connections'
     `)
-    const columns = new Set(rows.map((row) => row.column_name))
+    const columns = new Map(rows.map((row) => [row.column_name, row]))
 
     expect(columns.has('currency_code')).toBe(true)
-    expect(columns.has('is_manager')).toBe(true)
+    expect(columns.get('is_manager')).toMatchObject({ is_nullable: 'NO', column_default: 'false' })
     expect(columns.has('api_lease_id')).toBe(true)
     expect(columns.has('api_lease_expires_at')).toBe(true)
   })
@@ -74,49 +80,53 @@ describe('scripts/091-ads-google-readonly.sql', () => {
   it('enables RLS and grants only service_role direct table and RPC access', async () => {
     const { rows: rlsRows } = await db.query<{ relname: string; relrowsecurity: boolean }>(`
       select relname, relrowsecurity
-      from pg_class
+      from pg_catalog.pg_class
       where oid in (
+        'public.ads_connections'::regclass,
         'public.ads_google_oauth_flows'::regclass,
         'public.ads_google_api_operations'::regclass
       )
       order by relname
     `)
-    expect(rlsRows).toHaveLength(2)
+    expect(rlsRows).toHaveLength(3)
     expect(rlsRows.every((row) => row.relrowsecurity)).toBe(true)
 
-    const { rows: grants } = await db.query<{
-      anon_flow: boolean
-      auth_flow: boolean
-      service_flow: boolean
-      anon_operations: boolean
-      auth_operations: boolean
-      service_operations: boolean
-      anon_rpc: boolean
-      auth_rpc: boolean
-      service_rpc: boolean
+    const { rows: tableGrants } = await db.query<{
+      role_name: string
+      table_name: string
+      privilege: string
+      granted: boolean
     }>(`
-      select
-        has_table_privilege('anon', 'public.ads_google_oauth_flows', 'select') as anon_flow,
-        has_table_privilege('authenticated', 'public.ads_google_oauth_flows', 'select') as auth_flow,
-        has_table_privilege('service_role', 'public.ads_google_oauth_flows', 'select') as service_flow,
-        has_table_privilege('anon', 'public.ads_google_api_operations', 'select') as anon_operations,
-        has_table_privilege('authenticated', 'public.ads_google_api_operations', 'select') as auth_operations,
-        has_table_privilege('service_role', 'public.ads_google_api_operations', 'select') as service_operations,
-        has_function_privilege('anon', 'public.ads_reserve_google_api_operation(uuid,uuid,uuid,text)', 'execute') as anon_rpc,
-        has_function_privilege('authenticated', 'public.ads_reserve_google_api_operation(uuid,uuid,uuid,text)', 'execute') as auth_rpc,
-        has_function_privilege('service_role', 'public.ads_reserve_google_api_operation(uuid,uuid,uuid,text)', 'execute') as service_rpc
+      select roles.role_name, tables.table_name, privileges.privilege,
+             has_table_privilege(roles.role_name, tables.table_name, privileges.privilege) as granted
+      from (values ('anon'), ('authenticated'), ('service_role')) as roles(role_name)
+      cross join (values
+        ('public.ads_connections'),
+        ('public.ads_google_oauth_flows'),
+        ('public.ads_google_api_operations')
+      ) as tables(table_name)
+      cross join (values ('select'), ('insert'), ('update'), ('delete')) as privileges(privilege)
     `)
-    expect(grants[0]).toEqual({
-      anon_flow: false,
-      auth_flow: false,
-      service_flow: true,
-      anon_operations: false,
-      auth_operations: false,
-      service_operations: true,
-      anon_rpc: false,
-      auth_rpc: false,
-      service_rpc: true,
-    })
+    expect(tableGrants).toHaveLength(36)
+    for (const grant of tableGrants) {
+      expect(grant.granted).toBe(grant.role_name === 'service_role')
+    }
+
+    const { rows: connectionColumnGrants } = await db.query<{
+      role_name: string
+      column_name: string
+      granted: boolean
+    }>(`
+      select roles.role_name, columns.column_name,
+             has_column_privilege(roles.role_name, 'public.ads_connections', columns.column_name, 'select') as granted
+      from (values ('anon'), ('authenticated'), ('service_role')) as roles(role_name)
+      cross join information_schema.columns as columns
+      where columns.table_schema = 'public' and columns.table_name = 'ads_connections'
+    `)
+    expect(connectionColumnGrants.length).toBeGreaterThan(0)
+    for (const grant of connectionColumnGrants) {
+      expect(grant.granted).toBe(grant.role_name === 'service_role')
+    }
 
     const { rows: functionGrants } = await db.query<{
       anon_execute: boolean
@@ -127,11 +137,23 @@ describe('scripts/091-ads-google-readonly.sql', () => {
         bool_and(not has_function_privilege('anon', p.oid, 'execute')) as anon_execute,
         bool_and(not has_function_privilege('authenticated', p.oid, 'execute')) as authenticated_execute,
         bool_and(has_function_privilege('service_role', p.oid, 'execute')) as service_execute
-      from pg_proc p
-      join pg_namespace n on n.oid = p.pronamespace
+      from pg_catalog.pg_proc p
+      join pg_catalog.pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public' and p.proname like 'ads_%'
     `)
     expect(functionGrants[0]).toEqual({ anon_execute: true, authenticated_execute: true, service_execute: true })
+  })
+
+  it('accepts a credential-free completed OAuth flow state', async () => {
+    const userId = await createUser()
+    const { rows } = await db.query<{ id: string }>(`
+      insert into public.ads_google_oauth_flows (
+        user_id, state_hash, status, state_consumed_at, code_verifier_enc, pending_refresh_token_enc
+      ) values ($1::uuid, repeat('a', 64), 'completed', now(), null, null)
+      returning id
+    `, [userId])
+
+    expect(rows).toHaveLength(1)
   })
 
   it('reserves only approved Google Ads read operations and enforces per-user quotas', async () => {
