@@ -21,7 +21,7 @@ export function LegalDocument({ doc }: { doc: LegalDoc }) {
 
   const updatedLabel =
     lang === 'tr' ? 'Son güncelleme' : 'Last updated'
-  const updated = new Date(LEGAL_LAST_UPDATED).toLocaleDateString(
+  const updated = new Date(doc.lastUpdated ?? LEGAL_LAST_UPDATED).toLocaleDateString(
     lang === 'tr' ? 'tr-TR' : 'en-US',
     { year: 'numeric', month: 'long', day: 'numeric' },
   )
@@ -62,15 +62,43 @@ export function LegalDocument({ doc }: { doc: LegalDoc }) {
                 {section.heading}
               </h2>
               <div className="mt-4 space-y-4">
-                {section.blocks.map((block, i) =>
-                  block.type === 'p' ? (
-                    <p
-                      key={i}
-                      className="text-pretty leading-relaxed text-muted-foreground"
-                    >
-                      {block.text}
-                    </p>
-                  ) : (
+                {section.blocks.map((block, i) => {
+                  if (block.type === 'p') {
+                    return (
+                      <p
+                        key={i}
+                        className="text-pretty leading-relaxed text-muted-foreground"
+                      >
+                        {block.text}
+                      </p>
+                    )
+                  }
+
+                  if (block.type === 'link') {
+                    const linkClassName =
+                      'text-brand underline underline-offset-4 transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+
+                    return (
+                      <p key={i} className="text-pretty leading-relaxed">
+                        {block.external ? (
+                          <a
+                            href={block.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={linkClassName}
+                          >
+                            {block.label}
+                          </a>
+                        ) : (
+                          <Link href={block.href} className={linkClassName}>
+                            {block.label}
+                          </Link>
+                        )}
+                      </p>
+                    )
+                  }
+
+                  return (
                     <ul key={i} className="space-y-2 pl-1">
                       {block.items.map((item, j) => (
                         <li
@@ -85,8 +113,8 @@ export function LegalDocument({ doc }: { doc: LegalDoc }) {
                         </li>
                       ))}
                     </ul>
-                  ),
-                )}
+                  )
+                })}
               </div>
             </section>
           ))}

@@ -6,7 +6,10 @@ import { createElement } from 'react'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import { fallbackWebsite } from '@/lib/website-schema'
 
-type Block = { type: 'p'; text: string } | { type: 'list'; items: string[] }
+type Block =
+  | { type: 'p'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'link'; href: string; label: string; external?: boolean }
 type Section = { heading: string; blocks: Block[] }
 
 const ROOT = process.cwd()
@@ -20,7 +23,11 @@ async function load(phone = '') {
 }
 
 function flatten(section: Section): string[] {
-  return section.blocks.flatMap((b) => (b.type === 'p' ? [b.text] : b.items))
+  return section.blocks.flatMap((block) => {
+    if (block.type === 'p') return [block.text]
+    if (block.type === 'list') return block.items
+    return [block.label]
+  })
 }
 
 function walk(dir: string): string[] {
@@ -51,9 +58,41 @@ describe('Gizlilik Politikası — Veri Sorumlusu bloğu', () => {
     const { docs } = await load()
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
     for (const lang of ['tr', 'en'] as const) {
-      const numbered = privacy[lang].sections.slice(1).map((s) => s.heading)
+      const numbered = privacy[lang].sections
+        .filter((section) => /^\d+\. /.test(section.heading))
+        .map((section) => section.heading)
       expect(numbered).toHaveLength(8)
       numbered.forEach((heading, i) => expect(heading.startsWith(`${i + 1}. `)).toBe(true))
+    }
+  })
+
+  it('Google Ads bölümünü iki dilde, Limited Use beyanı ve bağlantılarıyla ekler', async () => {
+    const { docs } = await load()
+    const privacy = docs.getLegalDoc('gizlilik-politikasi')!
+    expect(privacy.lastUpdated).toBe('2026-10-31')
+    expect(docs.getLegalDoc('kvkk')?.lastUpdated).toBeUndefined()
+
+    const limitedUseStatements = {
+      tr: "GLOVAL AI'ın Google API'lerinden aldığı bilgileri kullanımı ve başka bir uygulamaya aktarması, Google API Services User Data Policy'ye (Limited Use gereklilikleri dahil) uygun olacaktır.",
+      en: "GLOVAL AI's use and transfer of information obtained from Google APIs to another application will comply with the Google API Services User Data Policy, including the Limited Use requirements.",
+    }
+    const policyUrl =
+      'https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes'
+
+    for (const lang of ['tr', 'en'] as const) {
+      const sections = privacy[lang].sections
+      const heading = lang === 'tr' ? 'Google Ads verileri (GLOVAL Ads)' : 'Google Ads data (GLOVAL Ads)'
+      const sectionIndex = sections.findIndex((section) => section.heading === heading)
+      expect(sectionIndex).toBeGreaterThan(0)
+      expect(sections[sectionIndex - 1].heading).toMatch(/^4\. /)
+      expect(sections[sectionIndex + 1].heading).toMatch(/^5\. /)
+
+      const section = sections[sectionIndex] as Section
+      expect(flatten(section)).toContain(limitedUseStatements[lang])
+      const links = section.blocks.filter((block) => block.type === 'link')
+      expect(links.map((item) => item.href)).toContain(policyUrl)
+      expect(links.map((item) => item.href)).toContain('https://myaccount.google.com/permissions')
+      expect(links.map((item) => item.href)).toContain('/yasal/kvkk')
     }
   })
 
