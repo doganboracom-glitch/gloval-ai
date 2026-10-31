@@ -22,6 +22,7 @@ export type PublicCatalog = {
   slug: string
   site: PublishedSite
   origin: string
+  lastModified: string | null
   items: CatalogItem[]
   groups: CatalogGroup[]
   /** Former category address -> current one (inline catalogs only). */
@@ -83,6 +84,7 @@ export async function loadPublicCatalog(slug: string): Promise<PublicCatalog | n
       slug,
       site,
       origin: context.origin,
+      lastModified: context.lastModified,
       items: inline.items,
       groups: inline.groups,
       categoryRedirects: inline.categoryRedirects,
@@ -129,6 +131,7 @@ export async function loadPublicCatalog(slug: string): Promise<PublicCatalog | n
     slug,
     site,
     origin: context.origin,
+    lastModified: context.lastModified,
     items,
     groups: groupByCategory(items),
     whatsappNumber: context.whatsappNumber,

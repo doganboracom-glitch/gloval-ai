@@ -10,6 +10,7 @@ import { loadCatalogPaths } from "@/lib/catalog-public-server";
 import { getSiteBlogData } from "@/lib/blog-server";
 import { isSiteBrandingRemoved } from "@/lib/project-entitlements";
 import { getSiteSeoContext } from "@/lib/seo/site-seo";
+import { buildTenantSocialMetadata } from "@/lib/seo/site-sharing";
 import { isStorefront } from "@/lib/website-schema";
 import { getStorePaymentBadges } from "@/lib/store-payment-badges";
 import { contactSecret, signContactToken } from "@/lib/site-contact-guard";
@@ -55,6 +56,8 @@ export async function buildSitePageMetadata(
       robots: { index: false, follow: false },
     };
 
+  const { origin, lastModified } = await getSiteSeoContext(slug);
+
   if (page && itemSlug && page.detailOf === "gallery") {
     const album = findPublicAlbum(site.schema, page.slug, itemSlug);
     if (!album || album.kind !== "album")
@@ -62,7 +65,6 @@ export async function buildSitePageMetadata(
         title: "Sayfa bulunamadı",
         robots: { index: false, follow: false },
       };
-    const { origin } = await getSiteSeoContext(slug);
     const canonical = `${origin}${galleryAlbumPath(page.slug, album.entry.slug)}`;
     const title = `${album.entry.name} | ${page.title} | ${site.name}`;
     const description = galleryDescription(
@@ -71,19 +73,16 @@ export async function buildSitePageMetadata(
       `${site.name} - ${album.entry.name}`,
       album.entry.photos.length,
     );
-    return {
+    return buildTenantSocialMetadata({
+      site,
+      slug,
+      origin,
+      lastModified,
+      canonical,
       title,
       description,
-      metadataBase: new URL(origin),
-      alternates: { canonical },
-      openGraph: {
-        title,
-        description,
-        url: canonical,
-        images: [album.entry.cover.src],
-      },
       robots: { index: isPageIndexable(page), follow: true },
-    };
+    });
   }
 
   if (page && itemSlug) {
@@ -94,26 +93,22 @@ export async function buildSitePageMetadata(
         robots: { index: false, follow: false },
       };
     const { entry } = found;
-    const { origin } = await getSiteSeoContext(slug);
     const canonical = `${origin}${servicePath(found.resolved.listSlug, entry.slug)}`;
     const title = `${entry.title} | ${site.name}`;
     const description =
       serviceDescription(entry) ||
       site.schema.meta.description ||
       site.schema.meta.tagline;
-    return {
+    return buildTenantSocialMetadata({
+      site,
+      slug,
+      origin,
+      lastModified,
+      canonical,
       title,
       description,
-      metadataBase: new URL(origin),
-      alternates: { canonical },
-      openGraph: {
-        title,
-        description,
-        url: canonical,
-        ...(entry.image ? { images: [entry.image.src] } : {}),
-      },
       robots: { index: isPageIndexable(page), follow: true },
-    };
+    });
   }
 
   const aboutDetail =
@@ -171,19 +166,20 @@ export async function buildSitePageMetadata(
 
   // Tenant pages are canonical to their OWN public origin (a live custom
   // domain when bound, else the subdomain), never to gloval.ai.
-  const { origin } = await getSiteSeoContext(slug);
   const canonical = page
     ? `${origin}${pagePath(site.schema, page.slug)}`
     : origin;
   const indexable = page ? isPageIndexable(page) : true;
-  return {
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin,
+    lastModified,
+    canonical,
     title,
     description,
-    metadataBase: new URL(origin),
-    alternates: { canonical },
-    openGraph: { title, description, url: canonical },
     robots: { index: indexable, follow: true },
-  };
+  });
 }
 
 export async function PublicSiteView({

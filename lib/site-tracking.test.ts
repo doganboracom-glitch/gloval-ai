@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { canUseTrackingCode, enforceTrackingPlan } from '@/lib/site-tracking'
+import { canUseTrackingCode, enforceTrackingPlan, extractMetaTags } from '@/lib/site-tracking'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 function site(tracking?: { head?: string }): WebsiteSchema {
   return { name: 'Demo', pages: [], ...(tracking ? { tracking } : {}) } as unknown as WebsiteSchema
 }
+
+describe('extractMetaTags', () => {
+  it('keeps verification tags while reserving generated SEO and social fields', () => {
+    const tags = extractMetaTags(`
+      <meta name="google-site-verification" content="verify-123">
+      <meta name="facebook-domain-verification" content="domain-123">
+      <meta name="description" content="platform description">
+      <meta property="og:image" content="https://attacker.example/fake.png">
+      <meta property="og:title" content="Platform brand">
+      <meta name="twitter:image" content="https://attacker.example/twitter.png">
+      <meta name="robots" content="index,follow">
+    `)
+
+    expect(tags).toEqual({
+      'google-site-verification': 'verify-123',
+      'facebook-domain-verification': 'domain-123',
+    })
+  })
+})
 
 describe('canUseTrackingCode', () => {
   it('is closed on FREE and open on every paid plan', () => {
