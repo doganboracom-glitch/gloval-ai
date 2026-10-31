@@ -7,6 +7,7 @@ import { useLanguage } from '@/components/language-provider'
 import { VoiceInputButton } from '@/components/voice/voice-input-button'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
 import { toBilingual } from '@/lib/i18n'
+import { AdsProductSwitch } from '@/components/ads/ads-product-switch'
 import { PlanResult, type Plan } from '@/components/plan-result'
 import { WebsitePreview } from '@/components/website-preview'
 import { websiteToPlan, type WebsiteSchema } from '@/lib/website-schema'
@@ -443,6 +444,8 @@ export function Hero() {
             {t.hero.subtitle}
           </p>
         </div>
+
+        <AdsProductSwitch active="build" className="mx-auto mb-6" />
 
         {/* AI prompt box */}
         <div

@@ -627,4 +627,91 @@
   html[data-cookie-banner-site] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
     transition: translate 200ms ease-out;
   }
+
+  html.ads-route-transition::before {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    content: '';
+    pointer-events: none;
+    background: radial-gradient(
+      circle at 50% 48%,
+      transparent 0 33%,
+      color-mix(in oklab, var(--color-brand) 58%, transparent) 36%,
+      color-mix(in oklab, var(--color-brand) 18%, transparent) 43%,
+      transparent 52%
+    );
+    transform: scale(0.12);
+    animation: ads-route-ring 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  html.ads-route-transition body {
+    animation: ads-route-page-warp 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  html.ads-route-transition::view-transition-old(root) {
+    animation: ads-view-transition-out 220ms ease-in both;
+  }
+
+  html.ads-route-transition::view-transition-new(root) {
+    animation: ads-view-transition-in 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes ads-route-ring {
+    0% {
+      opacity: 0;
+      filter: blur(10px);
+      transform: scale(0.12);
+    }
+    22% {
+      opacity: 0.86;
+    }
+    72% {
+      opacity: 0.42;
+      filter: blur(1px);
+      transform: scale(2.8);
+    }
+    100% {
+      opacity: 0;
+      filter: blur(7px);
+      transform: scale(4.2);
+    }
+  }
+
+  @keyframes ads-route-page-warp {
+    0%,
+    100% {
+      opacity: 1;
+      filter: blur(0);
+      transform: scale(1);
+    }
+    44% {
+      opacity: 0.62;
+      filter: blur(3px);
+      transform: scale(1.025);
+    }
+  }
+
+  @keyframes ads-view-transition-out {
+    to {
+      opacity: 0;
+      filter: blur(8px);
+      transform: scale(0.97);
+    }
+  }
+
+  @keyframes ads-view-transition-in {
+    from {
+      opacity: 0;
+      clip-path: circle(10% at 50% 48%);
+      filter: blur(8px);
+      transform: scale(1.04);
+    }
+    to {
+      opacity: 1;
+      clip-path: circle(150% at 50% 48%);
+      filter: blur(0);
+      transform: scale(1);
+    }
+  }
 }
