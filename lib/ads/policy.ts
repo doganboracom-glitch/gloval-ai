@@ -67,18 +67,14 @@ type CompiledCategory = {
   category: PolicyCategory
   severity: PolicySeverity
   pattern: RegExp
-  reviewPattern: RegExp | null
 }
 
 let compiled: CompiledCategory[] | null = null
 function compiledCategories(): CompiledCategory[] {
-  compiled ??= POLICY_CATEGORIES.map(({ category, severity, terms, reviewTerms = [] }) => ({
+  compiled ??= POLICY_CATEGORIES.map(({ category, severity, terms }) => ({
     category,
     severity,
     pattern: new RegExp(`(?<![a-z0-9])(?:${terms.map(termPattern).join('|')})(?![a-z0-9])`, 'g'),
-    reviewPattern: reviewTerms.length
-      ? new RegExp(`(?<![a-z0-9])(?:${reviewTerms.map(termPattern).join('|')})(?![a-z0-9])`, 'g')
-      : null,
   }))
   return compiled
 }
@@ -95,7 +91,7 @@ export function evaluatePolicy(input: PolicyInput): PolicyResult {
   const body = normalizeForPolicy((input.body ?? []).join(' | '))
 
   const findings: PolicyFinding[] = []
-  for (const { category, severity, pattern, reviewPattern } of compiledCategories()) {
+  for (const { category, severity, pattern } of compiledCategories()) {
     let prominentHits = countHits(pattern, prominent)
     for (const host of hosts) {
       if (HOST_STEMS.some((entry) => entry.category === category && host.includes(entry.stem))) prominentHits++
@@ -106,13 +102,6 @@ export function evaluatePolicy(input: PolicyInput): PolicyResult {
       continue
     }
 
-    if (reviewPattern) {
-      const reviewProminentHits = countHits(reviewPattern, prominent)
-      const reviewBodyHits = countHits(reviewPattern, body)
-      if (reviewProminentHits >= 1 || reviewBodyHits >= BODY_THRESHOLD.restricted) {
-        findings.push({ category, severity: 'restricted', prominentHits: reviewProminentHits, bodyHits: reviewBodyHits })
-      }
-    }
   }
 
   const blocked = findings.filter((f) => f.severity === 'blocked').map((f) => f.category)

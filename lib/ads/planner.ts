@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { fold, wordIncludes } from '@/lib/visual-subjects'
-import type { PolicyCategory } from '@/lib/ads/policy'
+import { evaluateSnapshotPolicy, type PolicyCategory } from '@/lib/ads/policy'
 import { POLICY_CATEGORIES } from '@/lib/ads/policy-terms'
 import type { SiteSnapshot } from '@/lib/ads/scan/scan-site'
 import { COMPETITIVENESS_LEVELS, type Competitiveness } from '@/lib/ads/budget'
@@ -58,9 +58,9 @@ export type AdsPlan = {
   negativeKeywords: string[]
   country: (typeof PLAN_COUNTRIES)[number]
   cities: string[]
-  /** Set only when the model saw a restricted-or-blocked category the keyword policy missed. */
+  /** Model-selected category; actionable only when its evidence passes policy validation. */
   modelPolicyCategory: PolicyCategory | null
-  /** Explicit only when the quoted evidence is present and contains a hard term for the category. */
+  /** Explicit only for a verified direct signal that also meets restricted-category context thresholds. */
   modelPolicyEvidence: ModelPolicyEvidence
 }
 
@@ -111,9 +111,7 @@ function normalizeEvidenceText(value: string): string {
 }
 
 function quoteContainsHardPolicyTerm(category: PolicyCategory, quote: string): boolean {
-  const definition = POLICY_CATEGORIES.find((entry) => entry.category === category)
-  const excludedTerms = new Set(definition?.modelEvidenceExclusions ?? [])
-  const terms = (definition?.terms ?? []).filter((term) => !excludedTerms.has(term))
+  const terms = POLICY_CATEGORIES.find((entry) => entry.category === category)?.terms ?? []
   const normalizedQuote = normalizeEvidenceText(quote)
   return terms.some((term) => {
     const prefix = term.endsWith('*')
@@ -147,8 +145,19 @@ export function validatePlan(raw: PlannerOutput, snapshot: SiteSnapshot): AdsPla
   const modelPolicyCategory = raw.policyCategory === 'none' ? null : raw.policyCategory
   const evidenceQuote = normalizeEvidenceText(raw.policyEvidenceQuote)
   const evidenceIsPresent = evidenceQuote.length > 0 && normalizeEvidenceText(text).includes(evidenceQuote)
+  const categoryDefinition = modelPolicyCategory
+    ? POLICY_CATEGORIES.find((entry) => entry.category === modelPolicyCategory)
+    : undefined
+  const snapshotPolicy = modelPolicyCategory ? evaluateSnapshotPolicy(snapshot) : null
+  const restrictedCategoryHasContext =
+    modelPolicyCategory !== null &&
+    (categoryDefinition?.severity !== 'restricted' ||
+      snapshotPolicy?.restricted.includes(modelPolicyCategory) === true)
   const evidenceIsExplicit =
-    modelPolicyCategory !== null && evidenceIsPresent && quoteContainsHardPolicyTerm(modelPolicyCategory, evidenceQuote)
+    modelPolicyCategory !== null &&
+    evidenceIsPresent &&
+    quoteContainsHardPolicyTerm(modelPolicyCategory, evidenceQuote) &&
+    restrictedCategoryHasContext
   const modelPolicyEvidence: ModelPolicyEvidence = !modelPolicyCategory
     ? 'none'
     : raw.policyEvidence === 'explicit' && evidenceIsExplicit
@@ -189,8 +198,10 @@ export const PLANNER_SYSTEM = [
   'Rules: answer only with the requested JSON fields. Keywords describe what the business really offers, as people would search for it, in the site language. No brand-impersonation, no competitor names, no URLs, no phone numbers.',
   'Hard-block guide: adult means pornography, explicit sexual content, or sexual services; weapons means weapon sales; counterfeit means fake identity documents or counterfeit goods; drugs and prescription_drugs mean illegal drugs or unauthorized prescription medicine; gambling means betting or casino services; spyware_hacking means spyware or hacking services; dishonest_practices means fake engagement or reviews; tobacco means tobacco or vape sales.',
   'These categories are restricted-only and must never hard-block from the model: alcohol, financial, health, cannabis_cbd, and dating.',
-  'Adult exclusions: lingerie, underwear, swimwear or bikinis, ordinary apparel or fashion, cosmetics, and jewelry are not adult by themselves. A standalone "sex shop" or "seks shop" SEO label without corroborating explicit sexual content or services is ambiguous.',
-  'Set policyEvidence to "explicit" only when a short exact site quote contains a direct hard-policy signal for the selected category; policyEvidenceQuote is verified against the scanned snapshot and hard terms in code. A standalone review signal such as "sex shop" cannot be explicit. For weak, indirect, or conflicting evidence, set policyEvidence to "ambiguous" and policyEvidenceQuote to an empty string; this can add only a restricted warning. When no category applies, use policyCategory "none", policyEvidence "none", and an empty quote.',
+  'Ambiguous business vocabulary is not policy evidence: standalone "kredi" (including app credits), "ilan", "rehber", "ödeme", "sağlık", "SEO", software, and SaaS do not indicate a restricted category. Credit restrictions require contextual phrases such as "kredi başvurusu", "kredi kartı", "kredi faiz", or "hızlı kredi"; body-only findings require multiple contextual hits.',
+  'General health services, pharmacies, medicine, and supplement mentions are not restricted by themselves. A health restriction requires a direct medical-product claim such as "mucize tedavi" or "kesin tedavi".',
+  'Adult exclusions: lingerie, underwear, swimwear or bikinis, ordinary apparel or fashion, cosmetics, and jewelry are not adult by themselves. A standalone "sex shop" or "seks shop" SEO label without corroborating explicit sexual content or services is not enough for a warning.',
+  'Set policyEvidence to "explicit" only when a short exact site quote contains a direct hard-policy signal for the selected category; policyEvidenceQuote is verified against the scanned snapshot and hard terms in code. Restricted categories must also meet their snapshot context threshold. For weak, indirect, or conflicting evidence, use policyCategory "none", policyEvidence "none", and an empty quote. Ambiguous model evidence never creates a warning. When no category applies, use policyCategory "none", policyEvidence "none", and an empty quote.',
   'Set language to "tr" or "en" when the site is in that language, otherwise "other".',
   'Set competitiveness (low, medium, high) from how crowded paid search is for this kind of business. Do not give budget numbers.',
   'Only list cities that appear in the data.',

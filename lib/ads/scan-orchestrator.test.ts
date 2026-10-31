@@ -188,7 +188,7 @@ describe('runScan: refunds on failure', () => {
     })
   })
 
-  it('blocks the Lilashop sex-shop snapshot before the model without consuming scan rights', async () => {
+  it('ignores a standalone sex-shop SEO label without explicit adult content', async () => {
     const snapshot = {
       ...SNAPSHOT,
       host: 'lilashop.com.tr',
@@ -200,22 +200,12 @@ describe('runScan: refunds on failure', () => {
     const { deps, calls } = makeDeps({ scanSite: async () => ({ ok: true, snapshot }) })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
 
-    expect(outcome).toEqual({
-      ok: false,
-      error: {
-        code: 'policy_blocked',
-        consumed: false,
-        messageKey: 'errPolicyBlockedAdultNotConsumed',
-      },
-    })
-    expect(calls.generate).toHaveLength(0)
-    expect(calls.reservePolicy).toBe(0)
+    expect(outcome.ok).toBe(true)
+    expect(outcome.ok && outcome.result.restricted).toEqual([])
+    expect(calls.generate).toHaveLength(2)
+    expect(calls.reservePolicy).toBe(1)
     expect(calls.charge).toBe(0)
-    expect(calls.release).toBe(1)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
-      free_quota_used: false,
-      error_code: 'policy_blocked:adult',
-    })
+    expect(calls.release).toBe(0)
   })
 
   it('keeps only the policy-abuse slot for a verified hard block', async () => {
@@ -300,14 +290,17 @@ describe('runScan: refunds on failure', () => {
     })
   })
 
-  it('treats an ambiguous model-only adult signal as restricted instead of blocking', async () => {
+  it('does not warn on directory vocabulary or an ambiguous model-only category', async () => {
     const snapshot = {
       ...SNAPSHOT,
-      host: 'lilashop.com.tr',
-      finalHost: 'www.lilashop.com.tr',
-      title: 'Lila Shop',
-      description: 'Kadın iç giyim, mayo ve bikini',
-      text: 'Seks Shop',
+      host: '444rehber.com',
+      finalHost: '444rehber.com',
+      title: '444 Rehber',
+      description: 'Firma rehberi, işletme ilanları ve ödeme seçenekleri',
+      siteName: '444 Rehber',
+      headings: ['İşletme rehberi', 'İlan ver'],
+      navLabels: ['Firmalar', 'Rehber', 'Ödeme', 'SEO'],
+      text: 'Kredi bakiyesi, kredi kullanımı, sağlık ve firma rehberi.',
     }
     const { deps, calls } = makeDeps({
       scanSite: async () => ({ ok: true, snapshot }),
@@ -315,11 +308,11 @@ describe('runScan: refunds on failure', () => {
         ...PLANNER_OUTPUT,
         policyCategory: 'adult',
         policyEvidence: 'ambiguous',
-        policyEvidenceQuote: 'Seks Shop',
+        policyEvidenceQuote: '',
       }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
-    expect(outcome.ok && outcome.result.restricted).toContain('adult')
+    expect(outcome.ok && outcome.result.restricted).toEqual([])
     expect(calls.release).toBe(0)
     expect(calls.releasePolicy).toBe(1)
     expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
@@ -329,8 +322,10 @@ describe('runScan: refunds on failure', () => {
     })
   })
 
-  it('adds a restricted category the model found, never removes one', async () => {
+  it('retains a restricted category when its explicit signal is present', async () => {
+    const snapshot = { ...SNAPSHOT, title: 'Butik şarap' }
     const { deps } = makeDeps({
+      scanSite: async () => ({ ok: true, snapshot }),
       generate: plannerThen(COPY_OUTPUT, {
         ...PLANNER_OUTPUT,
         policyCategory: 'alcohol',

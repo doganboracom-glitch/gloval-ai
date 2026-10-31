@@ -36,12 +36,8 @@ export type PolicySeverity = 'blocked' | 'restricted'
 export type PolicyCategoryDefinition = {
   category: PolicyCategory
   severity: PolicySeverity
-  /** Direct signals that can reach the category's configured severity. */
+  /** Explicit, contextual signals that can reach the category's configured severity. */
   terms: string[]
-  /** Lower-confidence signals that only produce a restricted finding. */
-  reviewTerms?: string[]
-  /** Direct terms that snapshot checks may block, but a model quote cannot prove alone. */
-  modelEvidenceExclusions?: string[]
 }
 
 export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
@@ -49,7 +45,7 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
     category: 'adult',
     severity: 'blocked',
     terms: [
-      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx', 'sex shop', 'seks shop', 'sexshop*', 'seksshop*',
+      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx',
       'seks hatti', 'seks sohbet', 'sex chat', 'canli seks', 'escort', 'escorts', 'eskort*', 'erotik masaj', 'fuhus*',
       'genelev*', 'yetiskin icerik', 'adult content', 'adult entertainment', 'sexual content', 'sexually explicit',
       'webcam show', 'nude photos', 'ciplak fotograf*', 'adult product*', 'adult toy*', 'adult shop*', 'adult store*',
@@ -57,8 +53,6 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
       'cinsel icerik', 'cinsel oyuncak*', 'cinsel urun*', 'yetiskin urun*', 'yetiskin oyuncak*', 'vibrator*', 'dildo*',
       'masturbator*',
     ],
-    reviewTerms: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
-    modelEvidenceExclusions: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
   },
   {
     category: 'weapons',
@@ -144,29 +138,36 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
     category: 'financial',
     severity: 'restricted',
     terms: [
-      'kredi*', 'forex', 'kripto*', 'bitcoin', 'borsa', 'faiz*', 'yatirim danismanlig*', 'ikili opsiyon*',
-      'hisse senedi', 'hisse senetleri', 'loan', 'loans', 'crypto', 'cryptocurrency', 'binary option*',
-      'trading signals', 'mortgage', 'payday loan*',
+      'kredi basvuru*', 'kredi karti*', 'kredi faiz*', 'hizli kredi*', 'kredi hesaplama*', 'kredi kampanyasi*',
+      'kredi karsilastirma*', 'kredi teklifi*', 'forex', 'kripto para*', 'kripto yatirim*', 'bitcoin yatirim*',
+      'bitcoin trading*', 'borsa yatirim*', 'borsa hesab*', 'faiz oran*', 'yatirim danismanlig*', 'ikili opsiyon*',
+      'hisse senedi', 'hisse senetleri', 'loan application*', 'personal loan*', 'loan rate*', 'mortgage',
+      'payday loan*', 'crypto trading*', 'crypto exchange*', 'cryptocurrency trading*', 'binary option*',
+      'trading signals',
     ],
   },
   {
     category: 'health',
     severity: 'restricted',
     terms: [
-      'tedavi*', 'mucize', 'kesin cozum', 'kesin tedavi', 'zayiflama*', 'zayiflatici*', 'diyet hapi', 'takviye*',
-      'gida takviyesi', 'supplement*', 'eczane*', 'pharmacy', 'ilac*', 'weight loss', 'miracle cure', 'cure',
-      'kanser tedavisi',
+      'mucize tedavi*', 'kesin tedavi*', 'garantili tedavi*', 'kanser tedavisi*', 'diyabet tedavisi*',
+      'mucize zayiflama*', 'zayiflama hapi*', 'zayiflatici urun*', 'diyet hapi*', 'mucize ilac*',
+      'guaranteed cure*', 'miracle cure*', 'cure cancer', 'cures cancer', 'treat cancer', 'treats cancer',
+      'cure diabetes', 'treat diabetes', 'weight loss pill*', 'diet pill*',
     ],
   },
   {
     category: 'cannabis_cbd',
     severity: 'restricted',
-    terms: ['cbd', 'kenevir*', 'cannabis', 'hemp', 'marijuana', 'marihuana'],
+    terms: ['cbd', 'cbd yagi*', 'cbd urun*', 'kenevir yagi*', 'cannabis', 'marijuana', 'marihuana'],
   },
   {
     category: 'dating',
     severity: 'restricted',
-    terms: ['arkadaslik sitesi*', 'flort', 'dating', 'dating site*', 'singles', 'matchmaking'],
+    terms: [
+      'arkadaslik sitesi*', 'flort sitesi*', 'flort uygulama*', 'dating site*', 'dating app*', 'singles dating*',
+      'matchmaking service*',
+    ],
   },
 ]
 
