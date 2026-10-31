@@ -53,8 +53,12 @@ describe('blocked categories', () => {
 describe('restricted categories', () => {
   it.each([
     ['alcohol', 'Butik şarap ve rakı koleksiyonu'],
+    ['alcohol', 'Alkol satışı ve şarap siparişi'],
+    ['financial', 'Kredi başvurusu için seçenekler'],
     ['financial', 'Hızlı kredi ve forex eğitimi'],
+    ['financial', 'Forex yatırım danışmanlığı'],
     ['health', 'Mucize zayıflama kürü ve takviyeler'],
+    ['health', 'Mucize tedavi ürünü'],
     ['cannabis_cbd', 'CBD yağı ve kenevir ürünleri'],
     ['dating', 'Arkadaşlık sitesi ve dating'],
   ])('flags %s in %j without blocking', (category, text) => {
@@ -62,6 +66,59 @@ describe('restricted categories', () => {
     expect(result.verdict).toBe('restricted')
     expect(result.restricted).toContain(category)
     expect(result.blocked).toEqual([])
+  })
+
+  it('does not flag standalone generic business, payment, or health vocabulary', () => {
+    const result = evaluatePolicy({
+      prominent: ['Kredi', 'İlan', 'Sağlık', 'Rehber', 'Ödeme', 'SEO', 'SaaS'],
+      body: ['Kredi bakiyesi ve krediler. Firma ilanları, sağlık rehberi ve ödeme seçenekleri.'],
+    })
+    expect(result).toMatchObject({ verdict: 'allowed', blocked: [], restricted: [], findings: [] })
+  })
+
+  it('does not treat a standalone sex-shop SEO label as explicit adult content', () => {
+    const result = evaluateSnapshotPolicy(
+      snapshot({ title: 'Seks Shop SEO etiketi', text: 'Seks shop katalog etiketi.' }),
+    )
+    expect(result).toMatchObject({ verdict: 'allowed', blocked: [], restricted: [], findings: [] })
+  })
+
+  it('allows website-builder, business-directory, and software/SaaS snapshots', () => {
+    const sites = [
+      snapshot({
+        host: 'gloval.ai',
+        finalHost: 'gloval.ai',
+        title: 'GLOVAL AI website builder',
+        description: 'AI website creation tools',
+        siteName: 'GLOVAL AI',
+        headings: ['AI kredileri and account plans'],
+        navLabels: ['SEO tools', 'Plans', 'Payments'],
+        text: 'AI kullanım kredisi ve kullanılabilir krediler. Website tools, subscriptions, and account settings.',
+      }),
+      snapshot({
+        host: '444rehber.com',
+        finalHost: '444rehber.com',
+        title: '444 Rehber',
+        description: 'Firma rehberi, işletme ilanları ve ödeme seçenekleri',
+        siteName: '444 Rehber',
+        headings: ['İşletme rehberi', 'İlan ver'],
+        navLabels: ['Firmalar', 'Ödeme', 'SEO'],
+        text: 'Kredi bakiyesi ve kredi kullanımı; sağlık, rehber, ilan ve ödeme bilgileri.',
+      }),
+      snapshot({
+        host: 'software.example',
+        finalHost: 'software.example',
+        title: 'Software and SaaS',
+        description: 'Subscription platform for websites and digital services',
+        headings: ['Billing and payments', 'AI credits'],
+        navLabels: ['Products', 'Plans'],
+        text: 'Manage subscriptions, payments, account credits, software services, and health directories.',
+      }),
+    ]
+
+    for (const site of sites) {
+      expect(evaluateSnapshotPolicy(site)).toMatchObject({ verdict: 'allowed', blocked: [], restricted: [], findings: [] })
+    }
   })
 
   it('does not block ordinary lingerie, swimwear, fashion, cosmetics, or jewelry', () => {
@@ -147,9 +204,11 @@ describe('thresholds', () => {
     expect(evaluatePolicy({ body: ['uyuşturucu satışı. uyuşturucu satışı. uyuşturucu satışı.'] }).verdict).toBe('blocked')
   })
 
-  it('restricted body text needs two hits', () => {
+  it('restricted body text needs multiple contextual hits', () => {
     expect(evaluatePolicy({ body: ['Bir kredi seçeneği'] }).verdict).toBe('allowed')
+    expect(evaluatePolicy({ body: ['Kredi başvurusu'] }).verdict).toBe('allowed')
     expect(evaluatePolicy({ body: ['kredi hesaplama ve kredi başvurusu'] }).verdict).toBe('restricted')
+    expect(evaluatePolicy({ prominent: ['Kredi başvurusu'] }).restricted).toContain('financial')
   })
 })
 

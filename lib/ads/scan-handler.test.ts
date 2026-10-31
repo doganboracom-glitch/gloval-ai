@@ -55,7 +55,7 @@ describe('POST /api/ads/scan handler', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('returns the adult-beta notice for the Lilashop fixture without calling AI or exposing evidence', async () => {
+  it('does not show the adult notice for a standalone sex-shop SEO label', async () => {
     const issued = issueAnonCookie({ ADS_ANON_HASH_SECRET: SECRET })!
     const { env, calls } = setup({}, issued.value)
     const snapshot = {
@@ -68,22 +68,13 @@ describe('POST /api/ads/scan handler', () => {
     }
     env.deps.scanSite = async () => ({ ok: true, snapshot })
     const response = await handleScanRequest(post(VALID), env)
-    expect(response.status).toBe(422)
-    expect(await response.json()).toEqual({
-      error: {
-        code: 'policy_blocked',
-        consumed: false,
-        messageKey: 'errPolicyBlockedAdultNotConsumed',
-      },
-    })
-    expect(calls.generate).toHaveLength(0)
-    expect(calls.reservePolicy).toBe(0)
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    expect(json.result.restricted).toEqual([])
+    expect(calls.generate).toHaveLength(2)
+    expect(calls.reservePolicy).toBe(1)
     expect(calls.charge).toBe(0)
-    expect(calls.release).toBe(1)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
-      free_quota_used: false,
-      error_code: 'policy_blocked:adult',
-    })
+    expect(calls.release).toBe(0)
   })
 
   it('accepts a signed-in user without a cookie and passes the normalized IP to policy limits', async () => {

@@ -352,9 +352,9 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
       return fail({ code: 'generation_failed' })
     }
 
-    // A model may only add a hard block when its explicit quote is verified in the snapshot.
-    if (plan.modelPolicyCategory) {
-      if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked' && plan.modelPolicyEvidence === 'explicit') {
+    // Model classifications only affect policy when their exact quote is verified as explicit.
+    if (plan.modelPolicyCategory && plan.modelPolicyEvidence === 'explicit') {
+      if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked') {
         keepPolicyAttempt = true
         finalCode = policyErrorCode([plan.modelPolicyCategory])
         const messageKey = policyBlockedMessageKey([plan.modelPolicyCategory], true)

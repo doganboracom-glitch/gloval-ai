@@ -70,13 +70,39 @@ describe('validatePlan', () => {
       validatePlan({ ...raw, policyEvidence: 'ambiguous' }, { ...SNAPSHOT, text: 'We publish adult entertainment.' }),
     ).toMatchObject({ modelPolicyEvidence: 'ambiguous' })
   })
+
+  it('requires repeated contextual hits for restricted model evidence', () => {
+    const financial = {
+      ...PLANNER_OUTPUT,
+      policyCategory: 'financial' as const,
+      policyEvidence: 'explicit' as const,
+      policyEvidenceQuote: 'Kredi başvurusu',
+    }
+
+    expect(validatePlan(financial, { ...SNAPSHOT, text: 'Kredi başvurusu' })).toMatchObject({
+      modelPolicyCategory: 'financial',
+      modelPolicyEvidence: 'ambiguous',
+    })
+    expect(validatePlan(financial, { ...SNAPSHOT, text: 'Kredi başvurusu. Hızlı kredi seçenekleri.' })).toMatchObject({
+      modelPolicyCategory: 'financial',
+      modelPolicyEvidence: 'explicit',
+    })
+    expect(
+      validatePlan(
+        { ...financial, policyEvidenceQuote: 'Kredi' },
+        { ...SNAPSHOT, text: 'Kredi, ilan, rehber, ödeme, sağlık.' },
+      ),
+    ).toMatchObject({ modelPolicyEvidence: 'ambiguous' })
+  })
 })
 
 describe('planner prompt', () => {
-  it('defines hard versus restricted policy categories and excludes ordinary fashion from adult', () => {
+  it('defines hard versus restricted policy categories and excludes ambiguous business vocabulary', () => {
     expect(PLANNER_SYSTEM).toContain('lingerie')
     expect(PLANNER_SYSTEM).toContain('restricted-only')
     expect(PLANNER_SYSTEM).toContain('policyEvidenceQuote')
+    expect(PLANNER_SYSTEM).toContain('standalone "kredi"')
+    expect(PLANNER_SYSTEM).toContain('body-only findings require multiple contextual hits')
   })
 
   it('wraps the page data in a random boundary and defangs the token', () => {
