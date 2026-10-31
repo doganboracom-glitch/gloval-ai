@@ -1439,6 +1439,13 @@ const pl: DeepPartial<Dict> = {
     noticeBody: 'Dane właściciela domeny muszą być prawdziwe i aktualne; błędne dane mogą skutkować zawieszeniem rejestracji.',
     noticeTerms: 'Warunki anulowania i zwrotu znajdziesz tutaj:',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Osiągnięto dzienny limit prób dla nieobsługiwanych kategorii. Spróbuj ponownie jutro.',
+    errPolicyBlockedAdultConsumed:
+      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta zablokowana próba wlicza się do dziennego limitu nieobsługiwanych kategorii; zwróciliśmy limit skanowania lub kredyty.',
+    errPolicyBlockedAdultNotConsumed:
+      'Ta kategoria (produkty dla dorosłych) nie jest jeszcze obsługiwana w wersji beta GLOVAL Ads. Ta próba nie wlicza się do dziennego limitu zablokowanych prób i nie wykorzystano limitu skanowania ani kredytów.',
+  },
 }
 
 export default pl

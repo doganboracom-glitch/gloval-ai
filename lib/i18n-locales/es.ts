@@ -1439,6 +1439,13 @@ const es: DeepPartial<Dict> = {
     noticeBody: 'Los datos del titular deben ser correctos y estar actualizados; datos incorrectos pueden provocar la suspensión del registro.',
     noticeTerms: 'Para las condiciones de cancelación y reembolso, consulta:',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Has alcanzado el límite de hoy para intentos con categorías no admitidas. Inténtalo de nuevo mañana.',
+    errPolicyBlockedAdultConsumed:
+      'Esta categoría (productos para adultos) aún no está disponible en la beta de GLOVAL Ads. Este intento bloqueado cuenta para el límite diario de categorías no admitidas; se ha devuelto tu uso de escaneo o los créditos.',
+    errPolicyBlockedAdultNotConsumed:
+      'Esta categoría (productos para adultos) aún no está disponible en la beta de GLOVAL Ads. Este intento no contó para el límite diario de intentos bloqueados y no se consumió ningún uso de escaneo ni crédito.',
+  },
 }
 
 export default es

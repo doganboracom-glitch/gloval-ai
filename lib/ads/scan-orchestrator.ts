@@ -3,6 +3,7 @@ import type { AiModelSelection } from '@/lib/ai-models'
 import { ADS_CREDIT_COSTS, assertAdsRequestId } from '@/lib/ads/credit-costs'
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { evaluateSnapshotPolicy, type PolicyCategory } from '@/lib/ads/policy'
+import { policyBlockedMessageKey } from '@/lib/ads/policy-message'
 import { POLICY_CATEGORIES } from '@/lib/ads/policy-terms'
 import { suggestBudget, type BudgetSuggestion } from '@/lib/ads/budget'
 import { estimateCostMicroUsd } from '@/lib/ads/model-pricing'
@@ -287,7 +288,8 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     const pre = evaluateSnapshotPolicy(snapshot)
     if (pre.verdict === 'blocked') {
       finalCode = policyErrorCode(pre.blocked)
-      return fail({ code: 'policy_blocked', consumed: false })
+      const messageKey = policyBlockedMessageKey(pre.blocked, false)
+      return fail({ code: 'policy_blocked', consumed: false, ...(messageKey ? { messageKey } : {}) })
     }
     const restricted = new Set<PolicyCategory>(pre.restricted)
 
@@ -355,7 +357,8 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
       if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked' && plan.modelPolicyEvidence === 'explicit') {
         keepPolicyAttempt = true
         finalCode = policyErrorCode([plan.modelPolicyCategory])
-        return fail({ code: 'policy_blocked', consumed: false })
+        const messageKey = policyBlockedMessageKey([plan.modelPolicyCategory], true)
+        return fail({ code: 'policy_blocked', consumed: false, ...(messageKey ? { messageKey } : {}) })
       }
       restricted.add(plan.modelPolicyCategory)
     }

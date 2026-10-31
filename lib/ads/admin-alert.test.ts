@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const { rpc, sendTransactionalEmail } = vi.hoisted(() => ({ rpc: vi.fn(), sendTransactionalEmail: vi.fn() }))
+
 vi.mock('server-only', () => ({}))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ rpc }) }))
+vi.mock('@/lib/notify', () => ({ sendTransactionalEmail }))
 
 import { notifyPolicyBlockCap, POLICY_BLOCK_CAP_ALERT_KIND } from '@/lib/ads/admin-alert'
 import type { AdsAlertDeps } from '@/lib/ads/admin-alert'
@@ -26,6 +30,19 @@ describe('notifyPolicyBlockCap', () => {
         idempotencyKey: expect.stringMatching(/^policy_block_global_cap-/),
       }),
     )
+  })
+
+  it('uses ads_record_alert_once before sending through the default server wiring', async () => {
+    rpc.mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: true, error: null }) })
+    sendTransactionalEmail.mockResolvedValue(undefined)
+
+    await notifyPolicyBlockCap(60, 60)
+
+    expect(rpc).toHaveBeenCalledWith('ads_record_alert_once', {
+      p_kind: 'policy_block_global_cap',
+      p_detail: { cap: 60, used: 60 },
+    })
+    expect(sendTransactionalEmail).toHaveBeenCalledOnce()
   })
 
   it('does not resend an alert already recorded for the day', async () => {

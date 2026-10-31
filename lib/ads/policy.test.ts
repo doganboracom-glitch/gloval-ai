@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateCopyPolicy, evaluatePolicy, evaluateSnapshotPolicy } from './policy'
+import { policyBlockedMessageKey } from './policy-message'
 import { POLICY_CATEGORIES } from './policy-terms'
 import type { SiteSnapshot } from './scan/scan-site'
 
@@ -22,6 +23,9 @@ describe('blocked categories', () => {
   it.each([
     ['adult', 'Ücretsiz porno izle'],
     ['adult', 'Elite escort services in Istanbul'],
+    ['adult', 'Erotik ürünler ve yetişkin oyuncakları'],
+    ['adult', 'Sex toys, vibrators and dildos'],
+    ['adult', 'Cinsel içerik ve cinsel ürünler'],
     ['weapons', 'Ruhsatsız silah satışı yapılır'],
     ['weapons', 'Buy a gun online, ammunition in stock'],
     ['counterfeit', 'Sahte diploma ve sahte kimlik hazırlanır'],
@@ -72,20 +76,23 @@ describe('restricted categories', () => {
     expect(result.blocked).toEqual([])
   })
 
-  it('downgrades a standalone sex-shop SEO label to restricted review', () => {
+  it('blocks the Lilashop sex-shop fixture and chooses the adult beta message variants', () => {
     const result = evaluateSnapshotPolicy(
       snapshot({
         host: 'lilashop.com.tr',
         finalHost: 'www.lilashop.com.tr',
-        title: 'Lila Shop - Seks Shop',
-        description: 'Seks Shop and lingerie collection',
-        navLabels: ['İç giyim', 'Mayo', 'Bikini'],
+        title: 'LiLa Shop İstanbul Seks Shop Yetişkin Oyuncak Hizmetleri',
+        description: 'Vibratör, dildo ve yetişkin ürünleri.',
+        siteName: 'LiLa Shop',
+        headings: ['FANTEZİ GİYİM', 'PARFÜMLER'],
+        text: 'Titreşimli vibratörler, gerçekçi dildo ürünleri, yetişkin oyuncakları ve fantezi giyim.',
       }),
     )
-    expect(result.verdict).toBe('restricted')
-    expect(result.blocked).toEqual([])
-    expect(result.restricted).toContain('adult')
-    expect(result.findings).toContainEqual({ category: 'adult', severity: 'restricted', prominentHits: 2, bodyHits: 0 })
+    expect(result.verdict).toBe('blocked')
+    expect(result.blocked).toContain('adult')
+    expect(result.restricted).toEqual([])
+    expect(policyBlockedMessageKey(result.blocked, true)).toBe('errPolicyBlockedAdultConsumed')
+    expect(policyBlockedMessageKey(result.blocked, false)).toBe('errPolicyBlockedAdultNotConsumed')
   })
 
   it('blocked wins over restricted', () => {

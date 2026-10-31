@@ -188,6 +188,36 @@ describe('runScan: refunds on failure', () => {
     })
   })
 
+  it('blocks the Lilashop sex-shop snapshot before the model without consuming scan rights', async () => {
+    const snapshot = {
+      ...SNAPSHOT,
+      host: 'lilashop.com.tr',
+      finalHost: 'www.lilashop.com.tr',
+      title: 'Lila Shop - Seks Shop',
+      description: 'Seks Shop and lingerie collection',
+      navLabels: ['İç giyim', 'Mayo', 'Bikini'],
+    }
+    const { deps, calls } = makeDeps({ scanSite: async () => ({ ok: true, snapshot }) })
+    const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
+
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultNotConsumed',
+      },
+    })
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.reservePolicy).toBe(0)
+    expect(calls.charge).toBe(0)
+    expect(calls.release).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: false,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
   it('keeps only the policy-abuse slot for a verified hard block', async () => {
     const snapshot = { ...SNAPSHOT, text: 'We publish adult entertainment.' }
     const { deps, calls } = makeDeps({
@@ -200,8 +230,16 @@ describe('runScan: refunds on failure', () => {
       }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
-    expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: false } })
-    expect(JSON.stringify(outcome)).not.toContain('adult')
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultConsumed',
+      },
+    })
+    expect(outcome.ok ? null : outcome.error).not.toHaveProperty('blockedCategories')
+    expect(outcome.ok ? null : outcome.error).not.toHaveProperty('policyEvidenceQuote')
     expect(calls.release).toBe(1)
     expect(calls.releasePolicy).toBe(0)
     expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
@@ -242,7 +280,14 @@ describe('runScan: refunds on failure', () => {
       }),
     })
     const outcome = await runScan({ ...REQUEST, actor: USER_ACTOR }, deps)
-    expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: false } })
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultConsumed',
+      },
+    })
     expect(calls.charge).toBe(1)
     expect(calls.refund).toBe(1)
     expect(calls.release).toBe(0)
@@ -260,8 +305,9 @@ describe('runScan: refunds on failure', () => {
       ...SNAPSHOT,
       host: 'lilashop.com.tr',
       finalHost: 'www.lilashop.com.tr',
-      title: 'Lila Shop - Seks Shop',
+      title: 'Lila Shop',
       description: 'Kadın iç giyim, mayo ve bikini',
+      text: 'Seks Shop',
     }
     const { deps, calls } = makeDeps({
       scanSite: async () => ({ ok: true, snapshot }),

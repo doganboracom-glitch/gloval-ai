@@ -1438,6 +1438,13 @@ const it: DeepPartial<Dict> = {
     noticeBody: 'I dati del titolare devono essere corretti e aggiornati; dati errati possono portare alla sospensione della registrazione.',
     noticeTerms: 'Per le condizioni di annullamento e rimborso consulta:',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Hai raggiunto il limite giornaliero di tentativi per le categorie non supportate. Riprova domani.',
+    errPolicyBlockedAdultConsumed:
+      'Questa categoria (prodotti per adulti) non è ancora supportata nella versione beta di GLOVAL Ads. Questo tentativo bloccato conta per il limite giornaliero delle categorie non supportate; la tua quota di scansione o i crediti sono stati restituiti.',
+    errPolicyBlockedAdultNotConsumed:
+      'Questa categoria (prodotti per adulti) non è ancora supportata nella versione beta di GLOVAL Ads. Questo tentativo non è stato conteggiato nel limite giornaliero dei tentativi bloccati e non è stata utilizzata alcuna quota di scansione né credito.',
+  },
 }
 
 export default it

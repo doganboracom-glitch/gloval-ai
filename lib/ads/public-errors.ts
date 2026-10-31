@@ -5,6 +5,8 @@
  * response cannot be used to map a private network.
  */
 
+import type { PolicyBlockedMessageKey } from '@/lib/ads/policy-message'
+
 export const ADS_SCAN_ERROR_STATUS = {
   invalid_request: 400,
   session_required: 428,
@@ -28,8 +30,10 @@ export type AdsScanError = {
   code: AdsScanErrorCode
   /** `credits_required`: current balance. */
   balance?: number
-  /** Kept for older clients; current policy blocks always refund free actions and credits. */
+  /** Kept for older clients; current policy blocks always return scan rights and credits. */
   consumed?: boolean
+  /** Safe UI variant; raw policy categories and evidence are never sent to clients. */
+  messageKey?: PolicyBlockedMessageKey
   /** `rate_limited`: seconds until a retry makes sense. */
   retryAfterSeconds?: number
 }
@@ -38,6 +42,7 @@ export function adsScanErrorBody(error: AdsScanError): { error: AdsScanError } {
   const body: AdsScanError = { code: error.code }
   if (error.balance !== undefined) body.balance = error.balance
   if (error.consumed !== undefined) body.consumed = error.consumed
+  if (error.messageKey !== undefined) body.messageKey = error.messageKey
   if (error.retryAfterSeconds !== undefined) body.retryAfterSeconds = error.retryAfterSeconds
   return { error: body }
 }

@@ -54,6 +54,12 @@ async function parse(response: Response): Promise<ClientScanOutcome> {
   const error: AdsScanError = { code: code as AdsScanErrorCode }
   if (typeof body.error?.balance === 'number') error.balance = body.error.balance
   if (typeof body.error?.consumed === 'boolean') error.consumed = body.error.consumed
+  if (
+    body.error?.messageKey === 'errPolicyBlockedAdultConsumed' ||
+    body.error?.messageKey === 'errPolicyBlockedAdultNotConsumed'
+  ) {
+    error.messageKey = body.error.messageKey
+  }
   if (typeof body.error?.retryAfterSeconds === 'number') error.retryAfterSeconds = body.error.retryAfterSeconds
   return { ok: false, error }
 }

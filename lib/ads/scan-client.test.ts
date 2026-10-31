@@ -29,6 +29,32 @@ describe('requestScan', () => {
     expect(outcome).toEqual({ ok: false, error: { code: 'credits_required', balance: 1 } })
   })
 
+  it('preserves the safe adult message variant and drops raw policy evidence', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 'policy_blocked',
+            consumed: false,
+            messageKey: 'errPolicyBlockedAdultNotConsumed',
+            blockedCategories: ['adult'],
+            evidenceQuote: 'Seks Shop',
+          },
+        },
+        422,
+      ),
+    )
+    const outcome = await requestScan(input, { fetchImpl, sleep: noSleep })
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultNotConsumed',
+      },
+    })
+  })
+
   it('maps an unknown code or a non-JSON body to service_unavailable', async () => {
     const unknown = vi.fn(async () => jsonResponse({ error: { code: 'weird' } }, 500))
     expect(await requestScan(input, { fetchImpl: unknown, sleep: noSleep })).toEqual({
