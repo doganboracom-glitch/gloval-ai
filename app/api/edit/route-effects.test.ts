@@ -39,11 +39,14 @@ function retitled(base: WebsiteSchema, effects?: WebsiteSchema['effects']): Webs
   return { ...base, sections, ...(effects ? { effects } : { effects: undefined }) }
 }
 
-async function edit(schema: WebsiteSchema) {
+async function edit(
+  schema: WebsiteSchema,
+  instruction = "Hero başlığını 'Yeni başlık' yap",
+) {
   const response = await POST(
     new Request('http://localhost/api/edit', {
       method: 'POST',
-      body: JSON.stringify({ schema, instruction: "Hero başlığını 'Yeni başlık' yap", lang: 'tr' }),
+      body: JSON.stringify({ schema, instruction, lang: 'tr' }),
     }),
   )
   return (await response.json()) as { schema: WebsiteSchema; source: string }
@@ -77,5 +80,31 @@ describe('/api/edit and effects', () => {
     const body = await edit(original)
     expect(body.source).toBe('ai')
     expect(body.schema.effects).toEqual({ cursorAura: STORED })
+  })
+
+  it('preserves the saved SEO description during unrelated AI edits', async () => {
+    const original = site()
+    original.meta.description = 'Owner-written SEO description'
+    const output = retitled(original)
+    output.meta.description = 'Unrequested model rewrite'
+    state.aiResult = output
+
+    const body = await edit(original)
+
+    expect(body.schema.meta.description).toBe('Owner-written SEO description')
+  })
+
+  it('lets the owner change the SEO description through AI and sanitizes it', async () => {
+    const original = site()
+    original.meta.description = 'Previous description'
+    const output = retitled(original)
+    output.meta.description = `<p>${'SEO metin '.repeat(30)}</p>`
+    state.aiResult = output
+
+    const body = await edit(original, 'SEO açıklamasını güncelle')
+
+    expect(body.schema.meta.description).toMatch(/^SEO metin SEO metin/)
+    expect(body.schema.meta.description).not.toMatch(/[<>]/)
+    expect(Array.from(body.schema.meta.description)).toHaveLength(160)
   })
 })

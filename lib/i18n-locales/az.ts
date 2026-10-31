@@ -149,6 +149,8 @@ const az: DeepPartial<Dict> = {
       groupSections: 'Bölmələr',
       siteName: 'Sayt adı',
       seoTitle: 'SEO başlığı',
+      seoDescription: 'SEO təsviri',
+      seoDescriptionHelp: 'Google nəticələrində başlığın altında görünür. Boş saxlasanız, hero və ya Haqqımızda məzmunundan yaradılır.',
       seoTitleHelp:
         'Google axtarış nəticələrində və brauzer tabında görünən başlıq. Sahənizə uyğun avtomatik yaradılır, sərbəst dəyişdirilə bilər.',
       tagline: 'Şüar',

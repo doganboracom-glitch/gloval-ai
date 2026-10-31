@@ -40,6 +40,10 @@ import { enforceSocialPlan } from '@/lib/social-links'
 import { enforceTrackingPlan } from '@/lib/site-tracking'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { sanitizeGeneratedProofContent } from '@/lib/proof-content'
+import {
+  sanitizeSeoDescription,
+  shouldAllowAiSeoDescriptionEdit,
+} from '@/lib/seo/seo-description'
 
 /**
  * Deterministic fallback: try to satisfy the instruction with the offline
@@ -290,9 +294,15 @@ export async function POST(req: Request) {
           sections: original.sections.map((s, i) => (i === sectionIndex ? aiSection! : s)),
         }
       : aiSite!
-    const restoredBase: WebsiteSchema = {
-      ...nextSite,
-      meta: { ...nextSite.meta, seoTitle: original.meta.seoTitle },
+  const restoredBase: WebsiteSchema = {
+    ...nextSite,
+    meta: {
+      ...nextSite.meta,
+      seoTitle: original.meta.seoTitle,
+      description: shouldAllowAiSeoDescriptionEdit(instruction)
+        ? sanitizeSeoDescription(nextSite.meta.description)
+        : original.meta.description,
+    },
       // The brand mark is owner-managed (generated locally or uploaded), so it
       // is carried through untouched by any AI edit.
       navigation: { ...nextSite.navigation, logo: original.navigation.logo },

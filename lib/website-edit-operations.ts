@@ -45,6 +45,7 @@ import { canHideLegalDoc, isSiteLegalSlug, legalSlugKeys } from '@/lib/site-lega
 import { uniquePageSlug } from '@/lib/page-slugs'
 import { sectionsOfKind, type CanonicalKind } from '@/lib/canonical-pages'
 import { addMissingToMenu } from '@/lib/site-menu'
+import { sanitizeSeoDescription } from '@/lib/seo/seo-description'
 
 type HeroSection = Extract<Section, { type: 'hero' }>
 
@@ -179,7 +180,7 @@ import { resolveShowcaseCollection, type ShowcaseLimit, type ShowcaseSource } fr
  * hero title only touches the hero section, never the whole site.
  */
 export type EditOperation =
-  | { op: 'updateMeta'; name?: string; tagline?: string; seoTitle?: string }
+  | { op: 'updateMeta'; name?: string; tagline?: string; seoTitle?: string; description?: string }
   /** One of the owner-supplied third-party code slots. */
   | { op: 'updateTracking'; field: 'head' | 'bodyStart' | 'bodyEnd'; value: string }
   /**
@@ -691,6 +692,9 @@ export function applyOperation(
         }
       }
       if (operation.tagline !== undefined) next.meta.tagline = operation.tagline
+      if (operation.description !== undefined) {
+        next.meta.description = sanitizeSeoDescription(operation.description)
+      }
       // An empty SEO title clears the field entirely, so the published <title>
       // falls back to the plain site name.
       if (operation.seoTitle !== undefined) {

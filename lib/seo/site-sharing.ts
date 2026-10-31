@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { OG_IMAGE_SIZE } from '@/lib/seo/page-seo'
+import {
+  resolveSeoDescription,
+  seoDescriptionPlainText,
+} from '@/lib/seo/seo-description'
 
 export type TenantSeoSite = {
   name: string
@@ -243,14 +247,45 @@ export function tenantSiteTitle(site: TenantSeoSite): string {
   return seoTitle ? `${site.name} - ${seoTitle}` : site.name
 }
 
+function firstSentence(value: string): string {
+  const plainText = seoDescriptionPlainText(value)
+  const sentenceEnd = plainText.search(/[.!?](?=\s|$)/u)
+  return sentenceEnd < 0 ? plainText : plainText.slice(0, sentenceEnd + 1)
+}
+
 export function tenantSiteDescription(site: TenantSeoSite): string {
-  return site.schema.meta.description.trim() || site.schema.meta.tagline.trim() || site.name
+  const customDescription = resolveSeoDescription(site.schema.meta.description)
+  if (customDescription) return customDescription
+
+  const hero = site.schema.sections.find(
+    (section) => section.type === 'hero' && !section.hidden,
+  )
+  if (hero?.type === 'hero') {
+    const heroCopy =
+      hero.description?.trim() ||
+      hero.slides?.find((slide) => slide.description?.trim())?.description ||
+      ''
+    const heroDescription = resolveSeoDescription(heroCopy)
+    if (heroDescription) return heroDescription
+  }
+
+  const about = site.schema.sections.find(
+    (section) => section.type === 'about' && !section.hidden,
+  )
+  if (about?.type === 'about') {
+    const aboutDescription = resolveSeoDescription(firstSentence(about.body))
+    if (aboutDescription) return aboutDescription
+  }
+
+  const name = resolveSeoDescription(site.name) || resolveSeoDescription(site.schema.meta.name)
+  const sector = resolveSeoDescription(site.schema.meta.seoTitle ?? '')
+  return resolveSeoDescription([name, sector].filter(Boolean).join(' - ')) || name
 }
 
 export function buildTenantSocialMetadata(input: TenantSocialMetadataInput): Metadata {
   const title = input.title?.trim() || tenantSiteTitle(input.site)
   const description =
-    input.description?.trim() || tenantSiteDescription(input.site)
+    resolveSeoDescription(input.description) || tenantSiteDescription(input.site)
   const base = new URL(input.origin)
   base.pathname = '/'
   base.search = ''

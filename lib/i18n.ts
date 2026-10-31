@@ -279,6 +279,8 @@ const dict = {
         groupSections: 'Bölümler',
         siteName: 'Site adı',
         seoTitle: 'SEO Başlığı',
+  seoDescription: 'SEO Açıklaması',
+  seoDescriptionHelp: 'Google sonuçlarında başlığın altında görünür. Boş bırakırsanız hero veya Hakkımızda içeriğinden otomatik oluşturulur.',
         seoTitleHelp:
           'Google arama sonuçlarında ve tarayıcı sekmesinde kullanılacak SEO başlığı. Sektörünüze göre otomatik oluşturuldu, dilediğiniz gibi değiştirebilirsiniz.',
         tagline: 'Slogan',
@@ -2352,6 +2354,8 @@ const dict = {
       groupSections: 'Sections',
         siteName: 'Site name',
         seoTitle: 'SEO title',
+  seoDescription: 'SEO description',
+  seoDescriptionHelp: 'Shown below your title in Google results. Leave blank to generate it from your hero or About content.',
         seoTitleHelp:
           'Used in Google search results and the browser tab. Auto-generated for your sector — edit it any time.',
         tagline: 'Tagline',

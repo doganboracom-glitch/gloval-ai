@@ -25,7 +25,7 @@ vi.mock('@/lib/supabase/admin', async () => {
   }
 })
 
-import { backupIfDue, recordBackup, runBackupSweep } from '@/lib/project-backups'
+import { backupIfDue, loadBackupSchema, recordBackup, runBackupSweep } from '@/lib/project-backups'
 
 const site = (title: string): WebsiteSchema => ({
   ...fallbackWebsite('kahve dükkanı', 'tr'),
@@ -93,6 +93,23 @@ describe('recordBackup idempotency and hash dedupe', () => {
     expect(await backupIfDue({ projectId: 'p1', planCode: null, schema: site('A') })).toBe('skipped')
     expect(await backupIfDue({ projectId: 'p1', planCode: 'pro_addon_x', schema: site('A') })).toBe('skipped')
     expect(backups()).toHaveLength(0)
+  })
+})
+
+describe('backup SEO description preservation', () => {
+  it('round-trips the existing schema description through backup storage and restore loading', async () => {
+    const schema = site('A')
+    schema.meta.description = 'Owner-authored SEO description'
+
+    expect(await recordBackup({ projectId: 'p1', kind: 'pre_restore', schema })).toBe('created')
+    const storedSchema = backups()[0].schema_data as WebsiteSchema
+    expect(storedSchema.meta.description).toBe('Owner-authored SEO description')
+
+    state.tables.project_backups = [
+      { id: 'restore-1', project_id: 'p1', schema_data: storedSchema },
+    ]
+    const restored = await loadBackupSchema('p1', 'restore-1')
+    expect(restored?.meta.description).toBe('Owner-authored SEO description')
   })
 })
 

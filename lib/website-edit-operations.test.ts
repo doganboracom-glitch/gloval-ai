@@ -28,6 +28,22 @@ function makeSite(): WebsiteSchema {
 const labels = (site: WebsiteSchema) => site.navigation.links.map((l) => l.label)
 const slugs = (site: WebsiteSchema) => site.pages.map((p) => p.slug)
 
+describe('SEO description editing', () => {
+  it('cleans HTML, caps the text at 160 characters, and allows clearing', () => {
+    const site = makeSite()
+    site.meta.description = 'Previous description'
+
+    const updated = applyOperation(site, {
+      op: 'updateMeta',
+      description: `<p>${'x'.repeat(180)}</p>`,
+    })
+
+    expect(updated.meta.description).toBe('x'.repeat(160))
+    expect(site.meta.description).toBe('Previous description')
+    expect(applyOperation(updated, { op: 'updateMeta', description: '' }).meta.description).toBe('')
+  })
+})
+
 describe('removePage', () => {
   it('drops the page and its own menu link together', () => {
     const next = applyOperation(makeSite(), { op: 'removePage', pageIndex: 1 })
