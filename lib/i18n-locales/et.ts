@@ -1442,6 +1442,14 @@ const et: DeepPartial<Dict> = {
     noticeBody: 'Domeeni omaniku andmed peavad olema õiged ja ajakohased; valed andmed võivad viia registreeringu peatamiseni.',
     noticeTerms: 'Tühistamise ja tagasimakse tingimused leiad siit:',
   },
+  ads: {
+    errPolicyBlocked:
+      'See veebisait näib kuuluvat kategooriasse, mida Google Adsi eeskirjade järgi ei saa reklaamida, seega me plaani ei koostanud.',
+    errPolicyBlockedAdultConsumed:
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset arvestati sinu limiidi hulka.',
+    errPolicyBlockedAdultNotConsumed:
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset ei arvestatud sinu limiidi hulka.',
+  },
 }
 
 export default et

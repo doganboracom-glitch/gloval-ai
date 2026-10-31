@@ -1851,6 +1851,12 @@ const dict = {
       activityTitle: 'İşlem günlüğü',
       activityEmpty: 'Henüz kayıtlı bir işlem yok.',
       backToAds: 'GLOVAL Ads sayfasına dön',
+      errPolicyBlocked:
+        'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
+      errPolicyBlockedAdultConsumed:
+        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşüldü.',
+      errPolicyBlockedAdultNotConsumed:
+        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşülmedi.',
     },
     whois: {
       footerLink: 'WHOIS Sorgula',
@@ -3854,6 +3860,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       activityTitle: 'Activity log',
       activityEmpty: 'No recorded actions yet.',
       backToAds: 'Back to GLOVAL Ads',
+      errPolicyBlocked:
+        "This site appears to be in a category that cannot be advertised under Google Ads policies, so we didn't prepare a plan.",
+      errPolicyBlockedAdultConsumed:
+        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt counted against your allowance.',
+      errPolicyBlockedAdultNotConsumed:
+        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt did not count against your allowance.',
     },
     whois: {
       footerLink: 'WHOIS Lookup',

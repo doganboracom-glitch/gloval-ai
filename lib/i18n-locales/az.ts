@@ -1442,6 +1442,14 @@ const az: DeepPartial<Dict> = {
     noticeBody: 'Domen sahibinin məlumatları düzgün və aktual olmalıdır; yanlış məlumat qeydiyyatın dayandırılmasına səbəb ola bilər.',
     noticeTerms: 'Ləğv və geri qaytarma şərtləri üçün baxın:',
   },
+  ads: {
+    errPolicyBlocked:
+      'Bu sayt Google Ads siyasətlərinə əsasən reklam verilməsi qadağan olunan kateqoriyaya aid görünür, buna görə də plan hazırlamadıq.',
+    errPolicyBlockedAdultConsumed:
+      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu cəhd gündəlik limitinə daxil edildi.',
+    errPolicyBlockedAdultNotConsumed:
+      'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu cəhd gündəlik limitinə daxil edilmədi.',
+  },
 }
 
 export default az

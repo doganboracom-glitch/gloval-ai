@@ -1443,6 +1443,14 @@ const pt: DeepPartial<Dict> = {
     noticeBody: 'Os dados do titular devem ser corretos e atualizados; dados incorretos podem levar à suspensão do registro.',
     noticeTerms: 'Para as condições de cancelamento e reembolso, consulte:',
   },
+  ads: {
+    errPolicyBlocked:
+      'Este site parece pertencer a uma categoria que não pode ser anunciada segundo as políticas do Google Ads; por isso, não preparámos um plano.',
+    errPolicyBlockedAdultConsumed:
+      'Esta categoria (produtos para adultos) ainda não é suportada na versão beta do GLOVAL Ads. Esta tentativa foi contabilizada no teu limite.',
+    errPolicyBlockedAdultNotConsumed:
+      'Esta categoria (produtos para adultos) ainda não é suportada na versão beta do GLOVAL Ads. Esta tentativa não foi contabilizada no teu limite.',
+  },
 }
 
 export default pt

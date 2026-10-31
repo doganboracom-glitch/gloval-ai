@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { dictionary, SUPPORTED_LOCALES } from '@/lib/i18n'
 import { evaluateCopyPolicy, evaluatePolicy, evaluateSnapshotPolicy } from './policy'
+import { policyBlockedMessageKey } from './policy-message'
 import { POLICY_CATEGORIES } from './policy-terms'
 import type { SiteSnapshot } from './scan/scan-site'
 
@@ -18,10 +20,33 @@ const snapshot = (overrides: Partial<SiteSnapshot> = {}): SiteSnapshot => ({
   ...overrides,
 })
 
+const lilashopFixture = snapshot({
+  host: 'lilashop.com.tr',
+  finalHost: 'lilashop.com.tr',
+  title: 'LiLa Shop İstanbul Seks Shop Yetişkin Oyuncak Hizmetleri',
+  description: 'Vibratör, dildo ve yetişkin ürünleri.',
+  siteName: 'LiLa Shop',
+  headings: ['FANTEZİ GİYİM', 'PARFÜMLER'],
+  text: 'Titreşimli vibratörler, gerçekçi dildo ürünleri, yetişkin oyuncakları ve fantezi giyim.',
+})
+
+const lingerieAndSwimwearFixture = snapshot({
+  host: 'denizmoda.example',
+  finalHost: 'denizmoda.example',
+  title: 'Deniz Moda | İç Giyim, Mayo ve Bikini',
+  description: 'Lingerie, underwear, swimwear, bikinis, cosmetics, jewelry and fashion.',
+  siteName: 'Deniz Moda',
+  headings: ['İç giyim', 'Mayo ve bikini', 'Kozmetik', 'Takı', 'Moda'],
+  text: 'Kadın iç giyim, mayo, bikini, kozmetik ve takı koleksiyonu.',
+})
+
 describe('blocked categories', () => {
   it.each([
     ['adult', 'Ücretsiz porno izle'],
     ['adult', 'Elite escort services in Istanbul'],
+    ['adult', 'Erotik ürünler ve yetişkin oyuncakları'],
+    ['adult', 'Sex toys, vibrators and dildos'],
+    ['adult', 'Cinsel içerik ve cinsel ürünler'],
     ['weapons', 'Ruhsatsız silah satışı yapılır'],
     ['weapons', 'Buy a gun online, ammunition in stock'],
     ['counterfeit', 'Sahte diploma ve sahte kimlik hazırlanır'],
@@ -43,6 +68,21 @@ describe('blocked categories', () => {
 
   it('covers every blocked category with at least one term', () => {
     for (const definition of POLICY_CATEGORIES) expect(definition.terms.length).toBeGreaterThan(0)
+  })
+})
+
+describe('adult policy fixtures', () => {
+  it('blocks the Lilashop sex-shop fixture and selects the adult-specific message', () => {
+    const result = evaluateSnapshotPolicy(lilashopFixture)
+    expect(result.verdict).toBe('blocked')
+    expect(result.blocked).toContain('adult')
+    expect(policyBlockedMessageKey(result.blocked, true)).toBe('errPolicyBlockedAdultConsumed')
+    expect(policyBlockedMessageKey(result.blocked, false)).toBe('errPolicyBlockedAdultNotConsumed')
+  })
+
+  it('does not block legitimate lingerie, swimwear, cosmetics, jewelry, or fashion', () => {
+    const result = evaluateSnapshotPolicy(lingerieAndSwimwearFixture)
+    expect(result).toMatchObject({ verdict: 'allowed', blocked: [], restricted: [] })
   })
 })
 
@@ -143,5 +183,26 @@ describe('evaluateSnapshotPolicy / evaluateCopyPolicy', () => {
   it('checks every generated ad string as prominent', () => {
     expect(evaluateCopyPolicy(['Güvenli Nakliyat', 'Hızlı Teklif']).verdict).toBe('allowed')
     expect(evaluateCopyPolicy(['Güvenli Nakliyat', 'Takipçi satın al']).verdict).toBe('blocked')
+  })
+})
+
+describe('policy block messages', () => {
+  it('keeps the existing generic Google Ads copy for non-adult blocked categories', () => {
+    expect(policyBlockedMessageKey(['weapons', 'counterfeit'], false)).toBe('errPolicyBlocked')
+    expect(dictionary.tr.ads.errPolicyBlocked).toBe(
+      'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
+    )
+    expect(dictionary.en.ads.errPolicyBlocked).toBe(
+      "This site appears to be in a category that cannot be advertised under Google Ads policies, so we didn't prepare a plan.",
+    )
+  })
+
+  it.each(SUPPORTED_LOCALES)('%s has localized blocked-policy copy', (locale) => {
+    const keys = ['errPolicyBlocked', 'errPolicyBlockedAdultConsumed', 'errPolicyBlockedAdultNotConsumed'] as const
+    for (const key of keys) {
+      const message = dictionary[locale].ads[key]
+      expect(message.trim()).not.toBe('')
+      if (locale !== 'en') expect(message).not.toBe(dictionary.en.ads[key])
+    }
   })
 })

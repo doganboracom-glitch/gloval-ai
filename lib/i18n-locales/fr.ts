@@ -1402,6 +1402,14 @@ const fr: DeepPartial<Dict> = {
     noticeBody: 'Les informations du titulaire doivent être exactes et à jour ; des informations erronées peuvent entraîner la suspension de l’enregistrement.',
     noticeTerms: 'Pour les conditions d’annulation et de remboursement, consultez :',
   },
+  ads: {
+    errPolicyBlocked:
+      'Ce site semble appartenir à une catégorie qui ne peut pas faire l’objet de publicités selon les règles de Google Ads ; nous n’avons donc pas préparé de plan.',
+    errPolicyBlockedAdultConsumed:
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative a été décomptée de votre quota.',
+    errPolicyBlockedAdultNotConsumed:
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative n’a pas été décomptée de votre quota.',
+  },
 }
 
 export default fr
