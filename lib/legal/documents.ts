@@ -17,6 +17,7 @@ import { COMPANY } from '@/lib/legal/company'
 export type LegalBlock =
   | { type: 'p'; text: string }
   | { type: 'list'; items: string[] }
+  | { type: 'link'; href: string; label: string; external?: boolean }
 
 export type LegalSection = { heading: string; blocks: LegalBlock[] }
 
@@ -33,12 +34,19 @@ export type LegalContent = {
 /** İki dilli yasal doküman. */
 export type LegalDoc = {
   slug: string
+  lastUpdated?: string
   tr: LegalContent
   en: LegalContent
 }
 
 const p = (text: string): LegalBlock => ({ type: 'p', text })
 const list = (items: string[]): LegalBlock => ({ type: 'list', items })
+const link = (href: string, label: string, external = false): LegalBlock => ({
+  type: 'link',
+  href,
+  label,
+  external,
+})
 
 /* -------------------------------------------------------------------------- */
 /* Gizlilik Politikası — Privacy Policy                                        */
@@ -46,6 +54,7 @@ const list = (items: string[]): LegalBlock => ({ type: 'list', items })
 
 const privacy: LegalDoc = {
   slug: 'gizlilik-politikasi',
+  lastUpdated: '2026-10-31',
   tr: {
     title: 'Gizlilik Politikası',
     description:
@@ -117,6 +126,52 @@ const privacy: LegalDoc = {
             'Yetkili kamu kurumları: yalnızca yasal zorunluluk hâlinde.',
           ]),
           p('Kişisel verilerinizi reklam amacıyla üçüncü taraflara satmayız.'),
+        ],
+      },
+      {
+        heading: 'Google Ads verileri (GLOVAL Ads)',
+        blocks: [
+          p(
+            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Uygulama şu anda yalnızca erişilebilir müşteri hesaplarını listeleyen ve performans raporlarını okuyan Google Ads API çağrıları yapar; kampanya oluşturma, düzenleme veya yayımlama işlemi yapmaz.',
+          ),
+          p(
+            'Hesap seçimi sırasında erişilebilir müşteri hesaplarının kimliği, adı, para birimi ve yönetici/alt hesap ilişkisi okunabilir. Seçtiğiniz müşteri hesabı için son 7 veya 30 güne ait raporda en fazla 100 kampanyanın adı ve durumu ile gösterim, tıklama, harcama ve dönüşüm ölçümleri alınır.',
+          ),
+          p(
+            'Performans raporları istek sırasında Google Ads API’den alınır ve bağlı kullanıcının panelinde gösterilmek üzere iletilir; uygulamanın veritabanında kalıcı olarak saklanmaz.',
+          ),
+          p(
+            'Bu akışta Google OAuth ve Google Ads API (izin ve veri sorguları), Vercel (uygulama barındırma ve çalıştırma) ve Supabase (kimlik doğrulama ve veritabanı) kullanılır. Bağlantı ve hesap metaverileri ile Google yenileme tokenı Supabase’te saklanır; yenileme tokenı AES-256-GCM ile şifrelenir, istemciye gönderilmez ve uygulama günlüklerine yazılmaz.',
+          ),
+          p(
+            'Bağlantı açıkken gerekli hesap/bağlantı metaverileri ve şifreli yenileme tokenı saklanır. Panelden bağlantıyı kestiğinizde Google’a iptal isteği gönderilir ve şifreli token silinir; bağlantı metaverisi hesap silinene kadar iptal edilmiş durumda tutulabilir. Tamamlanmamış OAuth akışları 15 dakika içinde sona erer ve günlük temizlikte silinir. Google Ads API işlem kayıtları (kullanıcı/bağlantı kimliği, istek yöntemi, sonuç, güvenli hata kodu ve zaman damgası) en fazla 25 saat tutulur; kampanya raporu içeriğini içermez.',
+          ),
+          p(
+            'Google Ads verileri satılmaz; reklam göstermek veya profil çıkarmak için kullanılmaz ya da hizmeti sunmak için yukarıda belirtilen sağlayıcılar dışında üçüncü taraflarla paylaşılmaz. Bu veriler genel amaçlı yapay zekâ veya makine öğrenmesi modellerini eğitmek için kullanılmaz ve herhangi bir AI sağlayıcısına gönderilmez.',
+          ),
+          p(
+            'Personel bu verilere yalnızca kullanıcının açık izniyle veya güvenlik, yasal gereklilik ya da destek talebini karşılamak için gerekli ve sınırlı durumlarda erişebilir.',
+          ),
+          p(
+            'GLOVAL AI\'ın Google API\'lerinden aldığı bilgileri kullanımı ve başka bir uygulamaya aktarması, Google API Services User Data Policy\'ye (Limited Use gereklilikleri dahil) uygun olacaktır.',
+          ),
+          link(
+            'https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes',
+            'Google API Services User Data Policy (Limited Use gereklilikleri)',
+            true,
+          ),
+          p(
+            'Google Ads bağlantısını panelden kestiğinizde erişim tokenı iptal edilir. Google hesabınızdaki uygulama izinlerini dilediğiniz zaman ayrıca kaldırabilirsiniz. Hesabınızı sildiğinizde bekleyen Google tokenları iptal edilir ve bağlantı kayıtları silinir; kimliklerle ilişkilendirilmiş olmayan işlem metaverisi 25 saate kadar tutulabilir.',
+          ),
+          link(
+            'https://myaccount.google.com/permissions',
+            'Google Hesabı izin ayarları',
+            true,
+          ),
+          p(
+            'Google Ads verileriyle ilgili KVKK kapsamındaki haklarınız ve başvuru yöntemleri için mevcut KVKK Aydınlatma Metni sayfasını inceleyebilirsiniz.',
+          ),
+          link('/yasal/kvkk', 'KVKK Aydınlatma Metni'),
         ],
       },
       {
@@ -225,6 +280,52 @@ const privacy: LegalDoc = {
             'Authorised public authorities: only where legally required.',
           ]),
           p('We do not sell your personal data to third parties for advertising.'),
+        ],
+      },
+      {
+        heading: 'Google Ads data (GLOVAL Ads)',
+        blocks: [
+          p(
+            'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. The current implementation only calls the Google Ads API to list accessible customer accounts and read performance reports; it does not create, edit or publish campaigns.',
+          ),
+          p(
+            'During account selection, accessible customer account IDs, names, currencies and manager/client-account relationships may be read. For the customer account you select, the service reads up to 100 campaigns in a report covering the last 7 or 30 days, including campaign names and statuses, impressions, clicks, spend and conversions.',
+          ),
+          p(
+            'Performance reports are fetched from the Google Ads API when requested and returned for display in the connected user’s dashboard; they are not persistently stored in the application database.',
+          ),
+          p(
+            'This flow uses Google OAuth and the Google Ads API (authorization and data queries), Vercel (application hosting and runtime) and Supabase (authentication and database). Connection and account metadata and the Google refresh token are stored in Supabase. The refresh token is encrypted with AES-256-GCM, is not sent to the client and is not written to application logs.',
+          ),
+          p(
+            'While the connection is active, the required account/connection metadata and encrypted refresh token are retained. When you disconnect in the dashboard, a revocation request is sent to Google and the encrypted token is cleared; connection metadata may remain marked as revoked until account deletion. Incomplete OAuth flows expire after 15 minutes and are removed by the daily purge. Google Ads API operation records (user/connection identifiers, request method, outcome, safe error code and timestamp) are retained for no more than 25 hours and do not contain campaign report contents.',
+          ),
+          p(
+            'Google user data is not sold or used to serve ads or build profiles, and is not shared with third parties other than the providers listed above as needed to operate the feature. It is not used to train general-purpose AI or machine-learning models and is not sent to any AI provider.',
+          ),
+          p(
+            'Personnel may access this data only with the user’s explicit permission or where necessary and limited to address a security matter, legal requirement or support request.',
+          ),
+          p(
+            "GLOVAL AI's use and transfer of information obtained from Google APIs to another application will comply with the Google API Services User Data Policy, including the Limited Use requirements.",
+          ),
+          link(
+            'https://developers.google.com/terms/api-services-user-data-policy#additional_requirements_for_specific_api_scopes',
+            'Google API Services User Data Policy (Limited Use requirements)',
+            true,
+          ),
+          p(
+            'You can disconnect Google Ads from the dashboard, which sends a revocation request and clears the stored token. You can also remove GLOVAL AI’s access in your Google Account permissions. When you delete your account, pending Google tokens are revoked and connection records are deleted; operation metadata detached from account identifiers may remain for up to 25 hours.',
+          ),
+          link(
+            'https://myaccount.google.com/permissions',
+            'Google Account permissions',
+            true,
+          ),
+          p(
+            'For your rights under KVKK and the applicable request procedure, see the existing Data Protection Notice.',
+          ),
+          link('/yasal/kvkk', 'Data Protection Notice (KVKK)'),
         ],
       },
       {
