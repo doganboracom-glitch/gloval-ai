@@ -72,6 +72,39 @@ describe('buildPageMetadata', () => {
   }
 })
 
+describe('Ads metadata copy', () => {
+  const expectedCopy: { lang: SeoLang; title: string; description: string }[] = [
+    {
+      lang: 'tr',
+      title: 'GLOVAL Ads AI | Yapay Zekâ ile Reklam Yönetimi',
+      description:
+        'GLOVAL Ads AI ile reklamını kolayca kur, yapay zekâ ile iyileştir ve performansını raporla. Reklam yönetimini tek platformdan akıllıca yönet.',
+    },
+    {
+      lang: 'en',
+      title: 'GLOVAL Ads AI | AI-Powered Ad Management',
+      description:
+        'Set up your ads easily with GLOVAL Ads AI, improve them with artificial intelligence and report performance. Manage your advertising from a single platform.',
+    },
+  ]
+
+  for (const { lang, title, description } of expectedCopy) {
+    it(`uses the approved ${lang} copy in every metadata field`, () => {
+      const meta = buildPageMetadata('ads', lang)
+      const openGraph = meta.openGraph as { title?: string; description?: string }
+      const twitter = meta.twitter as { title?: string; description?: string }
+
+      expect(SEO_PAGES.ads[lang]).toMatchObject({ title, description })
+      expect(meta.title).toBe(title)
+      expect(meta.description).toBe(description)
+      expect(openGraph.title).toBe(title)
+      expect(openGraph.description).toBe(description)
+      expect(twitter.title).toBe(title)
+      expect(twitter.description).toBe(description)
+    })
+  }
+})
+
 describe('isSeoPageKey', () => {
   it('rejects unknown and prototype keys', () => {
     expect(isSeoPageKey('home')).toBe(true)

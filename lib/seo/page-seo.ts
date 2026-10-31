@@ -140,16 +140,16 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
   ads: {
     path: '/ads',
     tr: {
-      title: 'GLOVAL Ads (BETA): AI ile Google Reklamı | GLOVAL AI',
+      title: 'GLOVAL Ads AI | Yapay Zekâ ile Reklam Yönetimi',
       description:
-        'Kendi Google Ads hesabınla AI destekli kampanya planı hazırla. Hiçbir şey onayın olmadan yayınlanmaz, reklam bütçesi GLOVAL üzerinden geçmez.',
+        'GLOVAL Ads AI ile reklamını kolayca kur, yapay zekâ ile iyileştir ve performansını raporla. Reklam yönetimini tek platformdan akıllıca yönet.',
       heading: 'GLOVAL Ads (BETA)',
       tagline: TAGLINE.tr,
     },
     en: {
-      title: 'GLOVAL Ads (BETA): AI Google Ads Planning | GLOVAL AI',
+      title: 'GLOVAL Ads AI | AI-Powered Ad Management',
       description:
-        'Prepare an AI-assisted campaign plan for your own Google Ads account. Nothing goes live without your approval, and ad spend never passes through GLOVAL.',
+        'Set up your ads easily with GLOVAL Ads AI, improve them with artificial intelligence and report performance. Manage your advertising from a single platform.',
       heading: 'GLOVAL Ads (BETA)',
       tagline: TAGLINE.en,
     },
