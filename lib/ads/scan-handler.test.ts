@@ -55,9 +55,17 @@ describe('POST /api/ads/scan handler', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('accepts a signed-in user without a cookie', async () => {
+  it('accepts a signed-in user without a cookie and passes the normalized IP to policy limits', async () => {
     const { env } = setup({ getUser: async () => ({ userId: 'u1', planCode: 'free' }) })
+    const reservePolicyAttempt = vi.fn(env.deps.reservePolicyAttempt)
+    env.deps.reservePolicyAttempt = reservePolicyAttempt
     expect((await handleScanRequest(post(VALID), env)).status).toBe(200)
+    expect(reservePolicyAttempt).toHaveBeenCalledWith(VALID.requestId, {
+      kind: 'user',
+      userId: 'u1',
+      planCode: 'free',
+      ip: '203.0.113.5',
+    })
   })
 
   it('rejects malformed, oversized and cross-origin requests', async () => {
@@ -68,6 +76,7 @@ describe('POST /api/ads/scan handler', () => {
     expect((await handleScanRequest(post({ ...VALID, address: 'a'.repeat(3000) }), env)).status).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://evil.example' }), env)).status).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://gloval.ai' }), env)).status).toBe(200)
+    expect((await handleScanRequest(post({ ...VALID, requestId: 'policy_12345678' }), env)).status).toBe(400)
   })
 
   it('fails closed for a visitor without a usable IP', async () => {

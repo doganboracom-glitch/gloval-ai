@@ -45,6 +45,13 @@ describe('describeScanError', () => {
     expect(tr).toContain('hakkından düşülmedi')
   })
 
+  it('shows the exact Turkish daily policy-attempt limit without a retry action', () => {
+    expect(describeScanError({ code: 'policy_attempt_limit' }, dictionary.tr.ads)).toEqual({
+      message: 'Bugün desteklenmeyen kategori denemesi sınırına ulaştın, yarın tekrar dene',
+      action: 'none',
+    })
+  })
+
   it('sends visitors who ran out to sign in and signed-in users without credits to billing', () => {
     expect(describeScanError({ code: 'login_required' }, dictionary.tr.ads).action).toBe('login')
     expect(describeScanError({ code: 'anon_capacity' }, dictionary.tr.ads).action).toBe('login')

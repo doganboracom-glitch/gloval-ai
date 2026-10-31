@@ -26,21 +26,22 @@ import type { AdsScanError } from '@/lib/ads/public-errors'
 import type { AdsChargeResult, AdsRefundResult } from '@/lib/ads/credits'
 import type { AdsFreeReservation, AdsFreeSubjects } from '@/lib/ads/free-quota'
 import { halfCapThreshold } from '@/lib/ads/admin-alert'
+import { ADS_POLICY_BLOCK_GLOBAL_SUBJECT } from '@/lib/ads/policy-constants'
 import type { AdsUsageRow } from '@/lib/ads/usage-events'
 import type { ScanSiteResult, SiteSnapshot } from '@/lib/ads/scan/scan-site'
 
 /**
- * One scan request, end to end: validate, rate-limit, reserve the free action
- * (or charge credits), read the site, run the policy gate, ask the model for a
- * plan and ad text, validate everything in code, and give back exactly what was
- * taken when the request fails before the model produced a usable result.
+ * One scan request, end to end: validate, rate-limit, reserve scan rights and a
+ * separate policy-abuse slot, read the site, run the policy gate, ask the model
+ * for a plan and ad text, and validate everything in code. Failed scans return
+ * normal free/paid rights; only an explicit, verified hard block keeps its abuse slot.
  *
  * Every side effect goes through `ScanDeps`, so the whole money path is tested
  * with fakes.
  */
 
 export type ScanActor =
-  | { kind: 'user'; userId: string; planCode: string | null }
+  | { kind: 'user'; userId: string; planCode: string | null; ip?: string | null }
   | { kind: 'anon'; anonId: string; ip: string }
 
 export type ScanRequest = { address: string; requestId: string; actor: ScanActor }
@@ -83,6 +84,11 @@ export type ScanDeps = {
   subjectsFor: (actor: ScanActor) => AdsFreeSubjects | null
   reserveFree: (requestId: string, subjects: AdsFreeSubjects) => Promise<AdsFreeReservation>
   releaseFree: (requestId: string) => Promise<boolean>
+  reservePolicyAttempt: (requestId: string, actor: ScanActor) => Promise<AdsFreeReservation>
+  releasePolicyAttempt: (requestId: string) => Promise<boolean>
+  policyBlockCap: () => number
+  readGlobalPolicyBlockUsed: () => Promise<number | null>
+  notifyPolicyBlockCap: (cap: number, used: number) => Promise<void>
   charge: (userId: string, requestId: string) => Promise<AdsChargeResult>
   refund: (userId: string, requestId: string) => Promise<AdsRefundResult>
   scanSite: (address: string) => Promise<ScanSiteResult>
@@ -123,6 +129,31 @@ function actorKey(actor: ScanActor): string {
 
 class StageTimeout extends Error {}
 
+async function releaseWithRetry(operation: () => Promise<boolean>, label: string): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (await operation()) return
+    } catch (error) {
+      if (attempt === 1) {
+        console.error(`[ads-scan] ${label} release failed:`, error instanceof Error ? error.message : 'unknown')
+      }
+    }
+  }
+}
+
+async function refundWithRetry(operation: () => Promise<AdsRefundResult>): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if ((await operation()).refunded) return true
+    } catch (error) {
+      if (attempt === 1) {
+        console.error('[ads-scan] credit refund failed:', error instanceof Error ? error.message : 'unknown')
+      }
+    }
+  }
+  return false
+}
+
 export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<ScanOutcome> {
   const startedAt = deps.now()
   const { actor, requestId } = request
@@ -151,7 +182,9 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
   let mode: 'free' | 'paid'
   let ownsFree = false
   let ownsCharge = false
-  let kept = false // true once the attempt is consumed on purpose (success or post-model policy block)
+  let ownsPolicyAttempt = false
+  let keepPolicyAttempt = false
+  let kept = false // true once a usable scan result is accepted
 
   const reservation = await deps.reserveFree(requestId, subjects)
   if (reservation.allowed) {
@@ -258,6 +291,31 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     }
     const restricted = new Set<PolicyCategory>(pre.restricted)
 
+    // Only model-confirmed hard blocks count against the separate policy-abuse allowance.
+    let policyReservation: AdsFreeReservation
+    try {
+      policyReservation = await deps.reservePolicyAttempt(requestId, actor)
+    } catch {
+      finalCode = 'service_unavailable'
+      return fail({ code: 'service_unavailable' })
+    }
+    if (!policyReservation.allowed) {
+      if (policyReservation.reason === 'quota_unavailable') {
+        finalCode = 'service_unavailable'
+        return fail({ code: 'service_unavailable' })
+      }
+      finalCode = 'policy_attempt_limit'
+      if (policyReservation.blockedSubject === ADS_POLICY_BLOCK_GLOBAL_SUBJECT) {
+        await notifyPolicyAttemptCapSafely(deps, true)
+      }
+      return fail({ code: 'policy_attempt_limit' })
+    }
+    if (policyReservation.alreadyReserved) {
+      finalCode = 'duplicate'
+      return fail({ code: 'duplicate' })
+    }
+    ownsPolicyAttempt = true
+
     // ---- credits (paid mode only, after the cheap checks) -------------------------
     if (mode === 'paid' && userId) {
       const charged = await deps.charge(userId, requestId)
@@ -295,9 +353,9 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     // A model may only add a hard block when its explicit quote is verified in the snapshot.
     if (plan.modelPolicyCategory) {
       if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked' && plan.modelPolicyEvidence === 'explicit') {
-        kept = true
+        keepPolicyAttempt = true
         finalCode = policyErrorCode([plan.modelPolicyCategory])
-        return fail({ code: 'policy_blocked', consumed: true })
+        return fail({ code: 'policy_blocked', consumed: false })
       }
       restricted.add(plan.modelPolicyCategory)
     }
@@ -346,12 +404,13 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
   } finally {
     // One place gives back whatever this request took and did not use.
     if (!kept) {
-      if (ownsFree) await deps.releaseFree(requestId)
-      if (ownsCharge && userId) {
-        const refund = await deps.refund(userId, requestId)
-        creditRefunded = refund.refunded
-      }
+      if (ownsFree) await releaseWithRetry(() => deps.releaseFree(requestId), 'free quota')
+      if (ownsCharge && userId) creditRefunded = await refundWithRetry(() => deps.refund(userId, requestId))
     }
+    if (ownsPolicyAttempt && !keepPolicyAttempt) {
+      await releaseWithRetry(() => deps.releasePolicyAttempt(requestId), 'policy attempt')
+    }
+    if (keepPolicyAttempt) await notifyPolicyAttemptCapSafely(deps)
     const succeeded = kept && finalCode === null
     const keptCharge = kept ? chargedAmount : 0
     const row: AdsUsageRow = {
@@ -407,4 +466,14 @@ async function notifyCapLevels(deps: ScanDeps): Promise<void> {
   if (used === null) return
   if (used >= cap) await deps.notifyAnonCap('full', cap)
   else if (used >= halfCapThreshold(cap)) await deps.notifyAnonCap('half', cap)
+}
+
+async function notifyPolicyAttemptCapSafely(deps: ScanDeps, force = false): Promise<void> {
+  try {
+    const cap = deps.policyBlockCap()
+    const used = await deps.readGlobalPolicyBlockUsed()
+    if (force || (used !== null && used >= cap)) await deps.notifyPolicyBlockCap(cap, used ?? cap)
+  } catch (error) {
+    console.error('[ads-scan] policy cap alert failed:', error instanceof Error ? error.message : 'unknown')
+  }
 }

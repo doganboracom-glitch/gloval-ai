@@ -16,6 +16,7 @@ export type ScanErrorCopy = {
   errInsufficientContent: string
   errPolicyBlocked: string
   errPolicyConsumed: string
+  errPolicyAttemptLimit: string
   errGenerationFailed: string
   errTimeout: string
   errServiceUnavailable: string
@@ -57,6 +58,8 @@ export function describeScanError(error: ClientScanError, copy: ScanErrorCopy): 
         message: error.consumed ? `${copy.errPolicyBlocked} ${copy.errPolicyConsumed}` : copy.errPolicyBlocked,
         action: 'none',
       }
+    case 'policy_attempt_limit':
+      return { message: copy.errPolicyAttemptLimit, action: 'none' }
     case 'generation_failed':
       return { message: copy.errGenerationFailed, action: 'retry' }
     case 'timeout':

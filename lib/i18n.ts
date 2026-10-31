@@ -1902,6 +1902,7 @@ const dict = {
       errPolicyBlocked:
         'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
       errPolicyConsumed: 'Bu deneme hakkından düşüldü.',
+      errPolicyAttemptLimit: 'Bugün desteklenmeyen kategori denemesi sınırına ulaştın, yarın tekrar dene',
       errGenerationFailed: 'Plan hazırlanırken bir sorun oluştu. Hakkın iade edildi, tekrar deneyebilirsin.',
       errTimeout: 'Plan zamanında hazırlanamadı. Hakkın iade edildi, tekrar deneyebilirsin.',
       errServiceUnavailable: 'Servis şu an kullanılamıyor. Lütfen biraz sonra tekrar dene.',
@@ -3959,6 +3960,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       errPolicyBlocked:
         'This site appears to be in a category that cannot be advertised under Google Ads policies, so we did not prepare a plan.',
       errPolicyConsumed: 'This attempt was counted.',
+      errPolicyAttemptLimit: "You've reached today's unsupported-category attempt limit. Please try again tomorrow.",
       errGenerationFailed: 'Something went wrong while preparing the plan. Your allowance was returned, so you can try again.',
       errTimeout: 'The plan could not be prepared in time. Your allowance was returned, so you can try again.',
       errServiceUnavailable: 'The service is unavailable right now. Please try again shortly.',

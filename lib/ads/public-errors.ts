@@ -11,6 +11,7 @@ export const ADS_SCAN_ERROR_STATUS = {
   rate_limited: 429,
   login_required: 401,
   anon_capacity: 429,
+  policy_attempt_limit: 429,
   credits_required: 402,
   duplicate: 409,
   unreachable: 422,
@@ -27,7 +28,7 @@ export type AdsScanError = {
   code: AdsScanErrorCode
   /** `credits_required`: current balance. */
   balance?: number
-  /** `policy_blocked`: true when the check ran after the model and the attempt was used up. */
+  /** Kept for older clients; current policy blocks always refund free actions and credits. */
   consumed?: boolean
   /** `rate_limited`: seconds until a retry makes sense. */
   retryAfterSeconds?: number
