@@ -1442,6 +1442,14 @@ const et: DeepPartial<Dict> = {
     noticeTerms: 'Tühistamise ja tagasimakse tingimused leiad siit:',
   },
   ads: {
+    disconnectDialog: {
+      title: 'Kas katkestada Google Adsi ühendus?',
+      description: 'Ühenduse katkestamisel tühistatakse GLOVALi juurdepääs sinu Google’i kontole ja salvestatud juurdepääsuvõti kustutatakse. Saad igal ajal uuesti ühenduse luua.',
+      cancel: 'Tühista',
+      confirm: 'Katkesta ühendus',
+      pending: 'Ühenduse katkestamine…',
+      error: 'Google ei saanud juurdepääsu tühistada. Ühendus on endiselt aktiivne. Proovi uuesti.',
+    },
     errPolicyAttemptLimit: 'Oled tänase mittetoetatud kategooriate katsete piirini jõudnud. Proovi homme uuesti.',
     errPolicyBlockedAdultConsumed:
       'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. See blokeeritud katse läheb tänase mittetoetatud kategooriate piirmäära arvestusse; skannimise kasutuskord või krediidid tagastati.',

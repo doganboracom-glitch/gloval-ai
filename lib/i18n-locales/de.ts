@@ -1442,6 +1442,14 @@ const de: DeepPartial<Dict> = {
     noticeTerms: 'Bedingungen zu Stornierung und Erstattung finden Sie hier:',
   },
   ads: {
+    disconnectDialog: {
+      title: 'Google Ads trennen?',
+      description: 'Wenn du die Verbindung trennst, wird der Zugriff von GLOVAL auf dein Google-Konto widerrufen und das gespeicherte Zugriffstoken gelöscht. Du kannst jederzeit erneut eine Verbindung herstellen.',
+      cancel: 'Abbrechen',
+      confirm: 'Trennen',
+      pending: 'Verbindung wird getrennt…',
+      error: 'Google konnte den Zugriff nicht widerrufen. Die Verbindung ist weiterhin aktiv. Bitte versuche es erneut.',
+    },
     errPolicyAttemptLimit: 'Das heutige Limit für Versuche mit nicht unterstützten Kategorien ist erreicht. Bitte versuche es morgen erneut.',
     errPolicyBlockedAdultConsumed:
       'Diese Kategorie (Produkte für Erwachsene) wird in der GLOVAL-Ads-Beta noch nicht unterstützt. Dieser blockierte Versuch zählt für das heutige Limit nicht unterstützter Kategorien; dein Scan-Kontingent bzw. deine Credits wurden zurückerstattet.',

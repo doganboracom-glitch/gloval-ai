@@ -1442,6 +1442,14 @@ const az: DeepPartial<Dict> = {
     noticeTerms: 'Ləğv və geri qaytarma şərtləri üçün baxın:',
   },
   ads: {
+    disconnectDialog: {
+      title: 'Google Ads bağlantısı kəsilsin?',
+      description: 'Bağlantını kəsdikdə GLOVAL-ın Google hesabına girişi ləğv ediləcək və saxlanmış giriş açarı silinəcək. İstədiyin vaxt yenidən qoşula bilərsən.',
+      cancel: 'Ləğv et',
+      confirm: 'Bağlantını kəs',
+      pending: 'Bağlantı kəsilir…',
+      error: 'Google girişi ləğv edə bilmədi. Bağlantı hələ də aktivdir; yenidən cəhd et.',
+    },
     errPolicyAttemptLimit: 'Dəstəklənməyən kateqoriyalar üzrə bugünkü cəhd limitinə çatmısınız. Sabah yenidən cəhd edin.',
     errPolicyBlockedAdultConsumed:
       'Bu kateqoriya (böyüklər üçün məhsullar) GLOVAL Ads beta versiyasında hələ dəstəklənmir. Bu bloklanmış cəhd gündəlik dəstəklənməyən kateqoriya limitinə daxil edildi; skan haqqı və ya kreditlər geri qaytarıldı.',
