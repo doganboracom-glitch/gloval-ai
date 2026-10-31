@@ -7,7 +7,7 @@ function site(tracking?: { head?: string }): WebsiteSchema {
 }
 
 describe('extractMetaTags', () => {
-  it('keeps verification tags while reserving generated SEO and social fields', () => {
+  it('keeps non-Google verification tags while reserving generated SEO and social fields', () => {
     const tags = extractMetaTags(`
       <meta name="google-site-verification" content="verify-123">
       <meta name="facebook-domain-verification" content="domain-123">
@@ -19,7 +19,6 @@ describe('extractMetaTags', () => {
     `)
 
     expect(tags).toEqual({
-      'google-site-verification': 'verify-123',
       'facebook-domain-verification': 'domain-123',
     })
   })

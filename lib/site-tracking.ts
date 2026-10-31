@@ -2,13 +2,14 @@ import type { TrackingCodes, WebsiteSchema } from '@/lib/website-schema'
 import type { PlanCode } from '@/lib/pricing-config'
 
 /**
- * Owner-supplied third-party code (analytics, tag manager, pixels, site
- * verification) is stored verbatim on the website schema and injected into the
- * PUBLISHED site only. These helpers keep that injection predictable:
+ * Owner-supplied third-party code (analytics, tag manager, pixels, and
+ * verification other than Google Search Console) is stored verbatim on the
+ * website schema and injected into the PUBLISHED site only. These helpers keep
+ * that injection predictable:
  *
- *  - `<meta name="..." content="...">` tags are lifted out of the head snippet
- *    and returned as Next.js `metadata.other` entries, so verification tags end
- *    up in the real document `<head>` (where Google Search Console looks).
+ *  - Allowed `<meta name="..." content="...">` tags are lifted into Next.js
+ *    metadata. Google Search Console and generated SEO/social tags remain owned
+ *    by platform metadata and cannot be injected from a site snippet.
  *  - Everything else (scripts, noscript, links) is injected as raw HTML into the
  *    document exactly as pasted — no escaping, no rewriting — so scripts execute
  *    during the initial page parse.
@@ -36,7 +37,7 @@ export function extractMetaTags(code?: string | null): Record<string, string> {
     if (!name || content === null) continue
     const normalizedName = name.trim().toLowerCase()
     if (
-      ['viewport', 'charset', 'description', 'robots', 'googlebot'].includes(normalizedName) ||
+      ['viewport', 'charset', 'description', 'robots', 'googlebot', 'google-site-verification'].includes(normalizedName) ||
       normalizedName.startsWith('og:') ||
       normalizedName.startsWith('twitter:')
     ) {

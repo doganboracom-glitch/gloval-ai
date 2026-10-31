@@ -19,6 +19,13 @@ vi.mock('@/lib/custom-domains/service', () => ({
     state.boundProject ? { websiteProjectId: state.boundProject } : null,
   getPublishedSlugForProjectId: async () => state.publishedSlug,
 }))
+vi.mock('@/lib/seo/site-seo', () => ({
+  getSiteSeoContext: async (slug: string) => ({
+    origin: `https://${slug}.gloval.site`,
+    isCustomDomain: false,
+    lastModified: null,
+  }),
+}))
 vi.mock('@/lib/supabase/proxy', async () => {
   const { NextResponse } = await import('next/server')
   return { updateSession: async () => NextResponse.next() }
@@ -72,11 +79,12 @@ describe('cookie banner theme in the published layout', () => {
   })
 })
 
-describe('google-site-verification in the published <head>', () => {
-  it('reaches Next metadata (the real <head>) as a named meta tag', async () => {
+describe('Google Search Console verification in the published <head>', () => {
+  it('is excluded from owner-provided snippets', async () => {
     publish(VERIFICATION)
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
+    expect(metadata.other).toBeUndefined()
+    expect(metadata.verification).toEqual({ google: null })
   })
 
   it('never leaks the platform token into a tenant site', async () => {
@@ -104,18 +112,20 @@ describe('google-site-verification in the published <head>', () => {
 describe('every entry path serves the same layout', () => {
   beforeEach(() => publish(VERIFICATION))
 
-  it('subdomain <slug>.gloval.site rewrites to /site/<slug> and renders the tag', async () => {
+  it('subdomain <slug>.gloval.site rewrites to /site/<slug> and excludes Google verification metadata', async () => {
     expect(await rewriteTarget('https://kahve.gloval.site/')).toBe('/site/kahve')
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toBeUndefined()
+    expect(metadata.verification).toEqual({ google: null })
   })
 
-  it('verified custom domain rewrites to the bound site and renders the tag', async () => {
+  it('verified custom domain rewrites to the bound site and excludes Google verification metadata', async () => {
     state.boundProject = 'project-1'
     state.publishedSlug = 'kahve'
     expect(await rewriteTarget('https://www.kahvem.com/')).toBe('/site/kahve')
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toBeUndefined()
+    expect(metadata.verification).toEqual({ google: null })
   })
 
   it('an unbound or unpublished custom domain does not rewrite to any site', async () => {
@@ -124,10 +134,11 @@ describe('every entry path serves the same layout', () => {
     expect(await rewriteTarget('https://www.kahvem.com/')).toBeNull()
   })
 
-  it('/site/<slug> on the platform host is served as is and renders the tag', async () => {
+  it('/site/<slug> on the platform host is served as is and excludes Google verification metadata', async () => {
     expect(await rewriteTarget('https://gloval.ai/site/kahve')).toBeNull()
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toBeUndefined()
+    expect(metadata.verification).toEqual({ google: null })
   })
 })
 

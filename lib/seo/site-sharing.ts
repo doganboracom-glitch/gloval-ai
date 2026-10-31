@@ -255,7 +255,11 @@ export function buildTenantSocialMetadata(input: TenantSocialMetadataInput): Met
   base.pathname = '/'
   base.search = ''
   base.hash = ''
-  const canonical = new URL(input.canonical ?? '/', base).toString()
+  const canonicalUrl = new URL(input.canonical ?? '/', base)
+  const canonical =
+    canonicalUrl.pathname === '/' && !canonicalUrl.search && !canonicalUrl.hash
+      ? canonicalUrl.origin
+      : canonicalUrl.toString()
   const imageUrl = tenantOgImageUrl(input.origin, input.slug, input.site, input.lastModified)
   const imageAlt = `${input.site.name} — ${title}`
   const sharedOpenGraph = {
