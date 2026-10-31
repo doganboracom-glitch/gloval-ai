@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { listAllDomains } from '@/lib/custom-domains/service'
 import type { AdminDomainRow } from '@/lib/admin/domain-handover-link'
+import { isTicketDepartment, type TicketDepartment } from '@/lib/support/constants'
 
 /**
  * Read layer for the admin back office.
@@ -157,7 +158,7 @@ export type AdminTicket = {
   userEmail: string | null
   subject: string
   ticketNumber: string
-  department: string
+  department: TicketDepartment
   service: string | null
   projectName: string | null
   status: 'open' | 'in_progress' | 'waiting_user' | 'answered' | 'resolved'
@@ -585,7 +586,7 @@ export async function listTickets(): Promise<AdminTicket[]> {
       users.get(row.user_id as string)?.email ?? (row.contact_email as string) ?? null,
     subject: row.subject as string,
     ticketNumber: (row.ticket_number as string) ?? '',
-    department: (row.department as string) ?? 'other',
+    department: isTicketDepartment(row.department) ? row.department : 'other',
     service: (row.service as string) ?? null,
     projectName: null,
     status: row.status as AdminTicket['status'],
@@ -639,7 +640,7 @@ export async function getTicketDetail(ticketId: string): Promise<{
         users.get(t.user_id as string)?.email ?? (t.contact_email as string) ?? null,
       subject: t.subject as string,
       ticketNumber: (t.ticket_number as string) ?? '',
-      department: (t.department as string) ?? 'other',
+      department: isTicketDepartment(t.department) ? t.department : 'other',
       service: (t.service as string) ?? null,
       projectName,
       status: t.status as AdminTicket['status'],

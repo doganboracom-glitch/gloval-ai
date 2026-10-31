@@ -43,7 +43,7 @@ export function AdsFaqSection() {
           {copy.supportText}
         </p>
         <Link
-          href="/yasal/iletisim"
+          href="/support/new?department=gloval-ads"
           className="inline-flex min-h-10 items-center justify-center rounded-xl border border-border/70 bg-card/40 px-4 text-sm font-medium text-foreground transition-colors hover:border-brand/40 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
         >
           {copy.supportButton}

@@ -1,9 +1,10 @@
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 import {
   MESSAGE_MAX,
   SUBJECT_MAX,
-  TICKET_DEPARTMENTS,
   TICKET_SERVICES,
   isOneOf,
+  isTicketDepartment,
   type TicketDepartment,
   type TicketService,
 } from '@/lib/support/constants'
@@ -57,7 +58,7 @@ export function parseTicketPrefill(params: RawParams, ownProjectIds: readonly st
   const service = first(params.service)
   const project = first(params.project)
   return {
-    department: isOneOf(TICKET_DEPARTMENTS, department) ? department : '',
+    department: isTicketDepartment(department) ? department : '',
     service: isOneOf(TICKET_SERVICES, service) ? service : 'none',
     projectId: ownProjectIds.includes(project) ? project : 'none',
     subject: first(params.subject).slice(0, SUBJECT_MAX),
@@ -74,6 +75,11 @@ export function newTicketPathWithParams(params: RawParams): string {
   }
   const s = qs.toString()
   return s ? `${NEW_TICKET_PATH}?${s}` : NEW_TICKET_PATH
+}
+
+export function newTicketSignUpHref(params: RawParams): string {
+  const next = sanitizeNextPath(newTicketPathWithParams(params))
+  return `/auth/sign-up?next=${encodeURIComponent(next)}`
 }
 
 /**

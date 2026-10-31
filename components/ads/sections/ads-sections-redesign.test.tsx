@@ -133,7 +133,7 @@ describe('Ads platform and information sections', () => {
     }
   })
 
-  it('groups the FAQ support callout at the list width and links to the contact page', () => {
+  it('groups the FAQ support callout at the list width and opens a prefilled support ticket', () => {
     renderWithLanguage('tr', <AdsFaqSection />)
 
     const supportText = screen.getByText('Sorunuz mu var? Destek ekibimiz size yardımcı olabilir.')
@@ -159,6 +159,6 @@ describe('Ads platform and information sections', () => {
     expect(supportLink.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['border', 'border-border/70']),
     )
-    expect(supportLink.getAttribute('href')).toBe('/yasal/iletisim')
+    expect(supportLink.getAttribute('href')).toBe('/support/new?department=gloval-ads')
   })
 })

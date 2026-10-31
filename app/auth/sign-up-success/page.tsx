@@ -17,6 +17,8 @@ import { resumeTargetPath } from '@/lib/signup-draft-core'
 import { useLanguage } from '@/components/language-provider'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { LinkButton } from '@/components/link-button'
+import { buildSignUpLoginHref } from '@/lib/auth-redirect'
+import { sanitizeNextPath } from '@/lib/safe-redirect'
 
 const POLL_MS = 3000
 const MAX_BUSY_RETRIES = 10
@@ -31,17 +33,22 @@ export default function SignUpSuccessPage() {
 
   useEffect(() => {
     setDraftFailed(readSignupDraftFailed())
+    const requestedNext = sanitizeNextPath(new URLSearchParams(window.location.search).get('next'))
     const token = readSignupDraftToken()
-    if (token) {
-      setLoginHref(`/auth/login?next=${encodeURIComponent(`/auth/resume?draft=${token}`)}`)
+    if (requestedNext !== '/dashboard') {
+      setLoginHref(buildSignUpLoginHref(requestedNext, false))
+    } else if (token) {
+      setLoginHref(buildSignUpLoginHref(`/auth/resume?draft=${token}`, false))
     } else if (readSignupIdea()) {
-      setLoginHref(`/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`)
+      setLoginHref(buildSignUpLoginHref('/auth/restore-idea', false))
     }
   }, [])
 
   // The verification link may be opened in another tab: the session cookie is
   // shared, so this tab notices the sign-in and continues with the same draft.
   useEffect(() => {
+    const requestedNext = sanitizeNextPath(new URLSearchParams(window.location.search).get('next'))
+    if (requestedNext !== '/dashboard') return
     const token = readSignupDraftToken()
     if (!token) return
     const supabase = createClient()

@@ -11,6 +11,7 @@ import { replyToTicket, setTicketStatus } from '@/lib/admin/actions'
 import { Button } from '@/components/ui/button'
 import { PageHeader, Panel } from '@/components/admin/admin-ui'
 import { TicketStatusPill } from '@/components/support/ticket-status-pill'
+import { getSupportCopy } from '@/components/support/support-copy'
 import { cn } from '@/lib/utils'
 import type { AdminTicket, AdminTicketMessage } from '@/lib/admin/queries'
 
@@ -25,6 +26,7 @@ export function TicketDetailView({
 }) {
   const { lang } = useLanguage()
   const t = adminT(lang)
+  const supportCopy = getSupportCopy(lang)
   const router = useRouter()
   const [body, setBody] = useState('')
   const [replyPending, startReply] = useTransition()
@@ -91,7 +93,7 @@ export function TicketDetailView({
         ) : null}
       </div>
       <p className="font-mono text-xs text-muted-foreground">
-        {ticket.ticketNumber} · {ticket.department}
+        {ticket.ticketNumber} · {supportCopy.departments[ticket.department]}
         {ticket.service ? ` · ${ticket.service}` : ''}
         {ticket.projectName ? ` · ${ticket.projectName}` : ''}
       </p>
