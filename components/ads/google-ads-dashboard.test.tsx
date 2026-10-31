@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { dictionary } from '@/lib/i18n'
 import type { AdsPerformanceSummary } from '@/lib/ads/providers/types'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
@@ -124,29 +124,133 @@ describe('Google Ads dashboard UI', () => {
     expect(button.className).toContain('dark:text-red-300')
   })
 
-  it('does not disconnect when the confirmation is cancelled', () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  it('opens an accessible confirmation dialog with focus on the safe cancel action', () => {
+    const nativeConfirm = vi.spyOn(window, 'confirm')
     render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
 
     fireEvent.click(screen.getByRole('button', { name: copy.disconnectButton }))
 
-    expect(confirmMock).toHaveBeenCalledWith(copy.disconnectConfirm)
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(mocks.router.refresh).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('alertdialog', { name: copy.disconnectDialogTitle })
+    const labelledBy = dialog.getAttribute('aria-labelledby')
+    const describedBy = dialog.getAttribute('aria-describedby')
+    expect(labelledBy).toBeTruthy()
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(labelledBy ?? '')?.textContent).toBe(copy.disconnectDialogTitle)
+    expect(document.getElementById(describedBy ?? '')?.textContent).toBe(copy.disconnectDialogDescription)
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: copy.disconnectCancelButton }))
+    expect(nativeConfirm).not.toHaveBeenCalled()
   })
 
-  it('posts an explicit disconnect and refreshes server-rendered connection state after confirmation', async () => {
+  it('closes from cancel, Escape, and an outside click without calling the API', () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+
+    const opener = screen.getByRole('button', { name: copy.disconnectButton })
+    opener.focus()
+    fireEvent.click(opener)
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: copy.disconnectCancelButton }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+
+    opener.focus()
+    fireEvent.click(opener)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+
+    opener.focus()
+    fireEvent.click(opener)
+    const backdrop = screen.getByRole('alertdialog').parentElement
+    expect(backdrop).toBeTruthy()
+    fireEvent.mouseDown(backdrop as HTMLElement)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('traps keyboard focus inside the dialog', () => {
+    render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+    fireEvent.click(screen.getByRole('button', { name: copy.disconnectButton }))
+
+    const dialog = screen.getByRole('alertdialog')
+    const cancelButton = within(dialog).getByRole('button', { name: copy.disconnectCancelButton })
+    const confirmButton = within(dialog).getByRole('button', { name: copy.disconnectButton })
+    expect(document.activeElement).toBe(cancelButton)
+
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(confirmButton)
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(cancelButton)
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(confirmButton)
+  })
+
+  it('disconnects with the existing API request, closes, and focuses the connect action after refresh', async () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { rerender } = render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: copy.disconnectButton }))
+    const dialog = screen.getByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.disconnectButton }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/ads/google/disconnect', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connectionId: connection.id }),
+    })))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(mocks.router.refresh).toHaveBeenCalled())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+
+    rerender(<GoogleAdsDashboard connections={[]} pendingFlowId={null} oauthStatus={null} />)
+    const connectButton = screen.getByRole('button', { name: copy.connectionButton })
+    await waitFor(() => expect(document.activeElement).toBe(connectButton))
+  })
+
+  it('shows an announced error and allows the disconnect to be retried', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('{"error":"disconnect_failed"}', { status: 500 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
     render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
 
     fireEvent.click(screen.getByRole('button', { name: copy.disconnectButton }))
+    let dialog = screen.getByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.disconnectButton }))
 
-    expect(confirmMock).toHaveBeenCalledWith(copy.disconnectConfirm)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/ads/google/disconnect', expect.objectContaining({ method: 'POST' })))
+    const error = await screen.findByRole('alert')
+    expect(error.textContent).toContain(copy.disconnectError)
+    dialog = screen.getByRole('alertdialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.disconnectButton }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(mocks.router.refresh).toHaveBeenCalled())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
+  it('prevents a rapid double click from issuing duplicate disconnect requests', async () => {
+    let resolveResponse: (response: Response) => void = () => {}
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveResponse = resolve }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: copy.disconnectButton }))
+    const dialog = screen.getByRole('alertdialog')
+    const confirmButton = within(dialog).getByRole('button', { name: copy.disconnectButton })
+    act(() => {
+      confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      confirmButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect((within(dialog).getByRole('button', { name: copy.disconnectingButton }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(dialog).getByRole('status').textContent).toBe(copy.disconnectingButton)
+
+    await act(async () => {
+      resolveResponse(new Response('{}', { status: 200 }))
+    })
+    await waitFor(() => expect(mocks.router.refresh).toHaveBeenCalled())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 })

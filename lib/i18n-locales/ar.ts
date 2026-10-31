@@ -1381,6 +1381,12 @@ const ar: DeepPartial<Dict> = {
     noticeTerms: 'لشروط الإلغاء والاسترداد راجع:',
   },
   ads: {
+    disconnectDialogTitle: 'هل تريد قطع اتصال Google Ads؟',
+    disconnectDialogDescription: 'عند قطع الاتصال، سيُلغى وصول GLOVAL إلى حسابك على Google وسيُحذف مفتاح الوصول المحفوظ. يمكنك إعادة الاتصال في أي وقت.',
+    disconnectCancelButton: 'إلغاء',
+    disconnectButton: 'قطع الاتصال',
+    disconnectingButton: 'جارٍ قطع الاتصال…',
+    disconnectError: 'تعذّر إلغاء إذن Google Ads. لا يزال الاتصال نشطًا؛ يُرجى المحاولة مرة أخرى.',
     errPolicyAttemptLimit: 'لقد وصلت إلى الحد اليومي لمحاولات الفئات غير المدعومة. يُرجى المحاولة مرة أخرى غدًا.',
     errPolicyBlockedAdultConsumed:
       'فئة المنتجات المخصصة للبالغين غير مدعومة بعد في النسخة التجريبية من GLOVAL Ads. تُحتسب هذه المحاولة المحظورة ضمن حد اليوم للفئات غير المدعومة؛ وقد أُعيد رصيد الفحص أو الرصيد الائتماني.',

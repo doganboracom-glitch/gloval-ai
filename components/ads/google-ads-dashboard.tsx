@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { AlertCircle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -8,6 +8,7 @@ import { useLanguage } from '@/components/language-provider'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   Card,
   CardAction,
@@ -422,6 +423,16 @@ export function GoogleAdsDashboard({
   const [range, setRange] = useState<GoogleAdsDateRange>('7d')
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
+  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false)
+  const disconnectInFlightRef = useRef(false)
+  const connectButtonRef = useRef<HTMLButtonElement>(null)
+  const focusConnectAfterDisconnectRef = useRef(false)
+
+  useEffect(() => {
+    if (!focusConnectAfterDisconnectRef.current) return
+    focusConnectAfterDisconnectRef.current = false
+    if (connections.length === 0) connectButtonRef.current?.focus()
+  }, [connections])
 
   const selectedConnection = useMemo(
     () => connections.find((connection) => connection.id === selectedId)
@@ -440,8 +451,19 @@ export function GoogleAdsDashboard({
       ? 'border-border bg-muted/50 text-muted-foreground'
       : 'border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300'
 
+  function openDisconnectDialog() {
+    setDisconnectError(null)
+    setIsDisconnectDialogOpen(true)
+  }
+
+  function closeDisconnectDialog() {
+    setIsDisconnectDialogOpen(false)
+    setDisconnectError(null)
+  }
+
   async function disconnectSelected() {
-    if (!selectedConnection || isDisconnecting || !window.confirm(copy.disconnectConfirm)) return
+    if (!selectedConnection || disconnectInFlightRef.current) return
+    disconnectInFlightRef.current = true
     setIsDisconnecting(true)
     setDisconnectError(null)
     try {
@@ -458,11 +480,15 @@ export function GoogleAdsDashboard({
         throw new DashboardApiError(code)
       }
       setSelectedId(null)
+      focusConnectAfterDisconnectRef.current = true
+      setIsDisconnectDialogOpen(false)
       router.refresh()
     } catch (caught) {
       const code = caught instanceof DashboardApiError ? caught.code : undefined
       setDisconnectError(code === 'connection_busy' ? copy.connectionBusy : copy.disconnectError)
+      setIsDisconnectDialogOpen(true)
     } finally {
+      disconnectInFlightRef.current = false
       setIsDisconnecting(false)
     }
   }
@@ -493,7 +519,7 @@ export function GoogleAdsDashboard({
           {connections.length === 0 ? (
             <div className="flex flex-col items-start gap-3">
               <form method="post" action="/api/ads/google/connect">
-                <Button type="submit">{copy.connectionButton}</Button>
+                <Button ref={connectButtonRef} type="submit">{copy.connectionButton}</Button>
               </form>
             </div>
           ) : (
@@ -538,10 +564,10 @@ export function GoogleAdsDashboard({
                     variant="outline"
                     size="sm"
                     className="border-red-700/40 text-red-700 hover:bg-red-50 hover:text-red-800 focus-visible:border-red-700 focus-visible:ring-2 focus-visible:ring-red-700 dark:border-red-300/40 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200 dark:focus-visible:border-red-300 dark:focus-visible:ring-red-300"
-                    onClick={disconnectSelected}
+                    onClick={openDisconnectDialog}
                     disabled={isDisconnecting}
                   >
-                    {isDisconnecting ? copy.performanceLoading : copy.disconnectButton}
+                    {isDisconnecting ? copy.disconnectingButton : copy.disconnectButton}
                   </Button>
                 ) : (
                   <form method="post" action="/api/ads/google/connect">
@@ -551,14 +577,32 @@ export function GoogleAdsDashboard({
               </div>
             </div>
           )}
-          {disconnectError ? (
-            <Alert variant="destructive">
-              <AlertCircle aria-hidden="true" />
-              <AlertDescription>{disconnectError}</AlertDescription>
-            </Alert>
-          ) : null}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={isDisconnectDialogOpen}
+        title={copy.disconnectDialogTitle}
+        description={copy.disconnectDialogDescription}
+        confirmLabel={isDisconnecting ? copy.disconnectingButton : copy.disconnectButton}
+        cancelLabel={copy.disconnectCancelButton}
+        destructive
+        confirmDisabled={isDisconnecting}
+        onConfirm={disconnectSelected}
+        onCancel={closeDisconnectDialog}
+      >
+        {disconnectError ? (
+          <Alert className="mt-4" variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription>{disconnectError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {isDisconnecting ? (
+          <span className="sr-only" role="status" aria-live="polite">
+            {copy.disconnectingButton}
+          </span>
+        ) : null}
+      </ConfirmDialog>
 
       {selectedConnection ? (
         <GoogleAdsPerformance
