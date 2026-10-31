@@ -24,23 +24,23 @@ export function AdsPageClient({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <SiteHeader />
-      <main className="flex-1">
-        <section className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 pb-16 pt-14 text-center sm:pt-20">
+      <main className="flex-1 divide-y divide-border/60">
+        <section className="mx-auto flex max-w-4xl flex-col items-center gap-5 px-4 pb-12 pt-10 text-center sm:gap-6 sm:pb-14 sm:pt-14">
           <div className="flex items-center gap-3">
             <AdsProductSwitch active="ads" />
             <AdsBetaBadge />
           </div>
-          <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">{copy.heroTitle}</h1>
-          <p className="max-w-2xl text-pretty text-lg leading-relaxed text-muted-foreground">{copy.heroSubtitle}</p>
+          <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">{copy.heroTitle}</h1>
+          <p className="max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">{copy.heroSubtitle}</p>
           <AdsAddressForm />
         </section>
 
-        <section aria-labelledby="ads-platforms" className="mx-auto max-w-5xl px-4 pb-16">
+        <section aria-labelledby="ads-platforms" className="mx-auto max-w-5xl px-4 py-10 sm:py-12">
           <div className="mb-6 flex flex-col gap-1">
             <h2 id="ads-platforms" className="text-2xl font-semibold tracking-tight">
               {copy.platformsTitle}
             </h2>
-            <p className="text-muted-foreground">{copy.platformsSubtitle}</p>
+            <p className="text-sm leading-relaxed text-muted-foreground">{copy.platformsSubtitle}</p>
           </div>
           <AdsPlatformGrid />
         </section>

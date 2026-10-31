@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useLanguage } from '@/components/language-provider'
+import { AdsNewScanButton } from '@/components/ads/sections/ads-new-scan-button'
 import type { ClientScanError } from '@/lib/ads/scan-client'
 import { describeScanError } from '@/lib/ads/scan-messages'
 
@@ -34,11 +35,7 @@ export function AdsScanError({ error, onAction }: { error: ClientScanError; onAc
           {copy.actionRetry}
         </button>
       ) : null}
-      {view.action === 'newScan' ? (
-        <button type="button" onClick={onAction} className={ACTION_CLASS}>
-          {copy.actionNewScan}
-        </button>
-      ) : null}
+      {view.action === 'newScan' ? <AdsNewScanButton onClick={onAction}>{copy.actionNewScan}</AdsNewScanButton> : null}
     </div>
   )
 }

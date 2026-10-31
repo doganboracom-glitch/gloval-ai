@@ -3,8 +3,11 @@ import { cleanup, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LanguageProvider } from '@/components/language-provider'
+import { AdsPlatformGrid } from '@/components/ads/ads-platform-grid'
 import { AdsCreditsSection } from '@/components/ads/sections/ads-credits-section'
 import { AdsExamplePreviewSection } from '@/components/ads/sections/ads-example-preview'
+import { AdsFaqSection } from '@/components/ads/sections/ads-faq-section'
+import { AdsHowItWorksSection } from '@/components/ads/sections/ads-how-it-works'
 import { ADS_CREDIT_COSTS } from '@/lib/ads/credit-costs'
 import { adsSectionsCopy } from '@/lib/ads/ads-sections-copy'
 import { LANG_COOKIE } from '@/lib/i18n'
@@ -85,5 +88,39 @@ describe('Ads credits panel', () => {
     expect(billingLink.getAttribute('href')).toBe('/billing')
     expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.scanAndPreview))
     expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.publish))
+  })
+})
+
+describe('Ads platform and information sections', () => {
+  it('renders six channels with only Google Ads active and includes WhatsApp Ads', () => {
+    renderWithLanguage('tr', <AdsPlatformGrid />)
+
+    const cards = screen.getAllByRole('listitem')
+    expect(cards).toHaveLength(6)
+    expect(cards[0]?.textContent).toContain('Google Ads')
+    expect(cards[0]?.textContent).not.toContain('Yakında')
+    expect(cards.slice(1).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
+    expect(cards.every((card) => card.querySelector('svg'))).toBe(true)
+    expect(cards[5]?.textContent).toContain('WhatsApp')
+    expect(cards[5]?.textContent).toContain('WhatsApp Business reklamlarıyla sohbet başlatan kampanyalar.')
+  })
+
+  it('uses three step cards while preserving all existing step copy', () => {
+    renderWithLanguage('tr', <AdsHowItWorksSection />)
+
+    const section = screen.getByRole('region', { name: 'Nasıl çalışır?' })
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+
+    for (const step of adsSectionsCopy.tr.how.steps) {
+      expect(section.textContent).toContain(step.title)
+      expect(section.textContent).toContain(step.body)
+    }
+  })
+
+  it('links the FAQ support callout to the contact page', () => {
+    renderWithLanguage('tr', <AdsFaqSection />)
+
+    expect(screen.getByText('Sorunuz mu var? Destek ekibimiz size yardımcı olabilir.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Destek ekibine ulaşın' }).getAttribute('href')).toBe('/yasal/iletisim')
   })
 })

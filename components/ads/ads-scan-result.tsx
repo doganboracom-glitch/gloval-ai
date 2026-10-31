@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useLanguage } from '@/components/language-provider'
+import { AdsNewScanButton } from '@/components/ads/sections/ads-new-scan-button'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
 
 function formatTry(amount: number, lang: string): string {
@@ -162,13 +163,7 @@ export function AdsScanResult({ result, onNewScan }: { result: PublicScanResult;
           {copy.publishSoon}
           <span className="ms-2 rounded-full bg-background px-2 py-0.5 text-xs">{copy.comingSoon}</span>
         </button>
-        <button
-          type="button"
-          onClick={onNewScan}
-          className="inline-flex h-10 items-center rounded-xl border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-        >
-          {copy.newScan}
-        </button>
+        <AdsNewScanButton onClick={onNewScan}>{copy.newScan}</AdsNewScanButton>
       </div>
     </div>
   )
