@@ -2,9 +2,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { loadAdsTokenKeyring, decryptAdsToken } from '@/lib/ads/token-crypto'
 import { saveGoogleAdsConnectionFromOAuth, googleOAuthTokenContext } from '@/lib/ads/google-connections'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import { GOOGLE_ADS_SCOPE } from '@/lib/ads/providers/google-ads-provider'
+import { GOOGLE_ADS_SCOPE, revokeGoogleAdsRefreshToken } from '@/lib/ads/providers/google-ads-provider'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsConnectAllowed, googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 import type { AdsAccountSummary } from '@/lib/ads/providers/types'
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
   const userId = await googleAdsUserId()
   if (!userId) return googleAdsJson({ error: 'not_authenticated' }, 401)
+  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
 
   const flowId = new URL(request.url).searchParams.get('flowId') ?? ''
   if (!UUID_PATTERN.test(flowId)) return googleAdsJson({ error: 'invalid_request' }, 400)
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
 
   const userId = await googleAdsUserId()
   if (!userId) return googleAdsJson({ error: 'not_authenticated' }, 401)
+  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
   const rate = checkRateLimit(`google-ads-select:${userId}`, 10, 60_000)
   if (!rate.allowed) return googleAdsJson({ error: 'rate_limited' }, 429)
 
@@ -82,7 +84,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString()
   const { data: flow, error: flowError } = await admin
     .from('ads_google_oauth_flows')
-    .select('id,pending_refresh_token_enc,scopes,account_candidates,expires_at,status')
+    .select('*')
     .eq('id', flowId)
     .eq('user_id', userId)
     .eq('status', 'awaiting_account')
@@ -116,7 +118,7 @@ export async function POST(request: Request) {
     .eq('user_id', userId)
     .eq('status', 'awaiting_account')
     .gt('expires_at', new Date().toISOString())
-    .select('id')
+    .select('*')
     .maybeSingle()
 
   if (consumeError) return googleAdsJson({ error: 'provider_error' }, 502)
@@ -131,6 +133,33 @@ export async function POST(request: Request) {
     })
     return googleAdsJson({ ok: true, connectionId: connection.id })
   } catch (error) {
+    let tokenRevoked = false
+    try {
+      await revokeGoogleAdsRefreshToken(refreshToken)
+      tokenRevoked = true
+    } catch {
+      console.error('[google-ads] selection token revoke failed', { flowId })
+    }
+
+    try {
+      const { error: restoreError } = await admin.from('ads_google_oauth_flows').insert({
+        id: consumed.id,
+        user_id: consumed.user_id,
+        state_hash: consumed.state_hash,
+        code_verifier_enc: null,
+        pending_refresh_token_enc: consumed.pending_refresh_token_enc,
+        status: 'awaiting_account',
+        account_candidates: tokenRevoked ? [] : consumed.account_candidates,
+        scopes: consumed.scopes,
+        state_consumed_at: consumed.state_consumed_at ?? new Date().toISOString(),
+        expires_at: consumed.expires_at,
+        created_at: consumed.created_at,
+      })
+      if (restoreError) console.error('[google-ads] selection flow restore failed', { flowId })
+    } catch {
+      console.error('[google-ads] selection flow restore failed', { flowId })
+    }
+
     return googleAdsErrorResponse(error instanceof GoogleAdsError ? error : new GoogleAdsError('provider_error'))
   }
 }

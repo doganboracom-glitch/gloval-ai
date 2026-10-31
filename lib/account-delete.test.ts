@@ -187,6 +187,9 @@ vi.mock('@/lib/ads/google-connections', () => ({
     db.calls.push('revokeGoogleAdsConnectionsForDeletion')
     if (db.googleAdsRevokeFails) throw new Error('revocation failed')
   },
+  revokeGoogleAdsOAuthFlowsForDeletion: async () => {
+    db.calls.push('revokeGoogleAdsOAuthFlowsForDeletion')
+  },
 }))
 vi.mock('@/lib/custom-domains/vercel', () => ({
   getVercelClient: () => ({
@@ -226,6 +229,7 @@ describe('deleteOwnAccount', () => {
   it('revokes Google Ads access and removes the free-use subject before deleting the account', async () => {
     expect(await deleteOwnAccount()).toEqual({ ok: true })
     expect(db.calls.indexOf('revokeGoogleAdsConnectionsForDeletion')).toBeLessThan(db.calls.indexOf('deleteUser'))
+    expect(db.calls.indexOf('revokeGoogleAdsOAuthFlowsForDeletion')).toBeLessThan(db.calls.indexOf('deleteUser'))
     expect(db.calls.indexOf('delete:ads_free_usage')).toBeLessThan(db.calls.indexOf('deleteUser'))
     expect(db.tables.ads_free_usage).toEqual([])
   })

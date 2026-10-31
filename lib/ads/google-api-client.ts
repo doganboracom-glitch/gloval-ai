@@ -65,7 +65,6 @@ async function recordOutcome(
 export function createGoogleAdsApiTransport(input: {
   userId: string
   connectionId: string | null
-  developerToken?: string
   apiVersion?: string
   fetcher?: typeof fetch
 }): GoogleAdsApiTransport {
@@ -98,18 +97,18 @@ export function createGoogleAdsApiTransport(input: {
       }
       if (!reservation.allowed) throw new GoogleAdsError('api_quota_exceeded')
 
+      const httpMethod = call.method === 'customers.listAccessibleCustomers' ? 'GET' : 'POST'
       const headers = new Headers({ Authorization: `Bearer ${call.accessToken}` })
-      if (input.developerToken) headers.set('developer-token', input.developerToken)
       if (call.loginCustomerId) headers.set('login-customer-id', call.loginCustomerId)
-      if (call.body) headers.set('Content-Type', 'application/json')
+      if (httpMethod === 'POST' && call.body) headers.set('Content-Type', 'application/json')
 
       let response: Response
       let payload: unknown
       try {
         response = await fetcher(`${API_BASE}/${apiVersion}/${call.path}`, {
-          method: 'POST',
+          method: httpMethod,
           headers,
-          ...(call.body ? { body: JSON.stringify(call.body) } : {}),
+          ...(httpMethod === 'POST' && call.body ? { body: JSON.stringify(call.body) } : {}),
           signal: AbortSignal.timeout(15_000),
         })
         payload = await response.json().catch(() => null)

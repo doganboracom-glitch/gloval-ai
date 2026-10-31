@@ -43,7 +43,6 @@ export type GoogleAdsProviderConfig = {
   clientId: string
   clientSecret?: string
   redirectUri?: string
-  developerToken?: string
   apiVersion?: string
   fetcher?: typeof fetch
   requestAdsApi?: GoogleAdsApiTransport

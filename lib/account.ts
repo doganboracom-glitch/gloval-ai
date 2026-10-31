@@ -2,7 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { revokeGoogleAdsConnectionsForDeletion } from '@/lib/ads/google-connections'
+import {
+  revokeGoogleAdsConnectionsForDeletion,
+  revokeGoogleAdsOAuthFlowsForDeletion,
+} from '@/lib/ads/google-connections'
 import {
   getDomainDeletionBlockers,
   hasDomainDeletionBlockers,
@@ -239,6 +242,7 @@ export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
 
   try {
     await revokeGoogleAdsConnectionsForDeletion(admin, user.id)
+    await revokeGoogleAdsOAuthFlowsForDeletion(admin, user.id)
   } catch {
     console.error('[account-delete] Google Ads revocation failed')
     return { ok: false, error: 'google_revoke_failed' }
@@ -258,6 +262,14 @@ export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
       console.error('[account-delete] unexpected failure', describeError(error))
     }
     return { ok: false, error: 'delete_failed' }
+  }
+
+  try {
+    await revokeGoogleAdsConnectionsForDeletion(admin, user.id)
+    await revokeGoogleAdsOAuthFlowsForDeletion(admin, user.id)
+  } catch {
+    console.error('[account-delete] Google Ads revocation failed')
+    return { ok: false, error: 'google_revoke_failed' }
   }
 
   const { error } = await admin.auth.admin.deleteUser(user.id)

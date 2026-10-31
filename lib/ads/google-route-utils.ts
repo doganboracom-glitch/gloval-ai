@@ -3,6 +3,7 @@ import 'server-only'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
+import { resolveGoogleAdsConnectAccess } from '@/lib/ads/env'
 import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 
 const NO_STORE_HEADERS = {
@@ -13,6 +14,10 @@ const NO_STORE_HEADERS = {
 
 export function googleAdsFeatureEnabled(): boolean {
   return isAdsFeatureUiEnabled()
+}
+
+export function googleAdsConnectAllowed(userId: string | null): boolean {
+  return resolveGoogleAdsConnectAccess(userId)
 }
 
 export async function googleAdsUserId(): Promise<string | null> {

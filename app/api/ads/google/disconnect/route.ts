@@ -1,14 +1,13 @@
 import { checkRateLimit } from '@/lib/rate-limit'
 import { disconnectGoogleAdsConnection } from '@/lib/ads/google-connections'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import { googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsErrorResponse, googleAdsJson, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export async function POST(request: Request) {
-  if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
   if (!isSameOriginGoogleAdsPost(request)) return googleAdsJson({ error: 'csrf_failed' }, 403)
 
   const userId = await googleAdsUserId()

@@ -427,3 +427,206 @@ export async function revokeGoogleAdsConnectionsForDeletion(
 
   if (failed) throw new GoogleAdsError('disconnect_failed')
 }
+
+type GoogleAdsOAuthFlowRow = {
+  id: string
+  user_id: string
+  state_hash: string
+  code_verifier_enc: string | null
+  pending_refresh_token_enc: string | null
+  status: 'started' | 'exchanging' | 'awaiting_account'
+  account_candidates: unknown
+  scopes: string[]
+  state_consumed_at: string | null
+  expires_at: string
+  created_at: string
+}
+
+function oauthFlowRestoreValues(
+  flow: GoogleAdsOAuthFlowRow,
+  accountCandidates: unknown,
+) {
+  return {
+    id: flow.id,
+    user_id: flow.user_id,
+    state_hash: flow.state_hash,
+    code_verifier_enc: null,
+    pending_refresh_token_enc: flow.pending_refresh_token_enc,
+    status: 'awaiting_account' as const,
+    account_candidates: accountCandidates,
+    scopes: flow.scopes,
+    state_consumed_at: flow.state_consumed_at ?? new Date().toISOString(),
+    expires_at: flow.expires_at,
+    created_at: flow.created_at,
+  }
+}
+
+async function restoreOAuthFlow(
+  admin: ReturnType<typeof createAdminClient>,
+  flow: GoogleAdsOAuthFlowRow,
+  accountCandidates: unknown,
+): Promise<boolean> {
+  const { error } = await admin
+    .from('ads_google_oauth_flows')
+    .insert(oauthFlowRestoreValues(flow, accountCandidates))
+  if (!error) return true
+  console.error('[google-ads] OAuth flow restore failed', { flowId: flow.id })
+  return false
+}
+
+export async function revokeGoogleAdsOAuthFlowsForDeletion(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await admin
+    .from('ads_google_oauth_flows')
+    .select('*')
+    .eq('user_id', userId)
+    .not('pending_refresh_token_enc', 'is', null)
+
+  if (error) throw new GoogleAdsError('disconnect_failed')
+  const flows = (data ?? []) as GoogleAdsOAuthFlowRow[]
+  if (flows.length === 0) return
+
+  let keyring
+  try {
+    keyring = loadAdsTokenKeyring()
+  } catch {
+    throw new GoogleAdsError('configuration_missing')
+  }
+
+  let failed = false
+  for (const flow of flows) {
+    if (!flow.pending_refresh_token_enc) continue
+
+    let refreshToken: string
+    try {
+      refreshToken = decryptAdsToken(
+        flow.pending_refresh_token_enc,
+        googleOAuthTokenContext(userId, flow.id),
+        keyring,
+      )
+    } catch {
+      failed = true
+      continue
+    }
+
+    const { data: claimed, error: claimError } = await admin
+      .from('ads_google_oauth_flows')
+      .delete()
+      .eq('id', flow.id)
+      .eq('user_id', userId)
+      .select('*')
+      .maybeSingle()
+
+    if (claimError) {
+      failed = true
+      continue
+    }
+    if (!claimed) continue
+
+    try {
+      await revokeGoogleAdsRefreshToken(refreshToken)
+    } catch {
+      failed = true
+      await restoreOAuthFlow(admin, flow, [])
+    }
+  }
+
+  if (failed) throw new GoogleAdsError('disconnect_failed')
+}
+
+export type ExpiredGoogleAdsOAuthCleanup = {
+  flowsRemoved: number
+  tokensRevoked: number
+  ciphertextsCleared: number
+  revokeFailures: number
+}
+
+export async function cleanupExpiredGoogleAdsOAuthFlows(
+  admin: ReturnType<typeof createAdminClient>,
+  now = new Date().toISOString(),
+): Promise<ExpiredGoogleAdsOAuthCleanup> {
+  const batchSize = 25
+  const maxBatches = 200
+  const totals: ExpiredGoogleAdsOAuthCleanup = {
+    flowsRemoved: 0,
+    tokensRevoked: 0,
+    ciphertextsCleared: 0,
+    revokeFailures: 0,
+  }
+  let keyring: ReturnType<typeof loadAdsTokenKeyring> | null | undefined
+
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    const { data, error } = await admin
+      .from('ads_google_oauth_flows')
+      .select('id,user_id,pending_refresh_token_enc')
+      .lt('expires_at', now)
+      .not('pending_refresh_token_enc', 'is', null)
+      .order('expires_at', { ascending: true })
+      .limit(batchSize)
+
+    if (error) throw new GoogleAdsError('provider_error')
+    const flows = (data ?? []) as Array<Pick<GoogleAdsOAuthFlowRow, 'id' | 'user_id' | 'pending_refresh_token_enc'>>
+    if (flows.length === 0) return totals
+
+    if (keyring === undefined) {
+      try {
+        keyring = loadAdsTokenKeyring()
+      } catch {
+        keyring = null
+      }
+    }
+
+    const outcomes = await Promise.all(flows.map(async (flow) => {
+      let revoked = false
+      if (flow.pending_refresh_token_enc && keyring) {
+        try {
+          const refreshToken = decryptAdsToken(
+            flow.pending_refresh_token_enc,
+            googleOAuthTokenContext(flow.user_id, flow.id),
+            keyring,
+          )
+          await revokeGoogleAdsRefreshToken(refreshToken)
+          revoked = true
+        } catch {
+          console.warn('[google-ads] expired OAuth token revoke failed', { flowId: flow.id })
+        }
+      } else {
+        console.warn('[google-ads] expired OAuth token could not be decrypted', { flowId: flow.id })
+      }
+
+      const { data: removed, error: removeError } = await admin
+        .from('ads_google_oauth_flows')
+        .delete()
+        .eq('id', flow.id)
+        .eq('user_id', flow.user_id)
+        .lt('expires_at', now)
+        .select('id')
+        .maybeSingle()
+
+      if (removeError) throw new GoogleAdsError('provider_error')
+      return { removed: Boolean(removed), revoked }
+    }))
+
+    for (const outcome of outcomes) {
+      if (!outcome.removed) continue
+      totals.flowsRemoved += 1
+      totals.ciphertextsCleared += 1
+      if (outcome.revoked) totals.tokensRevoked += 1
+      else totals.revokeFailures += 1
+    }
+
+    if (flows.length < batchSize) return totals
+  }
+
+  const { data: remaining, error: remainingError } = await admin
+    .from('ads_google_oauth_flows')
+    .select('id')
+    .lt('expires_at', now)
+    .not('pending_refresh_token_enc', 'is', null)
+    .limit(1)
+
+  if (remainingError || (remaining?.length ?? 0) > 0) throw new GoogleAdsError('provider_error')
+  return totals
+}

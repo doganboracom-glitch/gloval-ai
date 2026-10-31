@@ -4,6 +4,7 @@ import { AdsDashboardClient } from '@/components/ads/ads-dashboard-client'
 import { ADS_DASHBOARD_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
+import { googleAdsConnectAllowed } from '@/lib/ads/google-route-utils'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect(`/auth/login?next=${ADS_DASHBOARD_PATH}`)
+  if (!googleAdsConnectAllowed(user.id)) notFound()
 
   const params = await searchParams
   const rawAddress = firstValue(params.url)

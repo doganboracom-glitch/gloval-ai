@@ -2,13 +2,13 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadAdsTokenKeyring, decryptAdsToken, encryptAdsToken } from '@/lib/ads/token-crypto'
-import { createGoogleAdsProvider } from '@/lib/ads/providers/google-ads-provider'
+import { createGoogleAdsProvider, revokeGoogleAdsRefreshToken } from '@/lib/ads/providers/google-ads-provider'
 import { createGoogleAdsApiTransport } from '@/lib/ads/google-api-client'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { GOOGLE_OAUTH_CALLBACK_COOKIE_PATH, googleOAuthCookieName, hashGoogleOAuthState, readGoogleOAuthFlowId, secureTextEquals, verifyGoogleOAuthState } from '@/lib/ads/google-oauth-state'
 import { googleOAuthTokenContext } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsOAuthSettings } from '@/lib/ads/env'
-import { googleAdsFeatureEnabled, googleAdsRedirect, googleAdsUserId } from '@/lib/ads/google-route-utils'
+import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsRedirect, googleAdsUserId } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -56,6 +56,11 @@ export async function GET(request: Request) {
   if (claims.sub !== userId) {
     return addCookieCleanup(googleAdsRedirect(request, { google: 'state_invalid' }), flowId)
   }
+  if (!googleAdsConnectAllowed(userId)) {
+    const admin = createAdminClient()
+    await deleteFlow(admin, flowId, userId)
+    return addCookieCleanup(googleAdsRedirect(request, { google: 'not_found' }), flowId)
+  }
 
   const cookieStore = await cookies()
   const cookieValue = cookieStore.get(googleOAuthCookieName(flowId))?.value ?? ''
@@ -81,9 +86,10 @@ export async function GET(request: Request) {
   }
 
   const providerError = url.searchParams.get('error')
-  if (providerError === 'access_denied') {
+  if (providerError) {
     await deleteFlow(admin, flowId, userId)
-    return addCookieCleanup(googleAdsRedirect(request, { google: 'oauth_denied' }), flowId)
+    const errorCode = providerError === 'access_denied' ? 'oauth_denied' : 'oauth_failed'
+    return addCookieCleanup(googleAdsRedirect(request, { google: errorCode }), flowId)
   }
 
   const code = url.searchParams.get('code')
@@ -108,11 +114,11 @@ export async function GET(request: Request) {
     return addCookieCleanup(googleAdsRedirect(request, { google: 'configuration_missing' }), flowId)
   }
 
+  let exchangedToken: { refreshToken: string; scopes: string[] } | null = null
   try {
     const apiTransport = createGoogleAdsApiTransport({
       userId,
       connectionId: null,
-      developerToken: resolved.settings.developerToken,
     })
     const provider = createGoogleAdsProvider({
       clientId: resolved.settings.clientId,
@@ -125,6 +131,7 @@ export async function GET(request: Request) {
       redirectUri: resolved.settings.redirectUri,
       codeVerifier: verifier,
     })
+    exchangedToken = { refreshToken: tokenSet.refreshToken, scopes: tokenSet.scopes }
     const accounts = await provider.listAccountsForUser(tokenSet.accessToken, { userId, connectionId: null })
     const pendingToken = encryptAdsToken(
       tokenSet.refreshToken,
@@ -158,7 +165,51 @@ export async function GET(request: Request) {
     if (saveError || !saved) throw new GoogleAdsError('flow_expired')
     return addCookieCleanup(googleAdsRedirect(request, { google_flow: flowId }), flowId)
   } catch (error) {
-    await deleteFlow(admin, flowId, userId)
+    let tokenRevoked = false
+    let tokenPersistedForCleanup = false
+
+    if (exchangedToken) {
+      try {
+        await revokeGoogleAdsRefreshToken(exchangedToken.refreshToken)
+        tokenRevoked = true
+      } catch {
+        try {
+          const pendingToken = encryptAdsToken(
+            exchangedToken.refreshToken,
+            googleOAuthTokenContext(userId, flowId),
+            keyring,
+          )
+          const { data: saved, error: saveError } = await admin
+            .from('ads_google_oauth_flows')
+            .update({
+              status: 'awaiting_account',
+              code_verifier_enc: null,
+              pending_refresh_token_enc: pendingToken.ciphertext,
+              account_candidates: [],
+              scopes: exchangedToken.scopes,
+            })
+            .eq('id', flowId)
+            .eq('user_id', userId)
+            .eq('status', 'exchanging')
+            .select('id')
+            .maybeSingle()
+          tokenPersistedForCleanup = !saveError && Boolean(saved)
+        } catch {
+          tokenPersistedForCleanup = false
+        }
+
+        if (!tokenPersistedForCleanup) {
+          try {
+            await revokeGoogleAdsRefreshToken(exchangedToken.refreshToken)
+            tokenRevoked = true
+          } catch {
+            console.error('[google-ads] OAuth token cleanup deferred', { flowId })
+          }
+        }
+      }
+    }
+
+    if (tokenRevoked || !exchangedToken) await deleteFlow(admin, flowId, userId)
     const code = error instanceof GoogleAdsError ? error.code : 'oauth_failed'
     return addCookieCleanup(googleAdsRedirect(request, { google: code }), flowId)
   }

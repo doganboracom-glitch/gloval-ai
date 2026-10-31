@@ -41,7 +41,7 @@ beforeEach(() => {
 })
 
 describe('Google Ads API quota transport', () => {
-  it('reserves each API operation before sending and omits the retired developer-token header by default', async () => {
+  it('reserves each API operation before sending and never sends a developer-token header', async () => {
     const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse([{ results: [] }]))
     const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher: fetcherMock as unknown as typeof fetch })
 
@@ -52,10 +52,32 @@ describe('Google Ads API quota transport', () => {
       p_connection_id: CONTEXT.connectionId,
       p_method: 'googleAds.searchStream',
     }))
-    const headers = new Headers(fetcherMock.mock.calls[0]?.[1]?.headers)
+    const init = fetcherMock.mock.calls[0]?.[1]
+    const headers = new Headers(init?.headers)
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(String(init?.body))).toEqual({ query: 'SELECT campaign.id FROM campaign' })
     expect(headers.get('authorization')).toBe('Bearer private-access-token')
     expect(headers.get('login-customer-id')).toBe('1111111111')
     expect(headers.has('developer-token')).toBe(false)
+  })
+
+  it('sends accessible-customer discovery as GET without a body', async () => {
+    const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ resourceNames: [] }))
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: null, fetcher: fetcherMock as unknown as typeof fetch })
+
+    await transport(call({
+      method: 'customers.listAccessibleCustomers',
+      path: 'customers:listAccessibleCustomers',
+      loginCustomerId: null,
+      body: undefined,
+      context: { userId: CONTEXT.userId, connectionId: null },
+    }))
+
+    const [url, init] = fetcherMock.mock.calls[0] ?? []
+    expect(String(url)).toBe('https://googleads.googleapis.com/v26/customers:listAccessibleCustomers')
+    expect(init?.method).toBe('GET')
+    expect(init?.body).toBeUndefined()
+    expect(new Headers(init?.headers).has('content-type')).toBe(false)
   })
 
   it('fails closed when the atomic quota reservation is denied', async () => {

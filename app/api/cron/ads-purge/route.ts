@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanupExpiredGoogleAdsOAuthFlows } from '@/lib/ads/google-connections'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 300
 
 const BATCH_SIZE = 5_000
 const MAX_BATCHES = 10
@@ -19,6 +20,7 @@ export async function GET(request: Request) {
   const totals: Record<string, number> = {}
 
   try {
+    const oauthCleanup = await cleanupExpiredGoogleAdsOAuthFlows(admin)
     for (; batches < MAX_BATCHES; batches += 1) {
       const { data, error } = await admin.rpc('ads_purge_expired', {
         p_free_usage_days: 14,
@@ -45,7 +47,7 @@ export async function GET(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, batches, purged: totals }, {
+    return NextResponse.json({ ok: true, batches, purged: totals, oauthCleanup }, {
       headers: { 'Cache-Control': 'no-store' },
     })
   } catch {

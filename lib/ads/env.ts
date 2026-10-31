@@ -16,7 +16,8 @@ export const ADS_ENV = {
   googleAdsOAuthClientSecret: 'GOOGLE_ADS_OAUTH_CLIENT_SECRET',
   googleAdsOAuthStateSecret: 'ADS_OAUTH_STATE_SECRET',
   googleAdsOAuthRedirectUri: 'GOOGLE_ADS_OAUTH_REDIRECT_URI',
-  googleAdsDeveloperToken: 'GOOGLE_ADS_DEVELOPER_TOKEN',
+  googleAdsConnectEnabled: 'ADS_GOOGLE_CONNECT_ENABLED',
+  googleAdsConnectAllowedUserIds: 'ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS',
 } as const
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -44,7 +45,22 @@ export type GoogleAdsOAuthSettings = {
   clientSecret: string
   stateSecret: string
   redirectUri: string
-  developerToken?: string
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = process.env): boolean {
+  if (!userId || env[ADS_ENV.googleAdsConnectEnabled]?.trim() !== '1') return false
+  const normalizedUserId = userId.trim().toLowerCase()
+  if (!UUID_PATTERN.test(normalizedUserId)) return false
+
+  const allowedUserIds = new Set(
+    (env[ADS_ENV.googleAdsConnectAllowedUserIds] ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => UUID_PATTERN.test(value)),
+  )
+  return allowedUserIds.has(normalizedUserId)
 }
 
 export type GoogleAdsOAuthSettingsResult =
@@ -80,7 +96,6 @@ export function resolveGoogleAdsOAuthSettings(env: Env = process.env): GoogleAds
     return { ok: false, reason: 'redirect_uri_invalid' }
   }
 
-  const developerToken = env[ADS_ENV.googleAdsDeveloperToken]?.trim()
   return {
     ok: true,
     settings: {
@@ -88,7 +103,6 @@ export function resolveGoogleAdsOAuthSettings(env: Env = process.env): GoogleAds
       clientSecret,
       stateSecret,
       redirectUri,
-      ...(developerToken ? { developerToken } : {}),
     },
   }
 }
