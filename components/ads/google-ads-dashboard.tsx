@@ -434,6 +434,11 @@ export function GoogleAdsDashboard({
   const oauthNotice = oauthStatus
     ? errorMessage(oauthStatus, copy)
     : null
+  const connectionStatusClassName = selectedConnection?.status === 'active'
+    ? 'border-success/30 bg-success/10 text-success-strong'
+    : selectedConnection?.status === 'revoked'
+      ? 'border-border bg-muted/50 text-muted-foreground'
+      : 'border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300'
 
   async function disconnectSelected() {
     if (!selectedConnection || isDisconnecting || !window.confirm(copy.disconnectConfirm)) return
@@ -517,7 +522,10 @@ export function GoogleAdsDashboard({
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={selectedConnection?.status === 'active' ? 'secondary' : 'outline'}>
+                <Badge variant="outline" className={connectionStatusClassName}>
+                  {selectedConnection?.status === 'active' ? (
+                    <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-success" />
+                  ) : null}
                   {selectedConnection?.status === 'active'
                     ? copy.accountStatusActive
                     : selectedConnection?.status === 'revoked'
@@ -529,6 +537,7 @@ export function GoogleAdsDashboard({
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="border-red-700/40 text-red-700 hover:bg-red-50 hover:text-red-800 focus-visible:border-red-700 focus-visible:ring-2 focus-visible:ring-red-700 dark:border-red-300/40 dark:text-red-300 dark:hover:bg-red-950/40 dark:hover:text-red-200 dark:focus-visible:border-red-300 dark:focus-visible:ring-red-300"
                     onClick={disconnectSelected}
                     disabled={isDisconnecting}
                   >
