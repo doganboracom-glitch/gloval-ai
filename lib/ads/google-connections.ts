@@ -385,9 +385,19 @@ export async function revokeGoogleAdsConnectionsForDeletion(
   }
 
   let failed = false
-  for (const connection of connections) {
-    if (!connection.refresh_token_enc) continue
+  for (const candidate of connections) {
+    const leaseId = randomUUID()
+    let leaseAcquired = false
     try {
+      await claimConnectionLease(admin, userId, candidate.id, leaseId, ['active', 'error', 'pending'])
+      leaseAcquired = true
+      const connection = await getGoogleAdsConnectionForUser(admin, userId, candidate.id)
+      if (!connection) {
+        failed = true
+        continue
+      }
+      if (!connection.refresh_token_enc) continue
+
       const refreshToken = decryptAdsToken(
         connection.refresh_token_enc,
         connectionTokenContext(connection),
@@ -396,12 +406,22 @@ export async function revokeGoogleAdsConnectionsForDeletion(
       await revokeGoogleAdsRefreshToken(refreshToken)
       const { error: updateError } = await admin
         .from('ads_connections')
-        .update({ status: 'revoked', refresh_token_enc: null, last_error: null })
+        .update({
+          status: 'revoked',
+          refresh_token_enc: null,
+          last_error: null,
+          api_lease_id: null,
+          api_lease_expires_at: null,
+        })
         .eq('id', connection.id)
         .eq('user_id', userId)
+        .eq('api_lease_id', leaseId)
       if (updateError) failed = true
     } catch {
-      failed = true
+      const current = await getGoogleAdsConnectionForUser(admin, userId, candidate.id).catch(() => null)
+      if (current?.status !== 'revoked' || current.refresh_token_enc) failed = true
+    } finally {
+      if (leaseAcquired) await releaseConnectionLease(admin, userId, candidate.id, leaseId)
     }
   }
 

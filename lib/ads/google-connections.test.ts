@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   needsRotation: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
   connection: null as Record<string, unknown> | null,
+  revoke: vi.fn(),
   claimAllowed: true,
 }))
 
@@ -24,10 +25,10 @@ vi.mock('@/lib/ads/token-crypto', () => ({
   loadAdsTokenKeyring: mocks.loadKeyring,
 }))
 vi.mock('@/lib/ads/providers/google-ads-provider', () => ({
-  revokeGoogleAdsRefreshToken: vi.fn(),
+  revokeGoogleAdsRefreshToken: mocks.revoke,
 }))
 
-import { withGoogleAdsAccess } from '@/lib/ads/google-connections'
+import { revokeGoogleAdsConnectionsForDeletion, withGoogleAdsAccess } from '@/lib/ads/google-connections'
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const CONNECTION_ID = '123e4567-e89b-42d3-a456-426614174000'
@@ -40,8 +41,9 @@ function makeAdminQuery() {
     eq: (...args: unknown[]) => typeof builder
     in: (...args: unknown[]) => typeof builder
     or: (...args: unknown[]) => typeof builder
+    not: (...args: unknown[]) => typeof builder
     maybeSingle: () => Promise<{ data: unknown; error: null }>
-    then: (resolve: (value: { error: null }) => unknown) => Promise<unknown>
+    then: (resolve: (value: { data: unknown; error: null }) => unknown) => Promise<unknown>
   } = {
     select: () => builder,
     update: (patch) => {
@@ -52,10 +54,11 @@ function makeAdminQuery() {
     eq: () => builder,
     in: () => builder,
     or: () => builder,
+    not: () => builder,
     maybeSingle: async () => isUpdate
       ? { data: mocks.claimAllowed ? { id: CONNECTION_ID } : null, error: null }
       : { data: mocks.connection ? { ...mocks.connection } : null, error: null },
-    then: (resolve) => Promise.resolve({ error: null }).then(resolve),
+    then: (resolve) => Promise.resolve({ data: isUpdate ? null : mocks.connection ? [{ ...mocks.connection }] : [], error: null }).then(resolve),
   }
   return builder
 }
@@ -87,6 +90,7 @@ function provider(refresh: GoogleAdsProvider['refreshAccessTokenWithRotation']):
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.updates.length = 0
+  mocks.revoke.mockResolvedValue(undefined)
   mocks.claimAllowed = true
   mocks.connection = {
     id: CONNECTION_ID,
@@ -178,5 +182,14 @@ describe('Google Ads connection lifecycle', () => {
     })).rejects.toMatchObject({ code: 'connection_busy' })
 
     expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('takes the connection lease before revoking tokens during account deletion', async () => {
+    await revokeGoogleAdsConnectionsForDeletion({ from: mocks.from } as never, USER_ID)
+
+    expect(mocks.revoke).toHaveBeenCalledWith('refresh-token-plaintext')
+    expect(mocks.updates[0]).toMatchObject({ api_lease_id: expect.any(String) })
+    expect(mocks.updates[1]).toMatchObject({ status: 'revoked', refresh_token_enc: null })
+    expect(mocks.updates.at(-1)).toEqual({ api_lease_id: null, api_lease_expires_at: null })
   })
 })

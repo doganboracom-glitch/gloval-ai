@@ -215,16 +215,15 @@ function GoogleAccountChooser({ flowId }: { flowId: string | null }) {
                 <AlertDescription>{selectionError}</AlertDescription>
               </Alert>
             ) : null}
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  onClick={connectSelectedAccount}
-                  disabled={!selected || selected.isManager || isSubmitting}
-                >
-                  {isSubmitting ? copy.accountListLoading : copy.accountConnectSelected}
-                </Button>
-              </div>
-
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                onClick={connectSelectedAccount}
+                disabled={!selected || selected.isManager || isSubmitting}
+              >
+                {isSubmitting ? copy.accountListLoading : copy.accountConnectSelected}
+              </Button>
+            </div>
           </>
         )}
       </CardContent>
@@ -491,7 +490,6 @@ export function GoogleAdsDashboard({
               <form method="post" action="/api/ads/google/connect">
                 <Button type="submit">{copy.connectionButton}</Button>
               </form>
-              <p className="text-sm text-muted-foreground">{copy.readOnlyNote}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
