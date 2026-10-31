@@ -1,4 +1,5 @@
 -- rollback: support_department_gloval_ads_091
+-- applied as supabase migration support_department_gloval_ads_091; file numbered 092 because 091 is ads-google-readonly
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
