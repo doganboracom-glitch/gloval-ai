@@ -25,6 +25,8 @@ export const PLANNER_OUTPUT: PlannerOutput = {
   services: ['Ölçüye özel mutfak dolabı', 'Ankastre set', 'Montaj hizmeti'],
   language: 'tr',
   policyCategory: 'none',
+  policyEvidence: 'none',
+  policyEvidenceQuote: '',
   competitiveness: 'medium',
   keywords: ['mutfak dolabı', 'ölçüye özel mutfak', 'ankara mutfak dolabı', 'mutfak montajı'],
   negativeKeywords: ['ikinci el', 'ücretsiz'],
@@ -43,12 +45,15 @@ export const COPY_OUTPUT: AdCopyOutput = {
   path2: 'dolap',
 }
 
-export const USER_ACTOR: ScanActor = { kind: 'user', userId: 'user-1', planCode: 'free' }
+export const USER_ACTOR: ScanActor = { kind: 'user', userId: 'user-1', planCode: 'free', ip: '203.0.113.5' }
 export const ANON_ACTOR: ScanActor = { kind: 'anon', anonId: 'A'.repeat(22), ip: '203.0.113.0/24' }
 
 export type FakeCalls = {
   reserve: number
   release: number
+  reservePolicy: number
+  releasePolicy: number
+  policyAlerts: Array<{ cap: number; used: number }>
   charge: number
   refund: number
   generate: Array<{ system: string; prompt: string }>
@@ -57,7 +62,18 @@ export type FakeCalls = {
 }
 
 export function makeDeps(overrides: Partial<ScanDeps> = {}): { deps: ScanDeps; calls: FakeCalls } {
-  const calls: FakeCalls = { reserve: 0, release: 0, charge: 0, refund: 0, generate: [], usage: [], alerts: [] }
+  const calls: FakeCalls = {
+    reserve: 0,
+    release: 0,
+    reservePolicy: 0,
+    releasePolicy: 0,
+    policyAlerts: [],
+    charge: 0,
+    refund: 0,
+    generate: [],
+    usage: [],
+    alerts: [],
+  }
   const deps: ScanDeps = {
     now: () => 1_000_000,
     rateLimit: () => ({ allowed: true, retryAfterMs: 0 }),
@@ -69,6 +85,19 @@ export function makeDeps(overrides: Partial<ScanDeps> = {}): { deps: ScanDeps; c
     releaseFree: async () => {
       calls.release++
       return true
+    },
+    reservePolicyAttempt: async () => {
+      calls.reservePolicy++
+      return { allowed: true, alreadyReserved: false }
+    },
+    releasePolicyAttempt: async () => {
+      calls.releasePolicy++
+      return true
+    },
+    policyBlockCap: () => 60,
+    readGlobalPolicyBlockUsed: async () => 1,
+    notifyPolicyBlockCap: async (cap, used) => {
+      calls.policyAlerts.push({ cap, used })
     },
     charge: async () => {
       calls.charge++

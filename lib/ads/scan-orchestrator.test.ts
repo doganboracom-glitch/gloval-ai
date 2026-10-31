@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ADS_POLICY_BLOCK_GLOBAL_SUBJECT } from '@/lib/ads/policy-constants'
 import { runScan, type ScanDeps } from '@/lib/ads/scan-orchestrator'
 import {
   ANON_ACTOR,
@@ -30,6 +31,7 @@ describe('runScan: success', () => {
     expect(outcome.result.plan.cities).toEqual(['Ankara'])
     expect(outcome.result.ad.headlines.length).toBeGreaterThanOrEqual(3)
     expect(calls.release).toBe(0)
+    expect(calls.releasePolicy).toBe(1)
     expect(calls.charge).toBe(0)
     const scan = calls.usage.find((row) => row.flow === 'scan')
     expect(scan).toMatchObject({ outcome: 'ok', free_quota_used: true, credits_charged: 0, anon_subject_hash: 'hash' })
@@ -177,21 +179,165 @@ describe('runScan: refunds on failure', () => {
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
     expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: false } })
     expect(calls.generate).toHaveLength(0)
+    expect(calls.reservePolicy).toBe(0)
+    expect(calls.charge).toBe(0)
     expect(calls.release).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: false,
+      error_code: 'policy_blocked:gambling',
+    })
   })
 
-  it('consumes the attempt when only the model flags a blocked category', async () => {
+  it('blocks the Lilashop sex-shop snapshot before the model without consuming scan rights', async () => {
+    const snapshot = {
+      ...SNAPSHOT,
+      host: 'lilashop.com.tr',
+      finalHost: 'www.lilashop.com.tr',
+      title: 'Lila Shop - Seks Shop',
+      description: 'Seks Shop and lingerie collection',
+      navLabels: ['İç giyim', 'Mayo', 'Bikini'],
+    }
+    const { deps, calls } = makeDeps({ scanSite: async () => ({ ok: true, snapshot }) })
+    const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
+
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultNotConsumed',
+      },
+    })
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.reservePolicy).toBe(0)
+    expect(calls.charge).toBe(0)
+    expect(calls.release).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: false,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
+  it('keeps only the policy-abuse slot for a verified hard block', async () => {
+    const snapshot = { ...SNAPSHOT, text: 'We publish adult entertainment.' }
     const { deps, calls } = makeDeps({
-      generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'weapons' }),
+      scanSite: async () => ({ ok: true, snapshot }),
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'adult',
+        policyEvidence: 'explicit',
+        policyEvidenceQuote: 'adult entertainment',
+      }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
-    expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: true } })
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultConsumed',
+      },
+    })
+    expect(outcome.ok ? null : outcome.error).not.toHaveProperty('blockedCategories')
+    expect(outcome.ok ? null : outcome.error).not.toHaveProperty('policyEvidenceQuote')
+    expect(calls.release).toBe(1)
+    expect(calls.releasePolicy).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'error',
+      free_quota_used: false,
+      credits_charged: 0,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
+  it('rejects policy attempts at the global limit before charging or invoking AI', async () => {
+    const { deps, calls } = makeDeps({
+      reservePolicyAttempt: async () => ({
+        allowed: false,
+        reason: 'limit_reached',
+        blockedSubject: ADS_POLICY_BLOCK_GLOBAL_SUBJECT,
+      }),
+      readGlobalPolicyBlockUsed: async () => 60,
+    })
+    const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
+    expect(outcome).toEqual({ ok: false, error: { code: 'policy_attempt_limit' } })
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.charge).toBe(0)
+    expect(calls.release).toBe(1)
+    expect(calls.policyAlerts).toEqual([{ cap: 60, used: 60 }])
+  })
+
+  it('refunds paid credits for a hard block and retains only the policy-abuse slot', async () => {
+    const snapshot = { ...SNAPSHOT, text: 'We publish adult entertainment.' }
+    const { deps, calls } = makeDeps({
+      reserveFree: async () => ({ allowed: false, reason: 'limit_reached', blockedSubject: 'ads:user:user-1' }),
+      scanSite: async () => ({ ok: true, snapshot }),
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'adult',
+        policyEvidence: 'explicit',
+        policyEvidenceQuote: 'adult entertainment',
+      }),
+    })
+    const outcome = await runScan({ ...REQUEST, actor: USER_ACTOR }, deps)
+    expect(outcome).toEqual({
+      ok: false,
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultConsumed',
+      },
+    })
+    expect(calls.charge).toBe(1)
+    expect(calls.refund).toBe(1)
     expect(calls.release).toBe(0)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ free_quota_used: true, error_code: 'policy_blocked' })
+    expect(calls.releasePolicy).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'refunded',
+      free_quota_used: false,
+      credits_charged: 0,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
+  it('treats an ambiguous model-only adult signal as restricted instead of blocking', async () => {
+    const snapshot = {
+      ...SNAPSHOT,
+      host: 'lilashop.com.tr',
+      finalHost: 'www.lilashop.com.tr',
+      title: 'Lila Shop',
+      description: 'Kadın iç giyim, mayo ve bikini',
+      text: 'Seks Shop',
+    }
+    const { deps, calls } = makeDeps({
+      scanSite: async () => ({ ok: true, snapshot }),
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'adult',
+        policyEvidence: 'ambiguous',
+        policyEvidenceQuote: 'Seks Shop',
+      }),
+    })
+    const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
+    expect(outcome.ok && outcome.result.restricted).toContain('adult')
+    expect(calls.release).toBe(0)
+    expect(calls.releasePolicy).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'ok',
+      free_quota_used: true,
+      error_code: null,
+    })
   })
 
   it('adds a restricted category the model found, never removes one', async () => {
-    const { deps } = makeDeps({ generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'alcohol' }) })
+    const { deps } = makeDeps({
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'alcohol',
+        policyEvidence: 'explicit',
+        policyEvidenceQuote: 'Butik şarap',
+      }),
+    })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
     expect(outcome.ok && outcome.result.restricted).toEqual(['alcohol'])
   })
@@ -205,6 +351,24 @@ describe('runScan: refunds on failure', () => {
     expect(outcome).toEqual({ ok: false, error: { code: 'generation_failed' } })
     expect(calls.charge).toBe(1)
     expect(calls.refund).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ outcome: 'refunded', credits_charged: 0 })
+  })
+
+  it('retries a transient idempotent credit refund before writing the failed outcome', async () => {
+    let refundCalls = 0
+    const { deps, calls } = makeDeps({
+      reserveFree: async () => ({ allowed: false, reason: 'limit_reached', blockedSubject: 'ads:user:x' }),
+      generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, keywords: ['a b'] }),
+      refund: async () => {
+        refundCalls++
+        return { refunded: refundCalls === 2, balance: 12, refundedAmount: refundCalls === 2 ? 2 : 0 }
+      },
+    })
+    expect(await runScan({ ...REQUEST, actor: USER_ACTOR }, deps)).toEqual({
+      ok: false,
+      error: { code: 'generation_failed' },
+    })
+    expect(refundCalls).toBe(2)
     expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ outcome: 'refunded', credits_charged: 0 })
   })
 
@@ -233,7 +397,27 @@ describe('runScan: refunds on failure', () => {
     })
     expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({ ok: false, error: { code: 'generation_failed' } })
     expect(calls.release).toBe(1)
+    expect(calls.releasePolicy).toBe(1)
     expect(calls.usage.find((row) => row.flow === 'plan')).toMatchObject({ outcome: 'error', error_code: 'generation_failed', input_tokens: 7 })
+  })
+
+  it('retries releasing a policy slot after a technical model failure', async () => {
+    let releaseCalls = 0
+    const { deps, calls } = makeDeps({
+      generate: (async () => {
+        throw new Error('temporary model failure')
+      }) as unknown as ScanDeps['generate'],
+      releasePolicyAttempt: async () => {
+        releaseCalls++
+        return releaseCalls === 2
+      },
+    })
+    expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({
+      ok: false,
+      error: { code: 'generation_failed' },
+    })
+    expect(releaseCalls).toBe(2)
+    expect(calls.release).toBe(1)
   })
 
   it('times out when the time budget is already spent', async () => {

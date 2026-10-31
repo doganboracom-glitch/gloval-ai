@@ -1401,6 +1401,13 @@ const fr: DeepPartial<Dict> = {
     noticeBody: 'Les informations du titulaire doivent être exactes et à jour ; des informations erronées peuvent entraîner la suspension de l’enregistrement.',
     noticeTerms: 'Pour les conditions d’annulation et de remboursement, consultez :',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Vous avez atteint la limite quotidienne de tentatives pour les catégories non prises en charge. Réessayez demain.',
+    errPolicyBlockedAdultConsumed:
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative bloquée compte dans la limite quotidienne des catégories non prises en charge ; votre quota de scan ou vos crédits ont été restitués.',
+    errPolicyBlockedAdultNotConsumed:
+      'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative ne compte pas dans la limite quotidienne des tentatives bloquées et aucun quota de scan ni crédit n’a été utilisé.',
+  },
 }
 
 export default fr

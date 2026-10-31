@@ -1441,6 +1441,13 @@ const et: DeepPartial<Dict> = {
     noticeBody: 'Domeeni omaniku andmed peavad olema õiged ja ajakohased; valed andmed võivad viia registreeringu peatamiseni.',
     noticeTerms: 'Tühistamise ja tagasimakse tingimused leiad siit:',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Oled tänase mittetoetatud kategooriate katsete piirini jõudnud. Proovi homme uuesti.',
+    errPolicyBlockedAdultConsumed:
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. See blokeeritud katse läheb tänase mittetoetatud kategooriate piirmäära arvestusse; skannimise kasutuskord või krediidid tagastati.',
+    errPolicyBlockedAdultNotConsumed:
+      'See kategooria (täiskasvanutele mõeldud tooted) ei ole GLOVAL Adsi beetaversioonis veel toetatud. Seda katset ei arvestatud päevase blokeeritud katsete limiidi hulka ning skannimise kasutuskorda ega krediite ei kasutatud.',
+  },
 }
 
 export default et

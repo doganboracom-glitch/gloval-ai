@@ -36,7 +36,12 @@ export type PolicySeverity = 'blocked' | 'restricted'
 export type PolicyCategoryDefinition = {
   category: PolicyCategory
   severity: PolicySeverity
+  /** Direct signals that can reach the category's configured severity. */
   terms: string[]
+  /** Lower-confidence signals that only produce a restricted finding. */
+  reviewTerms?: string[]
+  /** Direct terms that snapshot checks may block, but a model quote cannot prove alone. */
+  modelEvidenceExclusions?: string[]
 }
 
 export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
@@ -44,10 +49,16 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
     category: 'adult',
     severity: 'blocked',
     terms: [
-      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx', 'sex shop', 'seks shop', 'sexshop', 'seks hatti',
-      'seks sohbet', 'sex chat', 'canli seks', 'escort', 'escorts', 'eskort*', 'erotik masaj', 'fuhus*', 'genelev*',
-      'yetiskin icerik', 'adult content', 'adult entertainment', 'webcam show', 'nude photos', 'ciplak fotograf*',
+      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx', 'sex shop', 'seks shop', 'sexshop*', 'seksshop*',
+      'seks hatti', 'seks sohbet', 'sex chat', 'canli seks', 'escort', 'escorts', 'eskort*', 'erotik masaj', 'fuhus*',
+      'genelev*', 'yetiskin icerik', 'adult content', 'adult entertainment', 'sexual content', 'sexually explicit',
+      'webcam show', 'nude photos', 'ciplak fotograf*', 'adult product*', 'adult toy*', 'adult shop*', 'adult store*',
+      'sex toy*', 'sex product*', 'erotic product*', 'erotic shop*', 'erotik*', 'erotik urun*', 'erotik magaza*',
+      'cinsel icerik', 'cinsel oyuncak*', 'cinsel urun*', 'yetiskin urun*', 'yetiskin oyuncak*', 'vibrator*', 'dildo*',
+      'masturbator*',
     ],
+    reviewTerms: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
+    modelEvidenceExclusions: ['sex shop', 'seks shop', 'sexshop*', 'seksshop*'],
   },
   {
     category: 'weapons',

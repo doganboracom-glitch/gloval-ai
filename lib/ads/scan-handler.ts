@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ADS_ANON_COOKIE, verifyAnonCookie } from '@/lib/ads/anon-identity'
 import { clientIpFromHeaders } from '@/lib/ads/client-ip'
+import { ADS_POLICY_BLOCK_RESERVATION_ID_PREFIX } from '@/lib/ads/policy-constants'
 import { ADS_SCAN_ERROR_STATUS, adsScanErrorBody, type AdsScanError } from '@/lib/ads/public-errors'
 import { runScan, type ScanActor, type ScanDeps } from '@/lib/ads/scan-orchestrator'
 
@@ -8,7 +9,10 @@ const MAX_BODY_BYTES = 2048
 
 const bodySchema = z.object({
   address: z.string().trim().min(1).max(300),
-  requestId: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+  requestId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,128}$/)
+    .refine((value) => !value.startsWith(ADS_POLICY_BLOCK_RESERVATION_ID_PREFIX)),
 })
 
 export type ScanHandlerEnv = {
@@ -54,13 +58,13 @@ export async function handleScanRequest(request: Request, env: ScanHandlerEnv): 
 
   let actor: ScanActor
   const user = await env.getUser()
+  const ip = clientIpFromHeaders(request.headers)
   if (user) {
-    actor = { kind: 'user', userId: user.userId, planCode: user.planCode }
+    actor = { kind: 'user', userId: user.userId, planCode: user.planCode, ip: ip ?? undefined }
   } else {
     const cookie = verifyAnonCookie(env.getCookie(ADS_ANON_COOKIE))
     if (cookie.status === 'unconfigured') return errorResponse({ code: 'service_unavailable' })
     if (cookie.status !== 'valid') return errorResponse({ code: 'session_required' })
-    const ip = clientIpFromHeaders(request.headers)
     if (!ip) return errorResponse({ code: 'service_unavailable' })
     actor = { kind: 'anon', anonId: cookie.id, ip }
   }

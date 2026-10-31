@@ -601,6 +601,28 @@ describe('free quota RPCs', () => {
     expect(await usage()).toEqual({ 's:a': 1, 's:b': 1 })
   })
 
+  it('keeps explicit policy-block counters independent from regular free-scan quota', async () => {
+    const policySubjects = ['ads:policy:user:identity-hash', 'ads:policy:ip:ip-hash', 'ads:policy:global']
+    const policyLimits = [3, 10, 60]
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      expect(
+        await reserve(`policy-block-${String(attempt).padStart(4, '0')}`, policySubjects, policyLimits),
+      ).toMatchObject({ allowed: true })
+    }
+    expect(await reserve('policy-block-0004', policySubjects, policyLimits)).toMatchObject({
+      allowed: false,
+      blocked_subject: policySubjects[0],
+    })
+
+    expect(await reserve('free-scan-0001', ['ads:user:identity-hash'], [1])).toMatchObject({ allowed: true })
+    expect(await usage()).toEqual({
+      'ads:policy:user:identity-hash': 3,
+      'ads:policy:ip:ip-hash': 3,
+      'ads:policy:global': 3,
+      'ads:user:identity-hash': 1,
+    })
+  })
+
   it('releases once and lets the same request id reserve again', async () => {
     await reserve('req-0000-0003', ['s:c'], [1])
     expect(await release('req-0000-0003')).toBe(true)

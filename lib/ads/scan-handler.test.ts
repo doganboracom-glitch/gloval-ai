@@ -4,7 +4,7 @@ vi.mock('server-only', () => ({}))
 
 import { ADS_ANON_COOKIE, issueAnonCookie } from '@/lib/ads/anon-identity'
 import { handleScanRequest, type ScanHandlerEnv } from '@/lib/ads/scan-handler'
-import { makeDeps } from '@/lib/ads/testing/scan-fixtures'
+import { makeDeps, SNAPSHOT } from '@/lib/ads/testing/scan-fixtures'
 
 const SECRET = 'x'.repeat(40)
 
@@ -55,9 +55,48 @@ describe('POST /api/ads/scan handler', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
-  it('accepts a signed-in user without a cookie', async () => {
+  it('returns the adult-beta notice for the Lilashop fixture without calling AI or exposing evidence', async () => {
+    const issued = issueAnonCookie({ ADS_ANON_HASH_SECRET: SECRET })!
+    const { env, calls } = setup({}, issued.value)
+    const snapshot = {
+      ...SNAPSHOT,
+      host: 'lilashop.com.tr',
+      finalHost: 'www.lilashop.com.tr',
+      title: 'Lila Shop - Seks Shop',
+      description: 'Seks Shop and lingerie collection',
+      navLabels: ['İç giyim', 'Mayo', 'Bikini'],
+    }
+    env.deps.scanSite = async () => ({ ok: true, snapshot })
+    const response = await handleScanRequest(post(VALID), env)
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({
+      error: {
+        code: 'policy_blocked',
+        consumed: false,
+        messageKey: 'errPolicyBlockedAdultNotConsumed',
+      },
+    })
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.reservePolicy).toBe(0)
+    expect(calls.charge).toBe(0)
+    expect(calls.release).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: false,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
+  it('accepts a signed-in user without a cookie and passes the normalized IP to policy limits', async () => {
     const { env } = setup({ getUser: async () => ({ userId: 'u1', planCode: 'free' }) })
+    const reservePolicyAttempt = vi.fn(env.deps.reservePolicyAttempt)
+    env.deps.reservePolicyAttempt = reservePolicyAttempt
     expect((await handleScanRequest(post(VALID), env)).status).toBe(200)
+    expect(reservePolicyAttempt).toHaveBeenCalledWith(VALID.requestId, {
+      kind: 'user',
+      userId: 'u1',
+      planCode: 'free',
+      ip: '203.0.113.5',
+    })
   })
 
   it('rejects malformed, oversized and cross-origin requests', async () => {
@@ -68,6 +107,7 @@ describe('POST /api/ads/scan handler', () => {
     expect((await handleScanRequest(post({ ...VALID, address: 'a'.repeat(3000) }), env)).status).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://evil.example' }), env)).status).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://gloval.ai' }), env)).status).toBe(200)
+    expect((await handleScanRequest(post({ ...VALID, requestId: 'policy_12345678' }), env)).status).toBe(400)
   })
 
   it('fails closed for a visitor without a usable IP', async () => {

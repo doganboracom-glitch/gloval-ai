@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { ADS_FREE_LIMITS } from '@/lib/ads/credit-costs'
+import { ADS_POLICY_BLOCK_LIMITS } from '@/lib/ads/policy-constants'
 
 /** Names of every GLOVAL Ads environment variable. Values are never logged. */
 export const ADS_ENV = {
@@ -9,6 +10,7 @@ export const ADS_ENV = {
   tokenEncActiveVersion: 'ADS_TOKEN_ENC_ACTIVE_VERSION',
   anonHashSecret: 'ADS_ANON_HASH_SECRET',
   anonDailyCap: 'ADS_ANON_DAILY_CAP',
+  policyBlockGlobalDailyCap: 'ADS_POLICY_BLOCK_GLOBAL_DAILY_CAP',
   plannerModel: 'ADS_PLANNER_MODEL',
   previewModel: 'ADS_PREVIEW_MODEL',
   assistantModel: 'ADS_ASSISTANT_MODEL',
@@ -24,10 +26,18 @@ export function resolveAnonDailyCap(env: Env = process.env): number {
   return value >= 1 ? value : ADS_FREE_LIMITS.anonGlobalPerDayDefault
 }
 
+/** Global daily ceiling on explicit model-confirmed policy-block attempts. */
+export function resolvePolicyBlockGlobalDailyCap(env: Env = process.env): number {
+  const raw = env[ADS_ENV.policyBlockGlobalDailyCap]?.trim()
+  if (!raw || !/^\d{1,6}$/.test(raw)) return ADS_POLICY_BLOCK_LIMITS.globalPerDayDefault
+  const value = Number(raw)
+  return value >= 1 ? value : ADS_POLICY_BLOCK_LIMITS.globalPerDayDefault
+}
+
 /**
- * Secret used to HMAC anonymous subjects (cookie id, IP) before they reach the
- * database. Dedicated on purpose: it is never shared with another feature's
- * secret. Returns null when missing so callers fail closed.
+ * Secret used to HMAC anonymous quota subjects and policy-block identity/IP
+ * counters before they reach storage. Dedicated to Ads; callers fail closed
+ * when it is missing.
  */
 export function resolveAnonHashSecret(env: Env = process.env): string | null {
   const value = env[ADS_ENV.anonHashSecret]

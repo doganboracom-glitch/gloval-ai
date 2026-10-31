@@ -16,6 +16,9 @@ export type ScanErrorCopy = {
   errInsufficientContent: string
   errPolicyBlocked: string
   errPolicyConsumed: string
+  errPolicyBlockedAdultConsumed: string
+  errPolicyBlockedAdultNotConsumed: string
+  errPolicyAttemptLimit: string
   errGenerationFailed: string
   errTimeout: string
   errServiceUnavailable: string
@@ -53,10 +56,18 @@ export function describeScanError(error: ClientScanError, copy: ScanErrorCopy): 
     case 'insufficient_content':
       return { message: copy.errInsufficientContent, action: 'none' }
     case 'policy_blocked':
+      if (error.messageKey === 'errPolicyBlockedAdultConsumed') {
+        return { message: copy.errPolicyBlockedAdultConsumed, action: 'none' }
+      }
+      if (error.messageKey === 'errPolicyBlockedAdultNotConsumed') {
+        return { message: copy.errPolicyBlockedAdultNotConsumed, action: 'none' }
+      }
       return {
         message: error.consumed ? `${copy.errPolicyBlocked} ${copy.errPolicyConsumed}` : copy.errPolicyBlocked,
         action: 'none',
       }
+    case 'policy_attempt_limit':
+      return { message: copy.errPolicyAttemptLimit, action: 'none' }
     case 'generation_failed':
       return { message: copy.errGenerationFailed, action: 'retry' }
     case 'timeout':

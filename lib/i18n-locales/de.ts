@@ -1441,6 +1441,13 @@ const de: DeepPartial<Dict> = {
     noticeBody: 'Die Angaben zum Domaininhaber müssen korrekt und aktuell sein; falsche Angaben können zur Sperrung der Registrierung führen.',
     noticeTerms: 'Bedingungen zu Stornierung und Erstattung finden Sie hier:',
   },
+  ads: {
+    errPolicyAttemptLimit: 'Das heutige Limit für Versuche mit nicht unterstützten Kategorien ist erreicht. Bitte versuche es morgen erneut.',
+    errPolicyBlockedAdultConsumed:
+      'Diese Kategorie (Produkte für Erwachsene) wird in der GLOVAL-Ads-Beta noch nicht unterstützt. Dieser blockierte Versuch zählt für das heutige Limit nicht unterstützter Kategorien; dein Scan-Kontingent bzw. deine Credits wurden zurückerstattet.',
+    errPolicyBlockedAdultNotConsumed:
+      'Diese Kategorie (Produkte für Erwachsene) wird in der GLOVAL-Ads-Beta noch nicht unterstützt. Dieser Versuch wurde nicht auf das tägliche Limit blockierter Versuche angerechnet, und es wurden weder Scan-Kontingent noch Credits verbraucht.',
+  },
 }
 
 export default de
