@@ -12,7 +12,7 @@ import {
 } from '@/lib/seo/site-sharing'
 
 const IMAGE_SIZE = { width: 1200, height: 630 }
-const MAX_IMAGE_BYTES = 1_500_000
+const MAX_IMAGE_BYTES = 3_000_000
 const MAX_REMOTE_IMAGE_ATTEMPTS = 2
 const CACHE_CONTROL = 'public, max-age=300, s-maxage=1800, stale-while-revalidate=86400'
 const SAFE_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif'])
@@ -107,7 +107,7 @@ async function safeSiteImageDataUri(source: string | undefined): Promise<string 
 
   try {
     const response = await fetch(trustedUrl, {
-      cache: 'force-cache',
+      cache: 'no-store',
       redirect: 'error',
       signal: AbortSignal.timeout(2500),
     })
@@ -125,12 +125,13 @@ async function safeSiteImageDataUri(source: string | undefined): Promise<string 
 }
 
 async function loadTenantHeroImage(site: TenantSeoSite): Promise<string | null> {
+  const candidates = getTenantOgImageCandidates(site.schema)
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   let remoteAttempts = 0
-  for (const candidate of getTenantOgImageCandidates(site.schema)) {
+
+  for (const candidate of candidates) {
     const inlineImage = safeRasterDataUri(candidate)
     if (inlineImage) return inlineImage
-
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     if (!trustedSupabaseImageUrl(candidate, supabaseUrl)) continue
     if (remoteAttempts >= MAX_REMOTE_IMAGE_ATTEMPTS) break
     remoteAttempts += 1
@@ -161,10 +162,10 @@ function colorWithAlpha(hex: string, alpha: number): string {
 }
 
 function headingFontSize(heading: string): number {
-  if (heading.length <= 26) return 76
-  if (heading.length <= 48) return 62
-  if (heading.length <= 72) return 50
-  return 42
+  if (heading.length <= 26) return 62
+  if (heading.length <= 48) return 54
+  if (heading.length <= 72) return 46
+  return 40
 }
 
 export async function renderTenantOgImage(site: TenantSeoSite): Promise<ImageResponse> {
@@ -227,16 +228,11 @@ export async function renderTenantOgImage(site: TenantSeoSite): Promise<ImageRes
           style={{
             position: 'absolute',
             top: 0,
-            right: 0,
-            bottom: 0,
             left: 0,
+            bottom: 0,
+            width: heroImage ? '74%' : '100%',
             display: 'flex',
-            backgroundColor: background,
-            ...(heroImage
-              ? {
-                  backgroundImage: `linear-gradient(90deg, ${colorWithAlpha(background, 0.98)} 0%, ${colorWithAlpha(background, 0.92)} 54%, ${colorWithAlpha(background, 0.18)} 100%)`,
-                }
-              : {}),
+            backgroundColor: heroImage ? colorWithAlpha(background, 0.9) : background,
           }}
         >
           <div
