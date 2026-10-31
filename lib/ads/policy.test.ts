@@ -60,6 +60,34 @@ describe('restricted categories', () => {
     expect(result.blocked).toEqual([])
   })
 
+  it('does not block ordinary lingerie, swimwear, fashion, cosmetics, or jewelry', () => {
+    const result = evaluateSnapshotPolicy(
+      snapshot({
+        title: 'Lingerie and swimwear collection',
+        description: 'Everyday fashion, cosmetics, and jewelry',
+        headings: ['Underwear, bikini, and clothing'],
+      }),
+    )
+    expect(result.verdict).toBe('allowed')
+    expect(result.blocked).toEqual([])
+  })
+
+  it('downgrades a standalone sex-shop SEO label to restricted review', () => {
+    const result = evaluateSnapshotPolicy(
+      snapshot({
+        host: 'lilashop.com.tr',
+        finalHost: 'www.lilashop.com.tr',
+        title: 'Lila Shop - Seks Shop',
+        description: 'Seks Shop and lingerie collection',
+        navLabels: ['İç giyim', 'Mayo', 'Bikini'],
+      }),
+    )
+    expect(result.verdict).toBe('restricted')
+    expect(result.blocked).toEqual([])
+    expect(result.restricted).toContain('adult')
+    expect(result.findings).toContainEqual({ category: 'adult', severity: 'restricted', prominentHits: 2, bodyHits: 0 })
+  })
+
   it('blocked wins over restricted', () => {
     const result = evaluatePolicy({ prominent: ['Şarap ve canlı bahis'] })
     expect(result.verdict).toBe('blocked')

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { adCopyIsSufficient, validateAdCopy } from '@/lib/ads/ad-copy'
-import { buildPlannerPrompt, isCleanText, newBoundaryToken, validatePlan } from '@/lib/ads/planner'
+import { buildPlannerPrompt, isCleanText, newBoundaryToken, PLANNER_SYSTEM, validatePlan } from '@/lib/ads/planner'
 import { COPY_OUTPUT, PLANNER_OUTPUT, SNAPSHOT } from '@/lib/ads/testing/scan-fixtures'
 
 describe('isCleanText', () => {
@@ -40,13 +40,45 @@ describe('validatePlan', () => {
     expect(plan).toMatchObject({ language: 'en', languageFallback: true })
   })
 
-  it('reports the model policy category only when it is not none', () => {
-    expect(validatePlan(PLANNER_OUTPUT, SNAPSHOT)?.modelPolicyCategory).toBeNull()
-    expect(validatePlan({ ...PLANNER_OUTPUT, policyCategory: 'alcohol' }, SNAPSHOT)?.modelPolicyCategory).toBe('alcohol')
+  it('requires a matching site quote before treating model policy evidence as explicit', () => {
+    const raw = {
+      ...PLANNER_OUTPUT,
+      policyCategory: 'adult' as const,
+      policyEvidence: 'explicit' as const,
+      policyEvidenceQuote: 'adult entertainment',
+    }
+
+    expect(validatePlan(PLANNER_OUTPUT, SNAPSHOT)).toMatchObject({
+      modelPolicyCategory: null,
+      modelPolicyEvidence: 'none',
+    })
+    expect(validatePlan(raw, SNAPSHOT)).toMatchObject({
+      modelPolicyCategory: 'adult',
+      modelPolicyEvidence: 'ambiguous',
+    })
+    expect(validatePlan(raw, { ...SNAPSHOT, text: 'We publish adult entertainment.' })).toMatchObject({
+      modelPolicyCategory: 'adult',
+      modelPolicyEvidence: 'explicit',
+    })
+    expect(
+      validatePlan(
+        { ...raw, policyEvidenceQuote: 'Seks Shop' },
+        { ...SNAPSHOT, title: 'Lila Shop - Seks Shop' },
+      ),
+    ).toMatchObject({ modelPolicyEvidence: 'ambiguous' })
+    expect(
+      validatePlan({ ...raw, policyEvidence: 'ambiguous' }, { ...SNAPSHOT, text: 'We publish adult entertainment.' }),
+    ).toMatchObject({ modelPolicyEvidence: 'ambiguous' })
   })
 })
 
 describe('planner prompt', () => {
+  it('defines hard versus restricted policy categories and excludes ordinary fashion from adult', () => {
+    expect(PLANNER_SYSTEM).toContain('lingerie')
+    expect(PLANNER_SYSTEM).toContain('restricted-only')
+    expect(PLANNER_SYSTEM).toContain('policyEvidenceQuote')
+  })
+
   it('wraps the page data in a random boundary and defangs the token', () => {
     const token = newBoundaryToken()
     expect(token).toMatch(/^SITE_DATA_[0-9A-F]{18}$/)

@@ -25,6 +25,8 @@ export const PLANNER_OUTPUT: PlannerOutput = {
   services: ['Ölçüye özel mutfak dolabı', 'Ankastre set', 'Montaj hizmeti'],
   language: 'tr',
   policyCategory: 'none',
+  policyEvidence: 'none',
+  policyEvidenceQuote: '',
   competitiveness: 'medium',
   keywords: ['mutfak dolabı', 'ölçüye özel mutfak', 'ankara mutfak dolabı', 'mutfak montajı'],
   negativeKeywords: ['ikinci el', 'ücretsiz'],
