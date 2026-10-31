@@ -1402,6 +1402,14 @@ const fr: DeepPartial<Dict> = {
     noticeTerms: 'Pour les conditions d’annulation et de remboursement, consultez :',
   },
   ads: {
+    disconnectDialog: {
+      title: 'Déconnecter Google Ads ?',
+      description: 'La déconnexion révoquera l’accès de GLOVAL à votre compte Google et supprimera le jeton d’accès enregistré. Vous pourrez vous reconnecter à tout moment.',
+      cancel: 'Annuler',
+      confirm: 'Déconnecter',
+      pending: 'Déconnexion…',
+      error: 'Google n’a pas pu révoquer l’accès. La connexion est toujours active ; veuillez réessayer.',
+    },
     errPolicyAttemptLimit: 'Vous avez atteint la limite quotidienne de tentatives pour les catégories non prises en charge. Réessayez demain.',
     errPolicyBlockedAdultConsumed:
       'Cette catégorie (produits pour adultes) n’est pas encore prise en charge dans la version bêta de GLOVAL Ads. Cette tentative bloquée compte dans la limite quotidienne des catégories non prises en charge ; votre quota de scan ou vos crédits ont été restitués.',
