@@ -14,6 +14,7 @@
      bloklara bakın) marka vurgusunun mor kalması gereken yerlerde bu token
      kullanılır — .beta-neon / .glow-primary ile aynı gerekçe. */
   --color-brand: oklch(0.66 0.2 298);
+  --color-ads-glow-pink: var(--color-chart-3);
   --color-brand-foreground: oklch(0.16 0.018 288);
   /* Başarılı durumlar için sabit yeşil; koyu zeminde ~9:1 kontrast. */
   --color-success: oklch(0.79 0.19 150);

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { ADS_CREDIT_COSTS, ADS_FREE_LIMITS } from '@/lib/ads/credit-costs'
+import styles from './ads-credits-section.module.css'
 
 export function AdsCreditsSection() {
   const { t } = useLanguage()
@@ -82,16 +83,19 @@ export function AdsCreditsSection() {
           </tbody>
         </table>
       </div>
-      <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-1">
+      <aside
+        aria-label={copy.panelLabel}
+        className={`${styles.creditPanel} -mt-px flex w-full flex-col gap-4 rounded-b-2xl border-x border-b border-t-0 border-brand/40 p-4 sm:ml-auto sm:w-4/5 sm:flex-row sm:items-center sm:justify-between sm:px-5`}
+      >
+        <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-foreground/85">
           <p>{t.ads.creditsNote}</p>
           <p>{copy.balanceNote}</p>
         </div>
-        <Link href="/billing" className="inline-flex w-fit items-center gap-1 font-medium text-brand hover:underline">
+        <Link href="/billing" className={styles.creditButton}>
           {copy.billingLink}
           <ArrowUpRight aria-hidden="true" className="size-4" />
         </Link>
-      </div>
+      </aside>
     </section>
   )
 }
