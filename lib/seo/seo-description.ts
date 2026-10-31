@@ -1,3 +1,5 @@
+import { fold, wordIncludes } from '@/lib/visual-subjects'
+
 export const SEO_DESCRIPTION_MAX_LENGTH = 160
 
 const LEGACY_GENERATED_MARKER = /GLOVAL\s+AI\s+ile\s+oluşturuldu/iu
@@ -18,6 +20,7 @@ export function seoDescriptionPlainText(value: string): string {
     .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')
     .replace(/[\s\u00a0]+/gu, ' ')
+    .replace(/\s+([,.;:!?])/gu, '$1')
     .trim()
 }
 
@@ -46,16 +49,12 @@ export function resolveSeoDescription(value: string | null | undefined): string 
 
 /** Only let a whole-site AI edit replace the owner-authored metadata on request. */
 export function shouldAllowAiSeoDescriptionEdit(instruction: string): boolean {
-  const normalized = instruction
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-  const hasMetadataTarget = /(?:^|[^\p{L}\p{N}])(?:seo|meta|google|search|arama|site)(?=$|[^\p{L}\p{N}])/u.test(
-    normalized,
+  const folded = fold(instruction)
+  const hasMetadataTarget = ['seo', 'meta', 'google', 'search', 'arama', 'site'].some((word) =>
+    wordIncludes(instruction, word),
   )
-  const hasDescriptionTerm = /(?:^|[^\p{L}\p{N}])(?:aciklama\p{L}*|description\p{L}*|snippet\p{L}*)(?=$|[^\p{L}\p{N}])/u.test(
-    normalized,
-  )
+  const hasDescriptionTerm =
+    /(?:^|[^a-z0-9])(?:aciklama\w*|description\w*|snippet\w*)(?=$|[^a-z0-9])/.test(folded)
 
   return hasMetadataTarget && hasDescriptionTerm
 }

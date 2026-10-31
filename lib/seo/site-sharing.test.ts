@@ -233,7 +233,7 @@ describe('buildTenantSocialMetadata', () => {
         type: 'hero',
         title: 'Hero',
         description: '<p>Günlük <strong>lüks</strong>, kalıcı tasarım.</p>',
-        image: { src: storageUrl },
+        image: { imagePrompt: '', src: storageUrl },
       },
       { type: 'about', title: 'Hakkımızda', body: 'İlk cümle burada. İkinci cümle burada.' },
     ] as unknown as WebsiteSchema['sections']
@@ -250,7 +250,7 @@ describe('buildTenantSocialMetadata', () => {
       type: 'hero',
       title: 'Hero',
       description: '',
-      image: { src: storageUrl },
+      image: { imagePrompt: '', src: storageUrl },
     }
     const aboutMetadata = buildTenantSocialMetadata({
       site,

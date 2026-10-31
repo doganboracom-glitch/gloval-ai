@@ -148,7 +148,7 @@ const pl: DeepPartial<Dict> = {
       siteName: 'Nazwa strony',
       seoTitle: 'Tytuł SEO',
       seoDescription: 'Opis SEO',
-      seoDescriptionHelp: 'Wyświetlany pod tytułem w wynikach Google. Pozostaw pusty, aby utworzyć go z treści nagłówka lub strony O nas.'
+      seoDescriptionHelp: 'Wyświetlany pod tytułem w wynikach Google. Pozostaw pusty, aby utworzyć go z treści nagłówka lub strony O nas.',
       seoTitleHelp:
         'Tytuł wyświetlany w wynikach wyszukiwania Google i karcie przeglądarki. Utworzony automatycznie na podstawie Twojej branży, w pełni edytowalny.',
       tagline: 'Hasło reklamowe',

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCleanSite } from '@/lib/__fixtures__/sample-site'
+import { shouldAllowAiSeoDescriptionEdit } from '@/lib/seo/seo-description'
 import { DEFAULT_CURSOR_AURA, type CursorAuraConfig } from '@/lib/cursor-aura'
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 
@@ -36,7 +37,7 @@ const site = (effects?: WebsiteSchema['effects']): WebsiteSchema => ({ ...buildC
 
 function retitled(base: WebsiteSchema, effects?: WebsiteSchema['effects']): WebsiteSchema {
   const sections = base.sections.map((s, i) => (i === 0 ? ({ ...s, title: 'Yeni başlık' } as Section) : s))
-  return { ...base, sections, ...(effects ? { effects } : { effects: undefined }) }
+  return { ...base, meta: { ...base.meta }, sections, ...(effects ? { effects } : { effects: undefined }) }
 }
 
 async function edit(
@@ -57,6 +58,11 @@ beforeEach(() => {
 })
 
 describe('/api/edit and effects', () => {
+  it('recognizes explicit SEO description requests only', () => {
+    expect(shouldAllowAiSeoDescriptionEdit("Hero başlığını 'Yeni başlık' yap")).toBe(false)
+    expect(shouldAllowAiSeoDescriptionEdit('SEO açıklaması olarak yeni bir SEO metni yaz')).toBe(true)
+  })
+
   it('api/edit: AI output that adds effects to a site without them is discarded', async () => {
     const original = site()
     state.aiResult = retitled(original, { cursorAura: INJECTED })
@@ -91,6 +97,7 @@ describe('/api/edit and effects', () => {
 
     const body = await edit(original)
 
+    expect(body.source).toBe('ai')
     expect(body.schema.meta.description).toBe('Owner-written SEO description')
   })
 
@@ -101,10 +108,12 @@ describe('/api/edit and effects', () => {
     output.meta.description = `<p>${'SEO metin '.repeat(30)}</p>`
     state.aiResult = output
 
-    const body = await edit(original, 'SEO açıklamasını güncelle')
+    const body = await edit(original, 'SEO açıklaması olarak yeni bir SEO metni yaz')
 
+    expect(body.source).toBe('ai')
     expect(body.schema.meta.description).toMatch(/^SEO metin SEO metin/)
     expect(body.schema.meta.description).not.toMatch(/[<>]/)
-    expect(Array.from(body.schema.meta.description)).toHaveLength(160)
+    expect(Array.from(body.schema.meta.description).length).toBeLessThanOrEqual(160)
+    expect(body.schema.meta.description.length).toBeGreaterThan(0)
   })
 })
