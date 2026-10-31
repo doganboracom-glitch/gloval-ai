@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { revokePendingGoogleAdsOAuthFlows } from '@/lib/ads/google-ads-oauth-server'
 import {
   getDomainDeletionBlockers,
   hasDomainDeletionBlockers,
@@ -233,6 +234,13 @@ export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
     if (hasDomainDeletionBlockers(blockers)) return { ok: false, error: 'domains_block_deletion' }
   } catch (error) {
     console.error('[account-delete] domain guard failed', describeError(error))
+    return { ok: false, error: 'delete_failed' }
+  }
+
+  try {
+    await revokePendingGoogleAdsOAuthFlows(admin, user.id)
+  } catch {
+    console.error('[account-delete] Google Ads OAuth cleanup failed', { stage: 'google_ads_oauth_revoke' })
     return { ok: false, error: 'delete_failed' }
   }
 

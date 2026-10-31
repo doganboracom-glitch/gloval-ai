@@ -19,10 +19,14 @@ export function isAdsPlatform(value: unknown): value is AdsPlatform {
  */
 export function createAdsProviderRegistry(options: {
   googleClientId: string
+  googleClientSecret?: string
   overrides?: Partial<Record<AdsPlatform, AdsProvider>>
 }): Record<AdsPlatform, AdsProvider> {
   const base: Record<AdsPlatform, AdsProvider> = {
-    google_ads: createGoogleAdsProvider({ clientId: options.googleClientId }),
+    google_ads: createGoogleAdsProvider({
+      clientId: options.googleClientId,
+      clientSecret: options.googleClientSecret,
+    }),
     meta: createComingSoonProvider('meta', COMING_SOON_NAMES.meta),
     tiktok: createComingSoonProvider('tiktok', COMING_SOON_NAMES.tiktok),
     linkedin: createComingSoonProvider('linkedin', COMING_SOON_NAMES.linkedin),

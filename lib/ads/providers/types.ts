@@ -25,6 +25,7 @@ export type AdsOAuthStartInput = {
   /** Opaque, signed value the callback route verifies. */
   state: string
   redirectUri: string
+  codeChallenge: string
 }
 
 export type AdsTokenSet = {
@@ -41,6 +42,7 @@ export type AdsAccountSummary = {
   currency: string | null
   /** Manager account id to send as login-customer-id, when the account sits under one. */
   loginCustomerId: string | null
+  isManager?: boolean
 }
 
 /** Money is always in minor units (kuruş) plus an ISO 4217 code. */
@@ -69,7 +71,7 @@ export interface AdsProvider {
   readonly displayName: string
 
   buildAuthUrl(input: AdsOAuthStartInput): string
-  exchangeCode(input: { code: string; redirectUri: string }): Promise<AdsTokenSet>
+  exchangeCode(input: { code: string; redirectUri: string; codeVerifier: string }): Promise<AdsTokenSet>
   refreshAccessToken(refreshToken: string): Promise<Pick<AdsTokenSet, 'accessToken' | 'expiresAt'>>
   listAccounts(accessToken: string): Promise<AdsAccountSummary[]>
   publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult>

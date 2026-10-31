@@ -16,6 +16,10 @@ const db = vi.hoisted(() => ({
   calls: [] as string[],
 }))
 
+const googleAdsCleanup = vi.hoisted(() => ({
+  revokePendingGoogleAdsOAuthFlows: vi.fn(async () => undefined),
+}))
+
 const EMAIL = 'music.operatoru@hotmail.com'
 
 function seedFreeAccount() {
@@ -179,6 +183,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: db.user } }) } }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => adminClient() }))
+vi.mock('@/lib/ads/google-ads-oauth-server', () => googleAdsCleanup)
 vi.mock('@/lib/custom-domains/vercel', () => ({
   getVercelClient: () => ({
     removeDomain: async (host: string) => {
@@ -194,6 +199,7 @@ let errorLog: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   seedFreeAccount()
+  googleAdsCleanup.revokePendingGoogleAdsOAuthFlows.mockReset().mockResolvedValue(undefined)
   errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => errorLog.mockRestore())
@@ -203,6 +209,16 @@ describe('deleteOwnAccount', () => {
     db.user = null
     expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'not_authenticated' })
     expect(db.calls).toEqual([])
+  })
+
+  it('stops before anonymizing or deleting when pending Google Ads token revocation fails', async () => {
+    googleAdsCleanup.revokePendingGoogleAdsOAuthFlows.mockRejectedValueOnce(new Error('revoke failed'))
+
+    expect(await deleteOwnAccount()).toEqual({ ok: false, error: 'delete_failed' })
+    expect(db.tables.billing_subscriptions[0].user_id).toBe('user-1')
+    expect(db.calls).not.toContain('deleteUser')
+    expect(db.calls).not.toContain('update:ecommerce_orders')
+    expect(googleAdsCleanup.revokePendingGoogleAdsOAuthFlows).toHaveBeenCalledWith(expect.anything(), 'user-1')
   })
 
   it('deletes a FREE account with a published site, an attestation and signup drafts', async () => {

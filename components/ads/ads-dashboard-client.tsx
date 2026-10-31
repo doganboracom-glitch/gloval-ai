@@ -6,10 +6,19 @@ import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { AdsProductSwitch } from '@/components/ads/ads-product-switch'
+import { GoogleAdsConnectionPanel } from '@/components/ads/google-ads-connection-panel'
 import { AdsBetaBadge } from '@/components/ads/ads-page-client'
 import { ADS_PATH } from '@/lib/ads/feature-flag'
 
-export function AdsDashboardClient({ address }: { address: string | null }) {
+export function AdsDashboardClient({
+  address,
+  googleAdsFlowId,
+  googleAdsStatus,
+}: {
+  address: string | null
+  googleAdsFlowId?: string
+  googleAdsStatus?: string
+}) {
   const { t } = useLanguage()
   const copy = t.ads
 
@@ -35,20 +44,18 @@ export function AdsDashboardClient({ address }: { address: string | null }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <section aria-labelledby="ads-connection" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
-            <h2 id="ads-connection" className="text-lg font-semibold">
-              {copy.connectionTitle}
-            </h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">{copy.connectionBody}</p>
-            <button
-              type="button"
-              disabled
-              className="mt-auto inline-flex h-10 w-fit cursor-not-allowed items-center rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground"
-            >
-              {copy.connectionButton}
-              <span className="ms-2 rounded-full bg-background px-2 py-0.5 text-xs">{copy.comingSoon}</span>
-            </button>
-          </section>
+      <section aria-labelledby="ads-connection" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
+        <h2 id="ads-connection" className="text-lg font-semibold">
+          {copy.connectionTitle}
+        </h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">{copy.connectionBody}</p>
+        <GoogleAdsConnectionPanel
+          connectLabel={copy.connectionButton}
+          flowId={googleAdsFlowId}
+          status={googleAdsStatus}
+        />
+      </section>
+
 
           <section aria-labelledby="ads-plans" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
             <h2 id="ads-plans" className="text-lg font-semibold">
