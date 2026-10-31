@@ -1899,6 +1899,10 @@ const dict = {
         'Sitede reklam planı çıkaracak kadar okunabilir metin bulamadık (içerik çok az olabilir ya da yalnızca JavaScript ile yükleniyor olabilir). Bu deneme hakkından düşülmedi.',
       errPolicyBlocked:
         'Bu site, Google Ads politikaları gereği reklam verilemeyen bir kategoride görünüyor; bu yüzden plan hazırlamadık.',
+      errPolicyBlockedAdultConsumed:
+        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşüldü.',
+      errPolicyBlockedAdultNotConsumed:
+        'GLOVAL Ads beta sürümünde bu kategori (yetişkin ürünleri) henüz desteklenmiyor. Bu deneme hakkından düşülmedi.',
       errPolicyConsumed: 'Bu deneme hakkından düşüldü.',
       errGenerationFailed: 'Plan hazırlanırken bir sorun oluştu. Hakkın iade edildi, tekrar deneyebilirsin.',
       errTimeout: 'Plan zamanında hazırlanamadı. Hakkın iade edildi, tekrar deneyebilirsin.',
@@ -3955,6 +3959,10 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
         'We could not find enough readable text on the site to build an ad plan (the content may be very short or loaded only with JavaScript). This attempt was not counted.',
       errPolicyBlocked:
         'This site appears to be in a category that cannot be advertised under Google Ads policies, so we did not prepare a plan.',
+      errPolicyBlockedAdultConsumed:
+        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt counted against your allowance.',
+      errPolicyBlockedAdultNotConsumed:
+        'This category (adult products) is not yet supported in the GLOVAL Ads beta. This attempt did not count against your allowance.',
       errPolicyConsumed: 'This attempt was counted.',
       errGenerationFailed: 'Something went wrong while preparing the plan. Your allowance was returned, so you can try again.',
       errTimeout: 'The plan could not be prepared in time. Your allowance was returned, so you can try again.',

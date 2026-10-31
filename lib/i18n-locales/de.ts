@@ -1442,6 +1442,14 @@ const de: DeepPartial<Dict> = {
     noticeBody: 'Die Angaben zum Domaininhaber müssen korrekt und aktuell sein; falsche Angaben können zur Sperrung der Registrierung führen.',
     noticeTerms: 'Bedingungen zu Stornierung und Erstattung finden Sie hier:',
   },
+  ads: {
+    errPolicyBlocked:
+      'Diese Website scheint zu einer Kategorie zu gehören, für die gemäß den Richtlinien von Google Ads keine Werbung geschaltet werden kann. Daher haben wir keinen Plan erstellt.',
+    errPolicyBlockedAdultConsumed:
+      'Diese Kategorie (Produkte für Erwachsene) wird in der GLOVAL-Ads-Beta noch nicht unterstützt. Dieser Versuch wurde auf dein Kontingent angerechnet.',
+    errPolicyBlockedAdultNotConsumed:
+      'Diese Kategorie (Produkte für Erwachsene) wird in der GLOVAL-Ads-Beta noch nicht unterstützt. Dieser Versuch wurde nicht auf dein Kontingent angerechnet.',
+  },
 }
 
 export default de
