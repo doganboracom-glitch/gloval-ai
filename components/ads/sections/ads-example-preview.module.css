@@ -1,0 +1,110 @@
+.previewShell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--color-border) 82%, transparent);
+  background:
+    radial-gradient(
+      ellipse at 10% 0%,
+      color-mix(in oklab, var(--color-brand) 23%, transparent),
+      transparent 53%
+    ),
+    radial-gradient(
+      ellipse at 92% 14%,
+      color-mix(in oklab, var(--color-ads-glow-pink) 17%, transparent),
+      transparent 51%
+    ),
+    linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-card) 74%, var(--color-background)),
+      var(--color-background) 78%
+    );
+}
+
+.connectorRight,
+.connectorLeft {
+  position: absolute;
+  top: 50%;
+  width: 1.5rem;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-brand) 58%, transparent),
+    color-mix(in oklab, var(--color-ads-glow-pink) 48%, transparent)
+  );
+  transform: translateY(-50%);
+}
+
+.connectorRight {
+  right: -1.5rem;
+}
+
+.connectorLeft {
+  left: -1.5rem;
+  transform: translateY(-50%) rotate(180deg);
+}
+
+@keyframes previewCardRise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes previewCalloutEnter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .previewCard {
+    animation: previewCardRise 480ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .callout {
+    animation: previewCalloutEnter 400ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  }
+
+  .leftCallouts .callout:nth-child(1),
+  .mobileCallouts .callout:nth-child(1) {
+    animation-delay: 90ms;
+  }
+
+  .leftCallouts .callout:nth-child(2),
+  .mobileCallouts .callout:nth-child(2) {
+    animation-delay: 170ms;
+  }
+
+  .leftCallouts .callout:nth-child(3),
+  .mobileCallouts .callout:nth-child(3) {
+    animation-delay: 250ms;
+  }
+
+  .rightCallouts .callout:nth-child(1),
+  .mobileCallouts .callout:nth-child(4) {
+    animation-delay: 330ms;
+  }
+
+  .rightCallouts .callout:nth-child(2),
+  .mobileCallouts .callout:nth-child(5) {
+    animation-delay: 410ms;
+  }
+
+  .rightCallouts .callout:nth-child(3),
+  .mobileCallouts .callout:nth-child(6) {
+    animation-delay: 490ms;
+  }
+}

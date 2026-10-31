@@ -1,0 +1,89 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LanguageProvider } from '@/components/language-provider'
+import { AdsCreditsSection } from '@/components/ads/sections/ads-credits-section'
+import { AdsExamplePreviewSection } from '@/components/ads/sections/ads-example-preview'
+import { ADS_CREDIT_COSTS } from '@/lib/ads/credit-costs'
+import { adsSectionsCopy } from '@/lib/ads/ads-sections-copy'
+import { LANG_COOKIE } from '@/lib/i18n'
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: { href: string; children: ReactNode; className?: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}))
+
+function renderWithLanguage(lang: 'tr' | 'en', children: ReactNode) {
+  return render(<LanguageProvider initialLang={lang}>{children}</LanguageProvider>)
+}
+
+beforeEach(() => {
+  window.localStorage.clear()
+  document.cookie = `${LANG_COOKIE}=; path=/; max-age=0; samesite=lax`
+})
+
+afterEach(cleanup)
+
+describe('Ads example preview', () => {
+  it('renders the Turkish sample ad and all generated-plan callouts without prohibited claims', () => {
+    renderWithLanguage('tr', <AdsExamplePreviewSection />)
+
+    const section = screen.getByRole('region', { name: 'Dakikalar içinde siteden reklam planına' })
+    const sectionText = section.textContent ?? ''
+
+    expect(screen.getByRole('article', { name: 'Örnek' })).toBeTruthy()
+    expect(sectionText).toContain('Sponsorlu')
+    expect(sectionText).toContain('ornek-klima-servisi.test')
+    expect(sectionText).toContain('Bu bir örnek tasarımdır; reklam yayınlanmış değildir.')
+    expect(sectionText).toContain('Örnek günlük bütçe')
+    expect(sectionText).toContain('₺300 / gün')
+
+    for (const callout of adsSectionsCopy.tr.preview.callouts) {
+      expect(sectionText).toContain(callout)
+    }
+
+    expect(sectionText).not.toMatch(/(?:^|[^\p{L}\p{N}])(?:yaş|cinsiyet|garanti)(?=$|[^\p{L}\p{N}])/iu)
+    expect(adsSectionsCopy.tr.preview.headlineOne.length).toBeLessThanOrEqual(30)
+    expect(adsSectionsCopy.tr.preview.headlineTwo.length).toBeLessThanOrEqual(30)
+    expect(adsSectionsCopy.tr.preview.description.length).toBeLessThanOrEqual(90)
+  })
+
+  it('renders the English plan callouts without age, gender, or guarantee claims', () => {
+    renderWithLanguage('en', <AdsExamplePreviewSection />)
+
+    const section = screen.getByRole('region', { name: 'From website to ad plan in minutes' })
+    const sectionText = section.textContent ?? ''
+
+    expect(screen.getByRole('article', { name: 'Sample' })).toBeTruthy()
+    for (const callout of adsSectionsCopy.en.preview.callouts) {
+      expect(sectionText).toContain(callout)
+    }
+    expect(sectionText).not.toMatch(
+      /(?:^|[^\p{L}\p{N}])(?:age|gender|guarantee(?:d)?)(?=$|[^\p{L}\p{N}])/iu,
+    )
+    expect(adsSectionsCopy.en.preview.headlineOne.length).toBeLessThanOrEqual(30)
+    expect(adsSectionsCopy.en.preview.headlineTwo.length).toBeLessThanOrEqual(30)
+    expect(adsSectionsCopy.en.preview.description.length).toBeLessThanOrEqual(90)
+  })
+})
+
+describe('Ads credits panel', () => {
+  it('keeps the tax and balance notes attached to the table and links to billing', () => {
+    renderWithLanguage('tr', <AdsCreditsSection />)
+
+    const panel = screen.getByRole('complementary', { name: 'Kredi bilgileri' })
+    const table = screen.getByRole('table')
+    const billingLink = screen.getByRole('link', { name: 'Kredi al' })
+
+    expect(table.parentElement?.nextElementSibling).toBe(panel)
+    expect(panel.textContent).toContain('Kredi satın alımında ve plan fiyatlarında KDV dahildir.')
+    expect(panel.textContent).toContain('Krediler mevcut AI kredi bakiyenle aynıdır.')
+    expect(billingLink.getAttribute('href')).toBe('/billing')
+    expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.scanAndPreview))
+    expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.publish))
+  })
+})
