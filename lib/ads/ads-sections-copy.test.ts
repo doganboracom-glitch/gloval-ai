@@ -23,4 +23,12 @@ describe('GLOVAL Ads information translations', () => {
     expect(paths.length).toBeGreaterThan(0)
     expect(paths).toEqual(keyPaths(dictionary.en.ads.sections))
   })
+
+  it.each(SUPPORTED_LOCALES)('%s keeps the full Ads translation tree in parity', (locale) => {
+    expect(keyPaths(dictionary[locale].ads).sort()).toEqual(keyPaths(dictionary.en.ads).sort())
+    expect(dictionary[locale].ads.platformWhatsappName).toBe('WhatsApp')
+    expect(dictionary[locale].ads.platformWhatsappBody.trim()).not.toBe('')
+    expect(dictionary[locale].ads.sections.faq.supportText.trim()).not.toBe('')
+    expect(dictionary[locale].ads.sections.faq.supportButton.trim()).not.toBe('')
+  })
 })

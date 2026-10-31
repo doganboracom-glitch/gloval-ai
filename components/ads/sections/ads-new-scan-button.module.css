@@ -1,0 +1,25 @@
+.button {
+  border-color: color-mix(in oklab, var(--color-foreground) 58%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-foreground) 20%, transparent),
+    0 0 12px color-mix(in oklab, var(--color-foreground) 12%, transparent);
+}
+
+.button:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--color-foreground) 88%, transparent);
+  background-color: color-mix(in oklab, var(--color-foreground) 5%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-foreground) 32%, transparent),
+    0 0 20px color-mix(in oklab, var(--color-foreground) 24%, transparent);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .button {
+    transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+  }
+}

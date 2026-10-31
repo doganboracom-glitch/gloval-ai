@@ -76,6 +76,8 @@ const tr = {
   },
   faq: {
     title: 'Sık sorulan sorular',
+    supportText: 'Sorunuz mu var? Destek ekibimiz size yardımcı olabilir.',
+    supportButton: 'Destek ekibine ulaşın',
     items: [
       {
         question: 'Ücretli mi?',
@@ -194,6 +196,8 @@ const en: AdsSectionsCopy = {
   },
   faq: {
     title: 'Frequently asked questions',
+    supportText: 'Have a question? Our support team is here to help.',
+    supportButton: 'Contact support',
     items: [
       {
         question: 'Is GLOVAL Ads paid?',
