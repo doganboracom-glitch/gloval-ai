@@ -4,6 +4,7 @@ import {
   matchLocaleTag,
   type SupportedLocale,
 } from '@/lib/locale-registry'
+import { adsSectionsCopy } from '@/lib/ads/ads-sections-copy'
 import frOverlay from '@/lib/i18n-locales/fr'
 import deOverlay from '@/lib/i18n-locales/de'
 import itOverlay from '@/lib/i18n-locales/it'
@@ -1800,8 +1801,9 @@ const dict = {
       deleteBlockedByDomains:
         'Hesabında kayıtçıda kayıtlı bir alan adı veya tamamlanmamış bir alan adı işlemi (sipariş, transfer, yenileme) var. Önce alan adını başka bir hesaba devret ya da bekleyen işlemin bitmesini bekle; sonra hesabını silebilirsin.',
     },
-    ads: {
-      navLink: 'Reklam Ver',
+  ads: {
+    sections: adsSectionsCopy.tr,
+    navLink: 'Reklam Ver',
       footerLink: 'GLOVAL Ads',
       beta: 'BETA',
       comingSoon: 'Yakında',
@@ -1818,7 +1820,7 @@ const dict = {
       addressHint: 'GLOVAL ile yaptığın siteyi de seçebilirsin. Plan önizlemesi için Google hesabı bağlaman gerekmez.',
       addressInvalid: 'Geçerli bir web sitesi adresi gir.',
       platformsTitle: 'Reklam kanalları',
-      platformsSubtitle: 'İlk olarak Google Ads açık. Diğer kanalları sırayla ekleyeceğiz.',
+      platformsSubtitle: 'Kanallar sırayla açılacak; ilk sırada Google Ads.',
       platformGoogleName: 'Google Ads',
       platformGoogleBody: 'Arama ağında duyarlı arama reklamı kampanyaları.',
       platformMetaName: 'Meta',
@@ -1835,8 +1837,8 @@ const dict = {
       principleLogTitle: 'Her işlem kayıtlı, geri alınabilir',
       principleLogBody: 'Yapılan her değişiklik önceki ve sonraki haliyle günlüğe yazılır ve geri alınabilir.',
       principleBudgetTitle: 'Bütçe senin hesabında',
-      principleBudgetBody: 'Reklam bütçesi GLOVAL’dan geçmez. Google’a doğrudan sen ödersin, bizden yalnızca AI kredisi alınır.',
-      creditsNote: 'AI kredi ve plan fiyatları KDV dahildir.',
+      principleBudgetBody: 'Reklam bütçesi GLOVAL’dan geçmez; Google’a doğrudan sen ödersin. Hesap bağlantısı açıldığında Google’ın resmi giriş ekranı kullanılır; şifren GLOVAL ile paylaşılmaz.',
+      creditsNote: 'Kredi satın alımında ve plan fiyatlarında KDV dahildir.',
       betaNote: 'GLOVAL Ads şu an BETA aşamasındadır. Özellikler ve kredi tutarları değişebilir.',
       dashboardTitle: 'GLOVAL Ads',
       dashboardSubtitle: 'Reklam planlarını ve bağlantılarını buradan yönet.',
@@ -3802,8 +3804,9 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       deleteBlockedByDomains:
         'Your account still holds a registrar domain or has an unfinished domain job (order, transfer or renewal). Transfer the domain to another account or wait for the pending job to finish, then delete your account.',
     },
-    ads: {
-      navLink: 'Run Ads',
+  ads: {
+    sections: adsSectionsCopy.en,
+    navLink: 'Run Ads',
       footerLink: 'GLOVAL Ads',
       beta: 'BETA',
       comingSoon: 'Coming soon',
@@ -3820,7 +3823,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       addressHint: 'You can also pick a site built with GLOVAL. You do not need to connect a Google account to preview a plan.',
       addressInvalid: 'Enter a valid website address.',
       platformsTitle: 'Ad channels',
-      platformsSubtitle: 'Google Ads is open first. We will add the other channels one by one.',
+      platformsSubtitle: 'Channels are opening one by one, starting with Google Ads.',
       platformGoogleName: 'Google Ads',
       platformGoogleBody: 'Responsive search ad campaigns on the search network.',
       platformMetaName: 'Meta',
@@ -3837,8 +3840,8 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       principleLogTitle: 'Every action is logged and reversible',
       principleLogBody: 'Each change is written to a log with its before and after state and can be undone.',
       principleBudgetTitle: 'Your budget stays on your account',
-      principleBudgetBody: 'Ad spend never passes through GLOVAL. You pay Google directly and we only charge AI credits.',
-      creditsNote: 'AI credit and plan prices include VAT.',
+      principleBudgetBody: 'Ad spend never passes through GLOVAL; you pay Google directly. When account linking becomes available, it will use Google’s official sign-in screen, so your password is never shared with GLOVAL.',
+      creditsNote: 'VAT is included in credit purchases and plan prices.',
       betaNote: 'GLOVAL Ads is in BETA. Features and credit amounts may change.',
       dashboardTitle: 'GLOVAL Ads',
       dashboardSubtitle: 'Manage your ad plans and connections here.',

@@ -1,6 +1,6 @@
 'use client'
 
-import { History, ShieldCheck, Wallet } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -17,15 +17,9 @@ export function AdsBetaBadge() {
   )
 }
 
-export function AdsPageClient() {
+export function AdsPageClient({ children }: { children: ReactNode }) {
   const { t } = useLanguage()
   const copy = t.ads
-
-  const principles = [
-    { icon: ShieldCheck, title: copy.principleApprovalTitle, body: copy.principleApprovalBody },
-    { icon: History, title: copy.principleLogTitle, body: copy.principleLogBody },
-    { icon: Wallet, title: copy.principleBudgetTitle, body: copy.principleBudgetBody },
-  ]
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -51,23 +45,7 @@ export function AdsPageClient() {
           <AdsPlatformGrid />
         </section>
 
-        <section aria-labelledby="ads-principles" className="mx-auto max-w-5xl px-4 pb-20">
-          <h2 id="ads-principles" className="mb-6 text-2xl font-semibold tracking-tight">
-            {copy.principlesTitle}
-          </h2>
-          <ul className="grid gap-4 md:grid-cols-3">
-            {principles.map(({ icon: Icon, title, body }) => (
-              <li key={title} className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
-                <Icon className="size-5 text-brand" aria-hidden="true" />
-                <h3 className="text-base font-semibold">{title}</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-8 text-sm text-muted-foreground">
-            {copy.betaNote} {copy.creditsNote}
-          </p>
-        </section>
+        {children}
       </main>
       <SiteFooter />
     </div>
