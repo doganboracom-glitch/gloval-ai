@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { getPublishedSiteCommerceMode, getCatalogContext } from '@/lib/commerce-mode-server'
 import { blogHrefBase, getLiveBlogPost, getLiveBlogPosts } from '@/lib/blog-server'
 import {
@@ -29,27 +30,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!site) notFound()
   const post = await getLiveBlogPost(slug, postSlug)
   if (!post) notFound()
-  const { origin } = await getSiteSeoContext(slug)
-  const canonical = `${origin}${blogPostPath(post.slug)}`
+  const seo = await getSiteSeoContext(slug)
+  const canonical = `${seo.origin}${blogPostPath(post.slug)}`
   const title = postTitle(post)
   const description = postDescription(post)
-  return {
+  // First-setup posts stay out of search until personalized, but links on them are followed.
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+    canonical,
     title,
-    ...(description ? { description } : {}),
-    alternates: { canonical },
-    // First-setup posts stay out of search until personalized, but links on them are followed.
-    robots: isPostIndexable(post) ? { index: true, follow: true } : { index: false, follow: true },
-    openGraph: {
-      title,
-      ...(description ? { description } : {}),
-      url: canonical,
-      type: 'article',
-      ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
+    description,
+    type: 'article',
+    article: {
+      publishedTime: post.publishedAt,
       modifiedTime: post.updatedAt,
-      ...(post.keywords.length ? { tags: post.keywords } : {}),
-      ...(post.coverUrl ? { images: [{ url: post.coverUrl, alt: post.coverAlt || post.title }] } : {}),
+      tags: post.keywords,
     },
-  }
+    robots: isPostIndexable(post) ? { index: true, follow: true } : { index: false, follow: true },
+  })
 }
 
 export default async function BlogPostPage({ params }: Props) {

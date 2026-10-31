@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { getPublishedSiteCommerceMode, getCatalogContext } from '@/lib/commerce-mode-server'
 import { blogHrefBase, getLiveBlogPosts } from '@/lib/blog-server'
 import { blogListPath, paginatePosts } from '@/lib/blog'
@@ -27,15 +28,20 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const posts = await getLiveBlogPosts(slug)
   const pagination = paginatePosts(posts.length, pageParam((await searchParams).page))
   if (posts.length === 0 || !pagination) notFound()
-  const { origin } = await getSiteSeoContext(slug)
+  const seo = await getSiteSeoContext(slug)
   const lang = site.schema.meta.language
   const title = `${blogCopy(lang).blog} — ${site.name}`
-  const canonical = `${origin}${blogListPath(pagination.page)}`
-  return {
+  const canonical = `${seo.origin}${blogListPath(pagination.page)}`
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+    canonical,
     title,
-    alternates: { canonical, types: { 'application/rss+xml': `${origin}/blog/rss.xml` } },
-    openGraph: { title, url: canonical, type: 'website' },
-  }
+    description: site.schema.meta.description || site.schema.meta.tagline,
+    alternateTypes: { 'application/rss+xml': `${seo.origin}/blog/rss.xml` },
+  })
 }
 
 export default async function BlogIndexPage({ params, searchParams }: Props) {

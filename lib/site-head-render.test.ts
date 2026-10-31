@@ -19,6 +19,13 @@ vi.mock('@/lib/custom-domains/service', () => ({
     state.boundProject ? { websiteProjectId: state.boundProject } : null,
   getPublishedSlugForProjectId: async () => state.publishedSlug,
 }))
+vi.mock('@/lib/seo/site-seo', () => ({
+  getSiteSeoContext: async (slug: string) => ({
+    origin: `https://${slug}.gloval.site`,
+    isCustomDomain: false,
+    lastModified: null,
+  }),
+}))
 vi.mock('@/lib/supabase/proxy', async () => {
   const { NextResponse } = await import('next/server')
   return { updateSession: async () => NextResponse.next() }
@@ -72,22 +79,18 @@ describe('cookie banner theme in the published layout', () => {
   })
 })
 
-describe('google-site-verification in the published <head>', () => {
-  it('reaches Next metadata (the real <head>) as a named meta tag', async () => {
+describe('Google Search Console verification in the published <head>', () => {
+  it('preserves the customer token while disabling the platform token', async () => {
     publish(VERIFICATION)
     const { metadata } = await renderHead('kahve')
     expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
-  })
-
-  it('never leaks the platform token into a tenant site', async () => {
-    publish(VERIFICATION)
-    const { metadata } = await renderHead('kahve')
     expect(metadata.verification).toEqual({ google: null })
   })
 
-  it('keeps the meta tag out of the body and renders other head code verbatim', async () => {
+  it('keeps verification in metadata, not raw head markup, and preserves scripts', async () => {
     publish(`${VERIFICATION}<script>window.gtag=1</script>`)
-    const { html } = await renderHead('kahve')
+    const { metadata, html } = await renderHead('kahve')
+    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
     expect(html).not.toContain('google-site-verification')
     expect(html).toContain('<script>window.gtag=1</script>')
     expect(html).toContain('sayfa')
@@ -101,21 +104,23 @@ describe('google-site-verification in the published <head>', () => {
   })
 })
 
-describe('every entry path serves the same layout', () => {
+describe('every entry path serves the same customer verification metadata', () => {
   beforeEach(() => publish(VERIFICATION))
 
-  it('subdomain <slug>.gloval.site rewrites to /site/<slug> and renders the tag', async () => {
+  it('subdomain <slug>.gloval.site rewrites to /site/<slug>', async () => {
     expect(await rewriteTarget('https://kahve.gloval.site/')).toBe('/site/kahve')
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
+    expect(metadata.verification).toEqual({ google: null })
   })
 
-  it('verified custom domain rewrites to the bound site and renders the tag', async () => {
+  it('verified custom domain rewrites to the bound site', async () => {
     state.boundProject = 'project-1'
     state.publishedSlug = 'kahve'
     expect(await rewriteTarget('https://www.kahvem.com/')).toBe('/site/kahve')
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
+    expect(metadata.verification).toEqual({ google: null })
   })
 
   it('an unbound or unpublished custom domain does not rewrite to any site', async () => {
@@ -124,10 +129,25 @@ describe('every entry path serves the same layout', () => {
     expect(await rewriteTarget('https://www.kahvem.com/')).toBeNull()
   })
 
-  it('/site/<slug> on the platform host is served as is and renders the tag', async () => {
+  it('/site/<slug> on the platform host is served as is', async () => {
     expect(await rewriteTarget('https://gloval.ai/site/kahve')).toBeNull()
     const { metadata } = await renderHead('kahve')
-    expect(metadata.other).toHaveProperty('google-site-verification', 'tok_abc123')
+    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
+    expect(metadata.verification).toEqual({ google: null })
+  })
+})
+
+describe('generated social and canonical metadata wins over snippet conflicts', () => {
+  it('keeps Google verification but strips conflicting OG, Twitter, and canonical tags', async () => {
+    publish(`${VERIFICATION}<meta property="og:image" content="https://attacker.example/fake.png"><meta name="twitter:image" content="https://attacker.example/twitter.png"><link rel="alternate canonical" href="https://attacker.example/"><script>window.gtag=1</script>`)
+    const { metadata, html } = await renderHead('kahve')
+
+    expect(metadata.other).toEqual({ 'google-site-verification': 'tok_abc123' })
+    expect(metadata.openGraph?.images).toBeDefined()
+    expect(metadata.twitter?.images).toBeDefined()
+    expect(html).toContain('<script>window.gtag=1</script>')
+    expect(html).not.toContain('attacker.example')
+    expect(html).not.toContain('canonical')
   })
 })
 
@@ -137,7 +157,6 @@ describe('harmful head code is never rendered', () => {
     '<base href="https://evil.example/" />',
     '<script src="http://cdn.example/a.js"></script>',
     '<a href="javascript:alert(1)">x</a>',
-    '<link rel="canonical" href="https://evil.example/" />',
   ]
 
   it.each(harmful)('drops the whole snippet: %s', async (snippet) => {

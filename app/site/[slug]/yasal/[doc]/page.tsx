@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { SITE_LEGAL_DISCLAIMER } from '@/lib/site-legal-templates'
 import { formatLegalDate, resolveLegalDoc } from '@/lib/site-legal-docs'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
@@ -16,12 +18,23 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, doc } = await params
   const site = await getPublishedSite(slug)
-  const page = site ? resolveLegalDoc(doc, site.schema, site.name) : null
+  if (!site) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
+  const page = resolveLegalDoc(doc, site.schema, site.name)
+  if (!page) return { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
+
   // Boilerplate legal text is near-identical across sites, so it stays out of
   // search results (noindex) while links on the page can still be followed.
-  return page
-    ? { title: `${page.title} — ${site?.name}`, robots: { index: false, follow: true } }
-    : { title: 'Sayfa bulunamadı', robots: { index: false, follow: false } }
+  const seo = await getSiteSeoContext(slug)
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+    canonical: `${seo.origin}/yasal/${encodeURIComponent(doc)}`,
+    title: `${page.title} — ${site.name}`,
+    description: site.schema.meta.description,
+    robots: { index: false, follow: true },
+  })
 }
 
 export default async function SiteLegalPage({

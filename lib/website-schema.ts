@@ -948,6 +948,11 @@ export const siteMetaSchema = z.object({
     .string()
     .optional()
     .describe('SEO title used in the browser tab and Google results, e.g. "İstanbul Nakliyeci"'),
+  ogImage: z
+    .string()
+    .max(2048)
+    .optional()
+    .describe('Optional owner-hosted social sharing image from the public site-images bucket'),
 })
 
 /**
