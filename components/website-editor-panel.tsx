@@ -63,6 +63,10 @@ import { canUseTrackingCode } from '@/lib/site-tracking'
 import type { PaymentSummary } from '@/lib/store-checkout-rules'
 import { contactActionsForEditor } from '@/lib/site-contact-actions'
 import {
+  resolveSeoDescription,
+  SEO_DESCRIPTION_MAX_LENGTH,
+} from '@/lib/seo/seo-description'
+import {
   canUseContactActions,
   SITE_SECTION_HARD_CAP,
   SITE_SECTION_WARN_AT,
@@ -469,6 +473,16 @@ function DesignTab({
           value={site.meta.seoTitle ?? ''}
           hint={ui.seoTitleHelp}
           onCommit={(v) => onDispatch({ op: 'updateMeta', seoTitle: v })}
+        />
+        <TextField
+          label={ui.seoDescription}
+          value={resolveSeoDescription(site.meta.description)}
+          hint={ui.seoDescriptionHelp}
+          multiline
+          rows={3}
+          maxLength={SEO_DESCRIPTION_MAX_LENGTH}
+          showCharacterCount
+          onCommit={(v) => onDispatch({ op: 'updateMeta', description: v })}
         />
         <TextField
           label={ui.tagline}

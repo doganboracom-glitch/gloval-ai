@@ -148,6 +148,8 @@ const it: DeepPartial<Dict> = {
       groupSections: 'Sezioni',
       siteName: 'Nome del sito',
       seoTitle: 'Titolo SEO',
+      seoDescription: 'Descrizione SEO',
+      seoDescriptionHelp: 'Mostrata sotto il titolo nei risultati Google. Lasciala vuota per generarla dai contenuti della hero o della pagina Chi siamo.',
       seoTitleHelp:
         'Usato nei risultati di ricerca Google e nella scheda del browser. Generato automaticamente per il tuo settore — puoi modificarlo in qualsiasi momento.',
       tagline: 'Slogan',

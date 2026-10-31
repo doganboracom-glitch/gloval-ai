@@ -21,6 +21,7 @@ export function TextField({
   hint,
   mono = false,
   maxLength,
+  showCharacterCount = false,
   hidePlaceholderOnFocus = false,
   validate,
 }: {
@@ -36,6 +37,8 @@ export function TextField({
   hidePlaceholderOnFocus?: boolean
   /** Caps the number of characters the field accepts. */
   maxLength?: number
+  /** Displays a live `length/maxLength` counter when a limit is set. */
+  showCharacterCount?: boolean
   multiline?: boolean
   placeholder?: string
   rows?: number
@@ -48,9 +51,18 @@ export function TextField({
   const dirtyRef = useRef(false)
   const [focused, setFocused] = useState(false)
   const errorId = useId()
+  const hintId = useId()
+  const characterCountId = useId()
+  const error = validate ? validate(draft) : null
+  const describedBy = [
+    error ? errorId : '',
+    hint ? hintId : '',
+    showCharacterCount && maxLength !== undefined ? characterCountId : '',
+  ]
+    .filter(Boolean)
+    .join(' ') || undefined
   if (!dirtyRef.current && draft !== value) setDraft(value)
   const shownPlaceholder = hidePlaceholderOnFocus && focused ? '' : placeholder
-  const error = validate ? validate(draft) : null
 
   function commit() {
     setFocused(false)
@@ -72,6 +84,9 @@ export function TextField({
           value={draft}
           placeholder={shownPlaceholder}
           onFocus={() => setFocused(true)}
+          maxLength={maxLength}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
           spellCheck={mono ? false : undefined}
           onChange={(e) => {
             dirtyRef.current = true
@@ -88,7 +103,7 @@ export function TextField({
           onFocus={() => setFocused(true)}
           maxLength={maxLength}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={describedBy}
           onChange={(e) => {
             dirtyRef.current = true
             setDraft(e.target.value)
@@ -108,7 +123,26 @@ export function TextField({
           {error}
         </span>
       ) : null}
-      {hint ? <span className="text-[11px] leading-snug text-muted-foreground/80">{hint}</span> : null}
+      {hint || (showCharacterCount && maxLength !== undefined) ? (
+        <div className="flex items-start justify-between gap-3">
+          {hint ? (
+            <span id={hintId} className="text-[11px] leading-snug text-muted-foreground/80">
+              {hint}
+            </span>
+          ) : null}
+          {showCharacterCount && maxLength !== undefined ? (
+            <span
+              id={characterCountId}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="shrink-0 text-[11px] leading-snug text-muted-foreground/80"
+            >
+              {Array.from(draft).length}/{maxLength}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </label>
   )
 }

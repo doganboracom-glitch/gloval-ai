@@ -150,6 +150,8 @@ const fr: DeepPartial<Dict> = {
       groupSections: 'Sections',
       siteName: 'Nom du site',
       seoTitle: 'Titre SEO',
+      seoDescription: 'Description SEO',
+      seoDescriptionHelp: 'Affichée sous le titre dans les résultats Google. Laissez ce champ vide pour la générer depuis le contenu de l’accueil ou À propos.',
       seoTitleHelp:
         'Titre utilisé dans les résultats Google et l’onglet du navigateur. Généré automatiquement selon votre secteur, modifiable à volonté.',
       tagline: 'Slogan',

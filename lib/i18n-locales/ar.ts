@@ -143,6 +143,8 @@ const ar: DeepPartial<Dict> = {
       groupSections: 'الأقسام',
       siteName: 'اسم الموقع',
       seoTitle: 'عنوان SEO',
+  seoDescription: 'وصف SEO',
+  seoDescriptionHelp: 'يظهر أسفل العنوان في نتائج Google. اتركه فارغًا لإنشائه تلقائيًا من محتوى الواجهة أو من نحن.',
       seoTitleHelp:
         'العنوان الذي يُستخدم في نتائج بحث Google وفي علامة تبويب المتصفح. يتم إنشاؤه تلقائيًا حسب مجالك، ويمكنك تعديله كما تريد.',
       tagline: 'الشعار',

@@ -147,6 +147,8 @@ const et: DeepPartial<Dict> = {
       groupSections: 'Sektsioonid',
       siteName: 'Veebilehe nimi',
       seoTitle: 'SEO pealkiri',
+      seoDescription: 'SEO kirjeldus',
+      seoDescriptionHelp: 'Kuvatakse Google tulemustes pealkirja all. Tühjaks jättes luuakse see avalehe või Meist sisu põhjal.',
       seoTitleHelp:
         'Pealkiri, mis kuvatakse Google\'i otsingutulemustes ja brauseri vahekaardil. Loodud automaatselt sinu valdkonna põhjal, vabalt muudetav.',
       tagline: 'Loosung',

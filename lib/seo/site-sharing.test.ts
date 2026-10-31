@@ -204,4 +204,67 @@ describe('buildTenantSocialMetadata', () => {
     expect(firstImage).not.toBe(secondImage)
     expect((first.openGraph as { locale: string }).locale).toBe('en_US')
   })
+
+  it('cleans the owner-authored description, caps it, and shares one value everywhere', () => {
+    const site = testSite()
+    site.schema.meta.description = `<p>Takılar &amp; tasarım.</p><script>ignored</script>${'x'.repeat(180)}`
+
+    const metadata = buildTenantSocialMetadata({
+      site,
+      slug: 'luna-mucevher',
+      origin: 'https://luna-mucevher.gloval.site',
+    })
+    const openGraph = metadata.openGraph as { description: string }
+    const twitter = metadata.twitter as { description: string }
+    const expected = Array.from(`Takılar & tasarım. ${'x'.repeat(180)}`).slice(0, 160).join('')
+
+    expect(metadata.description).toBe(expected)
+    expect(openGraph.description).toBe(expected)
+    expect(twitter.description).toBe(expected)
+    expect(Array.from(metadata.description ?? '')).toHaveLength(160)
+    expect(metadata.description).not.toContain('<')
+  })
+
+  it('ignores legacy Gloval credit copy and falls back to the hero, then About, then name and sector', () => {
+    const site = testSite()
+    site.schema.meta.description = 'Luna Mücevher Isimli — GLOVAL AI ile oluşturuldu.'
+    site.schema.sections = [
+      {
+        type: 'hero',
+        title: 'Hero',
+        description: '<p>Günlük <strong>lüks</strong>, kalıcı tasarım.</p>',
+        image: { imagePrompt: '', src: storageUrl },
+      },
+      { type: 'about', title: 'Hakkımızda', body: 'İlk cümle burada. İkinci cümle burada.' },
+    ] as unknown as WebsiteSchema['sections']
+
+    const heroMetadata = buildTenantSocialMetadata({
+      site,
+      slug: 'luna-mucevher',
+      origin: 'https://luna-mucevher.gloval.site',
+    })
+    expect(heroMetadata.description).toBe('Günlük lüks, kalıcı tasarım.')
+    expect(JSON.stringify(heroMetadata)).not.toContain('GLOVAL AI ile oluşturuldu')
+
+    site.schema.sections[0] = {
+      type: 'hero',
+      title: 'Hero',
+      description: '',
+      image: { imagePrompt: '', src: storageUrl },
+    }
+    const aboutMetadata = buildTenantSocialMetadata({
+      site,
+      slug: 'luna-mucevher',
+      origin: 'https://luna-mucevher.gloval.site',
+    })
+    expect(aboutMetadata.description).toBe('İlk cümle burada.')
+
+    site.schema.sections = []
+    const nameSectorMetadata = buildTenantSocialMetadata({
+      site,
+      slug: 'luna-mucevher',
+      origin: 'https://luna-mucevher.gloval.site',
+    })
+    expect(nameSectorMetadata.description).toBe('Luna Mücevher - Online Takı Mağazası')
+  })
 })

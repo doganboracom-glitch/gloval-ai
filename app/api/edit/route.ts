@@ -40,6 +40,10 @@ import { enforceSocialPlan } from '@/lib/social-links'
 import { enforceTrackingPlan } from '@/lib/site-tracking'
 import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/free-daily-limit'
 import { sanitizeGeneratedProofContent } from '@/lib/proof-content'
+import {
+  sanitizeSeoDescription,
+  shouldAllowAiSeoDescriptionEdit,
+} from '@/lib/seo/seo-description'
 
 /**
  * Deterministic fallback: try to satisfy the instruction with the offline
@@ -240,13 +244,14 @@ export async function POST(req: Request) {
     } else {
       const { object } = await generateStructured({
         ai,
-        // Owner-authored fields (custom code snippets, SEO title) are excluded
-        // from the model's schema so an unrelated edit can never rewrite or drop
-        // them; they are merged back from the current schema below.
+        // Custom code and SEO title are excluded from the model schema. The SEO
+        // description remains editable by the model, but is restored below unless
+        // the instruction explicitly asks to change it.
         schema: websiteEditSchema,
         system: siteSystemPrompt(normalizedLang, language),
         prompt:
           `CURRENT WEBSITE (JSON):\n${JSON.stringify(stripImagePayloads(original))}\n\n` +
+          `SEO DESCRIPTION RULE: Preserve meta.description unless the user explicitly asks to write or change the site's SEO description. If requested, return plain text with at most 160 characters.\n\n` +
           `USER INSTRUCTION:\n${instruction.slice(0, 600)}\n\n` +
           `Return the full updated website JSON now.`,
         // An edit must never silently delete the owner's sections, so surplus
@@ -290,9 +295,15 @@ export async function POST(req: Request) {
           sections: original.sections.map((s, i) => (i === sectionIndex ? aiSection! : s)),
         }
       : aiSite!
-    const restoredBase: WebsiteSchema = {
-      ...nextSite,
-      meta: { ...nextSite.meta, seoTitle: original.meta.seoTitle },
+  const restoredBase: WebsiteSchema = {
+    ...nextSite,
+    meta: {
+      ...nextSite.meta,
+      seoTitle: original.meta.seoTitle,
+      description: shouldAllowAiSeoDescriptionEdit(instruction)
+        ? sanitizeSeoDescription(nextSite.meta.description)
+        : original.meta.description,
+    },
       // The brand mark is owner-managed (generated locally or uploaded), so it
       // is carried through untouched by any AI edit.
       navigation: { ...nextSite.navigation, logo: original.navigation.logo },
@@ -324,13 +335,23 @@ export async function POST(req: Request) {
     const notice = locked.touched ? PRODUCTS_MANAGED_IN_PANEL : undefined
     // A corporate site never gets a model-invented store or product catalog.
     const guarded = guardCorporateCatalog(original, locked.schema, instruction)
-    const finalSchema = stripAiTeam(
+    const normalizedFinalSchema = stripAiTeam(
       stripAiReferences(
         sanitizeGeneratedProofContent(preserveAboutCopy(original, preserveResolvedImages(original, guarded)), original),
         original,
       ),
       original,
     )
+    const finalSchema: WebsiteSchema = {
+      ...normalizedFinalSchema,
+      meta: {
+        ...normalizedFinalSchema.meta,
+        seoTitle: original.meta.seoTitle,
+        description: shouldAllowAiSeoDescriptionEdit(instruction)
+          ? sanitizeSeoDescription(normalizedFinalSchema.meta.description)
+          : original.meta.description,
+      },
+    }
 
     // The model sometimes answers "done" while returning the site untouched.
     // That must surface as a failure (and cost nothing), never as a success.

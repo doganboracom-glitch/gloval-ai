@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCleanSite } from '@/lib/__fixtures__/sample-site'
+import { shouldAllowAiSeoDescriptionEdit } from '@/lib/seo/seo-description'
 import { DEFAULT_CURSOR_AURA, type CursorAuraConfig } from '@/lib/cursor-aura'
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 
@@ -36,14 +37,17 @@ const site = (effects?: WebsiteSchema['effects']): WebsiteSchema => ({ ...buildC
 
 function retitled(base: WebsiteSchema, effects?: WebsiteSchema['effects']): WebsiteSchema {
   const sections = base.sections.map((s, i) => (i === 0 ? ({ ...s, title: 'Yeni başlık' } as Section) : s))
-  return { ...base, sections, ...(effects ? { effects } : { effects: undefined }) }
+  return { ...base, meta: { ...base.meta }, sections, ...(effects ? { effects } : { effects: undefined }) }
 }
 
-async function edit(schema: WebsiteSchema) {
+async function edit(
+  schema: WebsiteSchema,
+  instruction = "Hero başlığını 'Yeni başlık' yap",
+) {
   const response = await POST(
     new Request('http://localhost/api/edit', {
       method: 'POST',
-      body: JSON.stringify({ schema, instruction: "Hero başlığını 'Yeni başlık' yap", lang: 'tr' }),
+      body: JSON.stringify({ schema, instruction, lang: 'tr' }),
     }),
   )
   return (await response.json()) as { schema: WebsiteSchema; source: string }
@@ -54,6 +58,11 @@ beforeEach(() => {
 })
 
 describe('/api/edit and effects', () => {
+  it('recognizes explicit SEO description requests only', () => {
+    expect(shouldAllowAiSeoDescriptionEdit("Hero başlığını 'Yeni başlık' yap")).toBe(false)
+    expect(shouldAllowAiSeoDescriptionEdit('SEO açıklaması olarak yeni bir SEO metni yaz')).toBe(true)
+  })
+
   it('api/edit: AI output that adds effects to a site without them is discarded', async () => {
     const original = site()
     state.aiResult = retitled(original, { cursorAura: INJECTED })
@@ -77,5 +86,34 @@ describe('/api/edit and effects', () => {
     const body = await edit(original)
     expect(body.source).toBe('ai')
     expect(body.schema.effects).toEqual({ cursorAura: STORED })
+  })
+
+  it('preserves the saved SEO description during unrelated AI edits', async () => {
+    const original = site()
+    original.meta.description = 'Owner-written SEO description'
+    const output = retitled(original)
+    output.meta.description = 'Unrequested model rewrite'
+    state.aiResult = output
+
+    const body = await edit(original)
+
+    expect(body.source).toBe('ai')
+    expect(body.schema.meta.description).toBe('Owner-written SEO description')
+  })
+
+  it('lets the owner change the SEO description through AI and sanitizes it', async () => {
+    const original = site()
+    original.meta.description = 'Previous description'
+    const output = retitled(original)
+    output.meta.description = `<p>${'SEO metin '.repeat(30)}</p>`
+    state.aiResult = output
+
+    const body = await edit(original, 'SEO açıklaması olarak yeni bir SEO metni yaz')
+
+    expect(body.source).toBe('ai')
+    expect(body.schema.meta.description).toMatch(/^SEO metin SEO metin/)
+    expect(body.schema.meta.description).not.toMatch(/[<>]/)
+    expect(Array.from(body.schema.meta.description).length).toBeLessThanOrEqual(160)
+    expect(body.schema.meta.description.length).toBeGreaterThan(0)
   })
 })
