@@ -942,15 +942,12 @@ const dict = {
     },
     footer: {
       tagline: 'Konuş, gerçek bir web sitesi kur.',
-      product: 'Ürün',
+      product: 'Ürünler',
       company: 'Şirket',
       legal: 'Yasal',
       rights: 'Tüm hakları saklıdır.',
       securePayment: 'Güvenli Ödeme',
       links: {
-        features: 'Özellikler',
-        pricing: 'Fiyatlar',
-        showcase: 'Örnekler',
         about: 'Hakkımızda',
         blog: 'Blog',
         contact: 'İletişim',
@@ -3004,15 +3001,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
     },
     footer: {
       tagline: 'Talk to AI. Build a real website.',
-      product: 'Product',
+      product: 'Products',
       company: 'Company',
       legal: 'Legal',
       rights: 'All rights reserved.',
       securePayment: 'Secure Payment',
       links: {
-        features: 'Features',
-        pricing: 'Pricing',
-        showcase: 'Showcase',
         about: 'About',
         blog: 'Blog',
         contact: 'Contact',

@@ -538,15 +538,12 @@ const fr: DeepPartial<Dict> = {
   },
   footer: {
     tagline: 'Parlez, obtenez un vrai site web.',
-    product: 'Produit',
+    product: 'Produits',
     company: 'Entreprise',
     legal: 'Mentions légales',
     rights: 'Tous droits réservés.',
     securePayment: 'Paiement sécurisé',
     links: {
-      features: 'Fonctionnalités',
-      pricing: 'Tarifs',
-      showcase: 'Exemples',
       about: 'À propos',
       blog: 'Blog',
       contact: 'Contact',
