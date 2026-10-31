@@ -28,3 +28,20 @@ export function resolveLoginNextPath(draft: string | null, requestedNext: string
 
   return sanitizeNextPath(requestedNext)
 }
+
+export function resolveSignUpNextPath(requestedNext: string | null, hasSignupIdea: boolean): string {
+  const next = sanitizeNextPath(requestedNext)
+  return hasSignupIdea && next === '/dashboard' ? '/auth/restore-idea' : next
+}
+
+export function buildSignUpLoginHref(requestedNext: string | null, hasSignupIdea: boolean): string {
+  const next = resolveSignUpNextPath(requestedNext, hasSignupIdea)
+  return next === '/dashboard' ? '/auth/login' : `/auth/login?next=${encodeURIComponent(next)}`
+}
+
+export function buildSignUpSuccessHref(requestedNext: string | null): string {
+  const next = sanitizeNextPath(requestedNext)
+  return next === '/dashboard'
+    ? '/auth/sign-up-success'
+    : `/auth/sign-up-success?next=${encodeURIComponent(next)}`
+}

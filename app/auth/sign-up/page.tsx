@@ -5,7 +5,12 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import {
+  buildSignUpLoginHref,
+  buildSignUpSuccessHref,
+  getAuthCallbackUrl,
+  resolveSignUpNextPath,
+} from '@/lib/auth-redirect'
 import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
 import { peekPendingProject } from '@/lib/pending-project'
@@ -54,11 +59,8 @@ function SignUpForm() {
     setHasSignupIdea(Boolean(readSignupIdea()))
   }, [])
 
-  const loginHref = hasSignupIdea
-    ? `/auth/login?next=${encodeURIComponent('/auth/restore-idea')}`
-    : next === '/dashboard'
-      ? '/auth/login'
-      : `/auth/login?next=${encodeURIComponent(next)}`
+  const signupNext = resolveSignUpNextPath(next, hasSignupIdea)
+  const loginHref = buildSignUpLoginHref(next, hasSignupIdea)
 
   function checkEmail(value: string): boolean {
     const check = validateEmail(value)
@@ -147,6 +149,11 @@ function SignUpForm() {
       draftToken,
       draftFailed: readSignupDraftFailed(),
     })
+    if (data.session && next !== '/dashboard') {
+      router.push(next)
+      router.refresh()
+      return
+    }
     if (step.kind === 'resume') {
       window.location.assign(`/auth/resume?draft=${step.token}`)
       return
@@ -163,7 +170,7 @@ function SignUpForm() {
       router.refresh()
       return
     }
-    router.push('/auth/sign-up-success')
+    router.push(buildSignUpSuccessHref(next))
   }
 
   if (draftLost) {
@@ -180,7 +187,7 @@ function SignUpForm() {
             size="lg"
             className="w-full"
             onClick={() => {
-              router.push(hasSignupIdea ? '/auth/restore-idea' : next)
+              router.push(signupNext)
               router.refresh()
             }}
           >
@@ -207,7 +214,7 @@ function SignUpForm() {
       <div className="flex flex-col gap-5">
         <OAuthButtons
           mode="signup"
-          next={hasSignupIdea ? '/auth/restore-idea' : next === '/dashboard' ? undefined : next}
+          next={signupNext === '/dashboard' ? undefined : signupNext}
         />
         <OAuthDivider />
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

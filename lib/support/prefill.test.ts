@@ -4,6 +4,7 @@ import {
   EMPTY_TICKET_PREFILL,
   newTicketHref,
   newTicketPathWithParams,
+  newTicketSignUpHref,
   parseTicketPrefill,
   probeSupportReachable,
 } from '@/lib/support/prefill'
@@ -32,6 +33,10 @@ describe('parseTicketPrefill', () => {
     expect(prefill).toEqual({ subject: 'S', message: 'M', department: 'website', service: 'ai_content', projectId: 'p1' })
   })
 
+  it('accepts gloval-ads as a prefilled department', () => {
+    expect(parseTicketPrefill({ department: 'gloval-ads' }, []).department).toBe('gloval-ads')
+  })
+
   it('ignores unknown categories and a project that is not theirs', () => {
     const prefill = parseTicketPrefill({ department: 'hack', service: 'nope', project: 'someone-else' }, ['p1'])
     expect(prefill.department).toBe('')
@@ -50,6 +55,14 @@ describe('newTicketPathWithParams', () => {
   it('keeps the prefill so a login redirect can return to it', () => {
     expect(newTicketPathWithParams({ subject: 'A b', project: 'p1', empty: undefined })).toBe('/support/new?subject=A+b&project=p1')
     expect(newTicketPathWithParams({})).toBe('/support/new')
+  })
+})
+
+describe('newTicketSignUpHref', () => {
+  it('preserves the prefilled route as a safe sign-up next path', () => {
+    const href = new URL(newTicketSignUpHref({ department: 'gloval-ads', subject: 'Ad help' }), 'https://gloval.ai')
+    expect(href.pathname).toBe('/auth/sign-up')
+    expect(href.searchParams.get('next')).toBe('/support/new?department=gloval-ads&subject=Ad+help')
   })
 })
 

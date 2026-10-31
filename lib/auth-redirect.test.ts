@@ -1,9 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { resolveLoginNextPath } from '@/lib/auth-redirect'
+import {
+  buildSignUpLoginHref,
+  buildSignUpSuccessHref,
+  resolveLoginNextPath,
+} from '@/lib/auth-redirect'
 import { getSignupDraftTokenFromNextPath, isSignupDraftToken } from '@/lib/signup-draft-shared'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 
 const DRAFT_TOKEN = 'c'.repeat(43)
+
+describe('support signup auth redirects', () => {
+  const next = '/support/new?department=gloval-ads'
+
+  it('keeps the prefilled support route through signup, confirmation, and the login link', () => {
+    const expectedNext = encodeURIComponent(next)
+    expect(buildSignUpSuccessHref(next)).toBe(`/auth/sign-up-success?next=${expectedNext}`)
+    expect(buildSignUpLoginHref(next, false)).toBe(`/auth/login?next=${expectedNext}`)
+    expect(buildSignUpLoginHref(next, true)).toBe(`/auth/login?next=${expectedNext}`)
+  })
+
+  it('rejects external return URLs', () => {
+    expect(buildSignUpSuccessHref('https://attacker.example')).toBe('/auth/sign-up-success')
+    expect(buildSignUpLoginHref('//attacker.example', false)).toBe('/auth/login')
+  })
+})
 
 describe('signup draft auth redirects', () => {
   it('sends a validated draft through login to the resume route', () => {

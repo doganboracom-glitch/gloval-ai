@@ -5,16 +5,18 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordNotification, sendTransactionalEmail } from '@/lib/notify'
+import { buildTicketCreatedNotice } from '@/lib/support/admin-notification'
 import {
   ATTACHMENT_MAX_BYTES,
   ATTACHMENT_MAX_FILES,
   ATTACHMENT_MIME_TYPES,
   MESSAGE_MAX,
   SUBJECT_MAX,
-  TICKET_DEPARTMENTS,
   TICKET_PRIORITIES,
   TICKET_SERVICES,
   isOneOf,
+  isTicketDepartment,
+  type TicketDepartment,
 } from '@/lib/support/constants'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
@@ -106,6 +108,7 @@ async function notifyAdminOfUserActivity(input: {
   subject: string
   message: string
   isNew: boolean
+  department?: TicketDepartment
 }) {
   try {
     await sendAdminNotification(input)
@@ -121,20 +124,30 @@ async function sendAdminNotification(input: {
   subject: string
   message: string
   isNew: boolean
+  department?: TicketDepartment
 }) {
-  const title = input.isNew
-    ? `Yeni destek talebi ${input.ticketNumber}`
-    : `Destek talebine yeni mesaj ${input.ticketNumber}`
+  const notice = input.isNew
+    ? buildTicketCreatedNotice({
+        ticketNumber: input.ticketNumber,
+        department: input.department ?? 'other',
+        subject: input.subject,
+      })
+    : null
+  const title = notice?.notificationTitle ?? `Destek talebine yeni mesaj ${input.ticketNumber}`
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim()
   let sent = false
   if (adminEmail) {
     const esc = (s: string) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`)
     sent = await sendTransactionalEmail({
       to: adminEmail,
-      subject: `[Gloval AI] ${title}`,
+      subject: notice?.emailSubject ?? `[Gloval AI] ${title}`,
       replyTo: input.userEmail ?? undefined,
-      text: `${input.subject}\n\n${input.message}`,
-      html: `<p><strong>${esc(input.subject)}</strong></p><p>${esc(input.userEmail ?? '')}</p><p style="white-space:pre-wrap">${esc(input.message)}</p>`,
+      text: notice
+        ? `Departman: ${notice.departmentLabel}\n\n${input.subject}\n\n${input.message}`
+        : `${input.subject}\n\n${input.message}`,
+      html: notice
+        ? `<p><strong>Departman: ${esc(notice.departmentLabel)}</strong></p><p><strong>${esc(input.subject)}</strong></p><p>${esc(input.userEmail ?? '')}</p><p style="white-space:pre-wrap">${esc(input.message)}</p>`
+        : `<p><strong>${esc(input.subject)}</strong></p><p>${esc(input.userEmail ?? '')}</p><p style="white-space:pre-wrap">${esc(input.message)}</p>`,
     })
   }
   await recordNotification({
@@ -142,7 +155,7 @@ async function sendAdminNotification(input: {
     channel: adminEmail ? 'email' : 'system',
     type: input.isNew ? 'ticket_created' : 'ticket_user_message',
     subject: title,
-    body: input.subject,
+    body: notice?.notificationBody ?? input.subject,
     status: adminEmail ? (sent ? 'sent' : 'failed') : 'sent',
   })
 }
@@ -163,7 +176,7 @@ export async function createSupportTicket(
   const message = String(formData.get('message') ?? '').trim()
   const idempotencyKey = String(formData.get('idempotencyKey') ?? '').slice(0, 80) || null
 
-  if (!isOneOf(TICKET_DEPARTMENTS, department)) return { ok: false, error: 'invalid_department' }
+  if (!isTicketDepartment(department)) return { ok: false, error: 'invalid_department' }
   if (!isOneOf(TICKET_PRIORITIES, priority)) return { ok: false, error: 'invalid_priority' }
   if (service !== null && !isOneOf(TICKET_SERVICES, service)) return { ok: false, error: 'invalid_service' }
   if (!subject || subject.length > SUBJECT_MAX) return { ok: false, error: 'invalid_subject' }
@@ -274,6 +287,7 @@ export async function createSupportTicket(
     subject,
     message,
     isNew: true,
+    department,
   })
 
   revalidatePath('/support')

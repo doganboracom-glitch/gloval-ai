@@ -4,7 +4,7 @@ export type TicketStatus = (typeof TICKET_STATUSES)[number]
 export const TICKET_PRIORITIES = ['low', 'normal', 'high'] as const
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number]
 
-export const TICKET_DEPARTMENTS = ['technical', 'billing', 'domain', 'website', 'ai', 'account', 'other'] as const
+export const TICKET_DEPARTMENTS = ['technical', 'billing', 'domain', 'website', 'ai', 'gloval-ads', 'account', 'other'] as const
 export type TicketDepartment = (typeof TICKET_DEPARTMENTS)[number]
 
 export const TICKET_SERVICES = [
@@ -34,6 +34,10 @@ export const ATTACHMENT_ACCEPT = '.png,.jpg,.jpeg,.webp,.pdf,.txt'
 
 export function isOneOf<T extends readonly string[]>(list: T, value: unknown): value is T[number] {
   return typeof value === 'string' && (list as readonly string[]).includes(value)
+}
+
+export function isTicketDepartment(value: unknown): value is TicketDepartment {
+  return isOneOf(TICKET_DEPARTMENTS, value)
 }
 
 export type TicketActionResult<T = undefined> =
