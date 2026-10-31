@@ -178,20 +178,69 @@ describe('runScan: refunds on failure', () => {
     expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: false } })
     expect(calls.generate).toHaveLength(0)
     expect(calls.release).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: false,
+      error_code: 'policy_blocked:gambling',
+    })
   })
 
-  it('consumes the attempt when only the model flags a blocked category', async () => {
+  it('keeps the attempt when explicit model evidence confirms a hard-block category', async () => {
+    const snapshot = { ...SNAPSHOT, text: 'We publish adult entertainment.' }
     const { deps, calls } = makeDeps({
-      generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'weapons' }),
+      scanSite: async () => ({ ok: true, snapshot }),
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'adult',
+        policyEvidence: 'explicit',
+        policyEvidenceQuote: 'adult entertainment',
+      }),
     })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
     expect(outcome).toEqual({ ok: false, error: { code: 'policy_blocked', consumed: true } })
+    expect(JSON.stringify(outcome)).not.toContain('adult')
     expect(calls.release).toBe(0)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ free_quota_used: true, error_code: 'policy_blocked' })
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: true,
+      error_code: 'policy_blocked:adult',
+    })
+  })
+
+  it('treats an ambiguous model-only adult signal as restricted instead of blocking', async () => {
+    const snapshot = {
+      ...SNAPSHOT,
+      host: 'lilashop.com.tr',
+      finalHost: 'www.lilashop.com.tr',
+      title: 'Lila Shop - Seks Shop',
+      description: 'Kadın iç giyim, mayo ve bikini',
+    }
+    const { deps, calls } = makeDeps({
+      scanSite: async () => ({ ok: true, snapshot }),
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'adult',
+        policyEvidence: 'ambiguous',
+        policyEvidenceQuote: 'Seks Shop',
+      }),
+    })
+    const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
+    expect(outcome.ok && outcome.result.restricted).toContain('adult')
+    expect(calls.release).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'ok',
+      free_quota_used: true,
+      error_code: null,
+    })
   })
 
   it('adds a restricted category the model found, never removes one', async () => {
-    const { deps } = makeDeps({ generate: plannerThen(COPY_OUTPUT, { ...PLANNER_OUTPUT, policyCategory: 'alcohol' }) })
+    const { deps } = makeDeps({
+      generate: plannerThen(COPY_OUTPUT, {
+        ...PLANNER_OUTPUT,
+        policyCategory: 'alcohol',
+        policyEvidence: 'explicit',
+        policyEvidenceQuote: 'Butik şarap',
+      }),
+    })
     const outcome = await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)
     expect(outcome.ok && outcome.result.restricted).toEqual(['alcohol'])
   })

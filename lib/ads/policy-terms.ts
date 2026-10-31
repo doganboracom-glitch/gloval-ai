@@ -36,7 +36,10 @@ export type PolicySeverity = 'blocked' | 'restricted'
 export type PolicyCategoryDefinition = {
   category: PolicyCategory
   severity: PolicySeverity
+  /** Direct signals that can reach the category's configured severity. */
   terms: string[]
+  /** Lower-confidence signals that only produce a restricted finding. */
+  reviewTerms?: string[]
 }
 
 export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
@@ -44,10 +47,11 @@ export const POLICY_CATEGORIES: PolicyCategoryDefinition[] = [
     category: 'adult',
     severity: 'blocked',
     terms: [
-      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx', 'sex shop', 'seks shop', 'sexshop', 'seks hatti',
-      'seks sohbet', 'sex chat', 'canli seks', 'escort', 'escorts', 'eskort*', 'erotik masaj', 'fuhus*', 'genelev*',
-      'yetiskin icerik', 'adult content', 'adult entertainment', 'webcam show', 'nude photos', 'ciplak fotograf*',
+      'porno*', 'porn', 'pornography', 'pornografi*', 'xxx', 'sexshop', 'seks hatti', 'seks sohbet', 'sex chat',
+      'canli seks', 'escort', 'escorts', 'eskort*', 'erotik masaj', 'fuhus*', 'genelev*', 'yetiskin icerik',
+      'adult content', 'adult entertainment', 'webcam show', 'nude photos', 'ciplak fotograf*',
     ],
+    reviewTerms: ['sex shop', 'seks shop'],
   },
   {
     category: 'weapons',

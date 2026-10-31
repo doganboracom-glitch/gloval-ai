@@ -113,6 +113,10 @@ function fail(error: AdsScanError): ScanOutcome {
   return { ok: false, error }
 }
 
+function policyErrorCode(categories: readonly PolicyCategory[]): string {
+  return `policy_blocked:${categories.join(',')}`
+}
+
 function actorKey(actor: ScanActor): string {
   return actor.kind === 'user' ? `user:${actor.userId}` : `ip:${actor.ip}`
 }
@@ -249,7 +253,7 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     // ---- policy before any model call -------------------------------------------
     const pre = evaluateSnapshotPolicy(snapshot)
     if (pre.verdict === 'blocked') {
-      finalCode = 'policy_blocked'
+      finalCode = policyErrorCode(pre.blocked)
       return fail({ code: 'policy_blocked', consumed: false })
     }
     const restricted = new Set<PolicyCategory>(pre.restricted)
@@ -288,11 +292,11 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
       return fail({ code: 'generation_failed' })
     }
 
-    // The model may only tighten the policy, never loosen it.
+    // A model may only add a hard block when its explicit quote is verified in the snapshot.
     if (plan.modelPolicyCategory) {
-      if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked') {
+      if (SEVERITY.get(plan.modelPolicyCategory) === 'blocked' && plan.modelPolicyEvidence === 'explicit') {
         kept = true
-        finalCode = 'policy_blocked'
+        finalCode = policyErrorCode([plan.modelPolicyCategory])
         return fail({ code: 'policy_blocked', consumed: true })
       }
       restricted.add(plan.modelPolicyCategory)
