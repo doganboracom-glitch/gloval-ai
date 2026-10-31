@@ -82,7 +82,23 @@ describe('Ads credits panel', () => {
     const table = screen.getByRole('table')
     const billingLink = screen.getByRole('link', { name: 'Kredi al' })
 
-    expect(table.parentElement?.nextElementSibling).toBe(panel)
+    const tableFrame = table.parentElement
+    const panelClasses = panel.className.split(/\s+/)
+
+    expect(tableFrame?.nextElementSibling).toBe(panel)
+    expect(tableFrame?.className.split(/\s+/)).toEqual(expect.arrayContaining(['border', 'border-border']))
+    expect(panelClasses).toEqual(
+      expect.arrayContaining([
+        '-mt-px',
+        'w-full',
+        'rounded-2xl',
+        'border',
+        'border-border',
+        'sm:mx-auto',
+        'sm:w-2/3',
+      ]),
+    )
+    expect(panelClasses).not.toContain('sm:ml-auto')
     expect(panel.textContent).toContain('Kredi satın alımında ve plan fiyatlarında KDV dahildir.')
     expect(panel.textContent).toContain('Krediler mevcut AI kredi bakiyenle aynıdır.')
     expect(billingLink.getAttribute('href')).toBe('/billing')
@@ -117,10 +133,32 @@ describe('Ads platform and information sections', () => {
     }
   })
 
-  it('links the FAQ support callout to the contact page', () => {
+  it('groups the FAQ support callout at the list width and links to the contact page', () => {
     renderWithLanguage('tr', <AdsFaqSection />)
 
-    expect(screen.getByText('Sorunuz mu var? Destek ekibimiz size yardımcı olabilir.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Destek ekibine ulaşın' }).getAttribute('href')).toBe('/yasal/iletisim')
+    const supportText = screen.getByText('Sorunuz mu var? Destek ekibimiz size yardımcı olabilir.')
+    const supportLink = screen.getByRole('link', { name: 'Destek ekibine ulaşın' })
+    const supportRow = supportText.parentElement
+    const supportRowClasses = supportRow?.className.split(/\s+/) ?? []
+
+    expect(supportRow?.tagName).toBe('ASIDE')
+    expect(supportLink.parentElement).toBe(supportRow)
+    expect(supportRowClasses).toEqual(
+      expect.arrayContaining([
+        'mx-auto',
+        'w-full',
+        'max-w-3xl',
+        'flex-col',
+        'items-center',
+        'gap-4',
+        'text-center',
+        'sm:flex-row',
+        'sm:justify-center',
+      ]),
+    )
+    expect(supportLink.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['border', 'border-border/70']),
+    )
+    expect(supportLink.getAttribute('href')).toBe('/yasal/iletisim')
   })
 })

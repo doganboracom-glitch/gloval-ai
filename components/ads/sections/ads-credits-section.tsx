@@ -85,7 +85,7 @@ export function AdsCreditsSection() {
       </div>
       <aside
         aria-label={copy.panelLabel}
-        className={`${styles.creditPanel} -mt-px flex w-full flex-col gap-4 rounded-b-2xl border-x border-b border-t-0 border-brand/40 p-4 sm:ml-auto sm:w-4/5 sm:flex-row sm:items-center sm:justify-between sm:px-5`}
+        className={`${styles.creditPanel} -mt-px flex w-full flex-col gap-4 rounded-2xl border border-border p-4 sm:mx-auto sm:w-2/3 sm:flex-row sm:items-center sm:justify-between sm:px-5`}
       >
         <div className="flex min-w-0 flex-col gap-1 text-sm leading-relaxed text-foreground/85">
           <p>{t.ads.creditsNote}</p>

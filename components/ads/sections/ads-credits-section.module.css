@@ -1,13 +1,10 @@
 .creditPanel {
-  border-color: color-mix(in oklab, var(--color-brand) 48%, var(--color-border));
   background: linear-gradient(
     135deg,
     color-mix(in oklab, var(--color-brand) 22%, var(--color-card)),
     color-mix(in oklab, var(--color-brand) 10%, var(--color-background))
   );
-  box-shadow:
-    0 12px 28px color-mix(in oklab, var(--color-brand) 13%, transparent),
-    inset 0 1px 0 color-mix(in oklab, var(--color-foreground) 8%, transparent);
+  box-shadow: 0 8px 20px color-mix(in oklab, var(--color-brand) 12%, transparent);
 }
 
 .creditButton {
