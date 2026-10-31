@@ -1,6 +1,8 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublishedSite } from '@/lib/projects'
+import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { SiteCustomCode } from '@/components/site-custom-code'
 import { cookieBannerCss } from '@/lib/cookie-banner-theme'
 import { CookieBannerDocProvider } from '@/components/cookie-banner-doc-context'
@@ -30,16 +32,58 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  if (!site) return { verification: { google: null }, robots: { index: false, follow: false } }
-  const other = extractMetaTags(safeTrackingCode(site?.schema.tracking?.head))
+  if (!site) {
+    return {
+      title: 'Site bulunamadı',
+      applicationName: null,
+      generator: null,
+      icons: null,
+      openGraph: null,
+      twitter: null,
+      verification: { google: null },
+      robots: { index: false, follow: false },
+    }
+  }
+
+  const seo = await getSiteSeoContext(slug)
+  const social = buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+  })
+  const other = extractMetaTags(safeTrackingCode(site.schema.tracking?.head))
   // The platform's own Google Search Console token belongs to gloval.ai only,
   // so it is dropped here instead of leaking into every published tenant site.
-  const base: Metadata = { verification: { google: null } }
-  // The owner's own favicon (separate from the header logo, see
-  // `faviconSchema`) replaces the platform default tab icon on their site.
-  const faviconSrc = site?.schema.navigation.favicon?.src
-  const withIcon: Metadata = faviconSrc ? { ...base, icons: { icon: faviconSrc } } : base
-  return Object.keys(other).length > 0 ? { ...withIcon, other } : withIcon
+  const faviconSrc = site.schema.navigation.favicon?.src
+  const base: Metadata = {
+    ...social,
+    applicationName: site.name,
+    generator: null,
+    icons: faviconSrc ? { icon: faviconSrc } : null,
+    verification: { google: null },
+  }
+  return Object.keys(other).length > 0 ? { ...base, other } : base
+}
+
+export async function generateViewport({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Viewport> {
+  const { slug } = await params
+  const site = await getPublishedSite(slug)
+  if (!site) return {}
+
+  const background = site.schema.theme.palette.find(
+    (color) => color.name.toLowerCase() === 'background',
+  )?.hex
+  return {
+    colorScheme: site.schema.theme.mode === 'dark' ? 'dark' : 'light',
+    ...(background && /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(background)
+      ? { themeColor: background }
+      : {}),
+  }
 }
 
 export default async function PublishedSiteLayout({

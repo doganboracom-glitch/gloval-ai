@@ -6,6 +6,7 @@ import { getStoreProductBySlug, getStoreProducts, getStorePaymentMethods } from 
 import { getTryOnConfigForStore } from '@/lib/try-on-settings'
 import { isCardProviderMethod } from '@/lib/payments/methods'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { productJsonLdScript } from '@/lib/product-json-ld'
 import { ProductDetail } from '@/components/store/product-detail'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
@@ -27,21 +28,17 @@ export async function generateMetadata({
   const product = await getStoreProductBySlug(slug, productSlug)
   if (!product) notFound()
   const description = product.seo_description ?? product.description ?? undefined
-  const image = product.images[0]?.url
-  const { origin } = await getSiteSeoContext(slug)
-  const canonical = `${origin}/store/${productSlug}`
-  return {
+  const seo = await getSiteSeoContext(slug)
+  const canonical = `${seo.origin}/store/${productSlug}`
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+    canonical,
     title: product.seo_title ?? product.name,
-    ...(description ? { description } : {}),
-    alternates: { canonical },
-    openGraph: {
-      title: product.seo_title ?? product.name,
-      ...(description ? { description } : {}),
-      url: canonical,
-      type: 'website' as const,
-      ...(image ? { images: [{ url: image, alt: product.name }] } : {}),
-    },
-  }
+    description,
+  })
 }
 
 export default async function ProductPage({

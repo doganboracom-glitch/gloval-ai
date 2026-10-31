@@ -152,6 +152,8 @@ export type CatalogContext = {
   whatsappNumber: string | null
   /** Canonical site origin used to build shareable product links. */
   origin: string
+  /** Published-site timestamp used to version social preview assets. */
+  lastModified: string | null
 }
 
 /** Everything the storefront needs to render catalog-mode order buttons. */
@@ -163,7 +165,12 @@ export async function getCatalogContext(
   const { getSiteSeoContext } = await import('@/lib/seo/site-seo')
   const { resolveContactActions } = await import('@/lib/site-contact-actions')
   const { usableWhatsappNumber } = await import('@/lib/commerce-mode')
-  const { origin } = await getSiteSeoContext(slug)
+  const seo = await getSiteSeoContext(slug)
   const resolved = resolveContactActions(schema)
-  return { mode, whatsappNumber: usableWhatsappNumber(resolved?.whatsapp?.display), origin }
+  return {
+    mode,
+    whatsappNumber: usableWhatsappNumber(resolved?.whatsapp?.display),
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+  }
 }

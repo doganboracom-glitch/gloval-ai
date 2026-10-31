@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { loadPublicCatalog } from '@/lib/catalog-public-server'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { findCategoryGroup } from '@/lib/product-categories'
 import { buildBreadcrumbJsonLd, catalogCategoryPath, catalogListPath, jsonLdScripts } from '@/lib/catalog-public'
 import { catalogLabels, catalogPageHref, findCatalogBandImage, paginate, parsePage } from '@/lib/catalog-view'
@@ -25,7 +26,15 @@ export async function generateMetadata({ params, searchParams }: Params): Promis
   const title = `${group.name} | ${catalog.site.name}`
   const description = `${catalog.site.name} ${group.name}: ${group.items.map((i) => i.name).slice(0, 4).join(', ')}.`
   const canonical = `${catalog.origin}${catalogPageHref(catalogCategoryPath(group.slug), page)}`
-  return { title, description, alternates: { canonical }, openGraph: { title, description, url: canonical, type: 'website' } }
+  return buildTenantSocialMetadata({
+    site: catalog.site,
+    slug,
+    origin: catalog.origin,
+    lastModified: catalog.lastModified,
+    canonical,
+    title,
+    description,
+  })
 }
 
 export default async function CatalogCategoryPage({ params, searchParams }: Params) {

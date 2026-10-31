@@ -5,6 +5,7 @@ import { modeHasStoreRoutes } from '@/lib/commerce-mode'
 import { getCatalogContext, getPublishedSiteRouting } from '@/lib/commerce-mode-server'
 import { catalogListPath } from '@/lib/catalog-public'
 import { getSiteSeoContext } from '@/lib/seo/site-seo'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import { getStoreCollections, getStoreProducts } from '@/lib/store'
 import { StoreFront } from '@/components/store/store-front'
 import { StoreSiteShell } from '@/components/store/store-site-shell'
@@ -20,7 +21,18 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const site = await getPublishedSite(slug)
-  return { title: site ? `${site.name} — Mağaza` : 'Mağaza' }
+  if (!site) return { title: 'Mağaza', robots: { index: false, follow: false } }
+
+  const seo = await getSiteSeoContext(slug)
+  return buildTenantSocialMetadata({
+    site,
+    slug,
+    origin: seo.origin,
+    lastModified: seo.lastModified,
+    canonical: `${seo.origin}/store`,
+    title: `${site.name} — Mağaza`,
+    description: site.schema.meta.description,
+  })
 }
 
 export default async function StorePage({

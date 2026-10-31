@@ -23,9 +23,9 @@ function attr(tag: string, name: string): string | null {
 }
 
 /**
- * Extracts `<meta name|property="…" content="…">` pairs from a head snippet so
- * they can be rendered through Next.js metadata (`other`). Charset/viewport and
- * anything without a usable name are skipped so platform metadata stays intact.
+ * Extracts safe `<meta name|property="…" content="…">` pairs from a head
+ * snippet for Next.js metadata (`other`). Charset, viewport, robots, description,
+ * and generated Open Graph/Twitter fields stay owned by the site's metadata.
  */
 export function extractMetaTags(code?: string | null): Record<string, string> {
   if (!code) return {}
@@ -34,7 +34,14 @@ export function extractMetaTags(code?: string | null): Record<string, string> {
     const name = attr(tag, 'name') ?? attr(tag, 'property')
     const content = attr(tag, 'content')
     if (!name || content === null) continue
-    if (['viewport', 'charset', 'description'].includes(name.toLowerCase())) continue
+    const normalizedName = name.trim().toLowerCase()
+    if (
+      ['viewport', 'charset', 'description', 'robots', 'googlebot'].includes(normalizedName) ||
+      normalizedName.startsWith('og:') ||
+      normalizedName.startsWith('twitter:')
+    ) {
+      continue
+    }
     result[name] = content
   }
   return result

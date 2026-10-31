@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { loadPublicCatalog } from '@/lib/catalog-public-server'
+import { buildTenantSocialMetadata } from '@/lib/seo/site-sharing'
 import {
   buildBreadcrumbJsonLd,
   buildCatalogProductJsonLd,
@@ -28,19 +29,15 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const title = item.seoTitle ?? `${item.name} | ${catalog.site.name}`
   const description = item.seoDescription ?? item.description?.slice(0, 160) ?? undefined
   const canonical = `${catalog.origin}${catalogProductPath(item.categorySlug, item.slug)}`
-  const image = item.images[0]?.url
-  return {
+  return buildTenantSocialMetadata({
+    site: catalog.site,
+    slug,
+    origin: catalog.origin,
+    lastModified: catalog.lastModified,
+    canonical,
     title,
-    ...(description ? { description } : {}),
-    alternates: { canonical },
-    openGraph: {
-      title,
-      ...(description ? { description } : {}),
-      url: canonical,
-      type: 'website',
-      ...(image ? { images: [{ url: image, alt: item.name }] } : {}),
-    },
-  }
+    description,
+  })
 }
 
 export default async function CatalogProductPage({ params }: Params) {
