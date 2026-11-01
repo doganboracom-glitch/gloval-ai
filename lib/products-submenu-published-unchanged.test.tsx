@@ -3,6 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import type { StoreCatalog } from '@/components/website-renderer/store-catalog-context'
 import { buildDemoSite, demos } from '@/lib/demos'
+import { resolveAboutDetail } from '@/lib/section-detail'
+import { resolveServices } from '@/lib/service-pages'
+import { resolveTestimonials } from '@/lib/testimonials'
+import { resolveReferences } from '@/lib/references'
+import { resolveTeam } from '@/lib/team'
 import type { StoreProduct } from '@/lib/store'
 import { seedProductsSubmenu } from '@/lib/site-menu'
 
@@ -37,6 +42,37 @@ function catalog(categories: string[]): StoreCatalog {
   }
 }
 
+function demoRoutes(site: ReturnType<typeof buildDemoSite>, lang: 'tr' | 'en') {
+  const slug = 'eticaret'
+  const langQuery = lang === 'en' ? '?lang=en' : ''
+  const services = resolveServices(site)
+  const servicesRoutes = services?.pageActive
+    ? {
+        listSlug: services.listSlug,
+        list: `/demo/${slug}/hizmetler${langQuery}`,
+        itemBase: `/demo/${slug}/hizmet`,
+        query: langQuery,
+      }
+    : undefined
+  const testimonials = resolveTestimonials(site, { demo: true })
+  const references = resolveReferences(site, { demo: true })
+  const team = resolveTeam(site)
+
+  return {
+    home: `/demo/${slug}${langQuery}`,
+    about: `/demo/${slug}/hakkimizda${langQuery}`,
+    aboutPageSlug: resolveAboutDetail(site)?.pageSlug ?? null,
+    services: servicesRoutes,
+    testimonials: testimonials.active
+      ? { slug: testimonials.slug, list: `/demo/${slug}/musteri-yorumlari${langQuery}` }
+      : undefined,
+    references: references.active
+      ? { slug: references.slug, list: `/demo/${slug}/referanslar${langQuery}` }
+      : undefined,
+    team: team.active ? { slug: team.slug, list: `/demo/${slug}/kadromuz${langQuery}` } : undefined,
+  }
+}
+
 function publishedHtml(lang: 'tr' | 'en', categories: string[], page: string | null): string {
   const demo = demos.find((d) => d.slug === 'eticaret')!
   const full = buildDemoSite(demo, lang)
@@ -66,7 +102,8 @@ function publishedHtml(lang: 'tr' | 'en', categories: string[], page: string | n
         }
       : built
   return renderToStaticMarkup(
-    <WebsiteRenderer site={site} pageRouting initialPage={page} store={catalog(categories)} />,
+        <WebsiteRenderer site={site} initialPage={page} store={catalog(categories)} demoRoutes={demoRoutes(site, lang)} />
+,
   )
 }
 
@@ -89,7 +126,7 @@ describe('published sites without productsSubmenu render the pre-feature HTML', 
     const explicitOff = { ...legacy, navigation: { ...legacy.navigation, productsSubmenu: false } }
     const render = (site: typeof legacy) =>
       renderToStaticMarkup(
-        <WebsiteRenderer site={site} pageRouting initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} />,
+        <WebsiteRenderer site={site} initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} demoRoutes={demoRoutes(site, 'tr')} />,
       )
     expect(render(explicitOff)).toBe(render(legacy))
   })
@@ -100,7 +137,7 @@ describe('published sites without productsSubmenu render the pre-feature HTML', 
     const on = { ...legacy, navigation: { ...legacy.navigation, productsSubmenu: true } }
     const render = (site: typeof legacy) =>
       renderToStaticMarkup(
-        <WebsiteRenderer site={site} pageRouting initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} />,
+        <WebsiteRenderer site={site} initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} demoRoutes={demoRoutes(site, 'tr')} />,
       )
     expect(render(on)).not.toBe(render(legacy))
     expect(render(on)).toContain('kategori=Aksesuar')
@@ -112,7 +149,7 @@ describe('published sites without productsSubmenu render the pre-feature HTML', 
     const legacy = buildDemoSite(demo, 'tr')
     const render = (site: typeof legacy) =>
       renderToStaticMarkup(
-        <WebsiteRenderer site={site} pageRouting initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} />,
+        <WebsiteRenderer site={site} initialPage={null} store={catalog(['Aksesuar', 'Giyim', 'Ev'])} demoRoutes={demoRoutes(site, 'tr')} />,
       )
     const seeded = seedProductsSubmenu(legacy)
     expect(seeded.navigation.productsSubmenu).toBe(true)

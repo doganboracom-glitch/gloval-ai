@@ -104,7 +104,16 @@ function normalizeAnchorId(id: string): string {
   } catch {
     // Keep malformed fragments as-is so they fail the target lookup below.
   }
-  return normalized.toLowerCase()
+  return normalized
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+}
+
+function isHomeAnchor(id: string): boolean {
+  const normalized = normalizeAnchorId(id)
+  return normalized === 'home' || normalized === 'ana-sayfa' || normalized === 'anasayfa'
 }
 
 /** The schema section type or special rendered target an actual DOM id resolves to. */
@@ -414,6 +423,7 @@ function verdictFor(site: WebsiteSchema, href: string, ctx: Context): Verdict {
   if (!parsed) return { keep: false, anchor: null }
   if (parsed.kind === 'external') return { keep: true }
   if (parsed.fragmentOnly && !parsed.hash) return { keep: false, anchor: null }
+  if (parsed.hash && isHomeAnchor(parsed.hash)) return { keep: true, href: '/' }
 
   const route = routeForPath(site, parsed.pathname, parsed.search, ctx)
   if (!route.valid) {
@@ -454,6 +464,10 @@ function rewriteLinks(site: WebsiteSchema, links: NavLink[], ctx: Context): NavL
 }
 
 export function withLivePageLinks(site: WebsiteSchema, options: LivePageLinkOptions = {}): WebsiteSchema {
+  const normalizedOptions: LivePageLinkOptions = {
+    hasBlog: options.hasBlog ?? site.blogSettings?.showInMenu === true,
+    hasLatestPosts: options.hasLatestPosts ?? (site.blogSettings?.showInMenu === true && site.blogSettings?.showLatest === true),
+  }
   const empty = new Set(emptyPageSlugs(site))
   let next = site
 
@@ -461,7 +475,7 @@ export function withLivePageLinks(site: WebsiteSchema, options: LivePageLinkOpti
     next = { ...next, pages: next.pages.filter((p, i) => !empty.has(p.slug || `page-${i}`)) }
   }
 
-  const ctx = contextFor(next, options)
+  const ctx = contextFor(next, normalizedOptions)
   const links = rewriteLinks(site, site.navigation.links, ctx)
   let cta = site.navigation.cta
   if (cta) {
@@ -499,21 +513,54 @@ const REMOVED = Symbol('removed')
  * link object is rewritten to its anchor or removed; a removed button simply
  * disappears from its parent. Untouched data keeps its identity.
  */
+const LINKED_CONTENT_KEYS = [
+  'alt',
+  'category',
+  'content',
+  'description',
+  'image',
+  'imagePrompt',
+  'imageUrl',
+  'items',
+  'name',
+  'price',
+  'productId',
+  'src',
+  'title',
+]
+
+function isStandaloneLink(record: Record<string, unknown>): boolean {
+  return !LINKED_CONTENT_KEYS.some((key) => key in record)
+}
+
 function rewriteNode(site: WebsiteSchema, node: unknown, ctx: Context): unknown {
   if (Array.isArray(node)) return rewriteList(site, node, ctx)
   if (!node || typeof node !== 'object') return node
+
   const record = node as Record<string, unknown>
+  let source = record
+  let changed = false
   if (typeof record.href === 'string') {
     const verdict = verdictFor(site, record.href, ctx)
-    if (!verdict.keep) return verdict.anchor ? { ...record, href: verdict.anchor } : REMOVED
-    if (verdict.href && verdict.href !== record.href) return { ...record, href: verdict.href }
-    return node
+    if (!verdict.keep) {
+      if (isStandaloneLink(record)) {
+        return verdict.anchor ? { ...record, href: verdict.anchor } : REMOVED
+      }
+      source = { ...record }
+      delete source.href
+      changed = true
+    } else if (verdict.href && verdict.href !== record.href) {
+      source = { ...record, href: verdict.href }
+      changed = true
+    }
   }
-  let copy: Record<string, unknown> | null = null
-  for (const [key, value] of Object.entries(record)) {
+
+  let copy: Record<string, unknown> | null = changed ? { ...source } : null
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'href') continue
     const result = rewriteNode(site, value, ctx)
     if (result === value) continue
-    copy ??= { ...record }
+    copy ??= { ...source }
     if (result === REMOVED) delete copy[key]
     else copy[key] = result
   }

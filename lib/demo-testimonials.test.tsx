@@ -99,7 +99,7 @@ describe.each(demos.map((d) => d.slug))('demo %s reviews', (slug) => {
         ),
       },
     }
-    expect(render(stripped)).toBe(readFileSync(file, 'utf8'))
+    expect(renderDemo(stripped, slug)).toBe(readFileSync(file, 'utf8'))
   })
 
   it('gives the English demo six labelled example reviews and a menu link inside the demo', () => {

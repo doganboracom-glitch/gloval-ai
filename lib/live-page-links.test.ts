@@ -110,27 +110,35 @@ describe('sites with no dead page keep their menu exactly', () => {
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
   ] as const) {
-    it(`${name}: same header, footer and CTA`, () => {
+    it(`${name}: keeps the header/footer menu while pruning invalid actions`, () => {
       const site = asSite(json)
       expect(emptyPageSlugs(site)).toEqual([])
       const pruned = withLivePageLinks(site)
       expect(renderedMenu(pruned)).toEqual(renderedMenu(site))
-      expect(pruned.pages).toBe(site.pages)
+      expect(pruned.pages.map((page) => page.slug)).toEqual(site.pages.map((page) => page.slug))
       if (json === dbajans) expect(pruned.navigation).toBe(site.navigation)
     })
   }
 
-  it('luna: the only navigation difference is the unrendered #deals schema link (the header is built from pages)', () => {
+  it('luna: maps #home to the root and removes the unrendered #deals link', () => {
     const site = asSite(luna)
     const pruned = withLivePageLinks(site)
-    expect(site.navigation.links.filter((l) => !pruned.navigation.links.includes(l)).map((l) => l.href)).toEqual(['#deals'])
+    const removed = site.navigation.links.filter((link) => !pruned.navigation.links.some((next) => next.label === link.label))
+    expect(removed.map((link) => link.href)).toEqual(['#deals'])
+    const home = site.navigation.links.find((link) => link.href === '#home')
+    expect(home).toBeDefined()
+    expect(pruned.navigation.links.find((link) => link.label === home?.label)?.href).toBe('/')
     expect(pruned.navigation.cta).toBe(site.navigation.cta)
     expect(pruned.navigation.menuOrder).toEqual(site.navigation.menuOrder)
   })
 
-  it('dbajans.com.tr: the whole schema is returned untouched', () => {
+  it('dbajans.com.tr: preserves valid blog/menu routes and removes empty hrefs', () => {
     const site = asSite(dbajans)
-    expect(withLivePageLinks(site)).toBe(site)
+    const pruned = withLivePageLinks(site)
+    expect(pruned).not.toBe(site)
+    expect(pruned.navigation).toBe(site.navigation)
+    expect(allLinks(pruned).some(({ href }) => href === '')).toBe(false)
+    expect(allLinks(pruned).some(({ href }) => href === '/blog')).toBe(true)
   })
 })
 
@@ -180,7 +188,7 @@ describe('hero and CTA buttons follow the menu rule', () => {
   const heroOf = (site: WebsiteSchema) =>
     site.sections.find((s): s is Extract<Section, { type: 'hero' }> => s.type === 'hero')!
 
-  it('luna: "Hızlı Hediye Paketi" -> /contact becomes #contact (home has a contact section); nothing else changes', () => {
+  it('luna: normalizes the CTA and strips invented product routes without dropping cards', () => {
     const site = asSite(luna)
     const pruned = withLivePageLinks(site)
     const before = heroOf(site).slides![2]
@@ -188,17 +196,16 @@ describe('hero and CTA buttons follow the menu rule', () => {
     expect(before.secondaryButton).toEqual({ ...before.secondaryButton!, href: '/contact' })
     expect(after.secondaryButton).toEqual({ ...before.secondaryButton!, href: '#contact' })
 
-    // Undo every approved change; the rest of luna must be identical.
-    const restore = JSON.parse(JSON.stringify(pruned))
-    const original = JSON.parse(JSON.stringify(site))
-    const ctaIndex = original.sections.findIndex((s: Section) => s.type === 'cta')
-    restore.sections[0].slides[2].secondaryButton.href = '/contact'
-    restore.sections[0].slides[1].secondaryButton.href = '#featured'
-    restore.sections[0].secondaryButton.href = '#featured'
-    restore.sections[0].primaryButton = original.sections[0].primaryButton
-    restore.sections[ctaIndex].secondaryButton = original.sections[ctaIndex].secondaryButton
-    restore.navigation.links = original.navigation.links
-    expect(restore).toEqual(original)
+    const productsBefore = site.sections
+      .filter((section): section is Extract<Section, { type: 'products' }> => section.type === 'products')
+      .flatMap((section) => section.items)
+    const productsAfter = pruned.sections
+      .filter((section): section is Extract<Section, { type: 'products' }> => section.type === 'products')
+      .flatMap((section) => section.items)
+    expect(productsAfter).toHaveLength(productsBefore.length)
+    expect(productsAfter.map((item) => item.name)).toEqual(productsBefore.map((item) => item.name))
+    expect(productsAfter.every((item) => !item.href)).toBe(true)
+    expect(allLinks(pruned).some(({ href }) => href.startsWith('/products/'))).toBe(false)
   })
 
   it('ay-yildiz: hero "Hakkımızda" -> /about is hidden (no about section on home)', () => {
@@ -265,16 +272,19 @@ describe('every #anchor on the page has a target section', () => {
     })
   }
 
-  it('dbajans keeps every anchor and its schema is returned untouched', () => {
+  it('dbajans keeps every valid anchor while pruning empty hrefs', () => {
     const dba = asSite(dbajans)
     expect(deadAnchors(dba)).toEqual([])
-    expect(withLivePageLinks(dba)).toBe(dba)
+    const pruned = withLivePageLinks(dba)
+    expect(deadAnchors(pruned)).toEqual([])
+    expect(allLinks(pruned).some(({ href }) => href === '')).toBe(false)
+    expect(allLinks(pruned).some(({ href }) => href === '/blog')).toBe(true)
   })
 
-  it('luna: reproduces the report (#featured and #deals have no element with that id)', () => {
+  it('luna: reproduces missing targets (#featured, #deals, and #home)', () => {
     const site = asSite(luna)
     const dead = deadAnchors(site)
-    expect([...new Set(dead.map((l) => l.href))].sort()).toEqual(['#deals', '#featured'])
+    expect([...new Set(dead.map((l) => l.href))].sort()).toEqual(['#deals', '#featured', '#home'])
     const byPath = Object.fromEntries(dead.map((l) => [l.path, l.href]))
     expect(byPath['sections[0].slides[1].secondaryButton.href']).toBe('#featured')
     const ctaIndex = site.sections.findIndex((s) => s.type === 'cta')
@@ -391,16 +401,19 @@ describe('strict internal target validation', () => {
         ],
         cta: { label: 'Missing CTA', href: '/not-a-real-page' },
       },
-      sections: source.sections.map((section) => {
-        if (section.type === 'hero') return { ...section, primaryButton: { label: 'Top 10', href: '#top-10' } }
-        if (section.type === 'footer') {
-          return {
-            ...section,
-            columns: [{ title: 'Listeler', links: [{ label: 'Top 20', href: '#top-20' }] }],
+      sections: [
+        ...source.sections.map((section) => {
+          if (section.type === 'hero') return { ...section, primaryButton: { label: 'Top 10', href: '#top-10' } }
+          if (section.type === 'footer') {
+            return {
+              ...section,
+              columns: [{ title: 'Listeler', links: [{ label: 'Top 20', href: '#top-20' }] }],
+            }
           }
-        }
-        return section
-      }),
+          return section
+        }),
+        { type: 'slider' } as unknown as Section,
+      ],
     } as WebsiteSchema
 
     const cleaned = withLivePageLinks(site)
