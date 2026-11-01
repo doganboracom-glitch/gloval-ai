@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getMyDomainsOverview } from '@/lib/custom-domains/actions'
 import { parseBuyParam, buildBuyHref } from '@/lib/custom-domains/public-search/buy-link'
 import { DomainsClient } from '@/components/domains/domains-client'
@@ -18,10 +20,12 @@ export default async function DomainsPage({
   const paymentResult = payment === 'success' || payment === 'failed' || payment === 'error' ? payment : null
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(buyDomain ? buildBuyHref(buyDomain, false, 'login') : '/auth/login?next=/dashboard/domains')
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') {
+    redirect(buyDomain ? buildBuyHref(buyDomain, false, 'login') : '/auth/login?next=/dashboard/domains')
+  }
+  const { user } = authState
 
   const overview = await getMyDomainsOverview()
 

@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getProject, listProjectBackups, listProjectVersions } from '@/lib/projects'
 import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
 import { SiteUnavailable } from '@/components/editor/site-unavailable'
@@ -29,10 +31,10 @@ export default async function EditorPage({
   const { autopublish, freeChosen } = await searchParams
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=/editor/${projectId}`)
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=/editor/${projectId}`)
+  const { user } = authState
 
   const project = await getProject(projectId)
   if (!project) notFound()
