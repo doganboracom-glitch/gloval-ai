@@ -119,7 +119,7 @@ function setup(options: {
     }),
     beginPublish: vi.fn(async () => {
       events.push('charge')
-      return { ok: true, balance: 85, alreadyCharged: false, chargedAmount: 15 }
+      return { ok: true as const, balance: 85, alreadyCharged: false, chargedAmount: 15 }
     }),
     markPublished: vi.fn(async () => { events.push('published') }),
     markFailed: vi.fn(async () => { events.push('failed') }),

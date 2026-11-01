@@ -26,6 +26,7 @@ describe('Google Ads publish SQL draft', () => {
 
   it('atomically charges 15 credits when a plan enters publishing', () => {
     expect(sqlDraft).toContain('ads_begin_google_ads_publish')
-    expect(sqlDraft).toContain('public.ads_charge_credits(p_user_id, 15,')
+    expect(sqlDraft).toContain('public.ads_charge_credits(')
+    expect(sqlDraft).toContain('p_user_id,\n    15,')
   })
 })

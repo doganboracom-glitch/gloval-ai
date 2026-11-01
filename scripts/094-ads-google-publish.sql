@@ -1,5 +1,5 @@
 -- UNAPPLIED DRAFT — E1 review only.
--- Do not run or apply without explicit user approval.
+-- Do not run until reviewed and approved; explicit user approval is required.
 -- Adds a transaction-backed publish reservation and counts each Google Ads
 -- mutate operation against the existing per-user and project API quotas.
 

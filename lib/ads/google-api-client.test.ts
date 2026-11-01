@@ -144,7 +144,8 @@ describe('Google Ads API quota transport', () => {
   })
 
   it('reserves every individual mutation operation before a single external request', async () => {
-    const fetcher = vi.fn(async () => jsonResponse({ mutateOperationResponses: [] })) as unknown as typeof fetch
+    const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ mutateOperationResponses: [] }))
+    const fetcher = fetcherMock as unknown as typeof fetch
     const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
 
     await transport(mutateCall())
@@ -157,7 +158,7 @@ describe('Google Ads API quota transport', () => {
       p_operation_count: 3,
     }))
     expect(fetcher).toHaveBeenCalledTimes(1)
-    const init = fetcher.mock.calls[0]?.[1]
+    const init = fetcherMock.mock.calls[0]?.[1]
     expect(JSON.parse(String(init?.body))).toMatchObject({ validateOnly: true, partialFailure: false })
   })
 
@@ -170,13 +171,12 @@ describe('Google Ads API quota transport', () => {
     expect(fetcher).not.toHaveBeenCalled()
 
     mocks.rpc.mockClear()
-    await expect(transport(mutateCall({
-      body: {
-        mutateOperations: [{ campaignOperation: { create: { status: 'PAUSED' } } }],
-        partialFailure: true,
-        validateOnly: false,
-      },
-    }))).rejects.toMatchObject({ code: 'invalid_request' })
+    const invalidBody = {
+      mutateOperations: [{ campaignOperation: { create: { status: 'PAUSED' } } }],
+      partialFailure: true,
+      validateOnly: false,
+    } as unknown as GoogleAdsApiCall['body']
+    await expect(transport(mutateCall({ body: invalidBody }))).rejects.toMatchObject({ code: 'invalid_request' })
     expect(mocks.rpc).not.toHaveBeenCalled()
   })
 

@@ -27,6 +27,7 @@ export type GoogleAdsErrorCode =
   | 'currency_mismatch'
   | 'publish_disabled'
   | 'disconnect_failed'
+  | 'status_update_failed'
 
 export class GoogleAdsError extends Error {
   readonly code: GoogleAdsErrorCode
@@ -83,6 +84,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'provider_unavailable':
     case 'provider_error':
     case 'disconnect_failed':
+    case 'status_update_failed':
     case 'no_accounts':
       return 502
   }

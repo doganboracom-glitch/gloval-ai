@@ -176,19 +176,18 @@ function requirePlanBudget(plan: PublishPlanRow): { currency: string; dailyMinor
   }
 }
 
-function defaultLoadPlan(userId: string, planId: string): Promise<PublishPlanRow | null> {
+async function defaultLoadPlan(userId: string, planId: string): Promise<PublishPlanRow | null> {
   const admin = createAdminClient()
-  return admin
+  const { data, error } = await admin
     .from('ads_plans')
     .select(PLAN_SELECT)
     .eq('id', planId)
     .eq('user_id', userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-    .then(({ data, error }) => {
-      if (error) throw new GoogleAdsError('provider_error')
-      return (data as PublishPlanRow | null) ?? null
-    })
+
+  if (error) throw new GoogleAdsError('provider_error')
+  return (data as PublishPlanRow | null) ?? null
 }
 
 async function defaultWithAccess<T>(input: WithAccessInput<T>): Promise<T> {

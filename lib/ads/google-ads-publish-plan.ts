@@ -48,6 +48,10 @@ function invalidPlan(): never {
   throw new GoogleAdsError('invalid_publish_plan')
 }
 
+function invalidBudget(): never {
+  throw new GoogleAdsError('invalid_budget')
+}
+
 function cleanDistinctLines(lines: string[], maxLength: number, headlines: boolean): string[] {
   const seen = new Set<string>()
   const output: string[] = []
@@ -94,18 +98,18 @@ function displayPaths(displayUrl: string, finalUrl: string): { path1?: string; p
 }
 
 function microsFromMinorUnits(dailyMinor: number, currency: string): string {
-  if (!Number.isSafeInteger(dailyMinor) || dailyMinor <= 0 || !/^[A-Z]{3}$/.test(currency)) return invalidPlan()
+  if (!Number.isSafeInteger(dailyMinor) || dailyMinor <= 0 || !/^[A-Z]{3}$/.test(currency)) return invalidBudget()
   try {
     const fractionDigits = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
-    }).resolvedOptions().maximumFractionDigits
-    if (fractionDigits > 6) return invalidPlan()
+    }).resolvedOptions().maximumFractionDigits ?? 2
+    if (fractionDigits > 6) return invalidBudget()
     const micros = dailyMinor * 10 ** (6 - fractionDigits)
-    if (!Number.isSafeInteger(micros) || micros <= 0) return invalidPlan()
+    if (!Number.isSafeInteger(micros) || micros <= 0) return invalidBudget()
     return String(micros)
   } catch {
-    return invalidPlan()
+    return invalidBudget()
   }
 }
 
@@ -150,7 +154,7 @@ export function buildGoogleAdsMutateRequest(input: {
     input.budgetCapMinor <= 0 ||
     input.dailyBudgetMinor > input.budgetCapMinor
   ) {
-    return invalidPlan()
+    return invalidBudget()
   }
 
   const plan = parseGoogleAdsPublishPlan(input.planJson)
