@@ -99,6 +99,22 @@ describe('Google Ads publish plan compiler', () => {
     expect(buildGoogleAdsMutateRequest({ ...INPUT, validateOnly: true }).validateOnly).toBe(true)
   })
 
+  it('caps a maximal publish at 34 mutate operations without auto-declaring political status', () => {
+    const planJson = {
+      ...PLAN,
+      keywords: Array.from({ length: 20 }, (_, index) => `keyword phrase ${index + 1}`),
+      negativeKeywords: Array.from({ length: 8 }, (_, index) => `negative phrase ${index + 1}`),
+    }
+    const request = buildGoogleAdsMutateRequest({ ...INPUT, planJson })
+    const campaignOperation = request.mutateOperations.find((operation) => 'campaignOperation' in operation)
+
+    expect(request.mutateOperations).toHaveLength(34)
+    expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)
+      .not.toHaveProperty('containsEuPoliticalAdvertising')
+    expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)
+      .not.toHaveProperty('contains_eu_political_advertising')
+  })
+
   it('rejects incomplete, policy-blocked, or unsafe plan JSON before creating a body', () => {
     expect(() => buildGoogleAdsMutateRequest({ ...INPUT, planJson: { ...PLAN, adCopy: { ...PLAN.adCopy, headlines: ['Only one'] } } }))
       .toThrowError(expect.objectContaining({ code: 'invalid_publish_plan' }))

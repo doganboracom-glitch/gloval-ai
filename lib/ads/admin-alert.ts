@@ -8,6 +8,13 @@ import type { AdsRpcClient } from '@/lib/ads/credits'
 export type AnonCapAlertKind = 'anon_global_cap_50' | 'anon_global_cap'
 export type PolicyBlockAlertKind = 'policy_block_global_cap'
 export type GooglePublishAlertKind = `google_publish_reconciling:${string}`
+export type GooglePublishReconciliationReason =
+  | 'google_publish_result_unknown'
+  | 'publish_result_persist_failed'
+  | 'publish_failure_persist_failed'
+  | 'publish_reservation_result_unknown'
+  | 'publish_stale_timeout'
+  | 'publish_refund_failed'
 export type AdsAlertKind = AnonCapAlertKind | PolicyBlockAlertKind | GooglePublishAlertKind
 
 export const ANON_CAP_ALERT_KIND = {
@@ -109,13 +116,14 @@ export async function notifyGooglePublishReconciling(
   planId: string,
   requestId: string,
   deps: AdsAlertDeps = defaultDeps,
+  reason: GooglePublishReconciliationReason = 'google_publish_result_unknown',
 ): Promise<void> {
   const kind: GooglePublishAlertKind = `${GOOGLE_PUBLISH_RECONCILING_ALERT_KIND}:${planId}`
   try {
-    const first = await deps.recordOnce(kind, { planId, requestId })
+    const first = await deps.recordOnce(kind, { planId, requestId, reason })
     if (!first) return
-    const subject = 'GLOVAL Ads: Google Ads yayın sonucu belirsiz'
-    const text = `Google Ads kampanya oluşturma çağrısının sonucu doğrulanamadı. Plan: ${planId}; deneme: ${requestId}. Otomatik yeniden oluşturma ve kredi iadesi yapılmadı; yönetici mutabakatı gerekiyor.`
+    const subject = 'GLOVAL Ads: Google Ads yayını mutabakat bekliyor'
+    const text = `Google Ads yayın işlemi mutabakat gerektiriyor. Plan: ${planId}; deneme: ${requestId}; neden: ${reason}. Otomatik yeniden oluşturma yapılmadı; yönetici mutabakatı gerekiyor.`
     await deps.sendEmail({
       subject,
       text,

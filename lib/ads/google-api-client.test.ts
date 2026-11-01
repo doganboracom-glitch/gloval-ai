@@ -143,6 +143,22 @@ describe('Google Ads API quota transport', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
+  it('maps a missing EU political declaration to a user-correctable reason without auto-declaring', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'Campaign is missing its EU political advertising declaration.',
+        details: [{
+          errors: [{ errorCode: { campaignError: 'MISSING_EU_POLITICAL_ADVERTISING_DECLARATION' } }],
+        }],
+      },
+    }, 400)) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(mutateCall())).rejects.toMatchObject({ code: 'eu_political_declaration_required' })
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
   it('reserves every individual mutation operation before a single external request', async () => {
     const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ mutateOperationResponses: [] }))
     const fetcher = fetcherMock as unknown as typeof fetch

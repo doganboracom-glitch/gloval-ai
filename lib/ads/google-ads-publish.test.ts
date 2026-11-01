@@ -4,7 +4,8 @@ vi.mock('server-only', () => ({}))
 
 import { createGoogleAdsPublishService, type GoogleAdsPublishServiceDeps } from '@/lib/ads/google-ads-publish'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import type { AdsPublishBeginResult } from '@/lib/ads/credits'
+import type { AdsPublishBeginResult, AdsRefundResult } from '@/lib/ads/credits'
+import type { GoogleAdsPublishPreflightResult } from '@/lib/ads/google-ads-publish-preflight'
 import type { GoogleAdsConnectionRow } from '@/lib/ads/google-connections'
 import type {
   AdsCampaignPublishResult,
@@ -92,6 +93,7 @@ function setup(options: {
   statusResult?: AdsCampaignStatusResult
   reviewStatus?: GoogleAdsAdReviewStatus
   beginPublishResult?: AdsPublishBeginResult
+  preflightResult?: GoogleAdsPublishPreflightResult
   connection?: Partial<GoogleAdsConnectionRow>
   accessEnabled?: boolean
 } = {}) {
@@ -133,11 +135,18 @@ function setup(options: {
     accessEnabled: () => options.accessEnabled ?? true,
     createRequestId: () => REQUEST_ID,
     loadPlan: vi.fn(async () => options.plan ?? plan()),
-    withAccess: async ({ action }) => action({
+    withAccess: vi.fn(async ({ action }) => {
+      events.push('access')
+      return action({
       connection: connection(options.connection),
       accessToken: 'private-access-token',
       context: { userId: USER_ID, connectionId: CONNECTION_ID },
       provider,
+      })
+    }),
+    preflightPublishUrl: vi.fn(async () => {
+      events.push('preflight')
+      return options.preflightResult ?? { ok: true as const }
     }),
     beginPublish: vi.fn(async () => {
       events.push('charge')
@@ -147,7 +156,7 @@ function setup(options: {
     markFailed: vi.fn(async () => { events.push('failed') }),
     markReconciling: vi.fn(async () => { events.push('reconciling') }),
     markCampaignStatus: vi.fn(async () => { events.push('status-saved') }),
-    refund: vi.fn(async () => ({ balance: 100 })),
+    refund: vi.fn(async (): Promise<AdsRefundResult> => ({ refunded: true, balance: 100, refundedAmount: 15 })),
     alertReconciling: vi.fn(async () => { events.push('alert') }),
   }
 
@@ -197,6 +206,22 @@ describe('Google Ads publish service', () => {
     expect(result).toMatchObject({ ok: false, reason: 'invalid_publish_plan' })
     expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unreachable final URL before access, credits, or Google calls', async () => {
+    const { service, deps, provider, events } = setup({
+      preflightResult: { ok: false, reason: 'destination_unreachable' },
+    })
+
+    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+
+    expect(result).toEqual({ ok: false, reason: 'destination_unreachable' })
+    expect(deps.preflightPublishUrl).toHaveBeenCalledWith(PLAN_JSON.finalUrl)
+    expect(events).toEqual(['preflight'])
+    expect(deps.withAccess).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+    expect(provider.verifyBilling).not.toHaveBeenCalled()
   })
 
   it('rejects an old approved plan version before access or billing calls', async () => {
@@ -276,7 +301,7 @@ describe('Google Ads publish service', () => {
       requestId: REQUEST_ID,
       reason: 'google_publish_result_unknown',
     }))
-    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID)
+    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'google_publish_result_unknown')
     expect(deps.refund).not.toHaveBeenCalled()
   })
 
@@ -293,6 +318,23 @@ describe('Google Ads publish service', () => {
     }))
     expect(deps.refund).toHaveBeenCalledWith(USER_ID, REQUEST_ID)
     expect(deps.alertReconciling).not.toHaveBeenCalled()
+  })
+
+  it('moves a definitive provider failure to reconciling when its credit refund fails', async () => {
+    const { service, deps, events } = setup({ publishError: new GoogleAdsError('provider_error') })
+    deps.refund = vi.fn(async () => ({ refunded: false, balance: 85, refundedAmount: 0 }))
+
+    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+
+    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: 15, balance: 85 })
+    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
+      planId: PLAN_ID,
+      requestId: REQUEST_ID,
+      reason: 'publish_refund_failed',
+    }))
+    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_refund_failed')
+    expect(events).toContain('reconciling')
+    expect(result).not.toMatchObject({ ok: false })
   })
 
   it('charges once when two publish requests race for the same plan', async () => {
@@ -327,7 +369,7 @@ describe('Google Ads publish service', () => {
     expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
       reason: 'publish_failure_persist_failed',
     }))
-    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID)
+    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_failure_persist_failed')
     expect(deps.refund).not.toHaveBeenCalled()
   })
 
@@ -347,7 +389,7 @@ describe('Google Ads publish service', () => {
       reason: 'publish_stale_timeout',
       requestId: REQUEST_ID,
     }))
-    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID)
+    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_stale_timeout')
     expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(provider.publishCampaign).not.toHaveBeenCalled()
     expect(deps.refund).not.toHaveBeenCalled()

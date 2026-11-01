@@ -402,6 +402,49 @@ describe('ads_plans approval and publish constraints', () => {
       .rejects.toThrow(/locked after publishing/)
   })
 
+  it('allows published-plan status metadata while keeping plan and budget fields locked', async () => {
+    const userId = await newUser()
+    const brandId = await newBrand(userId)
+    const connectionId = await newConnection(userId)
+    const planId = await newPlan(userId, brandId, {
+      connection_id: connectionId,
+      status: 'published',
+      daily_budget_minor: 5000,
+      budget_cap_minor: 150000,
+      approved_at: new Date().toISOString(),
+      external_campaign_id: '456789',
+      published_at: new Date().toISOString(),
+    })
+
+    await db.query(
+      `update public.ads_plans
+          set google_campaign_status = 'ENABLED', publish_billing_verified = true, failure_reason = 'metadata-only'
+        where id = $1`,
+      [planId],
+    )
+    const { rows } = await db.query<{
+      status: string
+      google_campaign_status: string
+      publish_billing_verified: boolean
+      failure_reason: string
+    }>(
+      `select status, google_campaign_status, publish_billing_verified, failure_reason
+         from public.ads_plans where id = $1`,
+      [planId],
+    )
+    expect(rows[0]).toEqual({
+      status: 'published',
+      google_campaign_status: 'ENABLED',
+      publish_billing_verified: true,
+      failure_reason: 'metadata-only',
+    })
+
+    await expect(db.query(`update public.ads_plans set daily_budget_minor = 6000 where id = $1`, [planId]))
+      .rejects.toThrow(/locked after publishing/)
+    await expect(db.query(`update public.ads_plans set plan = plan || '{"cities":["Paris"]}'::jsonb where id = $1`, [planId]))
+      .rejects.toThrow(/locked after publishing/)
+  })
+
   it('rejects publishing without a connection, publish time and external campaign id', async () => {
     const u = await newUser()
     const brand = await newBrand(u)
@@ -1007,7 +1050,7 @@ describe('Google Ads API operation quotas', () => {
     ).toBe(80)
   })
 
-  it('keeps the 80-operation read and 40-operation write buckets independent', async () => {
+  it('keeps the 80-operation read and 100-operation write buckets independent', async () => {
     const userId = await newUser()
     const connectionId = await newConnection(userId)
     await db.query(
@@ -1027,15 +1070,15 @@ describe('Google Ads API operation quotas', () => {
       global_used: 89,
       user_used: 9,
     })
-    expect(await reserveMutate('00000000-0000-4000-8000-000000000022', userId, connectionId, 31)).toMatchObject({
+    expect(await reserveMutate('00000000-0000-4000-8000-000000000022', userId, connectionId, 91)).toMatchObject({
       allowed: true,
-      global_used: 120,
-      user_used: 40,
+      global_used: 180,
+      user_used: 100,
     })
     expect(await reserveMutate('00000000-0000-4000-8000-000000000023', userId, connectionId, 1)).toMatchObject({
       allowed: false,
-      global_used: 120,
-      user_used: 40,
+      global_used: 180,
+      user_used: 100,
     })
   })
 
@@ -1115,6 +1158,84 @@ describe('Google Ads API operation quotas', () => {
   })
 })
 
+describe('Google Ads publish reconciliation RPCs', () => {
+  it('moves only stale publishing plans and logs compatible reconciliation actions', async () => {
+    const userId = await newUser()
+    const brandId = await newBrand(userId)
+    const connectionId = await newConnection(userId)
+    const staleRequestId = '00000000-0000-4000-8000-000000000201'
+    const recentRequestId = '00000000-0000-4000-8000-000000000202'
+    const stalePlanId = await newPlan(userId, brandId, {
+      connection_id: connectionId,
+      status: 'publishing',
+      daily_budget_minor: 5000,
+      budget_cap_minor: 150000,
+      approved_at: new Date().toISOString(),
+      publish_request_id: staleRequestId,
+      publish_started_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+    })
+    const recentPlanId = await newPlan(userId, brandId, {
+      connection_id: connectionId,
+      status: 'publishing',
+      daily_budget_minor: 5000,
+      budget_cap_minor: 150000,
+      approved_at: new Date().toISOString(),
+      publish_request_id: recentRequestId,
+      publish_started_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
+    })
+
+    const { rows: staleRows } = await db.query<{ plan_id: string; publish_request_id: string | null }>(
+      `select * from public.ads_reconcile_stale_google_ads_publishes($1)`,
+      [100],
+    )
+    expect(staleRows).toEqual([{ plan_id: stalePlanId, publish_request_id: staleRequestId }])
+
+    const { rows: states } = await db.query<{ id: string; status: string; failure_reason: string | null }>(
+      `select id, status, failure_reason from public.ads_plans where id = any($1::uuid[]) order by id`,
+      [[stalePlanId, recentPlanId]],
+    )
+    expect(states.find((row) => row.id === stalePlanId)).toMatchObject({
+      status: 'reconciling',
+      failure_reason: 'publish_stale_timeout',
+    })
+    expect(states.find((row) => row.id === recentPlanId)?.status).toBe('publishing')
+    expect(await db.query(`select * from public.ads_reconcile_stale_google_ads_publishes($1)`, [100]))
+      .toMatchObject({ rows: [] })
+
+    const { rows: resolution } = await db.query<{ state: string; refunded: boolean }>(
+      `select * from public.ads_resolve_google_ads_publish($1,$2,'published','456789','admin@example.com')`,
+      [stalePlanId, staleRequestId],
+    )
+    expect(resolution[0]).toMatchObject({ state: 'resolved_published', refunded: false })
+
+    const { rows: reconciliationActions } = await db.query<{
+      id: string
+      actor: string
+      action_type: string
+      status: string
+    }>(
+      `select id, actor, action_type, status from public.ads_actions
+        where plan_id = $1 and action_type in ('publish_reconciliation_opened','publish_reconciliation_resolved')
+        order by action_type`,
+      [stalePlanId],
+    )
+    expect(reconciliationActions).toEqual([
+      expect.objectContaining({ actor: 'system', action_type: 'publish_reconciliation_opened', status: 'applied' }),
+      expect.objectContaining({ actor: 'system', action_type: 'publish_reconciliation_resolved', status: 'applied' }),
+    ])
+
+    await db.query(
+      `update public.ads_actions
+          set status = 'approved', after_state = after_state || '{"reviewed":true}'::jsonb, applied_at = now()
+        where id = $1`,
+      [reconciliationActions[0].id],
+    )
+    await expect(
+      db.query(`update public.ads_actions set action_type = 'rewritten' where id = $1`, [reconciliationActions[0].id]),
+    ).rejects.toThrow(/append-only/)
+  })
+})
+
 describe('grants', () => {
   it('keeps token columns and server-only tables away from authenticated', async () => {
     const priv = async (role: string, sql: string) =>
@@ -1159,6 +1280,7 @@ describe('grants', () => {
       'ads_reserve_google_api_operation_v2(uuid,uuid,uuid,text,integer)',
       'ads_begin_google_ads_publish(uuid,uuid,uuid,integer,integer,bigint,smallint)',
       'ads_resolve_google_ads_publish(uuid,uuid,text,text,text)',
+      'ads_reconcile_stale_google_ads_publishes(integer)',
     ]
     for (const fn of fns) {
       const { rows } = await db.query<{ a: boolean; u: boolean; s: boolean }>(

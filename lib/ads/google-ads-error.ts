@@ -23,6 +23,7 @@ export type GoogleAdsErrorCode =
   | 'provider_unavailable'
   | 'provider_error'
   | 'invalid_publish_plan'
+  | 'eu_political_declaration_required'
   | 'invalid_budget'
   | 'currency_mismatch'
   | 'plan_changed'
@@ -78,6 +79,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
       return 429
     case 'invalid_request':
     case 'invalid_publish_plan':
+    case 'eu_political_declaration_required':
     case 'invalid_budget':
     case 'currency_mismatch':
     case 'oauth_denied':

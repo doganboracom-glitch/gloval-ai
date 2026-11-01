@@ -51,10 +51,20 @@ function mutateOperationCount(body: unknown): number | null {
   return request.mutateOperations.length
 }
 
-function responseError(payload: unknown): { status: string; message: string; dailyQuota: boolean; temporary: boolean } {
-  if (!payload || typeof payload !== 'object') return { status: '', message: '', dailyQuota: false, temporary: false }
+function responseError(payload: unknown): {
+  status: string
+  message: string
+  dailyQuota: boolean
+  temporary: boolean
+  euPoliticalDeclarationRequired: boolean
+} {
+  if (!payload || typeof payload !== 'object') {
+    return { status: '', message: '', dailyQuota: false, temporary: false, euPoliticalDeclarationRequired: false }
+  }
   const error = (payload as { error?: unknown }).error
-  if (!error || typeof error !== 'object') return { status: '', message: '', dailyQuota: false, temporary: false }
+  if (!error || typeof error !== 'object') {
+    return { status: '', message: '', dailyQuota: false, temporary: false, euPoliticalDeclarationRequired: false }
+  }
   const record = error as { status?: unknown; message?: unknown; details?: unknown }
   const status = typeof record.status === 'string' ? record.status : ''
   const message = typeof record.message === 'string' ? record.message : ''
@@ -65,6 +75,8 @@ function responseError(payload: unknown): { status: string; message: string; dai
     message,
     dailyQuota: /RESOURCE_EXHAUSTED|DAILY.*QUOTA|QUOTA.*EXCEEDED/.test(combined),
     temporary: /RESOURCE_TEMPORARILY_EXHAUSTED|TEMPORARY.*EXHAUSTED/.test(combined),
+    euPoliticalDeclarationRequired:
+      /MISSING_EU_POLITICAL_ADVERTISING_DECLARATION|MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION|EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED/.test(combined),
   }
 }
 
@@ -169,6 +181,10 @@ export function createGoogleAdsApiTransport(input: {
       if (providerError.dailyQuota) {
         await recordOutcome(admin, requestId, 'error', 'rate_limited')
         throw new GoogleAdsError('api_quota_exceeded')
+      }
+      if (providerError.euPoliticalDeclarationRequired) {
+        await recordOutcome(admin, requestId, 'error', 'provider_rejected')
+        throw new GoogleAdsError('eu_political_declaration_required')
       }
 
       const shouldRetry = !isMutation && (response.status === 429 || response.status >= 500) &&

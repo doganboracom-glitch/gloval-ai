@@ -2,15 +2,23 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { beginAdsPublish, refundAdsCredits, type AdsPublishBeginResult } from '@/lib/ads/credits'
-import { notifyGooglePublishReconciling } from '@/lib/ads/admin-alert'
+import { beginAdsPublish, refundAdsCredits, type AdsPublishBeginResult, type AdsRefundResult } from '@/lib/ads/credits'
+import {
+  notifyGooglePublishReconciling,
+  type GooglePublishReconciliationReason,
+} from '@/lib/ads/admin-alert'
 import { resolveGoogleAdsOAuthSettings, resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import {
   buildGoogleAdsApprovalSummary,
   buildGoogleAdsMutateRequest,
+  parseGoogleAdsPublishPlan,
   type GoogleAdsApprovalSummary,
 } from '@/lib/ads/google-ads-publish-plan'
+import {
+  preflightGoogleAdsPublishUrl,
+  type GoogleAdsPublishPreflightResult,
+} from '@/lib/ads/google-ads-publish-preflight'
 import { createGoogleAdsApiTransport } from '@/lib/ads/google-api-client'
 import { withGoogleAdsAccess, type GoogleAdsConnectionRow } from '@/lib/ads/google-connections'
 import { createGoogleAdsProvider } from '@/lib/ads/providers/google-ads-provider'
@@ -75,8 +83,11 @@ export type GoogleAdsPublishFailureReason =
   | 'manager_account'
   | 'connection_busy'
   | 'invalid_publish_plan'
+  | 'eu_political_declaration_required'
   | 'invalid_budget'
   | 'currency_mismatch'
+  | 'destination_unreachable'
+  | 'site_policy_blocked'
   | 'insufficient_credits'
   | 'reservation_failed'
   | 'provider_error'
@@ -120,6 +131,7 @@ export type GoogleAdsPublishServiceDeps = {
   createRequestId: () => string
   loadPlan: (userId: string, planId: string) => Promise<PublishPlanRow | null>
   withAccess: <T>(input: WithAccessInput<T>) => Promise<T>
+  preflightPublishUrl: (finalUrl: string) => Promise<GoogleAdsPublishPreflightResult>
   beginPublish: (
     userId: string,
     planId: string,
@@ -143,8 +155,12 @@ export type GoogleAdsPublishServiceDeps = {
     status: 'PAUSED' | 'ENABLED'
     billingVerified: boolean | null
   }) => Promise<void>
-  refund: (userId: string, requestId: string) => Promise<{ balance: number }>
-  alertReconciling: (planId: string, requestId: string) => Promise<void>
+  refund: (userId: string, requestId: string) => Promise<AdsRefundResult>
+  alertReconciling: (
+    planId: string,
+    requestId: string,
+    reason: GooglePublishReconciliationReason,
+  ) => Promise<void>
 }
 
 function isAmbiguousCreateError(error: unknown): boolean {
@@ -165,6 +181,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'manager_account',
       'connection_busy',
       'invalid_publish_plan',
+      'eu_political_declaration_required',
       'invalid_budget',
       'currency_mismatch',
       'insufficient_credits',
@@ -245,11 +262,13 @@ async function updatePlan(
   userId: string,
   planId: string,
   values: Record<string, unknown>,
-  filters: Record<string, string>,
+  filters: Record<string, string | string[]>,
 ): Promise<void> {
   const admin = createAdminClient()
   let query = admin.from('ads_plans').update(values).eq('id', planId).eq('user_id', userId)
-  for (const [column, value] of Object.entries(filters)) query = query.eq(column, value)
+  for (const [column, value] of Object.entries(filters)) {
+    query = Array.isArray(value) ? query.in(column, value) : query.eq(column, value)
+  }
   const { data, error } = await query.select('id').maybeSingle()
   if (error || !data) throw new GoogleAdsError('status_update_failed')
 }
@@ -259,6 +278,7 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
   createRequestId: randomUUID,
   loadPlan: defaultLoadPlan,
   withAccess: defaultWithAccess,
+  preflightPublishUrl: preflightGoogleAdsPublishUrl,
   beginPublish: beginAdsPublish,
   markPublished: (input) =>
     updatePlan(
@@ -286,7 +306,7 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
       input.userId,
       input.planId,
       { status: 'reconciling', failure_reason: input.reason },
-      { status: 'publishing', publish_request_id: input.requestId },
+      { status: ['publishing', 'failed'], publish_request_id: input.requestId },
     ),
   markCampaignStatus: (input) =>
     updatePlan(
@@ -298,11 +318,9 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
       },
       { status: 'published', external_campaign_id: input.externalCampaignId },
     ),
-  refund: async (userId, requestId) => {
-    const result = await refundAdsCredits(userId, 'publish', requestId)
-    return { balance: result.balance }
-  },
-  alertReconciling: notifyGooglePublishReconciling,
+  refund: (userId, requestId) => refundAdsCredits(userId, 'publish', requestId),
+  alertReconciling: (planId, requestId, reason) =>
+    notifyGooglePublishReconciling(planId, requestId, undefined, reason),
 }
 
 export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps = defaultDeps) {
@@ -392,7 +410,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
           requestId: staleRequestId,
           reason: 'publish_stale_timeout',
         }).catch(() => undefined)
-        await deps.alertReconciling(stalePlan.id, staleRequestId)
+        await deps.alertReconciling(stalePlan.id, staleRequestId, 'publish_stale_timeout')
       }
       let approvalSummary: GoogleAdsApprovalSummary | undefined
       try {
@@ -425,6 +443,21 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       dailyBudgetMinor: budget.dailyMinor,
       budgetCapMinor: budget.capMinor,
     })
+
+    let finalUrl: string
+    try {
+      finalUrl = parseGoogleAdsPublishPlan(plan.plan).finalUrl
+    } catch (error) {
+      return failed(failureReason(error))
+    }
+
+    let preflight: GoogleAdsPublishPreflightResult
+    try {
+      preflight = await deps.preflightPublishUrl(finalUrl)
+    } catch {
+      return failed('destination_unreachable')
+    }
+    if (!preflight.ok) return failed(preflight.reason)
 
     try {
       return await deps.withAccess({
@@ -493,7 +526,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 requestId,
                 reason: 'publish_reservation_result_unknown',
               }).catch(() => undefined)
-              await deps.alertReconciling(plan.id, requestId)
+              await deps.alertReconciling(plan.id, requestId, 'publish_reservation_result_unknown')
               return {
                 ok: true,
                 state: 'reconciling',
@@ -538,7 +571,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 requestId,
                 reason: 'publish_result_persist_failed',
               }).catch(() => undefined)
-              await deps.alertReconciling(plan.id, requestId)
+              await deps.alertReconciling(plan.id, requestId, 'publish_result_persist_failed')
               return {
                 ok: true,
                 state: 'reconciling',
@@ -571,7 +604,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 requestId,
                 reason: 'google_publish_result_unknown',
               }).catch(() => undefined)
-              await deps.alertReconciling(plan.id, requestId)
+              await deps.alertReconciling(plan.id, requestId, 'google_publish_result_unknown')
               return {
                 ok: true,
                 state: 'reconciling',
@@ -599,7 +632,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 requestId,
                 reason: 'publish_failure_persist_failed',
               }).catch(() => undefined)
-              await deps.alertReconciling(plan.id, requestId)
+              await deps.alertReconciling(plan.id, requestId, 'publish_failure_persist_failed')
               return {
                 ok: true,
                 state: 'reconciling',
@@ -613,7 +646,34 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               }
             }
 
-            const refund = await deps.refund(input.userId, requestId)
+            let refund: AdsRefundResult
+            try {
+              refund = await deps.refund(input.userId, requestId)
+            } catch {
+              refund = { refunded: false, balance: 0, refundedAmount: 0 }
+            }
+
+            if (!refund.refunded || refund.refundedAmount !== reservation.chargedAmount) {
+              await deps.markReconciling({
+                userId: input.userId,
+                planId: plan.id,
+                requestId,
+                reason: 'publish_refund_failed',
+              }).catch(() => undefined)
+              await deps.alertReconciling(plan.id, requestId, 'publish_refund_failed')
+              return {
+                ok: true,
+                state: 'reconciling',
+                externalCampaignId: null,
+                campaignStatus: 'paused',
+                billingVerified: null,
+                paymentMethodWarning: true,
+                creditsCharged: reservation.chargedAmount,
+                balance: refund.balance,
+                approvalSummary,
+              }
+            }
+
             return failed(failureReason(error), refund.balance)
           }
         },

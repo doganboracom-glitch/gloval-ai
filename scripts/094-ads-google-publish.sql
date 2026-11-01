@@ -139,8 +139,10 @@ create index if not exists ads_google_api_operations_user_method_created_idx
   on public.ads_google_api_operations (user_id, method, created_at);
 
 -- Separate read and write budgets at both user and project level. Reads get
--- 80/user and 1,200/project; mutations get 40/user and 1,200/project, preserving
+-- 80/user and 1,200/project; mutations get 100/user and 1,200/project, preserving
 -- the 2,400 total ceiling while reserving half of it for publish/go-live work.
+-- A maximal publish plan (20 positive + 8 negative keywords) emits 34 mutate
+-- operations: six fixed operations plus 28 keyword criterion operations.
 create or replace function public.ads_reserve_google_api_operation(
   p_request_id uuid,
   p_user_id uuid,
@@ -281,7 +283,7 @@ begin
 
   if v_global_used + p_operation_count > 2400
     or v_global_bucket_used + p_operation_count > 1200
-    or v_user_used + p_operation_count > 40 then
+    or v_user_used + p_operation_count > 100 then
     return query select false, v_global_used, v_user_used;
     return;
   end if;
@@ -539,6 +541,54 @@ begin
 end;
 $$;
 
+-- Reconcile stuck creates without replaying any Google Ads request. SKIP LOCKED
+-- lets concurrent cron invocations divide the same stale batch safely.
+create or replace function public.ads_reconcile_stale_google_ads_publishes(
+  p_batch integer default 100
+)
+returns table(plan_id uuid, publish_request_id uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_plan public.ads_plans%rowtype;
+begin
+  if p_batch is null or p_batch not between 1 and 500 then
+    raise exception 'batch size must be between 1 and 500';
+  end if;
+
+  for v_plan in
+    select p.*
+    from public.ads_plans p
+    where p.status = 'publishing'
+      and p.publish_started_at < pg_catalog.clock_timestamp() - interval '10 minutes'
+    order by p.publish_started_at, p.id
+    limit p_batch
+    for update skip locked
+  loop
+    update public.ads_plans
+    set status = 'reconciling',
+        failure_reason = 'publish_stale_timeout'
+    where id = v_plan.id
+      and status = 'publishing';
+
+    insert into public.ads_actions
+      (user_id, plan_id, connection_id, actor, action_type, before_state, after_state, status, applied_at)
+    values
+      (v_plan.user_id, v_plan.id, v_plan.connection_id, 'system',
+       'publish_reconciliation_opened',
+       pg_catalog.jsonb_build_object('status', 'publishing', 'request_id', v_plan.publish_request_id),
+       pg_catalog.jsonb_build_object('status', 'reconciling', 'reason', 'publish_stale_timeout'),
+       'applied', pg_catalog.clock_timestamp());
+
+    plan_id := v_plan.id;
+    publish_request_id := v_plan.publish_request_id;
+    return next;
+  end loop;
+end;
+$$;
+
 revoke all on function public.ads_reserve_google_api_operation(uuid, uuid, uuid, text)
   from public, anon, authenticated;
 grant execute on function public.ads_reserve_google_api_operation(uuid, uuid, uuid, text)
@@ -557,6 +607,11 @@ grant execute on function public.ads_begin_google_ads_publish(uuid, uuid, uuid, 
 revoke all on function public.ads_resolve_google_ads_publish(uuid, uuid, text, text, text)
   from public, anon, authenticated;
 grant execute on function public.ads_resolve_google_ads_publish(uuid, uuid, text, text, text)
+  to service_role;
+
+revoke all on function public.ads_reconcile_stale_google_ads_publishes(integer)
+  from public, anon, authenticated;
+grant execute on function public.ads_reconcile_stale_google_ads_publishes(integer)
   to service_role;
 
 commit;

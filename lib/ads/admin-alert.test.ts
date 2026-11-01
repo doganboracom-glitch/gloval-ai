@@ -32,12 +32,23 @@ describe('notifyGooglePublishReconciling', () => {
     expect(recordOnce).toHaveBeenCalledWith(`${GOOGLE_PUBLISH_RECONCILING_ALERT_KIND}:${planId}`, {
       planId,
       requestId,
+      reason: 'google_publish_result_unknown',
     })
     expect(sendEmail).toHaveBeenCalledOnce()
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
       text: expect.stringContaining(requestId),
       idempotencyKey: expect.stringContaining(`${planId}-`),
     }))
+  })
+
+  it('includes a definitive refund failure reason in the admin alert', async () => {
+    const { deps, recordOnce } = makeDeps()
+    await notifyGooglePublishReconciling('plan-refund', 'request-refund', deps, 'publish_refund_failed')
+
+    expect(recordOnce).toHaveBeenCalledWith(
+      `${GOOGLE_PUBLISH_RECONCILING_ALERT_KIND}:plan-refund`,
+      { planId: 'plan-refund', requestId: 'request-refund', reason: 'publish_refund_failed' },
+    )
   })
 
   it('records separate reconciling plans on the same day', async () => {
