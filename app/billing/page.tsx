@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getPublishOptions, listProjects } from '@/lib/projects'
 import { resolvePublishBanner } from '@/lib/billing-publish-banner'
 import { freeChosenSecret, signFreeChosenIntent } from '@/lib/free-chosen-intent'
@@ -32,10 +34,10 @@ export default async function BillingPage({
 }) {
   const { publish, topup } = await searchParams
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login?next=/billing')
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect('/auth/login?next=/billing')
+  const { user } = authState
 
   // Settles a paid-but-unconfirmed payment (e.g. the iyzico tab never returned)
   // before the balance is read; bounded so the page never waits long on iyzico.

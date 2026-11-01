@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import {
   getMyDomainDetail,
   listMyProjectsForSync,
@@ -18,10 +20,10 @@ export default async function DomainDetailPage({
   const { domainId } = await params
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=/dashboard/domains/${domainId}`)
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=/dashboard/domains/${domainId}`)
+  const { user } = authState
 
   // Returns null for both "no such domain" and "not yours", so probing ids
   // cannot distinguish another tenant's domain from a nonexistent one.

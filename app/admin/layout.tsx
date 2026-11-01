@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { AdminShell } from '@/components/admin/admin-shell'
 import { AdminUnauthorized } from '@/components/admin/admin-unauthorized'
@@ -21,13 +23,12 @@ export const dynamic = 'force-dynamic'
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') {
     redirect('/auth/login?next=/admin')
   }
+  const { user } = authState
 
   const admin = isAdminEmail(user.email)
 

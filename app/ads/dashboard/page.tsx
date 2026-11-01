@@ -5,7 +5,9 @@ import { ADS_DASHBOARD_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-fla
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
 import { googleAdsConnectAllowed } from '@/lib/ads/google-route-utils'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 
 export const metadata: Metadata = {
   title: 'Google Ads Dashboard | GLOVAL',
@@ -26,10 +28,10 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
   if (!isAdsFeatureUiEnabled()) notFound()
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=${ADS_DASHBOARD_PATH}`)
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=${ADS_DASHBOARD_PATH}`)
+  const { user } = authState
   if (!googleAdsConnectAllowed(user.id)) notFound()
 
   const params = await searchParams

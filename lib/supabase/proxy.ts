@@ -1,10 +1,74 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  AUTH_RETRY_AFTER_SECONDS,
+  getUserAuthState,
+} from '@/lib/supabase/auth-state'
+import {
+  clearVerifiedUserHeaders,
+  setVerifiedUserHeaders,
+} from '@/lib/supabase/auth-context'
+import type { AuthUserSummary } from '@/lib/supabase/auth-state'
+
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/editor',
+  '/billing',
+  '/ecommerce',
+  '/ads/dashboard',
+] as const
+const AUTH_GATED_PREFIXES = [...PROTECTED_PREFIXES, '/support', '/settings', '/admin']
+
+function matchesPath(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`)
+}
+
+function copyResponseCookies(source: NextResponse, target: NextResponse): NextResponse {
+  for (const cookie of source.cookies.getAll()) target.cookies.set(cookie)
+  return target
+}
+
+function unavailableResponse(source: NextResponse): NextResponse {
+  return copyResponseCookies(
+    source,
+    new NextResponse('Kimlik doğrulama hizmeti geçici olarak yanıt vermiyor.', {
+      status: 503,
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Retry-After': String(AUTH_RETRY_AFTER_SECONDS),
+      },
+    }),
+  )
+}
+
+function createSanitizedRequestHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers)
+  clearVerifiedUserHeaders(headers)
+  return headers
+}
+
+function nextWithSanitizedRequest(request: NextRequest): NextResponse {
+  return NextResponse.next({
+    request: { headers: createSanitizedRequestHeaders(request) },
+  })
+}
+
+function nextWithVerifiedUser(
+  request: NextRequest,
+  source: NextResponse,
+  user: AuthUserSummary,
+): NextResponse {
+  const requestHeaders = createSanitizedRequestHeaders(request)
+  setVerifiedUserHeaders(requestHeaders, user)
+  return copyResponseCookies(
+    source,
+    NextResponse.next({ request: { headers: requestHeaders } }),
+  )
+}
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  let supabaseResponse = nextWithSanitizedRequest(request)
 
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
@@ -22,9 +86,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = nextWithSanitizedRequest(request)
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           )
@@ -33,34 +95,27 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
-
-  // IMPORTANT: If you remove getUser() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const authState = await getUserAuthState(supabase)
   const path = request.nextUrl.pathname
-  const isProtected =
-    path.startsWith('/dashboard') ||
-    path.startsWith('/editor') ||
-    path.startsWith('/billing') ||
-    path.startsWith('/ecommerce') ||
-    path.startsWith('/ads/dashboard')
+  const isProtected = PROTECTED_PREFIXES.some((prefix) => matchesPath(path, prefix))
+  const isAuthGated = AUTH_GATED_PREFIXES.some((prefix) => matchesPath(path, prefix))
+
+  if (authState.kind === 'unavailable') {
+    return isAuthGated ? unavailableResponse(supabaseResponse) : supabaseResponse
+  }
+
+  if (authState.kind === 'unauthenticated') {
+    if (!isProtected) return supabaseResponse
+
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/login'
+    url.searchParams.set('next', path)
+    return copyResponseCookies(supabaseResponse, NextResponse.redirect(url))
+  }
+
+  const { user } = authState
 
   if (isProtected) {
-    if (!user) {
-      // No user on a protected app route: send to login, remembering where
-      // they were headed so we can bounce them back after sign-in.
-      const url = request.nextUrl.clone()
-      url.pathname = '/auth/login'
-      url.searchParams.set('next', path)
-      return NextResponse.redirect(url)
-    }
-
     // Authenticated but email not confirmed: block at the route level so the
     // protected content is never even briefly rendered. This uses the real
     // Supabase confirmation state (`email_confirmed_at`), never a client flag.
@@ -69,7 +124,7 @@ export async function updateSession(request: NextRequest) {
       url.pathname = '/auth/verify-email'
       url.search = ''
       if (user.email) url.searchParams.set('email', user.email)
-      return NextResponse.redirect(url)
+      return copyResponseCookies(supabaseResponse, NextResponse.redirect(url))
     }
 
     // Suspended accounts are locked out of every protected surface. We read the
@@ -86,22 +141,16 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/account-suspended'
       url.search = ''
-      return NextResponse.redirect(url)
+      return copyResponseCookies(supabaseResponse, NextResponse.redirect(url))
     }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
-  // If you're creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object to fit your needs, but avoid changing
-  //    the cookies!
-  // 4. Finally:
-  //    return myNewResponse
+  // If you create a replacement NextResponse, forward the sanitized request
+  // headers and copy over every cookie from supabaseResponse.
+  // Keep copied response cookies unchanged.
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely!
 
-  return supabaseResponse
+  return nextWithVerifiedUser(request, supabaseResponse, authState.user)
 }

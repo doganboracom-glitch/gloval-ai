@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { parseEmailLang } from '@/lib/email/lang'
 import { getMailServerHost, getWebmailUrl } from '@/lib/mail/webmail'
@@ -19,10 +21,11 @@ export default async function AdminEmailPreviewPage({
   // The admin layout also gates, but layouts and pages render in parallel, so
   // the page verifies admin access itself before building anything.
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user || !isAdminEmail(user.email)) notFound()
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') notFound()
+  const { user } = authState
+  if (!isAdminEmail(user.email)) notFound()
 
   const params = await searchParams
   const template = TEMPLATES.find((item) => item === params.template) ?? TEMPLATES[0]

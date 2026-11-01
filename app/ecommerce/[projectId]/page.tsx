@@ -1,7 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { StoreNotEnabled } from '@/components/ecommerce/store-not-enabled'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getProject } from '@/lib/projects'
 import { listProducts, listCategories } from '@/lib/ecommerce'
 import { listOwnerCollections } from '@/lib/store-collections-actions'
@@ -18,10 +20,10 @@ export default async function EcommercePage({
   const { projectId } = await params
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=/ecommerce/${projectId}`)
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=/ecommerce/${projectId}`)
+  const { user } = authState
 
   // Ownership is enforced by getProject (RLS) — a non-owned or missing id 404s.
   const project = await getProject(projectId)

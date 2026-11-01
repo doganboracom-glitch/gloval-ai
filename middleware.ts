@@ -12,6 +12,7 @@ import {
 } from '@/lib/custom-domains/service'
 import { tenantRewritePath } from '@/lib/indexnow'
 import { LANG_COOKIE, normalizeLang, resolveLangFromAcceptLanguage } from '@/lib/i18n'
+import { clearVerifiedUserHeaders } from '@/lib/supabase/auth-context'
 
 const LEGACY_TENANT_REFUND_PATH = '/yasal/iptal-ve-iade'
 
@@ -21,7 +22,29 @@ function redirectLegacyRefundPath(request: NextRequest) {
   return NextResponse.redirect(url, 308)
 }
 
+function createSanitizedRequestHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers)
+  clearVerifiedUserHeaders(headers)
+  return headers
+}
+
+function nextWithSanitizedRequestHeaders(request: NextRequest): NextResponse {
+  return NextResponse.next({
+    request: { headers: createSanitizedRequestHeaders(request) },
+  })
+}
+
+function rewriteWithSanitizedRequestHeaders(
+  request: NextRequest,
+  destination: URL,
+): NextResponse {
+  return NextResponse.rewrite(destination, {
+    request: { headers: createSanitizedRequestHeaders(request) },
+  })
+}
+
 export async function middleware(request: NextRequest) {
+  clearVerifiedUserHeaders(request.headers)
   const host = request.headers.get('host')
 
   // 1) Wildcard tenant subdomains: `<slug>.gloval.site` is served by the
@@ -29,7 +52,7 @@ export async function middleware(request: NextRequest) {
   // the subdomain).
   const slug = getTenantSlugFromHost(host)
   if (slug && isTenantPassthroughPath(request.nextUrl.pathname)) {
-    return NextResponse.next()
+    return nextWithSanitizedRequestHeaders(request)
   }
   if (slug && request.nextUrl.pathname === LEGACY_TENANT_REFUND_PATH) {
     return redirectLegacyRefundPath(request)
@@ -37,7 +60,7 @@ export async function middleware(request: NextRequest) {
   if (slug && !request.nextUrl.pathname.startsWith('/site/')) {
     const url = request.nextUrl.clone()
     url.pathname = tenantRewritePath(slug, request.nextUrl.pathname)
-    return NextResponse.rewrite(url)
+    return rewriteWithSanitizedRequestHeaders(request, url)
   }
 
   // 1.5) Bring-your-own custom domains: a customer domain that has passed
@@ -49,7 +72,7 @@ export async function middleware(request: NextRequest) {
   // `resolveActiveDomainForHost` requiring `active` + a bound project, and
   // `getPublishedSlugForProjectId` requiring that project still be published.
   if (host && !slug && !request.nextUrl.pathname.startsWith('/site/') && isForeignHost(host)) {
-    if (isTenantPassthroughPath(request.nextUrl.pathname)) return NextResponse.next()
+    if (isTenantPassthroughPath(request.nextUrl.pathname)) return nextWithSanitizedRequestHeaders(request)
     if (request.nextUrl.pathname === LEGACY_TENANT_REFUND_PATH) return redirectLegacyRefundPath(request)
     const bound = await resolveActiveDomainForHost(host)
     const targetSlug = bound?.websiteProjectId
@@ -58,7 +81,7 @@ export async function middleware(request: NextRequest) {
     if (targetSlug) {
       const url = request.nextUrl.clone()
       url.pathname = tenantRewritePath(targetSlug, request.nextUrl.pathname)
-      return NextResponse.rewrite(url)
+      return rewriteWithSanitizedRequestHeaders(request, url)
     }
   }
 
@@ -76,10 +99,10 @@ export async function middleware(request: NextRequest) {
   // 3) Canonical platform host (gloval.ai / previews / localhost): resolve
   // the visitor's language for this request, then run the normal auth flow.
   const { renderLang, persist } = resolveLanguage(request)
-  // Mutating request.cookies here (before updateSession creates its
-  // NextResponse.next({ request })) makes the resolved value visible to
-  // Server Components via cookies() on this very request — critical for a
-  // first-time visitor who has no language cookie yet.
+  // Mutating request.cookies here (before updateSession forwards the request
+  // headers) makes the resolved value visible to Server Components via
+  // cookies() on this very request — critical for a first-time visitor who
+  // has no language cookie yet.
   request.cookies.set(LANG_COOKIE, renderLang)
 
   const response = await updateSession(request)
