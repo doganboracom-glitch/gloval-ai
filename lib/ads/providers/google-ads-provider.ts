@@ -444,7 +444,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     }
   }
 
-  const getPerformance: GoogleAdsProvider['getPerformance'] = async ({ 
+  const getPerformance: GoogleAdsProvider['getPerformance'] = async ({
     accessToken,
     customerId,
     loginCustomerId,
