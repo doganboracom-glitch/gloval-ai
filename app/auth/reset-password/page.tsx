@@ -5,9 +5,58 @@ import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/components/language-provider'
 import { createClient } from '@/lib/supabase/client'
 
+type PasswordUpdateError = {
+  code?: string
+  message?: string
+  status?: number
+}
+
+type PasswordUpdateErrorKey =
+  | 'passwordSameAsCurrent'
+  | 'passwordUpdateLinkError'
+  | 'passwordUpdateFailed'
+
+const RECOVERY_SESSION_ERROR_CODES = new Set([
+  'bad_jwt',
+  'invalid_grant',
+  'invalid_jwt',
+  'invalid_refresh_token',
+  'invalid_token',
+  'otp_expired',
+  'refresh_token_already_used',
+  'refresh_token_not_found',
+  'session_expired',
+  'session_not_found',
+  'token_expired',
+])
+
+const RECOVERY_SESSION_ERROR_MESSAGE =
+  /(?:session|token|jwt|otp).*(?:expired|invalid|missing|not found|already used)|(?:expired|invalid|missing|not found|already used).*(?:session|token|jwt|otp)/i
+
+function getPasswordUpdateErrorKey(error: PasswordUpdateError): PasswordUpdateErrorKey {
+  const code = error.code?.toLowerCase()
+  const message = error.message ?? ''
+
+  if (code === 'same_password' || /different from the old password/i.test(message)) {
+    return 'passwordSameAsCurrent'
+  }
+
+  if (
+    error.status === 401 ||
+    RECOVERY_SESSION_ERROR_CODES.has(code ?? '') ||
+    RECOVERY_SESSION_ERROR_MESSAGE.test(`${code ?? ''} ${message}`)
+  ) {
+    return 'passwordUpdateLinkError'
+  }
+
+  return 'passwordUpdateFailed'
+}
+
 export default function ResetPasswordPage() {
+  const { t } = useLanguage()
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
   const [message, setMessage] = useState<string | null>(null)
@@ -20,13 +69,13 @@ export default function ResetPasswordPage() {
     createClient().auth.getSession().then(({ data }) => {
       if (active) {
         setReady(Boolean(data.session))
-        if (!data.session) setError('Bu şifre yenileme bağlantısı geçersiz veya süresi dolmuş olabilir.')
+        if (!data.session) setError(t.auth.recoveryLinkInvalid)
       }
     })
     return () => {
       active = false
     }
-  }, [])
+  }, [t.auth.recoveryLinkInvalid])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,7 +87,7 @@ export default function ResetPasswordPage() {
     const { error: updateError } = await createClient().auth.updateUser({ password })
     setPending(false)
     if (updateError) {
-      setError('Şifre güncellenemedi. Bağlantı geçersiz veya süresi dolmuş olabilir.')
+      setError(t.auth[getPasswordUpdateErrorKey(updateError)])
       return
     }
     setMessage('Şifreniz başarıyla güncellendi. Giriş sayfasına yönlendiriliyorsunuz.')
