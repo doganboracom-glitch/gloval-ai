@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult, type AuthUnavailableActionResult } from '@/lib/supabase/request-user'
 import { clampSince } from '@/lib/payment-notice'
 import type { CloseOutcome } from './reconcile'
 import { closePendingCheckoutForUser } from './reconcile-store'
@@ -10,11 +10,11 @@ import { closePendingCheckoutForUser } from './reconcile-store'
  * showing. Acts only on the signed-in user's own newest pending checkout
  * started at/after `sinceMs`; see `closePendingCheckoutForUser`.
  */
-export async function closePendingCheckout(sinceMs: number): Promise<CloseOutcome> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return 'none'
-  return closePendingCheckoutForUser(user.id, clampSince(Number(sinceMs), Date.now()))
+export async function closePendingCheckout(
+  sinceMs: number,
+): Promise<CloseOutcome | AuthUnavailableActionResult> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return 'none'
+  return closePendingCheckoutForUser(authState.user.id, clampSince(Number(sinceMs), Date.now()))
 }

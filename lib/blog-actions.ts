@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
@@ -22,18 +23,18 @@ import {
   type BlogWriteResult,
 } from '@/lib/blog-write'
 
-type Access = { ok: true; slug: string | null; ownerId: string } | { ok: false; reason: 'UNAUTHENTICATED' | 'NOT_FOUND' }
+type Access = { ok: true; slug: string | null; ownerId: string } | { ok: false; reason: 'auth_unavailable' | 'UNAUTHENTICATED' | 'NOT_FOUND' }
 
 /**
  * Only the project's owner (or a verified admin, same rule as project edits)
  * may write. The session client sees the project only through RLS ownership.
  */
 async function authorize(projectId: string): Promise<Access> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return { ok: false, reason: 'auth_unavailable' }
+  if (authState.kind === 'unauthenticated') return { ok: false, reason: 'UNAUTHENTICATED' }
+  const { user } = authState
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, reason: 'UNAUTHENTICATED' }
 
   const { data: owned } = await supabase
     .from('projects')

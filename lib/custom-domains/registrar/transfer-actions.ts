@@ -4,6 +4,7 @@ import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import type { CheckoutBuyer } from '@/lib/billing'
@@ -45,11 +46,7 @@ export type TransferErrorCode =
   | 'FAILED'
 
 async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
+  const user = await requireRequestUser()
   return { userId: user.id, email: user.email ?? '' }
 }
 

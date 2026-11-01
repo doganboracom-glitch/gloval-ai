@@ -30,6 +30,10 @@ const EMPTY_CONTACT: DomainContact = {
 }
 
 type Notice = { kind: 'ok' | 'error'; text: string }
+type RegistrarMutationResult =
+  | { ok: true; changed: boolean }
+  | { ok: false; error: DomainErrorCode }
+  | { ok: false; reason: 'auth_unavailable' }
 
 /**
  * Registrar-side settings for a domain bought through Gloval. Everything shown
@@ -66,12 +70,14 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
     }
   }
 
-  function run(action: () => Promise<{ ok: true; changed: boolean } | { ok: false; error: DomainErrorCode }>) {
+  function run(action: () => Promise<RegistrarMutationResult>) {
     setNotice(null)
     startTransition(async () => {
       const res = await action()
       if (res.ok) {
         setNotice({ kind: 'ok', text: res.changed ? d.mgSaved : d.mgNoChange })
+      } else if ('reason' in res) {
+        setNotice({ kind: 'error', text: d.mgLoadFailed })
       } else {
         setNotice({ kind: 'error', text: errorText(res.error) })
       }
@@ -88,7 +94,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
   }
 
   // Not a registrar-managed domain (or no access): this panel simply does not apply.
-  if (!data || (!data.ok && (data.error === 'NOT_REGISTRAR_MANAGED' || data.error === 'NOT_FOUND'))) return null
+  if (!data || (!data.ok && 'error' in data && (data.error === 'NOT_REGISTRAR_MANAGED' || data.error === 'NOT_FOUND'))) return null
 
   if (!data.ok) {
     return (
@@ -98,7 +104,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
           {d.mgTitle}
         </h2>
         <p role="alert" className="mt-3 text-sm text-destructive">
-          {data.error === 'REGISTRAR_UNAVAILABLE' ? d.errRegistrarUnavailable : d.mgLoadFailed}
+          {'reason' in data ? d.mgLoadFailed : data.error === 'REGISTRAR_UNAVAILABLE' ? d.errRegistrarUnavailable : d.mgLoadFailed}
         </p>
         <Button variant="outline" size="sm" className="mt-3" onClick={() => mutate()}>
           {d.mgRetry}

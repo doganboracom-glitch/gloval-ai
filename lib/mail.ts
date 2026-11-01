@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { getMailProvider } from '@/lib/mail/provider'
 import {
@@ -80,12 +81,7 @@ export type MailOverview = {
 }
 
 async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new MailError('UNAUTHENTICATED')
-  return user
+  return requireRequestUser()
 }
 
 function fail(error: unknown): { ok: false; error: MailErrorCode } {

@@ -1,11 +1,12 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { buildAddressEmbedSrc, parseMapInput } from '@/lib/map-embed'
 import { resolveShortMapLink } from '@/lib/map-short-link'
 
 export type MapInputResult =
   | { ok: true; src: string }
+  | { ok: false; reason: 'auth_unavailable' }
   | { ok: false; error: 'invalid' | 'unsafe' | 'wrong-domain' | 'unsupported-link' | 'short-link' | 'unauthorized' }
 
 /**
@@ -14,11 +15,9 @@ export type MapInputResult =
  * because the browser cannot read cross-origin redirects.
  */
 export async function resolveMapInputAction(raw: string): Promise<MapInputResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'unauthorized' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthorized' }
 
   const parsed = parseMapInput(typeof raw === 'string' ? raw : '')
   switch (parsed.kind) {

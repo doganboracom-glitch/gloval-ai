@@ -20,6 +20,10 @@ vi.mock('@/lib/ecommerce-access', () => ({
     return { supabase: { auth: { getUser: async () => ({ data: { user: { email: 'o@x.com' } } }) } }, userId: 'u1' }
   },
 }))
+vi.mock('@/lib/supabase/request-user', () => ({
+  getRequestUser: async () => ({ kind: 'authenticated', user: { id: 'u1', email: 'o@x.com' } }),
+  authUnavailableActionResult: () => ({ ok: false, reason: 'auth_unavailable' }),
+}))
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => {
     mocks.adminCalls += 1

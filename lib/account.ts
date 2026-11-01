@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   revokeGoogleAdsConnectionsForDeletion,
@@ -21,8 +22,8 @@ import {
   type CleanupStep,
 } from '@/lib/external-cleanup'
 
-export type DeleteAccountResult = { ok: true } | { ok: false; error: string }
-export type UpdateProfileResult = { ok: true } | { ok: false; error: string }
+export type DeleteAccountResult = { ok: true } | { ok: false; reason: 'auth_unavailable' } | { ok: false; error: string }
+export type UpdateProfileResult = { ok: true } | { ok: false; reason: 'auth_unavailable' } | { ok: false; error: string }
 
 /**
  * Updates the CURRENT user's own display name. Runs through the regular
@@ -30,11 +31,11 @@ export type UpdateProfileResult = { ok: true } | { ok: false; error: string }
  * `profiles` row.
  */
 export async function updateOwnProfile(input: { fullName: string }): Promise<UpdateProfileResult> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'not_authenticated' }
+  const { user } = authState
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'not_authenticated' }
 
   const fullName = input.fullName.trim()
   if (!fullName) return { ok: false, error: 'invalid_name' }
@@ -224,11 +225,10 @@ async function anonymizeFinancialRecords(admin: Admin, userId: string): Promise<
  * can only ever delete themselves.
  */
 export async function deleteOwnAccount(): Promise<DeleteAccountResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'not_authenticated' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'not_authenticated' }
+  const { user } = authState
 
   const admin = createAdminClient()
 

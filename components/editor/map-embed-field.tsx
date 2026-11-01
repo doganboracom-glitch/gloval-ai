@@ -46,6 +46,8 @@ export function MapEmbedField({
       if (result.ok) {
         onCommit(result.src)
         setDraft('')
+      } else if ('reason' in result) {
+        setError(copy.errors.generic)
       } else {
         setError(copy.errors[ERROR_KEY[result.error]])
       }

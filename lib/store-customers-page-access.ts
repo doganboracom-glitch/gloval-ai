@@ -1,8 +1,9 @@
 import 'server-only'
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
+import { AuthUnavailableError } from '@/lib/supabase/request-user'
 import { isEcommerceProjectId } from '@/lib/commerce-mode-server'
 
-export type CustomersPageAccess = 'allowed' | 'login' | 'not_found'
+export type CustomersPageAccess = 'allowed' | 'login' | 'unavailable' | 'not_found'
 
 /**
  * Page-level gate for the owner customer directory, on top of the checks inside
@@ -15,6 +16,7 @@ export async function resolveCustomersPageAccess(projectId: string): Promise<Cus
     if (!(await isEcommerceProjectId(projectId))) return 'not_found'
     return 'allowed'
   } catch (err) {
+    if (err instanceof AuthUnavailableError) return 'unavailable'
     return err instanceof Error && err.message === 'UNAUTHENTICATED' ? 'login' : 'not_found'
   }
 }

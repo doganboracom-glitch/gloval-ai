@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { AuthUnavailableError, getRequestUser } from '@/lib/supabase/request-user'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
 import { resolveGoogleAdsConnectAccess } from '@/lib/ads/env'
 import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
@@ -21,10 +21,9 @@ export function googleAdsConnectAllowed(userId: string | null): boolean {
 }
 
 export async function googleAdsUserId(): Promise<string | null> {
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.getUser()
-  if (error || !data.user) return null
-  return data.user.id
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') throw new AuthUnavailableError()
+  return authState.kind === 'authenticated' ? authState.user.id : null
 }
 
 export function isSameOriginGoogleAdsPost(request: Request): boolean {

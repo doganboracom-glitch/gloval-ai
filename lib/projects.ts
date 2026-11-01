@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
@@ -122,11 +123,8 @@ export type ProjectVersionItem = {
 
 /** Requires an authenticated user; returns the Supabase client + user id/email. */
 async function requireUser() {
+  const user = await requireRequestUser()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
   return { supabase, userId: user.id, email: user.email ?? null }
 }
 

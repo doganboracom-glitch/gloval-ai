@@ -3,6 +3,7 @@
 import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import {
@@ -125,11 +126,8 @@ export type TransactionRow = {
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 async function requireUser() {
+  const user = await requireRequestUser()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
   return { supabase, userId: user.id, email: user.email ?? '' }
 }
 

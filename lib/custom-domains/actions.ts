@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { getMailProvider } from '@/lib/mail/provider'
 import { getMailQuota } from '@/lib/mail/access'
@@ -85,12 +86,7 @@ export type DomainDetail = {
 }
 
 async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new DomainError('UNAUTHENTICATED')
-  return user
+  return requireRequestUser()
 }
 
 function fail(error: unknown): { ok: false; error: DomainErrorCode } {

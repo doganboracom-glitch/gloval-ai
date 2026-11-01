@@ -23,10 +23,12 @@ vi.mock('@/lib/custom-domains/service', () => ({
 
 import { middleware } from '@/middleware'
 import {
+  getAuthStateFromHeaders,
   getVerifiedUserFromHeaders,
   VERIFIED_USER_HEADERS,
 } from '@/lib/supabase/auth-context'
 import { getPageAuthState } from '@/lib/supabase/page-auth'
+import { getRequestUser } from '@/lib/supabase/request-user'
 
 const user = {
   id: 'trusted-user',
@@ -36,6 +38,7 @@ const user = {
 }
 
 const forgedHeaders = {
+  [VERIFIED_USER_HEADERS.state]: 'authenticated',
   [VERIFIED_USER_HEADERS.verified]: '1',
   [VERIFIED_USER_HEADERS.id]: 'attacker-user',
   [VERIFIED_USER_HEADERS.email]: encodeURIComponent('admin@gloval.ai'),
@@ -43,12 +46,12 @@ const forgedHeaders = {
   [VERIFIED_USER_HEADERS.createdAt]: '2024-01-01T00:00:00.000Z',
 }
 
-function request(path: string) {
+function request(path: string, method = 'GET') {
   const headers = new Headers({ host: 'gloval.ai' })
   for (const [name, value] of Object.entries(forgedHeaders)) {
     headers.set(name, value)
   }
-  return new NextRequest(`https://gloval.ai${path}`, { headers })
+  return new NextRequest(`https://gloval.ai${path}`, { headers, method })
 }
 
 function readForwardedRequestHeaders(response: NextResponse): Headers {
@@ -101,14 +104,15 @@ describe('middleware ile sayfa auth başlığı sınırı', () => {
 
     expect(response.status).toBe(200)
     expect(getVerifiedUserFromHeaders(forwardedHeaders)).toBeNull()
-    for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+    expect(getAuthStateFromHeaders(forwardedHeaders)).toEqual({ kind: 'unavailable' })
+    for (const name of Object.values(VERIFIED_USER_HEADERS).filter((header) => header !== VERIFIED_USER_HEADERS.state)) {
       expect(forwardedHeaders.has(name)).toBe(false)
     }
 
     mocks.serverHeaders.mockResolvedValue(forwardedHeaders)
-    await expect(getPageAuthState(unavailablePageClient() as never)).resolves.toEqual({
-      kind: 'unavailable',
-    })
+    const pageClient = unavailablePageClient()
+    await expect(getPageAuthState(pageClient as never)).resolves.toEqual({ kind: 'unavailable' })
+    expect(pageClient.auth.getUser).not.toHaveBeenCalled()
   })
 
   it('korunan sayfada middleware kimlik doğrulama kesintisi sayfa sorgusundan önce 503 döndürür', async () => {
@@ -147,5 +151,21 @@ describe('middleware ile sayfa auth başlığı sınırı', () => {
       kind: 'authenticated',
       user,
     })
+  })
+
+  it('POST sunucu eyleminde istemcinin sahte kimliğini reddedip middleware kimliğini kullanır', async () => {
+    mocks.middlewareGetUser.mockResolvedValue({ data: { user }, error: null })
+
+    const response = await middleware(request('/support/new', 'POST'))
+    const forwardedHeaders = readForwardedRequestHeaders(response)
+
+    expect(response.status).toBe(200)
+    expect(forwardedHeaders.get(VERIFIED_USER_HEADERS.id)).toBe(user.id)
+    expect(forwardedHeaders.get(VERIFIED_USER_HEADERS.id)).not.toBe('attacker-user')
+    expect(getVerifiedUserFromHeaders(forwardedHeaders)).toEqual(user)
+
+    mocks.serverHeaders.mockResolvedValue(forwardedHeaders)
+    await expect(getRequestUser()).resolves.toEqual({ kind: 'authenticated', user })
+    expect(mocks.middlewareGetUser).toHaveBeenCalledTimes(1)
   })
 })

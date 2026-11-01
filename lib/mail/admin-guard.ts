@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { AuthUnavailableError, getRequestUser } from '@/lib/supabase/request-user'
 
 /**
  * Server-only admin gate for the mail management area.
@@ -49,13 +49,10 @@ export function isAdminEmail(email: string | null | undefined): boolean {
  * may not have it.
  */
 export async function getAdminUser(): Promise<{ userId: string; email: string } | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || !isAdminEmail(user.email)) return null
-  return { userId: user.id, email: user.email ?? '' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') throw new AuthUnavailableError()
+  if (authState.kind !== 'authenticated' || !isAdminEmail(authState.user.email)) return null
+  return { userId: authState.user.id, email: authState.user.email ?? '' }
 }
 
 export async function requireAdmin(): Promise<{ userId: string; email: string }> {
@@ -76,9 +73,7 @@ export async function requireAdminResponse(): Promise<Response | null> {
 
 /** Non-throwing variant, for conditionally rendering an admin entry point. */
 export async function checkIsAdmin(): Promise<boolean> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return isAdminEmail(user?.email)
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') throw new AuthUnavailableError()
+  return authState.kind === 'authenticated' && isAdminEmail(authState.user.email)
 }

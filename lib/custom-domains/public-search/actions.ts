@@ -1,7 +1,7 @@
 'use server'
 
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { defaultPublicSearchDeps } from './defaults'
 import { demoSearchOrNull } from './demo'
 import { resolveRateLimitIp } from './limits'
@@ -20,14 +20,11 @@ export async function searchDomainsPublic(query: string): Promise<PublicSearchRe
     // No request context: the caller falls into the shared "unknown" bucket.
   }
 
-  let userId: string | null = null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.auth.getUser()
-    userId = data.user?.id ?? null
-  } catch {
-    // Treated as anonymous.
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') {
+    return { ok: false, error: 'TEMPORARILY_UNAVAILABLE' }
   }
+  const userId = authState.kind === 'authenticated' ? authState.user.id : null
 
   return runPublicDomainSearch({ query, ip, userId }, defaultPublicSearchDeps)
 }

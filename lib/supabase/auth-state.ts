@@ -1,10 +1,15 @@
 import type { User } from '@supabase/supabase-js'
 
+export type AuthUserMetadataSummary = Partial<
+  Record<'first_name' | 'last_name' | 'full_name' | 'name' | 'firstName' | 'lastName' | 'phone' | 'signup_draft_token', string>
+>
 export type AuthUserSummary = {
   id: string
   email: string | null
   email_confirmed_at: string | null
   created_at: string | null
+  phone?: string
+  user_metadata?: AuthUserMetadataSummary
 }
 
 export type AuthState =
@@ -68,11 +73,27 @@ function isDefiniteAuthFailure(error: unknown): boolean {
   )
 }
 
+function summarizeUserMetadata(value: unknown): AuthUserMetadataSummary | undefined {
+  if (!value || typeof value !== 'object') return undefined
+
+  const input = value as Record<string, unknown>
+  const metadata: AuthUserMetadataSummary = {}
+  const allowedKeys = ['first_name', 'last_name', 'full_name', 'name', 'firstName', 'lastName', 'phone', 'signup_draft_token'] as const
+
+  for (const key of allowedKeys) {
+    const item = input[key]
+    if (typeof item === 'string' && item) metadata[key] = item.slice(0, 180)
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined
+}
+
 export function classifyAuthResult(result: AuthResult): AuthState {
   const user = result.data?.user
   const error = result.error
 
   if (!error && user) {
+    const userMetadata = summarizeUserMetadata(user.user_metadata)
     return {
       kind: 'authenticated',
       user: {
@@ -80,6 +101,10 @@ export function classifyAuthResult(result: AuthResult): AuthState {
         email: user.email ?? null,
         email_confirmed_at: user.email_confirmed_at ?? null,
         created_at: user.created_at ?? null,
+        ...(typeof user.phone === 'string' && user.phone
+          ? { phone: user.phone.slice(0, 64) }
+          : {}),
+        ...(userMetadata ? { user_metadata: userMetadata } : {}),
       },
     }
   }

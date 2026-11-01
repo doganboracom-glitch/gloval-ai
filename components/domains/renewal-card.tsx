@@ -44,19 +44,23 @@ export function RenewalCard({
     revalidateOnFocus: false,
   })
 
-  const inProgress = latest ? !RENEWAL_FINAL.has(latest.status) : false
+  const latestUnavailable = latest !== null && latest !== undefined && 'reason' in latest
+  const latestRenewal = latest && 'status' in latest ? latest : null
+  const inProgress = latestRenewal ? !RENEWAL_FINAL.has(latestRenewal.status) : false
   const money = (minor: number, currency: string) =>
     new Intl.NumberFormat(locale, { style: 'currency', currency }).format(minor / 100)
 
-  const latestText = !latest
-    ? null
-    : latest.status === 'completed'
-      ? d.mgRenewStDone
-      : latest.status === 'manual_refund_required'
-        ? d.mgRenewStRefund
-        : latest.status === 'failed' || latest.status === 'cancelled'
-          ? d.mgRenewStFailed
-          : d.mgRenewStInProgress
+  const latestText = latestUnavailable
+    ? d.mgLoadFailed
+    : !latestRenewal
+      ? null
+      : latestRenewal.status === 'completed'
+        ? d.mgRenewStDone
+        : latestRenewal.status === 'manual_refund_required'
+          ? d.mgRenewStRefund
+          : latestRenewal.status === 'failed' || latestRenewal.status === 'cancelled'
+            ? d.mgRenewStFailed
+            : d.mgRenewStInProgress
 
   function pay() {
     consent.markTouched()
@@ -65,7 +69,7 @@ export function RenewalCard({
     startTransition(async () => {
       const res = await startMyDomainRenewal(domain, years, consent.consents)
       if (!res.ok) {
-        setError(errorText(res.error))
+        setError('reason' in res ? d.mgLoadFailed : errorText(res.error))
         setConfirming(false)
         return
       }
@@ -130,7 +134,7 @@ export function RenewalCard({
           </p>
         ) : quote && !quote.ok ? (
           <p role="alert" className="text-destructive">
-            {errorText(quote.error)}
+            {'reason' in quote ? d.mgLoadFailed : errorText(quote.error)}
           </p>
         ) : null}
       </div>

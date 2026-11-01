@@ -1,7 +1,7 @@
 'use server'
 
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
-import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import {
   claimOnboardingSlot,
   finalizeOnboardingRequest,
@@ -59,11 +59,8 @@ export async function getIyzicoInstantPrefill(projectId: string): Promise<Iyzico
   if (!readIyzicoInstantCredentials()) return DISABLED
   if (!(await isOnboardingStoreReady())) return DISABLED
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>
+  const user = await requireRequestUser()
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
   const parts = cleanName(metadata.full_name ?? metadata.name)
     .split(' ')
     .filter(Boolean)

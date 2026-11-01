@@ -2,7 +2,7 @@
 
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import {
   exportAdminBillingProfilesCsv,
   listAdminBillingProfileAccessHistory,
@@ -20,10 +20,10 @@ import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 
 export async function getMyBillingProfileAction() {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (error || !user) return { available: false, profile: null }
-    return getBillingProfileForUser(user.id)
+    const authState = await getRequestUser()
+    if (authState.kind === 'unavailable') return { available: false, profile: null, reason: 'auth_unavailable' as const }
+    if (authState.kind === 'unauthenticated') return { available: false, profile: null }
+    return getBillingProfileForUser(authState.user.id)
   } catch {
     return { available: false, profile: null }
   }
@@ -31,10 +31,10 @@ export async function getMyBillingProfileAction() {
 
 export async function getMyBillingProfileStatusAction() {
   try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (error || !user) return { available: false, complete: false }
-    return getBillingProfileStatusForUser(user.id)
+    const authState = await getRequestUser()
+    if (authState.kind === 'unavailable') return { available: false, complete: false, reason: 'auth_unavailable' as const }
+    if (authState.kind === 'unauthenticated') return { available: false, complete: false }
+    return getBillingProfileStatusForUser(authState.user.id)
   } catch {
     return { available: false, complete: false }
   }
@@ -42,14 +42,16 @@ export async function getMyBillingProfileStatusAction() {
 
 export type SaveBillingProfileResult =
   | { ok: true; profile: BillingProfileSummary }
+  | { ok: false; reason: 'auth_unavailable' }
   | { ok: false; error: 'unauthenticated' | 'unavailable' | 'validation' | 'save_failed'; fieldErrors?: Record<string, string> }
 
 export async function saveBillingProfileAction(input: unknown): Promise<SaveBillingProfileResult> {
   try {
     console.info(payloadPresenceLog(input))
-    const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) return { ok: false, error: 'unauthenticated' }
+    const authState = await getRequestUser()
+    if (authState.kind === 'unavailable') return authUnavailableActionResult()
+    if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+    const { user } = authState
 
     const admin = createAdminClient()
     const { data: existing, error: readError } = await admin

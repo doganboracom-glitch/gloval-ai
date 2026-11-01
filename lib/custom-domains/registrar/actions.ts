@@ -10,6 +10,7 @@ import type { BillingProfileSummary } from '@/lib/billing-profile-types'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { isMissingColumnError } from '@/lib/store-schema-compat'
@@ -40,11 +41,7 @@ import { priceAvailabilityRows, resolveOrderPricing } from '../pricing/order'
  */
 
 async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
+  const user = await requireRequestUser()
   return { userId: user.id, email: user.email ?? '' }
 }
 

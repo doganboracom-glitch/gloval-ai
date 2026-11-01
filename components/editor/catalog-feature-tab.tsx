@@ -106,8 +106,16 @@ export function CatalogFeatureTab({
         router.refresh()
         return
       }
+      if ('reason' in result) {
+        setError(c.errors.update_failed)
+        return
+      }
       if (result.error === 'plan_required') {
         setError(lang === 'en' ? 'The product catalog is a PRO feature. Upgrade to PRO to turn it on.' : (result.message ?? CATALOG_PLAN_WARNING))
+        return
+      }
+      if (result.error === 'unauthenticated' || result.error === 'not_found') {
+        setError(c.errors.update_failed)
         return
       }
       setError(c.errors[result.error] ?? c.errors.update_failed)

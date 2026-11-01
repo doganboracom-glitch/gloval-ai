@@ -1,5 +1,8 @@
 import 'server-only'
 
+import { NextResponse } from 'next/server'
+import { AUTH_RETRY_AFTER_SECONDS } from '@/lib/supabase/auth-state'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
@@ -33,10 +36,24 @@ export type BlogRouteContext = {
  * the real dependencies for `runBlogWrite` / `runBlogPersonalize`.
  */
 export async function loadBlogRouteContext(projectId: string): Promise<BlogRouteContext | Response> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') {
+    return Response.json(
+      { error: 'Authentication temporarily unavailable' },
+      {
+        status: 503,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Retry-After': String(AUTH_RETRY_AFTER_SECONDS),
+        },
+      },
+    )
+  }
+  if (authState.kind === 'unauthenticated') {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const { user } = authState
   const supabase = await createClient()
-  const { data: userData } = await supabase.auth.getUser()
-  const user = userData?.user
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const columns = 'id, slug, language, schema_data'
   let { data: project } = await supabase.from('projects').select(columns).eq('id', projectId).maybeSingle()

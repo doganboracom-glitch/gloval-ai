@@ -2,9 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
-import { requireUser } from '@/lib/ecommerce-access'
 import { isCatalogFeatureUiEnabled } from '@/lib/catalog-feature-flag'
 import {
   CATALOG_PLAN_WARNING,
@@ -15,9 +15,10 @@ import {
 
 export type CatalogToggleResult =
   | { ok: true; enabled: boolean }
+  | { ok: false; reason: 'auth_unavailable' }
   | {
       ok: false
-      error: CatalogToggleBlocker | 'not_found' | 'update_failed' | 'audit_failed' | 'feature_disabled'
+      error: CatalogToggleBlocker | 'unauthenticated' | 'not_found' | 'update_failed' | 'audit_failed' | 'feature_disabled'
       message?: string
     }
 
@@ -29,10 +30,11 @@ export type CatalogToggleResult =
 export async function setCatalogEnabled(projectId: string, enable: boolean): Promise<CatalogToggleResult> {
   if (!isCatalogFeatureUiEnabled()) return { ok: false, error: 'feature_disabled', message: 'Özellik kapalı' }
   if (!projectId || !/^[0-9a-f-]{36}$/i.test(projectId)) return { ok: false, error: 'not_found' }
-  const { supabase, userId } = await requireUser()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+  const { user } = authState
+  const userId = user.id
 
   const admin = createAdminClient()
   const { data: project } = await admin
