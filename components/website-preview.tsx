@@ -194,6 +194,7 @@ export function WebsitePreview({
   planCode = 'free',
   payments = null,
   blog = null,
+  previewNotice,
   catalog = null,
   catalogFeature = null,
   persist,
@@ -219,6 +220,8 @@ export function WebsitePreview({
   payments?: { projectId: string; initialSummary: PaymentSummary | null } | null
   /** Non-null for a project's owner/admin: enables the editor's Blog tab. */
   blog?: { projectId: string; topics: string[]; sitemapUrl?: string | null; starterPending?: boolean } | null
+  /** Explicit opt-in for editor and anonymous preview shells; published renderers omit it. */
+  previewNotice?: { projectId?: string | null; previewId?: string | null } | null
   /**
    * Store owner's active products + collections (loaded server-side), shown by
    * product showcase sections in the preview. Null: no data, empty-state message.
@@ -1891,13 +1894,17 @@ export function WebsitePreview({
           <div
             className={`flex min-h-0 w-full flex-col gap-3 transition-[max-width] duration-300 ${DEVICE_MAX_WIDTH[device]}`}
           >
-            {/* Editor only: the anonymous landing preview keeps its plain frame. */}
             {persist && <SiteAddressBanner address={siteAddress} lang={lang === 'en' ? 'en' : 'tr'} />}
-            {persist && (
+            {previewNotice && (
               <div className="relative h-0 w-full">
-                <PreviewSupportCard projectId={blog?.projectId ?? null} isEditorPreview />
+                <PreviewSupportCard
+                  projectId={previewNotice.projectId}
+                  previewId={previewNotice.previewId}
+                  isPreview
+                />
               </div>
             )}
+
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
             {/* Browser chrome */}
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">

@@ -123,7 +123,9 @@ export function Hero() {
     clearSignupIdea()
     try {
       const restoredPlan = websiteToPlan(pending.schema)
-      restoredTokenRef.current = pending.token
+      const previewId =
+        typeof pending.token === 'string' && pending.token.trim() ? pending.token : newToken()
+      restoredTokenRef.current = previewId
       setWebsite(pending.schema)
       setPlan(restoredPlan)
       setPrompt(pending.prompt ?? '')
@@ -343,7 +345,7 @@ export function Hero() {
       // A freshly generated site supersedes any restored draft. Drop the old
       // stash and its token so the two can never be confused on save.
       clearPendingProject()
-      restoredTokenRef.current = null
+      restoredTokenRef.current = newToken()
       setRestored(false)
       setWebsite(site)
       setPlan(websiteToPlan(site))
@@ -702,6 +704,7 @@ export function Hero() {
         <WebsitePreview
           site={website}
           lang={toBilingual(lang)}
+          previewNotice={{ previewId: restoredTokenRef.current }}
           initialEditorOpen={startWithEditor}
           onClose={() => setShowPreview(false)}
           onAuthenticatedPublish={publishAsNewProject}
