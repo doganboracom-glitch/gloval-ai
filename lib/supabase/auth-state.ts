@@ -1,7 +1,7 @@
 import type { User } from '@supabase/supabase-js'
 
 export type AuthUserMetadataSummary = Partial<
-  Record<'first_name' | 'last_name' | 'full_name' | 'name' | 'firstName' | 'lastName', string>
+  Record<'first_name' | 'last_name' | 'full_name' | 'name' | 'firstName' | 'lastName' | 'phone' | 'signup_draft_token', string>
 >
 export type AuthUserSummary = {
   id: string
@@ -78,7 +78,7 @@ function summarizeUserMetadata(value: unknown): AuthUserMetadataSummary | undefi
 
   const input = value as Record<string, unknown>
   const metadata: AuthUserMetadataSummary = {}
-  const allowedKeys = ['first_name', 'last_name', 'full_name', 'name', 'firstName', 'lastName'] as const
+  const allowedKeys = ['first_name', 'last_name', 'full_name', 'name', 'firstName', 'lastName', 'phone', 'signup_draft_token'] as const
 
   for (const key of allowedKeys) {
     const item = input[key]

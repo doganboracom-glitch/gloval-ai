@@ -23,6 +23,7 @@ vi.mock('@/lib/custom-domains/service', () => ({
 
 import { middleware } from '@/middleware'
 import {
+  getAuthStateFromHeaders,
   getVerifiedUserFromHeaders,
   VERIFIED_USER_HEADERS,
 } from '@/lib/supabase/auth-context'
@@ -101,14 +102,15 @@ describe('middleware ile sayfa auth başlığı sınırı', () => {
 
     expect(response.status).toBe(200)
     expect(getVerifiedUserFromHeaders(forwardedHeaders)).toBeNull()
-    for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+    expect(getAuthStateFromHeaders(forwardedHeaders)).toEqual({ kind: 'unavailable' })
+    for (const name of Object.values(VERIFIED_USER_HEADERS).filter((header) => header !== VERIFIED_USER_HEADERS.state)) {
       expect(forwardedHeaders.has(name)).toBe(false)
     }
 
     mocks.serverHeaders.mockResolvedValue(forwardedHeaders)
-    await expect(getPageAuthState(unavailablePageClient() as never)).resolves.toEqual({
-      kind: 'unavailable',
-    })
+    const pageClient = unavailablePageClient()
+    await expect(getPageAuthState(pageClient as never)).resolves.toEqual({ kind: 'unavailable' })
+    expect(pageClient.auth.getUser).not.toHaveBeenCalled()
   })
 
   it('korunan sayfada middleware kimlik doğrulama kesintisi sayfa sorgusundan önce 503 döndürür', async () => {

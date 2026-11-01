@@ -6,6 +6,8 @@ import {
 } from '@/lib/supabase/auth-state'
 import {
   clearVerifiedUserHeaders,
+  setUnauthenticatedAuthState,
+  setUnavailableAuthState,
   setVerifiedUserHeaders,
 } from '@/lib/supabase/auth-context'
 import type { AuthUserSummary } from '@/lib/supabase/auth-state'
@@ -67,6 +69,30 @@ function nextWithVerifiedUser(
   )
 }
 
+function nextWithUnauthenticatedState(
+  request: NextRequest,
+  source: NextResponse,
+): NextResponse {
+  const requestHeaders = createSanitizedRequestHeaders(request)
+  setUnauthenticatedAuthState(requestHeaders)
+  return copyResponseCookies(
+    source,
+    NextResponse.next({ request: { headers: requestHeaders } }),
+  )
+}
+
+function nextWithUnavailableAuthState(
+  request: NextRequest,
+  source: NextResponse,
+): NextResponse {
+  const requestHeaders = createSanitizedRequestHeaders(request)
+  setUnavailableAuthState(requestHeaders)
+  return copyResponseCookies(
+    source,
+    NextResponse.next({ request: { headers: requestHeaders } }),
+  )
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = nextWithSanitizedRequest(request)
 
@@ -101,11 +127,13 @@ export async function updateSession(request: NextRequest) {
   const isAuthGated = AUTH_GATED_PREFIXES.some((prefix) => matchesPath(path, prefix))
 
   if (authState.kind === 'unavailable') {
-    return isAuthGated ? unavailableResponse(supabaseResponse) : supabaseResponse
+    return isAuthGated
+      ? unavailableResponse(supabaseResponse)
+      : nextWithUnavailableAuthState(request, supabaseResponse)
   }
 
   if (authState.kind === 'unauthenticated') {
-    if (!isProtected) return supabaseResponse
+    if (!isProtected) return nextWithUnauthenticatedState(request, supabaseResponse)
 
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'

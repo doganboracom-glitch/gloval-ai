@@ -53,7 +53,7 @@ export function NewTicketForm({
       try {
         const res = await createSupportTicket(formData)
         if (!res.ok) {
-          setError(c.errors[res.error] ?? c.errors.generic)
+          setError('reason' in res ? c.errors.generic : c.errors[res.error] ?? c.errors.generic)
           return
         }
         router.push(`/support/${res.ticketId}`)

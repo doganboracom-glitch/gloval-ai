@@ -150,8 +150,10 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
   if (!isValidClaimToken(token)) return { status: 'invalid' }
   const authState = await getRequestUser()
   if (authState.kind === 'unavailable') return { status: 'auth_unavailable' }
-  if (authState.kind === 'unauthenticated' || !authState.user.email) return { status: 'unauthenticated' }
+  if (authState.kind === 'unauthenticated') return { status: 'unauthenticated' }
   const user = authState.user
+  const email = user.email
+  if (!email) return { status: 'unauthenticated' }
   const supabase = await createClient()
 
   const clearTemporarySignupMetadata = async () => {
@@ -176,7 +178,7 @@ export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
   }
 
   const admin = createAdminClient()
-  const claim = await claimDraft(admin, { token, userId: user.id, email: user.email })
+  const claim = await claimDraft(admin, { token, userId: user.id, email })
   if (claim.status === 'done_idea') {
     await clearTemporarySignupMetadata()
     return { status: 'idea', prompt: claim.prompt }

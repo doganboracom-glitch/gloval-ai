@@ -141,8 +141,8 @@ export function SettingsClient({
     if (!result.ok) {
       setIsDeleting(false)
       setDeleteError(true)
-      setDeleteBlockedByDomains(result.error === 'domains_block_deletion')
-      setDeleteGoogleRevokeFailed(result.error === 'google_revoke_failed')
+      setDeleteBlockedByDomains('error' in result && result.error === 'domains_block_deletion')
+      setDeleteGoogleRevokeFailed('error' in result && result.error === 'google_revoke_failed')
       return
     }
     const supabase = createClient()

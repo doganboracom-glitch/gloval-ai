@@ -33,7 +33,7 @@ async function sessionUserId(): Promise<SessionUser> {
 
 async function afterChange(result: MutationResult): Promise<MutationResult> {
   // Also refresh after an unconfirmed outcome: the provider state may have moved.
-  if (result.ok || result.error === 'OUTCOME_UNKNOWN') {
+  if (result.ok || ('error' in result && result.error === 'OUTCOME_UNKNOWN')) {
     revalidatePath('/dashboard/domains')
   }
   return result

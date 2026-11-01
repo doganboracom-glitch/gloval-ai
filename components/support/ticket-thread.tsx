@@ -29,7 +29,7 @@ export function TicketThread({ ticket }: { ticket: SupportTicketDetail }) {
       try {
         const res = await replyToOwnTicket(formData)
         if (!res.ok) {
-          setError(c.errors[res.error] ?? c.errors.generic)
+          setError('reason' in res ? c.errors.generic : c.errors[res.error] ?? c.errors.generic)
           return
         }
         formRef.current?.reset()

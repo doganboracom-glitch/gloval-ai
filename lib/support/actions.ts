@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult, type AuthUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { recordNotification, sendTransactionalEmail } from '@/lib/notify'
 import { buildTicketCreatedNotice } from '@/lib/support/admin-notification'
@@ -19,16 +19,19 @@ import {
   type TicketDepartment,
 } from '@/lib/support/constants'
 
-type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }
+type Result<T = object> =
+  | ({ ok: true } & T)
+  | { ok: false; error: string }
+  | AuthUnavailableActionResult
 
 type AuthedUser = { id: string; email: string | null }
+type RequireUserResult = AuthedUser | { ok: false; error: 'unauthenticated' } | AuthUnavailableActionResult
 
-async function requireUser(): Promise<AuthedUser | null> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user ? { id: user.id, email: user.email ?? null } : null
+async function requireUser(): Promise<RequireUserResult> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+  return { id: authState.user.id, email: authState.user.email }
 }
 
 /** Verify the real file signature so a renamed binary cannot pass as an image/PDF. */
@@ -164,8 +167,9 @@ async function sendAdminNotification(input: {
 export async function createSupportTicket(
   formData: FormData,
 ): Promise<Result<{ ticketId: string; ticketNumber: string }>> {
-  const user = await requireUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
+  const authResult = await requireUser()
+  if ('ok' in authResult) return authResult
+  const user = authResult
 
   const department = formData.get('department')
   const priority = formData.get('priority') || 'normal'
@@ -297,8 +301,9 @@ export async function createSupportTicket(
 
 /** Post a follow-up message from the ticket owner. */
 export async function replyToOwnTicket(formData: FormData): Promise<Result> {
-  const user = await requireUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
+  const authResult = await requireUser()
+  if ('ok' in authResult) return authResult
+  const user = authResult
 
   const ticketId = String(formData.get('ticketId') ?? '')
   const message = String(formData.get('message') ?? '').trim()

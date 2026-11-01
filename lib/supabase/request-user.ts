@@ -1,7 +1,7 @@
 import 'server-only'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { getVerifiedUserFromHeaders } from './auth-context'
+import { getAuthStateFromHeaders } from './auth-context'
 import { getUserAuthState, type AuthState, type AuthUserSummary } from './auth-state'
 import { cacheRequestUser } from './request-user-cache'
 
@@ -20,11 +20,17 @@ export class AuthUnavailableError extends Error {
 }
 
 async function resolveRequestUser(): Promise<AuthState> {
+  let requestHeaders: Awaited<ReturnType<typeof headers>> | null = null
   try {
-    const requestHeaders = await headers()
-    const verifiedUser = getVerifiedUserFromHeaders(requestHeaders)
-    if (verifiedUser) return { kind: 'authenticated', user: verifiedUser }
+    requestHeaders = await headers()
+  } catch {
+    // Outside a request context there is no forwarded state; still try the session client.
+  }
 
+  const forwardedAuthState = requestHeaders ? getAuthStateFromHeaders(requestHeaders) : null
+  if (forwardedAuthState) return forwardedAuthState
+
+  try {
     const supabase = await createClient()
     return await getUserAuthState(supabase)
   } catch {

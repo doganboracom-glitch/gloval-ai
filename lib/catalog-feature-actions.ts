@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { getPlanCodeForUser } from '@/lib/billing'
@@ -36,7 +35,6 @@ export async function setCatalogEnabled(projectId: string, enable: boolean): Pro
   if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
   const { user } = authState
   const userId = user.id
-  const supabase = await createClient()
 
   const admin = createAdminClient()
   const { data: project } = await admin

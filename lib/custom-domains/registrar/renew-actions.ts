@@ -128,7 +128,7 @@ export async function startMyDomainRenewal(
       orderId: `domren_${row.id}`,
       amountCents: priceCents,
       currency,
-      customerEmail: user.email,
+      customerEmail: email,
       returnUrl: `/dashboard/domains`,
       publicConfig: await resolvePlatformBuyerPublicConfig(userId),
     })

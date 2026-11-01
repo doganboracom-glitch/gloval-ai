@@ -86,6 +86,11 @@ export function BillingProfileCard({ initialProfile, storageAvailable, defaultFu
     startTransition(async () => {
       const result = await saveBillingProfileAction(values)
       if (!result.ok) {
+        if ('reason' in result) {
+          setErrors({})
+          setNotice(copy.unavailable)
+          return
+        }
         setErrors(pickKnownFieldErrors(result.fieldErrors).fieldErrors)
         setNotice(result.error === 'unavailable' ? copy.unavailable : result.error === 'validation' ? copy.fixFields : copy.saveFailed)
         return

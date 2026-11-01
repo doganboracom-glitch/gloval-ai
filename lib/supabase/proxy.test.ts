@@ -43,7 +43,7 @@ function expectVerifiedUserHeadersNotForwarded(response: Response) {
     .map((name) => name.trim())
     .filter(Boolean)
 
-  for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+  for (const name of Object.values(VERIFIED_USER_HEADERS).filter((header) => header !== VERIFIED_USER_HEADERS.state)) {
     expect(forwardedNames).not.toContain(name)
     expect(response.headers.get(`x-middleware-request-${name}`)).toBeNull()
     expect(response.headers.get(name)).toBeNull()
@@ -136,6 +136,7 @@ describe('updateSession authentication availability', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('x-middleware-next')).toBe('1')
     expect(response.headers.get('Location')).toBeNull()
+    expect(response.headers.get(`x-middleware-request-${VERIFIED_USER_HEADERS.state}`)).toBe('unavailable')
     expectVerifiedUserHeadersNotForwarded(response)
   })
 
@@ -150,6 +151,17 @@ describe('updateSession authentication availability', () => {
     expect(response.status).toBe(307)
     expect(location.pathname).toBe('/auth/login')
     expect(location.searchParams.get('next')).toBe('/dashboard')
+    expectVerifiedUserHeadersNotForwarded(response)
+  })
+
+  it('sends the middleware-confirmed signed-out state to public route handlers', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: null })
+
+    const response = await updateSession(request('/public'))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get(`x-middleware-request-${VERIFIED_USER_HEADERS.state}`)).toBe('unauthenticated')
+    expect(response.headers.get(VERIFIED_USER_HEADERS.id)).toBeNull()
     expectVerifiedUserHeadersNotForwarded(response)
   })
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { setVerifiedUserHeaders } from './auth-context'
+import { setUnauthenticatedAuthState, setUnavailableAuthState, setVerifiedUserHeaders } from './auth-context'
 
 const mocks = vi.hoisted(() => ({
   headers: vi.fn(),
@@ -36,6 +36,22 @@ describe('getRequestUser', () => {
     mocks.headers.mockResolvedValue(makeHeaders(true))
 
     await expect(getRequestUser()).resolves.toEqual({ kind: 'authenticated', user })
+    expect(mocks.createClient).not.toHaveBeenCalled()
+    expect(mocks.getUser).not.toHaveBeenCalled()
+  })
+
+  it('uses middleware-authenticated outcomes without another Supabase Auth call', async () => {
+    const signedOut = new Headers()
+    setUnauthenticatedAuthState(signedOut)
+    mocks.headers.mockResolvedValue(signedOut)
+    await expect(getRequestUser()).resolves.toEqual({ kind: 'unauthenticated' })
+    expect(mocks.createClient).not.toHaveBeenCalled()
+    expect(mocks.getUser).not.toHaveBeenCalled()
+
+    const unavailable = new Headers()
+    setUnavailableAuthState(unavailable)
+    mocks.headers.mockResolvedValue(unavailable)
+    await expect(getRequestUser()).resolves.toEqual({ kind: 'unavailable' })
     expect(mocks.createClient).not.toHaveBeenCalled()
     expect(mocks.getUser).not.toHaveBeenCalled()
   })

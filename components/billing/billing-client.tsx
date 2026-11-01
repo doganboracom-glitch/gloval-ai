@@ -607,7 +607,7 @@ export function BillingClient({
         if (!res.ok) {
           setCheckout(null)
           setCheckoutRun(null)
-          setError(paymentInitErrorMessage(res, b) ?? b.genericError)
+          setError('reason' in res ? b.genericError : paymentInitErrorMessage(res, b) ?? b.genericError)
           return
         }
         if (res.redirectUrl) {

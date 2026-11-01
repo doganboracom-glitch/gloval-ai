@@ -393,7 +393,7 @@ export function AddOnsPanel({
         setBusyCode(null)
         if (!res.ok) {
           setCheckoutCode(null)
-          setError(purchaseErrorMessage(res.error, errorCopy))
+          setError('reason' in res ? t.billing.genericError : purchaseErrorMessage(res.error, errorCopy))
           return
         }
         setPaymentResult(null)
