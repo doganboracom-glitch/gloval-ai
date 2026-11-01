@@ -17,7 +17,12 @@ vi.mock('@/lib/image-storage', async (importOriginal) => ({
   persistImageDataUri: async (src: string) => src,
 }))
 
-import { applyHeroImageRequest, applySlideImageRequest, attachHeroImage } from '@/lib/hero-image'
+import {
+  applyHeroImageRequest,
+  applySlideImageRequest,
+  attachHeroImage,
+  preserveResolvedImages,
+} from '@/lib/hero-image'
 import { applyItemImageRequest, attachSectionImages } from '@/lib/section-images'
 import { RADIO_STATION_BRIEF } from '@/lib/__fixtures__/radio-station'
 import type { WebsiteSchema } from '@/lib/website-schema'
@@ -66,6 +71,31 @@ describe('hero image request', () => {
     expect(out.status).toBe('failed')
     expect(heroOf(site).image.src).toBe('old-hero')
     expect(heroOf(site).slides[0].image.src).toBe('old-slide-0')
+  })
+})
+
+describe('manual hero image preservation', () => {
+  it('preserves a manually uploaded hero image when an AI edit omits its src', () => {
+    const previous = makeSite()
+    const next = makeSite()
+    const uploadedSrc = 'https://blob.vercel-storage.com/manual-hero.webp'
+    heroOf(previous).image.src = uploadedSrc
+    heroOf(next).image.src = undefined
+
+    preserveResolvedImages(previous, next)
+
+    expect(heroOf(next).image.src).toBe(uploadedSrc)
+  })
+
+  it('keeps an explicit replacement image instead of restoring the previous upload', () => {
+    const previous = makeSite()
+    const next = makeSite()
+    heroOf(previous).image.src = 'https://blob.vercel-storage.com/manual-hero.webp'
+    heroOf(next).image.src = 'https://blob.vercel-storage.com/replacement.webp'
+
+    preserveResolvedImages(previous, next)
+
+    expect(heroOf(next).image.src).toBe('https://blob.vercel-storage.com/replacement.webp')
   })
 })
 
