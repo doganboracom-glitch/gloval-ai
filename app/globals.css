@@ -175,6 +175,11 @@
   * {
     @apply border-border outline-ring/50;
   }
+  button:enabled,
+  a[href]:not([aria-disabled='true']),
+  [role='button']:not([aria-disabled='true']):not([disabled]) {
+    @apply cursor-pointer;
+  }
   body {
     @apply bg-background text-foreground font-sans;
     /* Safety net: no single component may widen the page horizontally.

@@ -3,6 +3,7 @@ import { MESSAGE_MAX, SUBJECT_MAX } from '@/lib/support/constants'
 import {
   EMPTY_TICKET_PREFILL,
   newTicketHref,
+  newTicketLoginHref,
   newTicketPathWithParams,
   newTicketSignUpHref,
   parseTicketPrefill,
@@ -55,6 +56,17 @@ describe('newTicketPathWithParams', () => {
   it('keeps the prefill so a login redirect can return to it', () => {
     expect(newTicketPathWithParams({ subject: 'A b', project: 'p1', empty: undefined })).toBe('/support/new?subject=A+b&project=p1')
     expect(newTicketPathWithParams({})).toBe('/support/new')
+  })
+})
+
+describe('newTicketLoginHref', () => {
+  it('preserves the prefilled route as a safe login next path', () => {
+    const href = new URL(
+      newTicketLoginHref({ department: 'technical', service: 'website', project: 'p1' }),
+      'https://gloval.ai',
+    )
+    expect(href.pathname).toBe('/auth/login')
+    expect(href.searchParams.get('next')).toBe('/support/new?department=technical&service=website&project=p1')
   })
 })
 

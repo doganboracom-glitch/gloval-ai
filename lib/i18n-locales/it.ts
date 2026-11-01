@@ -82,6 +82,12 @@ const it: DeepPartial<Dict> = {
     close: 'Chiudi',
     back: 'Torna al piano',
     hint: 'Questo è un sito reale generato dalla struttura creata dall\u2019IA.',
+    supportNotice: {
+      title: 'Informazione importante',
+      body: "Questo sito web è stato creato con l'IA. Se una funzionalità o un modulo aggiuntivo richiesto (come un lettore per le dirette, elenchi personalizzati o integrazioni) non è attivo sul tuo sito, puoi richiederlo al nostro team tecnico. Lo sviluppo su misura può comportare un costo aggiuntivo in base alle tue esigenze.",
+      cta: 'Crea una richiesta di supporto',
+      dismiss: "Chiudi l'avviso",
+    },
   },
   editor: {
     title: 'Modifica sito',

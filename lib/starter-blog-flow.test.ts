@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
 }))
 const scheduleStarterBlog = vi.hoisted(() => vi.fn())
 const runStarterBlogNow = vi.hoisted(() => vi.fn())
+const scheduleStarterBlogReadyEmail = vi.hoisted(() => vi.fn())
 
 vi.mock('server-only', () => ({}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }))
@@ -21,7 +22,11 @@ vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: vi.fn(), getEf
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: () => ({ allowed: true, retryAfterMs: 0 }) }))
 vi.mock('@/lib/billing-lifecycle', () => ({ isSubscriptionSuspended: vi.fn() }))
 vi.mock('@/lib/store-sync', () => ({ syncStoreFromSchema: vi.fn() }))
-vi.mock('@/lib/starter-blog-server', () => ({ scheduleStarterBlog, runStarterBlogNow }))
+vi.mock('@/lib/starter-blog-server', () => ({
+  scheduleStarterBlog,
+  runStarterBlogNow,
+  scheduleStarterBlogReadyEmail,
+}))
 vi.mock('@/lib/blog-store', () => ({ createBlogWriteDeps: vi.fn(), listProjectBlogPosts: vi.fn() }))
 vi.mock('@/lib/content-attestations', () => ({
   loadAttestedDigests: vi.fn(),
@@ -59,6 +64,7 @@ beforeEach(() => {
   state.admin = false
   scheduleStarterBlog.mockReset()
   runStarterBlogNow.mockReset()
+  scheduleStarterBlogReadyEmail.mockReset()
 })
 
 describe('starter blog after project creation', () => {
@@ -152,6 +158,7 @@ describe('"Örnek blog yazılarını ekle" button action', () => {
       site: starterSiteFromSchema(schema),
       lang: 'tr',
     })
+    expect(scheduleStarterBlogReadyEmail).toHaveBeenCalledWith({ projectId: 'p1', userId: 'owner-1' })
   })
 
   it('falls back to the project name when schema_data is not a valid site', async () => {

@@ -3,6 +3,7 @@ import { after } from 'next/server'
 import { generateStructured } from '@/lib/ai-structured'
 import { resolveAiModel } from '@/lib/ai-models'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendStarterBlogReadyEmail } from '@/lib/starter-blog-ready-email'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import { isStarterPost } from '@/lib/blog'
 import {
@@ -162,6 +163,21 @@ async function starterPostsLast24h(ownerId: string): Promise<number> {
   return count ?? 0
 }
 
+/** Runs after the response so optional email delivery never blocks the blog action. */
+export function scheduleStarterBlogReadyEmail(args: { projectId: string; userId: string }): void {
+  try {
+    after(async () => {
+      try {
+        await sendStarterBlogReadyEmail(args)
+      } catch {
+        console.log('[starter-blog] ready email failed')
+      }
+    })
+  } catch {
+    console.log('[starter-blog] ready email schedule failed')
+  }
+}
+
 /**
  * Runs after the response is sent, so neither project creation nor publish waits on it
  * or fails because of it. `ownerId` enables the per-user daily cap.
@@ -176,7 +192,10 @@ export function scheduleStarterBlog(args: {
   try {
     after(async () => {
       try {
-        await runStarterBlogNow(args)
+        const result = await runStarterBlogNow(args)
+        if (result.status === 'created' && args.ownerId) {
+          await sendStarterBlogReadyEmail({ projectId: args.projectId, userId: args.ownerId })
+        }
       } catch {
         console.log('[starter-blog] failed starter_blog_unexpected')
       }

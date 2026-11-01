@@ -76,23 +76,30 @@ describe('shouldAutoEnableBlog', () => {
 })
 
 describe('starterCardState', () => {
-  const base = { now, starterPending: true, waitExpired: false }
+  const base = { starterPending: true, waitExpired: false }
 
   it('preparing while the new site waits for its first post', () => {
     expect(starterCardState({ ...base, settings: { starterAutoEnabled: false }, posts: [] })).toBe('preparing')
   })
 
-  it('success once a starter post is live', () => {
-    expect(starterCardState({ ...base, settings: { starterAutoEnabled: false }, posts: [starter()] })).toBe('success')
+  it('success as soon as a starter post is generated, even if it is scheduled', () => {
+    const future = starter({ publishedAt: '2026-10-19T00:00:00Z' })
+    expect(starterCardState({ ...base, settings: { starterAutoEnabled: false }, posts: [future] })).toBe('success')
+  })
+
+  it('shows the ready notice on legacy sites with starter posts', () => {
+    expect(
+      starterCardState({ starterPending: false, waitExpired: true, settings: undefined, posts: [starter()] }),
+    ).toBe('success')
   })
 
   it('failed after the wait expires with no post', () => {
     expect(starterCardState({ ...base, waitExpired: true, settings: { starterAutoEnabled: false }, posts: [] })).toBe('failed')
   })
 
-  it('hidden once dismissed, for old sites, and while posts are loading', () => {
+  it('hidden once dismissed, for old sites without starter posts, and while posts are loading', () => {
     expect(starterCardState({ ...base, settings: { starterCardDismissed: true }, posts: [starter()] })).toBe('hidden')
-    expect(starterCardState({ ...base, starterPending: false, settings: undefined, posts: [starter()] })).toBe('hidden')
+    expect(starterCardState({ ...base, starterPending: false, settings: undefined, posts: [] })).toBe('hidden')
     expect(starterCardState({ ...base, settings: { starterAutoEnabled: false }, posts: undefined })).toBe('hidden')
   })
 })
@@ -166,7 +173,7 @@ describe('success card copy', () => {
   it('tr: reminds to republish and keeps the report link text', () => {
     const { lead, link, tail } = STARTER_CARD_COPY.tr.success
     expect(lead + link + tail).toBe(
-      'Blog makaleleriniz yayınlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize bildirin.',
+      'Blog yazılarınız hazırlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize bildirin.',
     )
     expect(link).toBe('bildirin')
   })
@@ -174,7 +181,7 @@ describe('success card copy', () => {
   it('en: reminds to republish and keeps the report link text', () => {
     const { lead, link, tail } = STARTER_CARD_COPY.en.success
     expect(lead + link + tail).toBe(
-      'Your blog posts are published. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please let us know.',
+      'Your blog posts are ready. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please let us know.',
     )
     expect(link).toBe('let us know')
   })
