@@ -50,7 +50,7 @@ function withoutLayoutFields(site: WebsiteSchema): WebsiteSchema {
   return copy
 }
 
-describe('live sites keep the exact same HTML (default hero style)', () => {
+describe('live sites preserve default hero styling while validating link targets', () => {
   for (const slug of LIVE_SITES) {
     it(`${slug}: every page`, async () => {
       const site = loadFixture(slug)
