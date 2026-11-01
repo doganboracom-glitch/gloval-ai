@@ -1,17 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { CATALOG_NOT_AVAILABLE, COMMERCE_NOT_AVAILABLE, type CommerceMode } from '@/lib/commerce-mode'
 
-/** Requires an authenticated user; returns the Supabase client + user id. */
+/** Requires an authenticated user; returns the RLS client + verified request identity. */
 export async function requireUser() {
+  const user = await requireRequestUser()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
-  return { supabase, userId: user.id }
+  return { supabase, userId: user.id, email: user.email }
 }
 
 /**
@@ -70,7 +68,7 @@ export function requireEcommerceMode(access: OwnedEcommerceAccess): void {
 }
 
 export async function requireOwnedEcommerceProject(projectId: string): Promise<OwnedEcommerceAccess> {
-  const { supabase, userId } = await requireUser()
+  const { supabase, userId, email } = await requireUser()
   const actorId = userId
 
   // Owner path (RLS): unchanged for normal users.
@@ -84,10 +82,7 @@ export async function requireOwnedEcommerceProject(projectId: string): Promise<O
   if (owned) return withCommerce({ supabase, userId, actorId, elevated: false }, projectId)
 
   // Admin path: verified admin editing another tenant's store.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (isAdminEmail(user?.email ?? null)) {
+  if (isAdminEmail(email)) {
     const admin = createAdminClient()
     const { data: proj, error: pErr } = await admin
       .from('projects')

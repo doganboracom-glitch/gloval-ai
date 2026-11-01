@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getRequestUser, authUnavailableActionResult, type AuthUnavailableActionResult } from '@/lib/supabase/request-user'
 import { clampSince, decidePaymentOutcome, type OutcomeRow, type PaymentOutcome } from '@/lib/payment-notice'
 
 /**
@@ -10,12 +10,13 @@ import { clampSince, decidePaymentOutcome, type OutcomeRow, type PaymentOutcome 
  * postMessage never reached this one. It only reads the user's own rows and
  * never changes any state.
  */
-export async function getPaymentOutcomeSince(sinceMs: number): Promise<PaymentOutcome> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return 'none'
+export async function getPaymentOutcomeSince(
+  sinceMs: number,
+): Promise<PaymentOutcome | AuthUnavailableActionResult> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return 'none'
+  const user = authState.user
 
   const sinceIso = new Date(clampSince(Number(sinceMs), Date.now())).toISOString()
   const admin = createAdminClient()

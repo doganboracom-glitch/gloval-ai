@@ -694,6 +694,7 @@ export function AddOnsPanel({
                 const since = paymentStartedAtRef.current ?? Date.now() - 60_000
                 void closePendingCheckout(since)
                   .then((outcome) => {
+                    if (typeof outcome !== 'string') return
                     if (outcome === 'paid') showResult()
                   })
                   .catch(() => {

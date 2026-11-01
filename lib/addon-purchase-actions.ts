@@ -2,7 +2,7 @@
 
 import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import { isAddOnCode } from '@/lib/add-ons'
@@ -50,6 +50,7 @@ export type PurchaseAddOnError =
 
 export type PurchaseAddOnResult =
   | { ok: true; purchaseId: string; redirectUrl: string }
+  | { ok: false; reason: 'auth_unavailable' }
   | { ok: false; error: PurchaseAddOnError; detail?: string; field?: BuyerField; profileFieldErrors?: Record<string, 'required' | 'invalid' | 'too_long'> }
 
 const ENTITLED_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due']
@@ -108,11 +109,10 @@ async function failPending(admin: AdminClient, userId: string, purchaseId: strin
 }
 
 export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<PurchaseAddOnResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+  const { user } = authState
 
   const addonCode = input?.addonCode
   if (!isAddOnCode(addonCode)) return { ok: false, error: 'invalid_addon' }

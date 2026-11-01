@@ -319,6 +319,7 @@ export function BillingClient({
       inFlight = true
       try {
         const outcome = await getPaymentOutcomeSince(pending.since)
+        if (typeof outcome !== 'string') return
         if (outcome === 'success' || outcome === 'failed') {
           applyPaymentOutcomeRef.current(outcome, pending.target)
         } else if (outcome === 'none') {
@@ -1576,11 +1577,12 @@ export function BillingClient({
               ? (item.notice ?? { kind: 'named', name: item.name })
               : null
             const since = paymentStartedAtRef.current ?? readPendingPayment()?.since ?? Date.now() - 60_000
-            void closePendingCheckout(since)
-              .then((outcome) => {
-                if (outcome === 'paid') applyPaymentOutcomeRef.current('success', target)
-                else if (outcome === 'abandoned') clearPendingPayment()
-              })
+              void closePendingCheckout(since)
+                .then((outcome) => {
+                  if (typeof outcome !== 'string') return
+                  if (outcome === 'paid') applyPaymentOutcomeRef.current('success', target)
+                  else if (outcome === 'abandoned') clearPendingPayment()
+                })
               .catch(() => {
                 // Transient; the cron and the focus check still reconcile it.
               })

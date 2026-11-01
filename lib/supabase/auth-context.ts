@@ -10,6 +10,13 @@ export const VERIFIED_USER_HEADERS = {
   email: 'x-gloval-auth-user-email',
   emailConfirmedAt: 'x-gloval-auth-user-email-confirmed-at',
   createdAt: 'x-gloval-auth-user-created-at',
+  phone: 'x-gloval-auth-user-phone',
+  metadataFirstName: 'x-gloval-auth-user-metadata-first-name',
+  metadataLastName: 'x-gloval-auth-user-metadata-last-name',
+  metadataFullName: 'x-gloval-auth-user-metadata-full-name',
+  metadataName: 'x-gloval-auth-user-metadata-name',
+  metadataFirstNameCamel: 'x-gloval-auth-user-metadata-firstname',
+  metadataLastNameCamel: 'x-gloval-auth-user-metadata-lastname',
 } as const
 
 export const VERIFIED_USER_HEADER_NAMES = Object.values(VERIFIED_USER_HEADERS)
@@ -34,6 +41,39 @@ export function setVerifiedUserHeaders(
     user.email_confirmed_at ?? '',
   )
   headers.set(VERIFIED_USER_HEADERS.createdAt, user.created_at ?? '')
+  headers.set(VERIFIED_USER_HEADERS.phone, encodeURIComponent(user.phone ?? ''))
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataFirstName,
+    encodeURIComponent(user.user_metadata?.first_name ?? ''),
+  )
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataLastName,
+    encodeURIComponent(user.user_metadata?.last_name ?? ''),
+  )
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataFullName,
+    encodeURIComponent(user.user_metadata?.full_name ?? ''),
+  )
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataName,
+    encodeURIComponent(user.user_metadata?.name ?? ''),
+  )
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataFirstNameCamel,
+    encodeURIComponent(user.user_metadata?.firstName ?? ''),
+  )
+  headers.set(
+    VERIFIED_USER_HEADERS.metadataLastNameCamel,
+    encodeURIComponent(user.user_metadata?.lastName ?? ''),
+  )
+}
+
+function decodeHeader(headers: HeaderReader, name: string): string | null {
+  try {
+    return decodeURIComponent(headers.get(name) ?? '') || null
+  } catch {
+    return null
+  }
 }
 
 export function getVerifiedUserFromHeaders(
@@ -44,12 +84,25 @@ export function getVerifiedUserFromHeaders(
   const id = headers.get(VERIFIED_USER_HEADERS.id)
   if (!id) return null
 
-  let email: string | null = null
+  let email: string | null
   try {
     email = decodeURIComponent(headers.get(VERIFIED_USER_HEADERS.email) ?? '') || null
   } catch {
     return null
   }
+
+  const userMetadata = {
+    first_name: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataFirstName),
+    last_name: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataLastName),
+    full_name: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataFullName),
+    name: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataName),
+    firstName: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataFirstNameCamel),
+    lastName: decodeHeader(headers, VERIFIED_USER_HEADERS.metadataLastNameCamel),
+  }
+  const filteredMetadata = Object.fromEntries(
+    Object.entries(userMetadata).filter(([, value]) => value !== null),
+  ) as NonNullable<AuthUserSummary['user_metadata']>
+  const phone = decodeHeader(headers, VERIFIED_USER_HEADERS.phone)
 
   return {
     id,
@@ -57,5 +110,7 @@ export function getVerifiedUserFromHeaders(
     email_confirmed_at:
       headers.get(VERIFIED_USER_HEADERS.emailConfirmedAt) || null,
     created_at: headers.get(VERIFIED_USER_HEADERS.createdAt) || null,
+    ...(phone ? { phone } : {}),
+    ...(Object.keys(filteredMetadata).length > 0 ? { user_metadata: filteredMetadata } : {}),
   }
 }

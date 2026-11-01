@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AURA_CURSOR_CODE } from '@/lib/billing-utils'
 import {
@@ -32,6 +33,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export type OwnerAuraError =
   | 'unauthenticated'
+  | 'auth_unavailable'
   | 'invalid_site'
   | 'not_entitled'
   | 'invalid_aura'
@@ -42,11 +44,11 @@ type Authorized = { ok: true } | { ok: false; error: OwnerAuraError }
 async function authorizeOwner(projectId: string): Promise<Authorized> {
   if (typeof projectId !== 'string' || !UUID_RE.test(projectId)) return { ok: false, error: 'invalid_site' }
 
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return { ok: false, error: 'auth_unavailable' }
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+  const { user } = authState
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
 
   const { data: project } = await supabase
     .from('projects')

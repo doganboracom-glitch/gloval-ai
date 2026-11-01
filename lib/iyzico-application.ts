@@ -1,7 +1,7 @@
 'use server'
 
 import { authorizeProjectOwner } from '@/lib/store-payments/owner-auth'
-import { createClient } from '@/lib/supabase/server'
+import { AuthUnavailableError, getRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getIyzicoSettings, type IyzicoSettingsView } from '@/lib/store-payments/iyzico-settings'
 import { isOnboardingStoreReady } from '@/lib/iyzico-onboarding-store'
@@ -99,17 +99,17 @@ export async function getIyzicoApplicationOverview(projectId: string): Promise<A
   const siteUrl = live && project.slug ? tenantUrl(project.slug) : null
 
   const admin = createAdminClient()
-  const [probe, iyzico, stateRow, storeReady, supabase] = await Promise.all([
+  const [probe, iyzico, stateRow, storeReady] = await Promise.all([
     siteUrl ? probeSite(siteUrl) : Promise.resolve(null),
     getIyzicoSettings(projectId),
     admin.from('ecommerce_payment_settings').select('public_config').eq('project_id', projectId).maybeSingle(),
     isOnboardingStoreReady(),
-    createClient(),
   ])
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const metadata = (user?.user_metadata ?? {}) as Record<string, unknown>
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') throw new AuthUnavailableError()
+  if (authState.kind === 'unauthenticated') throw new Error('UNAUTHENTICATED')
+  const { user } = authState
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
 
   return {
     items: evaluateSiteReadiness({

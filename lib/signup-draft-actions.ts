@@ -1,6 +1,7 @@
 'use server'
 
 import { cookies, headers } from 'next/headers'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { validateEmail } from '@/lib/email-validation'
@@ -64,7 +65,7 @@ export async function restoreSignupIdeaFromCookie(): Promise<SignupIdeaRestoreRe
 
 export type PersistSignupIdeaResult =
   | { status: 'idea'; prompt: string }
-  | { status: 'unauthenticated' | 'invalid' | 'error' }
+  | { status: 'unauthenticated' | 'auth_unavailable' | 'invalid' | 'error' }
 
 export async function persistSignupIdeaForCurrentUser(
   rawPrompt: string,
@@ -73,11 +74,11 @@ export async function persistSignupIdeaForCurrentUser(
   if (!isSignupIdeaDraftPayload(payload)) return { status: 'invalid' }
 
   try {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.getUser()
-    if (error || !data.user?.email) return { status: 'unauthenticated' }
+    const authState = await getRequestUser()
+    if (authState.kind === 'unavailable') return { status: 'auth_unavailable' }
+    if (authState.kind === 'unauthenticated' || !authState.user.email) return { status: 'unauthenticated' }
 
-    const parked = await parkDraftForEmail(data.user.email, payload)
+    const parked = await parkDraftForEmail(authState.user.email, payload)
     if (!parked.ok) return { status: 'error' }
 
     const cookieStore = await cookies()
@@ -137,6 +138,7 @@ export type ResumeResult =
   | { status: 'idea'; prompt: string }
   | { status: 'busy' }
   | { status: 'unauthenticated' }
+  | { status: 'auth_unavailable' }
   | { status: 'invalid' }
   | { status: 'error' }
 
@@ -146,10 +148,11 @@ export type ResumeResult =
  */
 export async function resumeSignupDraft(token: string): Promise<ResumeResult> {
   if (!isValidClaimToken(token)) return { status: 'invalid' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return { status: 'auth_unavailable' }
+  if (authState.kind === 'unauthenticated' || !authState.user.email) return { status: 'unauthenticated' }
+  const user = authState.user
   const supabase = await createClient()
-  const { data } = await supabase.auth.getUser()
-  const user = data.user
-  if (!user?.email) return { status: 'unauthenticated' }
 
   const clearTemporarySignupMetadata = async () => {
     if (user.user_metadata?.signup_draft_token !== token) return

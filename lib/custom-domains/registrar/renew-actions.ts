@@ -3,7 +3,7 @@
 import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult, type AuthUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireOk, warnOnError } from '@/lib/db-guard'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
@@ -18,15 +18,6 @@ import { finalizeRenewal, getLatestRenewal, quoteRenewal, type RenewalView } fro
  * the client. The provider Renew call itself happens only in `finalizeRenewal`,
  * after the payment has been confirmed.
  */
-
-async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-  return { userId: user.id, email: user.email ?? '' }
-}
 
 async function resolveClientIp(): Promise<string> {
   try {
@@ -55,12 +46,14 @@ export type RenewalQuoteView = {
 
 export type RenewalQuoteResponse =
   | { ok: true; quote: RenewalQuoteView }
+  | AuthUnavailableActionResult
   | { ok: false; error: DomainErrorCode }
 
 export async function getMyRenewalQuote(domain: string, years: number): Promise<RenewalQuoteResponse> {
-  const user = await requireUser()
-  if (!user) return { ok: false, error: 'UNAUTHENTICATED' }
-  const result = await quoteRenewal(user.userId, domain, years)
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'UNAUTHENTICATED' }
+  const result = await quoteRenewal(authState.user.id, domain, years)
   if (!result.ok) return result
   const q = result.quote
   return {
@@ -80,6 +73,7 @@ export async function getMyRenewalQuote(domain: string, years: number): Promise<
 
 export type StartRenewalResult =
   | { ok: true; renewalId: string; redirectUrl?: string }
+  | AuthUnavailableActionResult
   | { ok: false; error: DomainErrorCode }
 
 export async function startMyDomainRenewal(
@@ -88,11 +82,15 @@ export async function startMyDomainRenewal(
   consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
 ): Promise<StartRenewalResult> {
-  const user = await requireUser()
-  if (!user) return { ok: false, error: 'UNAUTHENTICATED' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'UNAUTHENTICATED' }
+  const { user } = authState
+  const userId = user.id
+  const email = user.email ?? ''
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
 
-  const result = await quoteRenewal(user.userId, domain, years)
+  const result = await quoteRenewal(userId, domain, years)
   if (!result.ok) return result
   const quote = result.quote
 
@@ -105,7 +103,7 @@ export async function startMyDomainRenewal(
   const { data: row, error: insertErr } = await admin
     .from('domain_renewals')
     .insert({
-      user_id: user.userId,
+      user_id: userId,
       domain: quote.domain,
       tld: quote.tld,
       period_years: quote.years,
@@ -132,7 +130,7 @@ export async function startMyDomainRenewal(
       currency,
       customerEmail: user.email,
       returnUrl: `/dashboard/domains`,
-      publicConfig: await resolvePlatformBuyerPublicConfig(user.userId),
+      publicConfig: await resolvePlatformBuyerPublicConfig(userId),
     })
   } catch {
     warnOnError(
@@ -167,7 +165,7 @@ export async function startMyDomainRenewal(
     'domainRenewal.recordTransaction',
     await admin.from('billing_transactions').upsert(
       {
-        user_id: user.userId,
+        user_id: userId,
         kind: 'charge',
         amount_cents: priceCents,
         currency,
@@ -199,8 +197,11 @@ export async function startMyDomainRenewal(
   return { ok: true, renewalId: row.id, redirectUrl: intent.redirectUrl }
 }
 
-export async function getMyLatestRenewal(domain: string): Promise<RenewalView | null> {
-  const user = await requireUser()
-  if (!user) return null
-  return getLatestRenewal(user.userId, domain)
+export async function getMyLatestRenewal(
+  domain: string,
+): Promise<RenewalView | null | AuthUnavailableActionResult> {
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return null
+  return getLatestRenewal(authState.user.id, domain)
 }

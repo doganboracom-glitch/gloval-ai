@@ -4,7 +4,7 @@ import { resolvePlatformBuyerPublicConfig } from '@/lib/platform-buyer'
 import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
 import { reportPaymentInitFailure } from '@/lib/payments/init-failure-report'
@@ -34,6 +34,7 @@ async function resolveClientIp(): Promise<string> {
 
 export type PurchaseCreditTopUpResult =
   | { ok: true; redirectUrl?: string }
+  | { ok: false; reason: 'auth_unavailable' }
   | {
       ok: false
       error:
@@ -67,11 +68,10 @@ export async function purchaseCreditTopUp(
   const pack = getCreditTopUp(packId)
   if (!pack) return { ok: false, error: 'not_found' }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
+  const authState = await getRequestUser()
+  if (authState.kind === 'unavailable') return authUnavailableActionResult()
+  if (authState.kind === 'unauthenticated') return { ok: false, error: 'unauthenticated' }
+  const { user } = authState
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
 
   const admin = createAdminClient()

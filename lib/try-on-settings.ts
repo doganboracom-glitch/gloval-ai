@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 
@@ -18,11 +19,8 @@ import { isAdminEmail } from '@/lib/mail/admin-guard'
 
 /** Verifies the caller owns the project (or is an admin) and returns owner id. */
 async function authorizeProjectOwner(projectId: string): Promise<string> {
+  const user = await requireRequestUser()
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('UNAUTHENTICATED')
 
   const { data: owned } = await supabase
     .from('projects')

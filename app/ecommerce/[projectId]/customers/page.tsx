@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { StoreNotEnabled } from '@/components/ecommerce/store-not-enabled'
 import { getProject } from '@/lib/projects'
@@ -20,6 +21,7 @@ export default async function CustomersPage({
   const query = await searchParams
 
   const access = await resolveCustomersPageAccess(projectId)
+  if (access === 'unavailable') return <AuthUnavailableNotice />
   if (access === 'login') redirect(`/auth/login?next=/ecommerce/${projectId}/customers`)
   if (access === 'not_found') notFound()
 
