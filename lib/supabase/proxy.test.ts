@@ -22,8 +22,9 @@ const user = {
   created_at: '2025-01-01T00:00:00.000Z',
 }
 
-function request(path: string) {
+function request(path: string, method = 'GET') {
   return new NextRequest(`https://gloval.ai${path}`, {
+    method,
     headers: { host: 'gloval.ai' },
   })
 }
@@ -59,6 +60,40 @@ describe('updateSession authentication availability', () => {
     },
   )
 
+  it.each([
+    '/dashboard',
+    '/editor/project-1',
+    '/billing',
+    '/ecommerce/project-1',
+    '/ads/dashboard',
+    '/support',
+    '/settings',
+    '/admin',
+    '/admin/emails/preview',
+  ])('blocks auth-gated route %s with 503 and never redirects during Auth throttling', async (path) => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: statusError(429) })
+
+    const response = await updateSession(request(path))
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('Retry-After')).toBe('5')
+    expect(response.headers.get('Location')).toBeNull()
+    expect(mocks.from).not.toHaveBeenCalled()
+  })
+
+  it.each(['/billing', '/billing/add-ons'])(
+    'blocks payment-action POST %s before its page handler when Auth is unavailable',
+    async (path) => {
+      mocks.getUser.mockResolvedValue({ data: { user: null }, error: statusError(429) })
+
+      const response = await updateSession(request(path, 'POST'))
+
+      expect(response.status).toBe(503)
+      expect(response.headers.get('Retry-After')).toBe('5')
+      expect(response.headers.get('Location')).toBeNull()
+    },
+  )
+
   it('returns 503 when the Auth request rejects at the network layer', async () => {
     mocks.getUser.mockRejectedValue(new TypeError('fetch failed'))
 
@@ -82,7 +117,7 @@ describe('updateSession authentication availability', () => {
     expect(response.headers.get('Location')).toBeNull()
   })
 
-  it('redirects a protected route only when there is no valid session', async () => {
+  it('redirects a cookie-less protected request to login', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null })
 
     const response = await updateSession(request('/dashboard'))

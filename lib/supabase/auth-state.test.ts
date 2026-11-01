@@ -34,6 +34,17 @@ describe('classifyAuthResult', () => {
     })
   })
 
+  it('treats Supabase AuthSessionMissingError as unauthenticated for a cookie-less request', () => {
+    const error = Object.assign(new Error('Auth session missing!'), {
+      name: 'AuthSessionMissingError',
+      status: 400,
+    })
+
+    expect(classifyAuthResult({ data: { user: null }, error })).toEqual({
+      kind: 'unauthenticated',
+    })
+  })
+
   it.each([
     authError('JWT expired', 401),
     authError('Invalid token', 400, 'bad_jwt'),
