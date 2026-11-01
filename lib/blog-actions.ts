@@ -145,6 +145,7 @@ export async function addStarterBlogPostsAction(
   })
   if (result.status === 'created') {
     refresh(access.slug)
+    scheduleStarterBlogReadyEmail({ projectId, userId: access.ownerId })
     return { ok: true, posts: result.posts, failed: result.failed }
   }
   if (result.status === 'skipped') return { ok: false, reason: result.reason }

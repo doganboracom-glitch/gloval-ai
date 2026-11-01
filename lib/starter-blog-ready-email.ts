@@ -1,5 +1,3 @@
-'use server'
-
 import 'server-only'
 import { PLATFORM_CANONICAL_HOST } from '@/lib/domains'
 import { renderEmailLayout, escape } from '@/lib/email/layout'
@@ -36,12 +34,12 @@ export function buildStarterBlogReadyEmail(projectId: string) {
 }
 
 export async function sendStarterBlogReadyEmail(args: { projectId: string; userId: string }): Promise<void> {
-  const email = buildStarterBlogReadyEmail(args.projectId)
   const dedupeKey = starterBlogReadyEmailDedupeKey(args.projectId)
   let admin: ReturnType<typeof createAdminClient> | null = null
   let claimed = false
 
   try {
+    const email = buildStarterBlogReadyEmail(args.projectId)
     admin = createAdminClient()
     const { data, error: userError } = await admin.auth.admin.getUserById(args.userId)
     const recipient = data.user?.email

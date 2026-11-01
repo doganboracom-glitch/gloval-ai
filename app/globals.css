@@ -175,7 +175,7 @@
   * {
     @apply border-border outline-ring/50;
   }
-  button:enabled,
+  button:enabled:not([aria-disabled='true']),
   a[href]:not([aria-disabled='true']),
   [role='button']:not([aria-disabled='true']):not([disabled]) {
     @apply cursor-pointer;

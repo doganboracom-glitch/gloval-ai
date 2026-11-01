@@ -187,7 +187,7 @@ const dict = {
       hint: 'Bu, yapay zekanın ürettiği yapıdan oluşturulan gerçek bir web sitesidir.',
       supportNotice: {
         title: 'Önemli bilgilendirme',
-        body: 'Bu web sitesi yapay zeka ile oluşturulmuştur. Talep ettiğiniz ek özellik veya modül (canlı yayın oynatıcı, özel listeler, entegrasyonlar vb.) sitenizde aktif değilse Teknik Ekibimizden talepte bulunabilirsiniz. İhtiyacınıza göre özel geliştirme ek ücretle yapılabilir.',
+        body: 'Bu web sitesi yapay zekâ tarafından oluşturulmuştur. İstediğiniz ek özellik veya modül (canlı yayın oynatıcı, özel listeler, entegrasyonlar vb.) sitenizde etkin değilse, Teknik Ekibimize destek talebi oluşturabilirsiniz. İhtiyacınıza göre özel geliştirme ek ücret karşılığında yapılabilir.',
         cta: 'Destek talebi oluştur',
         dismiss: 'Bilgilendirmeyi kapat',
       },
