@@ -84,7 +84,8 @@ const de: DeepPartial<Dict> = {
     hint: 'Dies ist eine echte, aus der KI-generierten Struktur erstellte Website.',
     supportNotice: {
       title: 'Wichtiger Hinweis',
-      body: 'Diese Website wurde mit KI erstellt. Wenn eine gewünschte Zusatzfunktion oder ein Modul (z. B. ein Livestream-Player, individuelle Listen oder Integrationen) auf Ihrer Website nicht aktiviert ist, können Sie eine Anfrage bei unserem technischen Team stellen. Eine individuelle Entwicklung ist je nach Bedarf gegen Aufpreis möglich.',
+      body: 'Diese Website wurde mit KI erstellt. Wenn eine gewünschte Zusatzfunktion oder ein Modul (z. B. ein Livestream-Player, eine individuelle Liste oder eine Integration) nicht aktiviert ist, können Sie eine Anfrage an unser technisches Team senden; individuelle Entwicklung kann je nach Bedarf kostenpflichtig oder kostenlos sein.',
+      supportLink: 'Support',
       cta: 'Supportanfrage erstellen',
       dismiss: 'Hinweis schließen',
     },

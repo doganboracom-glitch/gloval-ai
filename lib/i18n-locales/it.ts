@@ -84,7 +84,8 @@ const it: DeepPartial<Dict> = {
     hint: 'Questo è un sito reale generato dalla struttura creata dall\u2019IA.',
     supportNotice: {
       title: 'Informazione importante',
-      body: "Questo sito web è stato creato con l'IA. Se una funzionalità o un modulo aggiuntivo richiesto (come un lettore per le dirette, elenchi personalizzati o integrazioni) non è attivo sul tuo sito, puoi richiederlo al nostro team tecnico. Lo sviluppo su misura può comportare un costo aggiuntivo in base alle tue esigenze.",
+      body: "Questo sito web è stato creato con l'IA. Se una funzionalità o un modulo aggiuntivo richiesto (come un lettore per le dirette, un elenco personalizzato o un'integrazione) non è attivo, puoi inviare una richiesta al nostro team tecnico; lo sviluppo su misura può essere a pagamento o gratuito in base alle tue esigenze.",
+      supportLink: 'Supporto',
       cta: 'Crea una richiesta di supporto',
       dismiss: "Chiudi l'avviso",
     },

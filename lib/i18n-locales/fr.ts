@@ -86,7 +86,8 @@ const fr: DeepPartial<Dict> = {
     hint: 'Il s’agit d’un vrai site web généré à partir de la structure créée par l’IA.',
     supportNotice: {
       title: 'Information importante',
-      body: "Ce site web a été créé avec l'IA. Si la fonctionnalité ou le module supplémentaire demandé (lecteur de diffusion en direct, listes personnalisées, intégrations, etc.) n'est pas activé sur votre site, vous pouvez en faire la demande à notre équipe technique. Un développement sur mesure peut être proposé avec des frais supplémentaires, selon vos besoins.",
+      body: 'Ce site web a été créé avec l’IA. Si une fonctionnalité ou un module supplémentaire demandé (lecteur de diffusion en direct, liste personnalisée, intégration, etc.) n’est pas activé, vous pouvez envoyer une demande à notre équipe technique ; le développement sur mesure peut être payant ou gratuit selon vos besoins.',
+      supportLink: 'Assistance',
       cta: "Créer une demande d'assistance",
       dismiss: 'Fermer cette information',
     },
