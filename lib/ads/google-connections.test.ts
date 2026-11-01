@@ -81,8 +81,19 @@ function provider(refresh: GoogleAdsProvider['refreshAccessTokenWithRotation']):
       totals: { impressions: 0, clicks: 0, costMicros: 0, conversions: 0 },
       campaigns: [],
     }),
-    publishCampaign: async () => ({ externalCampaignId: '', status: 'paused' }),
-    setCampaignStatus: async () => {},
+    verifyBilling: async () => ({ verified: true, paymentMethodWarning: false }),
+    publishCampaign: async () => ({
+      externalCampaignId: '12345',
+      status: 'paused',
+      validateOnly: false,
+      billingVerified: true,
+      paymentMethodWarning: false,
+    }),
+    setCampaignStatus: async ({ status }) => ({
+      status,
+      billingVerified: null,
+      paymentMethodWarning: false,
+    }),
     revoke: async () => {},
   }
 }

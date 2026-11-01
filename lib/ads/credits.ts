@@ -31,6 +31,14 @@ export type AdsChargeResult =
 
 export type AdsRefundResult = { refunded: boolean; balance: number; refundedAmount: number }
 
+export type AdsPublishBeginResult =
+  | { ok: true; balance: number; alreadyCharged: boolean; chargedAmount: number }
+  | {
+      ok: false
+      reason: 'insufficient_credits' | 'publish_in_progress' | 'plan_not_approved' | 'plan_not_found' | 'reservation_failed'
+      balance: number
+    }
+
 function defaultClient(): AdsRpcClient {
   return createAdminClient() as unknown as AdsRpcClient
 }
@@ -73,6 +81,50 @@ export async function chargeAdsCredits(
     chargedAmount: row.charged_amount ?? 0,
     reason,
   }
+}
+
+/** Atomically charges 15 publish credits and claims the approved plan for one create attempt. */
+export async function beginAdsPublish(
+  userId: string,
+  planId: string,
+  requestId: string,
+  client: AdsRpcClient = defaultClient(),
+): Promise<AdsPublishBeginResult> {
+  adsChargeReason('publish', requestId)
+  const { data, error } = await client
+    .rpc('ads_begin_google_ads_publish', {
+      p_user_id: userId,
+      p_plan_id: planId,
+      p_request_id: requestId,
+    })
+    .maybeSingle()
+
+  if (error || !data) {
+    console.error('[ads-credits] publish reservation failed:', error?.message ?? 'no row')
+    return { ok: false, reason: 'reservation_failed', balance: 0 }
+  }
+
+  const row = data as {
+    state: string
+    balance: number
+    already_charged: boolean
+    charged_amount: number
+  }
+  const balance = row.balance ?? 0
+  if (row.state === 'started') {
+    return {
+      ok: true,
+      balance,
+      alreadyCharged: Boolean(row.already_charged),
+      chargedAmount: row.charged_amount ?? ADS_CREDIT_COSTS.publish,
+    }
+  }
+  if (row.state === 'insufficient_credits') return { ok: false, reason: 'insufficient_credits', balance }
+  if (row.state === 'in_progress' || row.state === 'already_published') {
+    return { ok: false, reason: 'publish_in_progress', balance }
+  }
+  if (row.state === 'not_found') return { ok: false, reason: 'plan_not_found', balance }
+  return { ok: false, reason: 'plan_not_approved', balance }
 }
 
 /**

@@ -19,7 +19,36 @@ function allowedPath(method: GoogleAdsApiMethod, path: string): boolean {
   if (method === 'googleAds.search' || method === 'googleAds.searchStream') {
     return /^customers\/\d{6,20}\/googleAds:(?:search|searchStream)$/.test(path)
   }
+  if (method === 'googleAds.mutate') return /^customers\/\d{6,20}\/googleAds:mutate$/.test(path)
   return false
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+const MUTATE_OPERATION_TYPES = [
+  'campaignBudgetOperation',
+  'campaignOperation',
+  'adGroupOperation',
+  'campaignCriterionOperation',
+  'adGroupCriterionOperation',
+  'adGroupAdOperation',
+] as const
+
+function mutateOperationCount(body: unknown): number | null {
+  const request = record(body)
+  if (!request || request.partialFailure !== false || typeof request.validateOnly !== 'boolean') return null
+  if (!Array.isArray(request.mutateOperations) || request.mutateOperations.length < 1 || request.mutateOperations.length > 100) {
+    return null
+  }
+  for (const operation of request.mutateOperations) {
+    const value = record(operation)
+    if (!value) return null
+    const kinds = MUTATE_OPERATION_TYPES.filter((kind) => Object.hasOwn(value, kind))
+    if (kinds.length !== 1 || !record(value[kinds[0]])) return null
+  }
+  return request.mutateOperations.length
 }
 
 function responseError(payload: unknown): { status: string; message: string; dailyQuota: boolean; temporary: boolean } {
@@ -82,14 +111,24 @@ export function createGoogleAdsApiTransport(input: {
       throw new GoogleAdsError('invalid_request')
     }
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const isMutation = call.method === 'googleAds.mutate'
+    const operationCount = isMutation ? mutateOperationCount(call.body) : 1
+    if (isMutation && operationCount === null) throw new GoogleAdsError('invalid_request')
+    const maxAttempts = isMutation ? 1 : 3
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const requestId = randomUUID()
-      const { data, error } = await admin.rpc('ads_reserve_google_api_operation', {
+      const reserveArgs: Record<string, unknown> = {
         p_request_id: requestId,
         p_user_id: input.userId,
         p_connection_id: input.connectionId,
         p_method: call.method,
-      })
+      }
+      if (isMutation) reserveArgs.p_operation_count = operationCount
+      const { data, error } = await admin.rpc(
+        isMutation ? 'ads_reserve_google_api_operation_v2' : 'ads_reserve_google_api_operation',
+        reserveArgs,
+      )
 
       const reservation = Array.isArray(data) ? data[0] : data
       if (error || !reservation || typeof reservation.allowed !== 'boolean') {
@@ -114,7 +153,7 @@ export function createGoogleAdsApiTransport(input: {
         payload = await response.json().catch(() => null)
       } catch {
         await recordOutcome(admin, requestId, 'error', 'network_error')
-        if (attempt < 3) {
+        if (attempt < maxAttempts) {
           await delay(retryDelay(attempt, null))
           continue
         }
@@ -132,7 +171,7 @@ export function createGoogleAdsApiTransport(input: {
         throw new GoogleAdsError('api_quota_exceeded')
       }
 
-      const shouldRetry = (response.status === 429 || response.status >= 500) &&
+      const shouldRetry = !isMutation && (response.status === 429 || response.status >= 500) &&
         (providerError.temporary || response.status >= 500 || response.status === 429)
       await recordOutcome(
         admin,

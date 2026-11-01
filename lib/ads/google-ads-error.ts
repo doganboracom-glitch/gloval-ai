@@ -22,6 +22,10 @@ export type GoogleAdsErrorCode =
   | 'account_list_failed'
   | 'provider_unavailable'
   | 'provider_error'
+  | 'invalid_publish_plan'
+  | 'invalid_budget'
+  | 'currency_mismatch'
+  | 'publish_disabled'
   | 'disconnect_failed'
 
 export class GoogleAdsError extends Error {
@@ -58,10 +62,14 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'connection_busy':
       return 409
     case 'configuration_missing':
+    case 'publish_disabled':
       return 503
     case 'api_quota_exceeded':
       return 429
     case 'invalid_request':
+    case 'invalid_publish_plan':
+    case 'invalid_budget':
+    case 'currency_mismatch':
     case 'oauth_denied':
     case 'refresh_token_missing':
     case 'scope_missing':

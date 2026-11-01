@@ -5,7 +5,9 @@ import {
   type AdsCampaignPerformance,
   type AdsCampaignPublishInput,
   type AdsCampaignPublishResult,
+  type AdsCampaignStatusResult,
   type AdsPerformanceSummary,
+  type GoogleAdsBillingVerification,
   type AdsProvider,
   type AdsTokenSet,
   type GoogleAdsDateRange,
@@ -13,6 +15,12 @@ import {
   type GoogleAdsRefreshResult,
 } from '@/lib/ads/providers/types'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
+import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import {
+  buildGoogleAdsMutateRequest,
+  readGoogleAdsCampaignId,
+  type GoogleAdsMutateRequest,
+} from '@/lib/ads/google-ads-publish-plan'
 
 export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords'
 export const GOOGLE_ADS_API_VERSION = 'v26'
@@ -27,13 +35,14 @@ export type GoogleAdsApiMethod =
   | 'customers.listAccessibleCustomers'
   | 'googleAds.search'
   | 'googleAds.searchStream'
+  | 'googleAds.mutate'
 
 export type GoogleAdsApiCall = {
   method: GoogleAdsApiMethod
   path: string
   accessToken: string
   loginCustomerId: string | null
-  body?: { query: string }
+  body?: { query: string } | GoogleAdsMutateRequest
   context: AdsApiOperationContext
 }
 
@@ -154,6 +163,10 @@ function requireClientSecret(config: GoogleAdsProviderConfig): string {
 function requireApiTransport(config: GoogleAdsProviderConfig): GoogleAdsApiTransport {
   if (!config.requestAdsApi) throw new GoogleAdsError('configuration_missing')
   return config.requestAdsApi
+}
+
+function requirePublishAccess(userId: string): void {
+  if (!resolveGoogleAdsPublishAccess(userId)) throw new GoogleAdsError('publish_disabled')
 }
 
 function handleProviderError(error: unknown): never {
@@ -342,7 +355,39 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     }
   }
 
-  const getPerformance: GoogleAdsProvider['getPerformance'] = async ({
+  const verifyBilling: GoogleAdsProvider['verifyBilling'] = async ({
+    accessToken,
+    customerId,
+    loginCustomerId,
+    context,
+  }): Promise<GoogleAdsBillingVerification> => {
+    const notVerified = { verified: false, paymentMethodWarning: true }
+    const normalizedCustomerId = normalizeCustomerId(customerId)
+    if (!normalizedCustomerId || !accessToken) return notVerified
+    if (loginCustomerId && !normalizeCustomerId(loginCustomerId)) return notVerified
+
+    try {
+      const payload = await requireApiTransport(config)({
+        method: 'googleAds.searchStream',
+        path: `customers/${normalizedCustomerId}/googleAds:searchStream`,
+        accessToken,
+        loginCustomerId: loginCustomerId ? normalizeCustomerId(loginCustomerId) : null,
+        body: {
+          query: "SELECT billing_setup.status FROM billing_setup WHERE billing_setup.status = 'APPROVED' LIMIT 1",
+        },
+        context,
+      })
+      const verified = searchRows(payload).some((row) => {
+        const setup = asRecord(row.billingSetup ?? row.billing_setup)
+        return setup?.status === 'APPROVED'
+      })
+      return { verified, paymentMethodWarning: !verified }
+    } catch {
+      return notVerified
+    }
+  }
+
+  const getPerformance: GoogleAdsProvider['getPerformance'] = async ({ 
     accessToken,
     customerId,
     loginCustomerId,
@@ -451,14 +496,109 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
 
     listAccountsForUser,
     getPerformance,
+    verifyBilling,
 
-    async publishCampaign(_input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {
-      notImplemented('campaign publishing')
+    async publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {
+      requirePublishAccess(input.context.userId)
+      const customerId = normalizeCustomerId(input.externalAccountId)
+      if (!customerId || !input.accessToken || !input.context.connectionId) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (input.loginCustomerId && !normalizeCustomerId(input.loginCustomerId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.planId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+
+      const body = buildGoogleAdsMutateRequest({
+        customerId,
+        requestId: input.requestId,
+        planJson: input.planJson,
+        dailyBudgetMinor: input.budget.dailyMinor,
+        budgetCapMinor: input.budget.capMinor,
+        currency: input.budget.currency,
+        validateOnly: input.validateOnly,
+      })
+      const billing = await verifyBilling({
+        accessToken: input.accessToken,
+        customerId,
+        loginCustomerId: input.loginCustomerId,
+        context: input.context,
+      })
+
+      try {
+        const payload = await requireApiTransport(config)({
+          method: 'googleAds.mutate',
+          path: `customers/${customerId}/googleAds:mutate`,
+          accessToken: input.accessToken,
+          loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+          body,
+          context: input.context,
+        })
+        const externalCampaignId = input.validateOnly ? null : readGoogleAdsCampaignId(payload)
+        if (!input.validateOnly && !externalCampaignId) throw new GoogleAdsError('provider_unavailable')
+        return {
+          externalCampaignId,
+          status: 'paused',
+          validateOnly: input.validateOnly,
+          billingVerified: billing.verified,
+          paymentMethodWarning: billing.paymentMethodWarning,
+        }
+      } catch (error) {
+        handleProviderError(error)
+      }
     },
 
-    async setCampaignStatus() {
-      notImplemented('campaign status changes')
+    async setCampaignStatus(input): Promise<AdsCampaignStatusResult> {
+      requirePublishAccess(input.context.userId)
+      const customerId = normalizeCustomerId(input.externalAccountId)
+      if (!customerId || !input.accessToken || !input.context.connectionId) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (input.loginCustomerId && !normalizeCustomerId(input.loginCustomerId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (!/^\d{1,20}$/.test(input.externalCampaignId)) throw new GoogleAdsError('invalid_request')
+
+      const billing = input.status === 'enabled'
+        ? await verifyBilling({
+            accessToken: input.accessToken,
+            customerId,
+            loginCustomerId: input.loginCustomerId,
+            context: input.context,
+          })
+        : null
+      const resourceName = `customers/${customerId}/campaigns/${input.externalCampaignId}`
+
+      try {
+        await requireApiTransport(config)({
+          method: 'googleAds.mutate',
+          path: `customers/${customerId}/googleAds:mutate`,
+          accessToken: input.accessToken,
+          loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+          body: {
+            mutateOperations: [{
+              campaignOperation: {
+                update: { resourceName, status: input.status === 'enabled' ? 'ENABLED' : 'PAUSED' },
+                updateMask: 'status',
+              },
+            }],
+            partialFailure: false,
+            validateOnly: false,
+          },
+          context: input.context,
+        })
+        return {
+          status: input.status,
+          billingVerified: billing?.verified ?? null,
+          paymentMethodWarning: billing?.paymentMethodWarning ?? false,
+        }
+      } catch (error) {
+        handleProviderError(error)
+      }
     },
+
 
     revoke(refreshToken) {
       return revokeGoogleAdsRefreshToken(refreshToken, fetcher)

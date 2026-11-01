@@ -7,7 +7,8 @@ import type { AdsRpcClient } from '@/lib/ads/credits'
 
 export type AnonCapAlertKind = 'anon_global_cap_50' | 'anon_global_cap'
 export type PolicyBlockAlertKind = 'policy_block_global_cap'
-export type AdsAlertKind = AnonCapAlertKind | PolicyBlockAlertKind
+export type GooglePublishAlertKind = 'google_publish_reconciling'
+export type AdsAlertKind = AnonCapAlertKind | PolicyBlockAlertKind | GooglePublishAlertKind
 
 export const ANON_CAP_ALERT_KIND = {
   half: 'anon_global_cap_50',
@@ -15,6 +16,7 @@ export const ANON_CAP_ALERT_KIND = {
 } as const satisfies Record<string, AnonCapAlertKind>
 
 export const POLICY_BLOCK_CAP_ALERT_KIND: PolicyBlockAlertKind = 'policy_block_global_cap'
+export const GOOGLE_PUBLISH_RECONCILING_ALERT_KIND: GooglePublishAlertKind = 'google_publish_reconciling'
 
 /** Number of anonymous free actions at which the 50 % warning fires. */
 export function halfCapThreshold(cap: number): number {
@@ -99,5 +101,28 @@ export async function notifyPolicyBlockCap(
     })
   } catch (error) {
     console.error('[ads-alert] policy cap notify failed:', error instanceof Error ? error.message : 'unknown')
+  }
+}
+
+/** Emits one daily, PII-free admin alert for an ambiguous Google Ads create. */
+export async function notifyGooglePublishReconciling(
+  planId: string,
+  requestId: string,
+  deps: AdsAlertDeps = defaultDeps,
+): Promise<void> {
+  const kind = GOOGLE_PUBLISH_RECONCILING_ALERT_KIND
+  try {
+    const first = await deps.recordOnce(kind, { planId, requestId })
+    if (!first) return
+    const subject = 'GLOVAL Ads: Google Ads yayın sonucu belirsiz'
+    const text = `Google Ads kampanya oluşturma çağrısının sonucu doğrulanamadı. Plan: ${planId}; deneme: ${requestId}. Otomatik yeniden oluşturma ve kredi iadesi yapılmadı; yönetici mutabakatı gerekiyor.`
+    await deps.sendEmail({
+      subject,
+      text,
+      html: `<p>${text}</p>`,
+      idempotencyKey: `${kind}-${istanbulDay()}`,
+    })
+  } catch (error) {
+    console.error('[ads-alert] publish reconciliation notify failed:', error instanceof Error ? error.message : 'unknown')
   }
 }

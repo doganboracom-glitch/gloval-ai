@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolveGoogleAdsConnectAccess, resolveGoogleAdsOAuthSettings } from '@/lib/ads/env'
+import {
+  resolveGoogleAdsConnectAccess,
+  resolveGoogleAdsOAuthSettings,
+  resolveGoogleAdsPublishAccess,
+} from '@/lib/ads/env'
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_USER_ID = '123e4567-e89b-42d3-a456-426614174000'
@@ -37,6 +41,26 @@ describe('Google Ads access configuration', () => {
       ADS_GOOGLE_CONNECT_ENABLED: '1',
       ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS: 'not-a-uuid,another-value',
     })).toBe(false)
+  })
+
+  it('keeps publishing disabled unless both explicit gates are configured', () => {
+    expect(resolveGoogleAdsPublishAccess(USER_ID, {})).toBe(false)
+    expect(resolveGoogleAdsPublishAccess(USER_ID, {
+      GOOGLE_ADS_PUBLISH_ENABLED: 'true',
+      GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS: USER_ID,
+    })).toBe(false)
+    expect(resolveGoogleAdsPublishAccess(USER_ID, {
+      GOOGLE_ADS_PUBLISH_ENABLED: '1',
+      GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS: '',
+    })).toBe(false)
+    expect(resolveGoogleAdsPublishAccess(USER_ID, {
+      GOOGLE_ADS_PUBLISH_ENABLED: '1',
+      GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS: OTHER_USER_ID,
+    })).toBe(false)
+    expect(resolveGoogleAdsPublishAccess(USER_ID, {
+      GOOGLE_ADS_PUBLISH_ENABLED: '1',
+      GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS: ` ${OTHER_USER_ID}, ${USER_ID.toUpperCase()} `,
+    })).toBe(true)
   })
 
   it('resolves OAuth without any developer-token setting', () => {

@@ -41,15 +41,40 @@ export function createMockAdsProvider(
     publishCampaign: async (input) => {
       if (options.failPublishWith) throw options.failPublishWith
       calls.published.push(input)
+      if (input.validateOnly) {
+        return {
+          externalCampaignId: null,
+          status: 'paused',
+          validateOnly: true,
+          billingVerified: true,
+          paymentMethodWarning: false,
+        }
+      }
       const existing = byRequestId.get(input.requestId)
-      if (existing) return { externalCampaignId: existing, status: 'paused' }
+      if (existing) {
+        return {
+          externalCampaignId: existing,
+          status: 'paused',
+          validateOnly: false,
+          billingVerified: true,
+          paymentMethodWarning: false,
+        }
+      }
       const id = `mock-campaign-${byRequestId.size + 1}`
       byRequestId.set(input.requestId, id)
-      return { externalCampaignId: id, status: 'paused' }
+      return {
+        externalCampaignId: id,
+        status: 'paused',
+        validateOnly: false,
+        billingVerified: true,
+        paymentMethodWarning: false,
+      }
     },
     setCampaignStatus: async ({ externalCampaignId, status }) => {
       calls.statusChanges.push({ externalCampaignId, status })
+      return { status, billingVerified: status === 'enabled' ? true : null, paymentMethodWarning: false }
     },
+
     revoke: async (refreshToken) => {
       calls.revoked.push(refreshToken)
     },
