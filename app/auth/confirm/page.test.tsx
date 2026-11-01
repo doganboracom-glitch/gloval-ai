@@ -34,6 +34,22 @@ describe('GET /auth/confirm page', () => {
     })
   })
 
+  it('forces recovery links to the password form and drops signup draft state', async () => {
+    await expect(
+      pageProps({
+        token_hash: 'opaque-recovery-token',
+        type: 'recovery',
+        draft: 'a'.repeat(43),
+        next: 'https://attacker.example',
+      }),
+    ).resolves.toMatchObject({
+      tokenHash: 'opaque-recovery-token',
+      type: 'recovery',
+      draft: null,
+      next: '/auth/reset-password',
+    })
+  })
+
   it.each(['//attacker.example', 'https://attacker.example', '%252F%252Fattacker.example'])(
     'rejects open redirect target %s',
     async (next) => {

@@ -1,36 +1,65 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { AuthShell } from '@/components/auth/auth-shell'
 import { Button } from '@/components/ui/button'
+import { PASSWORD_RESET_COOLDOWN_SECONDS } from '@/lib/password-reset-policy'
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState<string | null>(null)
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const requestInFlight = useRef(false)
+
+  const isCoolingDown = cooldownSeconds !== null && cooldownSeconds > 0
+
+  useEffect(() => {
+    if (!isCoolingDown) return
+    const interval = window.setInterval(() => {
+      setCooldownSeconds((remaining) =>
+        remaining === null ? null : Math.max(remaining - 1, 0),
+      )
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [isCoolingDown])
+
+  const message =
+    cooldownSeconds === null
+      ? null
+      : cooldownSeconds > 0
+        ? `Bağlantı gönderildi. Gelmediyse spam klasörünü kontrol et; yeni bağlantıyı ${cooldownSeconds} sn sonra isteyebilirsin.`
+        : 'Bağlantı gönderildi. Gelmediyse spam klasörünü kontrol et; artık yeni bağlantı isteyebilirsin.'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setMessage(null)
+    if (requestInFlight.current || (cooldownSeconds ?? 0) > 0) return
+
     setError(null)
     setLoading(true)
+    requestInFlight.current = true
 
-    const response = await fetch('/api/auth/forgot-password', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() }),
-    }).catch(() => null)
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
 
-    setLoading(false)
-    if (!response?.ok) {
+      if (!response.ok) {
+        setError('İstek şu anda işlenemedi. Lütfen daha sonra tekrar deneyin.')
+        return
+      }
+
+      setCooldownSeconds(PASSWORD_RESET_COOLDOWN_SECONDS)
+    } catch {
       setError('İstek şu anda işlenemedi. Lütfen daha sonra tekrar deneyin.')
-      return
+    } finally {
+      requestInFlight.current = false
+      setLoading(false)
     }
-
-    const result = await response.json().catch(() => null)
-    setMessage(result?.message ?? 'Bu adres kayıtlıysa, şifre yenileme bağlantısı gönderildi. Gelen kutunuzu kontrol edin.')
   }
 
   return (
@@ -57,10 +86,24 @@ export default function ForgotPasswordPage() {
             className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30"
           />
         </label>
-        {error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-        {message && <p role="status" className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">{message}</p>}
-        <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full">
-          {loading ? <><Loader2 className="size-4 animate-spin" /> Gönderiliyor...</> : 'Bağlantı gönder'}
+        {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        {message && <p role="status" aria-live="polite" aria-atomic="true" className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground">{message}</p>}
+        <Button
+          type="submit"
+          size="lg"
+          disabled={loading || (cooldownSeconds !== null && cooldownSeconds > 0)}
+          className="mt-2 w-full"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="animate-spin" data-icon="inline-start" />
+              Gönderiliyor...
+            </>
+          ) : cooldownSeconds !== null && cooldownSeconds > 0 ? (
+            `Tekrar iste (${cooldownSeconds} sn)`
+          ) : (
+            'Bağlantı gönder'
+          )}
         </Button>
       </form>
     </AuthShell>

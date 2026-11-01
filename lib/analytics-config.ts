@@ -16,9 +16,14 @@ export const META_PIXEL_ID: string | null = isValidPixelId(rawPixelId) ? rawPixe
  * never measured, because the owner's visitors never consented to GLOVAL's
  * tracking.
  */
+export function isAuthPath(pathname: string): boolean {
+  return pathname === '/auth' || pathname.startsWith('/auth/')
+}
+
 export function isMeasurementSurface(hostname: string, pathname: string): boolean {
   const host = hostname.toLowerCase()
   if (!host) return false
+  if (isAuthPath(pathname)) return false
   if (isForeignHost(host)) return false
   if (host === TENANT_ROOT_DOMAIN || host.endsWith(`.${TENANT_ROOT_DOMAIN}`)) return false
   if (pathname === '/site' || pathname.startsWith('/site/')) return false

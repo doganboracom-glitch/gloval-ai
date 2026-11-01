@@ -8,6 +8,7 @@ import { Cookie, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { useCookieBannerDoc } from '@/components/cookie-banner-doc-context'
 import { COOKIE_BANNER_DOC_LABEL, cookieBannerHref } from '@/lib/cookie-policy-link'
+import { isAuthPath } from '@/lib/analytics-config'
 import {
   CONSENT_CHANGE_EVENT,
   CONSENT_COOKIE,
@@ -144,9 +145,8 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
       marketing: draftMarketing,
     })
 
-  const analyticsAllowed = ready && consent?.analytics === true
-
   const pathname = usePathname()
+  const analyticsAllowed = ready && consent?.analytics === true && !isAuthPath(pathname ?? '')
   const siteDoc = useCookieBannerDoc()
   const bannerDoc = siteDoc === undefined ? 'cerez-politikasi' : siteDoc
   const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname ?? '')

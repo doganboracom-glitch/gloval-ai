@@ -95,6 +95,10 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  if (request.nextUrl.pathname === '/auth' || request.nextUrl.pathname.startsWith('/auth/')) {
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  }
+
   return response
 }
 

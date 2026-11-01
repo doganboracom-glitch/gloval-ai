@@ -16,7 +16,9 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }))
-vi.mock('@vercel/analytics/next', () => ({ Analytics: () => null }))
+vi.mock('@vercel/analytics/next', () => ({
+  Analytics: () => <div data-testid="vercel-analytics" />,
+}))
 vi.mock('@/components/language-provider', () => ({
   useLanguage: () => ({
     lang: 'tr',
@@ -79,6 +81,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
   document.documentElement.removeAttribute(COOKIE_BANNER_ATTR)
   document.documentElement.removeAttribute(COOKIE_BANNER_SITE_ATTR)
   document.documentElement.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
@@ -241,6 +244,21 @@ describe('CookieConsent variants', () => {
     expect(document.documentElement.hasAttribute(COOKIE_BANNER_SITE_ATTR)).toBe(false)
     unmount()
     expect(document.documentElement.hasAttribute(COOKIE_BANNER_SITE_ATTR)).toBe(false)
+  })
+
+  it('does not load Vercel Analytics on auth routes even with granted analytics consent', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    mockPath = '/auth/confirm'
+    const { rerender } = render(<CookieConsent />)
+
+    fireEvent.click(screen.getByText('Tümünü kabul et'))
+    expect(screen.queryByTestId('vercel-analytics')).toBeNull()
+
+    act(() => {
+      mockPath = '/dashboard'
+    })
+    rerender(<CookieConsent />)
+    expect(screen.getByTestId('vercel-analytics')).not.toBeNull()
   })
 
   it('consent logic is identical: same copy, buttons and stored choice', () => {

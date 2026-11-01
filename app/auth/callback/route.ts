@@ -15,9 +15,10 @@ function secureRedirect(url: URL): NextResponse {
   return response
 }
 
-function errorUrl(origin: string, draft: string | null): URL {
+function errorUrl(origin: string, draft: string | null, isRecovery = false): URL {
   const url = new URL('/auth/error', origin)
-  if (draft) url.searchParams.set('draft', draft)
+  if (isRecovery) url.searchParams.set('reason', 'recovery')
+  else if (draft) url.searchParams.set('draft', draft)
   return url
 }
 
@@ -64,14 +65,14 @@ export async function GET(request: NextRequest) {
       verifiedUser = result.data?.user ?? null
     } else {
       console.warn('[auth callback] Supabase callback is missing a code or token hash')
-      return secureRedirect(errorUrl(origin, draft))
+      return secureRedirect(errorUrl(origin, draft, isRecovery))
     }
   } catch (error) {
     if (!isRecovery && isPkceVerifierMissingError(error)) {
       return pkceVerifierMissingRedirect(origin, next, draft)
     }
     logSupabaseAuthFailure('auth callback', error)
-    return secureRedirect(errorUrl(origin, draft))
+    return secureRedirect(errorUrl(origin, draft, isRecovery))
   }
 
   if (verifyError) {
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
       return pkceVerifierMissingRedirect(origin, next, draft)
     }
     logSupabaseAuthFailure('auth callback', verifyError)
-    return secureRedirect(errorUrl(origin, draft))
+    return secureRedirect(errorUrl(origin, draft, isRecovery))
   }
 
   if (!isRecovery) scheduleWelcomeEmail(verifiedUser)

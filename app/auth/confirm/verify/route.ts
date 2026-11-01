@@ -9,7 +9,7 @@ import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
 function parseConfirmationType(value: FormDataEntryValue | null): EmailOtpType | null {
-  if (value === 'signup' || value === 'email') return value
+  if (value === 'signup' || value === 'email' || value === 'recovery') return value
   return null
 }
 
@@ -22,9 +22,10 @@ function redirect(url: URL): NextResponse {
   return NextResponse.redirect(url, 303)
 }
 
-function errorUrl(origin: string, draft: string | null): URL {
+function errorUrl(origin: string, draft: string | null, isRecovery = false): URL {
   const url = new URL('/auth/error', origin)
-  if (draft) url.searchParams.set('draft', draft)
+  if (isRecovery) url.searchParams.set('reason', 'recovery')
+  else if (draft) url.searchParams.set('draft', draft)
   return url
 }
 
@@ -41,14 +42,18 @@ export async function POST(request: NextRequest) {
   const rawTokenHash = formString(formData, 'token_hash')?.trim() ?? ''
   const tokenHash = rawTokenHash && rawTokenHash.length <= 512 ? rawTokenHash : null
   const type = parseConfirmationType(formData.get('type'))
-  const next = sanitizeNextPathWithDecoding(formString(formData, 'next'))
-  const rawDraft = formString(formData, 'draft')
-  const draft =
-    (isValidClaimToken(rawDraft) ? rawDraft : null) ?? getSignupDraftTokenFromNextPath(next)
+  const isRecovery = type === 'recovery'
+  const next = isRecovery
+    ? '/auth/reset-password'
+    : sanitizeNextPathWithDecoding(formString(formData, 'next'))
+  const rawDraft = isRecovery ? null : formString(formData, 'draft')
+  const draft = isRecovery
+    ? null
+    : (isValidClaimToken(rawDraft) ? rawDraft : null) ?? getSignupDraftTokenFromNextPath(next)
 
   if (!tokenHash || !type) {
     console.warn('[auth confirm] POST is missing a supported token hash or type')
-    return redirect(errorUrl(origin, draft))
+    return redirect(errorUrl(origin, draft, isRecovery))
   }
 
   const supabase = await createClient()
@@ -57,12 +62,15 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
     if (error) {
       logSupabaseAuthFailure('auth confirm', error)
-      return redirect(errorUrl(origin, draft))
+      return redirect(errorUrl(origin, draft, isRecovery))
+    }
+    if (isRecovery) {
+      return redirect(new URL('/auth/reset-password', origin))
     }
     scheduleWelcomeEmail(data?.user)
   } catch (error) {
     logSupabaseAuthFailure('auth confirm', error)
-    return redirect(errorUrl(origin, draft))
+    return redirect(errorUrl(origin, draft, isRecovery))
   }
 
   try {

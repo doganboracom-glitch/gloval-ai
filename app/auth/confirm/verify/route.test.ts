@@ -77,6 +77,57 @@ describe('POST /auth/confirm/verify', () => {
     expect(location(response).searchParams.has('draft')).toBe(false)
   })
 
+  it('verifies recovery tokens on the server and redirects to a fixed password-reset path without signing out', async () => {
+    const response = await POST(
+      postForm({
+        token_hash: 'one-time-recovery-token',
+        type: 'recovery',
+        draft: DRAFT_TOKEN,
+        next: 'https://attacker.example',
+      }),
+    )
+    const destination = location(response)
+
+    expect(mocks.verifyOtp).toHaveBeenCalledWith({
+      token_hash: 'one-time-recovery-token',
+      type: 'recovery',
+    })
+    expect(mocks.signOut).not.toHaveBeenCalled()
+    expect(mocks.scheduleWelcomeEmail).not.toHaveBeenCalled()
+    expect(response.status).toBe(303)
+    expect(destination.origin).toBe('https://gloval.ai')
+    expect(destination.pathname).toBe('/auth/reset-password')
+    expect(destination.search).toBe('')
+    expect(destination.toString()).not.toContain('one-time-recovery-token')
+  })
+
+  it('routes expired recovery tokens to a recovery-specific error without carrying secrets', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.verifyOtp.mockResolvedValue({
+      error: { code: 'otp_expired', status: 400, message: 'token one-time-recovery-token' },
+    })
+
+    const response = await POST(
+      postForm({
+        token_hash: 'one-time-recovery-token',
+        type: 'recovery',
+        email: 'private@example.com',
+        next: 'https://attacker.example',
+      }),
+    )
+    const destination = location(response)
+
+    expect(destination.pathname).toBe('/auth/error')
+    expect(destination.searchParams.get('reason')).toBe('recovery')
+    expect(destination.searchParams.has('token_hash')).toBe(false)
+    expect(destination.searchParams.has('email')).toBe(false)
+    expect(destination.searchParams.has('draft')).toBe(false)
+    expect(mocks.signOut).not.toHaveBeenCalled()
+    expect(mocks.scheduleWelcomeEmail).not.toHaveBeenCalled()
+    expect(JSON.stringify(log.mock.calls)).not.toContain('one-time-recovery-token')
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private@example.com')
+  })
+
   it('preserves a valid nested draft if the direct draft field is empty', async () => {
     const response = await POST(
       postForm({
