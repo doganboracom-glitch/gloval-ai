@@ -439,6 +439,73 @@ describe('strict internal target validation', () => {
   })
 })
 
+describe('supported href shapes preserve real destinations and external actions', () => {
+  it('keeps mailto, tel, external URLs, valid anchors, real pages, and enabled blog routes', () => {
+    const source = asSite(ayYildiz)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [
+          ...source.navigation.links,
+          { label: 'Valid section', href: '#gallery' },
+          { label: 'Valid custom anchor', href: '#latest-posts-heading' },
+          { label: 'Real page slug', href: '/galeri' },
+          { label: 'Contact alias', href: '/iletisim' },
+          { label: 'Enabled blog', href: '/blog' },
+          { label: 'Email', href: 'mailto:studio@example.org' },
+          { label: 'Phone', href: 'tel:+905551234567' },
+          { label: 'External HTTPS', href: 'https://radio.example.org/listen?show=1#live' },
+          { label: 'Protocol-relative external', href: '//radio.example.org/listen' },
+          { label: 'Unsafe scheme', href: 'javascript:alert(1)' },
+        ],
+      },
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site, { hasBlog: true, hasLatestPosts: true })
+    const hrefs = Object.fromEntries(cleaned.navigation.links.map(({ label, href }) => [label, href]))
+
+    expect(hrefs).toMatchObject({
+      'Valid section': '#gallery',
+      'Valid custom anchor': '#latest-posts-heading',
+      'Real page slug': '/galeri',
+      'Contact alias': '/contact',
+      'Enabled blog': '/blog',
+      Email: 'mailto:studio@example.org',
+      Phone: 'tel:+905551234567',
+      'External HTTPS': 'https://radio.example.org/listen?show=1#live',
+      'Protocol-relative external': '//radio.example.org/listen',
+    })
+    expect(hrefs).not.toHaveProperty('Unsafe scheme')
+  })
+
+  it('keeps /urunlerimiz only when the site is an enabled storefront', () => {
+    const source = asSite(luna)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [...source.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
+      },
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site)
+    expect(cleaned.navigation.links.find((link) => link.label === 'Product catalog')?.href).toBe('/urunlerimiz')
+
+    const nonStore = asSite(dbajans)
+    const nonStoreWithProductRoute = {
+      ...nonStore,
+      navigation: {
+        ...nonStore.navigation,
+        links: [...nonStore.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
+      },
+    } as WebsiteSchema
+    expect(
+      withLivePageLinks(nonStoreWithProductRoute).navigation.links.some((link) => link.label === 'Product catalog'),
+    ).toBe(false)
+  })
+})
+
 describe('generation always leaves a #services target when services are linked', () => {
   const withoutServices = (site: WebsiteSchema): WebsiteSchema => ({
     ...site,
