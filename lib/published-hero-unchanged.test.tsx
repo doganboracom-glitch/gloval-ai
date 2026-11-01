@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import { buildPreviewCatalog, StoreCatalogProvider } from '@/components/website-renderer/store-catalog-context'
 import { buildDemoSite, demos } from '@/lib/demos'
+import { slugify } from '@/lib/slug'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 /**
@@ -63,10 +64,13 @@ describe('live sites preserve default hero styling while validating link targets
             : renderToStaticMarkup(renderer)
 
         if (slug === 'luna-mucevher' && page === 'home') {
-          const firstProduct = site.sections.find((section) => section.type === 'products')
-          expect(firstProduct?.type).toBe('products')
-          expect(html).toContain('href="/site/luna-mucevher/store/14k-altin-tektas-yuzuk"')
-          expect(html).not.toContain('href="/products/altin-tektaş-14k"')
+          const products = site.sections.flatMap((section) => (section.type === 'products' ? section.items : []))
+          expect(products).toHaveLength(11)
+
+          for (const product of products) {
+            expect(html).toContain(`href="/site/luna-mucevher/store/${slugify(product.name)}"`)
+            expect(html).not.toContain(`href="${product.href}"`)
+          }
         }
 
         return `${page}: ${fingerprint(html)}`
