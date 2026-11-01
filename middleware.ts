@@ -12,6 +12,7 @@ import {
 } from '@/lib/custom-domains/service'
 import { tenantRewritePath } from '@/lib/indexnow'
 import { LANG_COOKIE, normalizeLang, resolveLangFromAcceptLanguage } from '@/lib/i18n'
+import { clearVerifiedUserHeaders } from '@/lib/supabase/auth-context'
 
 const LEGACY_TENANT_REFUND_PATH = '/yasal/iptal-ve-iade'
 
@@ -22,6 +23,7 @@ function redirectLegacyRefundPath(request: NextRequest) {
 }
 
 export async function middleware(request: NextRequest) {
+  clearVerifiedUserHeaders(request.headers)
   const host = request.headers.get('host')
 
   // 1) Wildcard tenant subdomains: `<slug>.gloval.site` is served by the

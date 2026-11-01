@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   user: null as { id: string } | null,
   getUserError: null as Error | null,
+  getUserThrown: null as unknown,
   consumeCredits: vi.fn(async () => ({ ok: true, balance: 1 })),
   getCreditBalance: vi.fn(async () => 100),
   adminFrom: vi.fn(),
@@ -12,10 +13,13 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: {
-      getUser: async () => ({
-        data: { user: mocks.user },
-        error: mocks.getUserError,
-      }),
+      getUser: async () => {
+        if (mocks.getUserThrown !== null) throw mocks.getUserThrown
+        return {
+          data: { user: mocks.user },
+          error: mocks.getUserError,
+        }
+      },
     },
     from: mocks.adminFrom,
   }),
@@ -29,7 +33,7 @@ vi.mock('@/lib/ai-credits', async (importOriginal) => ({
 
 import { rejectAnonymous } from '@/lib/api-auth'
 
-/** Every editor endpoint that must turn anonymous callers away with 401. */
+/** Editor endpoints that must stop before side effects for anonymous or unavailable auth. */
 const GUARDED_ROUTES = [
   'about-alt',
   'about-detail',
@@ -63,6 +67,7 @@ function postRequest(path: string) {
 beforeEach(() => {
   mocks.user = null
   mocks.getUserError = null
+  mocks.getUserThrown = null
   mocks.consumeCredits.mockClear()
   mocks.getCreditBalance.mockClear()
   mocks.adminFrom.mockClear()
@@ -76,10 +81,30 @@ describe('rejectAnonymous', () => {
     expect(await res?.json()).toEqual({ error: 'Unauthorized' })
   })
 
-  it('returns 401 when the session lookup errors', async () => {
+  it('returns 401 when the session is definitely expired', async () => {
     mocks.user = { id: 'u1' }
     mocks.getUserError = new Error('jwt expired')
     expect((await rejectAnonymous())?.status).toBe(401)
+  })
+
+  it('returns 503 with Retry-After when Auth is rate-limiting', async () => {
+    mocks.getUserError = Object.assign(new Error('Too many requests'), { status: 429 })
+
+    const res = await rejectAnonymous()
+
+    expect(res?.status).toBe(503)
+    expect(res?.headers.get('Retry-After')).toBe('5')
+    expect(res?.headers.get('Cache-Control')).toBe('no-store')
+    expect(await res?.json()).toEqual({ error: 'Authentication temporarily unavailable' })
+  })
+
+  it('returns 503 when the Auth network request rejects', async () => {
+    mocks.getUserThrown = new TypeError('fetch failed')
+
+    const res = await rejectAnonymous()
+
+    expect(res?.status).toBe(503)
+    expect(res?.headers.get('Retry-After')).toBe('5')
   })
 
   it('lets a signed-in caller through', async () => {
@@ -88,13 +113,26 @@ describe('rejectAnonymous', () => {
   })
 })
 
-describe('anonymous POST to editor endpoints', () => {
-  it.each(GUARDED_ROUTES)('/api/%s answers 401 before any credit logic', async (path) => {
+describe('auth failures on editor endpoints', () => {
+  it.each(GUARDED_ROUTES)('/api/%s returns 401 before any credit logic without a session', async (path) => {
     const load = ROUTE_MODULES[`../app/api/${path}/route.ts`]
     expect(load, `route module for ${path}`).toBeDefined()
     const mod = (await load()) as { POST: (req: Request) => Promise<Response> }
     const res = await mod.POST(postRequest(path))
     expect(res.status).toBe(401)
+    expect(mocks.consumeCredits).not.toHaveBeenCalled()
+    expect(mocks.getCreditBalance).not.toHaveBeenCalled()
+    expect(mocks.adminFrom).not.toHaveBeenCalled()
+  })
+
+  it.each(GUARDED_ROUTES)('/api/%s returns 503 before any credit logic when Auth is unavailable', async (path) => {
+    mocks.getUserError = Object.assign(new Error('Too many requests'), { status: 429 })
+    const load = ROUTE_MODULES[`../app/api/${path}/route.ts`]
+    expect(load, `route module for ${path}`).toBeDefined()
+    const mod = (await load()) as { POST: (req: Request) => Promise<Response> }
+    const res = await mod.POST(postRequest(path))
+    expect(res.status).toBe(503)
+    expect(res.headers.get('Retry-After')).toBe('5')
     expect(mocks.consumeCredits).not.toHaveBeenCalled()
     expect(mocks.getCreditBalance).not.toHaveBeenCalled()
     expect(mocks.adminFrom).not.toHaveBeenCalled()

@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getMyCurrentPlan } from '@/lib/billing'
 import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
 import { getAddOnOverview } from '@/lib/effective-limits'
@@ -17,10 +19,10 @@ export default async function AddOnsPage({
   searchParams: Promise<{ payment?: string }>
 }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login?next=/billing/add-ons')
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect('/auth/login?next=/billing/add-ons')
+  const { user } = authState
 
   const { payment } = await searchParams
   const currentPlan = await getMyCurrentPlan().catch(() => null)

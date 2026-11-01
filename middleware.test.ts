@@ -12,6 +12,7 @@ vi.mock('@/lib/custom-domains/service', () => ({
 }))
 
 import { middleware } from '@/middleware'
+import { VERIFIED_USER_HEADERS } from '@/lib/supabase/auth-context'
 
 const KEY = 'ab12'.repeat(8)
 
@@ -24,6 +25,7 @@ type Outcome =
   | { kind: 'redirect'; status: number; location: string }
   | { kind: 'next' }
   | { kind: 'session' }
+  | { kind: 'unavailable'; status: number; retryAfter: string | null }
 
 async function run(host: string, path: string): Promise<Outcome> {
   updateSession.mockClear()
@@ -33,6 +35,13 @@ async function run(host: string, path: string): Promise<Outcome> {
     const url = new URL(rewrite)
     return { kind: 'rewrite', path: url.pathname + url.search }
   }
+  if (res.status === 503) {
+    return {
+      kind: 'unavailable',
+      status: res.status,
+      retryAfter: res.headers.get('retry-after'),
+    }
+  }
   const location = res.headers.get('location')
   if (location) return { kind: 'redirect', status: res.status, location }
   if (updateSession.mock.calls.length > 0) return { kind: 'session' }
@@ -40,7 +49,8 @@ async function run(host: string, path: string): Promise<Outcome> {
 }
 
 beforeEach(() => {
-  updateSession.mockClear()
+  updateSession.mockReset()
+  updateSession.mockResolvedValue(NextResponse.next())
   resolveActiveDomainForHost.mockReset()
   getPublishedSlugForProjectId.mockReset()
   resolveActiveDomainForHost.mockResolvedValue({ websiteProjectId: 'p1' })
@@ -150,6 +160,35 @@ describe('middleware: unchanged behaviour', () => {
   })
 
   describe('platform hosts', () => {
+    it('preserves a temporary authentication response without redirecting', async () => {
+      updateSession.mockResolvedValue(
+        new NextResponse('Authentication temporarily unavailable', {
+          status: 503,
+          headers: { 'Retry-After': '5' },
+        }),
+      )
+
+      const response = await middleware(req('gloval.ai', '/dashboard'))
+
+      expect(response.status).toBe(503)
+      expect(response.headers.get('location')).toBeNull()
+      expect(response.headers.get('retry-after')).toBe('5')
+    })
+
+    it('removes client-supplied verified-user headers before auth handling', async () => {
+      const request = req('gloval.ai', '/dashboard')
+      for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+        request.headers.set(name, 'spoofed')
+      }
+
+      await middleware(request)
+
+      const forwardedRequest = updateSession.mock.calls[0]?.[0]
+      for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+        expect(forwardedRequest?.headers.get(name)).toBeNull()
+      }
+    })
+
     it.each([
       ['gloval.ai', '/'],
       ['gloval.ai', '/dashboard'],

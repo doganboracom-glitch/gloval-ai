@@ -1,7 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { loadProjectCommerce } from '@/lib/commerce-mode-server'
 import { StoreNotEnabled } from '@/components/ecommerce/store-not-enabled'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { getProject } from '@/lib/projects'
 import { getPaymentSettingsForOwner } from '@/lib/payment-settings'
 import { getTryOnEnabledForOwner } from '@/lib/try-on-settings'
@@ -18,10 +20,10 @@ export default async function PaymentSettingsPage({
   const { projectId } = await params
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(`/auth/login?next=/ecommerce/${projectId}/odeme`)
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=/ecommerce/${projectId}/odeme`)
+  const { user } = authState
 
   const project = await getProject(projectId)
   if (!project) notFound()

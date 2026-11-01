@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
+import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { listMyProjects } from '@/lib/support/queries'
 import { newTicketSignUpHref, parseTicketPrefill } from '@/lib/support/prefill'
 import { NewTicketForm } from '@/components/support/new-ticket-form'
@@ -13,10 +15,10 @@ export default async function NewSupportTicketPage({
 }) {
   const params = await searchParams
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect(newTicketSignUpHref(params))
+  const authState = await getPageAuthState(supabase)
+  if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
+  if (authState.kind === 'unauthenticated') redirect(newTicketSignUpHref(params))
+  const { user } = authState
   const projects = await listMyProjects(user.id)
   const prefill = parseTicketPrefill(
     params,
