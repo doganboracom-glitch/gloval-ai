@@ -73,8 +73,8 @@ const nextConfig = {
         headers: baseSecurityHeaders,
       },
       {
-        // Confirmation URLs carry a one-time hash until the explicit POST.
-        source: '/auth/confirm/:path*',
+        // Auth URLs can carry one-time tokens; avoid caching them or leaking their referrer.
+        source: '/auth/:path*',
         headers: [
           { key: 'Cache-Control', value: 'no-store' },
           { key: 'Referrer-Policy', value: 'no-referrer' },

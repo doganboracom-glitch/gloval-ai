@@ -3,8 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { warnOnError } from '@/lib/db-guard'
 import { DEFAULT_LANG, LANG_COOKIE, normalizeLang, type Lang } from '@/lib/i18n'
+import { PASSWORD_RESET_BLOCK_WINDOW_MS } from '@/lib/password-reset-policy'
 
-const BLOCK_WINDOW_MS = 15 * 60 * 1000
+const BLOCK_WINDOW_MS = PASSWORD_RESET_BLOCK_WINDOW_MS
 const GENERIC_MESSAGE = 'Bu adres kayıtlıysa, şifre yenileme bağlantısı gönderildi. Gelen kutunuzu kontrol edin.'
 
 function getRequestContext(request: Request) {

@@ -13,6 +13,13 @@ vi.mock('@/components/language-provider', () => ({
         confirmEmail: 'E-postamı doğrula',
         confirmLinkMissing: 'Bu doğrulama bağlantısı eksik veya geçersiz.',
         sendNewLink: 'Yeni doğrulama e-postası gönder',
+        recoveryConfirmTitle: 'Şifre sıfırlama bağlantısını doğrula',
+        recoveryConfirmBody: 'Devam ederek şifre belirleme sayfasına geç.',
+        confirmRecovery: 'Yeni şifre belirlemeye devam et',
+        recoveryErrorTitle: 'Şifre sıfırlama bağlantısı açılamadı',
+        recoveryLinkInvalid:
+          'Şifre sıfırlama bağlantısı geçersiz, süresi dolmuş veya kullanılmış olabilir.',
+        requestNewRecoveryLink: 'Yeni bağlantı iste',
       },
     },
   }),
@@ -51,6 +58,42 @@ describe('EmailConfirmationPrompt', () => {
     expect(
       screen.getByRole('link', { name: 'Yeni doğrulama e-postası gönder' }).getAttribute('href'),
     ).toBe('/auth/verify-email')
+  })
+
+  it('renders recovery confirmation as a deliberate POST with no caller-controlled redirect fields', () => {
+    render(
+      <EmailConfirmationPrompt
+        tokenHash="opaque-recovery-token"
+        type="recovery"
+        draft={"a".repeat(43)}
+        next="https://attacker.example"
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Şifre sıfırlama bağlantısını doğrula' })).not.toBeNull()
+    const button = screen.getByRole('button', { name: 'Yeni şifre belirlemeye devam et' })
+    const form = button.closest('form')
+    expect(form?.getAttribute('method')).toBe('post')
+    expect(form?.getAttribute('action')).toBe('/auth/confirm/verify')
+    expect(form?.querySelector('input[name="type"]')?.getAttribute('value')).toBe('recovery')
+    expect(form?.querySelector('input[name="next"]')).toBeNull()
+    expect(form?.querySelector('input[name="draft"]')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Yeni bağlantı iste' }).getAttribute('href')).toBe(
+      '/forgot-password',
+    )
+  })
+
+  it('shows a recovery-specific expired state and never auto-verifies', () => {
+    render(<EmailConfirmationPrompt tokenHash={null} type="recovery" draft={null} next="/auth/reset-password" />)
+
+    expect(screen.getByRole('heading', { name: 'Şifre sıfırlama bağlantısı açılamadı' })).not.toBeNull()
+    expect(
+      screen.getByText('Şifre sıfırlama bağlantısı geçersiz, süresi dolmuş veya kullanılmış olabilir.'),
+    ).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Yeni şifre belirlemeye devam et' })).toBeNull()
+    expect(screen.getByRole('link', { name: 'Yeni bağlantı iste' }).getAttribute('href')).toBe(
+      '/forgot-password',
+    )
   })
 
   it('offers a resend path on a parameterless visit but never auto-verifies', () => {

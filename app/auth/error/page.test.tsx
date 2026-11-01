@@ -58,6 +58,21 @@ describe('auth error fallback', () => {
     expect(screen.queryByRole('link', { name: 'Yeni doğrulama e-postası gönder' })).toBeNull()
   })
 
+  it('shows a recovery-specific message and a fresh-link action without forwarding URL data', () => {
+    mocks.search = `reason=recovery&draft=${DRAFT_TOKEN}&email=private%40example.com`
+    render(<AuthErrorPage />)
+
+    expect(screen.getByRole('heading', { name: 'Şifre sıfırlama bağlantısı açılamadı' })).not.toBeNull()
+    expect(
+      screen.getByText('Şifre sıfırlama bağlantısı geçersiz, süresi dolmuş veya kullanılmış olabilir.'),
+    ).not.toBeNull()
+    expect(screen.getByRole('link', { name: 'Yeni bağlantı iste' }).getAttribute('href')).toBe(
+      '/forgot-password',
+    )
+    expect(screen.getByRole('link', { name: 'Giriş yap' }).getAttribute('href')).toBe('/auth/login')
+    expect(screen.queryByRole('link', { name: 'Yeni doğrulama e-postası gönder' })).toBeNull()
+  })
+
   it('does not forward malformed draft values', () => {
     mocks.search = 'draft=invalid'
     render(<AuthErrorPage />)

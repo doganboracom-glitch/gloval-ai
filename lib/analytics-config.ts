@@ -11,14 +11,20 @@ export const META_PIXEL_ID: string | null = isValidPixelId(rawPixelId) ? rawPixe
 
 /**
  * Measurement runs on the gloval.ai platform (marketing site, dashboard,
- * editor, billing) and its previews only. Published customer sites -
+ * editor, billing) and its previews only. Password-recovery routes are excluded
+ * as well. Published customer sites -
  * `<slug>.gloval.site`, their custom domains and the `/site/*` routes - are
  * never measured, because the owner's visitors never consented to GLOVAL's
  * tracking.
  */
+export function isAuthPath(pathname: string): boolean {
+  return pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/forgot-password'
+}
+
 export function isMeasurementSurface(hostname: string, pathname: string): boolean {
   const host = hostname.toLowerCase()
   if (!host) return false
+  if (isAuthPath(pathname)) return false
   if (isForeignHost(host)) return false
   if (host === TENANT_ROOT_DOMAIN || host.endsWith(`.${TENANT_ROOT_DOMAIN}`)) return false
   if (pathname === '/site' || pathname.startsWith('/site/')) return false
