@@ -10,6 +10,7 @@ import { stripAiTeam } from '@/lib/team'
 import { seedContactActions } from '@/lib/site-contact-actions'
 import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
+import { withLivePageLinks } from '@/lib/live-page-links'
 import { ensureContactSection, flagPlaceholderContact } from '@/lib/contact-section'
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { ensureServicesSection } from '@/lib/services-section'
@@ -215,15 +216,17 @@ async function runGenerate(
         // Seeds the floating phone + WhatsApp buttons from the site's own
         // contact section, so every new site ships them without the model
         // being able to invent a phone number.
-        website: addMissingToMenu(
-          seedFooterLegal(
-            seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seedAboutCopy(seededAbout, aboutCopy), aboutDetail))), pageLimit), normalizedLang, pageLimit))),
+        website: withLivePageLinks(
+          addMissingToMenu(
+            seedFooterLegal(
+              seedFooterColumns(
+                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seedAboutCopy(seededAbout, aboutCopy), aboutDetail))), pageLimit), normalizedLang, pageLimit))),
+                normalizedLang,
+              ),
               normalizedLang,
             ),
             normalizedLang,
           ),
-          normalizedLang,
         ),
         source: 'ai',
         sectionImages,
@@ -250,15 +253,17 @@ async function runGenerate(
         prompt,
       )
       return Response.json({
-        website: addMissingToMenu(
-          seedFooterLegal(
-            seedFooterColumns(
-              seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout))), pageLimit), normalizedLang, pageLimit))),
+        website: withLivePageLinks(
+          addMissingToMenu(
+            seedFooterLegal(
+              seedFooterColumns(
+                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout))), pageLimit), normalizedLang, pageLimit))),
+                normalizedLang,
+              ),
               normalizedLang,
             ),
             normalizedLang,
           ),
-          normalizedLang,
         ),
         source: 'fallback',
         sectionImages,

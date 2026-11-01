@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import ayYildiz from '@/lib/__fixtures__/published/ay-yildiz.json'
 import dbajans from '@/lib/__fixtures__/published/dbajans.json'
 import luna from '@/lib/__fixtures__/published/luna-mucevher.json'
+import mimarlik from '@/lib/__fixtures__/published-mimarlik-studyosu.json'
 import { canonicalRedirectTarget } from '@/lib/canonical-pages'
 import { emptyPageSlugs, isDeadAnchor, isEmptyPage, liveSectionTypes, withLivePageLinks } from '@/lib/live-page-links'
 import { ensureServicesSection } from '@/lib/services-section'
 import { fallbackWebsite } from '@/lib/website-schema'
-import { resolveFooterColumns, resolveFooterLegal } from '@/lib/footer-links'
+import { resolveFooterColumns, resolveFooterLegal, validateFooterHref } from '@/lib/footer-links'
 import { pageMenuLabel, resolveFooterPages, resolveHeaderMenu } from '@/lib/site-menu'
 import { findPublicPage, homeSlug, pageNavItems, pagePath, sectionsForPage } from '@/lib/website-pages'
 import type { NavLink, Section, WebsiteSchema } from '@/lib/website-schema'
@@ -110,27 +111,51 @@ describe('sites with no dead page keep their menu exactly', () => {
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
   ] as const) {
-    it(`${name}: same header, footer and CTA`, () => {
+    it(`${name}: keeps the header/footer menu while pruning invalid actions`, () => {
       const site = asSite(json)
       expect(emptyPageSlugs(site)).toEqual([])
       const pruned = withLivePageLinks(site)
       expect(renderedMenu(pruned)).toEqual(renderedMenu(site))
-      expect(pruned.pages).toBe(site.pages)
+      expect(pruned.pages.map((page) => page.slug)).toEqual(site.pages.map((page) => page.slug))
       if (json === dbajans) expect(pruned.navigation).toBe(site.navigation)
     })
   }
 
-  it('luna: the only navigation difference is the unrendered #deals schema link (the header is built from pages)', () => {
+  it('luna: maps #home to the root and removes the unrendered #deals link', () => {
     const site = asSite(luna)
     const pruned = withLivePageLinks(site)
-    expect(site.navigation.links.filter((l) => !pruned.navigation.links.includes(l)).map((l) => l.href)).toEqual(['#deals'])
+    const removed = site.navigation.links.filter((link) => !pruned.navigation.links.some((next) => next.label === link.label))
+    expect(removed.map((link) => link.href)).toEqual(['#deals'])
+    const home = site.navigation.links.find((link) => link.href === '#home')
+    expect(home).toBeDefined()
+    expect(pruned.navigation.links.find((link) => link.label === home?.label)?.href).toBe('/')
     expect(pruned.navigation.cta).toBe(site.navigation.cta)
     expect(pruned.navigation.menuOrder).toEqual(site.navigation.menuOrder)
   })
 
-  it('dbajans.com.tr: the whole schema is returned untouched', () => {
+  it('dbajans.com.tr: preserves valid blog/menu routes and removes empty hrefs', () => {
     const site = asSite(dbajans)
-    expect(withLivePageLinks(site)).toBe(site)
+    const pruned = withLivePageLinks(site)
+    expect(pruned).not.toBe(site)
+    expect(pruned.navigation).toBe(site.navigation)
+    expect(allLinks(pruned).some(({ href }) => href === '')).toBe(false)
+    expect(allLinks(pruned).some(({ href }) => href === '/blog')).toBe(true)
+  })
+
+  it('removes a # placeholder CTA but preserves the real page menu', () => {
+    const site = asSite(dbajans)
+    const placeholder = {
+      ...site,
+      sections: site.sections.map((section) =>
+        section.type === 'cta' ? { ...section, primaryButton: { label: 'WhatsApp randevu', href: '#' } } : section,
+      ),
+    } as WebsiteSchema
+    const pruned = withLivePageLinks(placeholder)
+    const cta = pruned.sections.find((section) => section.type === 'cta')
+
+    expect(cta?.type === 'cta' ? cta.primaryButton : undefined).toBeUndefined()
+    expect(pageNavItems(pruned).some((page) => page.slug === 'iletisim')).toBe(true)
+    expect(allLinks(pruned).some((link) => link.href === '/blog')).toBe(true)
   })
 })
 
@@ -162,6 +187,7 @@ describe('no internal link anywhere points at a page without content', () => {
     ['ay-yildiz-tasimacilik', ayYildiz],
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
+    ['mimarlik-studyosu', mimarlik],
   ] as const) {
     it(`${name}: menu, hero, CTA, footer and sections have no dead link`, () => {
       const pruned = withLivePageLinks(asSite(json))
@@ -180,7 +206,7 @@ describe('hero and CTA buttons follow the menu rule', () => {
   const heroOf = (site: WebsiteSchema) =>
     site.sections.find((s): s is Extract<Section, { type: 'hero' }> => s.type === 'hero')!
 
-  it('luna: "Hızlı Hediye Paketi" -> /contact becomes #contact (home has a contact section); nothing else changes', () => {
+  it('luna: normalizes the CTA and strips invented product routes without dropping cards', () => {
     const site = asSite(luna)
     const pruned = withLivePageLinks(site)
     const before = heroOf(site).slides![2]
@@ -188,17 +214,16 @@ describe('hero and CTA buttons follow the menu rule', () => {
     expect(before.secondaryButton).toEqual({ ...before.secondaryButton!, href: '/contact' })
     expect(after.secondaryButton).toEqual({ ...before.secondaryButton!, href: '#contact' })
 
-    // Undo every approved change; the rest of luna must be identical.
-    const restore = JSON.parse(JSON.stringify(pruned))
-    const original = JSON.parse(JSON.stringify(site))
-    const ctaIndex = original.sections.findIndex((s: Section) => s.type === 'cta')
-    restore.sections[0].slides[2].secondaryButton.href = '/contact'
-    restore.sections[0].slides[1].secondaryButton.href = '#featured'
-    restore.sections[0].secondaryButton.href = '#featured'
-    restore.sections[0].primaryButton = original.sections[0].primaryButton
-    restore.sections[ctaIndex].secondaryButton = original.sections[ctaIndex].secondaryButton
-    restore.navigation.links = original.navigation.links
-    expect(restore).toEqual(original)
+    const productsBefore = site.sections
+      .filter((section): section is Extract<Section, { type: 'products' }> => section.type === 'products')
+      .flatMap((section) => section.items)
+    const productsAfter = pruned.sections
+      .filter((section): section is Extract<Section, { type: 'products' }> => section.type === 'products')
+      .flatMap((section) => section.items)
+    expect(productsAfter).toHaveLength(productsBefore.length)
+    expect(productsAfter.map((item) => item.name)).toEqual(productsBefore.map((item) => item.name))
+    expect(productsAfter.every((item) => !item.href)).toBe(true)
+    expect(allLinks(pruned).some(({ href }) => href.startsWith('/products/'))).toBe(false)
   })
 
   it('ay-yildiz: hero "Hakkımızda" -> /about is hidden (no about section on home)', () => {
@@ -259,22 +284,42 @@ describe('every #anchor on the page has a target section', () => {
     ['ay-yildiz-tasimacilik', ayYildiz],
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
+    ['mimarlik-studyosu', mimarlik],
   ] as const) {
     it(`${name}: all #anchors resolve to a rendered section`, () => {
       expect(deadAnchors(withLivePageLinks(asSite(json)))).toEqual([])
     })
   }
 
-  it('dbajans keeps every anchor and its schema is returned untouched', () => {
-    const dba = asSite(dbajans)
-    expect(deadAnchors(dba)).toEqual([])
-    expect(withLivePageLinks(dba)).toBe(dba)
+  it('mimarlik: rewrites the project anchor and removes only unregistered legal paths', () => {
+    const site = asSite(mimarlik)
+    const pruned = withLivePageLinks(site)
+    const projectLink = site.navigation.links.find((link) => link.label === 'Projeler')
+    const cleanedProjectLink = pruned.navigation.links.find((link) => link.label === 'Projeler')
+
+    expect(site.pages.map((page) => page.slug)).toEqual(['home', 'projeler', 'hizmetler', 'ekibimiz', 'iletisim'])
+    expect(sectionsForPage(site, 'home').some((section) => section.type === 'portfolio')).toBe(true)
+    expect(projectLink?.href).toBe('#projects')
+    expect(cleanedProjectLink?.href).toBe('#portfolio')
+    expect(validateFooterHref('/gizlilik', site)).toEqual({ ok: false, issue: 'unknown-page' })
+    expect(validateFooterHref('/kullanim-kosullari', site)).toEqual({ ok: false, issue: 'unknown-page' })
+    expect(validateFooterHref('/yasal/gizlilik-politikasi', site)).toEqual({ ok: true, kind: 'legal' })
+    expect(allLinks(pruned).some(({ href }) => href === '/gizlilik' || href === '/kullanim-kosullari')).toBe(false)
   })
 
-  it('luna: reproduces the report (#featured and #deals have no element with that id)', () => {
+  it('dbajans keeps every valid anchor while pruning empty hrefs', () => {
+    const dba = asSite(dbajans)
+    expect(deadAnchors(dba)).toEqual([])
+    const pruned = withLivePageLinks(dba)
+    expect(deadAnchors(pruned)).toEqual([])
+    expect(allLinks(pruned).some(({ href }) => href === '')).toBe(false)
+    expect(allLinks(pruned).some(({ href }) => href === '/blog')).toBe(true)
+  })
+
+  it('luna: reproduces missing targets (#featured, #deals, and #home)', () => {
     const site = asSite(luna)
     const dead = deadAnchors(site)
-    expect([...new Set(dead.map((l) => l.href))].sort()).toEqual(['#deals', '#featured'])
+    expect([...new Set(dead.map((l) => l.href))].sort()).toEqual(['#deals', '#featured', '#home'])
     const byPath = Object.fromEntries(dead.map((l) => [l.path, l.href]))
     expect(byPath['sections[0].slides[1].secondaryButton.href']).toBe('#featured')
     const ctaIndex = site.sections.findIndex((s) => s.type === 'cta')
@@ -369,6 +414,130 @@ describe('every #anchor on the page has a target section', () => {
     expect(deadAnchors(pruned)).toEqual([])
     expect(pruned.navigation.cta).toBeUndefined()
     expect(footerOf(pruned)?.columns?.[0].links).toEqual([{ label: 'İletişim', href: '#contact' }])
+  })
+})
+
+describe('strict internal target validation', () => {
+  it('removes unknown anchors and routes at every nesting level while preserving rendered ids and external URLs', () => {
+    const source = asSite(dbajans)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [
+          ...source.navigation.links,
+          { label: 'Programlar', href: '#programlar' },
+          { label: 'Top 10', href: '#top-10' },
+          { label: 'Top 20', href: '#top-20' },
+          { label: 'Missing page', href: '/not-a-real-page' },
+          { label: 'Missing nested route', href: '/programlar/top-10' },
+          { label: 'Rendered slider', href: '#slider' },
+          { label: 'External', href: 'https://example.org/radio' },
+        ],
+        cta: { label: 'Missing CTA', href: '/not-a-real-page' },
+      },
+      sections: [
+        ...source.sections.map((section) => {
+          if (section.type === 'hero') return { ...section, primaryButton: { label: 'Top 10', href: '#top-10' } }
+          if (section.type === 'footer') {
+            return {
+              ...section,
+              columns: [{ title: 'Listeler', links: [{ label: 'Top 20', href: '#top-20' }] }],
+            }
+          }
+          return section
+        }),
+        { type: 'slider' } as unknown as Section,
+      ],
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site)
+    const hrefs = allLinks(cleaned).map((link) => link.href)
+    expect(hrefs).not.toEqual(expect.arrayContaining(['#programlar', '#top-10', '#top-20', '/not-a-real-page', '/programlar/top-10']))
+    expect(cleaned.navigation.links.find((link) => link.label === 'Rendered slider')?.href).toBe('#slider')
+    expect(cleaned.navigation.links.find((link) => link.label === 'External')?.href).toBe('https://example.org/radio')
+    expect(cleaned.navigation.cta).toBeUndefined()
+    expect(deadAnchors(cleaned)).toEqual([])
+  })
+
+  it('normalizes a recognized alias to the real rendered section id', () => {
+    const source = asSite(dbajans)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [...source.navigation.links, { label: 'Hakkımızda aliası', href: '#hakkimizda' }],
+      },
+    } as WebsiteSchema
+
+    expect(withLivePageLinks(site).navigation.links.find((link) => link.label === 'Hakkımızda aliası')?.href).toBe('#about')
+  })
+})
+
+describe('supported href shapes preserve real destinations and external actions', () => {
+  it('keeps mailto, tel, external URLs, valid anchors, real pages, and enabled blog routes', () => {
+    const source = asSite(ayYildiz)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [
+          ...source.navigation.links,
+          { label: 'Valid section', href: '#gallery' },
+          { label: 'Valid custom anchor', href: '#latest-posts-heading' },
+          { label: 'Real page slug', href: '/galeri' },
+          { label: 'Contact alias', href: '/iletisim' },
+          { label: 'Enabled blog', href: '/blog' },
+          { label: 'Email', href: 'mailto:studio@example.org' },
+          { label: 'Phone', href: 'tel:+905551234567' },
+          { label: 'External HTTPS', href: 'https://radio.example.org/listen?show=1#live' },
+          { label: 'Protocol-relative external', href: '//radio.example.org/listen' },
+          { label: 'Unsafe scheme', href: 'javascript:alert(1)' },
+        ],
+      },
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site, { hasBlog: true, hasLatestPosts: true })
+    const hrefs = Object.fromEntries(cleaned.navigation.links.map(({ label, href }) => [label, href]))
+
+    expect(hrefs).toMatchObject({
+      'Valid section': '#gallery',
+      'Valid custom anchor': '#latest-posts-heading',
+      'Real page slug': '/galeri',
+      'Contact alias': '/contact',
+      'Enabled blog': '/blog',
+      Email: 'mailto:studio@example.org',
+      Phone: 'tel:+905551234567',
+      'External HTTPS': 'https://radio.example.org/listen?show=1#live',
+      'Protocol-relative external': '//radio.example.org/listen',
+    })
+    expect(hrefs).not.toHaveProperty('Unsafe scheme')
+  })
+
+  it('keeps /urunlerimiz only when the site is an enabled storefront', () => {
+    const source = asSite(luna)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [...source.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
+      },
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site)
+    expect(cleaned.navigation.links.find((link) => link.label === 'Product catalog')?.href).toBe('/urunlerimiz')
+
+    const nonStore = asSite(dbajans)
+    const nonStoreWithProductRoute = {
+      ...nonStore,
+      navigation: {
+        ...nonStore.navigation,
+        links: [...nonStore.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
+      },
+    } as WebsiteSchema
+    expect(
+      withLivePageLinks(nonStoreWithProductRoute).navigation.links.some((link) => link.label === 'Product catalog'),
+    ).toBe(false)
   })
 })
 

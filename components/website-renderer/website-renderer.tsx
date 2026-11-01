@@ -14,8 +14,14 @@ import { TestimonialsDetailPage } from '@/components/website-renderer/sections/t
 import { ReferencesDetailPage } from '@/components/website-renderer/sections/references-detail-page'
 import { TeamDetailPage } from '@/components/website-renderer/sections/team-detail-page'
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
-import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath, canonicalSectionAnchor } from '@/lib/website-pages'
-import { withLivePageLinks } from '@/lib/live-page-links'
+import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath } from '@/lib/website-pages'
+import {
+  liveSectionTypes,
+  liveSectionTypesForPage,
+  pageForRenderedAnchor,
+  renderedAnchorHref,
+  withLivePageLinks,
+} from '@/lib/live-page-links'
 import {
   SiteNavProvider,
   isDemoServiceHref,
@@ -248,18 +254,22 @@ export function WebsiteRenderer({
       if (href.startsWith('#')) {
         if (!parsed.success) return false
         const raw = href.slice(1)
-        const id = canonicalSectionAnchor(raw) ?? raw
-        const page = pageNavItems(parsed.data).find((p) =>
-          sectionsForPage(parsed.data, p.slug).some((s) => s.type === id),
-        )
-        if (!page) return false
+        const options = {
+          hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
+          hasLatestPosts: Boolean(
+            blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
+          ),
+        }
+        const id = renderedAnchorHref(raw, liveSectionTypes(parsed.data, options))?.slice(1)
+        const slug = pageForRenderedAnchor(parsed.data, raw, options)
+        if (!id || !slug) return false
         if (pageRouting) {
-          // Already on the page that owns the section: let the browser scroll to it.
-          if (page.slug === (activeSlug ?? homeSlug(parsed.data))) return false
-          window.location.assign(`${pagePath(parsed.data, page.slug)}#${id}`)
+          // Already on the page that owns the section: let the browser scroll to its real DOM id.
+          if (slug === (activeSlug ?? homeSlug(parsed.data))) return false
+          window.location.assign(`${pagePath(parsed.data, slug)}#${id}`)
           return true
         }
-        handleNavigate(page.slug)
+        handleNavigate(slug)
         // Wait for the new page's sections to mount before scrolling to the target.
         window.setTimeout(() => {
           rootRef.current?.ownerDocument
@@ -270,23 +280,69 @@ export function WebsiteRenderer({
       }
       // A service page lives under the services list page: switch in-memory
       // everywhere except the published site, where it is a real URL.
-      const service = parsed.success ? matchServiceHref(parsed.data, href) : null
+      const servicePath = href.split(/[?#]/, 1)[0]
+      const service = parsed.success ? matchServiceHref(parsed.data, servicePath) : null
       if (service) {
         if (pageRouting) return false
         setActiveSlug(service.listSlug)
         setActiveService(service.itemSlug)
         setActiveAlbum(null)
         scrollSiteToTop(rootRef.current)
+        if (href.includes('#')) {
+          const anchorId = renderedAnchorHref('service-detail', new Set(['detail:service']))?.slice(1)
+          if (anchorId) {
+            window.setTimeout(() => {
+              rootRef.current?.ownerDocument
+                .getElementById(anchorId)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 60)
+          }
+        }
         return true
       }
-      const album = parsed.success ? matchAlbumHref(parsed.data, href) : null
+      const albumPath = href.split(/[?#]/, 1)[0]
+      const album = parsed.success ? matchAlbumHref(parsed.data, albumPath) : null
       if (album) {
         if (pageRouting) return false
         setActiveSlug(album.listSlug)
         setActiveService(null)
         setActiveAlbum(album.albumSlug)
         scrollSiteToTop(rootRef.current)
+        if (href.includes('#')) {
+          const anchorId = renderedAnchorHref('gallery-album', new Set(['detail:gallery-album']))?.slice(1)
+          if (anchorId) {
+            window.setTimeout(() => {
+              rootRef.current?.ownerDocument
+                .getElementById(anchorId)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 60)
+          }
+        }
         return true
+      }
+      if (parsed.success && href.startsWith('/') && href.includes('#')) {
+        const url = new URL(href, window.location.origin)
+        const pageSlug = resolveHrefToPageSlug(parsed.data, url.pathname)
+        const rawAnchor = url.hash.slice(1)
+        const pageAnchors = pageSlug
+          ? liveSectionTypesForPage(parsed.data, pageSlug, {
+              hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
+              hasLatestPosts: Boolean(
+                blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
+              ),
+            })
+          : new Set<string>()
+        const anchorId = renderedAnchorHref(rawAnchor, pageAnchors)?.slice(1)
+        if (pageSlug && anchorId) {
+          if (pageRouting) return false
+          handleNavigate(pageSlug)
+          window.setTimeout(() => {
+            rootRef.current?.ownerDocument
+              .getElementById(anchorId)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }, 60)
+          return true
+        }
       }
       // Demos have no per-page routes (pageRouting is off) and no preview, so a
       // link to one of the site's own pages must switch in-memory instead of
@@ -376,7 +432,7 @@ export function WebsiteRenderer({
       }
       return true
     },
-    [parsed, handleNavigate, preview, pageRouting, activeSlug, demoRoutes, onDemoRoute],
+    [parsed, handleNavigate, preview, pageRouting, activeSlug, demoRoutes, onDemoRoute, blog],
   )
 
   // Display-only catalog for a storefront preview, so product cards link to the
@@ -402,9 +458,15 @@ export function WebsiteRenderer({
   // The editor preview keeps placeholder entries so the owner can fill them in;
   // every public render (published site, demo) leaves them out.
   const shown: WebsiteSchema = preview || editSelection ? parsed.data : stripPlaceholders(parsed.data)
-  // Published pages only: a menu/header/footer link to a page the site answers
-  // with a 404 is hidden or sent to the matching home section.
-  const data: WebsiteSchema = pageRouting && !preview && !editSelection ? withLivePageLinks(shown) : shown
+  const linkOptions = {
+    hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
+    hasLatestPosts: Boolean(
+      blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
+    ),
+  }
+  // Curated demos use DemoRoutes; generated sites share the validator in editor and public modes.
+  const shouldValidateLinks = !demoRoutes && Boolean(preview || editSelection || pageRouting)
+  const data: WebsiteSchema = shouldValidateLinks ? withLivePageLinks(shown, linkOptions) : shown
   const theme = resolveTheme(data)
   const pages = pageNavItems(data)
 
