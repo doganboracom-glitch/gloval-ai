@@ -32,6 +32,23 @@ function call(overrides: Partial<GoogleAdsApiCall> = {}): GoogleAdsApiCall {
   }
 }
 
+function mutateCall(overrides: Partial<GoogleAdsApiCall> = {}): GoogleAdsApiCall {
+  return call({
+    method: 'googleAds.mutate',
+    path: 'customers/1234567890/googleAds:mutate',
+    body: {
+      mutateOperations: [
+        { campaignBudgetOperation: { create: { amountMicros: '150000000' } } },
+        { campaignOperation: { create: { status: 'PAUSED' } } },
+        { campaignCriterionOperation: { create: { negative: false } } },
+      ],
+      partialFailure: false,
+      validateOnly: true,
+    },
+    ...overrides,
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.rpc.mockResolvedValue({ data: [{ allowed: true, global_used: 1, user_used: 1 }], error: null })
@@ -124,5 +141,71 @@ describe('Google Ads API quota transport', () => {
     await expect(transport(call({ context: { userId: 'another-user', connectionId: CONTEXT.connectionId } })))
       .rejects.toMatchObject({ code: 'invalid_request' })
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('maps a missing EU political declaration to a user-correctable reason without auto-declaring', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({
+      error: {
+        status: 'INVALID_ARGUMENT',
+        message: 'Campaign is missing its EU political advertising declaration.',
+        details: [{
+          errors: [{ errorCode: { campaignError: 'MISSING_EU_POLITICAL_ADVERTISING_DECLARATION' } }],
+        }],
+      },
+    }, 400)) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(mutateCall())).rejects.toMatchObject({ code: 'eu_political_declaration_required' })
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
+  it('reserves every individual mutation operation before a single external request', async () => {
+    const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ mutateOperationResponses: [] }))
+    const fetcher = fetcherMock as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await transport(mutateCall())
+
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation_v2', expect.objectContaining({
+      p_user_id: CONTEXT.userId,
+      p_connection_id: CONTEXT.connectionId,
+      p_method: 'googleAds.mutate',
+      p_operation_count: 3,
+    }))
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    const init = fetcherMock.mock.calls[0]?.[1]
+    expect(JSON.parse(String(init?.body))).toMatchObject({ validateOnly: true, partialFailure: false })
+  })
+
+  it('fails closed on mutation quota denial and rejects partial-failure bodies before reserving', async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ allowed: false, global_used: 2399, user_used: 119 }], error: null })
+    const fetcher = vi.fn(async () => jsonResponse({})) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(mutateCall())).rejects.toMatchObject({ code: 'api_quota_exceeded' })
+    expect(fetcher).not.toHaveBeenCalled()
+
+    mocks.rpc.mockClear()
+    const invalidBody = {
+      mutateOperations: [{ campaignOperation: { create: { status: 'PAUSED' } } }],
+      partialFailure: true,
+      validateOnly: false,
+    } as unknown as GoogleAdsApiCall['body']
+    await expect(transport(mutateCall({ body: invalidBody }))).rejects.toMatchObject({ code: 'invalid_request' })
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('never retries a mutate after an ambiguous network failure', async () => {
+    const fetcher = vi.fn().mockRejectedValue(new Error('timeout')) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(mutateCall({ body: {
+      mutateOperations: [{ campaignOperation: { create: { status: 'PAUSED' } } }],
+      partialFailure: false,
+      validateOnly: false,
+    } }))).rejects.toMatchObject({ code: 'provider_unavailable' })
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
+    expect(fetcher).toHaveBeenCalledTimes(1)
   })
 })

@@ -80,17 +80,38 @@ export type AdsCampaignPublishInput = {
   externalAccountId: string
   loginCustomerId: string | null
   accessToken: string
+  context: AdsApiOperationContext
   planId: string
-  /** Idempotency key: a retry with the same value must not create a second campaign. */
+  /** Created server-side and persisted before the external mutate request. */
   requestId: string
   budget: AdsBudgetMinor
-  /** Provider-neutral campaign body, validated by the plan schema before it gets here. */
-  campaign: Record<string, unknown>
+  /** Persisted, validated plan JSON; provider code builds every mutate body from it. */
+  planJson: unknown
+  validateOnly: boolean
 }
 
 export type AdsCampaignPublishResult = {
-  externalCampaignId: string
+  externalCampaignId: string | null
+  status: 'paused'
+  validateOnly: boolean
+  billingVerified: boolean
+  paymentMethodWarning: boolean
+}
+
+export type AdsCampaignStatusResult = {
   status: 'paused' | 'enabled'
+  billingVerified: boolean | null
+  paymentMethodWarning: boolean
+}
+
+export type GoogleAdsAdReviewStatus = {
+  status: 'approved' | 'disapproved' | 'review_in_progress' | 'unavailable'
+  adCount: number
+}
+
+export type GoogleAdsBillingVerification = {
+  verified: boolean
+  paymentMethodWarning: boolean
 }
 
 export interface AdsProvider {
@@ -107,9 +128,10 @@ export interface AdsProvider {
     externalAccountId: string
     loginCustomerId: string | null
     accessToken: string
+    context: AdsApiOperationContext
     externalCampaignId: string
     status: 'paused' | 'enabled'
-  }): Promise<void>
+  }): Promise<AdsCampaignStatusResult>
   revoke(refreshToken: string): Promise<void>
 }
 
@@ -124,6 +146,19 @@ export interface GoogleAdsProvider extends AdsProvider {
     accessToken: string,
     context: AdsApiOperationContext,
   ): Promise<AdsAccountSummary[]>
+  verifyBilling(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    context: AdsApiOperationContext
+  }): Promise<GoogleAdsBillingVerification>
+  getAdReviewStatus(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    campaignId: string
+    context: AdsApiOperationContext
+  }): Promise<GoogleAdsAdReviewStatus>
   getPerformance(input: {
     accessToken: string
     customerId: string

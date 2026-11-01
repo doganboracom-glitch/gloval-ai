@@ -20,6 +20,8 @@ export const ADS_ENV = {
   googleAdsOAuthRedirectUri: 'GOOGLE_ADS_OAUTH_REDIRECT_URI',
   googleAdsConnectEnabled: 'ADS_GOOGLE_CONNECT_ENABLED',
   googleAdsConnectAllowedUserIds: 'ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS',
+  googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
+  googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
 } as const
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -66,6 +68,20 @@ export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = 
 
   const allowedUserIds = new Set(
     (env[ADS_ENV.googleAdsConnectAllowedUserIds] ?? '')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => UUID_PATTERN.test(value)),
+  )
+  return allowedUserIds.has(normalizedUserId)
+}
+
+export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = process.env): boolean {
+  if (!userId || env[ADS_ENV.googleAdsPublishEnabled]?.trim() !== '1') return false
+  const normalizedUserId = userId.trim().toLowerCase()
+  if (!UUID_PATTERN.test(normalizedUserId)) return false
+
+  const allowedUserIds = new Set(
+    (env[ADS_ENV.googleAdsPublishAllowedUserIds] ?? '')
       .split(',')
       .map((value) => value.trim().toLowerCase())
       .filter((value) => UUID_PATTERN.test(value)),
