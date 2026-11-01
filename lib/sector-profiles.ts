@@ -385,6 +385,7 @@ const NICHE_SEO_KEYWORDS: { match: string[]; tr: string; en: string }[] = [
   { match: ['pilates'], tr: 'Pilates Stüdyosu', en: 'Pilates Studio' },
   { match: ['spor salonu', 'fitness', 'gym'], tr: 'Spor Salonu', en: 'Fitness Studio' },
   { match: ['otel', 'hotel', 'pansiyon', 'konaklama'], tr: 'Otel ve Konaklama', en: 'Hotel & Accommodation' },
+  { match: ['radyo', 'radyo istasyon', 'radio', 'radio station', 'radio broadcaster', 'yayincilik', 'broadcasting'], tr: 'Radyo ve Yayıncılık', en: 'Radio Broadcasting' },
   { match: ['tur', 'seyahat', 'travel agency', 'acenta', 'acente'], tr: 'Tur ve Seyahat', en: 'Travel Agency' },
   { match: ['kurs', 'eğitim', 'egitim', 'akademi', 'dershane', 'academy'], tr: 'Eğitim ve Kurs', en: 'Training Academy' },
   { match: ['kreş', 'kres', 'anaokul', 'daycare', 'preschool'], tr: 'Kreş ve Anaokulu', en: 'Preschool & Daycare' },

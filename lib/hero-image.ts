@@ -23,11 +23,14 @@ import {
  * sector images. It extracts the signals a good image needs (sector, business
  * type, style, audience, visual need) and composes a single descriptive prompt,
  * then (best-effort) resolves it to a real image via the server-side provider.
+ * Unknown default-sector briefs are marked low-confidence and keep the renderer's
+ * gradient rather than generating a speculative stock scene.
  */
 
 export type Brief = {
   sector: Sector
   businessType: string
+  confidence: 'high' | 'medium' | 'low'
   style: string
   audience: string
   visualNeed: string
@@ -49,7 +52,7 @@ const SECTOR_SUBJECT: Record<Sector, string> = {
   photography: 'a professional photography studio with dramatic directional lighting and a creative editorial composition',
   automotive: 'a premium automotive dealership showroom with luxury cars under cinematic lighting, sleek and modern, professional automotive photography',
   realestate: 'a luxury modern house exterior at dusk with warm interior lights, a pool and contemporary architecture, premium real-estate photography',
-  default: 'a clean, modern professional workspace that conveys trust, quality and craftsmanship',
+  default: 'a neutral abstract editorial composition informed by the business brief, with no generic office or unrelated people',
 }
 
 /** A short human label for the detected business type. */
@@ -119,23 +122,38 @@ export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
     .join(' ')
   const topic = resolveVisualTopic(haystack)
 
-  // No keyword matched and the sector is the generic default: describe the
-  // business by its own name instead of the sector's "professional workspace",
-  // which produced an unrelated office for any unlisted trade.
   const businessName = site?.meta.name?.trim()
+  const confidence: Brief['confidence'] =
+    topic ? 'high' : sector === 'default' ? 'low' : 'medium'
+  const briefReference = [
+    describeVisualRequest(prompt),
+    businessName,
+    site?.meta.tagline,
+    site?.meta.audience,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(' — ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 420)
   const visualNeed =
     topic?.subject ??
-    (sector === 'default' && businessName
-      ? `an authentic, realistic scene that clearly shows the real work, products and people of the business "${businessName}"${site?.meta.tagline ? ` (${site.meta.tagline})` : ''}`
+    (sector === 'default'
+      ? `a neutral, brand-specific abstract editorial composition inspired by this exact brief: "${briefReference || 'the business described by the user'}"; use only on-topic symbols, products or materials named in the brief`
       : SECTOR_SUBJECT[sector])
+  const avoid =
+    topic?.avoid ??
+    (confidence === 'low'
+      ? 'unrelated people, generic office or meeting scenes, bakery or food imagery, landscapes, and stock subjects from industries not named in the brief'
+      : undefined)
 
   return {
     sector,
     businessType: topic?.business ?? SECTOR_BUSINESS[sector],
+    confidence,
     style: styleDescriptor(prompt, site),
     audience: site?.meta.audience || 'a broad, quality-seeking audience',
     visualNeed,
-    avoid: topic?.avoid,
+    avoid,
     illustrative: wantsIllustrationStyle(haystack),
   }
 }
@@ -531,7 +549,9 @@ export async function attachHeroImage(
   //    "the first hero image must always be produced"). Remaining images then
   //    run in PARALLEL so latency does not compound. Any failure is a silent
   //    no-op that leaves the prompt-only fallback intact.
-  if (available) {
+  // An unclassified brief has no reliable subject; keep the themed gradient
+  // rather than asking the model to invent a potentially unrelated stock scene.
+  if (available && brief.confidence !== 'low') {
     const MAX_IMAGES = 3
 
     // A slider shows slides[0] first; every other variant shows hero.image.
@@ -543,7 +563,7 @@ export async function attachHeroImage(
     // Ordered, de-duplicated targets with the first-visible image at the head.
     const ordered: SiteImageRef[] = []
     const pushUnique = (img?: SiteImageRef) => {
-      if (img && !ordered.includes(img)) ordered.push(img)
+      if (img && !img.src && !ordered.includes(img)) ordered.push(img)
     }
     pushUnique(firstVisible)
     pushUnique(hero.image)

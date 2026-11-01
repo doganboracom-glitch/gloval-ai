@@ -7,7 +7,8 @@ import {
   variationCue,
 } from './visual-subjects'
 import { analyzeBrief, buildHeroImagePrompt } from './hero-image'
-import { deriveSeoTitle, detectSector } from './sector-profiles'
+import { deriveSeoTitle, detectSector, sectorPromptHint } from './sector-profiles'
+import { RADIO_STATION_BRIEF } from './__fixtures__/radio-station'
 
 describe('resolveVisualTopic: yoga / pilates / fitness', () => {
   it('maps yoga to a calm yoga studio, not a gym', () => {
@@ -102,6 +103,59 @@ describe('butcher vs grocery', () => {
     expect(topic?.subject).toMatch(/meat/)
     expect(topic?.avoid).toMatch(/vegetables/)
     expect(resolveVisualTopic('manav sitesi')?.business).toBe('grocery store / greengrocer')
+  })
+})
+
+describe('radio / broadcasting visual topic', () => {
+  it('resolves Turkish and English radio briefs to studio equipment and music', () => {
+    for (const brief of [RADIO_STATION_BRIEF, 'Radio station website with live broadcasting and music']) {
+      const topic = resolveVisualTopic(brief)
+      expect(topic?.business, brief).toBe('radio station / broadcaster')
+      expect(topic?.subject, brief).toMatch(/radio studio/i)
+      expect(topic?.subject, brief).toMatch(/microphone/i)
+      expect(topic?.subject, brief).toMatch(/mixing console/i)
+      expect(topic?.subject, brief).toMatch(/headphones/i)
+      expect(topic?.subject, brief).toMatch(/music/i)
+      expect(topic?.avoid, brief).toMatch(/bakery/i)
+    }
+  })
+
+  it('keeps the radio scene in hero, sector guidance, SEO and translated visual terms', () => {
+    const brief = analyzeBrief(RADIO_STATION_BRIEF)
+    expect(brief.sector).toBe('default')
+    expect(brief.confidence).toBe('high')
+    expect(brief.businessType).toBe('radio station / broadcaster')
+
+    const heroPrompt = buildHeroImagePrompt(brief)
+    expect(heroPrompt).toContain('audio mixing console')
+    expect(heroPrompt).toContain('over-ear headphones')
+    expect(sectorPromptHint(RADIO_STATION_BRIEF)).toContain(brief.visualNeed)
+    expect(deriveSeoTitle(RADIO_STATION_BRIEF, 'default', 'tr')).toBe('İstanbul Radyo ve Yayıncılık')
+    expect(deriveSeoTitle('Radio station website', 'default', 'en')).toBe('Radio Broadcasting')
+
+    const translated = describeVisualRequest('Radyo stüdyosu: mikrofon, mikser, kulaklık ve müzik')
+    expect(translated).toContain('radio broadcasting studio')
+    expect(translated).toContain('audio mixing console')
+    expect(translated).toContain('over-ear studio headphones')
+  })
+
+  it('does not confuse radiotherapy or music education with a radio station', () => {
+    expect(resolveVisualTopic('Radyoterapi kliniği')).toBeNull()
+    expect(resolveVisualTopic('Music school website')).toBeNull()
+  })
+})
+
+describe('low-confidence visual fallback', () => {
+  it('uses a neutral brand-brief abstraction instead of generic people or office stock', () => {
+    const brief = analyzeBrief('Kivu brand website with a thoughtful editorial identity')
+    expect(brief.sector).toBe('default')
+    expect(brief.confidence).toBe('low')
+    expect(brief.visualNeed).toMatch(/abstract editorial composition/i)
+    expect(brief.visualNeed).toContain('Kivu')
+
+    const prompt = buildHeroImagePrompt(brief)
+    expect(prompt).toMatch(/Do NOT depict:.*unrelated people/i)
+    expect(prompt).not.toMatch(/professional workspace|people at work/i)
   })
 })
 
