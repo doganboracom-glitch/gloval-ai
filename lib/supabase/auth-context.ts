@@ -1,5 +1,9 @@
 import type { AuthUserSummary } from './auth-state'
 
+/**
+ * These headers are not cryptographically signed. They are trusted only after
+ * middleware removes client copies and explicitly forwards its own request override.
+ */
 export const VERIFIED_USER_HEADERS = {
   verified: 'x-gloval-auth-verified',
   id: 'x-gloval-auth-user-id',

@@ -16,8 +16,31 @@ import { VERIFIED_USER_HEADERS } from '@/lib/supabase/auth-context'
 
 const KEY = 'ab12'.repeat(8)
 
-function req(host: string, path: string) {
-  return new NextRequest(`https://${host}${path}`, { headers: { host } })
+function req(host: string, path: string, incomingHeaders?: HeadersInit) {
+  const headers = new Headers({ host })
+  new Headers(incomingHeaders).forEach((value, name) => headers.set(name, value))
+  return new NextRequest(`https://${host}${path}`, { headers })
+}
+
+const forgedVerifiedUserHeaders = {
+  [VERIFIED_USER_HEADERS.verified]: '1',
+  [VERIFIED_USER_HEADERS.id]: 'attacker-user',
+  [VERIFIED_USER_HEADERS.email]: encodeURIComponent('admin@gloval.ai'),
+  [VERIFIED_USER_HEADERS.emailConfirmedAt]: '2024-01-01T00:00:00.000Z',
+  [VERIFIED_USER_HEADERS.createdAt]: '2024-01-01T00:00:00.000Z',
+}
+
+function expectVerifiedUserHeadersNotForwarded(response: NextResponse) {
+  const forwardedNames = (response.headers.get('x-middleware-override-headers') ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+
+  for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+    expect(forwardedNames).not.toContain(name)
+    expect(response.headers.get(`x-middleware-request-${name}`)).toBeNull()
+    expect(response.headers.get(name)).toBeNull()
+  }
 }
 
 type Outcome =
@@ -175,19 +198,39 @@ describe('middleware: unchanged behaviour', () => {
       expect(response.headers.get('retry-after')).toBe('5')
     })
 
-    it('removes client-supplied verified-user headers before auth handling', async () => {
-      const request = req('gloval.ai', '/dashboard')
-      for (const name of Object.values(VERIFIED_USER_HEADERS)) {
-        request.headers.set(name, 'spoofed')
-      }
+    it('NextResponse.next yanıtında istemcinin doğrulanmış-kullanıcı başlıklarını iletmez', async () => {
+      const request = req('gloval.ai', '/dashboard', forgedVerifiedUserHeaders)
+      updateSession.mockImplementation(async (incomingRequest) =>
+        NextResponse.next({ request: { headers: incomingRequest.headers } }),
+      )
 
-      await middleware(request)
-
+      const response = await middleware(request)
       const forwardedRequest = updateSession.mock.calls[0]?.[0]
+
       for (const name of Object.values(VERIFIED_USER_HEADERS)) {
         expect(forwardedRequest?.headers.get(name)).toBeNull()
       }
+      expectVerifiedUserHeadersNotForwarded(response)
     })
+
+    it.each([
+      ['dbajans.gloval.site', '/api/try-on', 'next'],
+      ['dbajans.gloval.site', '/hakkimizda', 'rewrite'],
+      ['www.dbajans.com.tr', '/api/try-on', 'next'],
+      ['www.dbajans.com.tr', '/hakkimizda', 'rewrite'],
+      ['dbajans.gloval.site', '/yasal/iptal-ve-iade', 'redirect'],
+      ['www.gloval.ai', '/dashboard', 'redirect'],
+    ] as const)(
+      '%s%s %s yanıtlarında sahte kimlik başlıklarını iletmez',
+      async (host, path, kind) => {
+        const response = await middleware(req(host, path, forgedVerifiedUserHeaders))
+
+        if (kind === 'next') expect(response.headers.get('x-middleware-next')).toBe('1')
+        if (kind === 'rewrite') expect(response.headers.get('x-middleware-rewrite')).not.toBeNull()
+        if (kind === 'redirect') expect(response.headers.get('location')).not.toBeNull()
+        expectVerifiedUserHeadersNotForwarded(response)
+      },
+    )
 
     it.each([
       ['gloval.ai', '/'],

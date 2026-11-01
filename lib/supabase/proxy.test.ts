@@ -14,6 +14,7 @@ vi.mock('@supabase/ssr', () => ({
 }))
 
 import { updateSession } from './proxy'
+import { VERIFIED_USER_HEADERS } from './auth-context'
 
 const user = {
   id: 'user-1',
@@ -22,11 +23,31 @@ const user = {
   created_at: '2025-01-01T00:00:00.000Z',
 }
 
-function request(path: string, method = 'GET') {
-  return new NextRequest(`https://gloval.ai${path}`, {
-    method,
-    headers: { host: 'gloval.ai' },
-  })
+function request(path: string, method = 'GET', incomingHeaders?: HeadersInit) {
+  const headers = new Headers({ host: 'gloval.ai' })
+  new Headers(incomingHeaders).forEach((value, name) => headers.set(name, value))
+  return new NextRequest(`https://gloval.ai${path}`, { method, headers })
+}
+
+const forgedVerifiedUserHeaders = {
+  [VERIFIED_USER_HEADERS.verified]: '1',
+  [VERIFIED_USER_HEADERS.id]: 'attacker-user',
+  [VERIFIED_USER_HEADERS.email]: encodeURIComponent('admin@gloval.ai'),
+  [VERIFIED_USER_HEADERS.emailConfirmedAt]: '2024-01-01T00:00:00.000Z',
+  [VERIFIED_USER_HEADERS.createdAt]: '2024-01-01T00:00:00.000Z',
+}
+
+function expectVerifiedUserHeadersNotForwarded(response: Response) {
+  const forwardedNames = (response.headers.get('x-middleware-override-headers') ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+
+  for (const name of Object.values(VERIFIED_USER_HEADERS)) {
+    expect(forwardedNames).not.toContain(name)
+    expect(response.headers.get(`x-middleware-request-${name}`)).toBeNull()
+    expect(response.headers.get(name)).toBeNull()
+  }
 }
 
 function statusError(status: number) {
@@ -104,37 +125,81 @@ describe('updateSession authentication availability', () => {
     expect(response.headers.get('Location')).toBeNull()
   })
 
-  it('passes public requests through during a temporary Auth failure', async () => {
+  it('Auth kesintisindeki herkese açık yanıtta sahte kimlik başlıklarını iletmez', async () => {
     mocks.getUser.mockResolvedValue({
       data: { user: null },
       error: statusError(429),
     })
 
-    const response = await updateSession(request('/'))
+    const response = await updateSession(request('/', 'GET', forgedVerifiedUserHeaders))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('x-middleware-next')).toBe('1')
     expect(response.headers.get('Location')).toBeNull()
+    expectVerifiedUserHeadersNotForwarded(response)
   })
 
-  it('redirects a cookie-less protected request to login', async () => {
+  it('oturumsuz korumalı isteği girişe yönlendirirken sahte kimlik başlıklarını iletmez', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: null })
 
-    const response = await updateSession(request('/dashboard'))
+    const response = await updateSession(
+      request('/dashboard', 'GET', forgedVerifiedUserHeaders),
+    )
     const location = new URL(response.headers.get('Location')!)
 
     expect(response.status).toBe(307)
     expect(location.pathname).toBe('/auth/login')
     expect(location.searchParams.get('next')).toBe('/dashboard')
+    expectVerifiedUserHeadersNotForwarded(response)
   })
 
-  it('forwards a middleware-verified identity only on the internal request', async () => {
+  it('e-posta doğrulama yönlendirmesinde sahte kimlik başlıklarını iletmez', async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: { ...user, email_confirmed_at: null } },
+      error: null,
+    })
+
+    const response = await updateSession(
+      request('/dashboard', 'GET', forgedVerifiedUserHeaders),
+    )
+    const location = new URL(response.headers.get('Location')!)
+
+    expect(location.pathname).toBe('/auth/verify-email')
+    expectVerifiedUserHeadersNotForwarded(response)
+  })
+
+  it('askıya alınmış hesap yönlendirmesinde sahte kimlik başlıklarını iletmez', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user }, error: null })
+    mocks.from.mockReturnValue({
+      select: () => ({
+        eq: () => ({ maybeSingle: async () => ({ data: { status: 'suspended' }, error: null }) }),
+      }),
+    })
+
+    const response = await updateSession(
+      request('/dashboard', 'GET', forgedVerifiedUserHeaders),
+    )
+    const location = new URL(response.headers.get('Location')!)
+
+    expect(location.pathname).toBe('/account-suspended')
+    expectVerifiedUserHeadersNotForwarded(response)
+  })
+
+  it('sahte kimlik alanlarının tümünü middleware tarafından doğrulanan kullanıcıyla ezer', async () => {
     mocks.getUser.mockResolvedValue({ data: { user }, error: null })
 
-    const response = await updateSession(request('/'))
+    const response = await updateSession(request('/', 'GET', forgedVerifiedUserHeaders))
+    const expectedHeaders = {
+      [VERIFIED_USER_HEADERS.verified]: '1',
+      [VERIFIED_USER_HEADERS.id]: user.id,
+      [VERIFIED_USER_HEADERS.email]: encodeURIComponent(user.email),
+      [VERIFIED_USER_HEADERS.emailConfirmedAt]: user.email_confirmed_at,
+      [VERIFIED_USER_HEADERS.createdAt]: user.created_at,
+    }
 
-    expect(response.headers.get('x-middleware-request-x-gloval-auth-verified')).toBe('1')
-    expect(response.headers.get('x-middleware-request-x-gloval-auth-user-id')).toBe('user-1')
-    expect(response.headers.get('x-gloval-auth-verified')).toBeNull()
+    for (const [name, value] of Object.entries(expectedHeaders)) {
+      expect(response.headers.get(`x-middleware-request-${name}`)).toBe(value)
+      expect(response.headers.get(name)).toBeNull()
+    }
   })
 })

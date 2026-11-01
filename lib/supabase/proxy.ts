@@ -4,7 +4,10 @@ import {
   AUTH_RETRY_AFTER_SECONDS,
   getUserAuthState,
 } from '@/lib/supabase/auth-state'
-import { setVerifiedUserHeaders } from '@/lib/supabase/auth-context'
+import {
+  clearVerifiedUserHeaders,
+  setVerifiedUserHeaders,
+} from '@/lib/supabase/auth-context'
 import type { AuthUserSummary } from '@/lib/supabase/auth-state'
 
 const PROTECTED_PREFIXES = [
@@ -39,12 +42,24 @@ function unavailableResponse(source: NextResponse): NextResponse {
   )
 }
 
+function createSanitizedRequestHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers)
+  clearVerifiedUserHeaders(headers)
+  return headers
+}
+
+function nextWithSanitizedRequest(request: NextRequest): NextResponse {
+  return NextResponse.next({
+    request: { headers: createSanitizedRequestHeaders(request) },
+  })
+}
+
 function nextWithVerifiedUser(
   request: NextRequest,
   source: NextResponse,
   user: AuthUserSummary,
 ): NextResponse {
-  const requestHeaders = new Headers(request.headers)
+  const requestHeaders = createSanitizedRequestHeaders(request)
   setVerifiedUserHeaders(requestHeaders, user)
   return copyResponseCookies(
     source,
@@ -53,9 +68,7 @@ function nextWithVerifiedUser(
 }
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  let supabaseResponse = nextWithSanitizedRequest(request)
 
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
@@ -73,9 +86,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           )
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          supabaseResponse = nextWithSanitizedRequest(request)
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           )
@@ -135,15 +146,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
-  // If you're creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object to fit your needs, but avoid changing
-  //    the cookies!
-  // 4. Finally:
-  //    return myNewResponse
+  // If you create a replacement NextResponse, forward the sanitized request
+  // headers and copy over every cookie from supabaseResponse.
+  // Keep copied response cookies unchanged.
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely!
 
