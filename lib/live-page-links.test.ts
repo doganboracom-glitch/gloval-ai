@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import ayYildiz from '@/lib/__fixtures__/published/ay-yildiz.json'
 import dbajans from '@/lib/__fixtures__/published/dbajans.json'
 import luna from '@/lib/__fixtures__/published/luna-mucevher.json'
+import mimarlik from '@/lib/__fixtures__/published-mimarlik-studyosu.json'
 import { canonicalRedirectTarget } from '@/lib/canonical-pages'
 import { emptyPageSlugs, isDeadAnchor, isEmptyPage, liveSectionTypes, withLivePageLinks } from '@/lib/live-page-links'
 import { ensureServicesSection } from '@/lib/services-section'
 import { fallbackWebsite } from '@/lib/website-schema'
-import { resolveFooterColumns, resolveFooterLegal } from '@/lib/footer-links'
+import { resolveFooterColumns, resolveFooterLegal, validateFooterHref } from '@/lib/footer-links'
 import { pageMenuLabel, resolveFooterPages, resolveHeaderMenu } from '@/lib/site-menu'
 import { findPublicPage, homeSlug, pageNavItems, pagePath, sectionsForPage } from '@/lib/website-pages'
 import type { NavLink, Section, WebsiteSchema } from '@/lib/website-schema'
@@ -140,6 +141,22 @@ describe('sites with no dead page keep their menu exactly', () => {
     expect(allLinks(pruned).some(({ href }) => href === '')).toBe(false)
     expect(allLinks(pruned).some(({ href }) => href === '/blog')).toBe(true)
   })
+
+  it('removes a # placeholder CTA but preserves the real page menu', () => {
+    const site = asSite(dbajans)
+    const placeholder = {
+      ...site,
+      sections: site.sections.map((section) =>
+        section.type === 'cta' ? { ...section, primaryButton: { label: 'WhatsApp randevu', href: '#' } } : section,
+      ),
+    } as WebsiteSchema
+    const pruned = withLivePageLinks(placeholder)
+    const cta = pruned.sections.find((section) => section.type === 'cta')
+
+    expect(cta?.type === 'cta' ? cta.primaryButton : undefined).toBeUndefined()
+    expect(pageNavItems(pruned).some((page) => page.slug === 'iletisim')).toBe(true)
+    expect(allLinks(pruned).some((link) => link.href === '/blog')).toBe(true)
+  })
 })
 
 type Json = unknown
@@ -170,6 +187,7 @@ describe('no internal link anywhere points at a page without content', () => {
     ['ay-yildiz-tasimacilik', ayYildiz],
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
+    ['mimarlik-studyosu', mimarlik],
   ] as const) {
     it(`${name}: menu, hero, CTA, footer and sections have no dead link`, () => {
       const pruned = withLivePageLinks(asSite(json))
@@ -266,11 +284,28 @@ describe('every #anchor on the page has a target section', () => {
     ['ay-yildiz-tasimacilik', ayYildiz],
     ['dbajans.com.tr', dbajans],
     ['luna-mucevher.gloval.site', luna],
+    ['mimarlik-studyosu', mimarlik],
   ] as const) {
     it(`${name}: all #anchors resolve to a rendered section`, () => {
       expect(deadAnchors(withLivePageLinks(asSite(json)))).toEqual([])
     })
   }
+
+  it('mimarlik: rewrites the project anchor and removes only unregistered legal paths', () => {
+    const site = asSite(mimarlik)
+    const pruned = withLivePageLinks(site)
+    const projectLink = site.navigation.links.find((link) => link.label === 'Projeler')
+    const cleanedProjectLink = pruned.navigation.links.find((link) => link.label === 'Projeler')
+
+    expect(site.pages.map((page) => page.slug)).toEqual(['home', 'projeler', 'hizmetler', 'ekibimiz', 'iletisim'])
+    expect(sectionsForPage(site, 'home').some((section) => section.type === 'portfolio')).toBe(true)
+    expect(projectLink?.href).toBe('#projects')
+    expect(cleanedProjectLink?.href).toBe('#portfolio')
+    expect(validateFooterHref('/gizlilik', site)).toEqual({ ok: false, issue: 'unknown-page' })
+    expect(validateFooterHref('/kullanim-kosullari', site)).toEqual({ ok: false, issue: 'unknown-page' })
+    expect(validateFooterHref('/yasal/gizlilik-politikasi', site)).toEqual({ ok: true, kind: 'legal' })
+    expect(allLinks(pruned).some(({ href }) => href === '/gizlilik' || href === '/kullanim-kosullari')).toBe(false)
+  })
 
   it('dbajans keeps every valid anchor while pruning empty hrefs', () => {
     const dba = asSite(dbajans)

@@ -100,10 +100,21 @@ function publishedHtml(lang: 'tr' | 'en', categories: string[], page: string | n
             links: built.navigation.links.filter((l) => !l.href.includes('musteri-yorumlari')),
           },
         }
-      : built
+      : {
+          ...built,
+          // Bu eski menü snapshot'ı, bağımsız demo yorum CTA'sından etkilenmemeli.
+          sections: built.sections.map((section) =>
+            section.type === 'testimonials'
+              ? {
+                  ...section,
+                  linkEnabled: false,
+                  items: section.items.map((item) => ({ ...item, sample: false })),
+                }
+              : section,
+          ),
+        }
   return renderToStaticMarkup(
-        <WebsiteRenderer site={site} initialPage={page} store={catalog(categories)} demoRoutes={demoRoutes(site, lang)} />
-,
+    <WebsiteRenderer site={site} initialPage={page} store={catalog(categories)} demoRoutes={demoRoutes(site, lang)} />,
   )
 }
 

@@ -3,15 +3,14 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
+import { buildPreviewCatalog, StoreCatalogProvider } from '@/components/website-renderer/store-catalog-context'
 import { buildDemoSite, demos } from '@/lib/demos'
 import type { WebsiteSchema } from '@/lib/website-schema'
 
 /**
- * Sites that are live (dbajans, mimarlik-studyosu, luna-mucevher) and every
- * showcase demo carry no hero layout fields, so the layout feature must leave
- * their public HTML byte-identical. The fixtures are the stored schemas of the
- * live sites; the snapshots were generated on `main` before the hero layout
- * work landed, so a failing line here means the default hero changed.
+ * Full-render fixtures guard the default hero and published link targets. Luna
+ * receives a display-only catalog context so its product cards resolve to the
+ * live store routes rather than the stale `/products/...` schema hrefs.
  */
 
 const LIVE_SITES = ['dbajans', 'mimarlik-studyosu', 'luna-mucevher'] as const
@@ -55,9 +54,21 @@ describe('live sites preserve default hero styling while validating link targets
     it(`${slug}: every page`, async () => {
       const site = loadFixture(slug)
       const lines = ['home', ...site.pages.filter((p) => !p.isHome).map((p) => p.slug)].map((page) => {
-        const html = renderToStaticMarkup(
-          <WebsiteRenderer site={site} pageRouting initialPage={page === 'home' ? null : page} />,
-        )
+        const renderer = <WebsiteRenderer site={site} pageRouting initialPage={page === 'home' ? null : page} />
+        const html =
+          slug === 'luna-mucevher'
+            ? renderToStaticMarkup(
+                <StoreCatalogProvider catalog={buildPreviewCatalog(site, slug)}>{renderer}</StoreCatalogProvider>,
+              )
+            : renderToStaticMarkup(renderer)
+
+        if (slug === 'luna-mucevher' && page === 'home') {
+          const firstProduct = site.sections.find((section) => section.type === 'products')
+          expect(firstProduct?.type).toBe('products')
+          expect(html).toContain('href="/site/luna-mucevher/store/14k-altin-tektas-yuzuk"')
+          expect(html).not.toContain('href="/products/altin-tektaş-14k"')
+        }
+
         return `${page}: ${fingerprint(html)}`
       })
       await expect(lines.join('\n') + '\n').toMatchFileSnapshot(`./__snapshots__/live-site-${slug}.txt`)
