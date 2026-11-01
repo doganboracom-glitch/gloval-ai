@@ -59,6 +59,7 @@ export function buildItemImagePrompt(
   site: WebsiteSchema,
   target: ImageTarget,
   override?: string,
+  originalBrief?: string,
 ): string {
   const item = target.item
   const raw =
@@ -66,8 +67,15 @@ export function buildItemImagePrompt(
     [item.imagePrompt, item.title, item.caption, item.name, item.category]
       .filter((v): v is string => typeof v === 'string' && v.trim().length > 1)
       .join(', ')
-  const brief = analyzeBrief(`${raw} ${site.meta.name} ${site.meta.tagline}`, site)
+  const siteBrief = originalBrief?.trim().replace(/\s+/g, ' ').slice(0, 600)
+  const brief = analyzeBrief(
+    `${raw} ${siteBrief ?? ''} ${site.meta.name} ${site.meta.tagline}`,
+    site,
+  )
   const subject = raw ? describeVisualRequest(raw) : brief.visualNeed
+  const siteBriefContext = siteBrief
+    ? `Original site brief (context only): "${siteBrief}". Preserve this item's own description as the primary subject; use the brief only for industry, equipment, and mood.`
+    : ''
 
   const rules = imagePromptRules(brief.illustrative)
 
@@ -78,6 +86,7 @@ export function buildItemImagePrompt(
         ? `Friendly portrait illustration of a ${role || 'team member'} at a ${brief.businessType}.`
         : `Professional corporate headshot portrait of a ${role || 'team member'} at a ${brief.businessType}.`,
       subject ? `Context: ${subject}.` : '',
+      siteBriefContext,
       `Style: ${brief.style}.`,
       brief.illustrative
         ? 'Friendly natural expression, clean neutral background, crisp clean artwork.'
@@ -92,6 +101,7 @@ export function buildItemImagePrompt(
 
   return [
     `${subject}.`,
+    siteBriefContext,
     brief.illustrative
       ? `Polished illustration for the ${target.section.type} section of a ${brief.businessType}.`
       : `Photorealistic photograph for the ${target.section.type} section of a ${brief.businessType}.`,
@@ -116,8 +126,9 @@ async function resolveTarget(
   site: WebsiteSchema,
   target: ImageTarget,
   override?: string,
+  originalBrief?: string,
 ): Promise<boolean> {
-  const prompt = buildItemImagePrompt(site, target, override)
+  const prompt = buildItemImagePrompt(site, target, override, originalBrief)
   target.item.imagePrompt = prompt
   const res = await generateSiteImage({ prompt, aspectRatio: aspectFor(target.section) })
   if (!res) return false
@@ -151,11 +162,11 @@ export async function attachSectionImages(
   }
 
   let storageFailed = 0
-  // The brief is derived per item, but seeding it with the original prompt keeps
-  // the whole set on-topic when the item copy alone is thin ("Proje 1").
+  // Every item keeps its own subject; the original brief is supplemental context
+  // so a batch of thin labels ("Proje 1") still stays within the requested industry.
   const results = await Promise.all(
     pending.map((target) =>
-      resolveTarget(site, target, prompt && pending.length === 1 ? prompt : undefined).catch(
+      resolveTarget(site, target, undefined, prompt).catch(
         (err) => {
           if (err instanceof ImageStorageError) storageFailed += 1
           return false
