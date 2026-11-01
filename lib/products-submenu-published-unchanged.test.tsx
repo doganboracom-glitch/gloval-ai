@@ -112,7 +112,7 @@ const CASES = [
   { name: 'store-2-categories-home-en', render: () => publishedHtml('en', ['Accessories', 'Clothing'], null) },
 ]
 
-describe('published sites without productsSubmenu render the pre-feature HTML', () => {
+describe('demo storefronts without productsSubmenu keep the base menu output', () => {
   for (const { name, render } of CASES) {
     it(name, async () => {
       const html = render()

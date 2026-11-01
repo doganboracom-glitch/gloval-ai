@@ -144,7 +144,7 @@ describe.each(TEAM_DEMOS)('demo %s Kadromuz', (slug) => {
         ),
       },
     }
-    const html = renderToStaticMarkup(<WebsiteRenderer site={stripped} pageRouting initialPage={null} />)
+    const html = renderDemo(stripped, slug)
     expect(html).toBe(readFileSync(file, 'utf8'))
   })
 
