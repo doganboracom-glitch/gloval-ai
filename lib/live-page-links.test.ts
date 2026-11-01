@@ -372,6 +372,60 @@ describe('every #anchor on the page has a target section', () => {
   })
 })
 
+describe('strict internal target validation', () => {
+  it('removes unknown anchors and routes at every nesting level while preserving rendered ids and external URLs', () => {
+    const source = asSite(dbajans)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [
+          ...source.navigation.links,
+          { label: 'Programlar', href: '#programlar' },
+          { label: 'Top 10', href: '#top-10' },
+          { label: 'Top 20', href: '#top-20' },
+          { label: 'Missing page', href: '/not-a-real-page' },
+          { label: 'Missing nested route', href: '/programlar/top-10' },
+          { label: 'Rendered slider', href: '#slider' },
+          { label: 'External', href: 'https://example.org/radio' },
+        ],
+        cta: { label: 'Missing CTA', href: '/not-a-real-page' },
+      },
+      sections: source.sections.map((section) => {
+        if (section.type === 'hero') return { ...section, primaryButton: { label: 'Top 10', href: '#top-10' } }
+        if (section.type === 'footer') {
+          return {
+            ...section,
+            columns: [{ title: 'Listeler', links: [{ label: 'Top 20', href: '#top-20' }] }],
+          }
+        }
+        return section
+      }),
+    } as WebsiteSchema
+
+    const cleaned = withLivePageLinks(site)
+    const hrefs = allLinks(cleaned).map((link) => link.href)
+    expect(hrefs).not.toEqual(expect.arrayContaining(['#programlar', '#top-10', '#top-20', '/not-a-real-page', '/programlar/top-10']))
+    expect(cleaned.navigation.links.find((link) => link.label === 'Rendered slider')?.href).toBe('#slider')
+    expect(cleaned.navigation.links.find((link) => link.label === 'External')?.href).toBe('https://example.org/radio')
+    expect(cleaned.navigation.cta).toBeUndefined()
+    expect(deadAnchors(cleaned)).toEqual([])
+  })
+
+  it('normalizes a recognized alias to the real rendered section id', () => {
+    const source = asSite(dbajans)
+    const site = {
+      ...source,
+      navigation: {
+        ...source.navigation,
+        links: [...source.navigation.links, { label: 'Hakkımızda aliası', href: '#hakkimizda' }],
+      },
+    } as WebsiteSchema
+
+    expect(withLivePageLinks(site).navigation.links.find((link) => link.label === 'Hakkımızda aliası')?.href).toBe('#about')
+  })
+})
+
 describe('generation always leaves a #services target when services are linked', () => {
   const withoutServices = (site: WebsiteSchema): WebsiteSchema => ({
     ...site,

@@ -58,6 +58,29 @@ describe('demo home "Daha fazlası…" link', () => {
     expect(onDemoRoute).toHaveBeenCalledWith(`/demo/${slug}`)
   })
 
+  it('applies identical target pruning in preview and published renders', () => {
+    const base = buildDemoSite(demos[0], 'tr')
+    const site = {
+      ...base,
+      navigation: {
+        ...base.navigation,
+        links: [
+          { label: 'Desteksiz liste', href: '#top-10' },
+          { label: 'Ana bölüm', href: '#hero' },
+        ],
+      },
+    }
+
+    const preview = render(<WebsiteRenderer site={site} />)
+    expect(preview.container.querySelector('a[href="#top-10"]')).toBeNull()
+    expect(preview.container.querySelector('a[href="#hero"]')).toBeTruthy()
+    preview.unmount()
+
+    const published = render(<WebsiteRenderer site={site} pageRouting />)
+    expect(published.container.querySelector('a[href="#top-10"]')).toBeNull()
+    expect(published.container.querySelector('a[href="#hero"]')).toBeTruthy()
+  })
+
   it('still lets a published multi-page site navigate for real', () => {
     const site = buildDemoSite(demos[0], 'tr')
     const { container } = render(<WebsiteRenderer site={site} pageRouting />)
