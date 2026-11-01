@@ -17,10 +17,23 @@ describe('Google Ads publish SQL draft', () => {
     expect(sqlDraft).toContain('google_campaign_status')
   })
 
-  it('allowlists mutate and counts every operation for both read and mutate quota checks', () => {
+  it('binds the reservation to the exact approved version and stores the CPC summary', () => {
+    expect(sqlDraft).toContain('approved_version')
+    expect(sqlDraft).toContain('p_expected_version')
+    expect(sqlDraft).toContain("'plan_changed'")
+    expect(sqlDraft).toContain('for update')
+    expect(sqlDraft).toContain('approval_summary')
+    expect(sqlDraft).toContain('cpcBidCeilingMicros')
+  })
+
+  it('counts separate user and project read/write buckets while counting every mutate operation', () => {
     expect(sqlDraft).toContain("'googleAds.mutate'")
     expect(sqlDraft).toContain('p_operation_count')
     expect(sqlDraft).toContain('sum(o.operation_count)')
+    expect(sqlDraft).toContain('v_user_used + 1 > 80')
+    expect(sqlDraft).toContain('v_user_used + p_operation_count > 40')
+    expect(sqlDraft).toContain('v_global_bucket_used + 1 > 1200')
+    expect(sqlDraft).toContain('v_global_bucket_used + p_operation_count > 1200')
     expect(sqlDraft).toContain('ads_reserve_google_api_operation_v2')
   })
 
@@ -28,5 +41,12 @@ describe('Google Ads publish SQL draft', () => {
     expect(sqlDraft).toContain('ads_begin_google_ads_publish')
     expect(sqlDraft).toContain('public.ads_charge_credits(')
     expect(sqlDraft).toContain('p_user_id,\n    15,')
+  })
+
+  it('keeps reconciliation on plans and restricts manual resolution to service_role', () => {
+    expect(sqlDraft).toContain('ads_resolve_google_ads_publish')
+    expect(sqlDraft).toContain("'failed_refunded'")
+    expect(sqlDraft).toContain('grant execute on function public.ads_resolve_google_ads_publish')
+    expect(sqlDraft).not.toContain('create table public.ads_google_publish_recoveries')
   })
 })

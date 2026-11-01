@@ -104,6 +104,11 @@ export type AdsCampaignStatusResult = {
   paymentMethodWarning: boolean
 }
 
+export type GoogleAdsAdReviewStatus = {
+  status: 'approved' | 'disapproved' | 'review_in_progress' | 'unavailable'
+  adCount: number
+}
+
 export type GoogleAdsBillingVerification = {
   verified: boolean
   paymentMethodWarning: boolean
@@ -147,6 +152,13 @@ export interface GoogleAdsProvider extends AdsProvider {
     loginCustomerId: string | null
     context: AdsApiOperationContext
   }): Promise<GoogleAdsBillingVerification>
+  getAdReviewStatus(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    campaignId: string
+    context: AdsApiOperationContext
+  }): Promise<GoogleAdsAdReviewStatus>
   getPerformance(input: {
     accessToken: string
     customerId: string

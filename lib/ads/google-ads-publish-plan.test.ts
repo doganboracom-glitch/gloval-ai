@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildGoogleAdsMutateRequest } from '@/lib/ads/google-ads-publish-plan'
+import {
+  buildGoogleAdsApprovalSummary,
+  buildGoogleAdsMutateRequest,
+} from '@/lib/ads/google-ads-publish-plan'
 
 const PLAN = {
   brand: 'Atölye Sitesi',
@@ -40,12 +43,48 @@ describe('Google Ads publish plan compiler', () => {
     const budgetOperation = request.mutateOperations.find((operation) => 'campaignBudgetOperation' in operation)
 
     expect(request).toMatchObject({ partialFailure: false, validateOnly: false })
-    expect(request.mutateOperations).toHaveLength(9)
-    expect((campaignOperation?.campaignOperation as { create: { status: string; campaignBudget: string } }).create)
-      .toMatchObject({ status: 'PAUSED', campaignBudget: 'customers/1234567890/campaignBudgets/-1' })
+    expect(request.mutateOperations).toHaveLength(10)
+    const campaign = (campaignOperation?.campaignOperation as {
+      create: { status: string; campaignBudget: string; maximizeClicks: { cpcBidCeilingMicros: string }; name: string }
+    }).create
+    expect(campaign).toMatchObject({
+      status: 'PAUSED',
+      campaignBudget: 'customers/1234567890/campaignBudgets/-1',
+      maximizeClicks: { cpcBidCeilingMicros: '15000000' },
+    })
+    expect(campaign.name).toContain('req-123e4567e89b42d3')
     expect((budgetOperation?.campaignBudgetOperation as { create: { amountMicros: string } }).create.amountMicros)
       .toBe('150000000')
+    expect(request.mutateOperations).toContainEqual(expect.objectContaining({
+      campaignCriterionOperation: expect.objectContaining({
+        create: expect.objectContaining({ language: { languageConstant: 'languageConstants/1037' } }),
+      }),
+    }))
     expect(request).not.toHaveProperty('campaign')
+  })
+
+  it('uses the official English language constant when the plan language is English', () => {
+    const request = buildGoogleAdsMutateRequest({
+      ...INPUT,
+      planJson: { ...PLAN, language: 'en' },
+    })
+
+    expect(request.mutateOperations).toContainEqual(expect.objectContaining({
+      campaignCriterionOperation: expect.objectContaining({
+        create: expect.objectContaining({ language: { languageConstant: 'languageConstants/1000' } }),
+      }),
+    }))
+  })
+
+  it('calculates and rounds the Maximize Clicks CPC cap in the currency minor unit', () => {
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 15000, budgetCapMinor: 90000 }))
+      .toMatchObject({ cpcBidCeilingMinor: 1500, cpcBidCeilingMicros: '15000000', currencyFractionDigits: 2 })
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 500, budgetCapMinor: 500 }))
+      .toMatchObject({ cpcBidCeilingMinor: 100, cpcBidCeilingMicros: '1000000' })
+    expect(buildGoogleAdsApprovalSummary({ currency: 'JPY', dailyBudgetMinor: 100, budgetCapMinor: 500 }))
+      .toMatchObject({ cpcBidCeilingMinor: 10, cpcBidCeilingMicros: '10000000', currencyFractionDigits: 0 })
+    expect(() => buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 50, budgetCapMinor: 100 }))
+      .toThrowError(expect.objectContaining({ code: 'invalid_budget' }))
   })
 
   it('passes validate_only through to the generated mutate request', () => {

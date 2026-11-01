@@ -7,6 +7,7 @@ import {
   type AdsCampaignPublishResult,
   type AdsCampaignStatusResult,
   type AdsPerformanceSummary,
+  type GoogleAdsAdReviewStatus,
   type GoogleAdsBillingVerification,
   type AdsProvider,
   type AdsTokenSet,
@@ -387,6 +388,62 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     }
   }
 
+  const getAdReviewStatus: GoogleAdsProvider['getAdReviewStatus'] = async ({
+    accessToken,
+    customerId,
+    loginCustomerId,
+    campaignId,
+    context,
+  }): Promise<GoogleAdsAdReviewStatus> => {
+    requirePublishAccess(context.userId)
+    const normalizedCustomerId = normalizeCustomerId(customerId)
+    if (!normalizedCustomerId || !accessToken || !context.connectionId || !/^\d{1,20}$/.test(campaignId)) {
+      throw new GoogleAdsError('invalid_request')
+    }
+    const normalizedLoginCustomerId = loginCustomerId ? normalizeCustomerId(loginCustomerId) : null
+    if (loginCustomerId && !normalizedLoginCustomerId) throw new GoogleAdsError('invalid_request')
+
+    try {
+      const payload = await requireApiTransport(config)({
+        method: 'googleAds.searchStream',
+        path: `customers/${normalizedCustomerId}/googleAds:searchStream`,
+        accessToken,
+        loginCustomerId: normalizedLoginCustomerId,
+        body: {
+          query: `SELECT ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status FROM ad_group_ad WHERE campaign.id = ${campaignId} AND ad_group_ad.status != 'REMOVED'`,
+        },
+        context,
+      })
+      const rows = searchRows(payload)
+      if (rows.length === 0) return { status: 'unavailable', adCount: 0 }
+
+      let unavailable = false
+      for (const row of rows) {
+        const ad = asRecord(row.adGroupAd ?? row.ad_group_ad)
+        const policy = asRecord(ad?.policySummary ?? ad?.policy_summary)
+        const approval = policy?.approvalStatus ?? policy?.approval_status
+        const review = policy?.reviewStatus ?? policy?.review_status
+        if (approval === 'DISAPPROVED') return { status: 'disapproved', adCount: rows.length }
+        if (review === 'REVIEW_IN_PROGRESS' || approval === 'UNDER_REVIEW') {
+          return { status: 'review_in_progress', adCount: rows.length }
+        }
+        if (
+          typeof approval !== 'string' ||
+          typeof review !== 'string' ||
+          approval === 'UNKNOWN' ||
+          approval === 'UNREVIEWED' ||
+          review === 'UNKNOWN'
+        ) {
+          unavailable = true
+        }
+      }
+
+      return { status: unavailable ? 'unavailable' : 'approved', adCount: rows.length }
+    } catch (error) {
+      handleProviderError(error)
+    }
+  }
+
   const getPerformance: GoogleAdsProvider['getPerformance'] = async ({ 
     accessToken,
     customerId,
@@ -496,6 +553,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
 
     listAccountsForUser,
     getPerformance,
+    getAdReviewStatus,
     verifyBilling,
 
     async publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {

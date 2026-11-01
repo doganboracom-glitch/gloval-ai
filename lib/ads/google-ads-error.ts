@@ -25,6 +25,11 @@ export type GoogleAdsErrorCode =
   | 'invalid_publish_plan'
   | 'invalid_budget'
   | 'currency_mismatch'
+  | 'plan_changed'
+  | 'confirmation_required'
+  | 'ad_disapproved'
+  | 'ad_review_in_progress'
+  | 'ad_review_status_unavailable'
   | 'publish_disabled'
   | 'disconnect_failed'
   | 'status_update_failed'
@@ -61,6 +66,10 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'flow_expired':
       return 404
     case 'connection_busy':
+    case 'plan_changed':
+    case 'confirmation_required':
+    case 'ad_disapproved':
+    case 'ad_review_in_progress':
       return 409
     case 'configuration_missing':
     case 'publish_disabled':
@@ -85,6 +94,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'provider_error':
     case 'disconnect_failed':
     case 'status_update_failed':
+    case 'ad_review_status_unavailable':
     case 'no_accounts':
       return 502
   }

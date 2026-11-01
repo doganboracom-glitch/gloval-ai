@@ -44,6 +44,8 @@ const COUNTRY_GEO_TARGET_IDS: Record<(typeof PLAN_COUNTRIES)[number], string> = 
   AE: '2784',
 }
 
+const LANGUAGE_CONSTANT_IDS = { en: '1000', tr: '1037' } as const
+
 function invalidPlan(): never {
   throw new GoogleAdsError('invalid_publish_plan')
 }
@@ -97,19 +99,68 @@ function displayPaths(displayUrl: string, finalUrl: string): { path1?: string; p
   return { ...(parts[0] ? { path1: parts[0] } : {}), ...(parts[1] ? { path2: parts[1] } : {}) }
 }
 
-function microsFromMinorUnits(dailyMinor: number, currency: string): string {
-  if (!Number.isSafeInteger(dailyMinor) || dailyMinor <= 0 || !/^[A-Z]{3}$/.test(currency)) return invalidBudget()
+function currencyFractionDigits(currency: string): number {
+  if (!/^[A-Z]{3}$/.test(currency)) return invalidBudget()
   try {
     const fractionDigits = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
     }).resolvedOptions().maximumFractionDigits ?? 2
     if (fractionDigits > 6) return invalidBudget()
-    const micros = dailyMinor * 10 ** (6 - fractionDigits)
-    if (!Number.isSafeInteger(micros) || micros <= 0) return invalidBudget()
-    return String(micros)
+    return fractionDigits
   } catch {
     return invalidBudget()
+  }
+}
+
+function microsFromMinorUnits(amountMinor: number, currency: string): string {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return invalidBudget()
+  const fractionDigits = currencyFractionDigits(currency)
+  const micros = amountMinor * 10 ** (6 - fractionDigits)
+  if (!Number.isSafeInteger(micros) || micros <= 0) return invalidBudget()
+  return String(micros)
+}
+
+export type GoogleAdsApprovalSummary = {
+  currency: string
+  dailyBudgetMinor: number
+  budgetCapMinor: number
+  currencyFractionDigits: number
+  cpcBidCeilingMinor: number
+  cpcBidCeilingMicros: string
+}
+
+export function buildGoogleAdsApprovalSummary(input: {
+  currency: string
+  dailyBudgetMinor: number
+  budgetCapMinor: number
+}): GoogleAdsApprovalSummary {
+  if (
+    !Number.isSafeInteger(input.dailyBudgetMinor) ||
+    !Number.isSafeInteger(input.budgetCapMinor) ||
+    input.dailyBudgetMinor <= 0 ||
+    input.budgetCapMinor <= 0 ||
+    input.dailyBudgetMinor > input.budgetCapMinor
+  ) {
+    return invalidBudget()
+  }
+
+  const fractionDigits = currencyFractionDigits(input.currency)
+  const oneCurrencyUnitMinor = 10 ** fractionDigits
+  if (input.dailyBudgetMinor < oneCurrencyUnitMinor) return invalidBudget()
+
+  const cpcBidCeilingMinor = Math.min(
+    input.dailyBudgetMinor,
+    Math.max(oneCurrencyUnitMinor, Math.floor(input.dailyBudgetMinor / 10)),
+  )
+
+  return {
+    currency: input.currency,
+    dailyBudgetMinor: input.dailyBudgetMinor,
+    budgetCapMinor: input.budgetCapMinor,
+    currencyFractionDigits: fractionDigits,
+    cpcBidCeilingMinor,
+    cpcBidCeilingMicros: microsFromMinorUnits(cpcBidCeilingMinor, input.currency),
   }
 }
 
@@ -158,6 +209,11 @@ export function buildGoogleAdsMutateRequest(input: {
   }
 
   const plan = parseGoogleAdsPublishPlan(input.planJson)
+  const approvalSummary = buildGoogleAdsApprovalSummary({
+    currency: input.currency,
+    dailyBudgetMinor: input.dailyBudgetMinor,
+    budgetCapMinor: input.budgetCapMinor,
+  })
   const dailyBudgetMicros = microsFromMinorUnits(input.dailyBudgetMinor, input.currency)
   const customerResource = `customers/${customerId}`
   const budgetResource = `${customerResource}/campaignBudgets/-1`
@@ -165,8 +221,9 @@ export function buildGoogleAdsMutateRequest(input: {
   const adGroupResource = `${customerResource}/adGroups/-3`
   const paths = displayPaths(plan.adCopy.displayUrl, plan.finalUrl)
   const geoTargets = [`geoTargetConstants/${COUNTRY_GEO_TARGET_IDS[plan.country]}`]
-  const shortId = input.requestId.replace(/[^A-Za-z0-9]/g, '').slice(0, 8)
-  const campaignName = `${plan.brand} - ${plan.sectorLabel || plan.sector} - ${shortId}`.slice(0, 120)
+  const requestMarker = `req-${input.requestId.replace(/[^A-Za-z0-9]/g, '').slice(0, 16)}`
+  const campaignPrefix = `${plan.brand} - ${plan.sectorLabel || plan.sector}`
+  const campaignName = `${campaignPrefix.slice(0, 120 - requestMarker.length - 3).trim()} - ${requestMarker}`
   const adGroupName = `${plan.brand} - Search`.slice(0, 120)
   const operations: GoogleAdsMutateOperation[] = [
     {
@@ -188,7 +245,7 @@ export function buildGoogleAdsMutateRequest(input: {
           advertisingChannelType: 'SEARCH',
           status: 'PAUSED',
           campaignBudget: budgetResource,
-          maximizeClicks: {},
+          maximizeClicks: { cpcBidCeilingMicros: approvalSummary.cpcBidCeilingMicros },
           networkSettings: {
             targetGoogleSearch: true,
             targetSearchNetwork: false,
@@ -221,6 +278,14 @@ export function buildGoogleAdsMutateRequest(input: {
         },
       },
     })),
+    {
+      campaignCriterionOperation: {
+        create: {
+          campaign: campaignResource,
+          language: { languageConstant: `languageConstants/${LANGUAGE_CONSTANT_IDS[plan.language]}` },
+        },
+      },
+    },
     ...plan.keywords.map((text) => ({
       adGroupCriterionOperation: {
         create: {

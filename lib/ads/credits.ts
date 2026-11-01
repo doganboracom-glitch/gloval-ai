@@ -6,6 +6,7 @@ import {
   adsChargeReason,
   type AdsCreditAction,
 } from '@/lib/ads/credit-costs'
+import type { GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 
 /**
  * The ONLY code path that writes ads rows to the credit ledger. It calls the
@@ -35,7 +36,14 @@ export type AdsPublishBeginResult =
   | { ok: true; balance: number; alreadyCharged: boolean; chargedAmount: number }
   | {
       ok: false
-      reason: 'insufficient_credits' | 'publish_in_progress' | 'plan_not_approved' | 'plan_not_found' | 'reservation_failed'
+      reason:
+        | 'insufficient_credits'
+        | 'publish_in_progress'
+        | 'plan_not_approved'
+        | 'plan_not_found'
+        | 'plan_changed'
+        | 'currency_mismatch'
+        | 'reservation_failed'
       balance: number
     }
 
@@ -88,6 +96,8 @@ export async function beginAdsPublish(
   userId: string,
   planId: string,
   requestId: string,
+  expectedVersion: number,
+  approvalSummary: GoogleAdsApprovalSummary,
   client: AdsRpcClient = defaultClient(),
 ): Promise<AdsPublishBeginResult> {
   adsChargeReason('publish', requestId)
@@ -96,6 +106,10 @@ export async function beginAdsPublish(
       p_user_id: userId,
       p_plan_id: planId,
       p_request_id: requestId,
+      p_expected_version: expectedVersion,
+      p_cpc_bid_ceiling_minor: approvalSummary.cpcBidCeilingMinor,
+      p_cpc_bid_ceiling_micros: approvalSummary.cpcBidCeilingMicros,
+      p_currency_fraction_digits: approvalSummary.currencyFractionDigits,
     })
     .maybeSingle()
 
@@ -124,6 +138,8 @@ export async function beginAdsPublish(
     return { ok: false, reason: 'publish_in_progress', balance }
   }
   if (row.state === 'not_found') return { ok: false, reason: 'plan_not_found', balance }
+  if (row.state === 'plan_changed') return { ok: false, reason: 'plan_changed', balance }
+  if (row.state === 'currency_mismatch') return { ok: false, reason: 'currency_mismatch', balance }
   return { ok: false, reason: 'plan_not_approved', balance }
 }
 

@@ -7,7 +7,7 @@ import type { AdsRpcClient } from '@/lib/ads/credits'
 
 export type AnonCapAlertKind = 'anon_global_cap_50' | 'anon_global_cap'
 export type PolicyBlockAlertKind = 'policy_block_global_cap'
-export type GooglePublishAlertKind = 'google_publish_reconciling'
+export type GooglePublishAlertKind = `google_publish_reconciling:${string}`
 export type AdsAlertKind = AnonCapAlertKind | PolicyBlockAlertKind | GooglePublishAlertKind
 
 export const ANON_CAP_ALERT_KIND = {
@@ -16,7 +16,7 @@ export const ANON_CAP_ALERT_KIND = {
 } as const satisfies Record<string, AnonCapAlertKind>
 
 export const POLICY_BLOCK_CAP_ALERT_KIND: PolicyBlockAlertKind = 'policy_block_global_cap'
-export const GOOGLE_PUBLISH_RECONCILING_ALERT_KIND: GooglePublishAlertKind = 'google_publish_reconciling'
+export const GOOGLE_PUBLISH_RECONCILING_ALERT_KIND = 'google_publish_reconciling'
 
 /** Number of anonymous free actions at which the 50 % warning fires. */
 export function halfCapThreshold(cap: number): number {
@@ -110,7 +110,7 @@ export async function notifyGooglePublishReconciling(
   requestId: string,
   deps: AdsAlertDeps = defaultDeps,
 ): Promise<void> {
-  const kind = GOOGLE_PUBLISH_RECONCILING_ALERT_KIND
+  const kind: GooglePublishAlertKind = `${GOOGLE_PUBLISH_RECONCILING_ALERT_KIND}:${planId}`
   try {
     const first = await deps.recordOnce(kind, { planId, requestId })
     if (!first) return

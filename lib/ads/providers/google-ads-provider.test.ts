@@ -303,6 +303,69 @@ describe('Google Ads provider', () => {
     expect(operation?.update.status).toBe('ENABLED')
   })
 
+  it('reads all campaign ad policy statuses and blocks while review is ongoing', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
+    const calls: GoogleAdsApiCall[] = []
+    const requestAdsApi: GoogleAdsApiTransport = async (call) => {
+      calls.push(call)
+      return [{ results: [
+        { adGroupAd: { policySummary: { approvalStatus: 'APPROVED', reviewStatus: 'REVIEWED' } } },
+        { ad_group_ad: { policy_summary: { approval_status: 'APPROVED', review_status: 'REVIEW_IN_PROGRESS' } } },
+      ] }]
+    }
+    const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
+
+    const result = await provider.getAdReviewStatus({
+      customerId: '1234567890',
+      loginCustomerId: '1111111111',
+      campaignId: '456789',
+      accessToken: 'access-token',
+      context: PUBLISH_CONTEXT,
+    })
+
+    expect(result).toEqual({ status: 'review_in_progress', adCount: 2 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.body && 'query' in calls[0].body ? calls[0].body.query : '')
+      .toContain('ad_group_ad.policy_summary.approval_status')
+    expect(calls[0]?.body && 'query' in calls[0].body ? calls[0].body.query : '')
+      .toContain('campaign.id = 456789')
+  })
+
+  it('returns disapproved and unavailable review states without guessing approval', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
+    const payloads: unknown[] = [
+      [{ results: [{ adGroupAd: { policySummary: { approvalStatus: 'DISAPPROVED', reviewStatus: 'REVIEWED' } } }] }],
+      [{ results: [] }],
+    ]
+    const provider = createGoogleAdsProvider({
+      clientId: 'client-id',
+      requestAdsApi: async () => payloads.shift(),
+    })
+
+    const input = {
+      customerId: '1234567890',
+      loginCustomerId: null,
+      campaignId: '456789',
+      accessToken: 'access-token',
+      context: PUBLISH_CONTEXT,
+    }
+    await expect(provider.getAdReviewStatus(input)).resolves.toEqual({ status: 'disapproved', adCount: 1 })
+    await expect(provider.getAdReviewStatus(input)).resolves.toEqual({ status: 'unavailable', adCount: 0 })
+  })
+
+  it('never calls the Google transport for a user outside the publish allowlist', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', '660e8400-e29b-41d4-a716-446655440000')
+    const requestAdsApi = vi.fn(async () => ({}))
+    const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
+
+    await expect(provider.publishCampaign(publishInput() as AdsCampaignPublishInput))
+      .rejects.toMatchObject({ code: 'publish_disabled' })
+    expect(requestAdsApi).not.toHaveBeenCalled()
+  })
+
   it('rejects API listing without a quota-bound user context', async () => {
     const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi: async () => ({}) })
     await expect(provider.listAccounts('access-token')).rejects.toBeInstanceOf(GoogleAdsError)
