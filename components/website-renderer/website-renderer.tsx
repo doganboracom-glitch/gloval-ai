@@ -255,7 +255,7 @@ export function WebsiteRenderer({
         if (!parsed.success) return false
         const raw = href.slice(1)
         const options = {
-          hasBlog: Boolean(blog),
+          hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
           hasLatestPosts: Boolean(
             blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
           ),
@@ -326,7 +326,7 @@ export function WebsiteRenderer({
         const rawAnchor = url.hash.slice(1)
         const pageAnchors = pageSlug
           ? liveSectionTypesForPage(parsed.data, pageSlug, {
-              hasBlog: Boolean(blog),
+              hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
               hasLatestPosts: Boolean(
                 blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
               ),
@@ -459,13 +459,14 @@ export function WebsiteRenderer({
   // every public render (published site, demo) leaves them out.
   const shown: WebsiteSchema = preview || editSelection ? parsed.data : stripPlaceholders(parsed.data)
   const linkOptions = {
-    hasBlog: Boolean(blog),
+    hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
     hasLatestPosts: Boolean(
       blog && !hasBlogLatestSection(parsed.data) && shouldShowLatestPosts(blog, parsed.data.blogSettings),
     ),
   }
-  // Use the same target validator in editor, landing preview, demo and published renders.
-  const data: WebsiteSchema = withLivePageLinks(shown, linkOptions)
+  // Curated demos use DemoRoutes; generated sites share the validator in editor and public modes.
+  const shouldValidateLinks = !demoRoutes && Boolean(preview || editSelection || pageRouting)
+  const data: WebsiteSchema = shouldValidateLinks ? withLivePageLinks(shown, linkOptions) : shown
   const theme = resolveTheme(data)
   const pages = pageNavItems(data)
 

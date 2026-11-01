@@ -56,11 +56,12 @@ export function SiteButton({
   button,
   variant = 'primary',
 }: {
-  button: CTAButton
+  button?: CTAButton
   variant?: 'primary' | 'outline'
 }) {
   const nav = useSiteNav()
   const normalize = useHrefNormalizer()
+  if (!button) return null
   const href = normalize(button.href || '')
   const base: React.CSSProperties = {
     borderRadius: 'var(--site-radius)',
