@@ -74,6 +74,18 @@ describe('createSupportTicket department validation', () => {
     expect(mocks.insertTicket).toHaveBeenCalledWith(expect.objectContaining({ department: 'gloval-ads' }))
   })
 
+  it('returns auth_unavailable without opening an admin client during an Auth outage', async () => {
+    mocks.getUser.mockResolvedValue({
+      data: { user: null },
+      error: Object.assign(new Error('Auth unavailable'), { status: 503 }),
+    })
+
+    const result = await createSupportTicket(ticketForm('gloval-ads'))
+
+    expect(result).toEqual({ ok: false, reason: 'auth_unavailable' })
+    expect(mocks.createAdminClient).not.toHaveBeenCalled()
+  })
+
   it('rejects an unknown department before writing to Supabase', async () => {
     const result = await createSupportTicket(ticketForm('gloval-ad'))
 

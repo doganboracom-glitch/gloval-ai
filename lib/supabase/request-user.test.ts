@@ -10,7 +10,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/headers', () => ({ headers: mocks.headers }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: mocks.createClient }))
 
-import { AuthUnavailableError, getRequestUser, requireRequestUser } from './request-user'
+import {
+  AuthUnavailableError,
+  authUnavailableActionResult,
+  getRequestUser,
+  requireRequestUser,
+} from './request-user'
 
 const user = {
   id: 'trusted-user',
@@ -73,6 +78,13 @@ describe('getRequestUser', () => {
 
     mocks.headers.mockRejectedValueOnce(new Error('missing request context'))
     await expect(getRequestUser()).resolves.toEqual({ kind: 'unavailable' })
+  })
+
+  it('maps unavailable action results to auth_unavailable', () => {
+    expect(authUnavailableActionResult()).toEqual({
+      ok: false,
+      reason: 'auth_unavailable',
+    })
   })
 
   it('throws a distinct unavailable error rather than UNAUTHENTICATED', async () => {
