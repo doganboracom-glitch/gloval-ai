@@ -1893,7 +1893,11 @@ export function WebsitePreview({
           >
             {/* Editor only: the anonymous landing preview keeps its plain frame. */}
             {persist && <SiteAddressBanner address={siteAddress} lang={lang === 'en' ? 'en' : 'tr'} />}
-            <PreviewSupportCard projectId={blog?.projectId ?? null} />
+            {persist && (
+              <div className="relative h-0 w-full">
+                <PreviewSupportCard projectId={blog?.projectId ?? null} isEditorPreview />
+              </div>
+            )}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl">
             {/* Browser chrome */}
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-secondary/50 px-3 py-2">
