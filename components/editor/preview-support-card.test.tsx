@@ -1,25 +1,33 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LanguageProvider } from '@/components/language-provider'
 import { PreviewSupportCard } from '@/components/editor/preview-support-card'
+import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
+import { buildSampleSite } from '@/lib/__fixtures__/sample-site'
 
 const DISMISSED_KEY = 'gloval:preview-support-notice:dismissed:v1'
 const SHOWN_KEY = 'gloval:preview-support-notice:shown:v1'
+const SESSION_SCOPE_KEY = 'gloval:preview-support-notice:session-scope:v1'
 const REVEAL_DELAY_MS = 1_500
 const AUTO_DISMISS_MS = 30_000
 const TURKISH_BODY =
   'Bu web sitesi yapay zekâ tarafından oluşturulmuştur. İstediğiniz ek özellik veya modül (canlı yayın oynatıcı, özel liste, entegrasyon vb.) etkin değilse Teknik Ekibimize talep iletebilirsiniz; özel geliştirme ihtiyaca göre ücretli veya ücretsiz yapılabilir.'
 
-function scopedKey(key: string, projectId = 'project-1') {
-  return `${key}:${encodeURIComponent(projectId)}`
+function scopedKey(key: string, scope = 'project-1') {
+  return `${key}:${encodeURIComponent(scope)}`
 }
 
-function renderCard(projectId = 'project-1', isEditorPreview = true) {
+function renderCard(
+  projectId: string | null = 'project-1',
+  isPreview = true,
+  previewId: string | null = null,
+) {
   return render(
     <LanguageProvider initialLang="tr">
-      <PreviewSupportCard projectId={projectId} isEditorPreview={isEditorPreview} />
+      <PreviewSupportCard projectId={projectId} previewId={previewId} isPreview={isPreview} />
     </LanguageProvider>,
   )
 }
@@ -56,6 +64,19 @@ describe('PreviewSupportCard', () => {
     expect(window.sessionStorage.getItem(scopedKey(SHOWN_KEY))).toBe('true')
   })
 
+  it('reveals the same notice for a guest preview and preserves the support prefill without a project', () => {
+    vi.useFakeTimers()
+    renderCard(null, true, 'draft-1')
+
+    act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
+
+    expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Destek' }).getAttribute('href')).toBe(
+      '/support/new?department=technical&service=website',
+    )
+    expect(window.sessionStorage.getItem(scopedKey(SHOWN_KEY, 'draft-1'))).toBe('true')
+  })
+
   it('persists manual dismissal and does not show again for that project', () => {
     vi.useFakeTimers()
     const firstRender = renderCard()
@@ -72,9 +93,9 @@ describe('PreviewSupportCard', () => {
     expect(screen.queryByTestId('preview-support-notice')).toBeNull()
   })
 
-  it('automatically dismisses after 30 seconds and persists the one-time state', () => {
+  it('automatically dismisses a guest notice after 30 seconds and persists the one-time state', () => {
     vi.useFakeTimers()
-    const firstRender = renderCard()
+    const firstRender = renderCard(null, true, 'draft-1')
     act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
     expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
 
@@ -83,10 +104,10 @@ describe('PreviewSupportCard', () => {
     act(() => vi.advanceTimersByTime(1))
 
     expect(screen.queryByTestId('preview-support-notice')).toBeNull()
-    expect(window.localStorage.getItem(scopedKey(DISMISSED_KEY))).toBe('true')
+    expect(window.localStorage.getItem(scopedKey(DISMISSED_KEY, 'draft-1'))).toBe('true')
 
     firstRender.unmount()
-    renderCard()
+    renderCard(null, true, 'draft-1')
     act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
     expect(screen.queryByTestId('preview-support-notice')).toBeNull()
   })
@@ -133,6 +154,34 @@ describe('PreviewSupportCard', () => {
     expect(screen.queryByTestId('preview-support-notice')).toBeNull()
   })
 
+  it('shows only once for the same guest draft and once again for a newly generated preview', () => {
+    vi.useFakeTimers()
+    const firstRender = renderCard(null, true, 'draft-1')
+    act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
+    expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
+
+    firstRender.unmount()
+    const samePreview = renderCard(null, true, 'draft-1')
+    act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
+    expect(screen.queryByTestId('preview-support-notice')).toBeNull()
+
+    samePreview.unmount()
+    renderCard(null, true, 'draft-2')
+    act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
+    expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
+  })
+
+  it('uses a session-scoped identity if a guest preview has no draft id', () => {
+    vi.useFakeTimers()
+    renderCard(null, true, null)
+    act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS))
+
+    const sessionScope = window.sessionStorage.getItem(SESSION_SCOPE_KEY)
+    expect(sessionScope).toBeTruthy()
+    expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
+    expect(window.sessionStorage.getItem(scopedKey(SHOWN_KEY, sessionScope ?? ''))).toBe('true')
+  })
+
   it('scopes the one-time display to each project', () => {
     vi.useFakeTimers()
     const firstRender = renderCard()
@@ -145,12 +194,15 @@ describe('PreviewSupportCard', () => {
     expect(screen.getByTestId('preview-support-notice')).toBeTruthy()
   })
 
-  it('stays hidden outside the editor preview', () => {
+  it('stays hidden when outside a preview, including for published WebsiteRenderer pages', () => {
     vi.useFakeTimers()
-    renderCard('project-1', false)
+    renderCard(null, false, 'draft-1')
     act(() => vi.advanceTimersByTime(REVEAL_DELAY_MS + AUTO_DISMISS_MS))
 
     expect(screen.queryByTestId('preview-support-notice')).toBeNull()
-    expect(window.sessionStorage.getItem(scopedKey(SHOWN_KEY))).toBeNull()
+    expect(window.sessionStorage.getItem(scopedKey(SHOWN_KEY, 'draft-1'))).toBeNull()
+
+    const publishedHtml = renderToStaticMarkup(<WebsiteRenderer site={buildSampleSite()} />)
+    expect(publishedHtml).not.toContain('data-testid="preview-support-notice"')
   })
 })

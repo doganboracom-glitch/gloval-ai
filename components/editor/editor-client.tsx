@@ -98,6 +98,7 @@ export function EditorClient({
       autoPublishConfirmed={autoPublishConfirmed}
       payments={payments ?? null}
       blog={blog ?? null}
+      previewNotice={{ projectId }}
       catalog={catalog ?? null}
       catalogFeature={catalogFeature ?? null}
       onClose={() => {
