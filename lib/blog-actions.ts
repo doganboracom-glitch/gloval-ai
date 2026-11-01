@@ -6,7 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createBlogWriteDeps, listProjectBlogPosts } from '@/lib/blog-store'
 import type { BlogPost } from '@/lib/blog'
-import { regenerateStarterBlogNow, runStarterBlogNow } from '@/lib/starter-blog-server'
+import {
+  regenerateStarterBlogNow,
+  runStarterBlogNow,
+  scheduleStarterBlogReadyEmail,
+} from '@/lib/starter-blog-server'
 import { starterSiteFromSchema, type StarterErrorCode } from '@/lib/starter-blog'
 import { websiteSchema } from '@/lib/website-schema'
 import {
@@ -141,6 +145,7 @@ export async function addStarterBlogPostsAction(
   })
   if (result.status === 'created') {
     refresh(access.slug)
+    scheduleStarterBlogReadyEmail({ projectId, userId: access.ownerId })
     return { ok: true, posts: result.posts, failed: result.failed }
   }
   if (result.status === 'skipped') return { ok: false, reason: result.reason }

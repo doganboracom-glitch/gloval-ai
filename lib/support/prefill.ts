@@ -77,6 +77,11 @@ export function newTicketPathWithParams(params: RawParams): string {
   return s ? `${NEW_TICKET_PATH}?${s}` : NEW_TICKET_PATH
 }
 
+export function newTicketLoginHref(params: RawParams): string {
+  const next = sanitizeNextPath(newTicketPathWithParams(params))
+  return `/auth/login?next=${encodeURIComponent(next)}`
+}
+
 export function newTicketSignUpHref(params: RawParams): string {
   const next = sanitizeNextPath(newTicketPathWithParams(params))
   return `/auth/sign-up?next=${encodeURIComponent(next)}`

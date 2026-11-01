@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { listMyProjects } from '@/lib/support/queries'
-import { newTicketSignUpHref, parseTicketPrefill } from '@/lib/support/prefill'
+import { newTicketLoginHref, parseTicketPrefill } from '@/lib/support/prefill'
 import { NewTicketForm } from '@/components/support/new-ticket-form'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export default async function NewSupportTicketPage({
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) redirect(newTicketSignUpHref(params))
+  if (!user) redirect(newTicketLoginHref(params))
   const projects = await listMyProjects(user.id)
   const prefill = parseTicketPrefill(
     params,

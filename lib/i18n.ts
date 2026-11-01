@@ -185,6 +185,12 @@ const dict = {
       close: 'Kapat',
       back: 'Plana dön',
       hint: 'Bu, yapay zekanın ürettiği yapıdan oluşturulan gerçek bir web sitesidir.',
+      supportNotice: {
+        title: 'Önemli bilgilendirme',
+        body: 'Bu web sitesi yapay zekâ tarafından oluşturulmuştur. İstediğiniz ek özellik veya modül (canlı yayın oynatıcı, özel listeler, entegrasyonlar vb.) sitenizde etkin değilse, Teknik Ekibimize destek talebi oluşturabilirsiniz. İhtiyacınıza göre özel geliştirme ek ücret karşılığında yapılabilir.',
+        cta: 'Destek talebi oluştur',
+        dismiss: 'Bilgilendirmeyi kapat',
+      },
     },
     editor: {
       title: 'Siteyi düzenle',
@@ -2321,6 +2327,12 @@ const dict = {
     close: 'Close',
     back: 'Back to plan',
     hint: 'This is a real website rendered from the structure the AI generated.',
+    supportNotice: {
+      title: 'Important information',
+      body: 'This website was created with AI. If a requested extra feature or module (such as a livestream player, custom lists, or integrations) is not enabled on your site, you can request it from our Technical Team. Custom development may be available for an additional fee, depending on your needs.',
+      cta: 'Create a support request',
+      dismiss: 'Dismiss information',
+    },
   },
   editor: {
     title: 'Edit website',

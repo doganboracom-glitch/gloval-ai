@@ -39,16 +39,15 @@ export const AUTO_ENABLE_PATCH = { showInMenu: true, showLatest: true, starterAu
 export function starterCardState(args: {
   settings: BlogSettings | undefined
   posts: readonly BlogPost[] | undefined
-  now: Date
   /** The site was created moments ago and the posts are still being written. */
   starterPending: boolean
   /** The short wait for the first post has run out. */
   waitExpired: boolean
 }): StarterCardState {
-  const { settings, posts, now, starterPending, waitExpired } = args
+  const { settings, posts, starterPending, waitExpired } = args
   if (settings?.starterCardDismissed === true) return 'hidden'
+  if ((posts ?? []).some(isStarterPost)) return 'success'
   if (!takesPart(settings, starterPending)) return 'hidden'
-  if (liveStarterPosts(posts, now).length > 0) return 'success'
   if (posts === undefined) return 'hidden'
   return starterPending && !waitExpired ? 'preparing' : 'failed'
 }
@@ -57,8 +56,8 @@ export const STARTER_CARD_COPY = {
   tr: {
     preparing: { title: 'Blog için 3 örnek yazı hazırlanıyor', body: 'Sektörünüze uygun yazılar yazılıyor. Bu birkaç dakika sürebilir.' },
     success: {
-      title: 'Blog makaleleriniz yayınlandı',
-      lead: 'Blog makaleleriniz yayınlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize ',
+      title: 'Blog yazılarınız hazır',
+      lead: 'Blog yazılarınız hazırlandı. Göz atmanızı öneririz. Kontrol sonrası sitenizi yeniden yayınlamayı unutmayınız. Yapay zekâ hata yapabilir; bir sorun görürseniz lütfen bize ',
       link: 'bildirin',
       tail: '.',
     },
@@ -73,8 +72,8 @@ export const STARTER_CARD_COPY = {
   en: {
     preparing: { title: '3 sample blog posts are being prepared', body: 'Posts that fit your sector are being written. This can take a few minutes.' },
     success: {
-      title: 'Your blog posts are live',
-      lead: 'Your blog posts are published. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please ',
+      title: 'Your blog posts are ready',
+      lead: 'Your blog posts are ready. We recommend taking a look. Please remember to republish your site after reviewing. AI can make mistakes; if you notice an issue, please ',
       link: 'let us know',
       tail: '.',
     },

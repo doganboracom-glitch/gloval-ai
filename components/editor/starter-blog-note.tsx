@@ -5,7 +5,6 @@ import useSWR from 'swr'
 import { CheckCircle2, FileText, Loader2, TriangleAlert, X } from 'lucide-react'
 import { addStarterBlogPostsAction } from '@/lib/blog-actions'
 import { BLOG_CHANGED_EVENT } from '@/lib/blog-client'
-import { blogNow } from '@/lib/blog-clock'
 import { blogPostsKey, fetchBlogPosts } from '@/lib/blog-posts-fetcher'
 import { COMPANY } from '@/lib/legal/company'
 import {
@@ -48,7 +47,7 @@ export function StarterBlogNote({ projectId, lang, siteUrl = null, settings, sta
     revalidateOnFocus: false,
   })
 
-  const computed = starterCardState({ settings, posts, now: blogNow(), starterPending, waitExpired })
+  const computed = starterCardState({ settings, posts, starterPending, waitExpired })
   // Once the success card has been shown it stays for this session, but never returns after a reload.
   const state = computed === 'hidden' ? (pinned ?? 'hidden') : computed
 
