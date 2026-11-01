@@ -146,7 +146,8 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
     })
 
   const pathname = usePathname()
-  const analyticsAllowed = ready && consent?.analytics === true && !isAuthPath(pathname ?? '')
+  const isAuthSurface = isAuthPath(pathname ?? '')
+  const analyticsAllowed = ready && consent?.analytics === true && !isAuthSurface
   const siteDoc = useCookieBannerDoc()
   const bannerDoc = siteDoc === undefined ? 'cerez-politikasi' : siteDoc
   const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname ?? '')
@@ -160,7 +161,7 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
   useEffect(() => {
     const root = document.documentElement
     const node = bannerRef.current
-    if (!open || !node) {
+    if (isAuthSurface || !open || !node) {
       applyBannerInset(root, null)
       return
     }
@@ -172,7 +173,7 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
       observer.disconnect()
       applyBannerInset(root, null)
     }
-  }, [open, customize, variant])
+  }, [open, customize, variant, isAuthSurface])
 
   const buttonBase =
     'cookie-focus inline-flex h-9 items-center justify-center rounded-xl px-3 text-sm font-semibold transition-colors'
@@ -183,7 +184,7 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
       {/* Rıza verildiyse ve production ise analitiği yükle; aksi hâlde hiç mount etme. */}
       {analyticsAllowed && process.env.NODE_ENV === 'production' && <Analytics />}
 
-      {open && (
+      {open && !isAuthSurface && (
         <div
           ref={bannerRef}
           className={cookieBannerClass(variant, customize)}

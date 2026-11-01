@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { isAuthPath, isMeasurementSurface } from './analytics-config'
 
-const authPaths = ['/auth', '/auth/login', '/auth/confirm', '/auth/confirm/verify', '/auth/error']
+const authPaths = [
+  '/auth',
+  '/auth/login',
+  '/auth/confirm',
+  '/auth/confirm/verify',
+  '/auth/error',
+  '/forgot-password',
+]
 
 describe('auth analytics exclusion', () => {
   it.each(authPaths)('excludes %s from platform measurement', (pathname) => {

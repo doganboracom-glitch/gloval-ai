@@ -73,9 +73,12 @@ const nextConfig = {
         headers: baseSecurityHeaders,
       },
       {
-        // Auth URLs can carry one-time tokens; never send their referrer to other origins.
+        // Auth URLs can carry one-time tokens; avoid caching them or leaking their referrer.
         source: '/auth/:path*',
-        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
       },
       platformMicrophoneRule,
       // Demo imagery. Anything under a stable url may be replaced later, so it

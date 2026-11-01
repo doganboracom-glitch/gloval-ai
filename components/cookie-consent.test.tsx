@@ -113,9 +113,9 @@ describe('CookieConsent floating card', () => {
     expect(seen.size).toBe(1)
   })
 
-  it('looks the same on the home page, auth, billing and editor routes', () => {
+  it('keeps the same card layout on platform routes where the banner is shown', () => {
     const seen = new Set<string>()
-    for (const p of ['/', '/auth/login', '/auth/sign-up', '/billing', '/editor/abc', '/dashboard']) {
+    for (const p of ['/', '/billing', '/editor/abc', '/dashboard']) {
       mockPath = p
       const { unmount } = render(<CookieConsent />)
       seen.add(cardClass())
@@ -246,20 +246,30 @@ describe('CookieConsent variants', () => {
     expect(document.documentElement.hasAttribute(COOKIE_BANNER_SITE_ATTR)).toBe(false)
   })
 
-  it('does not load Vercel Analytics on auth routes even with granted analytics consent', () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    mockPath = '/auth/confirm'
-    const { rerender } = render(<CookieConsent />)
+  it.each(['/auth/confirm', '/forgot-password'])(
+    'hides the cookie banner and Vercel Analytics on the auth flow route %s', (pathname) => {
+      vi.stubEnv('NODE_ENV', 'production')
+      mockPath = pathname
+      const { rerender } = render(<CookieConsent />)
 
-    fireEvent.click(screen.getByText('Tümünü kabul et'))
-    expect(screen.queryByTestId('vercel-analytics')).toBeNull()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByTestId('vercel-analytics')).toBeNull()
 
-    act(() => {
-      mockPath = '/dashboard'
-    })
-    rerender(<CookieConsent />)
-    expect(screen.getByTestId('vercel-analytics')).not.toBeNull()
-  })
+      act(() => {
+        mockPath = '/dashboard'
+      })
+      rerender(<CookieConsent />)
+      fireEvent.click(screen.getByText('Tümünü kabul et'))
+      expect(screen.getByTestId('vercel-analytics')).not.toBeNull()
+
+      act(() => {
+        mockPath = pathname
+      })
+      rerender(<CookieConsent />)
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByTestId('vercel-analytics')).toBeNull()
+    },
+  )
 
   it('consent logic is identical: same copy, buttons and stored choice', () => {
     for (const variant of ['platform', 'site'] as const) {
