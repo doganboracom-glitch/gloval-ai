@@ -15,7 +15,7 @@ import {
 import type { AdsAlertDeps } from '@/lib/ads/admin-alert'
 
 function makeDeps(first = true) {
-  const recordOnce = vi.fn(async () => first)
+  const recordOnce = vi.fn(async (_kind: string, _detail: unknown) => first)
   const sendEmail = vi.fn(async () => undefined)
   const deps: AdsAlertDeps = { recordOnce, sendEmail }
   return { deps, recordOnce, sendEmail }

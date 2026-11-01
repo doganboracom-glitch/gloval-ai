@@ -245,7 +245,7 @@ export function buildGoogleAdsMutateRequest(input: {
           advertisingChannelType: 'SEARCH',
           status: 'PAUSED',
           campaignBudget: budgetResource,
-          maximizeClicks: { cpcBidCeilingMicros: approvalSummary.cpcBidCeilingMicros },
+          targetSpend: { cpcBidCeilingMicros: approvalSummary.cpcBidCeilingMicros },
           networkSettings: {
             targetGoogleSearch: true,
             targetSearchNetwork: false,

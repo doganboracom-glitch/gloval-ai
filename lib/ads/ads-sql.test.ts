@@ -781,13 +781,13 @@ describe('ads_purge_expired', () => {
 
     await db.query(
       `insert into public.ads_actions (user_id, plan_id, actor, action_type, status)
-       values ($1, $2, 'admin', 'publish_reconciliation_opened', 'applied')`,
+       values ($1, $2, 'system', 'publish_reconciliation_opened', 'applied')`,
       [userId, planId],
     )
     await purge()
     const { rows } = await db.query<{ status: string }>(`select status from public.ads_plans where id=$1`, [planId])
     const audit = await db.query<{ n: number }>(
-      `select count(*)::int as n from public.ads_actions where plan_id=$1`,
+      `select count(*)::int as n from public.ads_actions where plan_id=$1 and action_type='publish_reconciliation_opened'`,
       [planId],
     )
     expect(rows[0].status).toBe('reconciling')

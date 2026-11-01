@@ -61,7 +61,6 @@ begin
       raise exception 'ads plan version must be positive';
     end if;
     if new.status = 'approved' then
-      new.approved_at := coalesce(new.approved_at, pg_catalog.now());
       new.approved_version := new.version;
     else
       new.approved_version := null;
@@ -98,7 +97,6 @@ begin
   end if;
 
   if new.status = 'approved' then
-    new.approved_at := coalesce(new.approved_at, pg_catalog.now());
     new.approved_version := new.version;
   elsif new.status = 'draft' then
     new.approved_at := null;
@@ -530,10 +528,11 @@ begin
   insert into public.ads_actions
     (user_id, plan_id, connection_id, actor, action_type, before_state, after_state, status, applied_at)
   values
-    (v_plan.user_id, v_plan.id, v_plan.connection_id, 'admin:' || p_admin_email,
-     'publish_reconciliation_resolved',
-     pg_catalog.jsonb_build_object('status', 'reconciling', 'request_id', p_request_id),
-     pg_catalog.jsonb_build_object('status', v_state, 'external_campaign_id', p_external_campaign_id),
+  (v_plan.user_id, v_plan.id, v_plan.connection_id, 'system',
+   'publish_reconciliation_resolved',
+   pg_catalog.jsonb_build_object('status', 'reconciling', 'request_id', p_request_id),
+   pg_catalog.jsonb_build_object('status', v_state, 'external_campaign_id', p_external_campaign_id, 'admin_email', p_admin_email),
+
      'applied', pg_catalog.clock_timestamp());
 
   return query select v_state, v_refunded, v_balance;

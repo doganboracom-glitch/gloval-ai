@@ -45,14 +45,22 @@ describe('Google Ads publish plan compiler', () => {
     expect(request).toMatchObject({ partialFailure: false, validateOnly: false })
     expect(request.mutateOperations).toHaveLength(10)
     const campaign = (campaignOperation?.campaignOperation as {
-      create: { status: string; campaignBudget: string; maximizeClicks: { cpcBidCeilingMicros: string }; name: string }
+      create: { status: string; campaignBudget: string; targetSpend: { cpcBidCeilingMicros: string }; name: string }
     }).create
     expect(campaign).toMatchObject({
       status: 'PAUSED',
       campaignBudget: 'customers/1234567890/campaignBudgets/-1',
-      maximizeClicks: { cpcBidCeilingMicros: '15000000' },
+      targetSpend: { cpcBidCeilingMicros: '15000000' },
     })
     expect(campaign.name).toContain('req-123e4567e89b42d3')
+    const locationCriteria = request.mutateOperations.filter((operation) =>
+      'campaignCriterionOperation' in operation &&
+      Boolean((operation.campaignCriterionOperation as { create?: { location?: unknown } }).create?.location),
+    )
+    expect(locationCriteria).toHaveLength(1)
+    expect(locationCriteria[0]).toMatchObject({
+      campaignCriterionOperation: { create: { location: { geoTargetConstant: 'geoTargetConstants/2792' } } },
+    })
     expect((budgetOperation?.campaignBudgetOperation as { create: { amountMicros: string } }).create.amountMicros)
       .toBe('150000000')
     expect(request.mutateOperations).toContainEqual(expect.objectContaining({

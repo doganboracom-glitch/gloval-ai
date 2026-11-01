@@ -299,12 +299,12 @@ describe('Google Ads publish service', () => {
     const { service, deps, provider } = setup()
     let reservationTaken = false
     let actualCharges = 0
-    deps.beginPublish = vi.fn(async () => {
+    deps.beginPublish = async () => {
       if (reservationTaken) return { ok: false, reason: 'publish_in_progress', balance: 85 }
       reservationTaken = true
       actualCharges += 1
       return { ok: true, balance: 85, alreadyCharged: false, chargedAmount: 15 }
-    })
+    }
 
     const results = await Promise.all([
       service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }),

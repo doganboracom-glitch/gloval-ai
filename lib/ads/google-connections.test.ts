@@ -82,6 +82,7 @@ function provider(refresh: GoogleAdsProvider['refreshAccessTokenWithRotation']):
       campaigns: [],
     }),
     verifyBilling: async () => ({ verified: true, paymentMethodWarning: false }),
+    getAdReviewStatus: async () => ({ status: 'approved', adCount: 0 }),
     publishCampaign: async () => ({
       externalCampaignId: '12345',
       status: 'paused',
