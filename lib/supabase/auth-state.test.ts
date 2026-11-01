@@ -19,7 +19,12 @@ describe('classifyAuthResult', () => {
   it('returns the user for a successful lookup', () => {
     expect(classifyAuthResult({ data: { user }, error: null })).toEqual({
       kind: 'authenticated',
-      user,
+      user: {
+        id: user.id,
+        email: user.email,
+        email_confirmed_at: user.email_confirmed_at,
+        created_at: user.created_at,
+      },
     })
   })
 
