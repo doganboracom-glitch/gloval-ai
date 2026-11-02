@@ -17,7 +17,8 @@ import { CATALOG_MODE_LIVE, CATALOG_PRODUCT_LIMIT } from '@/lib/commerce-mode'
 import { BLOG_MAX_POSTS } from '@/lib/blog'
 
 /**
- * User-facing plan copy (TR + EN only; every other language falls back to EN).
+ * User-facing plan copy (TR + EN; card-payment notes also support DE/FR/ES/IT,
+ * while all other plan copy falls back to EN).
  *
  * This file only decides how plans are DESCRIBED. Prices, limits, credits and
  * mailbox counts are read from `pricing-config.ts` and `access-state.ts`, so
@@ -41,6 +42,29 @@ export function copyLang(lang: string | null | undefined): CopyLang {
   return lang === 'tr' ? 'tr' : 'en'
 }
 
+type CardPaymentNoteLocale = 'tr' | 'en' | 'de' | 'fr' | 'es' | 'it'
+
+const CARD_PAYMENT_NOTE_LINES: Record<
+  CardPaymentNoteLocale,
+  readonly [string, string]
+> = {
+  tr: ['iyzico', '(diğer firmalar opsiyonel olarak eklenebilir.)'],
+  en: ['iyzico', '(other providers can optionally be added.)'],
+  de: ['iyzico', '(Weitere Anbieter können optional hinzugefügt werden.)'],
+  fr: ['iyzico', '(D’autres prestataires peuvent être ajoutés en option.)'],
+  es: ['iyzico', '(Se pueden añadir otros proveedores de forma opcional.)'],
+  it: ['iyzico', '(Altri fornitori possono essere aggiunti facoltativamente.)'],
+}
+
+function cardPaymentNoteLines(langInput: string | null | undefined): string[] {
+  const locale = langInput?.toLowerCase().split(/[-_]/)[0]
+  const lines =
+    locale && locale in CARD_PAYMENT_NOTE_LINES
+      ? CARD_PAYMENT_NOTE_LINES[locale as CardPaymentNoteLocale]
+      : CARD_PAYMENT_NOTE_LINES.en
+  return [...lines]
+}
+
 export type GroupKey = 'site' | 'store' | 'email' | 'support'
 
 export type PlanCopyItem = {
@@ -48,6 +72,8 @@ export type PlanCopyItem = {
   id: string
   label: string
   note?: string
+  /** Additional muted lines shared by the card and comparison-table label. */
+  notes?: string[]
   highlight?: boolean
   /** Rendered as "not included" (muted, minus icon). */
   excluded?: boolean
@@ -839,7 +865,13 @@ function buildRawPlanView(
           { id: 'cartOrders', label: f.cartOrders, note: f.cartOrdersNote },
           { id: 'customers', label: f.customers, note: f.customersNote },
           { id: 'paymentMethods', label: f.paymentMethods, note: f.paymentMethodsNote },
-          { id: 'cardSoon', label: f.cardSoon, excluded: true, soon: true },
+          {
+            id: 'cardSoon',
+            label: f.cardSoon,
+            notes: cardPaymentNoteLines(langInput),
+            excluded: true,
+            soon: true,
+          },
           { id: 'shipping', label: f.shipping, note: f.shippingNote },
           { id: 'orderMails', label: f.orderMails },
           { id: 'aiProduct', label: f.aiProduct, note: f.aiProductNote },
@@ -991,6 +1023,7 @@ export function buildComparison(
   const nf = numberFormatter(lang)
 
   const rowLabels = new Map<string, string>()
+  const rowNotes = new Map<string, string[]>()
   const rowOrder: Record<GroupKey | 'ai' | 'content', string[]> = {
     site: [],
     content: [],
@@ -1011,7 +1044,7 @@ export function buildComparison(
     if (parent) {
       for (const [key, value] of cells[parent]) cells[code].set(key, value)
     }
-    for (const group of buildRawPlanView(code, lang, options).groups) {
+    for (const group of buildRawPlanView(code, langInput, options).groups) {
       for (const item of group.items) {
         const target = item.tableGroup ?? group.key
         const key = `${target}:${item.id}`
@@ -1019,6 +1052,7 @@ export function buildComparison(
           rowLabels.set(key, item.rowLabel ?? item.label)
           rowOrder[target].push(key)
         }
+        if (item.notes && !rowNotes.has(key)) rowNotes.set(key, item.notes)
         cells[code].set(key, item.soon ? s.comparison.soon : (item.value ?? true))
       }
     }
@@ -1062,13 +1096,17 @@ export function buildComparison(
   const featureGroups = GROUP_ORDER.filter((key) => rowOrder[key].length > 0).map(
     (key): ComparisonGroup => ({
       category: s.comparison.groups[key],
-      rows: rowOrder[key].map((rowKey) => ({
-        label: rowLabels.get(rowKey) ?? rowKey,
-        free: cells.free.get(rowKey) ?? false,
-        starter: cells.starter.get(rowKey) ?? false,
-        pro: cells.pro.get(rowKey) ?? false,
-        ecommerce: cells.ecommerce.get(rowKey) ?? false,
-      })),
+      rows: rowOrder[key].map((rowKey) => {
+        const notes = rowNotes.get(rowKey)
+        return {
+          label: rowLabels.get(rowKey) ?? rowKey,
+          ...(notes ? { notes } : {}),
+          free: cells.free.get(rowKey) ?? false,
+          starter: cells.starter.get(rowKey) ?? false,
+          pro: cells.pro.get(rowKey) ?? false,
+          ecommerce: cells.ecommerce.get(rowKey) ?? false,
+        }
+      }),
     }),
   )
 

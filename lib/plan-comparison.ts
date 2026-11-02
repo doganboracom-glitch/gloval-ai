@@ -16,7 +16,7 @@ export const POPULAR_PLAN: PlanCode = 'pro'
 
 export type PlanColumnGroup = {
   category: string
-  rows: Array<{ label: string; value: ComparisonValue }>
+  rows: Array<{ label: string; value: ComparisonValue; notes?: string[] }>
 }
 
 /** Projects the 4-column comparison down to the single column of one plan. */
@@ -26,7 +26,11 @@ export function selectPlanColumn(
 ): PlanColumnGroup[] {
   return groups.map((group) => ({
     category: group.category,
-    rows: group.rows.map((row) => ({ label: row.label, value: row[code] })),
+    rows: group.rows.map((row) => ({
+      label: row.label,
+      value: row[code],
+      ...(row.notes ? { notes: row.notes } : {}),
+    })),
   }))
 }
 

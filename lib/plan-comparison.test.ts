@@ -20,10 +20,74 @@ describe('selectPlanColumn', () => {
         group.rows.forEach((row, r) => {
           expect(row.label).toBe(comparison[g].rows[r].label)
           expect(row.value).toBe(comparison[g].rows[r][code])
+          expect(row.notes).toEqual(comparison[g].rows[r].notes)
         })
       })
     }
   })
+})
+
+describe('card payment comparison notes', () => {
+  const translations = [
+    {
+      lang: 'tr',
+      secondLine: '(diğer firmalar opsiyonel olarak eklenebilir.)',
+      soon: 'Yakında',
+    },
+    {
+      lang: 'en',
+      secondLine: '(other providers can optionally be added.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'de',
+      secondLine: '(Weitere Anbieter können optional hinzugefügt werden.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'fr',
+      secondLine: '(D’autres prestataires peuvent être ajoutés en option.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'es',
+      secondLine: '(Se pueden añadir otros proveedores de forma opcional.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'it',
+      secondLine: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+      soon: 'Soon',
+    },
+  ] as const
+
+  it.each(translations)(
+    '$lang adds localized notes without changing comparison values',
+    ({ lang, secondLine, soon }) => {
+      const comparison = buildComparison(lang)
+      const rows = comparison.flatMap((group) => group.rows)
+      const rowsWithNotes = rows.filter((row) => row.notes)
+      expect(rowsWithNotes).toHaveLength(1)
+
+      const paymentRow = rowsWithNotes[0]
+      expect(paymentRow).toMatchObject({
+        notes: ['iyzico', secondLine],
+        free: false,
+        starter: false,
+        pro: false,
+        ecommerce: soon,
+      })
+
+      const mobilePaymentRow = selectPlanColumn(comparison, 'ecommerce')
+        .flatMap((group) => group.rows)
+        .find((row) => row.notes)
+      expect(mobilePaymentRow).toEqual({
+        label: paymentRow.label,
+        value: soon,
+        notes: ['iyzico', secondLine],
+      })
+    },
+  )
 })
 
 describe('defaultComparisonPlan', () => {

@@ -99,9 +99,17 @@ export function ComparisonAccordion({
                       <tr key={`${group.category}-${row.label}`}>
                         <th
                           scope="row"
-                          className="border-t border-border/60 py-3 pl-4 pr-3 text-xs font-normal text-muted-foreground sm:text-sm"
+                          className="border-t border-border/60 py-3 pl-4 pr-3 text-xs font-normal text-muted-foreground sm:text-sm [overflow-wrap:anywhere]"
                         >
                           {row.label}
+                          {row.notes?.map((note) => (
+                            <span
+                              key={note}
+                              className="block text-xs leading-4 text-muted-foreground/70"
+                            >
+                              {note}
+                            </span>
+                          ))}
                         </th>
                         {COMPARISON_PLANS.map((plan) => (
                           <td

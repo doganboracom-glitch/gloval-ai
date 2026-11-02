@@ -10,6 +10,7 @@ import {
   splitPlanItems,
 } from './plan-copy'
 import { PLANS, type PlanCode } from './pricing-config'
+import type { Lang } from '@/lib/i18n'
 
 const CODES: PlanCode[] = ['free', 'starter', 'pro', 'ecommerce']
 const LANGS = ['tr', 'en'] as const
@@ -18,7 +19,7 @@ const BUTTON_TEXT = {
   en: { closed: 'Show all features', open: 'Show less' },
 } as const
 
-function render(code: PlanCode, lang: 'tr' | 'en', expanded: boolean) {
+function render(code: PlanCode, lang: Lang, expanded: boolean) {
   const plan = PLANS.find((p) => p.code === code)!
   return renderToStaticMarkup(
     createElement(LanguageProvider, {
@@ -216,4 +217,48 @@ describe('e-commerce "in addition to PRO" list', () => {
       }
     })
   }
+})
+
+describe('e-commerce card payment note copy', () => {
+  const translations = [
+    {
+      lang: 'tr',
+      secondLine: '(diğer firmalar opsiyonel olarak eklenebilir.)',
+    },
+    {
+      lang: 'en',
+      secondLine: '(other providers can optionally be added.)',
+    },
+    {
+      lang: 'de',
+      secondLine: '(Weitere Anbieter können optional hinzugefügt werden.)',
+    },
+    {
+      lang: 'fr',
+      secondLine: '(D’autres prestataires peuvent être ajoutés en option.)',
+    },
+    {
+      lang: 'es',
+      secondLine: '(Se pueden añadir otros proveedores de forma opcional.)',
+    },
+    {
+      lang: 'it',
+      secondLine: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+    },
+  ] as const
+
+  it.each(translations)(
+    '$lang shows both provider note lines on the card',
+    ({ lang, secondLine }) => {
+      const paymentItem = buildPlanView('ecommerce', 'yearly', lang)
+        .groups.flatMap((group) => group.items)
+        .find((item) => item.id === 'cardSoon')
+      expect(paymentItem?.notes).toEqual(['iyzico', secondLine])
+
+      const html = render('ecommerce', lang, true)
+      expect(html).toContain(
+        `>iyzico</span><span class="block text-xs leading-4 text-muted-foreground/70">${secondLine}</span>`,
+      )
+    },
+  )
 })

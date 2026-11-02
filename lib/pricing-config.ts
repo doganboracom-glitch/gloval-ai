@@ -453,6 +453,7 @@ export type ComparisonGroup = {
   category: string
   rows: Array<{
     label: string
+    notes?: string[]
     free: ComparisonValue
     starter: ComparisonValue
     pro: ComparisonValue
