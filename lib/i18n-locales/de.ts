@@ -557,6 +557,7 @@ const de: DeepPartial<Dict> = {
     subtitle: 'Jederzeit upgraden oder kündigen.',
     monthly: 'monatlich',
     yearly: 'jährlich',
+    comparisonCardPaymentLabel: 'Kartenzahlung',
     monthlyTab: 'Monatlich',
     yearlyTab: 'Jährlich',
     cta: 'Starten',

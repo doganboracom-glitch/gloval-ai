@@ -557,6 +557,8 @@ const es: DeepPartial<Dict> = {
     subtitle: 'Mejora o cancela en cualquier momento.',
     monthly: 'mensual',
     yearly: 'anual',
+    comparisonCardPaymentLabel: 'Pago con tarjeta',
+    comparisonCardPaymentNote: '(se pueden añadir otros proveedores opcionalmente.)',
     monthlyTab: 'Mensual',
     yearlyTab: 'Anual',
     cta: 'Empezar',

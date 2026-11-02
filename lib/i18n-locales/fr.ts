@@ -514,6 +514,8 @@ const fr: DeepPartial<Dict> = {
     subtitle: 'Changez d’offre ou annulez à tout moment.',
     monthly: 'mensuel',
     yearly: 'annuel',
+    comparisonCardPaymentLabel: 'Paiement par carte',
+    comparisonCardPaymentNote: '(d’autres fournisseurs peuvent être ajoutés en option.)',
     monthlyTab: 'Mensuel',
     yearlyTab: 'Annuel',
     cta: 'Commencer',

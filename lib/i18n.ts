@@ -913,6 +913,9 @@ const dict = {
       subtitle: 'İstediğin zaman yükselt ya da iptal et.',
       monthly: 'aylık',
       yearly: 'yıllık',
+      comparisonCardPaymentLabel: 'Kart ile ödeme',
+      comparisonCardPaymentNote:
+        '(diğer firmalar opsiyonel olarak eklenebilir.)',
       monthlyTab: 'Aylık',
       yearlyTab: 'Yıllık',
       yearlyNote: 'Yıllık alımlarda 2 ay bizden + com.tr domain hediye',
@@ -3071,6 +3074,9 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       subtitle: 'Upgrade or cancel anytime.',
       monthly: 'per month',
       yearly: 'per year',
+      comparisonCardPaymentLabel: 'Card payments',
+      comparisonCardPaymentNote:
+        '(other providers can optionally be added.)',
       monthlyTab: 'Monthly',
       yearlyTab: 'Yearly',
       yearlyNote: 'Pay for 10 months, 2 months on us',

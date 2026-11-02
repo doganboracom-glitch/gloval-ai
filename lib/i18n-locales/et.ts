@@ -541,6 +541,8 @@ const et: DeepPartial<Dict> = {
     subtitle: 'Muuda paketti või tühista igal ajal.',
     monthly: 'kuus',
     yearly: 'aastas',
+    comparisonCardPaymentLabel: 'Kaardimaksed',
+    comparisonCardPaymentNote: '(teisi teenusepakkujaid saab soovi korral lisada.)',
     monthlyTab: 'Kuine',
     yearlyTab: 'Aastane',
     cta: 'Alusta',

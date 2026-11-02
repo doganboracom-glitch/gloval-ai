@@ -486,6 +486,8 @@ const ar: DeepPartial<Dict> = {
     subtitle: 'قم بالترقية أو الإلغاء في أي وقت.',
     monthly: 'شهري',
     yearly: 'سنوي',
+    comparisonCardPaymentLabel: 'الدفع بالبطاقة',
+    comparisonCardPaymentNote: '(يمكن إضافة مزوّدين آخرين اختياريًا.)',
     monthlyTab: 'شهري',
     yearlyTab: 'سنوي',
     cta: 'ابدأ الآن',

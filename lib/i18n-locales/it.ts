@@ -557,6 +557,8 @@ const it: DeepPartial<Dict> = {
     subtitle: 'Aggiorna o annulla in qualsiasi momento.',
     monthly: 'al mese',
     yearly: 'all\u2019anno',
+    comparisonCardPaymentLabel: 'Pagamenti con carta',
+    comparisonCardPaymentNote: '(altri fornitori possono essere aggiunti facoltativamente.)',
     monthlyTab: 'Mensile',
     yearlyTab: 'Annuale',
     cta: 'Inizia',
