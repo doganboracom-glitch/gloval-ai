@@ -340,6 +340,18 @@ function isEnabledStorePath(site: WebsiteSchema, pathname: string): boolean {
   return STOREFRONT_ROUTE.test(pathname)
 }
 
+export function isStoreRouteHref(site: WebsiteSchema, href: string): boolean {
+  const target = parseHref(href)
+  if (target?.kind !== 'internal' || target.fragmentOnly) return false
+
+  let pathname = normalizePathname(target.pathname)
+  if (pathname.startsWith('/site/')) {
+    pathname = normalizePathname(pathname.replace(/^\/site\/[^/]+/, '') || '/')
+  }
+
+  return isEnabledStorePath(site, pathname)
+}
+
 function runtimeRouteForPath(
   site: WebsiteSchema,
   pathname: string,

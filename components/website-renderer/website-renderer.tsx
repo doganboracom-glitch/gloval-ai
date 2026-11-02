@@ -16,12 +16,14 @@ import { TeamDetailPage } from '@/components/website-renderer/sections/team-deta
 import { GalleryDetailPage, VideosDetailPage } from '@/components/website-renderer/sections/gallery-detail-page'
 import { pageNavItems, sectionsForPage, homeSlug, pagePath, resolveHrefToPageSlug, hrefToTenantPath } from '@/lib/website-pages'
 import {
+  isStoreRouteHref,
   liveSectionTypes,
   liveSectionTypesForPage,
   pageForRenderedAnchor,
   renderedAnchorHref,
   withLivePageLinks,
 } from '@/lib/live-page-links'
+import { validateFooterHref } from '@/lib/footer-links'
 import {
   SiteNavProvider,
   isDemoServiceHref,
@@ -73,12 +75,12 @@ export type PreviewNav = {
   slug: string | null
   /** True when the store is live at its tenant URL. */
   published: boolean
-  /**
-   * Invoked for a storefront's product/cart/checkout routes with a
-   * tenant-relative path (e.g. `/store/altin-tektas`). The preview opens the
-   * real store in a new tab when published, or warns the owner to publish.
-   */
+  /** Invoked only for valid storefront product/cart/checkout routes. */
   onStoreRoute: (tenantPath: string) => void
+  /** Invoked for a blog route, never through the store-route callback. */
+  onBlogRoute: (tenantPath: string) => void
+  /** Invoked for a valid legal-document route, never through the store callback. */
+  onLegalRoute: (tenantPath: string) => void
 }
 
 /**
@@ -254,6 +256,10 @@ export function WebsiteRenderer({
       if (href.startsWith('#')) {
         if (!parsed.success) return false
         const raw = href.slice(1)
+        if (preview && raw.toLowerCase() === 'cart' && isStoreRouteHref(parsed.data, '/cart')) {
+          preview.onStoreRoute('/cart')
+          return true
+        }
         const options = {
           hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
           hasLatestPosts: Boolean(
@@ -322,8 +328,12 @@ export function WebsiteRenderer({
       }
       if (parsed.success && href.startsWith('/') && href.includes('#')) {
         const url = new URL(href, window.location.origin)
-        const pageSlug = resolveHrefToPageSlug(parsed.data, url.pathname)
         const rawAnchor = url.hash.slice(1)
+        if (preview && rawAnchor.toLowerCase() === 'cart' && isStoreRouteHref(parsed.data, '/cart')) {
+          preview.onStoreRoute('/cart')
+          return true
+        }
+        const pageSlug = resolveHrefToPageSlug(parsed.data, url.pathname)
         const pageAnchors = pageSlug
           ? liveSectionTypesForPage(parsed.data, pageSlug, {
               hasBlog: Boolean(blog) || parsed.data.blogSettings?.showInMenu === true,
@@ -427,8 +437,18 @@ export function WebsiteRenderer({
         return true
       }
       const tenantPath = hrefToTenantPath(href, preview.slug)
-      if (isStorefront(parsed.data) || href.startsWith('/yasal/') || isBlogRoutePath(tenantPath)) {
+      if (isStoreRouteHref(parsed.data, tenantPath)) {
         preview.onStoreRoute(tenantPath)
+        return true
+      }
+      if (isBlogRoutePath(tenantPath)) {
+        preview.onBlogRoute(tenantPath)
+        return true
+      }
+      const legalTarget = validateFooterHref(tenantPath, parsed.data)
+      if (legalTarget.ok && legalTarget.kind === 'legal') {
+        preview.onLegalRoute(tenantPath)
+        return true
       }
       return true
     },

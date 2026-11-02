@@ -4,7 +4,7 @@ import dbajans from '@/lib/__fixtures__/published/dbajans.json'
 import luna from '@/lib/__fixtures__/published/luna-mucevher.json'
 import mimarlik from '@/lib/__fixtures__/published-mimarlik-studyosu.json'
 import { canonicalRedirectTarget } from '@/lib/canonical-pages'
-import { emptyPageSlugs, isDeadAnchor, isEmptyPage, liveSectionTypes, withLivePageLinks } from '@/lib/live-page-links'
+import { emptyPageSlugs, isDeadAnchor, isEmptyPage, isStoreRouteHref, liveSectionTypes, withLivePageLinks } from '@/lib/live-page-links'
 import { ensureServicesSection } from '@/lib/services-section'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { resolveFooterColumns, resolveFooterLegal, validateFooterHref } from '@/lib/footer-links'
@@ -514,30 +514,55 @@ describe('supported href shapes preserve real destinations and external actions'
     expect(hrefs).not.toHaveProperty('Unsafe scheme')
   })
 
-  it('keeps /urunlerimiz only when the site is an enabled storefront', () => {
+  it('keeps product and cart routes only on storefronts, across preview navigation and footer links', () => {
+    const storeRoutes = [
+      '/urunlerimiz',
+      '/urunlerimiz/product-a',
+      '/store',
+      '/store/product-a',
+      '/cart',
+      '/checkout',
+      '/hesap',
+      '/orders',
+      '/order/order-a',
+      '/odeme',
+      '/siparis/order-a',
+    ]
+    const storeLinks = storeRoutes.map((href, index) => ({ label: `Store route ${index}`, href }))
     const source = asSite(luna)
-    const site = {
+    const storeSite = {
       ...source,
-      navigation: {
-        ...source.navigation,
-        links: [...source.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
-      },
+      navigation: { ...source.navigation, links: [...source.navigation.links, ...storeLinks] },
+      sections: source.sections.map((section) =>
+        section.type === 'footer' ? { ...section, columns: [{ title: 'Mağaza', links: storeLinks }] } : section,
+      ),
     } as WebsiteSchema
-
-    const cleaned = withLivePageLinks(site)
-    expect(cleaned.navigation.links.find((link) => link.label === 'Product catalog')?.href).toBe('/urunlerimiz')
+    const cleanedStore = withLivePageLinks(storeSite)
+    expect(cleanedStore.navigation.links).toEqual(expect.arrayContaining(storeLinks))
+    expect(
+      (footerOf(cleanedStore)?.columns ?? []).flatMap((column) => column.links),
+    ).toEqual(expect.arrayContaining(storeLinks))
+    for (const href of storeRoutes) expect(isStoreRouteHref(source, href)).toBe(true)
+    expect(isStoreRouteHref(source, '/site/preview/store/product-a')).toBe(true)
 
     const nonStore = asSite(dbajans)
-    const nonStoreWithProductRoute = {
+    const nonStoreRoutes = [...storeLinks, { label: 'Invalid cart alias', href: '/sepet' }]
+    const nonStoreSite = {
       ...nonStore,
-      navigation: {
-        ...nonStore.navigation,
-        links: [...nonStore.navigation.links, { label: 'Product catalog', href: '/urunlerimiz' }],
-      },
+      navigation: { ...nonStore.navigation, links: [...nonStore.navigation.links, ...nonStoreRoutes] },
+      sections: nonStore.sections.map((section) =>
+        section.type === 'footer' ? { ...section, columns: [{ title: 'Mağaza', links: nonStoreRoutes }] } : section,
+      ),
     } as WebsiteSchema
-    expect(
-      withLivePageLinks(nonStoreWithProductRoute).navigation.links.some((link) => link.label === 'Product catalog'),
-    ).toBe(false)
+    const cleanedNonStore = withLivePageLinks(nonStoreSite)
+    expect(cleanedNonStore.navigation.links.some((link) => link.label.startsWith('Store route'))).toBe(false)
+    expect(cleanedNonStore.navigation.links.some((link) => link.label === 'Invalid cart alias')).toBe(false)
+    const cleanedFooterHrefs = (footerOf(cleanedNonStore)?.columns ?? []).flatMap((column) =>
+      column.links.map((link) => link.href),
+    )
+    for (const { href } of nonStoreRoutes) expect(cleanedFooterHrefs).not.toContain(href)
+    for (const { href } of nonStoreRoutes) expect(isStoreRouteHref(nonStore, href)).toBe(false)
+    expect(isStoreRouteHref(nonStore, '/yasal/gizlilik-politikasi')).toBe(false)
   })
 })
 
