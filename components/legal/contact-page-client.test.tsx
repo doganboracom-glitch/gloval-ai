@@ -28,14 +28,75 @@ vi.mock('@/components/site-header', () => ({ SiteHeader: () => null }))
 vi.mock('@/components/site-footer', () => ({ SiteFooter: () => null }))
 vi.mock('@/lib/support/contact', () => ({ submitContactRequest: vi.fn() }))
 
+const scrollIntoViewSpy = vi.fn()
+
+function mockReducedMotion(reducedMotion: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: vi.fn((media: string) => ({
+      matches: reducedMotion,
+      media,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia,
+  })
+}
+
 beforeEach(() => {
   window.localStorage.clear()
   document.cookie = `${LANG_COOKIE}=; path=/; max-age=0; samesite=lax`
+  HTMLElement.prototype.scrollIntoView = scrollIntoViewSpy
+  scrollIntoViewSpy.mockClear()
+  mockReducedMotion(false)
 })
 
 afterEach(cleanup)
 
 describe('ContactPageClient message prefill', () => {
+  it('does not scroll or focus the form when there is no prefilled message', () => {
+    render(
+      <LanguageProvider initialLang="tr">
+        <ContactPageClient />
+      </LanguageProvider>,
+    )
+
+    const form = document.getElementById('bize-yazin')
+    expect(form?.scrollIntoView).not.toHaveBeenCalled()
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Mesajınız'))
+  })
+
+  it('uses an immediate scroll when reduced motion is preferred', () => {
+    mockReducedMotion(true)
+    render(
+      <LanguageProvider initialLang="tr">
+        <ContactPageClient initialMessage="Bize ulaşın" />
+      </LanguageProvider>,
+    )
+
+    const form = document.getElementById('bize-yazin')
+    expect(form?.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' })
+  })
+
+  it('scrolls when the visitor explicitly selects the contact form anchor', () => {
+    render(
+      <LanguageProvider initialLang="tr">
+        <ContactPageClient />
+      </LanguageProvider>,
+    )
+
+    const form = document.getElementById('bize-yazin')
+    expect(form?.scrollIntoView).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('link', { name: /Bize yazın/i }))
+
+    expect(form?.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+    expect(document.activeElement).toBe(screen.getByLabelText('Ad Soyad'))
+  })
+
   it('focuses the prefilled message at the end and preserves text entered by the visitor', () => {
     const initialMessage = 'Web sitesi yaptırmak istiyorum. Telefonum: '
     const view = render(
@@ -45,10 +106,12 @@ describe('ContactPageClient message prefill', () => {
     )
 
     const messageField = screen.getByLabelText('Mesajınız') as HTMLTextAreaElement
+    const form = document.getElementById('bize-yazin')
     expect(messageField.value).toBe(initialMessage)
     expect(document.activeElement).toBe(messageField)
     expect(messageField.selectionStart).toBe(initialMessage.length)
     expect(messageField.selectionEnd).toBe(initialMessage.length)
+    expect(form?.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
 
     const enteredMessage = `${initialMessage}+90 555 123 4567`
     fireEvent.change(messageField, { target: { value: enteredMessage } })
@@ -75,7 +138,9 @@ describe('ContactPageClient message prefill', () => {
     )
 
     const messageField = screen.getByLabelText('Mesajınız') as HTMLTextAreaElement
+    const form = document.getElementById('bize-yazin')
     const nameField = screen.getByLabelText('Ad Soyad')
+    expect(form?.scrollIntoView).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(document.activeElement).toBe(messageField))
 
     nameField.focus()
@@ -87,5 +152,6 @@ describe('ContactPageClient message prefill', () => {
       expect(messageField.selectionStart).toBe(initialMessage.length)
       expect(messageField.selectionEnd).toBe(initialMessage.length)
     })
+    expect(form?.scrollIntoView).toHaveBeenCalledTimes(1)
   })
 })
