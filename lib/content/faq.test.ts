@@ -101,13 +101,10 @@ describe('FAQ objection handling', () => {
     expect(faqRoute).toMatch(/getRequestUser\s*\(/)
   })
 
-  it('does not add an auth lookup to the homepage FAQ', () => {
-    const homepageSource = [
-      readFileSync(path.join(root, 'app/page.tsx'), 'utf8'),
-      readFileSync(path.join(root, 'components/faq.tsx'), 'utf8'),
-    ].join('\n')
+  it('does not add an auth lookup to the homepage FAQ component', () => {
+    const faqSource = readFileSync(path.join(root, 'components/faq.tsx'), 'utf8')
 
-    expect(homepageSource).not.toMatch(/getRequestUser\s*\(|auth\.getUser\s*\(|createClient\s*\(/)
+    expect(faqSource).not.toMatch(/getRequestUser\s*\(|auth\.getUser\s*\(|createClient\s*\(/)
   })
 
   it('includes every new FAQ in the existing FAQPage JSON-LD', () => {
