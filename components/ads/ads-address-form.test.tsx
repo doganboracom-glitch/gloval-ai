@@ -50,11 +50,56 @@ describe('AdsAddressForm', () => {
     expect(screen.getByText(copy.scanQuotaNote)).toBeTruthy()
   })
 
-  it('does not call the server for an invalid address', () => {
+  it('requires an address before starting a scan', () => {
+    render(<AdsAddressForm />)
+    submitAddress('')
+
+    const input = screen.getByLabelText(copy.addressLabel)
+    expect(requestScan).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toBe(copy.addressRequired)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toContain('ads-address-error')
+  })
+
+  it('shows an inline error and does not call the server for an invalid address', () => {
     render(<AdsAddressForm />)
     submitAddress('not an address')
+
+    const input = screen.getByLabelText(copy.addressLabel)
     expect(requestScan).not.toHaveBeenCalled()
     expect(screen.getByRole('alert').textContent).toBe(copy.addressInvalid)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.getAttribute('aria-describedby')).toContain('ads-address-error')
+  })
+
+  it('fills an example chip and clears validation without submitting', () => {
+    render(<AdsAddressForm />)
+    submitAddress('not an address')
+
+    fireEvent.click(screen.getByRole('button', { name: 'ornek.com' }))
+
+    const input = screen.getByLabelText(copy.addressLabel) as HTMLInputElement
+    expect(input.value).toBe('ornek.com')
+    expect(input.getAttribute('aria-invalid')).toBe('false')
+    expect(requestScan).not.toHaveBeenCalled()
+  })
+
+  it('uses an iOS-safe 18px website address input', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+    expect(input.className).toContain('text-lg')
+  })
+
+  it('cleans an https URL in the field and submits only its host', async () => {
+    requestScan.mockResolvedValue({ ok: false, error: { code: 'unreachable' } })
+    render(<AdsAddressForm />)
+    submitAddress('https://ornek.com/hakkimizda')
+
+    const input = screen.getByLabelText(copy.addressLabel) as HTMLInputElement
+    await waitFor(() => expect(requestScan).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(input.value).toBe('ornek.com'))
+    expect(requestScan.mock.calls[0][0].address).toBe('ornek.com')
+    await screen.findByRole('alert')
   })
 
   it('locks the form while scanning and sends one request per click', async () => {
