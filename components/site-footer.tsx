@@ -63,7 +63,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
 
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-5">
         <div className="max-w-xs">
           <BrandLogo />
           <p className="mt-3 text-sm text-muted-foreground">
@@ -125,6 +125,24 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
             </ul>
           </div>
         ))}
+
+        <section
+          data-testid="partner-footer-block"
+          className="min-w-0 sm:col-span-2 lg:col-span-1"
+        >
+          <h4 className="text-sm font-semibold">{t.footer.partner.title}</h4>
+          <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">
+            {t.footer.partner.description}
+          </p>
+          <div className="mt-3">
+            <span
+              data-testid="partner-soon-badge"
+              className="inline-flex rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
+            >
+              {t.footer.partner.badge}
+            </span>
+          </div>
+        </section>
       </div>
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-5 text-center sm:flex-row sm:justify-between sm:text-start">
