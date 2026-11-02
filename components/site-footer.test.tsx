@@ -51,29 +51,45 @@ afterEach(() => {
   state.lang = 'tr'
 })
 
-describe('GLOVAL Partner footer block', () => {
+describe('GLOVAL Partner footer card', () => {
   it('renders the teaser and badge without link or hover affordances', () => {
     render(<SiteFooter now={BEFORE} />)
-    const block = screen.getByTestId('partner-footer-block')
+    const card = screen.getByTestId('partner-footer-block')
 
-    expect(block.tagName).toBe('SECTION')
-    expect(within(block).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
+    expect(card.tagName).toBe('DIV')
+    expect(card.getAttribute('role')).toBe('group')
+    expect(within(card).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
     expect(
-      within(block).getByText('Web sitesi sat, sunucu ve yatırım derdi olmadan kendi markanla kazan.'),
+      within(card).getByText('Web sitesi sat, sunucu ve yatırım derdi olmadan kendi markanla kazan.'),
     ).toBeTruthy()
-    expect(within(block).getByTestId('partner-soon-badge').textContent).toBe('YAKINDA')
-    expect(block.querySelector('a, button, [tabindex]')).toBeNull()
-    expect(block.querySelector('[class*="cursor-"], [class*="hover:"]')).toBeNull()
+    expect(within(card).getByTestId('partner-soon-badge').textContent).toBe('YAKINDA')
+    expect(card.querySelector('a, button, [tabindex]')).toBeNull()
+    expect(card.querySelector('[class*="cursor-"]')).toBeNull()
+    expect(card.className).not.toMatch(/hover:/)
+  })
+
+  it('sits below the brand tagline and preserves four footer columns', () => {
+    render(<SiteFooter now={BEFORE} />)
+    const card = screen.getByTestId('partner-footer-block')
+    const brandColumn = screen.getByTestId('footer-brand-column')
+    const tagline = within(brandColumn).getByText(dictionary.tr.footer.tagline)
+    const grid = brandColumn.parentElement
+
+    expect(brandColumn.contains(card)).toBe(true)
+    expect(tagline.nextElementSibling).toBe(card)
+    expect(grid?.children.length).toBe(4)
+    expect(grid?.className).toContain('lg:grid-cols-4')
+    expect(grid?.className).not.toContain('lg:grid-cols-5')
   })
 
   it.each(PARTNER_COPY)('renders the %s translation', (locale, description, badge) => {
     state.lang = locale
     render(<SiteFooter now={BEFORE} />)
-    const block = screen.getByTestId('partner-footer-block')
+    const card = screen.getByTestId('partner-footer-block')
 
-    expect(within(block).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
-    expect(within(block).getByText(description)).toBeTruthy()
-    expect(within(block).getByTestId('partner-soon-badge').textContent).toBe(badge)
+    expect(within(card).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
+    expect(within(card).getByText(description)).toBeTruthy()
+    expect(within(card).getByTestId('partner-soon-badge').textContent).toBe(badge)
   })
 })
 

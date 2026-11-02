@@ -6,6 +6,8 @@ import { ADS_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-flags'
 import { useLanguage } from '@/components/language-provider'
 import { BrandLogo } from '@/components/brand-logo'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { openCookiePreferences } from '@/components/cookie-consent'
 import { PaymentBadges } from '@/components/payment-badges'
 import { PLATFORM_PAYMENT_BADGES } from '@/lib/payment-badges'
@@ -63,12 +65,42 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
 
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="max-w-xs">
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          data-testid="footer-brand-column"
+          className="min-w-0 w-full max-w-none sm:max-w-xs"
+        >
           <BrandLogo />
-          <p className="mt-3 text-sm text-muted-foreground">
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             {t.footer.tagline}
           </p>
+          <Card
+            role="group"
+            aria-labelledby="footer-partner-title"
+            data-testid="partner-footer-block"
+            className="relative mt-8 w-full overflow-visible rounded-3xl border border-brand/40 bg-card pt-6 shadow-[0_0_24px_color-mix(in_oklab,var(--color-brand)_18%,transparent)] ring-0"
+          >
+            <Badge
+              data-testid="partner-soon-badge"
+              variant="default"
+              className="absolute left-4 top-0 z-10 -translate-y-1/2 border-brand/70 bg-brand px-2.5 text-[10px] font-bold tracking-[0.12em] text-brand-foreground transition-none"
+            >
+              {t.footer.partner.badge}
+            </Badge>
+            <CardHeader>
+              <CardTitle
+                id="footer-partner-title"
+                role="heading"
+                aria-level={4}
+                className="font-bold"
+              >
+                {t.footer.partner.title}
+              </CardTitle>
+              <CardDescription className="break-words leading-relaxed">
+                {t.footer.partner.description}
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
 
         {columns.map((col) => (
@@ -126,23 +158,6 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
           </div>
         ))}
 
-        <section
-          data-testid="partner-footer-block"
-          className="min-w-0 sm:col-span-2 lg:col-span-1"
-        >
-          <h4 className="text-sm font-semibold">{t.footer.partner.title}</h4>
-          <p className="mt-3 break-words text-sm leading-relaxed text-muted-foreground">
-            {t.footer.partner.description}
-          </p>
-          <div className="mt-3">
-            <span
-              data-testid="partner-soon-badge"
-              className="inline-flex rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
-            >
-              {t.footer.partner.badge}
-            </span>
-          </div>
-        </section>
       </div>
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-5 text-center sm:flex-row sm:justify-between sm:text-start">
