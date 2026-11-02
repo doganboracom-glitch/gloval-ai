@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import {
   ArrowLeft,
   Mail,
@@ -17,6 +17,7 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
 import { COMPANY, isPlaceholder } from '@/lib/legal/company'
+import { CONSENT_CHANGE_EVENT } from '@/lib/cookie-consent-storage'
 import { submitContactRequest } from '@/lib/support/contact'
 
 const FORM_ID = 'bize-yazin'
@@ -39,7 +40,7 @@ function scrollToForm(event: React.MouseEvent<HTMLAnchorElement>) {
  * Kurumsal bilgi tablosunun yerini, gönderilen her talebi admin panelindeki
  * "Destek" ekranına bir talep (ticket) olarak düşüren bir iletişim formu aldı.
  */
-export function ContactPageClient() {
+export function ContactPageClient({ initialMessage = '' }: { initialMessage?: string }) {
   const { t, lang } = useLanguage()
   const tr = lang === 'tr'
 
@@ -147,7 +148,7 @@ export function ContactPageClient() {
           </a>
         </div>
 
-        <ContactForm tr={tr} />
+        <ContactForm tr={tr} initialMessage={initialMessage} />
       </main>
       <SiteFooter />
     </div>
@@ -155,14 +156,44 @@ export function ContactPageClient() {
 }
 
 /** İletişim formu — gönderim admin panelinde destek talebi olarak açılır. */
-function ContactForm({ tr }: { tr: boolean }) {
+function ContactForm({ tr, initialMessage }: { tr: boolean; initialMessage: string }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(initialMessage)
+  const messageFieldRef = useRef<HTMLTextAreaElement | null>(null)
+  const hasMessagePrefill = useRef(Boolean(initialMessage))
   const [website, setWebsite] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  useEffect(() => {
+    if (!hasMessagePrefill.current) return
+
+    const focusMessageField = () => {
+      const messageField = messageFieldRef.current
+      if (!messageField) return
+
+      messageField.focus()
+      messageField.setSelectionRange(messageField.value.length, messageField.value.length)
+    }
+
+    let focusTimer: number | undefined
+    const scheduleFocus = () => {
+      if (focusTimer !== undefined) window.clearTimeout(focusTimer)
+      focusTimer = window.setTimeout(focusMessageField, 0)
+    }
+    const onConsentChange = () => scheduleFocus()
+
+    window.addEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
+    focusMessageField()
+    scheduleFocus()
+
+    return () => {
+      window.removeEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
+      if (focusTimer !== undefined) window.clearTimeout(focusTimer)
+    }
+  }, [])
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -278,6 +309,7 @@ function ContactForm({ tr }: { tr: boolean }) {
               {tr ? 'Mesajınız' : 'Message'}
             </label>
             <textarea
+              ref={messageFieldRef}
               id="contact-message"
               required
               rows={5}
