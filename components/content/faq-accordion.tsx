@@ -17,9 +17,11 @@ export function FaqAccordion({
   items,
   /** Index open on first render. Pass null to start fully collapsed. */
   defaultOpen = 0,
+  supportHref = '/iletisim',
 }: {
   items: FaqItem[]
   defaultOpen?: number | null
+  supportHref?: string
 }) {
   const { lang } = useLanguage()
   const [open, setOpen] = useState<string | null>(
@@ -67,6 +69,24 @@ export function FaqAccordion({
             >
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground">
                 {getLocalized(item.answer, lang)}
+                {item.answerLink && (
+                  <>
+                    {' '}
+                    {getLocalized(item.answerLink.prefix, lang)}{' '}
+                    <a
+                      href={item.answerLink.target.kind === 'support' ? supportHref : item.answerLink.target.href}
+                      className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {getLocalized(item.answerLink.label, lang)}
+                    </a>
+                    {item.answerLink.suffix && (
+                      <>
+                        {/^[,.;:!?]/.test(getLocalized(item.answerLink.suffix, lang)) ? '' : ' '}
+                        {getLocalized(item.answerLink.suffix, lang)}
+                      </>
+                    )}
+                  </>
+                )}
               </p>
             </div>
           </div>

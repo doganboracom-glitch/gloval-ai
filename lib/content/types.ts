@@ -12,11 +12,12 @@ import type { Lang } from '@/lib/i18n'
  * than one row per locale, which keeps a post and its translation impossible to
  * get out of sync while there is no CMS enforcing that relationship.
  *
- * Content is currently translated in full for `tr`/`en` only. `en` is
- * mandatory and every other one of the 12 platform locales is optional —
- * use `getLocalized()` (below) to read a value, never index `[locale]`
- * directly, so an untranslated locale falls back to English instead of
- * rendering `undefined`.
+ * Most fallback content is translated in full for `tr`/`en`; individual FAQ
+ * entries may also provide selected translations for other locales. `en` is
+ * mandatory and every other one of the 12 platform locales is optional — use
+ * `getLocalized()` (below) to read a value, never index `[locale]` directly,
+ * so an untranslated locale falls back to English instead of rendering
+ * `undefined`.
  */
 export type Localized<T> = Partial<Record<Lang, T>> & { en: T }
 
@@ -25,17 +26,40 @@ export function getLocalized<T>(value: Localized<T>, locale: Lang): T {
   return value[locale] ?? value.en
 }
 
+export type FaqAnswerLink = {
+  target: { kind: 'url'; href: string } | { kind: 'support' }
+  prefix: Localized<string>
+  label: Localized<string>
+  suffix?: Localized<string>
+}
+
 export type FaqItem = {
   /** Stable key. Safe to use as a React key and as an anchor id. */
   id: string
   question: Localized<string>
   answer: Localized<string>
+  answerLink?: FaqAnswerLink
   /**
    * Whether this entry appears in the homepage summary. The homepage shows a
    * curated subset, so it is an explicit flag rather than "first N of the list"
    * — reordering the full list must not silently change the homepage.
    */
   featured: boolean
+}
+
+/** Plain-text equivalent of an FAQ answer, including any linked copy. */
+export function getFaqAnswerText(item: Pick<FaqItem, 'answer' | 'answerLink'>, locale: Lang): string {
+  const answer = getLocalized(item.answer, locale)
+  const link = item.answerLink
+  if (!link) return answer
+
+  const parts = [answer, getLocalized(link.prefix, locale), getLocalized(link.label, locale)]
+  if (link.suffix) parts.push(getLocalized(link.suffix, locale))
+
+  return parts.reduce((text, part) => {
+    if (!text) return part
+    return `${text}${/^[,.;:!?]/.test(part) ? '' : ' '}${part}`
+  }, '')
 }
 
 /** Category slug. Free-form now that categories are managed in the admin. */
