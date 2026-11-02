@@ -192,7 +192,6 @@ const REMOVED_CLAIMS = [
   'AI Site Analizi',
   'Gelişmiş SEO',
   'ziyaretçi analizi',
-  'iyzico',
   'İletişim formu',
   'Contact form',
 ]
@@ -306,6 +305,29 @@ describe('comparison table is derived from the cards', () => {
     }
   })
 
+  it('shows localized card payments as included on the e-commerce card', () => {
+    for (const lang of SUPPORTED_LOCALES) {
+      const expected = cardPaymentCopy[lang]
+      const paymentItem = buildPlanView('ecommerce', 'yearly', lang)
+        .groups.flatMap((group) => group.items)
+        .find((item) => item.id === 'cardPayment')
+
+      expect(paymentItem, lang).toBeDefined()
+      expect(paymentItem?.label).toBe(expected.label)
+      expect(paymentItem?.note).toBe(`iyzico ${expected.note}`)
+      expect(paymentItem?.excluded).toBeUndefined()
+      expect(paymentItem?.soon).toBeUndefined()
+
+      for (const code of CODES.filter((planCode) => planCode !== 'ecommerce')) {
+        const otherPlanText = buildPlanView(code, 'yearly', lang).groups
+          .flatMap((group) => group.items)
+          .flatMap((item) => [item.label, item.note ?? ''])
+          .join('\n')
+        expect(otherPlanText).not.toContain('iyzico')
+      }
+    }
+  })
+
   it('every feature on a card is ticked for that plan in the table', () => {
     const rows = buildComparison('en').flatMap((g) => g.rows)
     for (const code of CODES) {
@@ -391,23 +413,6 @@ describe('retired GLOVAL ADS plan row', () => {
         group.rows.map((row) => row.label),
       )
       expect(comparisonLabels).not.toContain('GLOVAL ADS')
-    }
-  })
-
-  it('keeps the e-commerce card payment announcement', () => {
-    const expectedLabels = {
-      tr: 'Kart ile ödeme (yakında)',
-      en: 'Card payments (coming soon)',
-    } as const
-
-    for (const lang of ['tr', 'en'] as const) {
-      const paymentItem = buildPlanView('ecommerce', 'yearly', lang)
-        .groups.flatMap((group) => group.items)
-        .find((item) => item.id === 'cardSoon')
-
-      expect(paymentItem?.label).toBe(expectedLabels[lang])
-      expect(paymentItem?.soon).toBe(true)
-      expect(paymentItem?.excluded).toBe(true)
     }
   })
 })

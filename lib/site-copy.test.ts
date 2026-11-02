@@ -38,12 +38,11 @@ describe('PayTR wording on gloval.ai public surfaces', () => {
     expect(read('lib/pricing-config.ts')).not.toMatch(/paytr/i)
   })
 
-  it('lists only the live store payment methods and marks card payments as coming soon', () => {
- const source = read('lib/plan-copy.ts')
- expect(source).toContain("paymentMethods: 'Havale/EFT ve kapıda ödeme'")
- expect(source).toContain("paymentMethods: 'Bank transfer and cash on delivery'")
- expect(source).toContain("cardSoon: 'Kart ile ödeme (yakında)'")
- expect(source).toContain("cardSoon: 'Card payments (coming soon)'")
- expect(source).not.toMatch(/paymentProviders/)
+  it('lists only live store payment methods and keeps card-payment copy localized', () => {
+    const source = read('lib/plan-copy.ts')
+    expect(source).toContain("paymentMethods: 'Havale/EFT ve kapıda ödeme'")
+    expect(source).toContain("paymentMethods: 'Bank transfer and cash on delivery'")
+    expect(source).toContain('const CARD_PAYMENT_COPY')
+    expect(source).not.toMatch(/paymentProviders/)
   })
 })
