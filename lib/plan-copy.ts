@@ -15,9 +15,10 @@ import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 import { ADVANCED_AI_DISTINCT } from '@/lib/ai-models'
 import { CATALOG_MODE_LIVE, CATALOG_PRODUCT_LIMIT } from '@/lib/commerce-mode'
 import { BLOG_MAX_POSTS } from '@/lib/blog'
+import { matchLocaleTag, type SupportedLocale } from '@/lib/locale-registry'
 
 /**
- * User-facing plan copy (TR + EN only; every other language falls back to EN).
+ * User-facing plan copy is TR + EN; the card-payment comparison row supports all locales.
  *
  * This file only decides how plans are DESCRIBED. Prices, limits, credits and
  * mailbox counts are read from `pricing-config.ts` and `access-state.ts`, so
@@ -41,6 +42,67 @@ export function copyLang(lang: string | null | undefined): CopyLang {
   return lang === 'tr' ? 'tr' : 'en'
 }
 
+type CardPaymentCopy = {
+  rowLabel: string
+  note: string
+}
+
+const CARD_PAYMENT_COPY: Record<SupportedLocale, CardPaymentCopy> = {
+  tr: {
+    rowLabel: 'Kart ile ödeme',
+    note: '(diğer firmalar opsiyonel olarak eklenebilir.)',
+  },
+  en: {
+    rowLabel: 'Card payments',
+    note: '(other providers can optionally be added.)',
+  },
+  fr: {
+    rowLabel: 'Paiement par carte',
+    note: '(D’autres prestataires peuvent être ajoutés en option.)',
+  },
+  de: {
+    rowLabel: 'Kartenzahlung',
+    note: '(Weitere Anbieter können optional hinzugefügt werden.)',
+  },
+  it: {
+    rowLabel: 'Pagamenti con carta',
+    note: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+  },
+  et: {
+    rowLabel: 'Kaardimaksed',
+    note: '(Teisi teenusepakkujaid saab soovi korral lisada.)',
+  },
+  pl: {
+    rowLabel: 'Płatność kartą',
+    note: '(Innych dostawców można opcjonalnie dodać.)',
+  },
+  es: {
+    rowLabel: 'Pago con tarjeta',
+    note: '(Se pueden añadir otros proveedores de forma opcional.)',
+  },
+  pt: {
+    rowLabel: 'Pagamento com cartão',
+    note: '(Outros fornecedores podem ser adicionados opcionalmente.)',
+  },
+  ar: {
+    rowLabel: 'الدفع بالبطاقة',
+    note: '(يمكن إضافة مزوّدين آخرين اختياريًا.)',
+  },
+  ru: {
+    rowLabel: 'Оплата картой',
+    note: '(Других поставщиков можно добавить по желанию.)',
+  },
+  az: {
+    rowLabel: 'Kartla ödəniş',
+    note: '(Digər provayderlər istəyə bağlı əlavə edilə bilər.)',
+  },
+}
+
+function getCardPaymentCopy(langInput: string | null | undefined): CardPaymentCopy {
+  const locale = matchLocaleTag(langInput?.replace(/_/g, '-') ?? '') ?? 'en'
+  return CARD_PAYMENT_COPY[locale]
+}
+
 export type GroupKey = 'site' | 'store' | 'email' | 'support'
 
 export type PlanCopyItem = {
@@ -55,6 +117,8 @@ export type PlanCopyItem = {
   rowLabel?: string
   /** Comparison cell text for limit-style rows (e.g. "3", "8"). */
   value?: string
+  /** Overrides the comparison value without changing the plan-card copy. */
+  comparisonValue?: ComparisonValue
   /** Feature is announced but not live yet; the table shows "Soon". */
   soon?: boolean
   /** Faded pill rendered next to the card label (e.g. "Yakında"). */
@@ -625,6 +689,7 @@ function buildRawPlanView(
   const nf = numberFormatter(lang)
   const base = s.plans[code]
   const { f, groups: g } = s
+  const paymentCopy = getCardPaymentCopy(langInput)
   const advancedAiItems: PlanCopyItem[] =
     (options.advancedAi ?? ADVANCED_AI_DISTINCT)
       ? [{ id: 'advancedAi', label: f.advancedAi, note: f.advancedAiNote, tableGroup: 'ai' }]
@@ -839,7 +904,14 @@ function buildRawPlanView(
           { id: 'cartOrders', label: f.cartOrders, note: f.cartOrdersNote },
           { id: 'customers', label: f.customers, note: f.customersNote },
           { id: 'paymentMethods', label: f.paymentMethods, note: f.paymentMethodsNote },
-          { id: 'cardSoon', label: f.cardSoon, excluded: true, soon: true },
+          {
+            id: 'cardSoon',
+            label: f.cardSoon,
+            rowLabel: paymentCopy.rowLabel,
+            comparisonValue: { text: 'iyzico', note: paymentCopy.note },
+            excluded: true,
+            soon: true,
+          },
           { id: 'shipping', label: f.shipping, note: f.shippingNote },
           { id: 'orderMails', label: f.orderMails },
           { id: 'aiProduct', label: f.aiProduct, note: f.aiProductNote },
@@ -1011,7 +1083,7 @@ export function buildComparison(
     if (parent) {
       for (const [key, value] of cells[parent]) cells[code].set(key, value)
     }
-    for (const group of buildRawPlanView(code, lang, options).groups) {
+    for (const group of buildRawPlanView(code, langInput, options).groups) {
       for (const item of group.items) {
         const target = item.tableGroup ?? group.key
         const key = `${target}:${item.id}`
@@ -1019,7 +1091,10 @@ export function buildComparison(
           rowLabels.set(key, item.rowLabel ?? item.label)
           rowOrder[target].push(key)
         }
-        cells[code].set(key, item.soon ? s.comparison.soon : (item.value ?? true))
+        cells[code].set(
+          key,
+          item.comparisonValue ?? (item.soon ? s.comparison.soon : (item.value ?? true)),
+        )
       }
     }
   }
