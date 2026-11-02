@@ -1422,6 +1422,8 @@ const fr: DeepPartial<Dict> = {
     campaignPaused: 'En pause',
     campaignRemoved: 'Supprimée',
     campaignUnknown: 'Inconnue',
+    campaignAccount: 'Compte',
+    unknownPlatform: 'Plateforme inconnue',
     disconnectDialog: {
       title: 'Déconnecter Google Ads ?',
       description: 'La déconnexion révoquera l’accès de GLOVAL à votre compte Google et supprimera le jeton d’accès enregistré. Vous pourrez vous reconnecter à tout moment.',

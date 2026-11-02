@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { AlertCircle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -28,8 +29,11 @@ import {
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ADS_DASHBOARD_PATH } from '@/lib/ads/feature-flag'
+import { getAdsPlatformDefinition } from '@/lib/ads/platforms'
+import { cn } from '@/lib/utils'
 import type {
   AdsAccountSummary,
+  AdsCampaignPerformanceRow,
   AdsPerformanceSummary,
   GoogleAdsDateRange,
 } from '@/lib/ads/providers/types'
@@ -186,7 +190,10 @@ function GoogleAccountChooser({ flowId }: { flowId: string | null }) {
         ) : (
           <>
             <label htmlFor="google-ads-account" className="flex flex-col gap-2 text-sm font-medium">
-              {copy.accountSelectionTitle}
+              <span className="flex flex-wrap items-center gap-2">
+                {copy.accountSelectionTitle}
+                <AdsPlatformBadge platformId="google_ads" fallbackLabel={copy.unknownPlatform} />
+              </span>
               <select
                 id="google-ads-account"
                 value={accountId}
@@ -274,54 +281,193 @@ function getCampaignStatusPresentation(status: string, copy: ReturnType<typeof u
   }
 }
 
-function CampaignTable({ report, locale, copy }: {
-  report: AdsPerformanceSummary
-  locale: string
+export function AdsPlatformBadge({
+  platformId,
+  fallbackLabel,
+}: {
+  platformId: string | null | undefined
+  fallbackLabel: string
+}) {
+  const platform = getAdsPlatformDefinition(platformId)
+  const logo = platform?.logo
+  const LogoComponent = typeof logo === 'string' ? null : logo
+
+  return (
+    <Badge
+      variant="outline"
+      className="inline-flex shrink-0 gap-2 border-border bg-background px-2 py-1 text-sm font-medium text-foreground"
+    >
+      {typeof logo === 'string' ? (
+        <Image
+          src={logo}
+          alt=""
+          width={14}
+          height={14}
+          className="size-3.5 shrink-0 object-contain"
+          aria-hidden="true"
+        />
+      ) : LogoComponent ? (
+        <LogoComponent className="size-3.5 shrink-0" aria-hidden />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="size-2 shrink-0 rounded-full bg-muted-foreground"
+          style={platform ? { backgroundColor: platform.accentColor } : undefined}
+        />
+      )}
+      <span>{platform?.label ?? fallbackLabel}</span>
+    </Badge>
+  )
+}
+
+function CampaignIdentity({
+  campaign,
+  copy,
+}: {
+  campaign: AdsCampaignPerformanceRow
   copy: ReturnType<typeof useLanguage>['t']['ads']
 }) {
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <caption className="sr-only">{copy.performanceTitle}</caption>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{copy.campaignName}</TableHead>
-            <TableHead>{copy.campaignStatus}</TableHead>
-            <TableHead className="text-end">{copy.impressions}</TableHead>
-            <TableHead className="text-end">{copy.clicks}</TableHead>
-            <TableHead className="text-end">{copy.spend}</TableHead>
-            <TableHead className="text-end">{copy.conversions}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {report.campaigns.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                {copy.campaignsEmpty}
-              </TableCell>
-            </TableRow>
-          ) : report.campaigns.map((campaign) => {
-            const status = getCampaignStatusPresentation(campaign.status, copy)
-
-            return (
-              <TableRow key={campaign.id}>
-                <TableCell className="max-w-64 truncate font-medium">{campaign.name || campaign.id}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={status.badgeClassName}>
-                    <span aria-hidden="true" className={status.dotClassName} />
-                    {status.label}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-end tabular-nums">{formatNumber(campaign.impressions, locale)}</TableCell>
-                <TableCell className="text-end tabular-nums">{formatNumber(campaign.clicks, locale)}</TableCell>
-                <TableCell className="text-end tabular-nums">{formatSpend(campaign.costMicros, report.currency, locale)}</TableCell>
-                <TableCell className="text-end tabular-nums">{formatNumber(campaign.conversions, locale, 2)}</TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <AdsPlatformBadge platformId={campaign.platform} fallbackLabel={copy.unknownPlatform} />
+        <h3 className="min-w-0 break-words text-base font-semibold leading-6 text-foreground">
+          {campaign.name || campaign.id}
+        </h3>
+      </div>
+      <p className="break-words text-sm leading-relaxed text-muted-foreground">
+        {copy.campaignAccount}: {campaign.accountName ? `${campaign.accountName} · ${campaign.accountId}` : campaign.accountId}
+      </p>
     </div>
+  )
+}
+
+function CampaignStatusBadge({ status, copy }: {
+  status: string
+  copy: ReturnType<typeof useLanguage>['t']['ads']
+}) {
+  const presentation = getCampaignStatusPresentation(status, copy)
+
+  return (
+    <Badge variant="outline" className={cn(presentation.badgeClassName, 'shrink-0 whitespace-nowrap text-sm')}>
+      <span aria-hidden="true" className={presentation.dotClassName} />
+      {presentation.label}
+    </Badge>
+  )
+}
+
+function CampaignMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="text-sm leading-relaxed text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-sm font-semibold leading-relaxed tabular-nums text-foreground">{value}</dd>
+    </div>
+  )
+}
+
+function campaignRowKey(campaign: AdsCampaignPerformanceRow) {
+  return `${campaign.platform}:${campaign.accountId}:${campaign.id}`
+}
+
+function CampaignTable({ campaigns, currency, locale, copy }: {
+  campaigns: AdsCampaignPerformanceRow[]
+  currency: string | null
+  locale: string
+  copy: ReturnType<typeof useLanguage>['t']['ads']
+}) {
+  const cellClassName = 'border-y border-border bg-card px-3 py-3 align-middle shadow-sm transition-colors group-hover:border-brand/40 group-hover:bg-brand/5'
+
+  return (
+    <>
+      <div data-testid="campaign-table-desktop" className="hidden min-w-0 overflow-hidden md:block">
+        <Table className="w-full table-fixed border-separate border-spacing-y-2">
+          <caption className="sr-only">{copy.performanceTitle}</caption>
+          <TableHeader>
+            <TableRow className="border-0 hover:bg-transparent">
+              <TableHead className="w-[34%] rounded-s-lg border border-border bg-muted/70 px-3 py-3 text-start text-sm font-semibold text-foreground whitespace-normal">
+                {copy.campaignName}
+              </TableHead>
+              <TableHead className="w-[16%] border-y border-border bg-muted/70 px-3 py-3 text-start text-sm font-semibold text-foreground whitespace-normal">
+                {copy.campaignStatus}
+              </TableHead>
+              <TableHead className="w-[12.5%] border-y border-border bg-muted/70 px-3 py-3 text-end text-sm font-semibold text-foreground whitespace-normal">
+                {copy.impressions}
+              </TableHead>
+              <TableHead className="w-[12.5%] border-y border-border bg-muted/70 px-3 py-3 text-end text-sm font-semibold text-foreground whitespace-normal">
+                {copy.clicks}
+              </TableHead>
+              <TableHead className="w-[12.5%] border-y border-border bg-muted/70 px-3 py-3 text-end text-sm font-semibold text-foreground whitespace-normal">
+                {copy.spend}
+              </TableHead>
+              <TableHead className="w-[12.5%] rounded-e-lg border border-border bg-muted/70 px-3 py-3 text-end text-sm font-semibold text-foreground whitespace-normal">
+                {copy.conversions}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {campaigns.length === 0 ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="rounded-xl border border-border bg-card py-8 text-center text-sm text-muted-foreground">
+                  {copy.campaignsEmpty}
+                </TableCell>
+              </TableRow>
+            ) : campaigns.map((campaign) => (
+              <TableRow key={campaignRowKey(campaign)} className="group cursor-default border-0 hover:bg-transparent">
+                <TableCell className={`${cellClassName} rounded-s-xl border-s whitespace-normal`}>
+                  <CampaignIdentity campaign={campaign} copy={copy} />
+                </TableCell>
+                <TableCell className={cellClassName}>
+                  <CampaignStatusBadge status={campaign.status} copy={copy} />
+                </TableCell>
+                <TableCell className={`${cellClassName} text-end text-sm tabular-nums whitespace-nowrap`}>
+                  {formatNumber(campaign.impressions, locale)}
+                </TableCell>
+                <TableCell className={`${cellClassName} text-end text-sm tabular-nums whitespace-nowrap`}>
+                  {formatNumber(campaign.clicks, locale)}
+                </TableCell>
+                <TableCell className={`${cellClassName} text-end text-sm tabular-nums whitespace-nowrap`}>
+                  {formatSpend(campaign.costMicros, currency, locale)}
+                </TableCell>
+                <TableCell className={`${cellClassName} rounded-e-xl border-e text-end text-sm tabular-nums whitespace-nowrap`}>
+                  {formatNumber(campaign.conversions, locale, 2)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ul
+        aria-label={copy.performanceTitle}
+        className="flex w-full min-w-0 flex-col gap-3 md:hidden"
+      >
+        {campaigns.length === 0 ? (
+          <li className="min-w-0 rounded-xl border border-border bg-card p-4 text-center text-sm text-muted-foreground">
+            {copy.campaignsEmpty}
+          </li>
+        ) : campaigns.map((campaign) => (
+          <li
+            key={campaignRowKey(campaign)}
+            className="min-w-0 cursor-default rounded-xl border border-border bg-card p-4 shadow-sm transition-[background-color,border-color,box-shadow] hover:border-brand/40 hover:bg-brand/5 hover:shadow-md"
+          >
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <CampaignIdentity campaign={campaign} copy={copy} />
+                </div>
+                <CampaignStatusBadge status={campaign.status} copy={copy} />
+              </div>
+              <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-3">
+                <CampaignMetric label={copy.impressions} value={formatNumber(campaign.impressions, locale)} />
+                <CampaignMetric label={copy.clicks} value={formatNumber(campaign.clicks, locale)} />
+                <CampaignMetric label={copy.spend} value={formatSpend(campaign.costMicros, currency, locale)} />
+                <CampaignMetric label={copy.conversions} value={formatNumber(campaign.conversions, locale, 2)} />
+              </dl>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
 
@@ -341,10 +487,18 @@ function GoogleAdsPerformance({ connection, range, onRangeChange }: {
     shouldRetryOnError: false,
   })
   const report = data?.report
-  const locale = lang === 'tr' ? 'tr-TR' : 'en-US'
+  const locale = lang
   const needsReconnect = error?.code === 'reauth_required' || error?.code === 'not_authorized'
 
   if (!connection) return null
+
+  const campaignRows: AdsCampaignPerformanceRow[] = report?.campaigns.map((campaign) => ({
+    ...campaign,
+    platform: 'google_ads',
+    accountId: connection.externalAccountId,
+    accountName: connection.name,
+  })) ?? []
+
   if (!isConnected || needsReconnect) {
     return (
       <Card>
@@ -429,7 +583,7 @@ function GoogleAdsPerformance({ connection, range, onRangeChange }: {
               <MetricCard label={copy.spend} value={formatSpend(report.totals.costMicros, report.currency, locale)} />
               <MetricCard label={copy.conversions} value={formatNumber(report.totals.conversions, locale, 2)} />
             </div>
-            <CampaignTable report={report} locale={locale} copy={copy} />
+            <CampaignTable campaigns={campaignRows} currency={report.currency} locale={locale} copy={copy} />
           </>
         ) : null}
       </CardContent>
@@ -562,8 +716,11 @@ export function GoogleAdsDashboard({
           ) : (
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex min-w-0 flex-col gap-2">
-                <label htmlFor="google-ads-connection" className="text-sm font-medium">
-                  {copy.accountSelectionTitle}
+                <label htmlFor="google-ads-connection" className="flex flex-col gap-2 text-sm font-medium">
+                  <span className="flex flex-wrap items-center gap-2">
+                    {copy.accountSelectionTitle}
+                    <AdsPlatformBadge platformId="google_ads" fallbackLabel={copy.unknownPlatform} />
+                  </span>
                 </label>
                 <select
                   ref={connectionSelectRef}
