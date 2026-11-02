@@ -47,6 +47,8 @@ type CardPaymentCopy = {
   note: string
 }
 
+const CARD_PAYMENT_PROVIDER = 'iyzico'
+
 const CARD_PAYMENT_COPY: Record<SupportedLocale, CardPaymentCopy> = {
   tr: {
     rowLabel: 'Kart ile ödeme',
@@ -271,7 +273,6 @@ type Strings = {
     customersNote: string
     paymentMethods: string
     paymentMethodsNote: string
-    cardSoon: string
     shipping: string
     shippingNote: string
     orderMails: string
@@ -439,7 +440,6 @@ const TR: Strings = {
     customersNote: 'Alıcılar hesap açabilir; müşterilerini panelden görürsün.',
     paymentMethods: 'Havale/EFT ve kapıda ödeme',
     paymentMethodsNote: 'Ödeme yöntemlerini mağaza ayarlarından aç veya kapat.',
-    cardSoon: 'Kart ile ödeme (yakında)',
     shipping: 'Kargo ücreti ve kargo takip bilgisi',
     shippingNote: 'Kargo ücretini belirle; kargoya verilince alıcıya takip e-postası gider.',
     orderMails: 'Sipariş e-posta bildirimleri',
@@ -609,7 +609,6 @@ const EN: Strings = {
     customersNote: 'Buyers can create accounts; you see your customers in the panel.',
     paymentMethods: 'Bank transfer and cash on delivery',
     paymentMethodsNote: 'Turn payment methods on or off in the store settings.',
-    cardSoon: 'Card payments (coming soon)',
     shipping: 'Shipping fee and tracking info',
     shippingNote: 'Set your shipping fee; buyers get a tracking email when it ships.',
     orderMails: 'Order email notifications',
@@ -905,12 +904,14 @@ function buildRawPlanView(
           { id: 'customers', label: f.customers, note: f.customersNote },
           { id: 'paymentMethods', label: f.paymentMethods, note: f.paymentMethodsNote },
           {
-            id: 'cardSoon',
-            label: f.cardSoon,
+            id: 'cardPayment',
+            label: paymentCopy.rowLabel,
+            note: `${CARD_PAYMENT_PROVIDER} ${paymentCopy.note}`,
             rowLabel: paymentCopy.rowLabel,
-            comparisonValue: { text: 'iyzico', note: paymentCopy.note },
-            excluded: true,
-            soon: true,
+            comparisonValue: {
+              text: CARD_PAYMENT_PROVIDER,
+              note: paymentCopy.note,
+            },
           },
           { id: 'shipping', label: f.shipping, note: f.shippingNote },
           { id: 'orderMails', label: f.orderMails },
