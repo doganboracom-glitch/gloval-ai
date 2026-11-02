@@ -565,6 +565,12 @@ const it: DeepPartial<Dict> = {
     addonSubtitle: 'Puoi aggiungere crediti IA extra a qualsiasi piano in qualsiasi momento.',
     yearlyNote: 'Paghi 10 mesi, 2 mesi in omaggio',
     yearlyPerk: 'Dominio .com gratuito',
+    jetOffer: {
+      title: 'GLOVAL AI alla velocità del jet',
+      body: 'Non vuoi creare il tuo sito da solo? Raccontaci della tua attività e mostraci alcuni siti che ti piacciono: adatteremo il tuo sito alle tue esigenze.',
+      cta: 'Richiedi un preventivo',
+      messageTemplate: 'La mia attività: ... / Siti che mi piacciono (massimo 3 link): ... / Note: ...',
+    },
   },
   faq: {
     title: 'Domande frequenti',
