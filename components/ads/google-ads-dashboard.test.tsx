@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { dictionary, SUPPORTED_LOCALES } from '@/lib/i18n'
-import type { AdsPerformanceSummary } from '@/lib/ads/providers/types'
+import type { AdsAccountSummary, AdsPerformanceSummary } from '@/lib/ads/providers/types'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +47,20 @@ const report: AdsPerformanceSummary = {
   }],
 }
 
+function configureSWRData(nextReport: AdsPerformanceSummary, accounts?: AdsAccountSummary[]) {
+  mocks.useSWR.mockImplementation((key: unknown) => ({
+    data: typeof key === 'string' && key.includes('/api/ads/google/dashboard')
+      ? { report: nextReport }
+      : typeof key === 'string' && key.includes('/api/ads/google/select?') && accounts
+        ? { accounts }
+        : undefined,
+    error: undefined,
+    isLoading: false,
+    isValidating: false,
+    mutate: vi.fn(),
+  }))
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -55,13 +69,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.useSWR.mockImplementation((key: unknown) => ({
-    data: typeof key === 'string' && key.includes('/api/ads/google/dashboard') ? { report } : undefined,
-    error: undefined,
-    isLoading: false,
-    isValidating: false,
-    mutate: vi.fn(),
-  }))
+  configureSWRData(report)
 })
 
 describe('Google Ads dashboard UI', () => {
@@ -74,6 +82,81 @@ describe('Google Ads dashboard UI', () => {
     expect(screen.getAllByText('$73.22')).toHaveLength(2)
     expect(screen.getByText('Search campaign')).toBeTruthy()
     expect(screen.getAllByText(copy.readOnlyNote)).toHaveLength(2)
+  })
+
+  it.each([
+    {
+      status: 'ENABLED',
+      label: copy.campaignActive,
+      badgeClasses: ['border-emerald-700/30', 'bg-emerald-50', 'text-emerald-900', 'dark:border-emerald-300/40', 'dark:bg-emerald-950/50', 'dark:text-emerald-200'],
+      dotClasses: ['bg-emerald-700', 'dark:bg-emerald-300'],
+    },
+    {
+      status: 'PAUSED',
+      label: copy.campaignPaused,
+      badgeClasses: ['border-amber-800/30', 'bg-amber-50', 'text-amber-900', 'dark:border-amber-300/40', 'dark:bg-amber-950/50', 'dark:text-amber-300'],
+      dotClasses: ['bg-amber-700', 'dark:bg-amber-300'],
+    },
+    {
+      status: 'REMOVED',
+      label: copy.campaignRemoved,
+      badgeClasses: ['border-border', 'bg-muted/50', 'text-muted-foreground'],
+      dotClasses: ['bg-muted-foreground'],
+    },
+    {
+      status: 'UNSPECIFIED',
+      label: copy.campaignUnknown,
+      badgeClasses: ['border-border', 'bg-muted/50', 'text-muted-foreground'],
+      dotClasses: ['bg-muted-foreground'],
+    },
+    {
+      status: 'UNKNOWN',
+      label: copy.campaignUnknown,
+      badgeClasses: ['border-border', 'bg-muted/50', 'text-muted-foreground'],
+      dotClasses: ['bg-muted-foreground'],
+    },
+    {
+      status: 'FUTURE_STATUS',
+      label: copy.campaignUnknown,
+      badgeClasses: ['border-border', 'bg-muted/50', 'text-muted-foreground'],
+      dotClasses: ['bg-muted-foreground'],
+    },
+  ] as const)('maps Google campaign status $status to the expected badge', ({ status, label, badgeClasses, dotClasses }) => {
+    configureSWRData({
+      ...report,
+      campaigns: report.campaigns.map((campaign) => ({ ...campaign, status })),
+    })
+    render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+
+    const badge = screen.getByText(label, { selector: '[data-slot="badge"]' })
+    for (const className of badgeClasses) expect(badge.className).toContain(className)
+
+    const dot = badge.querySelector('span[aria-hidden="true"]')
+    expect(dot).toBeTruthy()
+    for (const className of dotClasses) expect(dot?.className).toContain(className)
+  })
+
+  it('shows account names with IDs and avoids repeating an unnamed account ID', () => {
+    const accountId = '4021989690'
+    const unnamedConnection = {
+      ...connection,
+      id: '223e4567-e89b-42d3-a456-426614174001',
+      externalAccountId: accountId,
+      name: null,
+    }
+    const namedConnection = {
+      ...connection,
+      id: '323e4567-e89b-42d3-a456-426614174002',
+    }
+    configureSWRData(report, [
+      { externalAccountId: accountId, name: null, currency: 'TRY', isManager: false, loginCustomerId: null },
+      { externalAccountId: '1234567890', name: 'Northstar Ads', currency: 'USD', isManager: false, loginCustomerId: null },
+    ])
+    render(<GoogleAdsDashboard connections={[unnamedConnection, namedConnection]} pendingFlowId="flow-id" oauthStatus={null} />)
+
+    expect(screen.getAllByRole('option', { name: new RegExp(`^${accountId}$`) })).toHaveLength(2)
+    expect(screen.getByRole('option', { name: /^Northstar Ads · 1234567890$/ })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /^Northstar Search · 9876543210$/ })).toBeTruthy()
   })
 
   it('renders the connected status with a green badge and status indicator', () => {
@@ -142,6 +225,32 @@ describe('Google Ads dashboard UI', () => {
       pending: 'Kesiliyor…',
       error: 'Google Ads izni iptal edilemedi. Bağlantı hâlâ etkin; tekrar dene.',
     })
+  })
+
+  it('provides translated campaign status labels for the requested locales', () => {
+    const expectedTranslations = {
+      tr: { campaignActive: 'Etkin', campaignPaused: 'Duraklatıldı', campaignRemoved: 'Kaldırıldı', campaignUnknown: 'Bilinmiyor' },
+      en: { campaignActive: 'Enabled', campaignPaused: 'Paused', campaignRemoved: 'Removed', campaignUnknown: 'Unknown' },
+      de: { campaignActive: 'Aktiv', campaignPaused: 'Pausiert', campaignRemoved: 'Entfernt', campaignUnknown: 'Unbekannt' },
+      fr: { campaignActive: 'Activée', campaignPaused: 'En pause', campaignRemoved: 'Supprimée', campaignUnknown: 'Inconnue' },
+      es: { campaignActive: 'Activa', campaignPaused: 'Pausada', campaignRemoved: 'Eliminada', campaignUnknown: 'Desconocida' },
+      it: { campaignActive: 'Attiva', campaignPaused: 'In pausa', campaignRemoved: 'Rimossa', campaignUnknown: 'Sconosciuta' },
+    } as const
+
+    for (const locale of SUPPORTED_LOCALES) {
+      const statusCopy = dictionary[locale].ads
+      expect(statusCopy.campaignActive.trim()).not.toBe('')
+      expect(statusCopy.campaignPaused.trim()).not.toBe('')
+      expect(statusCopy.campaignRemoved.trim()).not.toBe('')
+      expect(statusCopy.campaignUnknown.trim()).not.toBe('')
+    }
+
+    for (const locale of Object.keys(expectedTranslations) as (keyof typeof expectedTranslations)[]) {
+      expect(dictionary[locale].ads).toMatchObject(expectedTranslations[locale])
+    }
+
+    expect(dictionary.tr.ads.readOnlyNote).toBe('Bu panel salt okunurdur: kampanya oluşturma, düzenleme, durdurma veya yayınlama yapmaz.')
+    expect(dictionary.en.ads.readOnlyNote).toBe('This dashboard is read-only: it does not create, edit, pause, or publish campaigns.')
   })
 
   it('opens an accessible dialog, traps focus, and returns focus after Escape', () => {

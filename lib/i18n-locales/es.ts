@@ -1458,6 +1458,10 @@ const es: DeepPartial<Dict> = {
     noticeTerms: 'Para las condiciones de cancelación y reembolso, consulta:',
   },
   ads: {
+    campaignActive: 'Activa',
+    campaignPaused: 'Pausada',
+    campaignRemoved: 'Eliminada',
+    campaignUnknown: 'Desconocida',
     disconnectDialog: {
       title: '¿Desconectar Google Ads?',
       description: 'Al desconectar, se revocará el acceso de GLOVAL a tu cuenta de Google y se eliminará el token de acceso guardado. Puedes volver a conectarla cuando quieras.',
