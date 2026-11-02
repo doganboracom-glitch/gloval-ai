@@ -4,14 +4,16 @@ import { useLanguage } from '@/components/language-provider'
 import { LinkButton } from '@/components/link-button'
 import { newTicketHref } from '@/lib/support/prefill'
 
-export function PricingJetBand() {
+export function PricingJetBand({ isAuthenticated }: { isAuthenticated: boolean }) {
   const { t } = useLanguage()
   const copy = t.pricing.jetOffer
-  const href = newTicketHref({
-    department: 'technical',
-    service: 'website',
-    message: copy.messageTemplate,
-  })
+  const href = isAuthenticated
+    ? newTicketHref({
+        department: 'technical',
+        service: 'website',
+        message: copy.messageTemplate,
+      })
+    : `/iletisim?${new URLSearchParams({ message: copy.guestPrefillMessage }).toString()}`
 
   return (
     <section
@@ -25,7 +27,10 @@ export function PricingJetBand() {
         >
           {copy.title}
         </h3>
-        <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+        <p className="mt-1 text-pretty font-medium text-foreground">
+          {copy.subtitle}
+        </p>
+        <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
           {copy.body}
         </p>
       </div>
