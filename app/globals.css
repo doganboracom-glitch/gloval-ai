@@ -329,6 +329,29 @@
   }
 }
 
+@keyframes ads-address-guidance {
+  0%, 100% {
+    opacity: 0.78;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.96;
+    transform: translateX(14px);
+  }
+}
+
+.ads-address-guidance-motion {
+  animation: ads-address-guidance 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ads-address-guidance-motion {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .beta-neon {
     animation: none;
@@ -523,6 +546,11 @@
   [contenteditable='true'] {
     font-size: 16px;
   }
+}
+
+/* The Ads address keeps its 18px text while other inputs retain the 16px iOS floor. */
+input.ads-address-input {
+  font-size: 18px;
 }
 
 /* Full-height shells follow the *dynamic* viewport so an open keyboard or the
