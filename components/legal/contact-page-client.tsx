@@ -17,7 +17,7 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { Button } from '@/components/ui/button'
 import { COMPANY, isPlaceholder } from '@/lib/legal/company'
-import { readConsent } from '@/lib/cookie-consent-storage'
+import { CONSENT_CHANGE_EVENT } from '@/lib/cookie-consent-storage'
 import { submitContactRequest } from '@/lib/support/contact'
 
 const FORM_ID = 'bize-yazin'
@@ -161,50 +161,38 @@ function ContactForm({ tr, initialMessage }: { tr: boolean; initialMessage: stri
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState(initialMessage)
   const messageFieldRef = useRef<HTMLTextAreaElement | null>(null)
-  const shouldFocusPrefill = useRef(Boolean(initialMessage))
+  const hasMessagePrefill = useRef(Boolean(initialMessage))
   const [website, setWebsite] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (!shouldFocusPrefill.current) return
+    if (!hasMessagePrefill.current) return
 
     const focusMessageField = () => {
       const messageField = messageFieldRef.current
-      const cookieBannerOpen = Boolean(document.querySelector('[data-cookie-variant]'))
-      console.log('[v0] contact prefill focus attempt', {
-        hasMessageField: Boolean(messageField),
-        cookieBannerOpen,
-      })
-      if (!messageField || cookieBannerOpen) return
+      if (!messageField) return
 
       messageField.focus()
       messageField.setSelectionRange(messageField.value.length, messageField.value.length)
-      shouldFocusPrefill.current = false
     }
 
-    if (readConsent()) {
-      focusMessageField()
-      return
+    let focusTimer: number | undefined
+    const scheduleFocus = () => {
+      if (focusTimer !== undefined) window.clearTimeout(focusTimer)
+      focusTimer = window.setTimeout(focusMessageField, 0)
     }
+    const onConsentChange = () => scheduleFocus()
 
-    let cookieBannerWasOpen = Boolean(document.querySelector('[data-cookie-variant]'))
-    const observer = new MutationObserver(() => {
-      const cookieBannerOpen = Boolean(document.querySelector('[data-cookie-variant]'))
-      if (cookieBannerOpen) {
-        cookieBannerWasOpen = true
-        return
-      }
-      if (cookieBannerWasOpen) {
-        focusMessageField()
-        observer.disconnect()
-      }
-    })
-
-    observer.observe(document.body, { childList: true, subtree: true })
+    window.addEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
     focusMessageField()
-    return () => observer.disconnect()
+    scheduleFocus()
+
+    return () => {
+      window.removeEventListener(CONSENT_CHANGE_EVENT, onConsentChange)
+      if (focusTimer !== undefined) window.clearTimeout(focusTimer)
+    }
   }, [])
 
   function onSubmit(e: React.FormEvent) {
