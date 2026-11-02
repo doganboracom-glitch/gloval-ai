@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from 'react'
+import { StrictMode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ContactPageClient } from '@/components/legal/contact-page-client'
 import { LanguageProvider } from '@/components/language-provider'
+import { CONSENT_CHANGE_EVENT } from '@/lib/cookie-consent-storage'
 import { LANG_COOKIE } from '@/lib/i18n'
 
 vi.mock('next/link', () => ({
@@ -61,22 +63,24 @@ describe('ContactPageClient message prefill', () => {
     )
   })
 
-  it('restores focus after the cookie banner closes', async () => {
+  it('restores focus after cookie consent changes in Strict Mode', async () => {
     const initialMessage = 'Web sitesi yaptırmak istiyorum. Telefonum: '
-    const cookieBanner = document.createElement('div')
-    cookieBanner.dataset.cookieVariant = 'platform'
-    document.body.appendChild(cookieBanner)
 
     render(
-      <LanguageProvider initialLang="tr">
-        <ContactPageClient initialMessage={initialMessage} />
-      </LanguageProvider>,
+      <StrictMode>
+        <LanguageProvider initialLang="tr">
+          <ContactPageClient initialMessage={initialMessage} />
+        </LanguageProvider>
+      </StrictMode>,
     )
 
     const messageField = screen.getByLabelText('Mesajınız') as HTMLTextAreaElement
-    expect(document.activeElement).not.toBe(messageField)
+    const nameField = screen.getByLabelText('Ad Soyad')
+    await waitFor(() => expect(document.activeElement).toBe(messageField))
 
-    cookieBanner.remove()
+    nameField.focus()
+    expect(document.activeElement).toBe(nameField)
+    window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT))
 
     await waitFor(() => {
       expect(document.activeElement).toBe(messageField)
