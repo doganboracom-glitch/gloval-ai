@@ -1,4 +1,5 @@
-import type { FaqItem } from './types'
+import type { AuthState } from '@/lib/supabase/auth-state'
+import { getFaqAnswerText, type FaqItem, type Localized } from './types'
 
 /**
  * FAQ source of truth.
@@ -7,8 +8,45 @@ import type { FaqItem } from './types'
  * ("unlimited", "guaranteed", "instant", "everything free") are avoided on
  * purpose: they are the kind of copy that turns into a support ticket.
  *
- * The first seven entries are `featured` and appear on the homepage.
+ * Homepage entries are explicitly marked `featured`.
  */
+export const FAQ_SUPPORT_COPY: Localized<{
+  before: string
+  link: string
+  after: string
+}> = {
+  tr: {
+    before: 'Yukarıda aradığınızı bulamadıysanız lütfen',
+    link: 'DESTEK',
+    after: 'talebi açınız.',
+  },
+  en: {
+    before: 'If you couldn’t find what you were looking for above, please submit a',
+    link: 'support',
+    after: 'request.',
+  },
+  de: {
+    before: 'Wenn Sie oben keine Antwort gefunden haben, erstellen Sie bitte eine',
+    link: 'Supportanfrage',
+    after: '.',
+  },
+  fr: {
+    before: 'Si vous n’avez pas trouvé ce que vous cherchiez ci-dessus, veuillez créer une',
+    link: 'demande de support',
+    after: '.',
+  },
+  es: {
+    before: 'Si no encontraste lo que buscabas arriba, abre una',
+    link: 'solicitud de soporte',
+    after: '.',
+  },
+  it: {
+    before: 'Se non hai trovato ciò che cercavi qui sopra, apri una',
+    link: 'richiesta di supporto',
+    after: '.',
+  },
+}
+
 const items: FaqItem[] = [
   {
     id: 'what-is-gloval',
@@ -42,8 +80,189 @@ const items: FaqItem[] = [
       en: 'How quickly can I build my website?',
     },
     answer: {
-      tr: 'İlk taslak genellikle birkaç dakika içinde hazır olur. Sonrasında içeriği ve tasarımı ne kadar detaylandırmak istediğinize bağlı olarak düzenlemeye devam edebilirsiniz.',
-      en: 'A first draft is usually ready within a few minutes. After that, how long you spend depends on how much you want to refine the content and design.',
+      tr: 'İlk taslak, ihtiyacınızı normal cümlelerle anlattığınızda oluşturulur. Sonrasında metin ve tasarımı dilediğiniz gibi gözden geçirip düzenleyebilirsiniz.',
+      en: 'A first draft is created from your plain-language description. You can then review and refine the content and design as needed.',
+    },
+  },
+  {
+    id: 'site-ready',
+    featured: true,
+    question: {
+      tr: 'Site ne kadar sürede hazır olur?',
+      en: 'How long does it take to get a site ready?',
+      de: 'Wie lange dauert es, bis die Website fertig ist?',
+      fr: 'Combien de temps faut-il pour que le site soit prêt ?',
+      es: '¿Cuánto tarda en estar listo el sitio?',
+      it: 'Quanto tempo serve perché il sito sia pronto?',
+    },
+    answer: {
+      tr: 'Dakikalar içinde. Ne istediğini anlatırsın, yapay zekâ taslağı hazırlar; düzenleyip tek tıkla yayınlarsın.',
+      en: 'In minutes. Describe what you want; the AI prepares a draft that you can edit and publish with one click.',
+      de: 'In wenigen Minuten. Beschreibe, was du brauchst; die KI erstellt einen Entwurf, den du bearbeiten und mit einem Klick veröffentlichen kannst.',
+      fr: 'En quelques minutes. Décrivez ce que vous souhaitez ; l’IA prépare un brouillon que vous pouvez modifier et publier en un clic.',
+      es: 'En cuestión de minutos. Describe lo que necesitas; la IA prepara un borrador que puedes editar y publicar con un solo clic.',
+      it: 'In pochi minuti. Descrivi ciò che ti serve; l’IA prepara una bozza che puoi modificare e pubblicare con un clic.',
+    },
+  },
+  {
+    id: 'site-ownership',
+    featured: true,
+    question: {
+      tr: 'Siten ve içeriğin kime ait?',
+      en: 'Who owns my website and its content?',
+      de: 'Wem gehören meine Website und ihre Inhalte?',
+      fr: 'À qui appartiennent mon site et son contenu ?',
+      es: '¿A quién pertenecen mi sitio y su contenido?',
+      it: 'A chi appartengono il mio sito e i suoi contenuti?',
+    },
+    answer: {
+      tr: 'Siten ve içeriğin sana aittir. Yayınladığın içeriklerin hukuka uygunluğundan ve doğruluğundan site sahibi sorumludur.',
+      en: 'Your website and its content belong to you. As the site owner, you are responsible for the legality and accuracy of what you publish.',
+      de: 'Deine Website und ihre Inhalte gehören dir. Als Website-Inhaber bist du für die Rechtmäßigkeit und Richtigkeit der veröffentlichten Inhalte verantwortlich.',
+      fr: 'Votre site et son contenu vous appartiennent. En tant que propriétaire du site, vous êtes responsable de la légalité et de l’exactitude des contenus publiés.',
+      es: 'El sitio y su contenido te pertenecen. Como titular del sitio, eres responsable de la legalidad y exactitud del contenido que publiques.',
+      it: 'Il tuo sito e i suoi contenuti ti appartengono. In qualità di proprietario del sito, sei responsabile della legalità e dell’accuratezza dei contenuti pubblicati.',
+    },
+    answerLink: {
+      target: { kind: 'url', href: '/yasal/kullanim-kosullari' },
+      prefix: {
+        tr: 'Ayrıntılar için',
+        en: 'For details, see',
+        de: 'Weitere Informationen findest du in den',
+        fr: 'Pour en savoir plus, consultez les',
+        es: 'Para más información, consulta los',
+        it: 'Per i dettagli, consulta i',
+      },
+      label: {
+        tr: 'Kullanım Koşulları',
+        en: 'Terms of Use',
+        de: 'Nutzungsbedingungen',
+        fr: 'Conditions d’utilisation',
+        es: 'Términos de uso',
+        it: 'Termini di utilizzo',
+      },
+      suffix: {
+        tr: '.',
+        en: '.',
+        de: '.',
+        fr: '.',
+        es: '.',
+        it: '.',
+      },
+    },
+  },
+  {
+    id: 'ai-review',
+    featured: true,
+    question: {
+      tr: 'Yapay zekâ hata yaparsa ne olur?',
+      en: 'What if the AI makes a mistake?',
+      de: 'Was passiert, wenn die KI einen Fehler macht?',
+      fr: 'Que se passe-t-il si l’IA fait une erreur ?',
+      es: '¿Qué pasa si la IA se equivoca?',
+      it: 'Cosa succede se l’IA commette un errore?',
+    },
+    answer: {
+      tr: 'Yapay zekâ taslak hazırlar; yayınlamadan önce metin ve görselleri incelemek ve düzenlemek sana aittir.',
+      en: 'AI creates a draft; reviewing and editing the text and images before publishing is your responsibility.',
+      de: 'Die KI erstellt einen Entwurf; du bist dafür verantwortlich, Texte und Bilder vor der Veröffentlichung zu prüfen und zu bearbeiten.',
+      fr: 'L’IA prépare un brouillon ; il vous appartient de vérifier et de modifier les textes et les images avant publication.',
+      es: 'La IA prepara un borrador; antes de publicar, te corresponde revisar y editar los textos y las imágenes.',
+      it: 'L’IA prepara una bozza; spetta a te controllare e modificare testi e immagini prima della pubblicazione.',
+    },
+    answerLink: {
+      target: { kind: 'support' },
+      prefix: {
+        tr: 'Takıldığın yerde',
+        en: 'If you get stuck, you can submit a',
+        de: 'Wenn du Hilfe brauchst, kannst du eine',
+        fr: 'Si vous avez besoin d’aide, vous pouvez ouvrir une',
+        es: 'Si necesitas ayuda, puedes abrir una',
+        it: 'Se hai bisogno di aiuto, puoi aprire una',
+      },
+      label: {
+        tr: 'DESTEK',
+        en: 'support',
+        de: 'Supportanfrage',
+        fr: 'demande de support',
+        es: 'solicitud de soporte',
+        it: 'richiesta di supporto',
+      },
+      suffix: {
+        tr: 'talebi açabilirsin.',
+        en: 'request.',
+        de: 'stellen.',
+        fr: '.',
+        es: '.',
+        it: '.',
+      },
+    },
+  },
+  {
+    id: 'legal-templates',
+    featured: true,
+    question: {
+      tr: 'KVKK ve yasal metinler dahil mi?',
+      en: 'Are KVKK and legal texts included?',
+      de: 'Sind KVKK- und Rechtstexte enthalten?',
+      fr: 'Les textes juridiques et le KVKK sont-ils inclus ?',
+      es: '¿Se incluyen textos legales y KVKK?',
+      it: 'Sono inclusi i testi legali e il KVKK?',
+    },
+    answer: {
+      tr: 'Gizlilik, KVKK, çerez ve mesafeli satış gibi hazır yasal metin şablonları sunulur; kendi işine göre gözden geçirmen gerekir.',
+      en: 'Ready-made legal text templates are available for privacy, KVKK, cookies, distance sales, and similar topics; you should review them for your own business.',
+      de: 'Vorlagen für Rechtstexte zu Themen wie Datenschutz, KVKK, Cookies und Fernabsatz sind verfügbar; du solltest sie für dein eigenes Unternehmen prüfen.',
+      fr: 'Des modèles de textes juridiques sur la confidentialité, le KVKK, les cookies et la vente à distance sont proposés ; vous devez les examiner pour votre activité.',
+      es: 'Hay plantillas de textos legales sobre privacidad, KVKK, cookies y venta a distancia; debes revisarlas para tu propio negocio.',
+      it: 'Sono disponibili modelli di testi legali su privacy, KVKK, cookie e vendite a distanza; dovresti esaminarli per la tua attività.',
+    },
+  },
+  {
+    id: 'cancel-anytime',
+    featured: true,
+    question: {
+      tr: 'İstediğim zaman iptal edebilir miyim?',
+      en: 'Can I cancel at any time?',
+      de: 'Kann ich jederzeit kündigen?',
+      fr: 'Puis-je résilier à tout moment ?',
+      es: '¿Puedo cancelar en cualquier momento?',
+      it: 'Posso annullare in qualsiasi momento?',
+    },
+    answer: {
+      tr: 'Evet, istediğin zaman iptal edebilirsin.',
+      en: 'Yes, you can cancel at any time.',
+      de: 'Ja, du kannst jederzeit kündigen.',
+      fr: 'Oui, vous pouvez résilier à tout moment.',
+      es: 'Sí, puedes cancelar en cualquier momento.',
+      it: 'Sì, puoi annullare in qualsiasi momento.',
+    },
+    answerLink: {
+      target: { kind: 'url', href: '/yasal/iptal-ve-iade' },
+      prefix: {
+        tr: 'Koşulların ayrıntısı için',
+        en: 'For details on the terms, see',
+        de: 'Einzelheiten zu den Bedingungen findest du auf der Seite',
+        fr: 'Pour connaître les conditions, consultez la page',
+        es: 'Para conocer las condiciones, consulta la página',
+        it: 'Per conoscere le condizioni, consulta la pagina',
+      },
+      label: {
+        tr: 'İptal ve İade',
+        en: 'Cancellation and Refunds',
+        de: 'Kündigung und Rückerstattung',
+        fr: 'Résiliation et remboursements',
+        es: 'Cancelaciones y reembolsos',
+        it: 'Annullamenti e rimborsi',
+      },
+      suffix: {
+        tr: 'sayfasına bak.',
+        en: '.',
+        de: '.',
+        fr: '.',
+        es: '.',
+        it: '.',
+      },
     },
   },
   {
@@ -54,8 +273,8 @@ const items: FaqItem[] = [
       en: 'Can I start for free?',
     },
     answer: {
-      tr: 'Evet. Başlangıç planıyla kredi kartı girmeden deneyebilirsiniz. Alan adı bağlama ve kurumsal e-posta gibi özellikler ücretli planlarda sunulur; planları Fiyatlar bölümünden karşılaştırabilirsiniz.',
-      en: 'Yes. You can try it on the Starter plan without entering a card. Features such as custom domains and business email are part of the paid plans — you can compare them in the Pricing section.',
+      tr: 'Evet. Başlangıç planıyla kredi kartı girmeden deneyebilirsiniz. Ücretsiz yayında adres: ad.gloval.site. Alan adı bağlama ve kurumsal e-posta gibi özellikler ücretli planlarda sunulur; planları Fiyatlar bölümünden karşılaştırabilirsiniz.',
+      en: 'Yes. You can try it on the Starter plan without entering a card. The free published address is ad.gloval.site. Features such as custom domains and business email are part of paid plans — compare them in the Pricing section.',
     },
   },
   {
@@ -200,4 +419,22 @@ export function getFaqItems(): FaqItem[] {
 /** The curated subset shown on the homepage. */
 export function getFeaturedFaqItems(): FaqItem[] {
   return items.filter((item) => item.featured)
+}
+
+/** Resolve support navigation without another client-side auth lookup. */
+export function getFaqSupportHref(authKind: AuthState['kind']): string {
+  return authKind === 'authenticated' ? '/support/new' : '/iletisim'
+}
+
+/** FAQPage JSON-LD is generated from the same localized content as the UI. */
+export function getFaqJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: items.map((item) => ({
+      '@type': 'Question',
+      name: item.question.tr,
+      acceptedAnswer: { '@type': 'Answer', text: getFaqAnswerText(item, 'tr') },
+    })),
+  }
 }

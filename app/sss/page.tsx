@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { FaqPageClient } from '@/components/content/faq-page-client'
-import { getFaqItems } from '@/lib/content/faq'
+import { getFaqJsonLd, getFaqSupportHref } from '@/lib/content/faq'
+import { getRequestUser } from '@/lib/supabase/request-user'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
 /**
@@ -16,20 +17,10 @@ export async function generateMetadata({
   return buildPageMetadata('faq', resolveSeoLang(lang))
 }
 
-export default function FaqPage() {
-  const items = getFaqItems()
-
-  // FAQPage structured data: lets search engines surface these answers directly.
-  // Built from the same source the UI renders, so the two cannot disagree.
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: items.map((item) => ({
-      '@type': 'Question',
-      name: item.question.tr,
-      acceptedAnswer: { '@type': 'Answer', text: item.answer.tr },
-    })),
-  }
+export default async function FaqPage() {
+  const requestUser = await getRequestUser()
+  const supportHref = getFaqSupportHref(requestUser.kind)
+  const jsonLd = getFaqJsonLd()
 
   return (
     <>
@@ -38,7 +29,7 @@ export default function FaqPage() {
         // Content is authored in-repo, not user input.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <FaqPageClient />
+      <FaqPageClient supportHref={supportHref} />
     </>
   )
 }

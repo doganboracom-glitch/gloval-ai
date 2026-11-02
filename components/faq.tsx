@@ -7,8 +7,8 @@ import { FaqAccordion } from '@/components/content/faq-accordion'
 import { getFeaturedFaqItems } from '@/lib/content/faq'
 
 /**
- * Homepage FAQ summary: the curated `featured` subset (7 items), with a link
- * through to the full /sss page.
+ * Homepage FAQ summary: the curated `featured` subset, with a link through to
+ * the full /sss page.
  */
 export function Faq() {
   const { t } = useLanguage()

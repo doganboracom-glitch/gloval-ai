@@ -6,26 +6,28 @@ import { useLanguage } from '@/components/language-provider'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { FaqAccordion } from '@/components/content/faq-accordion'
-import { getFaqItems } from '@/lib/content/faq'
-import { getLocalized } from '@/lib/content/types'
+import { FAQ_SUPPORT_COPY, getFaqItems } from '@/lib/content/faq'
+import { getFaqAnswerText, getLocalized } from '@/lib/content/types'
 
-export function FaqPageClient() {
+export function FaqPageClient({ supportHref }: { supportHref: string }) {
   const { t, lang } = useLanguage()
   const [query, setQuery] = useState('')
   const allItems = getFaqItems()
+  const supportCopy = getLocalized(FAQ_SUPPORT_COPY, lang)
+  const searchLocale = lang === 'tr' ? 'tr-TR' : lang
 
   // Filter across both question and answer text: people often remember a phrase
   // from the answer ("DNS", "iade") rather than the question wording.
   const items = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase(lang === 'tr' ? 'tr-TR' : 'en-US')
+    const q = query.trim().toLocaleLowerCase(searchLocale)
     if (!q) return allItems
     return allItems.filter((item) => {
-      const haystack = `${getLocalized(item.question, lang)} ${getLocalized(item.answer, lang)}`.toLocaleLowerCase(
-        lang === 'tr' ? 'tr-TR' : 'en-US',
+      const haystack = `${getLocalized(item.question, lang)} ${getFaqAnswerText(item, lang)}`.toLocaleLowerCase(
+        searchLocale,
       )
       return haystack.includes(q)
     })
-  }, [allItems, query, lang])
+  }, [allItems, query, lang, searchLocale])
 
   return (
     <div className="min-h-screen">
@@ -77,7 +79,7 @@ export function FaqPageClient() {
           {items.length > 0 ? (
             // Collapsed by default while searching so matches are scannable as
             // a list rather than one long expanded answer.
-            <FaqAccordion items={items} defaultOpen={query ? null : 0} />
+            <FaqAccordion items={items} defaultOpen={query ? null : 0} supportHref={supportHref} />
           ) : (
             <div className="rounded-2xl border border-border bg-card px-6 py-14 text-center">
               <p className="text-sm text-muted-foreground">{t.faq.noResults}</p>
@@ -91,6 +93,22 @@ export function FaqPageClient() {
             </div>
           )}
         </div>
+
+        <p className="mt-8 text-center text-sm leading-relaxed text-muted-foreground">
+          {supportCopy.before}{' '}
+          <a
+            href={supportHref}
+            className="font-semibold text-foreground underline underline-offset-4 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {supportCopy.link}
+          </a>
+          {supportCopy.after && (
+            <>
+              {/^[,.;:!?]/.test(supportCopy.after) ? '' : ' '}
+              {supportCopy.after}
+            </>
+          )}
+        </p>
       </main>
       <SiteFooter />
     </div>
