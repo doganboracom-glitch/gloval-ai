@@ -1462,6 +1462,8 @@ const de: DeepPartial<Dict> = {
     campaignPaused: 'Pausiert',
     campaignRemoved: 'Entfernt',
     campaignUnknown: 'Unbekannt',
+    campaignAccount: 'Konto',
+    unknownPlatform: 'Unbekannte Plattform',
     disconnectDialog: {
       title: 'Google Ads trennen?',
       description: 'Wenn du die Verbindung trennst, wird der Zugriff von GLOVAL auf dein Google-Konto widerrufen und das gespeicherte Zugriffstoken gelöscht. Du kannst jederzeit erneut eine Verbindung herstellen.',

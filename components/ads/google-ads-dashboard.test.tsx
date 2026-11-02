@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { dictionary, SUPPORTED_LOCALES } from '@/lib/i18n'
+import { ADS_PLATFORM_REGISTRY } from '@/lib/ads/platforms'
 import type { AdsAccountSummary, AdsPerformanceSummary } from '@/lib/ads/providers/types'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 
@@ -18,7 +19,8 @@ vi.mock('@/components/language-provider', async () => {
   return { useLanguage: () => ({ lang: 'en', t: translations.en, setLang: vi.fn() }) }
 })
 
-import { GoogleAdsDashboard } from '@/components/ads/google-ads-dashboard'
+import { AdsPlatformBadge, GoogleAdsDashboard } from '@/components/ads/google-ads-dashboard'
+import { AdsPlatformGrid } from '@/components/ads/ads-platform-grid'
 
 const copy = dictionary.en.ads
 const connection: GoogleAdsConnectionView = {
@@ -73,15 +75,27 @@ beforeEach(() => {
 })
 
 describe('Google Ads dashboard UI', () => {
-  it('renders read-only metrics and campaign performance for an active account', () => {
+  it('renders read-only metrics and account-aware campaign performance for an active account', () => {
     render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
 
     expect(screen.getByRole('option', { name: /Northstar Search/ })).toBeTruthy()
-    expect(screen.getAllByText('1,850')).toHaveLength(2)
-    expect(screen.getAllByText('29')).toHaveLength(2)
-    expect(screen.getAllByText('$73.22')).toHaveLength(2)
-    expect(screen.getByText('Search campaign')).toBeTruthy()
+    expect(screen.getAllByText('1,850')).toHaveLength(3)
+    expect(screen.getAllByText('29')).toHaveLength(3)
+    expect(screen.getAllByText('$73.22')).toHaveLength(3)
+    expect(screen.getAllByText('Search campaign')).toHaveLength(2)
     expect(screen.getAllByText(copy.readOnlyNote)).toHaveLength(2)
+
+    const desktopTable = screen.getByTestId('campaign-table-desktop').querySelector('table')
+    if (!desktopTable) throw new Error('Expected the desktop campaign table to render')
+    expect(desktopTable.querySelector('[data-slot="badge"]')?.textContent).toContain('Google Ads')
+    expect(within(desktopTable).getByText(`Account: ${connection.name} · ${connection.externalAccountId}`)).toBeTruthy()
+
+    const mobileCards = screen.getByRole('list', { name: copy.performanceTitle })
+    expect(mobileCards.querySelector('[data-slot="badge"]')?.textContent).toContain('Google Ads')
+    expect(within(mobileCards).getByText(`Account: ${connection.name} · ${connection.externalAccountId}`)).toBeTruthy()
+
+    const accountSelect = screen.getByRole('combobox')
+    expect(accountSelect.previousElementSibling?.querySelector('[data-slot="badge"]')?.textContent).toBe('Google Ads')
   })
 
   it.each([
@@ -128,12 +142,60 @@ describe('Google Ads dashboard UI', () => {
     })
     render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
 
-    const badge = screen.getByText(label, { selector: '[data-slot="badge"]' })
+    const desktopTable = screen.getByTestId('campaign-table-desktop')
+    const badge = within(desktopTable).getByText(label, { selector: '[data-slot="badge"]' })
     for (const className of badgeClasses) expect(badge.className).toContain(className)
 
     const dot = badge.querySelector('span[aria-hidden="true"]')
     expect(dot).toBeTruthy()
     for (const className of dotClasses) expect(dot?.className).toContain(className)
+  })
+
+  it('uses the registry for available and coming-soon platforms without making cards selectable', () => {
+    const comingSoon = ADS_PLATFORM_REGISTRY.filter((platform) => platform.status === 'coming_soon')
+    expect(comingSoon.map((platform) => platform.id)).toEqual(['meta', 'tiktok', 'x', 'linkedin', 'whatsapp'])
+    const googlePlatform = ADS_PLATFORM_REGISTRY.find((platform) => platform.id === 'google_ads')
+    expect(googlePlatform).toMatchObject({
+      label: 'Google Ads',
+      status: 'available',
+      accentColor: '#4285f4',
+    })
+    expect(googlePlatform).not.toHaveProperty('logo')
+
+    render(<AdsPlatformGrid />)
+
+    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length)
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    for (const platform of comingSoon) {
+      expect(screen.getByRole('heading', { name: dictionary.en.ads[platform.nameKey] })).toBeTruthy()
+    }
+  })
+
+  it('uses the localized fallback label for an unknown platform badge', () => {
+    render(<AdsPlatformBadge platformId="legacy_network" fallbackLabel={dictionary.de.ads.unknownPlatform} />)
+
+    const platformLabel = screen.getByText(dictionary.de.ads.unknownPlatform)
+    const badge = platformLabel.closest('[data-slot="badge"]')
+    expect(badge).toBeTruthy()
+    expect(badge?.querySelector('span[aria-hidden="true"]')).toBeTruthy()
+  })
+
+  it('uses stacked, non-interactive mobile campaign cards without horizontal scrolling', () => {
+    render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
+
+    const desktopTable = screen.getByTestId('campaign-table-desktop')
+    expect(desktopTable.className).toContain('hidden')
+    expect(desktopTable.className).toContain('md:block')
+
+    const mobileCards = screen.getByRole('list', { name: copy.performanceTitle })
+    expect(mobileCards.className).toContain('md:hidden')
+    expect(mobileCards.className).toContain('min-w-0')
+    expect(mobileCards.className).not.toContain('overflow-x-auto')
+    const card = mobileCards.querySelector('li')
+    expect(card?.className).toContain('rounded-xl')
+    expect(card?.className).toContain('shadow-sm')
+    expect(card?.className).toContain('cursor-default')
+    expect(card?.className).not.toContain('cursor-pointer')
   })
 
   it('shows account names with IDs and avoids repeating an unnamed account ID', () => {
@@ -229,12 +291,12 @@ describe('Google Ads dashboard UI', () => {
 
   it('provides translated campaign status labels for the requested locales', () => {
     const expectedTranslations = {
-      tr: { campaignActive: 'Etkin', campaignPaused: 'Duraklatıldı', campaignRemoved: 'Kaldırıldı', campaignUnknown: 'Bilinmiyor' },
-      en: { campaignActive: 'Enabled', campaignPaused: 'Paused', campaignRemoved: 'Removed', campaignUnknown: 'Unknown' },
-      de: { campaignActive: 'Aktiv', campaignPaused: 'Pausiert', campaignRemoved: 'Entfernt', campaignUnknown: 'Unbekannt' },
-      fr: { campaignActive: 'Activée', campaignPaused: 'En pause', campaignRemoved: 'Supprimée', campaignUnknown: 'Inconnue' },
-      es: { campaignActive: 'Activa', campaignPaused: 'Pausada', campaignRemoved: 'Eliminada', campaignUnknown: 'Desconocida' },
-      it: { campaignActive: 'Attiva', campaignPaused: 'In pausa', campaignRemoved: 'Rimossa', campaignUnknown: 'Sconosciuta' },
+      tr: { campaignActive: 'Etkin', campaignPaused: 'Duraklatıldı', campaignRemoved: 'Kaldırıldı', campaignUnknown: 'Bilinmiyor', campaignAccount: 'Hesap', unknownPlatform: 'Bilinmeyen platform' },
+      en: { campaignActive: 'Enabled', campaignPaused: 'Paused', campaignRemoved: 'Removed', campaignUnknown: 'Unknown', campaignAccount: 'Account', unknownPlatform: 'Unknown platform' },
+      de: { campaignActive: 'Aktiv', campaignPaused: 'Pausiert', campaignRemoved: 'Entfernt', campaignUnknown: 'Unbekannt', campaignAccount: 'Konto', unknownPlatform: 'Unbekannte Plattform' },
+      fr: { campaignActive: 'Activée', campaignPaused: 'En pause', campaignRemoved: 'Supprimée', campaignUnknown: 'Inconnue', campaignAccount: 'Compte', unknownPlatform: 'Plateforme inconnue' },
+      es: { campaignActive: 'Activa', campaignPaused: 'Pausada', campaignRemoved: 'Eliminada', campaignUnknown: 'Desconocida', campaignAccount: 'Cuenta', unknownPlatform: 'Plataforma desconocida' },
+      it: { campaignActive: 'Attiva', campaignPaused: 'In pausa', campaignRemoved: 'Rimossa', campaignUnknown: 'Sconosciuta', campaignAccount: 'Account', unknownPlatform: 'Piattaforma sconosciuta' },
     } as const
 
     for (const locale of SUPPORTED_LOCALES) {
@@ -243,6 +305,8 @@ describe('Google Ads dashboard UI', () => {
       expect(statusCopy.campaignPaused.trim()).not.toBe('')
       expect(statusCopy.campaignRemoved.trim()).not.toBe('')
       expect(statusCopy.campaignUnknown.trim()).not.toBe('')
+      expect(statusCopy.campaignAccount.trim()).not.toBe('')
+      expect(statusCopy.unknownPlatform.trim()).not.toBe('')
     }
 
     for (const locale of Object.keys(expectedTranslations) as (keyof typeof expectedTranslations)[]) {

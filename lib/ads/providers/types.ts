@@ -67,6 +67,12 @@ export type AdsPerformanceSummary = {
   campaigns: AdsCampaignPerformance[]
 }
 
+export type AdsCampaignPerformanceRow = AdsCampaignPerformance & {
+  platform: string
+  accountId: string
+  accountName: string | null
+}
+
 export type GoogleAdsRefreshResult = {
   accessToken: string
   expiresAt: string | null
