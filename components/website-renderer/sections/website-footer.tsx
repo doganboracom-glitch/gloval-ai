@@ -63,6 +63,10 @@ function FooterLink({
       <a
         href={FOOTER_CART_HREF}
         onClick={(e) => {
+          if (nav?.(FOOTER_CART_HREF)) {
+            e.preventDefault()
+            return
+          }
           e.preventDefault()
           window.dispatchEvent(new Event(OPEN_CART_EVENT))
         }}

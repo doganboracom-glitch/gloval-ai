@@ -13,7 +13,7 @@ import { blogNow } from '@/lib/blog-clock'
 import { isBlogRoutePath, previewSiteBlogData } from '@/lib/blog-site'
 import { withLegacyBlogLatest } from '@/lib/section-order'
 import { AUTO_ENABLE_PATCH, shouldAutoEnableBlog } from '@/lib/starter-blog-card'
-import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
+import { Monitor, Tablet, Smartphone, X, Wand2, Check, AlertCircle, Info, Save, Loader2, LayoutGrid, Rocket, ExternalLink, EyeOff, LogIn, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useEditorGate, type EditorSessionSource } from '@/components/editor/use-editor-gate'
 import { stopAllVoiceInput } from '@/lib/voice/voice-registry'
@@ -35,6 +35,8 @@ import {
   type SampleSectionFinding,
 } from '@/lib/sample-content'
 import { websiteSchema, type BlogSettings, type WebsiteSchema } from '@/lib/website-schema'
+import { isStoreRouteHref } from '@/lib/live-page-links'
+import { validateFooterHref } from '@/lib/footer-links'
 import { logSchemaRepair, normalizeWebsiteSchema } from '@/lib/website-schema-compat'
 import { WebsiteRenderer, type PreviewNav } from '@/components/website-renderer/website-renderer'
 import { resolveTheme, googleFontsHref } from '@/components/website-renderer/theme'
@@ -389,7 +391,7 @@ export function WebsitePreview({
   }))
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [editing, setEditing] = useState(false)
-  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [toast, setToast] = useState<{ kind: 'ok' | 'err' | 'info'; text: string } | null>(null)
   // AI kredisi tükendiğinde açılan yükseltme / kredi satın alma ekranı.
   const [outOfCredits, setOutOfCredits] = useState(false)
   const [creditBalance, setCreditBalance] = useState<number | null>(null)
@@ -510,7 +512,7 @@ export function WebsitePreview({
     [currentSite],
   )
 
-  function flashToast(kind: 'ok' | 'err', text: string) {
+  function flashToast(kind: 'ok' | 'err' | 'info', text: string) {
     setToast({ kind, text })
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 3000)
@@ -1568,28 +1570,49 @@ export function WebsitePreview({
     publishedUrl,
   })
 
-  // Preview navigation for the renderer. The preview iframe has no router, so
-  // page links switch in-memory, while a storefront's product/cart/checkout
-  // routes open the REAL live store in a new tab — those pages exist only on
-  // the published tenant site. If the store isn't published yet we can't link
-  // to a live page, so we nudge the owner to publish first.
+  // The preview iframe has no router. Route kinds stay separate so legal and
+  // blog pages can never trigger the store-only publish notice.
   const previewNav: PreviewNav = {
     slug: liveSlug,
     published: livePublished,
     onStoreRoute: (tenantPath) => {
+      if (!currentSite || !isStoreRouteHref(currentSite, tenantPath)) return
       if (livePublished && liveSlug) {
         window.open(`${tenantUrl(liveSlug)}${tenantPath}`, '_blank', 'noopener,noreferrer')
       } else {
-        const blogRoute = isBlogRoutePath(tenantPath)
         flashToast(
-          'err',
-          blogRoute
-            ? lang === 'en'
-              ? 'Publish your site to open the blog pages.'
-              : 'Blog sayfalarını açmak için sitenizi yayınlayın.'
-            : lang === 'en'
-              ? 'Publish your store to open product and cart pages.'
-              : 'Ürün ve sepet sayfalarını açmak için mağazanızı yayınlayın.',
+          'info',
+          lang === 'en'
+            ? 'Publish your store to open product and cart pages.'
+            : 'Ürün ve sepet sayfalarını açmak için mağazanızı yayınlayın.',
+        )
+      }
+    },
+    onBlogRoute: (tenantPath) => {
+      if (!isBlogRoutePath(tenantPath)) return
+      if (livePublished && liveSlug) {
+        window.open(`${tenantUrl(liveSlug)}${tenantPath}`, '_blank', 'noopener,noreferrer')
+      } else {
+        flashToast(
+          'info',
+          lang === 'en'
+            ? 'Publish your site to open the blog pages.'
+            : 'Blog sayfalarını açmak için sitenizi yayınlayın.',
+        )
+      }
+    },
+    onLegalRoute: (tenantPath) => {
+      if (!currentSite) return
+      const legalTarget = validateFooterHref(tenantPath, currentSite)
+      if (!legalTarget.ok || legalTarget.kind !== 'legal') return
+      if (livePublished && liveSlug) {
+        window.open(`${tenantUrl(liveSlug)}${tenantPath}`, '_blank', 'noopener,noreferrer')
+      } else {
+        flashToast(
+          'info',
+          lang === 'en'
+            ? 'Publish your site to read the legal pages.'
+            : 'Yasal sayfaları görüntülemek için sitenizi yayınlayın.',
         )
       }
     },
@@ -1890,7 +1913,7 @@ export function WebsitePreview({
 
       {/* Body: stage + docked editor */}
       <div className="relative flex min-h-0 flex-1">
-        <div className="flex flex-1 justify-center overflow-hidden bg-muted/30 p-4 sm:p-6">
+        <div className="relative flex flex-1 justify-center overflow-hidden bg-muted/30 p-4 sm:p-6">
           <div
             className={`flex min-h-0 w-full flex-col gap-3 transition-[max-width] duration-300 ${DEVICE_MAX_WIDTH[device]}`}
           >
@@ -1957,6 +1980,42 @@ export function WebsitePreview({
             </div>
           </div>
           </div>
+          {toast && (
+            <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-4">
+              <div
+                role={toast.kind === 'err' ? 'alert' : 'status'}
+                aria-live={toast.kind === 'err' ? 'assertive' : 'polite'}
+                className={`pointer-events-auto flex w-full max-w-lg items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-lg ${
+                  toast.kind === 'ok'
+                    ? 'border-primary/30 bg-primary/15 text-primary'
+                    : toast.kind === 'info'
+                      ? 'border-brand/30 bg-brand/10 text-brand'
+                      : 'border-destructive/30 bg-destructive/15 text-destructive'
+                }`}
+              >
+                {toast.kind === 'ok' ? (
+                  <Check className="h-4 w-4 shrink-0" />
+                ) : toast.kind === 'info' ? (
+                  <Info className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 text-pretty">{toast.text}</span>
+                <button
+                  type="button"
+                  aria-label={lang === 'en' ? 'Dismiss notification' : 'Bildirimi kapat'}
+                  onClick={() => {
+                    if (toastTimer.current) clearTimeout(toastTimer.current)
+                    toastTimer.current = null
+                    setToast(null)
+                  }}
+                  className="inline-flex size-7 shrink-0 items-center justify-center rounded-full text-current/80 transition-colors hover:bg-background/50 hover:text-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Editor: docked column on md+, drawer overlay on small screens */}
@@ -2005,21 +2064,6 @@ export function WebsitePreview({
         )}
       </div>
 
-      {/* Toast confirmation after an AI edit */}
-      {toast && (
-        <div className="pointer-events-none absolute left-1/2 top-16 z-20 -translate-x-1/2">
-          <div
-            className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium shadow-lg ${
-              toast.kind === 'ok'
-                ? 'border-primary/30 bg-primary/15 text-primary'
-                : 'border-destructive/30 bg-destructive/15 text-destructive'
-            }`}
-          >
-            {toast.kind === 'ok' ? <Check className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-            {toast.text}
-          </div>
-        </div>
-      )}
 
         {/* AI kredisi tükendiğinde hata yerine gösterilen açıklayıcı ekran. */}
         <OutOfCreditsModal

@@ -135,11 +135,35 @@ describe('defaults and seeding', () => {
     }
   })
 
-  it('stores get shop links, corporate sites do not', () => {
+  it('store routes are available only on storefronts and never seeded into corporate footers', () => {
+    const storefrontOnlyPaths = [
+      '/urunlerimiz',
+      '/urunlerimiz/product-a',
+      '/store',
+      '/store/product-a',
+      '/cart',
+      '/checkout',
+      '/hesap',
+      '/orders',
+      '/order/order-a',
+      '/odeme',
+      '/siparis/order-a',
+      '/sepet',
+    ]
     const hrefs = (s: WebsiteSchema) =>
       (buildDefaultFooterColumns(s) ?? []).flatMap((c) => c.links.map((l) => l.href))
+    const nonStore = corporate()
     expect(hrefs(store())).toContain('/store')
-    expect(hrefs(corporate())).not.toContain('/store')
+    for (const href of storefrontOnlyPaths) {
+      expect(validateFooterHref(href, nonStore).ok).toBe(false)
+      expect(hrefs(nonStore)).not.toContain(href)
+    }
+    const seeded = seedFooterColumns(nonStore)
+    const seededFooter = seeded.sections.find((section) => section.type === 'footer') as {
+      columns?: { links: { href: string }[] }[]
+    }
+    const seededHrefs = (seededFooter.columns ?? []).flatMap((column) => column.links.map((link) => link.href))
+    for (const href of storefrontOnlyPaths) expect(seededHrefs).not.toContain(href)
   })
 
   it('seedFooterColumns persists defaults once and never overwrites', () => {

@@ -6,7 +6,7 @@ import { resolveAboutDetail } from '@/lib/section-detail'
 import { addMissingToMenu, findMenuGaps, MENU_MAX, resolveHeaderMenu } from '@/lib/site-menu'
 import { pageNavItems } from '@/lib/website-pages'
 import { applyOperation } from '@/lib/website-edit-operations'
-import { fallbackWebsite, type WebsiteSchema } from '@/lib/website-schema'
+import { fallbackWebsite, isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 
 function onePage(prompt: string): WebsiteSchema {
   const site = fallbackWebsite(prompt, 'tr')
@@ -29,6 +29,13 @@ describe('default menu for new sites', () => {
       expect(addMissingToMenu(site, 'tr')).toBe(site)
     })
   }
+
+  it('an Atölye Portfolyo site seeds section links without any storefront routes', () => {
+    const site = addMissingToMenu(onePage('Atölye Portfolyo fotoğraf galerisi'), 'tr')
+    expect(isStorefront(site)).toBe(false)
+    expect(site.navigation.links.map((link) => link.href)).toEqual(['#about', '#services', '#contact'])
+    expect(site.navigation.links.some((link) => /^\/(?:urunlerimiz|store|cart|sepet|checkout)(?:\/|$)/i.test(link.href))).toBe(false)
+  })
 
   it('never pushes the header past MENU_MAX and leaves a full legacy menu alone', () => {
     const site = onePage('kahve dükkanı')
