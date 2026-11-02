@@ -197,7 +197,7 @@ function GoogleAccountChooser({ flowId }: { flowId: string | null }) {
                 {accounts.map((account) => (
                   <option key={account.externalAccountId} value={account.externalAccountId}>
                     {account.isManager ? `${copy.managerAccount} · ` : ''}
-                    {account.name || account.externalAccountId} · {account.externalAccountId}
+                    {account.name ? `${account.name} · ${account.externalAccountId}` : account.externalAccountId}
                   </option>
                 ))}
               </select>
@@ -245,6 +245,35 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   )
 }
 
+function getCampaignStatusPresentation(status: string, copy: ReturnType<typeof useLanguage>['t']['ads']) {
+  switch (status) {
+    case 'ENABLED':
+      return {
+        label: copy.campaignActive,
+        badgeClassName: 'border-emerald-700/30 bg-emerald-50 text-emerald-900 dark:border-emerald-300/40 dark:bg-emerald-950/50 dark:text-emerald-200',
+        dotClassName: 'size-1.5 shrink-0 rounded-full bg-emerald-700 dark:bg-emerald-300',
+      }
+    case 'PAUSED':
+      return {
+        label: copy.campaignPaused,
+        badgeClassName: 'border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300',
+        dotClassName: 'size-1.5 shrink-0 rounded-full bg-amber-700 dark:bg-amber-300',
+      }
+    case 'REMOVED':
+      return {
+        label: copy.campaignRemoved,
+        badgeClassName: 'border-border bg-muted/50 text-muted-foreground',
+        dotClassName: 'size-1.5 shrink-0 rounded-full bg-muted-foreground',
+      }
+    default:
+      return {
+        label: copy.campaignUnknown,
+        badgeClassName: 'border-border bg-muted/50 text-muted-foreground',
+        dotClassName: 'size-1.5 shrink-0 rounded-full bg-muted-foreground',
+      }
+  }
+}
+
 function CampaignTable({ report, locale, copy }: {
   report: AdsPerformanceSummary
   locale: string
@@ -271,24 +300,25 @@ function CampaignTable({ report, locale, copy }: {
                 {copy.campaignsEmpty}
               </TableCell>
             </TableRow>
-          ) : report.campaigns.map((campaign) => (
-            <TableRow key={campaign.id}>
-              <TableCell className="max-w-64 truncate font-medium">{campaign.name || campaign.id}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">
-                  {campaign.status === 'ENABLED'
-                    ? copy.campaignActive
-                    : campaign.status === 'PAUSED'
-                      ? copy.campaignPaused
-                      : copy.campaignUnknown}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-end tabular-nums">{formatNumber(campaign.impressions, locale)}</TableCell>
-              <TableCell className="text-end tabular-nums">{formatNumber(campaign.clicks, locale)}</TableCell>
-              <TableCell className="text-end tabular-nums">{formatSpend(campaign.costMicros, report.currency, locale)}</TableCell>
-              <TableCell className="text-end tabular-nums">{formatNumber(campaign.conversions, locale, 2)}</TableCell>
-            </TableRow>
-          ))}
+          ) : report.campaigns.map((campaign) => {
+            const status = getCampaignStatusPresentation(campaign.status, copy)
+
+            return (
+              <TableRow key={campaign.id}>
+                <TableCell className="max-w-64 truncate font-medium">{campaign.name || campaign.id}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={status.badgeClassName}>
+                    <span aria-hidden="true" className={status.dotClassName} />
+                    {status.label}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-end tabular-nums">{formatNumber(campaign.impressions, locale)}</TableCell>
+                <TableCell className="text-end tabular-nums">{formatNumber(campaign.clicks, locale)}</TableCell>
+                <TableCell className="text-end tabular-nums">{formatSpend(campaign.costMicros, report.currency, locale)}</TableCell>
+                <TableCell className="text-end tabular-nums">{formatNumber(campaign.conversions, locale, 2)}</TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
@@ -544,7 +574,7 @@ export function GoogleAdsDashboard({
                 >
                   {visibleConnections.map((connection) => (
                     <option key={connection.id} value={connection.id}>
-                      {connection.name || connection.externalAccountId} · {connection.externalAccountId}
+                      {connection.name ? `${connection.name} · ${connection.externalAccountId}` : connection.externalAccountId}
                     </option>
                   ))}
                 </select>

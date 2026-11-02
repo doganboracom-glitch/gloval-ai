@@ -53,7 +53,7 @@ export type GoogleAdsDateRange = '7d' | '30d'
 export type AdsCampaignPerformance = {
   id: string
   name: string
-  status: 'ENABLED' | 'PAUSED' | 'UNKNOWN'
+  status: string
   impressions: number
   clicks: number
   costMicros: number

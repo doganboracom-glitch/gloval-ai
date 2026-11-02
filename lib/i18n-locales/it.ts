@@ -1457,6 +1457,10 @@ const it: DeepPartial<Dict> = {
     noticeTerms: 'Per le condizioni di annullamento e rimborso consulta:',
   },
   ads: {
+    campaignActive: 'Attiva',
+    campaignPaused: 'In pausa',
+    campaignRemoved: 'Rimossa',
+    campaignUnknown: 'Sconosciuta',
     disconnectDialog: {
       title: 'Disconnettere Google Ads?',
       description: 'La disconnessione revocherà l’accesso di GLOVAL al tuo account Google ed eliminerà il token di accesso salvato. Puoi riconnetterti in qualsiasi momento.',
