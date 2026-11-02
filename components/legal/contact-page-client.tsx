@@ -162,6 +162,7 @@ function ContactForm({ tr, initialMessage }: { tr: boolean; initialMessage: stri
   const [message, setMessage] = useState(initialMessage)
   const messageFieldRef = useRef<HTMLTextAreaElement | null>(null)
   const hasMessagePrefill = useRef(Boolean(initialMessage))
+  const hasScrolledToPrefilledForm = useRef(false)
   const [website, setWebsite] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -169,6 +170,15 @@ function ContactForm({ tr, initialMessage }: { tr: boolean; initialMessage: stri
 
   useEffect(() => {
     if (!hasMessagePrefill.current) return
+
+    if (!hasScrolledToPrefilledForm.current) {
+      const form = document.getElementById(FORM_ID)
+      if (form) {
+        hasScrolledToPrefilledForm.current = true
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        form.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+      }
+    }
 
     const focusMessageField = () => {
       const messageField = messageFieldRef.current
