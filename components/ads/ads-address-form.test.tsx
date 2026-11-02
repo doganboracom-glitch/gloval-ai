@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdsAddressForm } from './ads-address-form'
@@ -31,6 +32,7 @@ vi.mock('@/lib/ads/scan-client', async (importOriginal) => {
 })
 
 const copy = dictionary.tr.ads
+const globalStyles = readFileSync('app/globals.css', 'utf8')
 
 function submitAddress(value: string) {
   fireEvent.change(screen.getByLabelText(copy.addressLabel), { target: { value } })
@@ -88,6 +90,78 @@ describe('AdsAddressForm', () => {
     render(<AdsAddressForm />)
     const input = screen.getByLabelText(copy.addressLabel)
     expect(input.className).toContain('text-lg')
+    expect(input.className).toContain('ads-address-input')
+    expect(input.getAttribute('aria-label')).toBe(copy.addressLabel)
+    expect(input.getAttribute('placeholder')).toBe('')
+  })
+
+  it('keeps the mobile address field at least 64px tall and full width', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+    const form = input.closest('form')!
+    const button = screen.getByRole('button', { name: copy.addressSubmit })
+
+    expect(input.className).toContain('h-16')
+    expect(input.className).toContain('w-full')
+    expect(input.className).toContain('min-w-0')
+    expect(input.className).toContain('text-lg')
+    expect(form.className).toContain('max-w-[47.5rem]')
+    expect(button.className).toContain('h-14')
+  })
+
+  it('shows aria-hidden guidance while empty and blurred', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+    const guidance = screen.getByText(copy.addressGuidance)
+
+    expect(guidance.closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(guidance.closest('[aria-hidden="true"]')?.className).toContain('pointer-events-none')
+    expect(guidance.className).toContain('ads-address-guidance-motion')
+    expect(input.getAttribute('aria-label')).toBe(copy.addressLabel)
+  })
+
+  it('hides guidance on focus and restores it after blur while empty', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+
+    fireEvent.focus(input)
+    expect(screen.queryByText(copy.addressGuidance)).toBeNull()
+    fireEvent.blur(input)
+    expect(screen.queryByText(copy.addressGuidance)).not.toBeNull()
+  })
+
+  it('hides guidance as soon as the user starts typing', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+
+    fireEvent.change(input, { target: { value: 'ornek.com' } })
+
+    expect(screen.queryByText(copy.addressGuidance)).toBeNull()
+  })
+
+  it('keeps guidance visible but static for reduced-motion users', () => {
+    render(<AdsAddressForm />)
+    expect(screen.getByText(copy.addressGuidance)).toBeTruthy()
+
+    const reducedMotionRule = globalStyles.match(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.ads-address-guidance-motion\s*\{([^}]*)\}/,
+    )
+    expect(reducedMotionRule?.[1]).toContain('animation: none;')
+    expect(reducedMotionRule?.[1]).toContain('opacity: 1;')
+    expect(reducedMotionRule?.[1]).toContain('transform: none;')
+    expect(globalStyles).toContain('animation: ads-address-guidance 2.4s ease-in-out infinite;')
+    expect(globalStyles).toContain('transform: translateX(14px);')
+  })
+
+  it.each([
+    ['tr', 'Web site linkini buraya gir'],
+    ['en', 'Enter your website link here'],
+    ['de', 'Website-Link hier eingeben'],
+    ['fr', 'Entrez le lien du site ici'],
+    ['es', 'Escribe aquí el enlace web'],
+    ['it', 'Inserisci qui il link del sito'],
+  ] as const)('%s has translated address guidance', (locale, expected) => {
+    expect(dictionary[locale].ads.addressGuidance).toBe(expected)
   })
 
   it('cleans an https URL in the field and submits only its host', async () => {

@@ -1470,6 +1470,7 @@ const es: DeepPartial<Dict> = {
   },
   ads: {
     addressLabel: 'Dirección del sitio web',
+    addressGuidance: 'Escribe aquí el enlace web',
     addressPlaceholder: 'ejemplo.com',
     addressSubmit: 'Crear plan de anuncios',
     addressHint: 'También puedes elegir un sitio creado con GLOVAL. No hace falta conectar una cuenta de Google para obtener una vista previa del plan.',

@@ -1842,6 +1842,7 @@ const dict = {
       heroSubtitle:
         'Web sitenin adresini yapıştır, GLOVAL AI sana arama reklamı planı çıkarsın. Reklam hesabın senin, bütçeni doğrudan Google’a ödersin.',
       addressLabel: 'Web sitesi adresi',
+      addressGuidance: 'Web site linkini buraya gir',
       addressPlaceholder: 'ornek.com',
       addressSubmit: 'Reklam planı oluştur',
       addressHint: 'GLOVAL ile yaptığın siteyi de seçebilirsin. Plan önizlemesi için Google hesabı bağlaman gerekmez.',
@@ -3992,6 +3993,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       heroSubtitle:
         'Paste your website address and GLOVAL AI drafts a search campaign plan. The ad account is yours and you pay Google directly.',
       addressLabel: 'Website address',
+      addressGuidance: 'Enter your website link here',
       addressPlaceholder: 'example.com',
       addressSubmit: 'Create ad plan',
       addressHint: 'You can also pick a site built with GLOVAL. You do not need to connect a Google account to preview a plan.',

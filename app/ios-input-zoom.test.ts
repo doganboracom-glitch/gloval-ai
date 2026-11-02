@@ -24,6 +24,15 @@ describe('iOS input zoom guard', () => {
     expect(block![0]).toMatch(/font-size:\s*16px/)
   })
 
+  it('keeps the Ads address field at 18px after the iOS zoom guard', () => {
+    const guard = css.match(/@supports \(-webkit-touch-callout: none\) \{[^]*?\n\}/)
+    const adsRule = css.match(/input\.ads-address-input\s*\{[^}]*\}/)
+
+    expect(adsRule).not.toBeNull()
+    expect(adsRule![0]).toMatch(/font-size:\s*18px/)
+    expect(css.indexOf(adsRule![0])).toBeGreaterThan(css.indexOf(guard![0]) + guard![0].length)
+  })
+
   it('keeps the guard unlayered so it beats Tailwind text-* utilities', () => {
     const idx = css.indexOf('iOS input zoom guard')
     const before = css.slice(0, idx)
