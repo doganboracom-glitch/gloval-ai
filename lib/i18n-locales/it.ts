@@ -1469,6 +1469,7 @@ const it: DeepPartial<Dict> = {
   },
   ads: {
     addressLabel: 'Indirizzo del sito web',
+    addressGuidance: 'Inserisci qui il link del sito',
     addressPlaceholder: 'esempio.it',
     addressSubmit: 'Crea il piano pubblicitario',
     addressHint: 'Puoi anche scegliere un sito creato con GLOVAL. Non è necessario collegare un account Google per visualizzare l’anteprima del piano.',

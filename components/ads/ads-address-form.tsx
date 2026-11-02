@@ -23,8 +23,10 @@ export function AdsAddressForm() {
   const copy = t.ads
   const { state, start, reset } = useAdsScan()
   const [value, setValue] = useState('')
+  const [isFocused, setIsFocused] = useState(false)
   const [validationError, setValidationError] = useState<AddressValidationError | null>(null)
   const busy = state.phase === 'busy'
+  const showGuidance = value.length === 0 && !isFocused
   const errorMessage = validationError === 'required' ? copy.addressRequired : copy.addressInvalid
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,44 +50,59 @@ export function AdsAddressForm() {
 
   return (
     <div className="flex w-full flex-col items-center gap-6">
-      <form onSubmit={submit} noValidate aria-busy={busy} className="flex w-full max-w-[45rem] flex-col gap-3 text-left">
+      <form onSubmit={submit} noValidate aria-busy={busy} className="flex w-full max-w-[47.5rem] flex-col gap-3 text-left">
         <label htmlFor="ads-address" className="text-sm font-medium leading-6 text-foreground">
           {copy.addressLabel}
         </label>
         <div
           data-invalid={validationError !== null}
-          className="flex min-w-0 flex-col gap-1.5 rounded-3xl border border-border bg-card p-1.5 shadow-sm transition-[border-color,box-shadow] focus-within:border-brand/70 focus-within:ring-4 focus-within:ring-brand/20 data-[invalid=true]:border-destructive/70 sm:flex-row"
+          className="flex w-full min-w-0 flex-col gap-2 rounded-3xl border border-border bg-card p-2 shadow-sm transition-[border-color,box-shadow] focus-within:border-brand/70 focus-within:ring-4 focus-within:ring-brand/20 data-[invalid=true]:border-destructive/70 sm:flex-row"
         >
-          <div className="flex h-14 min-w-0 flex-1 items-center rounded-2xl bg-background px-4 shadow-inner">
+          <div className="flex min-h-16 min-w-0 flex-1 items-center gap-4 px-3">
             <Globe aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-            <input
-              id="ads-address"
-              name="address"
-              type="text"
-              inputMode="url"
-              autoComplete="url"
-              autoCapitalize="none"
-              spellCheck={false}
-              required
-              maxLength={MAX_SITE_ADDRESS_LENGTH}
-              value={value}
-              disabled={busy}
-              onChange={(event) => {
-                setValue(event.target.value)
-                if (validationError) setValidationError(null)
-              }}
-              placeholder={copy.addressPlaceholder}
-              aria-invalid={validationError !== null}
-              aria-describedby={
-                validationError ? 'ads-address-error ads-address-hint' : 'ads-address-hint'
-              }
-              className="h-full min-w-0 flex-1 bg-transparent px-3 text-lg leading-6 text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
-            />
+            <div className="relative flex min-h-16 min-w-0 flex-1 items-center">
+              {showGuidance ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 left-0 flex min-w-0 items-center text-lg leading-6 text-muted-foreground"
+                >
+                  <span className="ads-address-guidance-motion whitespace-nowrap">
+                    {copy.addressGuidance}
+                  </span>
+                </span>
+              ) : null}
+              <input
+                id="ads-address"
+                name="address"
+                type="text"
+                inputMode="url"
+                autoComplete="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                maxLength={MAX_SITE_ADDRESS_LENGTH}
+                value={value}
+                disabled={busy}
+                onChange={(event) => {
+                  setValue(event.target.value)
+                  if (validationError) setValidationError(null)
+                }}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder=""
+                aria-label={copy.addressLabel}
+                aria-invalid={validationError !== null}
+                aria-describedby={
+                  validationError ? 'ads-address-error ads-address-hint' : 'ads-address-hint'
+                }
+                className="ads-address-input h-16 w-full min-w-0 flex-1 bg-transparent p-0 text-lg leading-6 text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
           </div>
           <button
             type="submit"
             disabled={busy}
-            className="inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-brand px-5 text-base font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-6"
+            className="inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-brand px-5 text-base font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-6"
           >
             {busy ? (
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
