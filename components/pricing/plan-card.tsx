@@ -260,6 +260,14 @@ function FeatureRow({ item }: { item: PlanCopyItem }) {
         {item.note && (
           <span className="block text-xs text-muted-foreground/70">{item.note}</span>
         )}
+        {item.notes?.map((note) => (
+          <span
+            key={note}
+            className="block text-xs leading-4 text-muted-foreground/70"
+          >
+            {note}
+          </span>
+        ))}
       </span>
     </li>
   )

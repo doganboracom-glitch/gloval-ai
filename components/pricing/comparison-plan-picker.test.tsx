@@ -6,13 +6,16 @@ import { buildComparison, getComparisonCopy } from '@/lib/plan-copy'
 
 afterEach(cleanup)
 
-function setup(currentPlanCode?: 'free' | 'starter' | 'pro' | 'ecommerce') {
+function setup(
+  currentPlanCode?: 'free' | 'starter' | 'pro' | 'ecommerce',
+  lang = 'tr',
+) {
   return render(
     <ComparisonPlanPicker
-      comparison={buildComparison('tr')}
-      copy={getComparisonCopy('tr')}
+      comparison={buildComparison(lang)}
+      copy={getComparisonCopy(lang)}
       currentPlanCode={currentPlanCode}
-    />,
+    />
   )
 }
 
@@ -64,4 +67,61 @@ describe('ComparisonPlanPicker blog rows', () => {
     const free = screen.getByRole('tabpanel')
     expect(within(free).getByText('AI yazı üretimi (kredi ile)')).toBeTruthy()
   })
+})
+
+describe('ComparisonPlanPicker card payment notes', () => {
+  const translations = [
+    {
+      lang: 'tr',
+      secondLine: '(diğer firmalar opsiyonel olarak eklenebilir.)',
+      soon: 'Yakında',
+    },
+    {
+      lang: 'en',
+      secondLine: '(other providers can optionally be added.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'de',
+      secondLine: '(Weitere Anbieter können optional hinzugefügt werden.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'fr',
+      secondLine: '(D’autres prestataires peuvent être ajoutés en option.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'es',
+      secondLine: '(Se pueden añadir otros proveedores de forma opcional.)',
+      soon: 'Soon',
+    },
+    {
+      lang: 'it',
+      secondLine: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+      soon: 'Soon',
+    },
+  ] as const
+
+  it.each(translations)(
+    '$lang shows the note under the label and keeps the soon value aligned',
+    ({ lang, secondLine, soon }) => {
+      setup('ecommerce', lang)
+      const panel = screen.getByRole('tabpanel')
+      const provider = within(panel).getByText('iyzico')
+      const labelCell = provider.closest('th')
+      const row = labelCell?.closest('tr')
+      const valueCell = row?.querySelector('td')
+
+      expect(labelCell?.textContent).toContain(secondLine)
+      expect(labelCell?.className).toContain('h-auto')
+      expect(valueCell?.textContent).toBe(soon)
+      expect(valueCell?.textContent).not.toContain('iyzico')
+      expect(valueCell?.className).toContain('h-auto')
+
+      const previousRow = row?.previousElementSibling as HTMLTableRowElement | null
+      expect(previousRow?.querySelector('th')?.className).toContain('h-12')
+      expect(previousRow?.querySelector('td')?.className).toContain('h-12')
+    },
+  )
 })
