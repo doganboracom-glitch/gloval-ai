@@ -10,6 +10,7 @@ import { Faq } from '@/components/faq'
 import { FinalCta } from '@/components/final-cta'
 import { SiteFooter } from '@/components/site-footer'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
+import { getRequestUser } from '@/lib/supabase/request-user'
 
 export async function generateMetadata({
   searchParams,
@@ -62,7 +63,10 @@ const structuredData = {
   ],
 }
 
-export default function Page() {
+export default async function Page() {
+  const authState = await getRequestUser()
+  const isAuthenticated = authState.kind === 'authenticated'
+
   return (
     <div className="min-h-screen">
       <script
@@ -76,7 +80,7 @@ export default function Page() {
         <HowItWorks />
         <Showcase />
         <Features />
-        <Pricing />
+        <Pricing isAuthenticated={isAuthenticated} />
         <BlogPreview />
         <Faq />
         <FinalCta />

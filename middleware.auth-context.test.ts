@@ -168,4 +168,15 @@ describe('middleware ile sayfa auth başlığı sınırı', () => {
     await expect(getRequestUser()).resolves.toEqual({ kind: 'authenticated', user })
     expect(mocks.middlewareGetUser).toHaveBeenCalledTimes(1)
   })
+
+  it('homepage reads the verified middleware identity without a second Auth request', async () => {
+    mocks.middlewareGetUser.mockResolvedValue({ data: { user }, error: null })
+
+    const response = await middleware(request('/'))
+    const forwardedHeaders = readForwardedRequestHeaders(response)
+
+    mocks.serverHeaders.mockResolvedValue(forwardedHeaders)
+    await expect(getRequestUser()).resolves.toEqual({ kind: 'authenticated', user })
+    expect(mocks.middlewareGetUser).toHaveBeenCalledTimes(1)
+  })
 })

@@ -523,9 +523,11 @@ const fr: DeepPartial<Dict> = {
     yearlyNote: '10 mois payés, 2 mois offerts',
     yearlyPerk: 'Domaine .com offert',
     jetOffer: {
-      title: 'GLOVAL AI à la vitesse du jet',
-      body: 'Vous ne souhaitez pas créer votre site vous-même ? Présentez-nous votre activité et quelques sites qui vous plaisent ; nous adapterons votre site à vos besoins.',
+      title: 'GLOVAL Maker',
+      subtitle: 'Confiez-nous la création de votre site.',
+      body: 'Montrez-nous votre activité et quelques sites que vous aimez ; nous préparerons rapidement votre site à votre place.',
       cta: 'Demander un devis',
+      guestPrefillMessage: 'Je souhaite faire créer un site web. Mon téléphone : ',
       messageTemplate: 'Mon activité : ... / Sites qui me plaisent (3 liens maximum) : ... / Remarques : ...',
     },
   },

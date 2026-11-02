@@ -566,9 +566,11 @@ const de: DeepPartial<Dict> = {
     yearlyNote: '10 Monate zahlen, 2 Monate geschenkt',
     yearlyPerk: 'Kostenlose .com.tr-Domain',
     jetOffer: {
-      title: 'GLOVAL AI in Jet-Geschwindigkeit',
-      body: 'Sie möchten Ihre Website nicht selbst erstellen? Zeigen Sie uns, was Ihr Unternehmen ausmacht, und einige Websites, die Ihnen gefallen – wir gestalten eine passende Website für Sie.',
+      title: 'GLOVAL Maker',
+      subtitle: 'Wir erstellen Ihre Website.',
+      body: 'Zeigen Sie uns, was Ihr Unternehmen ausmacht, und einige Websites, die Ihnen gefallen; wir erstellen schnell eine passende Website für Sie.',
       cta: 'Angebot anfordern',
+      guestPrefillMessage: 'Ich möchte eine Website erstellen lassen. Meine Telefonnummer: ',
       messageTemplate: 'Mein Unternehmen: ... / Websites, die mir gefallen (max. 3 Links): ... / Hinweise: ...',
     },
   },

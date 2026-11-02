@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { ContactPageClient } from '@/components/legal/contact-page-client'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
+import { sanitizeContactPrefillMessage } from '@/lib/contact-prefill'
 
 export async function generateMetadata({
   searchParams,
@@ -11,6 +12,13 @@ export async function generateMetadata({
   return buildPageMetadata('contact', resolveSeoLang(lang))
 }
 
-export default function ContactPage() {
-  return <ContactPageClient />
+export default async function ContactPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const { message } = await searchParams
+  const initialMessage = sanitizeContactPrefillMessage(message)
+
+  return <ContactPageClient initialMessage={initialMessage} />
 }
