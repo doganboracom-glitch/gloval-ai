@@ -565,6 +565,12 @@ const de: DeepPartial<Dict> = {
     addonSubtitle: 'Fügen Sie Ihrem Tarif jederzeit zusätzliche KI-Unterstützung hinzu.',
     yearlyNote: '10 Monate zahlen, 2 Monate geschenkt',
     yearlyPerk: 'Kostenlose .com.tr-Domain',
+    jetOffer: {
+      title: 'GLOVAL AI in Jet-Geschwindigkeit',
+      body: 'Sie möchten Ihre Website nicht selbst erstellen? Zeigen Sie uns, was Ihr Unternehmen ausmacht, und einige Websites, die Ihnen gefallen – wir gestalten eine passende Website für Sie.',
+      cta: 'Angebot anfordern',
+      messageTemplate: 'Mein Unternehmen: ... / Websites, die mir gefallen (max. 3 Links): ... / Hinweise: ...',
+    },
   },
   faq: {
     title: 'Häufig gestellte Fragen',

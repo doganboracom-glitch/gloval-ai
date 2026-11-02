@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { PlanGrid } from '@/components/pricing/plan-grid'
+import { PricingJetBand } from '@/components/pricing/pricing-jet-band'
 import { ComparisonAccordion } from '@/components/pricing/comparison-accordion'
 import { CreditRulesDialog } from '@/components/pricing/credit-rules-dialog'
 import { useLanguage } from '@/components/language-provider'
@@ -70,6 +71,7 @@ export function Pricing() {
         </div>
 
         <PlanGrid className="mt-12" cycle={cycle} />
+        <PricingJetBand />
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
           AI işlemlerin tükendiğinde ne oluyor?{' '}

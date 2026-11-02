@@ -60,13 +60,19 @@ describe('newTicketPathWithParams', () => {
 })
 
 describe('newTicketLoginHref', () => {
-  it('preserves the prefilled route as a safe login next path', () => {
+  it('preserves all prefilled form fields as a safe login next path', () => {
+    const message = 'İşim: ... / Beğendiğim siteler (en fazla 3 bağlantı): ... / Notlar: ...'
     const href = new URL(
-      newTicketLoginHref({ department: 'technical', service: 'website', project: 'p1' }),
+      newTicketLoginHref({ department: 'technical', service: 'website', project: 'p1', message }),
       'https://gloval.ai',
     )
+    const next = new URL(href.searchParams.get('next') ?? '', 'https://gloval.ai')
     expect(href.pathname).toBe('/auth/login')
-    expect(href.searchParams.get('next')).toBe('/support/new?department=technical&service=website&project=p1')
+    expect(next.pathname).toBe('/support/new')
+    expect(next.searchParams.get('department')).toBe('technical')
+    expect(next.searchParams.get('service')).toBe('website')
+    expect(next.searchParams.get('project')).toBe('p1')
+    expect(next.searchParams.get('message')).toBe(message)
   })
 })
 

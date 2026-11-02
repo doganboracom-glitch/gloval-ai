@@ -1,0 +1,37 @@
+'use client'
+
+import { useLanguage } from '@/components/language-provider'
+import { LinkButton } from '@/components/link-button'
+import { newTicketHref } from '@/lib/support/prefill'
+
+export function PricingJetBand() {
+  const { t } = useLanguage()
+  const copy = t.pricing.jetOffer
+  const href = newTicketHref({
+    department: 'technical',
+    service: 'website',
+    message: copy.messageTemplate,
+  })
+
+  return (
+    <section
+      aria-labelledby="pricing-jet-band-title"
+      className="mt-8 flex flex-col gap-5 rounded-2xl border border-brand/30 bg-card p-6 shadow-sm sm:p-8 md:flex-row md:items-center md:justify-between"
+    >
+      <div className="min-w-0 max-w-3xl">
+        <h3
+          id="pricing-jet-band-title"
+          className="text-balance font-display text-xl font-semibold tracking-tight sm:text-2xl"
+        >
+          {copy.title}
+        </h3>
+        <p className="mt-3 text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+          {copy.body}
+        </p>
+      </div>
+      <LinkButton href={href} variant="brand" size="lg" className="w-full shrink-0 md:w-auto">
+        {copy.cta}
+      </LinkButton>
+    </section>
+  )
+}

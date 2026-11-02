@@ -921,6 +921,12 @@ const dict = {
       popular: 'En Çok Tercih Edilen',
       addonTitle: 'Ek AI paketleri',
       addonSubtitle: 'Paketine dilediğin zaman ek AI desteği ekleyebilirsin.',
+      jetOffer: {
+        title: 'GLOVAL AI Jet Hızında',
+        body: 'Siteni kendin yapmak istemiyor musun? İşini ve beğendiğin birkaç siteyi örneklerle bize göster, işine en uygun hâle biz getirelim.',
+        cta: 'Teklif iste',
+        messageTemplate: 'İşim: ... / Beğendiğim siteler (en fazla 3 bağlantı): ... / Notlar: ...',
+      },
     },
     // Soru/cevap içeriği lib/content/faq.ts dosyasında tutulur; burada yalnızca
     // arayüz metinleri bulunur.
@@ -3067,6 +3073,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       popular: 'Most popular',
       addonTitle: 'Extra AI packs',
       addonSubtitle: 'You can add extra AI credits to any plan at any time.',
+      jetOffer: {
+        title: 'GLOVAL AI at Jet Speed',
+        body: 'Don’t want to build your website yourself? Show us your business and a few websites you like, and we’ll tailor it to fit your needs.',
+        cta: 'Request a quote',
+        messageTemplate: 'My business: ... / Websites I like (up to 3 links): ... / Notes: ...',
+      },
     },
     // Question/answer content lives in lib/content/faq.ts; only interface copy
     // belongs here.
