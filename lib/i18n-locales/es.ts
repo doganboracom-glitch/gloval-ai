@@ -602,6 +602,11 @@ const es: DeepPartial<Dict> = {
     legal: 'Legal',
     rights: 'Todos los derechos reservados.',
     securePayment: 'Pago seguro',
+    partner: {
+      title: 'GLOVAL Partner',
+      description: 'Vende sitios web y gana con tu propia marca, sin preocuparte por servidores ni inversión.',
+      badge: 'PRÓXIMAMENTE',
+    },
     links: {
       about: 'Sobre nosotros',
       blog: 'Blog',

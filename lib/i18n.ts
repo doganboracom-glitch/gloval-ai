@@ -965,6 +965,11 @@ const dict = {
       legal: 'Yasal',
       rights: 'Tüm hakları saklıdır.',
       securePayment: 'Güvenli Ödeme',
+      partner: {
+        title: 'GLOVAL Partner',
+        description: 'Web sitesi sat, sunucu ve yatırım derdi olmadan kendi markanla kazan.',
+        badge: 'YAKINDA',
+      },
       links: {
         about: 'Hakkımızda',
         blog: 'Blog',
@@ -3104,6 +3109,11 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       legal: 'Legal',
       rights: 'All rights reserved.',
       securePayment: 'Secure Payment',
+      partner: {
+        title: 'GLOVAL Partner',
+        description: 'Sell websites and earn under your own brand, without the hassle of servers or investment.',
+        badge: 'COMING SOON',
+      },
       links: {
         about: 'About',
         blog: 'Blog',

@@ -36,10 +36,45 @@ const PRODUCT_TITLES: Record<Lang, string> = {
   ru: 'Продукты',
 }
 
+const PARTNER_COPY = [
+  ['tr', 'Web sitesi sat, sunucu ve yatırım derdi olmadan kendi markanla kazan.', 'YAKINDA'],
+  ['en', 'Sell websites and earn under your own brand, without the hassle of servers or investment.', 'COMING SOON'],
+  ['de', 'Verkaufen Sie Websites und verdienen Sie unter Ihrer eigenen Marke – ohne Server oder Investitionskosten.', 'DEMNÄCHST'],
+  ['fr', 'Vendez des sites web sous votre propre marque, sans vous soucier des serveurs ni de l’investissement.', 'BIENTÔT'],
+  ['es', 'Vende sitios web y gana con tu propia marca, sin preocuparte por servidores ni inversión.', 'PRÓXIMAMENTE'],
+  ['it', 'Vendi siti web e guadagna con il tuo marchio, senza preoccuparti di server o investimenti.', 'PROSSIMAMENTE'],
+] as const
+
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
   state.lang = 'tr'
+})
+
+describe('GLOVAL Partner footer block', () => {
+  it('renders the teaser and badge without link or hover affordances', () => {
+    render(<SiteFooter now={BEFORE} />)
+    const block = screen.getByTestId('partner-footer-block')
+
+    expect(block.tagName).toBe('SECTION')
+    expect(within(block).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
+    expect(
+      within(block).getByText('Web sitesi sat, sunucu ve yatırım derdi olmadan kendi markanla kazan.'),
+    ).toBeTruthy()
+    expect(within(block).getByTestId('partner-soon-badge').textContent).toBe('YAKINDA')
+    expect(block.querySelector('a, button, [tabindex]')).toBeNull()
+    expect(block.querySelector('[class*="cursor-"], [class*="hover:"]')).toBeNull()
+  })
+
+  it.each(PARTNER_COPY)('renders the %s translation', (locale, description, badge) => {
+    state.lang = locale
+    render(<SiteFooter now={BEFORE} />)
+    const block = screen.getByTestId('partner-footer-block')
+
+    expect(within(block).getByRole('heading', { name: 'GLOVAL Partner' })).toBeTruthy()
+    expect(within(block).getByText(description)).toBeTruthy()
+    expect(within(block).getByTestId('partner-soon-badge').textContent).toBe(badge)
+  })
 })
 
 describe('footer GLOVAL Ads link badge', () => {
