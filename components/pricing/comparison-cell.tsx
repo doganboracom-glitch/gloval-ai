@@ -27,5 +27,19 @@ export function ComparisonCell({
       </>
     )
   }
+  if (typeof value === 'object') {
+    return (
+      <span
+        className={`${textClassName} inline-flex max-w-full flex-col items-center gap-0.5 leading-snug`}
+      >
+        <span>{value.text}</span>
+        {value.note ? (
+          <span className="max-w-full text-xs font-normal leading-4 text-muted-foreground/70 [overflow-wrap:anywhere]">
+            {value.note}
+          </span>
+        ) : null}
+      </span>
+    )
+  }
   return <span className={textClassName}>{value}</span>
 }

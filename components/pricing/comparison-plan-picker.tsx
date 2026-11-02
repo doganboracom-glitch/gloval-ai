@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState, type KeyboardEvent } from 'react'
 import { ComparisonCell } from '@/components/pricing/comparison-cell'
+import { cn } from '@/lib/utils'
 import type { ComparisonCopy } from '@/lib/plan-copy'
 import {
   COMPARISON_PLANS,
@@ -134,19 +135,32 @@ export function ComparisonPlanPicker({
                   {group.category}
                 </th>
               </tr>
-              {group.rows.map((row) => (
-                <tr key={`${group.category}-${row.label}`} className="min-h-12">
-                  <th
-                    scope="row"
-                    className="h-12 border-t border-border/60 py-2 pl-4 pr-3 align-middle text-sm font-normal leading-snug text-muted-foreground [overflow-wrap:anywhere]"
-                  >
-                    {row.label}
-                  </th>
-                  <td className="h-12 border-t border-border/60 bg-brand/5 px-3 py-2 text-center align-middle font-medium leading-snug [overflow-wrap:anywhere]">
-                    <ComparisonCell value={row.value} copy={copy} textClassName="text-sm" />
-                  </td>
-                </tr>
-              ))}
+              {group.rows.map((row) => {
+                const rowHeightClass =
+                  typeof row.value === 'object' && Boolean(row.value.note) ? 'h-auto' : 'h-12'
+
+                return (
+                  <tr key={`${group.category}-${row.label}`} className="min-h-12">
+                    <th
+                      scope="row"
+                      className={cn(
+                        rowHeightClass,
+                        'border-t border-border/60 py-2 pl-4 pr-3 align-middle text-sm font-normal leading-snug text-muted-foreground [overflow-wrap:anywhere]',
+                      )}
+                    >
+                      {row.label}
+                    </th>
+                    <td
+                      className={cn(
+                        rowHeightClass,
+                        'border-t border-border/60 bg-brand/5 px-3 py-2 text-center align-middle font-medium leading-snug [overflow-wrap:anywhere]',
+                      )}
+                    >
+                      <ComparisonCell value={row.value} copy={copy} textClassName="text-sm" />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           ))}
         </table>

@@ -447,7 +447,13 @@ export const FREE_DAILY_LIMIT = {
 /* Karşılaştırma                                                               */
 /* -------------------------------------------------------------------------- */
 
-export type ComparisonValue = string | boolean
+export type ComparisonValue =
+  | string
+  | boolean
+  | {
+      text: string
+      note?: string
+    }
 
 export type ComparisonGroup = {
   category: string

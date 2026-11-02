@@ -51,6 +51,21 @@ describe('ComparisonPlanPicker', () => {
     fireEvent.keyDown(screen.getByRole('tab', { name: 'E-TİCARET' }), { key: 'ArrowRight' })
     expect(screen.getByRole('tab', { name: 'FREE' }).getAttribute('aria-selected')).toBe('true')
   })
+
+  it('keeps the card-payment note inside the E-COMMERCE value cell', () => {
+    setup('ecommerce')
+    const label = screen.getByRole('rowheader', { name: 'Kart ile ödeme' })
+    const row = label.closest('tr')
+    const valueCell = row?.querySelector('td')
+
+    expect(label.textContent).toBe('Kart ile ödeme')
+    expect(valueCell).not.toBeNull()
+    expect(valueCell?.textContent).toContain('iyzico')
+    expect(valueCell?.textContent).toContain('(diğer firmalar opsiyonel olarak eklenebilir.)')
+    expect(label.className).toContain('h-auto')
+    expect(valueCell?.className).toContain('h-auto')
+    expect(within(row!).queryByText('Yakında')).toBeNull()
+  })
 })
 
 describe('ComparisonPlanPicker blog rows', () => {

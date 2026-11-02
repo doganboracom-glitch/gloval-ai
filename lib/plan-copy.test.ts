@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SUPPORTED_LOCALES, type SupportedLocale } from '@/lib/locale-registry'
 import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 import { websiteSchema } from './website-schema'
 import {
@@ -240,6 +241,45 @@ describe('pricing copy only describes features that exist', () => {
 })
 
 describe('comparison table is derived from the cards', () => {
+  const cardPaymentCopy: Record<SupportedLocale, { label: string; note: string }> = {
+    tr: { label: 'Kart ile ödeme', note: '(diğer firmalar opsiyonel olarak eklenebilir.)' },
+    en: { label: 'Card payments', note: '(other providers can optionally be added.)' },
+    fr: {
+      label: 'Paiement par carte',
+      note: '(D’autres prestataires peuvent être ajoutés en option.)',
+    },
+    de: {
+      label: 'Kartenzahlung',
+      note: '(Weitere Anbieter können optional hinzugefügt werden.)',
+    },
+    it: {
+      label: 'Pagamenti con carta',
+      note: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+    },
+    et: {
+      label: 'Kaardimaksed',
+      note: '(Teisi teenusepakkujaid saab soovi korral lisada.)',
+    },
+    pl: { label: 'Płatność kartą', note: '(Innych dostawców można opcjonalnie dodać.)' },
+    es: {
+      label: 'Pago con tarjeta',
+      note: '(Se pueden añadir otros proveedores de forma opcional.)',
+    },
+    pt: {
+      label: 'Pagamento com cartão',
+      note: '(Outros fornecedores podem ser adicionados opcionalmente.)',
+    },
+    ar: { label: 'الدفع بالبطاقة', note: '(يمكن إضافة مزوّدين آخرين اختياريًا.)' },
+    ru: {
+      label: 'Оплата картой',
+      note: '(Других поставщиков можно добавить по желанию.)',
+    },
+    az: {
+      label: 'Kartla ödəniş',
+      note: '(Digər provayderlər istəyə bağlı əlavə edilə bilər.)',
+    },
+  }
+
   const listed = (lang: string) =>
     buildComparison(lang)
       .filter((g) => g.category !== (lang === 'tr' ? 'Yapay zeka işlemleri' : 'AI actions'))
@@ -250,6 +290,20 @@ describe('comparison table is derived from the cards', () => {
     expect(buildComparison('tr').map((g) => g.rows.length)).toEqual(
       buildComparison('en').map((g) => g.rows.length),
     )
+  })
+
+  it('localizes card payments and keeps the provider note in the e-commerce value cell', () => {
+    for (const lang of SUPPORTED_LOCALES) {
+      const expected = cardPaymentCopy[lang]
+      const row = buildComparison(lang)
+        .flatMap((group) => group.rows)
+        .find((candidate) => candidate.label === expected.label)
+
+      expect(row, lang).toBeDefined()
+      expect(row?.label).toBe(expected.label)
+      expect([row?.free, row?.starter, row?.pro]).toEqual([false, false, false])
+      expect(row?.ecommerce).toEqual({ text: 'iyzico', note: expected.note })
+    }
   })
 
   it('every feature on a card is ticked for that plan in the table', () => {
