@@ -71,6 +71,10 @@ describe('GET /auth/oauth-callback (Google return)', () => {
       intentToken,
       referralCookie: referralToken,
     })
+    expect(mocks.scheduleWelcomeEmail).toHaveBeenCalledWith({
+      id: 'u1',
+      created_at: '2026-11-03T12:00:01.000Z',
+    })
     expect(response.cookies.get(REFERRAL_SIGNUP_INTENT_COOKIE_NAME)).toMatchObject({
       value: '',
       maxAge: 0,

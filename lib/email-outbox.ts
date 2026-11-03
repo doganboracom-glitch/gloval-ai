@@ -218,8 +218,10 @@ export type WelcomeCandidate = {
 }
 
 /**
- * Delivers the welcome email for a user whose address was just verified.
+ * Delivers the welcome email for a user whose address is verified.
  *
+ * - Verification state and creation time come from the Admin API, not the OAuth
+ *   exchange payload, which can omit `email_confirmed_at`.
  * - A row already exists (queued by the database trigger): it is claimed and
  *   sent now. A row that is sent, failed, processing or not yet due is left alone.
  * - No row exists (trigger did not fire): one is inserted only when the address
@@ -231,9 +233,17 @@ export type WelcomeCandidate = {
  */
 export async function ensureAndSendWelcomeEmail(user: WelcomeCandidate, now: Date = new Date()): Promise<void> {
   try {
-    if (!user.id || !user.email_confirmed_at) return
+    if (!user.id) return
 
     const admin = createAdminClient()
+    const { data: authData, error: authError } = await admin.auth.admin.getUserById(user.id)
+    if (authError) {
+      if (authError.status === 404) return
+      throw authError
+    }
+    const authUser = authData?.user
+    if (!authUser?.email_confirmed_at) return
+
     const { data: existing, error } = await admin
       .from('email_events')
       .select('id, status')
@@ -248,7 +258,7 @@ export async function ensureAndSendWelcomeEmail(user: WelcomeCandidate, now: Dat
       return
     }
 
-    if (!isWithinWelcomeWindow(user.created_at, now)) return
+    if (!isWithinWelcomeWindow(authUser.created_at, now)) return
 
     const id = await insertEvent({ user_id: user.id, kind: 'account_welcome' })
     if (id) await processEventById(id)
@@ -434,6 +444,7 @@ async function deliver(row: EventRow): Promise<Outcome> {
     title: copy.title,
     body,
     cta: copy.cta,
+    secondaryCta: copy.secondaryCta,
     footer: copy.footer,
   })
 
