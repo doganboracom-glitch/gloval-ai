@@ -15,6 +15,7 @@ const db = vi.hoisted(() => ({
   storageFailOn: null as string | null,
   removedHosts: [] as string[],
   calls: [] as string[],
+  profileUpdates: [] as Array<{ table: string; patch: Row; column: string; value: unknown }>,
 }))
 
 const EMAIL = 'music.operatoru@hotmail.com'
@@ -28,6 +29,7 @@ function seedFreeAccount() {
   db.storageFailOn = null
   db.removedHosts = []
   db.calls = []
+  db.profileUpdates = []
   db.storageFiles = {
     'site-images/products/p1': ['a.png', 'b.png'],
     'site-images/ai-candidates/p1': ['c.png'],
@@ -179,7 +181,19 @@ function adminClient() {
 }
 
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: db.user } }) } }),
+  createClient: async () => ({
+    auth: { getUser: async () => ({ data: { user: db.user } }) },
+    from: (table: string) => ({
+      update: (patch: Row) => ({
+        eq: async (column: string, value: unknown) => {
+          db.calls.push(`session-update:${table}`)
+          db.profileUpdates.push({ table, patch, column, value })
+          if (db.failOn === table) return { error: { code: 'XX000', message: 'boom' } }
+          return { error: null }
+        },
+      }),
+    }),
+  }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => adminClient() }))
 vi.mock('@/lib/ads/google-connections', () => ({
@@ -200,7 +214,7 @@ vi.mock('@/lib/custom-domains/vercel', () => ({
   }),
 }))
 
-import { deleteOwnAccount } from '@/lib/account'
+import { deleteOwnAccount, updateOwnProfile } from '@/lib/account'
 
 let errorLog: ReturnType<typeof vi.spyOn>
 
@@ -209,6 +223,32 @@ beforeEach(() => {
   errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => errorLog.mockRestore())
+
+describe('updateOwnProfile', () => {
+  it('refuses anonymous callers before writing a profile row', async () => {
+    db.user = null
+
+    expect(await updateOwnProfile({ fullName: 'Ada Lovelace' })).toEqual({
+      ok: false,
+      error: 'not_authenticated',
+    })
+    expect(db.profileUpdates).toEqual([])
+  })
+
+  it('updates only the current user full_name through the session client', async () => {
+    expect(await updateOwnProfile({ fullName: '  Deniz Kaya  ' })).toEqual({ ok: true })
+    expect(db.profileUpdates).toEqual([
+      { table: 'profiles', patch: { full_name: 'Deniz Kaya' }, column: 'id', value: 'user-1' },
+    ])
+    expect(db.calls).toContain('session-update:profiles')
+  })
+
+  it('rejects blank and oversized names without writing', async () => {
+    expect(await updateOwnProfile({ fullName: '   ' })).toEqual({ ok: false, error: 'invalid_name' })
+    expect(await updateOwnProfile({ fullName: 'x'.repeat(121) })).toEqual({ ok: false, error: 'invalid_name' })
+    expect(db.profileUpdates).toEqual([])
+  })
+})
 
 describe('deleteOwnAccount', () => {
   it('refuses anonymous callers before touching any data', async () => {
