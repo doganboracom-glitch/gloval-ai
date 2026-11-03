@@ -59,9 +59,10 @@ export function buildProductImagePrompt(
   const description = hasManualRequest
     ? item.description?.trim()
     : stripBrandNameFromImagePrompt(item.description ?? '', brandName)
+  const categoryLabel = category?.trim() ?? ''
   const subject =
     request.trim() ||
-    `the product "${productName.trim() || category.trim() || 'catalog item'}"${category.trim() ? ` (${category.trim()})` : ''}`
+    `the product "${productName.trim() || categoryLabel || 'catalog item'}"${categoryLabel ? ` (${categoryLabel})` : ''}`
   return withImagePromptRules(
     [
       `Photorealistic studio product photograph of ${subject}.`,
