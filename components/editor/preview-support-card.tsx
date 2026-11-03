@@ -11,8 +11,8 @@ import { newTicketHref } from '@/lib/support/prefill'
 const DISMISSED_KEY = 'gloval:preview-support-notice:dismissed:v1'
 const SHOWN_KEY = 'gloval:preview-support-notice:shown:v1'
 const SESSION_SCOPE_KEY = 'gloval:preview-support-notice:session-scope:v1'
-const REVEAL_DELAY_MS = 1_500
-const AUTO_DISMISS_MS = 30_000
+const PAGE_OPEN_DELAY_MS = 7_000
+const AUTO_DISMISS_MS = 20_000
 
 function scopedStorageKey(key: string, scopeId: string) {
   return `${key}:${encodeURIComponent(scopeId.trim())}`
@@ -22,9 +22,15 @@ type Props = {
   projectId?: string | null
   previewId?: string | null
   isPreview: boolean
+  hasScrolledDown: boolean
 }
 
-export function PreviewSupportCard({ projectId = null, previewId = null, isPreview }: Props) {
+export function PreviewSupportCard({
+  projectId = null,
+  previewId = null,
+  isPreview,
+  hasScrolledDown,
+}: Props) {
   const { t } = useLanguage()
   const explicitScope = projectId?.trim() || previewId?.trim() || null
   const [sessionScope, setSessionScope] = useState<string | null>(null)
@@ -33,11 +39,11 @@ export function PreviewSupportCard({ projectId = null, previewId = null, isPrevi
   const dismissedKey = scope ? scopedStorageKey(DISMISSED_KEY, scope) : null
   const shownKey = scope ? scopedStorageKey(SHOWN_KEY, scope) : null
   const [visibleScope, setVisibleScope] = useState<string | null>(null)
-  const [isHovered, setIsHovered] = useState(false)
   const [hasFocus, setHasFocus] = useState(false)
+  const pageOpenedAt = useRef(Date.now())
   const remainingTimeMs = useRef(AUTO_DISMISS_MS)
   const visible = isPreview && scope !== null && visibleScope === scope
-  const paused = isHovered || hasFocus
+  const paused = hasFocus
 
   useEffect(() => {
     if (explicitScope || !isPreview) return
@@ -74,7 +80,7 @@ export function PreviewSupportCard({ projectId = null, previewId = null, isPrevi
 
   useEffect(() => {
     remainingTimeMs.current = AUTO_DISMISS_MS
-    if (!isPreview || !scope || !dismissedKey || !shownKey) return
+    if (!isPreview || !scope || !dismissedKey || !shownKey || !hasScrolledDown) return
 
     const isProjectScope = Boolean(projectId?.trim())
     let dismissed = false
@@ -98,17 +104,27 @@ export function PreviewSupportCard({ projectId = null, previewId = null, isPrevi
 
     if (dismissed || shownThisSession) return
 
-    const revealTimeout = window.setTimeout(() => {
+    const reveal = () => {
       try {
         window.sessionStorage.setItem(shownKey, 'true')
       } catch {
         // The notice remains visible for this mount even without session storage.
       }
       setVisibleScope(scope)
-    }, REVEAL_DELAY_MS)
+    }
+    const remainingDelayMs = Math.max(
+      0,
+      PAGE_OPEN_DELAY_MS - (Date.now() - pageOpenedAt.current),
+    )
 
+    if (remainingDelayMs === 0) {
+      reveal()
+      return
+    }
+
+    const revealTimeout = window.setTimeout(reveal, remainingDelayMs)
     return () => window.clearTimeout(revealTimeout)
-  }, [dismissedKey, isPreview, projectId, scope, shownKey])
+  }, [dismissedKey, hasScrolledDown, isPreview, projectId, scope, shownKey])
 
   useEffect(() => {
     if (!visible || paused) return
@@ -136,8 +152,6 @@ export function PreviewSupportCard({ projectId = null, previewId = null, isPrevi
         role="status"
         aria-live="polite"
         data-testid="preview-support-notice"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         onFocusCapture={() => setHasFocus(true)}
         onBlurCapture={(event) => {
           const nextTarget = event.relatedTarget
