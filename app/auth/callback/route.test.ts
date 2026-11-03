@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   signOut: vi.fn(),
   scheduleWelcomeEmail: vi.fn(),
+  markReferralVerifiedForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -19,6 +20,9 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }))
 vi.mock('@/lib/email-outbox', () => ({ scheduleWelcomeEmail: mocks.scheduleWelcomeEmail }))
+vi.mock('@/lib/referrals/service', () => ({
+  markReferralVerifiedForUser: mocks.markReferralVerifiedForUser,
+}))
 
 import { GET } from './route'
 
@@ -57,11 +61,17 @@ describe('GET /auth/callback (email verification / password reset)', () => {
     },
   )
 
-  it('password reset still lands on /auth/reset-password', async () => {
+  it('marks a referred user verified after a successful email callback', async () => {
+    await call('/dashboard')
+    expect(mocks.markReferralVerifiedForUser).toHaveBeenCalledWith('u1')
+  })
+
+  it('password reset still lands on /auth/reset-password without marking referral verification', async () => {
     const out = target(await call('/auth/reset-password', '&type=recovery'))
     expect(out.origin).toBe('https://gloval.ai')
     expect(out.pathname).toBe('/auth/reset-password')
     expect(mocks.signOut).not.toHaveBeenCalled()
+    expect(mocks.markReferralVerifiedForUser).not.toHaveBeenCalled()
   })
 
   it('signs out and shows the success screen with a draft instead of resuming', async () => {

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { anonymizeReferralDataForDeletion } from '@/lib/referrals/service'
 import {
   revokeGoogleAdsConnectionsForDeletion,
   revokeGoogleAdsOAuthFlowsForDeletion,
@@ -201,6 +202,12 @@ async function anonymizeFinancialRecords(admin: Admin, userId: string): Promise<
   for (const table of ['billing_subscriptions', 'billing_transactions', 'addon_purchases', 'domain_orders'] as const) {
     const { error } = await admin.from(table).update({ user_id: null }).eq('user_id', userId)
     if (error) stageFailure(`anonymize_${table}`, error)
+  }
+
+  try {
+    await anonymizeReferralDataForDeletion(admin, userId)
+  } catch (error) {
+    stageFailure('anonymize_referrals', error)
   }
 
   return ownedProjectIds

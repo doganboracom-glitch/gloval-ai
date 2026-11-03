@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest, NextResponse } from 'next/server'
 
 const updateSession = vi.fn(async (_request: NextRequest) => NextResponse.next())
 const resolveActiveDomainForHost = vi.fn()
 const getPublishedSlugForProjectId = vi.fn()
+const captureReferralClick = vi.fn()
 
 vi.mock('@/lib/supabase/proxy', () => ({ updateSession: (req: NextRequest) => updateSession(req) }))
+vi.mock('@/lib/referrals/service', () => ({
+  captureReferralClick: (input: unknown) => captureReferralClick(input),
+}))
 vi.mock('@/lib/custom-domains/service', () => ({
   resolveActiveDomainForHost: (host: string) => resolveActiveDomainForHost(host),
   getPublishedSlugForProjectId: (id: string) => getPublishedSlugForProjectId(id),
@@ -76,8 +80,14 @@ beforeEach(() => {
   updateSession.mockResolvedValue(NextResponse.next())
   resolveActiveDomainForHost.mockReset()
   getPublishedSlugForProjectId.mockReset()
+  captureReferralClick.mockReset()
+  captureReferralClick.mockResolvedValue({ handled: false, cookieToken: null })
   resolveActiveDomainForHost.mockResolvedValue({ websiteProjectId: 'p1' })
   getPublishedSlugForProjectId.mockResolvedValue('dbajans')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('middleware: unchanged behaviour', () => {
@@ -282,5 +292,81 @@ describe('middleware: IndexNow key file (new behaviour)', () => {
   it('leaves /<key>.txt on an unbound custom domain to the auth flow', async () => {
     resolveActiveDomainForHost.mockResolvedValue(null)
     expect(await run('www.dbajans.com.tr', `/${KEY}.txt`)).toEqual({ kind: 'session' })
+  })
+})
+
+describe('middleware: referral capture', () => {
+  beforeEach(() => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_COOKIE_HMAC_ACTIVE_VERSION', 'v1')
+    vi.stubEnv('REFERRAL_COOKIE_HMAC_KEY_V1', 'cookie-secret-0123456789-abcdefghijkl')
+    vi.stubEnv('REFERRAL_CLICK_HMAC_KEY_V1', 'click-secret-0123456789-abcdefghijkl')
+  })
+
+  it('sets a signed host-only cookie and strips the ref query without losing session cookies', async () => {
+    captureReferralClick.mockResolvedValue({ handled: true, cookieToken: 'signed-first-touch-token' })
+    updateSession.mockImplementation(async () => {
+      const response = NextResponse.next()
+      response.cookies.set('session', 'session-value', { path: '/', httpOnly: true })
+      return response
+    })
+
+    const response = await middleware(
+      req('gloval.ai', '/?ref=PARTNER01&campaign=spring', {
+        'x-vercel-forwarded-for': '203.0.113.42',
+      }),
+    )
+    const location = new URL(response.headers.get('location') ?? '')
+    const referralCookie = response.cookies.get('gloval_referral')
+
+    expect(response.status).toBe(307)
+    expect(location.origin + location.pathname + location.search).toBe('https://gloval.ai/?campaign=spring')
+    expect(captureReferralClick).toHaveBeenCalledWith({
+      code: 'PARTNER01',
+      existingCookie: null,
+      ipAddress: '203.0.113.42',
+    })
+    expect(referralCookie).toMatchObject({
+      value: 'signed-first-touch-token',
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+    })
+    expect(response.cookies.get('session')?.value).toBe('session-value')
+  })
+
+  it('sanitizes an invalid code but does not set a referral cookie', async () => {
+    captureReferralClick.mockResolvedValue({ handled: true, cookieToken: null })
+    const response = await middleware(req('gloval.ai', '/?ref=not-valid'))
+
+    expect(response.status).toBe(307)
+    expect(new URL(response.headers.get('location') ?? '').searchParams.has('ref')).toBe(false)
+    expect(response.cookies.get('gloval_referral')).toBeUndefined()
+  })
+
+  it.each([
+    '/auth/callback?ref=PARTNER01',
+    '/api/referrals/signup-intent?ref=PARTNER01',
+    '/admin?ref=PARTNER01',
+    '/site/dbajans?ref=PARTNER01',
+  ])('does not capture referral parameters on %s', async (path) => {
+    const response = await middleware(req('gloval.ai', path))
+    expect(response.headers.get('location')).toBeNull()
+    expect(captureReferralClick).not.toHaveBeenCalled()
+  })
+
+  it('does not capture on tenant or custom domains', async () => {
+    await middleware(req('dbajans.gloval.site', '/?ref=PARTNER01'))
+    await middleware(req('www.dbajans.com.tr', '/?ref=PARTNER01'))
+    expect(captureReferralClick).not.toHaveBeenCalled()
+  })
+
+  it('is a no-op when referrals are disabled', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '0')
+    const response = await middleware(req('gloval.ai', '/?ref=PARTNER01'))
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.cookies.get('gloval_referral')).toBeUndefined()
+    expect(captureReferralClick).not.toHaveBeenCalled()
   })
 })

@@ -5,6 +5,7 @@ import { buildVerifiedUrl } from '@/lib/auth-verified-url'
 import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
+import { markReferralVerifiedForUser } from '@/lib/referrals/service'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -83,7 +84,10 @@ export async function GET(request: NextRequest) {
     return secureRedirect(errorUrl(origin, draft, isRecovery))
   }
 
-  if (!isRecovery) scheduleWelcomeEmail(verifiedUser)
+  if (!isRecovery) {
+    if (verifiedUser?.id) await markReferralVerifiedForUser(verifiedUser.id)
+    scheduleWelcomeEmail(verifiedUser)
+  }
 
   const successUrl = isRecovery
     ? new URL('/auth/reset-password', origin)

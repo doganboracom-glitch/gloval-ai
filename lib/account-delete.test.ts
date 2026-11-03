@@ -57,6 +57,31 @@ function seedFreeAccount() {
     support_tickets: [{ id: 't1', user_id: 'user-1' }],
     support_ticket_attachments: [{ id: 'att1', ticket_id: 't1', storage_path: 't1/f1' }],
     ads_free_usage: [{ subject: 'ads:user:user-1', day: '2026-10-31', used: 2 }],
+    referral_partners: [
+      {
+        id: 'ref-owner-1',
+        user_id: 'user-1',
+        referral_code: 'OWNER0001',
+        status: 'active',
+        payee_name: 'Private Payee',
+        tax_status: 'individual',
+        iban_ciphertext: 'encrypted-iban',
+        iban_key_version: 'v1',
+        iban_last4: '1234',
+      },
+      { id: 'ref-owner-2', user_id: 'user-2', referral_code: 'OWNER0002', status: 'active' },
+    ],
+    referral_attributions: [
+      {
+        id: 'ref-attr-1',
+        referred_user_id: 'user-1',
+        partner_id: 'ref-owner-2',
+        code_snapshot: 'OWNER0002',
+        source: 'email',
+        captured_at: '2026-10-31T12:00:00.000Z',
+        verified_at: null,
+      },
+    ],
   }
 }
 
@@ -226,6 +251,35 @@ describe('deleteOwnAccount', () => {
     expect(errorLog).not.toHaveBeenCalled()
   })
 
+  it('closes the partner, removes payout details and preserves anonymized attribution history', async () => {
+    expect(await deleteOwnAccount()).toEqual({ ok: true })
+
+    expect(db.tables.referral_partners.find((partner) => partner.id === 'ref-owner-1')).toMatchObject({
+      user_id: null,
+      status: 'closed',
+      payee_name: null,
+      tax_status: null,
+      iban_ciphertext: null,
+      iban_key_version: null,
+      iban_last4: null,
+    })
+    expect(db.tables.referral_partners.find((partner) => partner.id === 'ref-owner-2')).toMatchObject({
+      user_id: 'user-2',
+      status: 'active',
+    })
+    expect(db.tables.referral_attributions).toEqual([
+      expect.objectContaining({
+        id: 'ref-attr-1',
+        referred_user_id: null,
+        partner_id: 'ref-owner-2',
+        code_snapshot: 'OWNER0002',
+        source: 'email',
+      }),
+    ])
+    expect(db.calls.indexOf('update:referral_attributions')).toBeLessThan(db.calls.indexOf('deleteUser'))
+    expect(db.calls.indexOf('update:referral_partners')).toBeLessThan(db.calls.indexOf('deleteUser'))
+  })
+
   it('revokes Google Ads access and removes the free-use subject before deleting the account', async () => {
     expect(await deleteOwnAccount()).toEqual({ ok: true })
     expect(db.calls.indexOf('revokeGoogleAdsConnectionsForDeletion')).toBeLessThan(db.calls.indexOf('deleteUser'))
@@ -327,7 +381,16 @@ describe('deleteOwnAccount', () => {
     })
   })
 
-  it.each(['projects', 'ecommerce_orders', 'billing_subscriptions', 'billing_transactions', 'addon_purchases', 'domain_orders'])(
+  it.each([
+    'projects',
+    'ecommerce_orders',
+    'billing_subscriptions',
+    'billing_transactions',
+    'addon_purchases',
+    'domain_orders',
+    'referral_attributions',
+    'referral_partners',
+  ])(
     'stops before deleting the user when the %s query fails',
     async (table) => {
       seedPaidAccount()

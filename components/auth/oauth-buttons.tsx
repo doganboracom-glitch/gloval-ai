@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
+import { prepareReferralSignupIntent } from '@/lib/referrals/client'
 import { useLanguage } from '@/components/language-provider'
 
 type Provider = 'google'
@@ -22,6 +23,7 @@ export function OAuthButtons({ mode, next }: { mode: 'login' | 'signup'; next?: 
 
   async function handleClick(provider: Provider) {
     setPending(provider)
+    await prepareReferralSignupIntent(mode === 'signup' ? 'oauth' : 'login')
     const supabase = createClient()
     const redirectTo = getAuthCallbackUrl('/auth/oauth-callback')
     const { error } = await supabase.auth.signInWithOAuth({

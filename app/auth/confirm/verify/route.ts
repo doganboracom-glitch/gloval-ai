@@ -5,6 +5,7 @@ import { getSignupDraftTokenFromNextPath } from '@/lib/signup-draft-shared'
 import { buildVerifiedUrl } from '@/lib/auth-verified-url'
 import { sanitizeNextPathWithDecoding } from '@/lib/safe-redirect'
 import { isValidClaimToken } from '@/lib/signup-draft-core'
+import { markReferralVerifiedForUser } from '@/lib/referrals/service'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
     if (isRecovery) {
       return redirect(new URL('/auth/reset-password', origin))
     }
+    if (data?.user?.id) await markReferralVerifiedForUser(data.user.id)
     scheduleWelcomeEmail(data?.user)
   } catch (error) {
     logSupabaseAuthFailure('auth confirm', error)

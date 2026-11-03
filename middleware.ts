@@ -13,6 +13,13 @@ import {
 import { tenantRewritePath } from '@/lib/indexnow'
 import { LANG_COOKIE, normalizeLang, resolveLangFromAcceptLanguage } from '@/lib/i18n'
 import { clearVerifiedUserHeaders } from '@/lib/supabase/auth-context'
+import {
+  REFERRAL_COOKIE_NAME,
+  REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  isReferralRuntimeReady,
+  referralCookieOptions,
+} from '@/lib/referrals/core'
+import { captureReferralClick } from '@/lib/referrals/service'
 
 const LEGACY_TENANT_REFUND_PATH = '/yasal/iptal-ve-iade'
 
@@ -41,6 +48,30 @@ function rewriteWithSanitizedRequestHeaders(
   return NextResponse.rewrite(destination, {
     request: { headers: createSanitizedRequestHeaders(request) },
   })
+}
+
+function isReferralExcludedPath(pathname: string): boolean {
+  return ['/auth', '/api', '/admin', '/site'].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )
+}
+
+function requestIpAddress(request: NextRequest): string | null {
+  const forwarded =
+    request.headers.get('x-vercel-forwarded-for') ??
+    request.headers.get('x-forwarded-for') ??
+    request.headers.get('x-real-ip')
+  return forwarded?.split(',')[0]?.trim().slice(0, 128) || null
+}
+
+function redirectWithResponseCookies(
+  response: NextResponse,
+  destination: URL,
+  status: number,
+): NextResponse {
+  const redirect = NextResponse.redirect(destination, status)
+  for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie)
+  return redirect
 }
 
 export async function middleware(request: NextRequest) {
@@ -118,6 +149,54 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  const referralValues = request.nextUrl.searchParams.getAll('ref')
+  if (
+    request.method === 'GET' &&
+    referralValues.length > 0 &&
+    isReferralRuntimeReady() &&
+    !isReferralExcludedPath(request.nextUrl.pathname) &&
+    (!host || !isForeignHost(host))
+  ) {
+    const capture = await captureReferralClick({
+      code: referralValues.length === 1 ? referralValues[0] : null,
+      existingCookie: request.cookies.get(REFERRAL_COOKIE_NAME)?.value ?? null,
+      ipAddress: requestIpAddress(request),
+    })
+
+    if (capture.handled) {
+      const location = response.headers.get('location')
+      if (!location && response.status >= 400) {
+        if (capture.cookieToken) {
+          response.cookies.set(
+            REFERRAL_COOKIE_NAME,
+            capture.cookieToken,
+            referralCookieOptions(REFERRAL_COOKIE_MAX_AGE_SECONDS),
+          )
+        }
+        return response
+      }
+
+      const destination = location
+        ? new URL(location, request.url)
+        : request.nextUrl.clone()
+      destination.searchParams.delete('ref')
+      if (destination.origin !== request.nextUrl.origin) return response
+
+      const cleanResponse = redirectWithResponseCookies(
+        response,
+        destination,
+        location ? response.status : 307,
+      )
+      if (capture.cookieToken) {
+        cleanResponse.cookies.set(
+          REFERRAL_COOKIE_NAME,
+          capture.cookieToken,
+          referralCookieOptions(REFERRAL_COOKIE_MAX_AGE_SECONDS),
+        )
+      }
+      return cleanResponse
+    }
+  }
 
   return response
 }
