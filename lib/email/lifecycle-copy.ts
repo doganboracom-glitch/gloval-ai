@@ -1,3 +1,4 @@
+import { localizedGuideHref } from '@/lib/content/guides'
 import { AI_CREDIT_CONFIG, PAGE_LIMITS, SITE_LIMITS } from '@/lib/pricing-config'
 import type { EmailLang } from '@/lib/email/lang'
 
@@ -34,6 +35,7 @@ export type LifecycleCopy = {
   /** A sentence ending in a text link (e.g. "choose a plan" or "connect a domain"). */
   note?: { text: string; label: string; href: string }
   cta: { label: string; href: string }
+  secondaryCta?: { label: string; href: string }
   footer: string
 }
 
@@ -93,6 +95,10 @@ export function buildLifecycleCopy(input: LifecycleCopyInput): LifecycleCopy {
             ],
       },
       cta: { label: tr ? 'Sitemi düzenle' : 'Edit my site', href: input.dashboardUrl },
+      secondaryCta: {
+        label: tr ? 'Rehber' : 'Guide',
+        href: `${origin}${localizedGuideHref('/sss/rehber', input.lang)}`,
+      },
       footer: tr
         ? `Bu e-posta GLOVAL AI hesabın oluşturulduğu için gönderildi. Yardım için ${support}.`
         : `This email was sent because your GLOVAL AI account was created. Need help? ${support}.`,
@@ -172,6 +178,8 @@ export function lifecycleCopyToText(copy: LifecycleCopy): string {
   }
   if (copy.details) parts.push(copy.details.map(([label, value]) => `${label}: ${value}`).join('\n'))
   if (copy.note) parts.push(`${copy.note.text}\n${copy.note.href}`)
-  parts.push(`${copy.cta.label}: ${copy.cta.href}`, copy.footer)
+  parts.push(`${copy.cta.label}: ${copy.cta.href}`)
+  if (copy.secondaryCta) parts.push(`${copy.secondaryCta.label}: ${copy.secondaryCta.href}`)
+  parts.push(copy.footer)
   return parts.join('\n\n')
 }

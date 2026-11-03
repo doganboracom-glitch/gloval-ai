@@ -11,7 +11,17 @@ describe('lifecycle email copy', () => {
     expect(copy.paragraphs[1]).toContain('1 site ve 5 sayfa')
     expect(copy.paragraphs[1]).toContain('adin.gloval.site')
     expect(copy.cta).toEqual({ label: 'Sitemi düzenle', href: base.dashboardUrl })
+    expect(copy.secondaryCta).toEqual({ label: 'Rehber', href: 'https://gloval.ai/sss/rehber' })
     expect(copy.steps?.items).toHaveLength(3)
+  })
+
+  it('localizes the English guide URL and includes it in the plain-text email', () => {
+    const copy = buildLifecycleCopy({ kind: 'account_welcome', lang: 'en', name: 'Sam', ...base })
+    expect(copy.secondaryCta).toEqual({
+      label: 'Guide',
+      href: 'https://gloval.ai/sss/rehber?lang=en',
+    })
+    expect(lifecycleCopyToText(copy)).toContain('Guide: https://gloval.ai/sss/rehber?lang=en')
   })
 
   it('drops the name from the subject when it is unknown, in both languages', () => {

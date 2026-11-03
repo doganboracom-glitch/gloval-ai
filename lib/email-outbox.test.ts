@@ -5,15 +5,24 @@ type Row = Record<string, unknown>
 const db = vi.hoisted(() => ({
   events: [] as Row[],
   projects: [] as Row[],
-  users: new Map<string, { email: string | null; user_metadata: Record<string, unknown> }>(),
+  users: new Map<
+    string,
+    {
+      email: string | null
+      user_metadata: Record<string, unknown>
+      email_confirmed_at: string | null
+      created_at: string
+    }
+  >(),
+  afterCallbacks: [] as Array<() => void | Promise<void>>,
   plan: null as string | null,
   send: vi.fn(),
   seq: 0,
 }))
 
 vi.mock('next/server', () => ({
-  after: () => {
-    throw new Error('outside request scope')
+  after: (callback: () => void | Promise<void>) => {
+    db.afterCallbacks.push(callback)
   },
 }))
 
@@ -170,6 +179,7 @@ import {
   enqueueProjectUnpublishedEmail,
   processDueEmailEvents,
   processEventById,
+  scheduleWelcomeEmail,
 } from '@/lib/email-outbox'
 import { MAX_ATTEMPTS } from '@/lib/email-outbox-policy'
 
@@ -197,11 +207,22 @@ function seedEvent(patch: Row = {}): Row {
 
 const ok = (messageId = 'msg-1') => ({ ok: true, messageId })
 
+async function runScheduledAfterCallbacks() {
+  const callbacks = db.afterCallbacks.splice(0)
+  await Promise.all(callbacks.map((callback) => callback()))
+}
+
 beforeEach(() => {
   db.events.length = 0
   db.projects.length = 0
+  db.afterCallbacks.length = 0
   db.users.clear()
-  db.users.set(USER, { email: 'owner@example.com', user_metadata: { full_name: 'Ayşe Yılmaz' } })
+  db.users.set(USER, {
+    email: 'owner@example.com',
+    user_metadata: { full_name: 'Ayşe Yılmaz' },
+    email_confirmed_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  })
   db.projects.push({ id: PROJECT, name: 'Fırın', slug: 'firin' })
   db.plan = null
   db.seq = 0
@@ -333,7 +354,23 @@ describe('email outbox content', () => {
     expect(mail.text).toContain('50 yapay zekâ kredin')
     expect(mail.text).toContain('1 site ve 5 sayfa')
     expect(mail.text).toContain('adin.gloval.site')
+    expect(mail.text).toContain('Rehber: https://gloval.ai/sss/rehber')
     expect(mail.html).toContain('Sitemi düzenle')
+    expect(mail.html).toContain('href="https://gloval.ai/sss/rehber"')
+    expect(mail.html).toContain('class="cta-cell cta-cell-primary"')
+    expect(mail.html).toContain('.cta-cell-primary{padding-bottom:12px!important}')
+  })
+
+  it('renders the localized guide CTA in English welcome emails', async () => {
+    const user = db.users.get(USER)!
+    db.users.set(USER, { ...user, user_metadata: { ...user.user_metadata, email_locale: 'en' } })
+
+    const mail = await sendFor('account_welcome')
+
+    expect(mail.subject).toBe('Welcome to GLOVAL AI, Ayşe')
+    expect(mail.html).toContain('Guide')
+    expect(mail.html).toContain('href="https://gloval.ai/sss/rehber?lang=en"')
+    expect(mail.text).toContain('Guide: https://gloval.ai/sss/rehber?lang=en')
   })
 
   it('shows a soft plan hint, not a sales pitch, to a FREE owner on first publish', async () => {
@@ -375,37 +412,53 @@ describe('welcome email after verification', () => {
     created_at: new Date().toISOString(),
   })
 
-  it('queues and sends once when the trigger left no row', async () => {
+  it('backfills a confirmed OAuth account when the insert trigger left no row, without duplicating sends', async () => {
+    const authUser = db.users.get(USER)!
+    db.users.set(USER, { ...authUser, email: 'oauth@example.com' })
     db.send.mockResolvedValue(ok())
 
-    await Promise.all([ensureAndSendWelcomeEmail(fresh()), ensureAndSendWelcomeEmail(fresh())])
+    const callbackUser = { id: USER, created_at: authUser.created_at }
+    scheduleWelcomeEmail(callbackUser)
+    scheduleWelcomeEmail(callbackUser)
+    await runScheduledAfterCallbacks()
 
     const rows = db.events.filter((row) => row.kind === 'account_welcome')
     expect(rows).toHaveLength(1)
     expect(rows[0].status).toBe('sent')
     expect(db.send).toHaveBeenCalledTimes(1)
+    expect(db.send.mock.calls[0][0].to).toBe('oauth@example.com')
   })
 
-  it('sends a pending trigger row immediately and never twice', async () => {
+  it('sends an existing SQL-trigger row once when the OAuth callback omits email_confirmed_at', async () => {
     const event = seedEvent()
     db.send.mockResolvedValue(ok())
 
-    await ensureAndSendWelcomeEmail(fresh())
-    await ensureAndSendWelcomeEmail(fresh())
+    scheduleWelcomeEmail({ id: USER })
+    scheduleWelcomeEmail({ id: USER })
+    await runScheduledAfterCallbacks()
 
+    expect(db.events.filter((row) => row.kind === 'account_welcome')).toHaveLength(1)
     expect(event.status).toBe('sent')
     expect(db.send).toHaveBeenCalledTimes(1)
   })
 
-  it('does nothing for an unverified address', async () => {
-    await ensureAndSendWelcomeEmail({ ...fresh(), email_confirmed_at: null })
+  it('does nothing when the authoritative auth record is unverified', async () => {
+    const authUser = db.users.get(USER)!
+    db.users.set(USER, { ...authUser, email_confirmed_at: null })
+
+    await ensureAndSendWelcomeEmail(fresh())
+
     expect(db.events).toHaveLength(0)
     expect(db.send).not.toHaveBeenCalled()
   })
 
   it('does not backfill a welcome email for an account older than 24 hours', async () => {
     const old = new Date(Date.now() - 25 * 60 * 60_000).toISOString()
-    await ensureAndSendWelcomeEmail({ ...fresh(), created_at: old })
+    const authUser = db.users.get(USER)!
+    db.users.set(USER, { ...authUser, created_at: old })
+
+    await ensureAndSendWelcomeEmail(fresh())
+
     expect(db.events).toHaveLength(0)
     expect(db.send).not.toHaveBeenCalled()
   })
