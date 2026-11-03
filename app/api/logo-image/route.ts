@@ -12,6 +12,7 @@ import { resolveTheme } from '@/components/website-renderer/theme'
 import { buildTextAssets } from '@/lib/logo-studio/font-source'
 import { resolveAiModel } from '@/lib/ai-models'
 import { generateEmblemRound } from '@/lib/logo-studio/emblem-ai'
+import { resolveEffectiveSector } from '@/lib/logo-studio/direction'
 import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
 import {
   AI_EMBLEMS_PER_ROUND,
@@ -210,6 +211,13 @@ export async function POST(req: Request) {
           v2: v2Enabled,
           metallic,
           creativeDirection: v2Input?.creativeDirection,
+          avoid: v2Input
+            ? resolveEffectiveSector({
+                selectedId: v2Input.sectorId,
+                notes: v2Input.industryNotes,
+                direction: v2Input.creativeDirection,
+              }).profile.cliches
+            : undefined,
           motifs: v2Input
             ? Array.from({ length: EMBLEM_COUNT }, (_, index) => logoStudioMotifFor(v2Input.sectorId, index, seed, EMBLEM_COUNT))
             : undefined,
