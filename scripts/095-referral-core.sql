@@ -1,4 +1,4 @@
--- Referral attribution core. Intentionally not applied by this change.
+-- NOT APPLIED: referral attribution core; intentionally left unapplied by this change.
 -- All tables are service-role only; no client-facing policies are created.
 
 create table if not exists public.referral_partners (
@@ -7,7 +7,7 @@ create table if not exists public.referral_partners (
   referral_code text not null unique
     check (referral_code ~ '^[A-Z0-9]{8,16}$'),
   status text not null default 'active'
-    check (status in ('active', 'paused', 'closed')),
+    check (status in ('active', 'suspended', 'closed')),
   terms_version text,
   terms_accepted_at timestamptz,
   payee_name text,

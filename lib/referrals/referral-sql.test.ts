@@ -104,9 +104,9 @@ describe('scripts/095-referral-core.sql', () => {
     expect(ttl).toBeLessThanOrEqual(24 * 60 * 60 * 1000)
   })
 
-  it('does not count clicks for paused or ownerless partners', async () => {
+  it('does not count clicks for suspended or ownerless partners', async () => {
     const ownerId = await newUser()
-    const partnerId = await newPartner(ownerId, 'paused')
+    const partnerId = await newPartner(ownerId, 'suspended')
     const result = await db.query<{ record_referral_click: boolean }>(
       'select public.record_referral_click($1::uuid, $2::text) as record_referral_click',
       [partnerId, 'b'.repeat(64)],

@@ -48,7 +48,8 @@ async function getActivePartnerByCode(code: string): Promise<ReferralPartner | n
       .eq('status', 'active')
       .maybeSingle()
     if (error || !data) return null
-    return data as ReferralPartner
+    const partner = data as ReferralPartner
+    return partner.user_id ? partner : null
   } catch {
     return null
   }

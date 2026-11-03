@@ -13,11 +13,14 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const MIN_SECRET_LENGTH = 32
 
 export type ReferralEnvironment = {
+  [key: string]: string | undefined
   REFERRAL_ENABLED?: string
   REFERRAL_COOKIE_HMAC_ACTIVE_VERSION?: string
   REFERRAL_COOKIE_HMAC_KEY_V1?: string
   REFERRAL_CLICK_HMAC_KEY_V1?: string
 }
+
+export type ReferralSignupSource = 'email' | 'oauth'
 
 export type ReferralCookieClaims = {
   partnerId: string
@@ -31,7 +34,7 @@ export type ReferralSignupIntentClaims = {
   issuedAt: number
   expiresAt: number
   nonce: string
-  source: 'email' | 'oauth'
+  source: ReferralSignupSource
   version: typeof VERSION
 }
 
