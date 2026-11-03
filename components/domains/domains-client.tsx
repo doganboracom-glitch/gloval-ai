@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, ChevronRight, Globe, Loader2, Plus, ShoppingCart, Star, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { LinkButton } from '@/components/link-button'
 import { DomainModal, DomainShell, DomainStatusBadge, fill } from '@/components/domains/domain-chrome'
+import { DomainPriceView, formatDomainMoney } from '@/components/domains/domain-price'
 import { BuyDomainDialog } from '@/components/domains/buy-domain-dialog'
 import { TransferDomainDialog } from '@/components/domains/transfer-domain-dialog'
 import { normalizeDomain, type NormalizeFailure } from '@/lib/custom-domains/normalize'
@@ -231,10 +232,13 @@ export function DomainsClient({
                 {d.connect}
               </Button>
               {canBuyDomain && (
-                <Button size="lg" variant="outline" onClick={() => setShowBuy(true)} className="gap-2">
-                  <ShoppingCart className="size-4" />
+                <Link
+                  href="/alan-adi-sorgula?from=panel"
+                  className={buttonVariants({ size: 'lg', variant: 'outline', className: 'gap-2' })}
+                >
+                  <ShoppingCart className="size-4" aria-hidden="true" />
                   {d.buyCta}
-                </Button>
+                </Link>
               )}
               {canBuyDomain && (
                 <Button size="lg" variant="outline" onClick={() => setShowTransfer(true)} className="gap-2">
@@ -279,15 +283,13 @@ export function DomainsClient({
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {canBuyDomain && (
-              <Button
-                variant="outline"
-                onClick={() => setShowBuy(true)}
-                disabled={isPending}
-                className="gap-2"
+              <Link
+                href="/alan-adi-sorgula?from=panel"
+                className={buttonVariants({ variant: 'outline', className: 'gap-2' })}
               >
-                <ShoppingCart className="size-4" />
+                <ShoppingCart className="size-4" aria-hidden="true" />
                 {d.buyCta}
-              </Button>
+              </Link>
             )}
             {canBuyDomain && (
               <Button variant="outline" onClick={() => setShowTransfer(true)} disabled={isPending} className="gap-2">
@@ -485,14 +487,6 @@ function RecentOrders({ orders }: { orders: DomainsOverview['recentOrders'] }) {
     cancelled: 'text-muted-foreground',
   }
 
-  function formatPrice(cents: number, currency: string): string {
-    try {
-      return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100)
-    } catch {
-      return `${(cents / 100).toFixed(2)} ${currency}`
-    }
-  }
-
   return (
     <section className="mt-8">
       <h3 className="text-sm font-medium text-muted-foreground">{d.buyRecentTitle}</h3>
@@ -500,21 +494,30 @@ function RecentOrders({ orders }: { orders: DomainsOverview['recentOrders'] }) {
         {orders.map((order) => (
           <li
             key={order.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/50 px-4 py-2.5"
+            className="flex flex-col gap-2 rounded-xl border border-border bg-card/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <span className="truncate font-mono text-sm">{order.domain}</span>
-            <div className="flex shrink-0 items-center gap-3">
-              <span className="text-xs text-muted-foreground">
-                {formatPrice(order.priceCents, order.currency)}
-                {order.breakdown && (
-                  <>
-                    {' · '}
-                    {formatPrice(order.breakdown.netCents, order.currency)} + {d.buyVat}{' '}
-                    {formatPrice(order.breakdown.vatCents, order.currency)}
-                  </>
-                )}
-              </span>
-              <span className={`text-xs font-medium ${statusTone[order.status] ?? 'text-muted-foreground'}`}>
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 sm:justify-end">
+              {order.breakdown && order.currency.toUpperCase() === 'TRY' ? (
+                <DomainPriceView
+                  quote={{
+                    currency: 'TRY',
+                    grossMinor: order.priceCents,
+                    netMinor: order.breakdown.netCents,
+                    vatMinor: order.breakdown.vatCents,
+                    vatBps: order.breakdown.vatBps,
+                  }}
+                  locale={locale}
+                  copy={t.domainSearch}
+                  periodLabel={d.buyTotal}
+                  density="compact"
+                />
+              ) : (
+                <p className="text-sm font-semibold tabular-nums text-foreground">
+                  {formatDomainMoney(order.priceCents, order.currency, locale)}
+                </p>
+              )}
+              <span className={`shrink-0 text-xs font-medium ${statusTone[order.status] ?? 'text-muted-foreground'}`}>
                 {statusText[order.status] ?? order.status}
               </span>
             </div>

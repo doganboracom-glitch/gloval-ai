@@ -17,11 +17,12 @@ export type PublicSearchTld = (typeof PUBLIC_SEARCH_TLDS)[number]
 
 export const MAX_QUERY_LENGTH = 100
 const LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
+const TLD_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
 
 export type PublicSearchParse =
-  | { ok: true; label: string; tld: PublicSearchTld | null }
+  | { ok: true; label: string; tld: string | null }
   | { ok: false; error: 'INVALID_QUERY' | 'UNSUPPORTED_TLD' }
 
 export function isSupportedPublicTld(value: string): value is PublicSearchTld {
@@ -29,7 +30,10 @@ export function isSupportedPublicTld(value: string): value is PublicSearchTld {
 }
 
 /** Accepts "marka", "marka.com", "https://www.marka.com/yol?x=1"; rejects anything else. */
-export function parsePublicSearchQuery(raw: unknown): PublicSearchParse {
+export function parsePublicSearchQuery(
+  raw: unknown,
+  allowedTlds: readonly string[] | null = PUBLIC_SEARCH_TLDS,
+): PublicSearchParse {
   if (typeof raw !== 'string') return { ok: false, error: 'INVALID_QUERY' }
   if (raw.length > MAX_QUERY_LENGTH || CONTROL_CHARS.test(raw)) return { ok: false, error: 'INVALID_QUERY' }
 
@@ -51,15 +55,18 @@ export function parsePublicSearchQuery(raw: unknown): PublicSearchParse {
   if (rest.length === 0) return { ok: true, label, tld: null }
 
   const tld = rest.join('.')
-  if (rest.some((part) => !/^[a-z0-9-]{1,63}$/.test(part))) return { ok: false, error: 'INVALID_QUERY' }
-  if (!isSupportedPublicTld(tld)) return { ok: false, error: 'UNSUPPORTED_TLD' }
+  if (rest.some((part) => !TLD_LABEL_PATTERN.test(part))) return { ok: false, error: 'INVALID_QUERY' }
+  if (allowedTlds && !allowedTlds.includes(tld)) return { ok: false, error: 'UNSUPPORTED_TLD' }
   return { ok: true, label, tld }
 }
 
-/** Strict full-domain check used for `?buy=` hand-offs: label + a supported extension, nothing else. */
-export function parsePublicDomain(raw: unknown): { domain: string; label: string; tld: PublicSearchTld } | null {
+/** Strict full-domain check used for purchase hand-offs; `null` allows a live-catalog TLD. */
+export function parsePublicDomain(
+  raw: unknown,
+  allowedTlds: readonly string[] | null = PUBLIC_SEARCH_TLDS,
+): { domain: string; label: string; tld: string } | null {
   if (typeof raw !== 'string' || raw !== raw.trim().toLowerCase()) return null
-  const parsed = parsePublicSearchQuery(raw)
+  const parsed = parsePublicSearchQuery(raw, allowedTlds)
   if (!parsed.ok || !parsed.tld) return null
   const domain = `${parsed.label}.${parsed.tld}`
   return domain === raw ? { domain, label: parsed.label, tld: parsed.tld } : null

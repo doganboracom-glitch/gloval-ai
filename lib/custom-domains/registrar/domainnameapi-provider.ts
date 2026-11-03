@@ -21,6 +21,8 @@ import {
   type DomainListCapable,
   type DomainManageCapable,
   type DomainRegistrarProvider,
+  type DomainTldCatalogCapable,
+  type RegistrarTldRegistrationPrice,
   type ManageChange,
   type ManagedDomainDetails,
   type RegisterDomainInput,
@@ -107,7 +109,14 @@ type TransferClient = {
   Renew(domain: string, period: number): Promise<Envelope>
 }
 
-type TldRow = { tld?: string; pricing?: Record<string, Record<string, string>>; currencies?: Record<string, string> }
+type TldRow = {
+  tld?: string
+  status?: string
+  pricing?: Record<string, Record<string, string>>
+  currencies?: Record<string, string>
+}
+
+const TLD_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/
 
 /** Provider failure carrying only a safe code/message; never request payloads (which hold EPP codes). */
 function providerFailure(res: Envelope): RegistrarError {
@@ -253,7 +262,8 @@ export class DomainNameApiProvider
     DomainTransferCapable,
     DomainListCapable,
     DomainManageCapable,
-    DomainContactProbeCapable
+    DomainContactProbeCapable,
+    DomainTldCatalogCapable
 {
   readonly id = 'domainnameapi'
   readonly live = true
@@ -486,6 +496,41 @@ export class DomainNameApiProvider
       locked: Boolean(data.TransferLock),
       reasonKey: messageKey || null,
     }
+  }
+
+  /** Reads standard one-year registration prices; it does not mutate registrar state. */
+  async listRegistrationTlds(): Promise<RegistrarTldRegistrationPrice[]> {
+    let res: Awaited<ReturnType<TransferClient['GetTldList']>>
+    try {
+      res = await this.transferClient().GetTldList(1000)
+    } catch {
+      throw new RegistrarError('PROVIDER_ERROR', 'domainnameapi:TLD_LIST_EXCEPTION')
+    }
+    if (res.result !== 'OK') {
+      throw new RegistrarError('PROVIDER_ERROR', `domainnameapi:TLD_LIST_${res.error?.Code ?? 'UNKNOWN'}`)
+    }
+
+    const rows: TldRow[] = Array.isArray(res.data) ? res.data : (res.data?.tlds ?? [])
+    return rows.flatMap((row) => {
+      const tld = (row.tld ?? '').replace(/^\./, '').toLowerCase()
+      const labels = tld.split('.')
+      if (
+        !tld ||
+        tld.length > 100 ||
+        labels.some((label) => !TLD_LABEL_PATTERN.test(label)) ||
+        (row.status && row.status.toLowerCase() !== 'active')
+      ) {
+        return []
+      }
+
+      const raw = row.pricing?.registration?.['1']
+      const amount = raw === undefined ? Number.NaN : Number.parseFloat(raw)
+      const currency = (row.currencies?.registration ?? '').trim().toUpperCase()
+      const registerCents = Number.isFinite(amount) ? Math.round(amount * 100) : 0
+      if (registerCents <= 0 || !/^[A-Z]{3}$/.test(currency)) return []
+
+      return [{ tld, registerCents, currency }]
+    })
   }
 
   async getTransferPrice(tld: string): Promise<TransferPrice | null> {

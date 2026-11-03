@@ -18,12 +18,14 @@ export function DomainSearchPageClient({
   demo = false,
   authenticated,
   initialQuery,
+  fromPanel = false,
 }: {
   open: boolean
   /** Preview-only: fake results, no purchase. Never true in production. */
   demo?: boolean
   authenticated: boolean
   initialQuery: string
+  fromPanel?: boolean
 }) {
   const { t, lang } = useLanguage()
   const copy = t.domainSearch
@@ -51,11 +53,11 @@ export function DomainSearchPageClient({
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-16 sm:py-20">
         <Link
-          href="/"
+          href={fromPanel ? '/dashboard/domains' : '/'}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {t.nav.backHome}
+          {fromPanel ? (lang === 'tr' ? 'Panele dön' : 'Back to domains') : t.nav.backHome}
         </Link>
 
         <header className="mt-8 max-w-3xl">

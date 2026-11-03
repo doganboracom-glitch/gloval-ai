@@ -13,6 +13,12 @@ describe('parsePublicSearchQuery', () => {
     expect(parsePublicSearchQuery('marka.com.evil')).toEqual({ ok: false, error: 'UNSUPPORTED_TLD' })
   })
 
+  it('accepts a dynamic extension only when the server supplies it as allowed', () => {
+    expect(parsePublicSearchQuery('marka.io', ['io'])).toEqual({ ok: true, label: 'marka', tld: 'io' })
+    expect(parsePublicSearchQuery('marka.io', null)).toEqual({ ok: true, label: 'marka', tld: 'io' })
+    expect(parsePublicSearchQuery('marka.io')).toEqual({ ok: false, error: 'UNSUPPORTED_TLD' })
+  })
+
   it.each([
     '',
     '   ',
@@ -35,9 +41,10 @@ describe('parsePublicSearchQuery', () => {
 })
 
 describe('parsePublicDomain', () => {
-  it('accepts only a clean label plus a supported extension', () => {
+  it('accepts only a clean label plus an allowed extension', () => {
     expect(parsePublicDomain('marka.com')?.domain).toBe('marka.com')
     expect(parsePublicDomain('marka.com.tr')?.tld).toBe('com.tr')
+    expect(parsePublicDomain('marka.io', null)?.domain).toBe('marka.io')
   })
 
   it.each(['marka', 'MARKA.com', ' marka.com', 'marka.com/x', 'https://marka.com', 'marka.xyz', 'a.b.com', undefined])(

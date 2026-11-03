@@ -6,20 +6,21 @@ import { MAX_QUERY_LENGTH } from '@/lib/custom-domains/public-search/validate'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 import { createClient } from '@/lib/supabase/server'
 
-type SearchParams = Promise<{ lang?: string | string[]; q?: string | string[] }>
+type SearchParams = Promise<{ lang?: string | string[]; q?: string | string[]; from?: string | string[] }>
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value)
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
-  const { lang, q } = await searchParams
+  const { lang, q, from } = await searchParams
   const metadata = buildPageMetadata('domainSearch', resolveSeoLang(lang))
   // Parametrised search URLs are never indexed; the canonical stays the clean page.
-  return first(q) ? { ...metadata, robots: { index: false, follow: true } } : metadata
+  return first(q) || first(from) === 'panel' ? { ...metadata, robots: { index: false, follow: true } } : metadata
 }
 
 export default async function DomainSearchPage({ searchParams }: { searchParams: SearchParams }) {
-  const { q } = await searchParams
+  const { q, from } = await searchParams
   const initialQuery = (first(q) ?? '').slice(0, MAX_QUERY_LENGTH)
+  const fromPanel = first(from) === 'panel'
 
   const demo = isDomainSearchDemo()
   let authenticated = false
@@ -37,6 +38,7 @@ export default async function DomainSearchPage({ searchParams }: { searchParams:
       demo={demo}
       authenticated={authenticated}
       initialQuery={initialQuery}
+      fromPanel={fromPanel}
     />
   )
 }

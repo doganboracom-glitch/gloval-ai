@@ -1,15 +1,7 @@
 import type { ReactNode } from 'react'
-import { fill } from '@/components/domains/domain-chrome'
+import { DomainPriceView } from '@/components/domains/domain-price'
 import type { PricedDomainResult } from '@/lib/custom-domains/pricing/calc'
 import type { Dict } from '@/lib/i18n'
-
-export function formatTry(minor: number, locale: string): string {
-  try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: 'TRY' }).format(minor / 100)
-  } catch {
-    return `${(minor / 100).toFixed(2)} TRY`
-  }
-}
 
 const STATUS_STYLE = {
   available: 'bg-emerald-500/10 text-emerald-500',
@@ -53,18 +45,7 @@ export function DomainResultCard({
       <div className="flex flex-col gap-3 sm:items-end">
         {result.status === 'available' &&
           (quote ? (
-            <div className="sm:text-right">
-              <p className="font-display text-xl font-semibold tabular-nums">{formatTry(quote.grossMinor, locale)}</p>
-              <p className="text-xs text-muted-foreground">
-                {copy.perYear} · {copy.vatIncluded}
-              </p>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {fill(copy.vatBreakdown, {
-                  net: formatTry(quote.netMinor, locale),
-                  rate: quote.vatBps / 100,
-                })}
-              </p>
-            </div>
+            <DomainPriceView quote={quote} locale={locale} copy={copy} periodLabel={copy.perYear} align="end" />
           ) : (
             <p className="text-sm text-muted-foreground">{copy.priceUnavailable}</p>
           ))}
