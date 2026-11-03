@@ -23,6 +23,8 @@ import {
   type TextAssets,
 } from '@/lib/logo-studio/compose'
 import { drawLocalEmblem, pickLocalEmblems } from '@/lib/logo-studio/emblem-local'
+import { drawSectorSymbol, sectorSymbolPicks } from '@/lib/logo-studio/sector-symbols'
+import { directionSignature, resolveEffectiveSector, suggestTone } from '@/lib/logo-studio/direction'
 import { LogoStudioV2Controls } from '@/components/editor/logo-studio-v2-controls'
 import { wordIncludes } from '@/lib/visual-subjects'
 import {
@@ -90,7 +92,14 @@ type StudioData = {
   aiFailed: boolean
 }
 
-type Choice = { t: 'ai'; i: number } | { t: 'local'; i: number } | { t: 'mono'; shape: 'circle' | 'square' }
+type Choice =
+  | { t: 'ai'; i: number }
+  | { t: 'local'; i: number }
+  | { t: 'sector'; i: number }
+  | { t: 'mono'; shape: 'circle' | 'square' }
+
+const SECTOR_PICKS = 8
+const UNTOUCHED_DIRECTION = directionSignature({ sectorId: 'other', notes: '', direction: '' })
 type StudioLoadOptions = {
   style: LogoStyleId
   colorway: ColorwayId
@@ -160,6 +169,7 @@ export function LogoStudioDialog({
   const [colorway, setColorway] = useState<ColorwayId>('brand')
   const [selected, setSelected] = useState<LogoLayout>('horizontal')
   const [choice, setChoice] = useState<Choice>({ t: 'local', i: 0 })
+  const [generatedSig, setGeneratedSig] = useState<string | null>(null)
   const [faviconPrefer, setFaviconPrefer] = useState<FaviconPrefer>('auto')
   const [applyFavicon, setApplyFavicon] = useState(intent === 'favicon' || !site.navigation.favicon?.src)
   const [exporting, setExporting] = useState<string | null>(null)
@@ -255,9 +265,17 @@ export function LogoStudioDialog({
         }))
         if (!opts.textOnly) {
           setSeed(nextSeed)
-          setChoice(
-            fresh.length > 0 ? { t: 'ai', i: 0 } : mode === 'ai' ? { t: 'mono', shape: 'circle' } : { t: 'local', i: 0 },
-          )
+          if (opts.v2) {
+            setGeneratedSig(
+              directionSignature({
+                sectorId: opts.sectorId ?? 'other',
+                notes: opts.industryNotes ?? '',
+                direction: mode === 'ai' ? (opts.creativeDirection ?? '') : '',
+              }),
+            )
+          }
+          const freeChoice: Choice = opts.v2 ? { t: 'sector', i: 0 } : { t: 'local', i: 0 }
+          setChoice(fresh.length > 0 ? { t: 'ai', i: 0 } : mode === 'ai' ? { t: 'mono', shape: 'circle' } : freeChoice)
         }
       } catch {
         if (id === requestId.current) setError(ui.studioFailed)
@@ -331,6 +349,18 @@ export function LogoStudioDialog({
     })
   }, [data?.brand, data?.context, localSeed, v2Enabled, sectorId, industryNotes, creativeDirection, locale])
 
+  const effectiveSector = useMemo(
+    () => resolveEffectiveSector({ selectedId: sectorId, notes: industryNotes, direction: mode === 'ai' ? creativeDirection : '' }),
+    [sectorId, industryNotes, creativeDirection, mode],
+  )
+  const sectorPicks = useMemo(() => {
+    if (!v2Enabled) return []
+    const all = sectorSymbolPicks(effectiveSector.profile.id, 16)
+    if (mode !== 'local' || all.length === 0) return all.slice(0, SECTOR_PICKS)
+    const offset = (localSeed * 4) % all.length
+    return [...all.slice(offset), ...all.slice(0, offset)].slice(0, SECTOR_PICKS)
+  }, [v2Enabled, effectiveSector.profile.id, mode, localSeed])
+
   const emblemFor = useCallback(
     (c: Choice, colors: ReturnType<typeof resolveColorway>): EmblemAsset | null => {
       if (!data) return null
@@ -364,12 +394,18 @@ export function LogoStudioDialog({
         const emblem = monogramEmblem({ mono: data.text.mono, shape: c.shape, colors: iconColors, style })
         return metallic ? applyMetallicFinish(emblem, metalTone) : emblem
       }
+      if (c.t === 'sector') {
+        const sectorPick = sectorPicks[c.i] ?? sectorPicks[0]
+        if (!sectorPick) return null
+        const emblem = drawSectorSymbol(sectorPick, style, iconColors)
+        return metallic ? applyMetallicFinish(emblem, metalTone) : emblem
+      }
       const pick = picks[c.i] ?? picks[0]
       if (!pick) return null
       const emblem = drawLocalEmblem(pick, style, iconColors)
       return metallic ? applyMetallicFinish(emblem, metalTone) : emblem
     },
-    [data, picks, style, v2Enabled, colorway, metalTone],
+    [data, picks, sectorPicks, style, v2Enabled, colorway, metalTone],
   )
 
   const lockups = useMemo(() => {
@@ -411,6 +447,22 @@ export function LogoStudioDialog({
   const current = lockups?.[selected]
   const hasAi = data ? data.aiEmblems.length > 0 : false
   const busy = loading || exporting !== null
+
+  const directionInput = directionSignature({
+    sectorId,
+    notes: industryNotes,
+    direction: mode === 'ai' ? creativeDirection : '',
+  })
+  const directionPending = v2Enabled && mode === 'ai' && directionInput !== (generatedSig ?? UNTOUCHED_DIRECTION)
+  const aiIsStale = v2Enabled && mode === 'ai' && hasAi && generatedSig !== null && generatedSig !== directionInput
+  const toneSuggestion = useMemo(
+    () => (v2Enabled ? suggestTone(industryNotes, mode === 'ai' ? creativeDirection : '') : null),
+    [v2Enabled, industryNotes, creativeDirection, mode],
+  )
+  const toneAlreadyApplied =
+    !toneSuggestion || (style === toneSuggestion.style && (!toneSuggestion.metallic || colorway === 'metallic'))
+  const sectorLabel = effectiveSector.profile.label[locale === 'tr' ? 'tr' : 'en']
+  const roundCredits = AI_EMBLEMS_PER_ROUND * LOGO_EMBLEM_CREDITS
 
   function v2Options(overrides: Partial<StudioLoadOptions> = {}): StudioLoadOptions {
     return {
@@ -456,8 +508,25 @@ export function LogoStudioDialog({
       const nextSeed = v2Enabled && !hasAi ? seed : seed + 1
       void load(nextSeed, v2Enabled ? v2Options({ textOnly: false }) : { style, colorway })
     } else {
-      setChoice({ t: 'local', i: 0 })
+      setChoice(v2Enabled ? { t: 'sector', i: 0 } : { t: 'local', i: 0 })
     }
+  }
+
+  function applyTone() {
+    if (!toneSuggestion || !data) return
+    const nextColorway: ColorwayId = toneSuggestion.metallic ? 'metallic' : colorway
+    const enteringMetallic = nextColorway === 'metallic' && colorway !== 'metallic'
+    setStylePinned(true)
+    setStyle(toneSuggestion.style)
+    setColorway(nextColorway)
+    void load(
+      seed,
+      v2Options({
+        style: toneSuggestion.style,
+        colorway: nextColorway,
+        textOnly: !(mode === 'ai' && choice.t === 'ai' && enteringMetallic),
+      }),
+    )
   }
 
   function changeColorway(next: ColorwayId) {
@@ -605,24 +674,43 @@ export function LogoStudioDialog({
     data?.sectorFontName && data.sectorFontName !== data.fontName ? `${data.fontName} + ${data.sectorFontName}` : data?.fontName
   const sameChoice = (c: Choice) => JSON.stringify(c) === JSON.stringify(choice)
 
-  const candidates: { key: string; c: Choice; svg: string }[] = data
-    ? [
-        ...data.aiEmblems.flatMap((_, i) => {
-          const e = emblemFor({ t: 'ai', i }, thumbColors)
-          return e ? [{ key: `ai-${i}`, c: { t: 'ai', i } as Choice, svg: emblemThumb(e) }] : []
-        }),
-        // A library symbol would not match the business, so AI mode never shows one.
-        ...(mode === 'local' ? picks : []).map((_, i) => {
-          const e = emblemFor({ t: 'local', i }, thumbColors)
-          return { key: `local-${i}`, c: { t: 'local', i } as Choice, svg: e ? emblemThumb(e) : '' }
-        }),
-        ...(['circle', 'square'] as const).map((shape) => ({
-          key: `mono-${shape}`,
-          c: { t: 'mono', shape } as Choice,
-          svg: emblemThumb(monogramEmblem({ mono: data.text.mono, shape, colors: thumbColors, style })),
-        })),
-      ]
-    : []
+  type Candidate = { key: string; c: Choice; svg: string }
+  type CandidateGroup = { key: string; label: string | null; items: Candidate[]; note?: string }
+
+  const candidateGroups: CandidateGroup[] = (() => {
+    if (!data) return []
+    const aiCands: Candidate[] = data.aiEmblems.flatMap((_, i) => {
+      const e = emblemFor({ t: 'ai', i }, thumbColors)
+      return e ? [{ key: `ai-${i}`, c: { t: 'ai', i } as Choice, svg: emblemThumb(e) }] : []
+    })
+    const monoCands: Candidate[] = (['circle', 'square'] as const).map((shape) => ({
+      key: `mono-${shape}`,
+      c: { t: 'mono', shape } as Choice,
+      svg: emblemThumb(monogramEmblem({ mono: data.text.mono, shape, colors: thumbColors, style })),
+    }))
+    if (!v2Enabled) {
+      // A library symbol would not match the business, so AI mode never shows one.
+      const localCands: Candidate[] = (mode === 'local' ? picks : []).map((_, i) => {
+        const e = emblemFor({ t: 'local', i }, thumbColors)
+        return { key: `local-${i}`, c: { t: 'local', i } as Choice, svg: e ? emblemThumb(e) : '' }
+      })
+      return [{ key: 'all', label: null, items: [...aiCands, ...localCands, ...monoCands] }]
+    }
+    const sectorCands: Candidate[] = sectorPicks.map((_, i) => {
+      const e = emblemFor({ t: 'sector', i }, thumbColors)
+      return { key: `sector-${i}`, c: { t: 'sector', i } as Choice, svg: e ? emblemThumb(e) : '' }
+    })
+    const groups: CandidateGroup[] = [{ key: 'free', label: ui.studioFreeSymbols, items: [...sectorCands, ...monoCands] }]
+    if (mode === 'ai') {
+      groups.push({
+        key: 'ai',
+        label: ui.studioAiConcepts,
+        items: aiCands,
+        note: aiCands.length === 0 && !data.aiFailed ? ui.studioAiConceptsEmpty : undefined,
+      })
+    }
+    return groups
+  })()
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4">
@@ -724,34 +812,89 @@ export function LogoStudioDialog({
 
               <section className={`flex flex-col gap-2 ${loading ? 'opacity-50' : ''}`} aria-label={ui.studioEmblems}>
                 <span className="text-[11px] text-muted-foreground">{ui.studioEmblems}</span>
-                {v2Enabled && mode === 'ai' && !hasAi && !data.aiFailed ? (
-                  <p role="status" className="text-sm leading-relaxed text-muted-foreground">
-                    {ui.studioV2NextRoundHint}
+                {v2Enabled && effectiveSector.overridesSelection ? (
+                  <p role="status" className="text-xs leading-relaxed text-muted-foreground">
+                    {ui.studioV2NoteSector.replace('{sector}', sectorLabel)}
                   </p>
                 ) : null}
-                <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
-                  {candidates.map((cand) => {
-                    const active = sameChoice(cand.c)
-                    return (
-                      <button
-                        key={cand.key}
-                        type="button"
-                        aria-pressed={active}
-                        aria-label={cand.c.t === 'mono' ? (cand.c.shape === 'circle' ? ui.studioMonoCircle : ui.studioMonoSquare) : ui.studioEmblems}
-                        onClick={() => setChoice(cand.c)}
-                        className={`flex aspect-square items-center justify-center rounded-lg border p-2 transition-colors ${
-                          active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/60'
-                        }`}
-                        style={{ backgroundColor: thumbBg }}
-                      >
-                        {cand.svg ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- generated data URI
-                          <img src={svgToDataUri(cand.svg)} alt="" className="max-h-full max-w-full object-contain" />
+                {candidateGroups.map((group) => (
+                  <div key={group.key} className="flex flex-col gap-1.5">
+                    {group.label ? (
+                      <span className="flex flex-wrap items-center gap-2 text-xs font-medium text-foreground">
+                        {group.label}
+                        {group.key === 'ai' && aiIsStale ? (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-normal text-muted-foreground">
+                            {ui.studioV2StaleBadge}
+                          </span>
                         ) : null}
-                      </button>
-                    )
-                  })}
-                </div>
+                      </span>
+                    ) : null}
+                    {group.note ? (
+                      <p role="status" className="text-xs leading-relaxed text-muted-foreground">
+                        {group.note}
+                      </p>
+                    ) : null}
+                    {group.items.length > 0 ? (
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+                        {group.items.map((cand) => {
+                          const active = sameChoice(cand.c)
+                          return (
+                            <button
+                              key={cand.key}
+                              type="button"
+                              aria-pressed={active}
+                              aria-label={cand.c.t === 'mono' ? (cand.c.shape === 'circle' ? ui.studioMonoCircle : ui.studioMonoSquare) : ui.studioEmblems}
+                              onClick={() => setChoice(cand.c)}
+                              className={`flex aspect-square items-center justify-center rounded-lg border p-2 transition-colors ${
+                                active ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/60'
+                              } ${group.key === 'ai' && aiIsStale ? 'opacity-60' : ''}`}
+                              style={{ backgroundColor: thumbBg }}
+                            >
+                              {cand.svg ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- generated data URI
+                                <img src={svgToDataUri(cand.svg)} alt="" className="max-h-full max-w-full object-contain" />
+                              ) : null}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {directionPending ? (
+                  <div role="status" className="flex flex-col gap-2 rounded-lg border border-border bg-muted px-3 py-2">
+                    <p className="text-xs leading-relaxed text-muted-foreground">{ui.studioV2Pending}</p>
+                    <button
+                      type="button"
+                      disabled={busy || directionContainsBrandName}
+                      onClick={another}
+                      className="flex w-fit items-center gap-1.5 rounded-lg border border-primary px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      {ui.studioV2Regenerate
+                        .replace('{count}', String(AI_EMBLEMS_PER_ROUND))
+                        .replace('{credits}', String(roundCredits))}
+                    </button>
+                  </div>
+                ) : null}
+                {toneSuggestion && !toneAlreadyApplied ? (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>
+                      {ui.studioV2ToneSuggest.replace(
+                        '{tone}',
+                        `${styleLabel[toneSuggestion.style]}${toneSuggestion.metallic ? ` · ${colorLabel.metallic}` : ''}`,
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={applyTone}
+                      className="rounded-full border border-primary px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      {ui.studioV2ToneApply}
+                    </button>
+                  </div>
+                ) : null}
               </section>
 
               <div className={`grid grid-cols-1 gap-2 ${v2Enabled ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-3'} ${loading ? 'opacity-50' : ''}`}>

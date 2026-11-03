@@ -1,6 +1,7 @@
 import { generateText } from 'ai'
 import { attemptTimeoutMs, fallbackModelFor, logAiUsage, type AiModelSelection } from '@/lib/ai-models'
 import { splitSvg, type EmblemAsset } from '@/lib/logo-studio/compose'
+import { fingerprintEmblem, tooSimilar, type Fingerprint } from '@/lib/logo-studio/emblem-diversity'
 import { checkEmblemSvg } from '@/lib/logo-studio/emblem-gate'
 import { buildEmblemPrompt } from '@/lib/logo-studio/emblem-prompt'
 import type { LogoStyleId } from '@/lib/logo-studio/rules'
@@ -67,6 +68,8 @@ export type EmblemRound = {
   metallic?: boolean
   creativeDirection?: string
   motifs?: readonly string[]
+  /** Sector clichés the prompt tells the model to avoid (V2). */
+  avoid?: readonly string[]
   /** Test seam; production always uses the AI Gateway. */
   draw?: Drawer
   now?: () => number
@@ -125,7 +128,8 @@ async function drawCandidate(round: EmblemRound, index: number, startedAt: numbe
         v2: round.v2,
         metallic: round.metallic,
         creativeDirection: round.creativeDirection,
-        motif: round.motifs?.[index],
+        motif: round.motifs && round.motifs.length > 0 ? round.motifs[index % round.motifs.length] : undefined,
+        avoid: round.avoid,
       },
       round.count,
     )
@@ -181,8 +185,41 @@ async function drawCandidate(round: EmblemRound, index: number, startedAt: numbe
   return { ok: false, reason, attempts: 2 }
 }
 
+/** Extra draws allowed per near-duplicate before that slot is reported as failed (and so not charged). */
+const MAX_REDRAWS_PER_DUPLICATE = 2
+
+/**
+ * V2 only: a delivered mark that is nearly identical to an earlier one is
+ * redrawn with another concept family; if it is still a duplicate the slot
+ * fails with a reason and is never charged.
+ */
+async function dropNearDuplicates(round: EmblemRound, outcomes: EmblemOutcome[], startedAt: number): Promise<EmblemOutcome[]> {
+  const kept: Fingerprint[] = []
+  const result: EmblemOutcome[] = []
+  let extra = round.count
+  for (const outcome of outcomes) {
+    let current = outcome
+    for (let tries = 0; ; tries++) {
+      if (!current.ok) break
+      const print = fingerprintEmblem(current.emblem.inner)
+      if (!tooSimilar(print, kept)) {
+        kept.push(print)
+        break
+      }
+      if (tries >= MAX_REDRAWS_PER_DUPLICATE) {
+        current = { ok: false, reason: 'çok benzer', attempts: current.attempts }
+        break
+      }
+      current = await drawCandidate(round, extra++, startedAt)
+    }
+    result.push(current)
+  }
+  return result
+}
+
 /** Draws `count` emblems in parallel. Never throws; each slot is a success or a reasoned failure. */
 export async function generateEmblemRound(round: EmblemRound): Promise<EmblemOutcome[]> {
   const startedAt = (round.now ?? Date.now)()
-  return Promise.all(Array.from({ length: round.count }, (_, i) => drawCandidate(round, i, startedAt)))
+  const outcomes = await Promise.all(Array.from({ length: round.count }, (_, i) => drawCandidate(round, i, startedAt)))
+  return round.v2 ? dropNearDuplicates(round, outcomes, startedAt) : outcomes
 }

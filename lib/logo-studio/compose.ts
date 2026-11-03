@@ -1,5 +1,7 @@
 import type { Box, TextPath } from '@/lib/logo-studio/ttf'
 import {
+  contrastRatio,
+  hexLuminance,
   METALLIC_TOKEN_COLORS,
   PROPORTIONS,
   styleSpec,
@@ -142,10 +144,52 @@ function mapMetalTokens(inner: string, map: (tone: keyof typeof METALLIC_TOKEN_C
   })
 }
 
-function metallicDefinitions(id: string, tone: LogoMetalTone): string {
+type MetalStops = Record<keyof typeof METALLIC_TOKEN_COLORS, readonly [string, string, string, string]>
+
+/** WCAG non-text contrast: a metallic mark must reach this against the surface it sits on. */
+export const MIN_METAL_CONTRAST = 3
+
+function mixHex(from: string, to: string, amount: number): string {
+  const channel = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16)
+  return `#${[0, 1, 2]
+    .map((i) => Math.round(channel(from, i) + (channel(to, i) - channel(from, i)) * amount).toString(16).padStart(2, '0'))
+    .join('')}`
+}
+
+/**
+ * Metal stops adapted to a surface. On a light surface pale tones (silver,
+ * white-gold highlights) would vanish, so each shade is shifted toward black
+ * until its body stop (index 1) reaches `MIN_METAL_CONTRAST`; on a dark surface
+ * the shift goes toward white. `contour` is set when a shift was needed and the
+ * compositor then also draws a thin contrasting edge.
+ */
+export function metalStopsForSurface(
+  tone: LogoMetalTone,
+  surface?: string,
+): { stops: MetalStops; contour?: string; minContrast: number } {
+  const base = METAL_STOPS[tone]
+  const shades = Object.keys(base) as (keyof typeof METALLIC_TOKEN_COLORS)[]
+  const bodyContrast = (stops: MetalStops) => Math.min(...shades.map((shade) => contrastRatio(stops[shade][1], surface ?? '#ffffff')))
+  if (!surface) return { stops: base, minContrast: bodyContrast(base) }
+
+  const toward = hexLuminance(surface) >= 0.4 ? '#000000' : '#ffffff'
+  const stops = {} as MetalStops
+  let shifted = false
+  for (const shade of shades) {
+    let amount = 0
+    const at = (t: number) => base[shade].map((color) => mixHex(color, toward, t)) as unknown as MetalStops[typeof shade]
+    while (amount < 1 && contrastRatio(at(amount)[1], surface) < MIN_METAL_CONTRAST) amount = Math.round((amount + 0.05) * 100) / 100
+    if (amount > 0) shifted = true
+    stops[shade] = at(amount)
+  }
+  const contour = shifted ? (toward === '#000000' ? base.dark[2] : base.light[0]) : undefined
+  return { stops, contour, minContrast: bodyContrast(stops) }
+}
+
+function metallicDefinitions(id: string, tone: LogoMetalTone, palette: MetalStops = METAL_STOPS[tone]): string {
   const gradients = (Object.keys(METALLIC_TOKEN_COLORS) as (keyof typeof METALLIC_TOKEN_COLORS)[])
     .map((shade) => {
-      const colors = METAL_STOPS[tone][shade]
+      const colors = palette[shade]
       const stops = colors.map((color, index) => `<stop offset="${index * 33.333}%" stop-color="${color}"/>`).join('')
       return `<linearGradient id="${id}-${shade}" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient>`
     })
@@ -154,19 +198,24 @@ function metallicDefinitions(id: string, tone: LogoMetalTone): string {
 }
 
 /** Applies gradients, a soft shadow and a fine edge highlight only after SVG gate/local generation. */
-export function applyMetallicFinish(e: EmblemAsset, tone: LogoMetalTone): EmblemAsset {
+export function applyMetallicFinish(e: EmblemAsset, tone: LogoMetalTone, surface?: string): EmblemAsset {
   const id = metalSafeId(e.id)
+  const adapted = surface ? metalStopsForSurface(tone, surface) : null
+  const palette = adapted?.stops ?? METAL_STOPS[tone]
   const main = mapMetalTokens(e.inner, (shade) => `url(#${id}-${shade})`)
-  const inner = `<g filter="url(#${id}-shadow)" stroke="url(#${id}-highlight)" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".3">${main}</g>`
+  const edge = adapted?.contour
+    ? `stroke="${adapted.contour}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9"`
+    : `stroke="url(#${id}-highlight)" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".3"`
+  const inner = `<g filter="url(#${id}-shadow)" ${edge}>${main}</g>`
 
   const simple = e.simple
-    ? mapMetalTokens(e.simple, (shade) => METAL_STOPS[tone][shade][1])
+    ? mapMetalTokens(e.simple, (shade) => palette[shade][1])
     : undefined
   return {
     ...e,
     inner,
     simple,
-    svgDefs: metallicDefinitions(id, tone),
+    svgDefs: metallicDefinitions(id, tone, palette),
     metallic: true,
     metalTone: tone,
   }
@@ -234,6 +283,20 @@ function finish(
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     `<g transform="translate(${f(dx)} ${f(dy)})">${parts.map((p) => p.markup).join('')}</g></svg>`
   return { layout, svg, width, height, emblemBox: move(meta.emblem), textCapBox: move(meta.textCap) }
+}
+
+const BADGE_INNER_RING = 43.5
+const BADGE_RING_MARGIN = 1.5
+const BADGE_MIN_TAG_SCALE = 0.05
+
+/** True when all four corners of the box lie inside the badge's inner ring. */
+export function insideBadgeRing(box: Box): boolean {
+  return [
+    [box.x, box.y],
+    [box.x + box.w, box.y],
+    [box.x, box.y + box.h],
+    [box.x + box.w, box.y + box.h],
+  ].every(([x, y]) => Math.hypot(x - 50, y - 50) <= BADGE_INNER_RING - BADGE_RING_MARGIN)
 }
 
 export type BuildLockupInput = {
@@ -308,11 +371,28 @@ export function buildLockup({ layout, emblem, text, colors, style, sectorLabel }
     const iconScale = Math.min(32 / eb.w, 32 / eb.h) * overshoot(emblem)
     const iconW = eb.w * iconScale
     const e = placeEmblem(emblem, 50 - iconW / 2, 8, iconScale)
-    const textScale = Math.min(74 / Math.max(label.bbox.w, 1), 12 / Math.max(label.bbox.h, 1))
-    const textW = label.bbox.w * textScale
+    let textScale = Math.min(74 / Math.max(label.bbox.w, 1), 12 / Math.max(label.bbox.h, 1))
     const baseline = 66
-    const t = placeText(label, text.fauxBold, ink, 50 - textW / 2, baseline, textScale)
-    const tag = placeSectorTag(50, t.box, 76, 0.15)
+    let t = placeText(label, text.fauxBold, ink, 50 - (label.bbox.w * textScale) / 2, baseline, textScale)
+    // Shrink until every corner of the text box sits inside the inner ring.
+    for (let i = 0; i < 30 && !insideBadgeRing(t.box); i++) {
+      textScale *= 0.94
+      t = placeText(label, text.fauxBold, ink, 50 - (label.bbox.w * textScale) / 2, baseline, textScale)
+    }
+    const textW = label.bbox.w * textScale
+    let tag: Placed | null = null
+    if (sectorLabel) {
+      let tagScale = Math.min(0.15, 70 / Math.max(sectorLabel.bbox.w, 1))
+      for (let i = 0; i < 30 && tagScale >= BADGE_MIN_TAG_SCALE; i++) {
+        const tagBaseline = t.box.y + t.box.h + 2.5 + sectorLabel.capHeight * tagScale
+        const placed = placeText(sectorLabel, false, ink, 50 - (sectorLabel.bbox.w * tagScale) / 2, tagBaseline, tagScale)
+        if (insideBadgeRing(placed.box)) {
+          tag = placed
+          break
+        }
+        tagScale *= 0.94
+      }
+    }
     const textCap = { x: 50 - textW / 2, y: baseline - label.capHeight * textScale, w: textW, h: label.capHeight * textScale }
     return finish(layout, tag ? [frame, e, t, tag] : [frame, e, t], { emblem: e.box, textCap })
   }

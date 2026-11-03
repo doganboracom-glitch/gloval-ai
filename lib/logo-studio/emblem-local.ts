@@ -16,7 +16,7 @@ import { wordIncludes } from '@/lib/visual-subjects'
  * (k is the accent in plain mode and the badge colour inside filled frames).
  */
 
-type Draw = (a: string, b: string, k: string) => string
+export type Draw = (a: string, b: string, k: string) => string
 type Glyph = { id: string; draw: Draw }
 type Sector = { id: string; keys: string[]; subject: string; glyphs: Glyph[] }
 
@@ -35,7 +35,7 @@ const E = (cx: number, cy: number, rx: number, ry: number, f: string, rot = 0) =
 
 const n2 = (n: number) => (Math.round(n * 100) / 100).toString()
 
-function starPath(points: number, outer: number, inner: number): string {
+export function starPath(points: number, outer: number, inner: number): string {
   const pts: string[] = []
   for (let k = 0; k < points * 2; k++) {
     const r = k % 2 === 0 ? outer : inner
@@ -45,7 +45,7 @@ function starPath(points: number, outer: number, inner: number): string {
   return `M${pts.join('L')}Z`
 }
 
-function gearPath(teeth: number, outer: number, root: number): string {
+export function gearPath(teeth: number, outer: number, root: number): string {
   const step = (Math.PI * 2) / teeth
   const pts: string[] = []
   for (let i = 0; i < teeth; i++) {
@@ -645,9 +645,35 @@ const GLYPH_DRAW = new Map(SECTORS.flatMap((s) => s.glyphs.map((g) => [`${s.id}-
 /** A reference to a library emblem; recolour/restyle by drawing it again. */
 export type LocalPick = { entry: string; variant: number }
 
+/** Draw function of a library glyph, e.g. ('construction', 'keystone'). */
+export function libraryGlyphDraw(sector: string, glyph: string): ((a: string, b: string, k: string) => string) | null {
+  return GLYPH_DRAW.get(`${sector}-${glyph}`) ?? null
+}
+
 export function drawLocalEmblem(pick: LocalPick, style: LogoStyleId, colors: LogoColors): EmblemAsset {
   const entry = ENTRY_BY_ID.get(pick.entry) ?? EMBLEM_LIBRARY[0]
   const draw = GLYPH_DRAW.get(`${entry.sector}-${entry.glyph}`)!
+  return renderGlyphEmblem({ id: entry.id, draw, treatment: entry.treatment, variant: pick.variant, style, colors })
+}
+
+/** Shared by the legacy library and the V2 sector symbols; output is identical to the former inline code. */
+export function renderGlyphEmblem({
+  id,
+  draw,
+  treatment,
+  variant,
+  style,
+  colors,
+}: {
+  id: string
+  draw: Draw
+  treatment: Treatment
+  variant: number
+  style: LogoStyleId
+  colors: LogoColors
+}): EmblemAsset {
+  const entry = { id, treatment }
+  const pick = { variant }
   const spec = styleSpec(style)
   const frameId: FrameId = entry.treatment === 'plain' ? 'plain' : spec.frames[pick.variant % spec.frames.length]
   const frame = FRAME_META[frameId]
