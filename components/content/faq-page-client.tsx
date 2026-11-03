@@ -8,12 +8,17 @@ import { SiteFooter } from '@/components/site-footer'
 import { FaqAccordion } from '@/components/content/faq-accordion'
 import { FAQ_SUPPORT_COPY, getFaqItems } from '@/lib/content/faq'
 import { getFaqAnswerText, getLocalized } from '@/lib/content/types'
+import { HELP_CENTER_COPY } from '@/lib/content/guides'
+import { HelpCenterTabs } from '@/components/content/help-center-tabs'
+import { toBilingual } from '@/lib/i18n'
 
 export function FaqPageClient({ supportHref }: { supportHref: string }) {
   const { t, lang } = useLanguage()
   const [query, setQuery] = useState('')
   const allItems = getFaqItems()
   const supportCopy = getLocalized(FAQ_SUPPORT_COPY, lang)
+  const helpLocale = toBilingual(lang)
+  const helpCopy = HELP_CENTER_COPY[helpLocale]
   const searchLocale = lang === 'tr' ? 'tr-TR' : lang
 
   // Filter across both question and answer text: people often remember a phrase
@@ -43,12 +48,16 @@ export function FaqPageClient({ supportHref }: { supportHref: string }) {
 
         <header className="mt-8 text-center">
           <h1 className="text-balance font-display text-4xl font-bold tracking-tight sm:text-5xl">
-            {t.faq.pageTitle}
+            {helpCopy.title}
           </h1>
           <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-            {t.faq.pageSubtitle}
+            {helpCopy.subtitle}
           </p>
         </header>
+
+        <div className="mt-8">
+          <HelpCenterTabs active="faq" locale={helpLocale} />
+        </div>
 
         <div className="relative mt-10">
           <Search

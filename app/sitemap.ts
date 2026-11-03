@@ -4,6 +4,7 @@ import { isWhoisLookupEnabled, WHOIS_LOOKUP_PATH } from '@/lib/domains/feature-f
 import { platformUrl } from '@/lib/domains'
 import { getPosts } from '@/lib/content/blog'
 import { LEGAL_SLUGS } from '@/lib/legal/documents'
+import { GUIDES } from '@/lib/content/guides'
 
 /**
  * Sitemap for the GLOVAL platform itself (https://gloval.ai/sitemap.xml).
@@ -64,11 +65,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry('/', { changeFrequency: 'weekly', priority: 1 }),
     entry('/blog', { changeFrequency: 'weekly', priority: 0.8 }),
     entry('/sss', { changeFrequency: 'monthly', priority: 0.7 }),
+    entry('/sss/rehber', { changeFrequency: 'monthly', priority: 0.7 }),
     entry('/iletisim', { changeFrequency: 'yearly', priority: 0.5 }),
     entry('/alan-adi-sorgula', { changeFrequency: 'monthly', priority: 0.6 }),
     ...(isWhoisLookupEnabled() ? [entry(WHOIS_LOOKUP_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),
     ...(isAdsFeatureUiEnabled() ? [entry(ADS_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),
   ]
+
+  const guideArticles: MetadataRoute.Sitemap = GUIDES.map(({ slug }) =>
+    entry(`/sss/rehber/${slug}`, { changeFrequency: 'yearly', priority: 0.5 }),
+  )
 
   // Legal / corporate pages required for a production SaaS (and payment provider review).
   const legal: MetadataRoute.Sitemap = LEGAL_SLUGS.map((slug) =>
@@ -88,5 +94,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }),
     )
 
-  return [...marketing, ...legal, ...posts]
+  return [...marketing, ...guideArticles, ...legal, ...posts]
 }
