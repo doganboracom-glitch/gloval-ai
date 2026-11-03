@@ -1,5 +1,12 @@
 import type { Box, TextPath } from '@/lib/logo-studio/ttf'
-import { PROPORTIONS, styleSpec, type LogoColors, type LogoStyleId } from '@/lib/logo-studio/rules'
+import {
+  METALLIC_TOKEN_COLORS,
+  PROPORTIONS,
+  styleSpec,
+  type LogoColors,
+  type LogoMetalTone,
+  type LogoStyleId,
+} from '@/lib/logo-studio/rules'
 
 /**
  * Pure logo composition. Takes ready-made pieces (an emblem WITHOUT text, and
@@ -11,7 +18,9 @@ import { PROPORTIONS, styleSpec, type LogoColors, type LogoStyleId } from '@/lib
  * and re-run in the browser to recolour a logo for a light or dark surface.
  */
 
-export type LogoLayout = 'horizontal' | 'vertical' | 'wordmark'
+export type LogoLayout = 'horizontal' | 'vertical' | 'wordmark' | 'stacked' | 'badge'
+export const LEGACY_LOGO_LAYOUTS: readonly LogoLayout[] = ['horizontal', 'vertical', 'wordmark']
+export const LOGO_LAYOUTS_V2: readonly LogoLayout[] = [...LEGACY_LOGO_LAYOUTS, 'stacked', 'badge']
 
 export type EmblemAsset = {
   id: string
@@ -25,6 +34,10 @@ export type EmblemAsset = {
   round?: boolean
   /** Simplified, badge-like markup (100x100) that stays legible at 16-32 px. */
   simple?: string
+  /** Trusted-compositor definitions; never accepted from model output. */
+  svgDefs?: string
+  metallic?: boolean
+  metalTone?: LogoMetalTone
 }
 
 export type TextAssets = {
@@ -82,7 +95,7 @@ function maxStrokeWidth(inner: string): number {
 /** Emblem bounds including half the widest stroke (getBBox ignores strokes). */
 export function emblemBounds(e: EmblemAsset): Box {
   const base = e.bbox && e.bbox.w > 0 && e.bbox.h > 0 ? e.bbox : { x: 0, y: 0, w: e.viewBox.w, h: e.viewBox.h }
-  const pad = e.source === 'ai' ? maxStrokeWidth(e.inner) / 2 : 0
+  const pad = (e.source === 'ai' ? maxStrokeWidth(e.inner) / 2 : 0) + (e.metallic ? 4 : 0)
   return { x: base.x - pad, y: base.y - pad, w: base.w + 2 * pad, h: base.h + 2 * pad }
 }
 
@@ -96,7 +109,70 @@ export function recolorEmblem(e: EmblemAsset, map: Record<string, string>): Embl
   return { ...e, inner }
 }
 
-type Placed = { markup: string; box: Box }
+const METAL_TONE_BY_TOKEN = Object.fromEntries(
+  Object.entries(METALLIC_TOKEN_COLORS).map(([tone, color]) => [color.toLowerCase(), tone]),
+) as Record<string, keyof typeof METALLIC_TOKEN_COLORS>
+
+const METAL_STOPS: Record<LogoMetalTone, Record<keyof typeof METALLIC_TOKEN_COLORS, readonly [string, string, string, string]>> = {
+  gold: {
+    light: ['#fff9df', '#f2d67d', '#b27a22', '#fff0b4'],
+    mid: ['#f5dc83', '#c39435', '#835415', '#e9c35f'],
+    dark: ['#bf8328', '#80511b', '#4d2d10', '#b77921'],
+  },
+  silver: {
+    light: ['#ffffff', '#eef2f5', '#aab4be', '#ffffff'],
+    mid: ['#f5f7f9', '#c0c8d0', '#75818c', '#dce2e7'],
+    dark: ['#aab3bc', '#68737d', '#343c44', '#9aa5af'],
+  },
+  bronze: {
+    light: ['#f5d2a4', '#d6a16c', '#8c512d', '#f0c18e'],
+    mid: ['#d5a06a', '#a96d3e', '#66391e', '#c88a55'],
+    dark: ['#a46a3c', '#6b3f24', '#422514', '#91562e'],
+  },
+}
+
+function metalSafeId(id: string): string {
+  return `logo-metal-${id.toLowerCase().replace(/[^a-z0-9_-]/g, '-') || 'mark'}`
+}
+
+function mapMetalTokens(inner: string, map: (tone: keyof typeof METALLIC_TOKEN_COLORS, attribute: string) => string): string {
+  return inner.replace(/(fill|stroke)="(#[0-9a-f]{6})"/gi, (match, attribute: string, color: string) => {
+    const tone = METAL_TONE_BY_TOKEN[color.toLowerCase()]
+    return tone ? `${attribute}="${map(tone, attribute)}"` : match
+  })
+}
+
+function metallicDefinitions(id: string, tone: LogoMetalTone): string {
+  const gradients = (Object.keys(METALLIC_TOKEN_COLORS) as (keyof typeof METALLIC_TOKEN_COLORS)[])
+    .map((shade) => {
+      const colors = METAL_STOPS[tone][shade]
+      const stops = colors.map((color, index) => `<stop offset="${index * 33.333}%" stop-color="${color}"/>`).join('')
+      return `<linearGradient id="${id}-${shade}" x1="0" y1="0" x2="1" y2="1">${stops}</linearGradient>`
+    })
+    .join('')
+  return `${gradients}<linearGradient id="${id}-highlight" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#fff" stop-opacity=".18"/><stop offset="45%" stop-color="#fff" stop-opacity=".78"/><stop offset="100%" stop-color="#fff" stop-opacity=".08"/></linearGradient><filter id="${id}-shadow" x="-24%" y="-24%" width="148%" height="160%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceAlpha" stdDeviation="1.25" result="blur"/><feOffset in="blur" dy="1.35" result="offset"/><feComponentTransfer in="offset" result="shadow"><feFuncA type="linear" slope=".24"/></feComponentTransfer><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`
+}
+
+/** Applies gradients, a soft shadow and a fine edge highlight only after SVG gate/local generation. */
+export function applyMetallicFinish(e: EmblemAsset, tone: LogoMetalTone): EmblemAsset {
+  const id = metalSafeId(e.id)
+  const main = mapMetalTokens(e.inner, (shade) => `url(#${id}-${shade})`)
+  const inner = `<g filter="url(#${id}-shadow)" stroke="url(#${id}-highlight)" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".3">${main}</g>`
+
+  const simple = e.simple
+    ? mapMetalTokens(e.simple, (shade) => METAL_STOPS[tone][shade][1])
+    : undefined
+  return {
+    ...e,
+    inner,
+    simple,
+    svgDefs: metallicDefinitions(id, tone),
+    metallic: true,
+    metalTone: tone,
+  }
+}
+
+type Placed = { markup: string; box: Box; defs?: string }
 
 function placeEmblem(e: EmblemAsset, x: number, y: number, scale: number): Placed {
   const b = emblemBounds(e)
@@ -105,6 +181,7 @@ function placeEmblem(e: EmblemAsset, x: number, y: number, scale: number): Place
   return {
     markup: `<g transform="translate(${f(tx)} ${f(ty)}) scale(${f(scale)})">${e.inner}</g>`,
     box: { x, y, w: b.w * scale, h: b.h * scale },
+    defs: e.svgDefs,
   }
 }
 
@@ -151,8 +228,10 @@ function finish(
   const dx = pad - content.x
   const dy = pad - content.y
   const move = (b?: Box): Box | undefined => (b ? { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h } : undefined)
+  const defs = [...new Set(parts.map((part) => part.defs).filter((value): value is string => !!value))]
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f(width)} ${f(height)}" width="${f(width)}" height="${f(height)}">` +
+    (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     `<g transform="translate(${f(dx)} ${f(dy)})">${parts.map((p) => p.markup).join('')}</g></svg>`
   return { layout, svg, width, height, emblemBox: move(meta.emblem), textCapBox: move(meta.textCap) }
 }
@@ -163,15 +242,24 @@ export type BuildLockupInput = {
   text: TextAssets
   colors: LogoColors
   style: LogoStyleId
+  sectorLabel?: TextPath
 }
 
-export function buildLockup({ layout, emblem, text, colors, style }: BuildLockupInput): Lockup {
+export function buildLockup({ layout, emblem, text, colors, style, sectorLabel }: BuildLockupInput): Lockup {
   const spec = styleSpec(style)
   const P = PROPORTIONS
   const ink = colors.ink
   const label = spec.textCase === 'caps' ? text.caps : text.plain
   const capH = label.capHeight
   const overshoot = (e: EmblemAsset) => (e.round ? P.roundOvershoot : 1)
+  const placeSectorTag = (centerX: number, anchor: Box, maxWidth: number, preferredScale: number): Placed | null => {
+    if (!sectorLabel) return null
+    const scale = Math.min(preferredScale, maxWidth / Math.max(sectorLabel.bbox.w, 1))
+    const width = sectorLabel.bbox.w * scale
+    const cap = sectorLabel.capHeight * scale
+    const baseline = anchor.y + anchor.h + Math.max(2, capH * 0.08) + cap
+    return placeText(sectorLabel, false, ink, centerX - width / 2, baseline, scale)
+  }
 
   if (layout === 'horizontal' && emblem) {
     const eb = emblemBounds(emblem)
@@ -186,25 +274,47 @@ export function buildLockup({ layout, emblem, text, colors, style }: BuildLockup
     const gap = capH * P.horizontal.gapToCap * spec.gapScale
     const baseline = cy + capH / 2
     const t = placeText(label, text.fauxBold, ink, pw + gap, baseline, 1)
-    return finish(layout, [e, t], { emblem: e.box, textCap: { x: pw + gap, y: baseline - capH, w: label.bbox.w, h: capH } })
+    const tag = placeSectorTag(pw + gap + label.bbox.w / 2, t.box, Math.max(label.bbox.w, capH * 2.4), 0.22)
+    return finish(layout, tag ? [e, t, tag] : [e, t], { emblem: e.box, textCap: { x: pw + gap, y: baseline - capH, w: label.bbox.w, h: capH } })
   }
 
-  if (layout === 'vertical' && emblem) {
-    const ts = P.vertical.textScale
+  if ((layout === 'vertical' || layout === 'stacked') && emblem) {
+    const proportions = layout === 'stacked' ? P.stacked : P.vertical
+    const ts = proportions.textScale
     const tcap = text.caps.capHeight * ts
     const eb = emblemBounds(emblem)
-    const targetH = tcap * P.vertical.emblemToTextCap * spec.emblemScale
+    const targetH = tcap * proportions.emblemToTextCap * spec.emblemScale
     const scale =
-      Math.min(targetH / eb.h, (targetH * P.vertical.maxEmblemAspect) / eb.w) * overshoot(emblem)
+      Math.min(targetH / eb.h, (targetH * proportions.maxEmblemAspect) / eb.w) * overshoot(emblem)
     const ph = eb.h * scale
     const pw = eb.w * scale
     const textW = text.caps.bbox.w * ts
     const W = Math.max(pw, textW)
     const H = Math.max(targetH, ph)
     const e = placeEmblem(emblem, (W - pw) / 2, (H - ph) / 2, scale)
-    const baseline = H + tcap * P.vertical.gapToTextCap * spec.gapScale + tcap
-    const t = placeText(text.caps, text.fauxBold, ink, (W - textW) / 2, baseline, ts)
-    return finish(layout, [e, t], { emblem: e.box, textCap: { x: (W - textW) / 2, y: baseline - tcap, w: textW, h: tcap } })
+    const baseline = H + tcap * proportions.gapToTextCap * spec.gapScale + tcap
+    const textX = (W - textW) / 2
+    const t = placeText(text.caps, text.fauxBold, ink, textX, baseline, ts)
+    const tag = placeSectorTag(W / 2, t.box, Math.max(W, tcap * 2.5), 0.2)
+    return finish(layout, tag ? [e, t, tag] : [e, t], { emblem: e.box, textCap: { x: textX, y: baseline - tcap, w: textW, h: tcap } })
+  }
+
+  if (layout === 'badge' && emblem) {
+    const frame: Placed = {
+      markup: `<circle cx="50" cy="50" r="48" fill="none" stroke="${colors.a}" stroke-width="2.4"/><circle cx="50" cy="50" r="43.5" fill="none" stroke="${colors.b}" stroke-width="0.8"/>`,
+      box: { x: 0, y: 0, w: 100, h: 100 },
+    }
+    const eb = emblemBounds(emblem)
+    const iconScale = Math.min(32 / eb.w, 32 / eb.h) * overshoot(emblem)
+    const iconW = eb.w * iconScale
+    const e = placeEmblem(emblem, 50 - iconW / 2, 8, iconScale)
+    const textScale = Math.min(74 / Math.max(label.bbox.w, 1), 12 / Math.max(label.bbox.h, 1))
+    const textW = label.bbox.w * textScale
+    const baseline = 66
+    const t = placeText(label, text.fauxBold, ink, 50 - textW / 2, baseline, textScale)
+    const tag = placeSectorTag(50, t.box, 76, 0.15)
+    const textCap = { x: 50 - textW / 2, y: baseline - label.capHeight * textScale, w: textW, h: label.capHeight * textScale }
+    return finish(layout, tag ? [frame, e, t, tag] : [frame, e, t], { emblem: e.box, textCap })
   }
 
   // Wordmark: typography plus a short accent bar; also the fallback when a
@@ -218,7 +328,8 @@ export function buildLockup({ layout, emblem, text, colors, style }: BuildLockup
     markup: `<rect x="0" y="${f(barY)}" width="${f(barW)}" height="${f(barH)}" rx="${f(barH / 2)}" fill="${colors.b}"/>`,
     box: { x: 0, y: barY, w: barW, h: barH },
   }
-  return finish('wordmark', [t, bar], { textCap: { x: 0, y: 0, w: label.bbox.w, h: capH } })
+  const tag = placeSectorTag(label.bbox.w / 2, bar.box, Math.max(label.bbox.w, capH * 2.4), 0.22)
+  return finish('wordmark', tag ? [t, bar, tag] : [t, bar], { textCap: { x: 0, y: 0, w: label.bbox.w, h: capH } })
 }
 
 /**
