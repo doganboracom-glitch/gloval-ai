@@ -18,6 +18,14 @@ export const LOGO_EMBLEM_CREDITS = 2
 export type LogoStyleId = 'modern' | 'classic' | 'minimal' | 'luxury'
 export const LOGO_STYLE_IDS: LogoStyleId[] = ['modern', 'classic', 'minimal', 'luxury']
 
+export type LogoMetalTone = 'gold' | 'silver' | 'bronze'
+export const METAL_TONE_IDS: readonly LogoMetalTone[] = ['gold', 'silver', 'bronze']
+export const METALLIC_TOKEN_COLORS = {
+  light: '#f4f4f4',
+  mid: '#929292',
+  dark: '#2b2b2b',
+} as const
+
 export type FrameId = 'plain' | 'disc' | 'squircle' | 'ring' | 'tile' | 'diamond'
 
 export type StyleSpec = {
@@ -152,6 +160,7 @@ export const PROPORTIONS = {
     gapToTextCap: 1.15,
     maxEmblemAspect: 1.3,
   },
+  stacked: { textScale: 0.7, emblemToTextCap: 4.2, gapToTextCap: 1.2, maxEmblemAspect: 1.35 },
   wordmark: { barWidthRatio: 0.2, barMinWidth: 24, barHeightToCap: 0.1, barGapToCap: 0.42 },
   /** Round shapes look smaller than squares of the same size; compensate. */
   roundOvershoot: 1.05,
@@ -168,6 +177,8 @@ export const USAGE_RULES = {
   minSize: {
     horizontal: { px: 120, mm: 30 },
     vertical: { px: 64, mm: 16 },
+    stacked: { px: 64, mm: 16 },
+    badge: { px: 80, mm: 20 },
     wordmark: { px: 90, mm: 24 },
     icon: { px: 16, mm: 5 },
   },
@@ -221,9 +232,9 @@ export type LogoColors = {
   canvas?: string
 }
 
-export type ColorwayId = 'brand' | 'swap' | 'ink' | 'mono' | 'reverse'
-/** Three ready-made pairings from the site palette, plus single colour and reversed. */
-export const COLORWAY_IDS: ColorwayId[] = ['brand', 'swap', 'ink', 'mono', 'reverse']
+export type ColorwayId = 'brand' | 'swap' | 'ink' | 'mono' | 'reverse' | 'metallic'
+/** Ready-made site pairings, plus single-colour, reversed, and the V2 material finish. */
+export const COLORWAY_IDS: ColorwayId[] = ['brand', 'swap', 'ink', 'mono', 'reverse', 'metallic']
 
 export function surfaceBackground(surface: LogoSurface, site: SiteColors): string {
   return surface === 'light' ? LIGHT_SURFACE : surface === 'dark' ? DARK_SURFACE : site.background
@@ -239,11 +250,12 @@ function legible(color: string, bg: string, min: number): string {
 }
 
 export function resolveColorway(id: ColorwayId, site: SiteColors, surface: LogoSurface = 'site'): LogoColors {
+  if (id === 'metallic') return resolveColorway('brand', site, surface)
   if (id === 'reverse') {
     return { a: site.primaryFg, b: site.primaryFg, ink: site.primaryFg, fg: site.primary, canvas: site.primary }
   }
   const bg = surfaceBackground(surface, site)
-  const pairs: Record<Exclude<ColorwayId, 'reverse'>, [string, string, string]> = {
+  const pairs: Record<Exclude<ColorwayId, 'reverse' | 'metallic'>, [string, string, string]> = {
     brand: [site.primary, site.accent, site.foreground],
     swap: [site.accent, site.primary, site.foreground],
     ink: [site.foreground, site.primary, site.foreground],

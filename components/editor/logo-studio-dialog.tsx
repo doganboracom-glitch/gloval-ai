@@ -79,7 +79,8 @@ const FAVICON_PREFER: FaviconPrefer[] = ['auto', 'emblem', 'monogram']
 
 function emblemThumb(e: EmblemAsset): string {
   const b = emblemBounds(e)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x} ${b.y} ${b.w} ${b.h}">${e.inner}</svg>`
+  const defs = e.svgDefs ? `<defs>${e.svgDefs}</defs>` : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x} ${b.y} ${b.w} ${b.h}">${defs}${e.inner}</svg>`
 }
 
 export function LogoStudioDialog({

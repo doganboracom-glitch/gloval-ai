@@ -91,7 +91,10 @@ export function buildFaviconSvg(input: FaviconInput, size: number, background: s
       `<path d="${m.d}" fill="${input.colors.fg}" transform="translate(${f(tx)} ${f(ty)}) scale(${f(scale)})"/>`
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}">${bg}${body}</svg>`
+  const definitions = kind === 'emblem' && input.emblem && !input.emblem.simple && input.emblem.svgDefs
+    ? `<defs>${input.emblem.svgDefs}</defs>`
+    : ''
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="${size}" height="${size}">${bg}${definitions}${body}</svg>`
   return { svg, kind, size, padding, box }
 }
 

@@ -58,11 +58,15 @@ export type EmblemRound = {
   description?: string
   style: LogoStyleId
   symbol?: string
-  /** Palette hex values: one for single-colour mode, two otherwise. */
+  /** Palette hex values: one/two for legacy modes, three flat tone tokens for V2 metal mode. */
   colors: string[]
   count: number
   seed: number
   idPrefix: string
+  v2?: boolean
+  metallic?: boolean
+  creativeDirection?: string
+  motifs?: readonly string[]
   /** Test seam; production always uses the AI Gateway. */
   draw?: Drawer
   now?: () => number
@@ -118,6 +122,10 @@ async function drawCandidate(round: EmblemRound, index: number, startedAt: numbe
         index,
         seed: round.seed,
         retryReason: attempt === 2 ? reason : undefined,
+        v2: round.v2,
+        metallic: round.metallic,
+        creativeDirection: round.creativeDirection,
+        motif: round.motifs?.[index],
       },
       round.count,
     )

@@ -8,8 +8,8 @@ import {
 import { wordIncludes } from '@/lib/visual-subjects'
 
 /**
- * Deterministic, text-free emblem library: 16 sectors x 4 glyphs x 2
- * treatments (plain / framed) = 128 emblems, 8 per sector. Glyphs are flat,
+ * Deterministic, text-free emblem library: 16 sectors x 5 glyphs x 2
+ * treatments (plain / framed) = 160 emblems, 10 per sector. Glyphs are flat,
  * built from simple geometry inside a shared 4..96 safe box so they stay crisp
  * at favicon size. A glyph is drawn with three colours:
  *   a = main shape, b = independent secondary shapes, k = cut-outs inside `a`
@@ -470,8 +470,103 @@ const SECTORS: Sector[] = [
   },
 ]
 
+const V2_EXTRA_GLYPHS: Record<string, Glyph> = {
+  food: {
+    id: 'cloche',
+    draw: (a, b, k) =>
+      P('M18 70A32 32 0 0 1 82 70V74H18Z', a) + R(10, 77, 80, 9, b, 4) + C(50, 29, 6, b) + S('M28 62C36 57 43 57 50 62', k, 5),
+  },
+  health: {
+    id: 'dropper',
+    draw: (a, b, k) =>
+      P('M42 8H58V20L68 30V42L60 50V88H40V50L32 42V30L42 20Z', a) + R(41, 54, 18, 19, b, 5) + C(50, 79, 5, k),
+  },
+  beauty: {
+    id: 'bezel',
+    draw: (a, b, k) =>
+      PE('M16 32L34 12H66L84 32L50 84Z M34 32L50 20L66 32L50 66Z', a) + S('M22 30H78M32 20L28 12M68 20L72 12', b, 5) + C(50, 44, 5, k),
+  },
+  tech: {
+    id: 'fiber-coupler',
+    draw: (a, b, k) =>
+      S('M12 28H38L50 40L62 28H88V72H62L50 60L38 72H12Z', a, 8) + R(42, 42, 16, 16, b, 4) + C(50, 50, 4, k),
+  },
+  construction: {
+    id: 'keystone',
+    draw: (a, b, k) =>
+      P('M14 88V50A36 36 0 0 1 86 50V88H66V51A16 16 0 0 0 34 51V88Z', a) + P('M42 12H58L66 27L58 42H42L34 27Z', b) + S('M20 94H80', k, 5),
+  },
+  education: {
+    id: 'abacus',
+    draw: (a, b, k) =>
+      R(12, 15, 76, 9, a, 4) + R(12, 76, 76, 9, a, 4) + S('M28 24V76M50 24V76M72 24V76', b, 4) + C(28, 43, 7, k) + C(50, 59, 7, k) + C(72, 42, 7, k),
+  },
+  sport: {
+    id: 'carabiner',
+    draw: (a, b, k) =>
+      S('M39 14C21 19 12 36 12 55C12 79 28 92 50 92C72 92 88 77 88 56C88 43 81 35 72 30', a, 9) + S('M61 13C74 16 82 23 86 34', b, 8) + S('M61 13L72 30L88 24', k, 5),
+  },
+  legal: {
+    id: 'beam-scale',
+    draw: (a, b, k) =>
+      S('M50 14V77M20 32H80M28 32L16 55M28 32L40 55M72 32L60 55M72 32L84 55', a, 6) +
+      P('M10 57H46C44 70 14 70 10 57ZM54 57H90C86 70 56 70 54 57Z', b) + R(34, 79, 32, 7, k, 3) + R(24, 88, 52, 7, a, 3),
+  },
+  retail: {
+    id: 'parcel-knot',
+    draw: (a, b, k) =>
+      R(12, 30, 76, 58, a, 6) + R(43, 30, 14, 58, b, 2) + R(12, 48, 76, 9, b, 2) + P('M50 30C31 28 28 12 40 12C48 12 50 21 50 30ZM50 30C69 28 72 12 60 12C52 12 50 21 50 30Z', k),
+  },
+  transport: {
+    id: 'hub-cross-section',
+    draw: (a, b, k) =>
+      SC(50, 50, 39, a, 8) + SC(50, 50, 22, b, 7) + C(50, 50, 8, k) + S('M50 11V28M84 39L68 45M74 80L61 64M26 80L39 64M16 39L32 45', a, 5),
+  },
+  energy: {
+    id: 'turbine',
+    draw: (a, b, k) =>
+      [0, 120, 240].map((angle) => `<path d="M50 14C38 25 34 37 42 47L50 50L58 41C61 30 58 20 50 14Z" fill="${a}" transform="rotate(${angle} 50 50)"/>`).join('') + C(50, 50, 9, b) + SC(50, 50, 4, k, 2),
+  },
+  events: {
+    id: 'turntable',
+    draw: (a, b, k) =>
+      R(12, 12, 76, 76, a, 8) + SC(47, 51, 28, b, 5) + SC(47, 51, 18, k, 4) + SC(47, 51, 7, b, 4) + S('M74 28L62 40L54 49', k, 5) + C(74, 28, 5, a),
+  },
+  travel: {
+    id: 'luggage-clasp',
+    draw: (a, b, k) =>
+      R(19, 28, 62, 62, a, 8) + S('M37 28V18A9 9 0 0 1 55 18V28', a, 7) + R(42, 49, 16, 17, b, 4) + C(29, 77, 4, k) + C(71, 77, 4, k),
+  },
+  nature: {
+    id: 'seedpod',
+    draw: (a, b, k) =>
+      P('M50 8C72 25 84 40 80 61C76 80 63 91 50 94C37 91 24 80 20 61C16 40 28 25 50 8Z', a) + S('M50 24V82', b, 5) + C(38, 45, 5, k) + C(62, 57, 5, k) + C(38, 68, 5, k),
+  },
+  creative: {
+    id: 'aperture',
+    draw: (a, b, k) =>
+      [0, 60, 120, 180, 240, 300].map((angle) => `<path d="M50 13L67 24L61 46L50 53L39 46L33 24Z" fill="${a}" transform="rotate(${angle} 50 50)"/>`).join('') + C(50, 50, 13, b) + C(50, 50, 5, k),
+  },
+  generic: {
+    id: 'joinery-knot',
+    draw: (a, b, k) =>
+      R(12, 18, 76, 64, a, 9) + P('M12 43H34V30H48V43H62V57H48V70H34V57H12ZM88 57H66V70H52V57H38V43H52V30H66V43H88Z', b) + R(43, 43, 14, 14, k, 3),
+  },
+}
+
+for (const sector of SECTORS) {
+  const extra = V2_EXTRA_GLYPHS[sector.id]
+  if (!extra) throw new Error(`Missing Logo Studio V2 motif for ${sector.id}`)
+  sector.glyphs.push(extra)
+}
+
 export type SectorInfo = { id: string; subject: string }
 export const SECTOR_IDS = SECTORS.map((s) => s.id)
+
+export function getSectorInfoById(id: string): SectorInfo | null {
+  const sector = SECTORS.find((candidate) => candidate.id === id)
+  return sector ? { id: sector.id, subject: sector.subject } : null
+}
 
 export function sectorOf(text: string): SectorInfo {
   const hit = SECTORS.find((s) => s.keys.some((k) => wordIncludes(text, k)))
@@ -528,8 +623,8 @@ export type LibraryEntry = { id: string; sector: string; glyph: string; treatmen
 
 /** Interleaved so neighbouring suggestions never share a glyph. */
 const ORDER: [number, Treatment][] = [
-  [0, 'plain'], [1, 'framed'], [2, 'plain'], [3, 'framed'],
-  [0, 'framed'], [1, 'plain'], [2, 'framed'], [3, 'plain'],
+  [0, 'plain'], [1, 'framed'], [2, 'plain'], [3, 'framed'], [4, 'plain'],
+  [0, 'framed'], [1, 'plain'], [2, 'framed'], [3, 'plain'], [4, 'framed'],
 ]
 
 export const EMBLEM_LIBRARY: LibraryEntry[] = SECTORS.flatMap((s) =>
@@ -616,16 +711,19 @@ export function pickLocalEmblems({
   brand,
   context,
   seed,
+  sectorId,
 }: {
   count: number
   brand: string
   context: string
   seed: number
+  sectorId?: string
 }): LocalPick[] {
   const text = `${brand} ${context}`
   const h = hash(`${brand.toLocaleLowerCase('tr')}|${context.toLocaleLowerCase('tr')}`)
   const entriesOf = (id: string) => EMBLEM_LIBRARY.filter((e) => e.sector === id)
-  const preferred = SECTORS.filter((s) => s.keys.some((k) => wordIncludes(text, k)))
+  const explicitSector = sectorId ? SECTORS.find((s) => s.id === sectorId) : undefined
+  const preferred = explicitSector ? [explicitSector] : SECTORS.filter((s) => s.keys.some((k) => wordIncludes(text, k)))
   const rest = SECTORS.filter((s) => !preferred.includes(s))
   const ordered = [
     ...roundRobin(preferred.map((s) => rotate(entriesOf(s.id), h >>> 5))),
