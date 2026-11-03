@@ -31,6 +31,13 @@ describe('"Gelişmiş AI" badge placement', () => {
     expect(src).toContain(`<AdvancedAiBadge flow="${flow}"`)
   })
 
+  it('keeps the logo studio badge sized to its content', () => {
+    const src = read('components/editor/logo-studio-dialog.tsx')
+    expect(src).toContain(
+      '<AdvancedAiBadge flow="logoEmblem" className="mt-1.5 w-fit self-start" />',
+    )
+  })
+
   it('every badge usage in the app names a flow that runs on the advanced model', () => {
     const files = [...ADVANCED_FLOWS.map((f) => f.file)]
     for (const file of files) {

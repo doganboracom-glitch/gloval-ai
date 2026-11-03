@@ -126,9 +126,11 @@ type History = HistoryOf<WebsiteSchema>
  */
 function IframeCanvas({
   fontsHref,
+  onScrollDown,
   children,
 }: {
   fontsHref: string | null
+  onScrollDown: () => void
   children: React.ReactNode
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -137,10 +139,16 @@ function IframeCanvas({
   useEffect(() => {
     const iframe = iframeRef.current
     if (!iframe) return
+    const frame: HTMLIFrameElement = iframe
+
+    let removeScrollListeners: (() => void) | null = null
 
     function setup() {
-      const doc = iframe?.contentDocument
+      const doc = frame.contentDocument
       if (!doc) return
+
+      removeScrollListeners?.()
+      removeScrollListeners = null
 
       doc.head.innerHTML = ''
       doc.body.innerHTML = ''
@@ -158,6 +166,27 @@ function IframeCanvas({
         doc.head.appendChild(link)
       }
 
+      const frameWindow = frame.contentWindow
+      if (frameWindow) {
+        const reportScrollDown = (event: Event) => {
+          const targetScrollTop = (event.target as HTMLElement | null)?.scrollTop ?? 0
+          const scrollTop = Math.max(
+            frameWindow.scrollY,
+            doc.documentElement.scrollTop,
+            doc.body.scrollTop,
+            targetScrollTop,
+          )
+          if (scrollTop > 0) onScrollDown()
+        }
+
+        frameWindow.addEventListener('scroll', reportScrollDown, { passive: true })
+        doc.addEventListener('scroll', reportScrollDown, { capture: true, passive: true })
+        removeScrollListeners = () => {
+          frameWindow.removeEventListener('scroll', reportScrollDown)
+          doc.removeEventListener('scroll', reportScrollDown, true)
+        }
+      }
+
       const root = doc.createElement('div')
       doc.body.appendChild(root)
       setMountNode(root)
@@ -165,8 +194,11 @@ function IframeCanvas({
 
     setup()
     iframe.addEventListener('load', setup)
-    return () => iframe.removeEventListener('load', setup)
-  }, [fontsHref])
+    return () => {
+      iframe.removeEventListener('load', setup)
+      removeScrollListeners?.()
+    }
+  }, [fontsHref, onScrollDown])
 
   return (
     <iframe
@@ -327,6 +359,8 @@ export function WebsitePreview({
   const router = useRouter()
   const pathname = usePathname()
   const [device, setDevice] = useState<Device>('desktop')
+  const [previewHasScrolledDown, setPreviewHasScrolledDown] = useState(false)
+  const markPreviewScrolledDown = useCallback(() => setPreviewHasScrolledDown(true), [])
   // Single owner of the editor panel + the anonymous edit gate. Nothing in this
   // component sets the panel state directly: every entry point goes through it.
   const {
@@ -1920,11 +1954,12 @@ export function WebsitePreview({
             {persist && <SiteAddressBanner address={siteAddress} lang={lang === 'en' ? 'en' : 'tr'} />}
             {previewNotice && (
               <div className="relative h-0 w-full">
-                <PreviewSupportCard
-                  projectId={previewNotice.projectId}
-                  previewId={previewNotice.previewId}
-                  isPreview
-                />
+              <PreviewSupportCard
+                projectId={previewNotice.projectId}
+                previewId={previewNotice.previewId}
+                isPreview
+                hasScrolledDown={previewHasScrolledDown}
+              />
               </div>
             )}
 
@@ -1956,7 +1991,7 @@ export function WebsitePreview({
             {/* Rendered website inside an isolated, responsive iframe */}
             <div className="min-h-0 flex-1">
               {currentSite ? (
-                <IframeCanvas fontsHref={fontsHref}>
+                <IframeCanvas fontsHref={fontsHref} onScrollDown={markPreviewScrolledDown}>
                   <WebsiteRenderer
                     site={pendingAiEdit ? pendingAiEdit.after : currentSite}
                     onUndoLastChange={canUndo ? undo : null}

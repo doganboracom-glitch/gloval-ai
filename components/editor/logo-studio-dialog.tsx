@@ -458,7 +458,7 @@ export function LogoStudioDialog({
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div className="flex flex-col gap-1">
             <h2 className="text-base font-semibold text-balance">{ui.studioTitle}</h2>
-            <AdvancedAiBadge flow="logoEmblem" className="mt-1.5" />
+            <AdvancedAiBadge flow="logoEmblem" className="mt-1.5 w-fit self-start" />
             <p className="text-xs leading-relaxed text-muted-foreground text-pretty">
               {mode === 'ai' ? ui.studioDescAi : ui.studioDescLocal}
             </p>
