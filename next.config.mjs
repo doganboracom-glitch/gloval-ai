@@ -54,6 +54,36 @@ const nextConfig = {
   },
   async redirects() {
     return [
+      {
+        source: '/instagram',
+        destination: '/?utm_source=instagram&utm_medium=social&utm_campaign=launch&utm_content=bio_tr',
+        permanent: false,
+      },
+      {
+        source: '/instagram-en',
+        destination: '/?lang=en&utm_source=instagram&utm_medium=social&utm_campaign=launch&utm_content=bio_en',
+        permanent: false,
+      },
+      {
+        source: '/x',
+        destination: '/?utm_source=x&utm_medium=social&utm_campaign=launch&utm_content=bio_tr',
+        permanent: false,
+      },
+      {
+        source: '/x-en',
+        destination: '/?lang=en&utm_source=x&utm_medium=social&utm_campaign=launch&utm_content=bio_en',
+        permanent: false,
+      },
+      {
+        source: '/linkedin',
+        destination: '/?lang=en&utm_source=linkedin&utm_medium=social&utm_campaign=launch&utm_content=company_page',
+        permanent: false,
+      },
+      {
+        source: '/facebook',
+        destination: '/?utm_source=facebook&utm_medium=social&utm_campaign=launch&utm_content=page_tr',
+        permanent: false,
+      },
       { source: '/dashboard/mesajlar', destination: '/dashboard/messages', permanent: true },
       // Store "Teslimat ve İade" moved from iptal-ve-iade. Only the tenant path
       // is redirected here; the platform's own /yasal/iptal-ve-iade is a
