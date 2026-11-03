@@ -52,6 +52,26 @@ describe('runPublicDomainSearch', () => {
     expect(result.pricingAvailable).toBe(true)
   })
 
+  it('checks one dynamically listed TLD and filters the registrar response to it', async () => {
+    const fetchAvailability = vi.fn(async (label: string, tld: string | null) => [
+      row(`${label}.${tld}`, tld ?? 'com'),
+      row(`${label}.com`, 'com'),
+    ])
+    const deps = makeDeps({ additionalTlds: async () => ['io'], fetchAvailability })
+    const result = await runPublicDomainSearch({ ...input('marka'), requestedTld: 'io' }, deps)
+
+    expect(fetchAvailability).toHaveBeenCalledWith('marka', 'io')
+    expect(result.ok && result.results.map((item) => item.domain)).toEqual(['marka.io'])
+  })
+
+  it('rejects a dynamic TLD that is not present in the priced registrar catalog', async () => {
+    const deps = makeDeps({ additionalTlds: async () => ['io'] })
+    const result = await runPublicDomainSearch({ ...input('marka'), requestedTld: 'xyz' }, deps)
+
+    expect(result).toEqual({ ok: false, error: 'UNSUPPORTED_TLD' })
+    expect(deps.fetchAvailability).not.toHaveBeenCalled()
+  })
+
   it('rejects invalid input before touching the registrar and records a strike', async () => {
     const reserve = vi.fn(async (_subject: string, _limit: number, _windowSeconds: number) => ({ allowed: true }))
     const deps = makeDeps({ limiter: { reserve, release: async () => {} } })

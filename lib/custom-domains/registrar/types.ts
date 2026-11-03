@@ -149,6 +149,18 @@ export interface DomainListCapable {
   listOwnedDomains(options?: { skip?: number; take?: number }): Promise<OwnedDomainPage>
 }
 
+/** Read-only standard registration prices returned by the registrar's TLD catalog. */
+export type RegistrarTldRegistrationPrice = {
+  tld: string
+  registerCents: number
+  currency: string
+}
+
+/** Optional, read-only extension catalog capability. */
+export interface DomainTldCatalogCapable {
+  listRegistrationTlds(): Promise<RegistrarTldRegistrationPrice[]>
+}
+
 /** Inbound/outbound transfer operations. Optional: the mock registrar never implements them. */
 export interface DomainTransferCapable {
   checkTransferIn(domain: string, authCode: string): Promise<TransferCheckResult>
@@ -273,4 +285,10 @@ export interface DomainRegistrarProvider {
    */
   checkAvailability(domain: string, altTlds?: string[]): Promise<DomainAvailabilityResult[]>
   registerDomain(input: RegisterDomainInput): Promise<RegisterDomainResult>
+}
+
+export function isDomainTldCatalogCapable(
+  provider: DomainRegistrarProvider | null,
+): provider is DomainRegistrarProvider & DomainTldCatalogCapable {
+  return Boolean(provider) && typeof (provider as unknown as DomainTldCatalogCapable).listRegistrationTlds === 'function'
 }

@@ -18,12 +18,14 @@ export function DomainSearchPageClient({
   demo = false,
   authenticated,
   initialQuery,
+  fromPanel = false,
 }: {
   open: boolean
   /** Preview-only: fake results, no purchase. Never true in production. */
   demo?: boolean
   authenticated: boolean
   initialQuery: string
+  fromPanel?: boolean
 }) {
   const { t, lang } = useLanguage()
   const copy = t.domainSearch
@@ -51,21 +53,28 @@ export function DomainSearchPageClient({
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-16 sm:py-20">
         <Link
-          href="/"
+          href={fromPanel ? '/dashboard/domains' : '/'}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {t.nav.backHome}
+          {fromPanel ? (lang === 'tr' ? 'Panele dön' : 'Back to domains') : t.nav.backHome}
         </Link>
 
         <header className="mt-8 max-w-3xl">
           <Globe className="size-8 text-brand" aria-hidden="true" />
           <h1 className="mt-4 text-balance font-display text-4xl font-bold tracking-tight sm:text-5xl">
-            {open ? copy.title : copy.comingSoonTitle}
+            {copy.title}
           </h1>
           <p className="mt-4 max-w-xl text-pretty leading-relaxed text-muted-foreground">
-            {open ? copy.subtitle : copy.comingSoonBody}
+            {copy.subtitle}
           </p>
+          {!open && (
+            <p role="status" className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              {lang === 'tr'
+                ? 'Alan adı sorgu servisi şu anda kullanılamıyor. Arama ve uzantı kataloğu servis yeniden etkinleştiğinde çalışır.'
+                : 'Domain lookup is temporarily unavailable. Search and the extension catalog will work again when the registrar service is available.'}
+            </p>
+          )}
           {open && (
             <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
               {[copy.trust1, copy.trust2, copy.trust3].map((item) => (
@@ -78,7 +87,7 @@ export function DomainSearchPageClient({
           )}
         </header>
 
-        {open && demo && (
+        {demo && (
           <p
             role="note"
             className="mt-6 max-w-3xl rounded-lg border border-brand/40 bg-brand/10 px-4 py-3 text-sm text-foreground"
@@ -89,8 +98,7 @@ export function DomainSearchPageClient({
           </p>
         )}
 
-        {open && (
-          <div className="mt-10 max-w-3xl">
+        <div className="mt-10 max-w-3xl">
             <PublicDomainSearch
               demo={demo}
               authenticated={authenticated}
@@ -99,10 +107,8 @@ export function DomainSearchPageClient({
               onOpenScore={openScore}
             />
           </div>
-        )}
 
-        {open && (
-          <div className="mt-16 flex flex-col gap-16">
+        <div className="mt-16 flex flex-col gap-16">
             <DomainWhySection copy={copy} />
             <DomainQualityScore seed={scoreSeed} onSearch={requestSearch} />
             <DomainChooseGuide copy={copy} />
@@ -116,7 +122,6 @@ export function DomainSearchPageClient({
               </p>
             )}
           </div>
-        )}
 
         <section className="mt-16 max-w-3xl" aria-labelledby="domain-faq-title">
           <h2 id="domain-faq-title" className="font-display text-xl font-semibold">

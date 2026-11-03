@@ -8,6 +8,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { fill } from '@/components/domains/domain-chrome'
 import { DomainResultCard } from '@/components/domains/domain-result-card'
 import { DomainTldChips } from '@/components/domains/domain-tld-chips'
+import { DomainTldCatalog } from '@/components/domains/domain-tld-catalog'
 import { QualityScoreBadge } from '@/components/domains/quality-score-badge'
 import { PUBLIC_SEARCH_TLDS, type PublicSearchTld } from '@/lib/custom-domains/public-search/validate'
 import { searchDomainsPublic } from '@/lib/custom-domains/public-search/actions'
@@ -58,8 +59,9 @@ export function PublicDomainSearch({
   const copy = t.domainSearch
   const [query, setQuery] = useState(initialQuery)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ code: PublicSearchErrorCode; retryAfterSeconds?: number } | null>(null)
   const [selectedTlds, setSelectedTlds] = useState<readonly PublicSearchTld[]>(PUBLIC_SEARCH_TLDS)
+  const [pendingTld, setPendingTld] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -76,27 +78,42 @@ export function PublicDomainSearch({
     })
   }
 
+  function runSearch(value: string, requestedTld?: string) {
+    setError(null)
+    startTransition(async () => {
+      try {
+        const res: PublicSearchResponse = await searchDomainsPublic(value, requestedTld)
+        if (!res.ok) {
+          setOutcome(null)
+          setError({ code: res.error, retryAfterSeconds: res.retryAfterSeconds })
+          return
+        }
+        const resultQuery = requestedTld
+          ? res.results.find((result) => result.tld === requestedTld)?.domain ?? value
+          : value
+        setOutcome({ query: resultQuery, results: res.results, pricingAvailable: res.pricingAvailable })
+        if (requestedTld) setQuery(resultQuery)
+      } catch {
+        setOutcome(null)
+        setError({ code: 'PROVIDER_ERROR' })
+      } finally {
+        if (requestedTld) setPendingTld(null)
+      }
+    })
+  }
+
   function submit(event: React.FormEvent) {
     event.preventDefault()
     const value = query.trim()
     if (!value || isPending) return
-    setError(null)
-    startTransition(async () => {
-      let res: PublicSearchResponse
-      try {
-        res = await searchDomainsPublic(value)
-      } catch {
-        setOutcome(null)
-        setError(copy.errProvider)
-        return
-      }
-      if (!res.ok) {
-        setOutcome(null)
-        setError(errorText(res.error, copy, res.retryAfterSeconds))
-        return
-      }
-      setOutcome({ query: value, results: res.results, pricingAvailable: res.pricingAvailable })
-    })
+    runSearch(value)
+  }
+
+  function searchOnTld(tld: string) {
+    const value = query.trim()
+    if (!value || isPending) return
+    setPendingTld(tld)
+    runSearch(value, tld)
   }
 
   // The chips narrow a brand-only search; an explicit "brand.ext" query is shown as typed.
@@ -139,11 +156,21 @@ export function PublicDomainSearch({
       <div className="mt-3">
         <DomainTldChips label={copy.extChipsLabel} selected={selectedTlds} onToggle={toggleTld} />
       </div>
+      {!demo && (
+        <div className="mt-3">
+          <DomainTldCatalog
+            query={query}
+            busy={isPending}
+            pendingTld={pendingTld}
+            onSearch={searchOnTld}
+          />
+        </div>
+      )}
 
       <div aria-live="polite" className="mt-8">
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+            {errorText(error.code, copy, error.retryAfterSeconds)}
           </p>
         )}
 

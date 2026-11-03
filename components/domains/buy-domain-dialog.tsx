@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { LinkButton } from '@/components/link-button'
 import { BillingProfileCard } from '@/components/billing/billing-profile-card'
 import { fill } from '@/components/domains/domain-chrome'
+import { DomainPriceView } from '@/components/domains/domain-price'
 import {
   buildBillingProfileHref,
   describePurchaseError,
@@ -42,14 +43,6 @@ type Step =
   | { name: 'success'; domain: string }
 
 const PERIOD_OPTIONS = [1, 2, 3, 5]
-
-function formatPrice(cents: number, currency: string, locale: string): string {
-  try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100)
-  } catch {
-    return `${(cents / 100).toFixed(2)} ${currency}`
-  }
-}
 
 export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => void; initialDomain?: string }) {
   const { t, lang } = useLanguage()
@@ -183,14 +176,16 @@ export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => voi
                             : result.status === 'unavailable'
                               ? d.buyUnavailable
                               : d.buyUnknown}
-                          {result.status === 'available' && result.quote && (
-                            <span className="text-foreground">
-                              {' · '}
-                              {formatPrice(result.quote.netMinor, 'TRY', locale)}
-                              {d.buyPerYear} {d.buyVatExcluded}
-                            </span>
-                          )}
                         </p>
+                        {result.status === 'available' && result.quote && (
+                          <DomainPriceView
+                            quote={result.quote}
+                            locale={locale}
+                            copy={t.domainSearch}
+                            periodLabel={t.domainSearch.perYear}
+                            density="compact"
+                          />
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -483,16 +478,25 @@ function ContactStep({
 
       <div className="flex items-end justify-between gap-3 border-t border-border pt-4">
         <div>
-          {price && (
-            <p className="text-xs text-muted-foreground">
-              {formatPrice(netTotal, 'TRY', locale)} + {d.buyVat} %{price.vatBps / 100}{' '}
-              {formatPrice(vatTotal, 'TRY', locale)}
-            </p>
+          {price ? (
+            <DomainPriceView
+              quote={{
+                ...price,
+                netMinor: netTotal,
+                vatMinor: vatTotal,
+                grossMinor: grossTotal,
+              }}
+              locale={locale}
+              copy={t.domainSearch}
+              periodLabel={`${d.buyTotal} · ${fill(d.buyPeriodYears, { count: periodYears })}`}
+              density="compact"
+            />
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">{d.buyTotal}</p>
+              <p className="font-display text-lg font-semibold">—</p>
+            </>
           )}
-          <p className="mt-1 text-xs text-muted-foreground">{d.buyTotal}</p>
-          <p className="font-display text-lg font-semibold">
-            {price ? formatPrice(grossTotal, 'TRY', locale) : '—'}
-          </p>
         </div>
         <Button type="submit" disabled={!isValid || pending || blocked} className="gap-2">
           {pending && <Loader2 className="size-4 animate-spin" />}

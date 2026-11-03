@@ -5,6 +5,7 @@ import { priceAvailabilityRows } from '../pricing/order'
 import { getDomainRegistrarProvider, isLiveDomainRegistrar } from '../registrar/provider'
 import { RegistrarError } from '../registrar/types'
 import { TtlCache } from './cache'
+import { getPricedPublicTldCatalog } from './tld-catalog'
 import { rpcLimiter } from './limits'
 import type { PublicSearchDeps } from './service'
 import { PUBLIC_SEARCH_TLDS } from './validate'
@@ -31,6 +32,9 @@ export const defaultPublicSearchDeps: PublicSearchDeps = {
     const primary = tld ?? PUBLIC_SEARCH_TLDS[0]
     const alternatives = tld ? [] : PUBLIC_SEARCH_TLDS.slice(1)
     return registrar.checkAvailability(`${label}.${primary}`, [...alternatives])
+  },
+  async additionalTlds() {
+    return (await getPricedPublicTldCatalog()).map(({ tld }) => tld)
   },
   async priceRows(rows) {
     return priceAvailabilityRows(rows, await loadPricingContext())

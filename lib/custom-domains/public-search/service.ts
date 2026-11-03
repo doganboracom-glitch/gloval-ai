@@ -8,7 +8,7 @@ import {
   recordStrike,
   type LimiterDeps,
 } from './limits'
-import { PUBLIC_SEARCH_TLDS, parsePublicSearchQuery, type PublicSearchTld } from './validate'
+import { isSupportedPublicTld, PUBLIC_SEARCH_TLDS, parsePublicSearchQuery } from './validate'
 
 /**
  * Orchestrates one public search: gate -> abuse checks -> input validation ->
@@ -32,16 +32,28 @@ export type PublicSearchResponse =
   | { ok: true; results: PricedDomainResult[]; pricingAvailable: boolean }
   | { ok: false; error: PublicSearchErrorCode; retryAfterSeconds?: number }
 
+export type PublicTldCatalogItem = {
+  tld: string
+  quote: NonNullable<PricedDomainResult['quote']>
+  popular: boolean
+}
+
+export type PublicTldCatalogResponse =
+  | { ok: true; items: PublicTldCatalogItem[] }
+  | { ok: false; error: PublicSearchErrorCode; retryAfterSeconds?: number }
+
 export type PublicSearchDeps = {
   isOpen: () => boolean
-  fetchAvailability: (label: string, tld: PublicSearchTld | null) => Promise<DomainAvailabilityResult[]>
+  fetchAvailability: (label: string, tld: string | null) => Promise<DomainAvailabilityResult[]>
+  /** Called only after the public-search limiter for a non-core explicit TLD. */
+  additionalTlds?: () => Promise<readonly string[]>
   priceRows: (rows: DomainAvailabilityResult[]) => Promise<PricedDomainResult[]>
   limiter: LimiterDeps
   cache: TtlCache<DomainAvailabilityResult[]>
 }
 
 export async function runPublicDomainSearch(
-  input: { query: unknown; ip: string | null; userId: string | null },
+  input: { query: unknown; ip: string | null; userId: string | null; requestedTld?: unknown },
   deps: PublicSearchDeps,
 ): Promise<PublicSearchResponse> {
   if (!deps.isOpen()) return { ok: false, error: 'NOT_CONFIGURED' }
@@ -51,10 +63,24 @@ export async function runPublicDomainSearch(
   const blocked = await checkBlocked(identity, deps.limiter)
   if (!blocked.ok) return refusal(blocked)
 
-  const parsed = parsePublicSearchQuery(input.query)
+  const parsed = parsePublicSearchQuery(input.query, null)
   if (!parsed.ok) {
     await recordStrike(identity, deps.limiter)
     return { ok: false, error: parsed.error }
+  }
+
+  let requestedTld = parsed.tld
+  if (input.requestedTld !== undefined) {
+    if (typeof input.requestedTld !== 'string') {
+      await recordStrike(identity, deps.limiter)
+      return { ok: false, error: 'INVALID_QUERY' }
+    }
+    const override = parsePublicSearchQuery(`${parsed.label}.${input.requestedTld.trim().toLowerCase()}`, null)
+    if (!override.ok || !override.tld) {
+      await recordStrike(identity, deps.limiter)
+      return { ok: false, error: override.ok ? 'INVALID_QUERY' : override.error }
+    }
+    requestedTld = override.tld
   }
 
   const limits = await checkSearchLimits(identity, deps.limiter)
@@ -63,10 +89,23 @@ export async function runPublicDomainSearch(
     return refusal(limits)
   }
 
+  let additionalTlds: readonly string[] = []
+  if (requestedTld && !isSupportedPublicTld(requestedTld)) {
+    try {
+      additionalTlds = (await deps.additionalTlds?.()) ?? []
+    } catch {
+      return { ok: false, error: 'TEMPORARILY_UNAVAILABLE' }
+    }
+    if (!additionalTlds.includes(requestedTld)) {
+      await recordStrike(identity, deps.limiter)
+      return { ok: false, error: 'UNSUPPORTED_TLD' }
+    }
+  }
+
   let rows: DomainAvailabilityResult[]
   try {
-    const cacheKey = `${parsed.label}|${parsed.tld ?? '*'}`
-    rows = await deps.cache.getOrLoad(cacheKey, () => deps.fetchAvailability(parsed.label, parsed.tld))
+    const cacheKey = `${parsed.label}|${requestedTld ?? '*'}`
+    rows = await deps.cache.getOrLoad(cacheKey, () => deps.fetchAvailability(parsed.label, requestedTld))
   } catch (error) {
     if (error instanceof RegistrarError && error.code === 'NOT_CONFIGURED') {
       return { ok: false, error: 'NOT_CONFIGURED' }
@@ -75,8 +114,13 @@ export async function runPublicDomainSearch(
     return { ok: false, error: 'PROVIDER_ERROR' }
   }
 
-  const allowed = new Set<string>(PUBLIC_SEARCH_TLDS)
-  const wanted = rows.filter((row) => allowed.has(row.tld) && row.domain === `${parsed.label}.${row.tld}`)
+  const allowed = new Set<string>([...PUBLIC_SEARCH_TLDS, ...additionalTlds])
+  const wanted = rows.filter(
+    (row) =>
+      allowed.has(row.tld) &&
+      row.domain === `${parsed.label}.${row.tld}` &&
+      (requestedTld === null || row.tld === requestedTld),
+  )
   if (wanted.length === 0) return { ok: false, error: 'PROVIDER_ERROR' }
 
   try {
