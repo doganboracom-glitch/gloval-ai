@@ -1,14 +1,29 @@
+import { createHash } from 'node:crypto'
 import { deflateSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { buildTextAssets, bundledFont, initialsOf, loadHeadingFont } from '@/lib/logo-studio/font-source'
 import { textToPath } from '@/lib/logo-studio/ttf'
-import { buildLockup, type TextAssets } from '@/lib/logo-studio/compose'
-import { EMBLEM_LIBRARY, LOCAL_EMBLEM_COUNT, SECTOR_IDS, localEmblems } from '@/lib/logo-studio/emblem-local'
+import {
+  applyMetallicFinish,
+  buildLockup,
+  LEGACY_LOGO_LAYOUTS,
+  LOGO_LAYOUTS_V2,
+  svgToDataUri,
+  type EmblemAsset,
+  type TextAssets,
+} from '@/lib/logo-studio/compose'
+import { EMBLEM_LIBRARY, LOCAL_EMBLEM_COUNT, SECTOR_IDS, localEmblems, pickLocalEmblems } from '@/lib/logo-studio/emblem-local'
 import { FAVICON_PNG_SIZES, buildFaviconSvg, buildFaviconVariants, resolveFaviconKind } from '@/lib/logo-studio/favicon'
 import { buildIco } from '@/lib/logo-studio/ico'
-import { brandKitFileNames, brandKitSpec } from '@/lib/logo-studio/brand-kit'
+import { brandKitFileNames, brandKitSpec, brandKitVectorFiles } from '@/lib/logo-studio/brand-kit'
 import { buildZip } from '@/lib/logo-studio/zip'
-import { AI_EMBLEMS_PER_ROUND, LOGO_EMBLEM_CREDITS, LOGO_STYLE_IDS, STYLE_SPECS } from '@/lib/logo-studio/rules'
+import {
+  AI_EMBLEMS_PER_ROUND,
+  LOGO_EMBLEM_CREDITS,
+  LOGO_STYLE_IDS,
+  METALLIC_TOKEN_COLORS,
+  STYLE_SPECS,
+} from '@/lib/logo-studio/rules'
 import { buildPdf } from '@/lib/logo-studio/pdf'
 import { resolveColorway } from '@/lib/logo-studio/rules'
 
@@ -26,7 +41,42 @@ function assetsFor(name: string): TextAssets {
   }
 }
 
+function metallicFixture(tone: 'gold' | 'silver' | 'bronze' = 'gold'): EmblemAsset {
+  return applyMetallicFinish(
+    {
+      id: 'metal-fixture',
+      source: 'ai',
+      inner: `<g fill="${METALLIC_TOKEN_COLORS.mid}"><path d="M100 28L165 140H35Z" fill="${METALLIC_TOKEN_COLORS.light}"/><circle cx="100" cy="100" r="24" fill="${METALLIC_TOKEN_COLORS.dark}"/></g>`,
+      viewBox: { w: 200, h: 200 },
+      bbox: { x: 35, y: 28, w: 130, h: 112 },
+    },
+    tone,
+  )
+}
+
 describe('logo studio', () => {
+  it('keeps the V1 horizontal SVG byte-for-byte stable without a V2 sector label', () => {
+    const name = 'Acme Studio'
+    const text = assetsFor(name)
+    const emblem: EmblemAsset = {
+      id: 'legacy-fixture',
+      source: 'ai',
+      inner: '<g fill="#6d28d9"><path d="M20 80L50 20L80 80Z"/><circle cx="50" cy="58" r="12" fill="#06b6d4"/></g>',
+      viewBox: { w: 200, h: 200 },
+      bbox: { x: 20, y: 20, w: 60, h: 60 },
+    }
+    const svg = buildLockup({
+      layout: 'horizontal',
+      emblem,
+      text,
+      colors: resolveColorway('brand', siteColors),
+      style: 'modern',
+    }).svg
+    expect(createHash('sha256').update(svg).digest('hex')).toBe(
+      '7eb2c9c07c7a7cb46185bf37c53afc3ccad7c36f7a8ac71cccc9d66c3d3407af',
+    )
+  })
+
   it('typesets Turkish brand names with no missing glyphs', () => {
     const t = textToPath(bundledFont(), 'Çiğdem Şekerleme Öğütücü', { size: 100 })
     expect(t.missing).toBe(0)
@@ -57,6 +107,31 @@ describe('logo studio', () => {
     }
   })
 
+  it('keeps V1 layouts and composes metallic stacked/badge lockups with sector paths', () => {
+    expect(LEGACY_LOGO_LAYOUTS).toEqual(['horizontal', 'vertical', 'wordmark'])
+    expect(LOGO_LAYOUTS_V2).toEqual(['horizontal', 'vertical', 'wordmark', 'stacked', 'badge'])
+
+    const text = assetsFor('LUNA')
+    const sectorLabel = textToPath(bundledFont(), 'MÜCEVHER', { size: 100, letterSpacing: 0.14 })
+    for (const layout of ['horizontal', 'stacked', 'badge'] as const) {
+      const lockup = buildLockup({
+        layout,
+        emblem: metallicFixture('silver'),
+        text,
+        sectorLabel,
+        colors: resolveColorway('brand', siteColors),
+        style: 'luxury',
+      })
+      expect(lockup.svg).toContain('<linearGradient')
+      expect(lockup.svg).toContain('<feGaussianBlur')
+      expect(lockup.svg).toContain('stroke="url(#logo-metal-')
+      expect(lockup.svg).not.toContain('<text')
+      expect(svgToDataUri(lockup.svg)).toContain('linearGradient')
+      expect(lockup.width).toBeGreaterThan(0)
+      expect(lockup.height).toBeGreaterThan(0)
+    }
+  })
+
   it('rotates local emblems with the seed', () => {
     const ids = (seed: number) =>
       localEmblems({ count: 2, palette, brand: 'Acme', context: '', seed }).map((e) => e.id).join()
@@ -67,6 +142,17 @@ describe('logo studio', () => {
     expect(LOCAL_EMBLEM_COUNT).toBeGreaterThanOrEqual(120)
     for (const id of SECTOR_IDS) {
       expect(EMBLEM_LIBRARY.filter((e) => e.sector === id).length).toBeGreaterThanOrEqual(8)
+    }
+  })
+
+  it('offers five distinct motif families per sector and honors explicit sector selection', () => {
+    for (const sectorId of SECTOR_IDS) {
+      const motifs = new Set(
+        EMBLEM_LIBRARY.filter((emblem) => emblem.sector === sectorId).map((emblem) => emblem.glyph),
+      )
+      expect(motifs.size).toBeGreaterThanOrEqual(5)
+      const picks = pickLocalEmblems({ count: 4, brand: 'LUNA', context: 'law restaurant', seed: 0, sectorId })
+      expect(picks.every((pick) => EMBLEM_LIBRARY.find((emblem) => emblem.id === pick.entry)?.sector === sectorId)).toBe(true)
     }
   })
 
@@ -150,6 +236,25 @@ describe('logo studio: favicon, styles, kit and credits', () => {
     }
   })
 
+  it('keeps metallic gradients for AI marks and a flat simple mark for favicons', () => {
+    const ai = buildFaviconSvg({ emblem: metallicFixture('silver'), text, colors, style: 'luxury', prefer: 'emblem' }, 32)
+    expect(ai.kind).toBe('emblem')
+    expect(ai.svg).toContain('<defs>')
+    expect(ai.svg).toContain('<linearGradient')
+
+    const local = applyMetallicFinish({
+      id: 'simple-favicon',
+      source: 'local',
+      inner: `<path d="M10 50H90L50 10Z" fill="${METALLIC_TOKEN_COLORS.mid}"/>`,
+      simple: `<path d="M10 50H90L50 10Z" fill="${METALLIC_TOKEN_COLORS.mid}"/>`,
+      viewBox: { w: 100, h: 100 },
+    }, 'silver')
+    const simple = buildFaviconSvg({ emblem: local, text, colors, style: 'modern', prefer: 'emblem' }, 32)
+    expect(simple.kind).toBe('emblem')
+    expect(simple.svg).not.toContain('<defs>')
+    expect(simple.svg).not.toContain('<linearGradient')
+  })
+
   it('falls back to a monogram when the emblem is too detailed for 32 px', () => {
     const busy = {
       ...localEmblems({ count: 1, palette, brand: 'Acme', context: '', seed: 0 })[0],
@@ -187,6 +292,21 @@ describe('logo studio: favicon, styles, kit and credits', () => {
     expect(n.png2x).toBe('acme-logo@2x.png')
     expect(n.kitZip).toBe('acme-logo-kit.zip')
     expect(n.faviconDir).toBe('favicon/')
+  })
+
+  it('keeps metallic gradients in the SVG assets added to a brand-kit bundle', () => {
+    const lockup = buildLockup({
+      layout: 'badge',
+      text: assetsFor('LUNA'),
+      sectorLabel: textToPath(bundledFont(), 'MÜCEVHER', { size: 100, letterSpacing: 0.14 }),
+      emblem: metallicFixture('gold'),
+      colors,
+      style: 'luxury',
+    })
+    const files = brandKitVectorFiles({ slug: 'luna', light: lockup, dark: lockup, iconSvg: lockup.svg })
+    const decoded = files.map((file) => new TextDecoder().decode(file.data))
+    expect(files.map((file) => file.name)).toEqual(['luna-logo.svg', 'luna-logo-dark.svg', 'luna-logo-icon.svg'])
+    expect(decoded.every((svg) => svg.includes('<linearGradient'))).toBe(true)
   })
 
   it('charges credits per AI emblem drawn', () => {

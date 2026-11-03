@@ -13,7 +13,22 @@ import { buildTextAssets } from '@/lib/logo-studio/font-source'
 import { resolveAiModel } from '@/lib/ai-models'
 import { generateEmblemRound } from '@/lib/logo-studio/emblem-ai'
 import type { EmblemAsset, LogoPalette } from '@/lib/logo-studio/compose'
-import { AI_EMBLEMS_PER_ROUND, LOGO_STYLE_IDS, type LogoStyleId } from '@/lib/logo-studio/rules'
+import {
+  AI_EMBLEMS_PER_ROUND,
+  LOGO_STYLE_IDS,
+  METALLIC_TOKEN_COLORS,
+  METAL_TONE_IDS,
+  type LogoMetalTone,
+  type LogoStyleId,
+} from '@/lib/logo-studio/rules'
+import {
+  isLogoStudioV2Enabled,
+  logoStudioLocale,
+  logoStudioMotifFor,
+  recommendedLogoStyle,
+  resolveLogoStudioV2Input,
+  sectorLabelStyle,
+} from '@/lib/logo-studio/v2'
 
 // Four emblems are drawn in parallel, each with one automatic retry (Opus falls
 // back to Sonnet); per-attempt budgets live in AI_MODEL_ATTEMPT_TIMEOUT_MS.
@@ -29,6 +44,13 @@ const creditPort: CreditPort = {
   hasLedgerReason,
 }
 type LogoStyle = LogoStyleId
+
+export async function GET() {
+  return Response.json(
+    { logoStudioV2: isLogoStudioV2Enabled(process.env.LOGO_STUDIO_V2) },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
+}
 
 function distinctAccent(primary: string, accent: string, foreground: string): string {
   return primary.toLowerCase() === accent.toLowerCase() ? foreground : accent
@@ -75,6 +97,11 @@ export async function POST(req: Request) {
     colorMode?: string
     /** Client-generated id of this request; makes retries and double clicks charge once. */
     requestId?: string
+    sectorId?: unknown
+    industryNotes?: unknown
+    creativeDirection?: unknown
+    metalTone?: unknown
+    locale?: unknown
   }
 
   const parsed = websiteSchema.safeParse(body.schema)
@@ -108,11 +135,32 @@ export async function POST(req: Request) {
 
   const brand = (body.companyName || site.navigation.logoText || site.meta.name).trim().slice(0, 60)
   if (!brand) return Response.json({ error: 'Missing brand name' }, { status: 400 })
-  const sector = (body.sector || site.meta.audience || '').trim()
-  const description = (body.description || site.meta.tagline || '').trim()
-  const style: LogoStyle = STYLES.includes(body.style as LogoStyle) ? (body.style as LogoStyle) : 'modern'
-  const colorMode = body.colorMode === 'mono' ? 'mono' : 'duo'
-  const symbol = `${body.symbol ?? ''} ${body.request ?? ''}`.trim().slice(0, 200)
+  const v2Enabled = isLogoStudioV2Enabled(process.env.LOGO_STUDIO_V2)
+  const locale = logoStudioLocale(body.locale)
+  const requestedTone = METAL_TONE_IDS.includes(body.metalTone as LogoMetalTone) ? (body.metalTone as LogoMetalTone) : 'gold'
+  const v2InputResult = v2Enabled
+    ? resolveLogoStudioV2Input({
+        sectorId: body.sectorId,
+        industryNotes: body.industryNotes,
+        creativeDirection: body.creativeDirection,
+        brand,
+        locale,
+      })
+    : null
+  if (v2InputResult && !v2InputResult.ok) {
+    return Response.json({ error: 'Invalid logo studio V2 input', code: v2InputResult.error }, { status: 400 })
+  }
+  const v2Input = v2InputResult?.ok ? v2InputResult.value : null
+  const sector = v2Input ? v2Input.sectorPrompt : (body.sector || site.meta.audience || '').trim()
+  const description = v2Input ? v2Input.industryNotes : (body.description || site.meta.tagline || '').trim()
+  const style: LogoStyle = STYLES.includes(body.style as LogoStyle)
+    ? (body.style as LogoStyle)
+    : v2Input
+      ? recommendedLogoStyle(v2Input.sectorId, requestedTone)
+      : 'modern'
+  const metallic = v2Enabled && body.colorMode === 'metallic'
+  const colorMode = metallic ? 'metallic' : body.colorMode === 'mono' ? 'mono' : 'duo'
+  const symbol = v2Enabled ? '' : `${body.symbol ?? ''} ${body.request ?? ''}`.trim().slice(0, 200)
 
   const theme = resolveTheme(site)
   const palette: LogoPalette = {
@@ -124,12 +172,19 @@ export async function POST(req: Request) {
   const cost = AI_ACTION_COSTS.logoImage
   const useAi = mode === 'ai' && !textOnly
   const requestId = typeof body.requestId === 'string' && /^[\w-]{8,64}$/.test(body.requestId) ? body.requestId : undefined
-  const colors = colorMode === 'mono' ? [palette.primary] : [palette.primary, palette.accent]
+  const colors = metallic
+    ? [METALLIC_TOKEN_COLORS.light, METALLIC_TOKEN_COLORS.mid, METALLIC_TOKEN_COLORS.dark]
+    : colorMode === 'mono'
+      ? [palette.primary]
+      : [palette.primary, palette.accent]
   let charged = 0
   let chargeReason = ''
 
   try {
     const textPromise = buildTextAssets(brand, style)
+    const sectorTextPromise = v2Input
+      ? buildTextAssets(v2Input.sectorLabel, sectorLabelStyle(requestedTone))
+      : Promise.resolve(null)
     let aiEmblems: EmblemAsset[] = []
     let balance: number | undefined
     let requested = 0
@@ -143,7 +198,22 @@ export async function POST(req: Request) {
         selection,
         cost,
         maxCount: EMBLEM_COUNT,
-        round: { brand, sector, description, style, symbol, colors, seed, idPrefix: `ai-${seed}` },
+        round: {
+          brand,
+          sector,
+          description,
+          style,
+          symbol,
+          colors,
+          seed,
+          idPrefix: `ai-${seed}`,
+          v2: v2Enabled,
+          metallic,
+          creativeDirection: v2Input?.creativeDirection,
+          motifs: v2Input
+            ? Array.from({ length: EMBLEM_COUNT }, (_, index) => logoStudioMotifFor(v2Input.sectorId, index, seed, EMBLEM_COUNT))
+            : undefined,
+        },
         credits: creditPort,
         generate: generateEmblemRound,
         isAborted: () => req.signal.aborted,
@@ -183,7 +253,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { assets, fontName } = await textPromise
+    const [{ assets, fontName }, sectorTextResult] = await Promise.all([textPromise, sectorTextPromise])
     const aiCount = aiEmblems.length
     return Response.json({
       mode,
@@ -192,13 +262,22 @@ export async function POST(req: Request) {
       fontName,
       text: assets,
       aiEmblems,
-      context: `${sector} ${description}`.trim(),
+      context: v2Input ? `${v2Input.sectorId} ${v2Input.industryNotes}`.trim() : `${sector} ${description}`.trim(),
       palette,
       foreground: theme.foreground,
       aiCount,
       aiRequested: requested,
       aiFailed: useAi && aiCount === 0,
       balance,
+      ...(v2Input && sectorTextResult
+        ? {
+            logoStudioV2: true,
+            sectorId: v2Input.sectorId,
+            sectorLabel: v2Input.sectorLabel,
+            sectorText: sectorTextResult.assets.caps,
+            sectorFontName: sectorTextResult.fontName,
+          }
+        : {}),
     })
   } catch (err) {
     console.log('[v0] logo-image error:', err instanceof Error ? err.message : err)

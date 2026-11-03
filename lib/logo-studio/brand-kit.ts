@@ -86,6 +86,18 @@ export type BrandKitInput = {
   lightSurface: string
 }
 
+export function brandKitVectorFiles(
+  input: Pick<BrandKitInput, 'light' | 'dark' | 'iconSvg'> & { slug: string },
+): [ZipFile, ZipFile, ZipFile] {
+  const names = brandKitFileNames(input.slug)
+  const encoder = new TextEncoder()
+  return [
+    { name: names.svg, data: encoder.encode(input.light.svg) },
+    { name: names.svgDark, data: encoder.encode(input.dark.svg) },
+    { name: names.icon, data: encoder.encode(input.iconSvg) },
+  ]
+}
+
 const PAGE_W = 595
 const PAGE_H = 842
 const SCALE = 2.5
@@ -220,7 +232,7 @@ export async function buildBrandKitZip(
   input: BrandKitInput & { slug: string; faviconFiles: ZipFile[]; pngWidth: number },
 ): Promise<Blob> {
   const names = brandKitFileNames(input.slug)
-  const enc = new TextEncoder()
+  const [lightSvg, darkSvg, iconSvg] = brandKitVectorFiles(input)
   const png1 = await svgToPngBytes(input.light.svg, input.pngWidth, Math.round((input.light.height / input.light.width) * input.pngWidth))
   const png2 = await svgToPngBytes(
     input.light.svg,
@@ -228,12 +240,12 @@ export async function buildBrandKitZip(
     Math.round((input.light.height / input.light.width) * input.pngWidth * 2),
   )
   const files: ZipFile[] = [
-    { name: names.svg, data: enc.encode(input.light.svg) },
-    { name: names.svgDark, data: enc.encode(input.dark.svg) },
+    lightSvg,
+    darkSvg,
     { name: names.png, data: png1 },
     { name: names.png2x, data: png2 },
     { name: names.pdf, data: await blobBytes(await svgToPdfBlob(input.light.svg, input.light.width, input.light.height)) },
-    { name: names.icon, data: enc.encode(input.iconSvg) },
+    iconSvg,
     { name: names.kit, data: await blobBytes(await renderBrandKitPdf(input)) },
     ...input.faviconFiles.map((f) => ({ name: `${names.faviconDir}${f.name}`, data: f.data })),
   ]

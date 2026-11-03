@@ -8,8 +8,11 @@ import type { WebsiteSchema } from '@/lib/website-schema'
 import { resolveTheme } from '@/components/website-renderer/theme'
 import { classifyLogoGenerateStatus } from '@/lib/logo-generate-status'
 import {
+  applyMetallicFinish,
   buildLockup,
   emblemBounds,
+  LEGACY_LOGO_LAYOUTS,
+  LOGO_LAYOUTS_V2,
   monogramEmblem,
   recolorEmblem,
   svgToDataUri,
@@ -20,6 +23,15 @@ import {
   type TextAssets,
 } from '@/lib/logo-studio/compose'
 import { drawLocalEmblem, pickLocalEmblems } from '@/lib/logo-studio/emblem-local'
+import { LogoStudioV2Controls } from '@/components/editor/logo-studio-v2-controls'
+import { wordIncludes } from '@/lib/visual-subjects'
+import {
+  recommendedLogoStyle,
+  resolveLogoStudioSector,
+  type LogoStudioLocale,
+  type LogoStudioSectorId,
+} from '@/lib/logo-studio/v2'
+import type { TextPath } from '@/lib/logo-studio/ttf'
 import {
   buildFaviconSvg,
   buildFaviconVariants,
@@ -33,9 +45,11 @@ import {
   AI_EMBLEMS_PER_ROUND,
   LOGO_EMBLEM_CREDITS,
   LOGO_STYLE_IDS,
+  METALLIC_TOKEN_COLORS,
   USAGE_RULES,
   resolveColorway,
   type ColorwayId,
+  type LogoMetalTone,
   type LogoStyleId,
   type SiteColors,
 } from '@/lib/logo-studio/rules'
@@ -64,6 +78,11 @@ export type LogoStudioResult = {
 type StudioData = {
   brand: string
   fontName: string
+  sectorFontName?: string
+  sectorId?: LogoStudioSectorId
+  sectorLabel?: string
+  sectorText?: TextPath
+  logoStudioV2?: boolean
   text: TextAssets
   aiEmblems: EmblemAsset[]
   context: string
@@ -72,14 +91,24 @@ type StudioData = {
 }
 
 type Choice = { t: 'ai'; i: number } | { t: 'local'; i: number } | { t: 'mono'; shape: 'circle' | 'square' }
-
-const LAYOUTS: LogoLayout[] = ['horizontal', 'vertical', 'wordmark']
+type StudioLoadOptions = {
+  style: LogoStyleId
+  colorway: ColorwayId
+  textOnly?: boolean
+  v2?: boolean
+  sectorId?: LogoStudioSectorId
+  industryNotes?: string
+  creativeDirection?: string
+  metalTone?: LogoMetalTone
+  locale?: LogoStudioLocale
+}
 const PICKS = 6
 const FAVICON_PREFER: FaviconPrefer[] = ['auto', 'emblem', 'monogram']
 
 function emblemThumb(e: EmblemAsset): string {
   const b = emblemBounds(e)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x} ${b.y} ${b.w} ${b.h}">${e.inner}</svg>`
+  const defs = e.svgDefs ? `<defs>${e.svgDefs}</defs>` : ''
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${b.x} ${b.y} ${b.w} ${b.h}">${defs}${e.inner}</svg>`
 }
 
 export function LogoStudioDialog({
@@ -97,8 +126,14 @@ export function LogoStudioDialog({
   onApply: (result: LogoStudioResult) => void
   onFail: (kind: LogoStudioFailure) => void
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const ui = t.editor.ui
+  const locale: LogoStudioLocale = lang === 'tr' ? 'tr' : 'en'
+  const uiRef = useRef(ui)
+  uiRef.current = ui
+  const localeRef = useRef(locale)
+  localeRef.current = locale
+  const brandName = (site.navigation.logoText || site.meta.name).trim().slice(0, 60)
   const theme = resolveTheme(site)
   const siteColors: SiteColors = useMemo(
     () => ({
@@ -115,6 +150,12 @@ export function LogoStudioDialog({
   const [loading, setLoading] = useState(true)
   const [seed, setSeed] = useState(0)
   const [localSeed, setLocalSeed] = useState(0)
+  const [v2Enabled, setV2Enabled] = useState(false)
+  const [sectorId, setSectorId] = useState<LogoStudioSectorId>('other')
+  const [industryNotes, setIndustryNotes] = useState('')
+  const [creativeDirection, setCreativeDirection] = useState('')
+  const [metalTone, setMetalTone] = useState<LogoMetalTone>('gold')
+  const [stylePinned, setStylePinned] = useState(false)
   const [style, setStyle] = useState<LogoStyleId>('modern')
   const [colorway, setColorway] = useState<ColorwayId>('brand')
   const [selected, setSelected] = useState<LogoLayout>('horizontal')
@@ -140,12 +181,18 @@ export function LogoStudioDialog({
     ink: ui.studioColorInk,
     mono: ui.studioColorMono,
     reverse: ui.studioColorReverse,
+    metallic: ui.studioColorMetallic,
   }
   const layoutLabel: Record<LogoLayout, string> = {
     horizontal: ui.studioLayoutHorizontal,
-    vertical: ui.studioLayoutVertical,
+    vertical: v2Enabled ? ui.studioLayoutVerticalV2 : ui.studioLayoutVertical,
     wordmark: ui.studioLayoutWordmark,
+    stacked: ui.studioLayoutStacked,
+    badge: ui.studioLayoutBadge,
   }
+  const layouts = v2Enabled ? LOGO_LAYOUTS_V2 : LEGACY_LOGO_LAYOUTS
+  const colorways = v2Enabled ? COLORWAY_IDS : COLORWAY_IDS.filter((id) => id !== 'metallic')
+  const directionContainsBrandName = !!creativeDirection.trim() && !!brandName && wordIncludes(creativeDirection, brandName)
   const faviconPreferLabel: Record<FaviconPrefer, string> = {
     auto: ui.studioFaviconAuto,
     emblem: ui.studioFaviconEmblem,
@@ -153,7 +200,7 @@ export function LogoStudioDialog({
   }
 
   const load = useCallback(
-    async (nextSeed: number, opts: { style: LogoStyleId; colorway: ColorwayId; textOnly?: boolean }) => {
+    async (nextSeed: number, opts: StudioLoadOptions) => {
       const id = ++requestId.current
       // A superseded request is cancelled so the server can skip charging for
       // emblems nobody will see.
@@ -170,12 +217,21 @@ export function LogoStudioDialog({
           body: JSON.stringify({
             requestId: crypto.randomUUID(),
             schema: site,
-            companyName: site.navigation.logoText || site.meta.name,
+            companyName: brandName,
             mode,
             seed: nextSeed,
             style: opts.style,
-            colorMode: opts.colorway === 'mono' ? 'mono' : 'duo',
+            colorMode: opts.v2 && opts.colorway === 'metallic' ? 'metallic' : opts.colorway === 'mono' ? 'mono' : 'duo',
             textOnly: opts.textOnly === true,
+            ...(opts.v2
+              ? {
+                  sectorId: opts.sectorId ?? 'other',
+                  industryNotes: opts.industryNotes ?? '',
+                  creativeDirection: opts.creativeDirection ?? '',
+                  metalTone: opts.metalTone ?? 'gold',
+                  locale: opts.locale ?? 'en',
+                }
+              : {}),
           }),
         })
         if (id !== requestId.current) return
@@ -191,6 +247,7 @@ export function LogoStudioDialog({
         }
         const json = (await res.json()) as Omit<StudioData, 'aiEmblems'> & { aiEmblems: EmblemAsset[] }
         if (id !== requestId.current) return
+        if (json.logoStudioV2 === true) setV2Enabled(true)
         const fresh = json.aiEmblems.map(measureEmblem)
         setData((prev) => ({
           ...json,
@@ -214,7 +271,43 @@ export function LogoStudioDialog({
   )
 
   useEffect(() => {
-    void load(0, { style: 'modern', colorway: 'brand' })
+    let cancelled = false
+    const initialize = async () => {
+      try {
+        const response = await fetch('/api/logo-image', { method: 'GET', cache: 'no-store' })
+        if (!response.ok) throw new Error('Logo Studio feature check failed')
+        const features = (await response.json()) as { logoStudioV2?: boolean }
+        if (cancelled) return
+        if (features.logoStudioV2 === true) {
+          const initialStyle = recommendedLogoStyle('other', 'gold')
+          setV2Enabled(true)
+          setStyle(initialStyle)
+          if (mode === 'ai') setChoice({ t: 'mono', shape: 'circle' })
+          await load(0, {
+            style: initialStyle,
+            colorway: 'brand',
+            textOnly: mode === 'ai',
+            v2: true,
+            sectorId: 'other',
+            industryNotes: '',
+            creativeDirection: '',
+            metalTone: 'gold',
+            locale: localeRef.current,
+          })
+        } else {
+          await load(0, { style: 'modern', colorway: 'brand' })
+        }
+      } catch {
+        if (!cancelled) {
+          setError(uiRef.current.studioFailed)
+          setLoading(false)
+        }
+      }
+    }
+    void initialize()
+    return () => {
+      cancelled = true
+    }
   }, [load])
 
   useEffect(() => {
@@ -225,24 +318,58 @@ export function LogoStudioDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const picks = useMemo(
-    () => (data ? pickLocalEmblems({ count: PICKS, brand: data.brand, context: data.context, seed: localSeed }) : []),
-    [data?.brand, data?.context, localSeed], // eslint-disable-line react-hooks/exhaustive-deps
-  )
+  const picks = useMemo(() => {
+    if (!data) return []
+    const sectorContext = v2Enabled ? `${sectorId} ${industryNotes} ${creativeDirection}`.trim() : data.context
+    const localSectorId = v2Enabled ? resolveLogoStudioSector(sectorId, locale)?.localId : undefined
+    return pickLocalEmblems({
+      count: PICKS,
+      brand: data.brand,
+      context: sectorContext,
+      seed: localSeed,
+      sectorId: localSectorId,
+    })
+  }, [data?.brand, data?.context, localSeed, v2Enabled, sectorId, industryNotes, creativeDirection, locale])
 
   const emblemFor = useCallback(
     (c: Choice, colors: ReturnType<typeof resolveColorway>): EmblemAsset | null => {
       if (!data) return null
+      const metallic = v2Enabled && colorway === 'metallic'
+      const iconColors = metallic
+        ? {
+            ...colors,
+            a: METALLIC_TOKEN_COLORS.mid,
+            b: METALLIC_TOKEN_COLORS.light,
+            ink: METALLIC_TOKEN_COLORS.dark,
+            fg: METALLIC_TOKEN_COLORS.dark,
+          }
+        : colors
       if (c.t === 'ai') {
         const ai = data.aiEmblems[c.i]
         if (!ai) return null
-        return recolorEmblem(ai, { [data.palette.primary]: colors.a, [data.palette.accent]: colors.b })
+        if (metallic) return applyMetallicFinish(ai, metalTone)
+        return recolorEmblem(ai, {
+          [data.palette.primary]: colors.a,
+          [data.palette.accent]: colors.b,
+          ...(v2Enabled
+            ? {
+                [METALLIC_TOKEN_COLORS.light]: colors.b,
+                [METALLIC_TOKEN_COLORS.mid]: colors.a,
+                [METALLIC_TOKEN_COLORS.dark]: colors.a,
+              }
+            : {}),
+        })
       }
-      if (c.t === 'mono') return monogramEmblem({ mono: data.text.mono, shape: c.shape, colors, style })
+      if (c.t === 'mono') {
+        const emblem = monogramEmblem({ mono: data.text.mono, shape: c.shape, colors: iconColors, style })
+        return metallic ? applyMetallicFinish(emblem, metalTone) : emblem
+      }
       const pick = picks[c.i] ?? picks[0]
-      return pick ? drawLocalEmblem(pick, style, colors) : null
+      if (!pick) return null
+      const emblem = drawLocalEmblem(pick, style, iconColors)
+      return metallic ? applyMetallicFinish(emblem, metalTone) : emblem
     },
-    [data, picks, style],
+    [data, picks, style, v2Enabled, colorway, metalTone],
   )
 
   const lockups = useMemo(() => {
@@ -255,12 +382,13 @@ export function LogoStudioDialog({
         text: data.text,
         colors,
         style,
+        sectorLabel: v2Enabled ? data.sectorText : undefined,
       })
     }
     return Object.fromEntries(
-      LAYOUTS.map((layout) => [layout, { site: make(layout, 'site'), light: make(layout, 'light'), dark: make(layout, 'dark') }]),
+      layouts.map((layout) => [layout, { site: make(layout, 'site'), light: make(layout, 'light'), dark: make(layout, 'dark') }]),
     ) as Record<LogoLayout, { site: Lockup; light: Lockup; dark: Lockup }>
-  }, [data, colorway, siteColors, emblemFor, choice, style])
+  }, [data, colorway, siteColors, emblemFor, choice, style, v2Enabled, layouts])
 
   const faviconColors = useMemo(
     () => resolveColorway(colorway === 'reverse' ? 'brand' : colorway, siteColors, 'light'),
@@ -284,24 +412,71 @@ export function LogoStudioDialog({
   const hasAi = data ? data.aiEmblems.length > 0 : false
   const busy = loading || exporting !== null
 
+  function v2Options(overrides: Partial<StudioLoadOptions> = {}): StudioLoadOptions {
+    return {
+      style,
+      colorway,
+      v2: v2Enabled,
+      sectorId,
+      industryNotes,
+      creativeDirection,
+      metalTone,
+      locale,
+      ...overrides,
+    }
+  }
+
+  function updateSector(next: LogoStudioSectorId) {
+    if (next === sectorId) return
+    setSectorId(next)
+    const nextStyle = stylePinned ? style : recommendedLogoStyle(next, metalTone)
+    if (!stylePinned) setStyle(nextStyle)
+    if (data) void load(seed, v2Options({ sectorId: next, style: nextStyle, textOnly: true }))
+  }
+
   function changeStyle(next: LogoStyleId) {
     if (next === style || !data) return
+    setStylePinned(true)
     setStyle(next)
-    void load(seed, { style: next, colorway, textOnly: true })
+    if (!v2Enabled) {
+      void load(seed, { style: next, colorway, textOnly: true })
+      return
+    }
+    void load(seed, v2Options({ style: next, textOnly: mode === 'local' || !hasAi }))
   }
 
   function another() {
     if (!data) return
+    if (v2Enabled && mode === 'ai' && directionContainsBrandName) {
+      setError(ui.studioV2DirectionBrandName)
+      return
+    }
     setLocalSeed((s) => s + 1)
-    if (mode === 'ai') void load(seed + 1, { style, colorway })
-    else setChoice({ t: 'local', i: 0 })
+    if (mode === 'ai') {
+      const nextSeed = v2Enabled && !hasAi ? seed : seed + 1
+      void load(nextSeed, v2Enabled ? v2Options({ textOnly: false }) : { style, colorway })
+    } else {
+      setChoice({ t: 'local', i: 0 })
+    }
   }
 
   function changeColorway(next: ColorwayId) {
     if (next === colorway) return
-    const needsRedraw = mode === 'ai' && (next === 'mono' || colorway === 'mono') && choice.t === 'ai'
+    const monoNeedsRefresh = (next === 'mono' || colorway === 'mono') && !(v2Enabled && colorway === 'metallic')
+    const enteringMetallic = v2Enabled && next === 'metallic' && colorway !== 'metallic'
+    const needsRedraw = mode === 'ai' && choice.t === 'ai' && (monoNeedsRefresh || enteringMetallic)
     setColorway(next)
-    if (needsRedraw) void load(seed, { style, colorway: next })
+    if (needsRedraw) {
+      void load(seed, v2Enabled ? v2Options({ colorway: next, textOnly: false }) : { style, colorway: next })
+    }
+  }
+
+  function changeMetalTone(next: LogoMetalTone) {
+    if (next === metalTone || !v2Enabled) return
+    setMetalTone(next)
+    const nextStyle = stylePinned ? style : recommendedLogoStyle(sectorId, next)
+    if (!stylePinned) setStyle(nextStyle)
+    if (data) void load(seed, v2Options({ metalTone: next, style: nextStyle, textOnly: true }))
   }
 
   const kitInput = useCallback(
@@ -426,6 +601,8 @@ export function LogoStudioDialog({
 
   const thumbBg = colorway === 'reverse' ? siteColors.primary : siteColors.background
   const thumbColors = resolveColorway(colorway, siteColors, 'site')
+  const displayedTypeface =
+    data?.sectorFontName && data.sectorFontName !== data.fontName ? `${data.fontName} + ${data.sectorFontName}` : data?.fontName
   const sameChoice = (c: Choice) => JSON.stringify(c) === JSON.stringify(choice)
 
   const candidates: { key: string; c: Choice; svg: string }[] = data
@@ -500,7 +677,7 @@ export function LogoStudioDialog({
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="mr-1 w-12 text-[11px] text-muted-foreground">{ui.studioColors}</span>
-                  {COLORWAY_IDS.map((id) => (
+                  {colorways.map((id) => (
                     <button key={id} type="button" aria-pressed={id === colorway} onClick={() => changeColorway(id)} className={chip(id === colorway)}>
                       {colorLabel[id]}
                     </button>
@@ -508,8 +685,50 @@ export function LogoStudioDialog({
                 </div>
               </section>
 
+              {v2Enabled ? (
+                <LogoStudioV2Controls
+                  locale={locale}
+                  sectorId={sectorId}
+                  onSectorChange={updateSector}
+                  industryNotes={industryNotes}
+                  onIndustryNotesChange={setIndustryNotes}
+                  creativeDirection={creativeDirection}
+                  onCreativeDirectionChange={(value) => {
+                    setCreativeDirection(value)
+                    setError(null)
+                  }}
+                  directionContainsBrandName={directionContainsBrandName}
+                  tone={metalTone}
+                  onToneChange={changeMetalTone}
+                  showDirection={mode === 'ai'}
+                  showMetalTones={colorway === 'metallic'}
+                  disabled={busy}
+                  copy={{
+                    section: ui.studioV2Section,
+                    sector: ui.studioV2Sector,
+                    notes: ui.studioV2Notes,
+                    notesPlaceholder: ui.studioV2NotesPlaceholder,
+                    notesHint: ui.studioV2NotesHint,
+                    direction: ui.studioV2Direction,
+                    directionPlaceholder: ui.studioV2DirectionPlaceholder,
+                    directionHint: ui.studioV2DirectionHint,
+                    directionBrandName: ui.studioV2DirectionBrandName,
+                    metal: ui.studioV2Metal,
+                    gold: ui.studioV2MetalGold,
+                    silver: ui.studioV2MetalSilver,
+                    bronze: ui.studioV2MetalBronze,
+                    metalHint: ui.studioV2MetalHint,
+                  }}
+                />
+              ) : null}
+
               <section className={`flex flex-col gap-2 ${loading ? 'opacity-50' : ''}`} aria-label={ui.studioEmblems}>
                 <span className="text-[11px] text-muted-foreground">{ui.studioEmblems}</span>
+                {v2Enabled && mode === 'ai' && !hasAi && !data.aiFailed ? (
+                  <p role="status" className="text-sm leading-relaxed text-muted-foreground">
+                    {ui.studioV2NextRoundHint}
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
                   {candidates.map((cand) => {
                     const active = sameChoice(cand.c)
@@ -535,8 +754,8 @@ export function LogoStudioDialog({
                 </div>
               </section>
 
-              <div className={`grid grid-cols-1 gap-2 sm:grid-cols-3 ${loading ? 'opacity-50' : ''}`}>
-                {LAYOUTS.map((layout) => {
+              <div className={`grid grid-cols-1 gap-2 ${v2Enabled ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-3'} ${loading ? 'opacity-50' : ''}`}>
+                {layouts.map((layout) => {
                   const l = lockups[layout].site
                   const active = layout === selected
                   return (
@@ -585,7 +804,8 @@ export function LogoStudioDialog({
               </section>
 
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                {ui.studioFontNote} {data.fontName}
+                {ui.studioFontNote} {displayedTypeface}
+                {v2Enabled ? ` · ${ui.studioV2TypefaceHint}` : ''}
                 {hasAi ? ' · AI' : ''}
               </p>
             </>
@@ -622,7 +842,7 @@ export function LogoStudioDialog({
               className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-xs font-medium transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
             >
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {ui.studioAnother}
+              {v2Enabled && mode === 'ai' && !hasAi && !data?.aiFailed ? ui.studioV2Generate : ui.studioAnother}
             </button>
 
             <div className="flex flex-wrap items-center gap-1.5">

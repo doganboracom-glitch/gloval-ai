@@ -3,8 +3,15 @@ import type { AiModelSelection } from '@/lib/ai-models'
 import { generateEmblemRound, type Drawer } from './emblem-ai'
 import { checkEmblemSvg, normalizeViewBox, snapToPalette, unsafeReason } from './emblem-gate'
 import { buildEmblemPrompt, compositionFor, objectRankFor, COMPOSITION_HINTS } from './emblem-prompt'
+import { METALLIC_TOKEN_COLORS } from './rules'
 
 const PALETTE = ['#1d4ed8', '#f59e0b']
+const METALLIC_PALETTE = [METALLIC_TOKEN_COLORS.light, METALLIC_TOKEN_COLORS.mid, METALLIC_TOKEN_COLORS.dark]
+
+const GOOD_METALLIC = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="100" cy="100" r="70" fill="${METALLIC_TOKEN_COLORS.light}"/>
+  <path d="M70 100L100 60L130 100L100 140Z" fill="${METALLIC_TOKEN_COLORS.mid}" stroke="${METALLIC_TOKEN_COLORS.dark}" stroke-width="12"/>
+</svg>`
 
 const GOOD = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <circle cx="100" cy="100" r="70" fill="#1d4ed8"/>
@@ -34,6 +41,26 @@ describe('emblem prompt', () => {
     const { system, user } = buildEmblemPrompt({ ...base, colors: [PALETTE[0]] }, 4)
     expect(system).toContain('exactly ONE colour')
     expect(user).toContain(`"palette":["${PALETTE[0]}"]`)
+  })
+
+  it('labels metallic tones as flat data and forbids copied marks', () => {
+    const { system, user } = buildEmblemPrompt(
+      {
+        ...base,
+        v2: true,
+        metallic: true,
+        colors: METALLIC_PALETTE,
+        creativeDirection: 'two interlocking bands',
+        motif: 'a hinged clasp',
+      },
+      4,
+    )
+    expect(system).toContain('Never imitate or reproduce a recognizable existing logo')
+    expect(system).toContain('No gradients or shading in model output')
+    expect(user).toContain(`\"palette\":{\"light\":\"${METALLIC_TOKEN_COLORS.light}\",\"mid\":\"${METALLIC_TOKEN_COLORS.mid}\",\"dark\":\"${METALLIC_TOKEN_COLORS.dark}\"}`)
+    expect(user).toContain('"creative_direction":"two interlocking bands"')
+    expect(user).toContain('"distinctive_object":"a hinged clasp"')
+    expect(user).not.toContain('Kasap Ahmet')
   })
 
   it('gives each candidate of a round a different composition and rank', () => {
@@ -131,6 +158,22 @@ describe('emblem round', () => {
     const out = await generateEmblemRound(round(draw))
     expect(out.every((o) => o.ok && o.attempts === 1)).toBe(true)
     expect(out.map((o) => (o.ok ? o.emblem.id : ''))).toEqual(['ai-0-0', 'ai-0-1'])
+  })
+
+  it('keeps metallic model shapes flat until the trusted composer runs', async () => {
+    const draw: Drawer = async () => ({ text: GOOD_METALLIC, finishReason: 'stop' })
+    const [result] = await generateEmblemRound({
+      ...round(draw, 1),
+      colors: METALLIC_PALETTE,
+      v2: true,
+      metallic: true,
+      motifs: ['a gemstone setting'],
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.emblem.inner).not.toMatch(/linearGradient|feGaussianBlur/)
+      expect(result.emblem.inner).toContain(METALLIC_TOKEN_COLORS.light)
+    }
   })
 
   it('retries once with the rejection reason, then succeeds', async () => {
