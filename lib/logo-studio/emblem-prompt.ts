@@ -130,7 +130,7 @@ export function buildEmblemPrompt(input: EmblemPromptInput, count: number): { sy
   const userContext = input.v2
     ? userContextBlock({
         industry_notes: stripBrandNameFromImagePrompt(input.description ?? '', input.brand),
-        creative_direction: input.creativeDirection,
+        creative_direction: stripBrandNameFromImagePrompt(input.creativeDirection ?? '', input.brand),
       })
     : ''
   return {
