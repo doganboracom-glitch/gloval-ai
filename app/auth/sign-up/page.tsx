@@ -25,6 +25,8 @@ import {
 } from '@/lib/signup-draft-client'
 import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
+import { saveEmailReferralAction } from '@/lib/referrals/actions'
+import { prepareReferralSignupIntent } from '@/lib/referrals/client'
 import { useLanguage } from '@/components/language-provider'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { AuthShell } from '@/components/auth/auth-shell'
@@ -113,6 +115,7 @@ function SignUpForm() {
     if (draftToken) callbackParams.set('draft', draftToken)
     const callbackUrl = new URL(getAuthCallbackUrl())
     for (const [key, value] of callbackParams) callbackUrl.searchParams.set(key, value)
+    await prepareReferralSignupIntent('email')
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
@@ -137,10 +140,11 @@ function SignUpForm() {
       return
     }
     if (draftToken) clearSignupIdea()
-    // Fire-and-forget: attribution and measurement must never block sign-up.
+    // Existing analytics attribution stays fire-and-forget; signed referral binding is best-effort server-side.
     if (data.user?.id) {
       const attribution = readAttribution()
       if (attribution) void saveSignupAttribution({ userId: data.user.id, attribution })
+      await saveEmailReferralAction({ userId: data.user.id })
     }
     trackSignUp('email')
     // If email confirmation is off, a session already exists → go to dashboard.

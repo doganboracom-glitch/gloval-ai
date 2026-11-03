@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   signOut: vi.fn(),
   scheduleWelcomeEmail: vi.fn(),
+  markReferralVerifiedForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -18,6 +19,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/email-outbox', () => ({ scheduleWelcomeEmail: mocks.scheduleWelcomeEmail }))
+vi.mock('@/lib/referrals/service', () => ({
+  markReferralVerifiedForUser: mocks.markReferralVerifiedForUser,
+}))
 
 import { POST } from './route'
 
@@ -40,7 +44,7 @@ function location(response: Response) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.verifyOtp.mockResolvedValue({ error: null })
+  mocks.verifyOtp.mockResolvedValue({ data: { user: { id: 'verified-user' } }, error: null })
   mocks.signOut.mockResolvedValue({ error: null })
 })
 
@@ -59,7 +63,9 @@ describe('POST /auth/confirm/verify', () => {
       type: 'signup',
     })
     expect(mocks.signOut).toHaveBeenCalledOnce()
+    expect(mocks.markReferralVerifiedForUser).toHaveBeenCalledWith('verified-user')
     expect(response.status).toBe(303)
+
     expect(location(response).pathname).toBe('/auth/verified')
     expect(location(response).searchParams.get('next')).toBe(`/auth/resume?draft=${DRAFT_TOKEN}`)
   })
@@ -71,6 +77,7 @@ describe('POST /auth/confirm/verify', () => {
 
     expect(mocks.verifyOtp).toHaveBeenCalledOnce()
     expect(mocks.signOut).toHaveBeenCalledOnce()
+    expect(mocks.markReferralVerifiedForUser).toHaveBeenCalledWith('verified-user')
     expect(response.status).toBe(303)
     expect(location(response).pathname).toBe('/auth/verified')
     expect(location(response).searchParams.get('next')).toBe('/dashboard')
@@ -94,6 +101,7 @@ describe('POST /auth/confirm/verify', () => {
     })
     expect(mocks.signOut).not.toHaveBeenCalled()
     expect(mocks.scheduleWelcomeEmail).not.toHaveBeenCalled()
+    expect(mocks.markReferralVerifiedForUser).not.toHaveBeenCalled()
     expect(response.status).toBe(303)
     expect(destination.origin).toBe('https://gloval.ai')
     expect(destination.pathname).toBe('/auth/reset-password')
