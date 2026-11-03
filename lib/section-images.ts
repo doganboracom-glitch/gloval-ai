@@ -1,7 +1,7 @@
 import type { WebsiteSchema, Section } from '@/lib/website-schema'
 import { generateSiteImage, imageGenerationAvailable, type ImageAspect } from '@/lib/image-provider'
 import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
-import { imagePromptRules } from '@/lib/image-prompt-rules'
+import { imagePromptRules, stripBrandNameFromImagePrompt } from '@/lib/image-prompt-rules'
 import { analyzeBrief } from '@/lib/hero-image'
 import { describeVisualRequest } from '@/lib/visual-subjects'
 import { collectionOf, IMAGE_ITEM_SECTIONS } from '@/lib/website-edit-operations'
@@ -62,19 +62,25 @@ export function buildItemImagePrompt(
   originalBrief?: string,
 ): string {
   const item = target.item
-  const raw =
+  const rawSource =
     (override && override.trim()) ||
     [item.imagePrompt, item.title, item.caption, item.name, item.category]
       .filter((v): v is string => typeof v === 'string' && v.trim().length > 1)
       .join(', ')
+  const raw = override?.trim()
+    ? rawSource
+    : stripBrandNameFromImagePrompt(rawSource, site.meta.name)
   const siteBrief = originalBrief?.trim().replace(/\s+/g, ' ').slice(0, 600)
+  const safeSiteBrief = siteBrief
+    ? stripBrandNameFromImagePrompt(siteBrief, site.meta.name)
+    : ''
   const brief = analyzeBrief(
-    `${raw} ${siteBrief ?? ''} ${site.meta.name} ${site.meta.tagline}`,
+    `${rawSource} ${siteBrief ?? ''} ${site.meta.name} ${site.meta.tagline}`,
     site,
   )
   const subject = raw ? describeVisualRequest(raw) : brief.visualNeed
-  const siteBriefContext = siteBrief
-    ? `Original site brief (context only): "${siteBrief}". Preserve this item's own description as the primary subject; use the brief only for industry, equipment, and mood.`
+  const siteBriefContext = safeSiteBrief
+    ? `Original site brief (context only): "${safeSiteBrief}". Preserve this item's own description as the primary subject; use the brief only for industry, equipment, and mood.`
     : ''
 
   const rules = imagePromptRules(brief.illustrative)

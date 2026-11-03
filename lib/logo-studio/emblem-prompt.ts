@@ -1,3 +1,4 @@
+import { stripBrandNameFromImagePrompt } from '@/lib/image-prompt-rules'
 import { styleSpec, type LogoStyleId } from '@/lib/logo-studio/rules'
 
 /**
@@ -68,7 +69,7 @@ const BASE_RULES = [
   `- ONE single, simple, iconic mark built from 12 to ${TARGET_EMBLEM_SHAPES} vector shapes at most.`,
   '- Use ONLY the colours given in "palette", written as plain hex values in fill or stroke. No other colours, not even white or black: for a gap draw real empty space instead.',
   '- The mark MUST depict one concrete, recognisable object that belongs to this exact business (what a customer would associate with it), so anyone recognises the sector at a glance. The "object_rank" in the brief says which of the most iconic objects to choose: 1 is the most iconic, higher numbers are the next best choices.',
-  '- FORBIDDEN: generic symbols (leaf, crosshair or target, arrow, flame, cube, star, swoosh, orbit, abstract blobs), letter monograms or initials, any letters, digits or <text>, and objects unrelated to the business.',
+  '- FORBIDDEN: generic symbols (leaf, crosshair or target, arrow, flame, cube, star, swoosh, orbit, abstract blobs), letter monograms or initials, any letters, digits, words, typography, <text>, watermarks or signage, and objects unrelated to the business.',
   '- NEVER draw a background, frame or any shape that fills the whole box.',
   '- Flat design: solid fills, no gradients, shadows, filters, masks or clip paths. Any stroke is at least 10 units wide. It must stay readable at 24px, so avoid fine detail.',
   '- Use only path, circle, ellipse, rect, polygon, polyline, line and <g>. No <defs>, <use>, <image>, <style>, <script> or links of any kind.',
@@ -90,9 +91,8 @@ export function buildEmblemPrompt(input: EmblemPromptInput, count: number): { sy
   ].join('\n')
 
   const brief = {
-    brand_name: input.brand,
-    industry: input.sector || undefined,
-    description: input.description || undefined,
+    industry: stripBrandNameFromImagePrompt(input.sector ?? '', input.brand) || undefined,
+    description: stripBrandNameFromImagePrompt(input.description ?? '', input.brand) || undefined,
     requested_symbol: input.symbol || undefined,
     style: `${spec.ai.mood}; shape language: ${spec.ai.shape}`,
     palette,
@@ -103,5 +103,8 @@ export function buildEmblemPrompt(input: EmblemPromptInput, count: number): { sy
   const retry = input.retryReason
     ? '\nYour previous attempt was rejected for the problem named above. Fix it and keep the mark simple.'
     : ''
-  return { system, user: `Draw the logo mark for this brand.\n${JSON.stringify(brief)}${retry}` }
+  return {
+    system,
+    user: `Draw only the requested emblem symbol for the stated industry. The wordmark is typeset separately.\n${JSON.stringify(brief)}${retry}`,
+  }
 }

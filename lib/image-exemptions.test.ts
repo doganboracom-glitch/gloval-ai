@@ -13,6 +13,7 @@ vi.mock('ai', () => ({
 
 import { generateSiteImage } from '@/lib/image-provider'
 import {
+  FIXED_IMAGE_NEGATIVE_TERMS,
   IMAGE_PROMPT_RULES,
   IMAGE_PROMPT_RULES_ANY_STYLE,
   NEGATIVE_RULE,
@@ -21,11 +22,13 @@ import {
   NO_TEXT_RULE_ANY_STYLE,
   hasImagePromptRules,
   imagePromptRules,
+  stripBrandNameFromImagePrompt,
   wantsIllustrationStyle,
   withImagePromptRules,
 } from '@/lib/image-prompt-rules'
 import { analyzeBrief, buildHeroImagePrompt, buildRequestedImagePrompt } from '@/lib/hero-image'
 import { buildItemImagePrompt } from '@/lib/section-images'
+import { buildProductImagePrompt } from '@/lib/product-image'
 import { buildImagePrompt } from '@/lib/store-ai-image'
 
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
@@ -133,6 +136,51 @@ describe('visual STYLE restriction is optional, the text ban never is', () => {
     expect(art).not.toContain(NO_TEXT_RULE)
     expect(withImagePromptRules(photo, true)).toBe(photo)
     expect(withImagePromptRules(art)).toBe(art)
+  })
+
+  it('keeps the fixed negative phrase at the very end, including legacy prompts', () => {
+    const prompt = withImagePromptRules(`A cafe. ${NO_TEXT_RULE} Composition variation.`)
+    expect(prompt.trim().endsWith(`${FIXED_IMAGE_NEGATIVE_TERMS}.`)).toBe(true)
+    expect(prompt.match(/Final negative rule:/g)).toHaveLength(1)
+  })
+
+  it('removes a business name from automatic section and product prompts only', () => {
+    const site = {
+      meta: { name: 'Kivu Collective', tagline: 'Kivu Collective seasonal goods', tone: '', audience: '' },
+      theme: { mode: 'light' },
+      sections: [],
+    } as never
+    const sectionTarget = {
+      section: { type: 'gallery' },
+      item: { title: 'Kivu Collective woven tote', description: 'Kivu Collective canvas bag' },
+    } as never
+
+    const sectionPrompt = buildItemImagePrompt(
+      site,
+      sectionTarget,
+      undefined,
+      'Kivu Collective creates durable bags for everyday use',
+    )
+    expect(sectionPrompt).not.toContain('Kivu Collective')
+    expect(sectionPrompt.trim().endsWith(`${FIXED_IMAGE_NEGATIVE_TERMS}.`)).toBe(true)
+
+    const productPrompt = buildProductImagePrompt(
+      { name: 'Kivu Collective woven tote', category: 'Kivu Collective bags', description: 'Kivu Collective canvas' },
+      '',
+      'Kivu Collective',
+    )
+    expect(productPrompt).not.toContain('Kivu Collective')
+    expect(productPrompt).toContain('woven tote')
+    expect(productPrompt.trim().endsWith(`${FIXED_IMAGE_NEGATIVE_TERMS}.`)).toBe(true)
+
+    const manualPrompt = buildItemImagePrompt(site, sectionTarget, 'Keep the Kivu Collective lettering visible')
+    expect(manualPrompt).toContain('Kivu Collective lettering visible')
+  })
+
+  it('strips an exact business name without leaving it in visual context', () => {
+    expect(stripBrandNameFromImagePrompt('Kivu Collective display for Kivu Collective bags', 'Kivu Collective')).toBe(
+      'display for bags',
+    )
   })
 
   it('detects explicit illustration requests only', () => {
