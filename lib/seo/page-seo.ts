@@ -72,18 +72,18 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
   faq: {
     path: '/sss',
     tr: {
-      title: 'Sık Sorulan Sorular | GLOVAL AI',
+      title: 'Yardım Merkezi | GLOVAL AI',
       description:
-        'GLOVAL AI ile web sitesi oluşturma, alan adı bağlama, kurumsal e-posta, yayınlama ve planlar hakkında sık sorulan soruların yanıtları.',
-      heading: 'Sık Sorulan Sorular',
-      tagline: TAGLINE.tr,
+        'GLOVAL AI ile web sitesi oluşturma, alan adı, kurumsal e-posta, yayınlama ve planlar hakkındaki yanıtları ve rehberleri Yardım Merkezi’nde bul.',
+      heading: 'Yardım Merkezi',
+      tagline: 'SSS ve adım adım rehberler',
     },
     en: {
-      title: 'Frequently Asked Questions | GLOVAL AI',
+      title: 'Help Center | GLOVAL AI',
       description:
-        'Answers to common questions about building a website with GLOVAL AI, connecting a domain, business email, publishing and plans.',
-      heading: 'Frequently Asked Questions',
-      tagline: TAGLINE.en,
+        'Find answers and step-by-step guides about building a GLOVAL AI website, domains, business email, publishing, and plans in the Help Center.',
+      heading: 'Help Center',
+      tagline: 'FAQs and step-by-step guides',
     },
   },
   contact: {

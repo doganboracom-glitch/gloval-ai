@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import sitemap from './sitemap'
 import robots from './robots'
+import { GUIDES } from '@/lib/content/guides'
 
 const PRIVATE_PREFIXES = ['/dashboard', '/editor', '/ecommerce', '/billing', '/admin', '/auth', '/api', '/site', '/demo', '/og']
 
@@ -19,6 +20,24 @@ describe('platform sitemap', () => {
       expect(url.startsWith('https://gloval.ai')).toBe(true)
       expect(url).not.toContain('gloval.site')
       expect(url).not.toContain('#')
+    }
+  })
+
+  it('includes the guide index and all eight articles with English alternates', () => {
+    const guideEntries = entries.filter((entry) => {
+      const path = new URL(entry.url).pathname
+      return path === '/sss/rehber' || path.startsWith('/sss/rehber/')
+    })
+
+    expect(guideEntries).toHaveLength(GUIDES.length + 1)
+    for (const path of ['/sss/rehber', ...GUIDES.map(({ slug }) => `/sss/rehber/${slug}`)]) {
+      const entry = guideEntries.find((item) => new URL(item.url).pathname === path)
+      expect(entry?.url).toBe(`https://gloval.ai${path}`)
+      expect(entry?.alternates?.languages).toMatchObject({
+        'tr-TR': `https://gloval.ai${path}`,
+        en: `https://gloval.ai${path}?lang=en`,
+        'x-default': `https://gloval.ai${path}`,
+      })
     }
   })
 
