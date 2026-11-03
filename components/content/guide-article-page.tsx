@@ -253,4 +253,3 @@ export function GuideArticlePage({ guide, locale }: { guide: Guide; locale: Guid
     </div>
   )
 }
-
