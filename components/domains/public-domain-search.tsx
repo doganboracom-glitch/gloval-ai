@@ -59,7 +59,7 @@ export function PublicDomainSearch({
   const copy = t.domainSearch
   const [query, setQuery] = useState(initialQuery)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ code: PublicSearchErrorCode; retryAfterSeconds?: number } | null>(null)
   const [selectedTlds, setSelectedTlds] = useState<readonly PublicSearchTld[]>(PUBLIC_SEARCH_TLDS)
   const [pendingTld, setPendingTld] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -85,7 +85,7 @@ export function PublicDomainSearch({
         const res: PublicSearchResponse = await searchDomainsPublic(value, requestedTld)
         if (!res.ok) {
           setOutcome(null)
-          setError(errorText(res.error, copy, res.retryAfterSeconds))
+          setError({ code: res.error, retryAfterSeconds: res.retryAfterSeconds })
           return
         }
         const resultQuery = requestedTld
@@ -95,7 +95,7 @@ export function PublicDomainSearch({
         if (requestedTld) setQuery(resultQuery)
       } catch {
         setOutcome(null)
-        setError(copy.errProvider)
+        setError({ code: 'PROVIDER_ERROR' })
       } finally {
         if (requestedTld) setPendingTld(null)
       }
@@ -170,7 +170,7 @@ export function PublicDomainSearch({
       <div aria-live="polite" className="mt-8">
         {error && (
           <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
+            {errorText(error.code, copy, error.retryAfterSeconds)}
           </p>
         )}
 

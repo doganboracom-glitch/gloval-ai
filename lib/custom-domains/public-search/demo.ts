@@ -1,7 +1,8 @@
 import { isDomainSearchDemo } from '@/lib/domains/feature-flags'
 import type { DomainQuoteView, PricedDomainResult } from '../pricing/calc'
-import { PUBLIC_SEARCH_TLDS, parsePublicSearchQuery } from './validate'
+import { isSupportedPublicTld, PUBLIC_SEARCH_TLDS, parsePublicSearchQuery } from './validate'
 import type { PublicSearchResponse } from './service'
+import type { PublicSearchTld } from './validate'
 
 /**
  * Preview-only stand-in for the registrar. It exists so the page can be
@@ -31,10 +32,14 @@ export function buildDemoSearchResponse(query: unknown): PublicSearchResponse {
   const parsed = parsePublicSearchQuery(query)
   if (!parsed.ok) return { ok: false, error: parsed.error }
 
-  const tlds = parsed.tld ? [parsed.tld] : PUBLIC_SEARCH_TLDS
+  const selectedTld: PublicSearchTld | null =
+    parsed.tld && isSupportedPublicTld(parsed.tld) ? parsed.tld : null
+  if (parsed.tld && !selectedTld) return { ok: false, error: 'UNSUPPORTED_TLD' }
+
+  const tlds = selectedTld ? [selectedTld] : PUBLIC_SEARCH_TLDS
   const results: PricedDomainResult[] = tlds.map((tld) => {
     // Demo rule: a bare brand shows ".com" as taken so the alternatives box is visible.
-    const taken = !parsed.tld && tld === 'com'
+    const taken = !selectedTld && tld === 'com'
     return {
       domain: `${parsed.label}.${tld}`,
       tld,

@@ -9,6 +9,12 @@ import type { PublicTldCatalogItem } from './service'
 
 const TLD_PRICE_CACHE_SECONDS = 6 * 60 * 60
 const CORE_TLDS = new Set<string>(PUBLIC_SEARCH_TLDS)
+const registrarMode =
+  process.env.DOMAINNAMEAPI_TEST_MODE === 'true'
+    ? 'ote'
+    : process.env.DOMAINNAMEAPI_TEST_MODE === 'false'
+      ? 'live'
+      : 'disabled'
 
 const readRegistrarTldPrices = unstable_cache(
   async () => {
@@ -18,7 +24,7 @@ const readRegistrarTldPrices = unstable_cache(
     }
     return registrar.listRegistrationTlds()
   },
-  ['domainnameapi-registration-tld-prices-v1'],
+  ['domainnameapi-registration-tld-prices-v1', registrarMode],
   { revalidate: TLD_PRICE_CACHE_SECONDS },
 )
 
