@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   adminOk: true,
   rpc: vi.fn(),
   inserts: [] as Array<{ table: string; row: Record<string, unknown> }>,
+  profileUpdates: [] as Array<{ table: string; patch: Record<string, unknown>; column: string; value: unknown }>,
   liveSub: null as null | { provider: string; provider_ref: string | null; status: string },
   clientCreated: 0,
 }))
@@ -48,34 +49,59 @@ vi.mock('@/lib/supabase/admin', () => ({
           state.inserts.push({ table, row })
           return { error: null }
         },
+        update: (patch: Record<string, unknown>) => ({
+          eq: async (column: string, value: unknown) => {
+            state.profileUpdates.push({ table, patch, column, value })
+            return { error: null }
+          },
+        }),
       }),
     }
   },
 }))
 
-import { changeUserPlan, grantCredits, setUserPeriodEnd, setUserSiteLimitOverride } from './actions'
+import { changeUserPlan, grantCredits, setUserPeriodEnd, setUserSiteLimitOverride, setUserStatus } from './actions'
 
 beforeEach(() => {
   state.adminOk = true
   state.liveSub = null
   state.inserts = []
+  state.profileUpdates = []
   state.clientCreated = 0
   state.rpc.mockReset()
   state.rpc.mockResolvedValue({ data: { ok: true, plan_name: 'Pro' }, error: null })
 })
 
 describe('non-admin access', () => {
-  it('rejects every package action before any database client is created', async () => {
+  it('rejects every admin mutation before any database client is created', async () => {
     state.adminOk = false
     const calls = [
       () => changeUserPlan({ userId: USER_ID, planId: PLAN_ID }),
       () => grantCredits({ userId: USER_ID, amount: 10, reason: 'x' }),
       () => setUserPeriodEnd({ userId: USER_ID, periodEnd: null, reason: 'x' }),
       () => setUserSiteLimitOverride({ userId: USER_ID, siteLimit: 3, reason: 'x' }),
+      () => setUserStatus(USER_ID, 'suspended'),
     ]
     for (const call of calls) await expect(call()).rejects.toThrow('NEXT_NOT_FOUND')
     expect(state.clientCreated).toBe(0)
+    expect(state.profileUpdates).toEqual([])
     expect(state.rpc).not.toHaveBeenCalled()
+  })
+})
+
+describe('setUserStatus', () => {
+  it('updates only profiles.status through the guarded admin client', async () => {
+    expect(await setUserStatus(USER_ID, 'suspended')).toEqual({ ok: true })
+    expect(state.clientCreated).toBe(1)
+    expect(state.profileUpdates).toEqual([
+      { table: 'profiles', patch: { status: 'suspended' }, column: 'id', value: USER_ID },
+    ])
+  })
+
+  it('rejects invalid status before creating the admin client', async () => {
+    expect(await setUserStatus(USER_ID, 'disabled' as never)).toEqual({ ok: false, error: 'invalid_status' })
+    expect(state.clientCreated).toBe(0)
+    expect(state.profileUpdates).toEqual([])
   })
 })
 
