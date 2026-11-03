@@ -75,6 +75,21 @@ describe('site header navigation', () => {
     expect(mobileHrefs).toEqual(expect.arrayContaining(expectedHrefs))
   })
 
+  it.each(SUPPORTED_LOCALES)('%s shows the localized contact link after FAQ on mobile only', (locale) => {
+    state.lang = locale
+    render(<SiteHeader />)
+    const mobileNav = openMobileMenu()
+    const mobileLinks = within(mobileNav).getAllByRole('link')
+    const hrefs = mobileLinks.map((link) => link.getAttribute('href'))
+    const contactLink = mobileLinks.find((link) => link.getAttribute('href') === '/iletisim')
+    const desktopNav = document.querySelectorAll<HTMLElement>('header nav')[0]
+
+    expect(contactLink?.textContent).toBe(dictionary[locale].footer.links.contact)
+    expect(hrefs.indexOf('/sss')).toBeLessThan(hrefs.indexOf('/iletisim'))
+    expect(hrefs.indexOf('/iletisim')).toBeLessThan(hrefs.indexOf('/alan-adi-sorgula'))
+    expect(within(desktopNav).queryByRole('link', { name: dictionary[locale].footer.links.contact })).toBeNull()
+  })
+
   it('keeps the domain and Ads links out of the desktop navigation', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteHeader />)
