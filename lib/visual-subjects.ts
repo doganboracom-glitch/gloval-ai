@@ -201,10 +201,11 @@ const TOPICS: TopicEntry[] = [
       'a charming florist workshop bench with fresh seasonal bouquets being arranged, soft daylight',
   },
   {
-    keys: ['dugun', 'wedding', 'organizasyon', 'event', 'davet', 'nikah'],
-    business: 'wedding & event planning',
+    keys: ['dugun', 'wedding', 'wedding planner', 'gelin', 'nikah'],
+    business: 'wedding planning & celebration',
     subject:
-      'an elegantly decorated wedding reception table setting with candles and florals under warm string lights',
+      'an elegant wedding reception venue with refined floral arrangements, candlelit dining tables and soft ambient lighting',
+    avoid: 'readable signage, logos, generic corporate offices, unrelated storefronts',
   },
   {
     keys: ['catering', 'yemek fabrika', 'toplu yemek'],
@@ -391,6 +392,57 @@ const TOPICS: TopicEntry[] = [
     subject:
       'a modern stainless steel elevator interior in a contemporary building lobby with a technician servicing the panel',
   },
+  {
+    keys: [
+      'dj',
+      'disc jockey',
+      'nightclub',
+      'night club',
+      'nightlife',
+      'gece kulubu',
+      'gece hayati',
+      'live music',
+      'music venue',
+      'music event',
+      'music festival',
+      'musician',
+      'band',
+      'concert',
+      'konser',
+      'muzik',
+    ],
+    business: 'live music & nightlife venue',
+    subject:
+      'a DJ performing on a professional controller at a live music venue, concert lighting and speakers, a dancing crowd in silhouette, atmospheric event photography',
+    avoid:
+      'music classrooms, school desks, lesson settings, readable stage signs, logos, generic offices and unrelated retail products',
+  },
+  {
+    keys: [
+      'event planning',
+      'event planner',
+      'event organizer',
+      'event organisation',
+      'event organization',
+      'event management',
+      'event production',
+      'event',
+      'etkinlik',
+      'organizasyon',
+      'davet',
+      'party planner',
+      'party organizer',
+      'party',
+      'parti organizasyonu',
+      'parti',
+      'kutlama',
+      'celebration',
+    ],
+    business: 'event planning & production',
+    subject:
+      'a celebration venue being prepared for an event, coordinated banquet tables and floral decor, discreet event lighting and a production crew in the background',
+    avoid: 'readable signage, logos, generic corporate offices, unrelated storefronts',
+  },
 ]
 
 /**
@@ -401,7 +453,51 @@ const TOPICS: TopicEntry[] = [
 export function resolveVisualTopic(text: string): VisualTopic | null {
   const t = fold(text)
   if (!t) return null
+
+  const musicEducation = [
+    'music school',
+    'music academy',
+    'music lesson',
+    'music lessons',
+    'music class',
+    'music classes',
+    'music education',
+    'music teacher',
+    'muzik okulu',
+    'muzik akademisi',
+    'muzik dersi',
+    'muzik kursu',
+    'muzik egitimi',
+    'muzik ogretmeni',
+  ].some((key) => foldedWordIncludes(t, key))
+  const explicitMusicPerformance = [
+    'dj',
+    'disc jockey',
+    'nightclub',
+    'night club',
+    'nightlife',
+    'gece kulubu',
+    'live music',
+    'music venue',
+    'music event',
+    'music festival',
+    'musician',
+    'band',
+    'concert',
+    'konser',
+    'canli muzik',
+    'muzik etkinligi',
+    'muzik grubu',
+  ].some((key) => foldedWordIncludes(t, key))
+
   for (const entry of TOPICS) {
+    if (
+      entry.business === 'live music & nightlife venue' &&
+      musicEducation &&
+      !explicitMusicPerformance
+    ) {
+      continue
+    }
     // Word-boundary match: a short key like "tur" must NOT match inside
     // "olustur" (the folded "oluştur" present in nearly every prompt).
     if (entry.keys.some((k) => foldedWordIncludes(t, k))) {

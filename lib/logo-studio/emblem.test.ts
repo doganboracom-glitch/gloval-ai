@@ -14,13 +14,20 @@ const GOOD = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
 describe('emblem prompt', () => {
   const base = { brand: 'Kasap Ahmet', sector: 'Kasap', style: 'modern' as const, colors: PALETTE, index: 0, seed: 0 }
 
-  it('keeps hard rules, palette and brief as data', () => {
-    const { system, user } = buildEmblemPrompt(base, 4)
+  it('keeps hard rules and palette but omits the business name from the emblem prompt', () => {
+    const { system, user } = buildEmblemPrompt(
+      { ...base, description: 'Kasap Ahmet sells fresh meat and deli goods' },
+      4,
+    )
     expect(system).toContain('0 0 200 200')
     expect(system).toContain('FORBIDDEN')
+    expect(system).toContain('typography')
     expect(system).toContain(PALETTE[0])
-    expect(user).toContain('"brand_name":"Kasap Ahmet"')
+    expect(user).not.toContain('"brand_name"')
+    expect(user).not.toContain('Kasap Ahmet')
+    expect(user).toContain('"industry":"Kasap"')
     expect(user).toContain('"object_rank":1')
+    expect(user).toContain('wordmark is typeset separately')
   })
 
   it('uses a single colour in mono mode', () => {

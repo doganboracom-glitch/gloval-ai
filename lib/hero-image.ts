@@ -6,7 +6,7 @@ import {
   type ImageAspect,
 } from '@/lib/image-provider'
 import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
-import { imagePromptRules, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
+import { imagePromptRules, stripBrandNameFromImagePrompt, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
 import {
   describeVisualRequest,
   findGeneratedTopic,
@@ -52,7 +52,7 @@ const SECTOR_SUBJECT: Record<Sector, string> = {
   photography: 'a professional photography studio with dramatic directional lighting and a creative editorial composition',
   automotive: 'a premium automotive dealership showroom with luxury cars under cinematic lighting, sleek and modern, professional automotive photography',
   realestate: 'a luxury modern house exterior at dusk with warm interior lights, a pool and contemporary architecture, premium real-estate photography',
-  default: 'a neutral abstract editorial composition informed by the business brief, with no generic office or unrelated people',
+  default: 'a quiet abstract editorial composition with translucent layered forms, tactile materials and soft directional light',
 }
 
 /** A short human label for the detected business type. */
@@ -76,7 +76,10 @@ const SECTOR_BUSINESS: Record<Sector, string> = {
  */
 function styleDescriptor(prompt: string, site?: WebsiteSchema): string {
   const parts: string[] = []
-  if (site?.meta.tone) parts.push(site.meta.tone)
+  const tone = site?.meta.tone
+    ? stripBrandNameFromImagePrompt(site.meta.tone, site.meta.name)
+    : ''
+  if (tone) parts.push(tone)
 
   const p = prompt.toLowerCase()
   const cues: Array<[RegExp, string]> = [
@@ -104,8 +107,7 @@ function styleDescriptor(prompt: string, site?: WebsiteSchema): string {
  * Subject resolution is keyword-first, sector-second: `resolveVisualTopic`
  * covers hundreds of real businesses (nakliyat, temizlik, veteriner, tesisat,
  * …) that the coarse `Sector` list cannot express. Only when no keyword matches
- * do we fall back to the sector scene, and finally to the generic default. This
- * is why a moving company no longer gets an office-interior hero.
+ * do we fall back to the sector scene, and finally to a neutral abstract image.
  */
 export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
   const sector = detectSector(prompt)
@@ -122,23 +124,12 @@ export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
     .join(' ')
   const topic = resolveVisualTopic(haystack)
 
-  const businessName = site?.meta.name?.trim()
   const confidence: Brief['confidence'] =
     topic ? 'high' : sector === 'default' ? 'low' : 'medium'
-  const briefReference = [
-    describeVisualRequest(prompt),
-    businessName,
-    site?.meta.tagline,
-    site?.meta.audience,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .join(' — ')
-    .replace(/\s+/g, ' ')
-    .slice(0, 420)
   const visualNeed =
     topic?.subject ??
     (sector === 'default'
-      ? `a neutral, brand-specific abstract editorial composition inspired by this exact brief: "${briefReference || 'the business described by the user'}"; use only on-topic symbols, products or materials named in the brief`
+      ? 'a quiet abstract editorial composition of translucent layered forms, tactile materials and soft directional light, with no identifiable brand symbols'
       : SECTOR_SUBJECT[sector])
   const avoid =
     topic?.avoid ??
@@ -176,16 +167,17 @@ function heroRendering(brief: Brief): string {
  * it reflects the actual user request, the site's tone and the audience, rather
  * than selecting from a fixed set of canned images.
  */
-export function buildHeroImagePrompt(brief: Brief, extra?: string): string {
+export function buildHeroImagePrompt(brief: Brief, extra?: string, brandName?: string): string {
   // SUBJECT FIRST: fast diffusion models weight the opening tokens most
   // heavily, so leading with the scene (instead of "Professional hero banner
   // photograph for a …") is what keeps the result on-topic.
+  const safeContext = extra ? stripBrandNameFromImagePrompt(extra, brandName) : ''
   const bits = [
     `${brief.visualNeed}.`,
     heroKind(brief),
     brief.avoid ? `Do NOT depict: ${brief.avoid}.` : '',
     `Style: ${brief.style}.`,
-    extra ? `Context: ${extra}.` : '',
+    safeContext ? `Context: ${safeContext}.` : '',
     'Wide cinematic composition with clear negative space for overlaid text,',
     heroRendering(brief),
     'Not an empty landscape.',
@@ -348,7 +340,7 @@ export async function applyHeroImageRequest(
   const brief = analyzeBrief(trimmed || site.meta.name, site)
   const imagePrompt = trimmed
     ? buildRequestedImagePrompt(trimmed, site)
-    : buildHeroImagePrompt(brief, site.meta.tagline)
+    : buildHeroImagePrompt(brief, site.meta.tagline, site.meta.name)
 
   if (!hero) return { status: 'failed', imagePrompt }
 
@@ -420,7 +412,7 @@ export async function applySlideImageRequest(
   const slide = hero?.slides?.[slideIndex]
   const imagePrompt = trimmed
     ? buildRequestedImagePrompt(trimmed, site)
-    : buildHeroImagePrompt(brief, slide?.title || site.meta.tagline)
+    : buildHeroImagePrompt(brief, slide?.title || site.meta.tagline, site.meta.name)
 
   if (!hero || !slide) return { status: 'failed', imagePrompt }
 
@@ -524,7 +516,7 @@ export async function attachHeroImage(
     | Extract<WebsiteSchema['sections'][number], { type: 'hero' }>
     | undefined
 
-  const heroPrompt = buildHeroImagePrompt(brief, site?.meta?.tagline)
+  const heroPrompt = buildHeroImagePrompt(brief, site?.meta?.tagline, site?.meta?.name)
   if (!hero) return { brief, heroPrompt, generated, available, storageFailed }
 
   const altBase =
@@ -539,7 +531,7 @@ export async function attachHeroImage(
   //    prompt-only fallback is always populated regardless of generation.
   const slides = Array.isArray(hero.slides) ? hero.slides : []
   for (const slide of slides) {
-    const slidePrompt = buildHeroImagePrompt(brief, slide.title || site?.meta?.tagline)
+    const slidePrompt = buildHeroImagePrompt(brief, slide.title || site?.meta?.tagline, site?.meta?.name)
     slide.image = ensureImageRef(slide.image, slide.imagePrompt, slidePrompt, altBase)
   }
 

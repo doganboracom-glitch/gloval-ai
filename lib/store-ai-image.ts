@@ -15,22 +15,16 @@ import { IMAGE_STYLES, type ImageStyleId } from '@/lib/store-ai-image-styles'
 /*  Prompt                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function cleanProductName(name: string): string {
-  return name.replace(/["\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
-}
-
-export function buildImagePrompt(style: ImageStyleId, productName: string): string {
+export function buildImagePrompt(style: ImageStyleId, _productName: string): string {
   const scene = IMAGE_STYLES.find((s) => s.id === style)?.scene ?? IMAGE_STYLES[0].scene
-  const name = cleanProductName(productName)
   return [
     'Product photo edit. Keep the product in the reference image EXACTLY as it is: same shape, proportions, colors, patterns, materials, brand marks, and any text or logos printed on it.',
     'Do not redraw, restyle, add, remove or alter any part of the product. Only replace the background, lighting and surroundings.',
     `Scene: ${scene}.`,
-    `Rules: no people, no faces, no hands, no body parts. No other brands or logos. ${PRODUCT_EDIT_NO_TEXT_RULE} One product only, centered, fully in frame, nothing cropped.`,
-    name ? `Product name (context only): ${name}.` : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+    'No people, no faces, no hands, no body parts. No additional brands or logos in the generated scene.',
+    'One product only, centered, fully in frame, nothing cropped.',
+    PRODUCT_EDIT_NO_TEXT_RULE,
+  ].join(' ')
 }
 
 /* -------------------------------------------------------------------------- */

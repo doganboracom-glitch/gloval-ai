@@ -18,8 +18,13 @@ import { wordIncludes } from '@/lib/visual-subjects'
  * are generated with `allowText: true` (see `image-provider.ts`).
  */
 
+export const FIXED_IMAGE_NEGATIVE_TERMS =
+  'no text, no letters, no numbers, no words, no typography, no logos, no watermarks, no signage'
+
+const FINAL_IMAGE_NEGATIVE_RULE = `Final negative rule: ${FIXED_IMAGE_NEGATIVE_TERMS}.`
+
 const TEXT_BAN =
-  'absolutely NO text of any kind: no letters, words, numbers, captions, headlines, typography, slogans, logos, watermarks, signatures, signage or shop-sign lettering, label or screen text, camera or EXIF information, lens or exposure settings (f-stop, shutter speed, ISO), timestamps, UI elements, borders or frames.'
+  `absolutely NO text of any kind: ${FIXED_IMAGE_NEGATIVE_TERMS}; no captions, headlines, slogans, signatures, shop-sign lettering, label or screen text, camera or EXIF information, lens or exposure settings (f-stop, shutter speed, ISO), timestamps, UI elements, borders or frames.`
 
 export const NO_TEXT_RULE = `STRICT RULE: a plain photograph with ${TEXT_BAN}`
 
@@ -36,17 +41,17 @@ export const NEGATIVE_RULE = `Avoid: ${NEGATIVE_BASE}, ${NEGATIVE_STYLE}, ${NEGA
 export const NEGATIVE_RULE_ANY_STYLE = `Avoid: ${NEGATIVE_BASE}, ${NEGATIVE_QUALITY}.`
 
 /** Rules for scene/hero/section/team photos. */
-export const IMAGE_PROMPT_RULES = `${NO_TEXT_RULE} ${NEGATIVE_RULE}`
+export const IMAGE_PROMPT_RULES = `${NO_TEXT_RULE} ${NEGATIVE_RULE} ${FINAL_IMAGE_NEGATIVE_RULE}`
 
 /** Rules for sectors/requests that need drawn artwork; the text ban is unchanged. */
-export const IMAGE_PROMPT_RULES_ANY_STYLE = `${NO_TEXT_RULE_ANY_STYLE} ${NEGATIVE_RULE_ANY_STYLE}`
+export const IMAGE_PROMPT_RULES_ANY_STYLE = `${NO_TEXT_RULE_ANY_STYLE} ${NEGATIVE_RULE_ANY_STYLE} ${FINAL_IMAGE_NEGATIVE_RULE}`
 
 /**
  * Rules for product-photo edits: the product's OWN printed markings are part of
  * the product and must survive, everything else must stay text-free.
  */
 export const PRODUCT_EDIT_NO_TEXT_RULE =
-  'STRICT RULE: no letters, words, numbers, captions, logos, watermarks, signage, camera or EXIF information anywhere in the scene or background. The ONLY exception is markings already printed on the product in the reference photo, which stay exactly as they are.'
+  `STRICT RULE: no letters, words, numbers, captions, logos, watermarks, signage, camera or EXIF information anywhere in the scene or background. The ONLY exception is markings already printed on the product in the reference photo, which stay exactly as they are. The final negative terms apply only to newly generated scene/background elements, not the unchanged reference product: ${FIXED_IMAGE_NEGATIVE_TERMS}.`
 
 /** The text ban is always included; only the style half is optional. */
 export function imagePromptRules(allowIllustration = false): string {
@@ -92,7 +97,41 @@ export function hasImagePromptRules(prompt: string): boolean {
 }
 
 /** Idempotent: a prompt that already carries the rules is returned unchanged. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function withTerminalNegativeRule(prompt: string, rule: string): string {
+  const cleaned = prompt
+    .replace(new RegExp(`\\s*${escapeRegExp(FINAL_IMAGE_NEGATIVE_RULE)}\\s*`, 'gi'), ' ')
+    .replace(new RegExp(`\\s*${escapeRegExp(PRODUCT_EDIT_NO_TEXT_RULE)}\\s*`, 'gi'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return [cleaned, rule].filter(Boolean).join(' ')
+}
+
 export function withImagePromptRules(prompt: string, allowIllustration = false): string {
   const base = prompt.replace(/\s+/g, ' ').trim()
-  return hasImagePromptRules(base) ? base : `${base} ${imagePromptRules(allowIllustration)}`
+  const includesProductEditRules = base.includes(PRODUCT_EDIT_NO_TEXT_RULE)
+  const withRules = hasImagePromptRules(base)
+    ? base
+    : [base, imagePromptRules(allowIllustration)].filter(Boolean).join(' ')
+  return withTerminalNegativeRule(
+    withRules,
+    includesProductEditRules ? PRODUCT_EDIT_NO_TEXT_RULE : FINAL_IMAGE_NEGATIVE_RULE,
+  )
+}
+
+export function stripBrandNameFromImagePrompt(prompt: string, brandName?: string): string {
+  const name = brandName?.trim()
+  if (!name) return prompt
+
+  const escapedName = name.split(/\s+/).map(escapeRegExp).join('\\s+')
+  const matcher = new RegExp(`(^|[^\\p{L}\\p{N}])${escapedName}(?=$|[^\\p{L}\\p{N}])`, 'giu')
+  return prompt
+    .replace(matcher, '$1')
+    .replace(/[“”‘’"']\s*[“”‘’"']/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([.,!?;:])/g, '$1')
+    .trim()
 }

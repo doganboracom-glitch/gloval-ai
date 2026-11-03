@@ -1,5 +1,6 @@
 import type { WebsiteSchema } from '@/lib/website-schema'
 import { generateSiteImage, imageGenerationAvailable } from '@/lib/image-provider'
+import { stripBrandNameFromImagePrompt, withImagePromptRules } from '@/lib/image-prompt-rules'
 import { findInlineCatalogSection } from '@/lib/product-items'
 
 /** The inline catalog item a preview key like `products:2.1` points at, or null. */
@@ -29,29 +30,49 @@ export async function generateProductsBannerPreviewImage(
   const section = catalogSectionAt(site, sectionIndex)
   if (!section || !imageGenerationAvailable()) return null
   const name = site.meta.name.trim()
-  const subject = request.trim() || `a tidy, well-lit showroom or display of the products sold by ${name || 'a business'}`
-  const imagePrompt = [
-    `Photorealistic wide banner photograph: ${subject}.`,
-    'Soft even lighting, calm composition with empty space for a headline, shallow depth of field.',
-    'No people, no faces, no hands, no human figures, no text, no logos.',
-    'High resolution, sharp focus.',
-  ].join(' ')
+  const subject = request.trim() || 'a tidy, well-lit showroom or display of a varied product assortment'
+  const imagePrompt = withImagePromptRules(
+    [
+      `Photorealistic wide banner photograph: ${subject}.`,
+      'Soft even lighting, calm composition with empty space for a headline, shallow depth of field.',
+      'No people, no faces, no hands, no human figures, no text, no logos.',
+      'High resolution, sharp focus.',
+    ].join(' '),
+  )
   const result = await generateSiteImage({ prompt: imagePrompt, aspectRatio: '16:9' }).catch(() => null)
   if (!result) return null
   return { image: result.src, alt: name ? `${section.title || 'Ürünler'} - ${name}` : section.title || 'Ürünler', imagePrompt }
 }
 
-export function buildProductImagePrompt(item: { name: string; description?: string; category?: string }, request = ''): string {
-  const subject = request.trim() || `the product "${item.name}"${item.category ? ` (${item.category})` : ''}`
-  return [
-    `Photorealistic studio product photograph of ${subject}.`,
-    item.description?.trim() ? `Context: ${item.description.trim().slice(0, 240)}.` : '',
-    'Single product centered on a clean neutral background, soft even lighting.',
-    'No people, no faces, no hands, no human figures, no text, no logos, no packaging labels.',
-    'High resolution, sharp focus.',
-  ]
-    .filter(Boolean)
-    .join(' ')
+export function buildProductImagePrompt(
+  item: { name: string; description?: string; category?: string },
+  request = '',
+  brandName?: string,
+): string {
+  const hasManualRequest = Boolean(request.trim())
+  const productName = hasManualRequest
+    ? item.name
+    : stripBrandNameFromImagePrompt(item.name, brandName)
+  const category = hasManualRequest
+    ? item.category
+    : stripBrandNameFromImagePrompt(item.category ?? '', brandName)
+  const description = hasManualRequest
+    ? item.description?.trim()
+    : stripBrandNameFromImagePrompt(item.description ?? '', brandName)
+  const subject =
+    request.trim() ||
+    `the product "${productName.trim() || category.trim() || 'catalog item'}"${category.trim() ? ` (${category.trim()})` : ''}`
+  return withImagePromptRules(
+    [
+      `Photorealistic studio product photograph of ${subject}.`,
+      description ? `Context: ${description.slice(0, 240)}.` : '',
+      'Single product centered on a clean neutral background, soft even lighting.',
+      'No people, no faces, no hands, no human figures, no text, no logos, no packaging labels.',
+      'High resolution, sharp focus.',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  )
 }
 
 /**
@@ -67,7 +88,7 @@ export async function generateProductPreviewImage(
 ): Promise<{ image: string; alt: string; imagePrompt: string } | null> {
   const target = productItemAt(site, sectionIndex, itemIndex)
   if (!target || !imageGenerationAvailable()) return null
-  const imagePrompt = buildProductImagePrompt(target.item, request)
+  const imagePrompt = buildProductImagePrompt(target.item, request, site.meta.name)
   const result = await generateSiteImage({ prompt: imagePrompt, aspectRatio: '1:1' }).catch(() => null)
   if (!result) return null
   const name = site.meta.name.trim()

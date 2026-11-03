@@ -7,6 +7,7 @@ import {
   variationCue,
 } from './visual-subjects'
 import { analyzeBrief, buildHeroImagePrompt } from './hero-image'
+import { FIXED_IMAGE_NEGATIVE_TERMS } from './image-prompt-rules'
 import { deriveSeoTitle, detectSector, sectorPromptHint } from './sector-profiles'
 import { RADIO_STATION_BRIEF } from './__fixtures__/radio-station'
 
@@ -145,17 +146,40 @@ describe('radio / broadcasting visual topic', () => {
   })
 })
 
+describe('event and entertainment visual topics', () => {
+  it.each([
+    ['DJ Performans sitesi', 'live music & nightlife venue', /DJ performing/i],
+    ['Gece kulübü web sitesi', 'live music & nightlife venue', /DJ performing/i],
+    ['Müzik grubu ve konser sitesi', 'live music & nightlife venue', /concert lighting/i],
+    ['Music school website', null, null],
+    ['Wedding organizer website', 'wedding planning & celebration', /wedding reception/i],
+    ['Parti ve etkinlik organizasyon firması', 'event planning & production', /celebration venue/i],
+  ])('maps %s without confusing education or adjacent topics', (briefText, business, scene) => {
+    const topic = resolveVisualTopic(briefText)
+    expect(topic?.business ?? null).toBe(business)
+    if (scene) expect(topic?.subject).toMatch(scene)
+  })
+
+  it('keeps the exact text ban at the end of the generated music prompt', () => {
+    const prompt = buildHeroImagePrompt(analyzeBrief('DJ Performans sitesi'))
+    expect(prompt).toContain(FIXED_IMAGE_NEGATIVE_TERMS)
+    expect(prompt.trim().endsWith(`${FIXED_IMAGE_NEGATIVE_TERMS}.`)).toBe(true)
+  })
+})
+
 describe('low-confidence visual fallback', () => {
-  it('uses a neutral brand-brief abstraction instead of generic people or office stock', () => {
+  it('uses a neutral abstract scene without the business name or generic office stock', () => {
     const brief = analyzeBrief('Kivu brand website with a thoughtful editorial identity')
     expect(brief.sector).toBe('default')
     expect(brief.confidence).toBe('low')
     expect(brief.visualNeed).toMatch(/abstract editorial composition/i)
-    expect(brief.visualNeed).toContain('Kivu')
+    expect(brief.visualNeed).not.toContain('Kivu')
 
-    const prompt = buildHeroImagePrompt(brief)
+    const prompt = buildHeroImagePrompt(brief, 'Kivu thoughtful editorial identity', 'Kivu')
+    expect(prompt).not.toContain('Kivu')
     expect(prompt).toMatch(/Do NOT depict:.*unrelated people/i)
     expect(prompt).not.toMatch(/professional workspace|people at work/i)
+    expect(prompt.trim().endsWith(`${FIXED_IMAGE_NEGATIVE_TERMS}.`)).toBe(true)
   })
 })
 
