@@ -121,6 +121,27 @@ describe('scripts/095-referral-core.sql', () => {
     expect(ownerless.rows[0].record_referral_click).toBe(false)
   })
 
+  it('enforces one attribution per referred user', async () => {
+    const firstPartnerId = await newPartner(await newUser())
+    const secondPartnerId = await newPartner(await newUser())
+    const referredUserId = await newUser()
+    const insertAttribution = (partnerId: string) =>
+      db.query(
+        `insert into public.referral_attributions
+           (referred_user_id, partner_id, code_snapshot, source, captured_at)
+         values ($1, $2, 'PARTNER01', 'email', now())`,
+        [referredUserId, partnerId],
+      )
+
+    await insertAttribution(firstPartnerId)
+    await expect(insertAttribution(secondPartnerId)).rejects.toThrow()
+    const { rows } = await db.query<{ partner_id: string }>(
+      'select partner_id from public.referral_attributions where referred_user_id = $1',
+      [referredUserId],
+    )
+    expect(rows).toEqual([{ partner_id: firstPartnerId }])
+  })
+
   it('retains attribution history while deleting auth users and restricts partner deletion', async () => {
     const partnerUserId = await newUser()
     const referredUserId = await newUser()
