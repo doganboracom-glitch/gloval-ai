@@ -30,6 +30,7 @@ import { prepareReferralSignupIntent } from '@/lib/referrals/client'
 import { useLanguage } from '@/components/language-provider'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
 import { AuthShell } from '@/components/auth/auth-shell'
+import { keepAuthFieldVisibleOnMobile } from '@/components/auth/mobile-field-scroll'
 import { Button } from '@/components/ui/button'
 import { OAuthButtons, OAuthDivider } from '@/components/auth/oauth-buttons'
 
@@ -307,6 +308,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         autoComplete={autoComplete}
+        onFocus={keepAuthFieldVisibleOnMobile}
         required={required}
         aria-invalid={error ? true : undefined}
         className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-destructive"

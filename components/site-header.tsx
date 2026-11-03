@@ -68,6 +68,7 @@ export function SiteHeader() {
   ]
   const mobileLinks: ReadonlyArray<HeaderLink> = [
     ...desktopLinks,
+    { href: '/iletisim', label: t.footer.links.contact, route: true },
     { href: '/alan-adi-sorgula', label: t.domainSearch.footerLink, route: true, newBadge: true },
     ...(isAdsFeatureUiEnabled()
       ? [{ href: ADS_PATH, label: t.ads.navLink, route: true, soon: true }]
