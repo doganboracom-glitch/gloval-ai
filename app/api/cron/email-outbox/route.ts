@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { processAddOnExpiryReminders } from '@/lib/addon-expiry-reminders'
 import { processDueEmailEvents } from '@/lib/email-outbox'
 import { processContactAcks } from '@/lib/support/contact-ack'
 import { processMakerRequestEmails } from '@/lib/maker-requests/outbox'
@@ -40,7 +41,11 @@ export async function GET(request: Request) {
     console.log(
       `[email-outbox] referral emails sent=${referralEmails.sent} retry=${referralEmails.retry} deferred=${referralEmails.deferred} gaveUp=${referralEmails.gaveUp}`,
     )
-    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests, referralEmails, commissionSync })
+    const addOnReminders = await processAddOnExpiryReminders({ deadlineMs })
+    console.log(
+      `[email-outbox] add-on reminders scanned=${addOnReminders.scanned} sent=${addOnReminders.sent} skipped=${addOnReminders.skipped} failed=${addOnReminders.failed}`,
+    )
+    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests, referralEmails, addOnReminders, commissionSync })
   } catch {
     console.log('[email-outbox] sweep failed: unknown')
     return NextResponse.json({ error: 'email_outbox_failed' }, { status: 500 })

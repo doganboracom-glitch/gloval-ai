@@ -5,14 +5,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
-  Building2,
   CheckCircle2,
   CircleX,
   Clock,
   ExternalLink,
   Loader2,
-  Mail,
-  Package,
   ShieldAlert,
   X,
 } from 'lucide-react'
@@ -23,7 +20,6 @@ import {
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
 import { AddOnAllowanceCard } from '@/components/billing/add-on-allowance-card'
-import { formatMoney } from '@/lib/billing-utils'
 import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
@@ -31,7 +27,6 @@ import type {
   AddOnBillingPeriod,
   AddOnCatalogItem,
   AddOnCode,
-  AddOnKind,
   AddOnOverview,
 } from '@/lib/add-ons'
 import { purchaseAddOn } from '@/lib/addon-purchase-actions'
@@ -90,107 +85,6 @@ function CapacityRow({
             </dd>
           </div>
         </dl>
-      )}
-    </div>
-  )
-}
-
-export function AddOnCatalogGroup({
-  kind,
-  items,
-  eligible,
-  title,
-  description,
-  unitLabel,
-  notEligible,
-  notEligibleBadge,
-  perMonth,
-  periodNote,
-  buyLabel,
-  buyingLabel,
-  onBuy,
-  busyCode = null,
-  purchaseLocked = false,
-}: {
-  kind: AddOnKind
-  items: AddOnCatalogItem[]
-  eligible: boolean
-  title: string
-  description: string
-  unitLabel: string
-  notEligible: string
-  notEligibleBadge: string
-  perMonth: string
-  periodNote: string
-  buyLabel: string
-  buyingLabel: string
-  /** Absent on read-only surfaces; present means a purchase can be started. */
-  onBuy?: (code: AddOnCode) => void
-  busyCode?: AddOnCode | null
-  /** True while any purchase is in flight, so a second one cannot be started. */
-  purchaseLocked?: boolean
-}) {
-  const Icon = kind === 'site' ? Building2 : kind === 'mail' ? Mail : Package
-  return (
-    <div
-      className={`rounded-2xl border border-border bg-card/70 p-5 ${eligible ? '' : 'opacity-70'}`}
-    >
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
-          <Icon className="size-4" aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <h3 className="font-display text-base font-semibold">{title}</h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-        </div>
-      </div>
-
-      {eligible ? (
-        <>
-          <ul
-            className={`mt-4 grid gap-2 ${items.length > 3 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}
-          >
-            {items.map((item) => {
-              const busy = busyCode === item.code
-              return (
-                <li
-                  key={item.code}
-                  className="flex flex-col gap-1 rounded-xl border border-border bg-background/40 p-3"
-                >
-                  <span className="font-display text-base font-semibold">
-                    {fill(unitLabel, { n: item.capacity })}
-                  </span>
-                  <span className="text-sm tabular-nums">
-                    {formatMoney(item.priceCents, item.currency)}
-                    <span className="text-muted-foreground"> {perMonth}</span>
-                  </span>
-                  {onBuy ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="mt-2 gap-2"
-                      disabled={purchaseLocked}
-                      aria-busy={busy}
-                      data-addon-code={item.code}
-                      onClick={() => onBuy(item.code)}
-                    >
-                      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-                      {busy ? buyingLabel : buyLabel}
-                    </Button>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
-          <p className="mt-3 text-xs text-muted-foreground">{periodNote}</p>
-        </>
-      ) : (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-            {notEligibleBadge}
-          </span>
-          <span>{notEligible}</span>
-        </div>
       )}
     </div>
   )
@@ -411,8 +305,10 @@ export function AddOnsPanel({
     return () => window.clearTimeout(timer)
   }, [paymentResult, router])
 
+  const canBuy = variant === 'full'
+
   function openCheckout(code: AddOnCode) {
-    if (!isAddOnCode(code)) return
+    if (!canBuy || !isAddOnCode(code)) return
     setError(null)
     setCheckoutCode(code)
   }
