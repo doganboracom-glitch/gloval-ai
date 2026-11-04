@@ -709,7 +709,7 @@ export function GoogleAdsDashboard({
             <span>{copy.readOnlyNote}</span>
           </p>
           <Link
-            href="/yasal/gizlilik-politikasi"
+            href="/yasal/gizlilik-politikasi#google-ads-verileri"
             className="w-fit text-sm font-medium text-brand underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {copy.privacyPolicyLink}

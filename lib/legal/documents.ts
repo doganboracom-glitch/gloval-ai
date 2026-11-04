@@ -21,7 +21,7 @@ export type LegalBlock =
   | { type: 'list'; items: string[] }
   | { type: 'link'; href: string; label: string; external?: boolean }
 
-export type LegalSection = { heading: string; blocks: LegalBlock[] }
+export type LegalSection = { heading: string; blocks: LegalBlock[]; id?: string }
 
 /** Tek bir dile ait doküman gövdesi. */
 export type LegalContent = {
@@ -132,6 +132,7 @@ const privacy: LegalDoc = {
       },
       {
         heading: 'Google Ads verileri (GLOVAL Ads)',
+        id: 'google-ads-verileri',
         blocks: [
           p(
             'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Uygulama şu anda yalnızca erişilebilir müşteri hesaplarını listeleyen ve performans raporlarını okuyan Google Ads API çağrıları yapar; kampanya oluşturma, düzenleme veya yayımlama işlemi yapmaz.',
@@ -286,6 +287,7 @@ const privacy: LegalDoc = {
       },
       {
         heading: 'Google Ads data (GLOVAL Ads)',
+        id: 'google-ads-verileri',
         blocks: [
           p(
             'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. The current implementation only calls the Google Ads API to list accessible customer accounts and read performance reports; it does not create, edit or publish campaigns.',

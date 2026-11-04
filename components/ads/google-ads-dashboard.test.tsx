@@ -10,13 +10,14 @@ import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashbo
 const mocks = vi.hoisted(() => ({
   useSWR: vi.fn(),
   router: { replace: vi.fn(), refresh: vi.fn() },
+  lang: 'en' as 'en' | 'tr',
 }))
 
 vi.mock('next/navigation', () => ({ useRouter: () => mocks.router }))
 vi.mock('swr', () => ({ default: (...args: unknown[]) => mocks.useSWR(...args) }))
 vi.mock('@/components/language-provider', async () => {
   const { dictionary: translations } = await vi.importActual<typeof import('@/lib/i18n')>('@/lib/i18n')
-  return { useLanguage: () => ({ lang: 'en', t: translations.en, setLang: vi.fn() }) }
+  return { useLanguage: () => ({ lang: mocks.lang, t: translations[mocks.lang], setLang: vi.fn() }) }
 })
 
 import { AdsPlatformBadge, GoogleAdsDashboard } from '@/components/ads/google-ads-dashboard'
@@ -71,16 +72,21 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.lang = 'en'
   configureSWRData(report)
 })
 
 describe('Google Ads dashboard UI', () => {
-  it('shows the beta read-only disclosure and links to the privacy policy', () => {
+  it.each(['tr', 'en'] as const)('links the %s Google Ads card to its privacy section', (locale) => {
+    mocks.lang = locale
+    const localizedCopy = dictionary[locale].ads
     render(<GoogleAdsDashboard connections={[]} pendingFlowId={null} oauthStatus={null} />)
 
-    expect(screen.getByText(copy.connectionTitle)).toBeTruthy()
-    expect(screen.getByText(copy.connectionBody)).toBeTruthy()
-    expect(screen.getByRole('link', { name: copy.privacyPolicyLink }).getAttribute('href')).toBe('/yasal/gizlilik-politikasi')
+    expect(screen.getByText(localizedCopy.connectionTitle)).toBeTruthy()
+    expect(screen.getByText(localizedCopy.connectionBody)).toBeTruthy()
+    expect(screen.getByRole('link', { name: localizedCopy.privacyPolicyLink }).getAttribute('href')).toBe(
+      '/yasal/gizlilik-politikasi#google-ads-verileri',
+    )
   })
 
   it('shows a clear message when the active connection cap is reached', () => {
