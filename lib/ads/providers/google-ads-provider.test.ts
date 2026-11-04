@@ -31,6 +31,8 @@ const PUBLISH_PLAN = {
   cities: ['İstanbul'],
   modelPolicyCategory: null,
   modelPolicyEvidence: 'none',
+  euPoliticalAdvertising: 'no',
+  euPoliticalDeclarationConfirmed: true,
   finalUrl: 'https://gloval.example/hizmetler',
   adCopy: {
     headlines: ['Atölye Sitesi', 'Kurumsal Web Tasarımı', 'Web Bakım Hizmeti'],
@@ -50,6 +52,7 @@ function publishInput(overrides: Record<string, unknown> = {}) {
     budget: { currency: 'TRY', dailyMinor: 15000, capMinor: 90000 },
     planJson: PUBLISH_PLAN,
     validateOnly: false,
+    userConfirmed: true,
     ...overrides,
   }
 }
@@ -292,9 +295,11 @@ describe('Google Ads provider', () => {
       loginCustomerId: null,
       accessToken: 'access-token',
       context: PUBLISH_CONTEXT,
-      externalCampaignId: '456789',
-      status: 'enabled',
-    })
+    externalCampaignId: '456789',
+    status: 'enabled',
+    validateOnly: false,
+    userConfirmed: true,
+  })
     const mutateCall = calls.find((call) => call.method === 'googleAds.mutate')
     const body = mutateCall?.body as GoogleAdsMutateRequest | undefined
     const operation = body?.mutateOperations[0]?.campaignOperation as { update: { status: string } } | undefined

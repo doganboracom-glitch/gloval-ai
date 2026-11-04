@@ -5,6 +5,7 @@ import { ADS_DASHBOARD_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-fla
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
 import { googleAdsConnectAllowed } from '@/lib/ads/google-route-utils'
+import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
 import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
 import { getPageAuthState } from '@/lib/supabase/page-auth'
@@ -46,6 +47,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
       connections={connections}
       pendingFlowId={firstValue(params.google_flow)}
       googleStatus={firstValue(params.google)}
+      publishEnabled={resolveGoogleAdsPublishAccess(user.id)}
     />
   )
 }

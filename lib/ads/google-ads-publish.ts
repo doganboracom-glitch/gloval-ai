@@ -71,10 +71,16 @@ type PublishPlanRow = {
 
 type GoogleAdsPublishProvider = Pick<
   GoogleAdsProvider,
-  'publishCampaign' | 'setCampaignStatus' | 'verifyBilling' | 'getAdReviewStatus'
+  | 'publishCampaign'
+  | 'setCampaignStatus'
+  | 'verifyBilling'
+  | 'getAdReviewStatus'
+  | 'getCampaignManagementState'
+  | 'updateCampaignBudget'
+  | 'updateResponsiveSearchAd'
 >
 
-type GoogleAdsAccess = {
+export type GoogleAdsAccess = {
   connection: GoogleAdsConnectionRow
   accessToken: string
   context: AdsApiOperationContext
@@ -288,6 +294,10 @@ async function defaultWithAccess<T>(input: WithAccessInput<T>): Promise<T> {
   })
 }
 
+export function withGoogleAdsPublishAccess<T>(input: WithAccessInput<T>): Promise<T> {
+  return defaultWithAccess(input)
+}
+
 async function updatePlan(
   userId: string,
   planId: string,
@@ -402,14 +412,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       return failed('provider_error')
     }
     if (!plan) return failed('plan_not_found')
-  if (plan.version !== expectedVersion || plan.approved_version !== expectedVersion) return failed('plan_changed')
-  if (!plan.approval_id || !plan.approval_hash || !plan.approval_user_daily_budget_limit_minor) {
-    return failed('confirmation_required')
-  }
-  if (!plan.eu_political_declaration_confirmed_at || !plan.eu_political_advertising) {
-    return failed('eu_political_declaration_required')
-  }
-  if (plan.status === 'reconciling') return failed('reconciling')
+    if (plan.version !== expectedVersion || plan.approved_version !== expectedVersion) return failed('plan_changed')
+    if (!plan.approval_id || !plan.approval_hash || !plan.approval_user_daily_budget_limit_minor) {
+      return failed('confirmation_required')
+    }
+    if (
+      !plan.eu_political_declaration_confirmed_at ||
+      (plan.eu_political_advertising !== 'yes' && plan.eu_political_advertising !== 'no')
+    ) {
+      return failed('eu_political_declaration_required')
+    }
+    if (plan.status === 'reconciling') return failed('reconciling')
     if (plan.status === 'publishing') {
       const startedAt = plan.publish_started_at ? Date.parse(plan.publish_started_at) : Number.NaN
       if (Number.isFinite(startedAt) && Date.now() - startedAt >= STALE_PUBLISH_AFTER_MS) {
@@ -854,6 +867,8 @@ export function publishGoogleAdsPlan(input: {
   userId: string
   planId: string
   expectedVersion: number
+  approvalHash: string
+  userConfirmed: boolean
   validateOnly?: boolean
 }) {
   return defaultService.publish(input)
