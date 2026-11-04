@@ -7,7 +7,7 @@ import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
-import { REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
+import { CREDIT_MIN_CENTS, REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
 import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -26,6 +26,8 @@ import { Input } from '@/components/ui/input'
 
 const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+const minimumCreditTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(CREDIT_MIN_CENTS / 100)
+const minimumCreditEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(CREDIT_MIN_CENTS / 100)
 
 const COPY = {
   tr: {
@@ -41,7 +43,8 @@ const COPY = {
     copied: 'Kopyalandı',
     copyFailed: 'Bağlantı kopyalanamadı.',
     ibanLast4: 'Kayıtlı IBAN son 4 hane',
-    payoutHint: `Bakiyeniz ${minimumPayoutTr} TL olduğunda "Ödeme İste" yapabilirsiniz.`, 
+    payoutHint: `Toplam bakiye en az ${minimumCreditTr} TL olduğunda beklemeden AI kredisine çevirebilirsiniz. IBAN ödemesi için 14 günlük bekleme tamamlanmalı ve kullanılabilir bakiye en az ${minimumPayoutTr} TL olmalıdır.`,
+    creditOnlyPayoutHint: `Toplam bakiye en az ${minimumCreditTr} TL olduğunda tamamını beklemeden AI kredisine çevirebilirsiniz.`,
     close: 'Ortaklığı kapat',
     joinTitle: 'Programa katılın',
     termsIntro: 'Katılım şartlarını aşağıdaki kutudan okuyun. Kabul kutusu şartların hemen ardından yer alır.',
@@ -108,7 +111,8 @@ const COPY = {
     copied: 'Copied',
     copyFailed: 'Could not copy the link.',
     ibanLast4: 'Last 4 digits of the saved IBAN',
-    payoutHint: `You can request a payout when your available balance reaches TRY ${minimumPayoutEn}.`, 
+    payoutHint: `Once your total balance reaches TRY ${minimumCreditEn}, you can convert it to AI credits without waiting. IBAN payout requires the 14-day hold to end and at least TRY ${minimumPayoutEn} in available balance.`,
+    creditOnlyPayoutHint: `Once your total balance reaches TRY ${minimumCreditEn}, you can convert the full amount to AI credits without waiting.`,
     close: 'Close partnership',
     joinTitle: 'Join the program',
     termsIntro: 'Read the participation terms in the box below. The acceptance checkbox follows the terms.',
@@ -322,7 +326,7 @@ export function ReferralPartnerCard({
   const closeBlocked = Boolean(
     payoutsEnabled &&
     payoutState &&
-    (payoutState.pendingCents > 0 || payoutState.availableCents > 0 || payoutState.requestedCents > 0 || payoutState.hasOpenCashRequest),
+    (payoutState.totalCents > 0 || payoutState.requestedCents > 0 || payoutState.hasOpenCashRequest),
   )
   const taxVerificationRequired = Boolean(
     payoutsEnabled && partner?.status === 'suspended' && payoutState && !payoutState.taxVerified,
@@ -395,7 +399,7 @@ export function ReferralPartnerCard({
               <div className="flex flex-col gap-3 border-t border-border pt-4">
                 <div className="flex flex-col gap-1 text-sm text-muted-foreground">
                   <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
-                  {payoutsEnabled && <p>{copy.payoutHint}</p>}
+                  {payoutsEnabled && <p>{cashPayoutsEnabled ? copy.payoutHint : copy.creditOnlyPayoutHint}</p>}
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                   {payoutsEnabled && (

@@ -1,4 +1,5 @@
 import {
+  CREDIT_MIN_CENTS,
   REFERRAL_COMMISSION_RATE_PERCENT,
   REFERRAL_HOLD_DAYS,
   REFERRAL_MAX_CREDIT_TOPUP_CENTS,
@@ -10,6 +11,9 @@ import {
 const minimumPayoutTry = REFERRAL_PAYOUT_MIN_CENTS / 100
 const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
+const minimumCreditTry = CREDIT_MIN_CENTS / 100
+const minimumCreditTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(minimumCreditTry)
+const minimumCreditEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(minimumCreditTry)
 const vatMultiplier = ((100 + REFERRAL_VAT_RATE_PERCENT) / 100).toFixed(2)
 const creditValueTry = TRY_PER_CREDIT_CENTS / 100
 const maxCreditTopupTry = REFERRAL_MAX_CREDIT_TOPUP_CENTS / 100
@@ -34,7 +38,7 @@ export const REFERRAL_TERMS = {
           `Komisyon yalnızca yönlendirilen yeni müşterinin ilk başarılı abonelik ödemesi için hesaplanır. Komisyon, KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’sidir; KDV hariç tutar, brüt ödeme tutarının ${vatMultiplier.replace('.', ',')}’ye bölünmesiyle hesaplanır ve kuruş aşağı yuvarlanır.`,
           `Komisyon ödeme tarihinden itibaren ${REFERRAL_HOLD_DAYS} gün beklemede kalır. İlk ödeme bu süre içinde iptal edilir, iade edilir veya ters ibraz edilirse komisyon ters kayıtla iptal edilir. Bekleme süresi geçtikten sonraki bir iade veya ters ibraz, ortak bakiyesinde negatif düzeltme oluşturabilir.`, 
           `Nakit ödeme talebi için en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir. Aynı anda yalnızca bir açık nakit talebi bulunabilir. Fatura kesmesi gereken şirket ortakları (şahıs şirketleri dâhil) KDV dâhil komisyon faturası düzenler ve onaylanan fatura tutarı ödenir. Bireysel/muaf ortaklardan fatura istenmez; gider belgesi GLOVAL tarafından düzenlenir. Vergi yükümlülüklerinin değerlendirilmesi ortağın sorumluluğundadır.`, 
-          `AI kredisine dönüştürmede 1 kredi ${creditValueTry} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki en fazla ${maxCreditTopupTr} TL tutarındaki fark GLOVAL AI tarafından karşılanır. Dönüşüm için de en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir.`, 
+          `AI kredisine dönüştürmede 1 kredi ${creditValueTry} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki en fazla ${maxCreditTopupTr} TL tutarındaki fark GLOVAL AI tarafından karşılanır. Toplam komisyon bakiyesi en az ${minimumCreditTr} TL olduğunda bekleyen ve kullanılabilir komisyonların tamamı 14 günlük bekleme süresi dolmadan AI kredisine çevrilebilir.`, 
         ],
       },
       {
@@ -92,7 +96,7 @@ export const REFERRAL_TERMS = {
           `A commission is earned only on the referred new customer’s first successful paid subscription charge. The commission is ${REFERRAL_COMMISSION_RATE_PERCENT}% of the amount excluding VAT; the VAT-exclusive amount is the gross payment divided by ${vatMultiplier}, rounded down to the kuruş.`, 
           `A commission remains pending for ${REFERRAL_HOLD_DAYS} days after payment. If the first payment is cancelled, refunded, or charged back during that period, the commission is reversed. A refund or chargeback after the hold may create a negative adjustment to the partner balance.`, 
           `A cash payout requires at least TRY ${minimumPayoutEn} in available balance. Only one cash request may be open at a time. Partners who must issue invoices (Company, including sole proprietorships, under this program mapping) issue a commission invoice including VAT, and the approved invoice amount is paid. No invoice is requested from individual/exempt partners; GLOVAL issues an expense document. The partner remains responsible for determining their tax obligations.`, 
-          `For AI credit conversion, one credit is worth TRY ${creditValueTry}. The credit count is rounded up and GLOVAL AI covers the difference, up to TRY ${maxCreditTopupEn}. Credit conversion also requires at least TRY ${minimumPayoutEn} in available balance.`, 
+          `For AI credit conversion, one credit is worth TRY ${creditValueTry}. The credit count is rounded up and GLOVAL AI covers the difference, up to TRY ${maxCreditTopupEn}. Once the total commission balance reaches TRY ${minimumCreditEn}, all pending and available commissions can be converted to AI credits before the 14-day hold ends.`, 
         ],
       },
       {

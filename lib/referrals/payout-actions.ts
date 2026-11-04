@@ -17,6 +17,7 @@ type PayoutActionError =
   | 'not_found'
   | 'partner_inactive'
   | 'insufficient_balance'
+  | 'credit_minimum_not_met'
   | 'open_cash_request'
   | 'tax_verification_required'
   | 'missing_iban'
@@ -52,7 +53,10 @@ function nonNegativeInteger(value: unknown): number | null {
 function mapRpcError(value: unknown, method: ReferralPayoutMethod, hasIban: boolean): PayoutActionError {
   if (value === 'not_owner' || value === 'not_found') return 'not_found'
   if (value === 'partner_closed') return 'partner_inactive'
-  if (value === 'minimum_not_met') return 'insufficient_balance'
+  if (value === 'credit_minimum_not_met') return 'credit_minimum_not_met'
+  if (value === 'minimum_not_met') {
+    return method === 'credit' ? 'credit_minimum_not_met' : 'insufficient_balance'
+  }
   if (value === 'open_cash_request') return 'open_cash_request'
   if (value === 'tax_verification_required') return 'tax_verification_required'
   if (value === 'idempotency_conflict') return 'idempotency_conflict'

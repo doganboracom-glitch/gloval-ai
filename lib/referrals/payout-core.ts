@@ -1,5 +1,6 @@
 import type { ReferralPayoutMethod, ReferralTaxStatus } from './partner-types'
 import {
+  CREDIT_MIN_CENTS,
   REFERRAL_COMMISSION_RATE_PERCENT,
   REFERRAL_MAX_CREDIT_TOPUP_CENTS,
   REFERRAL_PAYOUT_MIN_CENTS,
@@ -7,7 +8,7 @@ import {
   TRY_PER_CREDIT_CENTS,
 } from './commission-config'
 
-export { REFERRAL_CREDIT_VALUE_CENTS, REFERRAL_PAYOUT_MIN_CENTS, TRY_PER_CREDIT_CENTS } from './commission-config'
+export { CREDIT_MIN_CENTS, REFERRAL_CREDIT_VALUE_CENTS, REFERRAL_PAYOUT_MIN_CENTS, TRY_PER_CREDIT_CENTS } from './commission-config'
 
 export type ReferralPayoutPreview = {
   method: ReferralPayoutMethod
@@ -72,7 +73,10 @@ export function calculateReferralPayoutPreview(
   method: ReferralPayoutMethod,
   taxStatus: ReferralTaxStatus | null,
 ): ReferralPayoutPreview | null {
-  if (!Number.isSafeInteger(balanceCents) || balanceCents < REFERRAL_PAYOUT_MIN_CENTS) return null
+  if (method !== 'cash' && method !== 'credit') return null
+
+  const minimumCents = method === 'cash' ? REFERRAL_PAYOUT_MIN_CENTS : CREDIT_MIN_CENTS
+  if (!Number.isSafeInteger(balanceCents) || balanceCents < minimumCents) return null
 
   if (method === 'cash') {
     if (taxStatus !== 'individual' && taxStatus !== 'company') return null

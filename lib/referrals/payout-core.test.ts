@@ -4,9 +4,11 @@ import {
   calculateReferralCreditConversion,
   calculateReferralPayoutPreview,
   formatReferralTry,
+  REFERRAL_PAYOUT_MIN_CENTS,
 } from './payout-core'
+import { CREDIT_MIN_CENTS } from './commission-config'
 
-const MINIMUM_PAYOUT_CENTS = 100_000
+const MINIMUM_PAYOUT_CENTS = REFERRAL_PAYOUT_MIN_CENTS
 
 describe('referral payout math', () => {
   it('calculates commission from VAT-exclusive gross and floors to the kuruş', () => {
@@ -22,6 +24,14 @@ describe('referral payout math', () => {
   })
 
   it('rounds credit conversions up and caps each system contribution below three lira', () => {
+    expect(calculateReferralCreditConversion(100)).toEqual({
+      creditAmount: 1,
+      systemTopupCents: 200,
+    })
+    expect(calculateReferralCreditConversion(300)).toEqual({
+      creditAmount: 1,
+      systemTopupCents: 0,
+    })
     expect(calculateReferralCreditConversion(882)).toEqual({
       creditAmount: 3,
       systemTopupCents: 18,
@@ -37,11 +47,19 @@ describe('referral payout math', () => {
     expect(calculateReferralCreditConversion(-1)).toBeNull()
   })
 
-  it('requires the minimum available balance before allowing either payout method', () => {
-    expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS - 1, 'credit', 'individual')).toBeNull()
-    expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS, 'credit', 'individual')).toMatchObject({
-      creditAmount: 334,
-      systemTopupCents: 200,
+  it('applies separate total-credit and available-cash minimums', () => {
+    expect(CREDIT_MIN_CENTS).toBe(300)
+    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS - 1, 'credit', 'individual')).toBeNull()
+    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS, 'credit', 'individual')).toMatchObject({
+      balanceCents: 300,
+      payoutCents: 300,
+      creditAmount: 1,
+      systemTopupCents: 0,
+    })
+    expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS - 1, 'cash', 'individual')).toBeNull()
+    expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS, 'cash', 'individual')).toMatchObject({
+      balanceCents: MINIMUM_PAYOUT_CENTS,
+      payoutCents: MINIMUM_PAYOUT_CENTS,
     })
   })
 

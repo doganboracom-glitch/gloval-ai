@@ -99,10 +99,15 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
 
     const pendingCents = safeInteger(row.pendingCents, true)
     const availableCents = safeInteger(row.availableCents, true)
+    const convertibleCents = row.convertibleCents == null
+      ? availableCents
+      : safeInteger(row.convertibleCents, true)
     const requestedCents = safeInteger(row.requestedCents) ?? 0
     const convertedCents = safeInteger(row.convertedCents) ?? 0
     const paidCents = safeInteger(row.paidCents) ?? 0
-    if (pendingCents === null || availableCents === null) return { state: null, unavailable: true }
+    if (pendingCents === null || availableCents === null || convertibleCents === null) {
+      return { state: null, unavailable: true }
+    }
 
     const state: ReferralPayoutState = {
       partnerStatus: status,
@@ -112,6 +117,7 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
       pendingCents,
       availableCents,
       totalCents: pendingCents + availableCents,
+      convertibleCents,
       requestedCents,
       convertedCents,
       paidCents,

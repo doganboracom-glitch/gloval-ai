@@ -60,6 +60,7 @@ export type ReferralPayoutState = {
   pendingCents: number
   availableCents: number
   totalCents: number
+  convertibleCents: number
   requestedCents: number
   convertedCents: number
   paidCents: number

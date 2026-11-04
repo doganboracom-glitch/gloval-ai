@@ -111,4 +111,26 @@ describe('referral payout feature flags', () => {
     expect(state.rpc).toHaveBeenCalledWith('request_referral_payout', expect.objectContaining({ p_method: 'credit' }))
     expect(state.queue).toHaveBeenCalledOnce()
   })
+
+  it('maps the credit minimum error and preserves the legacy method-specific minimum mapping', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
+
+    state.rpcData = { ok: false, error: 'credit_minimum_not_met', availableCents: 299 }
+    await expect(createReferralPayoutRequest({
+      method: 'credit',
+      idempotencyKey: '66666666-6666-4666-8666-666666666666',
+    })).resolves.toEqual({ ok: false, error: 'credit_minimum_not_met' })
+
+    state.rpcData = { ok: false, error: 'minimum_not_met' }
+    await expect(createReferralPayoutRequest({
+      method: 'credit',
+      idempotencyKey: '77777777-7777-4777-8777-777777777777',
+    })).resolves.toEqual({ ok: false, error: 'credit_minimum_not_met' })
+    await expect(createReferralPayoutRequest({
+      method: 'cash',
+      idempotencyKey: '88888888-8888-4888-8888-888888888888',
+    })).resolves.toEqual({ ok: false, error: 'insufficient_balance' })
+  })
 })
