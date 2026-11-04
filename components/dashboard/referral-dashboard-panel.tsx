@@ -1,0 +1,189 @@
+'use client'
+
+import { useState } from 'react'
+import { Check, Copy, MousePointerClick, UserRoundCheck, Users, WalletCards } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import type { ReferralCustomerStatus, ReferralDashboardData } from '@/lib/referrals/partner-types'
+
+const COPY = {
+  tr: {
+    title: 'Satış ortaklığı',
+    description: 'Yönlendirme bağlantınızın tıklama ve kayıt sonuçları.',
+    clicks: 'Tıklamalar',
+    signups: 'Kayıt olan',
+    verified: 'E-posta doğrulandı',
+    paid: 'Ücretli müşteri',
+    conversion: 'Dönüşüm',
+    clickToSignup: 'Tıklama → kayıt',
+    signupToPaid: 'Kayıt → ücretli',
+    link: 'Yönlendirme bağlantınız',
+    copy: 'Bağlantıyı kopyala',
+    copied: 'Kopyalandı',
+    copyFailed: 'Bağlantı kopyalanamadı.',
+    comingSoon: 'Komisyon ödemeleri henüz başlamadı; yönlendirme istatistiklerin burada takip edilir.',
+    customers: 'Yönlendirilen müşteriler',
+    noCustomers: 'Henüz yönlendirme kaydı yok.',
+    statuses: { signup: 'Kayıt oldu', verified: 'Doğrulandı', paid: 'Ücretli' },
+    date: 'Kayıt tarihi',
+  },
+  en: {
+    title: 'Referral partnership',
+    description: 'Clicks and signup outcomes for your referral link.',
+    clicks: 'Clicks',
+    signups: 'Signups',
+    verified: 'Email verified',
+    paid: 'Paid customers',
+    conversion: 'Conversion',
+    clickToSignup: 'Click → signup',
+    signupToPaid: 'Signup → paid',
+    link: 'Your referral link',
+    copy: 'Copy link',
+    copied: 'Copied',
+    copyFailed: 'Could not copy the link.',
+    comingSoon: 'Commission payments have not started yet; you can track your referral statistics here.',
+    customers: 'Referred customers',
+    noCustomers: 'No referrals yet.',
+    statuses: { signup: 'Signed up', verified: 'Verified', paid: 'Paid' },
+    date: 'Signup date',
+  },
+} as const
+
+const STATUS_VARIANT: Record<ReferralCustomerStatus, 'secondary' | 'default'> = {
+  signup: 'secondary',
+  verified: 'secondary',
+  paid: 'default',
+}
+
+export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData | null }) {
+  const { lang } = useLanguage()
+  const language = lang === 'tr' ? 'tr' : 'en'
+  const copy = COPY[language]
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  if (!data) return null
+
+  const referralUrl = `https://gloval.ai/?ref=${data.referralCode}`
+  const formatter = new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US')
+  const percentFormatter = new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+    maximumFractionDigits: 1,
+  })
+  const clickToSignup = data.clicks > 0 ? (data.signups / data.clicks) * 100 : 0
+  const signupToPaid = data.signups > 0 ? (data.paidCustomers / data.signups) * 100 : 0
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(referralUrl)
+      setCopyState('copied')
+    } catch {
+      setCopyState('failed')
+    }
+  }
+
+  return (
+    <section aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4">
+      <div>
+        <h2 id="referral-dashboard-title" className="text-xl font-semibold tracking-tight text-foreground">
+          {copy.title}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">{copy.description}</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+            <CardDescription>{copy.clicks}</CardDescription>
+            <MousePointerClick className="size-4 text-muted-foreground" aria-hidden="true" />
+          </CardHeader>
+          <CardContent><p className="text-2xl font-semibold tabular-nums">{formatter.format(data.clicks)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+            <CardDescription>{copy.signups}</CardDescription>
+            <Users className="size-4 text-muted-foreground" aria-hidden="true" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums">{formatter.format(data.signups)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{formatter.format(data.verifiedSignups)} {copy.verified.toLocaleLowerCase(language === 'tr' ? 'tr-TR' : 'en-US')}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+            <CardDescription>{copy.paid}</CardDescription>
+            <UserRoundCheck className="size-4 text-muted-foreground" aria-hidden="true" />
+          </CardHeader>
+          <CardContent><p className="text-2xl font-semibold tabular-nums">{formatter.format(data.paidCustomers)}</p></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
+            <CardDescription>{copy.conversion}</CardDescription>
+            <WalletCards className="size-4 text-muted-foreground" aria-hidden="true" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-muted-foreground">{copy.clickToSignup}</span>
+              <span className="font-semibold tabular-nums">{percentFormatter.format(clickToSignup)}%</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-muted-foreground">{copy.signupToPaid}</span>
+              <span className="font-semibold tabular-nums">{percentFormatter.format(signupToPaid)}%</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-base">{copy.link}</CardTitle>
+            <CardDescription className="mt-1 break-all font-mono">{referralUrl}</CardDescription>
+          </div>
+          <Button type="button" variant="outline" onClick={handleCopyLink} className="shrink-0 gap-2">
+            {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+            {copyState === 'copied' ? copy.copied : copy.copy}
+          </Button>
+        </CardHeader>
+        {copyState === 'failed' && <CardContent className="pt-0"><p role="status" className="text-sm text-destructive">{copy.copyFailed}</p></CardContent>}
+      </Card>
+
+      <Alert>
+        <WalletCards aria-hidden="true" />
+        <AlertDescription>{copy.comingSoon}</AlertDescription>
+      </Alert>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{copy.customers}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.customers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{copy.noCustomers}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {data.customers.map((customer) => (
+                <li key={`${customer.maskedEmail}-${customer.createdAt}`} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="break-all text-sm font-medium text-foreground">{customer.maskedEmail}</span>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <Badge variant={STATUS_VARIANT[customer.status]}>{copy.statuses[customer.status]}</Badge>
+                    <time dateTime={customer.createdAt} className="text-xs text-muted-foreground">
+                      {new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium' }).format(new Date(customer.createdAt))}
+                    </time>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  )
+}

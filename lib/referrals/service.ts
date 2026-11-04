@@ -247,7 +247,7 @@ export async function saveOAuthReferralAtSignup(input: {
 }
 
 export async function markReferralVerifiedForUser(userId: string): Promise<boolean> {
-  if (!UUID_PATTERN.test(userId)) return false
+  if (!isReferralRuntimeReady() || !UUID_PATTERN.test(userId)) return false
   try {
     const { error } = await createAdminClient()
       .from('referral_attributions')

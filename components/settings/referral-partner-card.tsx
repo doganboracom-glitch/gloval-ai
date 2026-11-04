@@ -1,0 +1,372 @@
+'use client'
+
+import { useState, type FormEvent } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
+import { useLanguage } from '@/components/language-provider'
+import { activateReferralPartner, closeReferralPartner } from '@/lib/referrals/partner-actions'
+import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
+import type { ReferralPartnerSettings } from '@/lib/referrals/partner-types'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+
+const COPY = {
+  tr: {
+    title: 'Satış Ortaklığı',
+    description: 'Gloval AI bağlantınızı paylaşın ve yönlendirmelerinizi güvenli biçimde takip edin.',
+    active: 'Aktif',
+    suspended: 'İncelemede',
+    closed: 'Kapalı',
+    codeLabel: 'Yönlendirme bağlantınız',
+    copy: 'Bağlantıyı kopyala',
+    copied: 'Kopyalandı',
+    copyFailed: 'Bağlantı kopyalanamadı.',
+    ibanLast4: 'Kayıtlı IBAN son 4 hane',
+    close: 'Ortaklığı kapat',
+    joinTitle: 'Programa katılın',
+    termsIntro: 'Katılım şartlarını aşağıdaki kutudan okuyun. Kabul kutusu şartların hemen ardından yer alır.',
+    termsBox: 'Satış ortaklığı programı şartları',
+    acceptTerms: 'Satış Ortaklığı Programı Şartları’nı okudum ve kabul ediyorum.',
+    fullTerms: 'Şartların tamamını aç',
+    payeeName: 'Ödeme alacak kişinin / kuruluşun adı',
+    payeeNameHint: 'Vergi veya ödeme kaydınızda yer alan adı girin.',
+    taxStatus: 'Vergi statüsü',
+    individual: 'Bireysel',
+    company: 'Şirket',
+    iban: 'IBAN',
+    ibanHint: 'Türkiye IBAN’ı girin. IBAN sunucu tarafında AES-256-GCM ile şifrelenir; burada yalnızca son 4 hane gösterilir.',
+    join: 'Programa katıl',
+    submitting: 'Kaydediliyor…',
+    closeTitle: 'Ortaklığı kapatmak istiyor musunuz?',
+    closeDescription: 'Yönlendirme bağlantınız devre dışı bırakılır ve şifreli IBAN bilgisi silinir. Bu işlem geri alınamaz.',
+    closeConfirm: 'Ortaklığı kapat',
+    cancel: 'Vazgeç',
+    closing: 'Kapatılıyor…',
+    success: 'Satış ortaklığı etkinleştirildi.',
+    closeSuccess: 'Satış ortaklığı kapatıldı.',
+    statusDescription: 'Bu ortaklık için yeni yönlendirme alınmıyor. Durum değişikliği için destek ekibiyle iletişime geçebilirsiniz.',
+    noReferral: 'Bağlantınız hazır olduğunda burada gösterilir.',
+    errors: {
+      not_authenticated: 'Oturumunuz doğrulanamadı. Lütfen yeniden giriş yapın.',
+      program_unavailable: 'Program şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
+      invalid_input: 'Form bilgilerini kontrol edip yeniden deneyin.',
+      terms_required: 'Devam etmek için geçerli şartları kabul etmeniz gerekir.',
+      invalid_name: 'Ad alanını kontrol edin (2–120 karakter).',
+      invalid_tax_status: 'Geçerli bir vergi statüsü seçin.',
+      invalid_iban: 'Geçerli bir Türkiye IBAN’ı girin.',
+      encryption_unavailable: 'IBAN güvenli biçimde saklanamadı. Bilgiler kaydedilmedi; lütfen daha sonra tekrar deneyin.',
+      already_registered: 'Bu hesap için zaten bir ortaklık kaydı bulunuyor.',
+      not_active: 'Etkin bir ortaklık bulunamadı.',
+    } as Record<string, string>,
+  },
+  en: {
+    title: 'Referral Partner',
+    description: 'Share your Gloval AI link and securely track your referrals.',
+    active: 'Active',
+    suspended: 'Under review',
+    closed: 'Closed',
+    codeLabel: 'Your referral link',
+    copy: 'Copy link',
+    copied: 'Copied',
+    copyFailed: 'Could not copy the link.',
+    ibanLast4: 'Last 4 digits of the saved IBAN',
+    close: 'Close partnership',
+    joinTitle: 'Join the program',
+    termsIntro: 'Read the participation terms in the box below. The acceptance checkbox follows the terms.',
+    termsBox: 'Referral partner program terms',
+    acceptTerms: 'I have read and accept the Referral Partner Program Terms.',
+    fullTerms: 'Open the full terms',
+    payeeName: 'Payee person or organization name',
+    payeeNameHint: 'Enter the name associated with your tax or payout records.',
+    taxStatus: 'Tax status',
+    individual: 'Individual',
+    company: 'Company',
+    iban: 'IBAN',
+    ibanHint: 'Enter a Turkish IBAN. It is encrypted server-side with AES-256-GCM; only its last 4 digits are shown here.',
+    join: 'Join the program',
+    submitting: 'Saving…',
+    closeTitle: 'Close your partnership?',
+    closeDescription: 'Your referral link will be disabled and the encrypted IBAN will be removed. This action cannot be undone.',
+    closeConfirm: 'Close partnership',
+    cancel: 'Cancel',
+    closing: 'Closing…',
+    success: 'Referral partnership activated.',
+    closeSuccess: 'Referral partnership closed.',
+    statusDescription: 'This partnership is not accepting new referrals. Contact support if you believe its status should change.',
+    noReferral: 'Your link will appear here once it is ready.',
+    errors: {
+      not_authenticated: 'Your session could not be verified. Please sign in again.',
+      program_unavailable: 'The program is unavailable right now. Please try again later.',
+      invalid_input: 'Check the form and try again.',
+      terms_required: 'You must accept the current terms before continuing.',
+      invalid_name: 'Check the name field (2–120 characters).',
+      invalid_tax_status: 'Choose a valid tax status.',
+      invalid_iban: 'Enter a valid Turkish IBAN.',
+      encryption_unavailable: 'The IBAN could not be stored securely. Nothing was saved; please try again later.',
+      already_registered: 'A partner record already exists for this account.',
+      not_active: 'No active partnership was found.',
+    } as Record<string, string>,
+  },
+} as const
+
+export function ReferralPartnerCard({
+  enabled,
+  partner,
+}: {
+  enabled: boolean
+  partner: ReferralPartnerSettings | null
+}) {
+  const { lang } = useLanguage()
+  const language = lang === 'tr' ? 'tr' : 'en'
+  const copy = COPY[language]
+  const router = useRouter()
+  const [payeeName, setPayeeName] = useState('')
+  const [taxStatus, setTaxStatus] = useState<'individual' | 'company'>('individual')
+  const [iban, setIban] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  if (!enabled) return null
+
+  const referralUrl = partner?.status === 'active'
+    ? `https://gloval.ai/?ref=${partner.referralCode}`
+    : null
+  const terms = REFERRAL_TERMS[language]
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isSubmitting || !termsAccepted) return
+
+    setError(null)
+    setNotice(null)
+    setIsSubmitting(true)
+    const result = await activateReferralPartner({
+      payeeName,
+      taxStatus,
+      iban,
+      termsAccepted,
+      termsVersion: REFERRAL_TERMS_VERSION,
+    })
+    setIsSubmitting(false)
+
+    if (!result.ok) {
+      setError(copy.errors[result.error] ?? copy.errors.program_unavailable)
+      return
+    }
+
+    setIban('')
+    setPayeeName('')
+    setNotice(copy.success)
+    router.refresh()
+  }
+
+  async function handleCopyLink() {
+    if (!referralUrl) return
+    try {
+      await navigator.clipboard.writeText(referralUrl)
+      setCopyState('copied')
+    } catch {
+      setCopyState('failed')
+    }
+  }
+
+  async function handleClosePartner() {
+    if (isClosing) return
+    setError(null)
+    setNotice(null)
+    setIsClosing(true)
+    const result = await closeReferralPartner()
+    setIsClosing(false)
+    setShowCloseConfirm(false)
+
+    if (!result.ok) {
+      setError(copy.errors[result.error] ?? copy.errors.program_unavailable)
+      return
+    }
+
+    setNotice(copy.closeSuccess)
+    router.refresh()
+  }
+
+  const statusLabel = partner?.status === 'active'
+    ? copy.active
+    : partner?.status === 'suspended'
+      ? copy.suspended
+      : copy.closed
+
+  return (
+    <>
+      <Card className="mt-6 border-border/80 bg-card/70">
+        <CardHeader className="gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
+              {copy.title}
+            </CardTitle>
+            {partner && <Badge variant={partner.status === 'active' ? 'default' : 'secondary'}>{statusLabel}</Badge>}
+          </div>
+          <CardDescription>{copy.description}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          {partner?.status === 'active' && referralUrl ? (
+            <>
+              <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{copy.codeLabel}</p>
+                  <p className="mt-1 break-all font-mono text-sm text-muted-foreground">{referralUrl}</p>
+                </div>
+                <Button type="button" variant="outline" onClick={handleCopyLink} className="shrink-0 gap-2">
+                  {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+                  {copyState === 'copied' ? copy.copied : copy.copy}
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
+                <Button type="button" variant="destructive" size="sm" onClick={() => setShowCloseConfirm(true)}>
+                  {copy.close}
+                </Button>
+              </div>
+            </>
+          ) : partner ? (
+            <Alert>
+              <AlertDescription>{copy.statusDescription}</AlertDescription>
+            </Alert>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-muted-foreground">{copy.termsIntro}</p>
+                <div
+                  tabIndex={0}
+                  aria-label={copy.termsBox}
+                  className="max-h-64 overflow-y-auto rounded-xl border border-border bg-muted/20 p-4 text-sm leading-relaxed text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <p>{terms.intro.join(' ')}</p>
+                  <div className="mt-4 flex flex-col gap-4">
+                    {terms.sections.map((section) => (
+                      <section key={section.heading}>
+                        <h3 className="font-semibold text-foreground">{section.heading}</h3>
+                        <div className="mt-1 flex flex-col gap-2">
+                          {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+                <Link href="/yasal/satis-ortakligi-sartlari" className="w-fit text-sm text-primary underline underline-offset-4">
+                  {copy.fullTerms}
+                </Link>
+              </div>
+
+              <label htmlFor="referral-terms-accepted" className="flex items-start gap-3 text-sm leading-relaxed text-foreground">
+                <input
+                  id="referral-terms-accepted"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(event) => setTermsAccepted(event.target.checked)}
+                  disabled={isSubmitting}
+                  className="mt-1 size-4 shrink-0 accent-primary"
+                />
+                <span>{copy.acceptTerms}</span>
+              </label>
+
+              <FieldGroup>
+                <FieldGroup className="sm:flex-row">
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor="referral-payee-name">{copy.payeeName}</FieldLabel>
+                    <Input
+                      id="referral-payee-name"
+                      value={payeeName}
+                      onChange={(event) => setPayeeName(event.target.value)}
+                      autoComplete="name"
+                      maxLength={120}
+                      required
+                      disabled={isSubmitting}
+                    />
+                    <FieldDescription>{copy.payeeNameHint}</FieldDescription>
+                  </Field>
+                  <Field className="flex-1">
+                    <FieldLabel htmlFor="referral-tax-status">{copy.taxStatus}</FieldLabel>
+                    <select
+                      id="referral-tax-status"
+                      value={taxStatus}
+                      onChange={(event) => setTaxStatus(event.target.value as 'individual' | 'company')}
+                      disabled={isSubmitting}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="individual">{copy.individual}</option>
+                      <option value="company">{copy.company}</option>
+                    </select>
+                  </Field>
+                </FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="referral-iban">{copy.iban}</FieldLabel>
+                  <Input
+                    id="referral-iban"
+                    value={iban}
+                    onChange={(event) => setIban(event.target.value.toUpperCase())}
+                    autoComplete="off"
+                    inputMode="text"
+                    maxLength={34}
+                    required
+                    disabled={isSubmitting}
+                    aria-describedby="referral-iban-hint"
+                  />
+                  <FieldDescription id="referral-iban-hint">{copy.ibanHint}</FieldDescription>
+                </Field>
+              </FieldGroup>
+
+              {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+              {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSubmitting || !termsAccepted} className="gap-2">
+                  {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isSubmitting ? copy.submitting : copy.join}
+                </Button>
+              </div>
+            </form>
+          )}
+          {copyState !== 'idle' && (
+            <p
+              role="status"
+              aria-live="polite"
+              className={copyState === 'failed' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}
+            >
+              {copyState === 'failed' ? copy.copyFailed : copy.copied}
+            </p>
+          )}
+          {notice && partner && <p role="status" className="text-sm text-primary">{notice}</p>}
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={showCloseConfirm}
+        title={copy.closeTitle}
+        description={copy.closeDescription}
+        confirmLabel={isClosing ? copy.closing : copy.closeConfirm}
+        cancelLabel={copy.cancel}
+        destructive
+        confirmDisabled={isClosing}
+        onConfirm={handleClosePartner}
+        onCancel={() => setShowCloseConfirm(false)}
+      />
+    </>
+  )
+}
