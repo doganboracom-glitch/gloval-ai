@@ -27,7 +27,7 @@ create table if not exists public.referral_payout_requests (
   tax_status_snapshot text check (tax_status_snapshot in ('individual', 'company')),
   payee_name_snapshot text,
   iban_last4_snapshot text check (iban_last4_snapshot is null or iban_last4_snapshot ~ '^\\d{4}$'),
-  status text not null check (status in ('requested', 'paid', 'rejected', 'converted')),
+  status text not null check (status in ('requested', 'processed', 'rejected')),
   idempotency_key uuid not null,
   requested_at timestamptz not null default now(),
   processed_at timestamptz,
@@ -46,6 +46,9 @@ create index if not exists referral_payout_requests_partner_status_idx
   on public.referral_payout_requests (partner_id, status, requested_at desc);
 create index if not exists referral_payout_requests_status_requested_idx
   on public.referral_payout_requests (status, requested_at desc);
+create unique index if not exists referral_one_open_cash_request_per_partner_idx
+  on public.referral_payout_requests (partner_id)
+  where method = 'cash' and status = 'requested';
 
 create table if not exists public.referral_commissions (
   id uuid primary key default gen_random_uuid(),
@@ -64,6 +67,7 @@ create table if not exists public.referral_commissions (
   reversal_kind text check (reversal_kind in ('pre_hold', 'post_hold')),
   reversal_reason text check (reversal_reason is null or reversal_reason in ('payment_status_changed', 'refund_or_chargeback')),
   created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   unique (attribution_id),
   unique (billing_transaction_id),
   check ((status = 'reversed') = (reversed_at is not null))
@@ -74,6 +78,25 @@ create index if not exists referral_commissions_partner_status_idx
 create index if not exists referral_commissions_available_at_idx
   on public.referral_commissions (available_at)
   where status = 'pending';
+
+create or replace function public.referral_commission_touch_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at := clock_timestamp();
+  return new;
+end;
+$$;
+
+revoke all on function public.referral_commission_touch_updated_at() from public, anon, authenticated;
+grant execute on function public.referral_commission_touch_updated_at() to service_role;
+
+drop trigger if exists referral_commissions_touch_updated_at on public.referral_commissions;
+create trigger referral_commissions_touch_updated_at
+before update on public.referral_commissions
+for each row execute function public.referral_commission_touch_updated_at();
 
 -- Ledger rows are append-only. Refunds before the hold expires add an equal
 -- negative pending entry; later refunds remain negative and may create debt.
@@ -437,6 +460,12 @@ begin
       and transaction_row.subscription_id is not null
       and transaction_row.amount_cents > 0
       and (p_partner_id is null or attribution.partner_id = p_partner_id)
+      and not exists (
+        select 1
+        from public.referral_commissions as existing_commission
+        where existing_commission.billing_transaction_id = transaction_row.id
+          or existing_commission.attribution_id = attribution.id
+      )
     order by transaction_row.created_at asc, transaction_row.id asc
     limit 500
   loop
@@ -473,19 +502,23 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.kind = 'charge' and new.status = 'succeeded' then
-    perform public.referral_record_commission_for_transaction(new.id);
-  end if;
+  begin
+    if new.kind = 'charge' and new.status = 'succeeded' then
+      perform public.referral_record_commission_for_transaction(new.id);
+    end if;
 
-  if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
-    and (tg_op = 'INSERT' or old.status is distinct from new.status) then
-    perform public.referral_sync_commission_reversals(null, new.id);
-  elsif tg_op = 'UPDATE'
-    and old.kind = 'charge'
-    and old.status = 'succeeded'
-    and new.status <> 'succeeded' then
-    perform public.referral_sync_commission_reversals(null, new.id);
-  end if;
+    if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
+      and (tg_op = 'INSERT' or old.status is distinct from new.status) then
+      perform public.referral_sync_commission_reversals(null, new.id);
+    elsif tg_op = 'UPDATE'
+      and old.kind = 'charge'
+      and old.status = 'succeeded'
+      and new.status <> 'succeeded' then
+      perform public.referral_sync_commission_reversals(null, new.id);
+    end if;
+  exception when others then
+    raise warning 'referral commission processing failed for billing transaction %', new.id;
+  end;
 
   return new;
 end;

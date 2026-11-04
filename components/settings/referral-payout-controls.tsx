@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Banknote, Coins, Loader2, WalletCards } from 'lucide-react'
+import { Banknote, Coins, WalletCards } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -15,6 +15,9 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { createReferralPayoutRequest } from '@/lib/referrals/payout-actions'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { REFERRAL_HOLD_DAYS, REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
 import {
   calculateReferralPayoutPreview,
   formatReferralTry,
@@ -27,6 +30,9 @@ import type {
 
 type Language = 'tr' | 'en'
 
+const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+
 const COPY = {
   tr: {
     title: 'Ödeme bakiyesi',
@@ -37,37 +43,43 @@ const COPY = {
     requested: 'İşlemde',
     converted: 'Krediye çevrildi',
     paid: 'Ödendi',
-    hold: 'Komisyonlar ödeme tarihinden 14 gün sonra kullanılabilir bakiyeye geçer.',
-    request: 'Ödeme iste',
-    requestTitle: 'Ödeme yöntemi ve özeti',
-    requestDescription: 'Onaylamadan önce tutarı kontrol edin. İstek sunucu tarafında tekrar doğrulanır.',
-    credit: 'AI kredisi',
-    cash: 'Nakit ödeme',
+    hold: `Komisyonlar ödeme tarihinden ${REFERRAL_HOLD_DAYS} gün sonra kullanılabilir bakiyeye geçer.`, 
+    request: 'Ödeme İste',
+    requestTitle: 'Bakiyenizi nasıl almak istersiniz?',
+    requestDescription: 'Bir ödeme yöntemi seçin. Tutar ve koşullar sonraki adımda gösterilir.',
+    reviewTitle: 'Talep özeti',
+    reviewDescription: 'Onaylamadan önce tutarı kontrol edin. İstek sunucu tarafında tekrar doğrulanır.',
+    continue: 'Devam et',
+    changeMethod: 'Yöntemi değiştir',
+    credit: 'AI Kredisine Dönüşsün',
+    cash: 'Nakit IBAN\'ına Yatsın',
     commissionValue: 'Kullanılacak komisyon bakiyesi',
     bankAmount: 'Ödenecek tutar',
     credits: 'Eklenecek AI kredisi',
     topup: 'GLOVAL AI katkısı',
     invoice: 'Bu vergi statüsü için fatura gerekir; ödeme fatura onayından sonra işlenir.',
     noInvoice: 'Bireysel statüsü bu program akışında fatura gerektirmez.',
-    confirm: 'İsteği onayla',
+    confirm: 'Onayla',
     cancel: 'Vazgeç',
     submitting: 'İşleniyor…',
-    successCash: 'Ödeme isteğiniz alındı. Yönetici incelemesinden sonra durum burada güncellenir.',
-    successCredit: 'AI kredileriniz bakiyenize eklendi.',
+    successCash: 'Talebiniz işleme alındı. Yönetici incelemesinden sonra durum burada güncellenir.',
+    successCredit: 'Talebiniz işleme alındı. AI kredileriniz bakiyenize eklendi.',
     cashUnavailable: 'Nakit ödeme şu anda kullanılamıyor.',
     noIban: 'Nakit ödeme için kayıtlı bir IBAN gerekir.',
-    threshold: 'İstek için kullanılabilir bakiyenin en az 1.000 TL olması gerekir.',
+    threshold: `İstek için kullanılabilir bakiyenin en az ${minimumPayoutTr} TL olması gerekir.`, 
     openCash: 'Açık bir nakit ödeme isteğiniz var. Yeni ödeme isteği, bu istek sonuçlanana kadar pasif kalır.',
     unavailable: 'Ödeme bilgileri şu anda yüklenemiyor. Lütfen daha sonra yeniden deneyin.',
     invalidTax: 'Nakit ödeme için vergi statünüzün doğrulanması gerekiyor.',
+    taxVerificationRequired: 'Bir sonraki nakit ödeme için vergi bilgilerinizin doğrulanması gerekiyor. Destek ekibimizle iletişime geçin.',
     errors: {
       not_authenticated: 'Oturum doğrulanamadı. Yeniden giriş yapın.',
       payout_disabled: 'Ödeme özelliği şu anda kullanılamıyor.',
       cash_disabled: 'Nakit ödeme şu anda kullanılamıyor.',
       not_found: 'Etkin bir satış ortaklığı bulunamadı.',
       partner_inactive: 'Kapalı bir ortaklık için ödeme isteği oluşturulamaz.',
-      insufficient_balance: 'Kullanılabilir bakiye 1.000 TL eşiğinin altında.',
+      insufficient_balance: `Kullanılabilir bakiye ${minimumPayoutTr} TL eşiğinin altında.`, 
       open_cash_request: 'Önce açık nakit ödeme isteğinizin sonuçlanmasını bekleyin.',
+      tax_verification_required: 'Bir sonraki nakit ödeme için vergi bilgilerinizin doğrulanması gerekiyor.',
       missing_iban: 'Nakit ödeme için kayıtlı IBAN bulunamadı.',
       invalid_tax_status: 'Nakit ödeme için vergi bilgileriniz tamamlanmalı.',
       idempotency_conflict: 'İstek doğrulanamadı. Sayfayı yenileyip yeniden deneyin.',
@@ -85,12 +97,16 @@ const COPY = {
     requested: 'In progress',
     converted: 'Converted to credits',
     paid: 'Paid',
-    hold: 'Commissions become available 14 days after the payment date.',
+    hold: `Commissions become available ${REFERRAL_HOLD_DAYS} days after the payment date.`, 
     request: 'Request payout',
-    requestTitle: 'Payout method and summary',
-    requestDescription: 'Review the amount before confirming. The request is revalidated on the server.',
-    credit: 'AI credits',
-    cash: 'Cash payout',
+    requestTitle: 'How would you like to receive your balance?',
+    requestDescription: 'Choose a payout method. The amount and terms appear in the next step.',
+    reviewTitle: 'Request summary',
+    reviewDescription: 'Review the amount before confirming. The request is revalidated on the server.',
+    continue: 'Continue',
+    changeMethod: 'Change method',
+    credit: 'Convert to AI credits',
+    cash: 'Pay to my IBAN',
     commissionValue: 'Commission balance used',
     bankAmount: 'Payout amount',
     credits: 'AI credits to add',
@@ -100,22 +116,24 @@ const COPY = {
     confirm: 'Confirm request',
     cancel: 'Cancel',
     submitting: 'Processing…',
-    successCash: 'Your payout request was received. Its status will update here after administrator review.',
-    successCredit: 'Your AI credits have been added to your balance.',
+    successCash: 'Your request is being processed. Its status will update here after administrator review.',
+    successCredit: 'Your request is being processed, and the AI credits have been added to your balance.',
     cashUnavailable: 'Cash payout is not available right now.',
     noIban: 'A saved IBAN is required for cash payout.',
-    threshold: 'At least TRY 1,000 in available balance is required to request a payout.',
+    threshold: `At least TRY ${minimumPayoutEn} in available balance is required to request a payout.`, 
     openCash: 'You have an open cash payout request. New requests remain unavailable until it is resolved.',
     unavailable: 'Payout information is temporarily unavailable. Please try again later.',
     invalidTax: 'Your tax status must be complete before a cash payout.',
+    taxVerificationRequired: 'Your tax information must be verified before your next cash payout. Please contact support.',
     errors: {
       not_authenticated: 'Your session could not be verified. Please sign in again.',
       payout_disabled: 'Payouts are currently unavailable.',
       cash_disabled: 'Cash payout is currently unavailable.',
       not_found: 'No active referral partnership was found.',
       partner_inactive: 'A closed partnership cannot request a payout.',
-      insufficient_balance: 'Available balance is below the TRY 1,000 minimum.',
+      insufficient_balance: `Available balance is below the TRY ${minimumPayoutEn} minimum.`, 
       open_cash_request: 'Wait for your open cash payout request to be resolved first.',
+      tax_verification_required: 'Tax verification is required before another cash payout.',
       missing_iban: 'No saved IBAN was found for cash payout.',
       invalid_tax_status: 'Complete your tax information before requesting cash payout.',
       idempotency_conflict: 'The request could not be verified. Refresh the page and try again.',
@@ -147,6 +165,7 @@ export function ReferralPayoutControls({
   const locale = language === 'tr' ? 'tr-TR' : 'en-US'
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [dialogStep, setDialogStep] = useState<'method' | 'review'>('method')
   const [method, setMethod] = useState<ReferralPayoutMethod>('credit')
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -158,7 +177,8 @@ export function ReferralPayoutControls({
   const preview = state
     ? calculateReferralPayoutPreview(state.availableCents, method, state.taxStatus)
     : null
-  const cashUnavailable = !cashEnabled || !state?.hasIban
+  const taxVerificationRequired = Boolean(state && state.partnerStatus === 'suspended' && !state.taxVerified)
+  const cashUnavailable = !cashEnabled || !state?.hasIban || taxVerificationRequired
   const hasOpenCashRequest = state?.hasOpenCashRequest ?? false
   const meetsMinimum = (state?.availableCents ?? 0) >= REFERRAL_PAYOUT_MIN_CENTS
   const canRequest = Boolean(state && state.partnerStatus !== 'closed' && meetsMinimum && !hasOpenCashRequest)
@@ -166,9 +186,21 @@ export function ReferralPayoutControls({
   function startRequest() {
     if (!canRequest || isSubmitting) return
     setMethod('credit')
+    setDialogStep('method')
     setIdempotencyKey(safeIdempotencyKey())
     setFeedback(null)
     setExpanded(true)
+  }
+
+  function continueToReview() {
+    if (!preview) return
+    setFeedback(null)
+    setDialogStep('review')
+  }
+
+  function closeRequestDialog() {
+    setExpanded(false)
+    setIdempotencyKey(null)
   }
 
   async function submitRequest() {
@@ -203,7 +235,8 @@ export function ReferralPayoutControls({
   }
 
   return (
-    <Card className={cn(variant === 'compact' && 'border-border/70 bg-muted/20 shadow-none')}>
+    <>
+      <Card className={cn(variant === 'compact' && 'border-0 bg-transparent p-0 shadow-none')}>
       <CardHeader className={cn('gap-1', variant === 'compact' && 'sr-only')}>
         <div className="flex items-center gap-2">
           <WalletCards className="size-4 text-primary" aria-hidden="true" />
@@ -253,13 +286,16 @@ export function ReferralPayoutControls({
             {hasOpenCashRequest && (
               <Alert><AlertDescription>{copy.openCash}</AlertDescription></Alert>
             )}
-            {!meetsMinimum && !hasOpenCashRequest && (
+            {!meetsMinimum && !hasOpenCashRequest && variant === 'dashboard' && (
               <p className="text-xs text-muted-foreground">{copy.threshold}</p>
             )}
             {cashEnabled && !state.hasIban && (
               <p className="text-xs text-muted-foreground">{copy.noIban}</p>
             )}
-            {feedback && (
+            {taxVerificationRequired && cashEnabled && (
+              <Alert><AlertDescription>{copy.taxVerificationRequired}</AlertDescription></Alert>
+            )}
+            {feedback && !expanded && (
               <Alert variant={feedback.kind === 'error' ? 'destructive' : 'default'}>
                 <AlertDescription role={feedback.kind === 'error' ? 'alert' : 'status'}>{feedback.text}</AlertDescription>
               </Alert>
@@ -276,97 +312,98 @@ export function ReferralPayoutControls({
               {copy.request}
             </Button>
 
-            {expanded && (
-              <section aria-labelledby="referral-payout-request-title" className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4">
-                <div>
-                  <h3 id="referral-payout-request-title" className="text-sm font-semibold text-foreground">{copy.requestTitle}</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{copy.requestDescription}</p>
-                </div>
 
-                <div className="flex flex-wrap gap-2" role="group" aria-label={copy.requestTitle}>
-                  <Button
-                    type="button"
-                    variant={method === 'credit' ? 'default' : 'outline'}
-                    aria-pressed={method === 'credit'}
-                    onClick={() => {
-                      setMethod('credit')
-                      setFeedback(null)
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    <Coins data-icon="inline-start" />
-                    {copy.credit}
-                  </Button>
-                  {cashEnabled && (
-                    <Button
-                      type="button"
-                      variant={method === 'cash' ? 'default' : 'outline'}
-                      aria-pressed={method === 'cash'}
-                      onClick={() => {
-                        setMethod('cash')
-                        setFeedback(null)
-                      }}
-                      disabled={cashUnavailable || isSubmitting}
-                    >
-                      <Banknote data-icon="inline-start" />
-                      {copy.cash}
-                    </Button>
-                  )}
-                </div>
-
-                {cashEnabled && method === 'cash' && cashUnavailable && (
-                  <Alert><AlertDescription>{copy.noIban}</AlertDescription></Alert>
-                )}
-                {!preview && method === 'cash' && !cashUnavailable && (
-                  <Alert variant="destructive"><AlertDescription>{copy.invalidTax}</AlertDescription></Alert>
-                )}
-                {preview && (
-                  <dl className="grid gap-2 rounded-lg bg-muted/30 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-4">
-                      <dt className="text-muted-foreground">{copy.commissionValue}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
-                    </div>
-                    {method === 'cash' ? (
-                      <>
-                        <div className="flex items-center justify-between gap-4">
-                          <dt className="text-muted-foreground">{copy.bankAmount}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
-                        </div>
-                        <p className="text-xs leading-relaxed text-muted-foreground">{preview.invoiceRequired ? copy.invoice : copy.noInvoice}</p>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between gap-4">
-                          <dt className="text-muted-foreground">{copy.credits}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
-                        </div>
-                        <div className="flex items-center justify-between gap-4">
-                          <dt className="text-muted-foreground">{copy.topup}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
-                        </div>
-                      </>
-                    )}
-                  </dl>
-                )}
-
-                {feedback?.kind === 'error' && (
-                  <Alert variant="destructive"><AlertDescription role="alert">{feedback.text}</AlertDescription></Alert>
-                )}
-
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setExpanded(false)} disabled={isSubmitting}>
-                    {copy.cancel}
-                  </Button>
-                  <Button type="button" onClick={submitRequest} disabled={!preview || isSubmitting} className="gap-2">
-                    {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                    {isSubmitting ? copy.submitting : copy.confirm}
-                  </Button>
-                </div>
-              </section>
-            )}
           </>
         ) : null}
       </CardContent>
-    </Card>
+      </Card>
+      <ConfirmDialog
+        open={expanded}
+        title={dialogStep === 'method' ? copy.requestTitle : copy.reviewTitle}
+        description={dialogStep === 'method' ? copy.requestDescription : copy.reviewDescription}
+        confirmLabel={isSubmitting ? copy.submitting : dialogStep === 'method' ? copy.continue : copy.confirm}
+        cancelLabel={copy.cancel}
+        confirmDisabled={!preview || isSubmitting}
+        onConfirm={dialogStep === 'method' ? continueToReview : submitRequest}
+        onCancel={closeRequestDialog}
+      >
+        {dialogStep === 'method' ? (
+          <div className="mt-4 flex flex-col gap-3">
+            <ToggleGroup
+              value={[method]}
+              onValueChange={(value) => {
+                const selectedMethod = value[0]
+                if (selectedMethod === 'credit' || selectedMethod === 'cash') {
+                  setMethod(selectedMethod)
+                  setFeedback(null)
+                }
+              }}
+              variant="outline"
+              aria-label={copy.requestTitle}
+              className="w-full flex-col sm:flex-row"
+            >
+              <ToggleGroupItem value="credit" className="w-full justify-start">
+                <Coins data-icon="inline-start" />
+                {copy.credit}
+              </ToggleGroupItem>
+              {cashEnabled && (
+                <ToggleGroupItem value="cash" disabled={cashUnavailable || isSubmitting} className="w-full justify-start">
+                  <Banknote data-icon="inline-start" />
+                  {copy.cash}
+                </ToggleGroupItem>
+              )}
+            </ToggleGroup>
+            {cashEnabled && !state?.hasIban && (
+              <Alert><AlertDescription>{copy.noIban}</AlertDescription></Alert>
+            )}
+            {taxVerificationRequired && cashEnabled && (
+              <Alert><AlertDescription>{copy.taxVerificationRequired}</AlertDescription></Alert>
+            )}
+            {!preview && method === 'cash' && !cashUnavailable && (
+              <Alert variant="destructive"><AlertDescription>{copy.invalidTax}</AlertDescription></Alert>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-4">
+            {preview && (
+              <dl className="grid gap-2 rounded-lg bg-muted/30 p-3 text-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">{copy.commissionValue}</dt>
+                  <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
+                </div>
+                {method === 'cash' ? (
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-muted-foreground">{copy.bankAmount}</dt>
+                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">{preview.invoiceRequired ? copy.invoice : copy.noInvoice}</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-muted-foreground">{copy.credits}</dt>
+                      <dd className="font-medium tabular-nums text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
+                    </div>
+                    {preview.systemTopupCents > 0 && (
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-muted-foreground">{copy.topup}</dt>
+                        <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
+                      </div>
+                    )}
+                  </>
+                )}
+              </dl>
+            )}
+            {feedback?.kind === 'error' && (
+              <Alert variant="destructive"><AlertDescription role="alert">{feedback.text}</AlertDescription></Alert>
+            )}
+            <Button type="button" variant="outline" onClick={() => setDialogStep('method')} disabled={isSubmitting}>
+              {copy.changeMethod}
+            </Button>
+          </div>
+        )}
+      </ConfirmDialog>
+    </>
   )
 }

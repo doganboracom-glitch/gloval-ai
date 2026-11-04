@@ -7,6 +7,7 @@ import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
+import { REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
 import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -23,10 +24,13 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 
+const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+
 const COPY = {
   tr: {
     title: 'Satış Ortaklığı',
-    descriptionBeforeLink: 'Gloval AI bağlantınızı paylaşın ve yönlendirmelerinizi ',
+    descriptionBeforeLink: 'GLOVAL AI bağlantınızı paylaşın ve yönlendirmelerinizi ',
     descriptionLink: 'panelden',
     descriptionAfterLink: ' güvenli biçimde takip edin.',
     active: 'Aktif',
@@ -37,6 +41,7 @@ const COPY = {
     copied: 'Kopyalandı',
     copyFailed: 'Bağlantı kopyalanamadı.',
     ibanLast4: 'Kayıtlı IBAN son 4 hane',
+    payoutHint: `Bakiyeniz ${minimumPayoutTr} TL olduğunda "Ödeme İste" yapabilirsiniz.`, 
     close: 'Ortaklığı kapat',
     joinTitle: 'Programa katılın',
     termsIntro: 'Katılım şartlarını aşağıdaki kutudan okuyun. Kabul kutusu şartların hemen ardından yer alır.',
@@ -79,7 +84,7 @@ const COPY = {
       not_authenticated: 'Oturumunuz doğrulanamadı. Lütfen yeniden giriş yapın.',
       program_unavailable: 'Program şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
       invalid_input: 'Form bilgilerini kontrol edip yeniden deneyin.',
-      terms_required: 'Devam etmek için geçerli şartları kabul etmeniz gerekir.',
+      terms_required: 'Devam etmek için şartları kabul etmelisiniz.',
       invalid_name: 'Ad alanını kontrol edin (2–120 karakter).',
       invalid_tax_status: 'Geçerli bir vergi statüsü seçin.',
       invalid_iban: 'Geçerli bir Türkiye IBAN’ı girin.',
@@ -92,7 +97,7 @@ const COPY = {
   },
   en: {
     title: 'Referral Partner',
-    descriptionBeforeLink: 'Share your Gloval AI link and securely track referrals from your ',
+    descriptionBeforeLink: 'Share your GLOVAL AI link and securely track referrals from your ',
     descriptionLink: 'dashboard',
     descriptionAfterLink: '.',
     active: 'Active',
@@ -103,6 +108,7 @@ const COPY = {
     copied: 'Copied',
     copyFailed: 'Could not copy the link.',
     ibanLast4: 'Last 4 digits of the saved IBAN',
+    payoutHint: `You can request a payout when your available balance reaches TRY ${minimumPayoutEn}.`, 
     close: 'Close partnership',
     joinTitle: 'Join the program',
     termsIntro: 'Read the participation terms in the box below. The acceptance checkbox follows the terms.',
@@ -145,7 +151,7 @@ const COPY = {
       not_authenticated: 'Your session could not be verified. Please sign in again.',
       program_unavailable: 'The program is unavailable right now. Please try again later.',
       invalid_input: 'Check the form and try again.',
-      terms_required: 'You must accept the current terms before continuing.',
+      terms_required: 'You must accept the terms to continue.',
       invalid_name: 'Check the name field (2–120 characters).',
       invalid_tax_status: 'Choose a valid tax status.',
       invalid_iban: 'Enter a valid Turkish IBAN.',
@@ -177,7 +183,7 @@ export function ReferralPartnerCard({
   const router = useRouter()
   const payeeNameRef = useRef<HTMLInputElement>(null)
   const ibanRef = useRef<HTMLInputElement>(null)
-  const termsBoxRef = useRef<HTMLDivElement>(null)
+  const termsCheckboxRef = useRef<HTMLInputElement>(null)
   const [payeeName, setPayeeName] = useState('')
   const [taxStatus, setTaxStatus] = useState<'individual' | 'company'>('individual')
   const [iban, setIban] = useState('')
@@ -211,7 +217,7 @@ export function ReferralPartnerCard({
 
     if (!termsAccepted) {
       setTermsError(true)
-      termsBoxRef.current?.focus()
+      termsCheckboxRef.current?.focus()
       return
     }
     setTermsError(false)
@@ -324,8 +330,8 @@ export function ReferralPartnerCard({
 
   return (
     <>
-      <Card className="mt-6 border-border/80 bg-card/70">
-        <CardHeader className="gap-2">
+      <Card className="mx-auto mt-6 w-full max-w-2xl border-border/80 bg-card/70">
+        <CardHeader className="gap-2 p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
@@ -341,7 +347,7 @@ export function ReferralPartnerCard({
             {copy.descriptionAfterLink}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-5">
+        <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
           {partner?.status === 'active' && referralUrl ? (
             <>
               <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -388,7 +394,10 @@ export function ReferralPartnerCard({
               )}
               <div className="flex flex-col gap-3 border-t border-border pt-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                  <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
+                    {payoutsEnabled && <p>{copy.payoutHint}</p>}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {payoutsEnabled && (
                       <ReferralPayoutControls
@@ -441,7 +450,6 @@ export function ReferralPartnerCard({
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-muted-foreground">{copy.termsIntro}</p>
                 <div
-                  ref={termsBoxRef}
                   tabIndex={0}
                   aria-label={copy.termsBox}
                   aria-invalid={termsError || undefined}
@@ -465,27 +473,30 @@ export function ReferralPartnerCard({
                 </Link>
               </div>
 
-              <label htmlFor="referral-terms-accepted" className="flex items-start gap-3 text-sm leading-relaxed text-foreground">
-                <input
-                  id="referral-terms-accepted"
-                  type="checkbox"
-                  checked={termsAccepted}
-                  onChange={(event) => {
-                    setTermsAccepted(event.target.checked)
-                    if (event.target.checked) setTermsError(false)
-                  }}
-                  disabled={isSubmitting}
-                  aria-invalid={termsError}
-                  aria-describedby={termsError ? 'referral-terms-error' : undefined}
-                  className="mt-1 size-4 shrink-0 accent-primary"
-                />
-                <span>{copy.acceptTerms}</span>
-              </label>
-              {termsError && (
-                <p id="referral-terms-error" role="alert" className="text-sm text-destructive">
-                  {copy.errors.terms_required}
-                </p>
-              )}
+              <div className={termsError ? 'rounded-md border border-destructive bg-destructive/5 p-3' : 'rounded-md border border-transparent p-3'}>
+                <label htmlFor="referral-terms-accepted" className="flex items-start gap-3 text-sm leading-relaxed text-foreground">
+                  <input
+                    ref={termsCheckboxRef}
+                    id="referral-terms-accepted"
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={(event) => {
+                      setTermsAccepted(event.target.checked)
+                      if (event.target.checked) setTermsError(false)
+                    }}
+                    disabled={isSubmitting}
+                    aria-invalid={termsError}
+                    aria-describedby={termsError ? 'referral-terms-error' : undefined}
+                    className="mt-1 size-4 shrink-0 accent-primary"
+                  />
+                  <span>{copy.acceptTerms}</span>
+                </label>
+                {termsError && (
+                  <p id="referral-terms-error" role="alert" className="mt-2 text-sm text-destructive">
+                    {copy.errors.terms_required}
+                  </p>
+                )}
+              </div>
 
               <FieldGroup>
                 <FieldGroup className="sm:flex-row">

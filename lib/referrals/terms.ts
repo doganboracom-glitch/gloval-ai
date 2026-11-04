@@ -1,3 +1,21 @@
+import {
+  REFERRAL_COMMISSION_RATE_PERCENT,
+  REFERRAL_HOLD_DAYS,
+  REFERRAL_MAX_CREDIT_TOPUP_CENTS,
+  REFERRAL_PAYOUT_MIN_CENTS,
+  REFERRAL_VAT_RATE_PERCENT,
+  TRY_PER_CREDIT_CENTS,
+} from './commission-config'
+
+const minimumPayoutTry = REFERRAL_PAYOUT_MIN_CENTS / 100
+const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
+const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
+const vatMultiplier = ((100 + REFERRAL_VAT_RATE_PERCENT) / 100).toFixed(2)
+const creditValueTry = TRY_PER_CREDIT_CENTS / 100
+const maxCreditTopupTry = REFERRAL_MAX_CREDIT_TOPUP_CENTS / 100
+const maxCreditTopupTr = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
+const maxCreditTopupEn = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
+
 export const REFERRAL_TERMS_VERSION = 'v1.1'
 export const REFERRAL_TERMS_UPDATED_AT = '2026-11-04'
 
@@ -13,10 +31,10 @@ export const REFERRAL_TERMS = {
       {
         heading: '1. Program, komisyon ve ödeme koşulları',
         paragraphs: [
-          'Komisyon yalnızca yönlendirilen yeni müşterinin ilk başarılı ücretli abonelik ödemesi için hesaplanır. Komisyon, KDV hariç tutarın %20’sidir; KDV hariç tutar, brüt ödeme tutarının 1,20’ye bölünmesiyle hesaplanır ve kuruş aşağı yuvarlanır.',
-          'Komisyon ödeme tarihinden itibaren 14 gün beklemede kalır. İlk ödeme bu süre içinde iptal edilir, iade edilir veya ters ibraz edilirse komisyon ters kayıtla iptal edilir. Bekleme süresi geçtikten sonraki bir iade veya ters ibraz, ortak bakiyesinde negatif düzeltme oluşturabilir.',
-          'Nakit ödeme talebi için en az 1.000 TL kullanılabilir bakiye gerekir. Aynı anda yalnızca bir açık nakit talebi bulunabilir. Şirket vergi statüsü bu programda fatura gerektirir ve nakit ödeme, fatura onayından sonra işlenir. Bireysel statü bu program iş akışında fatura gerektirmez; vergi yükümlülüklerinin değerlendirilmesi ortağın sorumluluğundadır.',
-          'AI kredisine dönüştürmede 1 kredi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki en fazla 2,99 TL tutarındaki fark GLOVAL AI tarafından karşılanır. Dönüşüm için de en az 1.000 TL kullanılabilir bakiye gerekir.',
+          `Komisyon yalnızca yönlendirilen yeni müşterinin ilk başarılı abonelik ödemesi için hesaplanır. Komisyon, KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’sidir; KDV hariç tutar, brüt ödeme tutarının ${vatMultiplier.replace('.', ',')}’ye bölünmesiyle hesaplanır ve kuruş aşağı yuvarlanır.`,
+          `Komisyon ödeme tarihinden itibaren ${REFERRAL_HOLD_DAYS} gün beklemede kalır. İlk ödeme bu süre içinde iptal edilir, iade edilir veya ters ibraz edilirse komisyon ters kayıtla iptal edilir. Bekleme süresi geçtikten sonraki bir iade veya ters ibraz, ortak bakiyesinde negatif düzeltme oluşturabilir.`, 
+          `Nakit ödeme talebi için en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir. Aynı anda yalnızca bir açık nakit talebi bulunabilir. Fatura kesmesi gereken şirket ortakları (şahıs şirketleri dâhil) KDV dâhil komisyon faturası düzenler ve onaylanan fatura tutarı ödenir. Bireysel/muaf ortaklardan fatura istenmez; gider belgesi GLOVAL tarafından düzenlenir. Vergi yükümlülüklerinin değerlendirilmesi ortağın sorumluluğundadır.`, 
+          `AI kredisine dönüştürmede 1 kredi ${creditValueTry} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki en fazla ${maxCreditTopupTr} TL tutarındaki fark GLOVAL AI tarafından karşılanır. Dönüşüm için de en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir.`, 
         ],
       },
       {
@@ -43,7 +61,7 @@ export const REFERRAL_TERMS = {
         heading: '5. Vergi ve belgeler',
         paragraphs: [
           'Katılım formundaki mevcut vergi statüsü seçenekleri “Bireysel” ve “Şirket”tir. Program eşlemesinde “Şirket” (şahıs şirketleri dâhil) nakit ödeme için fatura gerektirir; “Bireysel” bu iş akışında fatura gerektirmez. Bu ürün eşlemesi vergi veya hukuk danışmanlığı değildir; ortağın kendi statüsüne uygulanacak yükümlülükleri doğrulaması gerekir.',
-          'İlk ödeme işlendiğinde vergi bilgileriniz yönetici tarafından doğrulanmamışsa ortaklık, doğrulama tamamlanana kadar yeni yönlendirmeleri durdurmak üzere askıya alınabilir. Doğrulama, bu şartları yeniden kabul etmenizi gerektirmez.',
+          'Vergi bilgileriniz doğrulanmadan önce yalnızca bir nakit ödeme yapılabilir. İlk nakit ödeme işlendiğinde bilgileriniz hâlâ doğrulanmamışsa ortaklığınız yeni yönlendirmeleri durdurmak üzere otomatik olarak askıya alınır; sonraki nakit ödeme için destek ekibimiz üzerinden doğrulama gerekir. TCKN veya vergi numarası bu uygulamada toplanmaz. Doğrulama, bu şartları yeniden kabul etmenizi gerektirmez.',
         ],
       },
       {
@@ -55,7 +73,7 @@ export const REFERRAL_TERMS = {
       {
         heading: '7. Program durumu ve sürüm',
         paragraphs: [
-          'Kural ihlali veya kötüye kullanım şüphesinde ortaklık durumu askıya alınabilir veya kapatılabilir. Askıya alınan ortak yeni tıklama ve kayıt kabul etmez. Bekleyen veya kullanılabilir pozitif bakiye ya da açık nakit talebi varken ortaklık kapatılamaz. Bu belge sürüm v1.1 olarak 4 Kasım 2026 tarihinde yayımlanmıştır.',
+          'Kural ihlali veya kötüye kullanım şüphesinde ortaklık askıya alınabilir veya kapatılabilir; kötüye kullanım hâlinde bekleyen komisyonlar iptal edilebilir. Askıya alınan ortak yeni tıklama ve kayıt kabul etmez. Bekleyen, kullanılabilir veya talep edilmiş pozitif bakiye ya da açık nakit talebi varken ortaklık kapatılamaz. Bu belge sürüm v1.1 olarak 4 Kasım 2026 tarihinde yayımlanmıştır.',
         ],
       },
     ],
@@ -71,10 +89,10 @@ export const REFERRAL_TERMS = {
       {
         heading: '1. Program, commissions, and payouts',
         paragraphs: [
-          'A commission is earned only on the referred new customer’s first successful paid subscription charge. The commission is 20% of the amount excluding VAT; the VAT-exclusive amount is the gross payment divided by 1.20, rounded down to the kuruş.',
-          'A commission remains pending for 14 days after payment. If the first payment is cancelled, refunded, or charged back during that period, the commission is reversed. A refund or chargeback after the hold may create a negative adjustment to the partner balance.',
-          'A cash payout requires at least TRY 1,000 in available balance. Only one cash request may be open at a time. The program maps Company tax status to an invoice-required cash payout; cash payout is processed after invoice confirmation. Individual status does not require an invoice in this program workflow; the partner remains responsible for determining their tax obligations.',
-          'For AI credit conversion, one credit is worth TRY 3. The credit count is rounded up and GLOVAL AI covers the difference, up to TRY 2.99. Credit conversion also requires at least TRY 1,000 in available balance.',
+          `A commission is earned only on the referred new customer’s first successful paid subscription charge. The commission is ${REFERRAL_COMMISSION_RATE_PERCENT}% of the amount excluding VAT; the VAT-exclusive amount is the gross payment divided by ${vatMultiplier}, rounded down to the kuruş.`, 
+          `A commission remains pending for ${REFERRAL_HOLD_DAYS} days after payment. If the first payment is cancelled, refunded, or charged back during that period, the commission is reversed. A refund or chargeback after the hold may create a negative adjustment to the partner balance.`, 
+          `A cash payout requires at least TRY ${minimumPayoutEn} in available balance. Only one cash request may be open at a time. Partners who must issue invoices (Company, including sole proprietorships, under this program mapping) issue a commission invoice including VAT, and the approved invoice amount is paid. No invoice is requested from individual/exempt partners; GLOVAL issues an expense document. The partner remains responsible for determining their tax obligations.`, 
+          `For AI credit conversion, one credit is worth TRY ${creditValueTry}. The credit count is rounded up and GLOVAL AI covers the difference, up to TRY ${maxCreditTopupEn}. Credit conversion also requires at least TRY ${minimumPayoutEn} in available balance.`, 
         ],
       },
       {
@@ -101,7 +119,7 @@ export const REFERRAL_TERMS = {
         heading: '5. Taxes and records',
         paragraphs: [
           'The current tax-status choices are Individual and Company. In this program mapping, Company (including sole proprietorships) requires an invoice for cash payouts; Individual does not require an invoice in this workflow. This product mapping is not tax or legal advice; the partner must verify the obligations that apply to their status.',
-          'If an administrator has not verified your tax details when your first payout is processed, your partnership may be suspended from accepting new referrals until verification. Verification does not require you to accept these terms again.',
+          'Only one cash payout may be processed before tax details are verified. If your details are still unverified when the first cash payout is processed, your partnership is automatically suspended from accepting new referrals; verification through our support team is required before the next cash payout. This application does not collect national ID or tax identification numbers. Verification does not require you to accept these terms again.',
         ],
       },
       {
@@ -113,7 +131,7 @@ export const REFERRAL_TERMS = {
       {
         heading: '7. Program status and version',
         paragraphs: [
-          'Partnership status may be suspended or closed in response to a rule violation or suspected abuse. Suspended partners do not accept new clicks or signups. A partnership cannot be closed while a positive pending/available balance or an open cash request remains. This document is version v1.1, published November 4, 2026.',
+          'Partnership status may be suspended or closed in response to a rule violation or suspected abuse; pending commissions may be cancelled in cases of abuse. Suspended partners do not accept new clicks or signups. A partnership cannot be closed while a positive pending/available/requested balance or an open cash request remains. This document is version v1.1, published November 4, 2026.'
         ],
       },
     ],

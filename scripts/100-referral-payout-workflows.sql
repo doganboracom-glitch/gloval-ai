@@ -33,8 +33,8 @@ begin
 
   select
     coalesce(sum(request.balance_cents) filter (where request.status = 'requested'), 0),
-    coalesce(sum(request.balance_cents) filter (where request.status = 'converted'), 0),
-    coalesce(sum(request.balance_cents) filter (where request.status = 'paid'), 0),
+    coalesce(sum(request.balance_cents) filter (where request.method = 'credit' and request.status = 'processed'), 0),
+    coalesce(sum(request.balance_cents) filter (where request.method = 'cash' and request.status = 'processed'), 0),
     coalesce(bool_or(request.method = 'cash' and request.status = 'requested'), false)
   into v_requested, v_converted, v_paid, v_open_cash
   from public.referral_payout_requests as request
@@ -125,6 +125,19 @@ begin
     return jsonb_build_object('ok', false, 'error', 'partner_closed');
   end if;
 
+  if p_method = 'cash'
+    and v_partner.status = 'suspended'
+    and v_partner.tax_verified_at is null
+    and exists (
+      select 1
+      from public.referral_payout_requests as prior_cash_payout
+      where prior_cash_payout.partner_id = p_partner_id
+        and prior_cash_payout.method = 'cash'
+        and prior_cash_payout.status = 'processed'
+    ) then
+    return jsonb_build_object('ok', false, 'error', 'tax_verification_required');
+  end if;
+
   if exists (
     select 1
     from public.referral_payout_requests as request
@@ -201,7 +214,7 @@ begin
     v_partner.tax_status,
     case when p_method = 'cash' then v_partner.payee_name else null end,
     case when p_method = 'cash' then v_partner.iban_last4 else null end,
-    case when p_method = 'credit' then 'converted' else 'requested' end,
+    case when p_method = 'credit' then 'processed' else 'requested' end,
     p_idempotency_key,
     v_now,
     case when p_method = 'credit' then v_now else null end
@@ -271,7 +284,7 @@ begin
     'duplicate', false,
     'requestId', v_request_id,
     'method', p_method,
-    'status', case when p_method = 'credit' then 'converted' else 'requested' end,
+    'status', case when p_method = 'credit' then 'processed' else 'requested' end,
     'balanceCents', v_available,
     'payoutCents', v_payout_cents,
     'creditAmount', v_credit_amount,
@@ -399,7 +412,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'partner_not_found');
   end if;
 
-  if v_request.status = 'paid' then
+  if v_request.status = 'processed' then
     return jsonb_build_object(
       'ok', true,
       'alreadyProcessed', true,
@@ -436,8 +449,8 @@ begin
   end if;
 
   update public.referral_payout_requests
-    set status = 'paid',
-        invoice_confirmed = v_request.invoice_required and v_request.invoice_confirmed,
+  set status = 'processed',
+      invoice_confirmed = v_request.invoice_required and v_request.invoice_confirmed,
         payment_reference = btrim(p_payment_reference),
         processed_at = v_now,
         processed_by = p_actor_user_id
@@ -810,17 +823,17 @@ as $$
     'convertedCents', coalesce((
       select sum(request.balance_cents)
       from public.referral_payout_requests as request
-      where request.status = 'converted'
+      where request.method = 'credit' and request.status = 'processed'
     ), 0),
     'systemTopupCents', coalesce((
       select sum(request.system_topup_cents)
       from public.referral_payout_requests as request
-      where request.status = 'converted'
+      where request.method = 'credit' and request.status = 'processed'
     ), 0),
     'paidCents', coalesce((
       select sum(request.balance_cents)
       from public.referral_payout_requests as request
-      where request.status = 'paid'
+      where request.method = 'cash' and request.status = 'processed'
     ), 0),
     'openCashRequests', coalesce((
       select count(*)

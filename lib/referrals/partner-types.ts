@@ -50,7 +50,7 @@ export type ReferralAdminPartner = {
 }
 
 export type ReferralPayoutMethod = 'cash' | 'credit'
-export type ReferralPayoutStatus = 'requested' | 'paid' | 'rejected' | 'converted'
+export type ReferralPayoutStatus = 'requested' | 'processed' | 'rejected'
 
 export type ReferralPayoutState = {
   partnerStatus: ReferralPartnerStatus

@@ -64,7 +64,7 @@ const COPY = {
     individual: 'Bireysel',
     company: 'Şirket',
     requested: 'İncelemede',
-    paid: 'Ödendi',
+    processed: 'Ödendi',
     rejected: 'Reddedildi',
     convertedStatus: 'Dönüştürüldü',
     invoiceRequired: 'Komisyon faturası bekleniyor',
@@ -143,7 +143,7 @@ const COPY = {
     individual: 'Individual',
     company: 'Company',
     requested: 'Under review',
-    paid: 'Paid',
+    processed: 'Paid',
     rejected: 'Rejected',
     convertedStatus: 'Converted',
     invoiceRequired: 'Commission invoice pending',
@@ -204,8 +204,8 @@ const COPY = {
 } as const
 
 const STATUS_LABEL: Record<Language, Record<ReferralPayoutStatus, string>> = {
-  tr: { requested: 'İncelemede', paid: 'Ödendi', rejected: 'Reddedildi', converted: 'Dönüştürüldü' },
-  en: { requested: 'Under review', paid: 'Paid', rejected: 'Rejected', converted: 'Converted' },
+  tr: { requested: 'İncelemede', processed: 'Ödendi', rejected: 'Reddedildi' },
+  en: { requested: 'Under review', processed: 'Paid', rejected: 'Rejected' },
 }
 
 function asDate(value: string, locale: string) {
@@ -503,7 +503,7 @@ function FragmentRows({
   const localeCode = language === 'tr' ? 'tr-TR' : 'en-US'
   const isCashRequest = request.method === 'cash' && request.status === 'requested'
   const canVerifyTax = request.taxVerifiedAt === null && request.partnerStatus !== 'closed'
-  const statusLabel = STATUS_LABEL[language][request.status]
+  const statusLabel = request.method === 'credit' ? copy.convertedStatus : STATUS_LABEL[language][request.status]
 
   return (
     <>
@@ -542,7 +542,7 @@ function FragmentRows({
           {request.adminNote && request.status === 'rejected' && <p className="mt-1 max-w-52 whitespace-normal text-xs text-muted-foreground">{request.adminNote}</p>}
         </TableCell>
         <TableCell className="min-w-36 text-xs text-muted-foreground">{asDate(request.requestedAt, locale)}</TableCell>
-        <TableCell><Badge variant={request.status === 'paid' ? 'default' : request.status === 'rejected' ? 'destructive' : 'secondary'}>{statusLabel}</Badge></TableCell>
+        <TableCell><Badge variant={request.status === 'processed' ? 'default' : request.status === 'rejected' ? 'destructive' : 'secondary'}>{statusLabel}</Badge></TableCell>
         <TableCell className="min-w-56">
           <div className="flex flex-wrap gap-2">
             {isCashRequest && (

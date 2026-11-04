@@ -127,7 +127,7 @@ export async function processReferralCashPayout(input: {
     const partnerId = typeof result.partnerId === 'string' && UUID_PATTERN.test(result.partnerId)
       ? result.partnerId
       : null
-    const language = result.partnerLanguage === 'en' ? 'en' : 'tr'
+    const language: 'en' | 'tr' = result.partnerLanguage === 'en' ? 'en' : 'tr'
     const payoutCents = Number(result.payoutCents)
     if (partnerId && Number.isSafeInteger(payoutCents) && payoutCents >= 0 && result.alreadyProcessed !== true) {
       const base = { partnerId, payoutRequestId: requestId, lang: language, amountCents: payoutCents }
@@ -181,7 +181,7 @@ export async function rejectReferralCashPayout(input: {
     const partnerId = typeof result.partnerId === 'string' && UUID_PATTERN.test(result.partnerId)
       ? result.partnerId
       : null
-    const language = result.partnerLanguage === 'en' ? 'en' : 'tr'
+    const language: 'en' | 'tr' = result.partnerLanguage === 'en' ? 'en' : 'tr'
     const amountCents = Number(result.balanceCents)
     if (partnerId && Number.isSafeInteger(amountCents) && amountCents >= 0 && result.alreadyProcessed !== true) {
       await queueReferralPayoutNotification({

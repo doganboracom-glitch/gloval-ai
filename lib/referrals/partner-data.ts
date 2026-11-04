@@ -155,7 +155,18 @@ export async function getReferralDashboardData(): Promise<ReferralDashboardData 
   if (authState.kind !== 'authenticated') return null
 
   try {
-    const { data, error } = await createAdminClient().rpc('referral_partner_dashboard', {
+    const admin = createAdminClient()
+    const { data: partner, error: partnerError } = await admin
+      .from('referral_partners')
+      .select('id')
+      .eq('user_id', authState.user.id)
+      .maybeSingle()
+    if (partnerError) return null
+    if (typeof partner?.id === 'string') {
+      await admin.rpc('referral_sync_commissions', { p_partner_id: partner.id })
+    }
+
+    const { data, error } = await admin.rpc('referral_partner_dashboard', {
       p_user_id: authState.user.id,
       p_include_customers: true,
     })

@@ -54,7 +54,7 @@ function payoutMethod(value: unknown): ReferralPayoutMethod | null {
 }
 
 function payoutStatus(value: unknown): ReferralPayoutStatus | null {
-  return value === 'requested' || value === 'paid' || value === 'rejected' || value === 'converted'
+  return value === 'requested' || value === 'processed' || value === 'rejected'
     ? value
     : null
 }

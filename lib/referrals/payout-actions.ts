@@ -18,6 +18,7 @@ type PayoutActionError =
   | 'partner_inactive'
   | 'insufficient_balance'
   | 'open_cash_request'
+  | 'tax_verification_required'
   | 'missing_iban'
   | 'invalid_tax_status'
   | 'idempotency_conflict'
@@ -53,6 +54,7 @@ function mapRpcError(value: unknown, method: ReferralPayoutMethod, hasIban: bool
   if (value === 'partner_closed') return 'partner_inactive'
   if (value === 'minimum_not_met') return 'insufficient_balance'
   if (value === 'open_cash_request') return 'open_cash_request'
+  if (value === 'tax_verification_required') return 'tax_verification_required'
   if (value === 'idempotency_conflict') return 'idempotency_conflict'
   if (value === 'invalid_input') return 'invalid_input'
   if (value === 'credit_amount_out_of_range') return 'credit_unavailable'
@@ -120,7 +122,7 @@ export async function createReferralPayoutRequest(input: {
       (data.creditAmount != null && creditAmount === null)
     ) return { ok: false, error: 'unavailable' }
 
-    const lang = input.lang === 'en' ? 'en' : 'tr'
+    const lang: 'en' | 'tr' = input.lang === 'en' ? 'en' : 'tr'
     const noticeBase = { partnerId: partner.id, payoutRequestId: requestId, lang }
     if (payoutMethod === 'cash') {
       await queueReferralPayoutNotification({
@@ -137,7 +139,7 @@ export async function createReferralPayoutRequest(input: {
       await queueReferralPayoutNotification({
         ...noticeBase,
         type: 'referral_credit_converted',
-        creditAmount,
+        creditAmount: creditAmount ?? undefined,
         systemTopupCents,
       })
     }
