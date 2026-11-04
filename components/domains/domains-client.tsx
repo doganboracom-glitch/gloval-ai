@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, ChevronRight, Globe, Loader2, Plus, ShoppingCart, Star, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { adminT } from '@/lib/admin/i18n'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { LinkButton } from '@/components/link-button'
 import { DomainModal, DomainShell, DomainStatusBadge, fill } from '@/components/domains/domain-chrome'
@@ -49,7 +50,7 @@ export function DomainsClient({
   paymentResult?: 'success' | 'failed' | 'error' | null
   initialBuyDomain?: string | null
 }) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const router = useRouter()
   const d = t.domains
 
@@ -359,7 +360,7 @@ export function DomainsClient({
                   </span>
                   {domain.adminAssigned && (
                     <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">
-                      {d.mgSourceAdminAssigned}
+                      {adminT(lang).domains.importAssigned}
                     </span>
                   )}
                   <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

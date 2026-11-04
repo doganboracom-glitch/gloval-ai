@@ -50,6 +50,18 @@ export async function requestRegistrarDomainImportAction(input: {
   const actor = await requireAdmin()
   const rate = await guardRateLimit(actor.userId, 'request')
   if (rate !== 'ok') return { ok: false, error: rate === 'rate_limited' ? 'rate_limited' : 'unavailable' }
+  if (!input || typeof input.domain !== 'string' || input.domain.length > 300) {
+    return { ok: false, error: 'invalid_domain' }
+  }
+  if (typeof input.targetEmail !== 'string' || input.targetEmail.length > 254) {
+    return { ok: false, error: 'invalid_email' }
+  }
+  if (typeof input.reason !== 'string' || input.reason.length > 1000) {
+    return { ok: false, error: 'reason_required' }
+  }
+  if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length > 80) {
+    return { ok: false, error: 'idempotency_conflict' }
+  }
   return requestRegistrarDomainImport({ ...input, actor: { userId: actor.userId, email: actor.email } })
 }
 
@@ -59,6 +71,9 @@ export async function approveRegistrarDomainImportAction(
   const actor = await requireAdmin()
   const rate = await guardRateLimit(actor.userId, 'decide')
   if (rate !== 'ok') return { ok: false, error: rate === 'rate_limited' ? 'rate_limited' : 'unavailable' }
+  if (typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId)) {
+    return { ok: false, error: 'request_not_found' }
+  }
   return approveRegistrarDomainImport({ requestId, actor: { userId: actor.userId, email: actor.email } })
 }
 
@@ -69,6 +84,12 @@ export async function rejectRegistrarDomainImportAction(input: {
   const actor = await requireAdmin()
   const rate = await guardRateLimit(actor.userId, 'decide')
   if (rate !== 'ok') return { ok: false, error: rate === 'rate_limited' ? 'rate_limited' : 'unavailable' }
+  if (!input || typeof input.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(input.requestId)) {
+    return { ok: false, error: 'request_not_found' }
+  }
+  if (typeof input.note !== 'string' || input.note.length > 1000) {
+    return { ok: false, error: 'reason_required' }
+  }
   return rejectRegistrarDomainImport({
     ...input,
     actor: { userId: actor.userId, email: actor.email },
