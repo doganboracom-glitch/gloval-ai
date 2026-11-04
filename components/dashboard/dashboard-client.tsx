@@ -38,7 +38,7 @@ import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
 import { ReferralDashboardPanel } from '@/components/dashboard/referral-dashboard-panel'
-import type { ReferralDashboardData } from '@/lib/referrals/partner-types'
+import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const headerActionClass =
   'h-11 gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted hover:text-foreground'
@@ -53,6 +53,9 @@ export function DashboardClient({
   showBillingProfileReminder = false,
   unreadMessages = 0,
   referralDashboard = null,
+  referralPayoutData = null,
+  payoutsEnabled = false,
+  cashPayoutsEnabled = false,
 }: {
   projects: ProjectListItem[]
   /** Ids of the sites that hold an active Aura İmleç right. */
@@ -68,6 +71,9 @@ export function DashboardClient({
   /** Okunmamış iletişim mesajı sayısı; 0 ise rozet gösterilmez. */
   unreadMessages?: number
   referralDashboard?: ReferralDashboardData | null
+  referralPayoutData?: ReferralPayoutPanelData | null
+  payoutsEnabled?: boolean
+  cashPayoutsEnabled?: boolean
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -414,7 +420,12 @@ export function DashboardClient({
         )}
       </div>
 
-      <ReferralDashboardPanel data={referralDashboard} />
+      <ReferralDashboardPanel
+        data={referralDashboard}
+        payoutData={referralPayoutData}
+        payoutsEnabled={payoutsEnabled}
+        cashPayoutsEnabled={cashPayoutsEnabled}
+      />
 
       {showStorePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

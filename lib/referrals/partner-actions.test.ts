@@ -36,9 +36,16 @@ vi.mock('@/lib/supabase/admin', () => ({
           }
           return query
         },
-        insert: async (value: Record<string, unknown>) => {
+        insert: (value: Record<string, unknown>) => {
           state.inserts.push(value)
-          return { error: state.insertError }
+          const query: any = {
+            select: () => query,
+            maybeSingle: async () => ({
+              data: state.insertError ? null : { id: 'partner-id' },
+              error: state.insertError,
+            }),
+          }
+          return query
         },
         update: (value: Record<string, unknown>) => {
           state.updatePayload = value
@@ -73,6 +80,7 @@ import {
   closeReferralPartner,
   saveReferralPartnerIban,
 } from '@/lib/referrals/partner-actions'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 
 function validTurkishIban(): string {
   const account = '1234567890123456789012'
@@ -91,7 +99,7 @@ function validInput() {
     taxStatus: 'individual',
     iban: validTurkishIban(),
     termsAccepted: true,
-    termsVersion: 'v1.0',
+    termsVersion: REFERRAL_TERMS_VERSION,
     lang: 'tr',
   }
 }
@@ -168,7 +176,7 @@ describe('referral partner actions', () => {
     expect(state.inserts[0]).toMatchObject({
       user_id: 'owner-id',
       status: 'active',
-      terms_version: 'v1.0',
+      terms_version: REFERRAL_TERMS_VERSION,
       payee_name: 'Ayşe Yılmaz',
       tax_status: 'individual',
       iban_key_version: 'v1',
@@ -178,6 +186,7 @@ describe('referral partner actions', () => {
     expect(JSON.stringify(result)).not.toContain(iban)
     expect(result).not.toHaveProperty('payeeName')
     expect(state.enqueueActivation).toHaveBeenCalledWith(expect.objectContaining({
+      partnerId: 'partner-id',
       referralCode: expect.any(String),
       activatedAt: expect.any(String),
       lang: 'tr',

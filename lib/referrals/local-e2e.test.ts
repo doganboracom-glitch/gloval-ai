@@ -63,7 +63,7 @@ function createQuery(table: string) {
       const inserted = {
         ...(table === 'referral_partners' ? { id: PARTNER_ID } : {}),
         ...(table === 'referral_signup_intents' ? { consumed_at: null } : {}),
-        ...(table === 'referral_attributions' ? { verified_at: null } : {}),
+        ...(table === 'referral_attributions' ? { id: '44444444-4444-4444-8444-444444444444', verified_at: null } : {}),
         ...payload,
       }
       if (table === 'referral_partners') state.partner = inserted

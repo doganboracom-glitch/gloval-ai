@@ -15,6 +15,8 @@ vi.mock('@/lib/notify', () => ({ sendTransactionalEmailDetailed: mocks.sendTrans
 
 import { enqueueReferralPartnerActivationEmail } from './outbox'
 
+const PARTNER_ID = '22222222-2222-4222-8222-222222222222'
+
 describe('referral partner activation outbox', () => {
   beforeEach(() => {
     mocks.insertedRows = []
@@ -37,10 +39,11 @@ describe('referral partner activation outbox', () => {
     vi.restoreAllMocks()
   })
 
-  it('queues an idempotent admin notice with only referral code and activation date', async () => {
+  it('queues a partner-ID-deduped welcome email without payout details', async () => {
     const activatedAt = '2026-11-04T12:30:00.000Z'
 
     await enqueueReferralPartnerActivationEmail({
+      partnerId: PARTNER_ID,
       referralCode: 'partner1234',
       activatedAt,
       lang: 'en',
@@ -50,9 +53,9 @@ describe('referral partner activation outbox', () => {
     const [row] = mocks.insertedRows
     expect(row).toMatchObject({
       channel: 'email',
-      type: 'referral_partner_admin',
-      subject: 'New referral partner activated',
-      dedupe_key: 'referral_partner_admin:PARTNER1234',
+      type: 'referral_partner_welcome',
+      subject: 'Welcome to the referral program',
+      dedupe_key: `referral_partner_welcome:${PARTNER_ID}`,
       status: 'queued',
       user_id: null,
     })
@@ -60,6 +63,7 @@ describe('referral partner activation outbox', () => {
     expect(body).toEqual({
       lang: 'en',
       attempts: 0,
+      partnerId: PARTNER_ID,
       referralCode: 'PARTNER1234',
       activatedAt,
     })
@@ -73,6 +77,7 @@ describe('referral partner activation outbox', () => {
     mocks.insertError = { code: 'OUTBOX_UNAVAILABLE' }
 
     await expect(enqueueReferralPartnerActivationEmail({
+      partnerId: PARTNER_ID,
       referralCode: 'PARTNER1234',
       activatedAt: '2026-11-04T12:30:00.000Z',
       lang: 'tr',
@@ -86,6 +91,7 @@ describe('referral partner activation outbox', () => {
     mocks.insertError = { code: '23505' }
 
     await expect(enqueueReferralPartnerActivationEmail({
+      partnerId: PARTNER_ID,
       referralCode: 'PARTNER1234',
       activatedAt: '2026-11-04T12:30:00.000Z',
       lang: 'tr',
@@ -94,10 +100,17 @@ describe('referral partner activation outbox', () => {
     expect(mocks.after).not.toHaveBeenCalled()
   })
 
-  it('sends the admin notice with an idempotency key and no payout details', async () => {
-    vi.stubEnv('ADMIN_NOTIFICATION_EMAIL', 'ops@example.test,backup@example.test')
+  it('sends the welcome email to the partner with an idempotency key', async () => {
     mocks.sendTransactionalEmailDetailed.mockResolvedValue({ ok: true })
     mocks.createAdminClient.mockImplementation(() => ({
+      auth: {
+        admin: {
+          getUserById: vi.fn().mockResolvedValue({
+            data: { user: { email: 'partner@example.test' } },
+            error: null,
+          }),
+        },
+      },
       from: (table: string) => ({
         insert: async (rows: Array<Record<string, unknown>>) => {
           expect(table).toBe('notification_logs')
@@ -111,6 +124,13 @@ describe('referral partner activation outbox', () => {
           return { error: null }
         },
         select: () => {
+          if (table === 'referral_partners') {
+            const partnerQuery: any = {
+              eq: () => partnerQuery,
+              maybeSingle: async () => ({ data: { user_id: 'partner-user-id' }, error: null }),
+            }
+            return partnerQuery
+          }
           const filters: Record<string, unknown> = {}
           const query: any = {
             eq: (key: string, value: unknown) => {
@@ -153,6 +173,7 @@ describe('referral partner activation outbox', () => {
     }))
 
     await enqueueReferralPartnerActivationEmail({
+      partnerId: PARTNER_ID,
       referralCode: 'PARTNER1234',
       activatedAt: '2026-11-04T12:30:00.000Z',
       lang: 'en',
@@ -162,12 +183,16 @@ describe('referral partner activation outbox', () => {
 
     expect(mocks.sendTransactionalEmailDetailed).toHaveBeenCalledOnce()
     expect(mocks.sendTransactionalEmailDetailed).toHaveBeenCalledWith(expect.objectContaining({
-      to: 'ops@example.test',
-      idempotencyKey: 'referral-partner-admin:PARTNER1234',
+      to: 'partner@example.test',
+      idempotencyKey: `referral-partner-welcome:${PARTNER_ID}`,
     }))
     const sentEmail = mocks.sendTransactionalEmailDetailed.mock.calls[0][0]
     expect(sentEmail.html).toContain('PARTNER1234')
-    expect(sentEmail.html.toLowerCase()).not.toContain('iban')
-    expect(sentEmail.html).not.toContain('ops@example.test')
+    expect(sentEmail.html).toContain('https://gloval.ai/dashboard#satis-ortakligi')
+    expect(sentEmail.html).toContain('20%')
+    expect(sentEmail.html).toContain('14 days')
+    expect(sentEmail.html).toContain('TRY 1,000')
+    expect(sentEmail.html).not.toContain('partner@example.test')
+    expect(sentEmail.html).not.toMatch(/TR\d{24}/u)
   })
 })

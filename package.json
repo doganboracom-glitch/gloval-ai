@@ -19,6 +19,7 @@
     "ai": "^7.0.123",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cn": "^0.5.2",
     "lucide-react": "^1.16.0",
     "next": "16.3.0",
     "nodejs-dna": "^3.0.0",

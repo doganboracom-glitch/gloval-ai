@@ -26,6 +26,7 @@ type PartnerActionError =
   | 'already_registered'
   | 'not_active'
   | 'iban_unavailable'
+  | 'balance_outstanding'
 
 type PartnerActionResult =
   | { ok: true; referralCode: string; ibanLast4: string }
@@ -82,31 +83,40 @@ export async function activateReferralPartner(input: {
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const referralCode = generateReferralCode()
-      const { error } = await admin.from('referral_partners').insert({
-        user_id: authState.user.id,
-        referral_code: referralCode,
-        status: 'active',
-        terms_version: REFERRAL_TERMS_VERSION,
-        terms_accepted_at: activatedAt,
-        created_at: activatedAt,
-        payee_name: payeeName,
-        tax_status: taxStatus,
-        iban_ciphertext: encrypted.ciphertext,
-        iban_key_version: encrypted.keyVersion,
-        iban_last4: encrypted.last4,
-      })
-
-    if (!error) {
-      try {
-        await enqueueReferralPartnerActivationEmail({
-          referralCode,
-          activatedAt,
-          lang: input.lang === 'en' ? 'en' : 'tr',
+      const { data: insertedPartner, error } = await admin
+        .from('referral_partners')
+        .insert({
+          user_id: authState.user.id,
+          referral_code: referralCode,
+          status: 'active',
+          terms_version: REFERRAL_TERMS_VERSION,
+          terms_accepted_at: activatedAt,
+          created_at: activatedAt,
+          payee_name: payeeName,
+          tax_status: taxStatus,
+          iban_ciphertext: encrypted.ciphertext,
+          iban_key_version: encrypted.keyVersion,
+          iban_last4: encrypted.last4,
         })
-      } catch {
-        console.error('[referrals] activation notification enqueue failed')
-      }
-      revalidatePath('/settings')
+        .select('id')
+        .maybeSingle()
+
+      if (!error) {
+        try {
+          if (typeof insertedPartner?.id === 'string') {
+            await enqueueReferralPartnerActivationEmail({
+              partnerId: insertedPartner.id,
+              referralCode,
+              activatedAt,
+              lang: input.lang === 'en' ? 'en' : 'tr',
+            })
+          } else {
+            console.error('[referrals] activation notification enqueue failed')
+          }
+        } catch {
+          console.error('[referrals] activation notification enqueue failed')
+        }
+        revalidatePath('/settings')
       revalidatePath('/dashboard')
       return { ok: true, referralCode, ibanLast4: encrypted.last4 }
     }
@@ -200,10 +210,12 @@ export async function closeReferralPartner(): Promise<ClosePartnerResult> {
 
     const transition = data as { ok?: unknown; error?: unknown } | null
     if (transition?.ok !== true) {
-      return {
-        ok: false,
-        error: transition?.error === 'invalid_transition' ? 'not_active' : 'program_unavailable',
-      }
+      const error = transition?.error === 'balance_outstanding'
+        ? 'balance_outstanding'
+        : transition?.error === 'invalid_transition'
+          ? 'not_active'
+          : 'program_unavailable'
+      return { ok: false, error }
     }
 
     revalidatePath('/settings')

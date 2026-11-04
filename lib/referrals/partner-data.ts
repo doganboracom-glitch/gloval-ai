@@ -73,11 +73,17 @@ export function mapReferralDashboardRpcResult(value: unknown): ReferralDashboard
 
   const customers: ReferralCustomer[] = (Array.isArray(row.customers) ? row.customers : [])
     .filter(isRecord)
-    .map((customer) => ({
-      maskedEmail: maskEmail(typeof customer.email === 'string' ? customer.email : null),
-      status: customerStatus(customer.status),
-      createdAt: dateString(customer.createdAt) ?? '',
-    }))
+    .map((customer) => {
+      const accountDeleted = customer.accountDeleted === true
+      return {
+        maskedEmail: accountDeleted
+          ? ''
+          : maskEmail(typeof customer.email === 'string' ? customer.email : null),
+        accountDeleted,
+        status: customerStatus(customer.status),
+        createdAt: dateString(customer.createdAt) ?? '',
+      }
+    })
     .filter((customer) => customer.createdAt)
 
   return {
@@ -149,7 +155,18 @@ export async function getReferralDashboardData(): Promise<ReferralDashboardData 
   if (authState.kind !== 'authenticated') return null
 
   try {
-    const { data, error } = await createAdminClient().rpc('referral_partner_dashboard', {
+    const admin = createAdminClient()
+    const { data: partner, error: partnerError } = await admin
+      .from('referral_partners')
+      .select('id')
+      .eq('user_id', authState.user.id)
+      .maybeSingle()
+    if (partnerError) return null
+    if (typeof partner?.id === 'string') {
+      await admin.rpc('referral_sync_commissions', { p_partner_id: partner.id })
+    }
+
+    const { data, error } = await admin.rpc('referral_partner_dashboard', {
       p_user_id: authState.user.id,
       p_include_customers: true,
     })

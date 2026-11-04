@@ -13,20 +13,29 @@ afterEach(() => {
 })
 
 describe('referral partner terms', () => {
-  it('uses the accepted version, neutral payment terms, and program eligibility rules', () => {
+  it('uses version v1.1 and explains commission, payout, tax, and privacy rules', () => {
     const turkishTerms = REFERRAL_TERMS.tr.sections.flatMap((section) => section.paragraphs).join(' ')
     const englishTerms = REFERRAL_TERMS.en.sections.flatMap((section) => section.paragraphs).join(' ')
 
-    expect(REFERRAL_TERMS_VERSION).toBe('v1.0')
-    expect(turkishTerms).toContain('Ödeme koşulları ayrıca duyurulacaktır.')
-    expect(englishTerms).toContain('Payment terms will be announced separately.')
-    expect(turkishTerms).not.toMatch(/%\s*20|KDV hariç|14 günlük|1\.000\s*TL|komisyon hakkı doğmaz|garanti kazanç|taslak|hukuki onay bekliyor/iu)
-    expect(englishTerms).not.toMatch(/20%|exclusive of VAT|14-day|TRY\s*1,000|commission is due|guaranteed-earnings|draft|legal approval pending/iu)
+    expect(REFERRAL_TERMS_VERSION).toBe('v1.1')
+    expect(turkishTerms).toMatch(/ilk başarılı abonelik ödemesi.*%20.*KDV hariç/iu)
+    expect(turkishTerms).toMatch(/14 gün.*iade edilir/iu)
+    expect(turkishTerms).toMatch(/1\.000 TL.*AI kredisine.*1 kredi.*3 TL/iu)
+    expect(turkishTerms).toMatch(/Şirket.*KDV.*fatura.*Bireysel.*fatura.*gider belgesi/iu)
+    expect(turkishTerms).toMatch(/TCKN veya vergi numarası.*toplanmaz/iu)
+    expect(turkishTerms).toMatch(/kötüye kullanım.*askıya alınabilir/iu)
+    expect(englishTerms).toMatch(/first successful paid subscription charge.*20%.*excluding VAT/iu)
+    expect(englishTerms).toMatch(/14 days.*refunded/iu)
+    expect(englishTerms).toMatch(/TRY 1,000.*AI credit conversion.*one credit.*TRY 3/iu)
+    expect(englishTerms).toMatch(/Company.*commission invoice including VAT.*No invoice is requested from individual.*expense document/iu)
+    expect(englishTerms).toMatch(/national ID or tax identification numbers/iu)
+    expect(turkishTerms).not.toMatch(/garanti gelir|garantili kazanç/iu)
+    expect(englishTerms).not.toMatch(/guaranteed earnings/iu)
     expect(REFERRAL_TERMS_UPDATED_AT).toBe('2026-11-04')
     expect(REFERRAL_TERMS.tr.sections[2].paragraphs.join(' ')).toContain('gloval')
-    expect(REFERRAL_TERMS.tr.sections.at(-1)?.paragraphs.join(' ')).toContain('sürüm v1.0')
+    expect(REFERRAL_TERMS.tr.sections.at(-1)?.paragraphs.join(' ')).toContain('sürüm v1.1')
     expect(REFERRAL_TERMS.tr.sections.at(-1)?.paragraphs.join(' ')).toContain('4 Kasım 2026')
-    expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('version v1.0')
+    expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('version v1.1')
     expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('November 4, 2026')
   })
 

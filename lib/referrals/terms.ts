@@ -1,4 +1,22 @@
-export const REFERRAL_TERMS_VERSION = 'v1.0'
+import {
+  REFERRAL_COMMISSION_RATE_PERCENT,
+  REFERRAL_HOLD_DAYS,
+  REFERRAL_MAX_CREDIT_TOPUP_CENTS,
+  REFERRAL_PAYOUT_MIN_CENTS,
+  REFERRAL_VAT_RATE_PERCENT,
+  TRY_PER_CREDIT_CENTS,
+} from './commission-config'
+
+const minimumPayoutTry = REFERRAL_PAYOUT_MIN_CENTS / 100
+const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
+const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
+const vatMultiplier = ((100 + REFERRAL_VAT_RATE_PERCENT) / 100).toFixed(2)
+const creditValueTry = TRY_PER_CREDIT_CENTS / 100
+const maxCreditTopupTry = REFERRAL_MAX_CREDIT_TOPUP_CENTS / 100
+const maxCreditTopupTr = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
+const maxCreditTopupEn = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
+
+export const REFERRAL_TERMS_VERSION = 'v1.1'
 export const REFERRAL_TERMS_UPDATED_AT = '2026-11-04'
 
 export const REFERRAL_TERMS = {
@@ -11,9 +29,12 @@ export const REFERRAL_TERMS = {
     ],
     sections: [
       {
-        heading: '1. Program ve ödeme koşulları',
+        heading: '1. Program, komisyon ve ödeme koşulları',
         paragraphs: [
-          'Yönlendirme kayıtları programın geçerli şartlarına göre değerlendirilir. Ödeme koşulları ayrıca duyurulacaktır.',
+          `Komisyon yalnızca yönlendirilen yeni müşterinin ilk başarılı abonelik ödemesi için hesaplanır. Komisyon, KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’sidir; KDV hariç tutar, brüt ödeme tutarının ${vatMultiplier.replace('.', ',')}’ye bölünmesiyle hesaplanır ve kuruş aşağı yuvarlanır.`,
+          `Komisyon ödeme tarihinden itibaren ${REFERRAL_HOLD_DAYS} gün beklemede kalır. İlk ödeme bu süre içinde iptal edilir, iade edilir veya ters ibraz edilirse komisyon ters kayıtla iptal edilir. Bekleme süresi geçtikten sonraki bir iade veya ters ibraz, ortak bakiyesinde negatif düzeltme oluşturabilir.`, 
+          `Nakit ödeme talebi için en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir. Aynı anda yalnızca bir açık nakit talebi bulunabilir. Fatura kesmesi gereken şirket ortakları (şahıs şirketleri dâhil) KDV dâhil komisyon faturası düzenler ve onaylanan fatura tutarı ödenir. Bireysel/muaf ortaklardan fatura istenmez; gider belgesi GLOVAL tarafından düzenlenir. Vergi yükümlülüklerinin değerlendirilmesi ortağın sorumluluğundadır.`, 
+          `AI kredisine dönüştürmede 1 kredi ${creditValueTry} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki en fazla ${maxCreditTopupTr} TL tutarındaki fark GLOVAL AI tarafından karşılanır. Dönüşüm için de en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir.`, 
         ],
       },
       {
@@ -33,13 +54,14 @@ export const REFERRAL_TERMS = {
       {
         heading: '4. İade, iptal ve geçersiz işlemler',
         paragraphs: [
-          'İlk ücretli plan ödemesi iade edilir, iptal edilir, ters ibrazla geri alınır veya geçersiz işlem olarak belirlenirse ilgili yönlendirme uygun sayılmaz. Sahtecilik ya da kuralları aşma şüphesinde yönlendirmeler inceleme tamamlanana kadar bekletilebilir.',
+          'İlk ücretli abonelik ödemesi iade edilir, iptal edilir, ters ibrazla geri alınır veya geçersiz işlem olarak belirlenirse ilgili komisyon ters kaydedilir. 14 günlük bekleme süresinden sonra oluşan iade veya ters ibraz, daha önce oluşmuş kullanılabilir ya da ödenmiş tutarlara karşı negatif bakiye oluşturabilir. Sahtecilik ya da kuralları aşma şüphesinde yönlendirmeler inceleme tamamlanana kadar bekletilebilir.',
         ],
       },
       {
         heading: '5. Vergi ve belgeler',
         paragraphs: [
-          'Satış ortağı, kendi vergi statüsünün ve yükümlülüklerinin takibinden; mevzuatın gerektirdiği makbuz, fatura veya diğer belgelerin düzenlenmesinden ve doğru ödeme bilgisi sağlamaktan sorumludur.',
+          'Katılım formundaki mevcut vergi statüsü seçenekleri “Bireysel” ve “Şirket”tir. Program eşlemesinde “Şirket” (şahıs şirketleri dâhil) nakit ödeme için fatura gerektirir; “Bireysel” bu iş akışında fatura gerektirmez. Bu ürün eşlemesi vergi veya hukuk danışmanlığı değildir; ortağın kendi statüsüne uygulanacak yükümlülükleri doğrulaması gerekir.',
+          'Vergi bilgileriniz doğrulanmadan önce yalnızca bir nakit ödeme yapılabilir. İlk nakit ödeme işlendiğinde bilgileriniz hâlâ doğrulanmamışsa ortaklığınız yeni yönlendirmeleri durdurmak üzere otomatik olarak askıya alınır; sonraki nakit ödeme için destek ekibimiz üzerinden doğrulama gerekir. TCKN veya vergi numarası bu uygulamada toplanmaz. Doğrulama, bu şartları yeniden kabul etmenizi gerektirmez.',
         ],
       },
       {
@@ -51,7 +73,7 @@ export const REFERRAL_TERMS = {
       {
         heading: '7. Program durumu ve sürüm',
         paragraphs: [
-          'Kural ihlali veya kötüye kullanım şüphesinde ortaklık durumu kapatılabilir. Ortak, ayarlar bölümünden ortaklığı kapatabilir. Bu belge sürüm v1.0 olarak 4 Kasım 2026 tarihinde yayımlanmıştır.',
+          'Kural ihlali veya kötüye kullanım şüphesinde ortaklık askıya alınabilir veya kapatılabilir; kötüye kullanım hâlinde bekleyen komisyonlar iptal edilebilir. Askıya alınan ortak yeni tıklama ve kayıt kabul etmez. Bekleyen, kullanılabilir veya talep edilmiş pozitif bakiye ya da açık nakit talebi varken ortaklık kapatılamaz. Bu belge sürüm v1.1 olarak 4 Kasım 2026 tarihinde yayımlanmıştır.',
         ],
       },
     ],
@@ -65,9 +87,12 @@ export const REFERRAL_TERMS = {
     ],
     sections: [
       {
-        heading: '1. Program and payment terms',
+        heading: '1. Program, commissions, and payouts',
         paragraphs: [
-          'Referral records are evaluated under the applicable program terms. Payment terms will be announced separately.',
+          `A commission is earned only on the referred new customer’s first successful paid subscription charge. The commission is ${REFERRAL_COMMISSION_RATE_PERCENT}% of the amount excluding VAT; the VAT-exclusive amount is the gross payment divided by ${vatMultiplier}, rounded down to the kuruş.`, 
+          `A commission remains pending for ${REFERRAL_HOLD_DAYS} days after payment. If the first payment is cancelled, refunded, or charged back during that period, the commission is reversed. A refund or chargeback after the hold may create a negative adjustment to the partner balance.`, 
+          `A cash payout requires at least TRY ${minimumPayoutEn} in available balance. Only one cash request may be open at a time. Partners who must issue invoices (Company, including sole proprietorships, under this program mapping) issue a commission invoice including VAT, and the approved invoice amount is paid. No invoice is requested from individual/exempt partners; GLOVAL issues an expense document. The partner remains responsible for determining their tax obligations.`, 
+          `For AI credit conversion, one credit is worth TRY ${creditValueTry}. The credit count is rounded up and GLOVAL AI covers the difference, up to TRY ${maxCreditTopupEn}. Credit conversion also requires at least TRY ${minimumPayoutEn} in available balance.`, 
         ],
       },
       {
@@ -87,13 +112,14 @@ export const REFERRAL_TERMS = {
       {
         heading: '4. Refunds, cancellations, and invalid transactions',
         paragraphs: [
-          'If the first paid-plan payment is refunded, cancelled, charged back, or determined to be invalid, the referral may be treated as ineligible. Referrals may be held for review when fraud or circumvention is suspected.',
+          'If the first paid subscription charge is refunded, cancelled, charged back, or determined to be invalid, the related commission is reversed. A refund or chargeback after the 14-day hold may create a negative balance against previously available or paid amounts. Referrals may be held for review when fraud or circumvention is suspected.',
         ],
       },
       {
         heading: '5. Taxes and records',
         paragraphs: [
-          'The partner is responsible for determining and meeting their own tax obligations, issuing any receipt, invoice, or other document required by law, and providing accurate payout details.',
+          'The current tax-status choices are Individual and Company. In this program mapping, Company (including sole proprietorships) requires an invoice for cash payouts; Individual does not require an invoice in this workflow. This product mapping is not tax or legal advice; the partner must verify the obligations that apply to their status.',
+          'Only one cash payout may be processed before tax details are verified. If your details are still unverified when the first cash payout is processed, your partnership is automatically suspended from accepting new referrals; verification through our support team is required before the next cash payout. This application does not collect national ID or tax identification numbers. Verification does not require you to accept these terms again.',
         ],
       },
       {
@@ -105,7 +131,7 @@ export const REFERRAL_TERMS = {
       {
         heading: '7. Program status and version',
         paragraphs: [
-          'Partnership status may be closed in response to a rule violation or suspected abuse. A partner may close their partnership from settings. This document is version v1.0, published November 4, 2026.',
+          'Partnership status may be suspended or closed in response to a rule violation or suspected abuse; pending commissions may be cancelled in cases of abuse. Suspended partners do not accept new clicks or signups. A partnership cannot be closed while a positive pending/available/requested balance or an open cash request remains. This document is version v1.1, published November 4, 2026.'
         ],
       },
     ],

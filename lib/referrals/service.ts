@@ -155,14 +155,19 @@ async function insertAttribution(input: {
       return false
     }
 
-    const { error } = await admin.from('referral_attributions').insert({
-      referred_user_id: input.userId,
-      partner_id: partner.id,
-      code_snapshot: input.cookieClaims.referralCode,
-      source: input.source,
-      captured_at: new Date(input.cookieClaims.capturedAt).toISOString(),
-    })
-    return !error
+    const { data: attribution, error } = await admin
+      .from('referral_attributions')
+      .insert({
+        referred_user_id: input.userId,
+        partner_id: partner.id,
+        code_snapshot: input.cookieClaims.referralCode,
+        source: input.source,
+        captured_at: new Date(input.cookieClaims.capturedAt).toISOString(),
+      })
+      .select('id')
+      .maybeSingle()
+    if (error || !attribution?.id) return false
+    return true
   } catch {
     return false
   }

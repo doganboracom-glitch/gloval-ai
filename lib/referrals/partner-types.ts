@@ -10,6 +10,7 @@ export type ReferralPartnerSettings = {
 
 export type ReferralCustomer = {
   maskedEmail: string
+  accountDeleted: boolean
   status: ReferralCustomerStatus
   createdAt: string
 }
@@ -46,4 +47,74 @@ export type ReferralAdminPartner = {
   signups: number
   verifiedSignups: number
   paidCustomers: number
+}
+
+export type ReferralPayoutMethod = 'cash' | 'credit'
+export type ReferralPayoutStatus = 'requested' | 'processed' | 'rejected'
+
+export type ReferralPayoutState = {
+  partnerStatus: ReferralPartnerStatus
+  taxStatus: ReferralTaxStatus | null
+  taxVerified: boolean
+  hasIban: boolean
+  pendingCents: number
+  availableCents: number
+  totalCents: number
+  requestedCents: number
+  convertedCents: number
+  paidCents: number
+  hasOpenCashRequest: boolean
+}
+
+export type ReferralPayoutPanelData = {
+  state: ReferralPayoutState | null
+  unavailable: boolean
+}
+
+export type ReferralPayoutAdminRequest = {
+  requestId: string
+  partnerId: string
+  referralCode: string
+  partnerStatus: ReferralPartnerStatus
+  maskedEmail: string
+  payeeName: string | null
+  taxStatus: ReferralTaxStatus | null
+  taxVerifiedAt: string | null
+  ibanLast4: string | null
+  method: ReferralPayoutMethod
+  balanceCents: number
+  payoutCents: number
+  creditAmount: number | null
+  systemTopupCents: number
+  invoiceRequired: boolean
+  invoiceConfirmed: boolean
+  invoiceReference: string | null
+  invoiceReceivedAt: string | null
+  paymentReference: string | null
+  adminNote: string | null
+  status: ReferralPayoutStatus
+  requestedAt: string
+  processedAt: string | null
+  rejectionReason: string | null
+}
+
+export type ReferralPayoutAdminSummary = {
+  pendingCents: number
+  availableCents: number
+  convertedCents: number
+  systemTopupCents: number
+  paidCents: number
+  openCashRequests: number
+}
+
+export type ReferralCommissionAdminStatus = 'pending' | 'available' | 'requested' | 'converted' | 'paid'
+
+export type ReferralCommissionAdminRow = {
+  commissionId: string
+  partnerId: string
+  referralCode: string
+  commissionCents: number
+  status: ReferralCommissionAdminStatus
+  paidAt: string
+  availableAt: string
 }

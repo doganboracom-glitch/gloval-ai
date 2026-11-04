@@ -32,9 +32,14 @@ vi.mock('@/lib/supabase/admin', () => ({
         state.rpcCalls.push({ name, args })
         return { data: state.rpcData, error: state.rpcError }
       },
-      from: () => ({
+      from: (table: string) => ({
         select: () => ({
-          eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: table === 'referral_partners' ? { id: ownSummary.partnerId } : null,
+              error: null,
+            }),
+          }),
         }),
       }),
     }
@@ -87,7 +92,7 @@ describe('referral partner data', () => {
     expect(mapped?.customers[0]).not.toHaveProperty('email')
   })
 
-  it('uses one owner-scoped RPC for dashboard metrics and masked customers', async () => {
+  it('lazily syncs owned commissions before loading masked dashboard metrics', async () => {
     vi.stubEnv('REFERRAL_ENABLED', '1')
 
     const result = await getReferralDashboardData()
@@ -98,10 +103,13 @@ describe('referral partner data', () => {
     expect(result?.paidCustomers).toBe(2)
     expect(result?.customers[0].maskedEmail).toBe('m***@gmail.com')
     expect(JSON.stringify(result)).not.toContain(privateEmail)
-    expect(state.rpcCalls).toEqual([{
-      name: 'referral_partner_dashboard',
-      args: { p_user_id: 'partner-user-id', p_include_customers: true },
-    }])
+    expect(state.rpcCalls).toEqual([
+      { name: 'referral_sync_commissions', args: { p_partner_id: ownSummary.partnerId } },
+      {
+        name: 'referral_partner_dashboard',
+        args: { p_user_id: 'partner-user-id', p_include_customers: true },
+      },
+    ])
   })
 
   it('keeps the admin summary read-only and masks partner emails', async () => {

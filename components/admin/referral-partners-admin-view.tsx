@@ -12,7 +12,14 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ReferralPartnersAdminTable } from '@/components/admin/referral-partners-admin-table'
-import type { ReferralAdminPartner } from '@/lib/referrals/partner-types'
+import { ReferralPayoutsAdminTable } from '@/components/admin/referral-payouts-admin-table'
+import { ReferralCommissionReversalsAdminTable } from '@/components/admin/referral-commission-reversals-admin-table'
+import type {
+  ReferralAdminPartner,
+  ReferralCommissionAdminRow,
+  ReferralPayoutAdminRequest,
+  ReferralPayoutAdminSummary,
+} from '@/lib/referrals/partner-types'
 
 type AdminLanguage = 'tr' | 'en'
 
@@ -36,7 +43,7 @@ type AdminCopy = {
 const copyByLanguage: Record<AdminLanguage, AdminCopy> = {
   tr: {
     title: 'Satış ortakları',
-    description: 'Ortak durumlarını yönetin, performansı inceleyin ve tüm durum değişikliklerini denetleyin.',
+    description: 'Ortak durumlarını yönetin, performansı ve ödeme taleplerini inceleyin, tüm işlemleri denetleyin.',
     back: 'Yönetim paneli',
     records: 'Ortak kayıtları ve etkinlik',
     privacy: 'E-posta adresleri sunucu tarafında maskelenir; yalnızca IBAN’ın son 4 hanesi gösterilir. Tutar veya tam IBAN gösterilmez.',
@@ -52,7 +59,7 @@ const copyByLanguage: Record<AdminLanguage, AdminCopy> = {
   },
   en: {
     title: 'Referral partners',
-    description: 'Manage partner status, review activity, and audit every status change.',
+    description: 'Manage partner status, review activity and payout requests, and audit every change.',
     back: 'Admin dashboard',
     records: 'Partner records and activity',
     privacy: 'Email addresses are masked server-side; only the last 4 IBAN digits are shown. No amounts or full IBANs are displayed.',
@@ -96,9 +103,21 @@ function getSummary(partners: ReferralAdminPartner[]) {
 export function ReferralPartnersAdminView({
   partners,
   unavailable = false,
+  payoutsEnabled = false,
+  payoutRequests = [],
+  payoutSummary = null,
+  payoutsUnavailable = false,
+  commissionRows = [],
+  commissionsUnavailable = false,
 }: {
   partners: ReferralAdminPartner[]
   unavailable?: boolean
+  payoutsEnabled?: boolean
+  payoutRequests?: ReferralPayoutAdminRequest[]
+  payoutSummary?: ReferralPayoutAdminSummary | null
+  payoutsUnavailable?: boolean
+  commissionRows?: ReferralCommissionAdminRow[]
+  commissionsUnavailable?: boolean
 }) {
   const { lang } = useLanguage()
   const language: AdminLanguage = lang === 'tr' ? 'tr' : 'en'
@@ -160,6 +179,17 @@ export function ReferralPartnersAdminView({
               <ReferralPartnersAdminTable partners={partners} />
             </CardContent>
           </Card>
+          <ReferralPayoutsAdminTable
+            enabled={payoutsEnabled}
+            requests={payoutRequests}
+            summary={payoutSummary}
+            unavailable={payoutsUnavailable}
+          />
+          <ReferralCommissionReversalsAdminTable
+            enabled={payoutsEnabled}
+            commissions={commissionRows}
+            unavailable={commissionsUnavailable}
+          />
         </>
       )}
     </section>

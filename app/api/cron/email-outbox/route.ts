@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { processDueEmailEvents } from '@/lib/email-outbox'
 import { processContactAcks } from '@/lib/support/contact-ack'
 import { processMakerRequestEmails } from '@/lib/maker-requests/outbox'
+import { processReferralEmails } from '@/lib/referrals/email-outbox'
+import { syncReferralCommissions } from '@/lib/referrals/commission-sync'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -18,6 +20,10 @@ export async function GET(request: Request) {
 
   try {
     const deadlineMs = Date.now() + OUTBOX_BUDGET_MS
+    const commissionSync = await syncReferralCommissions()
+    console.log(
+      `[email-outbox] referral commissions ok=${commissionSync.ok} created=${commissionSync.created} reversed=${commissionSync.reversed} matured=${commissionSync.matured}`,
+    )
     const result = await processDueEmailEvents({ deadlineMs })
     console.log(
       `[email-outbox] sweep processed=${result.sent + result.retry + result.failed + result.deferred} sent=${result.sent} retry=${result.retry} failed=${result.failed} deferred=${result.deferred}`,
@@ -30,7 +36,11 @@ export async function GET(request: Request) {
     console.log(
       `[email-outbox] maker requests sent=${makerRequests.sent} retry=${makerRequests.retry} gaveUp=${makerRequests.gaveUp} skipped=${makerRequests.skipped}`,
     )
-    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests })
+    const referralEmails = await processReferralEmails({ deadlineMs })
+    console.log(
+      `[email-outbox] referral emails sent=${referralEmails.sent} retry=${referralEmails.retry} deferred=${referralEmails.deferred} gaveUp=${referralEmails.gaveUp}`,
+    )
+    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests, referralEmails, commissionSync })
   } catch {
     console.log('[email-outbox] sweep failed: unknown')
     return NextResponse.json({ error: 'email_outbox_failed' }, { status: 500 })

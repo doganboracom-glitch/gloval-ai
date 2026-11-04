@@ -73,7 +73,11 @@ function query(table: string) {
       ) {
         return { data: null, error: { code: '23505', message: 'duplicate signup intent' } }
       }
-      const inserted = { consumed_at: null, ...payload }
+      const inserted = {
+        ...(table === 'referral_attributions' ? { id: '55555555-5555-4555-8555-555555555555' } : {}),
+        consumed_at: null,
+        ...payload,
+      }
       rows.push(inserted)
       return { data: [inserted], error: null }
     }

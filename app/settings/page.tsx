@@ -3,8 +3,9 @@ import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
 import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { SettingsClient } from '@/components/settings/settings-client'
-import { isReferralFeatureEnabled } from '@/lib/referrals/core'
+import { isReferralCashPayoutsEnabled, isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
 import { getReferralPartnerForCurrentUser } from '@/lib/referrals/partner-data'
+import { getReferralPayoutPanelData } from '@/lib/referrals/payout-data'
 
 // Auth-gated account settings must always render fresh, never from a stale
 // cached session.
@@ -24,7 +25,14 @@ export default async function SettingsPage() {
     .maybeSingle()
 
   const referralEnabled = isReferralFeatureEnabled()
-  const referralPartner = referralEnabled ? await getReferralPartnerForCurrentUser() : null
+  const payoutsEnabled = referralEnabled && isReferralPayoutsEnabled()
+  const cashPayoutsEnabled = payoutsEnabled && isReferralCashPayoutsEnabled()
+  const [referralPartner, payoutData] = referralEnabled
+    ? await Promise.all([
+        getReferralPartnerForCurrentUser(),
+        payoutsEnabled ? getReferralPayoutPanelData() : Promise.resolve(null),
+      ])
+    : [null, null]
 
   return (
     <SettingsClient
@@ -32,6 +40,9 @@ export default async function SettingsPage() {
       fullName={profile?.full_name ?? ''}
       referralEnabled={referralEnabled}
       referralPartner={referralPartner}
+      payoutsEnabled={payoutsEnabled}
+      cashPayoutsEnabled={cashPayoutsEnabled}
+      referralPayoutData={payoutData}
     />
   )
 }

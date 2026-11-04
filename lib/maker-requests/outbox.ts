@@ -8,11 +8,13 @@ import {
   buildMakerRequestAdminEmail,
 } from '@/lib/email/maker-request-mail'
 import { buildReferralPartnerActivationAdminEmail } from '@/lib/email/referral-partner-activation-mail'
+import { buildReferralPartnerWelcomeEmail } from '@/lib/email/referral-partner-welcome-mail'
 import type { EmailLang } from '@/lib/email/lang'
+import { isReferralCashPayoutsEnabled } from '@/lib/referrals/core'
 import type { MakerRequest } from './types'
 
 const MAKER_REQUEST_TYPES = ['maker_request_admin', 'maker_request_ack'] as const
-const OUTBOX_TYPES = [...MAKER_REQUEST_TYPES, 'referral_partner_admin'] as const
+const OUTBOX_TYPES = [...MAKER_REQUEST_TYPES, 'referral_partner_admin', 'referral_partner_welcome'] as const
 const MAX_ATTEMPTS = 5
 const MAX_BATCH = 20
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -23,6 +25,7 @@ type OutboxType = (typeof OUTBOX_TYPES)[number]
 type OutboxState = {
   lang: EmailLang
   attempts: number
+  partnerId?: string
   referralCode?: string
   activatedAt?: string
 }
@@ -38,13 +41,18 @@ type OutboxRow = {
 function outboxIdFromDedupeKey(type: OutboxType, key: string): string | null {
   const prefix = `${type}:`
   const id = key.startsWith(prefix) ? key.slice(prefix.length) : ''
-  if (type === 'referral_partner_admin') return REFERRAL_CODE_PATTERN.test(id) ? id : null
+  if (type === 'referral_partner_admin' || type === 'referral_partner_welcome') {
+    return UUID_PATTERN.test(id) || REFERRAL_CODE_PATTERN.test(id) ? id : null
+  }
   return UUID_PATTERN.test(id) ? id : null
 }
 
 function parseOutboxState(body: string): OutboxState {
   try {
     const parsed = JSON.parse(body) as Partial<OutboxState>
+    const partnerId = typeof parsed.partnerId === 'string' && UUID_PATTERN.test(parsed.partnerId)
+      ? parsed.partnerId
+      : undefined
     const referralCode = typeof parsed.referralCode === 'string' && REFERRAL_CODE_PATTERN.test(parsed.referralCode)
       ? parsed.referralCode
       : undefined
@@ -57,6 +65,7 @@ function parseOutboxState(body: string): OutboxState {
       attempts: Number.isInteger(parsed.attempts) && Number(parsed.attempts) >= 0
         ? Number(parsed.attempts)
         : 0,
+      ...(partnerId ? { partnerId } : {}),
       ...(referralCode ? { referralCode } : {}),
       ...(activatedAt ? { activatedAt } : {}),
     }
@@ -114,15 +123,17 @@ export async function enqueueMakerRequestEmails(requestId: string, lang: EmailLa
 }
 
 export async function enqueueReferralPartnerActivationEmail(input: {
+  partnerId: string
   referralCode: string
   activatedAt: string
   lang: EmailLang
 }): Promise<void> {
+  const partnerId = input.partnerId.trim()
   const referralCode = input.referralCode.trim().toUpperCase()
   const activatedAt = input.activatedAt
-  if (!REFERRAL_CODE_PATTERN.test(referralCode) || !Number.isFinite(Date.parse(activatedAt))) return
+  if (!UUID_PATTERN.test(partnerId) || !REFERRAL_CODE_PATTERN.test(referralCode) || !Number.isFinite(Date.parse(activatedAt))) return
 
-  const type = 'referral_partner_admin' as const
+  const type = 'referral_partner_welcome' as const
   const lang = input.lang === 'en' ? 'en' : 'tr'
 
   try {
@@ -130,10 +141,10 @@ export async function enqueueReferralPartnerActivationEmail(input: {
       user_id: null,
       channel: 'email',
       type,
-      subject: lang === 'tr' ? 'Yeni satış ortağı etkinleştirildi' : 'New referral partner activated',
-      body: serializeOutboxState({ lang, attempts: 0, referralCode, activatedAt }),
+      subject: lang === 'tr' ? 'Satış ortaklığına hoş geldiniz' : 'Welcome to the referral program',
+      body: serializeOutboxState({ lang, attempts: 0, partnerId, referralCode, activatedAt }),
       status: 'queued',
-      dedupe_key: `${type}:${referralCode}`,
+      dedupe_key: `${type}:${partnerId}`,
     }])
 
     if (error) {
@@ -143,7 +154,7 @@ export async function enqueueReferralPartnerActivationEmail(input: {
 
     after(async () => {
       try {
-        await deliverMakerRequestEmail(type, referralCode)
+        await deliverMakerRequestEmail(type, partnerId)
       } catch {
         console.error('[maker-requests] referral admin notification delivery failed')
       }
@@ -154,7 +165,9 @@ export async function enqueueReferralPartnerActivationEmail(input: {
 }
 
 async function deliverMakerRequestEmail(type: OutboxType, requestId: string) {
-  if (type === 'referral_partner_admin') return deliverReferralPartnerActivationEmail(requestId)
+  if (type === 'referral_partner_admin' || type === 'referral_partner_welcome') {
+    return deliverReferralPartnerActivationEmail(requestId, type)
+  }
   if (!UUID_PATTERN.test(requestId)) return 'skipped' as const
 
   const admin = createAdminClient()
@@ -227,12 +240,14 @@ async function deliverMakerRequestEmail(type: OutboxType, requestId: string) {
   return failedState.attempts >= MAX_ATTEMPTS ? 'gave_up' as const : 'retry' as const
 }
 
-async function deliverReferralPartnerActivationEmail(referralCode: string) {
-  if (!REFERRAL_CODE_PATTERN.test(referralCode)) return 'skipped' as const
+async function deliverReferralPartnerActivationEmail(
+  identifier: string,
+  type: 'referral_partner_admin' | 'referral_partner_welcome',
+) {
+  if (!UUID_PATTERN.test(identifier) && !REFERRAL_CODE_PATTERN.test(identifier)) return 'skipped' as const
 
   const admin = createAdminClient()
-  const type = 'referral_partner_admin' as const
-  const dedupeKey = `${type}:${referralCode}`
+  const dedupeKey = `${type}:${identifier}`
   const { data: job, error: jobError } = await admin
     .from('notification_logs')
     .select('id, type, status, body, dedupe_key, created_at')
@@ -243,7 +258,10 @@ async function deliverReferralPartnerActivationEmail(referralCode: string) {
 
   const typedJob = job as OutboxRow
   const previousState = parseOutboxState(typedJob.body)
-  if (previousState.referralCode !== referralCode || !previousState.activatedAt) {
+  const hasMatchingIdentity = previousState.partnerId
+    ? previousState.partnerId === identifier
+    : previousState.referralCode === identifier
+  if (!hasMatchingIdentity || !previousState.referralCode || !previousState.activatedAt) {
     await updateOutboxRow(admin, typedJob.id, 'failed', { ...previousState, attempts: MAX_ATTEMPTS })
     return 'gave_up' as const
   }
@@ -261,19 +279,54 @@ async function deliverReferralPartnerActivationEmail(referralCode: string) {
 
   if (claimError || !claim) return 'skipped' as const
 
-  const email = buildReferralPartnerActivationAdminEmail({
-    lang: previousState.lang,
-    referralCode,
-    activatedAt: previousState.activatedAt,
-  })
-  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.split(',')[0]?.trim() ?? ''
+  let recipient: string | null = null
+  let email: ReturnType<typeof buildReferralPartnerActivationAdminEmail>
+
+  if (type === 'referral_partner_welcome') {
+    const partnerQuery = admin.from('referral_partners').select('user_id')
+    const partnerLookup = previousState.partnerId
+      ? await partnerQuery.eq('id', previousState.partnerId).maybeSingle()
+      : await partnerQuery.eq('referral_code', previousState.referralCode).maybeSingle()
+    if (partnerLookup.error || !partnerLookup.data || typeof partnerLookup.data.user_id !== 'string') {
+      await updateOutboxRow(admin, typedJob.id, 'sent', nextState)
+      return 'skipped' as const
+    }
+
+    const { data: userData, error: userError } = await admin.auth.admin.getUserById(partnerLookup.data.user_id)
+    recipient = userError ? null : userData.user?.email ?? null
+    if (!recipient) {
+      await updateOutboxRow(admin, typedJob.id, 'sent', nextState)
+      return 'skipped' as const
+    }
+
+    email = buildReferralPartnerWelcomeEmail({
+      lang: previousState.lang,
+      referralCode: previousState.referralCode,
+      cashPayoutsEnabled: isReferralCashPayoutsEnabled(),
+    })
+  } else {
+    recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.split(',')[0]?.trim() || null
+    if (!recipient) {
+      await updateOutboxRow(admin, typedJob.id, 'queued', previousState)
+      return 'retry' as const
+    }
+    email = buildReferralPartnerActivationAdminEmail({
+      lang: previousState.lang,
+      referralCode: previousState.referralCode,
+      activatedAt: previousState.activatedAt,
+    })
+  }
+
+  const idempotencyIdentity = previousState.partnerId ?? previousState.referralCode
   const result = await sendTransactionalEmailDetailed({
     to: recipient,
     subject: email.subject,
     html: email.html,
     text: email.text,
     fromDisplayName: 'GLOVAL AI',
-    idempotencyKey: `referral-partner-admin:${referralCode}`,
+    idempotencyKey: type === 'referral_partner_welcome'
+      ? `referral-partner-welcome:${idempotencyIdentity}`
+      : `referral-partner-admin:${idempotencyIdentity}`,
   })
 
   if (result.ok) {
