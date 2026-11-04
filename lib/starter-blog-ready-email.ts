@@ -56,7 +56,7 @@ export async function sendStarterBlogReadyEmail(args: { projectId: string; userI
       channel: 'email',
       type: 'starter_blog_ready',
       subject: email.subject,
-      body: `${email.body}\n\n${email.editorUrl}`,
+      body: email.text,
       status: 'queued',
       dedupe_key: dedupeKey,
     })
