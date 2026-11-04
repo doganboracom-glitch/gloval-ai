@@ -148,7 +148,7 @@ function seed(opts: {
         code: opts.addonCode ?? 'extra_site_1',
         price_cents: opts.catalogPrice ?? 9900,
         currency: 'TRY',
-        interval: 'month',
+        interval: opts.addonCode?.endsWith('_yearly') ? 'year' : 'month',
         product_category: 'addon',
         active: true,
       },
@@ -267,6 +267,42 @@ describe('settlePaymentResult - successful add-on payment', () => {
 
   it('accepts TRY as well as TL for the paid currency', async () => {
     expect(await settleAddOnResult('iyzico', paid({ paidCurrency: 'TRY' }))).toBe('granted')
+  })
+})
+
+describe('settlePaymentResult - yearly add-on payment', () => {
+  const seedYearly = () =>
+    seed({ addonCode: 'extra_mail_5_yearly', purchaseAmount: 199000, catalogPrice: 199000 })
+
+  it('charges the one-time yearly amount and grants for 12 months, not the subscription period', async () => {
+    seedYearly()
+    const before = Date.now()
+    expect(await settleAddOnResult('iyzico', paid({ paidAmountCents: 199000 }))).toBe('granted')
+    expect(entitlements()).toHaveLength(1)
+    const expiresAt = new Date(entitlements()[0].expires_at as string).getTime()
+    const twelveMonths = new Date(before)
+    twelveMonths.setUTCFullYear(twelveMonths.getUTCFullYear() + 1)
+    expect(Math.abs(expiresAt - twelveMonths.getTime())).toBeLessThan(5 * 60 * 1000)
+    expect(entitlements()[0].expires_at).not.toBe(FUTURE)
+    expect(state.db.billing_transactions).toHaveLength(1)
+    expect(state.db.billing_transactions[0]).toMatchObject({ amount_cents: 199000, idempotency_key: `addon_${PURCHASE_ID}` })
+  })
+
+  it('rejects a payment that matches only the monthly price', async () => {
+    seedYearly()
+    await settleAddOnResult('iyzico', paid({ paidAmountCents: 19900 }))
+    expect(purchase().status).toBe('manual_refund_required')
+    expect(entitlements()).toHaveLength(0)
+  })
+
+  it('a repeated payment callback never creates a second entitlement or ledger row', async () => {
+    seedYearly()
+    await settleAddOnResult('iyzico', paid({ paidAmountCents: 199000 }))
+    expect(await settleAddOnResult('iyzico', paid({ paidAmountCents: 199000 }))).toBe('already_settled')
+    await settleAddOnResult('iyzico', paid({ paidAmountCents: 199000 }))
+    expect(entitlements()).toHaveLength(1)
+    expect(state.db.billing_transactions).toHaveLength(1)
+    expect(entitlements()[0].idempotency_key).toBe(addOnGrantKey(PURCHASE_ID))
   })
 })
 

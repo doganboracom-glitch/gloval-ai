@@ -31,17 +31,21 @@ const activeSub = { status: 'active', current_period_end: iso(20) }
 const proPlan = (): MailPlanGrant => ({ code: 'pro', entitled: true, endsAt: iso(20), endedAt: null })
 
 describe('GLOVAL Mail catalog', () => {
-  it('keeps five historical and current packages with their agreed sizes and prices', () => {
+  it('keeps the historical and current packages (monthly and yearly) with their agreed sizes and prices', () => {
     expect(MAIL_ADD_ON_CODES).toEqual([
       'extra_mail_1',
+      'extra_mail_1_yearly',
       'extra_mail_5',
+      'extra_mail_5_yearly',
       'extra_mail_10',
       'extra_mail_25',
       'extra_mail_50',
     ])
     expect(MAIL_ADD_ON_CODES.map((c) => [ADD_ONS[c].capacity, ADD_ONS[c].listPriceCents])).toEqual([
       [1, 4900],
+      [1, 49000],
       [5, 19900],
+      [5, 199000],
       [10, 14900],
       [25, 29900],
       [50, 49900],
