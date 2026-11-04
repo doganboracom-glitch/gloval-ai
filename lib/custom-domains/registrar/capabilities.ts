@@ -1,18 +1,13 @@
 /**
- * What the registrar is allowed to change for a customer, as observed in real
- * DomainNameAPI OTE tests. Pure constants (no server imports) so the UI and the
- * server read the same truth.
- *
- *  - nameserverChange: ModifyNameServer answered `API_403`.
- *  - transferLockChange: DisableTheftProtectionLock answered `OK` but the lock
- *    state read back unchanged, so a success cannot be trusted.
- *
- * Both stay `false` until DomainNameAPI confirms the behaviour and a new OTE
- * test proves it. The adapter methods are intentionally left in place; they are
- * simply not reachable while these flags are off.
+ * Capabilities exposed to customers. Nameserver writes use the existing
+ * ModifyNameServer adapter and are read back before success is reported; the
+ * server additionally requires ownership, an active unexpired registration,
+ * and a per-user rate-limit reservation. Provider refusals remain generic.
+ * Transfer-lock updates stay disabled because the provider did not reflect the
+ * change in its read-back.
  */
 export const REGISTRAR_CAPABILITIES = {
-  nameserverChange: false,
+  nameserverChange: true,
   transferLockChange: false,
 } as const
 

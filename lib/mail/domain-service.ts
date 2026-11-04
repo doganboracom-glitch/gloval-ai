@@ -1,6 +1,8 @@
 import { getMailProvider } from './provider'
 import { listDomainsForUser } from '@/lib/custom-domains/service'
+import { isEmailManagementAvailable } from '@/lib/custom-domains/email-access'
 import { isDomainUsable, type CustomDomain, type DnsRecord } from '@/lib/custom-domains/types'
+import { listProjects } from '@/lib/projects'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getMyCurrentPlan, getMySubscription } from '@/lib/billing'
 import { getMailQuota } from './access'
@@ -50,26 +52,28 @@ function toMailDomain(domain: CustomDomain): MailDomain {
   }
 }
 
+async function getPublishedProjectIds(): Promise<Set<string>> {
+  const projects = await listProjects()
+  return new Set(projects.filter((project) => project.published && project.slug).map((project) => project.id))
+}
+
 /**
- * The caller's mail-capable domains: their verified custom domains, provisioned
- * on the mail provider so mailbox operations resolve.
- *
- * Unverified domains are excluded on purpose — mail cannot work before DNS is in
- * place, and returning one would let the UI offer mailbox creation that the
- * provider would then reject.
+ * The caller's mail-capable domains: verified, live domains attached to a
+ * published customer site. Every mailbox action resolves its target through
+ * this list, so it is also the server-side setup gate.
  */
 export async function getMyMailDomains(userId: string): Promise<MailDomain[]> {
-  // Quarantined domains are never provisioned or offered; every mailbox action
-  // resolves its domain through this list, so this is the single choke point.
   const held = await listHeldDomainIds(userId)
-  const usable = (await listDomainsForUser(userId)).filter((d) => isDomainUsable(d) && !held.has(d.id))
+  const candidates = (await listDomainsForUser(userId)).filter(
+    (domain) => isDomainUsable(domain) && !held.has(domain.id),
+  )
+  if (candidates.length === 0) return []
+
+  const publishedProjectIds = await getPublishedProjectIds()
+  const usable = candidates.filter((domain) => isEmailManagementAvailable(domain, publishedProjectIds))
   if (usable.length === 0) return []
 
   const provider = getMailProvider()
-
-  // Provisioning on the mail server costs real resources, so it only happens
-  // for customers whose plan actually includes mail. Everyone else just sees
-  // their domain list (the page then shows the "upgrade" state).
   const [plan, subscription] = await Promise.all([getMyCurrentPlan(), getMySubscription()])
   const entitled = getMailQuota(plan, subscription).allowed
   if (!entitled || !provider.ensureDomain) return usable.map(toMailDomain)
@@ -125,6 +129,7 @@ async function issueEmailDns(domain: CustomDomain): Promise<CustomDomain> {
 export type MailDomainGate =
   | { state: 'none' }
   | { state: 'unverified'; domainId: string; domain: string; status: CustomDomain['status'] }
+  | { state: 'website_not_connected'; domainId: string; domain: string }
   | { state: 'ready'; domainId: string; domain: string }
   /** Verified, but its mail service is closed while a domain transfer is under review. */
   | { state: 'held'; domainId: string; domain: string }
@@ -134,13 +139,22 @@ export async function getMyMailDomainGate(userId: string): Promise<MailDomainGat
   if (domains.length === 0) return { state: 'none' }
 
   const held = await listHeldDomainIds(userId)
-  const usable = domains.find((d) => isDomainUsable(d) && !held.has(d.id))
-  if (usable) return { state: 'ready', domainId: usable.id, domain: usable.domain }
+  const usable = domains.filter((domain) => isDomainUsable(domain) && !held.has(domain.id))
+  if (usable.length > 0) {
+    const publishedProjectIds = await getPublishedProjectIds()
+    const ready = usable.find((domain) => isEmailManagementAvailable(domain, publishedProjectIds))
+    if (ready) return { state: 'ready', domainId: ready.id, domain: ready.domain }
 
-  const quarantined = domains.find((d) => held.has(d.id))
+    return {
+      state: 'website_not_connected',
+      domainId: usable[0].id,
+      domain: usable[0].domain,
+    }
+  }
+
+  const quarantined = domains.find((domain) => held.has(domain.id))
   if (quarantined) return { state: 'held', domainId: quarantined.id, domain: quarantined.domain }
 
-  // Primary first ordering means this is the domain the customer cares about.
   const pending = domains[0]
   return {
     state: 'unverified',

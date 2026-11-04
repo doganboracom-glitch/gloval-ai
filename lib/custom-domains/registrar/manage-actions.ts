@@ -46,7 +46,7 @@ export async function loadManagedDomainAction(domain: string): Promise<LoadResul
   return loadManagedDomain(userId, String(domain ?? ''))
 }
 
-export async function updateNameserversAction(domain: string, nameservers: string[]): Promise<MutationResult> {
+export async function updateNameserversAction(domain: string, nameservers: unknown): Promise<MutationResult> {
   const session = await sessionUserId()
   if (!('userId' in session)) return session
   const { userId } = session

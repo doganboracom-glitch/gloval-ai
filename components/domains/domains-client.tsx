@@ -157,6 +157,7 @@ export function DomainsClient({
       FEATURE_UNSUPPORTED: d.errFeatureUnsupported,
       PRICING_UNAVAILABLE: d.errPricingUnavailable,
       RENEWAL_IN_PROGRESS: d.errRenewalInProgress,
+      RATE_LIMITED: d.pageRateLimited,
       DNS_VERIFICATION_UNAVAILABLE: d.errGeneric,
       TEMPORARY_FAILURE: d.errGeneric,
       VERCEL_DETACH_FAILED: d.errGeneric,

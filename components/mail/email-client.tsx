@@ -208,25 +208,29 @@ export function EmailClient({
             <Globe className="size-7" />
           </div>
           <h2 className="mt-5 font-display text-xl font-semibold">
-            {gate.state === 'unverified'
-              ? t.domains.gateUnverified
-              : gate.state === 'held'
-                ? m.heldTitle
-                : m.noDomainTitle}
+            {gate.state === 'website_not_connected'
+              ? t.domains.emailNeedsWebsiteTitle
+              : gate.state === 'unverified'
+                ? t.domains.gateUnverified
+                : gate.state === 'held'
+                  ? m.heldTitle
+                  : m.noDomainTitle}
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
-            {gate.state === 'unverified'
-              ? t.domains.verificationRequiredBody
-              : gate.state === 'held'
-                ? m.heldBody
-                : m.noDomainBody}
+            {gate.state === 'website_not_connected'
+              ? t.domains.emailNeedsWebsite
+              : gate.state === 'unverified'
+                ? t.domains.verificationRequiredBody
+                : gate.state === 'held'
+                  ? m.heldBody
+                  : m.noDomainBody}
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
             {/* Domain connection exists now, so this hands off to the shared
                 domain flow instead of dead-ending on a disabled button. */}
             {gate.state === 'held' ? (
               <span className="font-mono text-xs text-muted-foreground">{gate.domain}</span>
-            ) : gate.state === 'unverified' ? (
+            ) : gate.state === 'unverified' || gate.state === 'website_not_connected' ? (
               <>
                 <LinkButton href={`/dashboard/domains/${gate.domainId}`} size="lg">
                   {t.domains.gateViewDomain}

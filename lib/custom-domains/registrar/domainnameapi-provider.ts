@@ -10,6 +10,8 @@
 // `types/nodejs-dna.d.ts` for the ambient module declaration.
 import DNARest from 'nodejs-dna/src/DNARest'
 import { buildRegistrarDiagnostic, formatRegistrarDiagnostic } from './diagnostics'
+import { isActiveAndUnexpired } from './nameserver-access'
+import { normalizeNameservers } from './nameserver-validation'
 import { isLaterRawDate, parseProviderDate, readRawField } from './provider-date'
 import {
   RegistrarError,
@@ -144,17 +146,7 @@ function handleOf(contacts: unknown, key: string): string | null {
   return typeof value === 'string' && value ? value : null
 }
 
-const HOSTNAME_LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-/** Lower-cases, drops a trailing dot and validates each label. Returns null when it is not a hostname. */
-function normalizeNameserver(value: string): string | null {
-  const host = value.trim().toLowerCase().replace(/\.$/, '')
-  if (!host || host.length > 253) return null
-  const labels = host.split('.')
-  if (labels.length < 2) return null
-  return labels.every((l) => HOSTNAME_LABEL.test(l)) ? host : null
-}
 
 /** Nameservers may arrive as strings or `{ name }` objects; the SDK's own mapping stringifies objects. */
 function nameserversOf(value: unknown): string[] {
@@ -743,15 +735,14 @@ export class DomainNameApiProvider
   }
 
   async setNameservers(domain: string, nameservers: string[]): Promise<ManageChange> {
-    const wanted: string[] = []
-    for (const entry of nameservers) {
-      const host = normalizeNameserver(String(entry ?? ''))
-      if (!host) throw new RegistrarError('INVALID_INPUT', 'nameserver:invalid')
-      if (!wanted.includes(host)) wanted.push(host)
-    }
-    if (wanted.length < 2 || wanted.length > 13) throw new RegistrarError('INVALID_INPUT', 'nameserver:count')
+    const validation = normalizeNameservers(nameservers)
+    if (!validation.ok) throw new RegistrarError('INVALID_INPUT', 'nameserver:invalid')
+    const wanted = validation.nameservers
 
     const current = await this.requireDetails(domain)
+    if (!isActiveAndUnexpired(current)) {
+      throw new RegistrarError('PROVIDER_ERROR', 'domainnameapi:DOMAIN_NOT_ACTIVE')
+    }
     if (sameSet(current.nameservers, wanted)) return { changed: false }
 
     const client = this.transferClient()
