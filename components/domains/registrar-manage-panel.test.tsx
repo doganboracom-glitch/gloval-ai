@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   data: null as unknown,
   mutate: vi.fn(),
   strings: new Proxy({}, { get: (_target, key) => String(key) }) as Record<string, string>,
+  updateNameservers: vi.fn(async (..._args: unknown[]) => ({ ok: true, changed: true })),
 }))
 
 vi.mock('swr', () => ({
@@ -19,7 +20,7 @@ vi.mock('@/lib/custom-domains/registrar/manage-actions', () => ({
   loadManagedDomainAction: vi.fn(),
   setPrivacyAction: vi.fn(),
   updateContactAction: vi.fn(),
-  updateNameserversAction: vi.fn(),
+  updateNameserversAction: (...args: unknown[]) => state.updateNameservers(...args),
 }))
 
 import { RegistrarManagePanel } from './registrar-manage-panel'
@@ -39,6 +40,8 @@ const contact = {
 }
 
 beforeEach(() => {
+  state.updateNameservers.mockClear()
+  state.updateNameservers.mockResolvedValue({ ok: true, changed: true })
   state.data = {
     ok: true,
     details: {
@@ -87,5 +90,24 @@ describe('WHOIS contact accordion', () => {
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(panel.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('requires confirmation after normalization and shows the outage warning', async () => {
+    render(<RegistrarManagePanel domain="example.com" />)
+    fireEvent.click(screen.getByRole('button', { name: 'mgNsEdit' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'mgNs' }), {
+      target: { value: 'NS1.NEW.COM.\nns2.new.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'mgNsSave' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(screen.getByText('mgNsWarn')).toBeTruthy()
+    expect(screen.getByText('ns1.new.com')).toBeTruthy()
+    expect(screen.getByText('ns2.new.com')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'mgNsConfirm' }))
+    expect(await screen.findByText('mgSaved')).toBeTruthy()
+    expect(state.updateNameservers).toHaveBeenCalledWith('example.com', ['ns1.new.com', 'ns2.new.com'])
+    expect(dialog.isConnected).toBe(false)
   })
 })
