@@ -58,7 +58,7 @@ export function LegalDocument({ doc }: { doc: LegalDoc }) {
         <article className="mt-10 space-y-10">
           {content.sections.map((section) => (
             <section key={section.heading}>
-              <h2 className="font-display text-xl font-semibold tracking-tight">
+              <h2 id={section.id} className="scroll-mt-16 font-display text-xl font-semibold tracking-tight">
                 {section.heading}
               </h2>
               <div className="mt-4 space-y-4">
