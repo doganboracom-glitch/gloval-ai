@@ -50,9 +50,11 @@ import {
 
 const privateEmail = 'maria@gmail.com'
 const ownSummary = {
+  partnerId: '22222222-2222-4222-8222-222222222222',
   referralCode: 'PARTNER1234',
   status: 'active',
   activatedAt: '2026-11-04T12:00:00.000Z',
+  lastStatusChangedAt: '2026-11-04T12:00:00.000Z',
   clicks: 100,
   signups: 10,
   verifiedSignups: 8,
@@ -109,10 +111,19 @@ describe('referral partner data', () => {
     const result = await getReferralAdminSummary()
 
     expect(state.requireAdminCalls).toBe(1)
-    expect(state.rpcCalls).toHaveLength(1)
-    expect(state.rpcCalls[0].args).toEqual({ p_user_id: null, p_include_customers: false })
-    expect(result[0].maskedEmail).toBe('m***@gmail.com')
+    expect(state.rpcCalls).toEqual([{ name: 'referral_partner_admin_summary', args: {} }])
+    expect(result?.[0].maskedEmail).toBe('m***@gmail.com')
+    expect(result?.[0].partnerId).toBe(ownSummary.partnerId)
     expect(JSON.stringify(result)).not.toContain(privateEmail)
+  })
+
+  it('shows a safe unavailable state when the admin migration has not been applied', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    state.rpcError = new Error('function not found')
+
+    await expect(getReferralAdminSummary()).resolves.toBeNull()
+    expect(state.requireAdminCalls).toBe(1)
+    expect(state.rpcCalls).toHaveLength(1)
   })
 
   it('does not query admin data before requireAdmin succeeds', async () => {

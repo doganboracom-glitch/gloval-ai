@@ -12,12 +12,15 @@ import type {
   ReferralDashboardData,
   ReferralPartnerSettings,
   ReferralPartnerStatus,
+  ReferralPartnerStatusEvent,
 } from '@/lib/referrals/partner-types'
 
 type ReferralRpcRow = {
+  partnerId?: unknown
   referralCode?: unknown
   status?: unknown
   activatedAt?: unknown
+  lastStatusChangedAt?: unknown
   ibanLast4?: unknown
   email?: unknown
   clicks?: unknown
@@ -54,6 +57,12 @@ function lastFour(value: unknown): string | null {
   return typeof value === 'string' && /^\d{4}$/u.test(value) ? value : null
 }
 
+function uuid(value: unknown): string | null {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
+    ? value
+    : null
+}
+
 function customerStatus(value: unknown): ReferralCustomerStatus {
   return value === 'paid' || value === 'verified' ? value : 'signup'
 }
@@ -85,21 +94,26 @@ export function mapReferralDashboardRpcResult(value: unknown): ReferralDashboard
 export function mapReferralAdminRpcResult(value: unknown): ReferralAdminPartner[] {
   return rpcRows(value)
     .map((row) => {
+      const partnerId = uuid(row.partnerId)
       const referralCode = normalizeReferralCode(
         typeof row.referralCode === 'string' ? row.referralCode : null,
       )
       const status = partnerStatus(row.status)
       const activatedAt = dateString(row.activatedAt)
-      if (!referralCode || !status || !activatedAt) return null
+      if (!partnerId || !referralCode || !status || !activatedAt) return null
 
       return {
+        partnerId,
         referralCode,
         status,
         maskedEmail: maskEmail(typeof row.email === 'string' ? row.email : null),
         activatedAt,
+        lastStatusChangedAt: dateString(row.lastStatusChangedAt) ?? activatedAt,
         ibanLast4: lastFour(row.ibanLast4),
         clicks: count(row.clicks),
         signups: count(row.signups),
+        verifiedSignups: count(row.verifiedSignups),
+        paidCustomers: count(row.paidCustomers),
       }
     })
     .filter((row): row is ReferralAdminPartner => row !== null)
@@ -147,12 +161,55 @@ export async function getReferralDashboardData(): Promise<ReferralDashboardData 
   }
 }
 
-export async function getReferralAdminSummary(): Promise<ReferralAdminPartner[]> {
+export async function getReferralAdminSummary(): Promise<ReferralAdminPartner[] | null> {
   await requireAdmin()
-  const { data, error } = await createAdminClient().rpc('referral_partner_dashboard', {
-    p_user_id: null,
-    p_include_customers: false,
-  })
-  if (error) throw new Error('referral_admin_summary_unavailable')
-  return mapReferralAdminRpcResult(data)
+  if (!isReferralFeatureEnabled()) return null
+
+  try {
+    const { data, error } = await createAdminClient().rpc('referral_partner_admin_summary', {})
+    if (error) return null
+    return mapReferralAdminRpcResult(data)
+  } catch {
+    return null
+  }
+}
+
+export async function getReferralPartnerEventHistory(
+  partnerId: string,
+): Promise<ReferralPartnerStatusEvent[] | null> {
+  await requireAdmin()
+  if (!isReferralFeatureEnabled() || !uuid(partnerId)) return null
+
+  try {
+    const { data, error } = await createAdminClient()
+      .from('referral_partner_events')
+      .select('id,actor_user_id,action,from_status,to_status,created_at')
+      .eq('partner_id', partnerId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error || !Array.isArray(data)) return null
+
+    return data.flatMap((row) => {
+      const id = uuid(row.id)
+      const action = row.action === 'suspend' || row.action === 'reactivate' || row.action === 'close'
+        ? row.action
+        : null
+      const fromStatus = partnerStatus(row.from_status)
+      const toStatus = partnerStatus(row.to_status)
+      const createdAt = dateString(row.created_at)
+      if (!id || !action || !fromStatus || !toStatus || !createdAt) return []
+
+      return [{
+        id,
+        actorUserId: uuid(row.actor_user_id),
+        action,
+        fromStatus,
+        toStatus,
+        createdAt,
+      }]
+    })
+  } catch {
+    return null
+  }
 }

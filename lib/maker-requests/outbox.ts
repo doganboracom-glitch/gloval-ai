@@ -7,39 +7,58 @@ import {
   buildMakerRequestAcknowledgementEmail,
   buildMakerRequestAdminEmail,
 } from '@/lib/email/maker-request-mail'
+import { buildReferralPartnerActivationAdminEmail } from '@/lib/email/referral-partner-activation-mail'
 import type { EmailLang } from '@/lib/email/lang'
 import type { MakerRequest } from './types'
 
-const OUTBOX_TYPES = ['maker_request_admin', 'maker_request_ack'] as const
+const MAKER_REQUEST_TYPES = ['maker_request_admin', 'maker_request_ack'] as const
+const OUTBOX_TYPES = [...MAKER_REQUEST_TYPES, 'referral_partner_admin'] as const
 const MAX_ATTEMPTS = 5
 const MAX_BATCH = 20
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const REFERRAL_CODE_PATTERN = /^[A-Z0-9]{8,16}$/u
 
-type MakerRequestEmailType = (typeof OUTBOX_TYPES)[number]
-type OutboxState = { lang: EmailLang; attempts: number }
+type MakerRequestEmailType = (typeof MAKER_REQUEST_TYPES)[number]
+type OutboxType = (typeof OUTBOX_TYPES)[number]
+type OutboxState = {
+  lang: EmailLang
+  attempts: number
+  referralCode?: string
+  activatedAt?: string
+}
 type OutboxRow = {
   id: string
-  type: MakerRequestEmailType
+  type: OutboxType
   status: 'queued' | 'failed' | 'sent'
   body: string
   dedupe_key: string
   created_at: string
 }
 
-function requestIdFromDedupeKey(type: MakerRequestEmailType, key: string): string | null {
+function outboxIdFromDedupeKey(type: OutboxType, key: string): string | null {
   const prefix = `${type}:`
   const id = key.startsWith(prefix) ? key.slice(prefix.length) : ''
+  if (type === 'referral_partner_admin') return REFERRAL_CODE_PATTERN.test(id) ? id : null
   return UUID_PATTERN.test(id) ? id : null
 }
 
 function parseOutboxState(body: string): OutboxState {
   try {
     const parsed = JSON.parse(body) as Partial<OutboxState>
+    const referralCode = typeof parsed.referralCode === 'string' && REFERRAL_CODE_PATTERN.test(parsed.referralCode)
+      ? parsed.referralCode
+      : undefined
+    const activatedAt = typeof parsed.activatedAt === 'string' && Number.isFinite(Date.parse(parsed.activatedAt))
+      ? parsed.activatedAt
+      : undefined
+
     return {
       lang: parsed.lang === 'en' ? 'en' : 'tr',
       attempts: Number.isInteger(parsed.attempts) && Number(parsed.attempts) >= 0
         ? Number(parsed.attempts)
         : 0,
+      ...(referralCode ? { referralCode } : {}),
+      ...(activatedAt ? { activatedAt } : {}),
     }
   } catch {
     return { lang: 'tr', attempts: 0 }
@@ -65,7 +84,7 @@ async function updateOutboxRow(
 export async function enqueueMakerRequestEmails(requestId: string, lang: EmailLang): Promise<void> {
   if (!UUID_PATTERN.test(requestId)) return
 
-  const rows = OUTBOX_TYPES.map((type) => ({
+  const rows = MAKER_REQUEST_TYPES.map((type) => ({
     user_id: null,
     channel: 'email',
     type,
@@ -84,7 +103,7 @@ export async function enqueueMakerRequestEmails(requestId: string, lang: EmailLa
 
     after(async () => {
       try {
-        await Promise.all(OUTBOX_TYPES.map((type) => deliverMakerRequestEmail(type, requestId)))
+        await Promise.all(MAKER_REQUEST_TYPES.map((type) => deliverMakerRequestEmail(type, requestId)))
       } catch {
         console.error('[maker-requests] notification delivery failed')
       }
@@ -94,7 +113,48 @@ export async function enqueueMakerRequestEmails(requestId: string, lang: EmailLa
   }
 }
 
-async function deliverMakerRequestEmail(type: MakerRequestEmailType, requestId: string) {
+export async function enqueueReferralPartnerActivationEmail(input: {
+  referralCode: string
+  activatedAt: string
+  lang: EmailLang
+}): Promise<void> {
+  const referralCode = input.referralCode.trim().toUpperCase()
+  const activatedAt = input.activatedAt
+  if (!REFERRAL_CODE_PATTERN.test(referralCode) || !Number.isFinite(Date.parse(activatedAt))) return
+
+  const type = 'referral_partner_admin' as const
+  const lang = input.lang === 'en' ? 'en' : 'tr'
+
+  try {
+    const { error } = await createAdminClient().from('notification_logs').insert([{
+      user_id: null,
+      channel: 'email',
+      type,
+      subject: lang === 'tr' ? 'Yeni satış ortağı etkinleştirildi' : 'New referral partner activated',
+      body: serializeOutboxState({ lang, attempts: 0, referralCode, activatedAt }),
+      status: 'queued',
+      dedupe_key: `${type}:${referralCode}`,
+    }])
+
+    if (error) {
+      if (error.code !== '23505') console.error('[maker-requests] referral admin notification queue failed')
+      return
+    }
+
+    after(async () => {
+      try {
+        await deliverMakerRequestEmail(type, referralCode)
+      } catch {
+        console.error('[maker-requests] referral admin notification delivery failed')
+      }
+    })
+  } catch {
+    console.error('[maker-requests] referral admin notification queue unavailable')
+  }
+}
+
+async function deliverMakerRequestEmail(type: OutboxType, requestId: string) {
+  if (type === 'referral_partner_admin') return deliverReferralPartnerActivationEmail(requestId)
   if (!UUID_PATTERN.test(requestId)) return 'skipped' as const
 
   const admin = createAdminClient()
@@ -167,6 +227,71 @@ async function deliverMakerRequestEmail(type: MakerRequestEmailType, requestId: 
   return failedState.attempts >= MAX_ATTEMPTS ? 'gave_up' as const : 'retry' as const
 }
 
+async function deliverReferralPartnerActivationEmail(referralCode: string) {
+  if (!REFERRAL_CODE_PATTERN.test(referralCode)) return 'skipped' as const
+
+  const admin = createAdminClient()
+  const type = 'referral_partner_admin' as const
+  const dedupeKey = `${type}:${referralCode}`
+  const { data: job, error: jobError } = await admin
+    .from('notification_logs')
+    .select('id, type, status, body, dedupe_key, created_at')
+    .eq('dedupe_key', dedupeKey)
+    .maybeSingle()
+
+  if (jobError || !job || job.status === 'sent') return 'skipped' as const
+
+  const typedJob = job as OutboxRow
+  const previousState = parseOutboxState(typedJob.body)
+  if (previousState.referralCode !== referralCode || !previousState.activatedAt) {
+    await updateOutboxRow(admin, typedJob.id, 'failed', { ...previousState, attempts: MAX_ATTEMPTS })
+    return 'gave_up' as const
+  }
+  if (previousState.attempts >= MAX_ATTEMPTS) return 'gave_up' as const
+
+  const nextState = { ...previousState, attempts: previousState.attempts + 1 }
+  const { data: claim, error: claimError } = await admin
+    .from('notification_logs')
+    .update({ status: 'queued', body: serializeOutboxState(nextState) })
+    .eq('id', typedJob.id)
+    .eq('body', typedJob.body)
+    .neq('status', 'sent')
+    .select('id')
+    .maybeSingle()
+
+  if (claimError || !claim) return 'skipped' as const
+
+  const email = buildReferralPartnerActivationAdminEmail({
+    lang: previousState.lang,
+    referralCode,
+    activatedAt: previousState.activatedAt,
+  })
+  const recipient = process.env.ADMIN_NOTIFICATION_EMAIL?.split(',')[0]?.trim() ?? ''
+  const result = await sendTransactionalEmailDetailed({
+    to: recipient,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    fromDisplayName: 'GLOVAL AI',
+    idempotencyKey: `referral-partner-admin:${referralCode}`,
+  })
+
+  if (result.ok) {
+    await updateOutboxRow(admin, typedJob.id, 'sent', nextState)
+    return 'sent' as const
+  }
+
+  if (result.reason === 'not_configured') {
+    await updateOutboxRow(admin, typedJob.id, 'queued', previousState)
+    return 'retry' as const
+  }
+
+  const permanentHttpFailure = result.reason === 'http' && result.status >= 400 && result.status < 500 && result.status !== 408 && result.status !== 429
+  const failedState = permanentHttpFailure ? { ...nextState, attempts: MAX_ATTEMPTS } : nextState
+  await updateOutboxRow(admin, typedJob.id, 'failed', failedState)
+  return failedState.attempts >= MAX_ATTEMPTS ? 'gave_up' as const : 'retry' as const
+}
+
 export async function processMakerRequestEmails({
   deadlineMs,
 }: {
@@ -196,7 +321,7 @@ export async function processMakerRequestEmails({
   for (const rawJob of jobs ?? []) {
     if (Date.now() >= deadlineMs) break
     const job = rawJob as OutboxRow
-    const requestId = requestIdFromDedupeKey(job.type, job.dedupe_key)
+    const requestId = outboxIdFromDedupeKey(job.type, job.dedupe_key)
     if (!requestId) {
       summary.skipped += 1
       continue

@@ -9,5 +9,5 @@ export default async function AdminReferralsPage() {
   if (!isReferralFeatureEnabled()) notFound()
 
   const partners = await getReferralAdminSummary()
-  return <ReferralPartnersAdminView partners={partners} />
+  return <ReferralPartnersAdminView partners={partners ?? []} unavailable={partners === null} />
 }

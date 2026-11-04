@@ -344,7 +344,21 @@
   animation: ads-address-guidance 2.4s ease-in-out infinite;
 }
 
+@keyframes referral-activated-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.referral-activated-dot {
+  animation: referral-activated-pulse 1.8s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .referral-activated-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
   .ads-address-guidance-motion {
     animation: none;
     opacity: 1;
