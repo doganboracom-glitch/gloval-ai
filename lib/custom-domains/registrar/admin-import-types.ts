@@ -12,6 +12,8 @@ export type AdminDomainImportError =
   | 'reason_required'
   | 'rate_limited'
   | 'domain_exists'
+  | 'domain_linked'
+  | 'order_active'
   | 'import_pending'
   | 'second_admin_required'
   | 'request_not_found'

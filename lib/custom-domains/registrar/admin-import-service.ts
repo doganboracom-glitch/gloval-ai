@@ -33,6 +33,8 @@ const ERROR_CODES: Record<string, AdminDomainImportError> = {
   target_inactive: 'target_inactive',
   rate_limited: 'rate_limited',
   domain_exists: 'domain_exists',
+  domain_linked: 'domain_linked',
+  order_active: 'order_active',
   import_pending: 'import_pending',
   second_admin_required: 'second_admin_required',
   request_not_found: 'request_not_found',
