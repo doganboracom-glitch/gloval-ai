@@ -75,7 +75,7 @@ export function PlanCard({
   return (
     <div
       id={`plan-${plan.code}`}
-      className={`relative flex scroll-mt-24 flex-col rounded-2xl border p-6 ${
+      className={`@container relative flex min-w-0 scroll-mt-24 flex-col rounded-2xl border p-6 ${
         isCurrent
           ? 'border-brand ring-2 ring-brand/40 bg-card'
           : plan.featured
@@ -108,21 +108,29 @@ export function PlanCard({
         </p>
       </header>
 
-      <div className="mt-6">
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-display text-4xl font-bold tracking-tight">
+      <div className="mt-6 min-w-0">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+          <span className="max-w-full shrink-0 whitespace-nowrap font-display text-[clamp(1.625rem,15cqi,2.25rem)] font-bold tabular-nums tracking-tight">
             {price}
           </span>
           {period && (
-            <span className="text-sm text-muted-foreground">{period}</span>
+            <span className="shrink-0 whitespace-nowrap text-sm text-muted-foreground">
+              {period}
+            </span>
           )}
         </div>
-        <p className="mt-1.5 h-5 text-xs font-medium text-brand">
-          {saving ?? (plan.monthlyPrice === 0 ? copy.noCardRequired : '')}
-        </p>
-        {cycle === 'yearly' && plan.monthlyPrice > 0 && (
-          <p className="text-xs text-muted-foreground">{copy.domainGift}</p>
-        )}
+        <div className="mt-1.5 flex min-h-11 flex-col gap-1.5">
+          {(saving || plan.monthlyPrice === 0) && (
+            <p className="text-pretty text-xs font-medium leading-relaxed text-brand">
+              {saving ?? copy.noCardRequired}
+            </p>
+          )}
+          {cycle === 'yearly' && plan.monthlyPrice > 0 && (
+            <p className="whitespace-nowrap text-xs leading-relaxed text-muted-foreground">
+              {copy.domainGift}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* AI kredi özeti: paketler arasındaki en belirleyici fark, bu yüzden
@@ -244,7 +252,7 @@ function FeatureRow({ item }: { item: PlanCopyItem }) {
       ) : (
         <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
       )}
-      <span>
+      <span className="min-w-0 break-words">
         <span
           className={
             item.highlight ? 'font-medium text-foreground' : 'text-muted-foreground'

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LanguageProvider } from '@/components/language-provider'
 import { Pricing } from '@/components/pricing'
 import { LANG_COOKIE, type Lang } from '@/lib/i18n'
+import { PLANS, planPrice } from '@/lib/pricing-config'
 
 const originalMatchMedia = window.matchMedia
 
@@ -225,5 +226,51 @@ describe('pricing Maker band', () => {
 
     expect(await within(dialog).findByRole('heading', { name: copy.success })).toBeTruthy()
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/maker-requests', expect.objectContaining({ method: 'POST' }))
+  })
+})
+
+describe('responsive plan-card pricing', () => {
+  it.each([
+    { lang: 'tr' as const, cycle: 'monthly' as const, period: '/ ay', domainGift: null },
+    { lang: 'tr' as const, cycle: 'yearly' as const, period: '/ yıl', domainGift: '.com.tr alan adı hediye' },
+    { lang: 'en' as const, cycle: 'monthly' as const, period: '/ month', domainGift: null },
+    { lang: 'en' as const, cycle: 'yearly' as const, period: '/ year', domainGift: 'Free .com.tr domain' },
+  ])('keeps the $lang $cycle price and feature controls usable', ({ lang, cycle, period, domainGift }) => {
+    renderPricing(lang)
+    fireEvent.click(screen.getByRole('tab', { name: cycle === 'yearly' ? 'Yıllık' : 'Aylık' }))
+
+    const ecommercePlan = PLANS.find((plan) => plan.code === 'ecommerce')
+    const card = document.getElementById('plan-ecommerce')
+    if (!ecommercePlan || !card) throw new Error('E-commerce plan card is missing')
+
+    expect(card.className).toContain('flex-col')
+    expect(card.className).toContain('min-w-0')
+    expect(card.className).not.toContain('overflow-hidden')
+
+    const price = within(card).getByText(planPrice(ecommercePlan, cycle).price, { exact: true })
+    expect(price.className).toContain('whitespace-nowrap')
+    expect(price.className).toContain('tabular-nums')
+    expect(within(card).getByText(period, { exact: true }).className).toContain('whitespace-nowrap')
+
+    if (domainGift) {
+      const domain = within(card).getByText(domainGift, { exact: true })
+      const notes = domain.parentElement
+      const saving = domain.previousElementSibling as HTMLParagraphElement | null
+
+      expect(domain.className).toContain('whitespace-nowrap')
+      expect(notes?.className).toContain('flex-col')
+      expect(notes?.className).toContain('gap-1.5')
+      expect(notes?.className).toContain('min-h-11')
+      expect(saving?.tagName).toBe('P')
+      expect(saving?.className).toContain('leading-relaxed')
+      expect(saving?.className).not.toContain('h-5')
+    }
+
+    const showAll = within(card).getByRole('button', {
+      name: lang === 'tr' ? 'Tüm özellikleri göster' : 'Show all features',
+    })
+    expect(showAll.parentElement?.className).toContain('mt-auto')
+    fireEvent.click(showAll)
+    expect(showAll.getAttribute('aria-expanded')).toBe('true')
   })
 })
