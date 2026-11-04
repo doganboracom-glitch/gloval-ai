@@ -15,6 +15,7 @@ export type GoogleAdsErrorCode =
   | 'manager_account'
   | 'connection_not_found'
   | 'connection_busy'
+  | 'connection_limit_exceeded'
   | 'api_quota_exceeded'
   | 'quota_check_failed'
   | 'reauth_required'
@@ -60,6 +61,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'csrf_failed':
       return 403
     case 'rate_limited':
+    case 'connection_limit_exceeded':
       return 429
     case 'connection_not_found':
     case 'account_not_found':

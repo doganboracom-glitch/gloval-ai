@@ -2,6 +2,7 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
+import { isGoogleAdsConnectPublic, resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
 import type { GoogleAdsApiCall, GoogleAdsApiMethod, GoogleAdsApiTransport } from '@/lib/ads/providers/google-ads-provider'
 import { GOOGLE_ADS_API_VERSION } from '@/lib/ads/providers/google-ads-provider'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -137,13 +138,36 @@ export function createGoogleAdsApiTransport(input: {
         p_method: call.method,
       }
       if (isMutation) reserveArgs.p_operation_count = operationCount
-      const { data, error } = await admin.rpc(
-        isMutation ? 'ads_reserve_google_api_operation_v2' : 'ads_reserve_google_api_operation',
-        reserveArgs,
-      )
+      let reservationData: unknown = null
+      let reservationError: { code?: string } | null = null
+      if (isMutation) {
+        const result = await admin.rpc('ads_reserve_google_api_operation_v2', reserveArgs)
+        reservationData = result.data
+        reservationError = result.error
+      } else {
+        const limits = resolveGoogleAdsReadDailyLimits()
+        const result = await admin.rpc('ads_reserve_google_api_operation', {
+          ...reserveArgs,
+          p_user_daily_limit: limits.perUser,
+          p_global_daily_limit: limits.global,
+        })
+        reservationData = result.data
+        reservationError = result.error
 
-      const reservation = Array.isArray(data) ? data[0] : data
-      if (error || !reservation || typeof reservation.allowed !== 'boolean') {
+        if (
+          reservationError?.code === 'PGRST202'
+          && !isGoogleAdsConnectPublic()
+          && limits.perUser === 200
+          && limits.global === 2_000
+        ) {
+          const legacyResult = await admin.rpc('ads_reserve_google_api_operation', reserveArgs)
+          reservationData = legacyResult.data
+          reservationError = legacyResult.error
+        }
+      }
+
+      const reservation = record(Array.isArray(reservationData) ? reservationData[0] : reservationData)
+      if (reservationError || !reservation || typeof reservation.allowed !== 'boolean') {
         throw new GoogleAdsError('quota_check_failed')
       }
       if (!reservation.allowed) throw new GoogleAdsError('api_quota_exceeded')

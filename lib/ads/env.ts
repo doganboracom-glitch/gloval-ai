@@ -19,7 +19,11 @@ export const ADS_ENV = {
   googleAdsOAuthStateSecret: 'ADS_OAUTH_STATE_SECRET',
   googleAdsOAuthRedirectUri: 'GOOGLE_ADS_OAUTH_REDIRECT_URI',
   googleAdsConnectEnabled: 'ADS_GOOGLE_CONNECT_ENABLED',
+  googleAdsConnectPublic: 'ADS_GOOGLE_CONNECT_PUBLIC',
   googleAdsConnectAllowedUserIds: 'ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS',
+  googleAdsMaxActiveConnections: 'ADS_GOOGLE_CONNECT_MAX_ACTIVE_CONNECTIONS',
+  googleAdsReadDailyUserLimit: 'ADS_GOOGLE_READ_DAILY_USER_LIMIT',
+  googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
 } as const
@@ -61,10 +65,16 @@ export type GoogleAdsOAuthSettings = {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+export function isGoogleAdsConnectPublic(env: Env = process.env): boolean {
+  return env[ADS_ENV.googleAdsConnectEnabled]?.trim() === '1'
+    && env[ADS_ENV.googleAdsConnectPublic]?.trim() === '1'
+}
+
 export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = process.env): boolean {
   if (!userId || env[ADS_ENV.googleAdsConnectEnabled]?.trim() !== '1') return false
   const normalizedUserId = userId.trim().toLowerCase()
   if (!UUID_PATTERN.test(normalizedUserId)) return false
+  if (env[ADS_ENV.googleAdsConnectPublic]?.trim() === '1') return true
 
   const allowedUserIds = new Set(
     (env[ADS_ENV.googleAdsConnectAllowedUserIds] ?? '')
@@ -73,6 +83,41 @@ export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = 
       .filter((value) => UUID_PATTERN.test(value)),
   )
   return allowedUserIds.has(normalizedUserId)
+}
+
+const GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX = 2_879
+const GOOGLE_ADS_CONNECT_MAX_ACTIVE_DEFAULT = 3
+const GOOGLE_ADS_READ_DAILY_USER_DEFAULT = 200
+const GOOGLE_ADS_READ_DAILY_GLOBAL_DEFAULT = 2_000
+
+function resolvePositiveLimit(raw: string | undefined, fallback: number, max: number): number {
+  const value = raw?.trim()
+  if (!value || !/^\d{1,6}$/.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= max ? parsed : fallback
+}
+
+export function resolveGoogleAdsMaxActiveConnections(env: Env = process.env): number {
+  return resolvePositiveLimit(
+    env[ADS_ENV.googleAdsMaxActiveConnections],
+    GOOGLE_ADS_CONNECT_MAX_ACTIVE_DEFAULT,
+    100,
+  )
+}
+
+export function resolveGoogleAdsReadDailyLimits(env: Env = process.env): { perUser: number; global: number } {
+  return {
+    perUser: resolvePositiveLimit(
+      env[ADS_ENV.googleAdsReadDailyUserLimit],
+      GOOGLE_ADS_READ_DAILY_USER_DEFAULT,
+      GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX,
+    ),
+    global: resolvePositiveLimit(
+      env[ADS_ENV.googleAdsReadDailyGlobalLimit],
+      GOOGLE_ADS_READ_DAILY_GLOBAL_DEFAULT,
+      GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX,
+    ),
+  }
 }
 
 export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = process.env): boolean {
