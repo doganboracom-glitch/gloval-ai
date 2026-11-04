@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { queueReferralPartnerSignupNotification } from '@/lib/referrals/email-outbox'
 import {
   createReferralCookieToken,
   createReferralSignupIntent,
@@ -155,14 +156,21 @@ async function insertAttribution(input: {
       return false
     }
 
-    const { error } = await admin.from('referral_attributions').insert({
-      referred_user_id: input.userId,
-      partner_id: partner.id,
-      code_snapshot: input.cookieClaims.referralCode,
-      source: input.source,
-      captured_at: new Date(input.cookieClaims.capturedAt).toISOString(),
-    })
-    return !error
+    const { data: attribution, error } = await admin
+      .from('referral_attributions')
+      .insert({
+        referred_user_id: input.userId,
+        partner_id: partner.id,
+        code_snapshot: input.cookieClaims.referralCode,
+        source: input.source,
+        captured_at: new Date(input.cookieClaims.capturedAt).toISOString(),
+      })
+      .select('id')
+      .maybeSingle()
+    if (error || !attribution?.id) return false
+
+    await queueReferralPartnerSignupNotification(attribution.id)
+    return true
   } catch {
     return false
   }

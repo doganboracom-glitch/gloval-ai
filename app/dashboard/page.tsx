@@ -13,8 +13,9 @@ import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isWithinWelcomeWindow, scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
-import { isReferralFeatureEnabled } from '@/lib/referrals/core'
+import { isReferralCashPayoutsEnabled, isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
 import { getReferralDashboardData } from '@/lib/referrals/partner-data'
+import { getReferralPayoutPanelData } from '@/lib/referrals/payout-data'
 import { nonCritical, withOneRetry } from '@/lib/dashboard-resilience'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
@@ -42,7 +43,10 @@ export default async function DashboardPage() {
   // Only the projects list is critical (one retry for transient blips); the
   // unread counter and Aura rights fall back to empty values so a failure in
   // either can never take the whole panel down.
-  const [projects, unreadMessages, auraSiteIds, referralDashboard] = await Promise.all([
+  const referralEnabled = isReferralFeatureEnabled()
+  const payoutsEnabled = referralEnabled && isReferralPayoutsEnabled()
+  const cashPayoutsEnabled = payoutsEnabled && isReferralCashPayoutsEnabled()
+  const [projects, unreadMessages, auraSiteIds, referralDashboard, referralPayoutData] = await Promise.all([
     withOneRetry('listProjects', () => listProjects()),
     nonCritical(
       'unreadMessages',
@@ -65,8 +69,11 @@ export default async function DashboardPage() {
       },
       [] as string[],
     ),
-    isReferralFeatureEnabled()
+    referralEnabled
       ? nonCritical('referralDashboard', () => getReferralDashboardData(), null)
+      : Promise.resolve(null),
+    payoutsEnabled
+      ? nonCritical('referralPayouts', () => getReferralPayoutPanelData(), null)
       : Promise.resolve(null),
   ])
   // Aktif abonelik yoksa kullanıcı FREE sayılır. Faturalama sorgusu panelin
@@ -97,6 +104,9 @@ export default async function DashboardPage() {
         userEmail={user.email ?? ''}
         unreadMessages={unreadMessages}
         referralDashboard={referralDashboard}
+        referralPayoutData={referralPayoutData}
+        payoutsEnabled={payoutsEnabled}
+        cashPayoutsEnabled={cashPayoutsEnabled}
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}
         showBillingProfileReminder={showBillingProfileReminder}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Banknote, Coins, Loader2, WalletCards } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -36,7 +37,7 @@ const COPY = {
     requested: 'İşlemde',
     converted: 'Krediye çevrildi',
     paid: 'Ödendi',
-    hold: 'Komisyonlar ilk ödeme tarihinden itibaren 14 gün bekletilir.',
+    hold: 'Komisyonlar ödeme tarihinden 14 gün sonra kullanılabilir bakiyeye geçer.',
     request: 'Ödeme iste',
     requestTitle: 'Ödeme yöntemi ve özeti',
     requestDescription: 'Onaylamadan önce tutarı kontrol edin. İstek sunucu tarafında tekrar doğrulanır.',
@@ -84,7 +85,7 @@ const COPY = {
     requested: 'In progress',
     converted: 'Converted to credits',
     paid: 'Paid',
-    hold: 'Commissions are held for 14 days from the first payment date.',
+    hold: 'Commissions become available 14 days after the payment date.',
     request: 'Request payout',
     requestTitle: 'Payout method and summary',
     requestDescription: 'Review the amount before confirming. The request is revalidated on the server.',
@@ -202,21 +203,21 @@ export function ReferralPayoutControls({
   }
 
   return (
-    <Card className={variant === 'compact' ? 'border-border/70 bg-muted/20 shadow-none' : undefined}>
-      <CardHeader className="gap-1">
+    <Card className={cn(variant === 'compact' && 'border-border/70 bg-muted/20 shadow-none')}>
+      <CardHeader className={cn('gap-1', variant === 'compact' && 'sr-only')}>
         <div className="flex items-center gap-2">
           <WalletCards className="size-4 text-primary" aria-hidden="true" />
           <CardTitle className="text-base">{copy.title}</CardTitle>
         </div>
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className={cn('flex flex-col gap-4', variant === 'compact' && 'gap-2 p-0')}>
         {data.unavailable ? (
           <Alert variant="destructive"><AlertDescription>{copy.unavailable}</AlertDescription></Alert>
         ) : state ? (
           <>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-              <div className="col-span-2 flex flex-col gap-1 sm:col-span-1">
+            <dl className={cn('grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3', variant === 'compact' && 'flex flex-wrap items-center gap-x-4 gap-y-1')}>
+              <div className={cn('flex flex-col gap-1', variant !== 'compact' && 'col-span-2 sm:col-span-1')}>
                 <dt className="text-xs text-muted-foreground">{copy.total}</dt>
                 <dd className="text-xl font-semibold tabular-nums text-foreground">{formatReferralTry(state.totalCents, language)}</dd>
               </div>
@@ -228,19 +229,19 @@ export function ReferralPayoutControls({
                 <dt className="text-xs text-muted-foreground">{copy.available}</dt>
                 <dd className="text-sm font-medium tabular-nums text-foreground">{formatReferralTry(state.availableCents, language)}</dd>
               </div>
-              {state.requestedCents > 0 && (
+              {variant === 'dashboard' && state.requestedCents > 0 && (
                 <div className="flex flex-col gap-1">
                   <dt className="text-xs text-muted-foreground">{copy.requested}</dt>
                   <dd className="text-sm font-medium tabular-nums text-foreground">{formatReferralTry(state.requestedCents, language)}</dd>
                 </div>
               )}
-              {state.convertedCents > 0 && (
+              {variant === 'dashboard' && state.convertedCents > 0 && (
                 <div className="flex flex-col gap-1">
                   <dt className="text-xs text-muted-foreground">{copy.converted}</dt>
                   <dd className="text-sm font-medium tabular-nums text-foreground">{formatReferralTry(state.convertedCents, language)}</dd>
                 </div>
               )}
-              {state.paidCents > 0 && (
+              {variant === 'dashboard' && state.paidCents > 0 && (
                 <div className="flex flex-col gap-1">
                   <dt className="text-xs text-muted-foreground">{copy.paid}</dt>
                   <dd className="text-sm font-medium tabular-nums text-foreground">{formatReferralTry(state.paidCents, language)}</dd>
@@ -264,7 +265,13 @@ export function ReferralPayoutControls({
               </Alert>
             )}
 
-            <Button type="button" onClick={startRequest} disabled={!canRequest || isSubmitting} className="w-fit gap-2">
+            <Button
+              type="button"
+              onClick={startRequest}
+              disabled={!canRequest || isSubmitting}
+              size={variant === 'compact' ? 'sm' : undefined}
+              className={cn('w-fit gap-2', variant === 'compact' && 'shrink-0')}
+            >
               <WalletCards data-icon="inline-start" />
               {copy.request}
             </Button>

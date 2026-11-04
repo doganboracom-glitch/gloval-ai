@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, MousePointerClick, UserRoundCheck, Users, WalletCards } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
 import {
   Card,
   CardContent,
@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import type { ReferralCustomerStatus, ReferralDashboardData } from '@/lib/referrals/partner-types'
+import type { ReferralCustomerStatus, ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const COPY = {
   tr: {
@@ -30,11 +30,13 @@ const COPY = {
     copy: 'Bağlantıyı kopyala',
     copied: 'Kopyalandı',
     copyFailed: 'Bağlantı kopyalanamadı.',
-    comingSoon: 'Komisyon ödemeleri henüz başlamadı; yönlendirme istatistiklerin burada takip edilir.',
     customers: 'Yönlendirilen müşteriler',
     noCustomers: 'Henüz yönlendirme kaydı yok.',
     statuses: { signup: 'Kayıt oldu', verified: 'Doğrulandı', paid: 'Ücretli' },
     date: 'Kayıt tarihi',
+    deleted: 'Üye tarafından silindi',
+    deletedAccount: 'Silinmiş hesap',
+    jumpToSection: '↓ Satış Ortaklığı',
   },
   en: {
     title: 'Referral partnership',
@@ -50,11 +52,13 @@ const COPY = {
     copy: 'Copy link',
     copied: 'Copied',
     copyFailed: 'Could not copy the link.',
-    comingSoon: 'Commission payments have not started yet; you can track your referral statistics here.',
     customers: 'Referred customers',
     noCustomers: 'No referrals yet.',
     statuses: { signup: 'Signed up', verified: 'Verified', paid: 'Paid' },
     date: 'Signup date',
+    deleted: 'Deleted by member',
+    deletedAccount: 'Deleted account',
+    jumpToSection: '↓ Referral partnership',
   },
 } as const
 
@@ -64,11 +68,35 @@ const STATUS_VARIANT: Record<ReferralCustomerStatus, 'secondary' | 'default'> = 
   paid: 'default',
 }
 
-export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData | null }) {
+export function ReferralDashboardPanel({
+  data,
+  payoutData = null,
+  payoutsEnabled = false,
+  cashPayoutsEnabled = false,
+}: {
+  data: ReferralDashboardData | null
+  payoutData?: ReferralPayoutPanelData | null
+  payoutsEnabled?: boolean
+  cashPayoutsEnabled?: boolean
+}) {
   const { lang } = useLanguage()
   const language = lang === 'tr' ? 'tr' : 'en'
   const copy = COPY[language]
+  const sectionRef = useRef<HTMLElement>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [sectionVisible, setSectionVisible] = useState(false)
+
+  useEffect(() => {
+    const section = sectionRef.current
+    if (!section || typeof IntersectionObserver === 'undefined') return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setSectionVisible(entry.isIntersecting),
+      { threshold: 0.15 },
+    )
+    observer.observe(section)
+    return () => observer.disconnect()
+  }, [data])
 
   if (!data) return null
 
@@ -90,7 +118,8 @@ export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData |
   }
 
   return (
-    <section aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4">
+    <>
+    <section ref={sectionRef} id="satis-ortakligi" aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4 scroll-mt-8">
       <div>
         <h2 id="referral-dashboard-title" className="text-xl font-semibold tracking-tight text-foreground">
           {copy.title}
@@ -155,10 +184,14 @@ export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData |
         {copyState === 'failed' && <CardContent className="pt-0"><p role="status" className="text-sm text-destructive">{copy.copyFailed}</p></CardContent>}
       </Card>
 
-      <Alert>
-        <WalletCards aria-hidden="true" />
-        <AlertDescription>{copy.comingSoon}</AlertDescription>
-      </Alert>
+      {payoutsEnabled && (
+        <ReferralPayoutControls
+          enabled={payoutsEnabled}
+          cashEnabled={cashPayoutsEnabled}
+          data={payoutData}
+          variant="dashboard"
+        />
+      )}
 
       <Card>
         <CardHeader>
@@ -171,9 +204,14 @@ export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData |
             <ul className="divide-y divide-border">
               {data.customers.map((customer) => (
                 <li key={`${customer.maskedEmail}-${customer.createdAt}`} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="break-all text-sm font-medium text-foreground">{customer.maskedEmail}</span>
+                  <span className="break-all text-sm font-medium text-foreground">
+                    {customer.accountDeleted ? copy.deletedAccount : customer.maskedEmail}
+                  </span>
                   <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <Badge variant={STATUS_VARIANT[customer.status]}>{copy.statuses[customer.status]}</Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={STATUS_VARIANT[customer.status]}>{copy.statuses[customer.status]}</Badge>
+                      {customer.accountDeleted && <Badge variant="outline">{copy.deleted}</Badge>}
+                    </div>
                     <time dateTime={customer.createdAt} className="text-xs text-muted-foreground">
                       {new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium' }).format(new Date(customer.createdAt))}
                     </time>
@@ -185,5 +223,22 @@ export function ReferralDashboardPanel({ data }: { data: ReferralDashboardData |
         </CardContent>
       </Card>
     </section>
+    {!sectionVisible && (
+      <a
+        href="#satis-ortakligi"
+        onClick={(event) => {
+          event.preventDefault()
+          const section = sectionRef.current
+          if (!section) return
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          section.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
+        }}
+        className="fixed bottom-4 left-4 z-40 inline-flex min-h-10 items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-lg transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={copy.jumpToSection}
+      >
+        {copy.jumpToSection}
+      </a>
+    )}
+    </>
   )
 }

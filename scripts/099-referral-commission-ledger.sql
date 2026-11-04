@@ -20,6 +20,10 @@ create table if not exists public.referral_payout_requests (
   system_topup_cents bigint not null default 0 check (system_topup_cents >= 0),
   invoice_required boolean not null default false,
   invoice_confirmed boolean not null default false,
+  invoice_reference text check (invoice_reference is null or char_length(btrim(invoice_reference)) between 2 and 200),
+  invoice_received_at timestamptz,
+  payment_reference text check (payment_reference is null or char_length(btrim(payment_reference)) between 2 and 200),
+  admin_note text check (admin_note is null or char_length(btrim(admin_note)) between 3 and 500),
   tax_status_snapshot text check (tax_status_snapshot in ('individual', 'company')),
   payee_name_snapshot text,
   iban_last4_snapshot text check (iban_last4_snapshot is null or iban_last4_snapshot ~ '^\\d{4}$'),
@@ -31,6 +35,7 @@ create table if not exists public.referral_payout_requests (
   rejection_reason text check (rejection_reason is null or rejection_reason in ('admin_rejected', 'details_incomplete', 'compliance_review')),
   unique (partner_id, idempotency_key),
   check (not invoice_required or (method = 'cash' and tax_status_snapshot = 'company')),
+  check (not invoice_confirmed or (invoice_required and invoice_reference is not null and invoice_received_at is not null)),
   check (
     (method = 'cash' and credit_amount is null and system_topup_cents = 0)
     or (method = 'credit' and credit_amount > 0 and payout_cents = balance_cents)

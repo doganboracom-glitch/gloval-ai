@@ -26,6 +26,7 @@ type PartnerActionError =
   | 'already_registered'
   | 'not_active'
   | 'iban_unavailable'
+  | 'balance_outstanding'
 
 type PartnerActionResult =
   | { ok: true; referralCode: string; ibanLast4: string }
@@ -200,10 +201,12 @@ export async function closeReferralPartner(): Promise<ClosePartnerResult> {
 
     const transition = data as { ok?: unknown; error?: unknown } | null
     if (transition?.ok !== true) {
-      return {
-        ok: false,
-        error: transition?.error === 'invalid_transition' ? 'not_active' : 'program_unavailable',
-      }
+      const error = transition?.error === 'balance_outstanding'
+        ? 'balance_outstanding'
+        : transition?.error === 'invalid_transition'
+          ? 'not_active'
+          : 'program_unavailable'
+      return { ok: false, error }
     }
 
     revalidatePath('/settings')

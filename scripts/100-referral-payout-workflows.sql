@@ -77,7 +77,6 @@ declare
   v_credit_amount integer;
   v_topup_cents bigint := 0;
   v_invoice_required boolean := false;
-  v_tax_suspended boolean := false;
   v_language text;
 begin
   if p_user_id is null or p_idempotency_key is null or p_method not in ('cash', 'credit') then
@@ -236,18 +235,6 @@ begin
       'referral_payout:' || v_request_id::text
     );
 
-    if v_partner.tax_verified_at is null and v_partner.status = 'active' then
-      update public.referral_partners
-        set status = 'suspended'
-        where id = p_partner_id;
-      insert into public.referral_partner_events (
-        partner_id, actor_user_id, action, from_status, to_status, created_at
-      ) values (
-        p_partner_id, p_user_id, 'suspend', 'active', 'suspended', v_now
-      );
-      v_tax_suspended := true;
-    end if;
-
     insert into public.referral_payout_audit_events (
       partner_id, payout_request_id, actor_user_id, event_type, details
     ) values (
@@ -257,9 +244,9 @@ begin
       'credit_payout_converted',
       jsonb_build_object(
         'balanceCents', v_available,
-        'creditAmount', v_credit_amount,
-        'systemTopupCents', v_topup_cents,
-        'taxSuspended', v_tax_suspended
+      'creditAmount', v_credit_amount,
+      'systemTopupCents', v_topup_cents,
+      'taxSuspended', false
       )
     );
   else
@@ -292,7 +279,7 @@ begin
     'invoiceRequired', v_invoice_required,
     'partnerId', p_partner_id,
     'partnerLanguage', v_language,
-    'taxSuspended', v_tax_suspended
+    'taxSuspended', false
   );
 end;
 $$;
@@ -300,10 +287,83 @@ $$;
 revoke all on function public.request_referral_payout(uuid, uuid, text, uuid) from public, anon, authenticated;
 grant execute on function public.request_referral_payout(uuid, uuid, text, uuid) to service_role;
 
+create or replace function public.record_referral_cash_invoice(
+  p_request_id uuid,
+  p_actor_user_id uuid,
+  p_invoice_reference text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_request public.referral_payout_requests%rowtype;
+  v_now timestamptz := clock_timestamp();
+  v_reference text := btrim(coalesce(p_invoice_reference, ''));
+begin
+  if p_actor_user_id is null then
+    return jsonb_build_object('ok', false, 'error', 'invalid_actor');
+  end if;
+  if char_length(v_reference) not between 2 and 200 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_invoice_reference');
+  end if;
+
+  select request.*
+    into v_request
+    from public.referral_payout_requests as request
+    where request.id = p_request_id
+    for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if v_request.method <> 'cash'
+    or v_request.status <> 'requested'
+    or v_request.invoice_required is not true then
+    return jsonb_build_object('ok', false, 'error', 'invalid_transition');
+  end if;
+
+  if v_request.invoice_confirmed then
+    if v_request.invoice_reference = v_reference then
+      return jsonb_build_object('ok', true, 'duplicate', true, 'requestId', v_request.id);
+    end if;
+    return jsonb_build_object('ok', false, 'error', 'invoice_already_recorded');
+  end if;
+
+  update public.referral_payout_requests
+    set invoice_confirmed = true,
+        invoice_reference = v_reference,
+        invoice_received_at = v_now,
+        processed_by = p_actor_user_id
+    where id = v_request.id;
+
+  insert into public.referral_payout_audit_events (
+    partner_id, payout_request_id, actor_user_id, event_type, details
+  ) values (
+    v_request.partner_id,
+    v_request.id,
+    p_actor_user_id,
+    'cash_invoice_received',
+    jsonb_build_object('invoiceReferencePresent', true, 'receivedAt', v_now)
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'duplicate', false,
+    'requestId', v_request.id,
+    'partnerId', v_request.partner_id,
+    'invoiceReceivedAt', v_now
+  );
+end;
+$$;
+
+revoke all on function public.record_referral_cash_invoice(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.record_referral_cash_invoice(uuid, uuid, text) to service_role;
+
 create or replace function public.process_referral_cash_payout(
   p_request_id uuid,
   p_actor_user_id uuid,
-  p_invoice_confirmed boolean
+  p_payment_reference text
 )
 returns jsonb
 language plpgsql
@@ -355,7 +415,14 @@ begin
   if v_partner.iban_ciphertext is null or v_partner.iban_key_version is null then
     return jsonb_build_object('ok', false, 'error', 'iban_unavailable');
   end if;
-  if v_request.invoice_required and p_invoice_confirmed is not true then
+  if p_payment_reference is null or char_length(btrim(p_payment_reference)) not between 2 and 200 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_payment_reference');
+  end if;
+  if v_request.invoice_required and (
+    v_request.invoice_confirmed is not true
+    or v_request.invoice_reference is null
+    or v_request.invoice_received_at is null
+  ) then
     return jsonb_build_object('ok', false, 'error', 'invoice_confirmation_required');
   end if;
 
@@ -370,7 +437,8 @@ begin
 
   update public.referral_payout_requests
     set status = 'paid',
-        invoice_confirmed = coalesce(p_invoice_confirmed, false),
+        invoice_confirmed = v_request.invoice_required and v_request.invoice_confirmed,
+        payment_reference = btrim(p_payment_reference),
         processed_at = v_now,
         processed_by = p_actor_user_id
     where id = v_request.id;
@@ -403,7 +471,8 @@ begin
       'balanceCents', v_request.balance_cents,
       'payoutCents', v_request.payout_cents,
       'invoiceRequired', v_request.invoice_required,
-      'invoiceConfirmed', coalesce(p_invoice_confirmed, false),
+      'invoiceConfirmed', v_request.invoice_required and v_request.invoice_confirmed,
+      'paymentReferencePresent', true,
       'taxSuspended', v_tax_suspended
     )
   );
@@ -422,13 +491,14 @@ begin
 end;
 $$;
 
-revoke all on function public.process_referral_cash_payout(uuid, uuid, boolean) from public, anon, authenticated;
-grant execute on function public.process_referral_cash_payout(uuid, uuid, boolean) to service_role;
+revoke all on function public.process_referral_cash_payout(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.process_referral_cash_payout(uuid, uuid, text) to service_role;
 
 create or replace function public.reject_referral_cash_payout(
   p_request_id uuid,
   p_actor_user_id uuid,
-  p_reason text default 'admin_rejected'
+  p_reason text,
+  p_note text
 )
 returns jsonb
 language plpgsql
@@ -440,9 +510,13 @@ declare
   v_partner public.referral_partners%rowtype;
   v_now timestamptz := clock_timestamp();
   v_reason text;
+  v_note text := btrim(coalesce(p_note, ''));
 begin
   if p_actor_user_id is null then
     return jsonb_build_object('ok', false, 'error', 'invalid_actor');
+  end if;
+  if char_length(v_note) not between 3 and 500 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_note');
   end if;
   if p_reason not in ('admin_rejected', 'details_incomplete', 'compliance_review') then
     return jsonb_build_object('ok', false, 'error', 'invalid_reason');
@@ -492,7 +566,8 @@ begin
     set status = 'rejected',
         processed_at = v_now,
         processed_by = p_actor_user_id,
-        rejection_reason = v_reason
+        rejection_reason = v_reason,
+        admin_note = v_note
     where id = v_request.id;
 
   update public.referral_commissions
@@ -510,7 +585,8 @@ begin
     'cash_payout_rejected',
     jsonb_build_object(
       'balanceCents', v_request.balance_cents,
-      'reason', v_reason
+      'reason', v_reason,
+      'adminNotePresent', true
     )
   );
 
@@ -526,8 +602,8 @@ begin
 end;
 $$;
 
-revoke all on function public.reject_referral_cash_payout(uuid, uuid, text) from public, anon, authenticated;
-grant execute on function public.reject_referral_cash_payout(uuid, uuid, text) to service_role;
+revoke all on function public.reject_referral_cash_payout(uuid, uuid, text, text) from public, anon, authenticated;
+grant execute on function public.reject_referral_cash_payout(uuid, uuid, text, text) to service_role;
 
 create or replace function public.verify_referral_partner_tax(
   p_partner_id uuid,
@@ -680,6 +756,10 @@ as $$
         'systemTopupCents', payout.system_topup_cents,
         'invoiceRequired', payout.invoice_required,
         'invoiceConfirmed', payout.invoice_confirmed,
+        'invoiceReference', payout.invoice_reference,
+        'invoiceReceivedAt', payout.invoice_received_at,
+        'paymentReference', payout.payment_reference,
+        'adminNote', payout.admin_note,
         'status', payout.status,
         'requestedAt', payout.requested_at,
         'processedAt', payout.processed_at,
@@ -708,6 +788,50 @@ $$;
 
 revoke all on function public.referral_payout_admin_list(text, text, integer) from public, anon, authenticated;
 grant execute on function public.referral_payout_admin_list(text, text, integer) to service_role;
+
+create or replace function public.referral_payout_admin_summary()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'pendingCents', coalesce((
+      select sum(ledger.amount_cents)
+      from public.referral_commission_ledger as ledger
+      where ledger.available_at > clock_timestamp()
+    ), 0),
+    'availableCents', coalesce((
+      select sum(ledger.amount_cents)
+      from public.referral_commission_ledger as ledger
+      where ledger.available_at <= clock_timestamp()
+    ), 0),
+    'convertedCents', coalesce((
+      select sum(request.balance_cents)
+      from public.referral_payout_requests as request
+      where request.status = 'converted'
+    ), 0),
+    'systemTopupCents', coalesce((
+      select sum(request.system_topup_cents)
+      from public.referral_payout_requests as request
+      where request.status = 'converted'
+    ), 0),
+    'paidCents', coalesce((
+      select sum(request.balance_cents)
+      from public.referral_payout_requests as request
+      where request.status = 'paid'
+    ), 0),
+    'openCashRequests', coalesce((
+      select count(*)
+      from public.referral_payout_requests as request
+      where request.method = 'cash' and request.status = 'requested'
+    ), 0)
+  );
+$$;
+
+revoke all on function public.referral_payout_admin_summary() from public, anon, authenticated;
+grant execute on function public.referral_payout_admin_summary() to service_role;
 
 create or replace function public.transition_referral_partner_status(
   p_partner_id uuid,

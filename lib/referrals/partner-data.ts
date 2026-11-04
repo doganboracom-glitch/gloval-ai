@@ -73,11 +73,17 @@ export function mapReferralDashboardRpcResult(value: unknown): ReferralDashboard
 
   const customers: ReferralCustomer[] = (Array.isArray(row.customers) ? row.customers : [])
     .filter(isRecord)
-    .map((customer) => ({
-      maskedEmail: maskEmail(typeof customer.email === 'string' ? customer.email : null),
-      status: customerStatus(customer.status),
-      createdAt: dateString(customer.createdAt) ?? '',
-    }))
+    .map((customer) => {
+      const accountDeleted = customer.accountDeleted === true
+      return {
+        maskedEmail: accountDeleted
+          ? ''
+          : maskEmail(typeof customer.email === 'string' ? customer.email : null),
+        accountDeleted,
+        status: customerStatus(customer.status),
+        createdAt: dateString(customer.createdAt) ?? '',
+      }
+    })
     .filter((customer) => customer.createdAt)
 
   return {

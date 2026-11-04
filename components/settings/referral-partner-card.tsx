@@ -62,6 +62,7 @@ const COPY = {
     success: 'Satış ortaklığı etkinleştirildi.',
     closeSuccess: 'Satış ortaklığı kapatıldı.',
     suspendedStatusDescription: 'Bu ortaklık için yeni yönlendirme alınmıyor. Durum değişikliği için destek ekibiyle iletişime geçebilirsiniz.',
+    taxVerificationNotice: 'Bir sonraki ödeme için vergi bilgilerinizin doğrulanması gerekiyor. Destek ekibimizle iletişime geçin.',
     closedStatusDescription: 'Ortaklığınız kapalı. Yeniden etkinleştirme için bize yazın.',
     supportLink: 'Destek sayfası',
     ibanMissingTitle: 'IBAN ekleyin',
@@ -127,6 +128,7 @@ const COPY = {
     success: 'Referral partnership activated.',
     closeSuccess: 'Referral partnership closed.',
     suspendedStatusDescription: 'This partnership is not accepting new referrals. Contact support if you believe its status should change.',
+    taxVerificationNotice: 'Your tax information must be verified before the next payout. Please contact our support team.',
     closedStatusDescription: 'Your partnership is closed. Contact us to request reactivation.',
     supportLink: 'Support page',
     ibanMissingTitle: 'Add an IBAN',
@@ -222,7 +224,7 @@ export function ReferralPartnerCard({
     }
     setNameError(false)
 
-    const normalizedIban = iban.replace(/\\s+/g, '').toUpperCase()
+    const normalizedIban = iban.replace(/\s+/g, '').toUpperCase()
     if (!normalizedIban) {
       setIbanError(true)
       ibanRef.current?.focus()
@@ -310,6 +312,15 @@ export function ReferralPartnerCard({
     : partner?.status === 'suspended'
       ? copy.suspended
       : copy.closed
+  const payoutState = payoutData?.state
+  const closeBlocked = Boolean(
+    payoutsEnabled &&
+    payoutState &&
+    (payoutState.pendingCents > 0 || payoutState.availableCents > 0 || payoutState.requestedCents > 0 || payoutState.hasOpenCashRequest),
+  )
+  const taxVerificationRequired = Boolean(
+    payoutsEnabled && partner?.status === 'suspended' && payoutState && !payoutState.taxVerified,
+  )
 
   return (
     <>
@@ -375,24 +386,56 @@ export function ReferralPartnerCard({
                   </form>
                 </div>
               )}
-              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
-                <Button type="button" variant="destructive" size="sm" onClick={() => setShowCloseConfirm(true)}>
-                  {copy.close}
-                </Button>
+              <div className="flex flex-col gap-3 border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+                  <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {payoutsEnabled && (
+                      <ReferralPayoutControls
+                        data={payoutData}
+                        enabled={payoutsEnabled}
+                        cashEnabled={cashPayoutsEnabled}
+                        variant="compact"
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setShowCloseConfirm(true)}
+                      disabled={closeBlocked}
+                      title={closeBlocked ? copy.balanceOutstanding : undefined}
+                    >
+                      {copy.close}
+                    </Button>
+                  </div>
+                </div>
+                {closeBlocked && <p className="text-xs text-muted-foreground">{copy.balanceOutstanding}</p>}
               </div>
             </>
           ) : partner ? (
-            <Alert>
-              <AlertDescription className="flex flex-wrap items-center gap-1">
-                {partner.status === 'closed' ? copy.closedStatusDescription : copy.suspendedStatusDescription}{' '}
-                {partner.status === 'closed' && (
+            <div className="flex flex-col gap-4">
+              <Alert>
+                <AlertDescription className="flex flex-wrap items-center gap-1">
+                  {partner.status === 'closed'
+                    ? copy.closedStatusDescription
+                    : taxVerificationRequired
+                      ? copy.taxVerificationNotice
+                      : copy.suspendedStatusDescription}{' '}
                   <Link href="/support" className="font-medium text-primary underline underline-offset-4">
                     {copy.supportLink}
                   </Link>
-                )}
-              </AlertDescription>
-            </Alert>
+                </AlertDescription>
+              </Alert>
+              {partner.status === 'suspended' && payoutsEnabled && (
+                <ReferralPayoutControls
+                  data={payoutData}
+                  enabled={payoutsEnabled}
+                  cashEnabled={cashPayoutsEnabled}
+                  variant="compact"
+                />
+              )}
+            </div>
           ) : (
             <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
@@ -460,7 +503,7 @@ export function ReferralPartnerCard({
                       maxLength={120}
                       disabled={isSubmitting}
                       aria-invalid={nameError}
-                      aria-describedby={nameError ? 'referral-payee-name-error' : 'referral-payee-name-hint'}
+                      aria-describedby={nameError ? 'referral-payee-name-hint referral-payee-name-error' : 'referral-payee-name-hint'}
                     />
                     <FieldDescription id="referral-payee-name-hint">{copy.payeeNameHint}</FieldDescription>
                     {nameError && (
@@ -499,7 +542,7 @@ export function ReferralPartnerCard({
                     maxLength={34}
                     disabled={isSubmitting}
                     aria-invalid={ibanError}
-                    aria-describedby={ibanError ? 'referral-iban-error' : 'referral-iban-hint'}
+                    aria-describedby={ibanError ? 'referral-iban-hint referral-iban-error' : 'referral-iban-hint'}
                   />
                   <FieldDescription id="referral-iban-hint">{copy.ibanHint}</FieldDescription>
                   {ibanError && (
@@ -520,6 +563,11 @@ export function ReferralPartnerCard({
                 </Button>
               </div>
             </form>
+          )}
+          {partner && error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
           {copyState !== 'idle' && (
             <p

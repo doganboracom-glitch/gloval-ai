@@ -55,6 +55,7 @@ export type ReferralPayoutStatus = 'requested' | 'paid' | 'rejected' | 'converte
 export type ReferralPayoutState = {
   partnerStatus: ReferralPartnerStatus
   taxStatus: ReferralTaxStatus | null
+  taxVerified: boolean
   hasIban: boolean
   pendingCents: number
   availableCents: number
@@ -87,8 +88,21 @@ export type ReferralPayoutAdminRequest = {
   systemTopupCents: number
   invoiceRequired: boolean
   invoiceConfirmed: boolean
+  invoiceReference: string | null
+  invoiceReceivedAt: string | null
+  paymentReference: string | null
+  adminNote: string | null
   status: ReferralPayoutStatus
   requestedAt: string
   processedAt: string | null
   rejectionReason: string | null
+}
+
+export type ReferralPayoutAdminSummary = {
+  pendingCents: number
+  availableCents: number
+  convertedCents: number
+  systemTopupCents: number
+  paidCents: number
+  openCashRequests: number
 }

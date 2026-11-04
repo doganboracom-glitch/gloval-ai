@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/brand-logo'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { ReferralPartnerCard } from '@/components/settings/referral-partner-card'
-import type { ReferralPartnerSettings } from '@/lib/referrals/partner-types'
+import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -22,11 +22,17 @@ export function SettingsClient({
   fullName,
   referralEnabled = false,
   referralPartner = null,
+  payoutsEnabled = false,
+  cashPayoutsEnabled = false,
+  referralPayoutData = null,
 }: {
   userEmail: string
   fullName: string
   referralEnabled?: boolean
   referralPartner?: ReferralPartnerSettings | null
+  payoutsEnabled?: boolean
+  cashPayoutsEnabled?: boolean
+  referralPayoutData?: ReferralPayoutPanelData | null
 }) {
   const { t, lang } = useLanguage()
   const billingProfileCopy = getBillingProfileCopy(lang)
@@ -218,7 +224,13 @@ export function SettingsClient({
           </div>
         </section>
 
-        <ReferralPartnerCard enabled={referralEnabled} partner={referralPartner} />
+        <ReferralPartnerCard
+          enabled={referralEnabled}
+          partner={referralPartner}
+          payoutsEnabled={payoutsEnabled}
+          cashPayoutsEnabled={cashPayoutsEnabled}
+          payoutData={referralPayoutData}
+        />
 
         <section className="mt-6 rounded-xl border border-destructive/40 bg-destructive/5 p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">

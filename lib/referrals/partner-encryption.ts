@@ -53,6 +53,25 @@ function encodeBase64Url(bytes: Uint8Array): string {
   return globalThis.btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
 }
 
+function decodeBase64Url(value: string): Uint8Array | null {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return null
+  try {
+    const base64 = value.replaceAll('-', '+').replaceAll('_', '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    return Uint8Array.from(globalThis.atob(padded), (character) => character.charCodeAt(0))
+  } catch {
+    return null
+  }
+}
+
+function keyConfigForVersion(keyVersion: string, env: ReferralIbanEncryptionEnvironment) {
+  if (!/^v[1-9]\d*$/u.test(keyVersion)) return null
+  const keyName = `REFERRAL_IBAN_ENC_KEY_${keyVersion.toUpperCase()}`
+  const keyValue = env[keyName]
+  const keyBytes = keyValue ? decodeKey(keyValue) : null
+  return keyBytes ? { keyVersion, keyBytes } : null
+}
+
 export async function encryptReferralIban(
   value: unknown,
   env: ReferralIbanEncryptionEnvironment = process.env,
@@ -85,6 +104,48 @@ export async function encryptReferralIban(
       keyVersion: config.keyVersion,
       last4: iban.slice(-4),
     }
+  } catch {
+    return { ok: false, reason: 'crypto_unavailable' }
+  }
+}
+
+export type ReferralIbanDecryptionResult =
+  | { ok: true; iban: string }
+  | { ok: false; reason: 'missing_key' | 'crypto_unavailable' | 'invalid_ciphertext' }
+
+export async function decryptReferralIban(
+  ciphertext: unknown,
+  keyVersion: unknown,
+  env: ReferralIbanEncryptionEnvironment = process.env,
+): Promise<ReferralIbanDecryptionResult> {
+  if (typeof ciphertext !== 'string' || ciphertext.length > 4096 || typeof keyVersion !== 'string') {
+    return { ok: false, reason: 'invalid_ciphertext' }
+  }
+  const config = keyConfigForVersion(keyVersion, env)
+  if (!config) return { ok: false, reason: 'missing_key' }
+
+  const parts = ciphertext.split('.')
+  if (parts.length !== 2) return { ok: false, reason: 'invalid_ciphertext' }
+  const iv = decodeBase64Url(parts[0])
+  const encrypted = decodeBase64Url(parts[1])
+  if (!iv || iv.length !== 12 || !encrypted || encrypted.length < 16) {
+    return { ok: false, reason: 'invalid_ciphertext' }
+  }
+
+  const cryptoApi = globalThis.crypto
+  if (!cryptoApi?.subtle) return { ok: false, reason: 'crypto_unavailable' }
+  try {
+    const key = await cryptoApi.subtle.importKey('raw', config.keyBytes, { name: 'AES-GCM' }, false, [
+      'decrypt',
+    ])
+    const additionalData = new TextEncoder().encode(`gloval/referral/iban/${config.keyVersion}`)
+    const plaintext = await cryptoApi.subtle.decrypt(
+      { name: 'AES-GCM', iv, additionalData },
+      key,
+      encrypted,
+    )
+    const iban = normalizeTurkishIban(new TextDecoder('utf-8', { fatal: true }).decode(plaintext))
+    return iban ? { ok: true, iban } : { ok: false, reason: 'invalid_ciphertext' }
   } catch {
     return { ok: false, reason: 'crypto_unavailable' }
   }
