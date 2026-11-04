@@ -127,6 +127,21 @@ async function addAvailableBalance(db: PGlite, partnerId: string, amountCents: n
   `, [partnerId, amountCents, `fixture:${key}`])
 }
 
+async function addLedgerEntryAt(
+  db: PGlite,
+  partnerId: string,
+  amountCents: number,
+  availableAt: string,
+  key: string,
+  entryType: 'commission' | 'refund_pre_hold' = 'commission',
+) {
+  await db.query(`
+    insert into public.referral_commission_ledger (
+      partner_id, entry_type, amount_cents, available_at, dedupe_key
+    ) values ($1, $2, $3, $4::timestamptz, $5)
+  `, [partnerId, entryType, amountCents, availableAt, `fixture:${key}`])
+}
+
 async function requestPayout(
   db: PGlite,
   partnerId: string,
@@ -264,9 +279,186 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
         [pendingPartner.id],
       )
       expect(after[0].result).toMatchObject({
+        availableCents: 0,
         totalCents: 0,
         convertibleCents: 0,
         convertedCents: 2_117,
+      })
+      const { rows: availableLedger } = await db.query<{ balance_cents: string }>(`
+        select coalesce(sum(amount_cents), 0)::text as balance_cents
+        from public.referral_commission_ledger
+        where partner_id = $1 and available_at <= clock_timestamp()
+      `, [pendingPartner.id])
+      expect(Number(availableLedger[0].balance_cents)).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  it('clamps only available cents at zero while preserving the signed ledger totals', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'negative-available-balance@gloval.test' })
+      await addLedgerEntryAt(
+        db,
+        partner.id,
+        -400,
+        new Date(Date.now() - 10_000).toISOString(),
+        'negative-available-balance',
+        'refund_pre_hold',
+      )
+      await addLedgerEntryAt(
+        db,
+        partner.id,
+        1_000,
+        new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+        'positive-pending-balance',
+      )
+
+      const { rows } = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+
+      expect(rows[0].result).toMatchObject({
+        pendingCents: 1_000,
+        availableCents: 0,
+        totalCents: 600,
+        convertibleCents: 600,
+      })
+    })
+  })
+
+  it('balances each future maturity bucket and prevents credit double-spend after maturity', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'maturity-buckets@gloval.test' })
+      const firstMaturity = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString()
+      const secondMaturity = new Date(Date.now() + 2 * 24 * 60 * 60 * 1_000).toISOString()
+      const debtMaturity = new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000).toISOString()
+      await addLedgerEntryAt(db, partner.id, 1_000, firstMaturity, 'first-maturity-a')
+      await addLedgerEntryAt(db, partner.id, 1_000, firstMaturity, 'first-maturity-b')
+      await addLedgerEntryAt(db, partner.id, 2_000, secondMaturity, 'second-maturity')
+      await addLedgerEntryAt(db, partner.id, -300, debtMaturity, 'future-debt', 'refund_pre_hold')
+      const idempotencyKey = crypto.randomUUID()
+
+      const conversion = await requestPayout(db, partner.id, partner.user_id, 'credit', idempotencyKey)
+      const duplicate = await requestPayout(db, partner.id, partner.user_id, 'credit', idempotencyKey)
+      const newRequest = await requestPayout(db, partner.id, partner.user_id, 'credit')
+
+      expect(conversion).toMatchObject({
+        ok: true,
+        duplicate: false,
+        balanceCents: 3_700,
+        creditAmount: 13,
+        systemTopupCents: 200,
+      })
+      expect(duplicate).toMatchObject({ ok: true, duplicate: true, balanceCents: 3_700 })
+      expect(newRequest).toMatchObject({ ok: false, error: 'credit_minimum_not_met', availableCents: 0 })
+
+      const { rows: cohorts } = await db.query<{ balance_cents: string }>(`
+        select sum(amount_cents)::text as balance_cents
+        from public.referral_commission_ledger
+        where partner_id = $1 and available_at > clock_timestamp()
+        group by available_at
+        order by available_at
+      `, [partner.id])
+      expect(cohorts.map((row) => Number(row.balance_cents))).toEqual([0, 0, 0])
+
+      const { rows: futureBalance } = await db.query<{ balance_cents: string }>(`
+        select coalesce(sum(amount_cents), 0)::text as balance_cents
+        from public.referral_commission_ledger
+        where partner_id = $1 and available_at <= $2::timestamptz
+      `, [partner.id, new Date(Date.now() + 4 * 24 * 60 * 60 * 1_000).toISOString()])
+      expect(Number(futureBalance[0].balance_cents)).toBe(0)
+
+      const { rows: adjustments } = await db.query<{ amount_cents: string; dedupe_key: string }>(`
+        select amount_cents::text, dedupe_key
+        from public.referral_commission_ledger
+        where payout_request_id = $1
+        order by amount_cents, dedupe_key
+      `, [conversion.requestId])
+      expect(adjustments.map((row) => Number(row.amount_cents)).sort((a, b) => a - b)).toEqual([-2_000, -2_000, 300])
+      expect(new Set(adjustments.map((row) => row.dedupe_key)).size).toBe(3)
+      expect(adjustments.every((row) => row.dedupe_key.startsWith(`payout-request:${conversion.requestId}:`))).toBe(true)
+
+      const { rows: balance } = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+      expect(balance[0].result).toMatchObject({
+        pendingCents: 0,
+        availableCents: 0,
+        totalCents: 0,
+        convertibleCents: 0,
+        convertedCents: 3_700,
+      })
+      const { rows: creditTransactions } = await db.query<{ count: number; amount: number }>(`
+        select count(*)::integer as count, coalesce(sum(amount), 0)::integer as amount
+        from public.ai_credit_transactions
+        where user_id = $1 and reason like 'referral_payout:%'
+      `, [partner.user_id])
+      expect(creditTransactions).toEqual([{ count: 1, amount: 13 }])
+    })
+  })
+
+  it('deducts a pre-hold refund posted after conversion from the next credit conversion', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'refund-after-conversion@gloval.test' })
+      const adminUserId = await newUser(db, 'refund-after-conversion-admin@gloval.test')
+      const original = await newCommission(db, partner.id)
+      const firstConversion = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(firstConversion).toMatchObject({ ok: true, balanceCents: 2_017, creditAmount: 7 })
+
+      const { rows: originalMaturity } = await db.query<{ available_at: string }>(`
+        select available_at::text from public.referral_commissions where id = $1
+      `, [original.commissionId])
+      const reversal = await db.query<{ result: RpcResult }>(
+        'select public.referral_admin_reverse_commission($1::uuid, $2::uuid, $3) as result',
+        [original.commissionId, adminUserId, 'Refund received before the hold expires'],
+      )
+      expect(reversal.rows[0].result).toMatchObject({
+        ok: true,
+        reversalKind: 'pre_hold',
+        entryType: 'refund_pre_hold',
+      })
+
+      const { rows: refundLedger } = await db.query<{ amount_cents: string; available_at: string }>(`
+        select amount_cents::text, available_at::text
+        from public.referral_commission_ledger
+        where dedupe_key = $1
+      `, [`commission-reversal:${original.commissionId}`])
+      expect(refundLedger).toEqual([{
+        amount_cents: '-2017',
+        available_at: originalMaturity[0].available_at,
+      }])
+
+      await newCommission(db, partner.id)
+      await newCommission(db, partner.id)
+      const { rows: beforeNextConversion } = await db.query<{ balance_cents: string }>(`
+        select coalesce(sum(amount_cents), 0)::text as balance_cents
+        from public.referral_commission_ledger where partner_id = $1
+      `, [partner.id])
+      expect(Number(beforeNextConversion[0].balance_cents)).toBe(2_017)
+
+      const nextConversion = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(nextConversion).toMatchObject({
+        ok: true,
+        balanceCents: 2_017,
+        creditAmount: 7,
+        systemTopupCents: 83,
+      })
+      const { rows: remainingRefund } = await db.query<{ amount_cents: string }>(`
+        select amount_cents::text
+        from public.referral_commission_ledger
+        where dedupe_key = $1
+      `, [`commission-reversal:${original.commissionId}`])
+      expect(remainingRefund).toEqual([{ amount_cents: '-2017' }])
+
+      const { rows: finalBalance } = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+      expect(finalBalance[0].result).toMatchObject({
+        totalCents: 0,
+        convertibleCents: 0,
+        convertedCents: 4_034,
       })
     })
   })
@@ -427,9 +619,10 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
       expect(revealAudit.rows[0].result).toBe(true)
       expect(revealEvents).toEqual([{ details: { last4: '1234' } }])
 
+      await newCommission(db, partner.id)
       await addAvailableBalance(db, partner.id, 100_000, 'credit-with-open-cash')
       const creditWhileCashOpen = await requestPayout(db, partner.id, partner.user_id, 'credit')
-      expect(creditWhileCashOpen).toMatchObject({ ok: true, status: 'processed', balanceCents: 100_000, creditAmount: 334, systemTopupCents: 200 })
+      expect(creditWhileCashOpen).toMatchObject({ ok: true, status: 'processed', balanceCents: 102_017, creditAmount: 341, systemTopupCents: 283 })
 
       const beforeInvoice = await db.query<{ result: RpcResult }>(
         'select public.process_referral_cash_payout($1::uuid, $2::uuid, $3) as result',

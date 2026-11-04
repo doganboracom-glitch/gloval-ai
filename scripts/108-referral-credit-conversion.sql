@@ -44,7 +44,7 @@ begin
   return jsonb_build_object(
     'ok', true,
     'pendingCents', v_pending,
-    'availableCents', v_available,
+    'availableCents', greatest(0, v_available),
     'totalCents', v_pending + v_available,
     'convertibleCents', v_convertible,
     'requestedCents', v_requested,
@@ -239,16 +239,56 @@ begin
     case when p_method = 'credit' then v_now else null end
   ) returning id into v_request_id;
 
-  insert into public.referral_commission_ledger (
-    partner_id, payout_request_id, entry_type, amount_cents, available_at, dedupe_key
-  ) values (
-    p_partner_id,
-    v_request_id,
-    'payout_request',
-    -v_payout_balance,
-    v_now,
-    'payout-request:' || v_request_id::text
-  );
+  if p_method = 'credit' then
+    insert into public.referral_commission_ledger (
+      partner_id, payout_request_id, entry_type, amount_cents, available_at, dedupe_key
+    )
+    select
+      p_partner_id,
+      v_request_id,
+      'payout_request',
+      -available_bucket.amount_cents,
+      v_now,
+      'payout-request:' || v_request_id::text || ':available'
+    from (
+      select coalesce(sum(ledger.amount_cents), 0)::bigint as amount_cents
+      from public.referral_commission_ledger as ledger
+      where ledger.partner_id = p_partner_id
+        and ledger.available_at <= v_now
+    ) as available_bucket
+    where available_bucket.amount_cents > 0;
+
+    insert into public.referral_commission_ledger (
+      partner_id, payout_request_id, entry_type, amount_cents, available_at, dedupe_key
+    )
+    select
+      p_partner_id,
+      v_request_id,
+      'payout_request',
+      -maturity_bucket.amount_cents,
+      maturity_bucket.available_at,
+      'payout-request:' || v_request_id::text || ':future:' ||
+        to_char(maturity_bucket.available_at at time zone 'UTC', 'YYYYMMDD"T"HH24MISS.US"Z"')
+    from (
+      select ledger.available_at, sum(ledger.amount_cents)::bigint as amount_cents
+      from public.referral_commission_ledger as ledger
+      where ledger.partner_id = p_partner_id
+        and ledger.available_at > v_now
+      group by ledger.available_at
+    ) as maturity_bucket
+    where maturity_bucket.amount_cents <> 0;
+  else
+    insert into public.referral_commission_ledger (
+      partner_id, payout_request_id, entry_type, amount_cents, available_at, dedupe_key
+    ) values (
+      p_partner_id,
+      v_request_id,
+      'payout_request',
+      -v_payout_balance,
+      v_now,
+      'payout-request:' || v_request_id::text
+    );
+  end if;
 
   update public.referral_commissions
     set status = case when p_method = 'credit' then 'converted' else 'requested' end,
