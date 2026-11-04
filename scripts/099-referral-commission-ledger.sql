@@ -686,4 +686,28 @@ $$;
 revoke all on function public.referral_queue_signup_notification(uuid) from public, anon, authenticated;
 grant execute on function public.referral_queue_signup_notification(uuid) to service_role;
 
+create or replace function public.referral_enqueue_signup_notification_after_attribution()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  begin
+    perform public.referral_queue_signup_notification(new.id);
+  exception when others then
+    raise warning 'referral signup notification enqueue failed for attribution %', new.id;
+  end;
+  return new;
+end;
+$$;
+
+revoke all on function public.referral_enqueue_signup_notification_after_attribution() from public, anon, authenticated;
+grant execute on function public.referral_enqueue_signup_notification_after_attribution() to service_role;
+
+drop trigger if exists referral_attribution_signup_notification on public.referral_attributions;
+create trigger referral_attribution_signup_notification
+after insert on public.referral_attributions
+for each row execute function public.referral_enqueue_signup_notification_after_attribution();
+
 commit;

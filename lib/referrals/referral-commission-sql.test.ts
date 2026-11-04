@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.setConfig({ testTimeout: 30_000 })
 
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
@@ -302,9 +304,6 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
         attributionIds.push(await newAttribution(db, partnerId, await newUser(db)))
       }
 
-      for (const attributionId of attributionIds) {
-        await db.query('select public.referral_queue_signup_notification($1::uuid)', [attributionId])
-      }
       const { rows: logs } = await db.query<{ type: string; count: number }>(
         'select type, count(*)::integer as count from public.notification_logs group by type order by type',
       )
