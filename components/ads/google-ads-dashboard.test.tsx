@@ -82,7 +82,7 @@ describe('Google Ads dashboard UI', () => {
     expect(screen.getAllByText('1,850')).toHaveLength(3)
     expect(screen.getAllByText('29')).toHaveLength(3)
     expect(screen.getAllByText('$73.22')).toHaveLength(3)
-    expect(screen.getAllByText('Search campaign')).toHaveLength(2)
+    expect(screen.getAllByText('Search campaign')).toHaveLength(3)
     expect(screen.getAllByText(copy.readOnlyNote)).toHaveLength(2)
 
     const desktopTable = screen.getByTestId('campaign-table-desktop').querySelector('table')
