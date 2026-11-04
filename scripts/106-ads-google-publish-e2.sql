@@ -1,9 +1,54 @@
--- UNAPPLIED DRAFT — E2 review only.
--- Do not run until reviewed and explicitly approved. No provider calls occur here.
--- Depends on scripts/089-ads-core-part1.sql, 090-ads-core-part2.sql, and
--- 094-ads-google-publish.sql.
+-- REQUIRED PREREQUISITES (already present in the live database; do not apply here):
+--   * scripts/089-ads-core-part1.sql and scripts/090-ads-core-part2.sql
+--   * scripts/091-ads-google-readonly.sql
+--   * scripts/099-ads-google-public-readonly-quotas.sql, including its six-argument
+--     ads_reserve_google_api_operation and ads_save_google_ads_connection_with_limit.
+-- UNAPPLIED DRAFT — NOT APPLIED. This replaces the unapplied 094/095 publish drafts.
+-- It never recreates or drops the old four-argument read quota RPC and never replaces
+-- the live six-argument read RPC or connection-limit RPC. Existing ads_plans and
+-- ads_actions grants/policies are preserved. All changes below are one transaction.
 
 begin;
+
+-- E1 lifecycle fields required by the E2 publish state machine and the existing
+-- server-side beginAdsPublish compatibility wrapper.
+alter table public.ads_plans
+  drop constraint if exists ads_plans_status_check;
+alter table public.ads_plans
+  add constraint ads_plans_status_check
+  check (status in ('draft', 'approved', 'publishing', 'reconciling', 'published', 'failed'));
+
+alter table public.ads_plans
+  add column if not exists approved_version integer,
+  add column if not exists approval_summary jsonb not null default '{}'::jsonb,
+  add column if not exists publish_request_id uuid,
+  add column if not exists publish_started_at timestamptz,
+  add column if not exists publish_billing_verified boolean,
+  add column if not exists google_campaign_status text not null default 'PAUSED';
+
+update public.ads_plans
+   set approved_version = version
+ where status in ('approved', 'publishing', 'reconciling', 'published')
+   and approved_version is null;
+
+alter table public.ads_plans
+  drop constraint if exists ads_plans_approved_version_check;
+alter table public.ads_plans
+  add constraint ads_plans_approved_version_check
+  check (approved_version is null or approved_version between 1 and version);
+
+alter table public.ads_plans
+  drop constraint if exists ads_plans_google_campaign_status_check;
+alter table public.ads_plans
+  add constraint ads_plans_google_campaign_status_check
+  check (google_campaign_status in ('PAUSED', 'ENABLED'));
+
+create unique index if not exists ads_plans_publish_request_uniq
+  on public.ads_plans (publish_request_id)
+  where publish_request_id is not null;
+create index if not exists ads_plans_stale_publish_idx
+  on public.ads_plans (publish_started_at)
+  where status = 'publishing' and publish_started_at is not null;
 
 alter table public.ads_plans
   add column if not exists approval_id uuid,
@@ -93,6 +138,20 @@ create unique index if not exists ads_actions_idempotency_key_uniq
   on public.ads_actions (user_id, idempotency_key)
   where idempotency_key is not null;
 
+-- Count mutate operations, not just HTTP requests. Read reservations inserted by
+-- the live 099 function receive the default count of 1.
+alter table public.ads_google_api_operations
+  add column if not exists operation_count integer not null default 1;
+
+alter table public.ads_google_api_operations
+  drop constraint if exists ads_google_api_operations_operation_count_check;
+alter table public.ads_google_api_operations
+  add constraint ads_google_api_operations_operation_count_check
+  check (operation_count between 1 and 100);
+
+create index if not exists ads_google_api_operations_user_method_created_idx
+  on public.ads_google_api_operations (user_id, method, created_at);
+
 alter table public.ads_google_api_operations
   drop constraint if exists ads_google_api_operations_method_check;
 alter table public.ads_google_api_operations
@@ -109,6 +168,7 @@ alter table public.ads_google_api_operations
 create or replace function public.ads_plans_guard_version_and_approval()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
@@ -184,6 +244,7 @@ create trigger ads_plans_version_guard
 create or replace function public.ads_actions_guard()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 begin
@@ -216,7 +277,7 @@ end
 $$;
 
 drop trigger if exists ads_actions_guard_trg on public.ads_actions;
-create trigger ads_actions_guard_trigger
+create trigger ads_actions_guard_trg
   before update on public.ads_actions
   for each row execute function public.ads_actions_guard();
 
@@ -272,6 +333,115 @@ begin
   values (p_user_id, 'usage', -p_amount, p_reason);
   return query select true, v_balance - p_amount, false, p_amount;
 end
+$$;
+
+-- Kept because lib/ads/credits.ts still exposes beginAdsPublish and calls this
+-- legacy direct-charge RPC. New E2 publishing uses the reservation-backed _e2 RPC.
+create or replace function public.ads_begin_google_ads_publish(
+  p_user_id uuid,
+  p_plan_id uuid,
+  p_request_id uuid,
+  p_expected_version integer,
+  p_cpc_bid_ceiling_minor integer,
+  p_cpc_bid_ceiling_micros bigint,
+  p_currency_fraction_digits smallint
+)
+returns table(state text, balance integer, already_charged boolean, charged_amount integer)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_plan public.ads_plans%rowtype;
+  v_charge record;
+  v_one_unit_minor integer;
+  v_expected_cpc_minor integer;
+  v_expected_cpc_micros bigint;
+begin
+  if p_user_id is null or p_plan_id is null or p_request_id is null then
+    raise exception 'user, plan, and request ids are required';
+  end if;
+
+  select p.* into v_plan
+    from public.ads_plans p
+   where p.id = p_plan_id and p.user_id = p_user_id
+   for update;
+  if not found then return query select 'not_found'::text, 0, false, 0; return; end if;
+  if p_expected_version is null or v_plan.version is distinct from p_expected_version
+    or v_plan.approved_version is distinct from p_expected_version then
+    return query select 'plan_changed'::text, 0, false, 0; return;
+  end if;
+  if v_plan.status = 'published' and v_plan.external_campaign_id is not null then
+    return query select 'already_published'::text, 0, false, 0; return;
+  end if;
+  if v_plan.status in ('publishing', 'reconciling') then
+    return query select 'in_progress'::text, 0, false, 0; return;
+  end if;
+  if v_plan.status <> 'approved' or v_plan.connection_id is null
+    or v_plan.daily_budget_minor is null or v_plan.budget_cap_minor is null
+    or v_plan.daily_budget_minor > v_plan.budget_cap_minor
+    or p_currency_fraction_digits is null or p_currency_fraction_digits not between 0 and 6
+    or p_cpc_bid_ceiling_minor is null or p_cpc_bid_ceiling_micros is null then
+    return query select 'invalid_state'::text, 0, false, 0; return;
+  end if;
+  if exists (
+    select 1 from public.ads_connections c
+     where c.id = v_plan.connection_id and c.user_id = p_user_id
+       and c.status = 'active' and c.currency_code is distinct from v_plan.currency
+  ) then
+    return query select 'currency_mismatch'::text, 0, false, 0; return;
+  end if;
+  if not exists (
+    select 1 from public.ads_connections c
+     where c.id = v_plan.connection_id and c.user_id = p_user_id
+       and c.platform = 'google_ads' and c.status = 'active' and not c.is_manager
+  ) then
+    return query select 'invalid_state'::text, 0, false, 0; return;
+  end if;
+
+  v_one_unit_minor := pg_catalog.power(10, p_currency_fraction_digits)::integer;
+  if v_plan.daily_budget_minor < v_one_unit_minor then
+    return query select 'invalid_state'::text, 0, false, 0; return;
+  end if;
+  v_expected_cpc_minor := least(
+    v_plan.daily_budget_minor,
+    greatest(v_one_unit_minor, pg_catalog.floor(v_plan.daily_budget_minor / 10.0)::integer)
+  );
+  v_expected_cpc_micros := v_expected_cpc_minor::bigint
+    * pg_catalog.power(10, 6 - p_currency_fraction_digits)::bigint;
+  if p_cpc_bid_ceiling_minor is distinct from v_expected_cpc_minor
+    or p_cpc_bid_ceiling_micros is distinct from v_expected_cpc_micros then
+    return query select 'invalid_state'::text, 0, false, 0; return;
+  end if;
+
+  select * into v_charge from public.ads_charge_credits(
+    p_user_id, 15, 'ads:publish:' || p_request_id::text
+  );
+  if not v_charge.ok then
+    return query select 'insufficient_credits'::text, v_charge.balance, false, 0; return;
+  end if;
+
+  update public.ads_plans p set
+    status = 'publishing',
+    publish_request_id = p_request_id,
+    publish_started_at = pg_catalog.clock_timestamp(),
+    publish_billing_verified = null,
+    publish_credit_charged = true,
+    approval_summary = pg_catalog.jsonb_build_object(
+      'version', v_plan.version,
+      'currency', v_plan.currency,
+      'dailyBudgetMinor', v_plan.daily_budget_minor,
+      'budgetCapMinor', v_plan.budget_cap_minor,
+      'cpcBidCeilingMinor', v_expected_cpc_minor,
+      'cpcBidCeilingMicros', v_expected_cpc_micros::text,
+      'currencyFractionDigits', p_currency_fraction_digits
+    ),
+    google_campaign_status = 'PAUSED',
+    failure_reason = null
+   where p.id = p_plan_id and p.user_id = p_user_id;
+
+  return query select 'started'::text, v_charge.balance, v_charge.already_charged, v_charge.charged_amount;
+end;
 $$;
 
 create or replace function public.ads_create_google_ads_plan_draft_e2(
@@ -374,7 +544,7 @@ begin
   end if;
   if p_daily_budget_minor is null or p_daily_budget_minor <= 0
     or p_budget_cap_minor is null or p_budget_cap_minor < p_daily_budget_minor
-    or p_user_daily_budget_limit_minor is null or p_budget_cap_minor > p_user_daily_budget_limit_minor
+    or p_user_daily_budget_limit_minor is null or p_user_daily_budget_limit_minor < p_daily_budget_minor
     or p_currency is null or p_currency !~ '^[A-Z]{3}$'
     or p_customer_id is null or p_customer_id !~ '^[0-9-]{1,32}$' then
     return query select 'invalid_budget'::text, null::uuid, null::integer; return;
@@ -739,9 +909,13 @@ declare
   v_charge record;
   v_refund record;
   v_admin_allowed boolean;
+  v_legacy_charge_exists boolean;
+  v_state text;
+  v_refunded boolean := false;
+  v_balance integer := 0;
 begin
   if p_plan_id is null or p_request_id is null then raise exception 'plan and request ids are required'; end if;
-  if p_resolution not in ('published', 'failed_refunded') then
+  if p_resolution is null or p_resolution not in ('published', 'failed_refunded') then
     return query select 'invalid_resolution'::text, false, 0; return;
   end if;
   v_admin_allowed := p_admin_email is not null
@@ -753,40 +927,127 @@ begin
   if not found then return query select 'not_reconciling'::text, false, 0; return; end if;
   select r.* into v_reservation from public.ads_google_publish_credit_reservations r
    where r.request_id = p_request_id and r.plan_id = p_plan_id for update;
-  if not found then return query select 'reservation_missing'::text, false, 0; return; end if;
 
   if p_resolution = 'published' then
     if p_external_campaign_id is null or p_external_campaign_id !~ '^[0-9]{1,20}$' then
       return query select 'invalid_campaign_id'::text, false, 0; return;
     end if;
-    select * into v_charge from public.ads_charge_credits(v_plan.user_id, 15, v_reservation.ledger_reason);
-    if not coalesce(v_charge.ok, false) then
-      return query select 'insufficient_credits'::text, false, coalesce(v_charge.balance, 0); return;
+    if found then
+      if v_reservation.status not in ('reserved', 'charged') then
+        return query select 'reservation_not_recoverable'::text, false, 0; return;
+      end if;
+      select * into v_charge from public.ads_charge_credits(v_plan.user_id, 15, v_reservation.ledger_reason);
+      if not coalesce(v_charge.ok, false) then
+        return query select 'insufficient_credits'::text, false, coalesce(v_charge.balance, 0); return;
+      end if;
+      update public.ads_google_publish_credit_reservations r set status = 'charged', finished_at = now()
+       where r.request_id = p_request_id;
+      v_balance := coalesce(v_charge.balance, 0);
+    else
+      -- E1 charged before the provider request and did not create a reservation row.
+      select exists (
+        select 1 from public.ai_credit_transactions t
+         where t.user_id = v_plan.user_id
+           and t.reason = 'ads:publish:' || p_request_id::text
+           and t.amount < 0
+      ) into v_legacy_charge_exists;
+      if not v_legacy_charge_exists then
+        return query select 'legacy_charge_missing'::text, false, 0; return;
+      end if;
+      select coalesce(sum(t.amount), 0)::integer into v_balance
+        from public.ai_credit_transactions t where t.user_id = v_plan.user_id;
     end if;
-    update public.ads_google_publish_credit_reservations r set status = 'charged', finished_at = now()
-     where r.request_id = p_request_id;
     update public.ads_plans p set status = 'published', external_campaign_id = p_external_campaign_id,
       published_at = coalesce(p.published_at, now()), google_campaign_status = 'PAUSED',
       google_daily_budget_minor = coalesce(p.google_daily_budget_minor, p.daily_budget_minor),
       publish_credit_charged = true, failure_reason = null
      where p.id = p_plan_id;
-    return query select 'published'::text, false, v_charge.balance; return;
+    v_state := 'published';
+  else
+    if found and v_reservation.status = 'charged' then
+      select * into v_refund from public.ads_refund_credits(v_plan.user_id, v_reservation.ledger_reason);
+      v_refunded := coalesce(v_refund.refunded, false);
+      v_balance := coalesce(v_refund.balance, 0);
+      update public.ads_google_publish_credit_reservations r set status = 'released', finished_at = now()
+       where r.request_id = p_request_id;
+    elsif found and v_reservation.status = 'reserved' then
+      update public.ads_google_publish_credit_reservations r set status = 'released', finished_at = now()
+       where r.request_id = p_request_id;
+      select coalesce(sum(t.amount), 0)::integer into v_balance
+        from public.ai_credit_transactions t where t.user_id = v_plan.user_id;
+    else
+      -- Also handles legacy E1 charges and makes repeat refunds idempotent.
+      select * into v_refund from public.ads_refund_credits(
+        v_plan.user_id, 'ads:publish:' || p_request_id::text
+      );
+      v_refunded := coalesce(v_refund.refunded, false);
+      v_balance := coalesce(v_refund.balance, 0);
+    end if;
+    update public.ads_plans p set status = 'failed',
+      failure_reason = 'admin_marked_failed_refunded',
+      publish_credit_charged = case when v_refunded then false else p.publish_credit_charged end
+     where p.id = p_plan_id;
+    v_state := 'failed_refunded';
   end if;
 
-  if v_reservation.status = 'charged' then
-    select * into v_refund from public.ads_refund_credits(v_plan.user_id, v_reservation.ledger_reason);
-    update public.ads_google_publish_credit_reservations r set status = 'released', finished_at = now()
-     where r.request_id = p_request_id;
-    update public.ads_plans p set status = 'failed', failure_reason = 'admin_marked_failed_refunded', publish_credit_charged = false
-     where p.id = p_plan_id;
-    return query select 'failed_refunded'::text, coalesce(v_refund.refunded, false), coalesce(v_refund.balance, 0); return;
+  insert into public.ads_actions
+    (user_id, plan_id, connection_id, actor, action_type, before_state, after_state, status, applied_at)
+  values
+    (v_plan.user_id, v_plan.id, v_plan.connection_id, 'system', 'publish_reconciliation_resolved',
+     pg_catalog.jsonb_build_object('status', 'reconciling', 'request_id', p_request_id),
+     pg_catalog.jsonb_build_object(
+       'status', v_state,
+       'resolution', p_resolution,
+       'external_campaign_id', p_external_campaign_id,
+       'admin_email', p_admin_email,
+       'refunded', v_refunded
+     ),
+     'applied', pg_catalog.clock_timestamp());
+
+  return query select v_state, v_refunded, v_balance;
+end
+$$;
+
+-- Required by /api/cron/ads-publish-reconcile. It only changes stale publishes
+-- to reconciling and records that transition; it never replays a Google request.
+create or replace function public.ads_reconcile_stale_google_ads_publishes(
+  p_batch integer default 100
+)
+returns table(plan_id uuid, publish_request_id uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_plan public.ads_plans%rowtype;
+begin
+  if p_batch is null or p_batch not between 1 and 500 then
+    raise exception 'batch size must be between 1 and 500';
   end if;
-  update public.ads_google_publish_credit_reservations r set status = 'released', finished_at = now()
-   where r.request_id = p_request_id and r.status = 'reserved';
-  update public.ads_plans p set status = 'failed', failure_reason = 'admin_marked_failed_refunded'
-   where p.id = p_plan_id;
-  select coalesce(sum(t.amount), 0)::integer into v_charge from public.ai_credit_transactions t where t.user_id = v_plan.user_id;
-  return query select 'failed_refunded'::text, false, v_charge::integer;
+
+  for v_plan in
+    select p.* from public.ads_plans p
+     where p.status = 'publishing'
+       and p.publish_started_at < pg_catalog.clock_timestamp() - interval '10 minutes'
+     order by p.publish_started_at, p.id
+     limit p_batch
+     for update skip locked
+  loop
+    update public.ads_plans p set status = 'reconciling', failure_reason = 'publish_stale_timeout'
+     where p.id = v_plan.id and p.status = 'publishing';
+
+    insert into public.ads_actions
+      (user_id, plan_id, connection_id, actor, action_type, before_state, after_state, status, applied_at)
+    values
+      (v_plan.user_id, v_plan.id, v_plan.connection_id, 'system', 'publish_reconciliation_opened',
+       pg_catalog.jsonb_build_object('status', 'publishing', 'request_id', v_plan.publish_request_id),
+       pg_catalog.jsonb_build_object('status', 'reconciling', 'reason', 'publish_stale_timeout'),
+       'applied', pg_catalog.clock_timestamp());
+
+    plan_id := v_plan.id;
+    publish_request_id := v_plan.publish_request_id;
+    return next;
+  end loop;
 end
 $$;
 
@@ -981,13 +1242,17 @@ $$;
 
 alter table public.ads_google_publish_approvals enable row level security;
 alter table public.ads_google_publish_credit_reservations enable row level security;
-revoke all on table public.ads_google_publish_approvals from anon, authenticated;
-revoke all on table public.ads_google_publish_credit_reservations from anon, authenticated;
-revoke all on table public.ads_actions from anon, authenticated;
+revoke all on table public.ads_google_publish_approvals from public, anon, authenticated;
+revoke all on table public.ads_google_publish_credit_reservations from public, anon, authenticated;
 grant select, insert, update, delete on table public.ads_google_publish_approvals to service_role;
 grant select, insert, update, delete on table public.ads_google_publish_credit_reservations to service_role;
-grant select, insert, update, delete on table public.ads_actions to service_role;
+-- Do not change ads_plans / ads_actions table grants or RLS policies. The live
+-- authenticated SELECT + select_own policies remain intentional.
 
+revoke all on function public.ads_plans_guard_version_and_approval() from public, anon, authenticated;
+revoke all on function public.ads_actions_guard() from public, anon, authenticated;
+revoke all on function public.ads_begin_google_ads_publish(uuid, uuid, uuid, integer, integer, bigint, smallint) from public, anon, authenticated;
+revoke all on function public.ads_reconcile_stale_google_ads_publishes(integer) from public, anon, authenticated;
 revoke all on function public.ads_charge_credits(uuid, integer, text) from public, anon, authenticated;
 revoke all on function public.ads_create_google_ads_plan_draft_e2(uuid, uuid, jsonb, text, text, text, integer, integer, text) from public, anon, authenticated;
 revoke all on function public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, integer, integer, integer, text, text, boolean, boolean, jsonb) from public, anon, authenticated;
@@ -999,6 +1264,10 @@ revoke all on function public.ads_resolve_google_ads_publish(uuid, uuid, text, t
 revoke all on function public.ads_reserve_google_api_operation_v2(uuid, uuid, uuid, text, integer) from public, anon, authenticated;
 revoke all on function public.ads_begin_google_ads_campaign_action_e2(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean) from public, anon, authenticated;
 revoke all on function public.ads_finish_google_ads_campaign_action_e2(uuid, uuid, text, jsonb, text) from public, anon, authenticated;
+grant execute on function public.ads_plans_guard_version_and_approval() to service_role;
+grant execute on function public.ads_actions_guard() to service_role;
+grant execute on function public.ads_begin_google_ads_publish(uuid, uuid, uuid, integer, integer, bigint, smallint) to service_role;
+grant execute on function public.ads_reconcile_stale_google_ads_publishes(integer) to service_role;
 grant execute on function public.ads_charge_credits(uuid, integer, text) to service_role;
 grant execute on function public.ads_create_google_ads_plan_draft_e2(uuid, uuid, jsonb, text, text, text, integer, integer, text) to service_role;
 grant execute on function public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, integer, integer, integer, text, text, boolean, boolean, jsonb) to service_role;

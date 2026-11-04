@@ -13,6 +13,8 @@ import { GOOGLE_ADS_API_VERSION } from '@/lib/ads/providers/google-ads-provider'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const API_BASE = 'https://googleads.googleapis.com'
+const GOOGLE_ADS_READ_USER_LIMIT_MAX = 80
+const GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX = 1_200
 const SAFE_OUTCOMES = {
   rate_limited: 'rate_limited',
   provider_unavailable: 'provider_unavailable',
@@ -184,6 +186,7 @@ export function createGoogleAdsApiTransport(input: {
     }
 
     const isMutation = call.method === 'googleAds.mutate' || call.method === 'ads.mutateAds'
+    const usesQuotaV2 = isMutation || call.method === 'geoTargetConstants.suggest'
     const operationCount = call.method === 'googleAds.mutate'
       ? mutateOperationCount(call.body)
       : call.method === 'ads.mutateAds'
@@ -200,10 +203,10 @@ export function createGoogleAdsApiTransport(input: {
         p_connection_id: input.connectionId,
         p_method: call.method,
       }
-      if (isMutation) reserveArgs.p_operation_count = operationCount
+      if (usesQuotaV2) reserveArgs.p_operation_count = operationCount
       let reservationData: unknown = null
       let reservationError: { code?: string } | null = null
-      if (isMutation) {
+      if (usesQuotaV2) {
         const result = await admin.rpc('ads_reserve_google_api_operation_v2', reserveArgs)
         reservationData = result.data
         reservationError = result.error
@@ -211,12 +214,11 @@ export function createGoogleAdsApiTransport(input: {
         const limits = resolveGoogleAdsReadDailyLimits()
         const result = await admin.rpc('ads_reserve_google_api_operation', {
           ...reserveArgs,
-          p_user_daily_limit: limits.perUser,
-          p_global_daily_limit: limits.global,
+          p_user_daily_limit: Math.min(limits.perUser, GOOGLE_ADS_READ_USER_LIMIT_MAX),
+          p_global_daily_limit: Math.min(limits.global, GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX),
         })
         reservationData = result.data
         reservationError = result.error
-
       }
 
       const reservation = record(Array.isArray(reservationData) ? reservationData[0] : reservationData)

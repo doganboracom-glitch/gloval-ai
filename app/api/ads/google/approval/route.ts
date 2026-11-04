@@ -68,8 +68,7 @@ export async function POST(request: Request) {
   if (
     !Number.isSafeInteger(planRow.daily_budget_minor) ||
     !Number.isSafeInteger(planRow.budget_cap_minor) ||
-    (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor ||
-    (planRow.budget_cap_minor as number) > userDailyBudgetCapMinor
+    (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor
   ) {
     return googleAdsJson({ ok: false, error: 'budget_limit_exceeded' }, 400)
   }

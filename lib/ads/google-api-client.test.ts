@@ -77,8 +77,8 @@ describe('Google Ads API quota transport', () => {
       p_user_id: CONTEXT.userId,
       p_connection_id: CONTEXT.connectionId,
       p_method: 'googleAds.searchStream',
-      p_user_daily_limit: 200,
-      p_global_daily_limit: 2000,
+      p_user_daily_limit: 80,
+      p_global_daily_limit: 1200,
     }))
     const init = fetcherMock.mock.calls[0]?.[1]
     const headers = new Headers(init?.headers)
@@ -87,6 +87,20 @@ describe('Google Ads API quota transport', () => {
     expect(headers.get('authorization')).toBe('Bearer private-access-token')
     expect(headers.get('login-customer-id')).toBe('1111111111')
     expect(headers.has('developer-token')).toBe(false)
+  })
+
+  it('caps configured read limits to the 80/user and 1,200/project bucket', async () => {
+    vi.stubEnv('ADS_GOOGLE_READ_DAILY_USER_LIMIT', '240')
+    vi.stubEnv('ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT', '2400')
+    const fetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await transport(call())
+
+    expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
+      p_user_daily_limit: 80,
+      p_global_daily_limit: 1200,
+    }))
   })
 
   it('fails closed when the six-argument daily quota RPC is missing', async () => {
@@ -98,8 +112,8 @@ describe('Google Ads API quota transport', () => {
 
     expect(mocks.rpc).toHaveBeenCalledOnce()
     expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
-      p_user_daily_limit: 200,
-      p_global_daily_limit: 2000,
+      p_user_daily_limit: 80,
+      p_global_daily_limit: 1200,
     }))
     expect(fetcher).not.toHaveBeenCalled()
   })
@@ -143,6 +157,23 @@ describe('Google Ads API quota transport', () => {
     expect(init?.method).toBe('GET')
     expect(init?.body).toBeUndefined()
     expect(new Headers(init?.headers).has('content-type')).toBe(false)
+  })
+
+  it('reserves geo-target suggestions through v2 while keeping search on the six-argument RPC', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ geoTargetConstantSuggestions: [] })) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await transport(call({
+      method: 'geoTargetConstants.suggest',
+      path: 'geoTargetConstants:suggest',
+      body: { locale: 'en', countryCode: 'US', locationNames: { names: ['Boston'] } },
+    }))
+
+    expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation_v2', expect.objectContaining({
+      p_method: 'geoTargetConstants.suggest',
+      p_operation_count: 1,
+    }))
+    expect(fetcher).toHaveBeenCalledOnce()
   })
 
   it('fails closed when the atomic quota reservation is denied', async () => {
