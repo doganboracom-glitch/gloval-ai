@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/ads-purge",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/ads-publish-reconcile",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

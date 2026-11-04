@@ -24,6 +24,7 @@ const tr = {
       support: 'Destek',
       makerRequests: 'Website Talepleri',
       notifications: 'Bildirimler',
+      adsPublishRecovery: 'Takılı Google Ads yayınları',
       mail: 'Mail',
     },
     common: {
@@ -255,6 +256,7 @@ const en: BaseDict = {
       support: 'Support',
       makerRequests: 'Website Requests',
       notifications: 'Notifications',
+      adsPublishRecovery: 'Stuck Google Ads publishes',
       mail: 'Mail',
     },
     common: {

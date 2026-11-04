@@ -43,7 +43,7 @@ function parsePlan(value: unknown) {
 function budgetError(currency: string, dailyBudgetMinor: number, budgetCapMinor: number) {
   const userLimit = resolveGoogleAdsPublishDailyBudgetCapMinor(currency)
   if (!userLimit) return { error: 'budget_limit_not_configured', status: 503 }
-  if (dailyBudgetMinor > budgetCapMinor || budgetCapMinor > userLimit) {
+  if (dailyBudgetMinor > userLimit) {
     return { error: 'budget_limit_exceeded', status: 400 }
   }
   try {

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { notifyGooglePublishReconciling } from '@/lib/ads/admin-alert'
@@ -9,6 +10,12 @@ const BATCH_SIZE = 100
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type StalePublishRow = { plan_id: string; publish_request_id: string | null }
+
+function hasValidCronAuthorization(request: Request, secret: string): boolean {
+  const expected = Buffer.from(`Bearer ${secret}`)
+  const provided = Buffer.from(request.headers.get('authorization') ?? '')
+  return provided.length === expected.length && timingSafeEqual(provided, expected)
+}
 
 function parseRows(value: unknown): StalePublishRow[] | null {
   if (!Array.isArray(value)) return null
@@ -32,9 +39,12 @@ function parseRows(value: unknown): StalePublishRow[] | null {
 }
 
 export async function GET(request: Request) {
+  if (process.env.GOOGLE_ADS_PUBLISH_ENABLED !== '1') {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  }
   const secret = process.env.CRON_SECRET
   if (!secret) return NextResponse.json({ error: 'not_configured' }, { status: 503 })
-  if (request.headers.get('authorization') !== `Bearer ${secret}`) {
+  if (!hasValidCronAuthorization(request, secret)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
