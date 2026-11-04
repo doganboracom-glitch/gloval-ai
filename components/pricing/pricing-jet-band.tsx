@@ -2,10 +2,17 @@
 
 import { useLanguage } from '@/components/language-provider'
 import { LinkButton } from '@/components/link-button'
+import { MakerRequestDialog } from '@/components/pricing/maker-request-dialog'
 import { newTicketHref } from '@/lib/support/prefill'
 
-export function PricingJetBand({ isAuthenticated }: { isAuthenticated: boolean }) {
-  const { t } = useLanguage()
+export function PricingJetBand({
+  isAuthenticated,
+  makerRequestsEnabled = false,
+}: {
+  isAuthenticated: boolean
+  makerRequestsEnabled?: boolean
+}) {
+  const { lang, t } = useLanguage()
   const copy = t.pricing.jetOffer
   const href = isAuthenticated
     ? newTicketHref({
@@ -34,9 +41,13 @@ export function PricingJetBand({ isAuthenticated }: { isAuthenticated: boolean }
           {copy.body}
         </p>
       </div>
-      <LinkButton href={href} variant="brand" size="lg" className="w-full shrink-0 md:w-auto">
-        {copy.cta}
-      </LinkButton>
+      {makerRequestsEnabled ? (
+        <MakerRequestDialog lang={lang} />
+      ) : (
+        <LinkButton href={href} variant="brand" size="lg" className="w-full shrink-0 md:w-auto">
+          {copy.cta}
+        </LinkButton>
+      )}
     </section>
   )
 }

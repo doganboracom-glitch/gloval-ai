@@ -15,7 +15,13 @@ const CYCLES: Array<{ value: BillingCycle; label: string }> = [
   { value: 'yearly', label: 'Yıllık' },
 ]
 
-export function Pricing({ isAuthenticated }: { isAuthenticated: boolean }) {
+export function Pricing({
+  isAuthenticated,
+  makerRequestsEnabled = false,
+}: {
+  isAuthenticated: boolean
+  makerRequestsEnabled?: boolean
+}) {
   // İlk açılışta aylık paketler listelenir; yıllık avantaj toggle ile seçilir.
   const [cycle, setCycle] = useState<BillingCycle>('monthly')
   const [creditRulesOpen, setCreditRulesOpen] = useState(false)
@@ -71,7 +77,10 @@ export function Pricing({ isAuthenticated }: { isAuthenticated: boolean }) {
         </div>
 
         <PlanGrid className="mt-12" cycle={cycle} />
-        <PricingJetBand isAuthenticated={isAuthenticated} />
+        <PricingJetBand
+          isAuthenticated={isAuthenticated}
+          makerRequestsEnabled={makerRequestsEnabled}
+        />
 
         <p className="mt-8 text-center text-sm text-muted-foreground">
           AI işlemlerin tükendiğinde ne oluyor?{' '}
