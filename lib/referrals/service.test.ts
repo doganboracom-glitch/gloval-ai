@@ -26,6 +26,7 @@ vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.checkRateLimit }))
 
 import {
   captureReferralClick,
+  markReferralVerifiedForUser,
   saveEmailReferralAtSignup,
   saveOAuthReferralAtSignup,
 } from './service'
@@ -397,5 +398,22 @@ describe('signup attribution', () => {
     ).resolves.toBe(false)
     expect(state.attributions).toHaveLength(0)
     expect(state.intents[1]?.consumed_at).toBeNull()
+  })
+})
+
+describe('verification flag', () => {
+  it('does not query or update referral data while the program is disabled', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '0')
+
+    await expect(markReferralVerifiedForUser(REFERRED_USER_ID)).resolves.toBe(false)
+    expect(mocks.createAdminClient).not.toHaveBeenCalled()
+    expect(state.attributions).toHaveLength(0)
+  })
+
+  it('marks only an unverified referral after the program is enabled', async () => {
+    state.attributions = [{ referred_user_id: REFERRED_USER_ID, verified_at: null }]
+
+    await expect(markReferralVerifiedForUser(REFERRED_USER_ID)).resolves.toBe(true)
+    expect(state.attributions[0]?.verified_at).toBeTruthy()
   })
 })
