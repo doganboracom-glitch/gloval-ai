@@ -70,8 +70,8 @@ describe('referral payout controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
     expect(screen.getByRole('alertdialog')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
-    expect(screen.getByRole('button', { name: 'AI kredisi olarak al' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: "IBAN'a ödeme iste" }).hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'AI kredisi olarak al' })).toBeNull()
+    expect(screen.getByText('Kullanılacak komisyon bakiyesi')).toBeTruthy()
     expect(screen.getByText('Bu tutar, 14 günlük bekleme tamamlanmadan da AI kredisi olarak hemen eklenir.')).toBeTruthy()
     expect(screen.getAllByText('3,00 TL').length).toBeGreaterThan(0)
     expect(screen.getAllByText('1').length).toBeGreaterThan(0)
@@ -166,7 +166,7 @@ describe('referral payout controls', () => {
     expect(screen.getByText('250,00 TL')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('radio', { name: /Tutar üzerine %20 KDV eklensin/u }))
-    expect(screen.getByText('1.500,00 TL')).toBeTruthy()
+    expect(screen.getAllByText('1.500,00 TL').length).toBeGreaterThan(0)
     expect(screen.getByText('300,00 TL')).toBeTruthy()
     expect(screen.getAllByText('1.800,00 TL').length).toBeGreaterThan(0)
   })
@@ -185,7 +185,7 @@ describe('referral payout controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
 
     expect(screen.getByRole('button', { name: 'Belirli tutar' }).hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText(/negatif.*yalnızca bakiyenin tamamı/u)).toBeTruthy()
+    expect(screen.getByText(/Negatif vade dilimi.*kısmi kredi dönüşümü kapalı/u)).toBeTruthy()
   })
 
   it('allows credit requests while an open cash request keeps only the IBAN method disabled', () => {

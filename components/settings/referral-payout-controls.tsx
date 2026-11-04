@@ -58,7 +58,7 @@ const COPY = {
     requestTitle: 'Bakiyenizi nasıl almak istersiniz?',
     requestDescription: 'Önce ödeme yöntemini seçin; sonraki adımda tutarı ve varsa fatura KDV seçeneğini inceleyin.',
     reviewTitle: 'Talep özeti',
-    reviewDescription: 'Onaylamadan önce tutarı kontrol edin. İstek sunucu tarafında tekrar doğrulanır.',
+    reviewDescription: 'Tutarı, ödeme ve fatura bilgilerini kontrol edin.',
     continue: 'Devam et',
     changeMethod: 'Yöntemi değiştir',
     credit: 'AI kredisi olarak al',
@@ -77,8 +77,8 @@ const COPY = {
     vatModeTitle: 'KDV uygulaması',
     vatIncluded: 'KDV tutara dahil',
     vatAdded: 'Tutar üzerine %20 KDV eklensin',
-    vatIncludedHint: 'Seçilen tutar brüttür; net ve KDV bu tutarın içinden hesaplanır.',
-    vatAddedHint: 'Seçilen tutar nettir; %20 KDV eklenerek ödenecek tutar hesaplanır.',
+    vatIncludedHint: 'Brüt tutar; net ve KDV bu tutardan ayrılır.',
+    vatAddedHint: 'Net tutara %20 KDV eklenir.',
     invoiceNet: 'Fatura neti',
     invoiceVat: 'KDV',
     invoiceGross: 'Fatura brütü',
@@ -142,7 +142,7 @@ const COPY = {
     requestTitle: 'How would you like to receive your balance?',
     requestDescription: 'Choose a payout method first; the next step lets you review the amount and, when required, the invoice VAT option.',
     reviewTitle: 'Request summary',
-    reviewDescription: 'Review the amount before confirming. The request is revalidated on the server.',
+    reviewDescription: 'Review the amount, payout, and invoice details.',
     continue: 'Continue',
     changeMethod: 'Change method',
     credit: 'Receive as AI credits',
@@ -161,8 +161,8 @@ const COPY = {
     vatModeTitle: 'VAT treatment',
     vatIncluded: 'VAT included in amount',
     vatAdded: 'Add 20% VAT to amount',
-    vatIncludedHint: 'The selected amount is gross; net and VAT are calculated from it.',
-    vatAddedHint: 'The selected amount is net; 20% VAT is added to calculate the payout.',
+    vatIncludedHint: 'Gross amount; net and VAT are split from it.',
+    vatAddedHint: '20% VAT is added to the net amount.',
     invoiceNet: 'Invoice net',
     invoiceVat: 'VAT',
     invoiceGross: 'Invoice gross',
@@ -467,6 +467,7 @@ export function ReferralPayoutControls({
         confirmLabel={isSubmitting ? copy.submitting : dialogStep === 'method' ? copy.continue : copy.confirm}
         cancelLabel={copy.cancel}
         confirmDisabled={dialogStep === 'method' ? !canContinue || isSubmitting : !canSubmit || isSubmitting}
+      stickyActions
         onConfirm={dialogStep === 'method' ? continueToReview : submitRequest}
         onCancel={closeRequestDialog}
       >
@@ -530,7 +531,20 @@ export function ReferralPayoutControls({
             )}
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-4">
+          <div className="mt-3 flex flex-col gap-3">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="self-start px-0"
+              onClick={() => {
+                setDialogStep('method')
+                setFeedback(null)
+              }}
+              disabled={isSubmitting}
+            >
+              {copy.changeMethod}
+            </Button>
             <FieldSet>
               <FieldLegend>{copy.amountMode}</FieldLegend>
               <ToggleGroup
@@ -649,13 +663,13 @@ export function ReferralPayoutControls({
               <dl className="grid gap-2 rounded-lg bg-muted/30 p-3 text-sm">
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-muted-foreground">{copy.commissionValue}</dt>
-                  <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
+                  <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
                 </div>
                 {method === 'cash' ? (
                   <>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.bankAmount}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
                     </div>
                     {preview.vatMode && preview.invoiceNetCents !== null && preview.invoiceVatCents !== null && preview.invoiceGrossCents !== null && (
                       <>
@@ -665,15 +679,15 @@ export function ReferralPayoutControls({
                         </div>
                         <div className="flex items-center justify-between gap-4">
                           <dt className="text-muted-foreground">{copy.invoiceNet}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.invoiceNetCents, language)}</dd>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceNetCents, language)}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-4">
                           <dt className="text-muted-foreground">{copy.invoiceVat}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.invoiceVatCents, language)}</dd>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceVatCents, language)}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-4">
                           <dt className="text-muted-foreground">{copy.invoiceGross}</dt>
-                          <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.invoiceGrossCents, language)}</dd>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceGrossCents, language)}</dd>
                         </div>
                       </>
                     )}
@@ -683,11 +697,11 @@ export function ReferralPayoutControls({
                   <>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.credits}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.topup}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
                     </div>
                     <p className="text-xs leading-relaxed text-muted-foreground">{copy.creditImmediate}</p>
                   </>
@@ -701,12 +715,6 @@ export function ReferralPayoutControls({
             {feedback?.kind === 'error' && (
               <Alert variant="destructive"><AlertDescription role="alert">{feedback.text}</AlertDescription></Alert>
             )}
-            <Button type="button" variant="outline" onClick={() => {
-              setDialogStep('method')
-              setFeedback(null)
-            }} disabled={isSubmitting}>
-              {copy.changeMethod}
-            </Button>
           </div>
         )}
       </ConfirmDialog>

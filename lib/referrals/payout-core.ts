@@ -146,14 +146,16 @@ export function parseReferralPayoutAmount(value: string): number | null {
   } else if (commaIndex !== -1 || dotIndex !== -1) {
     const separator: ',' | '.' = commaIndex !== -1 ? ',' : '.'
     const parts = input.split(separator)
-    if (parts.length > 2) {
-      if (!/^\d{1,3}(?:[.,]\d{3})+$/u.test(input)) return null
+  if (parts.length > 2) {
+    if (!/^\d{1,3}(?:[.,]\d{3})+$/u.test(input)) return null
+    wholePart = input
+    groupingSeparator = separator
+  } else {
+    const [whole, fraction = ''] = parts
+    if (separator === '.' && fraction.length === 3 && /^\d{1,3}(?:\.\d{3})+$/u.test(input)) {
       wholePart = input
+      groupingSeparator = separator
     } else {
-      const [whole, fraction = ''] = parts
-      if (fraction.length === 3 && /^\d{1,3}(?:[.,]\d{3})+$/u.test(input)) {
-        wholePart = input
-      } else {
         wholePart = whole
         fractionPart = fraction
         if (!/^\d{1,2}$/u.test(fractionPart)) return null

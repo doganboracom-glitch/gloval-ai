@@ -223,4 +223,44 @@ describe('referral payout feature flags', () => {
     expect(args).not.toHaveProperty('p_amount_cents')
     expect(args).not.toHaveProperty('p_vat_mode')
   })
+
+  it('keeps full company cash requests on the legacy RPC while the extended SQL is unapplied', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
+    state.partner.tax_status = 'company'
+    state.rpcData = {
+      ok: true,
+      requestId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      method: 'cash',
+      balanceCents: 100_000,
+      payoutCents: 120_000,
+      creditAmount: null,
+      systemTopupCents: 0,
+      invoiceRequired: true,
+    }
+
+    const result = await createReferralPayoutRequest({
+      method: 'cash',
+      idempotencyKey: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      method: 'cash',
+      balanceCents: 100_000,
+      payoutCents: 120_000,
+      invoiceRequired: true,
+      partial: false,
+      vatMode: null,
+    })
+    const [, args] = state.rpc.mock.calls[0]
+    expect(args).not.toHaveProperty('p_amount_cents')
+    expect(args).not.toHaveProperty('p_vat_mode')
+    expect(state.queue).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'referral_cash_requested',
+      amountCents: 120_000,
+      commissionCents: 100_000,
+      invoiceRequired: true,
+    }))
+  })
 })

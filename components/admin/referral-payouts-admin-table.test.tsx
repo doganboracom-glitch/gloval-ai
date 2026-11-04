@@ -118,9 +118,9 @@ describe('referral payout admin table', () => {
 
     const cashTable = screen.getAllByRole('table')[0]
     expect(within(cashTable).getByText('Kısmi tutar')).toBeTruthy()
-    expect(within(cashTable).getByText('KDV hariç + %20')).toBeTruthy()
-    expect(within(cashTable).getByText('1.000,05 TL')).toBeTruthy()
-    expect(within(cashTable).getByText('200,01 TL')).toBeTruthy()
+    expect(within(cashTable).getByText(/KDV hariç \+ %20/u)).toBeTruthy()
+    expect(within(cashTable).getAllByText(/1\.000,05 TL/u).length).toBe(2)
+    expect(within(cashTable).getAllByText(/200,01 TL/u).length).toBe(1)
     expect(within(cashTable).getAllByText('1.200,06 TL').length).toBeGreaterThan(0)
   })
 

@@ -31,7 +31,7 @@ describe('referral partner terms', () => {
     expect(englishTerms).toMatch(/TRY 1,000.*AI credit conversion.*one credit.*TRY 3/iu)
     expect(englishTerms).toMatch(/Conversion requires at least TRY 3.*all pending and available commissions or a smaller eligible amount.*before the 14-day hold ends.*A partial conversion is unavailable while a future-dated negative balance adjustment exists/iu)
     expect(englishTerms).toMatch(/at least TRY 1,000 in available balance.*all of it or a portion at least that minimum.*VAT included in the amount.*add VAT on top/iu)
-    expect(englishTerms).toMatch(/Company.*commission invoice including VAT.*No invoice is requested from individual.*expense document/iu)
+    expect(englishTerms).toMatch(/Company, including sole proprietorships.*VAT included in the amount.*add VAT on top.*No invoice is requested from individual.*expense document/iu)
     expect(englishTerms).toMatch(/national ID or tax identification numbers/iu)
     expect(turkishTerms).not.toMatch(/garanti gelir|garantili kazanç/iu)
     expect(englishTerms).not.toMatch(/guaranteed earnings/iu)
