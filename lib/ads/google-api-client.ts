@@ -2,7 +2,7 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import { isGoogleAdsConnectPublic, resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
+import { resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
 import type { GoogleAdsApiCall, GoogleAdsApiMethod, GoogleAdsApiTransport } from '@/lib/ads/providers/google-ads-provider'
 import { GOOGLE_ADS_API_VERSION } from '@/lib/ads/providers/google-ads-provider'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -154,16 +154,6 @@ export function createGoogleAdsApiTransport(input: {
         reservationData = result.data
         reservationError = result.error
 
-        if (
-          reservationError?.code === 'PGRST202'
-          && !isGoogleAdsConnectPublic()
-          && limits.perUser === 200
-          && limits.global === 2_000
-        ) {
-          const legacyResult = await admin.rpc('ads_reserve_google_api_operation', reserveArgs)
-          reservationData = legacyResult.data
-          reservationError = legacyResult.error
-        }
       }
 
       const reservation = record(Array.isArray(reservationData) ? reservationData[0] : reservationData)

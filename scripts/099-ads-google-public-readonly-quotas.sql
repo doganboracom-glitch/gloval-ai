@@ -3,6 +3,8 @@
 
 begin;
 
+drop function if exists public.ads_reserve_google_api_operation(uuid, uuid, uuid, text);
+
 create or replace function public.ads_reserve_google_api_operation(
   p_request_id uuid,
   p_user_id uuid,
@@ -18,10 +20,7 @@ set search_path = ''
 as $$
 declare
   v_now timestamptz := pg_catalog.clock_timestamp();
-  v_day_start timestamptz := pg_catalog.date_trunc(
-    'day',
-    v_now at time zone 'Europe/Istanbul'
-  ) at time zone 'Europe/Istanbul';
+  v_window_start timestamptz := pg_catalog.clock_timestamp() - interval '24 hours';
   v_global_used integer;
   v_user_used integer;
 begin
@@ -65,7 +64,7 @@ begin
        'googleAds.search',
        'googleAds.searchStream'
      )
-     and o.created_at >= v_day_start;
+     and o.created_at >= v_window_start;
 
   select count(*)::integer
     into v_user_used
@@ -76,7 +75,7 @@ begin
        'googleAds.search',
        'googleAds.searchStream'
      )
-     and o.created_at >= v_day_start;
+     and o.created_at >= v_window_start;
 
   if v_global_used >= p_global_daily_limit or v_user_used >= p_user_daily_limit then
     return query select false, v_global_used, v_user_used;

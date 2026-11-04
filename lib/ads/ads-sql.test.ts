@@ -995,11 +995,17 @@ describe('free quota RPCs', () => {
 })
 
 describe('Google Ads API operation quotas', () => {
-  const reserve = async (requestId: string, userId: string, connectionId: string | null = null) =>
+  const reserve = async (
+    requestId: string,
+    userId: string,
+    connectionId: string | null = null,
+    userLimit = 80,
+    globalLimit = 1_200,
+  ) =>
     (
       await db.query<{ allowed: boolean; global_used: number; user_used: number }>(
-        `select * from public.ads_reserve_google_api_operation($1, $2, $3, 'googleAds.search')`,
-        [requestId, userId, connectionId],
+        `select * from public.ads_reserve_google_api_operation($1, $2, $3, 'googleAds.search', $4, $5)`,
+        [requestId, userId, connectionId, userLimit, globalLimit],
       )
     ).rows[0]
   const reserveMutate = async (
@@ -1236,21 +1242,30 @@ describe('Google Ads public read limits and connection caps', () => {
     ).toEqual({ allowed: false, global_used: 2, user_used: 0 })
   })
 
-  it('uses the Europe/Istanbul calendar day and caps below the Explorer quota', async () => {
+  it('uses a rolling 24-hour window and caps below the Explorer quota', async () => {
     const userId = await newUser()
     const connectionId = await newConnection(userId)
     await db.query(
       `insert into public.ads_google_api_operations (request_id, user_id, connection_id, method, created_at)
-       select gen_random_uuid(), $1, $2, 'googleAds.search',
-         (pg_catalog.date_trunc('day', now() at time zone 'Europe/Istanbul') at time zone 'Europe/Istanbul') - interval '1 minute'`,
+       values (gen_random_uuid(), $1, $2, 'googleAds.search', now() - interval '24 hours 1 minute')`,
       [userId, connectionId],
     )
 
     expect(
-      await reserveDaily('00000000-0000-4000-8000-000000000305', userId, connectionId, 1, 1),
+      await reserveDaily('00000000-0000-4000-8000-000000000305', userId, connectionId, 1, 3),
     ).toEqual({ allowed: true, global_used: 1, user_used: 1 })
+
+    const recentUserId = await newUser()
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, created_at)
+       values (gen_random_uuid(), $1, 'googleAds.search', now() - interval '23 hours 59 minutes')`,
+      [recentUserId],
+    )
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000306', recentUserId, null, 1, 3),
+    ).toEqual({ allowed: false, global_used: 2, user_used: 1 })
     await expect(
-      reserveDaily('00000000-0000-4000-8000-000000000306', userId, connectionId, 200, 2880),
+      reserveDaily('00000000-0000-4000-8000-000000000307', userId, connectionId, 200, 2880),
     ).rejects.toThrow(/between 1 and 2879/)
   })
 
@@ -1404,7 +1419,6 @@ describe('grants', () => {
       'release_ads_free_actions(text)',
       'ads_record_alert_once(text,jsonb)',
       'ads_purge_expired(integer,integer,integer,integer,integer,integer)',
-      'ads_reserve_google_api_operation(uuid,uuid,uuid,text)',
       'ads_reserve_google_api_operation(uuid,uuid,uuid,text,integer,integer)',
       'ads_save_google_ads_connection_with_limit(uuid,text,text,text,text,text,smallint,text[],integer)',
       'ads_reserve_google_api_operation_v2(uuid,uuid,uuid,text,integer)',

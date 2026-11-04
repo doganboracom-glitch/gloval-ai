@@ -89,19 +89,19 @@ describe('Google Ads API quota transport', () => {
     expect(headers.has('developer-token')).toBe(false)
   })
 
-  it('falls back to the deployed legacy cap only when public access and custom limits are off', async () => {
-    mocks.rpc
-      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
-      .mockResolvedValueOnce({ data: [{ allowed: true, global_used: 1, user_used: 1 }], error: null })
+  it('fails closed when the six-argument daily quota RPC is missing', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
     const fetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
     const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
 
-    await transport(call())
+    await expect(transport(call())).rejects.toMatchObject({ code: 'quota_check_failed' })
 
-    expect(mocks.rpc).toHaveBeenCalledTimes(2)
-    expect(mocks.rpc.mock.calls[0]?.[1]).toMatchObject({ p_user_daily_limit: 200, p_global_daily_limit: 2000 })
-    expect(mocks.rpc.mock.calls[1]?.[1]).not.toHaveProperty('p_user_daily_limit')
-    expect(fetcher).toHaveBeenCalledOnce()
+    expect(mocks.rpc).toHaveBeenCalledOnce()
+    expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
+      p_user_daily_limit: 200,
+      p_global_daily_limit: 2000,
+    }))
+    expect(fetcher).not.toHaveBeenCalled()
   })
 
   it('fails closed when public access or custom limits require the missing daily-quota SQL function', async () => {
