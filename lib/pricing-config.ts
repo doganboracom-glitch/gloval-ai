@@ -178,8 +178,9 @@ export function planAllowsInlineCatalog(code: PlanCode | string | null | undefin
 }
 
 /**
- * E-ticaret sitesi hakkı. Toplam yayın limitinden (SITE_LIMITS) bağımsızdır ve
- * ek site add-on'larından etkilenmez: E-ticaret paketi 3 kurumsal + 1 e-ticaret.
+ * Base e-commerce site allowance is tracked separately from the total site limit.
+ * Typed add-ons can increase the matching website allowance without shifting the
+ * other type's capacity.
  */
 export const ECOMMERCE_SITE_LIMITS: Record<PlanCode, number> = {
   free: 0,

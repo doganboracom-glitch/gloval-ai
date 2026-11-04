@@ -22,7 +22,7 @@ vi.mock('@/lib/billing', () => ({
   getMyCurrentPlan: vi.fn(),
   getPlanCodeForUser: async (id: string) => state.plans[id] ?? 'free',
 }))
-vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: vi.fn(), getEffectiveProductLimit: vi.fn() }))
+vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: vi.fn(), getEffectiveSiteLimits: vi.fn(async () => ({ total: 5, ecommerce: 1, corporate: 4 })), getEffectiveProductLimit: vi.fn() }))
 vi.mock('@/lib/page-limits', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/page-limits')>()
   return { ...actual, pageLimitForPlan: (plan: string | null | undefined) => state.pageLimit ?? actual.pageLimitForPlan(plan) }

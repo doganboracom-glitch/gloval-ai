@@ -33,6 +33,7 @@ vi.mock('@/lib/billing', () => ({
 vi.mock('@/lib/billing-lifecycle', () => ({ isSubscriptionSuspended: async () => false }))
 vi.mock('@/lib/effective-limits', () => ({
   getEffectiveSiteLimit: async () => 5,
+  getEffectiveSiteLimits: async () => ({ total: 5, ecommerce: 1, corporate: 4 }),
   getEffectiveProductLimit: async () => null,
 }))
 vi.mock('@/lib/store-sync', () => ({ syncStoreFromSchema: vi.fn(async () => {}) }))

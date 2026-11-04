@@ -8,10 +8,10 @@ import {
   ADD_ON_ENTITLED_SUBSCRIPTION_STATUSES,
   buildAddOnOverview,
   isAddOnCode,
-  isAddOnEligible,
+  isAddOnEligibleForCode,
   resolveAddOnPrices,
   resolveEffectiveProductLimit,
-  resolveEffectiveSiteLimit,
+  resolveEffectiveSiteLimits,
   type AddOnCode,
   type AddOnGrant,
   type AddOnOverview,
@@ -85,16 +85,24 @@ export async function resolveServerAddOnPrice(code: unknown): Promise<AddOnPrice
   return (await getAddOnPrices())[code]
 }
 
-/** Etkin yayın limiti: (admin istisnası ?? paket limiti) + aktif ek site. */
-export async function getEffectiveSiteLimit(
+/** Total, corporate, and e-commerce site allowances after overrides and active grants. */
+export async function getEffectiveSiteLimits(
   userId: string,
   planCode: string | null | undefined,
-): Promise<number> {
+) {
   const [override, grants] = await Promise.all([
     getActiveSiteLimitOverride(userId),
     getAddOnGrants(userId),
   ])
-  return resolveEffectiveSiteLimit({ planCode, override, grants })
+  return resolveEffectiveSiteLimits({ planCode, override, grants })
+}
+
+/** Effective total site allowance retained for callers that only need the total. */
+export async function getEffectiveSiteLimit(
+  userId: string,
+  planCode: string | null | undefined,
+): Promise<number> {
+  return (await getEffectiveSiteLimits(userId, planCode)).total
 }
 
 /** Etkin ürün limiti: paket ürün limiti + aktif ek ürün. null = limitsiz paket. */
@@ -176,7 +184,7 @@ export async function grantAddOn(input: {
   const rawPlan = (sub as unknown as { billing_plans: { code: string } | { code: string }[] | null })
     .billing_plans
   const planCode = toPlanCode((Array.isArray(rawPlan) ? rawPlan[0] : rawPlan)?.code)
-  if (!isAddOnEligible(def.kind, planCode)) return { ok: false, error: 'not_eligible' }
+  if (!isAddOnEligibleForCode(def.code, planCode)) return { ok: false, error: 'not_eligible' }
 
   const { error } = await admin.from('user_addon_entitlements').upsert(
     {

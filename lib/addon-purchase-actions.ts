@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
-import { isAddOnCode } from '@/lib/add-ons'
+import { isAddOnCode, isAddOnPurchasableCode } from '@/lib/add-ons'
 import { addOnOrderRef } from '@/lib/addon-purchases'
 import { loadCatalogPrice } from '@/lib/payments/addon-fulfillment'
 import { verifyAddOnFulfillmentContext } from '@/lib/payments/addon-verify'
@@ -117,6 +117,7 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
   const addonCode = input?.addonCode
   if (!isAddOnCode(addonCode)) return { ok: false, error: 'invalid_addon' }
   if (!hasAllCheckoutConsents(input?.consents)) return { ok: false, error: CONSENT_REQUIRED_ERROR }
+  if (!isAddOnPurchasableCode(addonCode)) return { ok: false, error: 'not_available' }
 
   const admin = createAdminClient()
   const now = Date.now()

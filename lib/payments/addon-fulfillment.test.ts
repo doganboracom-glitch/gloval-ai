@@ -113,6 +113,8 @@ function seed(opts: {
   subUser?: string
   plan?: string
   periodEnd?: string | null
+  addonCode?: string
+  purchaseAmount?: number
   catalogPrice?: number
 } = {}) {
   state.failEntitlementUpsert = false
@@ -124,8 +126,8 @@ function seed(opts: {
         id: PURCHASE_ID,
         user_id: 'user-1',
         subscription_id: 'sub-1',
-        addon_code: 'extra_site_1',
-        amount: 9900,
+        addon_code: opts.addonCode ?? 'extra_site_1',
+        amount: opts.purchaseAmount ?? 9900,
         currency: 'TRY',
         status: opts.purchaseStatus ?? 'pending',
         provider: 'iyzico',
@@ -143,7 +145,7 @@ function seed(opts: {
     ],
     billing_plans: [
       {
-        code: 'extra_site_1',
+        code: opts.addonCode ?? 'extra_site_1',
         price_cents: opts.catalogPrice ?? 9900,
         currency: 'TRY',
         interval: 'month',
@@ -249,6 +251,20 @@ describe('settlePaymentResult - successful add-on payment', () => {
     expect(await settleAddOnResult('iyzico', paid())).toBe('granted')
   })
 
+  it('grants an e-commerce site SKU on an e-commerce subscription', async () => {
+    seed({
+      plan: 'ecommerce',
+      addonCode: 'extra_ecommerce_site_1',
+      purchaseAmount: 49900,
+      catalogPrice: 49900,
+    })
+    expect(await settleAddOnResult('iyzico', paid({ paidAmountCents: 49900 }))).toBe('granted')
+    expect(entitlements()[0]).toMatchObject({
+      addon_code: 'extra_ecommerce_site_1',
+      kind: 'site',
+    })
+  })
+
   it('accepts TRY as well as TL for the paid currency', async () => {
     expect(await settleAddOnResult('iyzico', paid({ paidCurrency: 'TRY' }))).toBe('granted')
   })
@@ -301,6 +317,16 @@ describe('settlePaymentResult - rejected add-on payment', () => {
   it('plan not eligible for add-ons', async () => {
     seed({ plan: 'starter' })
     await refund()
+  })
+
+  it('a corporate subscription cannot settle an e-commerce site SKU', async () => {
+    seed({
+      plan: 'pro',
+      addonCode: 'extra_ecommerce_site_1',
+      purchaseAmount: 49900,
+      catalogPrice: 49900,
+    })
+    await refund({ paidAmountCents: 49900 })
   })
 
   it.each(['past_due', 'trialing', 'canceled', 'incomplete'])(
