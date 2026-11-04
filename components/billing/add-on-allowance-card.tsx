@@ -146,7 +146,7 @@ export function AddOnAllowanceCard({
             data-addon-code={selectedItem.code}
             onClick={() => onBuy(selectedItem.code)}
           >
-            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {busy ? <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
             {busy ? buyingLabel : buyLabel}
           </Button>
           <p className="text-sm text-muted-foreground">{periodNote}</p>
