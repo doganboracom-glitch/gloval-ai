@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRightLeft,
   Bell,
   CreditCard,
   FileText,
@@ -57,7 +58,8 @@ export function AdminShell({
     { href: '/admin/billing/invoices', label: getInvoiceCopy(lang).nav, icon: Receipt },
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
-    { href: '/admin/domains', label: t.nav.domains, icon: Globe },
+    { href: '/admin/domains', label: t.nav.domains, icon: Globe, exact: true },
+    { href: '/admin/domains/handover', label: t.nav.domainHandover, icon: ArrowRightLeft },
     { href: '/admin/blog', label: blogAdminT(lang).nav, icon: Newspaper },
     { href: '/admin/support', label: t.nav.support, icon: LifeBuoy },
     { href: '/admin/maker-requests', label: t.nav.makerRequests, icon: FileText },

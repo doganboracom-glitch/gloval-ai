@@ -1,11 +1,15 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const HANDOVER_MIGRATION = readFileSync(path.join(ROOT, 'scripts/086-domain-ownership-handover.sql'), 'utf8')
 const IMPORT_MIGRATION = readFileSync(path.join(ROOT, 'scripts/105-admin-domain-import.sql'), 'utf8')
+const CONFLICT_MIGRATION = readFileSync(
+  path.join(ROOT, 'scripts/107-admin-domain-import-dead-order-conflict.sql'),
+  'utf8',
+)
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;
@@ -31,6 +35,8 @@ create table public.domain_orders (
   provider_response jsonb,
   payment_provider text,
   provider_domain_id text,
+  payment_reference text,
+  error_message text,
   expires_at timestamptz,
   custom_domain_id text,
   created_at timestamptz not null default now()
@@ -89,6 +95,7 @@ beforeAll(async () => {
   await db.exec(BASE_SCHEMA)
   await db.exec(HANDOVER_MIGRATION)
   await db.exec(IMPORT_MIGRATION)
+  await db.exec(CONFLICT_MIGRATION)
 })
 
 afterAll(async () => {
@@ -211,7 +218,7 @@ describe('admin registrar domain import SQL', () => {
     expect(await rowCount('domain_handover_events', domain)).toBe(1)
 
     const duplicate = await requestImport({ domain, target, actor, key: 'import-key-0002' })
-    expect(duplicate).toMatchObject({ ok: false, code: 'domain_exists' })
+    expect(duplicate).toMatchObject({ ok: false, code: 'domain_linked' })
   })
 
   it('requires a different admin for enabled second-admin approval and rechecks the registrar snapshot', async () => {
@@ -272,5 +279,209 @@ describe('admin registrar domain import SQL', () => {
 
     const retried = await requestImport({ domain, target, actor: requester, key: 'import-key-0005' })
     expect(retried).toMatchObject({ ok: true, status: 'pending_approval' })
+  })
+
+  describe('order collision rule (107)', () => {
+    beforeEach(async () => {
+      await db.query(
+        `insert into public.domain_handover_settings (id, require_second_admin)
+         values (true, false)
+         on conflict (id) do update set require_second_admin = false`,
+      )
+    })
+
+    async function seedOrder(input: {
+      domain: string
+      status: string
+      paymentReference?: string | null
+      providerDomainId?: string | null
+    }) {
+      await db.query(
+        `insert into public.domain_orders
+           (domain, tld, period_years, status, price_cents, currency, payment_provider,
+            payment_reference, provider_domain_id, error_message)
+         values ($1, 'com', 1, $2, 10000, 'TRY', 'iyzico', $3, $4, 'HTTP 400')`,
+        [input.domain, input.status, input.paymentReference ?? null, input.providerDomainId ?? null],
+      )
+    }
+
+    it('imports over a dead registration_failed order and leaves that row untouched', async () => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = 'dead-order.example.com'
+      await seedOrder({ domain, status: 'registration_failed', paymentReference: 'pay-ref-1' })
+      const before = await db.query<Record<string, unknown>>(`select * from public.domain_orders where domain = $1`, [domain])
+
+      const result = await requestImport({ domain, target, actor, key: 'conflict-key-0001' })
+      expect(result).toMatchObject({ ok: true, status: 'imported', replayed: false })
+
+      const after = await db.query<Record<string, unknown>>(
+        `select * from public.domain_orders where domain = $1 and payment_provider = 'iyzico'`,
+        [domain],
+      )
+      expect(after.rows).toEqual(before.rows)
+      expect(await rowCount('domain_orders', domain)).toBe(2)
+      expect(await rowCount('custom_domains', domain)).toBe(1)
+    })
+
+    it.each(['failed', 'cancelled'])('treats a %s order without a registrar id as dead', async (status) => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = `dead-${status}.example.com`
+      await seedOrder({ domain, status })
+      expect(await requestImport({ domain, target, actor, key: `conflict-dead-${status}` })).toMatchObject({
+        ok: true,
+        status: 'imported',
+      })
+    })
+
+    it.each([
+      'active',
+      'pending_payment',
+      'payment_verified',
+      'registration_pending',
+      'registration_reconciliation_required',
+      'manual_refund_required',
+    ])('rejects a live %s order', async (status) => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = `live-${status.replaceAll('_', '-')}.example.com`
+      await seedOrder({ domain, status })
+      const result = await requestImport({ domain, target, actor, key: `conflict-live-${status}` })
+      expect(result).toMatchObject({ ok: false, code: 'order_active' })
+      expect(await rowCount('custom_domains', domain)).toBe(0)
+    })
+
+    it('rejects a dead order that carries both a payment reference and a registrar id', async () => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = 'traced-dead.example.com'
+      await seedOrder({
+        domain,
+        status: 'registration_failed',
+        paymentReference: 'pay-ref-2',
+        providerDomainId: domain,
+      })
+      expect(await requestImport({ domain, target, actor, key: 'conflict-key-0002' })).toMatchObject({
+        ok: false,
+        code: 'order_active',
+      })
+    })
+
+    it('still ignores a dead order that only has a payment reference', async () => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = 'paid-only-dead.example.com'
+      await seedOrder({ domain, status: 'registration_failed', paymentReference: 'pay-ref-3' })
+      expect(await requestImport({ domain, target, actor, key: 'conflict-key-0003' })).toMatchObject({
+        ok: true,
+        status: 'imported',
+      })
+    })
+
+    it('rejects a domain that already exists in custom_domains, in any status', async () => {
+      const target = await newUser()
+      const actor = await newUser()
+      const owner = await newUser()
+      const domain = 'linked-already.example.com'
+      await db.query(
+        `insert into public.custom_domains (user_id, domain, status) values ($1::uuid, $2, 'disabled')`,
+        [owner.id, domain],
+      )
+      expect(await requestImport({ domain, target, actor, key: 'conflict-key-0004' })).toMatchObject({
+        ok: false,
+        code: 'domain_linked',
+      })
+    })
+
+    it('cannot import the same domain twice with a fresh idempotency key', async () => {
+      const target = await newUser()
+      const actor = await newUser()
+      const domain = 'twice-import.example.com'
+      expect(await requestImport({ domain, target, actor, key: 'conflict-key-0005' })).toMatchObject({ ok: true })
+      expect(await requestImport({ domain, target, actor, key: 'conflict-key-0006' })).toMatchObject({
+        ok: false,
+        code: 'domain_linked',
+      })
+      expect(await rowCount('custom_domains', domain)).toBe(1)
+    })
+
+    it('reports a pending request for the same domain and re-checks collisions on approval', async () => {
+      const target = await newUser()
+      const requester = await newUser()
+      const approver = await newUser()
+      await db.query(`update public.domain_handover_settings set require_second_admin = true where id = true`)
+      const domain = 'approval-conflict.example.com'
+
+      const request = await requestImport({ domain, target, actor: requester, key: 'conflict-key-0007' })
+      expect(request).toMatchObject({ ok: true, status: 'pending_approval' })
+      expect(await requestImport({ domain, target, actor: requester, key: 'conflict-key-0008' })).toMatchObject({
+        ok: false,
+        code: 'import_pending',
+      })
+
+      await seedOrder({ domain, status: 'active' })
+      expect(await approveImport(request.request_id!, approver, domain)).toMatchObject({
+        ok: false,
+        code: 'order_active',
+      })
+      expect(await rowCount('custom_domains', domain)).toBe(0)
+    })
+
+    it('does not let anon or authenticated call the import functions', async () => {
+      const calls = [
+        `select public._admin_domain_import_conflict('x.example.com', null)`,
+        `select public._finalize_admin_domain_import(gen_random_uuid(), gen_random_uuid(), 'a@example.net')`,
+        `select public.admin_approve_domain_import(gen_random_uuid(), gen_random_uuid(), 'a@example.net', 'x.example.com', now() + interval '1 day', '{}')`,
+        `select public.admin_reject_domain_import(gen_random_uuid(), gen_random_uuid(), 'a@example.net', 'note here')`,
+        `select public.admin_request_domain_import('x.example.com', 'com', gen_random_uuid(), 'a@example.net', gen_random_uuid(), 'b@example.net', 'TKT-1', 'key-12345678', 'x.example.com', now() + interval '1 day', '{}', '[]', '0123456789abcdef0123456789abcdef')`,
+      ]
+      for (const role of ['anon', 'authenticated']) {
+        for (const call of calls) {
+          await db.exec(`set role ${role}`)
+          try {
+            await expect(db.query(call)).rejects.toThrow(/permission denied/i)
+          } finally {
+            await db.exec('reset role')
+          }
+        }
+      }
+    })
+
+    it('rebuilds a plain unique index on domain_orders.domain as a partial index without losing rows', async () => {
+      const scratch = new PGlite()
+      try {
+        await scratch.exec(BASE_SCHEMA)
+        await scratch.exec(HANDOVER_MIGRATION)
+        await scratch.exec(IMPORT_MIGRATION)
+        await scratch.exec(`create unique index domain_orders_domain_key on public.domain_orders (lower(btrim(domain)))`)
+        await scratch.exec(
+          `insert into public.domain_orders (domain, tld, period_years, status, price_cents, currency)
+           values ('a.example.com', 'com', 1, 'registration_failed', 1, 'TRY')`,
+        )
+        await scratch.exec(CONFLICT_MIGRATION)
+
+        const { rows } = await scratch.query<{ indexdef: string }>(
+          `select indexdef from pg_indexes where tablename = 'domain_orders' and indexname = 'domain_orders_domain_key'`,
+        )
+        expect(rows[0].indexdef).toMatch(/UNIQUE/i)
+        expect(rows[0].indexdef).toMatch(/registration_failed/)
+
+        await scratch.exec(
+          `insert into public.domain_orders (domain, tld, period_years, status, price_cents, currency)
+           values ('a.example.com', 'com', 1, 'active', 0, 'TRY')`,
+        )
+        await expect(
+          scratch.exec(
+            `insert into public.domain_orders (domain, tld, period_years, status, price_cents, currency)
+             values ('a.example.com', 'com', 1, 'pending_payment', 0, 'TRY')`,
+          ),
+        ).rejects.toThrow()
+        const count = await scratch.query<{ count: string }>(`select count(*)::text as count from public.domain_orders`)
+        expect(Number(count.rows[0].count)).toBe(2)
+      } finally {
+        await scratch.close()
+      }
+    })
   })
 })
