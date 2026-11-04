@@ -455,11 +455,7 @@ export function TransferOutPanel({
             <p className="text-sm text-muted-foreground">{statusCopy.restrictionUnknown}</p>
           )}
           {restrictedDate && <p className="text-sm text-muted-foreground">{fill(d.outRestricted, { date: restrictedDate })}</p>}
-          {activeWindow && status.locked === false && status.transferState !== 'pending_outgoing' && (
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {fill(statusCopy.statusActive, { time: formatRemainingTime(windowRemainingMs, statusCopy) })}
-            </p>
-          )}
+
           {status.transferState === 'pending_outgoing' && activeWindow && (
             <p className="text-sm text-muted-foreground" aria-live="polite">
               {fill(statusCopy.statusActive, { time: formatRemainingTime(windowRemainingMs, statusCopy) })}

@@ -140,6 +140,16 @@ function isDefiniteRegisterRejection(code: string | undefined): boolean {
   return typeof value === 'boolean' ? value : null
 }
 
+function asLockFlag(value: unknown): boolean | null {
+  const boolean = asBool(value)
+  if (boolean !== null) return boolean
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'true') return true
+  if (normalized === 'false') return false
+  return null
+}
+
 function handleOf(contacts: unknown, key: string): string | null {
   if (!contacts || typeof contacts !== 'object') return null
   const value = (contacts as Record<string, unknown>)[key]
@@ -568,7 +578,7 @@ export class DomainNameApiProvider
   const start = parseProviderDate(readRawField(raw, 'startDate'))
   const remaining = rawFields.remainingDay
   return {
-    locked: asBool(rawFields.lockStatus),
+    locked: asLockFlag(rawFields.lockStatus) ?? asLockFlag(d.LockStatus),
 
       expiresAt: expiry.instant,
       startedAt: start.instant,

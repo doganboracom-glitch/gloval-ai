@@ -20,7 +20,6 @@ import { findOpenTransferWindow } from './transfer-window-store'
 import { getRegistrarTransferState, type RegistrarTransferState } from './transfer-window-logic'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { reserveUserHourly } from './rate-limit'
-import { notifyTransferCodeViewed } from './transfer-code-notice'
 import { requireRegisteredByUs } from './ownership'
 import { getDomainRegistrarProvider } from './provider'
 import { parsePurchaseDomain } from './service'
@@ -393,6 +392,7 @@ export async function revealMyAuthCode(
       return { ok: false, error: 'NOT_FOUND' }
     }
     await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'success' } })
+    const { notifyTransferCodeViewed } = await import('./transfer-code-notice')
     await notifyTransferCodeViewed({ userId, email, domain, lang })
     return { ok: true, authCode }
   } catch {

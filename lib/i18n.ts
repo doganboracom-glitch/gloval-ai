@@ -1559,7 +1559,7 @@ const dict = {
     hour: 'saat',
     minute: 'dk',
   },
-      mgNsRowLabel: 'Nameserver {n}',
+      mgNsRowLabel: 'Ad sunucusu {n}',
       mgNsAddRow: 'Satır ekle',
       mgNsRemoveRow: 'Nameserver {n} satırını sil',
       mgNsErrInvalid: 'Geçerli bir nameserver adı girin (örn. ns.example.com). IP adresi ve boşluk kullanılamaz.',
