@@ -11,6 +11,7 @@ import {
   CreditCard,
   FileText,
   Globe,
+  Handshake,
   LayoutDashboard,
   LayoutTemplate,
   LifeBuoy,
@@ -40,9 +41,11 @@ import { cn } from '@/lib/utils'
  */
 export function AdminShell({
   adminEmail,
+  referralsEnabled,
   children,
 }: {
   adminEmail: string
+  referralsEnabled: boolean
   children: React.ReactNode
 }) {
   const { lang } = useLanguage()
@@ -59,6 +62,9 @@ export function AdminShell({
     { href: '/admin/billing/invoices', label: getInvoiceCopy(lang).nav, icon: Receipt },
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
+    ...(referralsEnabled
+      ? [{ href: '/admin/referrals', label: t.nav.referrals, icon: Handshake }]
+      : []),
     { href: '/admin/ads-publishing', label: t.nav.adsPublishRecovery, icon: Clock3 },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe, exact: true },
     { href: '/admin/domains/handover', label: t.nav.domainHandover, icon: ArrowRightLeft },
@@ -98,7 +104,7 @@ export function AdminShell({
           <nav aria-label={t.title} className="lg:w-52 lg:shrink-0">
             <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
               {nav.map(({ href, label, icon: Icon, exact }) => {
-                const active = exact ? pathname === href : pathname.startsWith(href)
+                const active = pathname === href || (!exact && pathname.startsWith(`${href}/`))
                 return (
                   <li key={href} className="shrink-0">
                     <Link
