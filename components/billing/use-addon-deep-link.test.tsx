@@ -8,6 +8,7 @@ import { addonCardId } from '@/lib/billing-addon-focus'
 import type { AddOnCatalogItem } from '@/lib/add-ons'
 
 const scrollIntoView = vi.fn()
+let prefersReducedMotion = false
 const mailItems: AddOnCatalogItem[] = [
   {
     code: 'extra_mail_1',
@@ -58,6 +59,7 @@ function DeepLinkHarness() {
         defaultPeriod="month"
         title="GLOVAL Mail"
         description="Ek posta kutusu kapasitesi"
+        yearlyDescription="12 ay geçerlidir, otomatik yenilenmez ve bir kez tahsil edilir."
         selectLabel="Paket"
         optionLabel="{item} - {amount} {currency} {period}"
         currencyLabel="TL"
@@ -82,11 +84,25 @@ function DeepLinkHarness() {
   )
 }
 
+function MissingCardHarness() {
+  const highlightedCode = useAddonDeepLink()
+
+  return (
+    <>
+      <output data-testid="highlighted-code">{highlightedCode ?? 'none'}</output>
+      <CollapsibleAddOnsSection title="Diğer Ek Paketler" summary="3 paket">
+        No card matches this link
+      </CollapsibleAddOnsSection>
+    </>
+  )
+}
+
 beforeEach(() => {
   vi.useFakeTimers()
+  prefersReducedMotion = false
   Element.prototype.scrollIntoView = scrollIntoView
   window.matchMedia = ((query: string) => ({
-    matches: false,
+    matches: query === '(prefers-reduced-motion: reduce)' && prefersReducedMotion,
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -117,7 +133,47 @@ describe('add-on allowance deep link', () => {
 
     const select = screen.getByLabelText('Paket') as HTMLSelectElement
     expect(select.value).toBe('extra_mail_5_yearly')
+    expect(
+      Array.from(select.options).find((option) => option.value === 'extra_mail_5_yearly')?.textContent,
+    ).toBe('5 posta kutusu - 1.990 TL / Yıl')
+    expect(screen.getByText('2 ay ücretsiz')).toBeTruthy()
+    expect(screen.getByText('12 ay geçerlidir, otomatik yenilenmez ve bir kez tahsil edilir.')).toBeTruthy()
     expect(document.getElementById(addonCardId('extra_mail_5_yearly'))).toBeTruthy()
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' })
+  })
+
+  it('uses immediate, non-smooth scrolling when reduced motion is preferred', async () => {
+    prefersReducedMotion = true
+    render(<DeepLinkHarness />)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' })
+  })
+
+  it('does not scroll or leave a highlight when the linked card is missing', async () => {
+    render(<MissingCardHarness />)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350)
+    })
+
+    expect(screen.getByTestId('highlighted-code').textContent).toBe('none')
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })
+  })
+
+  it('does not open, highlight, or scroll without an add-on query parameter', async () => {
+    window.history.replaceState(null, '', '/billing?campaign=plans')
+    render(<DeepLinkHarness />)
+
+    expect(screen.getByRole('button', { name: /Diğer Ek Paketler/ }).getAttribute('aria-expanded')).toBe('false')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(350)
+    })
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })

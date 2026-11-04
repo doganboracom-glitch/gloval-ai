@@ -722,6 +722,10 @@ const pl: DeepPartial<Dict> = {
   renewItemSuffix: 'odnowienie',
   publishSuspended: 'Twój abonament jest zawieszony, ponieważ płatność nie powiodła się. Dokończ płatność, aby opublikować.',
     addOns: {
+      websiteAllowanceDescription: 'Dodaje do limitu stron w Twoim planie jedno prawo publikacji wybranego typu. Obowiązuje w bieżącym okresie rozliczeniowym głównej subskrypcji.',
+      websiteAllowanceDescriptionYearly: 'Dodaje do limitu stron w Twoim planie jedno prawo publikacji wybranego typu. Obowiązuje przez 12 miesięcy, nie odnawia się automatycznie i jest opłacane jednorazowo.',
+      emailAllowanceDescription: 'Dodaje wybraną liczbę kont e-mail. Limit obowiązuje w bieżącym okresie rozliczeniowym głównej subskrypcji.',
+      emailAllowanceDescriptionYearly: 'Dodaje wybraną liczbę kont e-mail. Limit obowiązuje przez 12 miesięcy, nie odnawia się automatycznie i jest opłacany jednorazowo.',
       title: 'Usługi dodatkowe',
       subtitle: 'Dodaj dodatkową pojemność stron i produktów ponad limity swojego planu.',
       summaryHint: 'Twoja aktywna dodatkowa pojemność i usługi dostępne w Twoim planie.',

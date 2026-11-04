@@ -696,7 +696,7 @@ const fr: DeepPartial<Dict> = {
     paymentNotice: {
       successCredits: "Paiement reçu. +{credits} actions IA ont été ajoutées à votre compte.",
       successNamed: "Paiement reçu. {name} est maintenant actif sur votre compte.",
-      failed: "Le paiement n’a pas pu être finalisé. Il peut y avoir un problème avec votre carte, ou le système de paiement est temporairement indisponible. Essayez une autre carte ou contactez le support.",
+      failed: "Le paiement n'a pas pu être finalisé. Il peut y avoir un problème avec votre carte, ou le système de paiement est temporairement indisponible. Essayez une autre carte ou contactez le support.",
       dismiss: "Fermer la notification",
       resultTitle: "Paiement réussi",
       resultDesc: "Votre paiement a été reçu et votre compte a été mis à jour. Vous pouvez voir l’état actuel sur la page de facturation.",
@@ -711,6 +711,10 @@ const fr: DeepPartial<Dict> = {
   renewItemSuffix: 'renouvellement',
   publishSuspended: 'Votre abonnement est suspendu car un paiement a échoué. Finalisez le paiement pour publier.',
     addOns: {
+      websiteAllowanceDescription: 'Ajoute à la limite de sites de votre forfait un droit de publication du type choisi. Il est valable pendant la période de facturation de votre abonnement principal.',
+      websiteAllowanceDescriptionYearly: 'Ajoute à la limite de sites de votre forfait un droit de publication du type choisi. Il est valable 12 mois, ne se renouvelle pas automatiquement et est facturé une seule fois.',
+      emailAllowanceDescription: 'Ajoute le nombre choisi de comptes e-mail. Cette capacité est valable pendant la période de facturation de votre abonnement principal.',
+      emailAllowanceDescriptionYearly: 'Ajoute le nombre choisi de comptes e-mail. Cette capacité est valable 12 mois, ne se renouvelle pas automatiquement et est facturée une seule fois.',
       title: 'Services complémentaires',
       subtitle: 'Ajoutez de la capacité en sites et en produits en plus des limites de votre offre.',
       summaryHint: 'Votre capacité supplémentaire active et les services disponibles avec votre offre.',

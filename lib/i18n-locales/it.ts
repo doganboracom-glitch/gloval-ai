@@ -751,6 +751,10 @@ const it: DeepPartial<Dict> = {
   renewItemSuffix: 'rinnovo',
   publishSuspended: 'Il tuo abbonamento è sospeso perché un pagamento non è riuscito. Completa il pagamento per pubblicare.',
     addOns: {
+      websiteAllowanceDescription: 'Aggiunge al limite di siti del piano un diritto di pubblicazione del tipo selezionato. È valido durante il periodo di fatturazione della sottoscrizione principale.',
+      websiteAllowanceDescriptionYearly: 'Aggiunge al limite di siti del piano un diritto di pubblicazione del tipo selezionato. È valido per 12 mesi, non si rinnova automaticamente e viene addebitato una sola volta.',
+      emailAllowanceDescription: 'Aggiunge il numero selezionato di account email. La quota è valida durante il periodo di fatturazione della sottoscrizione principale.',
+      emailAllowanceDescriptionYearly: 'Aggiunge il numero selezionato di account email. La quota è valida per 12 mesi, non si rinnova automaticamente e viene addebitata una sola volta.',
       title: 'Servizi aggiuntivi',
       subtitle: 'Aggiungi capacità extra di siti e prodotti oltre ai limiti del tuo piano.',
       summaryHint: 'La tua capacità extra attiva e i servizi disponibili nel tuo piano.',

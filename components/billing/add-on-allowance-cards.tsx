@@ -32,8 +32,9 @@ import {
 import { isTrustedIyzicoCheckoutMessage } from '@/lib/iyzico-checkout-ui'
 import { ADD_ONS_ANCHOR, PLANS_ANCHOR } from '@/components/billing/collapsible-add-ons-section'
 import { addonCardId } from '@/lib/billing-addon-focus'
+import { ADD_ON_PAYMENT_RETURN_QUERY } from '@/lib/billing-add-ons-route'
 
-const ADD_ONS_RETURN_PATH = `/billing?payment=return#${ADD_ONS_ANCHOR}`
+const ADD_ONS_RETURN_PATH = `/billing?${ADD_ON_PAYMENT_RETURN_QUERY}#${ADD_ONS_ANCHOR}`
 
 export function AddOnAllowanceCards({
   overview,
@@ -220,6 +221,7 @@ export function AddOnAllowanceCards({
       items: websiteItems,
       title: a.websiteAllowanceTitle,
       description: a.websiteAllowanceDescription,
+      yearlyDescription: a.websiteAllowanceDescriptionYearly,
       selectLabel: a.websiteAllowanceSelectLabel,
       unitLabelFor: websiteUnitLabelFor,
       notEligible: a.notEligibleSite,
@@ -229,6 +231,7 @@ export function AddOnAllowanceCards({
       items: productItems,
       title: a.productAllowanceTitle,
       description: a.productAllowanceDescription,
+      yearlyDescription: undefined,
       selectLabel: a.productAllowanceSelectLabel,
       unitLabelFor: productUnitLabelFor,
       notEligible: a.notEligibleProduct,
@@ -238,6 +241,7 @@ export function AddOnAllowanceCards({
       items: mailItems,
       title: a.emailAllowanceTitle,
       description: a.emailAllowanceDescription,
+      yearlyDescription: a.emailAllowanceDescriptionYearly,
       selectLabel: a.emailAllowanceSelectLabel,
       unitLabelFor: emailUnitLabelFor,
       notEligible: a.notEligibleMail,
@@ -283,7 +287,7 @@ export function AddOnAllowanceCards({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {allowanceCards.map((card) => (
           <AddOnAllowanceCard
             key={card.kind}
@@ -292,6 +296,7 @@ export function AddOnAllowanceCards({
             defaultPeriod={planInterval}
             title={card.title}
             description={card.description}
+            yearlyDescription={card.yearlyDescription}
             selectLabel={card.selectLabel}
             optionLabel={a.allowanceOptionLabel}
             currencyLabel={a.priceCurrency}

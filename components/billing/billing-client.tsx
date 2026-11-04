@@ -1288,7 +1288,7 @@ export function BillingClient({
                 />
               ) : null}
               {oneTimeRightPlans.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {oneTimeRightPlans.map((p) => {
                     const busy = busyPlanId === p.id && (isPending || previewing)
                     return (
@@ -1296,7 +1296,7 @@ export function BillingClient({
                         key={p.id}
                         id={addonCardId(p.code)}
                         data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
-                        className={`relative flex scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-6 transition-[color,box-shadow,border-color] hover:border-primary/50 ${
+                        className={`relative flex h-full scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-4 transition-[color,box-shadow,border-color] hover:border-primary/50 sm:p-5 ${
                           highlightedAddonCode === p.code
                             ? 'border-brand ring-2 ring-brand'
                             : 'border-border'

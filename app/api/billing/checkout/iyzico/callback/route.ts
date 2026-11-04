@@ -5,6 +5,7 @@ import { retrieveIyzicoCheckoutForm } from '@/lib/payments/iyzico'
 import { extractPaidDetails } from '@/lib/payments/iyzico-paid-details'
 import { createHash } from 'node:crypto'
 import { settlePaymentResult, type SettleOutcome } from '@/lib/payments/settle'
+import { ADD_ON_PAYMENT_RETURN_QUERY } from '@/lib/billing-add-ons-route'
 
 /**
  * iyzico Checkout Form callback. Unlike Stripe, Checkout Form has no
@@ -82,12 +83,12 @@ function callbackResponse(
     ...(status === 'success' && purchase ? { purchase } : {}),
   })
   // Add-on results are read back from the stored purchase, so that page only
-  // needs to be told to look (`payment=return`), not what the result was.
+  // needs the dedicated add-on return signal, not the result from the browser.
   const baseFallback =
     destination === 'domains'
       ? `${origin}/dashboard/domains?payment=${status}`
       : destination === 'addons'
-        ? `${origin}/billing?payment=return#ek-paketler`
+        ? `${origin}/billing?${ADD_ON_PAYMENT_RETURN_QUERY}#ek-paketler`
         : `${origin}/payment-result?checkout=${status}`
   const fallback = status === 'success' ? withPurchaseParams(baseFallback, purchase) : baseFallback
   const html = `<!doctype html><title>Ödeme sonucu</title><script>

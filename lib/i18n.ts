@@ -1196,12 +1196,16 @@ const dict = {
     websiteAllowanceTitle: 'Website Hakkı Satın Al',
     websiteAllowanceDescription:
       'Planınızın website limitine seçtiğiniz türde +1 yayın hakkı ekler. Ana aboneliğin faturalama dönemiyle birlikte geçerlidir.',
+    websiteAllowanceDescriptionYearly:
+      'Planınızın website limitine seçtiğiniz türde +1 yayın hakkı ekler. 12 ay geçerlidir, otomatik yenilenmez ve bir kez tahsil edilir.',
     websiteAllowanceSelectLabel: 'Website hakkı türü',
     corporateSiteUnit: '+{n} Kurumsal Site',
     ecommerceSiteUnit: '+{n} E-Ticaret Sitesi',
     emailAllowanceTitle: 'E-Posta Hakkı Satın Al',
     emailAllowanceDescription:
       'Seçtiğiniz e-posta hesabı hakkı ana aboneliğinizin faturalama dönemi boyunca geçerlidir.',
+    emailAllowanceDescriptionYearly:
+      'Seçtiğiniz e-posta hesabı hakkı 12 ay geçerlidir, otomatik yenilenmez ve bir kez tahsil edilir.',
     emailAllowanceSelectLabel: 'E-Posta paketi',
     emailUnitOne: '+1 E-Posta Hesabı',
     emailUnitMany: '+{n} E-Posta Hesabı',
@@ -3434,12 +3438,16 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
     websiteAllowanceTitle: 'Buy Website Allowance',
     websiteAllowanceDescription:
       'Adds one publishing right of the selected type to your website limit. Valid through the current billing period of your main subscription.',
+    websiteAllowanceDescriptionYearly:
+      'Adds one publishing right of the selected type to your website limit. Valid for 12 months, does not auto-renew, and is charged once.',
     websiteAllowanceSelectLabel: 'Website allowance type',
     corporateSiteUnit: '+{n} Corporate Site',
     ecommerceSiteUnit: '+{n} E-Commerce Site',
     emailAllowanceTitle: 'Buy Email Allowance',
     emailAllowanceDescription:
       'Adds the selected number of email accounts. Valid through the current billing period of your main subscription.',
+    emailAllowanceDescriptionYearly:
+      'Adds the selected number of email accounts. Valid for 12 months, does not auto-renew, and is charged once.',
     emailAllowanceSelectLabel: 'Email account package',
     emailUnitOne: '+1 Email Account',
     emailUnitMany: '+{n} Email Accounts',
