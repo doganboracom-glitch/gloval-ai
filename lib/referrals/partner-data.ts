@@ -15,9 +15,11 @@ import type {
 } from '@/lib/referrals/partner-types'
 
 type ReferralRpcRow = {
+  partnerId?: unknown
   referralCode?: unknown
   status?: unknown
   activatedAt?: unknown
+  lastStatusChangedAt?: unknown
   ibanLast4?: unknown
   email?: unknown
   clicks?: unknown
@@ -54,6 +56,12 @@ function lastFour(value: unknown): string | null {
   return typeof value === 'string' && /^\d{4}$/u.test(value) ? value : null
 }
 
+function uuid(value: unknown): string | null {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
+    ? value
+    : null
+}
+
 function customerStatus(value: unknown): ReferralCustomerStatus {
   return value === 'paid' || value === 'verified' ? value : 'signup'
 }
@@ -85,21 +93,26 @@ export function mapReferralDashboardRpcResult(value: unknown): ReferralDashboard
 export function mapReferralAdminRpcResult(value: unknown): ReferralAdminPartner[] {
   return rpcRows(value)
     .map((row) => {
+      const partnerId = uuid(row.partnerId)
       const referralCode = normalizeReferralCode(
         typeof row.referralCode === 'string' ? row.referralCode : null,
       )
       const status = partnerStatus(row.status)
       const activatedAt = dateString(row.activatedAt)
-      if (!referralCode || !status || !activatedAt) return null
+      if (!partnerId || !referralCode || !status || !activatedAt) return null
 
       return {
+        partnerId,
         referralCode,
         status,
         maskedEmail: maskEmail(typeof row.email === 'string' ? row.email : null),
         activatedAt,
+        lastStatusChangedAt: dateString(row.lastStatusChangedAt) ?? activatedAt,
         ibanLast4: lastFour(row.ibanLast4),
         clicks: count(row.clicks),
         signups: count(row.signups),
+        verifiedSignups: count(row.verifiedSignups),
+        paidCustomers: count(row.paidCustomers),
       }
     })
     .filter((row): row is ReferralAdminPartner => row !== null)
@@ -147,12 +160,15 @@ export async function getReferralDashboardData(): Promise<ReferralDashboardData 
   }
 }
 
-export async function getReferralAdminSummary(): Promise<ReferralAdminPartner[]> {
+export async function getReferralAdminSummary(): Promise<ReferralAdminPartner[] | null> {
   await requireAdmin()
-  const { data, error } = await createAdminClient().rpc('referral_partner_dashboard', {
-    p_user_id: null,
-    p_include_customers: false,
-  })
-  if (error) throw new Error('referral_admin_summary_unavailable')
-  return mapReferralAdminRpcResult(data)
+  if (!isReferralFeatureEnabled()) return null
+
+  try {
+    const { data, error } = await createAdminClient().rpc('referral_partner_admin_summary', { p_query: null })
+    if (error) return null
+    return mapReferralAdminRpcResult(data)
+  } catch {
+    return null
+  }
 }

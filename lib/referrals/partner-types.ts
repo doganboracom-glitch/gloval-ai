@@ -23,12 +23,27 @@ export type ReferralDashboardData = {
   customers: ReferralCustomer[]
 }
 
+export type ReferralPartnerStatusAction = 'suspend' | 'reactivate' | 'close'
+
+export type ReferralPartnerStatusEvent = {
+  id: string
+  actorUserId: string | null
+  action: ReferralPartnerStatusAction
+  fromStatus: ReferralPartnerStatus
+  toStatus: ReferralPartnerStatus
+  createdAt: string
+}
+
 export type ReferralAdminPartner = {
+  partnerId: string
   referralCode: string
   status: ReferralPartnerStatus
   maskedEmail: string
   activatedAt: string
+  lastStatusChangedAt: string
   ibanLast4: string | null
   clicks: number
   signups: number
+  verifiedSignups: number
+  paidCustomers: number
 }

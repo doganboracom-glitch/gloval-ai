@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
 const DASHBOARD_SQL = readFileSync(path.join(ROOT, 'scripts/097-referral-partner-dashboard.sql'), 'utf8')
+const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-events.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -33,6 +34,19 @@ type DashboardSummary = {
   customers: Array<{ email: string | null; status: string; createdAt: string }>
 }
 
+type AdminPartnerSummary = {
+  partnerId: string
+  referralCode: string
+  status: string
+  email: string | null
+  clicks: number
+  signups: number
+  verifiedSignups: number
+  paidCustomers: number
+  ibanLast4: string | null
+  lastStatusChangedAt: string
+}
+
 let db: PGlite
 let userCounter = 0
 let partnerCounter = 0
@@ -42,6 +56,7 @@ beforeAll(async () => {
   await db.exec(BASE_SCHEMA)
   await db.exec(CORE_SQL)
   await db.exec(DASHBOARD_SQL)
+  await db.exec(ADMIN_SQL)
 })
 
 afterAll(async () => {
@@ -53,6 +68,7 @@ beforeEach(async () => {
   partnerCounter = 0
   await db.exec(`
     delete from public.billing_transactions;
+    delete from public.referral_partner_events;
     delete from public.referral_attributions;
     delete from public.referral_daily_clicks;
     delete from public.referral_click_dedup;
@@ -75,8 +91,9 @@ async function newPartner(userId: string): Promise<{ id: string; code: string }>
   partnerCounter += 1
   const code = `PARTNER${String(partnerCounter).padStart(4, '0')}`
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.referral_partners (user_id, referral_code, status, iban_last4)
-     values ($1, $2, 'active', '4321') returning id`,
+    `insert into public.referral_partners
+       (user_id, referral_code, status, payee_name, tax_status, iban_ciphertext, iban_key_version, iban_last4)
+     values ($1, $2, 'active', 'Test Recipient', 'individual', 'encrypted-test-value', 'v1', '4321') returning id`,
     [userId, code],
   )
   return { id: rows[0].id, code }
@@ -186,5 +203,166 @@ describe('scripts/097-referral-partner-dashboard.sql', () => {
     await expect(
       db.query('select public.referral_partner_dashboard(null::uuid, true) as summary'),
     ).rejects.toThrow('customer rows require a partner user id')
+  })
+})
+
+describe('scripts/098-referral-partner-events.sql', () => {
+  it('aggregates every status and exposes only admin-safe fields', async () => {
+    const ownerId = await newUser('owner@example.test')
+    const { id: partnerId, code } = await newPartner(ownerId)
+    await db.query(
+      'insert into public.referral_daily_clicks (partner_id, click_date, unique_clicks) values ($1, $2, 6)',
+      [partnerId, '2026-11-04'],
+    )
+
+    const { rows } = await db.query<{ summary: AdminPartnerSummary[] }>(
+      'select public.referral_partner_admin_summary() as summary',
+    )
+    expect(rows[0].summary).toHaveLength(1)
+    expect(rows[0].summary[0]).toMatchObject({
+      partnerId,
+      referralCode: code,
+      status: 'active',
+      email: 'owner@example.test',
+      clicks: 6,
+      signups: 0,
+      verifiedSignups: 0,
+      paidCustomers: 0,
+      ibanLast4: '4321',
+    })
+  })
+
+  it('filters admin summaries by full email or referral code inside the server-side RPC', async () => {
+    const ownerId = await newUser('search-owner@example.test')
+    const { code } = await newPartner(ownerId)
+    await newPartner(await newUser('other-owner@example.test'))
+
+    const { rows: emailRows } = await db.query<{ summary: AdminPartnerSummary[] }>(
+      'select public.referral_partner_admin_summary($1) as summary',
+      ['search-owner@example.test'],
+    )
+    expect(emailRows[0].summary).toHaveLength(1)
+    expect(emailRows[0].summary[0].email).toBe('search-owner@example.test')
+
+    const { rows: codeRows } = await db.query<{ summary: AdminPartnerSummary[] }>(
+      'select public.referral_partner_admin_summary($1) as summary',
+      [code],
+    )
+    expect(codeRows[0].summary).toHaveLength(1)
+    expect(codeRows[0].summary[0].referralCode).toBe(code)
+  })
+
+  it('atomically suspends, closes, clears payout details, reactivates, and audits each transition', async () => {
+    const ownerId = await newUser('owner@example.test')
+    const adminId = await newUser('admin@example.test')
+    const { id: partnerId } = await newPartner(ownerId)
+
+    const suspended = await db.query<{ result: { ok: boolean; fromStatus: string; toStatus: string } }>(
+      'select public.transition_referral_partner_status($1, $2, $3) as result',
+      [partnerId, adminId, 'suspend'],
+    )
+    expect(suspended.rows[0].result).toMatchObject({ ok: true, fromStatus: 'active', toStatus: 'suspended' })
+
+    const { rows: stoppedClick } = await db.query<{ recorded: boolean }>(
+      'select public.record_referral_click($1, $2) as recorded',
+      [partnerId, 'a'.repeat(64)],
+    )
+    expect(stoppedClick[0].recorded).toBe(false)
+
+    const closed = await db.query<{ result: { ok: boolean; fromStatus: string; toStatus: string } }>(
+      'select public.transition_referral_partner_status($1, $2, $3) as result',
+      [partnerId, adminId, 'close'],
+    )
+    expect(closed.rows[0].result).toMatchObject({ ok: true, fromStatus: 'suspended', toStatus: 'closed' })
+
+    const { rows: closedPartner } = await db.query<{
+      status: string
+      payee_name: string | null
+      tax_status: string | null
+      iban_ciphertext: string | null
+      iban_key_version: string | null
+      iban_last4: string | null
+    }>(
+      `select status, payee_name, tax_status, iban_ciphertext, iban_key_version, iban_last4
+       from public.referral_partners where id = $1`,
+      [partnerId],
+    )
+    expect(closedPartner[0]).toEqual({
+      status: 'closed',
+      payee_name: null,
+      tax_status: null,
+      iban_ciphertext: null,
+      iban_key_version: null,
+      iban_last4: null,
+    })
+
+    const reactivated = await db.query<{ result: { ok: boolean; fromStatus: string; toStatus: string } }>(
+      'select public.transition_referral_partner_status($1, $2, $3) as result',
+      [partnerId, adminId, 'reactivate'],
+    )
+    expect(reactivated.rows[0].result).toMatchObject({ ok: true, fromStatus: 'closed', toStatus: 'active' })
+
+    const { rows: restoredClick } = await db.query<{ recorded: boolean }>(
+      'select public.record_referral_click($1, $2) as recorded',
+      [partnerId, 'b'.repeat(64)],
+    )
+    expect(restoredClick[0].recorded).toBe(true)
+
+    const { rows: events } = await db.query<{
+      action: string
+      actor_user_id: string
+      from_status: string
+      to_status: string
+    }>(
+      `select action, actor_user_id, from_status, to_status
+       from public.referral_partner_events where partner_id = $1 order by created_at`,
+      [partnerId],
+    )
+    expect(events).toEqual([
+      { action: 'suspend', actor_user_id: adminId, from_status: 'active', to_status: 'suspended' },
+      { action: 'close', actor_user_id: adminId, from_status: 'suspended', to_status: 'closed' },
+      { action: 'reactivate', actor_user_id: adminId, from_status: 'closed', to_status: 'active' },
+    ])
+
+    const invalid = await db.query<{ result: { ok: boolean; error: string } }>(
+      'select public.transition_referral_partner_status($1, $2, $3) as result',
+      [partnerId, adminId, 'reactivate'],
+    )
+    expect(invalid.rows[0].result).toEqual({ ok: false, error: 'invalid_transition' })
+    const { rows: eventCount } = await db.query<{ count: number }>(
+      'select count(*)::int as count from public.referral_partner_events where partner_id = $1',
+      [partnerId],
+    )
+    expect(eventCount[0].count).toBe(3)
+  })
+
+  it('keeps event rows and transition functions restricted to service_role', async () => {
+    const { rows } = await db.query<{
+      row_security: boolean
+      anon_select: boolean
+      authenticated_select: boolean
+      service_select: boolean
+      anon_execute: boolean
+      authenticated_execute: boolean
+      service_execute: boolean
+    }>(`
+      select
+        (select relrowsecurity from pg_class where oid = 'public.referral_partner_events'::regclass) as row_security,
+        has_table_privilege('anon', 'public.referral_partner_events', 'select') as anon_select,
+        has_table_privilege('authenticated', 'public.referral_partner_events', 'select') as authenticated_select,
+        has_table_privilege('service_role', 'public.referral_partner_events', 'select') as service_select,
+        has_function_privilege('anon', 'public.transition_referral_partner_status(uuid,uuid,text)', 'execute') as anon_execute,
+        has_function_privilege('authenticated', 'public.transition_referral_partner_status(uuid,uuid,text)', 'execute') as authenticated_execute,
+        has_function_privilege('service_role', 'public.transition_referral_partner_status(uuid,uuid,text)', 'execute') as service_execute
+    `)
+    expect(rows[0]).toEqual({
+      row_security: true,
+      anon_select: false,
+      authenticated_select: false,
+      service_select: true,
+      anon_execute: false,
+      authenticated_execute: false,
+      service_execute: true,
+    })
   })
 })

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRequestUser } from '@/lib/supabase/request-user'
 import { isReferralRuntimeReady } from '@/lib/referrals/core'
+import { enqueueReferralPartnerActivationEmail } from '@/lib/maker-requests/outbox'
 import {
   generateReferralCode,
   normalizeReferralPayeeName,
@@ -24,6 +25,7 @@ type PartnerActionError =
   | 'encryption_unavailable'
   | 'already_registered'
   | 'not_active'
+  | 'iban_unavailable'
 
 type PartnerActionResult =
   | { ok: true; referralCode: string; ibanLast4: string }
@@ -37,6 +39,7 @@ export async function activateReferralPartner(input: {
   iban: unknown
   termsAccepted: unknown
   termsVersion: unknown
+  lang?: unknown
 }): Promise<PartnerActionResult> {
   if (!isReferralRuntimeReady()) return { ok: false, error: 'program_unavailable' }
 
@@ -57,6 +60,7 @@ export async function activateReferralPartner(input: {
   const iban = normalizeTurkishIban(input.iban)
   if (!iban) return { ok: false, error: 'invalid_iban' }
 
+  const activatedAt = new Date().toISOString()
   const encrypted = await encryptReferralIban(iban)
   if (!encrypted.ok) {
     return {
@@ -83,7 +87,8 @@ export async function activateReferralPartner(input: {
         referral_code: referralCode,
         status: 'active',
         terms_version: REFERRAL_TERMS_VERSION,
-        terms_accepted_at: new Date().toISOString(),
+        terms_accepted_at: activatedAt,
+        created_at: activatedAt,
         payee_name: payeeName,
         tax_status: taxStatus,
         iban_ciphertext: encrypted.ciphertext,
@@ -91,11 +96,20 @@ export async function activateReferralPartner(input: {
         iban_last4: encrypted.last4,
       })
 
-      if (!error) {
-        revalidatePath('/settings')
-        revalidatePath('/dashboard')
-        return { ok: true, referralCode, ibanLast4: encrypted.last4 }
+    if (!error) {
+      try {
+        await enqueueReferralPartnerActivationEmail({
+          referralCode,
+          activatedAt,
+          lang: input.lang === 'en' ? 'en' : 'tr',
+        })
+      } catch {
+        console.error('[referrals] activation notification enqueue failed')
       }
+      revalidatePath('/settings')
+      revalidatePath('/dashboard')
+      return { ok: true, referralCode, ibanLast4: encrypted.last4 }
+    }
 
       if (error.code !== '23505') return { ok: false, error: 'program_unavailable' }
 
@@ -114,6 +128,51 @@ export async function activateReferralPartner(input: {
   return { ok: false, error: 'program_unavailable' }
 }
 
+export async function saveReferralPartnerIban(input: { iban: unknown }): Promise<
+  | { ok: true; ibanLast4: string }
+  | { ok: false; error: PartnerActionError }
+> {
+  if (!isReferralRuntimeReady()) return { ok: false, error: 'program_unavailable' }
+
+  const authState = await getRequestUser()
+  if (authState.kind !== 'authenticated') return { ok: false, error: 'not_authenticated' }
+  if (!input || typeof input !== 'object') return { ok: false, error: 'invalid_input' }
+
+  const iban = normalizeTurkishIban(input.iban)
+  if (!iban) return { ok: false, error: 'invalid_iban' }
+
+  const encrypted = await encryptReferralIban(iban)
+  if (!encrypted.ok) {
+    return {
+      ok: false,
+      error: encrypted.reason === 'invalid_iban' ? 'invalid_iban' : 'encryption_unavailable',
+    }
+  }
+
+  try {
+    const { data, error } = await createAdminClient()
+      .from('referral_partners')
+      .update({
+        iban_ciphertext: encrypted.ciphertext,
+        iban_key_version: encrypted.keyVersion,
+        iban_last4: encrypted.last4,
+      })
+      .eq('user_id', authState.user.id)
+      .eq('status', 'active')
+      .is('iban_ciphertext', null)
+      .select('id')
+      .maybeSingle()
+
+    if (error || !data) return { ok: false, error: 'iban_unavailable' }
+
+    revalidatePath('/settings')
+    revalidatePath('/dashboard')
+    return { ok: true, ibanLast4: encrypted.last4 }
+  } catch {
+    return { ok: false, error: 'program_unavailable' }
+  }
+}
+
 export async function closeReferralPartner(): Promise<ClosePartnerResult> {
   if (!isReferralRuntimeReady()) return { ok: false, error: 'program_unavailable' }
 
@@ -121,26 +180,35 @@ export async function closeReferralPartner(): Promise<ClosePartnerResult> {
   if (authState.kind !== 'authenticated') return { ok: false, error: 'not_authenticated' }
 
   try {
-    const { data, error } = await createAdminClient()
+    const admin = createAdminClient()
+    const { data: partner, error: lookupError } = await admin
       .from('referral_partners')
-      .update({
-        status: 'closed',
-        payee_name: null,
-        tax_status: null,
-        iban_ciphertext: null,
-        iban_key_version: null,
-        iban_last4: null,
-      })
+      .select('id')
       .eq('user_id', authState.user.id)
       .eq('status', 'active')
-      .select('id')
       .maybeSingle()
 
+    if (lookupError) return { ok: false, error: 'program_unavailable' }
+    if (!partner) return { ok: false, error: 'not_active' }
+
+    const { data, error } = await admin.rpc('transition_referral_partner_status', {
+      p_partner_id: partner.id,
+      p_actor_user_id: authState.user.id,
+      p_action: 'close',
+    })
     if (error) return { ok: false, error: 'program_unavailable' }
-    if (!data) return { ok: false, error: 'not_active' }
+
+    const transition = data as { ok?: unknown; error?: unknown } | null
+    if (transition?.ok !== true) {
+      return {
+        ok: false,
+        error: transition?.error === 'invalid_transition' ? 'not_active' : 'program_unavailable',
+      }
+    }
 
     revalidatePath('/settings')
     revalidatePath('/dashboard')
+    revalidatePath('/admin/referrals')
     return { ok: true }
   } catch {
     return { ok: false, error: 'program_unavailable' }

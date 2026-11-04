@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { activateReferralPartner, closeReferralPartner } from '@/lib/referrals/partner-actions'
+import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import type { ReferralPartnerSettings } from '@/lib/referrals/partner-types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -56,8 +56,16 @@ const COPY = {
     closing: 'Kapatılıyor…',
     success: 'Satış ortaklığı etkinleştirildi.',
     closeSuccess: 'Satış ortaklığı kapatıldı.',
-    statusDescription: 'Bu ortaklık için yeni yönlendirme alınmıyor. Durum değişikliği için destek ekibiyle iletişime geçebilirsiniz.',
+    suspendedStatusDescription: 'Bu ortaklık için yeni yönlendirme alınmıyor. Durum değişikliği için destek ekibiyle iletişime geçebilirsiniz.',
+    closedStatusDescription: 'Ortaklığınız kapalı. Yeniden etkinleştirme için bize yazın.',
+    supportLink: 'Destek sayfası',
+    ibanMissingTitle: 'IBAN ekleyin',
+    ibanMissing: 'Ortaklığınız aktif ve yönlendirme bağlantınız çalışıyor. Yeniden etkinleştirme sonrası IBAN kaydınız bulunmuyor.',
+    saveIban: 'IBAN ekle',
+    savingIban: 'IBAN kaydediliyor…',
+    ibanSaved: 'IBAN kaydedildi.',
     noReferral: 'Bağlantınız hazır olduğunda burada gösterilir.',
+
     errors: {
       not_authenticated: 'Oturumunuz doğrulanamadı. Lütfen yeniden giriş yapın.',
       program_unavailable: 'Program şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
@@ -69,6 +77,7 @@ const COPY = {
       encryption_unavailable: 'IBAN güvenli biçimde saklanamadı. Bilgiler kaydedilmedi; lütfen daha sonra tekrar deneyin.',
       already_registered: 'Bu hesap için zaten bir ortaklık kaydı bulunuyor.',
       not_active: 'Etkin bir ortaklık bulunamadı.',
+      iban_unavailable: 'Aktif ve IBAN bilgisi eksik bir ortaklık bulunamadı. Sayfayı yenileyip tekrar deneyin.',
     } as Record<string, string>,
   },
   en: {
@@ -104,8 +113,16 @@ const COPY = {
     closing: 'Closing…',
     success: 'Referral partnership activated.',
     closeSuccess: 'Referral partnership closed.',
-    statusDescription: 'This partnership is not accepting new referrals. Contact support if you believe its status should change.',
+    suspendedStatusDescription: 'This partnership is not accepting new referrals. Contact support if you believe its status should change.',
+    closedStatusDescription: 'Your partnership is closed. Contact us to request reactivation.',
+    supportLink: 'Support page',
+    ibanMissingTitle: 'Add an IBAN',
+    ibanMissing: 'Your partnership is active and the referral link still works. There is no IBAN on file after reactivation.',
+    saveIban: 'Add IBAN',
+    savingIban: 'Saving IBAN…',
+    ibanSaved: 'IBAN saved.',
     noReferral: 'Your link will appear here once it is ready.',
+
     errors: {
       not_authenticated: 'Your session could not be verified. Please sign in again.',
       program_unavailable: 'The program is unavailable right now. Please try again later.',
@@ -117,6 +134,7 @@ const COPY = {
       encryption_unavailable: 'The IBAN could not be stored securely. Nothing was saved; please try again later.',
       already_registered: 'A partner record already exists for this account.',
       not_active: 'No active partnership was found.',
+      iban_unavailable: 'No active partnership with a missing IBAN was found. Refresh the page and try again.',
     } as Record<string, string>,
   },
 } as const
@@ -138,7 +156,9 @@ export function ReferralPartnerCard({
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [noticeKind, setNoticeKind] = useState<'activated' | 'closed' | 'iban-saved' | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSavingIban, setIsSavingIban] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -156,6 +176,7 @@ export function ReferralPartnerCard({
 
     setError(null)
     setNotice(null)
+    setNoticeKind(null)
     setIsSubmitting(true)
     const result = await activateReferralPartner({
       payeeName,
@@ -163,6 +184,7 @@ export function ReferralPartnerCard({
       iban,
       termsAccepted,
       termsVersion: REFERRAL_TERMS_VERSION,
+      lang: language,
     })
     setIsSubmitting(false)
 
@@ -174,6 +196,7 @@ export function ReferralPartnerCard({
     setIban('')
     setPayeeName('')
     setNotice(copy.success)
+    setNoticeKind('activated')
     router.refresh()
   }
 
@@ -187,10 +210,33 @@ export function ReferralPartnerCard({
     }
   }
 
+  async function handleSaveIban(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isSavingIban) return
+
+    setError(null)
+    setNotice(null)
+    setNoticeKind(null)
+    setIsSavingIban(true)
+    const result = await saveReferralPartnerIban({ iban })
+    setIsSavingIban(false)
+
+    if (!result.ok) {
+      setError(copy.errors[result.error] ?? copy.errors.program_unavailable)
+      return
+    }
+
+    setIban('')
+    setNotice(copy.ibanSaved)
+    setNoticeKind('iban-saved')
+    router.refresh()
+  }
+
   async function handleClosePartner() {
     if (isClosing) return
     setError(null)
     setNotice(null)
+    setNoticeKind(null)
     setIsClosing(true)
     const result = await closeReferralPartner()
     setIsClosing(false)
@@ -202,6 +248,7 @@ export function ReferralPartnerCard({
     }
 
     setNotice(copy.closeSuccess)
+    setNoticeKind('closed')
     router.refresh()
   }
 
@@ -230,13 +277,45 @@ export function ReferralPartnerCard({
               <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">{copy.codeLabel}</p>
-                  <p className="mt-1 break-all font-mono text-sm text-muted-foreground">{referralUrl}</p>
+                  <p className="mt-1 font-mono text-sm text-muted-foreground">
+              https://gloval.ai/?ref=<wbr />
+              <span className="whitespace-nowrap">{partner.referralCode}</span>
+            </p>
                 </div>
                 <Button type="button" variant="outline" onClick={handleCopyLink} className="shrink-0 gap-2">
                   {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
                   {copyState === 'copied' ? copy.copied : copy.copy}
                 </Button>
               </div>
+              {!partner.ibanLast4 && (
+                <div className="flex flex-col gap-3">
+                  <Alert>
+                    <AlertDescription>
+                      <span className="font-medium text-foreground">{copy.ibanMissingTitle}.</span>{' '}
+                      {copy.ibanMissing}
+                    </AlertDescription>
+                  </Alert>
+                  <form onSubmit={handleSaveIban} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <Field className="flex-1">
+                      <FieldLabel htmlFor="referral-iban-update">{copy.iban}</FieldLabel>
+                      <Input
+                        id="referral-iban-update"
+                        value={iban}
+                        onChange={(event) => setIban(event.target.value.toUpperCase())}
+                        autoComplete="off"
+                        inputMode="text"
+                        maxLength={34}
+                        required
+                        disabled={isSavingIban}
+                      />
+                    </Field>
+                    <Button type="submit" disabled={isSavingIban} className="gap-2">
+                      {isSavingIban && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                      {isSavingIban ? copy.savingIban : copy.saveIban}
+                    </Button>
+                  </form>
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
                 <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
                 <Button type="button" variant="destructive" size="sm" onClick={() => setShowCloseConfirm(true)}>
@@ -246,7 +325,14 @@ export function ReferralPartnerCard({
             </>
           ) : partner ? (
             <Alert>
-              <AlertDescription>{copy.statusDescription}</AlertDescription>
+              <AlertDescription className="flex flex-wrap items-center gap-1">
+                {partner.status === 'closed' ? copy.closedStatusDescription : copy.suspendedStatusDescription}{' '}
+                {partner.status === 'closed' && (
+                  <Link href="/support" className="font-medium text-primary underline underline-offset-4">
+                    {copy.supportLink}
+                  </Link>
+                )}
+              </AlertDescription>
             </Alert>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -352,7 +438,14 @@ export function ReferralPartnerCard({
               {copyState === 'failed' ? copy.copyFailed : copy.copied}
             </p>
           )}
-          {notice && partner && <p role="status" className="text-sm text-primary">{notice}</p>}
+          {notice && partner && (
+            <p role="status" className="flex items-center gap-2 text-sm text-primary">
+              {noticeKind === 'activated' && (
+                <span className="referral-activated-dot size-2 shrink-0 rounded-full bg-success" aria-hidden="true" />
+              )}
+              {notice}
+            </p>
+          )}
         </CardContent>
       </Card>
 
