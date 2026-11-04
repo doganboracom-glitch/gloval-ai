@@ -69,11 +69,43 @@ describe('referral partner settings card', () => {
     expect(html).toContain('overflow-y-auto')
     expect(html).toContain('KDV hariç tutarın %20')
     expect(html).toContain('1.000 TL')
+    expect(html).toContain('Toplam komisyon bakiyesi en az 3 TL')
+    expect(html).toContain('bekleyen ve kullanılabilir komisyonların tamamı')
     expect(html).toContain('14 gün')
     expect(html).toContain('gider belgesi GLOVAL tarafından düzenlenir')
     expect(html).toContain('TCKN veya vergi numarası bu uygulamada toplanmaz')
     expect(html).toContain('Şartların tamamını aç')
     expect(html).toContain('Türkiye IBAN')
+  })
+
+  it('explains the separate credit and IBAN thresholds in settings', () => {
+    const payoutData: ReferralPayoutPanelData = {
+      unavailable: false,
+      state: {
+        partnerStatus: 'active',
+        taxStatus: 'individual',
+        taxVerified: true,
+        hasIban: true,
+        pendingCents: 0,
+        availableCents: 300,
+        totalCents: 300,
+        convertibleCents: 300,
+        requestedCents: 0,
+        convertedCents: 0,
+        paidCents: 0,
+        hasOpenCashRequest: false,
+      },
+    }
+    const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      payoutData,
+      payoutsEnabled: true,
+      cashPayoutsEnabled: true,
+    }))
+
+    expect(html).toContain('Toplam bakiye en az 3 TL olduğunda beklemeden AI kredisine çevirebilirsiniz.')
+    expect(html).toContain('IBAN ödemesi için 14 günlük bekleme tamamlanmalı ve kullanılabilir bakiye en az 1.000 TL olmalıdır.')
   })
 
   it('blocks partnership closure while referral payout balance remains', () => {
@@ -87,6 +119,7 @@ describe('referral partner settings card', () => {
         pendingCents: 12_105,
         availableCents: 0,
         totalCents: 12_105,
+        convertibleCents: 12_105,
         requestedCents: 0,
         convertedCents: 0,
         paidCents: 0,
@@ -103,6 +136,34 @@ describe('referral partner settings card', () => {
     const closeButton = screen.getByRole('button', { name: 'Ortaklığı kapat' })
     expect(closeButton.hasAttribute('disabled')).toBe(true)
     expect(closeButton.getAttribute('title')).toBe('Pozitif bekleyen/kullanılabilir bakiye veya açık nakit talebi varken ortaklık kapatılamaz.')
+  })
+
+  it('does not treat a fully converted held commission as an outstanding balance', () => {
+    const payoutData: ReferralPayoutPanelData = {
+      unavailable: false,
+      state: {
+        partnerStatus: 'active',
+        taxStatus: 'individual',
+        taxVerified: true,
+        hasIban: true,
+        pendingCents: 300,
+        availableCents: -300,
+        totalCents: 0,
+        convertibleCents: 0,
+        requestedCents: 0,
+        convertedCents: 300,
+        paidCents: 0,
+        hasOpenCashRequest: false,
+      },
+    }
+    render(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      payoutData,
+      payoutsEnabled: true,
+    }))
+
+    expect(screen.getByRole('button', { name: 'Ortaklığı kapat' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('keeps the active referral link and asks for an IBAN after reactivation', () => {

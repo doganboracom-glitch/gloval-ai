@@ -7,6 +7,7 @@ import {
   BILLING_TRANSACTION_KIND_SQL,
   REFERRAL_PAYOUT_CREDIT_KIND,
 } from './referral-sql-test-kinds'
+import { CREDIT_MIN_CENTS } from './commission-config'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -15,6 +16,7 @@ const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 
 const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-events.sql'), 'utf8')
 const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commission-ledger.sql'), 'utf8')
 const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/103-referral-payout-workflows.sql'), 'utf8')
+const CREDIT_CONVERSION_SQL = readFileSync(path.join(ROOT, 'scripts/108-referral-credit-conversion.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -61,6 +63,7 @@ async function withDatabase<T>(run: (db: PGlite) => Promise<T>): Promise<T> {
     await db.exec(ADMIN_SQL)
     await db.exec(COMMISSION_SQL)
     await db.exec(PAYOUT_SQL)
+    await db.exec(CREDIT_CONVERSION_SQL)
     return await run(db)
   } finally {
     await db.close()
@@ -138,7 +141,37 @@ async function requestPayout(
   return rows[0].result
 }
 
-describe('scripts/103-referral-payout-workflows.sql', () => {
+describe('scripts/108-referral-credit-conversion.sql', () => {
+  it('keeps both payout RPCs executable only by service_role', async () => {
+    await withDatabase(async (db) => {
+      const { rows } = await db.query<{
+        balance_anon: boolean
+        balance_authenticated: boolean
+        balance_service_role: boolean
+        request_anon: boolean
+        request_authenticated: boolean
+        request_service_role: boolean
+      }>(`
+        select
+          has_function_privilege('anon', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_anon,
+          has_function_privilege('authenticated', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_authenticated,
+          has_function_privilege('service_role', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_service_role,
+          has_function_privilege('anon', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_anon,
+          has_function_privilege('authenticated', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_authenticated,
+          has_function_privilege('service_role', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_service_role
+      `)
+
+      expect(rows).toEqual([{
+        balance_anon: false,
+        balance_authenticated: false,
+        balance_service_role: true,
+        request_anon: false,
+        request_authenticated: false,
+        request_service_role: true,
+      }])
+    })
+  })
+
   it('converts the full available balance atomically and safely retries the same request', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'credit-partner@gloval.test' })
@@ -171,6 +204,70 @@ describe('scripts/103-referral-payout-workflows.sql', () => {
       expect(payoutRows[0].processed_at).toBeTruthy()
       expect(credits).toEqual([{ kind: REFERRAL_PAYOUT_CREDIT_KIND, amount: 334, reason: `referral_payout:${result.requestId}` }])
       expect(ledger.map((row) => Number(row.amount_cents))).toEqual([100_001, -100_001])
+    })
+  })
+
+  it('uses the 300-cent conversion minimum while crediting pending commissions without the cash hold', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'credit-minimum-boundary@gloval.test' })
+      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'credit-below-minimum')
+      await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
+        ok: false,
+        error: 'credit_minimum_not_met',
+        availableCents: CREDIT_MIN_CENTS - 1,
+      })
+
+      await addAvailableBalance(db, partner.id, 1, 'credit-exact-minimum')
+      const minimumCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(minimumCredit).toMatchObject({
+        ok: true,
+        balanceCents: CREDIT_MIN_CENTS,
+        payoutCents: CREDIT_MIN_CENTS,
+        creditAmount: 1,
+        systemTopupCents: 0,
+      })
+
+      const pendingPartner = await newPartner(db, { email: 'credit-pending-commission@gloval.test' })
+      const pendingCommission = await newCommission(db, pendingPartner.id)
+      await addAvailableBalance(db, pendingPartner.id, 100, 'credit-pending-available')
+
+      const { rows: before } = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [pendingPartner.id],
+      )
+      expect(before[0].result).toMatchObject({
+        pendingCents: 2_017,
+        availableCents: 100,
+        totalCents: 2_117,
+        convertibleCents: 2_117,
+      })
+
+      const cash = await requestPayout(db, pendingPartner.id, pendingPartner.user_id, 'cash')
+      expect(cash).toMatchObject({ ok: false, error: 'minimum_not_met', availableCents: 100 })
+
+      const credit = await requestPayout(db, pendingPartner.id, pendingPartner.user_id, 'credit')
+      expect(credit).toMatchObject({
+        ok: true,
+        balanceCents: 2_117,
+        payoutCents: 2_117,
+        creditAmount: 8,
+        systemTopupCents: 283,
+      })
+      const { rows: convertedCommission } = await db.query<{ status: string; payout_request_id: string }>(
+        'select status, payout_request_id from public.referral_commissions where id = $1',
+        [pendingCommission.commissionId],
+      )
+      expect(convertedCommission).toEqual([{ status: 'converted', payout_request_id: credit.requestId }])
+
+      const { rows: after } = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [pendingPartner.id],
+      )
+      expect(after[0].result).toMatchObject({
+        totalCents: 0,
+        convertibleCents: 0,
+        convertedCents: 2_117,
+      })
     })
   })
 
@@ -264,10 +361,11 @@ describe('scripts/103-referral-payout-workflows.sql', () => {
   it('rejects an under-minimum request and rolls back the entire credit conversion on ledger failure', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'atomic-partner@gloval.test' })
-      await addAvailableBalance(db, partner.id, 99_999, 'under-minimum')
+      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'under-minimum')
       await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
         ok: false,
-        error: 'minimum_not_met',
+        error: 'credit_minimum_not_met',
+        availableCents: CREDIT_MIN_CENTS - 1,
       })
       const { rows: underMinimum } = await db.query<{ count: number }>(
         'select count(*)::integer as count from public.referral_payout_requests',
@@ -278,7 +376,7 @@ describe('scripts/103-referral-payout-workflows.sql', () => {
         "select public.transition_referral_partner_status($1::uuid, $2::uuid, 'close') as result",
         [partner.id, adminUserId],
       )
-      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: 99_999 })
+      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: CREDIT_MIN_CENTS - 1 })
 
       await addAvailableBalance(db, partner.id, 100_000, 'atomic-failure')
       await db.exec(`
@@ -296,7 +394,7 @@ describe('scripts/103-referral-payout-workflows.sql', () => {
           (select count(*)::integer from public.ai_credit_transactions) as credits,
           (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1) as balance_cents
       `, [partner.id])
-      expect(rollbackState).toEqual([{ requests: 0, credits: 0, balance_cents: '199999' }])
+      expect(rollbackState).toEqual([{ requests: 0, credits: 0, balance_cents: String(CREDIT_MIN_CENTS - 1 + 100_000) }])
     })
   })
 
