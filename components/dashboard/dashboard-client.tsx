@@ -37,6 +37,8 @@ import type { PlanCode } from '@/lib/pricing-config'
 import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
+import { ReferralDashboardPanel } from '@/components/dashboard/referral-dashboard-panel'
+import type { ReferralDashboardData } from '@/lib/referrals/partner-types'
 
 const headerActionClass =
   'h-11 gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted hover:text-foreground'
@@ -50,6 +52,7 @@ export function DashboardClient({
   billingAlert = null,
   showBillingProfileReminder = false,
   unreadMessages = 0,
+  referralDashboard = null,
 }: {
   projects: ProjectListItem[]
   /** Ids of the sites that hold an active Aura İmleç right. */
@@ -64,6 +67,7 @@ export function DashboardClient({
   showBillingProfileReminder?: boolean
   /** Okunmamış iletişim mesajı sayısı; 0 ise rozet gösterilmez. */
   unreadMessages?: number
+  referralDashboard?: ReferralDashboardData | null
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -409,6 +413,8 @@ export function DashboardClient({
           </ul>
         )}
       </div>
+
+      <ReferralDashboardPanel data={referralDashboard} />
 
       {showStorePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

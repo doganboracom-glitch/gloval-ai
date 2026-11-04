@@ -13,6 +13,8 @@
  */
 
 import { COMPANY } from '@/lib/legal/company'
+import { isReferralFeatureEnabled } from '@/lib/referrals/core'
+import { REFERRAL_TERMS, REFERRAL_TERMS_UPDATED_AT } from '@/lib/referrals/terms'
 
 export type LegalBlock =
   | { type: 'p'; text: string }
@@ -1472,6 +1474,33 @@ const about: LegalDoc = {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Satış Ortaklığı — Referral Partner Terms                                    */
+/* -------------------------------------------------------------------------- */
+// Hukuk ve mali müşavir onayı gerekir.
+export const REFERRAL_PARTNER_TERMS_DOC: LegalDoc = {
+  slug: 'satis-ortakligi-sartlari',
+  lastUpdated: REFERRAL_TERMS_UPDATED_AT,
+  tr: {
+    title: REFERRAL_TERMS.tr.title,
+    description: REFERRAL_TERMS.tr.description,
+    intro: [...REFERRAL_TERMS.tr.intro],
+    sections: REFERRAL_TERMS.tr.sections.map((section) => ({
+      heading: section.heading,
+      blocks: section.paragraphs.map((paragraph) => p(paragraph)),
+    })),
+  },
+  en: {
+    title: REFERRAL_TERMS.en.title,
+    description: REFERRAL_TERMS.en.description,
+    intro: [...REFERRAL_TERMS.en.intro],
+    sections: REFERRAL_TERMS.en.sections.map((section) => ({
+      heading: section.heading,
+      blocks: section.paragraphs.map((paragraph) => p(paragraph)),
+    })),
+  },
+}
+
+/* -------------------------------------------------------------------------- */
 /* Kayıt — Registry                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -1485,6 +1514,9 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
   [refund.slug]: refund,
   [delivery.slug]: delivery,
   [about.slug]: about,
+  ...(isReferralFeatureEnabled()
+    ? { [REFERRAL_PARTNER_TERMS_DOC.slug]: REFERRAL_PARTNER_TERMS_DOC }
+    : {}),
 }
 
 export const LEGAL_SLUGS = Object.keys(LEGAL_DOCS)

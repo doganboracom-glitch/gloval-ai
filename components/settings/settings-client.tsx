@@ -12,15 +12,21 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/brand-logo'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
+import { ReferralPartnerCard } from '@/components/settings/referral-partner-card'
+import type { ReferralPartnerSettings } from '@/lib/referrals/partner-types'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function SettingsClient({
   userEmail,
   fullName,
+  referralEnabled = false,
+  referralPartner = null,
 }: {
   userEmail: string
   fullName: string
+  referralEnabled?: boolean
+  referralPartner?: ReferralPartnerSettings | null
 }) {
   const { t, lang } = useLanguage()
   const billingProfileCopy = getBillingProfileCopy(lang)
@@ -211,6 +217,8 @@ export function SettingsClient({
             <span>{userEmail}</span>
           </div>
         </section>
+
+        <ReferralPartnerCard enabled={referralEnabled} partner={referralPartner} />
 
         <section className="mt-6 rounded-xl border border-destructive/40 bg-destructive/5 p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">
