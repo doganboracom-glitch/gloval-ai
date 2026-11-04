@@ -30,7 +30,7 @@ create policy referral_partner_events_service_role_insert
   for insert to service_role
   with check (true);
 
-create or replace function public.referral_partner_admin_summary()
+create or replace function public.referral_partner_admin_summary(p_query text default null)
 returns jsonb
 language sql
 stable
@@ -96,11 +96,15 @@ as $$
   left join auth.users as owner on owner.id = partner.user_id
   left join click_totals on click_totals.partner_id = partner.id
   left join attribution_totals on attribution_totals.partner_id = partner.id
-  left join status_changes on status_changes.partner_id = partner.id;
+  left join status_changes on status_changes.partner_id = partner.id
+  where p_query is null
+    or btrim(p_query) = ''
+    or strpos(lower(coalesce(owner.email, '')), lower(btrim(p_query))) > 0
+    or strpos(lower(partner.referral_code), lower(btrim(p_query))) > 0;
 $$;
 
-revoke all on function public.referral_partner_admin_summary() from public, anon, authenticated;
-grant execute on function public.referral_partner_admin_summary() to service_role;
+revoke all on function public.referral_partner_admin_summary(text) from public, anon, authenticated;
+grant execute on function public.referral_partner_admin_summary(text) to service_role;
 
 create or replace function public.transition_referral_partner_status(
   p_partner_id uuid,

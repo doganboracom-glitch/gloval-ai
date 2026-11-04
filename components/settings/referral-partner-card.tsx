@@ -57,7 +57,7 @@ const COPY = {
     success: 'Satış ortaklığı etkinleştirildi.',
     closeSuccess: 'Satış ortaklığı kapatıldı.',
     suspendedStatusDescription: 'Bu ortaklık için yeni yönlendirme alınmıyor. Durum değişikliği için destek ekibiyle iletişime geçebilirsiniz.',
-    closedStatusDescription: 'Ortaklığınız kapalı. Yeniden etkinleştirme için destek ekibiyle iletişime geçin.',
+    closedStatusDescription: 'Ortaklığınız kapalı. Yeniden etkinleştirme için bize yazın.',
     supportLink: 'Destek sayfası',
     ibanMissingTitle: 'IBAN ekleyin',
     ibanMissing: 'Ortaklığınız aktif ve yönlendirme bağlantınız çalışıyor. Yeniden etkinleştirme sonrası IBAN kaydınız bulunmuyor.',
@@ -114,7 +114,7 @@ const COPY = {
     success: 'Referral partnership activated.',
     closeSuccess: 'Referral partnership closed.',
     suspendedStatusDescription: 'This partnership is not accepting new referrals. Contact support if you believe its status should change.',
-    closedStatusDescription: 'Your partnership is closed. Contact support to request reactivation.',
+    closedStatusDescription: 'Your partnership is closed. Contact us to request reactivation.',
     supportLink: 'Support page',
     ibanMissingTitle: 'Add an IBAN',
     ibanMissing: 'Your partnership is active and the referral link still works. There is no IBAN on file after reactivation.',
@@ -184,6 +184,7 @@ export function ReferralPartnerCard({
       iban,
       termsAccepted,
       termsVersion: REFERRAL_TERMS_VERSION,
+      lang: language,
     })
     setIsSubmitting(false)
 

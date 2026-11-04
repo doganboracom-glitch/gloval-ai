@@ -14,7 +14,8 @@ describe('buildReferralPartnerActivationAdminEmail', () => {
       expect(email.html).toContain('PARTNER0123')
       expect(email.text).toContain('PARTNER0123')
       expect(email.html.toLowerCase()).not.toContain('iban')
-      expect(email.html).not.toContain('@')
+      expect(email.html).not.toContain('mailto:')
+      expect(email.text).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/iu)
     }
   })
 

@@ -108,7 +108,7 @@ export async function activateReferralPartner(input: {
       }
       revalidatePath('/settings')
       revalidatePath('/dashboard')
-      return { ok: true, referralCode, ibanLast4: encrypted.ibanLast4 }
+      return { ok: true, referralCode, ibanLast4: encrypted.last4 }
     }
 
       if (error.code !== '23505') return { ok: false, error: 'program_unavailable' }

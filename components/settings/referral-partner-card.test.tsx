@@ -92,7 +92,7 @@ describe('referral partner settings card', () => {
       partner: { referralCode: 'PARTNER1234', status: 'closed', ibanLast4: null },
     }))
 
-    expect(html).toContain('Yeniden etkinleştirme için destek ekibiyle iletişime geçin.')
+    expect(html).toContain('Yeniden etkinleştirme için bize yazın.')
     expect(html).toContain('href="/support"')
     expect(html).toContain('Destek sayfası')
   })

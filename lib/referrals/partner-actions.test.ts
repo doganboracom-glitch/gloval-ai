@@ -9,6 +9,10 @@ const state = vi.hoisted(() => ({
   updatePayload: null as Record<string, unknown> | null,
   updateError: null as any,
   updatedRows: 1,
+  rpcResult: { ok: true } as any,
+  rpcError: null as any,
+  rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
+  enqueueActivation: vi.fn(),
   adminCalls: 0,
   userCalls: 0,
 }))
@@ -25,38 +29,50 @@ vi.mock('@/lib/supabase/admin', () => ({
     state.adminCalls += 1
     return {
       from: () => ({
-        select: () => ({
-          eq: () => ({
+        select: () => {
+          const query: any = {
+            eq: () => query,
             maybeSingle: async () => ({ data: state.existingPartner, error: state.lookupError }),
-          }),
-        }),
+          }
+          return query
+        },
         insert: async (value: Record<string, unknown>) => {
           state.inserts.push(value)
           return { error: state.insertError }
         },
         update: (value: Record<string, unknown>) => {
           state.updatePayload = value
-          return {
-            eq: () => ({
-              eq: () => ({
-                select: () => ({
-                  maybeSingle: async () => ({
-                    data: state.updatedRows ? { id: 'partner-id' } : null,
-                    error: state.updateError,
-                  }),
-                }),
-              }),
+          const query: any = {
+            eq: () => query,
+            is: () => query,
+            select: () => query,
+            maybeSingle: async () => ({
+              data: state.updatedRows ? { id: 'partner-id' } : null,
+              error: state.updateError,
             }),
           }
+          return query
         },
       }),
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        state.rpcCalls.push({ name, args })
+        return { data: state.rpcResult, error: state.rpcError }
+      },
     }
   }),
 }))
 
+vi.mock('@/lib/maker-requests/outbox', () => ({
+  enqueueReferralPartnerActivationEmail: state.enqueueActivation,
+}))
+
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
-import { activateReferralPartner, closeReferralPartner } from '@/lib/referrals/partner-actions'
+import {
+  activateReferralPartner,
+  closeReferralPartner,
+  saveReferralPartnerIban,
+} from '@/lib/referrals/partner-actions'
 
 function validTurkishIban(): string {
   const account = '1234567890123456789012'
@@ -76,6 +92,7 @@ function validInput() {
     iban: validTurkishIban(),
     termsAccepted: true,
     termsVersion: 'v1.0',
+    lang: 'tr',
   }
 }
 
@@ -84,6 +101,8 @@ function configureRuntime() {
   vi.stubEnv('REFERRAL_COOKIE_HMAC_ACTIVE_VERSION', 'v1')
   vi.stubEnv('REFERRAL_COOKIE_HMAC_KEY_V1', 'c'.repeat(32))
   vi.stubEnv('REFERRAL_CLICK_HMAC_KEY_V1', 'd'.repeat(32))
+  vi.stubEnv('REFERRAL_IBAN_ENC_ACTIVE_VERSION', 'v1')
+  vi.stubEnv('REFERRAL_IBAN_ENC_KEY_V1', 'e'.repeat(32))
 }
 
 beforeEach(() => {
@@ -95,6 +114,10 @@ beforeEach(() => {
   state.updatePayload = null
   state.updateError = null
   state.updatedRows = 1
+  state.rpcResult = { ok: true }
+  state.rpcError = null
+  state.rpcCalls = []
+  state.enqueueActivation.mockReset().mockResolvedValue(undefined)
   state.adminCalls = 0
   state.userCalls = 0
   configureRuntime()
@@ -102,6 +125,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe('referral partner actions', () => {
@@ -135,8 +159,6 @@ describe('referral partner actions', () => {
   })
 
   it('stores an encrypted IBAN, last four digits, active status, and accepted terms only', async () => {
-    vi.stubEnv('REFERRAL_IBAN_ENC_ACTIVE_VERSION', 'v1')
-    vi.stubEnv('REFERRAL_IBAN_ENC_KEY_V1', 'e'.repeat(32))
     const iban = validTurkishIban()
 
     const result = await activateReferralPartner({ ...validInput(), iban })
@@ -155,19 +177,51 @@ describe('referral partner actions', () => {
     expect(state.inserts[0].iban_ciphertext).not.toContain(iban)
     expect(JSON.stringify(result)).not.toContain(iban)
     expect(result).not.toHaveProperty('payeeName')
+    expect(state.enqueueActivation).toHaveBeenCalledWith(expect.objectContaining({
+      referralCode: expect.any(String),
+      activatedAt: expect.any(String),
+      lang: 'tr',
+    }))
   })
 
-  it('closes an active partnership and clears encrypted payout details', async () => {
+  it('keeps partner activation successful if the notification queue throws', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    state.enqueueActivation.mockRejectedValueOnce(new Error('outbox unavailable'))
+
+    const result = await activateReferralPartner(validInput())
+
+    expect(result.ok).toBe(true)
+    expect(state.inserts).toHaveLength(1)
+    expect(consoleError).toHaveBeenCalledWith('[referrals] activation notification enqueue failed')
+  })
+
+  it('saves an IBAN only for an active partner with no stored IBAN', async () => {
+    const iban = validTurkishIban()
+
+    const result = await saveReferralPartnerIban({ iban })
+
+    expect(result).toEqual({ ok: true, ibanLast4: iban.slice(-4) })
+    expect(state.updatePayload).toMatchObject({
+      iban_key_version: 'v1',
+      iban_last4: iban.slice(-4),
+    })
+    expect(state.updatePayload?.iban_ciphertext).not.toContain(iban)
+  })
+
+  it('closes an active partnership through the audited status transition', async () => {
+    state.existingPartner = { id: 'partner-id' }
+
     const result = await closeReferralPartner()
 
     expect(result).toEqual({ ok: true })
-    expect(state.updatePayload).toEqual({
-      status: 'closed',
-      payee_name: null,
-      tax_status: null,
-      iban_ciphertext: null,
-      iban_key_version: null,
-      iban_last4: null,
-    })
+    expect(state.rpcCalls).toEqual([{
+      name: 'transition_referral_partner_status',
+      args: {
+        p_partner_id: 'partner-id',
+        p_actor_user_id: 'owner-id',
+        p_action: 'close',
+      },
+    }])
+    expect(state.updatePayload).toBeNull()
   })
 })

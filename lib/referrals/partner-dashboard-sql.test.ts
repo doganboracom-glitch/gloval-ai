@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
 const DASHBOARD_SQL = readFileSync(path.join(ROOT, 'scripts/097-referral-partner-dashboard.sql'), 'utf8')
-const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-admin-controls.sql'), 'utf8')
+const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-events.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -206,7 +206,7 @@ describe('scripts/097-referral-partner-dashboard.sql', () => {
   })
 })
 
-describe('scripts/098-referral-partner-admin-controls.sql', () => {
+describe('scripts/098-referral-partner-events.sql', () => {
   it('aggregates every status and exposes only admin-safe fields', async () => {
     const ownerId = await newUser('owner@example.test')
     const { id: partnerId, code } = await newPartner(ownerId)
@@ -230,6 +230,26 @@ describe('scripts/098-referral-partner-admin-controls.sql', () => {
       paidCustomers: 0,
       ibanLast4: '4321',
     })
+  })
+
+  it('filters admin summaries by full email or referral code inside the server-side RPC', async () => {
+    const ownerId = await newUser('search-owner@example.test')
+    const { code } = await newPartner(ownerId)
+    await newPartner(await newUser('other-owner@example.test'))
+
+    const { rows: emailRows } = await db.query<{ summary: AdminPartnerSummary[] }>(
+      'select public.referral_partner_admin_summary($1) as summary',
+      ['search-owner@example.test'],
+    )
+    expect(emailRows[0].summary).toHaveLength(1)
+    expect(emailRows[0].summary[0].email).toBe('search-owner@example.test')
+
+    const { rows: codeRows } = await db.query<{ summary: AdminPartnerSummary[] }>(
+      'select public.referral_partner_admin_summary($1) as summary',
+      [code],
+    )
+    expect(codeRows[0].summary).toHaveLength(1)
+    expect(codeRows[0].summary[0].referralCode).toBe(code)
   })
 
   it('atomically suspends, closes, clears payout details, reactivates, and audits each transition', async () => {

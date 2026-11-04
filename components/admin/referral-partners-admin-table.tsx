@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/components/language-provider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/table'
 import {
   getReferralPartnerHistory,
+  searchReferralPartners,
   updateReferralPartnerStatus,
 } from '@/lib/referrals/admin-actions'
 import type {
@@ -33,6 +34,9 @@ type SortOption = 'recent' | 'clicks' | 'signups' | 'conversion'
 const copyByLanguage: Record<AdminLanguage, {
   search: string
   searchPlaceholder: string
+  searchAction: string
+  searching: string
+  searchError: string
   statusFilter: string
   sortBy: string
   allStatuses: string
@@ -88,6 +92,9 @@ const copyByLanguage: Record<AdminLanguage, {
   tr: {
     search: 'E-posta veya yönlendirme kodu',
     searchPlaceholder: 'E-posta ya da kod ara',
+    searchAction: 'Ara',
+    searching: 'Aranıyor…',
+    searchError: 'Arama tamamlanamadı. Lütfen tekrar deneyin.',
     statusFilter: 'Durum filtresi',
     sortBy: 'Sırala',
     allStatuses: 'Tüm durumlar',
@@ -143,6 +150,9 @@ const copyByLanguage: Record<AdminLanguage, {
   en: {
     search: 'Email or referral code',
     searchPlaceholder: 'Search email or code',
+    searchAction: 'Search',
+    searching: 'Searching…',
+    searchError: 'Search could not be completed. Try again.',
     statusFilter: 'Filter by status',
     sortBy: 'Sort by',
     allStatuses: 'All statuses',
@@ -316,20 +326,18 @@ export function ReferralPartnersAdminTable({ partners }: { partners: ReferralAdm
   const locale = language === 'tr' ? 'tr-TR' : 'en-US'
   const router = useRouter()
   const [query, setQuery] = useState('')
+  const [serverResults, setServerResults] = useState<ReferralAdminPartner[] | null>(null)
+  const [searchFailed, setSearchFailed] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortOption, setSortOption] = useState<SortOption>('recent')
   const [pending, setPending] = useState<{ partner: ReferralAdminPartner; action: ReferralPartnerStatusAction } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  const sourcePartners = serverResults ?? partners
   const visiblePartners = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase(locale)
-    const filtered = partners.filter((partner) => {
-      const matchesStatus = statusFilter === 'all' || partner.status === statusFilter
-      const matchesQuery = !normalizedQuery || [partner.referralCode, partner.maskedEmail]
-        .some((value) => value.toLocaleLowerCase(locale).includes(normalizedQuery))
-      return matchesStatus && matchesQuery
-    })
+    const filtered = sourcePartners.filter((partner) => statusFilter === 'all' || partner.status === statusFilter)
 
     return filtered.sort((left, right) => {
       if (sortOption === 'clicks') return right.clicks - left.clicks || left.referralCode.localeCompare(right.referralCode)
@@ -337,7 +345,32 @@ export function ReferralPartnersAdminTable({ partners }: { partners: ReferralAdm
       if (sortOption === 'conversion') return conversionRate(right) - conversionRate(left) || left.referralCode.localeCompare(right.referralCode)
       return new Date(right.activatedAt).getTime() - new Date(left.activatedAt).getTime()
     })
-  }, [locale, partners, query, sortOption, statusFilter])
+  }, [sourcePartners, sortOption, statusFilter])
+
+  async function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const normalizedQuery = query.trim()
+    setSearchFailed(false)
+
+    if (!normalizedQuery) {
+      setServerResults(null)
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const results = await searchReferralPartners(normalizedQuery)
+      if (results === null) {
+        setSearchFailed(true)
+        return
+      }
+      setServerResults(results)
+    } catch {
+      setSearchFailed(true)
+    } finally {
+      setIsSearching(false)
+    }
+  }
 
   async function confirmStatusChange() {
     if (!pending || isSubmitting) return
@@ -347,13 +380,19 @@ export function ReferralPartnersAdminTable({ partners }: { partners: ReferralAdm
       const result = await updateReferralPartnerStatus(pending.partner.partnerId, pending.action)
       if (!result.ok) {
         setNotice({ type: 'error', text: result.error === 'transition_conflict' ? copy.transitionConflict : copy.actionError })
+        setPending(null)
+        if (result.error === 'transition_conflict') router.refresh()
         return
       }
       setNotice({ type: 'success', text: copy.actionSuccess })
       setPending(null)
+      setSearchFailed(false)
+      setServerResults(null)
+      setQuery('')
       router.refresh()
     } catch {
       setNotice({ type: 'error', text: copy.actionError })
+      setPending(null)
     } finally {
       setIsSubmitting(false)
     }
@@ -383,12 +422,37 @@ export function ReferralPartnersAdminTable({ partners }: { partners: ReferralAdm
           <AlertDescription>{notice.text}</AlertDescription>
         </Alert>
       ) : null}
+      {searchFailed ? (
+        <Alert variant="destructive">
+          <AlertDescription>{copy.searchError}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <label className="flex w-full flex-col gap-2 text-sm font-medium text-foreground lg:max-w-sm">
-          {copy.search}
-          <Input type="search" value={query} placeholder={copy.searchPlaceholder} onChange={(event) => setQuery(event.target.value)} />
-        </label>
+        <form role="search" onSubmit={submitSearch} className="flex w-full items-end gap-2 lg:max-w-sm">
+          <label className="flex min-w-0 flex-1 flex-col gap-2 text-sm font-medium text-foreground">
+            {copy.search}
+            <Input
+              type="search"
+              value={query}
+              placeholder={copy.searchPlaceholder}
+              onChange={(event) => {
+                const nextQuery = event.target.value
+                setQuery(nextQuery)
+                if (!nextQuery) {
+                  setServerResults(null)
+                  setSearchFailed(false)
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault()
+              }}
+            />
+          </label>
+          <Button type="submit" variant="secondary" disabled={isSearching}>
+            {isSearching ? copy.searching : copy.searchAction}
+          </Button>
+        </form>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto">
           <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
             {copy.statusFilter}
@@ -423,7 +487,7 @@ export function ReferralPartnersAdminTable({ partners }: { partners: ReferralAdm
 
       {visiblePartners.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          {partners.length === 0 ? copy.noPartners : copy.noMatches}
+          {sourcePartners.length === 0 && !query.trim() ? copy.noPartners : copy.noMatches}
         </p>
       ) : (
         <>

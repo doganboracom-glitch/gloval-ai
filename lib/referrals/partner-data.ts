@@ -12,7 +12,6 @@ import type {
   ReferralDashboardData,
   ReferralPartnerSettings,
   ReferralPartnerStatus,
-  ReferralPartnerStatusEvent,
 } from '@/lib/referrals/partner-types'
 
 type ReferralRpcRow = {
@@ -166,49 +165,9 @@ export async function getReferralAdminSummary(): Promise<ReferralAdminPartner[] 
   if (!isReferralFeatureEnabled()) return null
 
   try {
-    const { data, error } = await createAdminClient().rpc('referral_partner_admin_summary', {})
+    const { data, error } = await createAdminClient().rpc('referral_partner_admin_summary', { p_query: null })
     if (error) return null
     return mapReferralAdminRpcResult(data)
-  } catch {
-    return null
-  }
-}
-
-export async function getReferralPartnerEventHistory(
-  partnerId: string,
-): Promise<ReferralPartnerStatusEvent[] | null> {
-  await requireAdmin()
-  if (!isReferralFeatureEnabled() || !uuid(partnerId)) return null
-
-  try {
-    const { data, error } = await createAdminClient()
-      .from('referral_partner_events')
-      .select('id,actor_user_id,action,from_status,to_status,created_at')
-      .eq('partner_id', partnerId)
-      .order('created_at', { ascending: false })
-      .limit(50)
-
-    if (error || !Array.isArray(data)) return null
-
-    return data.flatMap((row) => {
-      const id = uuid(row.id)
-      const action = row.action === 'suspend' || row.action === 'reactivate' || row.action === 'close'
-        ? row.action
-        : null
-      const fromStatus = partnerStatus(row.from_status)
-      const toStatus = partnerStatus(row.to_status)
-      const createdAt = dateString(row.created_at)
-      if (!id || !action || !fromStatus || !toStatus || !createdAt) return []
-
-      return [{
-        id,
-        actorUserId: uuid(row.actor_user_id),
-        action,
-        fromStatus,
-        toStatus,
-        createdAt,
-      }]
-    })
   } catch {
     return null
   }

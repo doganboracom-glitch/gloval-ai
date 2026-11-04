@@ -111,7 +111,7 @@ describe('referral partner data', () => {
     const result = await getReferralAdminSummary()
 
     expect(state.requireAdminCalls).toBe(1)
-    expect(state.rpcCalls).toEqual([{ name: 'referral_partner_admin_summary', args: {} }])
+    expect(state.rpcCalls).toEqual([{ name: 'referral_partner_admin_summary', args: { p_query: null } }])
     expect(result?.[0].maskedEmail).toBe('m***@gmail.com')
     expect(result?.[0].partnerId).toBe(ownSummary.partnerId)
     expect(JSON.stringify(result)).not.toContain(privateEmail)
