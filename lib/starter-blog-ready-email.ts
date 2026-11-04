@@ -6,6 +6,12 @@ import { sendTransactionalEmailDetailed, SUPPORT_EMAIL } from '@/lib/notify'
 
 const SUBJECT = 'Blog yazılarınız hazır'
 const BODY = 'Bloglar hazırlandı, sitenizin editör bölümünden düzenleyebilirsiniz'
+const BLOG_GUIDANCE = [
+  'Web sitenizde düzenli blog yazıları yayımlamak, Google\'da daha üst sıralarda yer almanıza ve organik ziyaretçi sayınızı artırmanıza yardımcı olur.',
+  'Hedef kitlenizin sorularına yanıt veren kaliteli içerikler, markanıza duyulan güveni güçlendirerek ziyaretçileri potansiyel müşterilere dönüştürür.',
+  'GLOVAL AI editörüyle haftada 2–3 blog yazısı hazırlayabilir, yayın zamanlamasını önceden planlayarak içeriklerinizi düzenli ve sürdürülebilir şekilde yönetebilirsiniz.',
+].join(' ')
+const EMAIL_BODY = `${BODY}\n\n${BLOG_GUIDANCE}`
 const FOOTER = 'Bu e-posta, blog yazılarınız hazır olduğu için GLOVAL AI tarafından gönderilmiştir.'
 
 export function starterBlogReadyEmailDedupeKey(projectId: string): string {
@@ -18,7 +24,7 @@ export function buildStarterBlogReadyEmail(projectId: string) {
     lang: 'tr',
     previewText: BODY,
     title: SUBJECT,
-    body: `<p style="margin:0;">${escape(BODY)}</p>`,
+    body: `<p style="margin:0;">${escape(BODY)}</p><p style="margin:16px 0 0;">${escape(BLOG_GUIDANCE)}</p>`,
     cta: { label: 'Editörü aç', href: editorUrl },
     footer: FOOTER,
     homeUrl: `https://${PLATFORM_CANONICAL_HOST}`,
@@ -26,10 +32,10 @@ export function buildStarterBlogReadyEmail(projectId: string) {
 
   return {
     subject: SUBJECT,
-    body: BODY,
+    body: EMAIL_BODY,
     editorUrl,
     html,
-    text: `${BODY}\n\nEditör bağlantısı: ${editorUrl}`,
+    text: `${EMAIL_BODY}\n\nEditör bağlantısı: ${editorUrl}`,
   }
 }
 
