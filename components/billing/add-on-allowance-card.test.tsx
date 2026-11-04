@@ -15,6 +15,7 @@ const websiteItems: AddOnCatalogItem[] = [
     capacity: 1,
     priceCents: 19900,
     currency: 'TRY',
+    period: 'month',
     eligible: true,
   },
   {
@@ -24,6 +25,7 @@ const websiteItems: AddOnCatalogItem[] = [
     capacity: 1,
     priceCents: 49900,
     currency: 'TRY',
+    period: 'month',
     eligible: true,
   },
 ]
@@ -35,6 +37,7 @@ const emailItems: AddOnCatalogItem[] = [
     capacity: 1,
     priceCents: 4900,
     currency: 'TRY',
+    period: 'month',
     eligible: true,
   },
   {
@@ -43,6 +46,7 @@ const emailItems: AddOnCatalogItem[] = [
     capacity: 5,
     priceCents: 19900,
     currency: 'TRY',
+    period: 'month',
     eligible: true,
   },
 ]
@@ -54,12 +58,14 @@ function renderAllowanceCard({
   unitLabelFor = (item) =>
     item.siteTarget === 'ecommerce' ? '+1 e-commerce site' : '+1 corporate site',
   onBuy = vi.fn(),
+  defaultPeriod = 'month',
 }: {
   items?: AddOnCatalogItem[]
   kind?: 'site' | 'mail'
   selectLabel?: string
   unitLabelFor?: (item: AddOnCatalogItem) => string
   onBuy?: (code: AddOnCatalogItem['code']) => void
+  defaultPeriod?: 'month' | 'year'
 } = {}) {
   render(
     <AddOnAllowanceCard
@@ -75,8 +81,10 @@ function renderAllowanceCard({
       availabilityHint="Some offers require a different plan."
       notEligible="An active plan is required."
       notEligibleBadge="Not available"
-      perMonth="/ mo"
-      periodNote="Valid for your current billing period."
+      defaultPeriod={defaultPeriod}
+      periodLabels={{ month: '/ mo', year: '/ yr' }}
+      yearlyBadge="2 months free"
+      periodNotes={{ month: 'Valid for your current billing period.', year: 'Valid for 12 months.' }}
       vatIncluded="VAT included"
       buyLabel="Buy selected"
       buySelectedAriaLabel="Buy {item} for {price} {period}"
@@ -130,5 +138,27 @@ describe('AddOnAllowanceCard', () => {
 
     expect((screen.getByRole('option', { name: /Unavailable on your plan/ }) as HTMLOptionElement).disabled).toBe(true)
     expect((screen.getByLabelText('Website allowance') as HTMLSelectElement).value).toBe('extra_corporate_site_1')
+  })
+
+  it('preselects the yearly row when the main plan is yearly', () => {
+    const yearly: AddOnCatalogItem = {
+      ...emailItems[0],
+      code: 'extra_mail_1_yearly' as AddOnCatalogItem['code'],
+      priceCents: 49000,
+      period: 'year',
+    }
+    renderAllowanceCard({
+      items: [...emailItems, yearly],
+      kind: 'mail',
+      selectLabel: 'Email package',
+      defaultPeriod: 'year',
+      unitLabelFor: (item) => `+${item.capacity} mailbox`,
+    })
+
+    expect((screen.getByLabelText('Email package') as HTMLSelectElement).value).toBe(
+      'extra_mail_1_yearly',
+    )
+    expect(screen.getByTestId('addon-period').textContent).toBe('/ yr')
+    expect(screen.getByTestId('addon-period-note').textContent).toBe('Valid for 12 months.')
   })
 })

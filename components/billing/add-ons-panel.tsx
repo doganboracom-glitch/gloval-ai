@@ -27,7 +27,13 @@ import { formatMoney } from '@/lib/billing-utils'
 import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
 import { ADD_ONS, isAddOnCode } from '@/lib/add-ons'
-import type { AddOnCatalogItem, AddOnCode, AddOnKind, AddOnOverview } from '@/lib/add-ons'
+import type {
+  AddOnBillingPeriod,
+  AddOnCatalogItem,
+  AddOnCode,
+  AddOnKind,
+  AddOnOverview,
+} from '@/lib/add-ons'
 import { purchaseAddOn } from '@/lib/addon-purchase-actions'
 import { closePendingCheckout } from '@/lib/payments/close-checkout-actions'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
@@ -286,10 +292,13 @@ export function AddOnsPanel({
   userEmail = '',
   outcome = null,
   profileComplete = false,
+  planInterval = 'month',
 }: {
   overview: AddOnOverview
   variant: Variant
   planName?: string | null
+  /** Billing period of the buyer's main plan; preselects the matching add-on period. */
+  planInterval?: AddOnBillingPeriod
   userEmail?: string
   /** Server-derived result of the buyer's last purchase, from the stored status. */
   outcome?: AddOnPurchaseOutcome | null
@@ -355,6 +364,8 @@ export function AddOnsPanel({
     const template = def.siteTarget === 'ecommerce' ? a.ecommerceSiteUnit : a.corporateSiteUnit
     return fill(template, { n: item.capacity })
   }
+
+  const productUnitLabelFor = (item: AddOnCatalogItem) => fill(a.productUnit, { n: item.capacity })
 
   const emailUnitLabelFor = (item: AddOnCatalogItem) =>
     fill(item.capacity === 1 ? a.emailUnitOne : a.emailUnitMany, { n: item.capacity })
@@ -445,7 +456,6 @@ export function AddOnsPanel({
   })()
 
   const purchaseLocked = isPending || awaitingUrl !== null || checkoutCode !== null
-  const canBuy = variant === 'full'
 
   const outcomeCopy: AddOnOutcomeCopy = {
     successTitle: a.successTitle,
@@ -647,69 +657,64 @@ export function AddOnsPanel({
           </div>
 
           <div className="mt-4 grid gap-4">
-            <AddOnAllowanceCard
-              kind="site"
-              items={websiteItems}
-              title={a.websiteAllowanceTitle}
-              description={a.websiteAllowanceDescription}
-              selectLabel={a.websiteAllowanceSelectLabel}
-              optionLabel={a.allowanceOptionLabel}
-              currencyLabel={a.priceCurrency}
-              unavailableOptionLabel={a.optionUnavailable}
-              availabilityHint={a.optionAvailabilityHint}
-              unitLabelFor={websiteUnitLabelFor}
-              notEligible={a.notEligibleSite}
-              notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.allowancePerMonth}
-              periodNote={a.periodNote}
-              vatIncluded={t.billing.checkout.vatIncluded}
-              buyLabel={a.buy}
-              buySelectedAriaLabel={a.buySelectedAriaLabel}
-              buyingLabel={a.buying}
-              onBuy={openCheckout}
-              busyCode={busyCode}
-              purchaseLocked={purchaseLocked}
-            />
-            <AddOnCatalogGroup
-              kind="product"
-              items={productItems}
-              eligible={overview.product.eligible}
-              title={a.productGroup}
-              description={a.productGroupDesc}
-              unitLabel={a.productUnit}
-              notEligible={a.notEligibleProduct}
-              notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.perMonth}
-              periodNote={a.periodNote}
-              buyLabel={a.buy}
-              buyingLabel={a.buying}
-              onBuy={canBuy ? openCheckout : undefined}
-              busyCode={busyCode}
-              purchaseLocked={purchaseLocked}
-            />
-            <AddOnAllowanceCard
-              kind="mail"
-              items={mailItems}
-              title={a.emailAllowanceTitle}
-              description={a.emailAllowanceDescription}
-              selectLabel={a.emailAllowanceSelectLabel}
-              optionLabel={a.allowanceOptionLabel}
-              currencyLabel={a.priceCurrency}
-              unavailableOptionLabel={a.optionUnavailable}
-              availabilityHint={a.optionAvailabilityHint}
-              unitLabelFor={emailUnitLabelFor}
-              notEligible={a.notEligibleMail}
-              notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.allowancePerMonth}
-              periodNote={a.periodNote}
-              vatIncluded={t.billing.checkout.vatIncluded}
-              buyLabel={a.buy}
-              buySelectedAriaLabel={a.buySelectedAriaLabel}
-              buyingLabel={a.buying}
-              onBuy={openCheckout}
-              busyCode={busyCode}
-              purchaseLocked={purchaseLocked}
-            />
+            {(
+              [
+                {
+                  kind: 'site',
+                  items: websiteItems,
+                  title: a.websiteAllowanceTitle,
+                  description: a.websiteAllowanceDescription,
+                  selectLabel: a.websiteAllowanceSelectLabel,
+                  unitLabelFor: websiteUnitLabelFor,
+                  notEligible: a.notEligibleSite,
+                },
+                {
+                  kind: 'product',
+                  items: productItems,
+                  title: a.productAllowanceTitle,
+                  description: a.productAllowanceDescription,
+                  selectLabel: a.productAllowanceSelectLabel,
+                  unitLabelFor: productUnitLabelFor,
+                  notEligible: a.notEligibleProduct,
+                },
+                {
+                  kind: 'mail',
+                  items: mailItems,
+                  title: a.emailAllowanceTitle,
+                  description: a.emailAllowanceDescription,
+                  selectLabel: a.emailAllowanceSelectLabel,
+                  unitLabelFor: emailUnitLabelFor,
+                  notEligible: a.notEligibleMail,
+                },
+              ] as const
+            ).map((card) => (
+              <AddOnAllowanceCard
+                key={card.kind}
+                kind={card.kind}
+                items={card.items}
+                defaultPeriod={planInterval}
+                title={card.title}
+                description={card.description}
+                selectLabel={card.selectLabel}
+                optionLabel={a.allowanceOptionLabel}
+                currencyLabel={a.priceCurrency}
+                unavailableOptionLabel={a.optionUnavailable}
+                availabilityHint={a.optionAvailabilityHint}
+                unitLabelFor={card.unitLabelFor}
+                notEligible={card.notEligible}
+                notEligibleBadge={a.notEligibleBadge}
+                periodLabels={{ month: a.allowancePerMonth, year: a.allowancePerYear }}
+                yearlyBadge={a.yearlyBadge}
+                periodNotes={{ month: a.periodNote, year: a.periodNoteYearly }}
+                vatIncluded={t.billing.checkout.vatIncluded}
+                buyLabel={a.buy}
+                buySelectedAriaLabel={a.buySelectedAriaLabel}
+                buyingLabel={a.buying}
+                onBuy={openCheckout}
+                busyCode={busyCode}
+                purchaseLocked={purchaseLocked}
+              />
+            ))}
           </div>
 
           {!websiteItems.every((item) => item.eligible) || !overview.product.eligible ? (

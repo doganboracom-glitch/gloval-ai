@@ -52,6 +52,7 @@ export default async function AddOnsPage({
           overview={overview}
           variant="full"
           planName={currentPlan?.name ?? null}
+          planInterval={currentPlan?.interval === 'year' ? 'year' : 'month'}
           userEmail={user.email ?? ''}
           outcome={outcome}
           profileComplete={billingProfileResult?.profile?.complete ?? false}

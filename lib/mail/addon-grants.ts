@@ -57,12 +57,30 @@ export function mailAddonGrantsFromRows(
       continue
     }
 
-    const entitled = started && ENTITLING_STATUSES.has(sub.status)
+    const subscriptionEnd = subscriptionSourceEndsAt(sub.status, sub.current_period_end, sub.grace_period_ends_at)
+    const subscriptionEntitled = started && ENTITLING_STATUSES.has(sub.status)
+
+    if (def.period === 'year') {
+      // Yearly: 12 months from purchase (`expires_at`), and never longer than the main subscription.
+      const ownEnd = row.expires_at
+      const ownExpired = !ownEnd || new Date(ownEnd) <= now
+      const entitled = subscriptionEntitled && !ownExpired
+      const endsAt =
+        ownEnd && subscriptionEnd && new Date(subscriptionEnd) < new Date(ownEnd) ? subscriptionEnd : (ownEnd ?? subscriptionEnd)
+      grants.push({
+        capacity: def.capacity,
+        entitled,
+        endsAt,
+        endedAt: entitled ? null : subscriptionEntitled ? ownEnd : (sub.updated_at ?? ownEnd),
+      })
+      continue
+    }
+
     grants.push({
       capacity: def.capacity,
-      entitled,
-      endsAt: subscriptionSourceEndsAt(sub.status, sub.current_period_end, sub.grace_period_ends_at),
-      endedAt: entitled ? null : (sub.updated_at ?? row.expires_at),
+      entitled: subscriptionEntitled,
+      endsAt: subscriptionEnd,
+      endedAt: subscriptionEntitled ? null : (sub.updated_at ?? row.expires_at),
     })
   }
   return grants

@@ -1205,6 +1205,14 @@ const dict = {
     emailAllowanceSelectLabel: 'E-Posta paketi',
     emailUnitOne: '+1 E-Posta Hesabı',
     emailUnitMany: '+{n} E-Posta Hesabı',
+    productAllowanceTitle: 'Ürün Hakkı Satın Al',
+    productAllowanceDescription:
+      'Mağazanda tutabileceğin toplam ürün sayısını seçtiğin paket kadar artırır.',
+    productAllowanceSelectLabel: 'Ürün paketi',
+    allowancePerYear: '/ Yıl',
+    yearlyBadge: '2 ay bedava',
+    periodNoteYearly:
+      'Yıllık ek hizmet satın alma tarihinden itibaren 12 ay geçerlidir, otomatik yenilenmez ve tek seferde tahsil edilir.',
     legacySiteUnit: 'Ek Site (+{n})',
     legacyMailUnit: 'Ek Posta Kutusu (+{n})',
     allowanceOptionLabel: '{item} - {amount} {currency} {period}',
@@ -3417,6 +3425,14 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
     emailAllowanceSelectLabel: 'Email account package',
     emailUnitOne: '+1 Email Account',
     emailUnitMany: '+{n} Email Accounts',
+    productAllowanceTitle: 'Buy Product Allowance',
+    productAllowanceDescription:
+      'Raises the total number of products you can keep in your store by the package you choose.',
+    productAllowanceSelectLabel: 'Product package',
+    allowancePerYear: '/ Year',
+    yearlyBadge: '2 months free',
+    periodNoteYearly:
+      'A yearly add-on is valid for 12 months from purchase, does not renew automatically and is charged once.',
     legacySiteUnit: 'Extra Site (+{n})',
     legacyMailUnit: 'Extra Mailbox (+{n})',
     allowanceOptionLabel: '{item} - {amount} {currency} {period}',

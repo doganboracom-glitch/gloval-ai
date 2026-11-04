@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { getRequestUser, authUnavailableActionResult } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/payments'
-import { isAddOnCode, isAddOnPurchasableCode } from '@/lib/add-ons'
+import { isAddOnCode, isAddOnPurchasableCode, resolveAddOnExpiry } from '@/lib/add-ons'
 import { addOnOrderRef } from '@/lib/addon-purchases'
 import { loadCatalogPrice } from '@/lib/payments/addon-fulfillment'
 import { verifyAddOnFulfillmentContext } from '@/lib/payments/addon-verify'
@@ -181,7 +181,8 @@ export async function purchaseAddOn(input: PurchaseAddOnInput): Promise<Purchase
     }
   }
 
-  const periodEnd = subRow.current_period_end as string
+  // What the buyer is promised: the subscription period end (monthly) or purchase + 12 months (yearly).
+  const periodEnd = resolveAddOnExpiry(addonCode, subRow.current_period_end as string, new Date(now))
 
   let providerId: ReturnType<typeof getPlatformPaymentProviderId>
   let provider: ReturnType<typeof getPlatformPaymentProvider>
