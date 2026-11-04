@@ -1239,7 +1239,6 @@ const fr: DeepPartial<Dict> = {
     mgNsConfirm: 'Oui, les modifier',
     mgNsUnsupported: "Le changement de serveurs de noms n'est pas pris en charge actuellement par le bureau d'enregistrement. Les serveurs actuels sont affichés à titre indicatif uniquement.",
     mgLockUnsupported: "La modification du verrou de transfert n'est pas prise en charge actuellement par le bureau d'enregistrement.",
-    outLockUnsupported: "La modification du verrou de transfert n'est pas prise en charge actuellement. Si vous avez besoin d'un code de transfert, contactez notre équipe d'assistance.",
     errFeatureUnsupported: "Cette action n'est pas prise en charge actuellement par le bureau d'enregistrement. Rien n'a été modifié.",
     mgContacts: 'Coordonnées WHOIS',
     mgContactsHelp: "Ce que vous enregistrez s'applique ensemble aux contacts titulaire, administratif, technique et facturation.",

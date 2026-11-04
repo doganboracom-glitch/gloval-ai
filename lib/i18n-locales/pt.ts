@@ -1251,7 +1251,6 @@ const pt: DeepPartial<Dict> = {
     mgNsConfirm: 'Sim, alterar',
     mgNsUnsupported: 'O registador não suporta atualmente a alteração de servidores de nomes. Os servidores atuais são apresentados apenas como referência.',
     mgLockUnsupported: 'O registador não suporta atualmente a alteração do bloqueio de transferência.',
-    outLockUnsupported: 'A alteração do bloqueio de transferência não é suportada atualmente. Se precisar de um código de transferência, contacte a nossa equipa de suporte.',
     errFeatureUnsupported: 'O registador não suporta atualmente esta ação. Nada foi alterado.',
     mgContacts: 'Dados de contacto WHOIS',
     mgContactsHelp: 'O que guardar aplica-se em conjunto aos contactos do titular, administrativo, técnico e de faturação.',

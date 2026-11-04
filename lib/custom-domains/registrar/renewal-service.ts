@@ -4,6 +4,7 @@ import type { DomainErrorCode } from '../types'
 import { loadPricingContext } from '../pricing/context'
 import { resolveOrderPricing } from '../pricing/order'
 import { toQuoteView, type DomainPriceSnapshot, type DomainQuoteView } from '../pricing/calc'
+import { recordDomainAuditEvent } from './audit'
 import { guard, toDomainError } from './manage-service'
 import { getDomainRegistrarProvider } from './provider'
 import { isLaterRawDate } from './provider-date'
@@ -191,6 +192,13 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
             .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
             .eq('id', row.id),
         )
+        await recordDomainAuditEvent({
+          userId: row.user_id,
+          domain: row.domain,
+          eventType: 'renewal_completed',
+          actor: 'system',
+          details: { outcome: 'success', periodYears: row.period_years },
+        })
         return
       }
     } catch (e) {
@@ -233,6 +241,13 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
         .update({ status: 'completed', provider_expires_raw: result.expiresAtRaw, error_message: null })
         .eq('id', row.id),
     )
+    await recordDomainAuditEvent({
+      userId: row.user_id,
+      domain: row.domain,
+      eventType: 'renewal_completed',
+      actor: 'system',
+      details: { outcome: 'success', periodYears: row.period_years },
+    })
   } catch (e) {
     console.error('[domain-renewal] finalize crashed', renewalId, e instanceof Error ? e.name : 'unknown')
   }

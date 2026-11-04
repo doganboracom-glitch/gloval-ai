@@ -34,6 +34,7 @@ function transferErrorText(code: TransferErrorCode, d: Dict['domains'], consentR
       RESTRICTED_60_DAYS: d.transferErrNotTransferable,
       PROVIDER_ERROR: d.transferErrProvider,
       UNSUPPORTED: d.errFeatureUnsupported,
+      RATE_LIMITED: d.pageRateLimited,
       FAILED: d.transferErrFailed,
     } satisfies Record<TransferErrorCode, string>
   )[code]

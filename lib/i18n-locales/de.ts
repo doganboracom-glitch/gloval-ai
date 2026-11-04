@@ -1279,7 +1279,6 @@ const de: DeepPartial<Dict> = {
     mgNsConfirm: 'Ja, ändern',
     mgNsUnsupported: 'Nameserver-Änderungen werden vom Registrar derzeit nicht unterstützt. Die aktuellen Server werden nur zur Information angezeigt.',
     mgLockUnsupported: 'Das Ändern der Transfersperre wird vom Registrar derzeit nicht unterstützt.',
-    outLockUnsupported: 'Das Ändern der Transfersperre wird derzeit nicht unterstützt. Wenn Sie einen Transfercode benötigen, wenden Sie sich an unser Support-Team.',
     errFeatureUnsupported: 'Diese Aktion wird vom Registrar derzeit nicht unterstützt. Es wurde nichts geändert.',
     mgContacts: 'WHOIS-Kontaktdaten',
     mgContactsHelp: 'Was Sie speichern, gilt gemeinsam für den Inhaber-, Admin-, technischen und Rechnungskontakt.',

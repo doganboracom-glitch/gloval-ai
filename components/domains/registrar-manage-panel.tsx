@@ -15,7 +15,7 @@ import {
 } from '@/lib/custom-domains/registrar/manage-actions'
 import { REGISTRAR_CAPABILITIES } from '@/lib/custom-domains/registrar/capabilities'
 import { isActiveAndUnexpired } from '@/lib/custom-domains/registrar/nameserver-access'
-import { normalizeNameservers } from '@/lib/custom-domains/registrar/nameserver-validation'
+import { NameserverEditor } from '@/components/domains/nameserver-editor'
 import type { DomainContact } from '@/lib/custom-domains/registrar/types'
 import type { DomainErrorCode } from '@/lib/custom-domains/types'
 import { cn } from '@/lib/utils'
@@ -55,10 +55,9 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
   const [isPending, startTransition] = useTransition()
   const [notice, setNotice] = useState<Notice | null>(null)
   const [nameserverEditing, setNameserverEditing] = useState(false)
-  const [nameserverDraft, setNameserverDraft] = useState('')
   const [confirmNameservers, setConfirmNameservers] = useState<string[] | null>(null)
+  const [nameserversJustSaved, setNameserversJustSaved] = useState(false)
   const [contactsExpanded, setContactsExpanded] = useState(false)
-  const nameserverInputId = useId()
   const contactsContentId = useId()
   const nameserverConfirmTitleId = useId()
 
@@ -98,15 +97,9 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
     })
   }
 
-  function requestNameserverChange() {
-    const entries = nameserverDraft.split(/\r?\n/).filter((entry) => entry.length > 0)
-    const validation = normalizeNameservers(entries)
-    if (!validation.ok) {
-      setNotice({ kind: 'error', text: d.errInvalidInput })
-      return
-    }
+  function requestNameserverChange(nameservers: string[]) {
     setNotice(null)
-    setConfirmNameservers(validation.nameservers)
+    setConfirmNameservers(nameservers)
   }
 
   function confirmNameserverChange() {
@@ -119,6 +112,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
         if (result.ok) {
           setNotice({ kind: 'ok', text: result.changed ? d.mgSaved : d.mgNoChange })
           setNameserverEditing(false)
+          setNameserversJustSaved(result.changed)
         } else if ('reason' in result) {
           setNotice({ kind: 'error', text: d.mgLoadFailed })
         } else {
@@ -200,7 +194,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
               : expiry
           }
         />
-        <Fact label={d.mgLock} value={state(details.locked)} hint={d.mgLockUnsupported} />
+        <Fact label={d.mgLock} value={state(details.locked)} />
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-background/60 p-3">
           <dt className="text-xs text-muted-foreground">{d.mgPrivacy}</dt>
           <dd className="flex items-center justify-between gap-2 text-sm font-medium">
@@ -229,8 +223,8 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
               size="sm"
               disabled={isPending}
               onClick={() => {
-                setNameserverDraft(details.nameservers.join('\n'))
                 setNameserverEditing(true)
+                setNameserversJustSaved(false)
                 setNotice(null)
               }}
             >
@@ -239,6 +233,9 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
             </Button>
           )}
         </div>
+        {nameserversJustSaved && !nameserverEditing && (
+          <p className="mt-2 text-xs text-muted-foreground">{d.mgNsReadback}</p>
+        )}
         {details.nameservers.length > 0 && (
           <ul className="mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
             {details.nameservers.map((nameserver) => (
@@ -251,37 +248,12 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
         ) : !canEditNameservers ? (
           <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsNeedsActive}</p>
         ) : nameserverEditing ? (
-          <div className="mt-3 flex flex-col gap-3">
-            <label htmlFor={nameserverInputId} className="sr-only">
-              {d.mgNs}
-            </label>
-            <textarea
-              id={nameserverInputId}
-              aria-label={d.mgNs}
-              rows={4}
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-              value={nameserverDraft}
-              onChange={(event) => setNameserverDraft(event.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm leading-relaxed"
-            />
-            <p className="text-pretty text-xs text-muted-foreground">{d.mgNsHelp}</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isPending}
-                onClick={() => setNameserverEditing(false)}
-              >
-                {d.cancel}
-              </Button>
-              <Button type="button" size="sm" disabled={isPending} onClick={requestNameserverChange}>
-                {d.mgNsSave}
-              </Button>
-            </div>
-          </div>
+          <NameserverEditor
+            current={details.nameservers}
+            disabled={isPending}
+            onCancel={() => setNameserverEditing(false)}
+            onSubmit={requestNameserverChange}
+          />
         ) : null}
       </div>
 
@@ -331,12 +303,30 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
           <h2 id={nameserverConfirmTitleId} className="font-display text-lg font-semibold">
             {d.mgNs}
           </h2>
-          <p className="mt-2 text-pretty text-sm text-muted-foreground">{d.mgNsWarn}</p>
-          <ul className="mt-3 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
-            {confirmNameservers.map((nameserver) => (
-              <li key={nameserver}>{nameserver}</li>
-            ))}
-          </ul>
+          <p className="mt-2 text-pretty text-sm text-muted-foreground">{d.mgNsConfirmWarn}</p>
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">{d.mgNsWarn}</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <h3 className="text-xs text-muted-foreground">{d.mgNsOldList}</h3>
+              <ul className="mt-1 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
+                {details.nameservers.map((nameserver) => (
+                  <li key={nameserver} className="break-all">
+                    {nameserver}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-xs text-muted-foreground">{d.mgNsNewList}</h3>
+              <ul className="mt-1 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
+                {confirmNameservers.map((nameserver) => (
+                  <li key={nameserver} className="break-all">
+                    {nameserver}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
           <div className="mt-5 flex justify-end gap-2">
             <Button
               type="button"

@@ -1250,7 +1250,6 @@ const pl: DeepPartial<Dict> = {
     mgNsConfirm: 'Tak, zmień',
     mgNsUnsupported: 'Zmiana serwerów nazw nie jest obecnie obsługiwana przez rejestratora. Bieżące serwery są pokazane tylko informacyjnie.',
     mgLockUnsupported: 'Zmiana blokady transferu nie jest obecnie obsługiwana przez rejestratora.',
-    outLockUnsupported: 'Zmiana blokady transferu nie jest obecnie obsługiwana. Jeśli potrzebujesz kodu transferowego, skontaktuj się z naszym zespołem wsparcia.',
     errFeatureUnsupported: 'Ta akcja nie jest obecnie obsługiwana przez rejestratora. Nic nie zostało zmienione.',
     mgContacts: 'Dane kontaktowe WHOIS',
     mgContactsHelp: 'To, co zapiszesz, dotyczy łącznie kontaktu właściciela, administracyjnego, technicznego i rozliczeniowego.',

@@ -95,9 +95,9 @@ describe('WHOIS contact accordion', () => {
   it('requires confirmation after normalization and shows the outage warning', async () => {
     render(<RegistrarManagePanel domain="example.com" />)
     fireEvent.click(screen.getByRole('button', { name: 'mgNsEdit' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'mgNs' }), {
-      target: { value: 'NS1.NEW.COM.\nns2.new.com' },
-    })
+    const inputs = screen.getAllByRole('textbox', { name: 'mgNsRowLabel' })
+    fireEvent.change(inputs[0], { target: { value: 'NS1.NEW.COM.' } })
+    fireEvent.change(inputs[1], { target: { value: 'ns2.new.com' } })
     fireEvent.click(screen.getByRole('button', { name: 'mgNsSave' }))
 
     const dialog = await screen.findByRole('dialog')
