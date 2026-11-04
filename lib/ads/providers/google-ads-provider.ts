@@ -9,6 +9,8 @@ import {
   type AdsPerformanceSummary,
   type GoogleAdsAdReviewStatus,
   type GoogleAdsBillingVerification,
+  type GoogleAdsCampaignManagementState,
+  type GoogleAdsCampaignMutationResult,
   type AdsProvider,
   type AdsTokenSet,
   type GoogleAdsDateRange,
@@ -19,6 +21,7 @@ import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
 import {
   buildGoogleAdsMutateRequest,
+  parseGoogleAdsPublishPlan,
   readGoogleAdsCampaignId,
   type GoogleAdsMutateRequest,
 } from '@/lib/ads/google-ads-publish-plan'
@@ -34,16 +37,28 @@ const MAX_DIRECT_ACCOUNTS = 40
 
 export type GoogleAdsApiMethod =
   | 'customers.listAccessibleCustomers'
+  | 'geoTargetConstants.suggest'
   | 'googleAds.search'
   | 'googleAds.searchStream'
   | 'googleAds.mutate'
+  | 'ads.mutateAds'
+
+export type GoogleAdsAdMutateRequest = {
+  operations: Record<string, unknown>[]
+  partialFailure: false
+  validateOnly: boolean
+}
 
 export type GoogleAdsApiCall = {
   method: GoogleAdsApiMethod
   path: string
   accessToken: string
   loginCustomerId: string | null
-  body?: { query: string } | GoogleAdsMutateRequest
+  body?:
+    | { query: string }
+    | { locale: string; countryCode: string; locationNames: { names: string[] } }
+    | GoogleAdsMutateRequest
+    | GoogleAdsAdMutateRequest
   context: AdsApiOperationContext
 }
 
@@ -125,6 +140,58 @@ function readCustomerAccount(row: Record<string, unknown>, loginCustomerId: stri
         loginCustomerId,
       })
     : null
+}
+
+function normalizeGeoName(value: string): string {
+  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('tr').trim()
+}
+
+async function resolveCityGeoTargetResources(input: {
+  requestAdsApi: GoogleAdsApiTransport
+  accessToken: string
+  context: AdsApiOperationContext
+  plan: ReturnType<typeof parseGoogleAdsPublishPlan>
+}): Promise<string[]> {
+  if (input.plan.cities.length === 0) return []
+
+  const payload = asRecord(await input.requestAdsApi({
+    method: 'geoTargetConstants.suggest',
+    path: 'geoTargetConstants:suggest',
+    accessToken: input.accessToken,
+    loginCustomerId: null,
+    body: {
+      locale: input.plan.language,
+      countryCode: input.plan.country,
+      locationNames: { names: input.plan.cities },
+    },
+    context: input.context,
+  }))
+  const suggestions = Array.isArray(payload?.geoTargetConstantSuggestions)
+    ? payload.geoTargetConstantSuggestions
+    : []
+  const resources: string[] = []
+
+  for (const city of input.plan.cities) {
+    const matches = suggestions.flatMap((value) => {
+      const suggestion = asRecord(value)
+      const location = asRecord(suggestion?.geoTargetConstant ?? suggestion?.geo_target_constant)
+      const name = location?.name
+      const countryCode = location?.countryCode ?? location?.country_code
+      const targetType = location?.targetType ?? location?.target_type
+      const status = location?.status
+      const resourceName = location?.resourceName ?? location?.resource_name
+      return typeof name === 'string' && normalizeGeoName(name) === normalizeGeoName(city) &&
+        countryCode === input.plan.country && targetType === 'City' && status === 'ENABLED' &&
+        typeof resourceName === 'string' && /^geoTargetConstants\/\d{1,20}$/.test(resourceName)
+        ? [resourceName]
+        : []
+    })
+    const uniqueMatches = [...new Set(matches)]
+    if (uniqueMatches.length !== 1) throw new GoogleAdsError('invalid_publish_plan')
+    resources.push(uniqueMatches[0])
+  }
+
+  return [...new Set(resources)]
 }
 
 function readClientAccount(row: Record<string, unknown>, loginCustomerId: string): AdsAccountSummary | null {
@@ -556,6 +623,135 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     getAdReviewStatus,
     verifyBilling,
 
+    async getCampaignManagementState(input): Promise<GoogleAdsCampaignManagementState> {
+      requirePublishAccess(input.context.userId)
+      const customerId = normalizeCustomerId(input.customerId)
+      if (!customerId || !input.accessToken || !input.context.connectionId || !/^\d{1,20}$/.test(input.campaignId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (input.loginCustomerId && !normalizeCustomerId(input.loginCustomerId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      const payload = await requireApiTransport(config)({
+        method: 'googleAds.searchStream',
+        path: `customers/${customerId}/googleAds:searchStream`,
+        accessToken: input.accessToken,
+        loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+        body: {
+          query: `SELECT campaign.id, campaign.status, campaign_budget.resource_name, campaign_budget.amount_micros, ad_group_ad.ad.resource_name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE campaign.id = ${input.campaignId} AND ad_group_ad.status != 'REMOVED' AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD' ORDER BY ad_group_ad.ad.id LIMIT 1`,
+        },
+        context: input.context,
+      })
+      const row = searchRows(payload)[0]
+      const campaign = asRecord(row?.campaign)
+      const budget = asRecord(row?.campaignBudget ?? row?.campaign_budget)
+      const adGroupAd = asRecord(row?.adGroupAd ?? row?.ad_group_ad)
+      const ad = asRecord(adGroupAd?.ad)
+      const responsive = asRecord(ad?.responsiveSearchAd ?? ad?.responsive_search_ad)
+      const budgetResourceName = budget?.resourceName ?? budget?.resource_name
+      const dailyBudgetMicros = budget?.amountMicros ?? budget?.amount_micros
+      const adResourceName = ad?.resourceName ?? ad?.resource_name
+      if (
+        !campaign || String(campaign.id ?? '') !== input.campaignId ||
+        typeof budgetResourceName !== 'string' ||
+        (typeof dailyBudgetMicros !== 'string' && typeof dailyBudgetMicros !== 'number') ||
+        !/^\d{1,20}$/.test(String(dailyBudgetMicros)) ||
+        typeof adResourceName !== 'string' ||
+        !new RegExp(`^customers/${customerId}/ads/\\d{1,20}$`).test(adResourceName) ||
+        !responsive
+      ) {
+        throw new GoogleAdsError('provider_unavailable')
+      }
+      const assetTexts = (value: unknown) => Array.isArray(value)
+        ? value.flatMap((asset) => {
+            const text = asRecord(asset)?.text
+            return typeof text === 'string' ? [text] : []
+          })
+        : []
+      return {
+        campaignId: input.campaignId,
+        campaignStatus: campaign.status === 'ENABLED' || campaign.status === 'PAUSED' ? campaign.status : 'UNKNOWN',
+        budgetResourceName,
+        dailyBudgetMicros: String(dailyBudgetMicros),
+        adResourceName,
+        headlines: assetTexts(responsive.headlines),
+        descriptions: assetTexts(responsive.descriptions),
+      }
+    },
+
+    async updateCampaignBudget(input): Promise<GoogleAdsCampaignMutationResult> {
+      requirePublishAccess(input.context.userId)
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
+      const customerId = normalizeCustomerId(input.customerId)
+      if (
+        !customerId || !input.accessToken || !input.context.connectionId ||
+        !/^\d{1,20}$/.test(input.dailyBudgetMicros) || Number(input.dailyBudgetMicros) <= 0 ||
+        !new RegExp(`^customers/${customerId}/campaignBudgets/\\d{1,20}$`).test(input.budgetResourceName)
+      ) {
+        throw new GoogleAdsError('invalid_budget')
+      }
+      await requireApiTransport(config)({
+        method: 'googleAds.mutate',
+        path: `customers/${customerId}/googleAds:mutate`,
+        accessToken: input.accessToken,
+        loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+        body: {
+          mutateOperations: [{
+            campaignBudgetOperation: {
+              update: { resourceName: input.budgetResourceName, amountMicros: input.dailyBudgetMicros },
+              updateMask: 'amountMicros',
+            },
+          }],
+          partialFailure: false,
+          validateOnly: input.validateOnly,
+        },
+        context: input.context,
+      })
+      return { validateOnly: input.validateOnly, billingVerified: null, paymentMethodWarning: false }
+    },
+
+    async updateResponsiveSearchAd(input): Promise<GoogleAdsCampaignMutationResult> {
+      requirePublishAccess(input.context.userId)
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
+      const customerId = normalizeCustomerId(input.customerId)
+      if (!customerId || !input.accessToken || !input.context.connectionId) throw new GoogleAdsError('invalid_request')
+      if (!new RegExp(`^customers/${customerId}/ads/\\d{1,20}$`).test(input.adResourceName)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      if (
+        input.headlines.length < 3 || input.headlines.length > 15 ||
+        input.headlines.some((text) => !text.trim() || text.length > 30) ||
+        input.descriptions.length < 2 || input.descriptions.length > 4 ||
+        input.descriptions.some((text) => !text.trim() || text.length > 90)
+      ) {
+        throw new GoogleAdsError('invalid_publish_plan')
+      }
+      await requireApiTransport(config)({
+        method: 'ads.mutateAds',
+        path: `customers/${customerId}/ads:mutate`,
+        accessToken: input.accessToken,
+        loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+        body: {
+          operations: [{
+            adOperation: {
+              update: {
+                resourceName: input.adResourceName,
+                responsiveSearchAd: {
+                  headlines: input.headlines.map((text) => ({ text })),
+                  descriptions: input.descriptions.map((text) => ({ text })),
+                },
+              },
+              updateMask: 'responsiveSearchAd.headlines,responsiveSearchAd.descriptions',
+            },
+          }],
+          partialFailure: false,
+          validateOnly: input.validateOnly,
+        },
+        context: input.context,
+      })
+      return { validateOnly: input.validateOnly, billingVerified: null, paymentMethodWarning: false }
+    },
+
     async publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {
       requirePublishAccess(input.context.userId)
       const customerId = normalizeCustomerId(input.externalAccountId)
@@ -569,6 +765,14 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         throw new GoogleAdsError('invalid_request')
       }
 
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
+      const plan = parseGoogleAdsPublishPlan(input.planJson)
+      const geoTargetResourceNames = await resolveCityGeoTargetResources({
+        requestAdsApi: requireApiTransport(config),
+        accessToken: input.accessToken,
+        context: input.context,
+        plan,
+      })
       const body = buildGoogleAdsMutateRequest({
         customerId,
         requestId: input.requestId,
@@ -577,6 +781,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         budgetCapMinor: input.budget.capMinor,
         currency: input.budget.currency,
         validateOnly: input.validateOnly,
+        ...(geoTargetResourceNames.length > 0 ? { geoTargetResourceNames } : {}),
       })
       const billing = await verifyBilling({
         accessToken: input.accessToken,
@@ -610,6 +815,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
 
     async setCampaignStatus(input): Promise<AdsCampaignStatusResult> {
       requirePublishAccess(input.context.userId)
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
       const customerId = normalizeCustomerId(input.externalAccountId)
       if (!customerId || !input.accessToken || !input.context.connectionId) {
         throw new GoogleAdsError('invalid_request')
@@ -643,12 +849,13 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
               },
             }],
             partialFailure: false,
-            validateOnly: false,
+            validateOnly: input.validateOnly,
           },
           context: input.context,
         })
         return {
           status: input.status,
+          validateOnly: input.validateOnly,
           billingVerified: billing?.verified ?? null,
           paymentMethodWarning: billing?.paymentMethodWarning ?? false,
         }

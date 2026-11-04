@@ -18,6 +18,8 @@ export const googleAdsPublishPlanSchema = z.object({
   cities: z.array(z.string().min(1).max(40)).max(5),
   modelPolicyCategory: z.string().max(40).nullable(),
   modelPolicyEvidence: z.enum(MODEL_POLICY_EVIDENCE),
+  euPoliticalAdvertising: z.enum(['yes', 'no']).default('no'),
+  euPoliticalDeclarationConfirmed: z.boolean().default(false),
   finalUrl: z.string().url().max(2048),
   adCopy: z.object({
     headlines: z.array(z.string().min(1).max(30)).min(3).max(15),
@@ -113,7 +115,7 @@ function currencyFractionDigits(currency: string): number {
   }
 }
 
-function microsFromMinorUnits(amountMinor: number, currency: string): string {
+export function googleAdsMicrosFromMinorUnits(amountMinor: number, currency: string): string {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return invalidBudget()
   const fractionDigits = currencyFractionDigits(currency)
   const micros = amountMinor * 10 ** (6 - fractionDigits)
@@ -160,7 +162,7 @@ export function buildGoogleAdsApprovalSummary(input: {
     budgetCapMinor: input.budgetCapMinor,
     currencyFractionDigits: fractionDigits,
     cpcBidCeilingMinor,
-    cpcBidCeilingMicros: microsFromMinorUnits(cpcBidCeilingMinor, input.currency),
+    cpcBidCeilingMicros: googleAdsMicrosFromMinorUnits(cpcBidCeilingMinor, input.currency),
   }
 }
 
@@ -197,6 +199,7 @@ export function buildGoogleAdsMutateRequest(input: {
   budgetCapMinor: number
   currency: string
   validateOnly: boolean
+  geoTargetResourceNames?: string[]
 }): GoogleAdsMutateRequest {
   const customerId = input.customerId.replaceAll('-', '')
   if (!/^\d{6,20}$/.test(customerId) || !/^[A-Za-z0-9_-]{8,128}$/.test(input.requestId)) return invalidPlan()
@@ -209,18 +212,29 @@ export function buildGoogleAdsMutateRequest(input: {
   }
 
   const plan = parseGoogleAdsPublishPlan(input.planJson)
+  if (!plan.euPoliticalDeclarationConfirmed) {
+    throw new GoogleAdsError('eu_political_declaration_required')
+  }
   const approvalSummary = buildGoogleAdsApprovalSummary({
     currency: input.currency,
     dailyBudgetMinor: input.dailyBudgetMinor,
     budgetCapMinor: input.budgetCapMinor,
   })
-  const dailyBudgetMicros = microsFromMinorUnits(input.dailyBudgetMinor, input.currency)
+  const dailyBudgetMicros = googleAdsMicrosFromMinorUnits(input.dailyBudgetMinor, input.currency)
   const customerResource = `customers/${customerId}`
   const budgetResource = `${customerResource}/campaignBudgets/-1`
   const campaignResource = `${customerResource}/campaigns/-2`
   const adGroupResource = `${customerResource}/adGroups/-3`
   const paths = displayPaths(plan.adCopy.displayUrl, plan.finalUrl)
-  const geoTargets = [`geoTargetConstants/${COUNTRY_GEO_TARGET_IDS[plan.country]}`]
+  const geoTargets = input.geoTargetResourceNames ?? (plan.cities.length === 0
+    ? [`geoTargetConstants/${COUNTRY_GEO_TARGET_IDS[plan.country]}`]
+    : [])
+  if (
+    geoTargets.length === 0 ||
+    geoTargets.some((resourceName) => !/^geoTargetConstants\/\d{1,20}$/.test(resourceName))
+  ) {
+    return invalidPlan()
+  }
   const requestMarker = `req-${input.requestId.replace(/[^A-Za-z0-9]/g, '').slice(0, 16)}`
   const campaignPrefix = `${plan.brand} - ${plan.sectorLabel || plan.sector}`
   const campaignName = `${campaignPrefix.slice(0, 120 - requestMarker.length - 3).trim()} - ${requestMarker}`
@@ -256,6 +270,9 @@ export function buildGoogleAdsMutateRequest(input: {
             positiveGeoTargetType: 'PRESENCE',
             negativeGeoTargetType: 'PRESENCE',
           },
+          containsEuPoliticalAdvertising: plan.euPoliticalAdvertising === 'yes'
+            ? 'CONTAINS_EU_POLITICAL_ADVERTISING'
+            : 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
         },
       },
     },
