@@ -133,12 +133,19 @@ export async function POST(request: Request) {
     })
     return googleAdsJson({ ok: true, connectionId: connection.id })
   } catch (error) {
+    const preservePendingToken = error instanceof GoogleAdsError && (
+      error.code === 'connection_limit_exceeded'
+      || error.code === 'connection_busy'
+      || error.code === 'quota_check_failed'
+    )
     let tokenRevoked = false
-    try {
-      await revokeGoogleAdsRefreshToken(refreshToken)
-      tokenRevoked = true
-    } catch {
-      console.error('[google-ads] selection token revoke failed', { flowId })
+    if (!preservePendingToken) {
+      try {
+        await revokeGoogleAdsRefreshToken(refreshToken)
+        tokenRevoked = true
+      } catch {
+        console.error('[google-ads] selection token revoke failed', { flowId })
+      }
     }
 
     try {
