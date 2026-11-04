@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
-import type { ReferralPartnerSettings } from '@/lib/referrals/partner-types'
+import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,7 +26,9 @@ import { Input } from '@/components/ui/input'
 const COPY = {
   tr: {
     title: 'Satış Ortaklığı',
-    description: 'Gloval AI bağlantınızı paylaşın ve yönlendirmelerinizi güvenli biçimde takip edin.',
+    descriptionBeforeLink: 'Gloval AI bağlantınızı paylaşın ve yönlendirmelerinizi ',
+    descriptionLink: 'panelden',
+    descriptionAfterLink: ' güvenli biçimde takip edin.',
     active: 'Aktif',
     suspended: 'İncelemede',
     closed: 'Kapalı',
@@ -45,6 +48,8 @@ const COPY = {
     taxStatus: 'Vergi statüsü',
     individual: 'Bireysel',
     company: 'Şirket',
+    companyTaxHint: 'Program eşlemesinde şirket ve şahıs şirketi statüsü nakit ödeme için fatura gerektirir.',
+    individualTaxHint: 'Bireysel statü bu program iş akışında fatura gerektirmez.',
     iban: 'IBAN',
     ibanHint: 'Türkiye IBAN’ı girin. IBAN sunucu tarafında AES-256-GCM ile şifrelenir; burada yalnızca son 4 hane gösterilir.',
     join: 'Programa katıl',
@@ -65,6 +70,9 @@ const COPY = {
     savingIban: 'IBAN kaydediliyor…',
     ibanSaved: 'IBAN kaydedildi.',
     noReferral: 'Bağlantınız hazır olduğunda burada gösterilir.',
+    missingName: 'Ödeme alacak kişinin veya kuruluşun adını girin.',
+    missingIban: 'Devam etmek için Türkiye IBAN’ınızı girin.',
+    balanceOutstanding: 'Pozitif bekleyen/kullanılabilir bakiye veya açık nakit talebi varken ortaklık kapatılamaz.',
 
     errors: {
       not_authenticated: 'Oturumunuz doğrulanamadı. Lütfen yeniden giriş yapın.',
@@ -78,11 +86,14 @@ const COPY = {
       already_registered: 'Bu hesap için zaten bir ortaklık kaydı bulunuyor.',
       not_active: 'Etkin bir ortaklık bulunamadı.',
       iban_unavailable: 'Aktif ve IBAN bilgisi eksik bir ortaklık bulunamadı. Sayfayı yenileyip tekrar deneyin.',
+      balance_outstanding: 'Pozitif bakiye veya açık nakit talebi varken ortaklık kapatılamaz.',
     } as Record<string, string>,
   },
   en: {
     title: 'Referral Partner',
-    description: 'Share your Gloval AI link and securely track your referrals.',
+    descriptionBeforeLink: 'Share your Gloval AI link and securely track referrals from your ',
+    descriptionLink: 'dashboard',
+    descriptionAfterLink: '.',
     active: 'Active',
     suspended: 'Under review',
     closed: 'Closed',
@@ -102,6 +113,8 @@ const COPY = {
     taxStatus: 'Tax status',
     individual: 'Individual',
     company: 'Company',
+    companyTaxHint: 'Under this program mapping, company and sole-proprietor status require an invoice for cash payout.',
+    individualTaxHint: 'Individual status does not require an invoice in this program workflow.',
     iban: 'IBAN',
     ibanHint: 'Enter a Turkish IBAN. It is encrypted server-side with AES-256-GCM; only its last 4 digits are shown here.',
     join: 'Join the program',
@@ -122,6 +135,9 @@ const COPY = {
     savingIban: 'Saving IBAN…',
     ibanSaved: 'IBAN saved.',
     noReferral: 'Your link will appear here once it is ready.',
+    missingName: 'Enter the payee person or organization name.',
+    missingIban: 'Enter your Turkish IBAN to continue.',
+    balanceOutstanding: 'A partnership cannot be closed while a positive pending/available balance or open cash request remains.',
 
     errors: {
       not_authenticated: 'Your session could not be verified. Please sign in again.',
@@ -135,6 +151,7 @@ const COPY = {
       already_registered: 'A partner record already exists for this account.',
       not_active: 'No active partnership was found.',
       iban_unavailable: 'No active partnership with a missing IBAN was found. Refresh the page and try again.',
+      balance_outstanding: 'A partnership cannot be closed while a positive balance or open cash request remains.',
     } as Record<string, string>,
   },
 } as const
@@ -142,18 +159,30 @@ const COPY = {
 export function ReferralPartnerCard({
   enabled,
   partner,
+  payoutData = null,
+  payoutsEnabled = false,
+  cashPayoutsEnabled = false,
 }: {
   enabled: boolean
   partner: ReferralPartnerSettings | null
+  payoutData?: ReferralPayoutPanelData | null
+  payoutsEnabled?: boolean
+  cashPayoutsEnabled?: boolean
 }) {
   const { lang } = useLanguage()
   const language = lang === 'tr' ? 'tr' : 'en'
   const copy = COPY[language]
   const router = useRouter()
+  const payeeNameRef = useRef<HTMLInputElement>(null)
+  const ibanRef = useRef<HTMLInputElement>(null)
+  const termsBoxRef = useRef<HTMLDivElement>(null)
   const [payeeName, setPayeeName] = useState('')
   const [taxStatus, setTaxStatus] = useState<'individual' | 'company'>('individual')
   const [iban, setIban] = useState('')
   const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsError, setTermsError] = useState(false)
+  const [nameError, setNameError] = useState(false)
+  const [ibanError, setIbanError] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [noticeKind, setNoticeKind] = useState<'activated' | 'closed' | 'iban-saved' | null>(null)
@@ -172,16 +201,40 @@ export function ReferralPartnerCard({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (isSubmitting || !termsAccepted) return
+    if (isSubmitting) return
 
     setError(null)
     setNotice(null)
     setNoticeKind(null)
+
+    if (!termsAccepted) {
+      setTermsError(true)
+      termsBoxRef.current?.focus()
+      return
+    }
+    setTermsError(false)
+
+    const normalizedName = payeeName.trim()
+    if (normalizedName.length < 2) {
+      setNameError(true)
+      payeeNameRef.current?.focus()
+      return
+    }
+    setNameError(false)
+
+    const normalizedIban = iban.replace(/\\s+/g, '').toUpperCase()
+    if (!normalizedIban) {
+      setIbanError(true)
+      ibanRef.current?.focus()
+      return
+    }
+    setIbanError(false)
+
     setIsSubmitting(true)
     const result = await activateReferralPartner({
-      payeeName,
+      payeeName: normalizedName,
       taxStatus,
-      iban,
+      iban: normalizedIban,
       termsAccepted,
       termsVersion: REFERRAL_TERMS_VERSION,
       lang: language,
@@ -269,7 +322,13 @@ export function ReferralPartnerCard({
             </CardTitle>
             {partner && <Badge variant={partner.status === 'active' ? 'default' : 'secondary'}>{statusLabel}</Badge>}
           </div>
-          <CardDescription>{copy.description}</CardDescription>
+          <CardDescription>
+            {copy.descriptionBeforeLink}
+            <Link href="/dashboard#satis-ortakligi" className="font-medium text-primary underline underline-offset-4">
+              {copy.descriptionLink}
+            </Link>
+            {copy.descriptionAfterLink}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           {partner?.status === 'active' && referralUrl ? (
@@ -335,12 +394,15 @@ export function ReferralPartnerCard({
               </AlertDescription>
             </Alert>
           ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <form noValidate onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
                 <p className="text-sm text-muted-foreground">{copy.termsIntro}</p>
                 <div
+                  ref={termsBoxRef}
                   tabIndex={0}
                   aria-label={copy.termsBox}
+                  aria-invalid={termsError || undefined}
+                  aria-describedby={termsError ? 'referral-terms-error' : undefined}
                   className="max-h-64 overflow-y-auto rounded-xl border border-border bg-muted/20 p-4 text-sm leading-relaxed text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <p>{terms.intro.join(' ')}</p>
@@ -365,27 +427,47 @@ export function ReferralPartnerCard({
                   id="referral-terms-accepted"
                   type="checkbox"
                   checked={termsAccepted}
-                  onChange={(event) => setTermsAccepted(event.target.checked)}
+                  onChange={(event) => {
+                    setTermsAccepted(event.target.checked)
+                    if (event.target.checked) setTermsError(false)
+                  }}
                   disabled={isSubmitting}
+                  aria-invalid={termsError}
+                  aria-describedby={termsError ? 'referral-terms-error' : undefined}
                   className="mt-1 size-4 shrink-0 accent-primary"
                 />
                 <span>{copy.acceptTerms}</span>
               </label>
+              {termsError && (
+                <p id="referral-terms-error" role="alert" className="text-sm text-destructive">
+                  {copy.errors.terms_required}
+                </p>
+              )}
 
               <FieldGroup>
                 <FieldGroup className="sm:flex-row">
-                  <Field className="flex-1">
+                  <Field className="flex-1" data-invalid={nameError || undefined}>
                     <FieldLabel htmlFor="referral-payee-name">{copy.payeeName}</FieldLabel>
                     <Input
+                      ref={payeeNameRef}
                       id="referral-payee-name"
                       value={payeeName}
-                      onChange={(event) => setPayeeName(event.target.value)}
+                      onChange={(event) => {
+                        setPayeeName(event.target.value)
+                        if (event.target.value.trim().length >= 2) setNameError(false)
+                      }}
                       autoComplete="name"
                       maxLength={120}
-                      required
                       disabled={isSubmitting}
+                      aria-invalid={nameError}
+                      aria-describedby={nameError ? 'referral-payee-name-error' : 'referral-payee-name-hint'}
                     />
-                    <FieldDescription>{copy.payeeNameHint}</FieldDescription>
+                    <FieldDescription id="referral-payee-name-hint">{copy.payeeNameHint}</FieldDescription>
+                    {nameError && (
+                      <p id="referral-payee-name-error" role="alert" className="text-sm text-destructive">
+                        {copy.missingName}
+                      </p>
+                    )}
                   </Field>
                   <Field className="flex-1">
                     <FieldLabel htmlFor="referral-tax-status">{copy.taxStatus}</FieldLabel>
@@ -399,22 +481,32 @@ export function ReferralPartnerCard({
                       <option value="individual">{copy.individual}</option>
                       <option value="company">{copy.company}</option>
                     </select>
+                    <FieldDescription>{taxStatus === 'company' ? copy.companyTaxHint : copy.individualTaxHint}</FieldDescription>
                   </Field>
                 </FieldGroup>
-                <Field>
+                <Field data-invalid={ibanError || undefined}>
                   <FieldLabel htmlFor="referral-iban">{copy.iban}</FieldLabel>
                   <Input
+                    ref={ibanRef}
                     id="referral-iban"
                     value={iban}
-                    onChange={(event) => setIban(event.target.value.toUpperCase())}
+                    onChange={(event) => {
+                      setIban(event.target.value.toUpperCase())
+                      if (event.target.value.trim()) setIbanError(false)
+                    }}
                     autoComplete="off"
                     inputMode="text"
                     maxLength={34}
-                    required
                     disabled={isSubmitting}
-                    aria-describedby="referral-iban-hint"
+                    aria-invalid={ibanError}
+                    aria-describedby={ibanError ? 'referral-iban-error' : 'referral-iban-hint'}
                   />
                   <FieldDescription id="referral-iban-hint">{copy.ibanHint}</FieldDescription>
+                  {ibanError && (
+                    <p id="referral-iban-error" role="alert" className="text-sm text-destructive">
+                      {copy.missingIban}
+                    </p>
+                  )}
                 </Field>
               </FieldGroup>
 
@@ -422,7 +514,7 @@ export function ReferralPartnerCard({
               {notice && <p role="status" className="text-sm text-primary">{notice}</p>}
 
               <div className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting || !termsAccepted} className="gap-2">
+                <Button type="submit" aria-disabled={!termsAccepted || isSubmitting} disabled={isSubmitting} className="gap-2">
                   {isSubmitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
                   {isSubmitting ? copy.submitting : copy.join}
                 </Button>

@@ -15,6 +15,8 @@ const MIN_SECRET_LENGTH = 32
 export type ReferralEnvironment = {
   [key: string]: string | undefined
   REFERRAL_ENABLED?: string
+  REFERRAL_PAYOUTS_ENABLED?: string
+  REFERRAL_CASH_PAYOUTS_ENABLED?: string
   REFERRAL_COOKIE_HMAC_ACTIVE_VERSION?: string
   REFERRAL_COOKIE_HMAC_KEY_V1?: string
   REFERRAL_CLICK_HMAC_KEY_V1?: string
@@ -76,6 +78,14 @@ function clickSecret(env: ReferralEnvironment): string | null {
 
 export function isReferralFeatureEnabled(env: ReferralEnvironment = process.env): boolean {
   return env.REFERRAL_ENABLED === '1'
+}
+
+export function isReferralPayoutsEnabled(env: ReferralEnvironment = process.env): boolean {
+  return isReferralFeatureEnabled(env) && env.REFERRAL_PAYOUTS_ENABLED === '1'
+}
+
+export function isReferralCashPayoutsEnabled(env: ReferralEnvironment = process.env): boolean {
+  return isReferralPayoutsEnabled(env) && env.REFERRAL_CASH_PAYOUTS_ENABLED === '1'
 }
 
 export function isReferralRuntimeReady(env: ReferralEnvironment = process.env): boolean {
