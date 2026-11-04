@@ -34,16 +34,34 @@ beforeEach(() => {
   stubs.sendTransactionalEmailDetailed.mockReset().mockResolvedValue({ ok: true, messageId: 'email-1' })
 })
 
+const blogGuidance = [
+  'Web sitenizde düzenli blog yazıları yayımlamak, Google\'da daha üst sıralarda yer almanıza ve organik ziyaretçi sayınızı artırmanıza yardımcı olur.',
+  'Hedef kitlenizin sorularına yanıt veren kaliteli içerikler, markanıza duyulan güveni güçlendirerek ziyaretçileri potansiyel müşterilere dönüştürür.',
+  'GLOVAL AI editörüyle haftada 2–3 blog yazısı hazırlayabilir, yayın zamanlamasını önceden planlayarak içeriklerinizi düzenli ve sürdürülebilir şekilde yönetebilirsiniz.',
+].join(' ')
+
 describe('starter blog ready email', () => {
   it('uses the requested copy, the editor URL, and the shared email layout', () => {
     const email = buildStarterBlogReadyEmail('project-1')
 
     expect(email.subject).toBe('Blog yazılarınız hazır')
-    expect(email.body).toBe('Bloglar hazırlandı, sitenizin editör bölümünden düzenleyebilirsiniz')
+    expect(email.body).toBe(`Bloglar hazırlandı, sitenizin editör bölümünden düzenleyebilirsiniz\n\n${blogGuidance}`)
     expect(email.editorUrl).toBe('https://gloval.ai/editor/project-1')
     expect(email.html).toContain('GLOVAL AI')
     expect(email.html).toContain('href="https://gloval.ai/editor/project-1"')
     expect(email.text).toContain('Editör bağlantısı: https://gloval.ai/editor/project-1')
+  })
+
+  it('renders the exact Turkish blog guidance before the editor button', () => {
+    const email = buildStarterBlogReadyEmail('project-1')
+    const paragraphIndex = email.html.indexOf(blogGuidance)
+    const ctaIndex = email.html.indexOf('Editörü aç')
+
+    expect(email.html).toContain('<html lang="tr">')
+    expect(paragraphIndex).toBeGreaterThan(-1)
+    expect(paragraphIndex).toBeLessThan(ctaIndex)
+    expect(email.html).toContain(`<p style="margin:16px 0 0;">${blogGuidance}</p>`)
+    expect(email.text).toContain(blogGuidance)
   })
 
   it('claims one send per project and passes the same idempotency key to Resend', async () => {

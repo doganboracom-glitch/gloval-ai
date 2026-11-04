@@ -124,13 +124,13 @@ export async function sendTransactionalEmailDetailed(
       }),
     })
     if (!res.ok) {
-      console.log('[v0] resend send failed:', res.status, await res.text().catch(() => ''))
+      console.warn('[v0] resend send failed:', res.status)
       return { ok: false, reason: 'http', status: res.status }
     }
     const payload = (await res.json().catch(() => null)) as { id?: unknown } | null
     return { ok: true, messageId: typeof payload?.id === 'string' ? payload.id : null }
   } catch (error) {
-    console.log('[v0] resend send error:', error)
+    console.warn('[v0] resend send error:', error instanceof Error ? error.name : 'unknown')
     return { ok: false, reason: 'network' }
   }
 }
