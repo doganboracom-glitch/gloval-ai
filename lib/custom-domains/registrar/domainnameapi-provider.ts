@@ -698,6 +698,9 @@ export class DomainNameApiProvider
       startedAtRaw: start.raw,
       remainingDays: days,
       hasAuthCode: String(d.AuthCode ?? '').length > 0,
+      rawFieldNames: Object.keys(raw)
+        .filter((key) => /^[A-Za-z0-9_]{1,64}$/.test(key))
+        .slice(0, 60),
     }
   }
 

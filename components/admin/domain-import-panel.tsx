@@ -6,7 +6,7 @@ import { useLanguage } from '@/components/language-provider'
 import { Panel } from '@/components/admin/admin-ui'
 import { Button } from '@/components/ui/button'
 import { adminT } from '@/lib/admin/i18n'
-import type { PendingAdminDomainImport } from '@/lib/custom-domains/registrar/admin-import-types'
+import type { PendingAdminDomainImport, RegistrarImportPreview } from '@/lib/custom-domains/registrar/admin-import-types'
 import {
   approveRegistrarDomainImportAction,
   previewRegistrarDomainImportAction,
@@ -39,7 +39,7 @@ export function AdminDomainImportPanel({
   const [domain, setDomain] = useState('')
   const [targetEmail, setTargetEmail] = useState('')
   const [reason, setReason] = useState('')
-  const [preview, setPreview] = useState<{ domain: string; expiresAt: string; nameservers: string[] } | null>(null)
+  const [preview, setPreview] = useState<RegistrarImportPreview | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
@@ -254,6 +254,9 @@ export function AdminDomainImportPanel({
                 <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm">
                   <p className="font-medium text-foreground">{t.importVerified}</p>
                   <p className="text-muted-foreground">{t.importExpiresAt}: {formatDate(preview.expiresAt, lang)}</p>
+                  {preview.expiresAtSource === 'assumed_istanbul' && (
+                    <p className="text-xs text-muted-foreground">{t.importExpiresAtAssumed}</p>
+                  )}
                   <p className="text-muted-foreground">
                     {t.importNameservers}: {preview.nameservers.length ? preview.nameservers.join(', ') : '—'}
                   </p>

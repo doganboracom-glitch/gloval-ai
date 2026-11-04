@@ -8,8 +8,11 @@ import { placeholderDns } from '@/lib/custom-domains/mock-provider'
 import { parsePurchaseDomain } from './service'
 import { getDomainRegistrarProvider } from './provider'
 import { isManageCapable } from './types'
+import type { ManagedDomainDetails } from './types'
+import { parseProviderDateAssumingIstanbul } from './provider-date'
 import type {
   AdminDomainImportError,
+  ExpiresAtSource,
   AdminDomainImportResult,
   PendingAdminDomainImport,
   PendingAdminDomainImportsResult,
@@ -66,7 +69,40 @@ function normalizeRegistrarNameservers(value: string[] | null | undefined): stri
   ).slice(0, 13)
 }
 
-async function readOwnedRegistrarDomain(domain: string): Promise<RegistrarSnapshot | AdminDomainImportError> {
+/**
+ * Strict zone-named instant first; only when the registrar sent a zone-less
+ * value is it read as Europe/Istanbul. This fallback is import/display-only:
+ * renewal verification keeps using the strict parser.
+ */
+function resolveImportExpiry(
+  details: Pick<ManagedDomainDetails, 'expiresAt' | 'expiresAtRaw'>,
+): { expiresAt: string; source: ExpiresAtSource } | null {
+  if (details.expiresAt) {
+    const strict = new Date(details.expiresAt)
+    if (Number.isFinite(strict.getTime())) return { expiresAt: strict.toISOString(), source: 'provider_explicit' }
+  }
+  const assumed = parseProviderDateAssumingIstanbul(details.expiresAtRaw)
+  if (assumed.instant && assumed.source) return { expiresAt: assumed.instant, source: assumed.source }
+  return null
+}
+
+const DATE_LIKE_FIELD = /date|expir|start|end|renew|creat|updat|time|day/i
+
+/** Logs which raw reply fields exist (names only) so a new date field name is discoverable. No values. */
+function logExpiryUnavailable(details: ManagedDomainDetails) {
+  const fieldNames = details.rawFieldNames ?? []
+  console.warn('[admin-domain-import] expiry_unavailable', {
+    rawFieldNames: fieldNames,
+    dateLikeFieldNames: fieldNames.filter((name) => DATE_LIKE_FIELD.test(name)),
+    hadExpiresAtRaw: Boolean(details.expiresAtRaw),
+  })
+}
+
+async function readOwnedRegistrarDomain(rawDomain: string): Promise<RegistrarSnapshot | AdminDomainImportError> {
+  const normalizedInput = normalizeDomain(rawDomain)
+  if (!normalizedInput.ok) return 'invalid_domain'
+  const domain = normalizedInput.domain
+
   const registrar = getDomainRegistrarProvider()
   if (!registrar || registrar.id !== 'domainnameapi' || !registrar.live || !isManageCapable(registrar)) {
     return 'registrar_unavailable'
@@ -85,18 +121,21 @@ async function readOwnedRegistrarDomain(domain: string): Promise<RegistrarSnapsh
   const returnedDomain = normalizeDomain(details.domain)
   if (!returnedDomain.ok || returnedDomain.domain !== domain) return 'domain_not_owned'
   if (details.status.trim().toLowerCase() !== 'active') return 'domain_not_active'
-  if (!details.expiresAt) return 'expiry_unavailable'
 
-  const expiresAt = new Date(details.expiresAt)
-  if (!Number.isFinite(expiresAt.getTime())) return 'expiry_unavailable'
-  if (expiresAt.getTime() <= Date.now()) return 'domain_expired'
+  const expiry = resolveImportExpiry(details)
+  if (!expiry) {
+    logExpiryUnavailable(details)
+    return 'expiry_unavailable'
+  }
+  if (new Date(expiry.expiresAt).getTime() <= Date.now()) return 'domain_expired'
 
   const purchase = parsePurchaseDomain(domain)
   if (!purchase) return 'invalid_domain'
 
   return {
     domain,
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: expiry.expiresAt,
+    expiresAtSource: expiry.source,
     nameservers: normalizeRegistrarNameservers(details.nameservers),
     // DomainNameAPI addresses its account operations by the canonical domain
     // string; that is the provider identifier used by the existing order flow.
@@ -118,6 +157,7 @@ export async function previewRegistrarDomainImport(
     preview: {
       domain: result.domain,
       expiresAt: result.expiresAt,
+      expiresAtSource: result.expiresAtSource,
       nameservers: result.nameservers,
     },
   }
