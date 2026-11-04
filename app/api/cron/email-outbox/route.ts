@@ -41,10 +41,18 @@ export async function GET(request: Request) {
     console.log(
       `[email-outbox] referral emails sent=${referralEmails.sent} retry=${referralEmails.retry} deferred=${referralEmails.deferred} gaveUp=${referralEmails.gaveUp}`,
     )
-    const addOnReminders = await processAddOnExpiryReminders({ deadlineMs })
-    console.log(
-      `[email-outbox] add-on reminders scanned=${addOnReminders.scanned} sent=${addOnReminders.sent} skipped=${addOnReminders.skipped} failed=${addOnReminders.failed}`,
-    )
+    let addOnReminders:
+      | Awaited<ReturnType<typeof processAddOnExpiryReminders>>
+      | { ok: false; error: 'sweep_failed' }
+    try {
+      addOnReminders = await processAddOnExpiryReminders({ deadlineMs })
+      console.log(
+        `[email-outbox] add-on reminders scanned=${addOnReminders.scanned} sent=${addOnReminders.sent} skipped=${addOnReminders.skipped} failed=${addOnReminders.failed}`,
+      )
+    } catch {
+      console.error('[email-outbox] add-on reminder sweep failed; details omitted')
+      addOnReminders = { ok: false, error: 'sweep_failed' }
+    }
     return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests, referralEmails, addOnReminders, commissionSync })
   } catch {
     console.log('[email-outbox] sweep failed: unknown')
