@@ -64,10 +64,11 @@ type Row = {
   last_error: string | null
   provider: string | null
   expires_at: string | null
+  order_id: string | null
 }
 
 const COLUMNS =
-  'id, user_id, domain, status, is_primary, dns, website_project_id, email_enabled, verified_at, created_at, verification_token, dns_status, vercel_status, ssl_status, last_checked_at, last_error, provider, expires_at'
+  'id, user_id, domain, status, is_primary, dns, website_project_id, email_enabled, verified_at, created_at, verification_token, dns_status, vercel_status, ssl_status, last_checked_at, last_error, provider, expires_at, order_id'
 
 /** At or below PostgREST's default max-rows, so a chunk is never cut short. */
 const LIST_CHUNK = 1000
@@ -100,8 +101,35 @@ function toDomain(row: Row): CustomDomain {
     },
     mock: false,
     source: domainSourceFromProvider(row.provider),
+    adminAssigned: false,
     expiresAt: row.expires_at,
   }
+}
+
+async function withAdminAssignment(
+  db: SupabaseClient,
+  rows: Row[],
+): Promise<CustomDomain[]> {
+  const domains = rows.map(toDomain)
+  const orderIds = Array.from(new Set(rows.map((row) => row.order_id).filter((id): id is string => Boolean(id))))
+  if (orderIds.length === 0) return domains
+
+  const importedOrderIds = new Set<string>()
+  for (let offset = 0; offset < orderIds.length; offset += 100) {
+    const { data, error } = await db
+      .from('domain_orders')
+      .select('id, payment_provider')
+      .in('id', orderIds.slice(offset, offset + 100))
+    if (error) throw error
+    for (const order of (data ?? []) as Array<{ id: string; payment_provider: string | null }>) {
+      if (order.payment_provider === 'admin_import') importedOrderIds.add(order.id)
+    }
+  }
+
+  return domains.map((domain, index) => ({
+    ...domain,
+    adminAssigned: Boolean(rows[index].order_id && importedOrderIds.has(rows[index].order_id)),
+  }))
 }
 
 type PgError = { code?: string; message?: string } | null
@@ -124,8 +152,9 @@ export class SupabaseDomainProvider implements DomainProvider {
    */
   async listDomains(userId?: string): Promise<CustomDomain[]> {
     const rows: Row[] = []
+    const db = this.db()
     for (let from = 0; ; from += LIST_CHUNK) {
-      let query = this.db().from('custom_domains').select(COLUMNS)
+      let query = db.from('custom_domains').select(COLUMNS)
       if (userId) query = query.eq('user_id', userId)
       const { data, error } = await query
         .order('is_primary', { ascending: false })
@@ -137,7 +166,7 @@ export class SupabaseDomainProvider implements DomainProvider {
       rows.push(...chunk)
       if (chunk.length < LIST_CHUNK) break
     }
-    return rows.map(toDomain)
+    return withAdminAssignment(db, rows)
   }
 
   async listDomainsPage(
@@ -145,7 +174,8 @@ export class SupabaseDomainProvider implements DomainProvider {
     request: { page: number; pageSize: number },
   ): Promise<{ items: CustomDomain[]; total: number }> {
     const { from, to } = pageRange(request.page, request.pageSize)
-    const { data, error, count } = await this.db()
+    const db = this.db()
+    const { data, error, count } = await db
       .from('custom_domains')
       .select(COLUMNS, { count: 'exact' })
       .eq('user_id', userId)
@@ -154,7 +184,7 @@ export class SupabaseDomainProvider implements DomainProvider {
       .order('id', { ascending: false })
       .range(from, to)
     if (error) throw error
-    return { items: ((data ?? []) as Row[]).map(toDomain), total: count ?? 0 }
+    return { items: await withAdminAssignment(db, (data ?? []) as Row[]), total: count ?? 0 }
   }
 
   async getDomain(domainId: string): Promise<CustomDomain | null> {
