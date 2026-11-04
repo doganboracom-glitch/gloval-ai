@@ -248,7 +248,7 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
     })
   })
 
-  it('keeps commission persistence atomic with billing while isolating email enqueue failure', async () => {
+  it('keeps payment writes non-blocking on referral notification or ledger errors and retries through sync', async () => {
     await withDatabase(async (db) => {
       const partnerId = await newPartner(db, await newUser(db))
       const referredUserId = await newUser(db)
@@ -285,14 +285,61 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
         for each row execute function public.fail_referral_commission_insert();
       `)
 
-      await expect(newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID()))
-        .rejects.toThrow('commission persistence unavailable')
-      const { rows } = await db.query<{ billing_transactions: number; commissions: number }>(`
+      const transactionId = await newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID())
+      const { rows: beforeRetry } = await db.query<{ billing_transactions: number; commissions: number }>(`
         select
           (select count(*)::integer from public.billing_transactions) as billing_transactions,
           (select count(*)::integer from public.referral_commissions) as commissions
       `)
-      expect(rows).toEqual([{ billing_transactions: 0, commissions: 0 }])
+      expect(beforeRetry).toEqual([{ billing_transactions: 1, commissions: 0 }])
+
+      await db.exec('drop trigger fail_referral_commission_insert on public.referral_commissions; drop function public.fail_referral_commission_insert()')
+      await db.query('select public.referral_sync_commissions()')
+      const { rows: afterRetry } = await db.query<{ billing_transactions: number; commissions: number }>(`
+        select
+          (select count(*)::integer from public.billing_transactions) as billing_transactions,
+          (select count(*)::integer from public.referral_commissions) as commissions
+      `)
+      expect(afterRetry).toEqual([{ billing_transactions: 1, commissions: 1 }])
+    })
+  })
+
+  it('flushes a missed successful charge before its referral user link is detached', async () => {
+    await withDatabase(async (db) => {
+      const partnerId = await newPartner(db, await newUser(db))
+      const referredUserId = await newUser(db)
+      const attributionId = await newAttribution(db, partnerId, referredUserId)
+      await db.exec('alter table public.billing_transactions disable trigger referral_billing_transaction_commission')
+      const transactionId = await newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID())
+      await db.exec('alter table public.billing_transactions enable trigger referral_billing_transaction_commission')
+
+      await db.query('update public.billing_transactions set user_id = null where id = $1', [transactionId])
+      await db.query('delete from auth.users where id = $1', [referredUserId])
+
+      const { rows: commissionRows } = await db.query<{
+        attribution_id: string
+        billing_transaction_id: string
+        commission_cents: string
+      }>(`
+        select attribution_id, billing_transaction_id, commission_cents::text
+        from public.referral_commissions where attribution_id = $1
+      `, [attributionId])
+      const { rows: detached } = await db.query<{
+        referred_user_id: string | null
+        transaction_user_id: string | null
+      }>(`
+        select attribution.referred_user_id, transaction_row.user_id as transaction_user_id
+        from public.referral_attributions as attribution
+        join public.billing_transactions as transaction_row on transaction_row.id = $1
+        where attribution.id = $2
+      `, [transactionId, attributionId])
+
+      expect(commissionRows).toEqual([{
+        attribution_id: attributionId,
+        billing_transaction_id: transactionId,
+        commission_cents: '2017',
+      }])
+      expect(detached).toEqual([{ referred_user_id: null, transaction_user_id: null }])
     })
   })
 

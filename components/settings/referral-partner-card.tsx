@@ -393,31 +393,32 @@ export function ReferralPartnerCard({
                 </div>
               )}
               <div className="flex flex-col gap-3 border-t border-border pt-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
-                    {payoutsEnabled && <p>{copy.payoutHint}</p>}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {payoutsEnabled && (
+                <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+                  <p>{copy.ibanLast4}: <span className="font-mono text-foreground">•••• {partner.ibanLast4 ?? '—'}</span></p>
+                  {payoutsEnabled && <p>{copy.payoutHint}</p>}
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  {payoutsEnabled && (
+                    <div className="min-w-0 flex-1">
                       <ReferralPayoutControls
                         data={payoutData}
                         enabled={payoutsEnabled}
                         cashEnabled={cashPayoutsEnabled}
                         variant="compact"
                       />
-                    )}
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setShowCloseConfirm(true)}
-                      disabled={closeBlocked}
-                      title={closeBlocked ? copy.balanceOutstanding : undefined}
-                    >
-                      {copy.close}
-                    </Button>
-                  </div>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowCloseConfirm(true)}
+                    disabled={closeBlocked}
+                    title={closeBlocked ? copy.balanceOutstanding : undefined}
+                    className="w-fit shrink-0 self-start"
+                  >
+                    {copy.close}
+                  </Button>
                 </div>
                 {closeBlocked && <p className="text-xs text-muted-foreground">{copy.balanceOutstanding}</p>}
               </div>

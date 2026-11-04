@@ -236,7 +236,7 @@ export function ReferralPayoutControls({
 
   return (
     <>
-      <Card className={cn(variant === 'compact' && 'border-0 bg-transparent p-0 shadow-none')}>
+      <Card className={cn(variant === 'compact' && 'w-full min-w-0 border-0 bg-transparent p-0 shadow-none')}>
       <CardHeader className={cn('gap-1', variant === 'compact' && 'sr-only')}>
         <div className="flex items-center gap-2">
           <WalletCards className="size-4 text-primary" aria-hidden="true" />
@@ -244,7 +244,7 @@ export function ReferralPayoutControls({
         </div>
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
-      <CardContent className={cn('flex flex-col gap-4', variant === 'compact' && 'gap-2 p-0')}>
+      <CardContent className={cn('flex flex-col gap-4', variant === 'compact' && 'gap-2 p-3')}>
         {data.unavailable ? (
           <Alert variant="destructive"><AlertDescription>{copy.unavailable}</AlertDescription></Alert>
         ) : state ? (
@@ -340,14 +340,14 @@ export function ReferralPayoutControls({
               }}
               variant="outline"
               aria-label={copy.requestTitle}
-              className="w-full flex-col sm:flex-row"
+              className="w-full min-w-0 flex-col sm:flex-row"
             >
-              <ToggleGroupItem value="credit" className="w-full justify-start">
+              <ToggleGroupItem value="credit" className="w-full min-w-0 flex-1 justify-start">
                 <Coins data-icon="inline-start" />
                 {copy.credit}
               </ToggleGroupItem>
               {cashEnabled && (
-                <ToggleGroupItem value="cash" disabled={cashUnavailable || isSubmitting} className="w-full justify-start">
+                <ToggleGroupItem value="cash" disabled={cashUnavailable || isSubmitting} className="w-full min-w-0 flex-1 justify-start">
                   <Banknote data-icon="inline-start" />
                   {copy.cash}
                 </ToggleGroupItem>

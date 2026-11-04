@@ -503,17 +503,29 @@ set search_path = ''
 as $$
 begin
   if new.kind = 'charge' and new.status = 'succeeded' then
-    perform public.referral_record_commission_for_transaction(new.id);
+    begin
+      perform public.referral_record_commission_for_transaction(new.id);
+    exception when others then
+      raise warning 'referral commission sync deferred for transaction %', new.id;
+    end;
   end if;
 
   if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
     and (tg_op = 'INSERT' or old.status is distinct from new.status) then
-    perform public.referral_sync_commission_reversals(null, new.id);
+    begin
+      perform public.referral_sync_commission_reversals(null, new.id);
+    exception when others then
+      raise warning 'referral commission reversal sync deferred for transaction %', new.id;
+    end;
   elsif tg_op = 'UPDATE'
     and old.kind = 'charge'
     and old.status = 'succeeded'
     and new.status <> 'succeeded' then
-    perform public.referral_sync_commission_reversals(null, new.id);
+    begin
+      perform public.referral_sync_commission_reversals(null, new.id);
+    exception when others then
+      raise warning 'referral commission reversal sync deferred for transaction %', new.id;
+    end;
   end if;
 
   return new;
@@ -528,6 +540,36 @@ create trigger referral_billing_transaction_commission
 after insert or update of status, kind, amount_cents, subscription_id, user_id
 on public.billing_transactions
 for each row execute function public.referral_handle_billing_transaction();
+
+create or replace function public.referral_flush_commission_before_user_detach()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.user_id is not null
+    and new.user_id is null
+    and old.kind = 'charge'
+    and old.status = 'succeeded'
+    and old.subscription_id is not null
+    and old.amount_cents > 0 then
+    perform public.referral_record_commission_for_transaction(old.id);
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.referral_flush_commission_before_user_detach() from public, anon, authenticated;
+grant execute on function public.referral_flush_commission_before_user_detach() to service_role;
+
+drop trigger if exists referral_flush_commission_before_user_detach on public.billing_transactions;
+create trigger referral_flush_commission_before_user_detach
+before update of user_id on public.billing_transactions
+for each row
+when (old.user_id is not null and new.user_id is null)
+execute function public.referral_flush_commission_before_user_detach();
 
 create or replace function public.referral_queue_signup_notification(p_attribution_id uuid)
 returns jsonb
