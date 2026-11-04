@@ -29,6 +29,10 @@ export type GoogleAdsErrorCode =
   | 'currency_mismatch'
   | 'plan_changed'
   | 'confirmation_required'
+  | 'plan_not_found'
+  | 'plan_not_approved'
+  | 'budget_limit_exceeded'
+  | 'publish_in_progress'
   | 'ad_disapproved'
   | 'ad_review_in_progress'
   | 'ad_review_status_unavailable'
@@ -63,15 +67,19 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'rate_limited':
     case 'connection_limit_exceeded':
       return 429
-    case 'connection_not_found':
-    case 'account_not_found':
+  case 'connection_not_found':
+  case 'plan_not_found':
+  case 'account_not_found':
     case 'state_invalid':
     case 'flow_expired':
       return 404
     case 'connection_busy':
     case 'plan_changed':
-    case 'confirmation_required':
-    case 'ad_disapproved':
+  case 'plan_not_approved':
+  case 'confirmation_required':
+  case 'budget_limit_exceeded':
+  case 'publish_in_progress':
+  case 'ad_disapproved':
     case 'ad_review_in_progress':
       return 409
     case 'configuration_missing':

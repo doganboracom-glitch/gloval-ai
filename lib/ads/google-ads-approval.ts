@@ -3,7 +3,11 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 
 function canonicalize(value: unknown): string {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    const serialized = JSON.stringify(value)
+    if (serialized === undefined) throw new TypeError('Approval payload contains an unsupported value')
+    return serialized
+  }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new TypeError('Approval payload contains a non-finite number')
     return JSON.stringify(value)
