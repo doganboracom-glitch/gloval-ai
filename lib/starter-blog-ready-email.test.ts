@@ -64,7 +64,7 @@ describe('starter blog ready email', () => {
     expect(email.text).toContain(blogGuidance)
   })
 
-  it('claims one send per project and passes the same idempotency key to Resend', async () => {
+  it('sends and logs the same rendered copy with one idempotency key per project', async () => {
     stubs.getUserById.mockResolvedValue({ data: { user: { email: 'owner@gloval.ai' } }, error: null })
 
     await sendStarterBlogReadyEmail({ projectId: 'project-1', userId: 'user-1' })
@@ -88,6 +88,13 @@ describe('starter blog ready email', () => {
         idempotencyKey: dedupeKey,
       }),
     )
+
+    const sentEmail = stubs.sendTransactionalEmailDetailed.mock.calls[0][0]
+    const notificationLog = stubs.insert.mock.calls[0][0]
+    expect(sentEmail.html).toContain(blogGuidance)
+    expect(sentEmail.text).toContain(blogGuidance)
+    expect(notificationLog.body).toContain(blogGuidance)
+    expect(notificationLog.body).toBe(sentEmail.text)
     expect(stubs.update).toHaveBeenCalledWith({ status: 'sent' })
   })
 
