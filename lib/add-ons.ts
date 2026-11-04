@@ -17,29 +17,47 @@ import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
 
 export type AddOnKind = 'site' | 'product' | 'mail'
 export type SiteAddOnTarget = 'corporate' | 'ecommerce'
+export type AddOnBillingPeriod = 'month' | 'year'
 
 export type AddOnCode =
   | 'extra_site_1'
   | 'extra_site_3'
   | 'extra_site_5'
   | 'extra_corporate_site_1'
+  | 'extra_corporate_site_1_yearly'
   | 'extra_ecommerce_site_1'
+  | 'extra_ecommerce_site_1_yearly'
+  | 'extra_product_50'
+  | 'extra_product_50_yearly'
+  | 'extra_ecommerce_product_100'
+  | 'extra_ecommerce_product_100_yearly'
   | 'extra_product_100'
   | 'extra_product_200'
   | 'extra_product_500'
   | 'extra_mail_1'
+  | 'extra_mail_1_yearly'
   | 'extra_mail_5'
+  | 'extra_mail_5_yearly'
   | 'extra_mail_10'
   | 'extra_mail_25'
   | 'extra_mail_50'
+
+/** A yearly add-on costs this many monthly payments (12 months for the price of 10). */
+export const ADD_ON_YEARLY_PRICE_FACTOR = 10
+/** A yearly add-on is valid this many calendar months from the purchase. */
+export const ADD_ON_YEARLY_VALIDITY_MONTHS = 12
 
 export type AddOnDefinition = {
   code: AddOnCode
   kind: AddOnKind
   /** Plan limitinin üzerine eklenen kapasite. */
   capacity: number
-  /** Aylık liste fiyatı (kuruş). `billing_plans.price_cents` ile aynı tutulur; DB satırı önceliklidir. */
+  /** Liste fiyatı (kuruş, KDV dahil). `billing_plans.price_cents` ile aynı tutulur; DB satırı önceliklidir. */
   listPriceCents: number
+  /** Omitted = monthly. A yearly SKU is a one-time charge valid for 12 months. */
+  period?: AddOnBillingPeriod
+  /** Yearly SKUs only: the monthly SKU this one is priced from. */
+  monthlyCode?: AddOnCode
   /** New typed website offers only; legacy `extra_site_*` grants remain corporate capacity. */
   siteTarget?: SiteAddOnTarget
   /** False removes a legacy SKU from sale while preserving its existing grants and settlement mapping. */
@@ -48,32 +66,95 @@ export type AddOnDefinition = {
   /**
    * Geçerlilik modeli: add-on tek seferlik değildir ve sabit gün sayısına bağlı
    * değildir; satın alındığı ana aboneliğin faturalama dönemiyle birlikte
-   * geçerlidir (bkz. `isGrantActive`).
+   * geçerlidir (bkz. `isGrantActive`). Yıllık SKU'lar `twelve_months`: satın alma
+   * anından 12 ay geçerli, otomatik yenilenmez.
    */
-  validity: 'subscription_period'
+  validity: 'subscription_period' | 'twelve_months'
 }
 
 export const ADD_ONS: Record<AddOnCode, AddOnDefinition> = {
   extra_site_1: { code: 'extra_site_1', kind: 'site', capacity: 1, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
   extra_site_3: { code: 'extra_site_3', kind: 'site', capacity: 3, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
   extra_site_5: { code: 'extra_site_5', kind: 'site', capacity: 5, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  // Sold SKUs, in on-screen order. Yearly prices are 10x the monthly price (see ADD_ON_YEARLY_PRICE_FACTOR).
   extra_corporate_site_1: { code: 'extra_corporate_site_1', kind: 'site', siteTarget: 'corporate', capacity: 1, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
+  extra_corporate_site_1_yearly: { code: 'extra_corporate_site_1_yearly', kind: 'site', siteTarget: 'corporate', capacity: 1, listPriceCents: 199000, period: 'year', monthlyCode: 'extra_corporate_site_1', currency: 'TRY', validity: 'twelve_months' },
   extra_ecommerce_site_1: { code: 'extra_ecommerce_site_1', kind: 'site', siteTarget: 'ecommerce', capacity: 1, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period' },
-  extra_product_100: { code: 'extra_product_100', kind: 'product', capacity: 100, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period' },
-  extra_product_200: { code: 'extra_product_200', kind: 'product', capacity: 200, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period' },
-  extra_product_500: { code: 'extra_product_500', kind: 'product', capacity: 500, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
+  extra_ecommerce_site_1_yearly: { code: 'extra_ecommerce_site_1_yearly', kind: 'site', siteTarget: 'ecommerce', capacity: 1, listPriceCents: 499000, period: 'year', monthlyCode: 'extra_ecommerce_site_1', currency: 'TRY', validity: 'twelve_months' },
   // GLOVAL Mail: `capacity` is the number of mailboxes. This is the only place prices and sizes live.
   extra_mail_1: { code: 'extra_mail_1', kind: 'mail', capacity: 1, listPriceCents: 4900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_1_yearly: { code: 'extra_mail_1_yearly', kind: 'mail', capacity: 1, listPriceCents: 49000, period: 'year', monthlyCode: 'extra_mail_1', currency: 'TRY', validity: 'twelve_months' },
   extra_mail_5: { code: 'extra_mail_5', kind: 'mail', capacity: 5, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_5_yearly: { code: 'extra_mail_5_yearly', kind: 'mail', capacity: 5, listPriceCents: 199000, period: 'year', monthlyCode: 'extra_mail_5', currency: 'TRY', validity: 'twelve_months' },
+  extra_product_50: { code: 'extra_product_50', kind: 'product', capacity: 50, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
+  extra_product_50_yearly: { code: 'extra_product_50_yearly', kind: 'product', capacity: 50, listPriceCents: 199000, period: 'year', monthlyCode: 'extra_product_50', currency: 'TRY', validity: 'twelve_months' },
+  extra_ecommerce_product_100: { code: 'extra_ecommerce_product_100', kind: 'product', capacity: 100, listPriceCents: 34900, currency: 'TRY', validity: 'subscription_period' },
+  extra_ecommerce_product_100_yearly: { code: 'extra_ecommerce_product_100_yearly', kind: 'product', capacity: 100, listPriceCents: 349000, period: 'year', monthlyCode: 'extra_ecommerce_product_100', currency: 'TRY', validity: 'twelve_months' },
+  // Legacy product SKUs: off sale, but existing grants keep counting.
+  extra_product_100: { code: 'extra_product_100', kind: 'product', capacity: 100, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_product_200: { code: 'extra_product_200', kind: 'product', capacity: 200, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_product_500: { code: 'extra_product_500', kind: 'product', capacity: 500, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
   extra_mail_10: { code: 'extra_mail_10', kind: 'mail', capacity: 10, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
   extra_mail_25: { code: 'extra_mail_25', kind: 'mail', capacity: 25, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
   extra_mail_50: { code: 'extra_mail_50', kind: 'mail', capacity: 50, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
 }
 
-/** Every GLOVAL Mail add-on code, in catalog order. */
+/** Every GLOVAL Mail add-on code (monthly and yearly), in catalog order. */
 export const MAIL_ADD_ON_CODES: readonly AddOnCode[] = Object.values(ADD_ONS)
   .filter((def) => def.kind === 'mail')
   .map((def) => def.code)
+
+/** Every yearly (12-month, one-time) add-on code. */
+export const YEARLY_ADD_ON_CODES: readonly AddOnCode[] = Object.values(ADD_ONS)
+  .filter((def) => def.period === 'year')
+  .map((def) => def.code)
+
+export function addOnBillingPeriod(code: string): AddOnBillingPeriod {
+  return Object.prototype.hasOwnProperty.call(ADD_ONS, code) && ADD_ONS[code as AddOnCode].period === 'year'
+    ? 'year'
+    : 'month'
+}
+
+/** Adds calendar months in UTC, clamping to the last day of a shorter month (31 Jan + 1 = 28/29 Feb). */
+export function addMonthsUtc(from: Date, months: number): Date {
+  const target = new Date(from.getTime())
+  const day = target.getUTCDate()
+  target.setUTCDate(1)
+  target.setUTCMonth(target.getUTCMonth() + months)
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+  target.setUTCDate(Math.min(day, lastDay))
+  return target
+}
+
+/**
+ * The `expires_at` a new grant receives. Monthly add-ons end with the
+ * subscription period they were bought in; yearly ones last 12 months from the
+ * purchase and are never renewed.
+ */
+export function resolveAddOnExpiry(code: AddOnCode, subscriptionPeriodEnd: string, purchasedAt: Date): string {
+  if (ADD_ONS[code].period === 'year') {
+    return addMonthsUtc(purchasedAt, ADD_ON_YEARLY_VALIDITY_MONTHS).toISOString()
+  }
+  return subscriptionPeriodEnd
+}
+
+/** What the sales screen shows, grouped per card and ordered as the menu rows. */
+export type AddOnSaleGroupId = 'website' | 'email' | 'product'
+export const ADD_ON_SALE_GROUPS: Record<AddOnSaleGroupId, readonly AddOnCode[]> = {
+  website: [
+    'extra_corporate_site_1',
+    'extra_corporate_site_1_yearly',
+    'extra_ecommerce_site_1',
+    'extra_ecommerce_site_1_yearly',
+  ],
+  email: ['extra_mail_1', 'extra_mail_1_yearly', 'extra_mail_5', 'extra_mail_5_yearly'],
+  product: [
+    'extra_product_50',
+    'extra_product_50_yearly',
+    'extra_ecommerce_product_100',
+    'extra_ecommerce_product_100_yearly',
+  ],
+}
 
 /** `billing_plans` içinden add-on fiyatını çözmek için gereken alanlar. */
 export type AddOnPlanRow = {
@@ -106,7 +187,7 @@ export function resolveAddOnPrices(rows: readonly AddOnPlanRow[]): Record<AddOnC
       row &&
       row.active !== false &&
       (row.product_category ?? 'addon') === 'addon' &&
-      (row.interval ?? 'month') === 'month' &&
+      (row.interval ?? 'month') === (def.period ?? 'month') &&
       Number.isInteger(row.price_cents) &&
       row.price_cents > 0
     out[def.code] = usable
@@ -174,6 +255,15 @@ export const ADD_ON_ENTITLED_SUBSCRIPTION_STATUSES: readonly string[] = [
  * ödeme bekleyen ise ya da aboneliğe bağlı değilse kapasite 0'dır.
  */
 export function grantEffectiveEnd(grant: AddOnGrant): string | null {
+  if (addOnBillingPeriod(grant.addonCode) === 'year') {
+    // Yearly: the 12-month window is the grant's own `expiresAt`; it also stops
+    // when the main subscription's period does (same rule as a monthly add-on).
+    if (!grant.expiresAt) return null
+    if (!grant.subscriptionPeriodEnd) return grant.expiresAt
+    return new Date(grant.subscriptionPeriodEnd) < new Date(grant.expiresAt)
+      ? grant.subscriptionPeriodEnd
+      : grant.expiresAt
+  }
   return grant.subscriptionPeriodEnd ?? grant.expiresAt
 }
 
@@ -295,7 +385,8 @@ export type AddOnCatalogItem = {
   kind: AddOnKind
   siteTarget?: SiteAddOnTarget
   capacity: number
-  /** Sunucuda çözümlenen aylık fiyat (kuruş) ve para birimi. */
+  period: AddOnBillingPeriod
+  /** Sunucuda çözümlenen fiyat (kuruş, KDV dahil; yıllıkta 12 aylık tek tahsilat) ve para birimi. */
   priceCents: number
   currency: string
   /** Sunucunun, kullanıcının paketine göre belirlediği uygunluk. */
@@ -345,7 +436,8 @@ export function buildAddOnOverview(
       kind: def.kind,
       ...(def.siteTarget ? { siteTarget: def.siteTarget } : {}),
       capacity: def.capacity,
-      expiresAt: grantEffectiveEnd(grant),
+      // A yearly add-on shows its own 12-month end, not the monthly plan's period end.
+      expiresAt: def.period === 'year' ? grant.expiresAt : grantEffectiveEnd(grant),
     })
   }
 
@@ -379,6 +471,7 @@ export function buildAddOnOverview(
         kind: def.kind,
         ...(def.siteTarget ? { siteTarget: def.siteTarget } : {}),
         capacity: def.capacity,
+        period: def.period ?? 'month',
         priceCents: prices[def.code].priceCents,
         currency: prices[def.code].currency,
         eligible: isAddOnEligibleForCode(def.code, planCode),

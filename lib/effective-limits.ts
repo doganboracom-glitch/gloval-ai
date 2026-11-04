@@ -9,6 +9,7 @@ import {
   buildAddOnOverview,
   isAddOnCode,
   isAddOnEligibleForCode,
+  resolveAddOnExpiry,
   resolveAddOnPrices,
   resolveEffectiveProductLimit,
   resolveEffectiveSiteLimits,
@@ -193,7 +194,8 @@ export async function grantAddOn(input: {
       addon_code: def.code,
       kind: def.kind,
       status: 'active',
-      expires_at: periodEnd,
+      // Monthly: the subscription's period end. Yearly: purchase + 12 months, no renewal.
+      expires_at: resolveAddOnExpiry(def.code, periodEnd, new Date()),
       idempotency_key: input.idempotencyKey,
       source: input.source ?? null,
       ...(input.purchaseId ? { purchase_id: input.purchaseId } : {}),

@@ -1,15 +1,18 @@
 'use client'
 
 import { useId, useState } from 'react'
-import { Building2, Loader2, Mail } from 'lucide-react'
+import { Building2, Loader2, Mail, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/billing-utils'
 import { fillTemplate } from '@/lib/addon-purchase-outcome'
-import type { AddOnCatalogItem, AddOnCode } from '@/lib/add-ons'
+import type { AddOnBillingPeriod, AddOnCatalogItem, AddOnCode } from '@/lib/add-ons'
 
 type AddOnAllowanceCardProps = {
-  kind: 'site' | 'mail'
+  kind: 'site' | 'mail' | 'product'
+  /** Monthly and yearly rows in display order; each row is its own select option. */
   items: AddOnCatalogItem[]
+  /** Which period is preselected: the buyer's main plan period. */
+  defaultPeriod: AddOnBillingPeriod
   title: string
   description: string
   selectLabel: string
@@ -20,8 +23,9 @@ type AddOnAllowanceCardProps = {
   unitLabelFor: (item: AddOnCatalogItem) => string
   notEligible: string
   notEligibleBadge: string
-  perMonth: string
-  periodNote: string
+  periodLabels: Record<AddOnBillingPeriod, string>
+  yearlyBadge: string
+  periodNotes: Record<AddOnBillingPeriod, string>
   vatIncluded: string
   buyLabel: string
   buySelectedAriaLabel: string
@@ -31,9 +35,22 @@ type AddOnAllowanceCardProps = {
   purchaseLocked: boolean
 }
 
+const ICONS = { site: Building2, mail: Mail, product: Package } as const
+
+export function pickDefaultItem(
+  items: AddOnCatalogItem[],
+  defaultPeriod: AddOnBillingPeriod,
+): AddOnCatalogItem | null {
+  const eligible = items.filter((item) => item.eligible)
+  return (
+    eligible.find((item) => item.period === defaultPeriod) ?? eligible[0] ?? items[0] ?? null
+  )
+}
+
 export function AddOnAllowanceCard({
   kind,
   items,
+  defaultPeriod,
   title,
   description,
   selectLabel,
@@ -44,8 +61,9 @@ export function AddOnAllowanceCard({
   unitLabelFor,
   notEligible,
   notEligibleBadge,
-  perMonth,
-  periodNote,
+  periodLabels,
+  yearlyBadge,
+  periodNotes,
   vatIncluded,
   buyLabel,
   buySelectedAriaLabel,
@@ -55,35 +73,32 @@ export function AddOnAllowanceCard({
   purchaseLocked,
 }: AddOnAllowanceCardProps) {
   const id = useId()
-  const firstEligibleItem = items.find((item) => item.eligible)
   const [selectedCode, setSelectedCode] = useState<AddOnCode | null>(
-    firstEligibleItem?.code ?? items[0]?.code ?? null,
+    () => pickDefaultItem(items, defaultPeriod)?.code ?? null,
   )
   const eligible = items.some((item) => item.eligible)
   const selectedItem =
     items.find((item) => item.code === selectedCode && item.eligible) ??
-    firstEligibleItem ??
-    items[0] ??
-    null
+    pickDefaultItem(items, defaultPeriod)
   const hasUnavailableOffers = eligible && items.some((item) => !item.eligible)
   const itemLabel = selectedItem ? unitLabelFor(selectedItem) : ''
-  const priceLabel = selectedItem
-    ? formatMoney(selectedItem.priceCents, selectedItem.currency)
-    : ''
+  const priceLabel = selectedItem ? formatMoney(selectedItem.priceCents, selectedItem.currency) : ''
+  const periodLabel = selectedItem ? periodLabels[selectedItem.period] : ''
   const busy = selectedItem !== null && busyCode === selectedItem.code
-  const Icon = kind === 'site' ? Building2 : Mail
+  const Icon = ICONS[kind]
 
   return (
     <article
       aria-labelledby={`${id}-title`}
-      className={`rounded-2xl border border-border bg-card/70 p-5 ${eligible ? '' : 'opacity-70'}`}
+      data-addon-card={kind}
+      className={`min-w-0 rounded-2xl border border-border bg-card/70 p-4 sm:p-5 ${eligible ? '' : 'opacity-70'}`}
     >
       <div className="flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
           <Icon className="size-4" aria-hidden />
         </span>
         <div className="min-w-0">
-          <h3 id={`${id}-title`} className="font-display text-base font-semibold">
+          <h3 id={`${id}-title`} className="font-display text-base font-semibold text-balance">
             {title}
           </h3>
           <p id={`${id}-description`} className="mt-0.5 text-sm text-muted-foreground">
@@ -101,18 +116,21 @@ export function AddOnAllowanceCard({
             <select
               id={`${id}-offer`}
               aria-describedby={`${id}-description`}
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 w-full min-w-0 max-w-full truncate rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               value={selectedItem.code}
               disabled={purchaseLocked}
               onChange={(event) => setSelectedCode(event.currentTarget.value as AddOnCode)}
             >
               {items.map((item) => {
-                const label = fillTemplate(optionLabel, {
+                const base = fillTemplate(optionLabel, {
                   item: unitLabelFor(item),
-                  amount: new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(item.priceCents / 100),
+                  amount: new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(
+                    item.priceCents / 100,
+                  ),
                   currency: currencyLabel,
-                  period: perMonth,
+                  period: periodLabels[item.period],
                 })
+                const label = item.period === 'year' ? `${base} · ${yearlyBadge}` : base
                 return (
                   <option key={item.code} value={item.code} disabled={!item.eligible}>
                     {item.eligible ? label : `${label} — ${unavailableOptionLabel}`}
@@ -129,7 +147,14 @@ export function AddOnAllowanceCard({
             <p className="font-display text-3xl font-bold tabular-nums text-foreground">
               {priceLabel}
             </p>
-            <span className="text-sm text-muted-foreground">{perMonth}</span>
+            <span className="text-sm text-muted-foreground" data-testid="addon-period">
+              {periodLabel}
+            </span>
+            {selectedItem.period === 'year' ? (
+              <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">
+                {yearlyBadge}
+              </span>
+            ) : null}
             <span className="basis-full text-sm text-muted-foreground">{vatIncluded}</span>
           </div>
 
@@ -141,7 +166,7 @@ export function AddOnAllowanceCard({
             aria-label={fillTemplate(buySelectedAriaLabel, {
               item: itemLabel,
               price: priceLabel,
-              period: perMonth,
+              period: periodLabel,
             })}
             data-addon-code={selectedItem.code}
             onClick={() => onBuy(selectedItem.code)}
@@ -149,7 +174,9 @@ export function AddOnAllowanceCard({
             {busy ? <Loader2 data-icon="inline-start" className="animate-spin" aria-hidden="true" /> : null}
             {busy ? buyingLabel : buyLabel}
           </Button>
-          <p className="text-sm text-muted-foreground">{periodNote}</p>
+          <p className="text-sm text-muted-foreground" data-testid="addon-period-note">
+            {periodNotes[selectedItem.period]}
+          </p>
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
