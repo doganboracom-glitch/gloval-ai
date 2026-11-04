@@ -562,12 +562,17 @@ export class DomainNameApiProvider
     }
     if (res.result !== 'OK' || !res.data) return null
     const d = res.data as Record<string, unknown>
-    const expiry = parseProviderDate(readRawField(client.lastResponse, 'expirationDate'))
-    const start = parseProviderDate(readRawField(client.lastResponse, 'startDate'))
-    return {
-      locked: d.LockStatus === 'true',
+  const raw = client.lastResponse
+  const rawFields = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const expiry = parseProviderDate(readRawField(raw, 'expirationDate'))
+  const start = parseProviderDate(readRawField(raw, 'startDate'))
+  const remaining = rawFields.remainingDay
+  return {
+    locked: asBool(rawFields.lockStatus),
+
       expiresAt: expiry.instant,
       startedAt: start.instant,
+      remainingDays: typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : null,
       expiresAtRaw: expiry.raw,
       startedAtRaw: start.raw,
       status: String(d.Status ?? ''),

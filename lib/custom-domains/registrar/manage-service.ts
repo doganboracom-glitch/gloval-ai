@@ -4,7 +4,12 @@ import { reserveUserHourly } from './rate-limit'
 import type { DomainErrorCode } from '../types'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
-import { REGISTRAR_CAPABILITIES, type RegistrarCapability } from './capabilities'
+import {
+  isRegistrarCapabilityEnabled,
+  isTransferLockChangeEnabled,
+  REGISTRAR_CAPABILITIES,
+  type RegistrarCapability,
+} from './capabilities'
 import { requireRegisteredByUs } from './ownership'
 import { getDomainRegistrarProvider } from './provider'
 import {
@@ -97,7 +102,7 @@ async function mutate(
   const g = await guard(userId, rawDomain)
   if (!g.ok) return g
   // Checked after ownership so a stranger learns nothing, and before any provider call.
-  if (capability && !REGISTRAR_CAPABILITIES[capability]) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
+  if (capability && !isRegistrarCapabilityEnabled(capability)) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
   try {
     const { changed } = await run(g.registrar, g.domain)
     return { ok: true, changed }
@@ -181,12 +186,12 @@ export async function changeLock(
 
   const g = await guard(userId, rawDomain)
   if (!g.ok) return g
-  if (!REGISTRAR_CAPABILITIES.transferLockChange) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
+  if (!isTransferLockChangeEnabled() || !locked) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
 
   try {
     const details = await g.registrar.getManagedDetails(g.domain)
     if (!details) return { ok: false, error: 'NOT_FOUND' }
-    if (!isActiveAndUnexpired(details)) return { ok: false, error: 'PROVIDER_REFUSED' }
+    if (!isActiveAndUnexpired(details) || details.locked === null) return { ok: false, error: 'PROVIDER_REFUSED' }
     if (details.locked === locked) return { ok: true, changed: false }
 
     const reservation = await reserveUserHourly('transfer-lock', 'domain:transfer-lock', userId)
@@ -199,7 +204,14 @@ export async function changeLock(
         userId,
         domain: g.domain,
         eventType: 'transfer_lock_changed',
-        details: { outcome: 'success', changed: result.changed, previousLocked: details.locked, newLocked: locked },
+        details: {
+          outcome: 'success',
+          changed: result.changed,
+          previousLocked: details.locked,
+          newLocked: locked,
+          locked: true,
+          source: 'user_relock',
+        },
       })
       return { ok: true, changed: result.changed }
     } catch (e) {
@@ -211,6 +223,8 @@ export async function changeLock(
           outcome: e instanceof RegistrarError && e.code === 'OUTCOME_UNKNOWN' ? 'unconfirmed' : 'failed',
           previousLocked: details.locked,
           newLocked: locked,
+          locked: null,
+          source: 'user_relock',
         },
       })
       throw e

@@ -15,6 +15,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/domain-transfer-relock",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/ads-purge",
       "schedule": "15 3 * * *"
     },

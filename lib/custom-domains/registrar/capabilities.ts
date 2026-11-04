@@ -1,14 +1,18 @@
-/**
- * Capabilities exposed to customers. Nameserver writes use the existing
- * ModifyNameServer adapter and are read back before success is reported; the
- * server additionally requires ownership, an active unexpired registration,
- * and a per-user rate-limit reservation. Provider refusals remain generic.
- * Transfer-lock updates stay disabled because the provider did not reflect the
- * change in its read-back.
- */
-export const REGISTRAR_CAPABILITIES = {
-  nameserverChange: true,
-  transferLockChange: false,
-} as const
+import 'server-only'
 
-export type RegistrarCapability = keyof typeof REGISTRAR_CAPABILITIES
+import { REGISTRAR_PUBLIC_CAPABILITIES } from './capabilities-public'
+
+/** Server-side capability defaults. Transfer-lock writes require an explicit flag. */
+export const REGISTRAR_CAPABILITIES = REGISTRAR_PUBLIC_CAPABILITIES
+
+export type RegistrarCapability = keyof typeof REGISTRAR_CAPABILITIES | 'transferLockChange'
+
+export function isTransferLockChangeEnabled(): boolean {
+  return process.env.DOMAIN_TRANSFER_LOCK_CHANGE_ENABLED === '1'
+}
+
+export function isRegistrarCapabilityEnabled(capability: RegistrarCapability): boolean {
+  return capability === 'transferLockChange'
+    ? isTransferLockChangeEnabled()
+    : REGISTRAR_CAPABILITIES[capability]
+}

@@ -14,8 +14,11 @@ import { toQuoteView, type DomainQuoteView } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
 import { resolveOrderPricing, type OrderPricing } from '../pricing/order'
 import { resolveEmailLang } from '@/lib/email/lang'
-import { REGISTRAR_CAPABILITIES } from './capabilities'
+import { isTransferLockChangeEnabled } from './capabilities'
 import { recordDomainAuditEvent } from './audit'
+import { findOpenTransferWindow } from './transfer-window-store'
+import { getRegistrarTransferState, type RegistrarTransferState } from './transfer-window-logic'
+import { isActiveAndUnexpired } from './nameserver-access'
 import { reserveUserHourly } from './rate-limit'
 import { notifyTransferCodeViewed } from './transfer-code-notice'
 import { requireRegisteredByUs } from './ownership'
@@ -23,7 +26,7 @@ import { getDomainRegistrarProvider } from './provider'
 import { parsePurchaseDomain } from './service'
 import { encryptAuthCode, isTransferSecretConfigured } from './transfer-crypto'
 import { finalizeTransferIn, isTransferSupportedTld, syncTransfersForUser } from './transfer-service'
-import { isTransferCapable } from './types'
+import { isTransferCapable, type OwnedDomainInfo } from './types'
 
 /**
  * Transfer-in (bring a domain to us) and transfer-out (lock / unlock / EPP
@@ -48,6 +51,12 @@ export type TransferErrorCode =
   | 'PROVIDER_ERROR'
   | 'UNSUPPORTED'
   | 'RATE_LIMITED'
+  | 'WINDOW_UNAVAILABLE'
+  | 'WINDOW_NOT_OPEN'
+  | 'WINDOW_EXPIRED'
+  | 'WINDOW_LIMIT_REACHED'
+  | 'CONFIRMATION_MISMATCH'
+  | 'STATUS_UNVERIFIED'
   | 'FAILED'
 
 async function requireUser() {
@@ -247,71 +256,122 @@ export async function getMyDomainTransfers(): Promise<MyDomainTransfer[]> {
 
 const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000
 
+export type TransferWindowSummary = {
+  id: string
+  openedAt: string
+  relockAt: string
+  extensions: number
+}
+
 export type TransferOutStatus =
   | {
       ok: true
       supported: true
-      locked: boolean
+      featureEnabled: boolean
+      locked: boolean | null
       expiresAt: string | null
       /** ISO date after which transfer-out is allowed; null when already allowed. */
       restrictedUntil: string | null
+      restrictionVerified: boolean
+      activeAndUnexpired: boolean
+      liveStatusReadable: boolean
+      transferState: RegistrarTransferState
+      windowAvailable: boolean
+      activeWindow: TransferWindowSummary | null
     }
   | { ok: true; supported: false; reason: 'UNSUPPORTED_TLD' | 'NOT_REGISTERED_HERE' }
   | { ok: false; error: TransferErrorCode }
 
 export async function getMyTransferOutStatus(domainInput: string): Promise<TransferOutStatus> {
   const { userId } = await requireUser()
-  const registrar = getDomainRegistrarProvider()
-  if (!isTransferCapable(registrar)) return { ok: false, error: 'NOT_CONFIGURED' }
+  const featureEnabled = isTransferLockChangeEnabled()
   const domain = await requireRegisteredByUs(userId, domainInput)
   if (!domain) return { ok: true, supported: false, reason: 'NOT_REGISTERED_HERE' }
   const parsed = parsePurchaseDomain(domain)
   if (!parsed || !isTransferSupportedTld(parsed.tld)) return { ok: true, supported: false, reason: 'UNSUPPORTED_TLD' }
-  try {
-    const info = await registrar.getOwnedDomainInfo(domain)
-    if (!info) return { ok: false, error: 'NOT_FOUND' }
-    const startedMs = info.startedAt ? Date.parse(info.startedAt) : Number.NaN
-    const until = Number.isFinite(startedMs) ? startedMs + SIXTY_DAYS_MS : 0
-    return {
-      ok: true,
-      supported: true,
-      locked: info.locked,
-      expiresAt: info.expiresAt,
-      restrictedUntil: until > Date.now() ? new Date(until).toISOString() : null,
+
+  const registrar = getDomainRegistrarProvider()
+  let info: OwnedDomainInfo | null = null
+  if (isTransferCapable(registrar)) {
+    try {
+      info = await registrar.getOwnedDomainInfo(domain)
+    } catch {
+      info = null
     }
-  } catch {
-    return { ok: false, error: 'PROVIDER_ERROR' }
+  }
+
+  let windowAvailable = !featureEnabled
+  let activeWindow: TransferWindowSummary | null = null
+  if (featureEnabled) {
+    try {
+      const result = await findOpenTransferWindow(createAdminClient(), domain, userId)
+      windowAvailable = result.ok
+      if (result.ok && result.value) {
+        activeWindow = {
+          id: result.value.id,
+          openedAt: result.value.opened_at,
+          relockAt: result.value.relock_at,
+          extensions: result.value.extensions,
+        }
+      }
+    } catch {
+      windowAvailable = false
+    }
+  }
+
+  const startedMs = info?.startedAt ? Date.parse(info.startedAt) : Number.NaN
+  const restrictionVerified = Number.isFinite(startedMs)
+  const until = restrictionVerified ? startedMs + SIXTY_DAYS_MS : Number.NaN
+  const transferState = info ? getRegistrarTransferState(info.status) : 'unknown'
+  const activeAndUnexpired = info
+    ? isActiveAndUnexpired({
+        status: info.status,
+        expiresAt: info.expiresAt,
+        remainingDays: info.remainingDays ?? null,
+      })
+    : false
+
+  return {
+    ok: true,
+    supported: true,
+    featureEnabled,
+    locked: info?.locked ?? null,
+    expiresAt: info?.expiresAt ?? null,
+    restrictedUntil: Number.isFinite(until) && until > Date.now() ? new Date(until).toISOString() : null,
+    restrictionVerified,
+    activeAndUnexpired,
+    liveStatusReadable: Boolean(info && info.locked !== null && transferState !== 'unknown'),
+    transferState,
+    windowAvailable,
+    activeWindow,
   }
 }
 
+/** The legacy direct lock mutation is intentionally disabled; use the guarded transfer-window actions. */
 export async function setMyTransferLock(
   domainInput: string,
   locked: boolean,
 ): Promise<{ ok: true; locked: boolean } | { ok: false; error: TransferErrorCode }> {
   const { userId } = await requireUser()
-  const registrar = getDomainRegistrarProvider()
-  if (!isTransferCapable(registrar)) return { ok: false, error: 'NOT_CONFIGURED' }
+  if (!domainInput || typeof locked !== 'boolean') return { ok: false, error: 'INVALID_DOMAIN' }
   const domain = await requireRegisteredByUs(userId, domainInput)
   if (!domain) return { ok: false, error: 'NOT_FOUND' }
-  // OTE showed an `OK` reply with no state change, so a "success" here cannot be trusted.
-  if (!REGISTRAR_CAPABILITIES.transferLockChange) return { ok: false, error: 'UNSUPPORTED' }
-  try {
-  await registrar.setTransferLock(domain, locked)
-    return { ok: true, locked }
-  } catch {
-    return { ok: false, error: 'PROVIDER_ERROR' }
-  }
+  const parsed = parsePurchaseDomain(domain)
+  if (!parsed) return { ok: false, error: 'INVALID_DOMAIN' }
+  if (!isTransferSupportedTld(parsed.tld)) return { ok: false, error: 'UNSUPPORTED_TLD' }
+  return { ok: false, error: 'UNSUPPORTED' }
 }
 
-/** Returns the EPP code once to the authenticated owner. The code is not logged or stored. */
+/** Legacy behavior remains available only while the guarded window flow is disabled. */
 export async function revealMyAuthCode(
   domainInput: string,
 ): Promise<{ ok: true; authCode: string } | { ok: false; error: TransferErrorCode }> {
   const status = await getMyTransferOutStatus(domainInput)
   if (!status.ok) return status
   if (!status.supported) return { ok: false, error: status.reason === 'UNSUPPORTED_TLD' ? 'UNSUPPORTED_TLD' : 'NOT_FOUND' }
+  if (status.featureEnabled) return { ok: false, error: 'UNSUPPORTED' }
   if (status.restrictedUntil) return { ok: false, error: 'RESTRICTED_60_DAYS' }
-  if (status.locked) return { ok: false, error: 'DOMAIN_LOCKED' }
+  if (status.locked !== false) return { ok: false, error: 'DOMAIN_LOCKED' }
 
   const { userId, email, lang } = await requireUser()
   const registrar = getDomainRegistrarProvider()
@@ -319,7 +379,6 @@ export async function revealMyAuthCode(
   const domain = await requireRegisteredByUs(userId, domainInput)
   if (!domain) return { ok: false, error: 'NOT_FOUND' }
 
-  // Fails closed: when the limiter cannot answer, the code is not revealed.
   const reservation = await reserveUserHourly('transfer-code', 'domain:transfer-code', userId)
   if (reservation === 'limited') {
     await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'rate_limited' } })
