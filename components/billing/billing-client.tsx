@@ -1234,7 +1234,7 @@ export function BillingClient({
                     {formatMoney(pack.priceCents, pack.currency)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    İşlem başına {formatMoney(Math.round(pack.priceCents / pack.credits), pack.currency)}, KDV dahil
+                    İşlem başına {formatMoney(Math.round(pack.priceCents / pack.credits), pack.currency)} KDV dahil
                   </p>
                   <Button
                     className="mt-5 w-full"
