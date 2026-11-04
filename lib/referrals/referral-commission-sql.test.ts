@@ -292,6 +292,13 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
           (select count(*)::integer from public.referral_commissions) as commissions
       `)
       expect(beforeRetry).toEqual([{ billing_transactions: 1, commissions: 0 }])
+      await expect(db.query('update public.billing_transactions set user_id = null where id = $1', [transactionId]))
+        .rejects.toThrow('commission persistence unavailable')
+      const { rows: stillLinked } = await db.query<{ user_id: string | null }>(
+        'select user_id from public.billing_transactions where id = $1',
+        [transactionId],
+      )
+      expect(stillLinked).toEqual([{ user_id: referredUserId }])
 
       await db.exec('drop trigger fail_referral_commission_insert on public.referral_commissions; drop function public.fail_referral_commission_insert()')
       await db.query('select public.referral_sync_commissions()')
