@@ -24,7 +24,15 @@ vi.mock('next/headers', () => ({ headers: async () => new Headers() }))
 vi.mock('@/lib/platform-buyer', () => ({
   resolvePlatformBuyerPublicConfig: async () => ({ buyer: { fullName: 'Ali Veli' } }),
 }))
-vi.mock('@/lib/notify', () => ({ logUserEvent: vi.fn(), formatTicketNumber: (ref: string) => ref }))
+vi.mock('server-only', () => ({}))
+vi.mock('@/lib/notify', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/notify')>()
+  return {
+    ...actual,
+    logUserEvent: vi.fn(),
+    formatTicketNumber: (ref: string) => ref,
+  }
+})
 vi.mock('@/lib/mail/access-trigger', () => ({ triggerMailAccessSync: vi.fn() }))
 vi.mock('@/lib/payments/init-failure-report', () => ({
   reportPaymentInitFailure: async () => ({ userError: 'payment_init_failed', code: 'test' }),
