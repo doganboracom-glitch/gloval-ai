@@ -68,13 +68,14 @@ function renderAllowanceCard({
       title="Allowance"
       description="Select a capacity."
       selectLabel={selectLabel}
-      optionLabel="{item} — {price} {period}"
+      optionLabel="{item} - {amount} {currency} {period}"
+      currencyLabel="TL"
       unitLabelFor={unitLabelFor}
       unavailableOptionLabel="Unavailable on your plan"
       availabilityHint="Some offers require a different plan."
       notEligible="An active plan is required."
       notEligibleBadge="Not available"
-      perMonth="/ month"
+      perMonth="/ mo"
       periodNote="Valid for your current billing period."
       vatIncluded="VAT included"
       buyLabel="Buy selected"

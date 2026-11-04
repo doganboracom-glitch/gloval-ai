@@ -1,5 +1,5 @@
--- Refresh the sellable allowance SKUs without deleting legacy catalog rows or grants.
--- This migration is intentionally idempotent and is not applied by the v0 task.
+-- UNAPPLIED — apply manually after review; this task does not mutate the live database.
+-- Preserve legacy catalog rows and grants; only disable discontinued SKUs for new sales.
 
 update public.billing_plans
 set active = false
@@ -67,14 +67,4 @@ values
     29,
     'addon'
   )
-on conflict (code) do update set
-  name = excluded.name,
-  description = excluded.description,
-  price_cents = excluded.price_cents,
-  currency = excluded.currency,
-  interval = excluded.interval,
-  trial_days = excluded.trial_days,
-  features = excluded.features,
-  active = excluded.active,
-  sort_order = excluded.sort_order,
-  product_category = excluded.product_category;
+on conflict (code) do nothing;

@@ -14,6 +14,7 @@ type AddOnAllowanceCardProps = {
   description: string
   selectLabel: string
   optionLabel: string
+  currencyLabel: string
   unavailableOptionLabel: string
   availabilityHint: string
   unitLabelFor: (item: AddOnCatalogItem) => string
@@ -37,6 +38,7 @@ export function AddOnAllowanceCard({
   description,
   selectLabel,
   optionLabel,
+  currencyLabel,
   unavailableOptionLabel,
   availabilityHint,
   unitLabelFor,
@@ -107,7 +109,8 @@ export function AddOnAllowanceCard({
               {items.map((item) => {
                 const label = fillTemplate(optionLabel, {
                   item: unitLabelFor(item),
-                  price: formatMoney(item.priceCents, item.currency),
+                  amount: new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(item.priceCents / 100),
+                  currency: currencyLabel,
                   period: perMonth,
                 })
                 return (
@@ -119,7 +122,7 @@ export function AddOnAllowanceCard({
             </select>
           </div>
           {hasUnavailableOffers ? (
-            <p className="text-xs text-muted-foreground">{availabilityHint}</p>
+            <p className="text-sm text-muted-foreground">{availabilityHint}</p>
           ) : null}
 
           <div aria-live="polite" className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -127,7 +130,7 @@ export function AddOnAllowanceCard({
               {priceLabel}
             </p>
             <span className="text-sm text-muted-foreground">{perMonth}</span>
-            <span className="basis-full text-xs text-muted-foreground">{vatIncluded}</span>
+            <span className="basis-full text-sm text-muted-foreground">{vatIncluded}</span>
           </div>
 
           <Button
@@ -146,11 +149,11 @@ export function AddOnAllowanceCard({
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
             {busy ? buyingLabel : buyLabel}
           </Button>
-          <p className="text-xs text-muted-foreground">{periodNote}</p>
+          <p className="text-sm text-muted-foreground">{periodNote}</p>
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-foreground">
             {notEligibleBadge}
           </span>
           <span>{notEligible}</span>

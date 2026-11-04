@@ -337,8 +337,14 @@ export function AddOnsPanel({
     if (def.kind === 'site' && def.siteTarget === 'ecommerce') {
       return fill(a.ecommerceSiteUnit, { n: def.capacity })
     }
+    if (def.kind === 'site' && def.saleEnabled === false) {
+      return fill(a.legacySiteUnit, { n: def.capacity })
+    }
     if (def.kind === 'mail' && (code === 'extra_mail_1' || code === 'extra_mail_5')) {
       return fill(def.capacity === 1 ? a.emailUnitOne : a.emailUnitMany, { n: def.capacity })
+    }
+    if (def.kind === 'mail' && def.saleEnabled === false) {
+      return fill(a.legacyMailUnit, { n: def.capacity })
     }
     const template = def.kind === 'site' ? a.siteUnit : def.kind === 'mail' ? mc.unit : a.productUnit
     return fill(template, { n: def.capacity })
@@ -648,12 +654,13 @@ export function AddOnsPanel({
               description={a.websiteAllowanceDescription}
               selectLabel={a.websiteAllowanceSelectLabel}
               optionLabel={a.allowanceOptionLabel}
+              currencyLabel={a.priceCurrency}
               unavailableOptionLabel={a.optionUnavailable}
               availabilityHint={a.optionAvailabilityHint}
               unitLabelFor={websiteUnitLabelFor}
               notEligible={a.notEligibleSite}
               notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.perMonth}
+              perMonth={a.allowancePerMonth}
               periodNote={a.periodNote}
               vatIncluded={t.billing.checkout.vatIncluded}
               buyLabel={a.buy}
@@ -687,12 +694,13 @@ export function AddOnsPanel({
               description={a.emailAllowanceDescription}
               selectLabel={a.emailAllowanceSelectLabel}
               optionLabel={a.allowanceOptionLabel}
+              currencyLabel={a.priceCurrency}
               unavailableOptionLabel={a.optionUnavailable}
               availabilityHint={a.optionAvailabilityHint}
               unitLabelFor={emailUnitLabelFor}
               notEligible={a.notEligibleMail}
               notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.perMonth}
+              perMonth={a.allowancePerMonth}
               periodNote={a.periodNote}
               vatIncluded={t.billing.checkout.vatIncluded}
               buyLabel={a.buy}
