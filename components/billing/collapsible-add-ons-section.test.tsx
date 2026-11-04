@@ -67,16 +67,29 @@ describe('Ek Paketler açılır bölümü', () => {
     expect(scrollIntoView).not.toHaveBeenCalled()
   })
 
-  it('tıklayınca açılır, tekrar tıklayınca kapanır', () => {
+  it('keeps overflow clipped during the opening animation, then reveals it until close', () => {
     renderSection()
     const toggle = screen.getByRole('button', { name: /Diğer Ek Paketler/ })
     const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    const overflowWrapper = panel.firstElementChild as HTMLElement
+    const content = overflowWrapper.firstElementChild as HTMLElement
+
+    expect(overflowWrapper.classList.contains('overflow-hidden')).toBe(true)
+    expect(content.classList.contains('pt-4')).toBe(true)
+    expect(content.classList.contains('pb-4')).toBe(true)
+
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(panel.hasAttribute('inert')).toBe(false)
+    expect(overflowWrapper.classList.contains('overflow-hidden')).toBe(true)
+
+    fireEvent.transitionEnd(panel, { propertyName: 'grid-template-rows' })
+    expect(overflowWrapper.classList.contains('overflow-visible')).toBe(true)
+
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(panel.hasAttribute('inert')).toBe(true)
+    expect(overflowWrapper.classList.contains('overflow-hidden')).toBe(true)
   })
 
   it('#ek-paketler çapasıyla gelince açılır ve bölüme kayar', () => {
@@ -97,11 +110,12 @@ describe('Ek Paketler açılır bölümü', () => {
     ).toBe('true')
   })
 
-  it('forceOpen (yayın akışı) ile baştan açık gelir', () => {
+  it('forceOpen (yayın akışı) ile baştan açık ve taşma görünür gelir', () => {
     renderSection(true)
-    expect(
-      screen.getByRole('button', { name: /Diğer Ek Paketler/ }).getAttribute('aria-expanded'),
-    ).toBe('true')
+    const toggle = screen.getByRole('button', { name: /Diğer Ek Paketler/ })
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect((panel.firstElementChild as HTMLElement).classList.contains('overflow-visible')).toBe(true)
     expect(screen.getByRole('button', { name: 'Satın al' })).toBeTruthy()
   })
 
@@ -214,5 +228,20 @@ describe('Paketler açılır bölümü', () => {
       'true',
     )
     expect(scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('reveals overflow immediately when reduced motion is preferred', () => {
+    window.matchMedia = ((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia
+
+    renderPlans(false)
+    const toggle = screen.getByRole('button', { name: 'Paketler' })
+    fireEvent.click(toggle)
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect((panel.firstElementChild as HTMLElement).classList.contains('overflow-visible')).toBe(true)
   })
 })

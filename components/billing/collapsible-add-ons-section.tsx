@@ -90,6 +90,7 @@ export function CollapsibleSection({
   children: ReactNode
 }) {
   const [open, setOpen] = useState(forceOpen)
+  const [overflowVisible, setOverflowVisible] = useState(forceOpen)
   const sectionRef = useRef<HTMLElement>(null)
   const panelId = useId()
   const headingId = useId()
@@ -98,8 +99,9 @@ export function CollapsibleSection({
     const { hash, search } = window.location
     if (!opensOn(hash, search)) return
     setOpen(true)
-    if (scrollsOn && !scrollsOn(hash, search)) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) setOverflowVisible(true)
+    if (scrollsOn && !scrollsOn(hash, search)) return
     window.requestAnimationFrame(() => {
       sectionRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
     })
@@ -123,7 +125,14 @@ export function CollapsibleSection({
           type="button"
           aria-expanded={open}
           aria-controls={panelId}
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            const nextOpen = !open
+            setOverflowVisible(false)
+            setOpen(nextOpen)
+            if (nextOpen && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+              setOverflowVisible(true)
+            }
+          }}
           className="flex w-full items-center gap-2 rounded-xl border border-border bg-card/70 px-4 py-3 text-left transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon className="size-5 shrink-0 text-primary" aria-hidden />
@@ -145,12 +154,21 @@ export function CollapsibleSection({
       <div
         id={panelId}
         inert={!open}
+        onTransitionEnd={(event) => {
+          if (
+            event.target !== event.currentTarget ||
+            event.propertyName !== 'grid-template-rows'
+          ) {
+            return
+          }
+          setOverflowVisible(open)
+        }}
         className={`grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none ${
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
-        <div className="min-h-0 overflow-hidden">
-          <div className="pt-4">{children}</div>
+        <div className={`min-h-0 ${overflowVisible ? 'overflow-visible' : 'overflow-hidden'}`}>
+          <div className="pb-4 pt-4">{children}</div>
         </div>
       </div>
     </section>
