@@ -1,5 +1,5 @@
 -- NOT APPLIED: referral dashboard deletion-safe status and paid-customer counts.
--- Apply manually after scripts/099-referral-commission-ledger.sql and 100-referral-payout-workflows.sql.
+-- Apply manually after scripts/102-referral-commission-ledger.sql and 103-referral-payout-workflows.sql.
 -- This draft does not execute against any database.
 
 begin;

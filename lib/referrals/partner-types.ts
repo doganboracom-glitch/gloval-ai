@@ -106,3 +106,15 @@ export type ReferralPayoutAdminSummary = {
   paidCents: number
   openCashRequests: number
 }
+
+export type ReferralCommissionAdminStatus = 'pending' | 'available' | 'requested' | 'converted' | 'paid'
+
+export type ReferralCommissionAdminRow = {
+  commissionId: string
+  partnerId: string
+  referralCode: string
+  commissionCents: number
+  status: ReferralCommissionAdminStatus
+  paidAt: string
+  availableAt: string
+}

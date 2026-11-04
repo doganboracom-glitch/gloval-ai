@@ -7,6 +7,8 @@ import { maskEmail } from '@/lib/store-order-privacy'
 import { isReferralPayoutsEnabled } from '@/lib/referrals/core'
 import type {
   ReferralPartnerStatus,
+  ReferralCommissionAdminRow,
+  ReferralCommissionAdminStatus,
   ReferralPayoutAdminRequest,
   ReferralPayoutAdminSummary,
   ReferralPayoutMethod,
@@ -229,6 +231,56 @@ export async function getReferralPayoutAdminSummary(): Promise<ReferralPayoutAdm
     const { data, error } = await createAdminClient().rpc('referral_payout_admin_summary')
     if (error) return null
     return mapReferralPayoutAdminSummary(data)
+  } catch {
+    return null
+  }
+}
+
+function commissionAdminStatus(value: unknown): ReferralCommissionAdminStatus | null {
+  return value === 'pending' || value === 'available' || value === 'requested' || value === 'converted' || value === 'paid'
+    ? value
+    : null
+}
+
+export function mapReferralCommissionAdminList(value: unknown): ReferralCommissionAdminRow[] {
+  return rpcRows(value)
+    .map((row) => {
+      const commissionId = uuid(row.commissionId)
+      const partnerId = uuid(row.partnerId)
+      const referralCode = typeof row.referralCode === 'string' && row.referralCode.trim()
+        ? row.referralCode.slice(0, 80)
+        : null
+      const commissionCents = safeInteger(row.commissionCents)
+      const status = commissionAdminStatus(row.status)
+      const paidAt = dateString(row.paidAt)
+      const availableAt = dateString(row.availableAt)
+
+      if (
+        !commissionId ||
+        !partnerId ||
+        !referralCode ||
+        commissionCents === null ||
+        commissionCents === 0 ||
+        !status ||
+        !paidAt ||
+        !availableAt
+      ) return null
+
+      return { commissionId, partnerId, referralCode, commissionCents, status, paidAt, availableAt }
+    })
+    .filter((row): row is ReferralCommissionAdminRow => row !== null)
+}
+
+export async function getReferralCommissionAdminRows(): Promise<ReferralCommissionAdminRow[] | null> {
+  await requireAdmin()
+  if (!isReferralPayoutsEnabled()) return null
+
+  try {
+    const { data, error } = await createAdminClient().rpc('referral_commission_admin_list', {
+      p_limit: 100,
+    })
+    if (error) return null
+    return mapReferralCommissionAdminList(data)
   } catch {
     return null
   }

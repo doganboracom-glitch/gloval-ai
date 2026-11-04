@@ -51,10 +51,11 @@ vi.mock('@/lib/referrals/email-outbox', () => ({
   queueReferralPayoutNotification: vi.fn(),
 }))
 
-import { revealReferralPayoutIban } from './admin-payout-actions'
+import { revealReferralPayoutIban, reverseReferralCommissionManually } from './admin-payout-actions'
 
 const PARTNER_ID = '22222222-2222-4222-8222-222222222222'
 const REQUEST_ID = '33333333-3333-4333-8333-333333333333'
+const COMMISSION_ID = '44444444-4444-4444-8444-444444444444'
 
 beforeEach(() => {
   state.adminError = null
@@ -115,5 +116,55 @@ describe('admin referral payout actions', () => {
       error: 'not_found',
     })
     expect(state.rpcCalls).toHaveLength(0)
+  })
+
+  it('requires an audit reason before calling the manual reversal RPC', async () => {
+    await expect(reverseReferralCommissionManually({ commissionId: COMMISSION_ID, reason: '  ' })).resolves.toEqual({
+      ok: false,
+      error: 'invalid_reason',
+    })
+
+    expect(state.adminCalls).toBe(1)
+    expect(state.clientCalls).toBe(0)
+    expect(state.rpcCalls).toHaveLength(0)
+  })
+
+  it('records a manual provider refund as an audited commission reversal without requiring cash payouts', async () => {
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '0')
+    state.auditResult = { ok: true, alreadyProcessed: false, commissionId: COMMISSION_ID }
+
+    await expect(reverseReferralCommissionManually({
+      commissionId: COMMISSION_ID,
+      reason: ' Iyzico panel refund confirmed ',
+    })).resolves.toEqual({ ok: true, commissionId: COMMISSION_ID, alreadyProcessed: false })
+
+    expect(state.rpcCalls).toEqual([{
+      name: 'referral_admin_reverse_commission',
+      args: {
+        p_commission_id: COMMISSION_ID,
+        p_actor_user_id: '11111111-1111-4111-8111-111111111111',
+        p_reason: 'Iyzico panel refund confirmed',
+      },
+    }])
+  })
+
+  it('requires admin authorization before requesting a manual reversal', async () => {
+    state.adminError = new Error('not_admin')
+
+    await expect(reverseReferralCommissionManually({
+      commissionId: COMMISSION_ID,
+      reason: 'Iyzico panel refund confirmed',
+    })).rejects.toThrow('not_admin')
+    expect(state.adminCalls).toBe(1)
+    expect(state.clientCalls).toBe(0)
+  })
+
+  it('surfaces idempotent retries returned by the database', async () => {
+    state.auditResult = { ok: true, alreadyProcessed: true, commissionId: COMMISSION_ID }
+
+    await expect(reverseReferralCommissionManually({
+      commissionId: COMMISSION_ID,
+      reason: 'Iyzico panel refund confirmed',
+    })).resolves.toEqual({ ok: true, commissionId: COMMISSION_ID, alreadyProcessed: true })
   })
 })

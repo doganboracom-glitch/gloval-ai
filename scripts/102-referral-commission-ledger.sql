@@ -65,7 +65,7 @@ create table if not exists public.referral_commissions (
   available_at timestamptz not null,
   reversed_at timestamptz,
   reversal_kind text check (reversal_kind in ('pre_hold', 'post_hold')),
-  reversal_reason text check (reversal_reason is null or reversal_reason in ('payment_status_changed', 'refund_or_chargeback')),
+  reversal_reason text check (reversal_reason is null or reversal_reason in ('payment_status_changed', 'refund')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (attribution_id),
@@ -348,7 +348,7 @@ begin
       exists (
         select 1
         from public.billing_transactions as refund_row
-        where refund_row.kind in ('refund', 'chargeback')
+        where refund_row.kind = 'refund'
           and refund_row.status = 'succeeded'
           and refund_row.subscription_id = original.subscription_id
       ) as has_refund
@@ -362,7 +362,7 @@ begin
         or exists (
           select 1
           from public.billing_transactions as refund_row
-          where refund_row.kind in ('refund', 'chargeback')
+          where refund_row.kind = 'refund'
             and refund_row.status = 'succeeded'
             and refund_row.subscription_id = original.subscription_id
         )
@@ -374,7 +374,7 @@ begin
           select 1
           from public.billing_transactions as refund_row
           where refund_row.id = p_transaction_id
-            and refund_row.kind in ('refund', 'chargeback')
+            and refund_row.kind = 'refund'
             and refund_row.status = 'succeeded'
             and refund_row.subscription_id = original.subscription_id
         )
@@ -384,7 +384,7 @@ begin
     v_reversed_at := clock_timestamp();
     v_pre_hold := v_commission.available_at > v_reversed_at;
     v_reason := case
-      when v_commission.has_refund then 'refund_or_chargeback'
+      when v_commission.has_refund then 'refund'
       else 'payment_status_changed'
     end;
 
@@ -437,6 +437,159 @@ $$;
 
 revoke all on function public.referral_sync_commission_reversals(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.referral_sync_commission_reversals(uuid, uuid) to service_role;
+
+create or replace function public.referral_commission_admin_list(p_limit integer default 100)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'commissionId', commission.id,
+        'partnerId', commission.partner_id,
+        'referralCode', partner.referral_code,
+        'commissionCents', commission.commission_cents,
+        'status', commission.status,
+        'paidAt', commission.paid_at,
+        'availableAt', commission.available_at
+      ) order by commission.created_at desc, commission.id desc
+    ),
+    '[]'::jsonb
+  )
+  from (
+    select commission.id, commission.partner_id, commission.commission_cents,
+      commission.status, commission.paid_at, commission.available_at, commission.created_at
+    from public.referral_commissions as commission
+    where commission.status <> 'reversed'
+      and commission.commission_cents > 0
+    order by commission.created_at desc, commission.id desc
+    limit greatest(1, least(coalesce(p_limit, 100), 200))
+  ) as commission
+  join public.referral_partners as partner on partner.id = commission.partner_id;
+$$;
+
+revoke all on function public.referral_commission_admin_list(integer) from public, anon, authenticated;
+grant execute on function public.referral_commission_admin_list(integer) to service_role;
+
+create or replace function public.referral_admin_reverse_commission(
+  p_commission_id uuid,
+  p_actor_user_id uuid,
+  p_reason text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_partner_id uuid;
+  v_commission public.referral_commissions%rowtype;
+  v_reversed_at timestamptz;
+  v_pre_hold boolean;
+  v_reversal_kind text;
+  v_entry_type text;
+begin
+  if p_commission_id is null or p_actor_user_id is null then
+    return jsonb_build_object('ok', false, 'error', 'invalid_input');
+  end if;
+  if p_reason is null or char_length(btrim(p_reason)) < 3 or char_length(btrim(p_reason)) > 500 then
+    return jsonb_build_object('ok', false, 'error', 'invalid_reason');
+  end if;
+
+  select commission.partner_id
+    into v_partner_id
+    from public.referral_commissions as commission
+    where commission.id = p_commission_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+
+  perform 1
+    from public.referral_partners as partner
+    where partner.id = v_partner_id
+    for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+
+  select commission.*
+    into v_commission
+    from public.referral_commissions as commission
+    where commission.id = p_commission_id
+      and commission.partner_id = v_partner_id
+    for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if v_commission.status = 'reversed' then
+    return jsonb_build_object(
+      'ok', true,
+      'alreadyProcessed', true,
+      'commissionId', v_commission.id,
+      'reversalKind', v_commission.reversal_kind
+    );
+  end if;
+
+  v_reversed_at := clock_timestamp();
+  v_pre_hold := v_commission.available_at > v_reversed_at;
+  v_reversal_kind := case when v_pre_hold then 'pre_hold' else 'post_hold' end;
+  v_entry_type := case when v_pre_hold then 'refund_pre_hold' else 'refund_adjustment' end;
+
+  if v_commission.commission_cents > 0 then
+    insert into public.referral_commission_ledger (
+      partner_id, commission_id, billing_transaction_id, entry_type,
+      amount_cents, available_at, dedupe_key
+    ) values (
+      v_commission.partner_id,
+      v_commission.id,
+      v_commission.billing_transaction_id,
+      v_entry_type,
+      -v_commission.commission_cents,
+      case when v_pre_hold then v_commission.available_at else v_reversed_at end,
+      'commission-reversal:' || v_commission.id::text
+    ) on conflict (dedupe_key) do nothing;
+  end if;
+
+  update public.referral_commissions
+    set status = 'reversed',
+        reversed_at = v_reversed_at,
+        reversal_kind = v_reversal_kind,
+        reversal_reason = 'refund'
+    where id = v_commission.id
+      and status <> 'reversed';
+
+  insert into public.referral_payout_audit_events (
+    partner_id, payout_request_id, actor_user_id, event_type, details
+  ) values (
+    v_commission.partner_id,
+    v_commission.payout_request_id,
+    p_actor_user_id,
+    'commission_manual_reversed',
+    jsonb_build_object(
+      'commissionId', v_commission.id,
+      'billingTransactionId', v_commission.billing_transaction_id,
+      'commissionCents', v_commission.commission_cents,
+      'reversalKind', v_reversal_kind,
+      'source', 'manual_external_refund',
+      'reason', btrim(p_reason)
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'alreadyProcessed', false,
+    'commissionId', v_commission.id,
+    'reversalKind', v_reversal_kind,
+    'entryType', v_entry_type
+  );
+end;
+$$;
+
+revoke all on function public.referral_admin_reverse_commission(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.referral_admin_reverse_commission(uuid, uuid, text) to service_role;
 
 create or replace function public.referral_sync_commissions(p_partner_id uuid default null)
 returns jsonb
@@ -510,7 +663,7 @@ begin
     end;
   end if;
 
-  if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
+  if new.kind = 'refund' and new.status = 'succeeded'
     and (tg_op = 'INSERT' or old.status is distinct from new.status) then
     begin
       perform public.referral_sync_commission_reversals(null, new.id);
@@ -554,7 +707,11 @@ begin
     and old.status = 'succeeded'
     and old.subscription_id is not null
     and old.amount_cents > 0 then
-    perform public.referral_record_commission_for_transaction(old.id);
+    begin
+      perform public.referral_record_commission_for_transaction(old.id);
+    exception when others then
+      raise warning 'referral commission flush skipped during user detach for transaction % (SQLSTATE %)', old.id, SQLSTATE;
+    end;
   end if;
 
   return new;

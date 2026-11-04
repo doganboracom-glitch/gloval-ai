@@ -278,3 +278,55 @@ export async function revealReferralPayoutIban(input: {
     return { ok: false, error: 'unavailable' }
   }
 }
+
+export type ReferralAdminCommissionActionError =
+  | 'payout_disabled'
+  | 'invalid_input'
+  | 'invalid_reason'
+  | 'not_found'
+  | 'unavailable'
+
+export type ReferralAdminCommissionActionResult =
+  | { ok: true; commissionId: string; alreadyProcessed: boolean }
+  | { ok: false; error: ReferralAdminCommissionActionError }
+
+export async function reverseReferralCommissionManually(input: {
+  commissionId: unknown
+  reason: unknown
+}): Promise<ReferralAdminCommissionActionResult> {
+  const adminUser = await requireAdmin()
+  if (!isReferralPayoutsEnabled()) return { ok: false, error: 'payout_disabled' }
+  if (!input || typeof input !== 'object' || typeof input.commissionId !== 'string' || !UUID_PATTERN.test(input.commissionId)) {
+    return { ok: false, error: 'invalid_input' }
+  }
+  if (typeof input.reason !== 'string' || input.reason.trim().length < 3 || input.reason.trim().length > 500) {
+    return { ok: false, error: 'invalid_reason' }
+  }
+
+  try {
+    const { data, error } = await createAdminClient().rpc('referral_admin_reverse_commission', {
+      p_commission_id: input.commissionId,
+      p_actor_user_id: adminUser.userId,
+      p_reason: input.reason.trim(),
+    })
+    if (error) return { ok: false, error: 'unavailable' }
+    const result = parseRpcActionResult(data)
+    if (!result) return { ok: false, error: 'unavailable' }
+    if (!result.ok) {
+      if (result.error === 'invalid_reason') return { ok: false, error: 'invalid_reason' }
+      if (result.error === 'not_found') return { ok: false, error: 'not_found' }
+      return { ok: false, error: 'unavailable' }
+    }
+
+    refreshReferralSurfaces()
+    return {
+      ok: true,
+      commissionId: typeof result.commissionId === 'string' && UUID_PATTERN.test(result.commissionId)
+        ? result.commissionId
+        : input.commissionId,
+      alreadyProcessed: result.alreadyProcessed === true,
+    }
+  } catch {
+    return { ok: false, error: 'unavailable' }
+  }
+}

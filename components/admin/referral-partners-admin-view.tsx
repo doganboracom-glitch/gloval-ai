@@ -13,8 +13,10 @@ import {
 } from '@/components/ui/card'
 import { ReferralPartnersAdminTable } from '@/components/admin/referral-partners-admin-table'
 import { ReferralPayoutsAdminTable } from '@/components/admin/referral-payouts-admin-table'
+import { ReferralCommissionReversalsAdminTable } from '@/components/admin/referral-commission-reversals-admin-table'
 import type {
   ReferralAdminPartner,
+  ReferralCommissionAdminRow,
   ReferralPayoutAdminRequest,
   ReferralPayoutAdminSummary,
 } from '@/lib/referrals/partner-types'
@@ -105,6 +107,8 @@ export function ReferralPartnersAdminView({
   payoutRequests = [],
   payoutSummary = null,
   payoutsUnavailable = false,
+  commissionRows = [],
+  commissionsUnavailable = false,
 }: {
   partners: ReferralAdminPartner[]
   unavailable?: boolean
@@ -112,6 +116,8 @@ export function ReferralPartnersAdminView({
   payoutRequests?: ReferralPayoutAdminRequest[]
   payoutSummary?: ReferralPayoutAdminSummary | null
   payoutsUnavailable?: boolean
+  commissionRows?: ReferralCommissionAdminRow[]
+  commissionsUnavailable?: boolean
 }) {
   const { lang } = useLanguage()
   const language: AdminLanguage = lang === 'tr' ? 'tr' : 'en'
@@ -178,6 +184,11 @@ export function ReferralPartnersAdminView({
             requests={payoutRequests}
             summary={payoutSummary}
             unavailable={payoutsUnavailable}
+          />
+          <ReferralCommissionReversalsAdminTable
+            enabled={payoutsEnabled}
+            commissions={commissionRows}
+            unavailable={commissionsUnavailable}
           />
         </>
       )}

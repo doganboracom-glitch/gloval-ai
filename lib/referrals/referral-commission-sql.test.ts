@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it, vi } from 'vitest'
+import { BILLING_TRANSACTION_KIND_SQL } from './referral-sql-test-kinds'
 
 vi.setConfig({ testTimeout: 30_000 })
 
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
-const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/099-referral-commission-ledger.sql'), 'utf8')
+const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commission-ledger.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -18,7 +19,7 @@ create table public.billing_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
   subscription_id uuid,
-  kind text not null,
+  kind text not null check (kind in (${BILLING_TRANSACTION_KIND_SQL})),
   status text not null,
   amount_cents bigint not null,
   created_at timestamptz not null default now()
@@ -111,7 +112,7 @@ async function matureCommission(db: PGlite, transactionId: string) {
   await db.exec('alter table public.referral_commission_ledger enable trigger referral_commission_ledger_immutable_trigger')
 }
 
-describe('scripts/099-referral-commission-ledger.sql', () => {
+describe('scripts/102-referral-commission-ledger.sql', () => {
   it('records only the first successful subscription charge and rounds VAT-exclusive commission down', async () => {
     await withDatabase(async (db) => {
       const partnerId = await newPartner(db, await newUser(db))
@@ -121,8 +122,8 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
 
       await newTransaction(db, referredUserId, 'charge', 'succeeded', subscriptionId)
       await newTransaction(db, referredUserId, 'charge', 'succeeded', subscriptionId, 50_000)
-      await newTransaction(db, referredUserId, 'addon', 'succeeded', subscriptionId, 5_000)
-      await newTransaction(db, referredUserId, 'domain', 'succeeded', subscriptionId, 2_000)
+      await newTransaction(db, referredUserId, 'proration_credit', 'succeeded', subscriptionId, 5_000)
+      await newTransaction(db, referredUserId, 'proration_debit', 'succeeded', subscriptionId, 2_000)
 
       const { rows } = await db.query<{
         count: number
@@ -292,14 +293,6 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
           (select count(*)::integer from public.referral_commissions) as commissions
       `)
       expect(beforeRetry).toEqual([{ billing_transactions: 1, commissions: 0 }])
-      await expect(db.query('update public.billing_transactions set user_id = null where id = $1', [transactionId]))
-        .rejects.toThrow('commission persistence unavailable')
-      const { rows: stillLinked } = await db.query<{ user_id: string | null }>(
-        'select user_id from public.billing_transactions where id = $1',
-        [transactionId],
-      )
-      expect(stillLinked).toEqual([{ user_id: referredUserId }])
-
       await db.exec('drop trigger fail_referral_commission_insert on public.referral_commissions; drop function public.fail_referral_commission_insert()')
       await db.query('select public.referral_sync_commissions()')
       const { rows: afterRetry } = await db.query<{ billing_transactions: number; commissions: number }>(`
@@ -308,6 +301,34 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
           (select count(*)::integer from public.referral_commissions) as commissions
       `)
       expect(afterRetry).toEqual([{ billing_transactions: 1, commissions: 1 }])
+    })
+  })
+
+  it('does not block account deletion when the pre-detach commission flush fails', async () => {
+    await withDatabase(async (db) => {
+      const partnerId = await newPartner(db, await newUser(db))
+      const referredUserId = await newUser(db)
+      await newAttribution(db, partnerId, referredUserId)
+      await db.exec(`
+        create function public.fail_referral_commission_insert() returns trigger
+        language plpgsql as $$ begin raise exception 'commission persistence unavailable'; end $$;
+        create trigger fail_referral_commission_insert
+        before insert on public.referral_commissions
+        for each row execute function public.fail_referral_commission_insert();
+      `)
+
+      const transactionId = await newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID())
+      await db.query('delete from auth.users where id = $1', [referredUserId])
+
+      const { rows } = await db.query<{ user_exists: boolean; transaction_detached: boolean; commissions: number }>(`
+        select
+          exists (select 1 from auth.users where id = $1) as user_exists,
+          transaction_row.user_id is null as transaction_detached,
+          (select count(*)::integer from public.referral_commissions where billing_transaction_id = transaction_row.id) as commissions
+        from public.billing_transactions as transaction_row
+        where transaction_row.id = $2
+      `, [referredUserId, transactionId])
+      expect(rows).toEqual([{ user_exists: false, transaction_detached: true, commissions: 0 }])
     })
   })
 

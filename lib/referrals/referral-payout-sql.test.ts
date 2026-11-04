@@ -2,14 +2,19 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it, vi } from 'vitest'
+import {
+  AI_CREDIT_TRANSACTION_KIND_SQL,
+  BILLING_TRANSACTION_KIND_SQL,
+  REFERRAL_PAYOUT_CREDIT_KIND,
+} from './referral-sql-test-kinds'
 
 vi.setConfig({ testTimeout: 30_000 })
 
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
 const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-events.sql'), 'utf8')
-const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/099-referral-commission-ledger.sql'), 'utf8')
-const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/100-referral-payout-workflows.sql'), 'utf8')
+const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commission-ledger.sql'), 'utf8')
+const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/103-referral-payout-workflows.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -20,7 +25,7 @@ create table public.billing_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
   subscription_id uuid,
-  kind text not null,
+  kind text not null check (kind in (${BILLING_TRANSACTION_KIND_SQL})),
   status text not null,
   amount_cents bigint not null,
   created_at timestamptz not null default now()
@@ -39,7 +44,7 @@ create table public.notification_logs (
 create table public.ai_credit_transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id),
-  kind text not null,
+  kind text not null check (kind in (${AI_CREDIT_TRANSACTION_KIND_SQL})),
   amount integer not null,
   reason text not null,
   created_at timestamptz not null default now()
@@ -91,6 +96,26 @@ async function newPartner(
   return rows[0]
 }
 
+async function newCommission(db: PGlite, partnerId: string) {
+  const referredUserId = await newUser(db, `referred-${crypto.randomUUID()}@gloval.test`)
+  await db.query(`
+    insert into public.referral_attributions
+      (referred_user_id, partner_id, code_snapshot, source, captured_at)
+    values ($1, $2, 'PARTNER01', 'email', now())
+  `, [referredUserId, partnerId])
+  const { rows: transactions } = await db.query<{ id: string }>(`
+    insert into public.billing_transactions
+      (user_id, subscription_id, kind, status, amount_cents)
+    values ($1, $2, 'charge', 'succeeded', 12_105)
+    returning id
+  `, [referredUserId, crypto.randomUUID()])
+  const { rows: commissions } = await db.query<{ id: string }>(
+    'select id from public.referral_commissions where billing_transaction_id = $1',
+    [transactions[0].id],
+  )
+  return { commissionId: commissions[0].id, transactionId: transactions[0].id }
+}
+
 async function addAvailableBalance(db: PGlite, partnerId: string, amountCents: number, key: string) {
   await db.query(`
     insert into public.referral_commission_ledger (
@@ -113,7 +138,7 @@ async function requestPayout(
   return rows[0].result
 }
 
-describe('scripts/100-referral-payout-workflows.sql', () => {
+describe('scripts/103-referral-payout-workflows.sql', () => {
   it('converts the full available balance atomically and safely retries the same request', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'credit-partner@gloval.test' })
@@ -144,8 +169,95 @@ describe('scripts/100-referral-payout-workflows.sql', () => {
       expect(payoutRows).toHaveLength(1)
       expect(payoutRows[0]).toMatchObject({ method: 'credit', status: 'processed', balance_cents: '100001', payout_cents: '100001', credit_amount: 334, system_topup_cents: '199' })
       expect(payoutRows[0].processed_at).toBeTruthy()
-      expect(credits).toEqual([{ kind: 'grant', amount: 334, reason: `referral_payout:${result.requestId}` }])
+      expect(credits).toEqual([{ kind: REFERRAL_PAYOUT_CREDIT_KIND, amount: 334, reason: `referral_payout:${result.requestId}` }])
       expect(ledger.map((row) => Number(row.amount_cents))).toEqual([100_001, -100_001])
+    })
+  })
+
+  it('records manual provider refunds in the commission ledger exactly once and audits the reason', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'manual-refund-partner@gloval.test' })
+      const adminUserId = await newUser(db, 'manual-refund-admin@gloval.test')
+      const preHold = await newCommission(db, partner.id)
+      const postHold = await newCommission(db, partner.id)
+      await db.query(`
+        update public.referral_commissions
+        set available_at = clock_timestamp() - interval '1 second'
+        where id = $1
+      `, [postHold.commissionId])
+
+      const listed = await db.query<{ result: Array<Record<string, unknown>> }>(
+        'select public.referral_commission_admin_list(100) as result',
+      )
+      expect(listed.rows[0].result).toHaveLength(2)
+      expect(listed.rows[0].result.map((row) => row.commissionId)).toContain(preHold.commissionId)
+
+      const invalidReason = await db.query<{ result: RpcResult }>(
+        'select public.referral_admin_reverse_commission($1::uuid, $2::uuid, $3) as result',
+        [preHold.commissionId, adminUserId, '  '],
+      )
+      expect(invalidReason.rows[0].result).toMatchObject({ ok: false, error: 'invalid_reason' })
+
+      const reason = 'Refund confirmed in the Iyzico merchant panel'
+      const preHoldResult = await db.query<{ result: RpcResult }>(
+        'select public.referral_admin_reverse_commission($1::uuid, $2::uuid, $3) as result',
+        [preHold.commissionId, adminUserId, reason],
+      )
+      const duplicate = await db.query<{ result: RpcResult }>(
+        'select public.referral_admin_reverse_commission($1::uuid, $2::uuid, $3) as result',
+        [preHold.commissionId, adminUserId, reason],
+      )
+      const postHoldResult = await db.query<{ result: RpcResult }>(
+        'select public.referral_admin_reverse_commission($1::uuid, $2::uuid, $3) as result',
+        [postHold.commissionId, adminUserId, 'Refund confirmed after the hold period'],
+      )
+
+      expect(preHoldResult.rows[0].result).toMatchObject({
+        ok: true,
+        alreadyProcessed: false,
+        reversalKind: 'pre_hold',
+        entryType: 'refund_pre_hold',
+      })
+      expect(duplicate.rows[0].result).toMatchObject({ ok: true, alreadyProcessed: true })
+      expect(postHoldResult.rows[0].result).toMatchObject({
+        ok: true,
+        alreadyProcessed: false,
+        reversalKind: 'post_hold',
+        entryType: 'refund_adjustment',
+      })
+
+      const { rows: reversals } = await db.query<{
+        commission_id: string
+        entry_type: string
+        amount_cents: string
+        dedupe_key: string
+      }>(`
+        select commission_id, entry_type, amount_cents::text, dedupe_key
+        from public.referral_commission_ledger
+        where entry_type in ('refund_pre_hold', 'refund_adjustment')
+        order by entry_type
+      `)
+      expect(reversals).toHaveLength(2)
+      expect(reversals.map((row) => row.entry_type)).toEqual(['refund_adjustment', 'refund_pre_hold'])
+      expect(reversals.every((row) => Number(row.amount_cents) < 0)).toBe(true)
+      expect(new Set(reversals.map((row) => row.dedupe_key)).size).toBe(2)
+
+      const { rows: audit } = await db.query<{ actor_user_id: string; event_type: string; details: Record<string, unknown> }>(`
+        select actor_user_id, event_type, details
+        from public.referral_payout_audit_events
+        where event_type = 'commission_manual_reversed'
+        order by created_at
+      `)
+      expect(audit).toHaveLength(2)
+      expect(audit[0]).toMatchObject({
+        actor_user_id: adminUserId,
+        event_type: 'commission_manual_reversed',
+        details: { source: 'manual_external_refund', reason },
+      })
+      const remaining = await db.query<{ result: Array<Record<string, unknown>> }>(
+        'select public.referral_commission_admin_list(100) as result',
+      )
+      expect(remaining.rows[0].result).toEqual([])
     })
   })
 

@@ -1,5 +1,5 @@
 -- NOT APPLIED: atomic partner payout RPCs, admin audit actions, and close guards.
--- Apply manually after scripts/099-referral-commission-ledger.sql.
+-- Apply manually after scripts/102-referral-commission-ledger.sql.
 -- This draft does not execute against any database.
 -- Thresholds, VAT, credit value, hold, and top-up limit mirror lib/referrals/commission-config.ts.
 
@@ -249,7 +249,7 @@ begin
     insert into public.ai_credit_transactions (user_id, kind, amount, reason)
     values (
       v_partner.user_id,
-      'grant',
+      'gift',
       v_credit_amount,
       'referral_payout:' || v_request_id::text
     );
