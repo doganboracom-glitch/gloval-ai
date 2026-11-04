@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GoogleAdsApiCall } from '@/lib/ads/providers/google-ads-provider'
 
 const mocks = vi.hoisted(() => ({
@@ -49,7 +49,16 @@ function mutateCall(overrides: Partial<GoogleAdsApiCall> = {}): GoogleAdsApiCall
   })
 }
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 beforeEach(() => {
+  vi.unstubAllEnvs()
+  vi.stubEnv('ADS_GOOGLE_CONNECT_ENABLED', '')
+  vi.stubEnv('ADS_GOOGLE_CONNECT_PUBLIC', '')
+  vi.stubEnv('ADS_GOOGLE_READ_DAILY_USER_LIMIT', '')
+  vi.stubEnv('ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT', '')
   vi.clearAllMocks()
   mocks.rpc.mockResolvedValue({ data: [{ allowed: true, global_used: 1, user_used: 1 }], error: null })
   mocks.from.mockImplementation(() => ({
@@ -68,6 +77,8 @@ describe('Google Ads API quota transport', () => {
       p_user_id: CONTEXT.userId,
       p_connection_id: CONTEXT.connectionId,
       p_method: 'googleAds.searchStream',
+      p_user_daily_limit: 200,
+      p_global_daily_limit: 2000,
     }))
     const init = fetcherMock.mock.calls[0]?.[1]
     const headers = new Headers(init?.headers)
@@ -76,6 +87,43 @@ describe('Google Ads API quota transport', () => {
     expect(headers.get('authorization')).toBe('Bearer private-access-token')
     expect(headers.get('login-customer-id')).toBe('1111111111')
     expect(headers.has('developer-token')).toBe(false)
+  })
+
+  it('fails closed when the six-argument daily quota RPC is missing', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
+    const fetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(call())).rejects.toMatchObject({ code: 'quota_check_failed' })
+
+    expect(mocks.rpc).toHaveBeenCalledOnce()
+    expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
+      p_user_daily_limit: 200,
+      p_global_daily_limit: 2000,
+    }))
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when public access or custom limits require the missing daily-quota SQL function', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
+    vi.stubEnv('ADS_GOOGLE_CONNECT_ENABLED', '1')
+    vi.stubEnv('ADS_GOOGLE_CONNECT_PUBLIC', '1')
+    const publicFetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
+    const publicTransport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher: publicFetcher })
+
+    await expect(publicTransport(call())).rejects.toMatchObject({ code: 'quota_check_failed' })
+    expect(mocks.rpc).toHaveBeenCalledOnce()
+    expect(publicFetcher).not.toHaveBeenCalled()
+
+    mocks.rpc.mockReset().mockResolvedValueOnce({ data: null, error: { code: 'PGRST202' } })
+    vi.stubEnv('ADS_GOOGLE_CONNECT_PUBLIC', '0')
+    vi.stubEnv('ADS_GOOGLE_READ_DAILY_USER_LIMIT', '150')
+    const customFetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
+    const customTransport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher: customFetcher })
+
+    await expect(customTransport(call())).rejects.toMatchObject({ code: 'quota_check_failed' })
+    expect(mocks.rpc).toHaveBeenCalledOnce()
+    expect(customFetcher).not.toHaveBeenCalled()
   })
 
   it('sends accessible-customer discovery as GET without a body', async () => {

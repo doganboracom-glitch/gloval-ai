@@ -75,6 +75,20 @@ beforeEach(() => {
 })
 
 describe('Google Ads dashboard UI', () => {
+  it('shows the beta read-only disclosure and links to the privacy policy', () => {
+    render(<GoogleAdsDashboard connections={[]} pendingFlowId={null} oauthStatus={null} />)
+
+    expect(screen.getByText(copy.connectionTitle)).toBeTruthy()
+    expect(screen.getByText(copy.connectionBody)).toBeTruthy()
+    expect(screen.getByRole('link', { name: copy.privacyPolicyLink }).getAttribute('href')).toBe('/yasal/gizlilik-politikasi')
+  })
+
+  it('shows a clear message when the active connection cap is reached', () => {
+    render(<GoogleAdsDashboard connections={[]} pendingFlowId={null} oauthStatus="connection_limit_exceeded" />)
+
+    expect(screen.getByText(copy.connectionLimitError)).toBeTruthy()
+  })
+
   it('renders read-only metrics and account-aware campaign performance for an active account', () => {
     render(<GoogleAdsDashboard connections={[connection]} pendingFlowId={null} oauthStatus={null} />)
 

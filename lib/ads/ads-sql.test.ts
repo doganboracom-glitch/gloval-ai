@@ -4,9 +4,9 @@ import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * Runs the Ads SQL migrations, exactly as applied to production, against an
- * in-process Postgres (PGlite) with a minimal stand-in for their dependencies.
- * No real database is touched.
+ * Runs the applied Ads migrations and the un-applied Google Ads quota draft
+ * against an in-process Postgres (PGlite) with minimal stand-ins. No real
+ * database is touched.
  */
 
 const ROOT = process.cwd()
@@ -14,6 +14,7 @@ const PART1 = readFileSync(path.join(ROOT, 'scripts/089-ads-core-part1.sql'), 'u
 const PART2 = readFileSync(path.join(ROOT, 'scripts/090-ads-core-part2.sql'), 'utf8')
 const PART3 = readFileSync(path.join(ROOT, 'scripts/091-ads-google-readonly.sql'), 'utf8')
 const PART4 = readFileSync(path.join(ROOT, 'scripts/094-ads-google-publish.sql'), 'utf8')
+const PART5 = readFileSync(path.join(ROOT, 'scripts/099-ads-google-public-readonly-quotas.sql'), 'utf8')
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;
@@ -40,6 +41,7 @@ beforeAll(async () => {
   await db.exec(PART2)
   await db.exec(PART3)
   await db.exec(PART4)
+  await db.exec(PART5)
 })
 
 afterAll(async () => {
@@ -993,11 +995,17 @@ describe('free quota RPCs', () => {
 })
 
 describe('Google Ads API operation quotas', () => {
-  const reserve = async (requestId: string, userId: string, connectionId: string | null = null) =>
+  const reserve = async (
+    requestId: string,
+    userId: string,
+    connectionId: string | null = null,
+    userLimit = 80,
+    globalLimit = 1_200,
+  ) =>
     (
       await db.query<{ allowed: boolean; global_used: number; user_used: number }>(
-        `select * from public.ads_reserve_google_api_operation($1, $2, $3, 'googleAds.search')`,
-        [requestId, userId, connectionId],
+        `select * from public.ads_reserve_google_api_operation($1, $2, $3, 'googleAds.search', $4, $5)`,
+        [requestId, userId, connectionId, userLimit, globalLimit],
       )
     ).rows[0]
   const reserveMutate = async (
@@ -1158,6 +1166,141 @@ describe('Google Ads API operation quotas', () => {
   })
 })
 
+describe('Google Ads public read limits and connection caps', () => {
+  const reserveDaily = async (
+    requestId: string,
+    userId: string,
+    connectionId: string | null,
+    userLimit: number,
+    globalLimit: number,
+    method = 'googleAds.search',
+  ) =>
+    (
+      await db.query<{ allowed: boolean; global_used: number; user_used: number }>(
+        `select * from public.ads_reserve_google_api_operation($1, $2, $3, $4, $5, $6)`,
+        [requestId, userId, connectionId, method, userLimit, globalLimit],
+      )
+    ).rows[0]
+
+  const saveConnection = async (userId: string, externalAccountId: string, maxActive: number) =>
+    (
+      await db.query<{
+        allowed: boolean
+        connection_id: string | null
+        active_count: number
+        error_code: string | null
+      }>(
+        `select * from public.ads_save_google_ads_connection_with_limit(
+          $1::uuid, $2::text, $3::text, $4::text, $5::text, $6::text,
+          $7::smallint, $8::text[], $9::integer
+        )`,
+        [
+          userId,
+          externalAccountId,
+          `Google Ads ${externalAccountId}`,
+          null,
+          'USD',
+          'encrypted-refresh-token',
+          1,
+          ['https://www.googleapis.com/auth/adwords'],
+          maxActive,
+        ],
+      )
+    ).rows[0]
+
+  it('keeps using the existing API operation counter without creating the named quota table', async () => {
+    const { rows } = await db.query<{ table_exists: boolean }>(
+      `select to_regclass('public.ads_google_readonly_oauth_quota') is not null as table_exists`,
+    )
+    expect(rows[0].table_exists).toBe(false)
+    expect(
+      (await db.query<{ table_exists: boolean }>(
+        `select to_regclass('public.ads_google_api_operations') is not null as table_exists`,
+      )).rows[0].table_exists,
+    ).toBe(true)
+  })
+
+  it('enforces per-user and global daily read caps without counting another user', async () => {
+    const userA = await newUser()
+    const userB = await newUser()
+    const userC = await newUser()
+    const connectionA = await newConnection(userA)
+    const connectionB = await newConnection(userB)
+    const connectionC = await newConnection(userC)
+
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000301', userA, connectionA, 1, 2),
+    ).toEqual({ allowed: true, global_used: 1, user_used: 1 })
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000302', userA, connectionA, 1, 2),
+    ).toEqual({ allowed: false, global_used: 1, user_used: 1 })
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000303', userB, connectionB, 1, 2),
+    ).toEqual({ allowed: true, global_used: 2, user_used: 1 })
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000304', userC, connectionC, 1, 2),
+    ).toEqual({ allowed: false, global_used: 2, user_used: 0 })
+  })
+
+  it('uses a rolling 24-hour window and caps below the Explorer quota', async () => {
+    const userId = await newUser()
+    const connectionId = await newConnection(userId)
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, connection_id, method, created_at)
+       values (gen_random_uuid(), $1, $2, 'googleAds.search', now() - interval '24 hours 1 minute')`,
+      [userId, connectionId],
+    )
+
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000305', userId, connectionId, 1, 3),
+    ).toEqual({ allowed: true, global_used: 1, user_used: 1 })
+
+    const recentUserId = await newUser()
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, created_at)
+       values (gen_random_uuid(), $1, 'googleAds.search', now() - interval '23 hours 59 minutes')`,
+      [recentUserId],
+    )
+    expect(
+      await reserveDaily('00000000-0000-4000-8000-000000000306', recentUserId, null, 1, 3),
+    ).toEqual({ allowed: false, global_used: 2, user_used: 1 })
+    await expect(
+      reserveDaily('00000000-0000-4000-8000-000000000307', userId, connectionId, 200, 2880),
+    ).rejects.toThrow(/between 1 and 2879/)
+  })
+
+  it('atomically caps active accounts while allowing an existing active account to refresh', async () => {
+    const userId = await newUser()
+    const first = await saveConnection(userId, '100000000001', 2)
+    const second = await saveConnection(userId, '100000000002', 2)
+    expect(first).toMatchObject({ allowed: true, active_count: 1, error_code: null })
+    expect(second).toMatchObject({ allowed: true, active_count: 2, error_code: null })
+
+    expect(await saveConnection(userId, '100000000003', 2)).toMatchObject({
+      allowed: false,
+      connection_id: null,
+      active_count: 2,
+      error_code: 'connection_limit_exceeded',
+    })
+    expect(await saveConnection(userId, '100000000001', 2)).toMatchObject({
+      allowed: true,
+      connection_id: first.connection_id,
+      active_count: 2,
+      error_code: null,
+    })
+
+    await db.query(
+      `update public.ads_connections set status = 'revoked' where user_id = $1 and external_account_id = '100000000002'`,
+      [userId],
+    )
+    expect(await saveConnection(userId, '100000000003', 2)).toMatchObject({
+      allowed: true,
+      active_count: 2,
+      error_code: null,
+    })
+  })
+})
+
 describe('Google Ads publish reconciliation RPCs', () => {
   it('moves only stale publishing plans and logs compatible reconciliation actions', async () => {
     const userId = await newUser()
@@ -1276,7 +1419,8 @@ describe('grants', () => {
       'release_ads_free_actions(text)',
       'ads_record_alert_once(text,jsonb)',
       'ads_purge_expired(integer,integer,integer,integer,integer,integer)',
-      'ads_reserve_google_api_operation(uuid,uuid,uuid,text)',
+      'ads_reserve_google_api_operation(uuid,uuid,uuid,text,integer,integer)',
+      'ads_save_google_ads_connection_with_limit(uuid,text,text,text,text,text,smallint,text[],integer)',
       'ads_reserve_google_api_operation_v2(uuid,uuid,uuid,text,integer)',
       'ads_begin_google_ads_publish(uuid,uuid,uuid,integer,integer,bigint,smallint)',
       'ads_resolve_google_ads_publish(uuid,uuid,text,text,text)',

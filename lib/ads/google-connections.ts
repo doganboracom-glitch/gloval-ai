@@ -3,6 +3,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
+import { isGoogleAdsConnectPublic, resolveGoogleAdsMaxActiveConnections } from '@/lib/ads/env'
 import {
   adsTokenNeedsRotation,
   decryptAdsToken,
@@ -250,18 +251,6 @@ export async function saveGoogleAdsConnectionFromOAuth(input: {
   }
 
   const admin = createAdminClient()
-  const { data: existing, error: lookupError } = await admin
-    .from('ads_connections')
-    .select('id,api_lease_expires_at')
-    .eq('user_id', input.userId)
-    .eq('platform', 'google_ads')
-    .eq('external_account_id', input.account.externalAccountId)
-    .maybeSingle()
-  if (lookupError) throw new GoogleAdsError('provider_error')
-  if (existing?.api_lease_expires_at && new Date(existing.api_lease_expires_at).getTime() > Date.now()) {
-    throw new GoogleAdsError('connection_busy')
-  }
-
   let keyring
   try {
     keyring = loadAdsTokenKeyring()
@@ -278,6 +267,59 @@ export async function saveGoogleAdsConnectionFromOAuth(input: {
     },
     keyring,
   )
+  const maxActiveConnections = resolveGoogleAdsMaxActiveConnections()
+  const { data: reservedData, error: reservationError } = await admin.rpc('ads_save_google_ads_connection_with_limit', {
+    p_user_id: input.userId,
+    p_external_account_id: input.account.externalAccountId,
+    p_external_account_name: input.account.name,
+    p_login_customer_id: input.account.loginCustomerId,
+    p_currency_code: input.account.currency,
+    p_refresh_token_enc: encrypted.ciphertext,
+    p_token_key_version: encrypted.keyVersion,
+    p_scopes: input.scopes,
+    p_max_active_connections: maxActiveConnections,
+  })
+
+  if (!reservationError) {
+    const reservation = Array.isArray(reservedData) ? reservedData[0] : reservedData
+    if (!reservation || typeof reservation.allowed !== 'boolean') throw new GoogleAdsError('provider_error')
+    if (!reservation.allowed) {
+      if (reservation.error_code === 'connection_limit_exceeded') {
+        throw new GoogleAdsError('connection_limit_exceeded')
+      }
+      if (reservation.error_code === 'connection_busy') throw new GoogleAdsError('connection_busy')
+      throw new GoogleAdsError('provider_error')
+    }
+    if (typeof reservation.connection_id !== 'string') throw new GoogleAdsError('provider_error')
+    return { id: reservation.connection_id }
+  }
+
+  if (reservationError.code !== 'PGRST202' || isGoogleAdsConnectPublic()) {
+    throw new GoogleAdsError('quota_check_failed')
+  }
+
+  const { data: existing, error: lookupError } = await admin
+    .from('ads_connections')
+    .select('id,status,api_lease_expires_at')
+    .eq('user_id', input.userId)
+    .eq('platform', 'google_ads')
+    .eq('external_account_id', input.account.externalAccountId)
+    .maybeSingle()
+  if (lookupError) throw new GoogleAdsError('provider_error')
+  if (existing?.api_lease_expires_at && new Date(existing.api_lease_expires_at).getTime() > Date.now()) {
+    throw new GoogleAdsError('connection_busy')
+  }
+
+  if (existing?.status !== 'active') {
+    const { count, error: countError } = await admin
+      .from('ads_connections')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', input.userId)
+      .eq('platform', 'google_ads')
+      .eq('status', 'active')
+    if (countError) throw new GoogleAdsError('provider_error')
+    if ((count ?? 0) >= maxActiveConnections) throw new GoogleAdsError('connection_limit_exceeded')
+  }
 
   const { data, error } = await admin
     .from('ads_connections')

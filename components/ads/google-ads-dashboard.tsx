@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { AlertCircle, BarChart3, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -82,6 +83,8 @@ function errorMessage(code: string | undefined, copy: ReturnType<typeof useLangu
       return copy.reauthError
     case 'connection_busy':
       return copy.connectionBusy
+    case 'connection_limit_exceeded':
+      return copy.connectionLimitError
     case 'flow_expired':
       return copy.flowExpired
     case 'configuration_missing':
@@ -705,6 +708,12 @@ export function GoogleAdsDashboard({
             <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" />
             <span>{copy.readOnlyNote}</span>
           </p>
+          <Link
+            href="/yasal/gizlilik-politikasi"
+            className="w-fit text-sm font-medium text-brand underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copy.privacyPolicyLink}
+          </Link>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {visibleConnections.length === 0 ? (
