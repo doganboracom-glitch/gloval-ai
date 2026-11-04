@@ -2,7 +2,14 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { beginAdsPublish, refundAdsCredits, type AdsPublishBeginResult, type AdsRefundResult } from '@/lib/ads/credits'
+import {
+  beginAdsGooglePublishE2,
+  finalizeAdsGooglePublishE2,
+  releaseAdsGooglePublishE2,
+  type AdsGooglePublishFinalizeResult,
+  type AdsPublishBeginResult,
+} from '@/lib/ads/credits'
+import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
 import {
   notifyGooglePublishReconciling,
   type GooglePublishReconciliationReason,
@@ -11,7 +18,6 @@ import { resolveGoogleAdsOAuthSettings, resolveGoogleAdsPublishAccess } from '@/
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import {
   buildGoogleAdsApprovalSummary,
-  buildGoogleAdsMutateRequest,
   parseGoogleAdsPublishPlan,
   type GoogleAdsApprovalSummary,
 } from '@/lib/ads/google-ads-publish-plan'
@@ -31,7 +37,7 @@ import type {
 
 const PLAN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const PLAN_SELECT =
-  'id,user_id,connection_id,status,plan,version,approved_version,approval_summary,currency,daily_budget_minor,budget_cap_minor,external_campaign_id,publish_request_id,publish_started_at,publish_billing_verified,google_campaign_status'
+  'id,user_id,connection_id,status,plan,version,approved_version,approval_summary,approval_id,approval_hash,validation_hash,validated_version,validated_at,eu_political_advertising,eu_political_declaration_confirmed_at,approval_user_daily_budget_limit_minor,publish_credit_charged,currency,daily_budget_minor,budget_cap_minor,google_daily_budget_minor,external_campaign_id,publish_request_id,publish_started_at,publish_billing_verified,google_campaign_status'
 const STALE_PUBLISH_AFTER_MS = 10 * 60 * 1000
 
 type PublishPlanRow = {
@@ -43,6 +49,16 @@ type PublishPlanRow = {
   version: number
   approved_version: number | null
   approval_summary: unknown
+  approval_id: string | null
+  approval_hash: string | null
+  validation_hash: string | null
+  validated_version: number | null
+  validated_at: string | null
+  eu_political_advertising: 'yes' | 'no' | null
+  eu_political_declaration_confirmed_at: string | null
+  approval_user_daily_budget_limit_minor: number | null
+  publish_credit_charged: boolean | null
+  google_daily_budget_minor: number | null
   currency: string
   daily_budget_minor: number | null
   budget_cap_minor: number | null
@@ -89,6 +105,7 @@ export type GoogleAdsPublishFailureReason =
   | 'destination_unreachable'
   | 'site_policy_blocked'
   | 'insufficient_credits'
+  | 'budget_limit_exceeded'
   | 'reservation_failed'
   | 'provider_error'
   | 'provider_unavailable'
@@ -117,6 +134,8 @@ export type GoogleAdsPlanStatusInput = {
   userId: string
   planId: string
   status: 'paused' | 'enabled'
+  validateOnly?: boolean
+  userConfirmed: boolean
   acknowledgedBillingWarning?: boolean
   acknowledgedBudget?: boolean
 }
@@ -138,14 +157,24 @@ export type GoogleAdsPublishServiceDeps = {
     requestId: string,
     expectedVersion: number,
     approvalSummary: GoogleAdsApprovalSummary,
+    approvalId: string,
+    approvalHash: string,
+    userDailyBudgetLimitMinor: number,
   ) => Promise<AdsPublishBeginResult>
+  markValidated: (input: {
+    userId: string
+    planId: string
+    expectedVersion: number
+    approvalId: string
+    approvalHash: string
+  }) => Promise<void>
   markPublished: (input: {
     userId: string
     planId: string
     requestId: string
     externalCampaignId: string
     billingVerified: boolean
-  }) => Promise<void>
+  }) => Promise<AdsGooglePublishFinalizeResult>
   markFailed: (input: { userId: string; planId: string; requestId: string; reason: string }) => Promise<void>
   markReconciling: (input: { userId: string; planId: string; requestId: string; reason: string }) => Promise<void>
   markCampaignStatus: (input: {
@@ -155,7 +184,7 @@ export type GoogleAdsPublishServiceDeps = {
     status: 'PAUSED' | 'ENABLED'
     billingVerified: boolean | null
   }) => Promise<void>
-  refund: (userId: string, requestId: string) => Promise<AdsRefundResult>
+
   alertReconciling: (
     planId: string,
     requestId: string,
@@ -185,6 +214,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'invalid_budget',
       'currency_mismatch',
       'insufficient_credits',
+      'budget_limit_exceeded',
       'reservation_failed',
       'provider_error',
       'provider_unavailable',
@@ -273,34 +303,56 @@ async function updatePlan(
   if (error || !data) throw new GoogleAdsError('status_update_failed')
 }
 
+function approvedPlanJson(plan: PublishPlanRow): unknown {
+  if (
+    (plan.eu_political_advertising !== 'yes' && plan.eu_political_advertising !== 'no') ||
+    !plan.eu_political_declaration_confirmed_at
+  ) {
+    throw new GoogleAdsError('confirmation_required')
+  }
+  return {
+    ...parseGoogleAdsPublishPlan(plan.plan),
+    euPoliticalAdvertising: plan.eu_political_advertising,
+    euPoliticalDeclarationConfirmed: true,
+  }
+}
+
 const defaultDeps: GoogleAdsPublishServiceDeps = {
   accessEnabled: (userId) => resolveGoogleAdsPublishAccess(userId),
   createRequestId: randomUUID,
   loadPlan: defaultLoadPlan,
   withAccess: defaultWithAccess,
   preflightPublishUrl: preflightGoogleAdsPublishUrl,
-  beginPublish: beginAdsPublish,
-  markPublished: (input) =>
-    updatePlan(
-      input.userId,
-      input.planId,
-      {
-        status: 'published',
-        external_campaign_id: input.externalCampaignId,
-        published_at: new Date().toISOString(),
-        google_campaign_status: 'PAUSED',
-        publish_billing_verified: input.billingVerified,
-        failure_reason: null,
-      },
-      { status: 'publishing', publish_request_id: input.requestId },
-    ),
-  markFailed: (input) =>
-    updatePlan(
-      input.userId,
-      input.planId,
-      { status: 'failed', failure_reason: input.reason },
-      { status: 'publishing', publish_request_id: input.requestId },
-    ),
+  beginPublish: (userId, planId, requestId, expectedVersion, approvalSummary, approvalId, approvalHash, userDailyBudgetLimitMinor) =>
+    beginAdsGooglePublishE2({
+      userId,
+      planId,
+      requestId,
+      expectedVersion,
+      approvalId,
+      approvalHash,
+      userDailyBudgetLimitMinor,
+      approvalSummary,
+    }),
+  markValidated: async (input) => {
+    const admin = createAdminClient()
+    const { data, error } = await admin.rpc('ads_record_google_ads_validation_e2', {
+      p_user_id: input.userId,
+      p_plan_id: input.planId,
+      p_expected_version: input.expectedVersion,
+      p_approval_id: input.approvalId,
+      p_plan_hash: input.approvalHash,
+    })
+    const result = Array.isArray(data) ? data[0] : data
+    if (error || !result || (result as { state?: string }).state !== 'validated') {
+      throw new GoogleAdsError('status_update_failed')
+    }
+  },
+  markPublished: (input) => finalizeAdsGooglePublishE2(input),
+  markFailed: async (input) => {
+    const released = await releaseAdsGooglePublishE2(input)
+    if (!released) throw new GoogleAdsError('status_update_failed')
+  },
   markReconciling: (input) =>
     updatePlan(
       input.userId,
@@ -318,7 +370,6 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
       },
       { status: 'published', external_campaign_id: input.externalCampaignId },
     ),
-  refund: (userId, requestId) => refundAdsCredits(userId, 'publish', requestId),
   alertReconciling: (planId, requestId, reason) =>
     notifyGooglePublishReconciling(planId, requestId, undefined, reason),
 }
@@ -351,8 +402,14 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       return failed('provider_error')
     }
     if (!plan) return failed('plan_not_found')
-    if (plan.version !== expectedVersion || plan.approved_version !== expectedVersion) return failed('plan_changed')
-    if (plan.status === 'reconciling') return failed('reconciling')
+  if (plan.version !== expectedVersion || plan.approved_version !== expectedVersion) return failed('plan_changed')
+  if (!plan.approval_id || !plan.approval_hash || !plan.approval_user_daily_budget_limit_minor) {
+    return failed('confirmation_required')
+  }
+  if (!plan.eu_political_declaration_confirmed_at || !plan.eu_political_advertising) {
+    return failed('eu_political_declaration_required')
+  }
+  if (plan.status === 'reconciling') return failed('reconciling')
     if (plan.status === 'publishing') {
       const startedAt = plan.publish_started_at ? Date.parse(plan.publish_started_at) : Number.NaN
       if (Number.isFinite(startedAt) && Date.now() - startedAt >= STALE_PUBLISH_AFTER_MS) {
@@ -369,7 +426,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
           campaignStatus: plan.google_campaign_status?.toLowerCase() === 'enabled' ? 'enabled' : 'paused',
           billingVerified: plan.publish_billing_verified,
           paymentMethodWarning: plan.publish_billing_verified !== true,
-          creditsCharged: 0,
+          creditsCharged: plan.publish_credit_charged ? 15 : 0,
           balance: null,
           approvalSummary: buildGoogleAdsApprovalSummary({
             currency: plan.currency,
@@ -395,9 +452,14 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     userId: string
     planId: string
     expectedVersion: number
+    approvalHash: string
+    userConfirmed: boolean
     validateOnly?: boolean
   }): Promise<GoogleAdsPublishServiceResult> {
     if (!deps.accessEnabled(input.userId)) return failed('publish_disabled')
+    if (input.userConfirmed !== true || !/^[a-f0-9]{64}$/.test(input.approvalHash)) {
+      return failed('confirmation_required')
+    }
     const loaded = await loadApprovedPlan(input.userId, input.planId, input.expectedVersion)
     if ('ok' in loaded) return loaded
     if ('stalePublishingPlan' in loaded) {
@@ -435,6 +497,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       }
     }
     const plan = loaded
+    if (plan.approval_hash !== input.approvalHash) return failed('plan_changed')
+    if (
+      !input.validateOnly &&
+      (plan.validation_hash !== input.approvalHash || plan.validated_version !== input.expectedVersion)
+    ) return failed('confirmation_required')
+    if (!plan.approval_id || !plan.approval_user_daily_budget_limit_minor) return failed('confirmation_required')
     const requestId = deps.createRequestId()
     if (!PLAN_ID_PATTERN.test(requestId)) return failed('invalid_request')
     const budget = requirePlanBudget(plan)
@@ -444,9 +512,11 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       budgetCapMinor: budget.capMinor,
     })
 
+    let planJson: unknown
     let finalUrl: string
     try {
-      finalUrl = parseGoogleAdsPublishPlan(plan.plan).finalUrl
+      planJson = approvedPlanJson(plan)
+      finalUrl = parseGoogleAdsPublishPlan(planJson).finalUrl
     } catch (error) {
       return failed(failureReason(error))
     }
@@ -468,20 +538,19 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
             return failed(connection.is_manager ? 'manager_account' : 'reauth_required')
           }
           if (connection.currency_code !== budget.currency) return failed('currency_mismatch')
-
-          try {
-            buildGoogleAdsMutateRequest({
-              customerId: connection.external_account_id,
-              planJson: plan.plan,
-              requestId,
-              dailyBudgetMinor: budget.dailyMinor,
-              budgetCapMinor: budget.capMinor,
-              currency: budget.currency,
-              validateOnly: Boolean(input.validateOnly),
-            })
-          } catch (error) {
-            return failed(failureReason(error))
-          }
+          const recomputedApprovalHash = createGoogleAdsPlanApprovalHash({
+            userId: input.userId,
+            planId: plan.id,
+            planVersion: plan.version,
+            connectionId: connection.id,
+            customerId: connection.external_account_id,
+            currency: budget.currency,
+            dailyBudgetMinor: budget.dailyMinor,
+            budgetCapMinor: budget.capMinor,
+            userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor as number,
+            plan: planJson,
+          })
+          if (recomputedApprovalHash !== input.approvalHash) return failed('plan_changed')
 
           if (input.validateOnly) {
             try {
@@ -492,9 +561,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 context,
                 planId: plan.id,
                 requestId,
-                planJson: plan.plan,
+                planJson,
                 budget,
                 validateOnly: true,
+                userConfirmed: true,
+              })
+              await deps.markValidated({
+                userId: input.userId,
+                planId: plan.id,
+                expectedVersion: input.expectedVersion,
+                approvalId: plan.approval_id as string,
+                approvalHash: input.approvalHash,
               })
               return {
                 ok: true,
@@ -514,7 +591,16 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
 
           let reservation: AdsPublishBeginResult
           try {
-            reservation = await deps.beginPublish(input.userId, plan.id, requestId, input.expectedVersion, approvalSummary)
+            reservation = await deps.beginPublish(
+              input.userId,
+              plan.id,
+              requestId,
+              input.expectedVersion,
+              approvalSummary,
+              plan.approval_id as string,
+              input.approvalHash,
+              plan.approval_user_daily_budget_limit_minor as number,
+            )
           } catch {
             reservation = { ok: false, reason: 'reservation_failed', balance: 0 }
           }
@@ -550,20 +636,23 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               context,
               planId: plan.id,
               requestId,
-              planJson: plan.plan,
+              planJson,
               budget,
               validateOnly: false,
+              userConfirmed: true,
             })
             if (!result.externalCampaignId) throw new GoogleAdsError('provider_unavailable')
 
+            let settlement: AdsGooglePublishFinalizeResult
             try {
-              await deps.markPublished({
+              settlement = await deps.markPublished({
                 userId: input.userId,
                 planId: plan.id,
                 requestId,
                 externalCampaignId: result.externalCampaignId,
                 billingVerified: result.billingVerified,
               })
+              if (!settlement.ok) throw new GoogleAdsError('status_update_failed')
             } catch {
               await deps.markReconciling({
                 userId: input.userId,
@@ -579,7 +668,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 campaignStatus: 'paused',
                 billingVerified: result.billingVerified,
                 paymentMethodWarning: result.paymentMethodWarning,
-                creditsCharged: reservation.chargedAmount,
+                creditsCharged: null,
                 balance: reservation.balance,
                 approvalSummary,
               }
@@ -592,8 +681,8 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               campaignStatus: 'paused',
               billingVerified: result.billingVerified,
               paymentMethodWarning: result.paymentMethodWarning,
-              creditsCharged: reservation.chargedAmount,
-              balance: reservation.balance,
+              creditsCharged: settlement.chargedAmount,
+              balance: settlement.balance,
               approvalSummary,
             }
           } catch (error) {
@@ -612,7 +701,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 campaignStatus: 'paused',
                 billingVerified: null,
                 paymentMethodWarning: true,
-                creditsCharged: reservation.chargedAmount,
+                creditsCharged: null,
                 balance: reservation.balance,
                 approvalSummary,
               }
@@ -640,41 +729,13 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 campaignStatus: 'paused',
                 billingVerified: null,
                 paymentMethodWarning: true,
-                creditsCharged: reservation.chargedAmount,
+                creditsCharged: null,
                 balance: reservation.balance,
                 approvalSummary,
               }
             }
 
-            let refund: AdsRefundResult
-            try {
-              refund = await deps.refund(input.userId, requestId)
-            } catch {
-              refund = { refunded: false, balance: 0, refundedAmount: 0 }
-            }
-
-            if (!refund.refunded || refund.refundedAmount !== reservation.chargedAmount) {
-              await deps.markReconciling({
-                userId: input.userId,
-                planId: plan.id,
-                requestId,
-                reason: 'publish_refund_failed',
-              }).catch(() => undefined)
-              await deps.alertReconciling(plan.id, requestId, 'publish_refund_failed')
-              return {
-                ok: true,
-                state: 'reconciling',
-                externalCampaignId: null,
-                campaignStatus: 'paused',
-                billingVerified: null,
-                paymentMethodWarning: true,
-                creditsCharged: reservation.chargedAmount,
-                balance: refund.balance,
-                approvalSummary,
-              }
-            }
-
-            return failed(failureReason(error), refund.balance)
+            return failed(failureReason(error), reservation.balance)
           }
         },
       })
@@ -688,6 +749,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     | { ok: false; reason: GoogleAdsPublishFailureReason }
   > {
     if (!deps.accessEnabled(input.userId)) return { ok: false, reason: 'publish_disabled' }
+    if (input.userConfirmed !== true) return { ok: false, reason: 'confirmation_required' }
     if (
       input.status === 'enabled' &&
       (input.acknowledgedBillingWarning !== true || input.acknowledgedBudget !== true)
@@ -728,14 +790,18 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
             status,
             accessToken,
             context,
+            validateOnly: Boolean(input.validateOnly),
+            userConfirmed: true,
           })
-          await deps.markCampaignStatus({
-            userId: input.userId,
-            planId: loaded.id,
-            externalCampaignId: loaded.external_campaign_id as string,
-            status: statusResult.status === 'enabled' ? 'ENABLED' : 'PAUSED',
-            billingVerified: statusResult.billingVerified,
-          })
+          if (!input.validateOnly) {
+            await deps.markCampaignStatus({
+              userId: input.userId,
+              planId: loaded.id,
+              externalCampaignId: loaded.external_campaign_id as string,
+              status: statusResult.status === 'enabled' ? 'ENABLED' : 'PAUSED',
+              billingVerified: statusResult.billingVerified,
+            })
+          }
           return statusResult
         },
       })

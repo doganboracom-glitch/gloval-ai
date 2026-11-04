@@ -26,6 +26,7 @@ export const ADS_ENV = {
   googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
+  googleAdsPublishDailyBudgetCapsMinor: 'GOOGLE_ADS_PUBLISH_DAILY_BUDGET_CAPS_MINOR',
 } as const
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -132,6 +133,26 @@ export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = 
       .filter((value) => UUID_PATTERN.test(value)),
   )
   return allowedUserIds.has(normalizedUserId)
+}
+
+/** Fail closed until an explicit per-currency daily budget cap is configured. */
+export function resolveGoogleAdsPublishDailyBudgetCapMinor(
+  currency: string,
+  env: Env = process.env,
+): number | null {
+  if (!/^[A-Z]{3}$/.test(currency)) return null
+  const raw = env[ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]?.trim()
+  if (!raw || raw.length > 400) return null
+
+  const caps = new Map<string, number>()
+  for (const entry of raw.split(',')) {
+    const match = /^([A-Z]{3})=(\d{1,12})$/.exec(entry.trim())
+    if (!match) return null
+    const amount = Number(match[2])
+    if (!Number.isSafeInteger(amount) || amount <= 0 || caps.has(match[1])) return null
+    caps.set(match[1], amount)
+  }
+  return caps.get(currency) ?? null
 }
 
 export type GoogleAdsOAuthSettingsResult =

@@ -43,6 +43,7 @@ export type AdsPublishBeginResult =
         | 'plan_not_found'
         | 'plan_changed'
         | 'currency_mismatch'
+        | 'budget_limit_exceeded'
         | 'reservation_failed'
       balance: number
     }
@@ -148,6 +149,93 @@ export async function beginAdsPublish(
  * call on every failure path: a repeat or a refund without a charge changes
  * nothing.
  */
+export async function beginAdsGooglePublishE2(
+  input: {
+    userId: string
+    planId: string
+    requestId: string
+    expectedVersion: number
+    approvalId: string
+    approvalHash: string
+    userDailyBudgetLimitMinor: number
+    approvalSummary: GoogleAdsApprovalSummary
+  },
+  client: AdsRpcClient = defaultClient(),
+): Promise<AdsPublishBeginResult> {
+  adsChargeReason('publish', input.requestId)
+  const { data, error } = await client.rpc('ads_begin_google_ads_publish_e2', {
+    p_user_id: input.userId,
+    p_plan_id: input.planId,
+    p_request_id: input.requestId,
+    p_expected_version: input.expectedVersion,
+    p_approval_id: input.approvalId,
+    p_plan_hash: input.approvalHash,
+    p_user_daily_budget_limit_minor: input.userDailyBudgetLimitMinor,
+    p_cpc_bid_ceiling_minor: input.approvalSummary.cpcBidCeilingMinor,
+    p_cpc_bid_ceiling_micros: input.approvalSummary.cpcBidCeilingMicros,
+    p_currency_fraction_digits: input.approvalSummary.currencyFractionDigits,
+  }).maybeSingle()
+  if (error || !data) return { ok: false, reason: 'reservation_failed', balance: 0 }
+
+  const row = data as { state: string; balance: number; already_charged?: boolean; charged_amount?: number }
+  const balance = row.balance ?? 0
+  if (row.state === 'started') {
+    return { ok: true, balance, alreadyCharged: Boolean(row.already_charged), chargedAmount: row.charged_amount ?? 0 }
+  }
+  if (row.state === 'insufficient_credits') return { ok: false, reason: 'insufficient_credits', balance }
+  if (row.state === 'budget_limit_exceeded') return { ok: false, reason: 'budget_limit_exceeded', balance }
+  if (row.state === 'publish_in_progress' || row.state === 'already_published') {
+    return { ok: false, reason: 'publish_in_progress', balance }
+  }
+  if (row.state === 'plan_changed') return { ok: false, reason: 'plan_changed', balance }
+  if (row.state === 'currency_mismatch') return { ok: false, reason: 'currency_mismatch', balance }
+  if (row.state === 'not_found') return { ok: false, reason: 'plan_not_found', balance }
+  return { ok: false, reason: 'plan_not_approved', balance }
+}
+
+export type AdsGooglePublishFinalizeResult =
+  | { ok: true; balance: number; alreadyCharged: boolean; chargedAmount: number }
+  | { ok: false; reason: 'insufficient_credits' | 'finalize_failed'; balance: number }
+
+export async function finalizeAdsGooglePublishE2(
+  input: { userId: string; planId: string; requestId: string; externalCampaignId: string; billingVerified: boolean },
+  client: AdsRpcClient = defaultClient(),
+): Promise<AdsGooglePublishFinalizeResult> {
+  const { data, error } = await client.rpc('ads_finalize_google_ads_publish_e2', {
+    p_user_id: input.userId,
+    p_plan_id: input.planId,
+    p_request_id: input.requestId,
+    p_external_campaign_id: input.externalCampaignId,
+    p_billing_verified: input.billingVerified,
+  }).maybeSingle()
+  if (error || !data) return { ok: false, reason: 'finalize_failed', balance: 0 }
+  const row = data as { state: string; balance: number; already_charged?: boolean; charged_amount?: number }
+  if (row.state !== 'published') {
+    return { ok: false, reason: row.state === 'insufficient_credits' ? 'insufficient_credits' : 'finalize_failed', balance: row.balance ?? 0 }
+  }
+  return {
+    ok: true,
+    balance: row.balance ?? 0,
+    alreadyCharged: Boolean(row.already_charged),
+    chargedAmount: row.charged_amount ?? 0,
+  }
+}
+
+export async function releaseAdsGooglePublishE2(
+  input: { userId: string; planId: string; requestId: string; reason: string },
+  client: AdsRpcClient = defaultClient(),
+): Promise<boolean> {
+  const { data, error } = await client.rpc('ads_release_google_ads_publish_e2', {
+    p_user_id: input.userId,
+    p_plan_id: input.planId,
+    p_request_id: input.requestId,
+    p_failure_reason: input.reason,
+  }).maybeSingle()
+  if (error || !data) return false
+  const row = data as { released?: boolean }
+  return row.released === true
+}
+
 export async function refundAdsCredits(
   userId: string,
   action: AdsCreditAction,
