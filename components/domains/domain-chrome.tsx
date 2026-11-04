@@ -128,15 +128,18 @@ export function DomainStatusBadge({ status }: { status: DomainStatus }) {
 export function DomainModal({
   children,
   onClose,
+  ariaLabelledBy,
 }: {
   children: React.ReactNode
   onClose: () => void
+  ariaLabelledBy?: string
 }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={ariaLabelledBy}
     >
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
         <button

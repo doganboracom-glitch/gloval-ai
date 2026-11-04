@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle2, Globe, Loader2, Mail, RefreshCw } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
-import { LinkButton } from '@/components/link-button'
 import { DomainShell, fill } from '@/components/domains/domain-chrome'
+import { DomainEmailManageButton } from '@/components/domains/domain-email-manage-button'
+import { isEmailManagementAvailable } from '@/lib/custom-domains/email-access'
 import { ConnectionStatus } from '@/components/domains/connection-status'
 import { TransferOutPanel } from '@/components/domains/transfer-out-panel'
 import { RegistrarManagePanel } from '@/components/domains/registrar-manage-panel'
@@ -43,6 +44,10 @@ export function PurchasedDomainDetail({
   const [success, setSuccess] = useState<string | null>(null)
 
   const publishedProjects = projects.filter((p) => p.published)
+  const emailCanManage = isEmailManagementAvailable(
+    domain,
+    new Set(publishedProjects.map((project) => project.id)),
+  )
   const [projectId, setProjectId] = useState(
     website.projectId && publishedProjects.some((p) => p.id === website.projectId)
       ? website.projectId
@@ -99,7 +104,9 @@ export function PurchasedDomainDetail({
             {d.primary}
           </span>
         )}
-        <span className="text-sm text-muted-foreground">{d.pdRegisteredLine}</span>
+        <span className="text-sm text-muted-foreground">
+          {domain.adminAssigned ? d.pdAssignedLine : d.pdRegisteredLine}
+        </span>
       </div>
 
       {success && (
@@ -170,9 +177,7 @@ export function PurchasedDomainDetail({
                   : fill(d.emailMailboxCount, { count: email.mailboxCount, max: email.maxMailboxes })}
               </p>
               <div className="mt-4">
-                <LinkButton href="/dashboard/email" variant="secondary" size="sm">
-                  {d.emailManage}
-                </LinkButton>
+                <DomainEmailManageButton canManage={emailCanManage} />
               </div>
             </>
           )}

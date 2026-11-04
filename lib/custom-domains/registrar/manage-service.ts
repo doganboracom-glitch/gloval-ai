@@ -1,5 +1,8 @@
+import { createAdminClient } from '@/lib/supabase/admin'
 import { listDomainsForUser } from '../service'
 import type { DomainErrorCode } from '../types'
+import { isActiveAndUnexpired } from './nameserver-access'
+import { normalizeNameservers } from './nameserver-validation'
 import { REGISTRAR_CAPABILITIES, type RegistrarCapability } from './capabilities'
 import { requireRegisteredByUs } from './ownership'
 import { getDomainRegistrarProvider } from './provider'
@@ -102,9 +105,51 @@ async function mutate(
   }
 }
 
-export function changeNameservers(userId: string, rawDomain: string, nameservers: string[]) {
-  if (!Array.isArray(nameservers)) return Promise.resolve<ManageResult<{ changed: boolean }>>({ ok: false, error: 'INVALID_INPUT' })
-  return mutate(userId, rawDomain, (r, d) => r.setNameservers(d, nameservers), 'nameserverChange')
+function sameNameserverSet(current: string[], wanted: string[]): boolean {
+  return current.length === wanted.length && current.every((name) => wanted.includes(name))
+}
+
+export async function changeNameservers(
+  userId: string,
+  rawDomain: string,
+  input: unknown,
+): Promise<ManageResult<{ changed: boolean }>> {
+  const validation = normalizeNameservers(input)
+  if (!validation.ok) return { ok: false, error: 'INVALID_INPUT' }
+
+  const g = await guard(userId, rawDomain)
+  if (!g.ok) return g
+  if (!REGISTRAR_CAPABILITIES.nameserverChange) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
+
+  try {
+    const details = await g.registrar.getManagedDetails(g.domain)
+    if (!details) return { ok: false, error: 'NOT_FOUND' }
+    if (!isActiveAndUnexpired(details)) return { ok: false, error: 'PROVIDER_REFUSED' }
+
+    const current = normalizeNameservers(details.nameservers)
+    if (current.ok && sameNameserverSet(current.nameservers, validation.nameservers)) {
+      return { ok: true, changed: false }
+    }
+
+    const { data, error } = await createAdminClient()
+      .rpc('reserve_rate_limit', {
+        p_subject: `domain:nameservers:${userId}`,
+        p_limit: 5,
+        p_window_seconds: 60 * 60,
+      })
+      .maybeSingle()
+    const reservation = data as { allowed?: unknown } | null
+    if (error || !reservation || typeof reservation.allowed !== 'boolean') {
+      console.error('[registrar-manage] nameserver rate limit unavailable', error?.code ?? 'NO_RESULT')
+      return { ok: false, error: 'UNEXPECTED_ERROR' }
+    }
+    if (!reservation.allowed) return { ok: false, error: 'RATE_LIMITED' }
+
+    const result = await g.registrar.setNameservers(g.domain, validation.nameservers)
+    return { ok: true, changed: result.changed }
+  } catch (e) {
+    return { ok: false, error: toDomainError(e) }
+  }
 }
 
 export function changePrivacy(userId: string, rawDomain: string, enabled: boolean) {

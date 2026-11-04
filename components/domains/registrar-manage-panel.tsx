@@ -1,19 +1,24 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useId, useState, useTransition } from 'react'
 import useSWR from 'swr'
-import { Loader2, Settings2 } from 'lucide-react'
+import { ChevronDown, Loader2, Pencil, Settings2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
-import { fill } from '@/components/domains/domain-chrome'
+import { DomainModal, fill } from '@/components/domains/domain-chrome'
 import { RenewalCard } from '@/components/domains/renewal-card'
 import {
   loadManagedDomainAction,
   setPrivacyAction,
   updateContactAction,
+  updateNameserversAction,
 } from '@/lib/custom-domains/registrar/manage-actions'
+import { REGISTRAR_CAPABILITIES } from '@/lib/custom-domains/registrar/capabilities'
+import { isActiveAndUnexpired } from '@/lib/custom-domains/registrar/nameserver-access'
+import { normalizeNameservers } from '@/lib/custom-domains/registrar/nameserver-validation'
 import type { DomainContact } from '@/lib/custom-domains/registrar/types'
 import type { DomainErrorCode } from '@/lib/custom-domains/types'
+import { cn } from '@/lib/utils'
 
 const EMPTY_CONTACT: DomainContact = {
   firstName: '',
@@ -36,10 +41,9 @@ type RegistrarMutationResult =
   | { ok: false; reason: 'auth_unavailable' }
 
 /**
- * Registrar-side settings for a domain bought through Gloval. Everything shown
- * is read live from the registrar; every change is re-read and verified by the
- * server before it reports success. Renewal, auto-renew and DNS records are
- * stated honestly as unavailable rather than faked.
+ * Registrar-side settings for a domain managed through GLOVAL. Registrar data
+ * is read live, and state-changing operations are verified server-side before
+ * success is reported.
  */
 export function RegistrarManagePanel({ domain }: { domain: string }) {
   const { t, lang } = useLanguage()
@@ -50,6 +54,13 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
   })
   const [isPending, startTransition] = useTransition()
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [nameserverEditing, setNameserverEditing] = useState(false)
+  const [nameserverDraft, setNameserverDraft] = useState('')
+  const [confirmNameservers, setConfirmNameservers] = useState<string[] | null>(null)
+  const [contactsExpanded, setContactsExpanded] = useState(false)
+  const nameserverInputId = useId()
+  const contactsContentId = useId()
+  const nameserverConfirmTitleId = useId()
 
   const errorText = (code: DomainErrorCode): string => {
     switch (code) {
@@ -61,6 +72,8 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
         return d.errOutcomeUnknown
       case 'FEATURE_UNSUPPORTED':
         return d.errFeatureUnsupported
+      case 'RATE_LIMITED':
+        return d.pageRateLimited
       case 'REGISTRAR_UNAVAILABLE':
         return d.errRegistrarUnavailable
       case 'NOT_REGISTRAR_MANAGED':
@@ -82,6 +95,45 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
         setNotice({ kind: 'error', text: errorText(res.error) })
       }
       await mutate()
+    })
+  }
+
+  function requestNameserverChange() {
+    const entries = nameserverDraft.split(/\r?\n/).filter((entry) => entry.length > 0)
+    const validation = normalizeNameservers(entries)
+    if (!validation.ok) {
+      setNotice({ kind: 'error', text: d.errInvalidInput })
+      return
+    }
+    setNotice(null)
+    setConfirmNameservers(validation.nameservers)
+  }
+
+  function confirmNameserverChange() {
+    if (!confirmNameservers) return
+    const requestedNameservers = confirmNameservers
+    setNotice(null)
+    startTransition(async () => {
+      try {
+        const result = await updateNameserversAction(domain, requestedNameservers)
+        if (result.ok) {
+          setNotice({ kind: 'ok', text: result.changed ? d.mgSaved : d.mgNoChange })
+          setNameserverEditing(false)
+        } else if ('reason' in result) {
+          setNotice({ kind: 'error', text: d.mgLoadFailed })
+        } else {
+          setNotice({ kind: 'error', text: errorText(result.error) })
+        }
+      } catch {
+        setNotice({ kind: 'error', text: d.errGeneric })
+      } finally {
+        setConfirmNameservers(null)
+        try {
+          await mutate()
+        } catch {
+          setNotice({ kind: 'error', text: d.mgLoadFailed })
+        }
+      }
     })
   }
 
@@ -114,6 +166,8 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
   }
 
   const { details, contacts, contactsUnavailable } = data
+  const canEditNameservers =
+    REGISTRAR_CAPABILITIES.nameserverChange && isActiveAndUnexpired(details)
   const state = (v: boolean | null) => (v === null ? d.mgUnknown : v ? d.mgOn : d.mgOff)
   const expiry = details.expiresAt
     ? new Date(details.expiresAt).toLocaleDateString(locale)
@@ -166,38 +220,139 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
       </dl>
 
       <div className="mt-6">
-        <h3 className="text-sm font-medium">{d.mgNs}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">{d.mgNs}</h3>
+          {canEditNameservers && !nameserverEditing && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => {
+                setNameserverDraft(details.nameservers.join('\n'))
+                setNameserverEditing(true)
+                setNotice(null)
+              }}
+            >
+              <Pencil data-icon="inline-start" />
+              {d.mgNsEdit}
+            </Button>
+          )}
+        </div>
         {details.nameservers.length > 0 && (
           <ul className="mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
-            {details.nameservers.map((ns) => (
-              <li key={ns}>{ns}</li>
+            {details.nameservers.map((nameserver) => (
+              <li key={nameserver}>{nameserver}</li>
             ))}
           </ul>
         )}
-        <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsUnsupported}</p>
+        {!REGISTRAR_CAPABILITIES.nameserverChange ? (
+          <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsUnsupported}</p>
+        ) : !canEditNameservers ? (
+          <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsNeedsActive}</p>
+        ) : nameserverEditing ? (
+          <div className="mt-3 flex flex-col gap-3">
+            <label htmlFor={nameserverInputId} className="sr-only">
+              {d.mgNs}
+            </label>
+            <textarea
+              id={nameserverInputId}
+              aria-label={d.mgNs}
+              rows={4}
+              spellCheck={false}
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={nameserverDraft}
+              onChange={(event) => setNameserverDraft(event.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm leading-relaxed"
+            />
+            <p className="text-pretty text-xs text-muted-foreground">{d.mgNsHelp}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                onClick={() => setNameserverEditing(false)}
+              >
+                {d.cancel}
+              </Button>
+              <Button type="button" size="sm" disabled={isPending} onClick={requestNameserverChange}>
+                {d.mgNsSave}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-6">
-        <h3 className="text-sm font-medium">{d.mgContacts}</h3>
-        {contactsUnavailable || !contacts ? (
-          <p className="mt-2 text-sm text-muted-foreground">{d.mgContactsUnavailable}</p>
-        ) : (
-          <ContactForm
-            key={JSON.stringify(contacts.registrant)}
-            initial={contacts.registrant ?? EMPTY_CONTACT}
-            disabled={isPending}
-            pending={isPending}
-            onSave={(c) => run(() => updateContactAction(domain, c))}
-          />
-        )}
+        <h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-0"
+            aria-expanded={contactsExpanded}
+            aria-controls={contactsContentId}
+            onClick={() => setContactsExpanded((expanded) => !expanded)}
+          >
+            <span>{d.mgContacts}</span>
+            <ChevronDown
+              data-icon="inline-end"
+              aria-hidden="true"
+              className={cn('transition-transform', contactsExpanded && 'rotate-180')}
+            />
+          </Button>
+        </h3>
+        <div id={contactsContentId} hidden={!contactsExpanded}>
+          {contactsUnavailable || !contacts ? (
+            <p className="mt-2 text-sm text-muted-foreground">{d.mgContactsUnavailable}</p>
+          ) : (
+            <ContactForm
+              key={JSON.stringify(contacts.registrant)}
+              initial={contacts.registrant ?? EMPTY_CONTACT}
+              disabled={isPending}
+              pending={isPending}
+              onSave={(contact) => run(() => updateContactAction(domain, contact))}
+            />
+          )}
+        </div>
       </div>
 
       <RenewalCard domain={domain} errorText={errorText} />
 
-      <div className="mt-6 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
-        <Unavailable title={d.mgAutoTitle} body={d.mgAutoBody} />
-        <Unavailable title={d.mgDnsTitle} body={d.mgDnsBody} />
-      </div>
+      {confirmNameservers && (
+        <DomainModal
+          ariaLabelledBy={nameserverConfirmTitleId}
+          onClose={() => {
+            if (!isPending) setConfirmNameservers(null)
+          }}
+        >
+          <h2 id={nameserverConfirmTitleId} className="font-display text-lg font-semibold">
+            {d.mgNs}
+          </h2>
+          <p className="mt-2 text-pretty text-sm text-muted-foreground">{d.mgNsWarn}</p>
+          <ul className="mt-3 flex flex-col gap-1 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-sm">
+            {confirmNameservers.map((nameserver) => (
+              <li key={nameserver}>{nameserver}</li>
+            ))}
+          </ul>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => setConfirmNameservers(null)}
+            >
+              {d.cancel}
+            </Button>
+            <Button type="button" disabled={isPending} onClick={confirmNameserverChange}>
+              {isPending && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {d.mgNsConfirm}
+            </Button>
+          </div>
+        </DomainModal>
+      )}
     </section>
   )
 }
@@ -208,15 +363,6 @@ function Fact({ label, value, hint }: { label: string; value: string; hint?: str
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="mt-1 text-sm font-medium">{value}</dd>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  )
-}
-
-function Unavailable({ title, body }: { title: string; body: string }) {
-  return (
-    <div>
-      <h3 className="text-sm font-medium">{title}</h3>
-      <p className="mt-1 text-pretty text-xs text-muted-foreground">{body}</p>
     </div>
   )
 }

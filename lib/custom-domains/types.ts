@@ -248,6 +248,8 @@ export type DomainErrorCode =
   | 'REGISTRAR_UNAVAILABLE'
   /** Rejected before any provider call (bad nameserver / contact field / missing confirmation). */
   | 'INVALID_INPUT'
+  /** The signed-in user has exhausted the hourly nameserver-change allowance. */
+  | 'RATE_LIMITED'
   /** The provider refused the change. */
   | 'PROVIDER_REFUSED'
   /** A change was sent but could not be confirmed. Re-read the state; never retry blindly. */

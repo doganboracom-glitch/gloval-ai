@@ -25,6 +25,8 @@ import {
   type DomainDetail,
 } from '@/lib/custom-domains/actions'
 import { ConnectionStatus } from '@/components/domains/connection-status'
+import { DomainEmailManageButton } from '@/components/domains/domain-email-manage-button'
+import { isEmailManagementAvailable } from '@/lib/custom-domains/email-access'
 import { getRecheckCopy } from '@/components/domains/recheck-copy'
 import { isDomainLive, isDomainUsable, type DomainErrorCode } from '@/lib/custom-domains/types'
 
@@ -60,6 +62,10 @@ export function DomainDetailClient({
   const [emailDnsNotice, setEmailDnsNotice] = useState<string | null>(null)
 
   const usable = isDomainUsable(domain)
+  const emailCanManage = isEmailManagementAvailable(
+    domain,
+    new Set(publishableProjects.map((project) => project.id)),
+  )
   // An external domain the customer has not started verifying yet: no technical
   // DNS details are shown until they press "Doğrulamayı Başlat".
   const notStarted = domain.source === 'external' && domain.status === 'pending'
@@ -353,10 +359,8 @@ export function DomainDetailClient({
                       max: email.maxMailboxes,
                     })}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <LinkButton href="/dashboard/email" variant="secondary" size="sm">
-                  {d.emailManage}
-                </LinkButton>
+              <div className="mt-4 flex flex-wrap items-start gap-2">
+                <DomainEmailManageButton canManage={emailCanManage} />
                 <Button
                   variant="secondary"
                   size="sm"
