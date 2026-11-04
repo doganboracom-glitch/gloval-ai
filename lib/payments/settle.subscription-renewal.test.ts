@@ -57,7 +57,13 @@ vi.mock('@/lib/notify', () => ({
   logUserEvent: (...args: unknown[]) => (state.logUserEvent as (...a: unknown[]) => Promise<void>)(...args),
   formatTicketNumber: (s: string) => s,
 }))
-vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: async () => state.siteLimit }))
+vi.mock('@/lib/effective-limits', () => ({
+  getEffectiveSiteLimit: async () => state.siteLimit,
+  getEffectiveSiteLimits: async (_userId: string, planCode: string) => {
+    const ecommerce = planCode === 'ecommerce' ? 1 : 0
+    return { total: state.siteLimit, ecommerce, corporate: Math.max(0, state.siteLimit - ecommerce) }
+  }
+}))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/custom-domains/provider', () => ({ getDomainProvider: () => ({}) }))
 vi.mock('@/lib/custom-domains/registrar/provider', () => ({ getDomainRegistrarProvider: () => ({}) }))

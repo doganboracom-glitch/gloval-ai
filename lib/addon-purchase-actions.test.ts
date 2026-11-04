@@ -135,7 +135,7 @@ function seed(overrides: { sub?: Row | null; plan?: Row | null } = {}) {
         ? []
         : [
             {
-              code: 'extra_site_1',
+              code: 'extra_corporate_site_1',
               price_cents: 12300,
               currency: 'TRY',
               interval: 'month',
@@ -170,7 +170,7 @@ beforeEach(() => {
 describe('purchaseAddOn rejections (no payment, no rows)', () => {
   it('rejects an unauthenticated caller before touching the database', async () => {
     m.user = null
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'unauthenticated' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'unauthenticated' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(m.touched.size).toBe(0)
   })
@@ -182,29 +182,64 @@ describe('purchaseAddOn rejections (no payment, no rows)', () => {
     expect(purchases()).toHaveLength(0)
   })
 
+  it('rejects a discontinued site SKU even if its legacy catalog row is still active', async () => {
+    m.db.billing_plans.push({
+      code: 'extra_site_1',
+      price_cents: 9900,
+      currency: 'TRY',
+      interval: 'month',
+      product_category: 'addon',
+      active: true,
+    })
+    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({
+      ok: false,
+      error: 'not_available',
+    })
+    expect(m.createIntent).not.toHaveBeenCalled()
+    expect(purchases()).toHaveLength(0)
+  })
+
+  it('rejects the e-commerce site SKU on a PRO subscription', async () => {
+    m.db.billing_plans = [
+      {
+        code: 'extra_ecommerce_site_1',
+        price_cents: 49900,
+        currency: 'TRY',
+        interval: 'month',
+        product_category: 'addon',
+        active: true,
+      },
+    ]
+    expect(
+      await purchaseAddOn({ addonCode: 'extra_ecommerce_site_1', consents: ALL_CONSENTS }),
+    ).toEqual({ ok: false, error: 'not_eligible' })
+    expect(m.createIntent).not.toHaveBeenCalled()
+    expect(purchases()).toHaveLength(0)
+  })
+
   it('rejects a user without a subscription', async () => {
     seed({ sub: null })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'no_subscription' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'no_subscription' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(purchases()).toHaveLength(0)
   })
 
   it('never uses a subscription that belongs to another user', async () => {
     seed({ sub: { user_id: 'u2' } })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'no_subscription' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'no_subscription' })
     expect(purchases()).toHaveLength(0)
   })
 
   it.each(['trialing', 'past_due'])('rejects a %s subscription', async (status) => {
     seed({ sub: { status } })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'subscription_inactive' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'subscription_inactive' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(purchases()).toHaveLength(0)
   })
 
   it.each(['canceled', 'incomplete'])('rejects a %s subscription', async (status) => {
     seed({ sub: { status } })
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    const res = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(res.ok).toBe(false)
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(purchases()).toHaveLength(0)
@@ -212,13 +247,13 @@ describe('purchaseAddOn rejections (no payment, no rows)', () => {
 
   it('rejects an active subscription whose billing period already ended', async () => {
     seed({ sub: { current_period_end: minutesAgo(5) } })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'subscription_inactive' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'subscription_inactive' })
     expect(purchases()).toHaveLength(0)
   })
 
   it('rejects a plan that is not eligible for add-ons', async () => {
     seed({ sub: { billing_plans: { code: 'starter' } } })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_eligible' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_eligible' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(purchases()).toHaveLength(0)
   })
@@ -228,28 +263,28 @@ describe('purchaseAddOn rejections (no payment, no rows)', () => {
     ['missing', null],
   ])('does not sell an add-on whose billing_plans row is %s', async (_label, plan) => {
     seed({ plan: plan as Row | null })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_available' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_available' })
     expect(m.createIntent).not.toHaveBeenCalled()
     expect(purchases()).toHaveLength(0)
   })
 
   it('does not sell in a currency other than TRY', async () => {
     seed({ plan: { currency: 'USD' } })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_available' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'not_available' })
     expect(purchases()).toHaveLength(0)
   })
 })
 
 describe('purchaseAddOn happy path', () => {
   it('creates the pending purchase from server data and opens an iyzico intent with the same amount', async () => {
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    const res = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
 
     expect(res).toEqual({ ok: true, purchaseId: 'p1', redirectUrl: 'https://sandbox-cpp.iyzipay.com/pay/tok_1' })
     expect(purchases()).toHaveLength(1)
     expect(purchases()[0]).toMatchObject({
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       amount: 12300,
       currency: 'TRY',
       period_end_snapshot: PERIOD_END,
@@ -269,7 +304,7 @@ describe('purchaseAddOn happy path', () => {
   })
 
   it('stores the three-box consent evidence on the purchase row', async () => {
-    await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(purchases()[0]).toMatchObject({
       consent_pre_info: true,
       consent_distance: true,
@@ -280,7 +315,7 @@ describe('purchaseAddOn happy path', () => {
   })
 
   it('grants nothing and never moves past pending', async () => {
-    await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(purchases()[0].status).toBe('pending')
     expect(m.db.user_addon_entitlements).toHaveLength(0)
     expect(m.touched.has('user_addon_entitlements')).toBe(false)
@@ -291,7 +326,7 @@ describe('purchaseAddOn happy path', () => {
       id: 'p-other',
       user_id: 'u2',
       subscription_id: 's2',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: 'tok_other',
       created_at: minutesAgo(5),
@@ -299,7 +334,7 @@ describe('purchaseAddOn happy path', () => {
       currency: 'TRY',
     })
     const hostile = {
-      addonCode: 'extra_site_1',
+      addonCode: 'extra_corporate_site_1',
       consents: ALL_CONSENTS,
       priceCents: 1,
       amount: 1,
@@ -331,14 +366,14 @@ describe('purchaseAddOn happy path', () => {
       id: 'p-other',
       user_id: 'u2',
       subscription_id: 's2',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: null,
       created_at: minutesAgo(10),
       amount: 9900,
       currency: 'TRY',
     })
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    const res = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(res.ok).toBe(true)
     expect(purchases().find((r) => r.id === 'p-other')).toMatchObject({ status: 'pending', provider_ref: null })
   })
@@ -347,7 +382,7 @@ describe('purchaseAddOn happy path', () => {
 describe('purchaseAddOn PSP failures', () => {
   it('marks the purchase failed and creates no entitlement when iyzico throws', async () => {
     m.createIntent.mockRejectedValue(new Error('iyzico_error: boom'))
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toMatchObject({
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toMatchObject({
       ok: false,
       error: 'payment_init_failed',
       detail: 'billing_init_unknown',
@@ -363,15 +398,15 @@ describe('purchaseAddOn PSP failures', () => {
     ['synchronous completion', { status: 'paid', action: 'completed', reference: 'x' }],
   ])('fails the purchase on %s', async (_label, intent) => {
     m.createIntent.mockResolvedValue(intent)
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toMatchObject({ ok: false, error: 'payment_init_failed' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toMatchObject({ ok: false, error: 'payment_init_failed' })
     expect(purchases()[0]).toMatchObject({ status: 'failed', provider_ref: null })
     expect(m.touched.has('user_addon_entitlements')).toBe(false)
   })
 
   it('allows a fresh attempt after a failed one', async () => {
     m.createIntent.mockRejectedValueOnce(new Error('psp down'))
-    await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
-    const retry = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
+    const retry = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(retry.ok).toBe(true)
     expect(purchases().map((r) => r.status)).toEqual(['failed', 'pending'])
   })
@@ -379,8 +414,8 @@ describe('purchaseAddOn PSP failures', () => {
 
 describe('purchaseAddOn double-click protection', () => {
   it('a second click while the first payment is open starts no second payment', async () => {
-    expect((await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).ok).toBe(true)
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect((await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).ok).toBe(true)
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(m.createIntent).toHaveBeenCalledTimes(1)
     expect(purchases()).toHaveLength(1)
   })
@@ -390,14 +425,14 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-paid',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'paid',
       provider_ref: 'tok_paid',
       created_at: minutesAgo(3),
       amount: 12300,
       currency: 'TRY',
     })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(m.createIntent).not.toHaveBeenCalled()
   })
 
@@ -406,19 +441,19 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-done',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'granted',
       provider_ref: 'tok_done',
       created_at: minutesAgo(500),
       amount: 12300,
       currency: 'TRY',
     })
-    expect((await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).ok).toBe(true)
+    expect((await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).ok).toBe(true)
   })
 
   it('a concurrent insert caught by the unique index is reported as in progress', async () => {
     m.forceInsertConflict = true
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(m.createIntent).not.toHaveBeenCalled()
   })
 
@@ -427,7 +462,7 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-abandoned',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: null,
       created_at: minutesAgo(5),
@@ -435,7 +470,7 @@ describe('purchaseAddOn double-click protection', () => {
       currency: 'TRY',
       period_end_snapshot: minutesAgo(-60),
     })
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    const res = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(res).toMatchObject({ ok: true, purchaseId: 'p-abandoned' })
     expect(purchases()).toHaveLength(1)
     expect(purchases()[0]).toMatchObject({
@@ -454,14 +489,14 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-flying',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: null,
       created_at: new Date().toISOString(),
       amount: 12300,
       currency: 'TRY',
     })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(m.createIntent).not.toHaveBeenCalled()
   })
 
@@ -470,14 +505,14 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-live',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: 'tok_live',
       created_at: minutesAgo(10),
       amount: 12300,
       currency: 'TRY',
     })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(purchases()[0]).toMatchObject({ status: 'pending', provider_ref: 'tok_live' })
   })
 
@@ -486,14 +521,14 @@ describe('purchaseAddOn double-click protection', () => {
       id: 'p-stale',
       user_id: 'u1',
       subscription_id: 's1',
-      addon_code: 'extra_site_1',
+      addon_code: 'extra_corporate_site_1',
       status: 'pending',
       provider_ref: 'tok_stale',
       created_at: minutesAgo(45),
       amount: 12300,
       currency: 'TRY',
     })
-    const res = await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })
+    const res = await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })
     expect(res.ok).toBe(true)
     expect(purchases().find((r) => r.id === 'p-stale')?.status).toBe('failed')
     expect(purchases().filter((r) => r.status === 'pending')).toHaveLength(1)
@@ -509,7 +544,7 @@ describe('purchaseAddOn double-click protection', () => {
         redirectUrl: 'https://sandbox-cpp.iyzipay.com/pay/tok_loser',
       }
     })
-    expect(await purchaseAddOn({ addonCode: 'extra_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
+    expect(await purchaseAddOn({ addonCode: 'extra_corporate_site_1', consents: ALL_CONSENTS })).toEqual({ ok: false, error: 'purchase_in_progress' })
     expect(purchases()[0]).toMatchObject({ status: 'pending', provider_ref: 'tok_winner' })
   })
 })

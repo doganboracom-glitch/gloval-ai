@@ -16,15 +16,19 @@ import { PLAN_INCLUDED_MAILBOXES } from '@/lib/mail/access-state'
  */
 
 export type AddOnKind = 'site' | 'product' | 'mail'
+export type SiteAddOnTarget = 'corporate' | 'ecommerce'
 
 export type AddOnCode =
   | 'extra_site_1'
   | 'extra_site_3'
   | 'extra_site_5'
+  | 'extra_corporate_site_1'
+  | 'extra_ecommerce_site_1'
   | 'extra_product_100'
   | 'extra_product_200'
   | 'extra_product_500'
   | 'extra_mail_1'
+  | 'extra_mail_5'
   | 'extra_mail_10'
   | 'extra_mail_25'
   | 'extra_mail_50'
@@ -36,6 +40,10 @@ export type AddOnDefinition = {
   capacity: number
   /** Aylık liste fiyatı (kuruş). `billing_plans.price_cents` ile aynı tutulur; DB satırı önceliklidir. */
   listPriceCents: number
+  /** New typed website offers only; legacy `extra_site_*` grants remain corporate capacity. */
+  siteTarget?: SiteAddOnTarget
+  /** False removes a legacy SKU from sale while preserving its existing grants and settlement mapping. */
+  saleEnabled?: boolean
   currency: 'TRY'
   /**
    * Geçerlilik modeli: add-on tek seferlik değildir ve sabit gün sayısına bağlı
@@ -46,17 +54,20 @@ export type AddOnDefinition = {
 }
 
 export const ADD_ONS: Record<AddOnCode, AddOnDefinition> = {
-  extra_site_1: { code: 'extra_site_1', kind: 'site', capacity: 1, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period' },
-  extra_site_3: { code: 'extra_site_3', kind: 'site', capacity: 3, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
-  extra_site_5: { code: 'extra_site_5', kind: 'site', capacity: 5, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
+  extra_site_1: { code: 'extra_site_1', kind: 'site', capacity: 1, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_site_3: { code: 'extra_site_3', kind: 'site', capacity: 3, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_site_5: { code: 'extra_site_5', kind: 'site', capacity: 5, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_corporate_site_1: { code: 'extra_corporate_site_1', kind: 'site', siteTarget: 'corporate', capacity: 1, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
+  extra_ecommerce_site_1: { code: 'extra_ecommerce_site_1', kind: 'site', siteTarget: 'ecommerce', capacity: 1, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period' },
   extra_product_100: { code: 'extra_product_100', kind: 'product', capacity: 100, listPriceCents: 9900, currency: 'TRY', validity: 'subscription_period' },
   extra_product_200: { code: 'extra_product_200', kind: 'product', capacity: 200, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period' },
   extra_product_500: { code: 'extra_product_500', kind: 'product', capacity: 500, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
   // GLOVAL Mail: `capacity` is the number of mailboxes. This is the only place prices and sizes live.
   extra_mail_1: { code: 'extra_mail_1', kind: 'mail', capacity: 1, listPriceCents: 4900, currency: 'TRY', validity: 'subscription_period' },
-  extra_mail_10: { code: 'extra_mail_10', kind: 'mail', capacity: 10, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period' },
-  extra_mail_25: { code: 'extra_mail_25', kind: 'mail', capacity: 25, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period' },
-  extra_mail_50: { code: 'extra_mail_50', kind: 'mail', capacity: 50, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_5: { code: 'extra_mail_5', kind: 'mail', capacity: 5, listPriceCents: 19900, currency: 'TRY', validity: 'subscription_period' },
+  extra_mail_10: { code: 'extra_mail_10', kind: 'mail', capacity: 10, listPriceCents: 14900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_mail_25: { code: 'extra_mail_25', kind: 'mail', capacity: 25, listPriceCents: 29900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
+  extra_mail_50: { code: 'extra_mail_50', kind: 'mail', capacity: 50, listPriceCents: 49900, currency: 'TRY', validity: 'subscription_period', saleEnabled: false },
 }
 
 /** Every GLOVAL Mail add-on code, in catalog order. */
@@ -126,6 +137,16 @@ export function isAddOnEligible(kind: AddOnKind, planCode: PlanCode): boolean {
   return ADD_ON_ELIGIBLE_PLANS[kind].includes(planCode)
 }
 
+export function isAddOnEligibleForCode(value: unknown, planCode: PlanCode): value is AddOnCode {
+  if (!isAddOnCode(value)) return false
+  const def = ADD_ONS[value]
+  return isAddOnEligible(def.kind, planCode) && (def.siteTarget !== 'ecommerce' || planCode === 'ecommerce')
+}
+
+export function isAddOnPurchasableCode(value: unknown): value is AddOnCode {
+  return isAddOnCode(value) && ADD_ONS[value].saleEnabled !== false
+}
+
 /** `user_addon_entitlements` satırının kapasite hesabı için gereken alanları. */
 export type AddOnGrant = {
   addonCode: string
@@ -181,10 +202,28 @@ export function sumActiveAddOnCapacity(
   if (!isAddOnEligible(kind, planCode)) return 0
   let total = 0
   for (const grant of grants) {
-    if (!isAddOnCode(grant.addonCode)) continue
+    if (!isAddOnEligibleForCode(grant.addonCode, planCode)) continue
     const def = ADD_ONS[grant.addonCode]
     if (def.kind !== kind) continue
     if (!isGrantActive(grant, now)) continue
+    total += def.capacity
+  }
+  return total
+}
+
+export function sumActiveSiteAddOnCapacity(
+  grants: readonly AddOnGrant[],
+  target: SiteAddOnTarget,
+  planCode: PlanCode,
+  now: Date = new Date(),
+): number {
+  if (!isAddOnEligible('site', planCode)) return 0
+  let total = 0
+  for (const grant of grants) {
+    if (!isAddOnEligibleForCode(grant.addonCode, planCode)) continue
+    const def = ADD_ONS[grant.addonCode]
+    if (def.kind !== 'site' || !isGrantActive(grant, now)) continue
+    if (target === 'ecommerce' ? def.siteTarget !== 'ecommerce' : def.siteTarget === 'ecommerce') continue
     total += def.capacity
   }
   return total
@@ -197,14 +236,34 @@ type ResolveInput = {
 }
 
 /**
- * Etkin yayın (site) limiti = (admin istisnası ?? paket limiti) + aktif ek site.
- * Admin istisnası (user_limit_overrides) taban değeri belirler; add-on onun
+ * Etkin toplam yayın limiti = (admin istisnası ?? paket limiti) + etkin site SKU'ları.
+ * Admin istisnası (user_limit_overrides) taban değeri belirler; add-onlar onun
  * üzerine eklenir.
  */
 export function resolveEffectiveSiteLimit(input: ResolveInput & { override?: number | null }): number {
   const planCode = toPlanCode(input.planCode)
   const base = input.override ?? SITE_LIMITS[planCode]
   return base + sumActiveAddOnCapacity(input.grants, 'site', planCode, input.now)
+}
+
+export type EffectiveSiteLimits = {
+  total: number
+  corporate: number
+  ecommerce: number
+}
+
+export function resolveEffectiveEcommerceSiteLimit(input: ResolveInput): number {
+  const planCode = toPlanCode(input.planCode)
+  return ECOMMERCE_SITE_LIMITS[planCode] +
+    sumActiveSiteAddOnCapacity(input.grants, 'ecommerce', planCode, input.now)
+}
+
+export function resolveEffectiveSiteLimits(
+  input: ResolveInput & { override?: number | null },
+): EffectiveSiteLimits {
+  const total = resolveEffectiveSiteLimit(input)
+  const ecommerce = resolveEffectiveEcommerceSiteLimit(input)
+  return { total, ecommerce, corporate: Math.max(0, total - ecommerce) }
 }
 
 /**
@@ -218,11 +277,7 @@ export function resolveEffectiveProductLimit(input: ResolveInput): number | null
   return base + sumActiveAddOnCapacity(input.grants, 'product', planCode, input.now)
 }
 
-/**
- * E-ticaret sitesi hakkı. Ek site add-on'ları bu sayıyı ARTIRMAZ: e-ticaret
- * paketinde 3 kurumsal + 1 e-ticaret ayrımı korunur, ek site yalnızca toplam
- * yayın kapasitesini büyütür.
- */
+/** Base e-commerce site allowance before any typed add-on grants. */
 export function resolveEcommerceSiteLimit(planCode: string | null | undefined): number {
   return ECOMMERCE_SITE_LIMITS[toPlanCode(planCode)]
 }
@@ -230,6 +285,7 @@ export function resolveEcommerceSiteLimit(planCode: string | null | undefined): 
 export type ActiveAddOn = {
   code: AddOnCode
   kind: AddOnKind
+  siteTarget?: SiteAddOnTarget
   capacity: number
   expiresAt: string | null
 }
@@ -237,6 +293,7 @@ export type ActiveAddOn = {
 export type AddOnCatalogItem = {
   code: AddOnCode
   kind: AddOnKind
+  siteTarget?: SiteAddOnTarget
   capacity: number
   /** Sunucuda çözümlenen aylık fiyat (kuruş) ve para birimi. */
   priceCents: number
@@ -256,7 +313,8 @@ export type AddOnOverview = {
   product: { eligible: boolean; base: number | null; addOn: number; total: number | null }
   /** Mailboxes: included by the package + active GLOVAL Mail add-ons. */
   mail: { eligible: boolean; base: number; addOn: number; total: number }
-  /** Ek site ile ARTMAYAN e-ticaret sitesi hakkı. */
+  /** Site-type allowances after eligible, active add-ons. */
+  corporateSiteLimit: number
   ecommerceSiteLimit: number
   /** Yalnızca şu an kapasiteye gerçekten katkı veren kayıtlar. */
   active: ActiveAddOn[]
@@ -274,16 +332,18 @@ export function buildAddOnOverview(
   const productBase = PRODUCT_LIMITS[planCode]
   const mailAddOn = sumActiveAddOnCapacity(input.grants, 'mail', planCode, now)
   const mailBase = PLAN_INCLUDED_MAILBOXES[planCode]
+  const siteLimits = resolveEffectiveSiteLimits({ ...input, now })
 
   const active: ActiveAddOn[] = []
   for (const grant of input.grants) {
     if (!isAddOnCode(grant.addonCode)) continue
     const def = ADD_ONS[grant.addonCode]
-    if (!isAddOnEligible(def.kind, planCode)) continue
+    if (!isAddOnEligibleForCode(def.code, planCode)) continue
     if (!isGrantActive(grant, now)) continue
     active.push({
       code: def.code,
       kind: def.kind,
+      ...(def.siteTarget ? { siteTarget: def.siteTarget } : {}),
       capacity: def.capacity,
       expiresAt: grantEffectiveEnd(grant),
     })
@@ -295,7 +355,7 @@ export function buildAddOnOverview(
       eligible: isAddOnEligible('site', planCode),
       base: input.override ?? SITE_LIMITS[planCode],
       addOn: siteAddOn,
-      total: resolveEffectiveSiteLimit({ ...input, now }),
+      total: siteLimits.total,
     },
     product: {
       eligible: isAddOnEligible('product', planCode),
@@ -309,15 +369,19 @@ export function buildAddOnOverview(
       addOn: mailAddOn,
       total: mailBase + mailAddOn,
     },
-    ecommerceSiteLimit: resolveEcommerceSiteLimit(planCode),
+    corporateSiteLimit: siteLimits.corporate,
+    ecommerceSiteLimit: siteLimits.ecommerce,
     active,
-    catalog: Object.values(ADD_ONS).map((def) => ({
-      code: def.code,
-      kind: def.kind,
-      capacity: def.capacity,
-      priceCents: prices[def.code].priceCents,
-      currency: prices[def.code].currency,
-      eligible: isAddOnEligible(def.kind, planCode),
-    })),
+    catalog: Object.values(ADD_ONS)
+      .filter((def) => def.saleEnabled !== false)
+      .map((def) => ({
+        code: def.code,
+        kind: def.kind,
+        ...(def.siteTarget ? { siteTarget: def.siteTarget } : {}),
+        capacity: def.capacity,
+        priceCents: prices[def.code].priceCents,
+        currency: prices[def.code].currency,
+        eligible: isAddOnEligibleForCode(def.code, planCode),
+      })),
   }
 }

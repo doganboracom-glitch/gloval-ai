@@ -18,7 +18,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock('next/server', () => ({ after: vi.fn() }))
 vi.mock('@/lib/mail/admin-guard', () => ({ isAdminEmail: () => state.admin }))
 vi.mock('@/lib/billing', () => ({ getMyCurrentPlan: vi.fn(), getPlanCodeForUser: async () => 'free' }))
-vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: vi.fn(), getEffectiveProductLimit: vi.fn() }))
+vi.mock('@/lib/effective-limits', () => ({ getEffectiveSiteLimit: vi.fn(), getEffectiveSiteLimits: vi.fn(async () => ({ total: 5, ecommerce: 1, corporate: 4 })), getEffectiveProductLimit: vi.fn() }))
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: () => ({ allowed: true, retryAfterMs: 0 }) }))
 vi.mock('@/lib/billing-lifecycle', () => ({ isSubscriptionSuspended: vi.fn() }))
 vi.mock('@/lib/store-sync', () => ({ syncStoreFromSchema: vi.fn() }))

@@ -1,4 +1,4 @@
-import { isAddOnCode, isAddOnEligible, ADD_ONS, type AddOnPrice } from '@/lib/add-ons'
+import { isAddOnCode, isAddOnEligibleForCode, type AddOnPrice } from '@/lib/add-ons'
 import { toPlanCode } from '@/lib/pricing-config'
 import { addOnOrderRef } from '@/lib/addon-purchases'
 import { normalizeCurrency, verifyPaidFacts } from './paid-facts'
@@ -80,7 +80,7 @@ export function verifyAddOnFulfillmentContext(input: {
   ) {
     return { ok: false, reason: 'subscription_inactive' }
   }
-  if (!isAddOnEligible(ADD_ONS[purchase.addon_code].kind, toPlanCode(subscription.planCode))) {
+  if (!isAddOnEligibleForCode(purchase.addon_code, toPlanCode(subscription.planCode))) {
     return { ok: false, reason: 'not_eligible' }
   }
   return { ok: true }

@@ -7,6 +7,13 @@ import { getPublishedSite, publishProject, saveProjectSchema } from '@/lib/proje
 import { getPublishedSiteCommerceMode } from '@/lib/commerce-mode-server'
 import { isStorefront, type WebsiteSchema } from '@/lib/website-schema'
 
+const limits = vi.hoisted(() => ({
+  planCode: 'pro',
+  total: 5,
+  ecommerce: 0,
+  corporate: 5,
+}))
+
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 vi.mock('@/lib/supabase/server', async () => {
   const { fakeDb } = await import('@/lib/__fixtures__/fake-db')
@@ -18,12 +25,13 @@ vi.mock('@/lib/supabase/admin', async () => {
 })
 vi.mock('@/lib/mail/admin-guard', () => ({ isAdminEmail: () => false }))
 vi.mock('@/lib/billing', () => ({
-  getMyCurrentPlan: async () => ({ code: 'pro' }),
-  getPlanCodeForUser: async () => 'pro',
+  getMyCurrentPlan: async () => ({ code: limits.planCode }),
+  getPlanCodeForUser: async () => limits.planCode,
 }))
 vi.mock('@/lib/billing-lifecycle', () => ({ isSubscriptionSuspended: async () => false }))
 vi.mock('@/lib/effective-limits', () => ({
-  getEffectiveSiteLimit: async () => 5,
+  getEffectiveSiteLimit: async () => limits.total,
+  getEffectiveSiteLimits: async () => ({ ...limits }),
   getEffectiveProductLimit: async () => null,
 }))
 vi.mock('@/lib/store-sync', () => ({ syncStoreFromSchema: vi.fn(async () => {}) }))
@@ -53,6 +61,10 @@ function storeSchema(): WebsiteSchema {
 
 beforeEach(() => {
   fakeDb.reset()
+  limits.planCode = 'pro'
+  limits.total = 5
+  limits.ecommerce = 0
+  limits.corporate = 5
   fakeDb.rows('projects').push({
     id: ID,
     owner_id: 'user-1',
@@ -115,5 +127,43 @@ describe('a corporate site keeps its type through every store-adjacent flow', ()
     await createProduct(ID, PRODUCT)
     await savePaymentSettings(ID, { enabled: [], publicConfig: {}, secrets: {} })
     expect(kind()).toEqual(CORPORATE)
+  })
+
+  it('does not use corporate site capacity to publish beyond the e-commerce limit', async () => {
+    limits.planCode = 'ecommerce'
+    limits.total = 5
+    limits.ecommerce = 1
+    limits.corporate = 4
+    fakeDb.rows('projects')[0].project_type = 'ecommerce'
+    fakeDb.rows('projects').push({
+      id: 'existing-ecommerce-site',
+      owner_id: 'user-1',
+      published: true,
+      project_type: 'ecommerce',
+    })
+
+    const result = await publishProject({ id: ID, schema: storeSchema() })
+
+    expect(result).toMatchObject({ ok: false, reason: 'SITE_LIMIT_REACHED', used: 1, total: 1 })
+    expect(fakeDb.rows('projects')[0].published).toBe(false)
+  })
+
+  it('allows another e-commerce site when an e-commerce-specific allowance is active', async () => {
+    limits.planCode = 'ecommerce'
+    limits.total = 5
+    limits.ecommerce = 2
+    limits.corporate = 3
+    fakeDb.rows('projects')[0].project_type = 'ecommerce'
+    fakeDb.rows('projects').push({
+      id: 'existing-ecommerce-site',
+      owner_id: 'user-1',
+      published: true,
+      project_type: 'ecommerce',
+    })
+
+    const result = await publishProject({ id: ID, schema: storeSchema() })
+
+    expect(result.ok).toBe(true)
+    expect(fakeDb.rows('projects')[0].published).toBe(true)
   })
 })

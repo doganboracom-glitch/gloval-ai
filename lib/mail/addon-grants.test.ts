@@ -31,10 +31,17 @@ const activeSub = { status: 'active', current_period_end: iso(20) }
 const proPlan = (): MailPlanGrant => ({ code: 'pro', entitled: true, endsAt: iso(20), endedAt: null })
 
 describe('GLOVAL Mail catalog', () => {
-  it('exposes the four packages with the agreed sizes and prices', () => {
-    expect(MAIL_ADD_ON_CODES).toEqual(['extra_mail_1', 'extra_mail_10', 'extra_mail_25', 'extra_mail_50'])
+  it('keeps five historical and current packages with their agreed sizes and prices', () => {
+    expect(MAIL_ADD_ON_CODES).toEqual([
+      'extra_mail_1',
+      'extra_mail_5',
+      'extra_mail_10',
+      'extra_mail_25',
+      'extra_mail_50',
+    ])
     expect(MAIL_ADD_ON_CODES.map((c) => [ADD_ONS[c].capacity, ADD_ONS[c].listPriceCents])).toEqual([
       [1, 4900],
+      [5, 19900],
       [10, 14900],
       [25, 29900],
       [50, 49900],
@@ -100,7 +107,16 @@ describe('mailbox capacity = plan + active add-ons', () => {
     expect(limit).toEqual({ max: 3, fromPlan: 3, fromAddons: 0 })
   })
 
-  it('sums several active add-ons on top of the plan', () => {
+  it('adds the new five-mailbox package to the plan allowance', () => {
+    const addons = mailAddonGrantsFromRows(
+      [mailRow('extra_mail_5', activeSub), mailRow('extra_mail_1', activeSub)],
+      NOW,
+    )
+    const limit = computeMailboxLimit({ grants: { plans: [proPlan()], addons }, now: NOW })
+    expect(limit).toEqual({ max: 3 + 6, fromPlan: 3, fromAddons: 6 })
+  })
+
+  it('sums historical active packages on top of the plan', () => {
     const addons = mailAddonGrantsFromRows(
       [mailRow('extra_mail_10', activeSub), mailRow('extra_mail_1', activeSub), mailRow('extra_mail_25', activeSub)],
       NOW,

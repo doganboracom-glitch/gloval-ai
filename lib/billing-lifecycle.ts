@@ -294,17 +294,15 @@ type ProjectRow = { id: string; slug: string | null; published: boolean; project
 
 /**
  * Restores the sites remembered by suspension, oldest first, without ever
- * exceeding the owner's effective limits: total = plan limit + active add-ons,
- * and on the e-commerce plan 1 e-commerce site (add-ons never raise it) with the
- * rest corporate. Sites that do not fit stay unpublished.
+ * exceeding the owner's effective, type-aware limits. Typed site add-ons raise
+ * only their matching allowance. Sites that do not fit stay unpublished.
  */
 async function restoreSuspendedSites(userId: string, suspendedIds: string[], planCode: string | null) {
   // A failed read would look like "no owned/live sites" and a failed update like
   // "restored"; both must abort so the renewal is retried instead.
   const admin = strictDb(createAdminClient(), 'billing.restoreSites')
-  const [{ getEffectiveSiteLimit }, { resolveEcommerceSiteLimit }, { toPlanCode }] = await Promise.all([
+  const [{ getEffectiveSiteLimits }, { toPlanCode }] = await Promise.all([
     import('@/lib/effective-limits'),
-    import('@/lib/add-ons'),
     import('@/lib/pricing-config'),
   ])
   const code = toPlanCode(planCode)
@@ -313,8 +311,8 @@ async function restoreSuspendedSites(userId: string, suspendedIds: string[], pla
     admin.from('projects').select('id, project_type').eq('owner_id', userId).eq('published', true),
   ])
 
-  const limit = await getEffectiveSiteLimit(userId, code)
-  const ecommerceLimit = resolveEcommerceSiteLimit(code)
+  const limits = await getEffectiveSiteLimits(userId, code)
+  const { total: limit, corporate: corporateLimit, ecommerce: ecommerceLimit } = limits
   let total = (live ?? []).length
   let ecommerce = (live ?? []).filter((p) => p.project_type === 'ecommerce').length
   let corporate = total - ecommerce
@@ -327,9 +325,7 @@ async function restoreSuspendedSites(userId: string, suspendedIds: string[], pla
   for (const project of candidates) {
     if (total >= limit) continue
     const isEcommerce = project.project_type === 'ecommerce'
-    if (ecommerceLimit > 0) {
-      if (isEcommerce ? ecommerce >= ecommerceLimit : corporate >= limit - ecommerceLimit) continue
-    }
+    if (isEcommerce ? ecommerce >= ecommerceLimit : corporate >= corporateLimit) continue
     accepted.push(project)
     total++
     if (isEcommerce) ecommerce++

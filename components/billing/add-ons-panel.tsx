@@ -22,6 +22,7 @@ import {
   CheckoutConfirmDialog,
   type CheckoutItem,
 } from '@/components/billing/checkout-confirm-dialog'
+import { AddOnAllowanceCard } from '@/components/billing/add-on-allowance-card'
 import { formatMoney } from '@/lib/billing-utils'
 import { BILLING_PROFILE_HREF } from '@/lib/billing-profile-link'
 import { getMailAddOnCopy } from '@/components/billing/mail-addon-copy'
@@ -299,12 +300,10 @@ export function AddOnsPanel({
   const router = useRouter()
   const a = t.billing.addOns
   const dateFmt = new Intl.DateTimeFormat(lang, { dateStyle: 'medium' })
-  const siteItems = overview.catalog.filter((c) => c.kind === 'site')
+  const websiteItems = overview.catalog.filter((c) => c.kind === 'site' && c.siteTarget)
   const productItems = overview.catalog.filter((c) => c.kind === 'product')
   const mailItems = overview.catalog.filter((c) => c.kind === 'mail')
   const mc = getMailAddOnCopy(lang)
-  const unitTemplate = (kind: AddOnKind) =>
-    kind === 'site' ? a.siteUnit : kind === 'mail' ? mc.unit : a.productUnit
 
   const [checkoutCode, setCheckoutCode] = useState<AddOnCode | null>(null)
   const [busyCode, setBusyCode] = useState<AddOnCode | null>(null)
@@ -332,8 +331,33 @@ export function AddOnsPanel({
 
   const unitLabelFor = (code: AddOnCode) => {
     const def = ADD_ONS[code]
-    return fill(unitTemplate(def.kind), { n: def.capacity })
+    if (def.kind === 'site' && def.siteTarget === 'corporate') {
+      return fill(a.corporateSiteUnit, { n: def.capacity })
+    }
+    if (def.kind === 'site' && def.siteTarget === 'ecommerce') {
+      return fill(a.ecommerceSiteUnit, { n: def.capacity })
+    }
+    if (def.kind === 'site' && def.saleEnabled === false) {
+      return fill(a.legacySiteUnit, { n: def.capacity })
+    }
+    if (def.kind === 'mail' && (code === 'extra_mail_1' || code === 'extra_mail_5')) {
+      return fill(def.capacity === 1 ? a.emailUnitOne : a.emailUnitMany, { n: def.capacity })
+    }
+    if (def.kind === 'mail' && def.saleEnabled === false) {
+      return fill(a.legacyMailUnit, { n: def.capacity })
+    }
+    const template = def.kind === 'site' ? a.siteUnit : def.kind === 'mail' ? mc.unit : a.productUnit
+    return fill(template, { n: def.capacity })
   }
+
+  const websiteUnitLabelFor = (item: AddOnCatalogItem) => {
+    const def = ADD_ONS[item.code]
+    const template = def.siteTarget === 'ecommerce' ? a.ecommerceSiteUnit : a.corporateSiteUnit
+    return fill(template, { n: item.capacity })
+  }
+
+  const emailUnitLabelFor = (item: AddOnCatalogItem) =>
+    fill(item.capacity === 1 ? a.emailUnitOne : a.emailUnitMany, { n: item.capacity })
 
   function showResult() {
     setAwaitingUrl(null)
@@ -440,17 +464,26 @@ export function AddOnsPanel({
     refreshStatus: a.refreshStatus,
     dismiss: a.dismiss,
   }
+  const outcomeSiteTarget = outcome ? ADD_ONS[outcome.addonCode].siteTarget : undefined
   if (outcome) {
     outcomeCopy.successTotal =
       outcome.kind === 'site'
-        ? a.successTotalSite
+        ? outcomeSiteTarget === 'ecommerce'
+          ? a.successTotalEcommerceSite
+          : outcomeSiteTarget === 'corporate'
+            ? a.successTotalCorporateSite
+            : a.successTotalSite
         : outcome.kind === 'mail'
           ? mc.successTotal
           : a.successTotalProduct
   }
   const outcomeTotal = outcome
     ? outcome.kind === 'site'
-      ? overview.site.total
+      ? outcomeSiteTarget === 'ecommerce'
+        ? overview.ecommerceSiteLimit
+        : outcomeSiteTarget === 'corporate'
+          ? overview.corporateSiteLimit
+          : overview.site.total
       : outcome.kind === 'mail'
         ? overview.mail.total
         : overview.product.total
@@ -575,7 +608,10 @@ export function AddOnsPanel({
           />
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          {fill(a.ecommerceNote, { n: overview.ecommerceSiteLimit })}
+          {fill(a.ecommerceNote, {
+            corporate: overview.corporateSiteLimit,
+            ecommerce: overview.ecommerceSiteLimit,
+          })}
         </p>
       </div>
 
@@ -593,7 +629,7 @@ export function AddOnsPanel({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/40 px-3 py-2 text-sm"
                   >
                     <span className="font-medium">
-                      {fill(unitTemplate(item.kind), { n: item.capacity })}
+                      {unitLabelFor(item.code)}
                     </span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <span className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
@@ -611,20 +647,26 @@ export function AddOnsPanel({
           </div>
 
           <div className="mt-4 grid gap-4">
-            <AddOnCatalogGroup
+            <AddOnAllowanceCard
               kind="site"
-              items={siteItems}
-              eligible={overview.site.eligible}
-              title={a.siteGroup}
-              description={a.siteGroupDesc}
-              unitLabel={a.siteUnit}
+              items={websiteItems}
+              title={a.websiteAllowanceTitle}
+              description={a.websiteAllowanceDescription}
+              selectLabel={a.websiteAllowanceSelectLabel}
+              optionLabel={a.allowanceOptionLabel}
+              currencyLabel={a.priceCurrency}
+              unavailableOptionLabel={a.optionUnavailable}
+              availabilityHint={a.optionAvailabilityHint}
+              unitLabelFor={websiteUnitLabelFor}
               notEligible={a.notEligibleSite}
               notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.perMonth}
+              perMonth={a.allowancePerMonth}
               periodNote={a.periodNote}
+              vatIncluded={t.billing.checkout.vatIncluded}
               buyLabel={a.buy}
+              buySelectedAriaLabel={a.buySelectedAriaLabel}
               buyingLabel={a.buying}
-              onBuy={canBuy ? openCheckout : undefined}
+              onBuy={openCheckout}
               busyCode={busyCode}
               purchaseLocked={purchaseLocked}
             />
@@ -645,26 +687,32 @@ export function AddOnsPanel({
               busyCode={busyCode}
               purchaseLocked={purchaseLocked}
             />
-            <AddOnCatalogGroup
+            <AddOnAllowanceCard
               kind="mail"
               items={mailItems}
-              eligible={overview.mail.eligible}
-              title={mc.group}
-              description={mc.groupDesc}
-              unitLabel={mc.unit}
-              notEligible={mc.notEligible}
+              title={a.emailAllowanceTitle}
+              description={a.emailAllowanceDescription}
+              selectLabel={a.emailAllowanceSelectLabel}
+              optionLabel={a.allowanceOptionLabel}
+              currencyLabel={a.priceCurrency}
+              unavailableOptionLabel={a.optionUnavailable}
+              availabilityHint={a.optionAvailabilityHint}
+              unitLabelFor={emailUnitLabelFor}
+              notEligible={a.notEligibleMail}
               notEligibleBadge={a.notEligibleBadge}
-              perMonth={a.perMonth}
+              perMonth={a.allowancePerMonth}
               periodNote={a.periodNote}
+              vatIncluded={t.billing.checkout.vatIncluded}
               buyLabel={a.buy}
+              buySelectedAriaLabel={a.buySelectedAriaLabel}
               buyingLabel={a.buying}
-              onBuy={canBuy ? openCheckout : undefined}
+              onBuy={openCheckout}
               busyCode={busyCode}
               purchaseLocked={purchaseLocked}
             />
           </div>
 
-          {!overview.site.eligible || !overview.product.eligible ? (
+          {!websiteItems.every((item) => item.eligible) || !overview.product.eligible ? (
             <Link
               href="/billing"
               className="mt-4 inline-flex rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-foreground"

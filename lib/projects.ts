@@ -860,7 +860,7 @@ export async function publishProject(input: {
   // editing another tenant's site, `db` is the elevated service-role client.
   const { data: project, error: loadErr } = await db
     .from('projects')
-    .select('id, name, slug, published, published_at, language, owner_id, schema_data')
+    .select('id, name, slug, published, published_at, language, owner_id, project_type, schema_data')
     .eq('id', input.id)
     .maybeSingle()
   if (loadErr) throw loadErr
@@ -907,20 +907,39 @@ export async function publishProject(input: {
         return { ok: false, reason: FREE_PAGE_LIMIT_ERROR, limit: pageLimit }
       }
     }
-    // Admin-granted per-user exception (user_limit_overrides) wins over the plan
-    // default while unexpired; active "Ek Site" add-ons are added on top. The
-    // plan definition itself is never modified.
-    const limit = await getEffectiveSiteLimit(project.owner_id as string, planCode)
-    const { count, error: countErr } = await db
-      .from('projects')
-      .select('id', { count: 'exact', head: true })
-      .eq('published', true)
-      .neq('id', input.id)
-    if (countErr) throw countErr
-    // Limit dolu: hata firlatmak yerine yapilandirilmis sonuc donduruyoruz;
-    // boylece sunucu action hata temizlemesi mesaji bozmadan istemciye ulasir.
-    if ((count ?? 0) >= limit) {
-      return { ok: false, reason: SITE_LIMIT_ERROR, used: count ?? 0, total: limit }
+    // Admin-granted per-user exceptions and active, type-specific add-ons are
+    // applied without changing the underlying plan limits.
+    const { getEffectiveSiteLimits } = await import('@/lib/effective-limits')
+    const limits = await getEffectiveSiteLimits(project.owner_id as string, planCode)
+    const [totalCountResult, ecommerceCountResult] = await Promise.all([
+      db
+        .from('projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', project.owner_id)
+        .eq('published', true)
+        .neq('id', input.id),
+      db
+        .from('projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', project.owner_id)
+        .eq('published', true)
+        .eq('project_type', 'ecommerce')
+        .neq('id', input.id),
+    ])
+    if (totalCountResult.error) throw totalCountResult.error
+    if (ecommerceCountResult.error) throw ecommerceCountResult.error
+
+    const totalUsed = totalCountResult.count ?? 0
+    const ecommerceUsed = ecommerceCountResult.count ?? 0
+    if (totalUsed >= limits.total) {
+      return { ok: false, reason: SITE_LIMIT_ERROR, used: totalUsed, total: limits.total }
+    }
+
+    const isEcommerce = project.project_type === 'ecommerce'
+    const typeUsed = isEcommerce ? ecommerceUsed : Math.max(0, totalUsed - ecommerceUsed)
+    const typeLimit = isEcommerce ? limits.ecommerce : limits.corporate
+    if (typeUsed >= typeLimit) {
+      return { ok: false, reason: SITE_LIMIT_ERROR, used: typeUsed, total: typeLimit }
     }
   }
 

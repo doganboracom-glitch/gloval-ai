@@ -46,9 +46,14 @@ vi.mock('@/lib/site-limit-override', () => ({
 
 import {
   ADD_ONS,
+  buildAddOnOverview,
+  isAddOnEligibleForCode,
+  isAddOnPurchasableCode,
+  resolveAddOnPrices,
   resolveEcommerceSiteLimit,
   resolveEffectiveProductLimit,
   resolveEffectiveSiteLimit,
+  resolveEffectiveSiteLimits,
   sumActiveAddOnCapacity,
   type AddOnCode,
   type AddOnGrant,
@@ -56,6 +61,7 @@ import {
 import {
   getEffectiveProductLimit,
   getEffectiveSiteLimit,
+  getEffectiveSiteLimits,
   grantAddOn,
 } from '@/lib/effective-limits'
 import { PRODUCT_LIMITS, SITE_LIMITS } from '@/lib/pricing-config'
@@ -255,12 +261,74 @@ describe('admin override', () => {
 })
 
 describe('e-commerce site allowance', () => {
-  it('is 1 and unchanged by extra site add-ons (3 corporate + 1 e-commerce)', () => {
+  it('legacy extra-site packages still add corporate capacity only', () => {
     const grants = [grant('extra_site_1'), grant('extra_site_3'), grant('extra_site_5')]
     expect(resolveEcommerceSiteLimit('ecommerce')).toBe(1)
     expect(resolveEffectiveSiteLimit({ planCode: 'ecommerce', grants })).toBe(SITE_LIMITS.ecommerce + 9)
     expect(resolveEcommerceSiteLimit('ecommerce')).toBe(1)
     expect(resolveEcommerceSiteLimit('pro')).toBe(0)
+  })
+
+  it('routes corporate and e-commerce packages to only their matching allowance', () => {
+    const base = resolveEffectiveSiteLimits({ planCode: 'ecommerce', grants: [] })
+    const corporate = resolveEffectiveSiteLimits({
+      planCode: 'ecommerce',
+      grants: [grant('extra_corporate_site_1')],
+    })
+    const ecommerce = resolveEffectiveSiteLimits({
+      planCode: 'ecommerce',
+      grants: [grant('extra_ecommerce_site_1')],
+    })
+
+    expect(corporate).toEqual({
+      total: base.total + 1,
+      ecommerce: base.ecommerce,
+      corporate: base.corporate + 1,
+    })
+    expect(ecommerce).toEqual({
+      total: base.total + 1,
+      ecommerce: base.ecommerce + 1,
+      corporate: base.corporate,
+    })
+    expect(isAddOnEligibleForCode('extra_ecommerce_site_1', 'pro')).toBe(false)
+    expect(resolveEffectiveSiteLimits({
+      planCode: 'pro',
+      grants: [grant('extra_ecommerce_site_1')],
+    })).toEqual(resolveEffectiveSiteLimits({ planCode: 'pro', grants: [] }))
+  })
+
+  it('hides discontinued SKUs from sale while retaining their existing grants', () => {
+    const overview = buildAddOnOverview({
+      planCode: 'ecommerce',
+      grants: [grant('extra_site_1'), grant('extra_mail_10')],
+      prices: resolveAddOnPrices([]),
+    })
+    const codes = overview.catalog.map((item) => item.code)
+    const activeCodes = overview.active.map((item) => item.code)
+
+    expect(codes).toContain('extra_corporate_site_1')
+    expect(codes).toContain('extra_ecommerce_site_1')
+    expect(codes).toContain('extra_mail_1')
+    expect(codes).toContain('extra_mail_5')
+    expect(codes).not.toContain('extra_site_1')
+    expect(codes).not.toContain('extra_site_3')
+    expect(codes).not.toContain('extra_site_5')
+    expect(codes).not.toContain('extra_mail_10')
+    expect(codes).not.toContain('extra_mail_25')
+    expect(codes).not.toContain('extra_mail_50')
+    expect(activeCodes).toContain('extra_site_1')
+    expect(activeCodes).toContain('extra_mail_10')
+    expect(overview.site.total).toBe(SITE_LIMITS.ecommerce + 1)
+    expect(overview.ecommerceSiteLimit).toBe(1)
+    expect(isAddOnPurchasableCode('extra_site_1')).toBe(false)
+    expect(isAddOnPurchasableCode('extra_mail_5')).toBe(true)
+  })
+
+  it('uses the new catalog prices before their rows are installed', () => {
+    const prices = resolveAddOnPrices([])
+    expect(prices.extra_corporate_site_1.priceCents).toBe(19900)
+    expect(prices.extra_ecommerce_site_1.priceCents).toBe(49900)
+    expect(prices.extra_mail_5.priceCents).toBe(19900)
   })
 })
 
@@ -269,6 +337,16 @@ describe('server-side resolvers (DB backed)', () => {
     state.rows = [row('extra_site_3'), row('extra_product_200')]
     expect(await getEffectiveSiteLimit('u1', 'pro')).toBe(6)
     expect(await getEffectiveProductLimit('u1', 'pro')).toBe(250)
+  })
+
+  it('reads type-specific grants for total, corporate and e-commerce limits', async () => {
+    state.rows = [row('extra_corporate_site_1'), row('extra_ecommerce_site_1')]
+    const base = resolveEffectiveSiteLimits({ planCode: 'ecommerce', grants: [] })
+    expect(await getEffectiveSiteLimits('u1', 'ecommerce')).toEqual({
+      total: base.total + 2,
+      ecommerce: base.ecommerce + 1,
+      corporate: base.corporate + 1,
+    })
   })
 
   it('applies the admin override as the site base', async () => {
@@ -358,6 +436,17 @@ describe('server-side resolvers (DB backed)', () => {
       ok: false,
       error: 'not_eligible',
     })
+    expect(state.upserts).toHaveLength(0)
+  })
+
+  it('grantAddOn rejects an e-commerce site SKU on a PRO subscription', async () => {
+    const res = await grantAddOn({
+      userId: 'u1',
+      addonCode: 'extra_ecommerce_site_1',
+      subscriptionId: 's1',
+      idempotencyKey: 'ecommerce-site-on-pro',
+    })
+    expect(res).toEqual({ ok: false, error: 'not_eligible' })
     expect(state.upserts).toHaveLength(0)
   })
 })
