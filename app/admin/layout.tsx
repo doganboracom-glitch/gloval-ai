@@ -3,6 +3,7 @@ import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
 import { getPageAuthState } from '@/lib/supabase/page-auth'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
+import { isReferralFeatureEnabled } from '@/lib/referrals/core'
 import { AdminShell } from '@/components/admin/admin-shell'
 import { AdminUnauthorized } from '@/components/admin/admin-unauthorized'
 
@@ -36,5 +37,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     return <AdminUnauthorized email={user.email ?? undefined} />
   }
 
-  return <AdminShell adminEmail={user.email ?? ''}>{children}</AdminShell>
+  return (
+    <AdminShell adminEmail={user.email ?? ''} referralsEnabled={isReferralFeatureEnabled()}>
+      {children}
+    </AdminShell>
+  )
 }

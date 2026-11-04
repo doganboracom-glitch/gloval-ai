@@ -408,7 +408,7 @@ export function ReferralPayoutsAdminTable({
   const creditConversions = requests.filter((request) => request.method === 'credit' && request.status === 'processed')
 
   return (
-    <section className="flex flex-col gap-4">
+    <section id="payouts" className="scroll-mt-24 flex flex-col gap-4">
       <div>
         <h2 className="text-lg font-semibold text-foreground">{copy.title}</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{copy.description}</p>

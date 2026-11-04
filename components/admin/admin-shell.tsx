@@ -2,15 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRightLeft,
   Bell,
+  ChevronDown,
   Clock3,
   CreditCard,
   FileText,
   Globe,
+  Handshake,
   LayoutDashboard,
   LayoutTemplate,
   LifeBuoy,
@@ -19,6 +22,7 @@ import {
   Receipt,
   Sparkles,
   Users,
+  type LucideIcon,
 } from 'lucide-react'
 import { blogAdminT } from '@/lib/blog-admin-copy'
 import { useLanguage } from '@/components/language-provider'
@@ -30,6 +34,75 @@ import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { getInvoiceCopy } from '@/lib/invoices/copy'
 import { cn } from '@/lib/utils'
 
+type AdminNavChild = {
+  href: string
+  label: string
+}
+
+type AdminNavItem = {
+  href: string
+  label: string
+  icon: LucideIcon
+  exact?: boolean
+  children?: AdminNavChild[]
+}
+
+function isAdminNavItemActive(pathname: string, href: string, exact = false) {
+  return pathname === href || (!exact && pathname.startsWith(`${href}/`))
+}
+
+function AdminNavGroup({
+  item,
+  pathname,
+}: {
+  item: AdminNavItem
+  pathname: string
+}) {
+  const active = isAdminNavItemActive(pathname, item.href)
+  const [expanded, setExpanded] = useState(active)
+  const Icon = item.icon
+
+  return (
+    <li className="shrink-0">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls="admin-nav-referrals-sections"
+        onClick={() => setExpanded((isExpanded) => !isExpanded)}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          active
+            ? 'bg-brand/15 font-medium text-brand'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        )}
+      >
+        <Icon className="size-4 shrink-0" aria-hidden="true" />
+        <span>{item.label}</span>
+        <ChevronDown
+          className={cn('ms-auto size-4 shrink-0 transition-transform duration-200', expanded && 'rotate-180')}
+          aria-hidden="true"
+        />
+      </button>
+      <ul
+        id="admin-nav-referrals-sections"
+        hidden={!expanded}
+        className={cn('mt-1 flex flex-col gap-1', !expanded && 'hidden')}
+      >
+        {item.children?.map((child) => (
+          <li key={child.href}>
+            <Link
+              href={child.href}
+              className="flex items-center rounded-lg py-2 ps-9 pe-3 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {child.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </li>
+  )
+}
+
 /**
  * Unified admin back office chrome.
  *
@@ -40,9 +113,11 @@ import { cn } from '@/lib/utils'
  */
 export function AdminShell({
   adminEmail,
+  referralsEnabled,
   children,
 }: {
   adminEmail: string
+  referralsEnabled: boolean
   children: React.ReactNode
 }) {
   const { lang } = useLanguage()
@@ -50,7 +125,7 @@ export function AdminShell({
   const billingProfileCopy = getBillingProfileCopy(lang)
   const pathname = usePathname()
 
-  const nav = [
+  const nav: AdminNavItem[] = [
     { href: '/admin', label: t.nav.dashboard, icon: LayoutDashboard, exact: true },
     { href: '/admin/users', label: t.nav.users, icon: Users },
     { href: '/admin/sites', label: t.nav.sites, icon: LayoutTemplate },
@@ -59,6 +134,18 @@ export function AdminShell({
     { href: '/admin/billing/invoices', label: getInvoiceCopy(lang).nav, icon: Receipt },
     { href: '/admin/overdue', label: overdueT(lang).nav, icon: AlertCircle },
     { href: '/admin/credits', label: t.nav.credits, icon: Sparkles },
+    ...(referralsEnabled
+      ? [{
+        href: '/admin/referrals',
+        label: t.nav.referrals,
+        icon: Handshake,
+        children: [
+          { href: '/admin/referrals#partners', label: t.nav.referralPartners },
+          { href: '/admin/referrals#payouts', label: t.nav.referralPayoutRequests },
+          { href: '/admin/referrals#reversals', label: t.nav.referralCommissionReversals },
+        ],
+      }]
+      : []),
     { href: '/admin/ads-publishing', label: t.nav.adsPublishRecovery, icon: Clock3 },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe, exact: true },
     { href: '/admin/domains/handover', label: t.nav.domainHandover, icon: ArrowRightLeft },
@@ -97,12 +184,23 @@ export function AdminShell({
         <div className="mt-8 flex flex-col gap-8 lg:flex-row">
           <nav aria-label={t.title} className="lg:w-52 lg:shrink-0">
             <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-              {nav.map(({ href, label, icon: Icon, exact }) => {
-                const active = exact ? pathname === href : pathname.startsWith(href)
+              {nav.map((item) => {
+                if (item.children) {
+                  return (
+                    <AdminNavGroup
+                      key={`${item.href}:${pathname}`}
+                      item={item}
+                      pathname={pathname}
+                    />
+                  )
+                }
+
+                const active = isAdminNavItemActive(pathname, item.href, item.exact)
+                const Icon = item.icon
                 return (
-                  <li key={href} className="shrink-0">
+                  <li key={item.href} className="shrink-0">
                     <Link
-                      href={href}
+                      href={item.href}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
                         'flex items-center gap-2 rounded-lg px-3 py-2 text-sm whitespace-nowrap transition-colors',
@@ -112,7 +210,7 @@ export function AdminShell({
                       )}
                     >
                       <Icon className="size-4 shrink-0" />
-                      {label}
+                      {item.label}
                     </Link>
                   </li>
                 )
