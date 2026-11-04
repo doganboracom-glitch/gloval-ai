@@ -50,20 +50,25 @@ export type AdsApiOperationContext = {
 
 export type GoogleAdsDateRange = '7d' | '30d'
 
-export type AdsCampaignPerformance = {
-  id: string
-  name: string
-  status: string
+export type AdsPerformanceMetrics = {
   impressions: number
   clicks: number
   costMicros: number
   conversions: number
 }
 
+export type AdsCampaignPerformance = AdsPerformanceMetrics & {
+  id: string
+  name: string
+  status: string
+  previous?: AdsPerformanceMetrics
+}
+
 export type AdsPerformanceSummary = {
   range: GoogleAdsDateRange
   currency: string | null
-  totals: Omit<AdsCampaignPerformance, 'id' | 'name' | 'status'>
+  totals: AdsPerformanceMetrics
+  previousTotals?: AdsPerformanceMetrics
   campaigns: AdsCampaignPerformance[]
 }
 
@@ -94,6 +99,7 @@ export type AdsCampaignPublishInput = {
   /** Persisted, validated plan JSON; provider code builds every mutate body from it. */
   planJson: unknown
   validateOnly: boolean
+  userConfirmed: boolean
 }
 
 export type AdsCampaignPublishResult = {
@@ -106,6 +112,7 @@ export type AdsCampaignPublishResult = {
 
 export type AdsCampaignStatusResult = {
   status: 'paused' | 'enabled'
+  validateOnly: boolean
   billingVerified: boolean | null
   paymentMethodWarning: boolean
 }
@@ -118,6 +125,23 @@ export type GoogleAdsAdReviewStatus = {
 export type GoogleAdsBillingVerification = {
   verified: boolean
   paymentMethodWarning: boolean
+}
+
+export type GoogleAdsCampaignManagementState = {
+  campaignId: string
+  campaignStatus: 'PAUSED' | 'ENABLED' | 'UNKNOWN'
+  budgetResourceName: string
+  dailyBudgetMicros: string
+  adResourceName: string
+  headlines: string[]
+  descriptions: string[]
+}
+
+export type GoogleAdsCampaignMutationResult = {
+  validateOnly: boolean
+  billingVerified: boolean | null
+  paymentMethodWarning: boolean
+  status?: 'paused' | 'enabled'
 }
 
 export interface AdsProvider {
@@ -137,6 +161,8 @@ export interface AdsProvider {
     context: AdsApiOperationContext
     externalCampaignId: string
     status: 'paused' | 'enabled'
+    validateOnly: boolean
+    userConfirmed: boolean
   }): Promise<AdsCampaignStatusResult>
   revoke(refreshToken: string): Promise<void>
 }
@@ -165,6 +191,34 @@ export interface GoogleAdsProvider extends AdsProvider {
     campaignId: string
     context: AdsApiOperationContext
   }): Promise<GoogleAdsAdReviewStatus>
+  getCampaignManagementState(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    campaignId: string
+    context: AdsApiOperationContext
+  }): Promise<GoogleAdsCampaignManagementState>
+  updateCampaignBudget(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    context: AdsApiOperationContext
+    budgetResourceName: string
+    dailyBudgetMicros: string
+    validateOnly: boolean
+    userConfirmed: boolean
+  }): Promise<GoogleAdsCampaignMutationResult>
+  updateResponsiveSearchAd(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    context: AdsApiOperationContext
+    adResourceName: string
+    headlines: string[]
+    descriptions: string[]
+    validateOnly: boolean
+    userConfirmed: boolean
+  }): Promise<GoogleAdsCampaignMutationResult>
   getPerformance(input: {
     accessToken: string
     customerId: string

@@ -474,6 +474,77 @@ function CampaignTable({ campaigns, currency, locale, copy }: {
   )
 }
 
+function CampaignInsights({
+  campaigns,
+  currency,
+  locale,
+  isTr,
+}: {
+  campaigns: AdsCampaignPerformanceRow[]
+  currency: string | null
+  locale: string
+  isTr: boolean
+}) {
+  const ranked = [...campaigns].sort((a, b) => b.costMicros - a.costMicros).slice(0, 3)
+  const active = campaigns.filter((campaign) => campaign.status === 'ENABLED')
+  const spentWithoutConversions = campaigns.some((campaign) => campaign.costMicros > 0 && campaign.conversions === 0)
+  const lowCtr = campaigns.some((campaign) => campaign.impressions >= 100 && campaign.clicks / campaign.impressions < 0.015)
+  const recommendations = [
+    ...(spentWithoutConversions
+      ? [isTr ? 'Harcama olup dönüşüm yoksa bütçeyi artırmadan önce dönüşüm ölçümünü kontrol edin.' : 'If spend has no conversions, check conversion measurement before increasing budget.']
+      : []),
+    ...(lowCtr
+      ? [isTr ? 'Düşük tıklama oranlı kampanyalarda arama terimlerini ve reklam metnini inceleyin.' : 'Review search terms and ad copy for campaigns with low click-through rates.']
+      : []),
+    ...(active.length === 0
+      ? [isTr ? 'Etkin kampanya yok. Öneriler otomatik değişiklik yapmaz; etkinleştirme öncesi incelemeyi tamamlayın.' : 'No campaign is enabled. Recommendations never make automatic changes; review before enabling.']
+      : []),
+  ]
+  if (recommendations.length === 0) {
+    recommendations.push(isTr
+      ? 'Sonraki bütçe veya metin değişikliğinden önce kampanyaları aynı tarih aralığında karşılaştırın.'
+      : 'Compare campaigns over the same date range before changing budgets or ad copy.')
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>{isTr ? 'Kampanya karşılaştırması' : 'Campaign comparison'}</CardTitle>
+          <CardDescription>{isTr ? 'Aynı tarih aralığında harcama, tıklama oranı ve dönüşümler.' : 'Spend, click-through rate, and conversions over the selected period.'}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {ranked.length ? ranked.map((campaign) => {
+            const ctr = campaign.impressions > 0 ? (campaign.clicks / campaign.impressions) * 100 : 0
+            const averageCpcMicros = campaign.clicks > 0 ? campaign.costMicros / campaign.clicks : 0
+            return (
+              <div key={campaignRowKey(campaign)} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border border-border px-3 py-2 text-sm">
+                <span className="truncate font-medium">{campaign.name}</span>
+                <span className="text-end text-muted-foreground tabular-nums">{ctr.toLocaleString(locale, { maximumFractionDigits: 2 })}% CTR</span>
+                <span className="text-end tabular-nums">{formatSpend(averageCpcMicros, currency, locale)} CPC</span>
+                <span className="col-span-3 text-xs text-muted-foreground">
+                  {formatNumber(campaign.clicks, locale)} {isTr ? 'tıklama' : 'clicks'} · {formatNumber(campaign.conversions, locale, 2)} {isTr ? 'dönüşüm' : 'conversions'}
+                </span>
+              </div>
+            )
+          }) : <p className="text-sm text-muted-foreground">{isTr ? 'Karşılaştırma için kampanya verisi yok.' : 'No campaign data is available to compare.'}</p>}
+        </CardContent>
+      </Card>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>{isTr ? 'Öneriler' : 'Recommendations'}</CardTitle>
+          <CardDescription>{isTr ? 'Yalnızca öneri; hiçbir otomatik değişiklik yapılmaz.' : 'Suggestions only; no automatic changes are made.'}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul className="flex flex-col gap-2 text-sm leading-relaxed">
+            {recommendations.map((recommendation) => <li key={recommendation} className="rounded-lg border border-border bg-muted/30 px-3 py-2">{recommendation}</li>)}
+          </ul>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function GoogleAdsPerformance({ connection, range, onRangeChange }: {
   connection: GoogleAdsConnectionView | null
   range: GoogleAdsDateRange
@@ -587,6 +658,7 @@ function GoogleAdsPerformance({ connection, range, onRangeChange }: {
               <MetricCard label={copy.conversions} value={formatNumber(report.totals.conversions, locale, 2)} />
             </div>
             <CampaignTable campaigns={campaignRows} currency={report.currency} locale={locale} copy={copy} />
+            <CampaignInsights campaigns={campaignRows} currency={report.currency} locale={locale} isTr={lang === 'tr'} />
           </>
         ) : null}
       </CardContent>

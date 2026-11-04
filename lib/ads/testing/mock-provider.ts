@@ -70,10 +70,10 @@ export function createMockAdsProvider(
         paymentMethodWarning: false,
       }
     },
-    setCampaignStatus: async ({ externalCampaignId, status }) => {
-      calls.statusChanges.push({ externalCampaignId, status })
-      return { status, billingVerified: status === 'enabled' ? true : null, paymentMethodWarning: false }
-    },
+  setCampaignStatus: async ({ externalCampaignId, status, validateOnly }) => {
+    calls.statusChanges.push({ externalCampaignId, status })
+    return { status, validateOnly, billingVerified: status === 'enabled' ? true : null, paymentMethodWarning: false }
+  },
 
     revoke: async (refreshToken) => {
       calls.revoked.push(refreshToken)

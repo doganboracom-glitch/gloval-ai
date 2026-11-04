@@ -3,11 +3,18 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
-import type { GoogleAdsApiCall, GoogleAdsApiMethod, GoogleAdsApiTransport } from '@/lib/ads/providers/google-ads-provider'
+import type {
+  GoogleAdsAdMutateRequest,
+  GoogleAdsApiCall,
+  GoogleAdsApiMethod,
+  GoogleAdsApiTransport,
+} from '@/lib/ads/providers/google-ads-provider'
 import { GOOGLE_ADS_API_VERSION } from '@/lib/ads/providers/google-ads-provider'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const API_BASE = 'https://googleads.googleapis.com'
+const GOOGLE_ADS_READ_USER_LIMIT_MAX = 80
+const GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX = 1_200
 const SAFE_OUTCOMES = {
   rate_limited: 'rate_limited',
   provider_unavailable: 'provider_unavailable',
@@ -17,10 +24,12 @@ const SAFE_OUTCOMES = {
 
 function allowedPath(method: GoogleAdsApiMethod, path: string): boolean {
   if (method === 'customers.listAccessibleCustomers') return path === 'customers:listAccessibleCustomers'
+  if (method === 'geoTargetConstants.suggest') return path === 'geoTargetConstants:suggest'
   if (method === 'googleAds.search' || method === 'googleAds.searchStream') {
     return /^customers\/\d{6,20}\/googleAds:(?:search|searchStream)$/.test(path)
   }
   if (method === 'googleAds.mutate') return /^customers\/\d{6,20}\/googleAds:mutate$/.test(path)
+  if (method === 'ads.mutateAds') return /^customers\/\d{6,20}\/ads:mutate$/.test(path)
   return false
 }
 
@@ -37,6 +46,21 @@ const MUTATE_OPERATION_TYPES = [
   'adGroupAdOperation',
 ] as const
 
+function hasOnlyCreateOrUpdate(operation: Record<string, unknown>): boolean {
+  if (Object.keys(operation).length !== 1) return false
+  const resourceOperation = record(Object.values(operation)[0])
+  if (!resourceOperation || Object.hasOwn(resourceOperation, 'remove')) return false
+  const create = Object.hasOwn(resourceOperation, 'create')
+  const update = Object.hasOwn(resourceOperation, 'update')
+  if (create === update) return false
+  const allowedKeys = create ? ['create'] : ['update', 'updateMask']
+  if (Object.keys(resourceOperation).some((key) => !allowedKeys.includes(key))) return false
+  if (create) return record(resourceOperation.create) !== null
+  return record(resourceOperation.update) !== null &&
+    typeof resourceOperation.updateMask === 'string' &&
+    resourceOperation.updateMask.trim().length > 0
+}
+
 function mutateOperationCount(body: unknown): number | null {
   const request = record(body)
   if (!request || request.partialFailure !== false || typeof request.validateOnly !== 'boolean') return null
@@ -47,9 +71,46 @@ function mutateOperationCount(body: unknown): number | null {
     const value = record(operation)
     if (!value) return null
     const kinds = MUTATE_OPERATION_TYPES.filter((kind) => Object.hasOwn(value, kind))
-    if (kinds.length !== 1 || !record(value[kinds[0]])) return null
+    if (kinds.length !== 1 || !hasOnlyCreateOrUpdate(value)) return null
   }
   return request.mutateOperations.length
+}
+
+function adMutateOperationCount(body: unknown): number | null {
+  const request = record(body)
+  if (!request || request.partialFailure !== false || typeof request.validateOnly !== 'boolean') return null
+  if (!Array.isArray(request.operations) || request.operations.length !== 1) return null
+  const operation = record(request.operations[0])
+  const adOperation = record(operation?.adOperation)
+  if (!operation || Object.keys(operation).length !== 1 || !adOperation) return null
+  const update = record(adOperation.update)
+  const mask = adOperation.updateMask
+  if (
+    Object.hasOwn(adOperation, 'remove') ||
+    Object.hasOwn(adOperation, 'create') ||
+    !update ||
+    typeof update.resourceName !== 'string' ||
+    !/^customers\/\d{6,20}\/ads\/\d{1,20}$/.test(update.resourceName) ||
+    typeof mask !== 'string' ||
+    mask !== 'responsiveSearchAd.headlines,responsiveSearchAd.descriptions'
+  ) return null
+  if (Object.keys(adOperation).some((key) => !['update', 'updateMask'].includes(key))) return null
+  if (Object.keys(update).some((key) => !['resourceName', 'responsiveSearchAd'].includes(key))) return null
+  const rsa = record(update.responsiveSearchAd)
+  const headlines = rsa?.headlines
+  const descriptions = rsa?.descriptions
+  if (!rsa || Object.keys(rsa).some((key) => !['headlines', 'descriptions'].includes(key))) return null
+  if (!Array.isArray(headlines) || headlines.length < 3 || headlines.length > 15) return null
+  if (!Array.isArray(descriptions) || descriptions.length < 2 || descriptions.length > 4) return null
+  if (headlines.some((asset) => {
+    const text = record(asset)?.text
+    return typeof text !== 'string' || !text.trim() || text.length > 30
+  })) return null
+  if (descriptions.some((asset) => {
+    const text = record(asset)?.text
+    return typeof text !== 'string' || !text.trim() || text.length > 90
+  })) return null
+  return request.operations.length
 }
 
 function responseError(payload: unknown): {
@@ -124,8 +185,13 @@ export function createGoogleAdsApiTransport(input: {
       throw new GoogleAdsError('invalid_request')
     }
 
-    const isMutation = call.method === 'googleAds.mutate'
-    const operationCount = isMutation ? mutateOperationCount(call.body) : 1
+    const isMutation = call.method === 'googleAds.mutate' || call.method === 'ads.mutateAds'
+    const usesQuotaV2 = isMutation || call.method === 'geoTargetConstants.suggest'
+    const operationCount = call.method === 'googleAds.mutate'
+      ? mutateOperationCount(call.body)
+      : call.method === 'ads.mutateAds'
+        ? adMutateOperationCount(call.body as GoogleAdsAdMutateRequest)
+        : 1
     if (isMutation && operationCount === null) throw new GoogleAdsError('invalid_request')
     const maxAttempts = isMutation ? 1 : 3
 
@@ -137,10 +203,10 @@ export function createGoogleAdsApiTransport(input: {
         p_connection_id: input.connectionId,
         p_method: call.method,
       }
-      if (isMutation) reserveArgs.p_operation_count = operationCount
+      if (usesQuotaV2) reserveArgs.p_operation_count = operationCount
       let reservationData: unknown = null
       let reservationError: { code?: string } | null = null
-      if (isMutation) {
+      if (usesQuotaV2) {
         const result = await admin.rpc('ads_reserve_google_api_operation_v2', reserveArgs)
         reservationData = result.data
         reservationError = result.error
@@ -148,12 +214,11 @@ export function createGoogleAdsApiTransport(input: {
         const limits = resolveGoogleAdsReadDailyLimits()
         const result = await admin.rpc('ads_reserve_google_api_operation', {
           ...reserveArgs,
-          p_user_daily_limit: limits.perUser,
-          p_global_daily_limit: limits.global,
+          p_user_daily_limit: Math.min(limits.perUser, GOOGLE_ADS_READ_USER_LIMIT_MAX),
+          p_global_daily_limit: Math.min(limits.global, GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX),
         })
         reservationData = result.data
         reservationError = result.error
-
       }
 
       const reservation = record(Array.isArray(reservationData) ? reservationData[0] : reservationData)

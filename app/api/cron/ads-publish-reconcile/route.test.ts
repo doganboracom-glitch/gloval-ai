@@ -22,6 +22,7 @@ function request(authorization?: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('CRON_SECRET', 'cron-secret')
+  vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
   mocks.rpc.mockResolvedValue({
     data: [{ plan_id: PLAN_ID, publish_request_id: REQUEST_ID }],
     error: null,
@@ -32,8 +33,16 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('GET /api/cron/ads-publish-reconcile', () => {
+  it('stays disabled unless the publish feature flag is explicitly enabled', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '0')
+    const response = await GET(request('Bearer cron-secret'))
+
+    expect(response.status).toBe(404)
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
   it('rejects unauthenticated requests before invoking the RPC', async () => {
-    const response = await GET(request('Bearer wrong-secret'))
+    const response = await GET(request('Bearer nope-secret'))
 
     expect(response.status).toBe(401)
     expect(mocks.rpc).not.toHaveBeenCalled()

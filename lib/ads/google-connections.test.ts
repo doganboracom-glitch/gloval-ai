@@ -83,6 +83,17 @@ function provider(refresh: GoogleAdsProvider['refreshAccessTokenWithRotation']):
     }),
     verifyBilling: async () => ({ verified: true, paymentMethodWarning: false }),
     getAdReviewStatus: async () => ({ status: 'approved', adCount: 0 }),
+    getCampaignManagementState: async () => ({
+      campaignId: '12345',
+      campaignStatus: 'PAUSED',
+      budgetResourceName: 'customers/9876543210/campaignBudgets/1',
+      dailyBudgetMicros: '1000000',
+      adResourceName: 'customers/9876543210/adGroupAds/1~2',
+      headlines: ['Headline one', 'Headline two', 'Headline three'],
+      descriptions: ['Description one', 'Description two'],
+    }),
+    updateCampaignBudget: async ({ validateOnly }) => ({ validateOnly, billingVerified: true, paymentMethodWarning: false }),
+    updateResponsiveSearchAd: async ({ validateOnly }) => ({ validateOnly, billingVerified: true, paymentMethodWarning: false }),
     publishCampaign: async () => ({
       externalCampaignId: '12345',
       status: 'paused',
@@ -90,11 +101,12 @@ function provider(refresh: GoogleAdsProvider['refreshAccessTokenWithRotation']):
       billingVerified: true,
       paymentMethodWarning: false,
     }),
-    setCampaignStatus: async ({ status }) => ({
-      status,
-      billingVerified: null,
-      paymentMethodWarning: false,
-    }),
+  setCampaignStatus: async ({ status, validateOnly }) => ({
+    status,
+    validateOnly,
+    billingVerified: null,
+    paymentMethodWarning: false,
+  }),
     revoke: async () => {},
   }
 }

@@ -4,17 +4,16 @@ import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 /**
- * Runs the applied Ads migrations and the un-applied Google Ads quota draft
- * against an in-process Postgres (PGlite) with minimal stand-ins. No real
- * database is touched.
+ * Runs the Ads core, live 099 quota migration, and unpublished combined 106
+ * migration against an in-process Postgres (PGlite). No real database is touched.
  */
 
 const ROOT = process.cwd()
 const PART1 = readFileSync(path.join(ROOT, 'scripts/089-ads-core-part1.sql'), 'utf8')
 const PART2 = readFileSync(path.join(ROOT, 'scripts/090-ads-core-part2.sql'), 'utf8')
 const PART3 = readFileSync(path.join(ROOT, 'scripts/091-ads-google-readonly.sql'), 'utf8')
-const PART4 = readFileSync(path.join(ROOT, 'scripts/094-ads-google-publish.sql'), 'utf8')
-const PART5 = readFileSync(path.join(ROOT, 'scripts/099-ads-google-public-readonly-quotas.sql'), 'utf8')
+const LIVE_QUOTAS = readFileSync(path.join(ROOT, 'scripts/099-ads-google-public-readonly-quotas.sql'), 'utf8')
+const PUBLISH_MIGRATION = readFileSync(path.join(ROOT, 'scripts/106-ads-google-publish-e2.sql'), 'utf8')
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;
@@ -40,8 +39,8 @@ beforeAll(async () => {
   await db.exec(PART1)
   await db.exec(PART2)
   await db.exec(PART3)
-  await db.exec(PART4)
-  await db.exec(PART5)
+  await db.exec(LIVE_QUOTAS)
+  await db.exec(PUBLISH_MIGRATION)
 })
 
 afterAll(async () => {
@@ -188,7 +187,7 @@ describe('ads_actions_guard (append-only)', () => {
     const u = await newUser()
     const id = await newAction(u)
     await expect(db.query(`update public.ads_actions set ${assignment} where id=$1`, [id])).rejects.toThrow(
-      /append-only/,
+      /audit fields are immutable/,
     )
   })
 
@@ -197,7 +196,7 @@ describe('ads_actions_guard (append-only)', () => {
     const b = await newUser()
     const id = await newAction(a)
     await expect(db.query(`update public.ads_actions set user_id=$1 where id=$2`, [b, id])).rejects.toThrow(
-      /append-only/,
+      /audit fields are immutable/,
     )
   })
 
@@ -621,12 +620,12 @@ describe('ads_begin_google_ads_publish', () => {
       `select * from public.ads_resolve_google_ads_publish($1,$2,'failed_refunded',null,'ads-admin@example.com')`,
       [planId, requestId],
     )
-    expect(rows[0]).toMatchObject({ state: 'resolved_failed', refunded: true, balance: 50 })
+    expect(rows[0]).toMatchObject({ state: 'failed_refunded', refunded: true, balance: 50 })
     const planRows = await db.query<{ status: string; failure_reason: string }>(
       `select status, failure_reason from public.ads_plans where id=$1`,
       [planId],
     )
-    expect(planRows.rows[0]).toEqual({ status: 'failed', failure_reason: 'admin_confirmed_campaign_not_created' })
+    expect(planRows.rows[0]).toEqual({ status: 'failed', failure_reason: 'admin_marked_failed_refunded' })
     const ledger = await db.query<{ n: number }>(
       `select count(*)::int as n from public.ai_credit_transactions where user_id=$1 and reason like 'ads_refund:%'`,
       [userId],
@@ -648,12 +647,17 @@ describe('ads_begin_google_ads_publish', () => {
       publish_request_id: requestId,
       publish_started_at: new Date(0).toISOString(),
     })
+    await db.query(
+      `insert into public.ai_credit_transactions (user_id, kind, amount, reason) values ($1,'grant',50,'seed')`,
+      [userId],
+    )
+    await db.query('select * from public.ads_charge_credits($1, 15, $2)', [userId, `ads:publish:${requestId}`])
 
     const { rows } = await db.query<Record<string, unknown>>(
       `select * from public.ads_resolve_google_ads_publish($1,$2,'published','456789','ads-admin@example.com')`,
       [planId, requestId],
     )
-    expect(rows[0]).toMatchObject({ state: 'resolved_published', refunded: false })
+    expect(rows[0]).toMatchObject({ state: 'published', refunded: false })
     const result = await db.query<{ status: string; external_campaign_id: string; google_campaign_status: string }>(
       `select status, external_campaign_id, google_campaign_status from public.ads_plans where id=$1`,
       [planId],
@@ -1156,6 +1160,68 @@ describe('Google Ads API operation quotas', () => {
     })
   })
 
+  it('keeps mixed read/write reservations at or below 2,400 across separate 1,200-operation buckets', async () => {
+    const reader = await newUser()
+    const existingWriter = await newUser()
+    const nextWriter = await newUser()
+    const readCaller = await newUser()
+    const existingConnection = await newConnection(existingWriter)
+    const nextConnection = await newConnection(nextWriter)
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, method, operation_count, created_at)
+       select gen_random_uuid(), $1, 'googleAds.search', 1, now() - interval '1 hour'
+         from generate_series(1, 1199)`,
+      [reader],
+    )
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, connection_id, method, operation_count, created_at)
+       select gen_random_uuid(), $1, $2, 'googleAds.mutate', 1, now() - interval '1 hour'
+         from generate_series(1, 1199)`,
+      [existingWriter, existingConnection],
+    )
+
+    expect(await reserve('00000000-0000-4000-8000-000000000028', readCaller, null, 80, 1200)).toMatchObject({
+      allowed: true,
+      global_used: 1200,
+      user_used: 1,
+    })
+    expect(await reserveMutate('00000000-0000-4000-8000-000000000029', nextWriter, nextConnection, 1)).toMatchObject({
+      allowed: true,
+      global_used: 2400,
+      user_used: 1,
+    })
+    expect(await reserveMutate('00000000-0000-4000-8000-000000000030', nextWriter, nextConnection, 1)).toMatchObject({
+      allowed: false,
+      global_used: 2400,
+      user_used: 1,
+    })
+    expect(await reserve('00000000-0000-4000-8000-000000000031', readCaller, null, 80, 1200)).toMatchObject({
+      allowed: false,
+      global_used: 1200,
+      user_used: 1,
+    })
+  })
+
+  it('expires old write operations under a rolling 24-hour window', async () => {
+    const owner = await newUser()
+    const writer = await newUser()
+    const oldConnection = await newConnection(owner)
+    const connectionId = await newConnection(writer)
+    await db.query(
+      `insert into public.ads_google_api_operations (request_id, user_id, connection_id, method, operation_count, created_at)
+       select gen_random_uuid(), $1, $2, 'googleAds.mutate', 1, now() - interval '26 hours'
+         from generate_series(1, 100)`,
+      [owner, oldConnection],
+    )
+
+    expect(await reserveMutate('00000000-0000-4000-8000-000000000032', writer, connectionId, 1)).toMatchObject({
+      allowed: true,
+      global_used: 1,
+      user_used: 1,
+    })
+    expect((await db.query<{ count: number }>('select count(*)::integer as count from public.ads_google_api_operations')).rows[0].count).toBe(1)
+  })
+
   it('rejects a connection owned by another user', async () => {
     const owner = await newUser()
     const other = await newUser()
@@ -1326,6 +1392,11 @@ describe('Google Ads publish reconciliation RPCs', () => {
       publish_request_id: recentRequestId,
       publish_started_at: new Date(Date.now() - 9 * 60 * 1000).toISOString(),
     })
+    await db.query(
+      `insert into public.ai_credit_transactions (user_id, kind, amount, reason) values ($1,'grant',50,'seed')`,
+      [userId],
+    )
+    await db.query('select * from public.ads_charge_credits($1, 15, $2)', [userId, `ads:publish:${staleRequestId}`])
 
     const { rows: staleRows } = await db.query<{ plan_id: string; publish_request_id: string | null }>(
       `select * from public.ads_reconcile_stale_google_ads_publishes($1)`,
@@ -1349,7 +1420,7 @@ describe('Google Ads publish reconciliation RPCs', () => {
       `select * from public.ads_resolve_google_ads_publish($1,$2,'published','456789','admin@example.com')`,
       [stalePlanId, staleRequestId],
     )
-    expect(resolution[0]).toMatchObject({ state: 'resolved_published', refunded: false })
+    expect(resolution[0]).toMatchObject({ state: 'published', refunded: false })
 
     const { rows: reconciliationActions } = await db.query<{
       id: string
@@ -1367,15 +1438,17 @@ describe('Google Ads publish reconciliation RPCs', () => {
       expect.objectContaining({ actor: 'system', action_type: 'publish_reconciliation_resolved', status: 'applied' }),
     ])
 
-    await db.query(
-      `update public.ads_actions
-          set status = 'approved', after_state = after_state || '{"reviewed":true}'::jsonb, applied_at = now()
-        where id = $1`,
-      [reconciliationActions[0].id],
-    )
+    await expect(
+      db.query(
+        `update public.ads_actions
+            set status = 'approved', after_state = after_state || '{"reviewed":true}'::jsonb, applied_at = now()
+          where id = $1`,
+        [reconciliationActions[0].id],
+      ),
+    ).rejects.toThrow(/immutable after completion/)
     await expect(
       db.query(`update public.ads_actions set action_type = 'rewritten' where id = $1`, [reconciliationActions[0].id]),
-    ).rejects.toThrow(/append-only/)
+    ).rejects.toThrow(/audit fields are immutable/)
   })
 })
 
@@ -1397,6 +1470,8 @@ describe('grants', () => {
         `select has_column_privilege('$ROLE','public.ads_connections'::regclass,'status','SELECT') as ok`,
       ),
     ).toBe(true)
+    expect(await priv('authenticated', "select has_table_privilege('$ROLE','public.ads_plans','SELECT') as ok")).toBe(true)
+    expect(await priv('authenticated', "select has_table_privilege('$ROLE','public.ads_actions','SELECT') as ok")).toBe(true)
     for (const table of [
       'ads_usage_events',
       'ads_free_usage',
@@ -1404,6 +1479,8 @@ describe('grants', () => {
       'ads_free_reservations',
       'ads_google_oauth_flows',
       'ads_google_api_operations',
+      'ads_google_publish_approvals',
+      'ads_google_publish_credit_reservations',
     ]) {
       expect(await priv('authenticated', `select has_table_privilege('$ROLE','public.${table}','SELECT') as ok`)).toBe(
         false,
@@ -1425,6 +1502,16 @@ describe('grants', () => {
       'ads_begin_google_ads_publish(uuid,uuid,uuid,integer,integer,bigint,smallint)',
       'ads_resolve_google_ads_publish(uuid,uuid,text,text,text)',
       'ads_reconcile_stale_google_ads_publishes(integer)',
+      'ads_plans_guard_version_and_approval()',
+      'ads_actions_guard()',
+      'ads_create_google_ads_plan_draft_e2(uuid,uuid,jsonb,text,text,text,integer,integer,text)',
+      'ads_approve_google_ads_plan_e2(uuid,uuid,integer,uuid,text,text,integer,integer,integer,text,text,boolean,boolean,jsonb)',
+      'ads_record_google_ads_validation_e2(uuid,uuid,integer,uuid,text)',
+      'ads_begin_google_ads_publish_e2(uuid,uuid,uuid,integer,uuid,text,integer,integer,bigint,smallint)',
+      'ads_finalize_google_ads_publish_e2(uuid,uuid,uuid,text,boolean)',
+      'ads_release_google_ads_publish_e2(uuid,uuid,uuid,text)',
+      'ads_begin_google_ads_campaign_action_e2(uuid,uuid,uuid,text,integer,text,jsonb,jsonb,integer,boolean)',
+      'ads_finish_google_ads_campaign_action_e2(uuid,uuid,text,jsonb,text)',
     ]
     for (const fn of fns) {
       const { rows } = await db.query<{ a: boolean; u: boolean; s: boolean }>(

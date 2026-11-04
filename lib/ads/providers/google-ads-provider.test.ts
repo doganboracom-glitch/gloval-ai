@@ -31,6 +31,8 @@ const PUBLISH_PLAN = {
   cities: ['İstanbul'],
   modelPolicyCategory: null,
   modelPolicyEvidence: 'none',
+  euPoliticalAdvertising: 'no',
+  euPoliticalDeclarationConfirmed: true,
   finalUrl: 'https://gloval.example/hizmetler',
   adCopy: {
     headlines: ['Atölye Sitesi', 'Kurumsal Web Tasarımı', 'Web Bakım Hizmeti'],
@@ -50,6 +52,7 @@ function publishInput(overrides: Record<string, unknown> = {}) {
     budget: { currency: 'TRY', dailyMinor: 15000, capMinor: 90000 },
     planJson: PUBLISH_PLAN,
     validateOnly: false,
+    userConfirmed: true,
     ...overrides,
   }
 }
@@ -59,6 +62,20 @@ function response(body: unknown, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+function geoSuggestionResponse() {
+  return {
+    geoTargetConstantSuggestions: [{
+      geoTargetConstant: {
+        name: 'İstanbul',
+        countryCode: 'TR',
+        targetType: 'City',
+        status: 'ENABLED',
+        resourceName: 'geoTargetConstants/123',
+      },
+    }],
+  }
 }
 
 afterEach(() => vi.unstubAllEnvs())
@@ -226,6 +243,7 @@ describe('Google Ads provider', () => {
       if (call.method === 'googleAds.mutate') {
         return { mutateOperationResponses: [{}, { campaignResult: { resourceName: 'customers/1234567890/campaigns/456789' } }] }
       }
+      if (call.method === 'geoTargetConstants.suggest') return geoSuggestionResponse()
       return [{ results: [] }]
     }
     const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
@@ -254,7 +272,9 @@ describe('Google Ads provider', () => {
     const calls: GoogleAdsApiCall[] = []
     const requestAdsApi: GoogleAdsApiTransport = async (call) => {
       calls.push(call)
-      return call.method === 'googleAds.mutate' ? {} : [{ results: [] }]
+      if (call.method === 'googleAds.mutate') return {}
+      if (call.method === 'geoTargetConstants.suggest') return geoSuggestionResponse()
+      return [{ results: [] }]
     }
     const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
 
@@ -264,6 +284,50 @@ describe('Google Ads provider', () => {
 
     expect(result).toMatchObject({ externalCampaignId: null, validateOnly: true, status: 'paused' })
     expect(body?.validateOnly).toBe(true)
+  })
+
+  it('requires explicit user confirmation before any publish or management write', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
+    const requestAdsApi = vi.fn(async (_call: GoogleAdsApiCall) => ({}))
+    const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
+
+    await expect(provider.publishCampaign(
+      publishInput({ userConfirmed: false }) as AdsCampaignPublishInput,
+    )).rejects.toMatchObject({ code: 'confirmation_required' })
+    await expect(provider.setCampaignStatus({
+      externalAccountId: '1234567890',
+      loginCustomerId: null,
+      accessToken: 'access-token',
+      context: PUBLISH_CONTEXT,
+      externalCampaignId: '456789',
+      status: 'paused',
+      validateOnly: false,
+      userConfirmed: false,
+    })).rejects.toMatchObject({ code: 'confirmation_required' })
+    await expect(provider.updateCampaignBudget({
+      customerId: '1234567890',
+      loginCustomerId: null,
+      accessToken: 'access-token',
+      context: PUBLISH_CONTEXT,
+      budgetResourceName: 'customers/1234567890/campaignBudgets/1',
+      dailyBudgetMicros: '15000000',
+      validateOnly: false,
+      userConfirmed: false,
+    })).rejects.toMatchObject({ code: 'confirmation_required' })
+    await expect(provider.updateResponsiveSearchAd({
+      customerId: '1234567890',
+      loginCustomerId: null,
+      accessToken: 'access-token',
+      context: PUBLISH_CONTEXT,
+      adResourceName: 'customers/1234567890/ads/2',
+      headlines: ['One', 'Two', 'Three'],
+      descriptions: ['Description one', 'Description two'],
+      validateOnly: false,
+      userConfirmed: false,
+    })).rejects.toMatchObject({ code: 'confirmation_required' })
+
+    expect(requestAdsApi).not.toHaveBeenCalled()
   })
 
   it('fails closed when publishing is disabled and never calls Google Ads', async () => {
@@ -294,6 +358,8 @@ describe('Google Ads provider', () => {
       context: PUBLISH_CONTEXT,
       externalCampaignId: '456789',
       status: 'enabled',
+      validateOnly: false,
+      userConfirmed: true,
     })
     const mutateCall = calls.find((call) => call.method === 'googleAds.mutate')
     const body = mutateCall?.body as GoogleAdsMutateRequest | undefined

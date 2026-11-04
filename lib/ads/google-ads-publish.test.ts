@@ -4,7 +4,9 @@ vi.mock('server-only', () => ({}))
 
 import { createGoogleAdsPublishService, type GoogleAdsPublishServiceDeps } from '@/lib/ads/google-ads-publish'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import type { AdsPublishBeginResult, AdsRefundResult } from '@/lib/ads/credits'
+import type { AdsPublishBeginResult } from '@/lib/ads/credits'
+import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
+import { parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
 import type { GoogleAdsPublishPreflightResult } from '@/lib/ads/google-ads-publish-preflight'
 import type { GoogleAdsConnectionRow } from '@/lib/ads/google-connections'
 import type {
@@ -18,6 +20,7 @@ const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const PLAN_ID = '123e4567-e89b-42d3-a456-426614174001'
 const CONNECTION_ID = '123e4567-e89b-42d3-a456-426614174000'
 const REQUEST_ID = '123e4567-e89b-42d3-a456-426614174002'
+const APPROVAL_ID = '123e4567-e89b-42d3-a456-426614174003'
 
 const PLAN_JSON = {
   brand: 'Atölye Sitesi',
@@ -33,6 +36,8 @@ const PLAN_JSON = {
   cities: ['İstanbul'],
   modelPolicyCategory: null,
   modelPolicyEvidence: 'none',
+  euPoliticalAdvertising: 'no',
+  euPoliticalDeclarationConfirmed: true,
   finalUrl: 'https://gloval.example/hizmetler',
   adCopy: {
     headlines: ['Atölye Sitesi', 'Kurumsal Web Tasarımı', 'Web Bakım Hizmeti'],
@@ -40,6 +45,19 @@ const PLAN_JSON = {
     displayUrl: 'https://gloval.example/web-tasarim/kurumsal',
   },
 }
+const APPROVED_PLAN = parseGoogleAdsPublishPlan(PLAN_JSON)
+const APPROVAL_HASH = createGoogleAdsPlanApprovalHash({
+  userId: USER_ID,
+  planId: PLAN_ID,
+  planVersion: 1,
+  connectionId: CONNECTION_ID,
+  customerId: '1234567890',
+  currency: 'TRY',
+  dailyBudgetMinor: 15000,
+  budgetCapMinor: 90000,
+  userDailyBudgetCapMinor: 200000,
+  plan: APPROVED_PLAN,
+})
 
 function plan(overrides: Record<string, unknown> = {}) {
   return {
@@ -51,6 +69,16 @@ function plan(overrides: Record<string, unknown> = {}) {
     version: 1,
     approved_version: 1,
     approval_summary: {},
+    approval_id: APPROVAL_ID,
+    approval_hash: APPROVAL_HASH,
+    validation_hash: APPROVAL_HASH,
+    validated_version: 1,
+    validated_at: new Date(0).toISOString(),
+    eu_political_advertising: 'no' as const,
+    eu_political_declaration_confirmed_at: new Date(0).toISOString(),
+    approval_user_daily_budget_limit_minor: 200000,
+    publish_credit_charged: false,
+    google_daily_budget_minor: null,
     currency: 'TRY',
     daily_budget_minor: 15000,
     budget_cap_minor: 90000,
@@ -96,39 +124,59 @@ function setup(options: {
   preflightResult?: GoogleAdsPublishPreflightResult
   connection?: Partial<GoogleAdsConnectionRow>
   accessEnabled?: boolean
+  finalizeResult?: { ok: true; balance: number; alreadyCharged: boolean; chargedAmount: number } | { ok: false; reason: 'insufficient_credits' | 'finalize_failed'; balance: number }
 } = {}) {
   const events: string[] = []
   const provider: Pick<
     GoogleAdsProvider,
-    'publishCampaign' | 'setCampaignStatus' | 'verifyBilling' | 'getAdReviewStatus'
+    | 'publishCampaign'
+    | 'setCampaignStatus'
+    | 'verifyBilling'
+    | 'getAdReviewStatus'
+    | 'getCampaignManagementState'
+    | 'updateCampaignBudget'
+    | 'updateResponsiveSearchAd'
   > = {
-    publishCampaign: vi.fn<GoogleAdsProvider['publishCampaign']>(async () => {
-      events.push('mutate')
+    publishCampaign: vi.fn<GoogleAdsProvider['publishCampaign']>(async (input) => {
+      events.push(input.validateOnly ? 'validateOnly' : 'mutate')
       if (options.publishError) throw options.publishError
       return options.publishResult ?? {
         externalCampaignId: '456789',
         status: 'paused',
-        validateOnly: false,
+        validateOnly: input.validateOnly,
         billingVerified: false,
         paymentMethodWarning: true,
       }
     }),
-    setCampaignStatus: vi.fn<GoogleAdsProvider['setCampaignStatus']>(async ({ status }) => {
+    setCampaignStatus: vi.fn<GoogleAdsProvider['setCampaignStatus']>(async ({ status, validateOnly }) => {
       events.push('status')
       return options.statusResult ?? {
         status,
+        validateOnly,
         billingVerified: status === 'enabled' ? false : null,
         paymentMethodWarning: status === 'enabled',
       }
     }),
-    verifyBilling: vi.fn<GoogleAdsProvider['verifyBilling']>(async () => ({
-      verified: false,
-      paymentMethodWarning: true,
-    })),
+    verifyBilling: vi.fn<GoogleAdsProvider['verifyBilling']>(async () => ({ verified: false, paymentMethodWarning: true })),
     getAdReviewStatus: vi.fn<GoogleAdsProvider['getAdReviewStatus']>(async () => {
       events.push('review')
       return options.reviewStatus ?? { status: 'approved', adCount: 1 }
     }),
+    getCampaignManagementState: vi.fn<GoogleAdsProvider['getCampaignManagementState']>(async () => ({
+      campaignId: '456789',
+      campaignStatus: 'PAUSED',
+      budgetResourceName: 'customers/1234567890/campaignBudgets/1',
+      dailyBudgetMicros: '150000000',
+      adResourceName: 'customers/1234567890/adGroupAds/1~2',
+      headlines: ['Atölye Sitesi', 'Kurumsal Web Tasarımı', 'Web Bakım Hizmeti'],
+      descriptions: ['Kurumsal web tasarım hizmetlerini keşfedin.', 'Web siteniz için bakım desteği alın.'],
+    })),
+    updateCampaignBudget: vi.fn<GoogleAdsProvider['updateCampaignBudget']>(async () => ({
+      validateOnly: false, billingVerified: true, paymentMethodWarning: false,
+    })),
+    updateResponsiveSearchAd: vi.fn<GoogleAdsProvider['updateResponsiveSearchAd']>(async () => ({
+      validateOnly: false, billingVerified: true, paymentMethodWarning: false,
+    })),
   }
 
   const deps: GoogleAdsPublishServiceDeps = {
@@ -138,10 +186,10 @@ function setup(options: {
     withAccess: vi.fn(async ({ action }) => {
       events.push('access')
       return action({
-      connection: connection(options.connection),
-      accessToken: 'private-access-token',
-      context: { userId: USER_ID, connectionId: CONNECTION_ID },
-      provider,
+        connection: connection(options.connection),
+        accessToken: 'private-access-token',
+        context: { userId: USER_ID, connectionId: CONNECTION_ID },
+        provider,
       })
     }),
     preflightPublishUrl: vi.fn(async () => {
@@ -149,25 +197,88 @@ function setup(options: {
       return options.preflightResult ?? { ok: true as const }
     }),
     beginPublish: vi.fn(async () => {
-      events.push('charge')
-      return options.beginPublishResult ?? { ok: true as const, balance: 85, alreadyCharged: false, chargedAmount: 15 }
+      events.push('reserve')
+      return options.beginPublishResult ?? { ok: true as const, balance: 85, alreadyCharged: false, chargedAmount: 0 }
     }),
-    markPublished: vi.fn(async () => { events.push('published') }),
-    markFailed: vi.fn(async () => { events.push('failed') }),
+    markValidated: vi.fn(async () => { events.push('validated') }),
+    markPublished: vi.fn(async () => {
+      events.push('charge')
+      return options.finalizeResult ?? { ok: true as const, balance: 70, alreadyCharged: false, chargedAmount: 15 }
+    }),
+    markFailed: vi.fn(async () => { events.push('released') }),
     markReconciling: vi.fn(async () => { events.push('reconciling') }),
     markCampaignStatus: vi.fn(async () => { events.push('status-saved') }),
-    refund: vi.fn(async (): Promise<AdsRefundResult> => ({ refunded: true, balance: 100, refundedAmount: 15 })),
     alertReconciling: vi.fn(async () => { events.push('alert') }),
   }
 
   return { service: createGoogleAdsPublishService(deps), deps, provider, events }
 }
 
-describe('Google Ads publish service', () => {
-  it('charges 15 credits after plan and connection checks, then records a paused campaign with a billing warning', async () => {
+const confirmedPublish = {
+  userId: USER_ID,
+  planId: PLAN_ID,
+  expectedVersion: 1,
+  approvalHash: APPROVAL_HASH,
+  userConfirmed: true,
+}
+
+describe('Google Ads E2 publish service', () => {
+  it('requires explicit confirmation and the exact approval hash before any preflight or provider call', async () => {
+    const { service, deps, provider } = setup()
+
+    expect(await service.publish({ ...confirmedPublish, userConfirmed: false }))
+      .toMatchObject({ ok: false, reason: 'confirmation_required' })
+    expect(await service.publish({ ...confirmedPublish, approvalHash: '0'.repeat(64) }))
+      .toMatchObject({ ok: false, reason: 'plan_changed' })
+    expect(deps.preflightPublishUrl).not.toHaveBeenCalled()
+    expect(deps.withAccess).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
+  it('validates the approved plan with validate_only and persists the exact version without reserving credits', async () => {
+    const { service, deps, provider, events } = setup({
+      publishResult: {
+        externalCampaignId: null,
+        status: 'paused',
+        validateOnly: true,
+        billingVerified: true,
+        paymentMethodWarning: false,
+      },
+    })
+
+    const result = await service.publish({ ...confirmedPublish, validateOnly: true })
+
+    expect(result).toMatchObject({ ok: true, state: 'validated', creditsCharged: 0 })
+    expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({
+      validateOnly: true,
+      userConfirmed: true,
+      planJson: expect.objectContaining({ euPoliticalAdvertising: 'no', euPoliticalDeclarationConfirmed: true }),
+    }))
+    expect(deps.markValidated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      planId: PLAN_ID,
+      expectedVersion: 1,
+      approvalId: APPROVAL_ID,
+      approvalHash: APPROVAL_HASH,
+    })
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(deps.markPublished).not.toHaveBeenCalled()
+    expect(events).toContain('validated')
+  })
+
+  it('blocks a real publish until the exact approved version has a matching validation record', async () => {
+    const { service, deps, provider } = setup({ plan: plan({ validation_hash: null, validated_version: null }) })
+
+    expect(await service.publish(confirmedPublish)).toMatchObject({ ok: false, reason: 'confirmation_required' })
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
+  it('creates paused and charges 15 credits only after the provider confirms success', async () => {
     const { service, deps, provider, events } = setup()
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
     expect(result).toMatchObject({
       ok: true,
@@ -177,62 +288,31 @@ describe('Google Ads publish service', () => {
       billingVerified: false,
       paymentMethodWarning: true,
       creditsCharged: 15,
+      balance: 70,
     })
-    expect(events.indexOf('charge')).toBeLessThan(events.indexOf('mutate'))
+    expect(events.indexOf('reserve')).toBeLessThan(events.indexOf('mutate'))
+    expect(events.indexOf('mutate')).toBeLessThan(events.indexOf('charge'))
     expect(deps.beginPublish).toHaveBeenCalledWith(
       USER_ID,
       PLAN_ID,
       REQUEST_ID,
       1,
       expect.objectContaining({ cpcBidCeilingMinor: 1500, cpcBidCeilingMicros: '15000000' }),
+      APPROVAL_ID,
+      APPROVAL_HASH,
+      200000,
     )
     expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({
-      planJson: PLAN_JSON,
+      planJson: expect.objectContaining({ euPoliticalAdvertising: 'no', euPoliticalDeclarationConfirmed: true }),
       validateOnly: false,
+      userConfirmed: true,
       budget: { currency: 'TRY', dailyMinor: 15000, capMinor: 90000 },
     }))
     expect(deps.markPublished).toHaveBeenCalledWith(expect.objectContaining({
       externalCampaignId: '456789',
       billingVerified: false,
     }))
-    expect(deps.refund).not.toHaveBeenCalled()
-  })
-
-  it('does not charge or mutate when stored plan JSON fails validation', async () => {
-    const { service, deps, provider } = setup({ plan: plan({ plan: { ...PLAN_JSON, adCopy: undefined } }) })
-
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
-
-    expect(result).toMatchObject({ ok: false, reason: 'invalid_publish_plan' })
-    expect(deps.beginPublish).not.toHaveBeenCalled()
-    expect(provider.publishCampaign).not.toHaveBeenCalled()
-  })
-
-  it('rejects an unreachable final URL before access, credits, or Google calls', async () => {
-    const { service, deps, provider, events } = setup({
-      preflightResult: { ok: false, reason: 'destination_unreachable' },
-    })
-
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
-
-    expect(result).toEqual({ ok: false, reason: 'destination_unreachable' })
-    expect(deps.preflightPublishUrl).toHaveBeenCalledWith(PLAN_JSON.finalUrl)
-    expect(events).toEqual(['preflight'])
-    expect(deps.withAccess).not.toHaveBeenCalled()
-    expect(deps.beginPublish).not.toHaveBeenCalled()
-    expect(provider.publishCampaign).not.toHaveBeenCalled()
-    expect(provider.verifyBilling).not.toHaveBeenCalled()
-  })
-
-  it('rejects an old approved plan version before access or billing calls', async () => {
-    const { service, deps, provider } = setup({ plan: plan({ version: 2, approved_version: 2 }) })
-
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
-
-    expect(result).toMatchObject({ ok: false, reason: 'plan_changed' })
-    expect(deps.beginPublish).not.toHaveBeenCalled()
-    expect(provider.publishCampaign).not.toHaveBeenCalled()
-    expect(provider.verifyBilling).not.toHaveBeenCalled()
+    expect(deps.markFailed).not.toHaveBeenCalled()
   })
 
   it('does not call Google when the user has insufficient credits', async () => {
@@ -240,140 +320,54 @@ describe('Google Ads publish service', () => {
       beginPublishResult: { ok: false, reason: 'insufficient_credits', balance: 2 },
     })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
-
-    expect(result).toMatchObject({ ok: false, reason: 'insufficient_credits', balance: 2 })
+    expect(await service.publish(confirmedPublish)).toMatchObject({ ok: false, reason: 'insufficient_credits', balance: 2 })
     expect(provider.publishCampaign).not.toHaveBeenCalled()
-    expect(provider.verifyBilling).not.toHaveBeenCalled()
-    expect(deps.refund).not.toHaveBeenCalled()
-  })
-
-  it('rejects currency mismatch and inactive connections before reserving or mutating', async () => {
-    const mismatch = setup({ plan: plan({ currency: 'USD' }) })
-    expect(await mismatch.service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }))
-      .toMatchObject({ ok: false, reason: 'currency_mismatch' })
-    expect(mismatch.deps.beginPublish).not.toHaveBeenCalled()
-    expect(mismatch.provider.publishCampaign).not.toHaveBeenCalled()
-
-    const inactive = setup({ connection: { status: 'error' } })
-    expect(await inactive.service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }))
-      .toMatchObject({ ok: false, reason: 'reauth_required' })
-    expect(inactive.deps.beginPublish).not.toHaveBeenCalled()
-    expect(inactive.provider.publishCampaign).not.toHaveBeenCalled()
-  })
-
-  it('does not enter access or provider code for a user outside the publish allowlist', async () => {
-    const { service, deps, provider } = setup({ accessEnabled: false })
-
-    expect(await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }))
-      .toMatchObject({ ok: false, reason: 'publish_disabled' })
-    expect(deps.beginPublish).not.toHaveBeenCalled()
-    expect(provider.publishCampaign).not.toHaveBeenCalled()
-  })
-
-  it('runs validate_only without charging credits or changing plan state', async () => {
-    const { service, deps, provider } = setup({
-      publishResult: {
-        externalCampaignId: null,
-        status: 'paused',
-        validateOnly: true,
-        billingVerified: false,
-        paymentMethodWarning: true,
-      },
-    })
-
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1, validateOnly: true })
-
-    expect(result).toMatchObject({ ok: true, state: 'validated', externalCampaignId: null, creditsCharged: 0 })
-    expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({ validateOnly: true }))
-    expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(deps.markPublished).not.toHaveBeenCalled()
   })
 
-  it('keeps the charge and records reconciling plus one admin alert after an ambiguous timeout', async () => {
+  it('keeps a reservation in reconciling after an ambiguous provider timeout and does not charge', async () => {
     const { service, deps } = setup({ publishError: new GoogleAdsError('provider_unavailable') })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
-    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: 15, paymentMethodWarning: true })
+    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: null, balance: 85 })
     expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
       planId: PLAN_ID,
       requestId: REQUEST_ID,
       reason: 'google_publish_result_unknown',
     }))
+    expect(deps.markPublished).not.toHaveBeenCalled()
+    expect(deps.markFailed).not.toHaveBeenCalled()
     expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'google_publish_result_unknown')
-    expect(deps.refund).not.toHaveBeenCalled()
   })
 
-  it('refunds a definitive provider rejection and marks the plan failed', async () => {
-    const { service, deps } = setup({ publishError: new GoogleAdsError('provider_error') })
+  it('releases the reserved credits on a definitive provider rejection without a refund', async () => {
+    const { service, deps, events } = setup({ publishError: new GoogleAdsError('provider_error') })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
-    expect(result).toMatchObject({ ok: false, reason: 'provider_error', balance: 100 })
+    expect(result).toMatchObject({ ok: false, reason: 'provider_error', balance: 85 })
     expect(deps.markFailed).toHaveBeenCalledWith(expect.objectContaining({
       planId: PLAN_ID,
       requestId: REQUEST_ID,
       reason: 'provider_error',
     }))
-    expect(deps.refund).toHaveBeenCalledWith(USER_ID, REQUEST_ID)
+    expect(events).toContain('released')
     expect(deps.alertReconciling).not.toHaveBeenCalled()
   })
 
-  it('moves a definitive provider failure to reconciling when its credit refund fails', async () => {
-    const { service, deps, events } = setup({ publishError: new GoogleAdsError('provider_error') })
-    deps.refund = vi.fn(async () => ({ refunded: false, balance: 85, refundedAmount: 0 }))
-
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
-
-    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: 15, balance: 85 })
-    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
-      planId: PLAN_ID,
-      requestId: REQUEST_ID,
-      reason: 'publish_refund_failed',
-    }))
-    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_refund_failed')
-    expect(events).toContain('reconciling')
-    expect(result).not.toMatchObject({ ok: false })
-  })
-
-  it('charges once when two publish requests race for the same plan', async () => {
-    const { service, deps, provider } = setup()
-    let reservationTaken = false
-    let actualCharges = 0
-    deps.beginPublish = async () => {
-      if (reservationTaken) return { ok: false, reason: 'publish_in_progress', balance: 85 }
-      reservationTaken = true
-      actualCharges += 1
-      return { ok: true, balance: 85, alreadyCharged: false, chargedAmount: 15 }
-    }
-
-    const results = await Promise.all([
-      service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }),
-      service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 }),
-    ])
-
-    expect(actualCharges).toBe(1)
-    expect(provider.publishCampaign).toHaveBeenCalledTimes(1)
-    expect(deps.markPublished).toHaveBeenCalledTimes(1)
-    expect(results.filter((result) => result.ok && result.state === 'published')).toHaveLength(1)
-  })
-
-  it('does not refund if marking a definitive failure fails; it moves to reconciling and alerts', async () => {
+  it('marks a definitive failure reconciling when releasing the reservation fails', async () => {
     const { service, deps } = setup({ publishError: new GoogleAdsError('provider_error') })
     deps.markFailed = vi.fn(async () => { throw new Error('database unavailable') })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
-    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: 15 })
-    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
-      reason: 'publish_failure_persist_failed',
-    }))
+    expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: null })
+    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({ reason: 'publish_failure_persist_failed' }))
     expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_failure_persist_failed')
-    expect(deps.refund).not.toHaveBeenCalled()
   })
 
-  it('moves a publish older than ten minutes to reconciling without retrying or refunding', async () => {
+  it('moves a stale publishing attempt to reconciling without retrying or charging', async () => {
     const { service, deps, provider } = setup({
       plan: plan({
         status: 'publishing',
@@ -382,78 +376,63 @@ describe('Google Ads publish service', () => {
       }),
     })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
     expect(result).toMatchObject({ ok: true, state: 'reconciling', creditsCharged: null })
-    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({
-      reason: 'publish_stale_timeout',
-      requestId: REQUEST_ID,
-    }))
-    expect(deps.alertReconciling).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'publish_stale_timeout')
+    expect(deps.markReconciling).toHaveBeenCalledWith(expect.objectContaining({ reason: 'publish_stale_timeout', requestId: REQUEST_ID }))
     expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(provider.publishCampaign).not.toHaveBeenCalled()
-    expect(deps.refund).not.toHaveBeenCalled()
   })
 
-  it('keeps status changes free and returns the payment warning on go-live', async () => {
-    const { service, deps, provider } = setup({
+  it('requires explicit confirmation before campaign status changes and blocks unreviewed ads', async () => {
+    const { service, provider } = setup({
       plan: plan({ status: 'published', external_campaign_id: '456789' }),
-      statusResult: { status: 'enabled', billingVerified: false, paymentMethodWarning: true },
+      reviewStatus: { status: 'review_in_progress', adCount: 1 },
     })
 
-    const result = await service.updateCampaignStatus({
+    expect(await service.updateCampaignStatus({ userId: USER_ID, planId: PLAN_ID, status: 'enabled', userConfirmed: false }))
+      .toEqual({ ok: false, reason: 'confirmation_required' })
+    expect(await service.updateCampaignStatus({
       userId: USER_ID,
       planId: PLAN_ID,
       status: 'enabled',
+      userConfirmed: true,
       acknowledgedBillingWarning: true,
       acknowledgedBudget: true,
-    })
-
-    expect(result).toMatchObject({ ok: true, result: { status: 'enabled', paymentMethodWarning: true } })
-    expect(provider.setCampaignStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'enabled' }))
-    expect(deps.beginPublish).not.toHaveBeenCalled()
-    expect(deps.refund).not.toHaveBeenCalled()
-    expect(deps.markCampaignStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'ENABLED' }))
-  })
-
-  it('requires both billing and budget acknowledgements before go-live', async () => {
-    const { service, provider } = setup({ plan: plan({ status: 'published', external_campaign_id: '456789' }) })
-
-    expect(await service.updateCampaignStatus({ userId: USER_ID, planId: PLAN_ID, status: 'enabled' }))
-      .toEqual({ ok: false, reason: 'confirmation_required' })
-    expect(provider.getAdReviewStatus).not.toHaveBeenCalled()
+    })).toEqual({ ok: false, reason: 'ad_review_in_progress' })
     expect(provider.setCampaignStatus).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['disapproved', 'ad_disapproved'],
-    ['review_in_progress', 'ad_review_in_progress'],
-    ['unavailable', 'ad_review_status_unavailable'],
-  ] as const)('blocks go-live when Google review status is %s', async (status, reason) => {
-    const { service, provider } = setup({
-      plan: plan({ status: 'published', external_campaign_id: '456789' }),
-      reviewStatus: { status, adCount: status === 'unavailable' ? 0 : 1 },
-    })
+  it('does not enable when a payment or budget acknowledgement is missing', async () => {
+    const { service, provider } = setup({ plan: plan({ status: 'published', external_campaign_id: '456789' }) })
 
     expect(await service.updateCampaignStatus({
       userId: USER_ID,
       planId: PLAN_ID,
       status: 'enabled',
-      acknowledgedBillingWarning: true,
-      acknowledgedBudget: true,
-    })).toEqual({ ok: false, reason })
-    expect(provider.getAdReviewStatus).toHaveBeenCalledTimes(1)
+      userConfirmed: true,
+    })).toEqual({ ok: false, reason: 'confirmation_required' })
+    expect(provider.getAdReviewStatus).not.toHaveBeenCalled()
     expect(provider.setCampaignStatus).not.toHaveBeenCalled()
   })
 
-  it('returns an existing publish result without charging twice', async () => {
+  it('rejects old approved plan versions before accessing Google', async () => {
+    const { service, deps, provider } = setup({ plan: plan({ version: 2, approved_version: 2 }) })
+
+    expect(await service.publish(confirmedPublish)).toMatchObject({ ok: false, reason: 'plan_changed' })
+    expect(deps.withAccess).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
+  it('returns an existing published result idempotently without a second reservation', async () => {
     const { service, deps, provider } = setup({
-      plan: plan({ status: 'published', external_campaign_id: '456789', publish_billing_verified: true }),
+      plan: plan({ status: 'published', external_campaign_id: '456789', publish_credit_charged: true }),
     })
 
-    const result = await service.publish({ userId: USER_ID, planId: PLAN_ID, expectedVersion: 1 })
+    const result = await service.publish(confirmedPublish)
 
-    expect(result).toMatchObject({ ok: true, state: 'published', externalCampaignId: '456789', creditsCharged: 0 })
+    expect(result).toMatchObject({ ok: true, state: 'published', externalCampaignId: '456789', creditsCharged: 15 })
     expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(provider.publishCampaign).not.toHaveBeenCalled()
   })

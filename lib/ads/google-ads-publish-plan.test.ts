@@ -15,9 +15,11 @@ const PLAN = {
   keywords: ['kurumsal web tasarımı', 'web sitesi hizmeti', 'web tasarım ajansı'],
   negativeKeywords: ['ücretsiz şablon'],
   country: 'TR',
-  cities: ['İstanbul'],
+  cities: [],
   modelPolicyCategory: null,
   modelPolicyEvidence: 'none',
+  euPoliticalAdvertising: 'no',
+  euPoliticalDeclarationConfirmed: true,
   finalUrl: 'https://gloval.example/hizmetler',
   adCopy: {
     headlines: ['Atölye Sitesi', 'Kurumsal Web Tasarımı', 'Web Bakım Hizmeti'],
@@ -99,7 +101,7 @@ describe('Google Ads publish plan compiler', () => {
     expect(buildGoogleAdsMutateRequest({ ...INPUT, validateOnly: true }).validateOnly).toBe(true)
   })
 
-  it('caps a maximal publish at 34 mutate operations without auto-declaring political status', () => {
+  it('caps a maximal publish and maps only the explicitly confirmed EU political declaration', () => {
     const planJson = {
       ...PLAN,
       keywords: Array.from({ length: 20 }, (_, index) => `keyword phrase ${index + 1}`),
@@ -110,9 +112,16 @@ describe('Google Ads publish plan compiler', () => {
 
     expect(request.mutateOperations).toHaveLength(34)
     expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)
-      .not.toHaveProperty('containsEuPoliticalAdvertising')
+      .toHaveProperty('containsEuPoliticalAdvertising', 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')
     expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)
       .not.toHaveProperty('contains_eu_political_advertising')
+  })
+
+  it('rejects a political advertising answer without explicit user confirmation', () => {
+    expect(() => buildGoogleAdsMutateRequest({
+      ...INPUT,
+      planJson: { ...PLAN, euPoliticalDeclarationConfirmed: false },
+    })).toThrowError(expect.objectContaining({ code: 'eu_political_declaration_required' }))
   })
 
   it('rejects incomplete, policy-blocked, or unsafe plan JSON before creating a body', () => {
