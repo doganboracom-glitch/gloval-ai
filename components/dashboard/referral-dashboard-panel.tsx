@@ -20,8 +20,7 @@ const SECTION_ID = 'satis-ortakligi'
 
 const COPY = {
   tr: {
-    title: 'Satış ortaklığı',
-    description: 'Yönlendirme bağlantınızın tıklama ve kayıt sonuçları.',
+    sectionLabel: 'Satış ortaklığı',
     clicks: 'Tıklamalar',
     signups: 'Kayıt olan',
     verified: 'E-posta doğrulandı',
@@ -43,8 +42,7 @@ const COPY = {
     jumpToSectionLabel: 'Satış ortaklığı bölümüne git',
   },
   en: {
-    title: 'Referral partnership',
-    description: 'Clicks and signup outcomes for your referral link.',
+    sectionLabel: 'Referral partnership',
     clicks: 'Clicks',
     signups: 'Signups',
     verified: 'Email verified',
@@ -111,14 +109,12 @@ export function ReferralDashboardPanel({
 
   return (
     <>
-    <section ref={sectionRef} id={SECTION_ID} aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4 scroll-mt-24">
-      <div>
-        <h2 id="referral-dashboard-title" className="text-xl font-semibold tracking-tight text-foreground">
-          {copy.title}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.description}</p>
-      </div>
-
+    <section
+      ref={sectionRef}
+      id={SECTION_ID}
+      aria-label={copy.sectionLabel}
+      className="mt-8 flex flex-col gap-4 scroll-mt-24"
+    >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-3 pb-2">

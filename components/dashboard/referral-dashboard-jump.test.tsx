@@ -54,7 +54,10 @@ afterEach(() => {
 describe('referral dashboard jump button', () => {
   it('scrolls smoothly unless reduced motion is requested and hides while the section is visible', () => {
     languageState.lang = 'tr'
-    const scrollIntoView = vi.fn()
+    const scrolledSectionIds: string[] = []
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolledSectionIds.push(this.id)
+    })
     let reducedMotion = false
     originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
     originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView')
@@ -69,20 +72,26 @@ describe('referral dashboard jump button', () => {
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
 
     render(<ReferralDashboardPanel data={dashboardData} />)
+    const section = screen.getByRole('region', { name: 'Satış ortaklığı' })
     const jumpButton = screen.getByRole('link', { name: 'Satış ortaklığı bölümüne git' })
-    expect(jumpButton.getAttribute('href')).toBe('#satis-ortakligi')
+    expect(section.id).toBe('satis-ortakligi')
+    expect(section.className).toContain('scroll-mt-24')
+    expect(jumpButton.getAttribute('href')).toBe(`#${section.id}`)
     expect(jumpButton.className).toContain('fixed')
     expect(jumpButton.className).toContain('right-4')
     expect(jumpButton.className).not.toContain('left-4')
+    expect(jumpButton.className).toContain('bottom-[calc(env(safe-area-inset-bottom)+5.25rem)]')
     expect(jumpButton.className).toContain('safe-area-inset-bottom')
     expect(jumpButton.className).toContain('z-30')
 
     fireEvent.click(jumpButton)
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'smooth', block: 'start' })
+    expect(scrolledSectionIds).toEqual(['satis-ortakligi'])
 
     reducedMotion = true
     fireEvent.click(jumpButton)
     expect(scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'auto', block: 'start' })
+    expect(scrolledSectionIds).toEqual(['satis-ortakligi', 'satis-ortakligi'])
 
     act(() => observers[0].trigger(true))
     expect(screen.queryByRole('link', { name: 'Satış ortaklığı bölümüne git' })).toBeNull()

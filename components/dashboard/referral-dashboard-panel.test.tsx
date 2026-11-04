@@ -23,6 +23,23 @@ describe('referral dashboard panel', () => {
     expect(renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: null }))).toBe('')
   })
 
+  it('keeps the referral section named and addressable without a visible heading or description in both languages', () => {
+    state.lang = 'tr'
+    const turkish = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: dashboardData }))
+    expect(turkish).toContain('id="satis-ortakligi"')
+    expect(turkish).toContain('aria-label="Satış ortaklığı"')
+    expect(turkish).toContain('scroll-mt-24')
+    expect(turkish).not.toContain('<h2')
+    expect(turkish).not.toContain('Yönlendirme bağlantınızın tıklama ve kayıt sonuçları.')
+
+    state.lang = 'en'
+    const english = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: dashboardData }))
+    expect(english).toContain('id="satis-ortakligi"')
+    expect(english).toContain('aria-label="Referral partnership"')
+    expect(english).not.toContain('<h2')
+    expect(english).not.toContain('Clicks and signup outcomes for your referral link.')
+  })
+
   it('shows referral metrics, conversions, masked customers, and no payment controls', () => {
     state.lang = 'en'
     const html = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: dashboardData }))
