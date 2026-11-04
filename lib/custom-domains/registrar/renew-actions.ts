@@ -10,6 +10,7 @@ import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/
 import type { CheckoutBuyer } from '@/lib/billing'
 import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } from '@/lib/checkout-consent'
 import type { DomainErrorCode } from '../types'
+import { recordDomainAuditEvent } from './audit'
 import { finalizeRenewal, getLatestRenewal, quoteRenewal, type RenewalView } from './renewal-service'
 
 /**
@@ -179,6 +180,13 @@ export async function startMyDomainRenewal(
       { onConflict: 'user_id,idempotency_key', ignoreDuplicates: false },
     ),
   )
+
+  await recordDomainAuditEvent({
+    userId,
+    domain: quote.domain,
+    eventType: 'renewal_started',
+    details: { outcome: 'success', periodYears: quote.years },
+  })
 
   if (intent.action === 'completed') {
     requireOk(

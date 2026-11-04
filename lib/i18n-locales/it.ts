@@ -1278,7 +1278,6 @@ const it: DeepPartial<Dict> = {
     mgNsConfirm: 'Sì, modificali',
     mgNsUnsupported: 'La modifica dei nameserver non è attualmente supportata dal registrar. I server attuali sono mostrati solo come riferimento.',
     mgLockUnsupported: 'La modifica del blocco del trasferimento non è attualmente supportata dal registrar.',
-    outLockUnsupported: 'La modifica del blocco del trasferimento non è attualmente supportata. Se hai bisogno di un codice di trasferimento, contatta il nostro team di assistenza.',
     errFeatureUnsupported: 'Questa azione non è attualmente supportata dal registrar. Non è stato modificato nulla.',
     mgContacts: 'Dati di contatto WHOIS',
     mgContactsHelp: 'Ciò che salvi si applica insieme ai contatti del titolare, amministrativo, tecnico e di fatturazione.',

@@ -49,7 +49,11 @@ vi.mock('@/lib/platform-buyer', () => ({
   resolvePlatformBuyerPublicConfig: async () => ({ buyer: { fullName: 'Ali Veli' } }),
 }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: { getUser: mocks.getUser } }) }))
-vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: (t: string) => makeBuilder(t) }) }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({
+    from: (t: string) => makeBuilder(t),
+    rpc: () => ({ maybeSingle: async () => ({ data: { allowed: true }, error: null }) }),
+  }),
+}))
 vi.mock('@/lib/payments', () => ({
   getPlatformPaymentProvider: () => ({ createIntent: mocks.createIntent }),
   getPlatformPaymentProviderId: () => 'iyzico',

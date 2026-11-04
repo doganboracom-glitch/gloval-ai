@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check, Copy, MousePointerClick, UserRoundCheck, Users, WalletCards } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
+import { ReferralJumpLink } from '@/components/dashboard/referral-jump-link'
 import {
   Card,
   CardContent,
@@ -14,6 +15,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import type { ReferralCustomerStatus, ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+
+const SECTION_ID = 'satis-ortakligi'
 
 const COPY = {
   tr: {
@@ -37,6 +40,7 @@ const COPY = {
     deleted: 'Üye tarafından silindi',
     deletedAccount: 'Silinmiş hesap',
     jumpToSection: '↓ Satış Ortaklığı',
+    jumpToSectionLabel: 'Satış ortaklığı bölümüne git',
   },
   en: {
     title: 'Referral partnership',
@@ -59,6 +63,7 @@ const COPY = {
     deleted: 'Deleted by member',
     deletedAccount: 'Deleted account',
     jumpToSection: '↓ Referral partnership',
+    jumpToSectionLabel: 'Go to the referral partnership section',
   },
 } as const
 
@@ -84,19 +89,6 @@ export function ReferralDashboardPanel({
   const copy = COPY[language]
   const sectionRef = useRef<HTMLElement>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const [sectionVisible, setSectionVisible] = useState(false)
-
-  useEffect(() => {
-    const section = sectionRef.current
-    if (!section || typeof IntersectionObserver === 'undefined') return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setSectionVisible(entry.isIntersecting),
-      { threshold: 0.15 },
-    )
-    observer.observe(section)
-    return () => observer.disconnect()
-  }, [data])
 
   if (!data) return null
 
@@ -119,7 +111,7 @@ export function ReferralDashboardPanel({
 
   return (
     <>
-    <section ref={sectionRef} id="satis-ortakligi" aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4 scroll-mt-8">
+    <section ref={sectionRef} id={SECTION_ID} aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4 scroll-mt-24">
       <div>
         <h2 id="referral-dashboard-title" className="text-xl font-semibold tracking-tight text-foreground">
           {copy.title}
@@ -223,22 +215,12 @@ export function ReferralDashboardPanel({
         </CardContent>
       </Card>
     </section>
-    {!sectionVisible && (
-      <a
-        href="#satis-ortakligi"
-        onClick={(event) => {
-          event.preventDefault()
-          const section = sectionRef.current
-          if (!section) return
-          const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-          section.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
-        }}
-        className="fixed bottom-4 left-4 z-40 inline-flex min-h-10 items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-lg transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={copy.jumpToSection}
-      >
-        {copy.jumpToSection}
-      </a>
-    )}
+    <ReferralJumpLink
+      sectionRef={sectionRef}
+      sectionId={SECTION_ID}
+      label={copy.jumpToSection}
+      ariaLabel={copy.jumpToSectionLabel}
+    />
     </>
   )
 }
