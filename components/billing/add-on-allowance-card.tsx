@@ -116,7 +116,7 @@ export function AddOnAllowanceCard({
       aria-labelledby={`${id}-title`}
       data-addon-card={kind}
       data-highlighted={isHighlighted ? 'true' : undefined}
-      className={`flex h-full min-w-0 flex-col rounded-2xl border bg-card/70 p-4 sm:p-5 ${
+      className={`flex h-full min-w-0 flex-col rounded-2xl border bg-card/70 p-3 sm:p-5 ${
         isHighlighted ? 'border-brand ring-2 ring-brand' : 'border-border'
       } ${eligible ? '' : 'opacity-70'}`}
     >
@@ -143,7 +143,7 @@ export function AddOnAllowanceCard({
             <select
               id={`${id}-offer`}
               aria-describedby={`${id}-description`}
-              className="h-10 w-full min-w-0 max-w-full rounded-lg border border-input bg-background px-2 text-xs text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm"
+              className="h-10 w-full min-w-0 max-w-full rounded-lg border border-input bg-background px-1 text-xs text-foreground tracking-tight shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm"
               value={selectedItem.code}
               disabled={purchaseLocked}
               onChange={(event) => setSelectedCode(event.currentTarget.value as AddOnCode)}

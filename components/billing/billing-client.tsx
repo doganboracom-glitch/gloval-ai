@@ -1296,7 +1296,7 @@ export function BillingClient({
                         key={p.id}
                         id={addonCardId(p.code)}
                         data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
-                        className={`relative flex h-full scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-4 transition-[color,box-shadow,border-color] hover:border-primary/50 sm:p-5 ${
+                        className={`relative flex h-full scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-3 transition-[color,box-shadow,border-color] hover:border-primary/50 sm:p-5 ${
                           highlightedAddonCode === p.code
                             ? 'border-brand ring-2 ring-brand'
                             : 'border-border'
