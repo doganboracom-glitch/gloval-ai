@@ -1786,7 +1786,7 @@ const dict = {
       emailManage: 'E-postayı yönet',
       emailNeedsWebsiteTitle: 'Önce alan adınızı GLOVAL sitenize bağlayın',
       emailNeedsVerification: 'E-posta hesapları için alan adı doğrulaması gerekiyor.',
-      emailNeedsWebsite: 'E-posta yönetimi için önce alan adını bir GLOVAL sitesine bağlayın.'
+      emailNeedsWebsite: 'E-posta yönetimi için önce alan adını bir GLOVAL sitesine bağlayın.',
       emailDnsVerify: 'E-posta DNS kayıtlarını doğrula',
       emailExternalDnsHint: "Nameserver'lar GLOVAL dışındaki bir DNS sağlayıcısına yönlüyorsa, MX/SPF/DKIM kayıtlarını o sağlayıcıda ekleyin.",
       emailDnsVerified: 'E-posta DNS kayıtları (MX, SPF, DKIM, DMARC) doğrulandı.',
@@ -3668,7 +3668,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       mgNs: 'Nameservers (DNS servers)',
       mgNsEdit: 'Edit nameserver list',
       mgNsHelp: 'One nameserver per line (at least 2, at most 13).',
-      mgNsWarn: 'This change may temporarily make your website and email unavailable. DNS propagation can take several hours.'
+      mgNsWarn: 'This change may temporarily make your website and email unavailable. DNS propagation can take several hours.',
       mgNsSave: 'Save nameservers',
       mgNsConfirm: 'Yes, change them',
       mgNsUnsupported: 'Nameserver changes are not currently supported by the registrar. The current servers are shown for reference only.',
@@ -3972,7 +3972,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       emailManage: 'Manage email',
       emailNeedsWebsiteTitle: 'Connect your domain to a GLOVAL site first',
       emailNeedsVerification: 'Email accounts require the domain to be verified.',
-      emailNeedsWebsite: 'Connect the domain to a GLOVAL site before managing email.'
+      emailNeedsWebsite: 'Connect the domain to a GLOVAL site before managing email.',
       emailDnsVerify: 'Verify email DNS records',
       emailExternalDnsHint: 'If your nameservers point to a DNS provider outside GLOVAL, add the MX/SPF/DKIM records at that provider.',
       emailDnsVerified: 'Email DNS records (MX, SPF, DKIM, DMARC) are verified.',

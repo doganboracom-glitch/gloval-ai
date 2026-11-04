@@ -4,9 +4,19 @@ const m = vi.hoisted(() => ({
   provider: null as unknown,
   owned: null as string | null,
   mine: [] as Array<{ domain: string }>,
+  rpcCalls: [] as unknown[][],
+  rateLimitResult: { data: { allowed: true } as { allowed: boolean } | null, error: null as { code?: string } | null },
 }))
 
 vi.mock('./provider', () => ({ getDomainRegistrarProvider: () => m.provider }))
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({
+    rpc: (...args: unknown[]) => {
+      m.rpcCalls.push(args)
+      return { maybeSingle: async () => m.rateLimitResult }
+    },
+  }),
+}))
 vi.mock('./ownership', () => ({ requireRegisteredByUs: async () => m.owned }))
 vi.mock('../service', () => ({ listDomainsForUser: async () => m.mine }))
 
@@ -40,6 +50,8 @@ function fakeProvider(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  m.rpcCalls = []
+  m.rateLimitResult = { data: { allowed: true }, error: null }
   m.provider = fakeProvider()
   m.owned = 'example.com'
   m.mine = [{ domain: 'example.com' }]
@@ -114,15 +126,73 @@ describe('mutations', () => {
     expect(await changePrivacy('u1', 'example.com', false)).toEqual({ ok: false, error: 'UNEXPECTED_ERROR' })
   })
 
-  it('refuses nameserver and lock changes as FEATURE_UNSUPPORTED without calling the provider', async () => {
+  it('normalizes nameservers, reserves five changes per hour, and then applies the change', async () => {
     const p = m.provider as ReturnType<typeof fakeProvider>
-    expect(await changeNameservers('u1', 'example.com', ['ns1.x.com', 'ns2.x.com'])).toEqual({
-      ok: false,
-      error: 'FEATURE_UNSUPPORTED',
+    expect(await changeNameservers('u1', 'example.com', ['NS1.New.COM.', 'ns2.new.com'])).toEqual({
+      ok: true,
+      changed: true,
     })
-    expect(await changeLock('u1', 'example.com', false)).toEqual({ ok: false, error: 'FEATURE_UNSUPPORTED' })
+    expect(m.rpcCalls).toEqual([
+      ['reserve_rate_limit', { p_subject: 'domain:nameservers:u1', p_limit: 5, p_window_seconds: 3600 }],
+    ])
+    expect(p.setNameservers).toHaveBeenCalledWith('example.com', ['ns1.new.com', 'ns2.new.com'])
+  })
+
+  it('does not consume a rate-limit reservation for a no-op', async () => {
+    const p = m.provider as ReturnType<typeof fakeProvider>
+    expect(await changeNameservers('u1', 'example.com', ['NS2.A.COM.', 'ns1.a.com'])).toEqual({
+      ok: true,
+      changed: false,
+    })
+    expect(m.rpcCalls).toHaveLength(0)
     expect(p.setNameservers).not.toHaveBeenCalled()
+  })
+
+  it('rejects expired domains before reserving or calling the provider', async () => {
+    m.provider = fakeProvider({
+      getManagedDetails: vi.fn().mockResolvedValue({
+        ...details,
+        expiresAt: '2020-01-01T00:00:00.000Z',
+        remainingDays: 0,
+      }),
+    })
+    const p = m.provider as ReturnType<typeof fakeProvider>
+    expect(await changeNameservers('u1', 'example.com', ['ns1.new.com', 'ns2.new.com'])).toEqual({
+      ok: false,
+      error: 'PROVIDER_REFUSED',
+    })
+    expect(m.rpcCalls).toHaveLength(0)
+    expect(p.setNameservers).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the hourly limit is exhausted or the limiter is unavailable', async () => {
+    const p = m.provider as ReturnType<typeof fakeProvider>
+    m.rateLimitResult = { data: { allowed: false }, error: null }
+    expect(await changeNameservers('u1', 'example.com', ['ns1.new.com', 'ns2.new.com'])).toEqual({
+      ok: false,
+      error: 'RATE_LIMITED',
+    })
+    expect(p.setNameservers).not.toHaveBeenCalled()
+
+    m.rateLimitResult = { data: null, error: { code: 'RPC_ERROR' } }
+    expect(await changeNameservers('u1', 'example.com', ['ns1.new.com', 'ns2.new.com'])).toEqual({
+      ok: false,
+      error: 'UNEXPECTED_ERROR',
+    })
+    expect(p.setNameservers).not.toHaveBeenCalled()
+  })
+
+  it('keeps the lock change unsupported and never logs nameserver values', async () => {
+    const p = m.provider as ReturnType<typeof fakeProvider>
+    expect(await changeLock('u1', 'example.com', false)).toEqual({ ok: false, error: 'FEATURE_UNSUPPORTED' })
+    m.provider = fakeProvider({
+      setNameservers: vi.fn().mockRejectedValue(new RegistrarError('PROVIDER_ERROR', 'secret-nameserver.example')),
+    })
+    const spy = vi.spyOn(console, 'error')
+    await changeNameservers('u1', 'example.com', ['ns1.private.example', 'ns2.private.example'])
     expect(p.changeLock).not.toHaveBeenCalled()
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('private.example')
+    expect(JSON.stringify(spy.mock.calls)).not.toContain('secret-nameserver.example')
   })
 
   it('rejects wrongly typed input without calling the provider', async () => {
