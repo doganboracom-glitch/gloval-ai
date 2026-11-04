@@ -22,6 +22,7 @@ import { CreditNoticeToast } from '@/components/credit-notice-toast'
 import { getMyBillingProfileAction } from '@/lib/billing-profile-actions'
 import { getMyInvoiceState } from '@/lib/invoices/customer'
 import { reconcilePendingPayments } from '@/lib/payments/reconcile-store'
+import { getLatestAddOnPurchaseOutcome } from '@/lib/addon-purchase-outcome-loader'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
 // made moments earlier is never served from a stale cache.
@@ -30,9 +31,9 @@ export const dynamic = 'force-dynamic'
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ publish?: string; topup?: string }>
+  searchParams: Promise<{ publish?: string; topup?: string; payment?: string }>
 }) {
-  const { publish, topup } = await searchParams
+  const { publish, topup, payment } = await searchParams
   const supabase = await createClient()
   const authState = await getPageAuthState(supabase)
   if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
@@ -123,6 +124,8 @@ export default async function BillingPage({
     console.error('[billing] add-on overview unavailable', err)
     return null
   })
+  const addOnOutcome =
+    payment === undefined ? null : await getLatestAddOnPurchaseOutcome(user.id).catch(() => null)
 
   const usage = {
     corporate: projects.filter((p) => p.project_type !== 'ecommerce').length,
@@ -178,6 +181,7 @@ export default async function BillingPage({
       publishBanner={publishBanner}
       freeChosenToken={freeChosenToken}
       initialTopUpId={topup ?? null}
+      addOnOutcome={addOnOutcome}
     />
     </>
   )

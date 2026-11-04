@@ -87,7 +87,7 @@ function callbackResponse(
     destination === 'domains'
       ? `${origin}/dashboard/domains?payment=${status}`
       : destination === 'addons'
-        ? `${origin}/billing/add-ons?payment=return`
+        ? `${origin}/billing?payment=return#ek-paketler`
         : `${origin}/payment-result?checkout=${status}`
   const fallback = status === 'success' ? withPurchaseParams(baseFallback, purchase) : baseFallback
   const html = `<!doctype html><title>Ödeme sonucu</title><script>

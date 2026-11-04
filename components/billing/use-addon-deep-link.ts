@@ -22,13 +22,16 @@ export function useAddonDeepLink(): string | null {
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let clearTimer: number | undefined
+    setHighlightedCode(code)
 
     const scrollTimer = window.setTimeout(
       () => {
         const card = document.getElementById(addonCardId(code))
-        if (!card) return
+        if (!card) {
+          setHighlightedCode(null)
+          return
+        }
         card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
-        setHighlightedCode(code)
         clearTimer = window.setTimeout(() => setHighlightedCode(null), ADDON_HIGHLIGHT_MS)
       },
       reduceMotion ? 0 : ADDON_SECTION_OPEN_MS,
