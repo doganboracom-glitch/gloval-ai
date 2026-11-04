@@ -512,6 +512,7 @@ declare
   v_cpc_minor integer;
   v_cpc_micros bigint;
   v_currency_digits smallint;
+  v_one_unit_minor integer;
 begin
   if p_user_id is null or p_plan_id is null or p_request_id is null then
     raise exception 'user, plan, and request ids are required';
@@ -534,15 +535,28 @@ begin
       return query select 'plan_changed'::text, 0, false, 0; return;
     end if;
     if v_existing.status = 'reserved' then
+      if v_plan.publish_request_id is distinct from p_request_id then
+        return query select 'plan_changed'::text, 0, false, 0; return;
+      end if;
+      if v_plan.status = 'reconciling' then
+        return query select 'publish_in_progress'::text, 0, false, 0; return;
+      end if;
+      if v_plan.status is distinct from 'publishing' then
+        return query select 'plan_changed'::text, 0, false, 0; return;
+      end if;
       select coalesce(sum(t.amount), 0)::integer into v_balance
         from public.ai_credit_transactions t where t.user_id = p_user_id;
       select coalesce(sum(r.amount), 0)::integer into v_reserved
         from public.ads_google_publish_credit_reservations r where r.user_id = p_user_id and r.status = 'reserved';
       return query select 'started'::text, greatest(v_balance - v_reserved, 0), false, 0; return;
     end if;
-    return query select case when v_existing.status = 'charged' then 'already_published' else 'plan_changed' end,
-      0, v_existing.status = 'charged', case when v_existing.status = 'charged' then 15 else 0 end;
-    return;
+    if v_existing.status = 'charged' then
+      if v_plan.status is distinct from 'published' or v_plan.publish_request_id is distinct from p_request_id then
+        return query select 'plan_changed'::text, 0, false, 0; return;
+      end if;
+      return query select 'already_published'::text, 0, true, 15; return;
+    end if;
+    return query select 'plan_changed'::text, 0, false, 0; return;
   end if;
 
   if v_plan.version is distinct from p_expected_version
@@ -646,12 +660,12 @@ begin
    where r.request_id = p_request_id and r.user_id = p_user_id and r.plan_id = p_plan_id for update;
   if not found then return query select 'reservation_missing'::text, 0, false, 0; return; end if;
   if v_reservation.status = 'charged' then
+    if v_plan.status is distinct from 'published'
+      or v_plan.publish_request_id is distinct from p_request_id
+      or v_plan.external_campaign_id is distinct from p_external_campaign_id then
+      return query select 'plan_changed'::text, 0, false, 0; return;
+    end if;
     select coalesce(sum(t.amount), 0)::integer into v_balance from public.ai_credit_transactions t where t.user_id = p_user_id;
-    update public.ads_plans p set status = 'published', external_campaign_id = p_external_campaign_id,
-      published_at = coalesce(p.published_at, now()), google_campaign_status = 'PAUSED',
-      google_daily_budget_minor = coalesce(p.google_daily_budget_minor, p.daily_budget_minor),
-      publish_billing_verified = p_billing_verified, publish_credit_charged = true, failure_reason = null
-     where p.id = p_plan_id and p.user_id = p_user_id;
     return query select 'published'::text, v_balance, true, 0; return;
   end if;
   if v_reservation.status is distinct from 'reserved'
