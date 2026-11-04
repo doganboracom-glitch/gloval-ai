@@ -277,7 +277,10 @@ export function ReferralPartnerCard({
               <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">{copy.codeLabel}</p>
-                  <p className="mt-1 break-all font-mono text-sm text-muted-foreground">{referralUrl}</p>
+                  <p className="mt-1 font-mono text-sm text-muted-foreground">
+              https://gloval.ai/?ref=<wbr />
+              <span className="whitespace-nowrap">{partner.referralCode}</span>
+            </p>
                 </div>
                 <Button type="button" variant="outline" onClick={handleCopyLink} className="shrink-0 gap-2">
                   {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}

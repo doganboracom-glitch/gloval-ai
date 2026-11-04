@@ -51,7 +51,7 @@ describe('referral partner settings card', () => {
       partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
     }))
 
-    expect(html).toContain('https://gloval.ai/?ref=PARTNER1234')
+    expect(html.replace(/<[^>]*>/gu, '')).toContain('https://gloval.ai/?ref=PARTNER1234')
     expect(html).toContain('Copy link')
     expect(html).toContain('4321')
     expect(html).not.toContain('TR123456789012345678901234')
@@ -80,7 +80,7 @@ describe('referral partner settings card', () => {
       partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: null },
     }))
 
-    expect(html).toContain('https://gloval.ai/?ref=PARTNER1234')
+    expect(html.replace(/<[^>]*>/gu, '')).toContain('https://gloval.ai/?ref=PARTNER1234')
     expect(html).toContain('IBAN ekleyin')
     expect(html).toContain('id="referral-iban-update"')
     expect(html).toContain('yönlendirme bağlantınız çalışıyor.')
