@@ -179,6 +179,8 @@ export type CustomDomain = {
    */
   mock: boolean
   source: DomainSource
+  /** True when the linked domain order was created by a secure admin import. */
+  adminAssigned?: boolean
   /** Provider-reported expiry (UTC instant), when the registrar named its zone. */
   expiresAt: string | null
   /**

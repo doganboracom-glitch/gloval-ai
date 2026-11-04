@@ -1532,6 +1532,7 @@ const dict = {
       mgDnsBody: 'Kayıt kuruluşu API\'si DNS kaydı yönetimi sunmuyor. Kayıtları nameserver olarak seçtiğiniz DNS sağlayıcısında düzenleyin.',
       mgSourceRegistrar: 'Gloval kaydı',
       mgSourceExternal: 'Harici bağlı',
+      mgSourceAdminAssigned: 'Gloval tarafından atandı',
 
       upgradeTitle: 'Özel alan adı ücretli paketlerde',
       upgradeBody: 'Özel domain kullanmak için ücretli bir pakete geçmeniz gerekiyor.',
@@ -3714,6 +3715,7 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       mgDnsBody: 'The registrar API does not offer DNS record management. Edit records at the DNS provider you chose as nameserver.',
       mgSourceRegistrar: 'Gloval registration',
       mgSourceExternal: 'Connected externally',
+      mgSourceAdminAssigned: 'Administratively assigned',
 
       upgradeTitle: 'Custom domains are on paid plans',
       upgradeBody: 'You need a paid plan to use a custom domain.',

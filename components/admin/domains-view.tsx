@@ -6,6 +6,8 @@ import { useLanguage } from '@/components/language-provider'
 import { adminT } from '@/lib/admin/i18n'
 import { PageHeader, DataTable, Th, Td, Tr, StatusBadge, type MailStatusTone } from '@/components/admin/admin-ui'
 import { DetachUnboundDomains } from '@/components/admin/detach-unbound-domains'
+import { AdminDomainImportPanel } from '@/components/admin/domain-import-panel'
+import type { PendingAdminDomainImport } from '@/lib/custom-domains/registrar/admin-import-types'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { handoverHref, handoverLinkState, type AdminDomainRow, type HandoverBlockReason } from '@/lib/admin/domain-handover-link'
@@ -69,7 +71,15 @@ function HandoverAction({ row }: { row: AdminDomain }) {
   )
 }
 
-export function DomainsView({ domains }: { domains: AdminDomain[] }) {
+export function DomainsView({
+  domains,
+  pendingImports = [],
+  importQueueReady = false,
+}: {
+  domains: AdminDomain[]
+  pendingImports?: PendingAdminDomainImport[]
+  importQueueReady?: boolean
+}) {
   const { lang } = useLanguage()
   const t = adminT(lang)
   const [query, setQuery] = useState('')
@@ -95,6 +105,8 @@ export function DomainsView({ domains }: { domains: AdminDomain[] }) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t.domains.title} subtitle={t.domains.subtitle} />
+
+      <AdminDomainImportPanel pendingImports={pendingImports} queueReady={importQueueReady} />
 
       <DetachUnboundDomains />
 

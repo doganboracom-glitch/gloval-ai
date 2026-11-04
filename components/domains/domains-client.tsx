@@ -64,6 +64,13 @@ export function DomainsClient({
   const [loadingPage, setLoadingPage] = useState(false)
 
   const { entitlement, live, canBuyDomain, recentOrders, projects } = overview
+  const domains = current.items
+  const visibleRecentOrders = useMemo(
+    () => recentOrders.filter((order) => !domains.some(
+      (domain) => domain.adminAssigned && domain.domain.toLowerCase() === order.domain.toLowerCase(),
+    )),
+    [domains, recentOrders],
+  )
 
   // router.refresh() delivers a fresh overview but never resets useState, so the
   // list must be re-seeded from it or a just-registered domain stays invisible.
@@ -74,7 +81,7 @@ export function DomainsClient({
   // After a payment redirect the registrar step can still be running. Re-read
   // the server state a few times until the order settles instead of leaving the
   // customer staring at a stale page.
-  const inFlight = recentOrders.some((o) => IN_FLIGHT_ORDER_STATUSES.includes(o.status))
+  const inFlight = visibleRecentOrders.some((o) => IN_FLIGHT_ORDER_STATUSES.includes(o.status))
   const pollAttempts = useRef(0)
   useEffect(() => {
     if (!inFlight || pollAttempts.current >= POLL_MAX_ATTEMPTS) return
@@ -83,9 +90,9 @@ export function DomainsClient({
       router.refresh()
     }, POLL_INTERVAL_MS)
     return () => clearTimeout(timer)
-  }, [inFlight, recentOrders, router])
+  }, [inFlight, visibleRecentOrders, router])
 
-  const latestOrder = recentOrders[0]
+  const latestOrder = visibleRecentOrders[0]
   const paymentBanner = ((): { tone: 'ok' | 'warn' | 'error'; text: string } | null => {
     if (paymentResult === 'failed') return { tone: 'error', text: d.payBannerFailed }
     if (paymentResult === 'error') return { tone: 'warn', text: d.payBannerError }
@@ -101,7 +108,6 @@ export function DomainsClient({
         return { tone: 'warn', text: d.payBannerProcessing }
     }
   })()
-  const domains = current.items
   const total = current.total
   const pages = pageCount(total, current.pageSize)
   // The plan only gates CONNECTING an existing domain; buying/transferring is a separate paid product.
@@ -256,7 +262,7 @@ export function DomainsClient({
           </div>
         </section>
 
-        {recentOrders.length > 0 && <RecentOrders orders={recentOrders} />}
+        {visibleRecentOrders.length > 0 && <RecentOrders orders={visibleRecentOrders} />}
 
         {showAdd && (
           <AddDomainDialog
@@ -351,6 +357,11 @@ export function DomainsClient({
                   <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                     {domain.source === 'registrar' ? d.mgSourceRegistrar : d.mgSourceExternal}
                   </span>
+                  {domain.adminAssigned && (
+                    <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-medium text-brand">
+                      {d.mgSourceAdminAssigned}
+                    </span>
+                  )}
                   <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </div>
               </Link>
@@ -408,7 +419,7 @@ export function DomainsClient({
         )}
       </section>
 
-      {recentOrders.length > 0 && <RecentOrders orders={recentOrders} />}
+      {visibleRecentOrders.length > 0 && <RecentOrders orders={visibleRecentOrders} />}
 
       {showAdd && (
         <AddDomainDialog
