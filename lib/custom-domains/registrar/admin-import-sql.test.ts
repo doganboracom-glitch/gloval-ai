@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const HANDOVER_MIGRATION = readFileSync(path.join(ROOT, 'scripts/086-domain-ownership-handover.sql'), 'utf8')
-const IMPORT_MIGRATION = readFileSync(path.join(ROOT, 'scripts/087-admin-domain-import.sql'), 'utf8')
+const IMPORT_MIGRATION = readFileSync(path.join(ROOT, 'scripts/105-admin-domain-import.sql'), 'utf8')
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;

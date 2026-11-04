@@ -1,4 +1,4 @@
--- scripts/087-admin-domain-import.sql
+-- scripts/105-admin-domain-import.sql
 -- *** NOT APPLIED to any database. Review/PR only. ***
 -- Prerequisite: scripts/086-domain-ownership-handover.sql has been applied.
 -- Imports an already-owned DomainNameAPI domain into a GLOVAL user's domain list.
