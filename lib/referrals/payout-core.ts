@@ -59,7 +59,7 @@ function ratioAmount(value: number, numerator: number, denominator: number, roun
 
   const scaled = BigInt(value) * BigInt(numerator)
   const divisor = BigInt(denominator)
-  const result = round ? (scaled + divisor / 2n) / divisor : scaled / divisor
+  const result = round ? (scaled + divisor / BigInt(2)) / divisor : scaled / divisor
   const parsed = Number(result)
   return Number.isSafeInteger(parsed) ? parsed : null
 }
@@ -174,7 +174,7 @@ export function parseReferralPayoutAmount(value: string): number | null {
   const fractionDigits = fractionPart.padEnd(REFERRAL_AMOUNT_MAX_DECIMALS, '0')
   try {
     const cents = BigInt(wholeDigits) * BigInt(REFERRAL_CURRENCY_MINOR_UNITS) + BigInt(fractionDigits || '0')
-    if (cents <= 0n || cents > BigInt(Number.MAX_SAFE_INTEGER)) return null
+    if (cents <= BigInt(0) || cents > BigInt(Number.MAX_SAFE_INTEGER)) return null
     return Number(cents)
   } catch {
     return null

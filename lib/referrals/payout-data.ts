@@ -107,7 +107,7 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
       ? convertibleCents
       : safeInteger(row.maxCreditCents, true)
     const maxCashCents = row.maxCashCents == null
-      ? Math.max(0, availableCents)
+      ? Math.max(0, availableCents ?? 0)
       : safeInteger(row.maxCashCents)
     const hasDebtBucket = row.hasDebtBucket === true
     const partialPayoutsAvailable =

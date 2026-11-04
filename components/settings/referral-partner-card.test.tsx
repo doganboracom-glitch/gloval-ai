@@ -69,7 +69,7 @@ describe('referral partner settings card', () => {
     expect(html).toContain('overflow-y-auto')
     expect(html).toContain('KDV hariç tutarın %20')
     expect(html).toContain('1.000 TL')
-    expect(html).toContain('Toplam komisyon bakiyesi en az 3 TL')
+    expect(html).toContain('Dönüşüm için en az 3 TL gerekir')
     expect(html).toContain('bekleyen ve kullanılabilir komisyonların tamamı')
     expect(html).toContain('14 gün')
     expect(html).toContain('gider belgesi GLOVAL tarafından düzenlenir')
@@ -90,6 +90,10 @@ describe('referral partner settings card', () => {
         availableCents: 300,
         totalCents: 300,
         convertibleCents: 300,
+        maxCreditCents: 300,
+        maxCashCents: 300,
+        hasDebtBucket: false,
+        partialPayoutsAvailable: false,
         requestedCents: 0,
         convertedCents: 0,
         paidCents: 0,
@@ -120,6 +124,10 @@ describe('referral partner settings card', () => {
         availableCents: 0,
         totalCents: 12_105,
         convertibleCents: 12_105,
+        maxCreditCents: 12_105,
+        maxCashCents: 0,
+        hasDebtBucket: false,
+        partialPayoutsAvailable: false,
         requestedCents: 0,
         convertedCents: 0,
         paidCents: 0,
@@ -150,6 +158,10 @@ describe('referral partner settings card', () => {
         availableCents: -300,
         totalCents: 0,
         convertibleCents: 0,
+        maxCreditCents: 0,
+        maxCashCents: 0,
+        hasDebtBucket: false,
+        partialPayoutsAvailable: false,
         requestedCents: 0,
         convertedCents: 300,
         paidCents: 0,

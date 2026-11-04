@@ -222,13 +222,13 @@ export async function queueReferralPayoutNotification(input: {
     ...(typeof input.partial === 'boolean' ? { partial: input.partial } : {}),
     ...(typeof input.invoiceRequired === 'boolean' ? { invoiceRequired: input.invoiceRequired } : {}),
     ...(input.vatMode === 'included' || input.vatMode === 'added' ? { vatMode: input.vatMode } : {}),
-    ...(Number.isSafeInteger(input.invoiceNetCents) && input.invoiceNetCents! >= 0
+    ...(typeof input.invoiceNetCents === 'number' && Number.isSafeInteger(input.invoiceNetCents) && input.invoiceNetCents >= 0
       ? { invoiceNetCents: input.invoiceNetCents }
       : {}),
-    ...(Number.isSafeInteger(input.invoiceVatCents) && input.invoiceVatCents! >= 0
+    ...(typeof input.invoiceVatCents === 'number' && Number.isSafeInteger(input.invoiceVatCents) && input.invoiceVatCents >= 0
       ? { invoiceVatCents: input.invoiceVatCents }
       : {}),
-    ...(Number.isSafeInteger(input.invoiceGrossCents) && input.invoiceGrossCents! >= 0
+    ...(typeof input.invoiceGrossCents === 'number' && Number.isSafeInteger(input.invoiceGrossCents) && input.invoiceGrossCents >= 0
       ? { invoiceGrossCents: input.invoiceGrossCents }
       : {}),
   }

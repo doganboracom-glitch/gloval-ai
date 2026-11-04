@@ -16,7 +16,7 @@ vi.mock('@/lib/referrals/payout-actions', () => ({ createReferralPayoutRequest: 
 import { ReferralPayoutControls } from './referral-payout-controls'
 import type { ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
-function payoutData(overrides: Partial<ReferralPayoutPanelData['state']> = {}): ReferralPayoutPanelData {
+function payoutData(overrides: Partial<NonNullable<ReferralPayoutPanelData['state']>> = {}): ReferralPayoutPanelData {
   const base: NonNullable<ReferralPayoutPanelData['state']> = {
     partnerStatus: 'active',
     taxStatus: 'individual',

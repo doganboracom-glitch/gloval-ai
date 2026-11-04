@@ -182,7 +182,8 @@ export async function createReferralPayoutRequest(input: {
     const invoiceNetCents = optionalInvoiceCents(data, 'invoiceNetCents')
     const invoiceVatCents = optionalInvoiceCents(data, 'invoiceVatCents')
     const invoiceGrossCents = optionalInvoiceCents(data, 'invoiceGrossCents')
-    const vatMode = data.vatMode === 'included' || data.vatMode === 'added' ? data.vatMode : null
+    const vatMode: ReferralVatMode | null =
+      data.vatMode === 'included' || data.vatMode === 'added' ? data.vatMode : null
     const hasInvoiceBreakdown = [invoiceNetCents, invoiceVatCents, invoiceGrossCents].some((value) => value !== null)
     if (
       !requestId ||
@@ -211,9 +212,9 @@ export async function createReferralPayoutRequest(input: {
         partial,
         invoiceRequired: data.invoiceRequired === true,
         vatMode,
-        invoiceNetCents: invoiceNetCents === 'invalid' ? null : invoiceNetCents,
-        invoiceVatCents: invoiceVatCents === 'invalid' ? null : invoiceVatCents,
-        invoiceGrossCents: invoiceGrossCents === 'invalid' ? null : invoiceGrossCents,
+        invoiceNetCents,
+        invoiceVatCents,
+        invoiceGrossCents,
       }
       await queueReferralPayoutNotification({
         ...noticeBase,
@@ -249,9 +250,9 @@ export async function createReferralPayoutRequest(input: {
       creditAmount,
       systemTopupCents,
       invoiceRequired: data.invoiceRequired === true,
-      invoiceNetCents: invoiceNetCents === 'invalid' ? null : invoiceNetCents,
-      invoiceVatCents: invoiceVatCents === 'invalid' ? null : invoiceVatCents,
-      invoiceGrossCents: invoiceGrossCents === 'invalid' ? null : invoiceGrossCents,
+      invoiceNetCents,
+      invoiceVatCents,
+      invoiceGrossCents,
       vatMode,
       partial,
       taxSuspended: data.taxSuspended === true,

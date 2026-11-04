@@ -34,8 +34,9 @@ export type ReferralPayoutNotice = {
 
 function formatTry(cents: number, lang: EmailLang) {
   const absoluteCents = BigInt(Math.abs(Number.isSafeInteger(cents) ? cents : 0))
-  const whole = Number(absoluteCents / 100n)
-  const fraction = String(absoluteCents % 100n).padStart(2, '0')
+  const centsPerLira = BigInt(100)
+  const whole = Number(absoluteCents / centsPerLira)
+  const fraction = String(absoluteCents % centsPerLira).padStart(2, '0')
   const formattedWhole = new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
     maximumFractionDigits: 0,
   }).format(whole)
