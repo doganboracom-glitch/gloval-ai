@@ -49,16 +49,22 @@ describe('referral dashboard panel', () => {
     expect(html).not.toMatch(/(?:₺|\\bTRY\\b|\\bTL\\b|\\$|1\\.000)/u)
   })
 
-  it('labels deleted members without showing a masked email placeholder', () => {
-    state.lang = 'en'
+  it('labels deleted members without showing a masked email placeholder in English and Turkish', () => {
     const deletedData = {
       ...dashboardData,
       customers: [{ maskedEmail: '', accountDeleted: true, status: 'verified' as const, createdAt: '2026-11-03T12:00:00.000Z' }],
     }
-    const html = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: deletedData }))
 
-    expect(html).toContain('Deleted account')
-    expect(html).toContain('Deleted by member')
-    expect(html).not.toContain('***')
+    state.lang = 'en'
+    const english = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: deletedData }))
+    expect(english).toContain('Deleted account')
+    expect(english).toContain('Deleted by member')
+    expect(english).not.toContain('***')
+
+    state.lang = 'tr'
+    const turkish = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: deletedData }))
+    expect(turkish).toContain('Silinmiş hesap')
+    expect(turkish).toContain('Üye tarafından silindi')
+    expect(turkish).not.toContain('***')
   })
 })

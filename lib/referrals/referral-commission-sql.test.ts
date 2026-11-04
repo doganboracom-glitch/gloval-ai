@@ -94,6 +94,21 @@ async function newTransaction(
   return rows[0].id
 }
 
+async function matureCommission(db: PGlite, transactionId: string) {
+  await db.exec('alter table public.referral_commission_ledger disable trigger referral_commission_ledger_immutable_trigger')
+  await db.query(`
+    update public.referral_commissions
+    set available_at = clock_timestamp() - interval '1 second'
+    where billing_transaction_id = $1
+  `, [transactionId])
+  await db.query(`
+    update public.referral_commission_ledger
+    set available_at = clock_timestamp() - interval '1 second'
+    where billing_transaction_id = $1 and entry_type = 'commission'
+  `, [transactionId])
+  await db.exec('alter table public.referral_commission_ledger enable trigger referral_commission_ledger_immutable_trigger')
+}
+
 describe('scripts/099-referral-commission-ledger.sql', () => {
   it('records only the first successful subscription charge and rounds VAT-exclusive commission down', async () => {
     await withDatabase(async (db) => {
@@ -154,6 +169,47 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
     })
   })
 
+  it('matures a commission through sync and posts a post-hold refund as a negative adjustment', async () => {
+    await withDatabase(async (db) => {
+      const partnerId = await newPartner(db, await newUser(db))
+      const referredUserId = await newUser(db)
+      const subscriptionId = crypto.randomUUID()
+      await newAttribution(db, partnerId, referredUserId)
+      const transactionId = await newTransaction(db, referredUserId, 'charge', 'succeeded', subscriptionId)
+      await matureCommission(db, transactionId)
+      await db.query('select public.referral_sync_commissions($1::uuid)', [partnerId])
+
+      const { rows: matured } = await db.query<{ status: string }>(
+        'select status from public.referral_commissions where billing_transaction_id = $1',
+        [transactionId],
+      )
+      expect(matured).toEqual([{ status: 'available' }])
+
+      await db.query(`
+        insert into public.referral_commission_ledger (
+          partner_id, entry_type, amount_cents, available_at, dedupe_key
+        ) values ($1, 'payout_request', -3000, clock_timestamp(), 'fixture:prior-spend')
+      `, [partnerId])
+      await newTransaction(db, referredUserId, 'refund', 'succeeded', subscriptionId, -12_105)
+
+      const { rows: reversed } = await db.query<{ status: string; reversal_kind: string }>(
+        'select status, reversal_kind from public.referral_commissions where billing_transaction_id = $1',
+        [transactionId],
+      )
+      const { rows: adjustment } = await db.query<{ entry_type: string; amount_cents: string }>(
+        "select entry_type, amount_cents::text from public.referral_commission_ledger where entry_type = 'refund_adjustment'",
+      )
+      const { rows: balance } = await db.query<{ amount_cents: string }>(
+        'select sum(amount_cents)::text as amount_cents from public.referral_commission_ledger where partner_id = $1',
+        [partnerId],
+      )
+
+      expect(reversed).toEqual([{ status: 'reversed', reversal_kind: 'post_hold' }])
+      expect(adjustment).toEqual([{ entry_type: 'refund_adjustment', amount_cents: '-2017' }])
+      expect(Number(balance[0].amount_cents)).toBe(-3_000)
+    })
+  })
+
   it('keeps a created commission after deleting the referred account and syncs idempotently', async () => {
     await withDatabase(async (db) => {
       const partnerId = await newPartner(db, await newUser(db))
@@ -187,6 +243,54 @@ describe('scripts/099-referral-commission-ledger.sql', () => {
             (select id from public.referral_commissions where attribution_id = $1)) as ledger_entries
       `, [attributionId])
       expect(counts[0]).toEqual({ commissions: 1, ledger_entries: 1 })
+    })
+  })
+
+  it('keeps commission persistence atomic with billing while isolating email enqueue failure', async () => {
+    await withDatabase(async (db) => {
+      const partnerId = await newPartner(db, await newUser(db))
+      const referredUserId = await newUser(db)
+      await newAttribution(db, partnerId, referredUserId)
+      await db.exec(`
+        create function public.fail_referral_email_enqueue() returns trigger
+        language plpgsql as $$ begin
+          if new.type = 'referral_commission_earned' then raise exception 'email queue unavailable'; end if;
+          return new;
+        end $$;
+        create trigger fail_referral_email_enqueue
+        before insert on public.notification_logs
+        for each row execute function public.fail_referral_email_enqueue();
+      `)
+
+      await newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID())
+      const { rows } = await db.query<{ commissions: number; ledger_entries: number }>(`
+        select
+          (select count(*)::integer from public.referral_commissions) as commissions,
+          (select count(*)::integer from public.referral_commission_ledger) as ledger_entries
+      `)
+      expect(rows).toEqual([{ commissions: 1, ledger_entries: 1 }])
+    })
+
+    await withDatabase(async (db) => {
+      const partnerId = await newPartner(db, await newUser(db))
+      const referredUserId = await newUser(db)
+      await newAttribution(db, partnerId, referredUserId)
+      await db.exec(`
+        create function public.fail_referral_commission_insert() returns trigger
+        language plpgsql as $$ begin raise exception 'commission persistence unavailable'; end $$;
+        create trigger fail_referral_commission_insert
+        before insert on public.referral_commissions
+        for each row execute function public.fail_referral_commission_insert();
+      `)
+
+      await expect(newTransaction(db, referredUserId, 'charge', 'succeeded', crypto.randomUUID()))
+        .rejects.toThrow('commission persistence unavailable')
+      const { rows } = await db.query<{ billing_transactions: number; commissions: number }>(`
+        select
+          (select count(*)::integer from public.billing_transactions) as billing_transactions,
+          (select count(*)::integer from public.referral_commissions) as commissions
+      `)
+      expect(rows).toEqual([{ billing_transactions: 0, commissions: 0 }])
     })
   })
 

@@ -17,7 +17,7 @@ create table if not exists public.referral_payout_requests (
   balance_cents bigint not null check (balance_cents >= 0),
   payout_cents bigint not null check (payout_cents >= 0),
   credit_amount integer,
-  system_topup_cents bigint not null default 0 check (system_topup_cents >= 0),
+  system_topup_cents bigint not null default 0 check (system_topup_cents between 0 and 299),
   invoice_required boolean not null default false,
   invoice_confirmed boolean not null default false,
   invoice_reference text check (invoice_reference is null or char_length(btrim(invoice_reference)) between 2 and 200),
@@ -26,7 +26,7 @@ create table if not exists public.referral_payout_requests (
   admin_note text check (admin_note is null or char_length(btrim(admin_note)) between 3 and 500),
   tax_status_snapshot text check (tax_status_snapshot in ('individual', 'company')),
   payee_name_snapshot text,
-  iban_last4_snapshot text check (iban_last4_snapshot is null or iban_last4_snapshot ~ '^\\d{4}$'),
+  iban_last4_snapshot text check (iban_last4_snapshot is null or iban_last4_snapshot ~ '^[0-9]{4}$'),
   status text not null check (status in ('requested', 'processed', 'rejected')),
   idempotency_key uuid not null,
   requested_at timestamptz not null default now(),
@@ -502,23 +502,19 @@ security definer
 set search_path = ''
 as $$
 begin
-  begin
-    if new.kind = 'charge' and new.status = 'succeeded' then
-      perform public.referral_record_commission_for_transaction(new.id);
-    end if;
+  if new.kind = 'charge' and new.status = 'succeeded' then
+    perform public.referral_record_commission_for_transaction(new.id);
+  end if;
 
-    if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
-      and (tg_op = 'INSERT' or old.status is distinct from new.status) then
-      perform public.referral_sync_commission_reversals(null, new.id);
-    elsif tg_op = 'UPDATE'
-      and old.kind = 'charge'
-      and old.status = 'succeeded'
-      and new.status <> 'succeeded' then
-      perform public.referral_sync_commission_reversals(null, new.id);
-    end if;
-  exception when others then
-    raise warning 'referral commission processing failed for billing transaction %', new.id;
-  end;
+  if new.kind in ('refund', 'chargeback') and new.status = 'succeeded'
+    and (tg_op = 'INSERT' or old.status is distinct from new.status) then
+    perform public.referral_sync_commission_reversals(null, new.id);
+  elsif tg_op = 'UPDATE'
+    and old.kind = 'charge'
+    and old.status = 'succeeded'
+    and new.status <> 'succeeded' then
+    perform public.referral_sync_commission_reversals(null, new.id);
+  end if;
 
   return new;
 end;

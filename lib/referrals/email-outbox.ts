@@ -12,6 +12,7 @@ const REFERRAL_EMAIL_TYPES: readonly ReferralPayoutNoticeType[] = [
   'referral_partner_signup_digest',
   'referral_commission_earned',
   'referral_cash_requested',
+  'referral_cash_admin',
   'referral_cash_paid',
   'referral_cash_rejected',
   'referral_credit_converted',

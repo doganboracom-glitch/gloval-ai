@@ -46,6 +46,15 @@ const COPY = {
   tr: {
     title: 'Ödeme talepleri',
     description: 'Nakit ödeme taleplerini inceleyin, komisyon bakiyelerini ve kredi dönüşümlerini takip edin.',
+    cashRequestsTitle: 'Nakit ödeme talepleri',
+    cashRequestsEmpty: 'Filtrelere uygun nakit talebi yok.',
+    creditHistoryTitle: 'AI kredi dönüşüm geçmişi',
+    creditHistoryEmpty: 'Henüz kredi dönüşümü yok.',
+    convertedAt: 'Dönüştürme tarihi',
+    searchRequests: 'Kod, maskeli e-posta veya talep kimliği ara',
+    searchPlaceholder: 'Örn. PARTNER12 veya …@example.com',
+    filterStatus: 'Durum filtresi',
+    filterAll: 'Tüm durumlar',
     privacy: 'E-postalar sunucu tarafında maskelenir. Tam IBAN yalnızca yetkili yönetici tarafından talep bazında açılır ve her görüntüleme denetlenir.',
     openRequests: 'Bekleyen nakit talebi',
     pending: 'Bekleyen komisyon',
@@ -125,6 +134,15 @@ const COPY = {
   en: {
     title: 'Payout requests',
     description: 'Review cash payout requests, commission balances, and credit conversions.',
+    cashRequestsTitle: 'Cash payout requests',
+    cashRequestsEmpty: 'No cash requests match these filters.',
+    creditHistoryTitle: 'AI credit conversion history',
+    creditHistoryEmpty: 'No credit conversions yet.',
+    convertedAt: 'Converted',
+    searchRequests: 'Search code, masked email, or request ID',
+    searchPlaceholder: 'e.g. PARTNER12 or …@example.com',
+    filterStatus: 'Filter by status',
+    filterAll: 'All statuses',
     privacy: 'Emails are masked server-side. Full IBAN is revealed per request to authorized admins only, and every reveal is audited.',
     openRequests: 'Open cash requests',
     pending: 'Pending commission',
@@ -237,6 +255,8 @@ export function ReferralPayoutsAdminTable({
   const [working, setWorking] = useState(false)
   const [revealedIban, setRevealedIban] = useState<{ requestId: string; iban: string } | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [cashStatusFilter, setCashStatusFilter] = useState<ReferralPayoutStatus | 'all'>('all')
+  const [cashQuery, setCashQuery] = useState('')
 
   if (!enabled) return null
 
@@ -376,6 +396,16 @@ export function ReferralPayoutsAdminTable({
     { label: copy.converted, value: formatReferralTry(summary.convertedCents, language) },
     { label: copy.topup, value: formatReferralTry(summary.systemTopupCents, language) },
   ] : []
+  const filteredCashRequests = requests
+    .filter((request) => request.method === 'cash')
+    .filter((request) => cashStatusFilter === 'all' || request.status === cashStatusFilter)
+    .filter((request) => {
+      const query = cashQuery.trim().toLocaleLowerCase(locale)
+      if (!query) return true
+      return [request.referralCode, request.maskedEmail ?? '', request.requestId]
+        .some((value) => value.toLocaleLowerCase(locale).includes(query))
+    })
+  const creditConversions = requests.filter((request) => request.method === 'credit' && request.status === 'processed')
 
   return (
     <section className="flex flex-col gap-4">
@@ -399,12 +429,33 @@ export function ReferralPayoutsAdminTable({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">{copy.title}</CardTitle>
+              <CardTitle className="text-base">{copy.cashRequestsTitle}</CardTitle>
               <CardDescription>{copy.privacy}</CardDescription>
             </CardHeader>
-            <CardContent>
-              {requests.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{copy.noRequests}</p>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  type="search"
+                  aria-label={copy.searchRequests}
+                  placeholder={copy.searchPlaceholder}
+                  value={cashQuery}
+                  onChange={(event) => setCashQuery(event.target.value)}
+                  className="sm:flex-1"
+                />
+                <select
+                  aria-label={copy.filterStatus}
+                  value={cashStatusFilter}
+                  onChange={(event) => setCashStatusFilter(event.target.value as ReferralPayoutStatus | 'all')}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all">{copy.filterAll}</option>
+                  <option value="requested">{copy.requested}</option>
+                  <option value="processed">{copy.processed}</option>
+                  <option value="rejected">{copy.rejected}</option>
+                </select>
+              </div>
+              {filteredCashRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{copy.cashRequestsEmpty}</p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -419,7 +470,7 @@ export function ReferralPayoutsAdminTable({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {requests.map((request) => (
+                    {filteredCashRequests.map((request) => (
                       <FragmentRows
                         key={request.requestId}
                         request={request}
@@ -443,6 +494,47 @@ export function ReferralPayoutsAdminTable({
                           referralCode: request.referralCode,
                         })}
                       />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{copy.creditHistoryTitle}</CardTitle>
+              <CardDescription>{copy.privacy}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {creditConversions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{copy.creditHistoryEmpty}</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{copy.request}</TableHead>
+                      <TableHead>{copy.amount}</TableHead>
+                      <TableHead>{copy.creditAmount}</TableHead>
+                      <TableHead>{copy.topup}</TableHead>
+                      <TableHead>{copy.convertedAt}</TableHead>
+                      <TableHead>{copy.status}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {creditConversions.map((request) => (
+                      <TableRow key={request.requestId}>
+                        <TableCell className="min-w-44">
+                          <p className="font-mono text-xs font-semibold text-foreground">{request.referralCode}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">{request.maskedEmail}</p>
+                          <p className="mt-1 font-mono text-[11px] text-muted-foreground" title={request.requestId}>{request.requestId.slice(0, 8)}</p>
+                        </TableCell>
+                        <TableCell className="tabular-nums">{formatReferralTry(request.balanceCents, language)}</TableCell>
+                        <TableCell className="tabular-nums">{new Intl.NumberFormat(locale).format(request.creditAmount ?? 0)} {copy.credit}</TableCell>
+                        <TableCell className="tabular-nums">{formatReferralTry(request.systemTopupCents, language)}</TableCell>
+                        <TableCell className="min-w-36 text-xs text-muted-foreground">{asDate(request.processedAt ?? request.requestedAt, locale)}</TableCell>
+                        <TableCell><Badge variant="outline">{copy.convertedStatus}</Badge></TableCell>
+                      </TableRow>
                     ))}
                   </TableBody>
                 </Table>
@@ -503,7 +595,7 @@ function FragmentRows({
   const localeCode = language === 'tr' ? 'tr-TR' : 'en-US'
   const isCashRequest = request.method === 'cash' && request.status === 'requested'
   const canVerifyTax = request.taxVerifiedAt === null && request.partnerStatus !== 'closed'
-  const statusLabel = request.method === 'credit' ? copy.convertedStatus : STATUS_LABEL[language][request.status]
+  const statusLabel = STATUS_LABEL[language][request.status]
 
   return (
     <>

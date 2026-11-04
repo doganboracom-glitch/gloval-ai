@@ -1,4 +1,5 @@
 import { escape, renderEmailLayout, renderEmailPlainText, renderTable, type EmailLang } from './layout'
+import { REFERRAL_HOLD_DAYS } from '@/lib/referrals/commission-config'
 
 export type ReferralPayoutNoticeType =
   | 'referral_partner_signup'
@@ -56,7 +57,7 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         digestIntro: 'Son bildirim penceresinde yeni hesaplar oluşturuldu.',
         count: 'Yeni hesap sayısı',
         commissionTitle: 'Yeni komisyon kaydedildi',
-        commissionIntro: 'İlk başarılı abonelik ödemesi için komisyonunuz kaydedildi. Komisyon 14 günlük bekleme süresi boyunca beklemede kalır.',
+        commissionIntro: `İlk başarılı abonelik ödemesi için komisyonunuz kaydedildi. Komisyon ${REFERRAL_HOLD_DAYS} günlük bekleme süresi boyunca beklemede kalır.`, 
         commission: 'Komisyon',
         availableAt: 'Kullanılabilir olacağı tarih (UTC)',
         requestedTitle: 'Nakit ödeme talebiniz alındı',
@@ -74,7 +75,7 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         credits: 'Eklenen AI kredisi',
         topup: 'GLOVAL AI tarafından karşılanan küsurat farkı',
         taxTitle: 'Vergi bilgisi doğrulaması gerekiyor',
-        taxIntro: 'İlk ödeme işleminiz tamamlandı; vergi bilgileriniz yönetim tarafından doğrulanana kadar yeni yönlendirme kabulü duraklatıldı.',
+        taxIntro: 'İlk nakit ödemeniz işlendi; vergi bilgileriniz yönetim tarafından doğrulanana kadar yeni yönlendirme kabulü duraklatıldı.', 
         footer: 'Bu otomatik bir satış ortaklığı bildirimidir. Tam IBAN bilgisi e-posta ile paylaşılmaz.',
       }
     : {
@@ -87,7 +88,7 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         digestIntro: 'New accounts were created during the latest notification window.',
         count: 'New account count',
         commissionTitle: 'A new commission was recorded',
-        commissionIntro: 'Your commission for the first successful subscription payment was recorded. It remains pending during the 14-day hold.',
+        commissionIntro: `Your commission for the first successful subscription payment was recorded. It remains pending during the ${REFERRAL_HOLD_DAYS}-day hold.`, 
         commission: 'Commission',
         availableAt: 'Available after (UTC)',
         requestedTitle: 'Your cash payout request was received',
@@ -105,7 +106,7 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         credits: 'AI credits added',
         topup: 'Fractional difference covered by GLOVAL AI',
         taxTitle: 'Tax information verification required',
-        taxIntro: 'Your first payout was processed. New referrals are paused until an administrator verifies your tax information.',
+        taxIntro: 'Your first cash payout was processed. New referrals are paused until an administrator verifies your tax information.', 
         footer: 'This is an automated referral program notice. Full IBAN details are never included in email.',
       }
 

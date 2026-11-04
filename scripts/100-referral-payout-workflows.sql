@@ -1,6 +1,7 @@
 -- NOT APPLIED: atomic partner payout RPCs, admin audit actions, and close guards.
 -- Apply manually after scripts/099-referral-commission-ledger.sql.
 -- This draft does not execute against any database.
+-- Thresholds, VAT, credit value, hold, and top-up limit mirror lib/referrals/commission-config.ts.
 
 begin;
 
@@ -75,6 +76,7 @@ declare
   v_available bigint := 0;
   v_payout_cents bigint := 0;
   v_credit_amount integer;
+  v_credit_amount_numeric numeric;
   v_topup_cents bigint := 0;
   v_invoice_required boolean := false;
   v_language text;
@@ -138,7 +140,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'tax_verification_required');
   end if;
 
-  if exists (
+  if p_method = 'cash' and exists (
     select 1
     from public.referral_payout_requests as request
     where request.partner_id = p_partner_id
@@ -178,11 +180,15 @@ begin
       else v_available
     end;
   else
-    v_credit_amount := ceil(v_available::numeric / 300)::integer;
-    if v_credit_amount < 1 or v_credit_amount > 2147483647 then
+    v_credit_amount_numeric := ceil(v_available::numeric / 300);
+    if v_credit_amount_numeric < 1 or v_credit_amount_numeric > 2147483647 then
       return jsonb_build_object('ok', false, 'error', 'credit_amount_out_of_range');
     end if;
+    v_credit_amount := v_credit_amount_numeric::integer;
     v_topup_cents := v_credit_amount::bigint * 300 - v_available;
+    if v_topup_cents > 299 then
+      return jsonb_build_object('ok', false, 'error', 'credit_topup_out_of_range');
+    end if;
     v_payout_cents := v_available;
   end if;
 
