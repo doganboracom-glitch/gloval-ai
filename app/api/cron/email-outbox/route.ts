@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { processDueEmailEvents } from '@/lib/email-outbox'
 import { processContactAcks } from '@/lib/support/contact-ack'
+import { processMakerRequestEmails } from '@/lib/maker-requests/outbox'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -16,17 +17,22 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processDueEmailEvents({ deadlineMs: Date.now() + OUTBOX_BUDGET_MS })
+    const deadlineMs = Date.now() + OUTBOX_BUDGET_MS
+    const result = await processDueEmailEvents({ deadlineMs })
     console.log(
       `[email-outbox] sweep processed=${result.sent + result.retry + result.failed + result.deferred} sent=${result.sent} retry=${result.retry} failed=${result.failed} deferred=${result.deferred}`,
     )
-    const contactAcks = await processContactAcks({ deadlineMs: Date.now() + OUTBOX_BUDGET_MS })
+    const contactAcks = await processContactAcks({ deadlineMs })
     console.log(
       `[email-outbox] contact acks sent=${contactAcks.sent} retry=${contactAcks.retry} gaveUp=${contactAcks.gaveUp} skipped=${contactAcks.skipped}`,
     )
-    return NextResponse.json({ ok: true, ...result, contactAcks })
-  } catch (error) {
-    console.log('[email-outbox] sweep failed:', error instanceof Error ? error.message : 'unknown')
+    const makerRequests = await processMakerRequestEmails({ deadlineMs })
+    console.log(
+      `[email-outbox] maker requests sent=${makerRequests.sent} retry=${makerRequests.retry} gaveUp=${makerRequests.gaveUp} skipped=${makerRequests.skipped}`,
+    )
+    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests })
+  } catch {
+    console.log('[email-outbox] sweep failed: unknown')
     return NextResponse.json({ error: 'email_outbox_failed' }, { status: 500 })
   }
 }

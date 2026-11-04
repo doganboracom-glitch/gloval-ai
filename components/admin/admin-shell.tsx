@@ -60,6 +60,7 @@ export function AdminShell({
     { href: '/admin/domains', label: t.nav.domains, icon: Globe },
     { href: '/admin/blog', label: blogAdminT(lang).nav, icon: Newspaper },
     { href: '/admin/support', label: t.nav.support, icon: LifeBuoy },
+    { href: '/admin/maker-requests', label: t.nav.makerRequests, icon: FileText },
     { href: '/admin/notifications', label: t.nav.notifications, icon: Bell },
     { href: '/admin/mail', label: t.nav.mail, icon: Mail },
   ]

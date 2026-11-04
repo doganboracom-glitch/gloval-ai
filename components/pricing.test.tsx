@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LanguageProvider } from '@/components/language-provider'
 import { Pricing } from '@/components/pricing'
@@ -73,12 +73,12 @@ const localizedCopy: Array<{
   },
 ]
 
-function renderPricing(lang: Lang, isAuthenticated = false) {
+function renderPricing(lang: Lang, isAuthenticated = false, makerRequestsEnabled = false) {
   window.localStorage.clear()
   document.cookie = `${LANG_COOKIE}=; path=/; max-age=0; samesite=lax`
   return render(
     <LanguageProvider initialLang={lang}>
-      <Pricing isAuthenticated={isAuthenticated} />
+      <Pricing isAuthenticated={isAuthenticated} makerRequestsEnabled={makerRequestsEnabled} />
     </LanguageProvider>,
   )
 }
@@ -99,6 +99,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   window.matchMedia = originalMatchMedia
 })
 
@@ -164,4 +165,65 @@ describe('pricing Maker band', () => {
       expect(url.searchParams.get('message')).toBe(guestMessage)
     },
   )
+
+  it.each([
+    { lang: 'tr' as const, trigger: 'Teklif iste', title: 'Web siten için teklif iste' },
+    { lang: 'en' as const, trigger: 'Request a quote', title: 'Get a website quote' },
+  ])('opens the enabled request dialog in $lang', async ({ lang, trigger, title }) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ prefill: null }),
+    }))
+    renderPricing(lang, false, true)
+
+    fireEvent.click(screen.getByRole('button', { name: trigger }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeTruthy()
+    expect(within(dialog).getByRole('heading', { name: title })).toBeTruthy()
+    expect(within(dialog).getByLabelText(lang === 'tr' ? 'Ad soyad' : 'Full name')).toBeTruthy()
+    expect(within(dialog).getByLabelText(lang === 'tr' ? 'Telefon' : 'Phone')).toBeTruthy()
+    expect(within(dialog).getByLabelText(lang === 'tr' ? 'E-posta' : 'Email')).toBeTruthy()
+  })
+
+  it.each([
+    {
+      lang: 'tr' as const,
+      trigger: 'Teklif iste',
+      name: 'Ad soyad',
+      phone: 'Telefon',
+      email: 'E-posta',
+      budget: 'Yaklaşık bütçe',
+      submit: 'Teklif isteğini gönder',
+      success: 'Talebini aldık',
+    },
+    {
+      lang: 'en' as const,
+      trigger: 'Request a quote',
+      name: 'Full name',
+      phone: 'Phone',
+      email: 'Email',
+      budget: 'Approximate budget',
+      submit: 'Send quote request',
+      success: 'We got your request',
+    },
+  ])('shows the localized success state in $lang', async (copy) => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prefill: null }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPricing(copy.lang, false, true)
+
+    fireEvent.click(screen.getByRole('button', { name: copy.trigger }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(copy.name), { target: { value: 'Derya Yılmaz' } })
+    fireEvent.change(within(dialog).getByLabelText(copy.phone), { target: { value: '+90 555 123 45 67' } })
+    fireEvent.change(within(dialog).getByLabelText(copy.email), { target: { value: 'derya@example.net' } })
+    fireEvent.change(within(dialog).getByLabelText(copy.budget), { target: { value: '10000-25000' } })
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    fireEvent.click(within(dialog).getByRole('button', { name: copy.submit }))
+
+    expect(await within(dialog).findByRole('heading', { name: copy.success })).toBeTruthy()
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/maker-requests', expect.objectContaining({ method: 'POST' }))
+  })
 })

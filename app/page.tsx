@@ -80,7 +80,10 @@ export default async function Page() {
         <HowItWorks />
         <Showcase />
         <Features />
-        <Pricing isAuthenticated={isAuthenticated} />
+        <Pricing
+          isAuthenticated={isAuthenticated}
+          makerRequestsEnabled={process.env.MAKER_REQUESTS_ENABLED === '1'}
+        />
         <BlogPreview />
         <Faq />
         <FinalCta />
