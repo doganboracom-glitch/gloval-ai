@@ -58,6 +58,7 @@ export function SiteHeader() {
   // a standalone route (/blog, /sss) they are prefixed with "/" to navigate home
   // first. Real routes are marked so they render as <Link> instead.
   const onHome = pathname === '/'
+  const isAdsRoute = pathname === ADS_PATH || pathname.startsWith(`${ADS_PATH}/`)
   const desktopLinks: ReadonlyArray<HeaderLink> = [
     { href: '#how', label: t.nav.how },
     { href: '#features', label: t.nav.features },
@@ -67,7 +68,7 @@ export function SiteHeader() {
     { href: '/sss', label: t.nav.faq, route: true },
   ]
   const mobileLinks: ReadonlyArray<HeaderLink> = [
-    ...desktopLinks,
+    ...(isAdsRoute ? [] : desktopLinks),
     { href: '/iletisim', label: t.footer.links.contact, route: true },
     { href: '/alan-adi-sorgula', label: t.domainSearch.footerLink, route: true, newBadge: true },
     ...(isAdsFeatureUiEnabled()
@@ -110,32 +111,34 @@ export function SiteHeader() {
           <BrandLogo priority />
         </Link>
 
-        <nav className="hidden items-center gap-4 md:flex lg:gap-6">
-          {desktopLinks.map((l) =>
-            l.route ? (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={
-                  l.soon
-                    ? 'inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground'
-                    : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
-                }
-              >
-                {l.label}
-                {l.soon && soonBadge('nav-ads-soon-badge')}
-              </Link>
-            ) : (
-              <a
-                key={l.href}
-                href={onHome ? l.href : `/${l.href}`}
-                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {l.label}
-              </a>
-            ),
-          )}
-        </nav>
+        {!isAdsRoute && (
+          <nav className="hidden items-center gap-4 md:flex lg:gap-6">
+            {desktopLinks.map((l) =>
+              l.route ? (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={
+                    l.soon
+                      ? 'inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground'
+                      : 'text-sm text-muted-foreground transition-colors hover:text-foreground'
+                  }
+                >
+                  {l.label}
+                  {l.soon && soonBadge('nav-ads-soon-badge')}
+                </Link>
+              ) : (
+                <a
+                  key={l.href}
+                  href={onHome ? l.href : `/${l.href}`}
+                  className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {l.label}
+                </a>
+              ),
+            )}
+          </nav>
+        )}
 
         <div className="flex items-center gap-2">
           <LanguageSwitcher />

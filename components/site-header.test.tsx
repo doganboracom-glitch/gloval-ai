@@ -7,9 +7,9 @@ import { SiteHeader } from './site-header'
 import { dictionary, type Lang } from '@/lib/i18n'
 import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
 
-const state: { lang: Lang } = { lang: 'tr' }
+const state: { lang: Lang; pathname: string } = { lang: 'tr', pathname: '/' }
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }))
+vi.mock('next/navigation', () => ({ usePathname: () => state.pathname }))
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>{children}</a>
@@ -18,7 +18,9 @@ vi.mock('next/link', () => ({
 vi.mock('@/components/language-provider', () => ({
   useLanguage: () => ({ lang: state.lang, t: dictionary[state.lang] }),
 }))
-vi.mock('@/components/language-switcher', () => ({ LanguageSwitcher: () => null }))
+vi.mock('@/components/language-switcher', () => ({
+  LanguageSwitcher: () => <button type="button" data-testid="language-switcher">TR</button>,
+}))
 vi.mock('@/components/link-button', () => ({
   LinkButton: ({ href, children, className, onClick }: {
     href: string
@@ -58,9 +60,60 @@ afterEach(() => {
   vi.unstubAllEnvs()
   vi.useRealTimers()
   state.lang = 'tr'
+  state.pathname = '/'
 })
 
 describe('site header navigation', () => {
+  it.each(SUPPORTED_LOCALES)('%s hides landing links only on Ads routes', (locale) => {
+    state.lang = locale
+    const nav = dictionary[locale].nav
+    const landingLabels = [nav.how, nav.features, nav.showcase, nav.pricing, nav.blog, nav.faq]
+
+    for (const pathname of ['/ads', '/ads/xyz']) {
+      state.pathname = pathname
+      const { unmount } = render(<SiteHeader />)
+      const header = document.querySelector('header')!
+      const desktopNav = header.querySelector('nav')
+
+      expect(header.querySelector('a[aria-label="GLOVAL AI"]')).not.toBeNull()
+      expect(screen.getByTestId('language-switcher')).not.toBeNull()
+      expect(header.querySelector('a[href="/auth/login"]')).not.toBeNull()
+      expect(within(header).getByRole('link', { name: nav.cta })).not.toBeNull()
+      expect(desktopNav).toBeNull()
+
+      const mobileNav = openMobileMenu()
+      expect(within(mobileNav).getByRole('link', { name: nav.signIn })).not.toBeNull()
+      for (const label of landingLabels) {
+        expect(within(header).queryByRole('link', { name: label })).toBeNull()
+        expect(within(mobileNav).queryByRole('link', { name: label })).toBeNull()
+      }
+
+      unmount()
+    }
+
+    for (const pathname of ['/', '/blog']) {
+      state.pathname = pathname
+      const { unmount } = render(<SiteHeader />)
+      const header = document.querySelector('header')!
+      const desktopNav = header.querySelector('nav')!
+
+      expect(header.querySelector('a[aria-label="GLOVAL AI"]')).not.toBeNull()
+      expect(screen.getByTestId('language-switcher')).not.toBeNull()
+      expect(header.querySelector('a[href="/auth/login"]')).not.toBeNull()
+      for (const label of landingLabels) {
+        expect(within(desktopNav).getByRole('link', { name: label })).not.toBeNull()
+      }
+
+      const mobileNav = openMobileMenu()
+      expect(within(mobileNav).getByRole('link', { name: nav.signIn })).not.toBeNull()
+      for (const label of landingLabels) {
+        expect(within(mobileNav).getByRole('link', { name: label })).not.toBeNull()
+      }
+
+      unmount()
+    }
+  })
+
   it('keeps all landing page sections accessible in desktop and mobile menus', () => {
     render(<SiteHeader />)
     const expectedHrefs = ['#how', '#features', '#showcase', '#pricing']
