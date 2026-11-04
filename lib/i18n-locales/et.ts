@@ -969,6 +969,7 @@ const et: DeepPartial<Dict> = {
     errVerifyNotFound: "Kinnituskirjet ei leitud veel. DNS-i levimine võib aega võtta; proovige mõne minuti pärast uuesti.",
     errVerifyTemporary: "DNS-päring ei ole praegu saadaval. Palun proovige varsti uuesti.",
     emailDnsVerify: "Kinnita e-posti DNS-kirjed",
+      emailExternalDnsHint: "Kui nimeserverid osutavad GLOVAList väljaspool asuvale DNS-teenuse pakkujale, lisa seal MX/SPF/DKIM-kirjed.",
     emailDnsVerified: "E-posti DNS-kirjed (MX, SPF, DKIM, DMARC) on kinnitatud.",
     emailDnsIncomplete: "Mõnda e-posti DNS-kirjet ei leitud veel. Lisage puuduvad kirjed, oodake levimist ja proovige uuesti.",
     emailDnsNotIssued: "Selle domeeni jaoks pole veel e-posti DNS-kirjeid väljastatud. Looge esmalt postkast.",
