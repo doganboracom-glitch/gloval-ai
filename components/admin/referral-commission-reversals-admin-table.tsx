@@ -225,7 +225,7 @@ export function ReferralCommissionReversalsAdminTable({
   if (!enabled) return null
 
   return (
-    <Card>
+    <Card id="reversals" className="scroll-mt-24">
       <CardHeader>
         <CardTitle className="text-base">{copy.title}</CardTitle>
         <CardDescription>{copy.description}</CardDescription>

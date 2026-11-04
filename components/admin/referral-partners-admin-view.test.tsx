@@ -62,4 +62,15 @@ describe('ReferralPartnersAdminView', () => {
     expect(html).toContain('Paid customers')
     expect(html).not.toMatch(/\bTRY\b|₺/iu)
   })
+
+  it('exposes scroll targets for the partner, payout, and reversal sections', () => {
+    const html = renderToStaticMarkup(
+      <ReferralPartnersAdminView partners={partners} payoutsEnabled />,
+    )
+
+    expect(html).toContain('id="partners"')
+    expect(html).toContain('id="payouts"')
+    expect(html).toContain('id="reversals"')
+    expect(html).toContain('scroll-mt-24')
+  })
 })

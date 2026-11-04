@@ -170,7 +170,7 @@ export function ReferralPartnersAdminView({
             ))}
           </div>
 
-          <Card>
+          <Card id="partners" className="scroll-mt-24">
             <CardHeader>
               <CardTitle className="text-base">{copy.records}</CardTitle>
               <CardDescription>{copy.privacy}</CardDescription>
