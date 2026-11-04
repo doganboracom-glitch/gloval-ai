@@ -1250,7 +1250,6 @@ const et: DeepPartial<Dict> = {
     mgNsConfirm: 'Jah, muuda',
     mgNsUnsupported: 'Registripidaja ei toeta praegu nimeserverite muutmist. Praegused serverid kuvatakse ainult teavituseks.',
     mgLockUnsupported: 'Registripidaja ei toeta praegu ülekandeluku muutmist.',
-    outLockUnsupported: 'Ülekandeluku muutmist ei toetata praegu. Kui vajad ülekandekoodi, võta ühendust meie klienditoega.',
     errFeatureUnsupported: 'Registripidaja ei toeta seda toimingut praegu. Midagi ei muudetud.',
     mgContacts: 'WHOIS-i kontaktandmed',
     mgContactsHelp: 'Salvestatu kehtib koos registreerija, halduri, tehnilise ja arvelduskontakti kohta.',

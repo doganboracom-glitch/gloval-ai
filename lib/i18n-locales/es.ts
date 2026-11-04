@@ -1279,7 +1279,6 @@ const es: DeepPartial<Dict> = {
     mgNsConfirm: 'Sí, cambiarlos',
     mgNsUnsupported: 'El registrador no admite actualmente el cambio de servidores de nombres. Los servidores actuales se muestran solo como referencia.',
     mgLockUnsupported: 'El registrador no admite actualmente el cambio del bloqueo de transferencia.',
-    outLockUnsupported: 'Actualmente no se admite el cambio del bloqueo de transferencia. Si necesitas un código de transferencia, contacta con nuestro equipo de soporte.',
     errFeatureUnsupported: 'El registrador no admite actualmente esta acción. No se cambió nada.',
     mgContacts: 'Datos de contacto WHOIS',
     mgContactsHelp: 'Lo que guardes se aplica en conjunto a los contactos del titular, administrativo, técnico y de facturación.',

@@ -1,5 +1,6 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { listDomainsForUser } from '../service'
+import { recordDomainAuditEvent } from './audit'
+import { reserveUserHourly } from './rate-limit'
 import type { DomainErrorCode } from '../types'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
@@ -131,22 +132,31 @@ export async function changeNameservers(
       return { ok: true, changed: false }
     }
 
-    const { data, error } = await createAdminClient()
-      .rpc('reserve_rate_limit', {
-        p_subject: `domain:nameservers:${userId}`,
-        p_limit: 5,
-        p_window_seconds: 60 * 60,
-      })
-      .maybeSingle()
-    const reservation = data as { allowed?: unknown } | null
-    if (error || !reservation || typeof reservation.allowed !== 'boolean') {
-      console.error('[registrar-manage] nameserver rate limit unavailable', error?.code ?? 'NO_RESULT')
-      return { ok: false, error: 'UNEXPECTED_ERROR' }
-    }
-    if (!reservation.allowed) return { ok: false, error: 'RATE_LIMITED' }
+    const reservation = await reserveUserHourly('nameserver', 'domain:nameservers', userId)
+    if (reservation === 'unavailable') return { ok: false, error: 'UNEXPECTED_ERROR' }
+    if (reservation === 'limited') return { ok: false, error: 'RATE_LIMITED' }
 
-    const result = await g.registrar.setNameservers(g.domain, validation.nameservers)
-    return { ok: true, changed: result.changed }
+    try {
+      const result = await g.registrar.setNameservers(g.domain, validation.nameservers)
+      await recordDomainAuditEvent({
+        userId,
+        domain: g.domain,
+        eventType: 'nameservers_updated',
+        details: { outcome: 'success', changed: result.changed, nameserverCount: validation.nameservers.length },
+      })
+      return { ok: true, changed: result.changed }
+    } catch (e) {
+      await recordDomainAuditEvent({
+        userId,
+        domain: g.domain,
+        eventType: 'nameservers_updated',
+        details: {
+          outcome: e instanceof RegistrarError && e.code === 'OUTCOME_UNKNOWN' ? 'unconfirmed' : 'failed',
+          nameserverCount: validation.nameservers.length,
+        },
+      })
+      throw e
+    }
   } catch (e) {
     return { ok: false, error: toDomainError(e) }
   }
@@ -157,12 +167,73 @@ export function changePrivacy(userId: string, rawDomain: string, enabled: boolea
   return mutate(userId, rawDomain, (r, d) => r.setPrivacy(d, enabled))
 }
 
-export function changeLock(userId: string, rawDomain: string, locked: boolean) {
-  if (typeof locked !== 'boolean') return Promise.resolve<ManageResult<{ changed: boolean }>>({ ok: false, error: 'INVALID_INPUT' })
-  return mutate(userId, rawDomain, (r, d) => r.changeLock(d, locked), 'transferLockChange')
+/**
+ * Same safety chain as nameservers: ownership, capability, active and unexpired
+ * registration, per-user hourly reservation (fail closed), and an adapter that
+ * reads the lock back before success is reported.
+ */
+export async function changeLock(
+  userId: string,
+  rawDomain: string,
+  locked: boolean,
+): Promise<ManageResult<{ changed: boolean }>> {
+  if (typeof locked !== 'boolean') return { ok: false, error: 'INVALID_INPUT' }
+
+  const g = await guard(userId, rawDomain)
+  if (!g.ok) return g
+  if (!REGISTRAR_CAPABILITIES.transferLockChange) return { ok: false, error: 'FEATURE_UNSUPPORTED' }
+
+  try {
+    const details = await g.registrar.getManagedDetails(g.domain)
+    if (!details) return { ok: false, error: 'NOT_FOUND' }
+    if (!isActiveAndUnexpired(details)) return { ok: false, error: 'PROVIDER_REFUSED' }
+    if (details.locked === locked) return { ok: true, changed: false }
+
+    const reservation = await reserveUserHourly('transfer-lock', 'domain:transfer-lock', userId)
+    if (reservation === 'unavailable') return { ok: false, error: 'UNEXPECTED_ERROR' }
+    if (reservation === 'limited') return { ok: false, error: 'RATE_LIMITED' }
+
+    try {
+      const result = await g.registrar.changeLock(g.domain, locked)
+      await recordDomainAuditEvent({
+        userId,
+        domain: g.domain,
+        eventType: 'transfer_lock_changed',
+        details: { outcome: 'success', changed: result.changed, previousLocked: details.locked, newLocked: locked },
+      })
+      return { ok: true, changed: result.changed }
+    } catch (e) {
+      await recordDomainAuditEvent({
+        userId,
+        domain: g.domain,
+        eventType: 'transfer_lock_changed',
+        details: {
+          outcome: e instanceof RegistrarError && e.code === 'OUTCOME_UNKNOWN' ? 'unconfirmed' : 'failed',
+          previousLocked: details.locked,
+          newLocked: locked,
+        },
+      })
+      throw e
+    }
+  } catch (e) {
+    return { ok: false, error: toDomainError(e) }
+  }
 }
 
-export function changeContact(userId: string, rawDomain: string, contact: DomainContact) {
-  if (!contact || typeof contact !== 'object') return Promise.resolve<ManageResult<{ changed: boolean }>>({ ok: false, error: 'INVALID_INPUT' })
-  return mutate(userId, rawDomain, (r, d) => r.updateContacts(d, contact))
+export async function changeContact(
+  userId: string,
+  rawDomain: string,
+  contact: DomainContact,
+): Promise<ManageResult<{ changed: boolean }>> {
+  if (!contact || typeof contact !== 'object') return { ok: false, error: 'INVALID_INPUT' }
+  const result = await mutate(userId, rawDomain, (r, d) => r.updateContacts(d, contact))
+  if (result.ok) {
+    await recordDomainAuditEvent({
+      userId,
+      domain: rawDomain,
+      eventType: 'contacts_updated',
+      details: { outcome: 'success', changed: result.changed },
+    })
+  }
+  return result
 }

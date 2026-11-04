@@ -13,7 +13,11 @@ import { listDomainsForUser } from '../service'
 import { toQuoteView, type DomainQuoteView } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
 import { resolveOrderPricing, type OrderPricing } from '../pricing/order'
+import { resolveEmailLang } from '@/lib/email/lang'
 import { REGISTRAR_CAPABILITIES } from './capabilities'
+import { recordDomainAuditEvent } from './audit'
+import { reserveUserHourly } from './rate-limit'
+import { notifyTransferCodeViewed } from './transfer-code-notice'
 import { requireRegisteredByUs } from './ownership'
 import { getDomainRegistrarProvider } from './provider'
 import { parsePurchaseDomain } from './service'
@@ -43,11 +47,13 @@ export type TransferErrorCode =
   | 'RESTRICTED_60_DAYS'
   | 'PROVIDER_ERROR'
   | 'UNSUPPORTED'
+  | 'RATE_LIMITED'
   | 'FAILED'
 
 async function requireUser() {
   const user = await requireRequestUser()
-  return { userId: user.id, email: user.email ?? '' }
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>
+  return { userId: user.id, email: user.email ?? '', lang: resolveEmailLang(metadata.email_locale) }
 }
 
 async function resolveClientIp(): Promise<string> {
@@ -307,15 +313,31 @@ export async function revealMyAuthCode(
   if (status.restrictedUntil) return { ok: false, error: 'RESTRICTED_60_DAYS' }
   if (status.locked) return { ok: false, error: 'DOMAIN_LOCKED' }
 
-  const { userId } = await requireUser()
+  const { userId, email, lang } = await requireUser()
   const registrar = getDomainRegistrarProvider()
   if (!isTransferCapable(registrar)) return { ok: false, error: 'NOT_CONFIGURED' }
   const domain = await requireRegisteredByUs(userId, domainInput)
   if (!domain) return { ok: false, error: 'NOT_FOUND' }
+
+  // Fails closed: when the limiter cannot answer, the code is not revealed.
+  const reservation = await reserveUserHourly('transfer-code', 'domain:transfer-code', userId)
+  if (reservation === 'limited') {
+    await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'rate_limited' } })
+    return { ok: false, error: 'RATE_LIMITED' }
+  }
+  if (reservation === 'unavailable') return { ok: false, error: 'FAILED' }
+
   try {
     const authCode = await registrar.getAuthCode(domain)
-    return authCode ? { ok: true, authCode } : { ok: false, error: 'NOT_FOUND' }
+    if (!authCode) {
+      await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'failed' } })
+      return { ok: false, error: 'NOT_FOUND' }
+    }
+    await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'success' } })
+    await notifyTransferCodeViewed({ userId, email, domain, lang })
+    return { ok: true, authCode }
   } catch {
+    await recordDomainAuditEvent({ userId, domain, eventType: 'transfer_code_viewed', details: { outcome: 'failed' } })
     return { ok: false, error: 'PROVIDER_ERROR' }
   }
 }

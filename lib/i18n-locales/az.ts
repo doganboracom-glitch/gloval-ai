@@ -1250,7 +1250,6 @@ const az: DeepPartial<Dict> = {
     mgNsConfirm: 'Bəli, dəyiş',
     mgNsUnsupported: 'Ad serverlərinin dəyişdirilməsi hazırda registrator tərəfindən dəstəklənmir. Cari serverlər yalnız məlumat üçün göstərilir.',
     mgLockUnsupported: 'Transfer kilidinin dəyişdirilməsi hazırda registrator tərəfindən dəstəklənmir.',
-    outLockUnsupported: 'Transfer kilidinin dəyişdirilməsi hazırda dəstəklənmir. Transfer koduna ehtiyacınız varsa, dəstək komandamızla əlaqə saxlayın.',
     errFeatureUnsupported: 'Bu əməliyyat hazırda registrator tərəfindən dəstəklənmir. Heç nə dəyişdirilmədi.',
     mgContacts: 'WHOIS əlaqə məlumatları',
     mgContactsHelp: 'Saxladığınız məlumat sahib, inzibati, texniki və ödəniş əlaqələrinə birlikdə tətbiq olunur.',
