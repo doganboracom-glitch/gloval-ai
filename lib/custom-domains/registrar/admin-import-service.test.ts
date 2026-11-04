@@ -74,12 +74,36 @@ describe('admin registrar import service', () => {
       preview: {
         domain: 'owned-example.com.tr',
         expiresAt: future,
+        expiresAtSource: 'provider_explicit',
         nameservers: ['ns1.example.net', 'ns2.example.net'],
       },
     })
     expect(provider.getManagedDetails).toHaveBeenCalledTimes(1)
     expect(provider.getManagedDetails).toHaveBeenCalledWith('owned-example.com.tr')
     expect(provider.getContacts).not.toHaveBeenCalled()
+  })
+
+  it('reads a zone-less registrar expiry as Istanbul time and flags it as assumed', async () => {
+    const provider = registrar({
+      getManagedDetails: vi.fn().mockResolvedValue({
+        domain: 'owned-example.com.tr',
+        status: 'Active',
+        expiresAt: null,
+        expiresAtRaw: '2099-10-04T17:55:29',
+        nameservers: ['ns1.example.net'],
+      }),
+    })
+    mocks.getDomainRegistrarProvider.mockReturnValue(provider)
+
+    await expect(previewRegistrarDomainImport('owned-example.com.tr')).resolves.toEqual({
+      ok: true,
+      preview: {
+        domain: 'owned-example.com.tr',
+        expiresAt: '2099-10-04T14:55:29.000Z',
+        expiresAtSource: 'assumed_istanbul',
+        nameservers: ['ns1.example.net'],
+      },
+    })
   })
 
   it('rejects a domain not returned by this reseller account without calling the import RPC', async () => {

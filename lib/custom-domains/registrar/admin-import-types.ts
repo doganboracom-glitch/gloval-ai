@@ -19,9 +19,12 @@ export type AdminDomainImportError =
   | 'idempotency_conflict'
   | 'unavailable'
 
+export type ExpiresAtSource = 'provider_explicit' | 'assumed_istanbul'
+
 export type RegistrarImportPreview = {
   domain: string
   expiresAt: string
+  expiresAtSource: ExpiresAtSource
   nameservers: string[]
 }
 

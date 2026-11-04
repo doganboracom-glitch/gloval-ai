@@ -184,6 +184,8 @@ export type ManagedDomainDetails = {
   startedAtRaw: string | null
   remainingDays: number | null
   hasAuthCode: boolean
+  /** Top-level key names of the raw GetDetails reply (names only, never values); debug aid. */
+  rawFieldNames?: string[]
 }
 
 /** One WHOIS contact as the provider stores it. */
