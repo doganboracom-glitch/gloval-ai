@@ -16,6 +16,7 @@ import type {
   ReferralPayoutState,
   ReferralPayoutStatus,
   ReferralTaxStatus,
+  ReferralVatMode,
 } from '@/lib/referrals/partner-types'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,10 +103,27 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
     const convertibleCents = row.convertibleCents == null
       ? availableCents
       : safeInteger(row.convertibleCents, true)
+    const maxCreditCents = row.maxCreditCents == null
+      ? convertibleCents
+      : safeInteger(row.maxCreditCents, true)
+    const maxCashCents = row.maxCashCents == null
+      ? Math.max(0, availableCents)
+      : safeInteger(row.maxCashCents)
+    const hasDebtBucket = row.hasDebtBucket === true
+    const partialPayoutsAvailable =
+      row.maxCreditCents != null &&
+      row.maxCashCents != null &&
+      typeof row.hasDebtBucket === 'boolean'
     const requestedCents = safeInteger(row.requestedCents) ?? 0
     const convertedCents = safeInteger(row.convertedCents) ?? 0
     const paidCents = safeInteger(row.paidCents) ?? 0
-    if (pendingCents === null || availableCents === null || convertibleCents === null) {
+    if (
+      pendingCents === null ||
+      availableCents === null ||
+      convertibleCents === null ||
+      maxCreditCents === null ||
+      maxCashCents === null
+    ) {
       return { state: null, unavailable: true }
     }
 
@@ -118,6 +136,10 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
       availableCents,
       totalCents: pendingCents + availableCents,
       convertibleCents,
+      maxCreditCents,
+      maxCashCents,
+      hasDebtBucket,
+      partialPayoutsAvailable,
       requestedCents,
       convertedCents,
       paidCents,
@@ -145,6 +167,12 @@ export function mapReferralPayoutAdminList(value: unknown): ReferralPayoutAdminR
       const payoutCents = safeInteger(row.payoutCents)
       const systemTopupCents = safeInteger(row.systemTopupCents)
       const creditAmount = row.creditAmount == null ? null : safeInteger(row.creditAmount)
+      const vatMode: ReferralVatMode | null = row.vatMode === 'included' || row.vatMode === 'added'
+        ? row.vatMode
+        : null
+      const invoiceNetCents = row.invoiceNetCents == null ? null : safeInteger(row.invoiceNetCents)
+      const invoiceVatCents = row.invoiceVatCents == null ? null : safeInteger(row.invoiceVatCents)
+      const invoiceGrossCents = row.invoiceGrossCents == null ? null : safeInteger(row.invoiceGrossCents)
 
       if (
         !requestId ||
@@ -157,7 +185,11 @@ export function mapReferralPayoutAdminList(value: unknown): ReferralPayoutAdminR
         balanceCents === null ||
         payoutCents === null ||
         systemTopupCents === null ||
-        (row.creditAmount != null && creditAmount === null)
+        (row.creditAmount != null && creditAmount === null) ||
+        (row.vatMode != null && vatMode === null) ||
+        (row.invoiceNetCents != null && invoiceNetCents === null) ||
+        (row.invoiceVatCents != null && invoiceVatCents === null) ||
+        (row.invoiceGrossCents != null && invoiceGrossCents === null)
       ) return null
 
       return {
@@ -176,6 +208,11 @@ export function mapReferralPayoutAdminList(value: unknown): ReferralPayoutAdminR
         creditAmount,
         systemTopupCents,
         invoiceRequired: row.invoiceRequired === true,
+        vatMode,
+        invoiceNetCents,
+        invoiceVatCents,
+        invoiceGrossCents,
+        partial: row.partial === true,
         invoiceConfirmed: row.invoiceConfirmed === true,
         invoiceReference: typeof row.invoiceReference === 'string' ? row.invoiceReference.slice(0, 200) : null,
         invoiceReceivedAt: dateString(row.invoiceReceivedAt),

@@ -30,6 +30,10 @@ function payoutData(overrides: Partial<ReferralPayoutPanelData['state']> = {}): 
     convertedCents: 0,
     paidCents: 0,
     hasOpenCashRequest: false,
+    maxCreditCents: overrides.convertibleCents ?? 299,
+    maxCashCents: Math.max(0, overrides.availableCents ?? 0),
+    hasDebtBucket: false,
+    partialPayoutsAvailable: true,
   }
   const merged = { ...base, ...overrides }
   return { state: merged, unavailable: false }
@@ -55,7 +59,7 @@ describe('referral payout controls', () => {
     expect(screen.getByText('AI kredisine dönüşüm için toplam bakiyenin en az 3 TL olması gerekir.')).toBeTruthy()
   })
 
-  it('shows the immediate full credit preview, including zero system top-up at exactly 3 TL', () => {
+  it('shows the immediate full credit preview after continuing, including zero system top-up at exactly 3 TL', () => {
     render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
       pendingCents: 0,
       availableCents: 300,
@@ -65,6 +69,7 @@ describe('referral payout controls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
     expect(screen.getByRole('alertdialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
     expect(screen.getByRole('button', { name: 'AI kredisi olarak al' })).toBeTruthy()
     expect(screen.getByRole('button', { name: "IBAN'a ödeme iste" }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('Bu tutar, 14 günlük bekleme tamamlanmadan da AI kredisi olarak hemen eklenir.')).toBeTruthy()
@@ -86,6 +91,7 @@ describe('referral payout controls', () => {
     fireEvent.click(requestButton)
     expect(screen.getByRole('button', { name: "IBAN'a ödeme iste" }).hasAttribute('disabled')).toBe(true)
     expect(screen.getAllByText(/14 günlük bekleme tamamlandığında ve kullanılabilir bakiye 1\.000 TL'ye ulaştığında/u).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
     expect(screen.getByText('Kullanılacak komisyon bakiyesi')).toBeTruthy()
   })
 
@@ -123,6 +129,65 @@ describe('referral payout controls', () => {
     expect(screen.getAllByText(/Bir sonraki nakit ödeme için vergi bilgilerinizin doğrulanması gerekiyor/u).length).toBeGreaterThan(0)
   })
 
+  it('parses a partial credit amount in Turkish formatting without rounding the entered kuruş', () => {
+    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
+      pendingCents: 0,
+      availableCents: 200_000,
+      totalCents: 200_000,
+      convertibleCents: 200_000,
+      maxCreditCents: 200_000,
+    })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Belirli tutar' }))
+    fireEvent.change(screen.getByLabelText('Talep edilecek tutar (TL)'), { target: { value: '1.234,50' } })
+
+    expect(screen.getByText('1.234,50 TL')).toBeTruthy()
+    expect(screen.getByText('412')).toBeTruthy()
+    expect(screen.getByText('1,50 TL')).toBeTruthy()
+  })
+
+  it('offers both company VAT modes and recalculates the invoice preview in kuruş', () => {
+    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
+      taxStatus: 'company',
+      pendingCents: 0,
+      availableCents: 150_000,
+      totalCents: 150_000,
+      convertibleCents: 0,
+      maxCreditCents: 0,
+      maxCashCents: 150_000,
+    })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    fireEvent.click(screen.getByRole('radio', { name: /KDV tutara dahil/u }))
+    expect(screen.getByText('1.250,00 TL')).toBeTruthy()
+    expect(screen.getByText('250,00 TL')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('radio', { name: /Tutar üzerine %20 KDV eklensin/u }))
+    expect(screen.getByText('1.500,00 TL')).toBeTruthy()
+    expect(screen.getByText('300,00 TL')).toBeTruthy()
+    expect(screen.getAllByText('1.800,00 TL').length).toBeGreaterThan(0)
+  })
+
+  it('disables partial credit when a future negative bucket exists', () => {
+    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
+      pendingCents: 0,
+      availableCents: 10_000,
+      totalCents: 10_000,
+      convertibleCents: 10_000,
+      maxCreditCents: 10_000,
+      hasDebtBucket: true,
+    })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+
+    expect(screen.getByRole('button', { name: 'Belirli tutar' }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText(/negatif.*yalnızca bakiyenin tamamı/u)).toBeTruthy()
+  })
+
   it('allows credit requests while an open cash request keeps only the IBAN method disabled', () => {
     render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
       availableCents: 5_000,
@@ -137,5 +202,7 @@ describe('referral payout controls', () => {
     fireEvent.click(requestButton)
     expect(screen.getByRole('button', { name: "IBAN'a ödeme iste" }).hasAttribute('disabled')).toBe(true)
     expect(screen.getByRole('button', { name: 'AI kredisi olarak al' }).hasAttribute('disabled')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    expect(screen.getByText('Kullanılacak komisyon bakiyesi')).toBeTruthy()
   })
 })

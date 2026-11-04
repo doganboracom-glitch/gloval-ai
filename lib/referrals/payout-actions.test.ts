@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
   auth: { kind: 'authenticated', user: { id: '11111111-1111-4111-8111-111111111111' } } as any,
-  partner: { id: '22222222-2222-4222-8222-222222222222', status: 'active', iban_last4: '1234' } as any,
+  partner: { id: '22222222-2222-4222-8222-222222222222', status: 'active', iban_last4: '1234', tax_status: 'individual' } as any,
   rpcData: {
     ok: true,
     duplicate: false,
@@ -51,7 +51,7 @@ import { createReferralPayoutRequest } from './payout-actions'
 
 beforeEach(() => {
   state.auth = { kind: 'authenticated', user: { id: '11111111-1111-4111-8111-111111111111' } }
-  state.partner = { id: '22222222-2222-4222-8222-222222222222', status: 'active', iban_last4: '1234' }
+  state.partner = { id: '22222222-2222-4222-8222-222222222222', status: 'active', iban_last4: '1234', tax_status: 'individual' }
   state.rpcData = {
     ok: true,
     duplicate: false,
@@ -112,7 +112,7 @@ describe('referral payout feature flags', () => {
     expect(state.queue).toHaveBeenCalledOnce()
   })
 
-  it('maps the credit minimum error and preserves the legacy method-specific minimum mapping', async () => {
+  it('maps the method-specific minimum errors', async () => {
     vi.stubEnv('REFERRAL_ENABLED', '1')
     vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
     vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
@@ -131,6 +131,96 @@ describe('referral payout feature flags', () => {
     await expect(createReferralPayoutRequest({
       method: 'cash',
       idempotencyKey: '88888888-8888-4888-8888-888888888888',
-    })).resolves.toEqual({ ok: false, error: 'insufficient_balance' })
+    })).resolves.toEqual({ ok: false, error: 'minimum_not_met' })
+  })
+
+  it('sends partial amounts and company VAT mode to SQL and includes the breakdown in both emails', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
+    state.partner = {
+      id: '22222222-2222-4222-8222-222222222222',
+      status: 'active',
+      iban_last4: '1234',
+      tax_status: 'company',
+    }
+    state.rpcData = {
+      ok: true,
+      requestId: '33333333-3333-4333-8333-333333333333',
+      balanceCents: 100_005,
+      payoutCents: 120_006,
+      invoiceRequired: true,
+      partial: true,
+      vatMode: 'added',
+      invoiceNetCents: 100_005,
+      invoiceVatCents: 20_001,
+      invoiceGrossCents: 120_006,
+    }
+
+    const result = await createReferralPayoutRequest({
+      method: 'cash',
+      amountCents: 100_005,
+      vatMode: 'added',
+      idempotencyKey: '99999999-9999-4999-8999-999999999999',
+      lang: 'en',
+    })
+
+    expect(state.rpc).toHaveBeenCalledWith('request_referral_payout', expect.objectContaining({
+      p_amount_cents: 100_005,
+      p_vat_mode: 'added',
+    }))
+    expect(result).toMatchObject({
+      ok: true,
+      partial: true,
+      balanceCents: 100_005,
+      payoutCents: 120_006,
+      vatMode: 'added',
+      invoiceNetCents: 100_005,
+      invoiceVatCents: 20_001,
+      invoiceGrossCents: 120_006,
+    })
+    expect(state.queue).toHaveBeenCalledTimes(2)
+    expect(state.queue).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'referral_cash_requested',
+      amountCents: 120_006,
+      commissionCents: 100_005,
+      partial: true,
+      vatMode: 'added',
+      invoiceNetCents: 100_005,
+      invoiceVatCents: 20_001,
+      invoiceGrossCents: 120_006,
+    }))
+  })
+
+  it('returns feature_unavailable for extended requests when the new SQL RPC is missing without queuing notifications', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
+    state.rpcError = {
+      code: 'PGRST202',
+      message: 'Could not find the function public.request_referral_payout in the schema cache',
+    }
+
+    await expect(createReferralPayoutRequest({
+      method: 'cash',
+      amountCents: 100_000,
+      idempotencyKey: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    })).resolves.toEqual({ ok: false, error: 'feature_unavailable' })
+    expect(state.rpc).toHaveBeenCalledTimes(1)
+    expect(state.queue).not.toHaveBeenCalled()
+  })
+
+  it('keeps full credit calls on the legacy four-argument RPC contract', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
+    vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
+
+    await createReferralPayoutRequest({
+      method: 'credit',
+      idempotencyKey: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    })
+    const [, args] = state.rpc.mock.calls[0]
+    expect(args).not.toHaveProperty('p_amount_cents')
+    expect(args).not.toHaveProperty('p_vat_mode')
   })
 })

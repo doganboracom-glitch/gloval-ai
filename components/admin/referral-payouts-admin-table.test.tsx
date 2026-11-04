@@ -41,6 +41,11 @@ function request(overrides: Partial<ReferralPayoutAdminRequest> = {}): ReferralP
     creditAmount: null,
     systemTopupCents: 0,
     invoiceRequired: false,
+    partial: false,
+    vatMode: null,
+    invoiceNetCents: null,
+    invoiceVatCents: null,
+    invoiceGrossCents: null,
     invoiceConfirmed: false,
     invoiceReference: null,
     invoiceReceivedAt: null,
@@ -95,6 +100,28 @@ describe('referral payout admin table', () => {
     expect(within(tables[1]).getByText('CREDIT12')).toBeTruthy()
     expect(within(tables[1]).getByText('Dönüştürüldü')).toBeTruthy()
     expect(within(tables[1]).queryByRole('button')).toBeNull()
+  })
+
+  it('shows partial commission, VAT mode, and invoice net, VAT, and gross values', () => {
+    const companyRequest = request({
+      taxStatus: 'company',
+      balanceCents: 100_005,
+      payoutCents: 120_006,
+      partial: true,
+      vatMode: 'added',
+      invoiceRequired: true,
+      invoiceNetCents: 100_005,
+      invoiceVatCents: 20_001,
+      invoiceGrossCents: 120_006,
+    })
+    render(<ReferralPayoutsAdminTable enabled requests={[companyRequest]} summary={summary} />)
+
+    const cashTable = screen.getAllByRole('table')[0]
+    expect(within(cashTable).getByText('Kısmi tutar')).toBeTruthy()
+    expect(within(cashTable).getByText('KDV hariç + %20')).toBeTruthy()
+    expect(within(cashTable).getByText('1.000,05 TL')).toBeTruthy()
+    expect(within(cashTable).getByText('200,01 TL')).toBeTruthy()
+    expect(within(cashTable).getAllByText('1.200,06 TL').length).toBeGreaterThan(0)
   })
 
   it('filters cash request rows by status and masked partner lookup', () => {

@@ -81,6 +81,15 @@ const COPY = {
     expenseDocument: 'Gider belgesi GLOVAL tarafından düzenlenecek',
     creditAmount: 'Eklenen AI kredisi',
     payoutAmount: 'Banka ödeme tutarı',
+    commissionAmount: 'Kullanılan komisyon',
+    partialAmount: 'Kısmi tutar',
+    fullAmount: 'Tam tutar',
+    vatMode: 'KDV modu',
+    vatIncluded: 'KDV dahil',
+    vatAdded: 'KDV hariç + %20',
+    invoiceNet: 'Net',
+    invoiceVat: 'KDV',
+    invoiceGross: 'Brüt',
     noRequests: 'Henüz ödeme talebi yok.',
     unavailable: 'Ödeme yönetim verileri yüklenemiyor. SQL taslaklarının uygulanmış ve ödeme bayraklarının açık olduğundan emin olun.',
     showIban: 'IBAN’ı göster',
@@ -169,6 +178,15 @@ const COPY = {
     expenseDocument: 'GLOVAL will issue an expense document',
     creditAmount: 'AI credits added',
     payoutAmount: 'Bank payout amount',
+    commissionAmount: 'Commission used',
+    partialAmount: 'Partial amount',
+    fullAmount: 'Full amount',
+    vatMode: 'VAT mode',
+    vatIncluded: 'VAT included',
+    vatAdded: 'VAT added on top',
+    invoiceNet: 'Net',
+    invoiceVat: 'VAT',
+    invoiceGross: 'Gross',
     noRequests: 'No payout requests yet.',
     unavailable: 'Payout admin data is unavailable. Confirm the SQL drafts are applied and the payout flags are enabled.',
     showIban: 'Show IBAN',
@@ -606,15 +624,27 @@ function FragmentRows({
           <p className="mt-1 font-mono text-[11px] text-muted-foreground" title={request.requestId}>{request.requestId.slice(0, 8)}</p>
         </TableCell>
         <TableCell>{request.method === 'cash' ? copy.cash : copy.credit}</TableCell>
-        <TableCell className="min-w-40">
+        <TableCell className="min-w-52">
           {request.method === 'cash' ? (
             <>
               <p className="font-medium tabular-nums">{formatReferralTry(request.payoutCents, language)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{copy.payoutAmount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{request.partial ? copy.partialAmount : copy.fullAmount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{copy.commissionAmount}: {formatReferralTry(request.balanceCents, language)}</p>
+              {request.vatMode && (
+                <div className="mt-2 flex flex-col gap-1 border-s border-border ps-2 text-xs text-muted-foreground">
+                  <p>{copy.vatMode}: {request.vatMode === 'included' ? copy.vatIncluded : copy.vatAdded}</p>
+                  {request.invoiceNetCents != null && <p>{copy.invoiceNet}: {formatReferralTry(request.invoiceNetCents, language)}</p>}
+                  {request.invoiceVatCents != null && <p>{copy.invoiceVat}: {formatReferralTry(request.invoiceVatCents, language)}</p>}
+                  {request.invoiceGrossCents != null && <p>{copy.invoiceGross}: {formatReferralTry(request.invoiceGrossCents, language)}</p>}
+                </div>
+              )}
             </>
           ) : (
             <>
               <p className="font-medium tabular-nums">{new Intl.NumberFormat(localeCode).format(request.creditAmount ?? 0)} {copy.credit}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{request.partial ? copy.partialAmount : copy.fullAmount}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{copy.commissionAmount}: {formatReferralTry(request.balanceCents, language)}</p>
               <p className="mt-1 text-xs text-muted-foreground">{copy.topup}: {formatReferralTry(request.systemTopupCents, language)}</p>
             </>
           )}
