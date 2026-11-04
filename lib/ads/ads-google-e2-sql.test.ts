@@ -342,6 +342,74 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     expect(charges.rows[0].count).toBe(1)
   })
 
+  it('cascades account deletion through an approved plan, connection, and credit reservation', async () => {
+    const userId = await newUser()
+    const connection = await newConnection(userId)
+    const draft = await newDraft(userId, connection.id)
+    const approval = await approvePlan({
+      userId,
+      planId: draft.plan_id,
+      connectionId: connection.id,
+      customerId: connection.customerId,
+      declarationConfirmed: true,
+      termsAccepted: true,
+    })
+    expect(approval).toMatchObject({ state: 'approved', plan_version: 1 })
+
+    const requestId = '123e4567-e89b-42d3-a456-426614174098'
+    const validation = await db.query<{ state: string }>(
+      'select * from public.ads_record_google_ads_validation_e2($1, $2, 1, $3, $4)',
+      [userId, draft.plan_id, approval.approval_id, PLAN_HASH],
+    )
+    expect(validation.rows[0].state).toBe('validated')
+    const reservation = await db.query<{ state: string }>(
+      `select * from public.ads_begin_google_ads_publish_e2(
+        $1::uuid, $2::uuid, $3::uuid, 1::integer, $4::uuid, $5::text,
+        200000::integer, 1500::integer, 15000000::bigint, 2::smallint
+      )`,
+      [userId, draft.plan_id, requestId, approval.approval_id, PLAN_HASH],
+    )
+    expect(reservation.rows[0].state).toBe('started')
+
+    const beforeDelete = await db.query<{
+      connections: number
+      plans: number
+      approvals: number
+      reservations: number
+    }>(`
+      select
+        (select count(*)::integer from public.ads_connections where user_id = $1) as connections,
+        (select count(*)::integer from public.ads_plans where user_id = $1) as plans,
+        (select count(*)::integer from public.ads_google_publish_approvals where user_id = $1) as approvals,
+        (select count(*)::integer from public.ads_google_publish_credit_reservations where user_id = $1) as reservations
+    `, [userId])
+    expect(beforeDelete.rows[0]).toEqual({ connections: 1, plans: 1, approvals: 1, reservations: 1 })
+
+    const foreignKey = await db.query<{ delete_action: string }>(`
+      select confdeltype::text as delete_action
+        from pg_constraint
+       where conrelid = 'public.ads_google_publish_approvals'::regclass
+         and confrelid = 'public.ads_connections'::regclass
+    `)
+    expect(foreignKey.rows).toEqual([{ delete_action: 'a' }])
+
+    await db.query('delete from auth.users where id = $1', [userId])
+
+    const afterDelete = await db.query<{
+      connections: number
+      plans: number
+      approvals: number
+      reservations: number
+    }>(`
+      select
+        (select count(*)::integer from public.ads_connections where user_id = $1) as connections,
+        (select count(*)::integer from public.ads_plans where user_id = $1) as plans,
+        (select count(*)::integer from public.ads_google_publish_approvals where user_id = $1) as approvals,
+        (select count(*)::integer from public.ads_google_publish_credit_reservations where user_id = $1) as reservations
+    `, [userId])
+    expect(afterDelete.rows[0]).toEqual({ connections: 0, plans: 0, approvals: 0, reservations: 0 })
+  })
+
   it('allows a campaign-level daily cap above the user aggregate daily limit', async () => {
     const userId = await newUser()
     const connection = await newConnection(userId)

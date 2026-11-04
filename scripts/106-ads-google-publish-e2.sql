@@ -83,7 +83,7 @@ create table if not exists public.ads_google_publish_approvals (
   plan_id uuid not null references public.ads_plans(id) on delete cascade,
   plan_version integer not null check (plan_version > 0),
   plan_hash text not null check (plan_hash ~ '^[0-9a-f]{64}$'),
-  connection_id uuid not null references public.ads_connections(id) on delete restrict,
+  connection_id uuid not null references public.ads_connections(id) on delete no action,
   customer_id text not null check (customer_id ~ '^[0-9-]{1,32}$'),
   currency text not null check (currency ~ '^[A-Z]{3}$'),
   daily_budget_minor integer not null check (daily_budget_minor > 0),
