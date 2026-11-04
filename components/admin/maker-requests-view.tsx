@@ -92,7 +92,12 @@ export function AdminMakerRequestsView({
                         <p className="truncate font-semibold text-foreground">{item.full_name}</p>
                         <p className="mt-1 break-all text-sm text-muted-foreground">{item.email}</p>
                       </div>
-                      <StatusBadge tone={statusTone(item.status)}>{copy.statuses[item.status]}</StatusBadge>
+                      <StatusBadge
+                    tone={statusTone(item.status)}
+                    className={item.status === 'new' ? 'bg-brand/15 text-brand' : undefined}
+                  >
+                    {copy.statuses[item.status]}
+                  </StatusBadge>
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
                       <span>{formCopy.budgets[item.budget_range]}</span>
@@ -134,7 +139,12 @@ export function AdminMakerRequestsView({
                 </Td>
                 <Td>{item.phone}</Td>
                 <Td>{formCopy.budgets[item.budget_range]}</Td>
-                <Td><StatusBadge tone={statusTone(item.status)}>{copy.statuses[item.status]}</StatusBadge></Td>
+                <Td><StatusBadge
+                    tone={statusTone(item.status)}
+                    className={item.status === 'new' ? 'bg-brand/15 text-brand' : undefined}
+                  >
+                    {copy.statuses[item.status]}
+                  </StatusBadge></Td>
                 <Td><time dateTime={item.created_at}>{formatDate(item.created_at, locale, copy.unknown)}</time></Td>
                 <Td className="text-right">
                   <Link href={`/admin/maker-requests/${item.id}`} className="text-sm font-medium text-brand underline-offset-4 hover:underline">

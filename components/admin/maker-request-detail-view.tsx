@@ -90,7 +90,14 @@ export function MakerRequestDetailView({ request }: { request: MakerRequest }) {
       <PageHeader
         title={request.full_name}
         subtitle={request.email}
-        action={<StatusBadge tone={statusTone(request.status)}>{copy.statuses[request.status]}</StatusBadge>}
+        action={(
+      <StatusBadge
+        tone={statusTone(request.status)}
+        className={request.status === 'new' ? 'bg-brand/15 text-brand' : undefined}
+      >
+        {copy.statuses[request.status]}
+      </StatusBadge>
+    )}
       />
 
       <Panel title={copy.title}>
