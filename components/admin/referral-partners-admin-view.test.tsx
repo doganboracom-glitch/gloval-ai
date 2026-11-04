@@ -34,6 +34,7 @@ describe('ReferralPartnersAdminView', () => {
     expect(html).toContain('m***@example.test')
     expect(html).not.toContain('member@example.test')
     expect(html).toContain('4821')
+    expect(html).not.toMatch(/commission|payout|TRY|₺|%/iu)
   })
 
   it('renders English labels and localized counts', () => {
@@ -44,5 +45,6 @@ describe('ReferralPartnersAdminView', () => {
     expect(html).toContain('Referral code')
     expect(html).toContain('Clicks')
     expect(html).toContain('Signups')
+    expect(html).not.toMatch(/commission|payout|TRY|₺|%/iu)
   })
 })

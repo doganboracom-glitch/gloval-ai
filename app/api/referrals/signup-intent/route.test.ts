@@ -51,6 +51,7 @@ describe('POST /api/referrals/signup-intent', () => {
 
     expect(response.status).toBe(204)
     expect(response.cookies.getAll()).toHaveLength(0)
+    expect(response.headers.get('set-cookie')).toBeNull()
     expect(createSignupIntentForReferral).not.toHaveBeenCalled()
   })
 

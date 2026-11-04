@@ -343,7 +343,15 @@ export function ReferralPartnerCard({
               </div>
             </form>
           )}
-          {copyState === 'failed' && <p role="status" className="text-sm text-destructive">{copy.copyFailed}</p>}
+          {copyState !== 'idle' && (
+            <p
+              role="status"
+              aria-live="polite"
+              className={copyState === 'failed' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}
+            >
+              {copyState === 'failed' ? copy.copyFailed : copy.copied}
+            </p>
+          )}
           {notice && partner && <p role="status" className="text-sm text-primary">{notice}</p>}
         </CardContent>
       </Card>

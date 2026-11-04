@@ -11,10 +11,9 @@ export const REFERRAL_TERMS = {
     ],
     sections: [
       {
-        heading: '1. Program ve komisyon kuralı',
+        heading: '1. Program ve ödeme koşulları',
         paragraphs: [
-          'Yönlendirdiğiniz yeni bir müşteri, Gloval AI hesabı oluşturup platformun ücretli planı için ilk ödemesini başarıyla yaptığında, uygun işlem tutarı üzerinden %20 komisyon öngörülür. Hesaplama KDV hariç tutar üzerinden ve müşteri başına yalnızca bir kez yapılır.',
-          'İlk uygun ödemenin ardından 14 günlük bekleme süresi uygulanır. Birikmiş ödenebilir tutar 1.000 TL eşiğine ulaştığında ödeme elle yapılır. Bu panel komisyon, bakiye veya ödeme hesaplamaz, göstermez ya da ödeme talimatı oluşturmaz.',
+          'Yönlendirme kayıtları programın geçerli şartlarına göre değerlendirilir. Ödeme koşulları ayrıca duyurulacaktır.',
         ],
       },
       {
@@ -28,13 +27,13 @@ export const REFERRAL_TERMS = {
         heading: '3. Tanıtım kuralları',
         paragraphs: [
           '“gloval” markalı kelimesini arama reklamlarında anahtar kelime olarak satın alamaz veya reklam metninde yanıltıcı biçimde kullanamazsınız. Gloval AI adına yetkili olduğunuzu ima edemezsiniz.',
-          'Yanıltıcı vaat, garanti kazanç iddiası, istenmeyen toplu ileti, sahte hesap, marka taklidi veya yürürlükteki mevzuata aykırı tanıtım yapılamaz.',
+          'Yanıltıcı veya kanıtlanmamış gelir beyanları, istenmeyen toplu ileti, sahte hesap, marka taklidi veya yürürlükteki mevzuata aykırı tanıtım yapılamaz.',
         ],
       },
       {
         heading: '4. İade, iptal ve geçersiz işlemler',
         paragraphs: [
-          'İlk ücretli plan ödemesi iade edilir, iptal edilir, ters ibrazla geri alınır veya geçersiz işlem olarak belirlenirse ilgili yönlendirme uygun sayılmaz ve bu işlem için komisyon hakkı doğmaz. Sahtecilik ya da kuralları aşma şüphesinde kayıtlar incelenene kadar yönlendirmeler bekletilebilir.',
+          'İlk ücretli plan ödemesi iade edilir, iptal edilir, ters ibrazla geri alınır veya geçersiz işlem olarak belirlenirse ilgili yönlendirme uygun sayılmaz. Sahtecilik ya da kuralları aşma şüphesinde yönlendirmeler inceleme tamamlanana kadar bekletilebilir.',
         ],
       },
       {
@@ -66,10 +65,9 @@ export const REFERRAL_TERMS = {
     ],
     sections: [
       {
-        heading: '1. Program and commission rule',
+        heading: '1. Program and payment terms',
         paragraphs: [
-          'When a new customer you refer creates a Gloval AI account and successfully makes their first payment for a paid platform plan, a 20% commission is contemplated on the eligible transaction amount. The calculation is exclusive of VAT and applies only once per customer.',
-          'A 14-day waiting period applies after the first eligible payment. Manual payment is made once the accrued payable amount reaches TRY 1,000. This dashboard does not calculate or display commission or balances, and it does not initiate payments.',
+          'Referral records are evaluated under the applicable program terms. Payment terms will be announced separately.',
         ],
       },
       {
@@ -83,13 +81,13 @@ export const REFERRAL_TERMS = {
         heading: '3. Promotion rules',
         paragraphs: [
           'You may not buy the branded keyword “gloval” for search advertising or use it misleadingly in ad copy. You may not imply that you are authorized to act on behalf of Gloval AI.',
-          'Misleading statements, guaranteed-earnings claims, unsolicited bulk messages, fake accounts, impersonation, or promotion that violates applicable law are prohibited.',
+          'Misleading or unsubstantiated income claims, unsolicited bulk messages, fake accounts, impersonation, or promotion that violates applicable law are prohibited.',
         ],
       },
       {
         heading: '4. Refunds, cancellations, and invalid transactions',
         paragraphs: [
-          'If the first paid-plan payment is refunded, cancelled, charged back, or determined to be invalid, the referral is not eligible and no commission is due for that transaction. Referrals may be held for review when fraud or circumvention is suspected.',
+          'If the first paid-plan payment is refunded, cancelled, charged back, or determined to be invalid, the referral may be treated as ineligible. Referrals may be held for review when fraud or circumvention is suspected.',
         ],
       },
       {

@@ -32,6 +32,7 @@ describe('referral partner settings card', () => {
     }))
 
     expect(html).toContain('https://gloval.ai/?ref=PARTNER1234')
+    expect(html).toContain('Copy link')
     expect(html).toContain('4321')
     expect(html).not.toContain('TR123456789012345678901234')
     expect(html).toContain('Close partnership')
@@ -45,6 +46,10 @@ describe('referral partner settings card', () => {
     expect(termsPosition).toBeGreaterThanOrEqual(0)
     expect(checkboxPosition).toBeGreaterThan(termsPosition)
     expect(html).toContain('overflow-y-auto')
+    expect(html).toContain('Ödeme koşulları ayrıca duyurulacaktır.')
+    expect(html).not.toContain('%20')
+    expect(html).not.toContain('1.000 TL')
+    expect(html).not.toContain('14 günlük')
     expect(html).toContain('Şartların tamamını aç')
     expect(html).toContain('Türkiye IBAN')
   })

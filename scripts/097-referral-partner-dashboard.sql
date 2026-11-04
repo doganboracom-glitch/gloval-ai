@@ -1,4 +1,4 @@
--- NOT APPLIED by this change. Apply after 095-referral-core.sql.
+-- NOT APPLIED by this change. Apply after 095-referral-core.sql and 096-maker-requests.sql.
 -- The RPC returns only partner aggregates and, for an authenticated owner
 -- request, the 20 most recent referred customers. Email values are consumed
 -- and masked by server code before any result reaches a client.

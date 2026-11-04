@@ -33,8 +33,17 @@ describe('referral dashboard panel', () => {
     expect(html).toContain('20%')
     expect(html).toContain('m***@gmail.com')
     expect(html).not.toContain('maria@gmail.com')
-    expect(html).toContain('Commission and payment: coming soon')
+    expect(html).toContain('Commission payments have not started yet; you can track your referral statistics here.')
+    expect(html).not.toMatch(/(?:₺|\bTRY\b|\$|1,000)/u)
     expect(html).not.toContain('IBAN')
     expect(html).not.toContain('paymentPageUrl')
+  })
+
+  it('shows the Turkish no-payment status without currency or payout amounts', () => {
+    state.lang = 'tr'
+    const html = renderToStaticMarkup(createElement(ReferralDashboardPanel, { data: dashboardData }))
+
+    expect(html).toContain('Komisyon ödemeleri henüz başlamadı; yönlendirme istatistiklerin burada takip edilir.')
+    expect(html).not.toMatch(/(?:₺|\bTRY\b|\bTL\b|\$|1\.000)/u)
   })
 })

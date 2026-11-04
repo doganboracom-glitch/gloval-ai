@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const CORE_SQL = readFileSync(path.join(ROOT, 'scripts/095-referral-core.sql'), 'utf8')
-const DASHBOARD_SQL = readFileSync(path.join(ROOT, 'scripts/096-referral-partner-dashboard.sql'), 'utf8')
+const DASHBOARD_SQL = readFileSync(path.join(ROOT, 'scripts/097-referral-partner-dashboard.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -97,7 +97,7 @@ async function addAttribution(input: {
   )
 }
 
-describe('scripts/096-referral-partner-dashboard.sql', () => {
+describe('scripts/097-referral-partner-dashboard.sql', () => {
   it('aggregates clicks, referrals, verification, paid customers, and the latest customer rows', async () => {
     const ownerId = await newUser('owner@example.test')
     const { id: partnerId, code } = await newPartner(ownerId)

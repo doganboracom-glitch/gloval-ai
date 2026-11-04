@@ -218,6 +218,41 @@ describe('captureReferralClick', () => {
     expect(state.rpcCalls).toHaveLength(0)
   })
 
+  it.each(['closed', 'suspended'] as const)(
+    'rejects clicks and signup attribution when the partner is %s',
+    async (status) => {
+      state.partners[0].status = status
+      const inactiveClick = await captureReferralClick({
+        code: 'PARTNER01',
+        existingCookie: null,
+        ipAddress: IP,
+        now: NOW,
+      })
+
+      expect(inactiveClick).toEqual({ handled: true, cookieToken: null })
+      expect(state.rpcCalls).toHaveLength(0)
+
+      state.partners[0].status = 'active'
+      const referralToken = await referralCookie()
+      const intentToken = await seedIntent('email')
+      state.users[REFERRED_USER_ID] = {
+        id: REFERRED_USER_ID,
+        created_at: new Date(NOW + 1_000).toISOString(),
+      }
+      state.partners[0].status = status
+
+      await expect(
+        saveEmailReferralAtSignup({
+          userId: REFERRED_USER_ID,
+          intentToken,
+          referralCookie: referralToken,
+          now: NOW + 2_000,
+        }),
+      ).resolves.toBe(false)
+      expect(state.attributions).toHaveLength(0)
+    },
+  )
+
   it('sets the first-touch cookie and increments a unique click only once per IP/day', async () => {
     const first = await captureReferralClick({
       code: 'partner01',
