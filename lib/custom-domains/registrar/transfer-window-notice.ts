@@ -97,10 +97,10 @@ const COPY = {
       preview: (domain: string) => `Transfer protection for ${domain} is active again.`,
       title: 'Transfer lock re-enabled',
       body: (domain: string) =>
-        `The transfer lock for <strong>${escape(domain)}</strong> was automatically re-enabled. Your domain cannot be transferred to another registrar.`,
+        `The transfer lock for <strong>${escape(domain)}</strong> was automatically re-enabled. Your domain cannot be transferred to another company.`,
       cta: 'Open the domain panel',
       text: (domain: string) =>
-        `The transfer lock for ${domain} was automatically re-enabled. Your domain cannot be transferred to another registrar.`,
+        `The transfer lock for ${domain} was automatically re-enabled. Your domain cannot be transferred to another company.`,
     },
   },
 } as const
@@ -118,29 +118,30 @@ function formatRelockAt(value: string | undefined, lang: EmailLang): string {
 
 export async function sendTransferWindowNotice(input: TransferWindowNoticeInput): Promise<boolean> {
   if (!input.email.trim()) return false
-  const copy = COPY[input.lang][input.kind]
-  const notices = COPY[input.lang]
-  const panelUrl = `https://gloval.ai/dashboard/domains/${encodeURIComponent(input.customDomainId)}`
-  const relockAt = formatRelockAt(input.relockAt, input.lang)
-  const body =
-    input.kind === 'extended'
-      ? notices.extended.body(input.domain, relockAt)
-      : input.kind === 'opened'
-        ? notices.opened.body(input.domain)
-        : input.kind === 'reminder'
-          ? notices.reminder.body(input.domain)
-          : notices.relocked.body(input.domain)
-  const text =
-    input.kind === 'extended'
-      ? notices.extended.text(input.domain, relockAt)
-      : input.kind === 'opened'
-        ? notices.opened.text(input.domain)
-        : input.kind === 'reminder'
-          ? notices.reminder.text(input.domain)
-          : notices.relocked.text(input.domain)
-  const idempotencySuffix = input.kind === 'extended' ? `:${input.extensionCount ?? 0}` : ''
 
   try {
+    const copy = COPY[input.lang][input.kind]
+    const notices = COPY[input.lang]
+    const panelUrl = `https://gloval.ai/dashboard/domains/${encodeURIComponent(input.customDomainId)}`
+    const relockAt = formatRelockAt(input.relockAt, input.lang)
+    const body =
+      input.kind === 'extended'
+        ? notices.extended.body(input.domain, relockAt)
+        : input.kind === 'opened'
+          ? notices.opened.body(input.domain)
+          : input.kind === 'reminder'
+            ? notices.reminder.body(input.domain)
+            : notices.relocked.body(input.domain)
+    const text =
+      input.kind === 'extended'
+        ? notices.extended.text(input.domain, relockAt)
+        : input.kind === 'opened'
+          ? notices.opened.text(input.domain)
+          : input.kind === 'reminder'
+            ? notices.reminder.text(input.domain)
+            : notices.relocked.text(input.domain)
+    const idempotencySuffix = input.kind === 'extended' ? `:${input.extensionCount ?? 0}` : ''
+
     return await sendTransactionalEmail({
       to: input.email,
       subject: copy.subject(input.domain),

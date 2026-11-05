@@ -30,12 +30,15 @@ export type DomainAuditStage =
   | 'unlock_readback'
   | 'window_insert'
   | 'code_fetch'
+  | 'notice'
 
 export type DomainAuditDetails = {
   outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
   reason?: DomainAuditReason
   stage?: DomainAuditStage
   providerCode?: string
+  /** Error class name only (`/^[A-Za-z0-9_]{1,40}$/`); never a message or content. */
+  errorName?: string
   startDateShape?: string
   changed?: boolean
   nameserverCount?: number
@@ -52,6 +55,7 @@ const DETAIL_KEYS = [
   'reason',
   'stage',
   'providerCode',
+  'errorName',
   'startDateShape',
   'changed',
   'nameserverCount',
@@ -82,6 +86,7 @@ const AUDIT_STAGES = new Set<DomainAuditStage>([
   'unlock_readback',
   'window_insert',
   'code_fetch',
+  'notice',
 ])
 
 function isSafeStartDateShape(value: string): boolean {
@@ -105,6 +110,10 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
     }
     if (key === 'providerCode') {
       if (typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value)) out[key] = value
+      continue
+    }
+    if (key === 'errorName') {
+      if (typeof value === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(value)) out[key] = value
       continue
     }
     if (key === 'startDateShape') {
