@@ -54,8 +54,11 @@ export function ReferralCustomerDetails({ customers }: { customers: ReferralCust
 
   return (
     <details id="referral-customer-details" aria-label={copy.details} className="rounded-md border border-border/70">
-      <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-foreground marker:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
-        {copy.details}
+      <summary
+        aria-label={`${copy.details}, ${customers.length} ${copy.customerCount}`}
+        className="cursor-pointer px-3 py-2 text-sm font-medium text-foreground marker:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        {copy.details}{' '}
         <span className="ms-2 font-normal text-muted-foreground">
           ({customers.length} {copy.customerCount})
         </span>

@@ -102,23 +102,25 @@ export function ReferralDashboardPanel({
         className="mt-6 scroll-mt-24"
       >
         <Card className="border-border/80 bg-card/70">
-          <CardHeader className="flex-row items-center justify-between gap-3 p-4 sm:p-5">
-            <h2 id="referral-dashboard-title" className="text-base font-semibold leading-6 tracking-tight text-foreground">
-              {copy.title}
-            </h2>
-            <Link
-              href="/settings#satis-ortakligi"
-              className="shrink-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            >
-              {copy.details}
-            </Link>
+          <CardHeader className="p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="referral-dashboard-title" className="text-base font-semibold leading-6 tracking-tight text-foreground">
+                {copy.title}
+              </h2>
+              <Link
+                href="/settings#satis-ortakligi"
+                className="shrink-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {copy.details}
+              </Link>
+            </div>
           </CardHeader>
           {data ? (
             <CardContent className="flex flex-col gap-3 px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
               <div role="group" aria-label={copy.link} className="flex min-w-0 items-center gap-2">
                 <code
                   title={referralUrl}
-                  className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/30 px-3 py-2 text-sm leading-5 text-foreground"
+                  className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-sm leading-5 text-foreground"
                 >
                   {referralUrl}
                 </code>
