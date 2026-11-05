@@ -13,6 +13,7 @@ import { ADS_PATH } from '@/lib/ads/feature-flag'
 
 type AdsDashboardClientProps = {
   address: string | null
+  initialPlanId?: string | null
   connections: GoogleAdsConnectionView[]
   pendingFlowId: string | null
   googleStatus: string | null
@@ -21,6 +22,7 @@ type AdsDashboardClientProps = {
 
 export function AdsDashboardClient({
   address,
+  initialPlanId = null,
   connections,
   pendingFlowId,
   googleStatus,
@@ -63,6 +65,7 @@ export function AdsDashboardClient({
             enabled={publishEnabled}
             connections={connections}
             initialAddress={address}
+            initialPlanId={initialPlanId}
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2">

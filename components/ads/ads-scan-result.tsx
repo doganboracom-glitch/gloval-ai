@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { useLanguage } from '@/components/language-provider'
+import { AdsHandoffAction } from '@/components/ads/ads-handoff-action'
 import { AdsNewScanButton } from '@/components/ads/sections/ads-new-scan-button'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
 
@@ -160,14 +161,7 @@ export function AdsScanResult({ result, onNewScan }: { result: PublicScanResult;
       <BudgetPanel result={result} />
       <p className="text-sm text-muted-foreground">{copy.previewNote}</p>
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled
-          className="inline-flex h-10 cursor-not-allowed items-center rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground"
-        >
-          {copy.publishSoon}
-          <span className="ms-2 rounded-full bg-background px-2 py-0.5 text-xs">{copy.comingSoon}</span>
-        </button>
+        <AdsHandoffAction result={result} />
         <AdsNewScanButton onClick={onNewScan}>{copy.newScan}</AdsNewScanButton>
       </div>
     </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { AlertCircle, Check, RefreshCw, Save, ShieldCheck } from 'lucide-react'
@@ -21,6 +21,10 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import { GoogleAdsPublishReview } from '@/components/ads/google-ads-publish-review'
+import { GoogleAdsAiPlanner } from '@/components/ads/google-ads-ai-planner'
+import { AiSuggestionBadge, GoogleAdsSearchPreview } from '@/components/ads/google-ads-search-preview'
+import { currencyDigits, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
+import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
 import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
@@ -79,6 +83,7 @@ type ApiPayload = {
   before?: unknown
   target?: unknown
   after?: unknown
+  suggestion?: PlanSuggestion
 }
 
 type PlanForm = {
@@ -97,6 +102,19 @@ type PlanForm = {
   headlines: string
   descriptions: string
   displayUrl: string
+}
+
+type AiFieldKey = keyof PlanForm | 'dailyBudget' | 'budgetCap'
+
+const ALL_PLAN_FIELDS: AiFieldKey[] = [
+  'brand', 'sector', 'sectorLabel', 'services', 'language', 'keywords', 'negativeKeywords', 'country', 'cities',
+  'finalUrl', 'modelPolicyCategory', 'modelPolicyEvidence', 'headlines', 'descriptions', 'displayUrl',
+]
+const HEADLINE_LIMIT = 30
+const DESCRIPTION_LIMIT = 90
+
+function countOver(value: string, limit: number): number {
+  return splitLines(value).filter((line) => line.length > limit).length
 }
 
 class WorkspaceApiError extends Error {
@@ -139,14 +157,6 @@ function splitLines(value: string): string[] {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-}
-
-function currencyDigits(currency: string): number {
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2
-  } catch {
-    return 2
-  }
 }
 
 function majorToMinor(value: string, currency: string): number | null {
@@ -331,6 +341,7 @@ function TextField({
   type = 'text',
   description,
   disabled = false,
+  aiSuggested = false,
 }: {
   id: string
   label: string
@@ -340,10 +351,11 @@ function TextField({
   type?: string
   description?: string
   disabled?: boolean
+  aiSuggested?: boolean
 }) {
   return (
     <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{label}{aiSuggested ? <AiSuggestionBadge /> : null}</FieldLabel>
       <Input id={id} type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} disabled={disabled} />
       {description ? <FieldDescription>{description}</FieldDescription> : null}
     </Field>
@@ -359,6 +371,8 @@ function TextAreaField({
   description,
   disabled = false,
   rows = 4,
+  aiSuggested = false,
+  warning,
 }: {
   id: string
   label: string
@@ -368,10 +382,12 @@ function TextAreaField({
   description?: string
   disabled?: boolean
   rows?: number
+  aiSuggested?: boolean
+  warning?: string | null
 }) {
   return (
     <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{label}{aiSuggested ? <AiSuggestionBadge /> : null}</FieldLabel>
       <textarea
         id={id}
         rows={rows}
@@ -381,6 +397,7 @@ function TextAreaField({
         disabled={disabled}
         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       />
+      {warning ? <p role="status" className="text-sm text-destructive">{warning}</p> : null}
       {description ? <FieldDescription>{description}</FieldDescription> : null}
     </Field>
   )
@@ -390,10 +407,12 @@ export function GoogleAdsWorkspace({
   enabled,
   connections,
   initialAddress,
+  initialPlanId = null,
 }: {
   enabled: boolean
   connections: GoogleAdsConnectionView[]
   initialAddress: string | null
+  initialPlanId?: string | null
 }) {
   const { lang } = useLanguage()
   const isTr = lang === 'tr'
@@ -518,6 +537,12 @@ export function GoogleAdsWorkspace({
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [showPublishReview, setShowPublishReview] = useState(false)
   const [finalPublishConfirmed, setFinalPublishConfirmed] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [aiFields, setAiFields] = useState<ReadonlySet<AiFieldKey>>(() => new Set())
+  const [notices, setNotices] = useState<string[]>([])
+  const handoffApplied = useRef(false)
+  const isAi = (key: AiFieldKey) => aiFields.has(key)
 
   const { data: plansData, error: plansError, isLoading: plansLoading, mutate: mutatePlans } = useSWR<PlansPayload>(
     enabled ? '/api/ads/google/plans' : null,
@@ -579,14 +604,116 @@ export function GoogleAdsWorkspace({
     }
   })() : null
 
+  useEffect(() => {
+    if (!initialPlanId || handoffApplied.current) return
+    const handoffPlan = plans.find((plan) => plan.id === initialPlanId)
+    if (!handoffPlan) return
+    handoffApplied.current = true
+    selectPlan(handoffPlan, true)
+    setMessage(isTr
+      ? 'Plan taramadan taslak olarak aktarıldı. Google Ads’te henüz değişiklik yapılmadı.'
+      : 'The plan was transferred from the scan as a draft. No Google Ads changes were made.')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectPlan only sets state
+  }, [initialPlanId, plans, isTr])
+
+  const applyScanResult = useCallback(async (result: PublicScanResult) => {
+    if (!selectedConnection) return
+    setPending('suggest')
+    setErrorCode(null)
+    setMessage(null)
+    try {
+      const response = await postJson('/api/ads/google/plans/suggest', 'POST', {
+        connectionId: selectedConnection.id,
+        result,
+      })
+      const suggestion = response.suggestion
+      if (!suggestion) throw new WorkspaceApiError('provider_error')
+      const currency = suggestion.budget?.currency ?? selectedConnection.currency ?? 'TRY'
+      const nextNotices: string[] = []
+      if (suggestion.budget?.clamped) {
+        nextNotices.push(isTr
+          ? `Önerilen bütçe, sunucudaki üst sınır olan ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, true)} / gün değerine indirildi.`
+          : `The suggested budget was lowered to the server ceiling of ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, false)} / day.`)
+      }
+      if (suggestion.budget?.approximate) {
+        nextNotices.push(isTr
+          ? 'Bütçe, hesabınızın para birimine yaklaşık dönüşümle hesaplandı. Kaydetmeden önce kontrol edin.'
+          : 'The budget was converted to your account currency approximately. Check it before saving.')
+      }
+      if (!suggestion.budget) {
+        nextNotices.push(errorText(suggestion.budgetIssue ?? 'invalid_budget', isTr))
+      }
+      const dropped = suggestion.adjustments.headlinesDropped + suggestion.adjustments.descriptionsDropped
+      if (dropped > 0) {
+        nextNotices.push(isTr
+          ? `${dropped} reklam satırı Google Ads kurallarına uymadığı için çıkarıldı.`
+          : `${dropped} ad lines were removed because they did not meet Google Ads rules.`)
+      }
+      if (suggestion.adjustments.toppedUp) {
+        nextNotices.push(isTr
+          ? 'Eksik kalan reklam satırları sitenizin adı ve hizmetlerinden tamamlandı.'
+          : 'Missing ad lines were completed from your site name and services.')
+      }
+      setPlanId(null)
+      setForm(formFromPlan(suggestion.plan as Record<string, unknown>))
+      setDailyBudget(suggestion.budget ? minorToMajor(suggestion.budget.dailyMinor, currency) : '')
+      setBudgetCap(suggestion.budget ? minorToMajor(suggestion.budget.capMinor, currency) : '')
+      setEuPoliticalAdvertising('no')
+      setConfirmedEu(false)
+      setAcceptedTerms(false)
+      setShowPublishReview(false)
+      setFinalPublishConfirmed(false)
+      const aiKeys = new Set<AiFieldKey>(ALL_PLAN_FIELDS)
+      if (suggestion.budget) {
+        aiKeys.add('dailyBudget')
+        aiKeys.add('budgetCap')
+      }
+      setAiFields(aiKeys)
+      setNotices(nextNotices)
+      setAdvancedOpen(false)
+      setEditorOpen(true)
+      setMessage(isTr
+        ? 'Plan sitenizden hazırlandı. Kontrol edip taslak olarak kaydedin; Google Ads’te henüz değişiklik yapılmadı.'
+        : 'The plan was prepared from your site. Review and save it as a draft; nothing has changed in Google Ads yet.')
+    } catch (error) {
+      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+    } finally {
+      setPending(null)
+    }
+  }, [selectedConnection, isTr])
+
   if (!enabled) return null
 
   function updateForm<K extends keyof PlanForm>(key: K, value: PlanForm[K]) {
     setForm((current) => ({ ...current, [key]: value }))
+    clearAi(key)
+  }
+
+  function clearAi(key: AiFieldKey) {
+    setAiFields((current) => {
+      if (!current.has(key)) return current
+      const next = new Set(current)
+      next.delete(key)
+      return next
+    })
+  }
+
+  function startManual(address: string) {
+    clearSelection()
+    if (address) {
+      const normalized = address.startsWith('http') ? address : `https://${address}`
+      setForm((current) => ({ ...current, finalUrl: normalized, displayUrl: normalized }))
+    }
+    setEditorOpen(true)
+    setAdvancedOpen(true)
   }
 
   function clearSelection() {
     setPlanId(null)
+    setEditorOpen(false)
+    setAdvancedOpen(false)
+    setAiFields(new Set())
+    setNotices([])
     setForm(defaultPlanForm(initialAddress))
     setDailyBudget('1000')
     setBudgetCap('1000')
@@ -599,7 +726,11 @@ export function GoogleAdsWorkspace({
     setFinalPublishConfirmed(false)
   }
 
-  function selectPlan(plan: PlanRow) {
+  function selectPlan(plan: PlanRow, fromAi = false) {
+    setEditorOpen(true)
+    setAdvancedOpen(false)
+    setNotices([])
+    setAiFields(fromAi ? new Set<AiFieldKey>([...ALL_PLAN_FIELDS, 'dailyBudget', 'budgetCap']) : new Set())
     setPlanId(plan.id)
     setConnectionId(plan.connection_id ?? '')
     setForm(formFromPlan(plan.plan))
@@ -795,95 +926,152 @@ export function GoogleAdsWorkspace({
       ) : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>{copy.builder}</CardTitle>
-            <CardDescription>{copy.createHint}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="google-ads-workspace-account">{copy.selectAccount}</FieldLabel>
-                <select
-                  id="google-ads-workspace-account"
-                  value={connectionId}
-                  onChange={(event) => setConnectionId(event.target.value)}
-                  disabled={!isEditable || pending !== null}
-                  className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">{copy.selectAccount}</option>
-                  {availableConnections.map((connection) => (
-                    <option key={connection.id} value={connection.id}>
-                      {connection.name ?? connection.externalAccountId} · {connection.currency ?? '—'}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextField id="google-ads-brand" label={copy.brand} value={form.brand} onChange={(value) => updateForm('brand', value)} disabled={!isEditable || pending !== null} />
-                <Field>
-                  <FieldLabel htmlFor="google-ads-sector">{formCopy.sector}</FieldLabel>
-                  <select id="google-ads-sector" value={form.sector} onChange={(event) => updateForm('sector', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    {PLAN_SECTORS.map((sector) => <option key={sector} value={sector}>{sector.replaceAll('_', ' ')}</option>)}
-                  </select>
-                </Field>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextField id="google-ads-sector-label" label={copy.sectorLabel} value={form.sectorLabel} onChange={(value) => updateForm('sectorLabel', value)} disabled={!isEditable || pending !== null} />
-                <Field>
-                  <FieldLabel htmlFor="google-ads-language">{copy.language}</FieldLabel>
-                  <select id="google-ads-language" value={form.language} onChange={(event) => updateForm('language', event.target.value as 'tr' | 'en')} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option value="tr">Türkçe</option><option value="en">English</option>
-                  </select>
-                </Field>
-              </div>
-              <TextAreaField id="google-ads-services" label={copy.services} value={form.services} onChange={(value) => updateForm('services', value)} disabled={!isEditable || pending !== null} rows={2} />
-              <TextField id="google-ads-url" label={copy.url} value={form.finalUrl} onChange={(value) => { updateForm('finalUrl', value); if (!form.displayUrl) updateForm('displayUrl', value) }} placeholder="https://example.com" disabled={!isEditable || pending !== null} />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="google-ads-country">{copy.country}</FieldLabel>
-                  <select id="google-ads-country" value={form.country} onChange={(event) => updateForm('country', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    {PLAN_COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
-                  </select>
-                </Field>
-                <TextAreaField id="google-ads-cities" label={copy.cities} value={form.cities} onChange={(value) => updateForm('cities', value)} disabled={!isEditable || pending !== null} rows={2} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={setDailyBudget} disabled={!isEditable || pending !== null} />
-                <TextField id="google-ads-budget-cap" label={`${copy.cap} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={budgetCap} onChange={setBudgetCap} disabled={!isEditable || pending !== null} />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextAreaField id="google-ads-keywords" label={copy.keywords} value={form.keywords} onChange={(value) => updateForm('keywords', value)} disabled={!isEditable || pending !== null} />
-                <TextAreaField id="google-ads-negative-keywords" label={copy.negatives} value={form.negativeKeywords} onChange={(value) => updateForm('negativeKeywords', value)} disabled={!isEditable || pending !== null} />
-              </div>
-              <TextAreaField id="google-ads-headlines" label={copy.headlines} value={form.headlines} onChange={(value) => updateForm('headlines', value)} disabled={!isEditable || pending !== null} />
-              <TextAreaField id="google-ads-descriptions" label={copy.descriptions} value={form.descriptions} onChange={(value) => updateForm('descriptions', value)} disabled={!isEditable || pending !== null} />
-              <TextField id="google-ads-display-url" label={copy.displayUrl} value={form.displayUrl} onChange={(value) => updateForm('displayUrl', value)} disabled={!isEditable || pending !== null} />
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field>
-                  <FieldLabel htmlFor="google-ads-policy-category">{copy.policyCategory}</FieldLabel>
-                  <select id="google-ads-policy-category" value={form.modelPolicyCategory} onChange={(event) => updateForm('modelPolicyCategory', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    {['none', 'health', 'financial', 'gambling', 'adult', 'drugs', 'alcohol', 'tobacco', 'other'].map((category) => <option key={category} value={category}>{category}</option>)}
-                  </select>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="google-ads-policy-evidence">{copy.policyEvidence}</FieldLabel>
-                  <select id="google-ads-policy-evidence" value={form.modelPolicyEvidence} onChange={(event) => updateForm('modelPolicyEvidence', event.target.value as 'none' | 'ambiguous')} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option value="none">{isTr ? 'Belirgin değil' : 'No indication'}</option>
-                    <option value="ambiguous">{isTr ? 'Belirsiz' : 'Ambiguous'}</option>
-                  </select>
-                </Field>
-              </div>
-              <Button type="button" onClick={() => void saveDraft()} disabled={!selectedConnection || !isEditable || pending !== null}>
-                <Save data-icon="inline-start" aria-hidden="true" />{pending === 'save' ? copy.saving : copy.saveDraft}
-              </Button>
-            </FieldGroup>
-            <Alert variant="destructive">
-              <AlertCircle aria-hidden="true" />
-              <AlertDescription>{copy.restricted}</AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
+        <div className="flex min-w-0 flex-col gap-5">
+          <GoogleAdsAiPlanner
+            initialAddress={initialAddress}
+            applying={pending === 'suggest'}
+            disabledReason={!selectedConnection ? copy.noConnection : !isEditable ? (isTr ? 'Bu plan artık düzenlenemez. Yeni bir plan başlatın.' : 'This plan can no longer be edited. Start a new plan.') : null}
+            onResult={applyScanResult}
+            onManual={startManual}
+          />
+
+          {editorOpen ? (
+            <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{copy.builder}</CardTitle>
+                  <CardDescription>{copy.createHint}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-5">
+                  {notices.length > 0 ? (
+                    <Alert>
+                      <AlertCircle aria-hidden="true" />
+                      <AlertDescription className="flex flex-col gap-1">
+                        {notices.map((notice) => <span key={notice}>{notice}</span>)}
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="google-ads-workspace-account">{copy.selectAccount}</FieldLabel>
+                      <select
+                        id="google-ads-workspace-account"
+                        value={connectionId}
+                        onChange={(event) => setConnectionId(event.target.value)}
+                        disabled={!isEditable || pending !== null}
+                        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <option value="">{copy.selectAccount}</option>
+                        {availableConnections.map((connection) => (
+                          <option key={connection.id} value={connection.id}>
+                            {connection.name ?? connection.externalAccountId} · {connection.currency ?? '—'}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <TextField id="google-ads-brand" label={copy.brand} value={form.brand} onChange={(value) => updateForm('brand', value)} disabled={!isEditable || pending !== null} aiSuggested={isAi('brand')} />
+                      <TextField id="google-ads-url" label={copy.url} value={form.finalUrl} onChange={(value) => { updateForm('finalUrl', value); if (!form.displayUrl) updateForm('displayUrl', value) }} placeholder="https://example.com" disabled={!isEditable || pending !== null} aiSuggested={isAi('finalUrl')} />
+                    </div>
+                    <TextAreaField id="google-ads-services" label={copy.services} value={form.services} onChange={(value) => updateForm('services', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('services')} />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
+                      <TextField id="google-ads-budget-cap" label={`${copy.cap} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={budgetCap} onChange={(value) => { setBudgetCap(value); clearAi('budgetCap') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('budgetCap')} />
+                    </div>
+                    <TextAreaField
+                      id="google-ads-headlines"
+                      label={copy.headlines}
+                      value={form.headlines}
+                      onChange={(value) => updateForm('headlines', value)}
+                      disabled={!isEditable || pending !== null}
+                      aiSuggested={isAi('headlines')}
+                      warning={countOver(form.headlines, HEADLINE_LIMIT) > 0
+                        ? (isTr ? `${countOver(form.headlines, HEADLINE_LIMIT)} başlık ${HEADLINE_LIMIT} karakteri aşıyor.` : `${countOver(form.headlines, HEADLINE_LIMIT)} headline(s) exceed ${HEADLINE_LIMIT} characters.`)
+                        : null}
+                    />
+                    <TextAreaField
+                      id="google-ads-descriptions"
+                      label={copy.descriptions}
+                      value={form.descriptions}
+                      onChange={(value) => updateForm('descriptions', value)}
+                      disabled={!isEditable || pending !== null}
+                      aiSuggested={isAi('descriptions')}
+                      warning={countOver(form.descriptions, DESCRIPTION_LIMIT) > 0
+                        ? (isTr ? `${countOver(form.descriptions, DESCRIPTION_LIMIT)} açıklama ${DESCRIPTION_LIMIT} karakteri aşıyor.` : `${countOver(form.descriptions, DESCRIPTION_LIMIT)} description(s) exceed ${DESCRIPTION_LIMIT} characters.`)
+                        : null}
+                    />
+                    <TextAreaField id="google-ads-keywords" label={copy.keywords} value={form.keywords} onChange={(value) => updateForm('keywords', value)} disabled={!isEditable || pending !== null} aiSuggested={isAi('keywords')} />
+
+                    <div>
+                      <Button type="button" variant="ghost" size="sm" aria-expanded={advancedOpen} aria-controls="google-ads-advanced-fields" onClick={() => setAdvancedOpen((open) => !open)}>
+                        {advancedOpen ? (isTr ? 'Gelişmiş ayarları gizle' : 'Hide advanced settings') : (isTr ? 'Gelişmiş ayarları göster' : 'Show advanced settings')}
+                      </Button>
+                    </div>
+                    <div id="google-ads-advanced-fields" hidden={!advancedOpen} className="flex flex-col gap-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="google-ads-sector">{formCopy.sector}{isAi('sector') ? <AiSuggestionBadge /> : null}</FieldLabel>
+                          <select id="google-ads-sector" value={form.sector} onChange={(event) => updateForm('sector', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {PLAN_SECTORS.map((sector) => <option key={sector} value={sector}>{sector.replaceAll('_', ' ')}</option>)}
+                          </select>
+                        </Field>
+                        <TextField id="google-ads-sector-label" label={copy.sectorLabel} value={form.sectorLabel} onChange={(value) => updateForm('sectorLabel', value)} disabled={!isEditable || pending !== null} aiSuggested={isAi('sectorLabel')} />
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="google-ads-language">{copy.language}{isAi('language') ? <AiSuggestionBadge /> : null}</FieldLabel>
+                          <select id="google-ads-language" value={form.language} onChange={(event) => updateForm('language', event.target.value as 'tr' | 'en')} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <option value="tr">Türkçe</option><option value="en">English</option>
+                          </select>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="google-ads-country">{copy.country}{isAi('country') ? <AiSuggestionBadge /> : null}</FieldLabel>
+                          <select id="google-ads-country" value={form.country} onChange={(event) => updateForm('country', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {PLAN_COUNTRIES.map((country) => <option key={country} value={country}>{country}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <TextAreaField id="google-ads-cities" label={copy.cities} value={form.cities} onChange={(value) => updateForm('cities', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('cities')} />
+                        <TextAreaField id="google-ads-negative-keywords" label={copy.negatives} value={form.negativeKeywords} onChange={(value) => updateForm('negativeKeywords', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('negativeKeywords')} />
+                      </div>
+                      <TextField id="google-ads-display-url" label={copy.displayUrl} value={form.displayUrl} onChange={(value) => updateForm('displayUrl', value)} disabled={!isEditable || pending !== null} aiSuggested={isAi('displayUrl')} />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="google-ads-policy-category">{copy.policyCategory}{isAi('modelPolicyCategory') ? <AiSuggestionBadge /> : null}</FieldLabel>
+                          <select id="google-ads-policy-category" value={form.modelPolicyCategory} onChange={(event) => updateForm('modelPolicyCategory', event.target.value)} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            {['none', 'health', 'financial', 'gambling', 'adult', 'drugs', 'alcohol', 'tobacco', 'other'].map((category) => <option key={category} value={category}>{category}</option>)}
+                          </select>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="google-ads-policy-evidence">{copy.policyEvidence}{isAi('modelPolicyEvidence') ? <AiSuggestionBadge /> : null}</FieldLabel>
+                          <select id="google-ads-policy-evidence" value={form.modelPolicyEvidence} onChange={(event) => updateForm('modelPolicyEvidence', event.target.value as 'none' | 'ambiguous')} disabled={!isEditable || pending !== null} className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <option value="none">{isTr ? 'Belirgin değil' : 'No indication'}</option>
+                            <option value="ambiguous">{isTr ? 'Belirsiz' : 'Ambiguous'}</option>
+                          </select>
+                        </Field>
+                      </div>
+                    </div>
+                    <Button type="button" onClick={() => void saveDraft()} disabled={!selectedConnection || !isEditable || pending !== null}>
+                      <Save data-icon="inline-start" aria-hidden="true" />{pending === 'save' ? copy.saving : copy.saveDraft}
+                    </Button>
+                  </FieldGroup>
+                  <Alert variant="destructive">
+                    <AlertCircle aria-hidden="true" />
+                    <AlertDescription>{copy.restricted}</AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+              <GoogleAdsSearchPreview
+                headlines={splitLines(form.headlines)}
+                descriptions={splitLines(form.descriptions)}
+                displayUrl={form.displayUrl}
+                finalUrl={form.finalUrl}
+                keywords={splitLines(form.keywords)}
+              />
+            </div>
+          ) : null}
+        </div>
 
         <div className="flex flex-col gap-5">
           <Card>

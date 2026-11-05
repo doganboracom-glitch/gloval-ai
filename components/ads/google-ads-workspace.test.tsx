@@ -97,7 +97,7 @@ describe('GoogleAdsWorkspace publish feature gate', () => {
     fireEvent.click(screen.getByRole('button', { name: /Studio campaign/i }))
     fireEvent.click(screen.getByRole('button', { name: 'Review before publishing' }))
     expect(screen.getByText('https://gloval.example/landing')).toBeTruthy()
-    const reviewHeading = screen.getByRole('heading', { level: 3, name: /review/i })
+    const reviewHeading = screen.getByRole('heading', { level: 3, name: /pre-publish review/i })
     const reviewPanel = reviewHeading.closest('section') as HTMLElement
     expect(within(reviewPanel).getByText(/daily budget is not a guaranteed total-spend cap/i)).toBeTruthy()
 
