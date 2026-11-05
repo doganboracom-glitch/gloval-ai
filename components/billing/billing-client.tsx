@@ -1361,7 +1361,7 @@ export function BillingClient({
                                   >
                                     <span
                                       role="status"
-                                      className="inline-flex shrink-0 items-center rounded-full bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
+                                      className="inline-flex shrink-0 items-center rounded-full border border-brand/40 bg-brand/10 px-2.5 py-1 text-xs font-medium text-brand"
                                     >
                                       {multilangCopy.active}
                                     </span>
