@@ -35,6 +35,12 @@ function transferErrorText(code: TransferErrorCode, d: Dict['domains'], consentR
       PROVIDER_ERROR: d.transferErrProvider,
       UNSUPPORTED: d.errFeatureUnsupported,
       RATE_LIMITED: d.pageRateLimited,
+      WINDOW_UNAVAILABLE: d.transferErrFailed,
+      WINDOW_NOT_OPEN: d.transferErrFailed,
+      WINDOW_EXPIRED: d.transferErrFailed,
+      WINDOW_LIMIT_REACHED: d.transferErrFailed,
+      CONFIRMATION_MISMATCH: d.transferErrFailed,
+      STATUS_UNVERIFIED: d.transferErrFailed,
       FAILED: d.transferErrFailed,
     } satisfies Record<TransferErrorCode, string>
   )[code]

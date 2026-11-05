@@ -96,6 +96,47 @@ const emptyRegisterData = {
   NameServers: [],
 }
 
+describe('DomainNameApiProvider transfer status parsing', () => {
+  it('keeps a missing live lock status unknown instead of treating it as unlocked', async () => {
+    successes.set('unknown-lock.com', {
+      registerData: {},
+      details: { result: 'OK', data: { DomainName: 'unknown-lock.com', Status: 'Active' } },
+      detailsRaw: {
+        domainName: 'unknown-lock.com',
+        expirationDate: '2027-10-04T14:55:29Z',
+        startDate: '2026-01-01T00:00:00Z',
+      },
+    })
+    const provider = new DomainNameApiProvider('user-uuid', 'api-key', true)
+
+    await expect(provider.getOwnedDomainInfo('unknown-lock.com')).resolves.toMatchObject({
+      locked: null,
+      status: 'Active',
+    })
+  })
+
+  it('preserves the DomainNameAPI status code and parses the raw lock flag', async () => {
+    successes.set('pending-out.com', {
+      registerData: {},
+      details: { result: 'OK', data: { DomainName: 'pending-out.com', Status: 11 } },
+      detailsRaw: {
+        domainName: 'pending-out.com',
+        lockStatus: false,
+        expirationDate: '2027-10-04T14:55:29Z',
+        startDate: '2026-01-01T00:00:00Z',
+        remainingDay: 90,
+      },
+    })
+    const provider = new DomainNameApiProvider('user-uuid', 'api-key', true)
+
+    await expect(provider.getOwnedDomainInfo('pending-out.com')).resolves.toMatchObject({
+      locked: false,
+      status: '11',
+      remainingDays: 90,
+    })
+  })
+})
+
 describe('DomainNameApiProvider registration read-back', () => {
   it('takes the domain name from GetDetails and keeps a zone-less expiry raw instead of guessing a zone', async () => {
     successes.set('readback.com', {

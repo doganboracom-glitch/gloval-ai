@@ -140,6 +140,16 @@ function isDefiniteRegisterRejection(code: string | undefined): boolean {
   return typeof value === 'boolean' ? value : null
 }
 
+function asLockFlag(value: unknown): boolean | null {
+  const boolean = asBool(value)
+  if (boolean !== null) return boolean
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'true') return true
+  if (normalized === 'false') return false
+  return null
+}
+
 function handleOf(contacts: unknown, key: string): string | null {
   if (!contacts || typeof contacts !== 'object') return null
   const value = (contacts as Record<string, unknown>)[key]
@@ -562,12 +572,17 @@ export class DomainNameApiProvider
     }
     if (res.result !== 'OK' || !res.data) return null
     const d = res.data as Record<string, unknown>
-    const expiry = parseProviderDate(readRawField(client.lastResponse, 'expirationDate'))
-    const start = parseProviderDate(readRawField(client.lastResponse, 'startDate'))
-    return {
-      locked: d.LockStatus === 'true',
+  const raw = client.lastResponse
+  const rawFields = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const expiry = parseProviderDate(readRawField(raw, 'expirationDate'))
+  const start = parseProviderDate(readRawField(raw, 'startDate'))
+  const remaining = rawFields.remainingDay
+  return {
+    locked: asLockFlag(rawFields.lockStatus) ?? asLockFlag(d.LockStatus),
+
       expiresAt: expiry.instant,
       startedAt: start.instant,
+      remainingDays: typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : null,
       expiresAtRaw: expiry.raw,
       startedAtRaw: start.raw,
       status: String(d.Status ?? ''),

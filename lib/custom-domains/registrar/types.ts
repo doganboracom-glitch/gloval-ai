@@ -107,11 +107,12 @@ export type TransferPrice = {
 }
 
 export type OwnedDomainInfo = {
-  /** True only when the provider actually reports a lock flag. */
-  locked: boolean
+  /** Null when the provider did not report a usable lock flag. */
+  locked: boolean | null
   /** UTC ISO instant; null unless the provider named the zone (never guessed). */
   expiresAt: string | null
   startedAt: string | null
+  remainingDays?: number | null
   /** Verbatim provider date strings (may be zone-less, zone not documented). */
   expiresAtRaw?: string | null
   startedAtRaw?: string | null

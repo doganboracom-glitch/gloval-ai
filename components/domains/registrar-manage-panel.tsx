@@ -13,7 +13,7 @@ import {
   updateContactAction,
   updateNameserversAction,
 } from '@/lib/custom-domains/registrar/manage-actions'
-import { REGISTRAR_CAPABILITIES } from '@/lib/custom-domains/registrar/capabilities'
+import { REGISTRAR_PUBLIC_CAPABILITIES } from '@/lib/custom-domains/registrar/capabilities-public'
 import { isActiveAndUnexpired } from '@/lib/custom-domains/registrar/nameserver-access'
 import { NameserverEditor } from '@/components/domains/nameserver-editor'
 import type { DomainContact } from '@/lib/custom-domains/registrar/types'
@@ -161,7 +161,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
 
   const { details, contacts, contactsUnavailable } = data
   const canEditNameservers =
-    REGISTRAR_CAPABILITIES.nameserverChange && isActiveAndUnexpired(details)
+    REGISTRAR_PUBLIC_CAPABILITIES.nameserverChange && isActiveAndUnexpired(details)
   const state = (v: boolean | null) => (v === null ? d.mgUnknown : v ? d.mgOn : d.mgOff)
   const expiry = details.expiresAt
     ? new Date(details.expiresAt).toLocaleDateString(locale)
@@ -243,7 +243,7 @@ export function RegistrarManagePanel({ domain }: { domain: string }) {
             ))}
           </ul>
         )}
-        {!REGISTRAR_CAPABILITIES.nameserverChange ? (
+        {!REGISTRAR_PUBLIC_CAPABILITIES.nameserverChange ? (
           <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsUnsupported}</p>
         ) : !canEditNameservers ? (
           <p className="mt-2 text-pretty text-xs text-muted-foreground">{d.mgNsNeedsActive}</p>

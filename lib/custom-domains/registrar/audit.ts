@@ -18,15 +18,35 @@ export type DomainAuditEventType =
   | 'renewal_completed'
 
 export type DomainAuditDetails = {
-  outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged'
+  outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
   changed?: boolean
   nameserverCount?: number
   previousLocked?: boolean | null
   newLocked?: boolean | null
+  locked?: boolean | null
+  source?: 'user_code_request' | 'user_relock' | 'auto_relock' | 'auto_relock_deferred' | 'window_extended'
+  extensions?: number
   periodYears?: number
 }
 
-const DETAIL_KEYS = ['outcome', 'changed', 'nameserverCount', 'previousLocked', 'newLocked', 'periodYears'] as const
+const DETAIL_KEYS = [
+  'outcome',
+  'changed',
+  'nameserverCount',
+  'previousLocked',
+  'newLocked',
+  'locked',
+  'source',
+  'extensions',
+  'periodYears',
+] as const
+const AUDIT_SOURCES = new Set<NonNullable<DomainAuditDetails['source']>>([
+  'user_code_request',
+  'user_relock',
+  'auto_relock',
+  'auto_relock_deferred',
+  'window_extended',
+])
 
 function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string, string | number | boolean | null> {
   const out: Record<string, string | number | boolean | null> = {}
@@ -38,6 +58,8 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
       out[key] = value
     } else if (key === 'outcome' && typeof value === 'string' && /^[a-z_]{1,20}$/.test(value)) {
       out[key] = value
+    } else if (key === 'source' && typeof value === 'string' && AUDIT_SOURCES.has(value as DomainAuditDetails['source'] & string)) {
+      out[key] = value
     }
   }
   return out
@@ -47,8 +69,9 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
 const MISSING_TABLE_CODES = new Set(['42P01', 'PGRST205'])
 
 export type DomainAuditInput = {
-  userId: string
+  userId: string | null
   domain: string
+  customDomainId?: string | null
   eventType: DomainAuditEventType
   actor?: 'user' | 'admin' | 'system'
   details?: DomainAuditDetails
@@ -59,14 +82,16 @@ export async function recordDomainAuditEvent(input: DomainAuditInput): Promise<v
     const admin = createAdminClient()
     const domain = input.domain.trim().toLowerCase()
 
-    let customDomainId: string | null = null
-    const lookup = await admin
-      .from('custom_domains')
-      .select('id')
-      .eq('user_id', input.userId)
-      .eq('domain', domain)
-      .maybeSingle()
-    if (!lookup.error && lookup.data) customDomainId = (lookup.data as { id: string }).id
+    let customDomainId: string | null = input.customDomainId ?? null
+    if (input.customDomainId === undefined && input.userId) {
+      const lookup = await admin
+        .from('custom_domains')
+        .select('id')
+        .eq('user_id', input.userId)
+        .eq('domain', domain)
+        .maybeSingle()
+      if (!lookup.error && lookup.data) customDomainId = (lookup.data as { id: string }).id
+    }
 
     const { error } = await admin.from('domain_audit_events').insert({
       custom_domain_id: customDomainId,
