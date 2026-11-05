@@ -51,10 +51,9 @@ export async function shouldRenderCursorAura(slug: string, effects: unknown): Pr
 }
 
 /**
- * The Çoklu Dil Paketi catalog row, or null while the feature flag is off. The
- * row ships `active = false` so every catalog reader that filters on `active`
- * (`getPlans`, pricing surfaces) ignores it; the flag is the only switch that
- * lists or sells it.
+ * The active Çoklu Dil add-on row, or null when its feature flag is off or the
+ * catalog row is inactive. Both checks are required before it can be shown or
+ * sold.
  */
 export async function getMultilangPlanIfEnabled(
   env: Record<string, string | undefined> = process.env,
@@ -66,15 +65,16 @@ export async function getMultilangPlanIfEnabled(
       'id, code, name, description, price_cents, currency, interval, trial_days, features, provider_price_id, product_category, active, sort_order',
     )
     .eq('code', MULTILANG_CODE)
+    .eq('active', true)
     .maybeSingle()
-  if (error || !data) return null
+  if (error || !data || data.active !== true) return null
   return data as PlanRow
 }
 
 /**
  * The Aura İmleç catalog row (99 TL, KDV dahil, tek seferlik, site başına), or
- * null while `AURA_CURSOR_FEATURE_UI` is off. Ships `active = false` for the same
- * reason as the multilang row.
+ * null while `AURA_CURSOR_FEATURE_UI` is off. It remains flag-gated while its
+ * catalog row is inactive; the multilang row is activated separately.
  */
 export async function getAuraCursorPlanIfEnabled(
   env: Record<string, string | undefined> = process.env,

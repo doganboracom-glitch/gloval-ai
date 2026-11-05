@@ -552,6 +552,17 @@ export function BillingClient({
     }
   }, [projects, projectEntitlements])
 
+  const activeProjectsFor = useMemo(() => {
+    return (code: string) => {
+      const ownedIds = new Set(
+        projectEntitlements
+          .filter((e) => e.code === code && e.status === 'active')
+          .map((e) => e.project_id),
+      )
+      return projects.filter((project) => ownedIds.has(project.id))
+    }
+  }, [projects, projectEntitlements])
+
   function openSitePicker(plan: PlanRow) {
     setError(null)
     setPickedProjectId(eligibleProjectsFor(plan.code)[0]?.id ?? '')
@@ -602,7 +613,7 @@ export function BillingClient({
     const plan = sitePicker
     setSitePicker(null)
     setCheckout({
-      name: plan.name,
+      name: plan.code === MULTILANG_CODE ? b.addOns.multilang.title : plan.name,
       priceCents: plan.price_cents,
       currency: plan.currency,
       recurring: false,
@@ -1291,10 +1302,23 @@ export function BillingClient({
                 <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {oneTimeRightPlans.map((p) => {
                     const busy = busyPlanId === p.id && (isPending || previewing)
+                    const isMultilang = p.code === MULTILANG_CODE
+                    const multilangCopy = b.addOns.multilang
+                    const activeSites = isMultilang ? activeProjectsFor(p.code) : []
+                    const eligibleSites = eligibleProjectsFor(p.code)
+                    const features = isMultilang
+                      ? [
+                          multilangCopy.featureLanguages,
+                          multilangCopy.featureTranslation,
+                          multilangCopy.featurePublished,
+                        ]
+                      : p.features
+
                     return (
                       <div
                         key={p.id}
                         id={addonCardId(p.code)}
+                        data-addon-code={p.code}
                         data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
                         className={`relative flex h-full scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-3 transition-[color,box-shadow,border-color] hover:border-primary/50 sm:p-5 ${
                           highlightedAddonCode === p.code
@@ -1302,7 +1326,9 @@ export function BillingClient({
                             : 'border-border'
                         }`}
                       >
-                        <h3 className="font-display text-xl font-bold">{p.name}</h3>
+                        <h3 className="font-display text-xl font-bold">
+                          {isMultilang ? multilangCopy.title : p.name}
+                        </h3>
                         <div className="mt-2 flex items-baseline gap-1">
                           <span className="font-display text-3xl font-bold">
                             {formatMoney(p.price_cents, p.currency)}
@@ -1311,23 +1337,63 @@ export function BillingClient({
                             {intervalLabel(p)}
                           </span>
                         </div>
-                        {p.description ? (
-                          <p className="mt-3 text-sm text-muted-foreground">{p.description}</p>
+                        {isMultilang || p.description ? (
+                          <p className="mt-3 text-sm text-muted-foreground">
+                            {isMultilang ? multilangCopy.description : p.description}
+                          </p>
                         ) : null}
                         <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm">
-                          {p.features.map((feature) => (
+                          {features.map((feature) => (
                             <li key={feature} className="flex items-start gap-2">
                               <Check className="mt-0.5 size-4 shrink-0 text-accent" />
                               <span>{feature}</span>
                             </li>
                           ))}
                         </ul>
-                        <div className="mt-6">
-                          {projects.length === 0 ? (
+                        <div className="mt-6 flex flex-col gap-2">
+                          {isMultilang && activeSites.length > 0 ? (
+                            <>
+                              <ul className="flex flex-col gap-2">
+                                {activeSites.map((site) => (
+                                  <li
+                                    key={site.id}
+                                    className="flex items-center gap-2 rounded-xl border border-border bg-background/50 p-2"
+                                  >
+                                    <span
+                                      role="status"
+                                      className="inline-flex shrink-0 items-center rounded-full bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
+                                    >
+                                      {multilangCopy.active}
+                                    </span>
+                                    <Link
+                                      href={`/editor/${site.id}`}
+                                      aria-label={`${multilangCopy.manageSite}: ${site.name}`}
+                                      className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center truncate rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    >
+                                      {multilangCopy.manageSite} · {site.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                              {eligibleSites.length > 0 ? (
+                                <Button
+                                  className="w-full"
+                                  disabled={busy}
+                                  onClick={() => openSitePicker(p)}
+                                >
+                                  {busy ? (
+                                    <Loader2 className="size-4 animate-spin" />
+                                  ) : (
+                                    multilangCopy.buyAnotherSite
+                                  )}
+                                </Button>
+                              ) : null}
+                            </>
+                          ) : projects.length === 0 ? (
                             <Button variant="outline" className="w-full" disabled>
                               {b.noSites}
                             </Button>
-                          ) : eligibleProjectsFor(p.code).length === 0 ? (
+                          ) : eligibleSites.length === 0 ? (
                             <Button variant="outline" className="w-full" disabled>
                               {b.owned}
                             </Button>

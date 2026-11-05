@@ -65,12 +65,20 @@ describe('getMultilangPlanIfEnabled', () => {
     expect(await getMultilangPlanIfEnabled({ MULTILANG_FEATURE_UI: undefined })).toBeNull()
     expect(mocks.adminCalls).toBe(0)
   })
-  it('flag ON: returns the catalog row', async () => {
+  it('flag ON: returns an active catalog row', async () => {
+    mocks.planRow = { id: 'p1', code: MULTILANG_CODE, price_cents: 100000, active: true }
     const plan = await getMultilangPlanIfEnabled({ MULTILANG_FEATURE_UI: 'true' })
-    expect(plan).toMatchObject({ code: MULTILANG_CODE, price_cents: 100000 })
+    expect(plan).toMatchObject({ code: MULTILANG_CODE, price_cents: 100000, active: true })
   })
-  it('flag ON but missing row or read error: returns null', async () => {
+  it('flag ON: hides an inactive catalog row', async () => {
+    expect(await getMultilangPlanIfEnabled({ MULTILANG_FEATURE_UI: 'true' })).toBeNull()
+  })
+  it('flag ON: hides a missing catalog row', async () => {
     mocks.planRow = null
+    expect(await getMultilangPlanIfEnabled({ MULTILANG_FEATURE_UI: 'true' })).toBeNull()
+  })
+  it('flag ON: hides the catalog row on a read error', async () => {
+    mocks.readError = new Error('boom')
     expect(await getMultilangPlanIfEnabled({ MULTILANG_FEATURE_UI: 'true' })).toBeNull()
   })
 })

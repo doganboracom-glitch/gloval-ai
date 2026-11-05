@@ -722,6 +722,16 @@ const et: DeepPartial<Dict> = {
   renewItemSuffix: 'pikendamine',
   publishSuspended: 'Teie tellimus on peatatud, kuna makse ebaõnnestus. Avaldamiseks lõpetage makse.',
     addOns: {
+      multilang: {
+        title: 'Keelelisand',
+        description: 'Ühekordne makse koos käibemaksuga. Kehtib ühe veebisaidi kohta ega ole seotud tellimusega.',
+        featureLanguages: 'Avalda veebisaidi sisu türgi või inglise keeles',
+        featureTranslation: 'Tõlgi kogu sait ühe AI-redaktori päringuga',
+        featurePublished: 'Salvestatud muudatused kuvatakse avaldatud saidil',
+        active: 'Aktiivne',
+        manageSite: 'Halda saiti',
+        buyAnotherSite: 'Osta teisele saidile',
+      },
       websiteAllowanceDescription: 'Lisab sinu plaani saidipiirangule ühe valitud tüüpi avaldamisõiguse. See kehtib sinu põhitellimuse praeguse arveldusperioodi lõpuni.',
       websiteAllowanceDescriptionYearly: 'Lisab sinu plaani saidipiirangule ühe valitud tüüpi avaldamisõiguse. See kehtib 12 kuud, ei uuene automaatselt ja selle eest tasutakse üks kord.',
       emailAllowanceDescription: 'Lisab valitud arvu e-posti kontosid. Maht kehtib sinu põhitellimuse praeguse arveldusperioodi lõpuni.',

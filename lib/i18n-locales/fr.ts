@@ -711,6 +711,16 @@ const fr: DeepPartial<Dict> = {
   renewItemSuffix: 'renouvellement',
   publishSuspended: 'Votre abonnement est suspendu car un paiement a échoué. Finalisez le paiement pour publier.',
     addOns: {
+      multilang: {
+        title: 'Extension linguistique',
+        description: 'Paiement unique, TVA comprise. Valable pour un site et non lié à un abonnement.',
+        featureLanguages: 'Publiez le contenu du site en turc ou en anglais',
+        featureTranslation: 'Traduisez tout le site en une seule demande dans l’éditeur IA',
+        featurePublished: 'Les modifications enregistrées apparaissent sur le site publié',
+        active: 'Actif',
+        manageSite: 'Gérer le site',
+        buyAnotherSite: 'Acheter pour un autre site',
+      },
       websiteAllowanceDescription: 'Ajoute à la limite de sites de votre forfait un droit de publication du type choisi. Il est valable pendant la période de facturation de votre abonnement principal.',
       websiteAllowanceDescriptionYearly: 'Ajoute à la limite de sites de votre forfait un droit de publication du type choisi. Il est valable 12 mois, ne se renouvelle pas automatiquement et est facturé une seule fois.',
       emailAllowanceDescription: 'Ajoute le nombre choisi de comptes e-mail. Cette capacité est valable pendant la période de facturation de votre abonnement principal.',
