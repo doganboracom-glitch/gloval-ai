@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { blocksToMarkup, sanitizeBlogMarkup } from '@/lib/blog-markup'
+import { blocksToMarkup, readingTimeMinutes, sanitizeBlogMarkup } from '@/lib/blog-markup'
 import { LIMITS, SLUG_PATTERN } from '@/lib/blog-admin-shared'
 import { staticCategories, staticPosts } from './blog-static'
 import type { BlogCategory, BlogPost, Localized, StaticBlogPost } from './types'
@@ -16,7 +16,9 @@ import type { BlogCategory, BlogPost, Localized, StaticBlogPost } from './types'
  * The file-based posts in `blog-static.ts` are only a fallback for when the
  * database cannot be reached (error or missing table). An EMPTY result is a
  * legitimate state — an admin who unpublishes everything gets an empty blog,
- * never resurrected static posts.
+ * never resurrected static posts. The new collaboration post is the sole
+ * development-preview exception until its unapplied SQL is run; production
+ * remains database-only.
  *
  * Scheduled posts are stored with a future `published_at`. Visibility is
  * decided by comparing it to the server clock on every read, after the cache,
@@ -158,14 +160,20 @@ export function mapPostRow(row: PostRow, categories: Map<string, CategoryRow>, w
 
 function fromStatic(post: StaticBlogPost): BlogPost {
   const category = staticCategories.find((c) => c.id === post.category)
-  const l = <T,>(value: Localized<T>): Localized<T> => ({ tr: value.tr ?? value.en, en: value.en })
+  const hasEnglish = Boolean(post.title.en.trim())
+  const l = <T,>(value: Localized<T>): Localized<T> => {
+    const tr = value.tr ?? value.en
+    return { tr, en: hasEnglish ? value.en : tr }
+  }
+  const trMarkup = blocksToMarkup(post.body, 'tr')
+  const enMarkup = blocksToMarkup(post.body, hasEnglish ? 'en' : 'tr')
   return {
     slug: post.slug,
     title: l(post.title),
     excerpt: l(post.excerpt),
-    markup: { tr: blocksToMarkup(post.body, 'tr'), en: blocksToMarkup(post.body, 'en') },
+    markup: { tr: trMarkup, en: enMarkup },
     coverImage: post.coverImage,
-    coverAlt: post.coverAlt,
+    coverAlt: post.coverAlt ? l(post.coverAlt) : undefined,
     category: post.category,
     categoryLabel: category?.label,
     author: post.author,
@@ -177,8 +185,8 @@ function fromStatic(post: StaticBlogPost): BlogPost {
     tags: post.keywords.tr ?? post.keywords.en,
     featured: post.featured,
     noindex: false,
-    readingTime: 1,
-    hasEnglish: true,
+    readingTime: readingTimeMinutes(trMarkup),
+    hasEnglish,
   }
 }
 
@@ -188,6 +196,20 @@ function sortNewestFirst(posts: BlogPost[]): BlogPost[] {
 
 function staticList(): BlogPost[] {
   return sortNewestFirst(staticPosts.map(fromStatic))
+}
+
+const DEVELOPMENT_PREVIEW_POST_SLUG = 'iyzico-gloval-ai-isbirligi-e-ticaret-websiteni-bugun-kur'
+
+function developmentPreviewPost(slug: string): BlogPost | null {
+  if (process.env.NODE_ENV !== 'development' || slug !== DEVELOPMENT_PREVIEW_POST_SLUG) return null
+  const post = staticPosts.find((candidate) => candidate.slug === slug)
+  return post ? fromStatic(post) : null
+}
+
+function withDevelopmentPreviewPost(posts: BlogPost[], storedSlugs: Set<string>): BlogPost[] {
+  const previewPost = developmentPreviewPost(DEVELOPMENT_PREVIEW_POST_SLUG)
+  if (!previewPost || storedSlugs.has(previewPost.slug)) return posts
+  return sortNewestFirst([...posts, previewPost])
 }
 
 async function loadCategories(): Promise<CategoryRow[]> {
@@ -221,7 +243,8 @@ export async function getPosts(): Promise<BlogPost[]> {
     const { posts, categories } = await cached(['platform-blog', 'list'], [BLOG_CACHE_TAG], loadList)
     const byId = new Map(categories.map((c) => [c.id, c]))
     const now = Date.now()
-    return posts.filter((row) => isLive(row, now)).map((row) => mapPostRow(row, byId, false))
+    const livePosts = posts.filter((row) => isLive(row, now)).map((row) => mapPostRow(row, byId, false))
+    return withDevelopmentPreviewPost(livePosts, new Set(posts.map((row) => row.slug)))
   } catch (error) {
     if (!isDbError(error)) throw error
     console.error('[blog] database unavailable, serving static fallback:', (error as Error).message)
@@ -248,7 +271,8 @@ export async function getPost(slug: string): Promise<BlogPost | null> {
       if (postResult.error) throw new Error(postResult.error.message)
       return { row: (postResult.data ?? null) as PostRow | null, categories: categoryRows }
     })
-    if (!row || !isLive(row)) return null
+    if (!row) return developmentPreviewPost(slug)
+    if (!isLive(row)) return null
     return mapPostRow(row, new Map(categories.map((c) => [c.id, c])), true)
   } catch (error) {
     if (!isDbError(error)) throw error

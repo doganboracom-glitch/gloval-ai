@@ -240,6 +240,13 @@ export function PlanCard({
           </div>
         )}
       </div>
+
+      {plan.code === 'ecommerce' && (
+        <div className="mt-4 flex flex-col gap-0.5 border-t border-border pt-3 text-xs leading-relaxed">
+          <p className="font-medium text-foreground">{view.ecommercePaymentRateLine}</p>
+          <p className="text-muted-foreground">{view.ecommercePaymentRateFootnote}</p>
+        </div>
+      )}
     </div>
   )
 }

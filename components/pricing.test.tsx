@@ -251,6 +251,20 @@ describe('responsive plan-card pricing', () => {
     expect(price.className).toContain('whitespace-nowrap')
     expect(price.className).toContain('tabular-nums')
     expect(within(card).getByText(period, { exact: true }).className).toContain('whitespace-nowrap')
+    expect(
+      within(card).getByText(
+        lang === 'tr'
+          ? 'iyzico ile ödeme: %2.29 işlem oranı*'
+          : 'Payments with iyzico: %2.29 transaction rate*',
+        { exact: true },
+      ),
+    ).toBeTruthy()
+    expect(
+      within(card).getByText(
+        lang === 'tr' ? '* 7 gün vadede %2.29' : '* %2.29 with a 7-day settlement term',
+        { exact: true },
+      ),
+    ).toBeTruthy()
 
     if (domainGift) {
       const domain = within(card).getByText(domainGift, { exact: true })

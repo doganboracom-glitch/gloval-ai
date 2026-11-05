@@ -45,6 +45,8 @@ export function copyLang(lang: string | null | undefined): CopyLang {
 type CardPaymentCopy = {
   rowLabel: string
   note: string
+  ecommerceRateLine: string
+  ecommerceRateFootnote: string
 }
 
 const CARD_PAYMENT_PROVIDER = 'iyzico'
@@ -53,50 +55,74 @@ const CARD_PAYMENT_COPY: Record<SupportedLocale, CardPaymentCopy> = {
   tr: {
     rowLabel: 'Kart ile ödeme',
     note: '(diğer firmalar opsiyonel olarak eklenebilir.)',
+    ecommerceRateLine: 'iyzico ile ödeme: %2.29 işlem oranı*',
+    ecommerceRateFootnote: '* 7 gün vadede %2.29',
   },
   en: {
     rowLabel: 'Card payments',
     note: '(other providers can optionally be added.)',
+    ecommerceRateLine: 'Payments with iyzico: %2.29 transaction rate*',
+    ecommerceRateFootnote: '* %2.29 with a 7-day settlement term',
   },
   fr: {
     rowLabel: 'Paiement par carte',
     note: '(D’autres prestataires peuvent être ajoutés en option.)',
+    ecommerceRateLine: 'Paiements avec iyzico : taux de transaction de %2.29*',
+    ecommerceRateFootnote: '* %2.29 avec un délai de règlement de 7 jours',
   },
   de: {
     rowLabel: 'Kartenzahlung',
     note: '(Weitere Anbieter können optional hinzugefügt werden.)',
+    ecommerceRateLine: 'Mit iyzico bezahlen: %2.29 Transaktionsgebühr*',
+    ecommerceRateFootnote: '* %2.29 bei einer Abrechnungsfrist von 7 Tagen',
   },
   it: {
     rowLabel: 'Pagamenti con carta',
     note: '(Altri fornitori possono essere aggiunti facoltativamente.)',
+    ecommerceRateLine: 'Pagamenti con iyzico: tasso per transazione del %2.29*',
+    ecommerceRateFootnote: '* %2.29 con liquidazione a 7 giorni',
   },
   et: {
     rowLabel: 'Kaardimaksed',
     note: '(Teisi teenusepakkujaid saab soovi korral lisada.)',
+    ecommerceRateLine: 'Maksed iyzico kaudu: tehingutasu %2.29*',
+    ecommerceRateFootnote: '* %2.29 arveldustähtajaga 7 päeva',
   },
   pl: {
     rowLabel: 'Płatność kartą',
     note: '(Innych dostawców można opcjonalnie dodać.)',
+    ecommerceRateLine: 'Płatności z iyzico: opłata transakcyjna %2.29*',
+    ecommerceRateFootnote: '* %2.29 przy 7-dniowym terminie rozliczenia',
   },
   es: {
     rowLabel: 'Pago con tarjeta',
     note: '(Se pueden añadir otros proveedores de forma opcional.)',
+    ecommerceRateLine: 'Pagos con iyzico: tasa por transacción del %2.29*',
+    ecommerceRateFootnote: '* %2.29 con un plazo de liquidación de 7 días',
   },
   pt: {
     rowLabel: 'Pagamento com cartão',
     note: '(Outros fornecedores podem ser adicionados opcionalmente.)',
+    ecommerceRateLine: 'Pagamentos com iyzico: taxa por transação de %2.29*',
+    ecommerceRateFootnote: '* %2.29 com prazo de liquidação de 7 dias',
   },
   ar: {
     rowLabel: 'الدفع بالبطاقة',
     note: '(يمكن إضافة مزوّدين آخرين اختياريًا.)',
+    ecommerceRateLine: 'الدفع عبر iyzico: نسبة المعاملة %2.29*',
+    ecommerceRateFootnote: '* %2.29 مع فترة تسوية مدتها 7 أيام',
   },
   ru: {
     rowLabel: 'Оплата картой',
     note: '(Других поставщиков можно добавить по желанию.)',
+    ecommerceRateLine: 'Приём платежей через iyzico: комиссия за транзакцию %2.29*',
+    ecommerceRateFootnote: '* %2.29 при сроке расчёта 7 дней',
   },
   az: {
     rowLabel: 'Kartla ödəniş',
     note: '(Digər provayderlər istəyə bağlı əlavə edilə bilər.)',
+    ecommerceRateLine: 'iyzico ilə ödəniş: %2.29 əməliyyat faizi*',
+    ecommerceRateFootnote: '* %2.29, 7 günlük hesablaşma müddətində',
   },
 }
 
@@ -154,6 +180,8 @@ export type PlanView = {
   badge?: string
   creditSummary: string
   creditNotes: string[]
+  ecommercePaymentRateLine: string
+  ecommercePaymentRateFootnote: string
   /** Set on cards that only list what they add on top of a lower plan. */
   extendsLabel?: string
   groups: PlanCopyGroup[]
@@ -689,6 +717,7 @@ function buildRawPlanView(
   const base = s.plans[code]
   const { f, groups: g } = s
   const paymentCopy = getCardPaymentCopy(langInput)
+  const ecommercePaymentCopy = code === 'ecommerce' ? paymentCopy : CARD_PAYMENT_COPY.en
   const advancedAiItems: PlanCopyItem[] =
     (options.advancedAi ?? ADVANCED_AI_DISTINCT)
       ? [{ id: 'advancedAi', label: f.advancedAi, note: f.advancedAiNote, tableGroup: 'ai' }]
@@ -720,6 +749,8 @@ function buildRawPlanView(
     description: base.description,
     cta: base.cta,
     badge: base.badge,
+    ecommercePaymentRateLine: ecommercePaymentCopy.ecommerceRateLine,
+    ecommercePaymentRateFootnote: ecommercePaymentCopy.ecommerceRateFootnote,
   }
 
   const sitesItem = (label: string, highlight = false): PlanCopyItem => ({
