@@ -261,7 +261,7 @@ describe('responsive plan-card pricing', () => {
     ).toBeTruthy()
     expect(
       within(card).getByText(
-        lang === 'tr' ? '* 7 gün vadede %2.29' : '* %2.29 with a 7 gün settlement term',
+        lang === 'tr' ? '* 7 gün vadede %2.29' : '* %2.29 with a 7-day settlement term',
         { exact: true },
       ),
     ).toBeTruthy()
