@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseProviderDate, readRawField } from './provider-date'
+import { parseProviderDate, parseProviderDateAssumingIstanbul, readRawField } from './provider-date'
 
 describe('parseProviderDate', () => {
   it('keeps a zone-less value raw and never invents an instant', () => {
@@ -53,6 +53,20 @@ describe('parseProviderDate', () => {
       if (previous === undefined) delete process.env.TZ
       else process.env.TZ = previous
     }
+  })
+})
+
+describe('parseProviderDateAssumingIstanbul', () => {
+  it.each([
+    ['04.10.2027 17:55:29', '2027-10-04T14:55:29.000Z'],
+    ['04/10/2027 17:55:29', '2027-10-04T14:55:29.000Z'],
+    ['2027-10-04 17:55:29', '2027-10-04T14:55:29.000Z'],
+    ['2027-10-04T17:55:29', '2027-10-04T14:55:29.000Z'],
+    ['2027-10-04T17:55:29+03:00', '2027-10-04T14:55:29.000Z'],
+  ])('parses %s as a timezone-aware instant', (raw, instant) => {
+    const parsed = parseProviderDateAssumingIstanbul(raw)
+    expect(parsed.raw).toBe(raw)
+    expect(parsed.instant).toBe(instant)
   })
 })
 

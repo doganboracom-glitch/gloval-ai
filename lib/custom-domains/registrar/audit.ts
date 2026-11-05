@@ -5,8 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
  *
  * Writing an event must never block or fail the user's operation, so every
  * failure is swallowed and reported as a server-side error count. `details` is
- * built from a fixed key allow-list of outcomes and counts: transfer codes,
- * nameserver values and personal data have no key to travel through.
+ * built from a fixed key allow-list: transfer codes, nameserver values,
+ * personal data and raw provider dates have no key to travel through.
  */
 
 export type DomainAuditEventType =
@@ -23,9 +23,14 @@ export type DomainAuditReason =
   | 'start_date_missing'
   | 'start_date_unparseable'
 
+export type DomainAuditStage = 'unlock_request' | 'unlock_readback' | 'window_insert' | 'code_fetch'
+
 export type DomainAuditDetails = {
   outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
   reason?: DomainAuditReason
+  stage?: DomainAuditStage
+  providerCode?: string
+  startDateShape?: string
   changed?: boolean
   nameserverCount?: number
   previousLocked?: boolean | null
@@ -39,6 +44,9 @@ export type DomainAuditDetails = {
 const DETAIL_KEYS = [
   'outcome',
   'reason',
+  'stage',
+  'providerCode',
+  'startDateShape',
   'changed',
   'nameserverCount',
   'previousLocked',
@@ -61,6 +69,16 @@ const AUDIT_REASONS = new Set<DomainAuditReason>([
   'start_date_missing',
   'start_date_unparseable',
 ])
+const AUDIT_STAGES = new Set<DomainAuditStage>(['unlock_request', 'unlock_readback', 'window_insert', 'code_fetch'])
+
+function isSafeStartDateShape(value: string): boolean {
+  if (!value || value.length > 120 || /[\u0000-\u001f\u007f-\u009f]/.test(value)) return false
+  for (const character of value) {
+    if (character === 'a' || character === '9') continue
+    if (/[\p{L}\p{N}]/u.test(character)) return false
+  }
+  return true
+}
 
 function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string, string | number | boolean | null> {
   const out: Record<string, string | number | boolean | null> = {}
@@ -68,6 +86,18 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
   for (const key of DETAIL_KEYS) {
     const value = details[key]
     if (value === undefined) continue
+    if (key === 'stage') {
+      if (typeof value === 'string' && AUDIT_STAGES.has(value as DomainAuditStage)) out[key] = value
+      continue
+    }
+    if (key === 'providerCode') {
+      if (typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value)) out[key] = value
+      continue
+    }
+    if (key === 'startDateShape') {
+      if (typeof value === 'string' && isSafeStartDateShape(value)) out[key] = value
+      continue
+    }
     if (value === null || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
       out[key] = value
     } else if (key === 'outcome' && typeof value === 'string' && /^[a-z_]{1,20}$/.test(value)) {

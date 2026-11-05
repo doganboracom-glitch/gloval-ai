@@ -252,6 +252,42 @@ describe('setPrivacy and changeLock', () => {
     expect(sdk.EnableTheftProtectionLock).not.toHaveBeenCalled()
   })
 
+  it('lock: retries only read-back after a delayed unlock', async () => {
+    vi.useFakeTimers()
+    try {
+      queueDetails(body({ lockStatus: true }), body({ lockStatus: true }), body({ lockStatus: false }))
+      sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
+
+      const operation = provider().changeLock(DOMAIN, false)
+      await vi.runAllTimersAsync()
+      await expect(operation).resolves.toEqual({ changed: true })
+      expect(sdk.GetDetails).toHaveBeenCalledTimes(3)
+      expect(sdk.DisableTheftProtectionLock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lock: stops after bounded read-back retries without resending unlock', async () => {
+    vi.useFakeTimers()
+    try {
+      queueDetails(body({ lockStatus: true }))
+      sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
+
+      const operation = provider().changeLock(DOMAIN, false)
+      const rejection = expect(operation).rejects.toMatchObject({
+        code: 'OUTCOME_UNKNOWN',
+        message: 'domainnameapi:LOCK_NOT_CONFIRMED',
+      })
+      await vi.runAllTimersAsync()
+      await rejection
+      expect(sdk.GetDetails).toHaveBeenCalledTimes(6)
+      expect(sdk.DisableTheftProtectionLock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lock: repeating the same request sends nothing', async () => {
     queueDetails(body({ lockStatus: true }))
     expect(await provider().changeLock(DOMAIN, true)).toEqual({ changed: false })

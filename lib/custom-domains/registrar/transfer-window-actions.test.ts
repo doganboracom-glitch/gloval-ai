@@ -42,6 +42,7 @@ import {
   relockMyTransferWindow,
   requestMyTransferOutCode,
 } from './transfer-window-actions'
+import { RegistrarError } from './types'
 import type { OwnedDomainInfo } from './types'
 
 const EPP = 'EPP-TEST-ONLY'
@@ -238,7 +239,7 @@ describe('transfer window access controls', () => {
     }))
   })
 
-  it('requires confirmation for an unparseable registration date and audits only its safe reason code', async () => {
+  it('requires confirmation for an unparseable registration date and audits only its safe shape', async () => {
     const registrar = makeRegistrar(true)
     registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({
       startedAt: null,
@@ -251,9 +252,143 @@ describe('transfer window access controls', () => {
     })
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'transfer_code_viewed',
-      details: { outcome: 'failed', reason: 'start_date_unparseable' },
+      details: {
+        outcome: 'failed',
+        reason: 'start_date_unparseable',
+        startDateShape: '9999-99-99a99:99:99',
+      },
     }))
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('2026-01-01T10:00:00')
+  })
+
+  it('records an unlock-request stage and only the safe RegistrarError prefix', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.changeLock.mockRejectedValueOnce(
+      new RegistrarError('OUTCOME_UNKNOWN', 'domainnameapi:LOCK_NOT_CONFIRMED private-domain-token'),
+    )
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'PROVIDER_ERROR',
+    })
+
+    expect(registrar.changeLock.mock.calls).toEqual([
+      ['example.com', false],
+      ['example.com', true],
+    ])
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({
+        stage: 'unlock_request',
+        providerCode: 'domainnameapi:LOCK_NOT_CONFIRMED',
+      }),
+    }))
+    expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('private-domain-token')
+  })
+
+  it('waits for a stale post-unlock read-back without resending the unlock', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getManagedDetails
+      .mockResolvedValueOnce({ locked: true, expiresAt, remainingDays: 180, status: 'Active' })
+      .mockResolvedValueOnce({ locked: false, expiresAt, remainingDays: 180, status: 'Active' })
+
+    vi.useFakeTimers()
+    try {
+      const operation = requestMyTransferOutCode('example.com', 'example.com')
+      await vi.runAllTimersAsync()
+      await expect(operation).resolves.toMatchObject({ ok: true, authCode: EPP, created: true })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(registrar.changeLock).toHaveBeenCalledTimes(1)
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false)
+    expect(registrar.getManagedDetails).toHaveBeenCalledTimes(2)
+  })
+
+  it('relocks and fails closed when post-unlock read-back never confirms', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.changeLock.mockImplementationOnce(async () => ({
+      changed: true,
+      previousLocked: true,
+      locked: false,
+    }))
+
+    vi.useFakeTimers()
+    try {
+      const operation = requestMyTransferOutCode('example.com', 'example.com')
+      await vi.runAllTimersAsync()
+      await expect(operation).resolves.toEqual({ ok: false, error: 'DOMAIN_LOCKED' })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(registrar.changeLock.mock.calls).toEqual([
+      ['example.com', false],
+      ['example.com', true],
+    ])
+    expect(registrar.getManagedDetails).toHaveBeenCalledTimes(6)
+    expect(mocks.insertOpenWindow).not.toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({ stage: 'unlock_readback', locked: true }),
+    }))
+  })
+
+  it('relocks and schedules immediate recovery when window insertion fails', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.changeLock
+      .mockImplementationOnce(async () => ({ changed: true, previousLocked: true, locked: false }))
+      .mockRejectedValueOnce(new RegistrarError('PROVIDER_ERROR', 'domainnameapi:LOCK_EXCEPTION private-value'))
+    registrar.getManagedDetails.mockResolvedValueOnce({ locked: false, expiresAt, remainingDays: 180, status: 'Active' })
+    mocks.insertOpenWindow
+      .mockResolvedValueOnce({ ok: false, error: 'unavailable' })
+      .mockResolvedValueOnce({ ok: true, value: { ...activeWindow(), id: 'recovery-window' } })
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'WINDOW_UNAVAILABLE',
+    })
+
+    expect(registrar.changeLock.mock.calls).toEqual([
+      ['example.com', false],
+      ['example.com', true],
+    ])
+    expect(mocks.insertOpenWindow).toHaveBeenCalledTimes(2)
+    expect(mocks.updateOpenWindow).toHaveBeenCalledWith(
+      expect.anything(),
+      'recovery-window',
+      expect.objectContaining({ last_error_code: 'unlock_outcome_unconfirmed' }),
+    )
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({
+        stage: 'window_insert',
+        providerCode: 'domainnameapi:LOCK_EXCEPTION',
+      }),
+    }))
+    expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('private-value')
+  })
+
+  it('records provider failures while fetching a code without logging the provider message', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getAuthCode.mockRejectedValueOnce(
+      new RegistrarError('PROVIDER_ERROR', 'domainnameapi:AUTH_CODE_EXCEPTION private-response'),
+    )
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'PROVIDER_ERROR',
+    })
+
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_code_viewed',
+      details: expect.objectContaining({
+        stage: 'code_fetch',
+        providerCode: 'domainnameapi:AUTH_CODE_EXCEPTION',
+      }),
+    }))
+    expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('private-response')
   })
 
   it('keeps the 60-day restriction even when the user confirms the date warning', async () => {

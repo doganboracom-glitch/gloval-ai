@@ -12,7 +12,8 @@ import DNARest from 'nodejs-dna/src/DNARest'
 import { buildRegistrarDiagnostic, formatRegistrarDiagnostic } from './diagnostics'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
-import { isLaterRawDate, parseProviderDate, readFirstRawField, readRawField } from './provider-date'
+import { isLaterRawDate, parseProviderDate, parseProviderDateAssumingIstanbul, readFirstRawField, readRawField } from './provider-date'
+import { TRANSFER_LOCK_READBACK_DELAY_MS, TRANSFER_LOCK_READBACK_RETRIES } from './transfer-window-logic'
 import {
   RegistrarError,
   type DomainAvailabilityResult,
@@ -575,7 +576,7 @@ export class DomainNameApiProvider
   const raw = client.lastResponse
   const rawFields = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const expiry = parseProviderDate(readRawField(raw, 'expirationDate'))
-  const start = parseProviderDate(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
+  const start = parseProviderDateAssumingIstanbul(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
   const remaining = rawFields.remainingDay
   return {
     locked: asLockFlag(rawFields.lockStatus) ?? asLockFlag(d.LockStatus),
@@ -695,7 +696,7 @@ export class DomainNameApiProvider
       unknown
     >
     const expiry = parseProviderDate(raw.expirationDate)
-    const start = parseProviderDate(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
+    const start = parseProviderDateAssumingIstanbul(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
     const days = typeof raw.remainingDay === 'number' && Number.isFinite(raw.remainingDay) ? raw.remainingDay : null
     return {
       domain: String(d.DomainName || domain),
@@ -715,15 +716,15 @@ export class DomainNameApiProvider
   }
 
   /**
-   * Sends one change, then decides from a read-back. Never retries.
-   *  - read-back matches            -> success, whatever the envelope said
-   *  - envelope OK, read-back differs -> OUTCOME_UNKNOWN (may be propagation lag)
-   *  - envelope failed, read-back differs -> the change did not happen: PROVIDER_ERROR
+   * Sends one mutation and confirms it through a read-back. Only callers that
+   * explicitly opt in may retry ambiguous read-backs; the mutation itself is
+   * never sent again.
    */
   private async applyAndVerify(
     send: () => Promise<Envelope>,
     confirmed: () => Promise<boolean>,
     failureKey: string,
+    readbackRetries = 0,
   ): Promise<void> {
     let res: Envelope | null = null
     try {
@@ -733,12 +734,25 @@ export class DomainNameApiProvider
     }
 
     let applied = false
-    try {
-      applied = await confirmed()
-    } catch {
+    let readBackFailed = false
+    for (let retry = 0; retry <= readbackRetries; retry += 1) {
+      try {
+        applied = await confirmed()
+        readBackFailed = false
+      } catch {
+        applied = false
+        readBackFailed = true
+      }
+      if (applied) return
+
+      const outcomeUnknown = readBackFailed || res?.result === 'OK'
+      if (!outcomeUnknown || retry === readbackRetries) break
+      await new Promise((resolve) => setTimeout(resolve, TRANSFER_LOCK_READBACK_DELAY_MS))
+    }
+
+    if (readBackFailed) {
       throw new RegistrarError('OUTCOME_UNKNOWN', `domainnameapi:${failureKey}_UNCONFIRMED`)
     }
-    if (applied) return
     if (res && res.result === 'OK') {
       throw new RegistrarError('OUTCOME_UNKNOWN', `domainnameapi:${failureKey}_NOT_CONFIRMED`)
     }
@@ -794,6 +808,7 @@ export class DomainNameApiProvider
       () => (locked ? client.EnableTheftProtectionLock(domain) : client.DisableTheftProtectionLock(domain)),
       async () => (await this.requireDetails(domain)).locked === locked,
       'LOCK',
+      locked ? 0 : TRANSFER_LOCK_READBACK_RETRIES,
     )
     return { changed: true }
   }

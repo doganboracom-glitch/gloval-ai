@@ -120,7 +120,7 @@ describe('DomainNameApiProvider transfer support', () => {
     expect(await provider().getOwnedDomainInfo('example.com')).toMatchObject({
       status: 'Active',
       locked: true,
-      startedAt: null,
+      startedAt: '2025-01-01T07:00:00.000Z',
       expiresAt: null,
       startedAtRaw: '2025-01-01T10:00:00.1234567',
       expiresAtRaw: '2026-01-01T10:00:00.1234567',
@@ -129,7 +129,7 @@ describe('DomainNameApiProvider transfer support', () => {
     expect(await provider().getAuthCode('example.com')).toBe(EPP)
   })
 
-  it('returns an instant only for a date that names its own zone', async () => {
+  it('assumes Istanbul for registration dates while keeping expiry parsing strict', async () => {
     sdk.GetDetails.mockResolvedValue({ result: 'OK', data: { Status: 'Active', LockStatus: 'false' } })
     sdk.state.lastResponse = { expirationDate: '2026-01-01T07:00:00Z' }
     const info = await provider().getOwnedDomainInfo('example.com')
