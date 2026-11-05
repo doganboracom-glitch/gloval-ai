@@ -58,6 +58,14 @@ describe('describeScanError', () => {
     if (lang !== 'en') expect(limit.message).not.toBe(dictionary.en.ads.errPolicyAttemptLimit)
   })
 
+  it.each(SUPPORTED_LOCALES)('%s has complete manual fallback copy', (lang) => {
+    const copy = dictionary[lang].ads.manualFallback
+    for (const value of Object.values(copy)) {
+      expect(value.trim().length).toBeGreaterThan(0)
+    }
+    if (lang !== 'en') expect(copy.title).not.toBe(dictionary.en.ads.manualFallback.title)
+  })
+
   it('the unreachable message never names a cause such as robots, private network or noindex as a reason', () => {
     const tr = describeScanError({ code: 'unreachable' }, dictionary.tr.ads).message
     expect(tr).toContain('robots.txt')

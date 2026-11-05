@@ -6,8 +6,11 @@ import { AdsAddressForm } from './ads-address-form'
 import { dictionary } from '@/lib/i18n'
 import { sampleScanResult } from '@/lib/ads/testing/scan-result-fixture'
 import type { ClientScanOutcome } from '@/lib/ads/scan-client'
+import type { ManualPlanInput } from '@/lib/ads/manual-plan'
 
-const requestScan = vi.fn<(input: { address: string; requestId: string }) => Promise<ClientScanOutcome>>()
+const requestScan = vi.fn<
+  (input: { address: string; requestId: string; manual?: ManualPlanInput }) => Promise<ClientScanOutcome>
+>()
 const swrCalls: string[] = []
 
 vi.mock('@/components/language-provider', () => ({
@@ -28,7 +31,10 @@ vi.mock('next/link', () => ({
 }))
 vi.mock('@/lib/ads/scan-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/ads/scan-client')>()
-  return { ...actual, requestScan: (input: { address: string; requestId: string }) => requestScan(input) }
+  return {
+    ...actual,
+    requestScan: (input: { address: string; requestId: string; manual?: ManualPlanInput }) => requestScan(input),
+  }
 })
 
 const copy = dictionary.tr.ads
@@ -273,6 +279,68 @@ describe('AdsAddressForm', () => {
     expect(alert.textContent).toContain('robots.txt')
     expect(alert.textContent).toContain('hakkından düşülmedi')
     expect(screen.getByRole('button', { name: copy.actionRetry })).toBeTruthy()
+  })
+
+  it.each(['site_blocked', 'site_unresponsive'] as const)(
+    'offers the manual plan form for %s without exposing crawler internals',
+    async (code) => {
+      requestScan.mockResolvedValue({ ok: false, error: { code } })
+      render(<AdsAddressForm />)
+      submitAddress('https://ornek.com/hakkimizda')
+
+      expect(await screen.findByRole('heading', { level: 3, name: copy.manualFallback.title })).toBeTruthy()
+      expect(screen.getByLabelText(copy.manualFallback.businessLabel)).toBeTruthy()
+      expect(screen.getByLabelText(copy.manualFallback.servicesLabel)).toBeTruthy()
+      expect(screen.queryByText(/private network|raw response|stack/i)).toBeNull()
+    },
+  )
+
+  it('submits manual details through the same address route and labels the result as unverified', async () => {
+    requestScan
+      .mockResolvedValueOnce({ ok: false, error: { code: 'site_blocked' } })
+      .mockResolvedValueOnce({ ok: true, result: { ...sampleScanResult, source: 'manual' } })
+    render(<AdsAddressForm />)
+    submitAddress('https://ornek.com/hakkimizda')
+
+    const businessName = await screen.findByLabelText(copy.manualFallback.businessLabel)
+    const industry = screen.getByLabelText(copy.manualFallback.industryLabel)
+    const services = screen.getByLabelText(copy.manualFallback.servicesLabel)
+    const location = screen.getByLabelText(copy.manualFallback.locationLabel)
+    fireEvent.change(businessName, { target: { value: 'Northline Studio' } })
+    fireEvent.change(industry, { target: { value: 'Custom furniture' } })
+    fireEvent.change(services, { target: { value: 'Made-to-measure tables' } })
+    fireEvent.change(location, { target: { value: 'Ankara' } })
+    fireEvent.submit(businessName.closest('form')!)
+
+    await screen.findByRole('heading', { level: 2, name: copy.manualFallback.resultTitle })
+    expect(requestScan).toHaveBeenCalledTimes(2)
+    expect(requestScan.mock.calls[1][0]).toMatchObject({
+      address: 'ornek.com',
+      manual: {
+        businessName: 'Northline Studio',
+        industry: 'Custom furniture',
+        services: 'Made-to-measure tables',
+        location: 'Ankara',
+        language: 'tr',
+      },
+    })
+    expect(screen.getByRole('note').textContent).toBe(copy.manualFallback.note)
+  })
+
+  it('retries the same address with a fresh request id and no cached scan', async () => {
+    requestScan
+      .mockResolvedValueOnce({ ok: false, error: { code: 'unreachable' } })
+      .mockResolvedValueOnce({ ok: true, result: sampleScanResult })
+    render(<AdsAddressForm />)
+    submitAddress('https://ornek.com/hakkimizda')
+
+    fireEvent.click(await screen.findByRole('button', { name: copy.actionRetry }))
+    await screen.findByRole('heading', { level: 2 })
+
+    expect(requestScan).toHaveBeenCalledTimes(2)
+    expect(requestScan.mock.calls[0][0].address).toBe('ornek.com')
+    expect(requestScan.mock.calls[1][0].address).toBe('ornek.com')
+    expect(requestScan.mock.calls[1][0].requestId).not.toBe(requestScan.mock.calls[0][0].requestId)
   })
 
   it('a thrown runner becomes the network message instead of a stuck spinner', async () => {

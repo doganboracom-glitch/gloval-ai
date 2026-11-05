@@ -202,7 +202,7 @@ export const PLANNER_SYSTEM = [
   'General health services, pharmacies, medicine, and supplement mentions are not restricted by themselves. A health restriction requires a direct medical-product claim such as "mucize tedavi" or "kesin tedavi".',
   'Adult exclusions: lingerie, underwear, swimwear or bikinis, ordinary apparel or fashion, cosmetics, and jewelry are not adult by themselves. A standalone "sex shop" or "seks shop" SEO label without corroborating explicit sexual content or services is not enough for a warning.',
   'Set policyEvidence to "explicit" only when a short exact site quote contains a direct hard-policy signal for the selected category; policyEvidenceQuote is verified against the scanned snapshot and hard terms in code. Restricted categories must also meet their snapshot context threshold. For weak, indirect, or conflicting evidence, use policyCategory "none", policyEvidence "none", and an empty quote. Ambiguous model evidence never creates a warning. When no category applies, use policyCategory "none", policyEvidence "none", and an empty quote.',
-  'Set language to "tr" or "en" when the website or business brief uses that language, otherwise "other".'
+  'Set language to "tr" or "en" when the website or business brief uses that language, otherwise "other".',
   'Set competitiveness (low, medium, high) from how crowded paid search is for this kind of business. Do not give budget numbers.',
   'Only list cities that appear in the data.',
 ].join('\n')

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ADS_POLICY_BLOCK_GLOBAL_SUBJECT } from '@/lib/ads/policy-constants'
-import { runScan, type ScanDeps } from '@/lib/ads/scan-orchestrator'
+import { RATE_LIMITS, runScan, type ScanDeps } from '@/lib/ads/scan-orchestrator'
 import {
   ANON_ACTOR,
   COPY_OUTPUT,
@@ -36,6 +36,54 @@ describe('runScan: success', () => {
     const scan = calls.usage.find((row) => row.flow === 'scan')
     expect(scan).toMatchObject({ outcome: 'ok', free_quota_used: true, credits_charged: 0, anon_subject_hash: 'hash' })
     expect(calls.usage.map((row) => row.flow).sort()).toEqual(['plan', 'preview', 'scan'])
+  })
+
+  it('runs a manual draft through the same limits and policy pipeline without reading the site', async () => {
+    const scanSite = vi.fn(async () => ({ ok: false, code: 'site_blocked', detail: 'robots_disallowed' }) as never)
+    const rateLimit = vi.fn(() => ({ allowed: true, retryAfterMs: 0 }))
+    const { deps, calls } = makeDeps({ scanSite, rateLimit })
+    const outcome = await runScan(
+      {
+        ...REQUEST,
+        actor: ANON_ACTOR,
+        manual: {
+          businessName: 'Northline Studio',
+          industry: 'Custom furniture',
+          services: 'Made-to-measure tables; installation',
+          location: 'Ankara',
+          language: 'en',
+        },
+      },
+      deps,
+    )
+
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.source).toBe('manual')
+    expect(outcome.result.host).toBe('ornekmutfak.com')
+    expect(scanSite).not.toHaveBeenCalled()
+    expect(rateLimit).toHaveBeenNthCalledWith(
+      1,
+      `ads-scan:actor:ip:${ANON_ACTOR.ip}`,
+      RATE_LIMITS.perActorPerMinute,
+      60_000,
+    )
+    expect(rateLimit).toHaveBeenNthCalledWith(
+      2,
+      'ads-scan:host:ornekmutfak.com',
+      RATE_LIMITS.perHostPer10Minutes,
+      600_000,
+    )
+    expect(calls.reserve).toBe(1)
+    expect(calls.reservePolicy).toBe(1)
+    expect(calls.generate).toHaveLength(2)
+    expect(calls.generate[0].prompt).toContain('Business name: Northline Studio')
+    expect(calls.generate[0].prompt).not.toContain('Host: ornekmutfak.com')
+    expect(calls.release).toBe(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      free_quota_used: true,
+      outcome: 'ok',
+    })
   })
 
   it('charges credits when the free allowance is used up for a signed-in user', async () => {
@@ -160,6 +208,23 @@ describe('runScan: refunds on failure', () => {
     expect(calls.release).toBe(1)
     expect(calls.generate).toHaveLength(0)
     expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ outcome: 'error', error_code: 'unreachable:robots_disallowed', free_quota_used: false })
+  })
+
+  it.each([
+    ['site_blocked', 'robots_disallowed'],
+    ['site_unresponsive', 'timeout'],
+  ] as const)('%s does not consume the daily free scan', async (code, detail) => {
+    const { deps, calls } = makeDeps({
+      scanSite: async () => ({ ok: false, code, detail }) as never,
+    })
+    expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({ ok: false, error: { code } })
+    expect(calls.release).toBe(1)
+    expect(calls.generate).toHaveLength(0)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'error',
+      error_code: `${code}:${detail}`,
+      free_quota_used: false,
+    })
   })
 
   it('maps thin pages to insufficient_content and refunds a paid scan', async () => {
