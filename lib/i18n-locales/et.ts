@@ -945,8 +945,10 @@ const et: DeepPartial<Dict> = {
       statusActive: "Ülekandeaken on aktiivne — lukk aktiveeritakse automaatselt {time} pärast.",
       statusUnlocked: "Lukustamata — ülekantav. Domeeni kaitsmiseks aktiveerige lukk.",
       unavailable: "Ülekandeaken pole praegu saadaval; domeeni lukku ei muudetud.",
-      restrictionUnknown: "Ülekande ooteaega ei saanud kontrollida; koodi vaatamine on keelatud.",
-      guideTitle: "Ülekande käik ja turvalisus",
+  restrictionUnknown: "Ülekande ooteaega ei saanud kontrollida; koodi vaatamine on keelatud.",
+  startDateUnverifiedWarning: "Registreerimiskuupäeva ei õnnestunud kontrollida. Domeeniregistraator rakendab pärast uut registreerimist või ülekannet 60 päeva reeglit; kui see kehtib, võidakse ülekanne tagasi lükata.",
+  startDateConfirmationLabel: "Mõistan, et ülekanne võidakse tagasi lükata, kui registraatori 60 päeva reegel kehtib.",
+  guideTitle: "Ülekande käik ja turvalisus",
       trUnsupported: ".tr-domeenide ülekandmisel kehtib teine kord ja see voog neid ei hõlma.",
       guideItems: [
         "Ülekandekoodi taotlemisel eemaldatakse domeeni lukk 72 tunniks. Kood on ekraanil nähtav 60 sekundit ning seda ei salvestata e-kirja ega andmebaasi.",

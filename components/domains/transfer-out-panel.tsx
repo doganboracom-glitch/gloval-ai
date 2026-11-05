@@ -63,6 +63,8 @@ function outErrorText(code: TransferErrorCode, d: Dict['domains']): string {
       return d.outWindow.confirmationMismatch
     case 'STATUS_UNVERIFIED':
       return d.outWindow.statusUnverified
+    case 'START_DATE_CONFIRMATION_REQUIRED':
+      return d.outWindow.startDateUnverifiedWarning
     default:
       return d.outErr
   }
@@ -212,6 +214,12 @@ export function TransferOutPanel({
   const [error, setError] = useState<string | null>(null)
   const [confirmKind, setConfirmKind] = useState<'open' | 'lock' | null>(null)
   const [typedDomain, setTypedDomain] = useState('')
+  const [dateRiskAcknowledgement, setDateRiskAcknowledgement] = useState<{
+    domain: string
+    windowId: string | null
+  } | null>(null)
+  const [serverDateConfirmationDomain, setServerDateConfirmationDomain] = useState<string | null>(null)
+  const dateRiskCheckboxId = useId()
   const [now, setNow] = useState(() => Date.now())
   const [isPending, startTransition] = useTransition()
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -262,16 +270,30 @@ export function TransferOutPanel({
     }
   }
 
-  function startCodeRequest(confirmation?: string) {
+  function startCodeRequest(confirmation?: string, confirmedStartDateRisk = false) {
     setError(null)
     startTransition(async () => {
       try {
         const result = status?.ok && status.supported && status.featureEnabled
-          ? await actions.requestWindowCode(domain, confirmation)
+          ? await actions.requestWindowCode(domain, confirmation, confirmedStartDateRisk)
           : await actions.revealLegacyCode(domain)
         if (!result.ok) {
+          if (result.error === 'START_DATE_CONFIRMATION_REQUIRED') {
+            setServerDateConfirmationDomain(domain)
+            setDateRiskAcknowledgement(null)
+            setTypedDomain(confirmation ?? '')
+            setConfirmKind(null)
+            setError(null)
+            void mutate()
+            return
+          }
+          if (result.error === 'STATUS_UNVERIFIED') setDateRiskAcknowledgement(null)
           setError(outErrorText(result.error, d))
           return
+        }
+        if (confirmedStartDateRisk && 'window' in result) {
+          setDateRiskAcknowledgement({ domain, windowId: result.window.id })
+          setServerDateConfirmationDomain(null)
         }
         setCode(result.authCode)
         setCopied(false)
@@ -358,7 +380,19 @@ export function TransferOutPanel({
   const windowRemainingMs = activeWindow ? Date.parse(activeWindow.relockAt) - now : 0
   const windowExpired = activeWindow ? windowRemainingMs <= 0 : false
   const liveVerified = status.liveStatusReadable && status.locked !== null
-  const eligibilityVerified = liveVerified && status.activeAndUnexpired && status.restrictionVerified
+  const startDateConfirmationRequired =
+    status.startDateNeedsConfirmation ||
+    (serverDateConfirmationDomain === domain &&
+      status.liveStatusReadable &&
+      status.activeAndUnexpired &&
+      status.transferState === 'held')
+  const activeWindowId = activeWindow?.id ?? null
+  const startDateConfirmationChecked =
+    dateRiskAcknowledgement?.domain === domain && dateRiskAcknowledgement.windowId === activeWindowId
+  const eligibilityVerified =
+    liveVerified &&
+    status.activeAndUnexpired &&
+    (status.restrictionVerified || (startDateConfirmationRequired && startDateConfirmationChecked))
   const canRequestWindow =
     status.featureEnabled &&
     status.windowAvailable &&
@@ -451,8 +485,31 @@ export function TransferOutPanel({
               {statusCopy.unavailable}
             </p>
           )}
-          {!status.restrictionVerified && status.liveStatusReadable && (
+          {!status.restrictionVerified && status.liveStatusReadable && !startDateConfirmationRequired && (
             <p className="text-sm text-muted-foreground">{statusCopy.restrictionUnknown}</p>
+          )}
+          {startDateConfirmationRequired && (
+            <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p role="alert" className="flex items-start gap-2 text-sm leading-relaxed text-foreground">
+                <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
+                <span>{statusCopy.startDateUnverifiedWarning}</span>
+              </p>
+              <label htmlFor={dateRiskCheckboxId} className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-foreground">
+                <input
+                  id={dateRiskCheckboxId}
+                  type="checkbox"
+                  className="mt-1 size-4 shrink-0 accent-primary"
+                  checked={startDateConfirmationChecked}
+                  disabled={isPending}
+                  onChange={(event) =>
+                    setDateRiskAcknowledgement(
+                      event.currentTarget.checked ? { domain, windowId: activeWindowId } : null,
+                    )
+                  }
+                />
+                <span>{statusCopy.startDateConfirmationLabel}</span>
+              </label>
+            </div>
           )}
           {restrictedDate && <p className="text-sm text-muted-foreground">{fill(d.outRestricted, { date: restrictedDate })}</p>}
 
@@ -473,7 +530,7 @@ export function TransferOutPanel({
                 disabled={isPending || !canRequestWindow}
                 onClick={() => {
                   setError(null)
-                  setTypedDomain('')
+                  setTypedDomain((current) => (current === domain ? current : ''))
                   setConfirmKind('open')
                 }}
               >
@@ -487,7 +544,7 @@ export function TransferOutPanel({
                   type="button"
                   size="sm"
                   disabled={isPending || !canShowWindowCode || Boolean(code)}
-                  onClick={() => startCodeRequest()}
+                  onClick={() => startCodeRequest(undefined, startDateConfirmationRequired && startDateConfirmationChecked)}
                 >
                   {isPending && <Loader2 data-icon="inline-start" className="animate-spin" />}
                   {statusCopy.showCode}
@@ -533,7 +590,7 @@ export function TransferOutPanel({
         onClose={() => setConfirmKind(null)}
         onConfirm={() => {
           if (confirmKind === 'open') {
-            startCodeRequest(typedDomain)
+            startCodeRequest(typedDomain, startDateConfirmationRequired && startDateConfirmationChecked)
             setConfirmKind(null)
             setTypedDomain('')
           } else if (confirmKind === 'lock') {

@@ -135,7 +135,22 @@ export function isLaterRawDate(candidate: string | null, baseline: string | null
 }
 
 export function readRawField(lastResponse: unknown, field: string): string | undefined {
-  if (!lastResponse || typeof lastResponse !== 'object') return undefined
-  const value = (lastResponse as Record<string, unknown>)[field]
-  return typeof value === 'string' ? value : undefined
+  if (!lastResponse || typeof lastResponse !== 'object' || Array.isArray(lastResponse)) return undefined
+  const response = lastResponse as Record<string, unknown>
+  const exactValue = response[field]
+  if (typeof exactValue === 'string') return exactValue
+
+  const normalizedField = field.toLowerCase()
+  for (const [key, value] of Object.entries(response)) {
+    if (key.toLowerCase() === normalizedField && typeof value === 'string') return value
+  }
+  return undefined
+}
+
+export function readFirstRawField(lastResponse: unknown, fields: readonly string[]): string | undefined {
+  for (const field of fields) {
+    const value = readRawField(lastResponse, field)
+    if (value !== undefined && value.trim()) return value
+  }
+  return undefined
 }

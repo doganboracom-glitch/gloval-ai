@@ -974,8 +974,10 @@ const de: DeepPartial<Dict> = {
       statusActive: "Transferfenster aktiv — die Sperre wird in {time} automatisch aktiviert.",
       statusUnlocked: "Entsperrt — übertragbar. Aktivieren Sie die Sperre zum Schutz Ihrer Domain.",
       unavailable: "Das Transferfenster ist derzeit nicht verfügbar; die Domainsperre wurde nicht geändert.",
-      restrictionUnknown: "Die Transferwartezeit konnte nicht überprüft werden; der Abruf des Codes ist deaktiviert.",
-      guideTitle: "Transferablauf und Sicherheit",
+  restrictionUnknown: "Die Transferwartezeit konnte nicht überprüft werden; der Abruf des Codes ist deaktiviert.",
+  startDateUnverifiedWarning: "Das Registrierungsdatum konnte nicht verifiziert werden. Der Registrar wendet nach einer Neuregistrierung oder einem Transfer eine 60-Tage-Regel an; falls sie gilt, kann der Transfer abgelehnt werden.",
+  startDateConfirmationLabel: "Ich verstehe, dass der Transfer abgelehnt werden kann, wenn die 60-Tage-Regel des Registrars gilt.",
+  guideTitle: "Transferablauf und Sicherheit",
       trUnsupported: ".tr-Domains verwenden einen anderen Transferprozess und sind von diesem Ablauf ausgeschlossen.",
       guideItems: [
         "Wenn Sie den Transfercode anfordern, wird die Domainsperre für 72 Stunden deaktiviert. Der Code ist 60 Sekunden auf dem Bildschirm sichtbar und wird weder per E-Mail noch in der Datenbank gespeichert.",

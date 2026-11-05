@@ -56,6 +56,7 @@ export type TransferErrorCode =
   | 'WINDOW_LIMIT_REACHED'
   | 'CONFIRMATION_MISMATCH'
   | 'STATUS_UNVERIFIED'
+  | 'START_DATE_CONFIRMATION_REQUIRED'
   | 'FAILED'
 
 async function requireUser() {
@@ -272,6 +273,7 @@ export type TransferOutStatus =
       /** ISO date after which transfer-out is allowed; null when already allowed. */
       restrictedUntil: string | null
       restrictionVerified: boolean
+      startDateNeedsConfirmation: boolean
       activeAndUnexpired: boolean
       liveStatusReadable: boolean
       transferState: RegistrarTransferState
@@ -329,6 +331,9 @@ export async function getMyTransferOutStatus(domainInput: string): Promise<Trans
         remainingDays: info.remainingDays ?? null,
       })
     : false
+  const liveStatusReadable = Boolean(info && typeof info.locked === 'boolean' && transferState !== 'unknown')
+  const startDateNeedsConfirmation =
+    liveStatusReadable && activeAndUnexpired && transferState === 'held' && !restrictionVerified
 
   return {
     ok: true,
@@ -338,8 +343,9 @@ export async function getMyTransferOutStatus(domainInput: string): Promise<Trans
     expiresAt: info?.expiresAt ?? null,
     restrictedUntil: Number.isFinite(until) && until > Date.now() ? new Date(until).toISOString() : null,
     restrictionVerified,
+    startDateNeedsConfirmation,
     activeAndUnexpired,
-    liveStatusReadable: Boolean(info && info.locked !== null && transferState !== 'unknown'),
+    liveStatusReadable,
     transferState,
     windowAvailable,
     activeWindow,

@@ -945,8 +945,10 @@ const az: DeepPartial<Dict> = {
       statusActive: "Köçürmə pəncərəsi aktivdir — kilid {time} sonra avtomatik aktivləşdiriləcək.",
       statusUnlocked: "Kilid açıqdır — köçürmək mümkündür. Domeninizi qorumaq üçün kilidi aktivləşdirin.",
       unavailable: "Köçürmə pəncərəsi hazırda əlçatan deyil; domenin kilidi dəyişdirilmədi.",
-      restrictionUnknown: "Köçürmə üçün gözləmə müddətini yoxlamaq mümkün olmadı; kodun alınması deaktiv edilib.",
-      guideTitle: "Köçürmə prosesi və təhlükəsizlik",
+  restrictionUnknown: "Köçürmə üçün gözləmə müddətini yoxlamaq mümkün olmadı; kodun alınması deaktiv edilib.",
+  startDateUnverifiedWarning: "Qeydiyyat tarixini yoxlamaq mümkün olmadı. Qeydiyyatçı yeni qeydiyyatdan və ya domen köçürməsindən sonra 60 günlük qayda tətbiq edir; qayda qüvvədədirsə, köçürmə rədd edilə bilər.",
+  startDateConfirmationLabel: "Qeydiyyatçının 60 günlük qaydası tətbiq edilərsə, köçürmənin rədd edilə biləcəyini başa düşürəm.",
+  guideTitle: "Köçürmə prosesi və təhlükəsizlik",
       trUnsupported: ".tr domenləri fərqli köçürmə qaydalarına tabedir və bu axına daxil deyil.",
       guideItems: [
         "Köçürmə kodunu istədikdə domen kilidi 72 saatlıq söndürülür. Kod ekranda 60 saniyə görünür və e-poçtda və ya verilənlər bazasında saxlanmır.",

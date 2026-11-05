@@ -116,6 +116,8 @@ export type OwnedDomainInfo = {
   /** Verbatim provider date strings (may be zone-less, zone not documented). */
   expiresAtRaw?: string | null
   startedAtRaw?: string | null
+  /** Top-level raw GetDetails key names only; never includes provider values. */
+  rawFieldNames?: string[]
   /** Raw provider status label, e.g. "Active". */
   status: string
   /** Whether the provider holds an EPP code for this domain (the code itself is not exposed here). */

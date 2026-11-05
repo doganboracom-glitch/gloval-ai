@@ -945,8 +945,10 @@ const pl: DeepPartial<Dict> = {
       statusActive: "Okno transferu jest aktywne — blokada zostanie automatycznie włączona za {time}.",
       statusUnlocked: "Odblokowana — można ją przenieść. Włącz blokadę, aby chronić domenę.",
       unavailable: "Okno transferu jest teraz niedostępne; blokada domeny nie została zmieniona.",
-      restrictionUnknown: "Nie udało się zweryfikować okresu oczekiwania na transfer; pobieranie kodu jest wyłączone.",
-      guideTitle: "Przebieg transferu i bezpieczeństwo",
+  restrictionUnknown: "Nie udało się zweryfikować okresu oczekiwania na transfer; pobieranie kodu jest wyłączone.",
+  startDateUnverifiedWarning: "Nie udało się zweryfikować daty rejestracji. Rejestrator stosuje zasadę 60 dni po nowej rejestracji lub transferze; jeśli ma ona zastosowanie, transfer może zostać odrzucony.",
+  startDateConfirmationLabel: "Rozumiem, że transfer może zostać odrzucony, jeśli rejestrator zastosuje zasadę 60 dni.",
+  guideTitle: "Przebieg transferu i bezpieczeństwo",
       trUnsupported: "Domeny .tr podlegają innym zasadom transferu i nie są obsługiwane w tym procesie.",
       guideItems: [
         "Po zażądaniu kodu transferowego blokada domeny zostaje wyłączona na 72 godziny. Kod jest widoczny na ekranie przez 60 sekund i nie jest zapisywany w wiadomości e-mail ani w bazie danych.",
