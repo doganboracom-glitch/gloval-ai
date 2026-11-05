@@ -3,9 +3,10 @@ import { ADS_ANON_COOKIE, verifyAnonCookie } from '@/lib/ads/anon-identity'
 import { clientIpFromHeaders } from '@/lib/ads/client-ip'
 import { ADS_POLICY_BLOCK_RESERVATION_ID_PREFIX } from '@/lib/ads/policy-constants'
 import { ADS_SCAN_ERROR_STATUS, adsScanErrorBody, type AdsScanError } from '@/lib/ads/public-errors'
+import { manualPlanSchema } from '@/lib/ads/manual-plan'
 import { runScan, type ScanActor, type ScanDeps } from '@/lib/ads/scan-orchestrator'
 
-const MAX_BODY_BYTES = 2048
+const MAX_BODY_BYTES = 4096
 
 const bodySchema = z.object({
   address: z.string().trim().min(1).max(300),
@@ -13,6 +14,7 @@ const bodySchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{8,128}$/)
     .refine((value) => !value.startsWith(ADS_POLICY_BLOCK_RESERVATION_ID_PREFIX)),
+  manual: manualPlanSchema.optional(),
 })
 
 export type ScanHandlerEnv = {
@@ -42,11 +44,16 @@ function sameOrigin(request: Request): boolean {
 
 /** The request half of `POST /api/ads/scan`: identity, body validation, then the orchestrator. */
 export async function handleScanRequest(request: Request, env: ScanHandlerEnv): Promise<Response> {
-  if (!env.featureEnabled) return Response.json({ error: { code: 'service_unavailable' } }, { status: 404 })
+  if (!env.featureEnabled) {
+    return Response.json(
+      { error: { code: 'service_unavailable' } },
+      { status: 404, headers: { 'Cache-Control': 'no-store' } },
+    )
+  }
   if (!sameOrigin(request)) return errorResponse({ code: 'invalid_request' })
 
   const raw = await request.text()
-  if (raw.length > MAX_BODY_BYTES) return errorResponse({ code: 'invalid_request' })
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return errorResponse({ code: 'invalid_request' })
   let json: unknown
   try {
     json = JSON.parse(raw)
@@ -69,7 +76,15 @@ export async function handleScanRequest(request: Request, env: ScanHandlerEnv): 
     actor = { kind: 'anon', anonId: cookie.id, ip }
   }
 
-  const outcome = await runScan({ address: body.data.address, requestId: body.data.requestId, actor }, env.deps)
+  const outcome = await runScan(
+    {
+      address: body.data.address,
+      requestId: body.data.requestId,
+      actor,
+      ...(body.data.manual ? { manual: body.data.manual } : {}),
+    },
+    env.deps,
+  )
   if (!outcome.ok) return errorResponse(outcome.error)
   return Response.json({ result: outcome.result }, { headers: { 'Cache-Control': 'no-store' } })
 }

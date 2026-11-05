@@ -119,8 +119,8 @@ export function BotPageClient({ supportEmail }: { supportEmail: string }) {
           </CodeBlock>
           <p>
             {tr
-              ? `Siten bir güvenlik duvarı veya bot koruması arkasındaysa, “${BOT_NAME}” kullanıcı aracısına izin veren bir kural ekle. Sabit bir IP aralığı yayınlamıyoruz; bu yüzden izin kuralı kullanıcı aracısı üzerinden tanımlanmalıdır.`
-              : `If your site sits behind a firewall or bot protection, add a rule that allows the “${BOT_NAME}” user agent. We do not publish a fixed IP range, so the allow rule has to be based on the user agent.`}
+              ? 'robots.txt veya bir erişim kuralı GlovalAdsBot’u engellerse dururuz; korumaları aşmaya çalışmayız. İzin vermek isteğe bağlıdır. Sabit IP aralığı yayınlamıyoruz; güvenlik duvarı kuralını yalnızca kendi güvenlik politikan doğrultusunda tanımla.'
+              : 'If robots.txt or an access control blocks GlovalAdsBot, we stop and do not try to bypass it. Allowing the crawler is optional. We do not publish a fixed IP range; configure any firewall rule only if it fits your security policy.'}
           </p>
         </Section>
 

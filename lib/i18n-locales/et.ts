@@ -1521,6 +1521,7 @@ const et: DeepPartial<Dict> = {
     noticeTerms: 'Tühistamise ja tagasimakse tingimused leiad siit:',
   },
   ads: {
+    manualFallback: { title: 'Koosta plaani mustand ettevõtte andmete põhjal', description: 'Kui saiti ei saa lugeda, sisesta allpool ettevõtte andmed. Me ei möödu robots.txt-ist ega juurdepääsukontrollist.', note: 'Mustand põhineb ainult sinu esitatud andmetel; saiti ei skannita ja siht-URL-i ei kontrollita.', resultTitle: 'Koosta plaani mustand ettevõtte andmete põhjal', summaryTitle: 'Esitatud ettevõtte andmed', businessLabel: 'Ettevõtte nimi', industryLabel: 'Tegevusala', servicesLabel: 'Tooted või teenused', locationLabel: 'Teeninduspiirkond (valikuline)', languageLabel: 'Reklaami keel', submitLabel: 'Loo mustand' },
     disconnectDialog: {
       title: 'Kas katkestada Google Adsi ühendus?',
       description: 'Ühenduse katkestamisel tühistatakse GLOVALi juurdepääs sinu Google’i kontole ja salvestatud juurdepääsuvõti kustutatakse. Saad igal ajal uuesti ühenduse luua.',

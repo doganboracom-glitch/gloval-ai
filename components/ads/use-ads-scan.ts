@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
+import type { ManualPlanInput } from '@/lib/ads/manual-plan'
 import {
   ADS_SESSION_PATH,
   requestScan,
@@ -23,7 +24,7 @@ async function ensureSession(url: string) {
   return response.ok
 }
 
-type ScanRunner = (input: { address: string; requestId: string }) => Promise<ClientScanOutcome>
+type ScanRunner = (input: { address: string; requestId: string; manual?: ManualPlanInput }) => Promise<ClientScanOutcome>
 
 /**
  * Drives one scan at a time. The anonymous cookie is requested as soon as the
@@ -50,17 +51,20 @@ export function useAdsScan(runner: ScanRunner = requestScan) {
   }, [busy])
 
   const start = useCallback(
-    async (address: string) => {
-      if (requestIdRef.current) return
+    async (address: string, manual?: ManualPlanInput): Promise<ClientScanOutcome | null> => {
+      if (requestIdRef.current) return null
       const requestId = crypto.randomUUID()
       requestIdRef.current = requestId
       setElapsed(0)
       setState({ phase: 'busy', stage: 'reading' })
       try {
-        const outcome = await runner({ address, requestId })
+        const outcome = await runner({ address, requestId, ...(manual ? { manual } : {}) })
         setState(outcome.ok ? { phase: 'done', result: outcome.result } : { phase: 'error', error: outcome.error })
+        return outcome
       } catch {
-        setState({ phase: 'error', error: { code: 'network' } })
+        const outcome: ClientScanOutcome = { ok: false, error: { code: 'network' } }
+        setState({ phase: 'error', error: outcome.error })
+        return outcome
       } finally {
         requestIdRef.current = null
       }
