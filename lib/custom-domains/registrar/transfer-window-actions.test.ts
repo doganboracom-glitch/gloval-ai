@@ -200,7 +200,7 @@ describe('transfer window access controls', () => {
     const result = await requestMyTransferOutCode('example.com', 'example.com', true)
 
     expect(result).toMatchObject({ ok: true, authCode: EPP, created: true })
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true, lockCall: {} })
     expect(mocks.insertOpenWindow).toHaveBeenCalled()
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'transfer_lock_changed',
@@ -273,7 +273,7 @@ describe('transfer window access controls', () => {
     })
 
     expect(registrar.changeLock.mock.calls).toEqual([
-      ['example.com', false, { acceptUnconfirmed: true }],
+      ['example.com', false, { acceptUnconfirmed: true, lockCall: {} }],
       ['example.com', true],
     ])
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -302,11 +302,33 @@ describe('transfer window access controls', () => {
     })
 
     expect(registrar.changeLock).toHaveBeenCalledTimes(1)
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true, lockCall: {} })
     expect(mocks.insertOpenWindow).toHaveBeenCalledTimes(1)
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'transfer_lock_changed',
       details: expect.objectContaining({ stage: 'unlock_pending', outcome: 'deferred', locked: null }),
+    }))
+  })
+
+  it('refuses to open a window when the registrar silently ignored the unlock', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.changeLock.mockImplementationOnce(async () => ({
+      changed: false,
+      ineffective: true,
+      previousLocked: true,
+      locked: true,
+    }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'UNLOCK_INEFFECTIVE',
+    })
+
+    expect(mocks.insertOpenWindow).not.toHaveBeenCalled()
+    expect(registrar.getAuthCode).not.toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({ stage: 'unlock_ineffective' }),
     }))
   })
 
@@ -339,7 +361,7 @@ describe('transfer window access controls', () => {
     })
 
     expect(registrar.changeLock.mock.calls).toEqual([
-      ['example.com', false, { acceptUnconfirmed: true }],
+      ['example.com', false, { acceptUnconfirmed: true, lockCall: {} }],
       ['example.com', true],
     ])
     expect(mocks.insertOpenWindow).toHaveBeenCalledTimes(2)
@@ -397,7 +419,7 @@ describe('transfer window access controls', () => {
     const result = await requestMyTransferOutCode('example.com', 'example.com')
 
     expect(result).toMatchObject({ ok: true, authCode: EPP, created: true })
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true, lockCall: {} })
     expect(mocks.insertOpenWindow.mock.invocationCallOrder[0]).toBeGreaterThan(
       registrar.changeLock.mock.invocationCallOrder[0],
     )

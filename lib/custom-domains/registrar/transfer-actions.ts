@@ -57,6 +57,7 @@ export type TransferErrorCode =
   | 'CONFIRMATION_MISMATCH'
   | 'STATUS_UNVERIFIED'
   | 'START_DATE_CONFIRMATION_REQUIRED'
+  | 'UNLOCK_INEFFECTIVE'
   | 'FAILED'
 
 async function requireUser() {

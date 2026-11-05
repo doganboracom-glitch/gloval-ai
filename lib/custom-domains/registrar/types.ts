@@ -224,6 +224,27 @@ export type ManageChange = {
    * (only possible when the caller opted in with `acceptUnconfirmed`).
    */
   pending?: boolean
+  /**
+   * Only with `lockCall`: the unlock was accepted without any error code, yet
+   * both timed read-backs still show the domain locked.
+   */
+  ineffective?: boolean
+}
+
+/** Raw wire form of the provider's lock flag, never the flag's meaning. */
+export type LockRawShape = 'true' | 'false' | '"true"' | '"false"' | '1' | '0' | 'other' | 'unreadable'
+
+/**
+ * Safe, value-free summary of one lock call. Filled in place by the provider so
+ * the caller can still read it when the call throws. It holds no request body,
+ * account data, codes or free text.
+ */
+export type LockCallSummary = {
+  httpStatus?: number
+  bodyKeys?: string[]
+  errorCode?: string
+  lockAfter5s?: LockRawShape
+  lockAfter20s?: LockRawShape
 }
 
 /**
@@ -241,7 +262,19 @@ export interface DomainManageCapable {
    * instead of waiting and throwing `OUTCOME_UNKNOWN`. Explicit provider
    * errors still throw.
    */
-  changeLock(domain: string, locked: boolean, options?: { acceptUnconfirmed?: boolean }): Promise<ManageChange>
+  changeLock(
+    domain: string,
+    locked: boolean,
+    options?: {
+      acceptUnconfirmed?: boolean
+      /**
+       * Send once, then read the raw lock flag back after 5 s and 20 s and
+       * fill this summary. An unlock still shown as locked with no error code
+       * resolves as `{ ineffective: true }`.
+       */
+      lockCall?: LockCallSummary
+    },
+  ): Promise<ManageChange>
   getContacts(domain: string): Promise<DomainContactSet>
   /** Applies one contact to all four WHOIS roles, as registration does. */
   updateContacts(domain: string, contact: DomainContact): Promise<ManageChange>
