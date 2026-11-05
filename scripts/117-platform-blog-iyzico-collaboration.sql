@@ -57,6 +57,8 @@ GLOVAL AI’da ana sayfadaki kurulum alanına işletmeni, hedef kitleni ve satac
 
 E-Ticaret paketinin ürün, sepet ve mağaza yönetimi kapsamını [fiyatlandırma sayfasında](/#pricing) inceleyebilir; doğrudan [e-ticaret kurulum alanına](/#hero-input) giderek ilk mağaza taslağını oluşturmaya başlayabilirsin.
 
+![iyzico × GLOVAL AI iş birliği: e-ticaret web siteni bugün kur; 7 gün vadede %2.29 ödeme duyurusu.](/blog/isbirligi/iyzico-gloval-x-1200x675.png)
+
 ## iyzico ile ödeme ve %2.29 duyurusu
 
 İşbirliği kapsamında paylaşılan duyuruda “iyzico ile ödeme: %2.29 işlem oranı*” ifadesi yer alıyor. Dipnot, bu oranı “7 gün vadede %2.29” olarak açıklıyor. Ayrıntılar iyzico ile yapılan anlaşma koşullarına tabidir. Başvuru, hesap onayı, vade ve işlem koşullarını ödeme almaya başlamadan önce iyzico’dan doğrula. Bu metin tüm mağazalar için aynı koşulların geçerli olduğu, başvurunun kabul edileceği veya satışların belirli bir seviyeye ulaşacağı yönünde bir taahhüt değildir.

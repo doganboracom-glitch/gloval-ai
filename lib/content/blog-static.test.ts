@@ -28,6 +28,9 @@ describe('iyzico collaboration blog post', () => {
     expect(words.length).toBeLessThanOrEqual(600)
     expect(body).toContain('[fiyatlandırma sayfasında](/#pricing)')
     expect(body).toContain('[e-ticaret kurulum alanına](/#hero-input)')
+    const xImage = '![iyzico × GLOVAL AI iş birliği: e-ticaret web siteni bugün kur; 7 gün vadede %2.29 ödeme duyurusu.](/blog/isbirligi/iyzico-gloval-x-1200x675.png)'
+    expect(body).toContain(xImage)
+    expect(body.indexOf(xImage)).toBeLessThan(body.indexOf('## iyzico ile ödeme ve %2.29 duyurusu'))
     expect(body).toContain('iyzico ile ödeme almak için ne yapmalıyım?')
     expect(body).toContain('%2.29 oranı tüm mağazalar için geçerli mi?')
     expect(body).toContain('Mağaza ve ürün bilgileri otomatik tamamlanıyor mu?')

@@ -8,6 +8,20 @@ import { OG_IMAGE_SIZE, ogImageUrlForPost } from '@/lib/seo/page-seo'
 /** Posts are admin-managed: pages are regenerated at most every 5 minutes, and instantly when an admin saves. */
 export const revalidate = 300
 
+const IYZICO_COLLABORATION_SLUG = 'iyzico-gloval-ai-isbirligi-e-ticaret-websiteni-bugun-kur'
+const IYZICO_LINKEDIN_IMAGE = {
+  url: '/blog/isbirligi/iyzico-gloval-linkedin-1200x627.png',
+  width: 1200,
+  height: 627,
+  alt: 'iyzico × GLOVAL AI iş birliği duyurusu: e-ticaret mağazanı kur, iyzico ile ödeme al; %2.29 oranı 7 gün vade dipnotuyla.',
+}
+const IYZICO_X_IMAGE = {
+  url: '/blog/isbirligi/iyzico-gloval-x-1200x675.png',
+  width: 1200,
+  height: 675,
+  alt: 'iyzico × GLOVAL AI iş birliği: e-ticaret web siteni bugün kur; 7 gün vadede %2.29 ödeme duyurusu.',
+}
+
 export async function generateStaticParams() {
   return (await getPosts()).map((post) => ({ slug: post.slug }))
 }
@@ -26,13 +40,15 @@ export async function generateMetadata({
   // per request.
   const title = post.seoTitle.tr
   const description = post.seoDescription.tr
-  // A post's own cover wins; otherwise the generated 1200x630 share image
-  // (title on the brand background) is used so every share has a real preview.
+  // This announcement has dedicated crops for Open Graph (LinkedIn) and X;
+  // other posts use their cover or a generated 1200x630 share image.
   const image = {
     url: post.coverImage ?? ogImageUrlForPost(post.slug),
     ...OG_IMAGE_SIZE,
     alt: post.coverAlt?.tr ?? title,
   }
+  const openGraphImage = post.slug === IYZICO_COLLABORATION_SLUG ? IYZICO_LINKEDIN_IMAGE : image
+  const twitterImage = post.slug === IYZICO_COLLABORATION_SLUG ? IYZICO_X_IMAGE : image
   return {
     title,
     description,
@@ -46,7 +62,7 @@ export async function generateMetadata({
       title,
       description,
       url: `/blog/${post.slug}`,
-      images: [image],
+      images: [openGraphImage],
       publishedTime: post.publishedAt,
       modifiedTime: post.updatedAt,
     },
@@ -54,7 +70,7 @@ export async function generateMetadata({
       card: 'summary_large_image',
       title,
       description,
-      images: [{ url: image.url, alt: image.alt }],
+      images: [{ url: twitterImage.url, alt: twitterImage.alt }],
     },
   }
 }

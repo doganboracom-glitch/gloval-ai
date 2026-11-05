@@ -577,6 +577,13 @@ export const staticPosts: StaticBlogPost[] = [
         },
       },
       {
+        type: 'paragraph',
+        text: {
+          tr: '![iyzico × GLOVAL AI iş birliği: e-ticaret web siteni bugün kur; 7 gün vadede %2.29 ödeme duyurusu.](/blog/isbirligi/iyzico-gloval-x-1200x675.png)',
+          en: '',
+        },
+      },
+      {
         type: 'heading',
         text: { tr: 'iyzico ile ödeme ve %2.29 duyurusu', en: '' },
       },
