@@ -62,13 +62,28 @@ describe('blog rows in plan copy', () => {
     })
   }
 
+  const SETTLEMENT_TERMS: Record<(typeof SUPPORTED_LOCALES)[number], string> = {
+    tr: '7 gün',
+    en: '7-day',
+    fr: '7 jours',
+    de: '7 Tagen',
+    it: '7 giorni',
+    et: '7 päeva',
+    pl: '7-dniowym',
+    es: '7 días',
+    pt: '7 dias',
+    ar: '7 أيام',
+    ru: '7 дней',
+    az: '7 günlük',
+  }
+
   it.each(SUPPORTED_LOCALES)('%s: shows the iyzico rate and 7-day footnote only on E-COMMERCE', (locale) => {
     const ecommerce = buildPlanView('ecommerce', 'yearly', locale)
     const pro = buildPlanView('pro', 'yearly', locale)
 
     expect(ecommerce.ecommercePaymentRateLine).toContain('%2.29')
     expect(ecommerce.ecommercePaymentRateFootnote).toContain('%2.29')
-    expect(ecommerce.ecommercePaymentRateFootnote).toContain('7 gün')
+    expect(ecommerce.ecommercePaymentRateFootnote).toContain(SETTLEMENT_TERMS[locale])
     expect(pro.groups.flatMap((group) => group.items.map((item) => item.label))).not.toContain(
       ecommerce.ecommercePaymentRateLine,
     )
