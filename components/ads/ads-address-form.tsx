@@ -95,7 +95,7 @@ export function AdsAddressForm() {
                 aria-describedby={
                   validationError ? 'ads-address-error ads-address-hint' : 'ads-address-hint'
                 }
-                className="ads-address-input h-16 w-full min-w-0 flex-1 bg-transparent p-0 text-lg leading-6 text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+                className="ads-address-input theme-aware-autofill h-16 w-full min-w-0 flex-1 bg-transparent p-0 text-lg leading-6 text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
           </div>
