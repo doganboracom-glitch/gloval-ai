@@ -366,10 +366,14 @@ describe('renewDomain (paid)', () => {
     expect(await codeOf(provider().renewDomain(DOMAIN, 1))).toBe('OUTCOME_UNKNOWN')
   })
 
-  it('an OK reply with an unreadable read-back is OUTCOME_UNKNOWN', async () => {
+  it('an acknowledged renewal with an unreadable expiry is successful and awaits expiry sync', async () => {
     queueDetails(BEFORE, 'throw')
     sdk.Renew.mockResolvedValue({ result: 'OK' })
-    expect(await codeOf(provider().renewDomain(DOMAIN, 1))).toBe('OUTCOME_UNKNOWN')
+    await expect(provider().renewDomain(DOMAIN, 1)).resolves.toEqual({
+      expiresAtRaw: null,
+      expirySyncPending: true,
+    })
+    expect(sdk.Renew).toHaveBeenCalledTimes(1)
   })
 
   it('the SDK swallowed-network-error code DOMAIN_RENEW is OUTCOME_UNKNOWN', async () => {

@@ -932,10 +932,9 @@ export class DomainNameApiProvider
     if (res.result !== 'OK') {
       throw new RegistrarError('OUTCOME_UNKNOWN', `domainnameapi:RENEW_${res.error?.Code ?? 'UNKNOWN'}`)
     }
-    if (!res.error?.Code) {
-      // The provider acknowledged Renew but GetDetails has not caught up (or
-      // is temporarily unavailable). Persist success and retry only the read;
-      // never issue another paid Renew for this attempt.
+    if (!res.error?.Code && (!after || !after.expiresAtRaw)) {
+      // The provider acknowledged Renew but the expiry field could not be read.
+      // Persist success and retry only the read; never issue another paid Renew.
       return { expiresAtRaw: after?.expiresAtRaw ?? null, expirySyncPending: true }
     }
     throw new RegistrarError('OUTCOME_UNKNOWN', 'domainnameapi:RENEW_NOT_CONFIRMED')
