@@ -3,12 +3,14 @@
 import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Check, Copy, Loader2, ShieldCheck } from 'lucide-react'
+import { Check, Copy, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import { CREDIT_MIN_CENTS, REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
-import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import type { ReferralDashboardData, ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import { ReferralCustomerDetails } from '@/components/referral-customer-details'
+import { ReferralMetrics } from '@/components/referral-metrics'
 import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -18,7 +20,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -31,7 +32,7 @@ const minimumCreditEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 
 
 const COPY = {
   tr: {
-    title: 'Satış Ortaklığı',
+    title: 'Satış ortaklığı',
     descriptionBeforeLink: 'GLOVAL AI bağlantınızı paylaşın ve yönlendirmelerinizi ',
     descriptionLink: 'panelden',
     descriptionAfterLink: ' güvenli biçimde takip edin.',
@@ -99,7 +100,7 @@ const COPY = {
     } as Record<string, string>,
   },
   en: {
-    title: 'Referral Partner',
+    title: 'Referral partnership',
     descriptionBeforeLink: 'Share your GLOVAL AI link and securely track referrals from your ',
     descriptionLink: 'dashboard',
     descriptionAfterLink: '.',
@@ -171,12 +172,14 @@ const COPY = {
 export function ReferralPartnerCard({
   enabled,
   partner,
+  dashboardData = null,
   payoutData = null,
   payoutsEnabled = false,
   cashPayoutsEnabled = false,
 }: {
   enabled: boolean
   partner: ReferralPartnerSettings | null
+  dashboardData?: ReferralDashboardData | null
   payoutData?: ReferralPayoutPanelData | null
   payoutsEnabled?: boolean
   cashPayoutsEnabled?: boolean
@@ -334,15 +337,19 @@ export function ReferralPartnerCard({
 
   return (
     <>
-      <Card className="mx-auto mt-6 w-full max-w-2xl border-border/80 bg-card/70">
-        <CardHeader className="gap-2 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
-              {copy.title}
-            </CardTitle>
-            {partner && <Badge variant={partner.status === 'active' ? 'default' : 'secondary'}>{statusLabel}</Badge>}
-          </div>
+      <section
+        id="satis-ortakligi"
+        aria-labelledby="referral-partner-title"
+        className="mx-auto mt-6 w-full max-w-2xl scroll-mt-24"
+      >
+        <Card className="border-border/80 bg-card/70">
+          <CardHeader className="gap-2 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 id="referral-partner-title" className="text-lg font-semibold leading-6 tracking-tight">
+                {copy.title}
+              </h2>
+              {partner && <Badge variant={partner.status === 'active' ? 'default' : 'secondary'}>{statusLabel}</Badge>}
+            </div>
           <CardDescription>
             {copy.descriptionBeforeLink}
             <Link href="/dashboard#satis-ortakligi" className="font-medium text-primary underline underline-offset-4">
@@ -350,11 +357,17 @@ export function ReferralPartnerCard({
             </Link>
             {copy.descriptionAfterLink}
           </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
-          {partner?.status === 'active' && referralUrl ? (
-            <>
-              <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
+            {partner?.status === 'active' && referralUrl ? (
+              <>
+                {dashboardData && (
+                  <div className="flex flex-col gap-3">
+                    <ReferralMetrics data={dashboardData} />
+                    <ReferralCustomerDetails customers={dashboardData.customers} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">{copy.codeLabel}</p>
                   <p className="mt-1 font-mono text-sm text-muted-foreground">
@@ -603,7 +616,8 @@ export function ReferralPartnerCard({
             </p>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
       <ConfirmDialog
         open={showCloseConfirm}

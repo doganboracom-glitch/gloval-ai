@@ -140,10 +140,10 @@ describe('referral dashboard jump button', () => {
     Reflect.deleteProperty(window, 'visualViewport')
   })
 
-  it('renders no link when there is no referral data', () => {
+  it('renders no referral links when the feature is disabled', () => {
     languageState.lang = 'tr'
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
-    render(<ReferralDashboardPanel data={null} />)
+    render(<ReferralDashboardPanel data={null} enabled={false} />)
     expect(screen.queryByRole('link')).toBeNull()
   })
 })

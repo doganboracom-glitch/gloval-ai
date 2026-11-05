@@ -1,88 +1,77 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Check, Copy, MousePointerClick, UserRoundCheck, Users, WalletCards } from 'lucide-react'
+import Link from 'next/link'
+import { Check, Copy } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { ReferralPayoutControls } from '@/components/settings/referral-payout-controls'
+import { LinkButton } from '@/components/link-button'
 import { ReferralJumpLink } from '@/components/dashboard/referral-jump-link'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import type { ReferralCustomerStatus, ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import { ReferralMetrics } from '@/components/referral-metrics'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { formatReferralTry } from '@/lib/referrals/payout-core'
+import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const SECTION_ID = 'satis-ortakligi'
+
+type DashboardCopy = {
+  title: string
+  details: string
+  invitation: string
+  join: string
+  link: string
+  copy: string
+  copied: string
+  copyFailed: string
+  balance: string
+  balanceUnavailable: string
+  jumpToSection: string
+  jumpToSectionLabel: string
+}
 
 const COPY = {
   tr: {
     title: 'Satış ortaklığı',
-    description: 'Yönlendirme bağlantınızın tıklama ve kayıt sonuçları.',
-    clicks: 'Tıklamalar',
-    signups: 'Kayıt olan',
-    verified: 'E-posta doğrulandı',
-    paid: 'Ücretli müşteri',
-    conversion: 'Dönüşüm',
-    clickToSignup: 'Tıklama → kayıt',
-    signupToPaid: 'Kayıt → ücretli',
+    details: 'Ayrıntı',
+    invitation: 'Satış ortaklığı programına katılın, size özel bağlantınızla yönlendirme sonuçlarını takip edin.',
+    join: 'Ortak ol',
     link: 'Yönlendirme bağlantınız',
-    copy: 'Bağlantıyı kopyala',
+    copy: 'Kopyala',
     copied: 'Kopyalandı',
     copyFailed: 'Bağlantı kopyalanamadı.',
-    customers: 'Yönlendirilen müşteriler',
-    noCustomers: 'Henüz yönlendirme kaydı yok.',
-    statuses: { signup: 'Kayıt oldu', verified: 'Doğrulandı', paid: 'Ücretli' },
-    date: 'Kayıt tarihi',
-    deleted: 'Üye tarafından silindi',
-    deletedAccount: 'Silinmiş hesap',
-    jumpToSection: '↓ Satış Ortaklığı',
+    balance: 'Hesapta görünen',
+    balanceUnavailable: 'Şu anda görüntülenemiyor',
+    jumpToSection: '↓ Satış ortaklığı',
     jumpToSectionLabel: 'Satış ortaklığı bölümüne git',
   },
   en: {
     title: 'Referral partnership',
-    description: 'Clicks and signup outcomes for your referral link.',
-    clicks: 'Clicks',
-    signups: 'Signups',
-    verified: 'Email verified',
-    paid: 'Paid customers',
-    conversion: 'Conversion',
-    clickToSignup: 'Click → signup',
-    signupToPaid: 'Signup → paid',
+    details: 'Details',
+    invitation: 'Join the referral program and track results from your own link.',
+    join: 'Become a partner',
     link: 'Your referral link',
-    copy: 'Copy link',
+    copy: 'Copy',
     copied: 'Copied',
     copyFailed: 'Could not copy the link.',
-    customers: 'Referred customers',
-    noCustomers: 'No referrals yet.',
-    statuses: { signup: 'Signed up', verified: 'Verified', paid: 'Paid' },
-    date: 'Signup date',
-    deleted: 'Deleted by member',
-    deletedAccount: 'Deleted account',
+    balance: 'Balance on account',
+    balanceUnavailable: 'Unavailable right now',
     jumpToSection: '↓ Referral partnership',
     jumpToSectionLabel: 'Go to the referral partnership section',
   },
-} as const
-
-const STATUS_VARIANT: Record<ReferralCustomerStatus, 'secondary' | 'default'> = {
-  signup: 'secondary',
-  verified: 'secondary',
-  paid: 'default',
-}
+} satisfies Record<'tr' | 'en', DashboardCopy>
 
 export function ReferralDashboardPanel({
   data,
+  enabled = true,
+  hasPartner = Boolean(data),
   payoutData = null,
   payoutsEnabled = false,
-  cashPayoutsEnabled = false,
 }: {
   data: ReferralDashboardData | null
+  enabled?: boolean
+  hasPartner?: boolean
   payoutData?: ReferralPayoutPanelData | null
   payoutsEnabled?: boolean
-  cashPayoutsEnabled?: boolean
 }) {
   const { lang } = useLanguage()
   const language = lang === 'tr' ? 'tr' : 'en'
@@ -90,17 +79,12 @@ export function ReferralDashboardPanel({
   const sectionRef = useRef<HTMLElement>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
-  if (!data) return null
+  if (!enabled || (!data && hasPartner)) return null
 
-  const referralUrl = `https://gloval.ai/?ref=${data.referralCode}`
-  const formatter = new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US')
-  const percentFormatter = new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
-    maximumFractionDigits: 1,
-  })
-  const clickToSignup = data.clicks > 0 ? (data.signups / data.clicks) * 100 : 0
-  const signupToPaid = data.signups > 0 ? (data.paidCustomers / data.signups) * 100 : 0
+  const referralUrl = data ? `https://gloval.ai/?ref=${data.referralCode}` : ''
 
   async function handleCopyLink() {
+    if (!referralUrl) return
     try {
       await navigator.clipboard.writeText(referralUrl)
       setCopyState('copied')
@@ -111,116 +95,88 @@ export function ReferralDashboardPanel({
 
   return (
     <>
-    <section ref={sectionRef} id={SECTION_ID} aria-labelledby="referral-dashboard-title" className="mt-8 flex flex-col gap-4 scroll-mt-24">
-      <div>
-        <h2 id="referral-dashboard-title" className="text-xl font-semibold tracking-tight text-foreground">
-          {copy.title}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.description}</p>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-            <CardDescription>{copy.clicks}</CardDescription>
-            <MousePointerClick className="size-4 text-muted-foreground" aria-hidden="true" />
-          </CardHeader>
-          <CardContent><p className="text-2xl font-semibold tabular-nums">{formatter.format(data.clicks)}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-            <CardDescription>{copy.signups}</CardDescription>
-            <Users className="size-4 text-muted-foreground" aria-hidden="true" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold tabular-nums">{formatter.format(data.signups)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{formatter.format(data.verifiedSignups)} {copy.verified.toLocaleLowerCase(language === 'tr' ? 'tr-TR' : 'en-US')}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-            <CardDescription>{copy.paid}</CardDescription>
-            <UserRoundCheck className="size-4 text-muted-foreground" aria-hidden="true" />
-          </CardHeader>
-          <CardContent><p className="text-2xl font-semibold tabular-nums">{formatter.format(data.paidCustomers)}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3 pb-2">
-            <CardDescription>{copy.conversion}</CardDescription>
-            <WalletCards className="size-4 text-muted-foreground" aria-hidden="true" />
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-muted-foreground">{copy.clickToSignup}</span>
-              <span className="font-semibold tabular-nums">{percentFormatter.format(clickToSignup)}%</span>
+      <section
+        ref={sectionRef}
+        id={SECTION_ID}
+        aria-labelledby="referral-dashboard-title"
+        className="mt-6 scroll-mt-24"
+      >
+        <Card className="border-border/80 bg-card/70">
+          <CardHeader className="p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="referral-dashboard-title" className="text-base font-semibold leading-6 tracking-tight text-foreground">
+                {copy.title}
+              </h2>
+              <Link
+                href="/settings#satis-ortakligi"
+                className="shrink-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {copy.details}
+              </Link>
             </div>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-muted-foreground">{copy.signupToPaid}</span>
-              <span className="font-semibold tabular-nums">{percentFormatter.format(signupToPaid)}%</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base">{copy.link}</CardTitle>
-            <CardDescription className="mt-1 break-all font-mono">{referralUrl}</CardDescription>
-          </div>
-          <Button type="button" variant="outline" onClick={handleCopyLink} className="shrink-0 gap-2">
-            {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-            {copyState === 'copied' ? copy.copied : copy.copy}
-          </Button>
-        </CardHeader>
-        {copyState === 'failed' && <CardContent className="pt-0"><p role="status" className="text-sm text-destructive">{copy.copyFailed}</p></CardContent>}
-      </Card>
-
-      {payoutsEnabled && (
-        <ReferralPayoutControls
-          enabled={payoutsEnabled}
-          cashEnabled={cashPayoutsEnabled}
-          data={payoutData}
-          variant="dashboard"
-        />
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{copy.customers}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.customers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{copy.noCustomers}</p>
-          ) : (
-            <ul className="divide-y divide-border">
-              {data.customers.map((customer) => (
-                <li key={`${customer.maskedEmail}-${customer.createdAt}`} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="break-all text-sm font-medium text-foreground">
-                    {customer.accountDeleted ? copy.deletedAccount : customer.maskedEmail}
+          </CardHeader>
+          {data ? (
+            <CardContent className="flex flex-col gap-3 px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
+              <div role="group" aria-label={copy.link} className="flex min-w-0 items-center gap-2">
+                <code
+                  title={referralUrl}
+                  className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/30 px-3 py-2 font-mono text-sm leading-5 text-foreground"
+                >
+                  {referralUrl}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyLink}
+                  className="shrink-0 gap-1.5"
+                >
+                  {copyState === 'copied' ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+                  {copyState === 'copied' ? copy.copied : copy.copy}
+                </Button>
+              </div>
+              {copyState === 'failed' && (
+                <p role="status" aria-live="polite" className="text-sm text-destructive">
+                  {copy.copyFailed}
+                </p>
+              )}
+              {copyState === 'copied' && (
+                <span role="status" aria-live="polite" className="sr-only">
+                  {copy.copied}
+                </span>
+              )}
+              <ReferralMetrics data={data} />
+              {payoutsEnabled && (
+                <div
+                  role="group"
+                  aria-label={copy.balance}
+                  className="flex items-center justify-between gap-3 border-t border-border pt-3 text-sm"
+                >
+                  <span className="text-sm text-muted-foreground">{copy.balance}</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    {payoutData?.state
+                      ? formatReferralTry(payoutData.state.totalCents, language)
+                      : copy.balanceUnavailable}
                   </span>
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={STATUS_VARIANT[customer.status]}>{copy.statuses[customer.status]}</Badge>
-                      {customer.accountDeleted && <Badge variant="outline">{copy.deleted}</Badge>}
-                    </div>
-                    <time dateTime={customer.createdAt} className="text-xs text-muted-foreground">
-                      {new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium' }).format(new Date(customer.createdAt))}
-                    </time>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              )}
+            </CardContent>
+          ) : (
+            <CardContent className="flex flex-col gap-3 px-4 pb-4 pt-0 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:pb-5">
+              <p className="text-sm leading-6 text-muted-foreground">{copy.invitation}</p>
+              <LinkButton href="/settings#satis-ortakligi" variant="brand" size="sm" className="shrink-0">
+                {copy.join}
+              </LinkButton>
+            </CardContent>
           )}
-        </CardContent>
-      </Card>
-    </section>
-    <ReferralJumpLink
-      sectionRef={sectionRef}
-      sectionId={SECTION_ID}
-      label={copy.jumpToSection}
-      ariaLabel={copy.jumpToSectionLabel}
-    />
+        </Card>
+      </section>
+      <ReferralJumpLink
+        sectionRef={sectionRef}
+        sectionId={SECTION_ID}
+        label={copy.jumpToSection}
+        ariaLabel={copy.jumpToSectionLabel}
+      />
     </>
   )
 }

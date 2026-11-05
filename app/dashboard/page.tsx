@@ -13,8 +13,8 @@ import { getMyBillingProfileStatusAction } from '@/lib/billing-profile-actions'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isWithinWelcomeWindow, scheduleWelcomeEmail } from '@/lib/email-outbox'
 import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
-import { isReferralCashPayoutsEnabled, isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
-import { getReferralDashboardData } from '@/lib/referrals/partner-data'
+import { isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
+import { getReferralDashboardData, getReferralPartnerForCurrentUser } from '@/lib/referrals/partner-data'
 import { getReferralPayoutPanelData } from '@/lib/referrals/payout-data'
 import { nonCritical, withOneRetry } from '@/lib/dashboard-resilience'
 
@@ -45,8 +45,7 @@ export default async function DashboardPage() {
   // either can never take the whole panel down.
   const referralEnabled = isReferralFeatureEnabled()
   const payoutsEnabled = referralEnabled && isReferralPayoutsEnabled()
-  const cashPayoutsEnabled = payoutsEnabled && isReferralCashPayoutsEnabled()
-  const [projects, unreadMessages, auraSiteIds, referralDashboard, referralPayoutData] = await Promise.all([
+  const [projects, unreadMessages, auraSiteIds, referralDashboard, referralPartner, referralPayoutData] = await Promise.all([
     withOneRetry('listProjects', () => listProjects()),
     nonCritical(
       'unreadMessages',
@@ -71,6 +70,9 @@ export default async function DashboardPage() {
     ),
     referralEnabled
       ? nonCritical('referralDashboard', () => getReferralDashboardData(), null)
+      : Promise.resolve(null),
+    referralEnabled
+      ? nonCritical('referralPartner', () => getReferralPartnerForCurrentUser(), null)
       : Promise.resolve(null),
     payoutsEnabled
       ? nonCritical('referralPayouts', () => getReferralPayoutPanelData(), null)
@@ -105,8 +107,9 @@ export default async function DashboardPage() {
         unreadMessages={unreadMessages}
         referralDashboard={referralDashboard}
         referralPayoutData={referralPayoutData}
+        referralEnabled={referralEnabled}
+        hasReferralPartner={Boolean(referralPartner)}
         payoutsEnabled={payoutsEnabled}
-        cashPayoutsEnabled={cashPayoutsEnabled}
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}
         showBillingProfileReminder={showBillingProfileReminder}

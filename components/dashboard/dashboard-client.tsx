@@ -54,8 +54,9 @@ export function DashboardClient({
   unreadMessages = 0,
   referralDashboard = null,
   referralPayoutData = null,
+  referralEnabled = false,
+  hasReferralPartner = false,
   payoutsEnabled = false,
-  cashPayoutsEnabled = false,
 }: {
   projects: ProjectListItem[]
   /** Ids of the sites that hold an active Aura İmleç right. */
@@ -72,8 +73,9 @@ export function DashboardClient({
   unreadMessages?: number
   referralDashboard?: ReferralDashboardData | null
   referralPayoutData?: ReferralPayoutPanelData | null
+  referralEnabled?: boolean
+  hasReferralPartner?: boolean
   payoutsEnabled?: boolean
-  cashPayoutsEnabled?: boolean
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -418,14 +420,14 @@ export function DashboardClient({
             ))}
           </ul>
         )}
+        <ReferralDashboardPanel
+          data={referralDashboard}
+          enabled={referralEnabled}
+          hasPartner={hasReferralPartner}
+          payoutData={referralPayoutData}
+          payoutsEnabled={payoutsEnabled}
+        />
       </div>
-
-      <ReferralDashboardPanel
-        data={referralDashboard}
-        payoutData={referralPayoutData}
-        payoutsEnabled={payoutsEnabled}
-        cashPayoutsEnabled={cashPayoutsEnabled}
-      />
 
       {showStorePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

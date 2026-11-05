@@ -5,6 +5,11 @@ const mocks = vi.hoisted(() => ({
   listProjects: vi.fn(),
   countUnread: vi.fn(),
   entitlementsResult: vi.fn(),
+  referralFeatureEnabled: vi.fn(),
+  referralPayoutsEnabled: vi.fn(),
+  getReferralPartner: vi.fn(),
+  getReferralDashboard: vi.fn(),
+  getReferralPayoutData: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
@@ -59,6 +64,17 @@ vi.mock('@/lib/email-outbox', () => ({
 vi.mock('@/lib/site-contact-store', () => ({
   countOwnerUnreadContactMessages: mocks.countUnread,
 }))
+vi.mock('@/lib/referrals/core', () => ({
+  isReferralFeatureEnabled: mocks.referralFeatureEnabled,
+  isReferralPayoutsEnabled: mocks.referralPayoutsEnabled,
+}))
+vi.mock('@/lib/referrals/partner-data', () => ({
+  getReferralPartnerForCurrentUser: mocks.getReferralPartner,
+  getReferralDashboardData: mocks.getReferralDashboard,
+}))
+vi.mock('@/lib/referrals/payout-data', () => ({
+  getReferralPayoutPanelData: mocks.getReferralPayoutData,
+}))
 
 import DashboardPage from '@/app/dashboard/page'
 
@@ -66,6 +82,9 @@ type Props = {
   projects: unknown[]
   unreadMessages: number
   auraSiteIds: string[]
+  referralEnabled: boolean
+  hasReferralPartner: boolean
+  referralDashboard: unknown
 }
 
 async function renderProps(): Promise<Props> {
@@ -83,6 +102,11 @@ beforeEach(() => {
     data: [{ project_id: 'p1' }],
     error: null,
   })
+  mocks.referralFeatureEnabled.mockReset().mockReturnValue(false)
+  mocks.referralPayoutsEnabled.mockReset().mockReturnValue(false)
+  mocks.getReferralPartner.mockReset().mockResolvedValue(null)
+  mocks.getReferralDashboard.mockReset().mockResolvedValue(null)
+  mocks.getReferralPayoutData.mockReset().mockResolvedValue(null)
 })
 
 describe('dashboard page resilience', () => {
@@ -91,6 +115,31 @@ describe('dashboard page resilience', () => {
     expect(props.projects).toEqual([{ id: 'p1' }])
     expect(props.unreadMessages).toBe(3)
     expect(props.auraSiteIds).toEqual(['p1'])
+    expect(props.referralEnabled).toBe(false)
+    expect(props.hasReferralPartner).toBe(false)
+    expect(props.referralDashboard).toBeNull()
+  })
+
+  it('loads referral stats and partner presence without making them critical', async () => {
+    const dashboardData = {
+      referralCode: 'PARTNER1234',
+      clicks: 100,
+      signups: 10,
+      verifiedSignups: 8,
+      paidCustomers: 2,
+      customers: [],
+    }
+    mocks.referralFeatureEnabled.mockReturnValue(true)
+    mocks.getReferralPartner.mockResolvedValue({ referralCode: 'PARTNER1234', status: 'active' })
+    mocks.getReferralDashboard.mockResolvedValue(dashboardData)
+
+    const props = await renderProps()
+
+    expect(props.referralEnabled).toBe(true)
+    expect(props.hasReferralPartner).toBe(true)
+    expect(props.referralDashboard).toEqual(dashboardData)
+    expect(mocks.getReferralPartner).toHaveBeenCalledTimes(1)
+    expect(mocks.getReferralDashboard).toHaveBeenCalledTimes(1)
   })
 
   it('unreadMessages failure falls back to 0 and the panel still renders', async () => {

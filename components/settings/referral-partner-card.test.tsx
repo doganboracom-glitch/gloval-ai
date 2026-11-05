@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type { ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
@@ -37,6 +37,17 @@ afterEach(() => {
   cleanup()
 })
 
+const referralDashboardData: ReferralDashboardData = {
+  referralCode: 'PARTNER1234',
+  clicks: 24,
+  signups: 6,
+  verifiedSignups: 4,
+  paidCustomers: 2,
+  customers: [
+    { maskedEmail: 'm***@gmail.com', accountDeleted: false, status: 'paid', createdAt: '2026-11-03T12:00:00.000Z' },
+  ],
+}
+
 describe('referral partner settings card', () => {
   it('renders no referral menu or card while the feature flag is off', () => {
     const html = renderToStaticMarkup(createElement(ReferralPartnerCard, { enabled: false, partner: null }))
@@ -57,6 +68,56 @@ describe('referral partner settings card', () => {
     expect(html).toContain('4321')
     expect(html).not.toContain('TR123456789012345678901234')
     expect(html).toContain('Close partnership')
+  })
+
+  it('shows the shared metrics and keeps referred customers in a collapsed details area', () => {
+    state.lang = 'tr'
+    const view = render(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      dashboardData: referralDashboardData,
+    }))
+
+    expect(screen.getByText('Tıklama')).toBeTruthy()
+    expect(screen.getByText('Kayıt')).toBeTruthy()
+    expect(screen.getByText('Ücretli müşteri')).toBeTruthy()
+    expect(screen.getByText('Dönüşüm yüzdesi')).toBeTruthy()
+    expect(view.container.querySelectorAll('h2')).toHaveLength(1)
+    expect(view.container.querySelector('section#satis-ortakligi')?.getAttribute('aria-labelledby')).toBe('referral-partner-title')
+
+    const details = view.container.querySelector('#referral-customer-details') as HTMLDetailsElement | null
+    expect(details).not.toBeNull()
+    expect(details?.open).toBe(false)
+    fireEvent.click(details!.querySelector('summary')!)
+    expect(details?.open).toBe(true)
+    expect(screen.getByText('m***@gmail.com')).toBeTruthy()
+  })
+
+  it('labels deleted referred accounts in English and Turkish without a masked-email placeholder', () => {
+    const deletedData: ReferralDashboardData = {
+      ...referralDashboardData,
+      customers: [{ maskedEmail: '', accountDeleted: true, status: 'verified', createdAt: '2026-11-03T12:00:00.000Z' }],
+    }
+
+    state.lang = 'en'
+    const english = renderToStaticMarkup(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      dashboardData: deletedData,
+    }))
+    expect(english).toContain('Deleted account')
+    expect(english).toContain('Deleted by member')
+    expect(english).not.toContain('***')
+
+    state.lang = 'tr'
+    const turkish = renderToStaticMarkup(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      dashboardData: deletedData,
+    }))
+    expect(turkish).toContain('Silinmiş hesap')
+    expect(turkish).toContain('Üye tarafından silindi')
+    expect(turkish).not.toContain('***')
   })
 
   it('places a scrollable terms box before the required acceptance checkbox', () => {
