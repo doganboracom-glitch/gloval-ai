@@ -50,6 +50,7 @@ export type ReferralAdminPartner = {
 }
 
 export type ReferralPayoutMethod = 'cash' | 'credit'
+export type ReferralVatMode = 'included' | 'added'
 export type ReferralPayoutStatus = 'requested' | 'processed' | 'rejected'
 
 export type ReferralPayoutState = {
@@ -61,6 +62,10 @@ export type ReferralPayoutState = {
   availableCents: number
   totalCents: number
   convertibleCents: number
+  maxCreditCents: number
+  maxCashCents: number
+  hasDebtBucket: boolean
+  partialPayoutsAvailable: boolean
   requestedCents: number
   convertedCents: number
   paidCents: number
@@ -88,6 +93,11 @@ export type ReferralPayoutAdminRequest = {
   creditAmount: number | null
   systemTopupCents: number
   invoiceRequired: boolean
+  vatMode: ReferralVatMode | null
+  invoiceNetCents: number | null
+  invoiceVatCents: number | null
+  invoiceGrossCents: number | null
+  partial: boolean
   invoiceConfirmed: boolean
   invoiceReference: string | null
   invoiceReceivedAt: string | null

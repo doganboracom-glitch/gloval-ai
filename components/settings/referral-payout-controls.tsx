@@ -7,6 +7,8 @@ import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import {
   Card,
   CardContent,
@@ -20,15 +22,21 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { CREDIT_MIN_CENTS, REFERRAL_HOLD_DAYS, REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
 import {
   calculateReferralPayoutPreview,
+  type ReferralPayoutAmountError,
   formatReferralTry,
+  formatReferralTryInput,
+  parseReferralPayoutAmount,
   REFERRAL_PAYOUT_MIN_CENTS,
+  validateReferralPayoutAmount,
 } from '@/lib/referrals/payout-core'
 import type {
   ReferralPayoutMethod,
   ReferralPayoutPanelData,
+  ReferralVatMode,
 } from '@/lib/referrals/partner-types'
 
 type Language = 'tr' | 'en'
+type PayoutAmountMode = 'all' | 'specific'
 
 const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
@@ -45,12 +53,12 @@ const COPY = {
     requested: 'İşlemde',
     converted: 'Krediye çevrildi',
     paid: 'Ödendi',
-    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; toplam bakiye en az ${minimumCreditTr} TL olduğunda tamamı beklemeden AI kredisine çevrilebilir.`,
+    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; toplam bakiye en az ${minimumCreditTr} TL olduğunda tamamı veya uygun durumlarda bir kısmı beklemeden AI kredisine çevrilebilir.`,
     request: 'Ödeme İste',
     requestTitle: 'Bakiyenizi nasıl almak istersiniz?',
-    requestDescription: 'AI kredisi bakiyesi ve GLOVAL AI katkısı burada görünür; IBAN ödemesi bekleme ve kullanılabilir bakiye şartlarına bağlıdır.',
+    requestDescription: 'Önce ödeme yöntemini seçin; sonraki adımda tutarı ve varsa fatura KDV seçeneğini inceleyin.',
     reviewTitle: 'Talep özeti',
-    reviewDescription: 'Onaylamadan önce tutarı kontrol edin. İstek sunucu tarafında tekrar doğrulanır.',
+    reviewDescription: 'Tutarı, ödeme ve fatura bilgilerini kontrol edin.',
     continue: 'Devam et',
     changeMethod: 'Yöntemi değiştir',
     credit: 'AI kredisi olarak al',
@@ -58,6 +66,25 @@ const COPY = {
     creditImmediate: 'Bu tutar, 14 günlük bekleme tamamlanmadan da AI kredisi olarak hemen eklenir.',
     commissionValue: 'Kullanılacak komisyon bakiyesi',
     bankAmount: 'Ödenecek tutar',
+    amountMode: 'Tutar seçimi',
+    amountAll: 'Bakiyenin tamamı',
+    amountSpecific: 'Belirli tutar',
+    amountLabel: 'Talep edilecek tutar (TL)',
+    amountDescription: 'En fazla {maximum}. Kuruş hassasiyetinde girin; 1.234,50 ve 1234.50 biçimleri desteklenir.',
+    useMaximum: 'Üst sınırı kullan',
+    full: 'Tam tutar',
+    partial: 'Kısmi tutar',
+    vatModeTitle: 'KDV uygulaması',
+    vatIncluded: 'KDV tutara dahil',
+    vatAdded: 'Tutar üzerine %20 KDV eklensin',
+    vatIncludedHint: 'Brüt tutar; net ve KDV bu tutardan ayrılır.',
+    vatAddedHint: 'Net tutara %20 KDV eklenir.',
+    invoiceNet: 'Fatura neti',
+    invoiceVat: 'KDV',
+    invoiceGross: 'Fatura brütü',
+    partialUnavailable: 'Kısmi tutar ve şirket KDV seçenekleri yeni SQL taslağı uygulandıktan sonra kullanılabilir.',
+    legacyVat: 'Yeni SQL taslağı uygulanana kadar tam şirket ödemesi mevcut %20 KDV hesaplamasını kullanır.',
+    partialDebt: 'Negatif vade dilimi bulunduğundan kısmi kredi dönüşümü kapalıdır; bakiyenin tamamını dönüştürebilirsiniz.',
     credits: 'Eklenecek AI kredisi',
     topup: 'GLOVAL AI katkısı',
     invoice: 'Bu vergi statüsü için fatura gerekir; ödeme fatura onayından sonra işlenir.',
@@ -83,7 +110,14 @@ const COPY = {
       not_found: 'Etkin bir satış ortaklığı bulunamadı.',
       partner_inactive: 'Kapalı bir ortaklık için ödeme isteği oluşturulamaz.',
       insufficient_balance: `IBAN'a ödenebilir bakiye ${minimumPayoutTr} TL eşiğinin altında.`,
-      credit_minimum_not_met: `AI kredisine dönüşüm için toplam bakiyenin en az ${minimumCreditTr} TL olması gerekir.`,
+      minimum_not_met: `Nakit ödeme tutarı en az ${minimumPayoutTr} TL olmalıdır.`,
+      credit_minimum_not_met: `AI kredisine dönüşüm için tutar en az ${minimumCreditTr} TL olmalıdır.`,
+      amount_exceeds_balance: 'Girilen tutar kullanılabilir bakiyeyi aşamaz.',
+      partial_unavailable_debt: 'Negatif vade dilimi varken kısmi kredi dönüşümü yapılamaz; tam tutarı seçin.',
+      vat_mode_required: 'Şirket ödemesi için bir KDV seçeneği belirleyin.',
+      vat_mode_not_allowed: 'KDV seçeneği yalnızca şirket statüsündeki nakit ödemelerde kullanılabilir.',
+      feature_unavailable: 'Kısmi tutar veya şirket KDV seçenekleri henüz kullanılamıyor. Tam tutar seçeneğini kullanın ya da daha sonra yeniden deneyin.',
+      invalid_amount: 'Tutarı kuruş hassasiyetinde girin.',
       open_cash_request: 'Önce açık nakit ödeme isteğinizin sonuçlanmasını bekleyin.',
       tax_verification_required: 'Bir sonraki nakit ödeme için vergi bilgilerinizin doğrulanması gerekiyor.',
       missing_iban: 'Nakit ödeme için kayıtlı IBAN bulunamadı.',
@@ -103,12 +137,12 @@ const COPY = {
     requested: 'In progress',
     converted: 'Converted to credits',
     paid: 'Paid',
-    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; once the total balance reaches TRY ${minimumCreditEn}, the full amount can be converted to AI credits without waiting.`,
+    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; once the total reaches TRY ${minimumCreditEn}, the full amount or an eligible partial amount can be converted to AI credits immediately.`,
     request: 'Request payout',
     requestTitle: 'How would you like to receive your balance?',
-    requestDescription: 'The AI credit amount and GLOVAL AI contribution appear here; IBAN payout requires the hold and available-balance conditions.',
+    requestDescription: 'Choose a payout method first; the next step lets you review the amount and, when required, the invoice VAT option.',
     reviewTitle: 'Request summary',
-    reviewDescription: 'Review the amount before confirming. The request is revalidated on the server.',
+    reviewDescription: 'Review the amount, payout, and invoice details.',
     continue: 'Continue',
     changeMethod: 'Change method',
     credit: 'Receive as AI credits',
@@ -116,6 +150,25 @@ const COPY = {
     creditImmediate: 'AI credits are added immediately, without waiting for the 14-day hold to end.',
     commissionValue: 'Commission balance used',
     bankAmount: 'Payout amount',
+    amountMode: 'Amount selection',
+    amountAll: 'Entire balance',
+    amountSpecific: 'Specific amount',
+    amountLabel: 'Requested amount (TRY)',
+    amountDescription: 'Up to {maximum}. Enter kuruş precision; both 1.234,50 and 1234.50 formats are supported.',
+    useMaximum: 'Use maximum',
+    full: 'Full amount',
+    partial: 'Partial amount',
+    vatModeTitle: 'VAT treatment',
+    vatIncluded: 'VAT included in amount',
+    vatAdded: 'Add 20% VAT to amount',
+    vatIncludedHint: 'Gross amount; net and VAT are split from it.',
+    vatAddedHint: '20% VAT is added to the net amount.',
+    invoiceNet: 'Invoice net',
+    invoiceVat: 'VAT',
+    invoiceGross: 'Invoice gross',
+    partialUnavailable: 'Partial amounts and company VAT options are available after the new SQL draft is applied.',
+    legacyVat: 'Until the new SQL draft is applied, full company payouts use the existing 20% VAT calculation.',
+    partialDebt: 'A negative maturity bucket prevents partial credit conversion; you can still convert the full balance.',
     credits: 'AI credits to add',
     topup: 'GLOVAL AI contribution',
     invoice: 'This tax status requires an invoice; payment is processed after invoice confirmation.',
@@ -141,7 +194,14 @@ const COPY = {
       not_found: 'No active referral partnership was found.',
       partner_inactive: 'A closed partnership cannot request a payout.',
       insufficient_balance: `Available balance for IBAN payout is below the TRY ${minimumPayoutEn} minimum.`,
-      credit_minimum_not_met: `At least TRY ${minimumCreditEn} in total balance is required to convert to AI credits.`,
+      minimum_not_met: `A cash payout must be at least TRY ${minimumPayoutEn}.`,
+      credit_minimum_not_met: `A credit conversion must be at least TRY ${minimumCreditEn}.`,
+      amount_exceeds_balance: 'The amount cannot exceed the available balance.',
+      partial_unavailable_debt: 'Partial credit conversion is unavailable while a maturity bucket is negative. Select the full amount.',
+      vat_mode_required: 'Choose a VAT option for a company payout.',
+      vat_mode_not_allowed: 'VAT options are only available for company cash payouts.',
+      feature_unavailable: 'Partial amounts or company VAT options are not available yet. Use the full amount option or try again later.',
+      invalid_amount: 'Enter an amount with kuruş precision.',
       open_cash_request: 'Wait for your open cash payout request to be resolved first.',
       tax_verification_required: 'Tax verification is required before another cash payout.',
       missing_iban: 'No saved IBAN was found for cash payout.',
@@ -177,6 +237,9 @@ export function ReferralPayoutControls({
   const [expanded, setExpanded] = useState(false)
   const [dialogStep, setDialogStep] = useState<'method' | 'review'>('method')
   const [method, setMethod] = useState<ReferralPayoutMethod>('credit')
+  const [amountMode, setAmountMode] = useState<PayoutAmountMode>('all')
+  const [amountText, setAmountText] = useState('')
+  const [vatMode, setVatMode] = useState<ReferralVatMode | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
@@ -184,25 +247,65 @@ export function ReferralPayoutControls({
   if (!enabled || !data) return null
 
   const state = data.state
-  const payoutBalanceCents = method === 'credit'
-    ? state?.convertibleCents
-    : state?.availableCents
-  const preview = state && payoutBalanceCents !== undefined
-    ? calculateReferralPayoutPreview(payoutBalanceCents, method, state.taxStatus)
-    : null
+  const maxCreditCents = state?.maxCreditCents ?? state?.convertibleCents ?? 0
+  const maxCashCents = state?.maxCashCents ?? Math.max(0, state?.availableCents ?? 0)
   const taxVerificationRequired = Boolean(state && state.partnerStatus === 'suspended' && !state.taxVerified)
-  const cashUnavailable = !cashEnabled || !state?.hasIban || taxVerificationRequired
+  const validCashTaxStatus = state?.taxStatus === 'individual' || state?.taxStatus === 'company'
+  const cashUnavailable = !cashEnabled || !state?.hasIban || taxVerificationRequired || !validCashTaxStatus
   const hasOpenCashRequest = state?.hasOpenCashRequest ?? false
   const hasPendingBalance = (state?.pendingCents ?? 0) > 0
-  const meetsCreditMinimum = (state?.convertibleCents ?? 0) >= CREDIT_MIN_CENTS
-  const meetsCashMinimum = (state?.availableCents ?? 0) >= REFERRAL_PAYOUT_MIN_CENTS
+  const meetsCreditMinimum = maxCreditCents >= CREDIT_MIN_CENTS
+  const meetsCashMinimum = maxCashCents >= REFERRAL_PAYOUT_MIN_CENTS
   const cashBalanceHeld = !meetsCashMinimum || hasPendingBalance
   const cashOptionDisabled = cashUnavailable || hasOpenCashRequest || cashBalanceHeld
-  const canRequest = Boolean(state && state.partnerStatus !== 'closed' && meetsCreditMinimum)
+  const canRequest = Boolean(
+    state &&
+    state.partnerStatus !== 'closed' &&
+    (meetsCreditMinimum || (cashEnabled && !cashOptionDisabled && meetsCashMinimum)),
+  )
+  const maximumCents = method === 'credit' ? maxCreditCents : maxCashCents
+  const parsedAmountCents = amountMode === 'specific' ? parseReferralPayoutAmount(amountText) : null
+  const selectedAmountCents = amountMode === 'all' ? maximumCents : parsedAmountCents
+  const isPartial = selectedAmountCents !== null && selectedAmountCents < maximumCents
+  const amountInputError: ReferralPayoutAmountError | null = amountMode === 'specific' && parsedAmountCents === null
+    ? 'invalid_amount'
+    : validateReferralPayoutAmount(
+        amountMode === 'all' ? undefined : parsedAmountCents,
+        maximumCents,
+        method,
+        method === 'credit' && state?.hasDebtBucket,
+      )
+  const isCompanyCash = method === 'cash' && state?.taxStatus === 'company'
+  const legacyCompanyCash = Boolean(isCompanyCash && !state?.partialPayoutsAvailable)
+  const companyVatRequired = Boolean(isCompanyCash && state?.partialPayoutsAvailable)
+  const requiresExtendedSql = Boolean(
+    state && ((amountMode === 'specific' && isPartial) || companyVatRequired),
+  )
+  const featureUnavailable = Boolean(requiresExtendedSql && !state?.partialPayoutsAvailable)
+  const vatModeError = companyVatRequired && !vatMode && !featureUnavailable ? 'vat_mode_required' : null
+  const payoutError = amountInputError ?? (featureUnavailable ? 'feature_unavailable' : vatModeError)
+  const preview = state && selectedAmountCents !== null && !payoutError
+    ? calculateReferralPayoutPreview(maximumCents, method, state.taxStatus, {
+        amountCents: selectedAmountCents,
+        vatMode: legacyCompanyCash ? 'added' : vatMode,
+        hasDebtBucket: state.hasDebtBucket,
+      })
+    : null
+  const canContinue = method === 'credit'
+    ? meetsCreditMinimum
+    : meetsCashMinimum && !cashOptionDisabled
+  const canSubmit = Boolean(
+    preview &&
+    !payoutError &&
+    !(method === 'cash' && cashOptionDisabled),
+  )
 
   function startRequest() {
     if (!canRequest || isSubmitting) return
-    setMethod('credit')
+    setMethod(meetsCreditMinimum ? 'credit' : 'cash')
+    setAmountMode('all')
+    setAmountText('')
+    setVatMode(null)
     setDialogStep('method')
     setIdempotencyKey(safeIdempotencyKey())
     setFeedback(null)
@@ -210,7 +313,10 @@ export function ReferralPayoutControls({
   }
 
   function continueToReview() {
-    if (!preview || (method === 'cash' && cashOptionDisabled)) return
+    if (!canContinue || isSubmitting) return
+    setAmountMode('all')
+    setAmountText('')
+    setVatMode(null)
     setFeedback(null)
     setDialogStep('review')
   }
@@ -218,10 +324,13 @@ export function ReferralPayoutControls({
   function closeRequestDialog() {
     setExpanded(false)
     setIdempotencyKey(null)
+    setAmountMode('all')
+    setAmountText('')
+    setVatMode(null)
   }
 
   async function submitRequest() {
-    if (!preview || (method === 'cash' && cashOptionDisabled) || !idempotencyKey || isSubmitting) return
+    if (!canSubmit || !preview || !idempotencyKey || isSubmitting) return
 
     setIsSubmitting(true)
     setFeedback(null)
@@ -229,6 +338,8 @@ export function ReferralPayoutControls({
       const result = await createReferralPayoutRequest({
         method,
         idempotencyKey,
+        amountCents: preview.partial ? preview.balanceCents : undefined,
+        vatMode: companyVatRequired ? vatMode ?? undefined : undefined,
         lang: language,
       })
       if (!result.ok) {
@@ -237,10 +348,22 @@ export function ReferralPayoutControls({
         return
       }
 
-      setFeedback({
-        kind: 'success',
-        text: method === 'cash' ? copy.successCash : copy.successCredit,
-      })
+      const requestMode = result.partial ? copy.partial : copy.full
+      const summary = result.method === 'cash'
+        ? [
+            copy.successCash,
+            `${requestMode}: ${copy.bankAmount} ${formatReferralTry(result.payoutCents, language)}`,
+            result.vatMode && result.invoiceNetCents !== null && result.invoiceVatCents !== null && result.invoiceGrossCents !== null
+              ? `${copy.invoiceNet} ${formatReferralTry(result.invoiceNetCents, language)} · ${copy.invoiceVat} ${formatReferralTry(result.invoiceVatCents, language)} · ${copy.invoiceGross} ${formatReferralTry(result.invoiceGrossCents, language)}`
+              : null,
+          ].filter(Boolean).join(' ')
+        : [
+            copy.successCredit,
+            `${requestMode}: ${copy.commissionValue} ${formatReferralTry(result.balanceCents, language)}`,
+            `${copy.credits} ${new Intl.NumberFormat(locale).format(result.creditAmount ?? 0)}`,
+            `${copy.topup} ${formatReferralTry(result.systemTopupCents, language)}`,
+          ].join(' ')
+      setFeedback({ kind: 'success', text: summary })
       setExpanded(false)
       setIdempotencyKey(null)
       router.refresh()
@@ -343,7 +466,8 @@ export function ReferralPayoutControls({
         description={dialogStep === 'method' ? copy.requestDescription : copy.reviewDescription}
         confirmLabel={isSubmitting ? copy.submitting : dialogStep === 'method' ? copy.continue : copy.confirm}
         cancelLabel={copy.cancel}
-        confirmDisabled={!preview || (method === 'cash' && cashOptionDisabled) || isSubmitting}
+        confirmDisabled={dialogStep === 'method' ? !canContinue || isSubmitting : !canSubmit || isSubmitting}
+      stickyActions
         onConfirm={dialogStep === 'method' ? continueToReview : submitRequest}
         onCancel={closeRequestDialog}
       >
@@ -353,8 +477,18 @@ export function ReferralPayoutControls({
               value={[method]}
               onValueChange={(value) => {
                 const selectedMethod = value[0]
-                if (selectedMethod === 'credit' || selectedMethod === 'cash') {
+                if (selectedMethod === 'credit' && meetsCreditMinimum) {
                   setMethod(selectedMethod)
+                  setAmountMode('all')
+                  setAmountText('')
+                  setVatMode(null)
+                  setFeedback(null)
+                }
+                if (selectedMethod === 'cash' && !cashOptionDisabled) {
+                  setMethod(selectedMethod)
+                  setAmountMode('all')
+                  setAmountText('')
+                  setVatMode(null)
                   setFeedback(null)
                 }
               }}
@@ -362,7 +496,7 @@ export function ReferralPayoutControls({
               aria-label={copy.requestTitle}
               className="w-full min-w-0 flex-col sm:flex-row"
             >
-              <ToggleGroupItem value="credit" className="w-full min-w-0 flex-1 justify-start">
+              <ToggleGroupItem value="credit" disabled={!meetsCreditMinimum || isSubmitting} className="w-full min-w-0 flex-1 justify-start">
                 <Coins data-icon="inline-start" />
                 {copy.credit}
               </ToggleGroupItem>
@@ -373,77 +507,214 @@ export function ReferralPayoutControls({
                 </ToggleGroupItem>
               )}
             </ToggleGroup>
-            {cashEnabled && cashBalanceHeld && (
-              <Alert><AlertDescription>{hasPendingBalance ? copy.cashWaiting : copy.cashMinimum}</AlertDescription></Alert>
+            {method === 'credit' && !meetsCreditMinimum && (
+              <Alert><AlertDescription>{copy.creditThreshold}</AlertDescription></Alert>
             )}
-            {cashEnabled && hasOpenCashRequest && (
-              <Alert><AlertDescription>{copy.openCash}</AlertDescription></Alert>
-            )}
-            {cashEnabled && !state?.hasIban && (
-              <Alert><AlertDescription>{copy.noIban}</AlertDescription></Alert>
-            )}
-            {taxVerificationRequired && cashEnabled && (
-              <Alert><AlertDescription>{copy.taxVerificationRequired}</AlertDescription></Alert>
-            )}
-            {method === 'credit' && preview && (
-              <>
-                <Alert><AlertDescription>{copy.creditImmediate}</AlertDescription></Alert>
-                <dl className="grid gap-2 rounded-lg bg-muted/30 p-3 text-sm">
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">{copy.commissionValue}</dt>
-                    <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">{copy.credits}</dt>
-                    <dd className="font-medium tabular-nums text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">{copy.topup}</dt>
-                    <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
-                  </div>
-                </dl>
-              </>
-            )}
-            {!preview && method === 'cash' && !cashUnavailable && !cashBalanceHeld && (
-              <Alert variant="destructive"><AlertDescription>{copy.invalidTax}</AlertDescription></Alert>
+            {cashEnabled && cashOptionDisabled && (
+              <Alert variant={cashUnavailable ? 'destructive' : 'default'}>
+                <AlertDescription>
+                  {!state?.hasIban
+                    ? copy.noIban
+                    : taxVerificationRequired
+                      ? copy.taxVerificationRequired
+                      : !validCashTaxStatus
+                        ? copy.invalidTax
+                        : hasOpenCashRequest
+                          ? copy.openCash
+                          : hasPendingBalance
+                            ? copy.cashWaiting
+                            : cashBalanceHeld
+                              ? copy.cashMinimum
+                              : copy.cashUnavailable}
+                </AlertDescription>
+              </Alert>
             )}
           </div>
         ) : (
-          <div className="mt-4 flex flex-col gap-4">
+          <div className="mt-3 flex flex-col gap-3">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="self-start px-0"
+              onClick={() => {
+                setDialogStep('method')
+                setFeedback(null)
+              }}
+              disabled={isSubmitting}
+            >
+              {copy.changeMethod}
+            </Button>
+            <FieldSet>
+              <FieldLegend>{copy.amountMode}</FieldLegend>
+              <ToggleGroup
+                value={[amountMode]}
+                onValueChange={(value) => {
+                  const selectedMode = value[0]
+                  if (selectedMode === 'all' || selectedMode === 'specific') {
+                    setAmountMode(selectedMode)
+                    setAmountText('')
+                    setFeedback(null)
+                  }
+                }}
+                variant="outline"
+                aria-label={copy.amountMode}
+                className="w-full min-w-0 flex-col sm:flex-row"
+              >
+                <ToggleGroupItem value="all" className="w-full min-w-0 flex-1 justify-start">
+                  {copy.amountAll}
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="specific"
+                  disabled={!state?.partialPayoutsAvailable || (method === 'credit' && state.hasDebtBucket) || isSubmitting}
+                  className="w-full min-w-0 flex-1 justify-start"
+                >
+                  {copy.amountSpecific}
+                </ToggleGroupItem>
+              </ToggleGroup>
+              {!state?.partialPayoutsAvailable && (
+                <p className="text-sm leading-relaxed text-muted-foreground">{copy.partialUnavailable}</p>
+              )}
+              {method === 'credit' && state?.hasDebtBucket && (
+                <p className="text-sm leading-relaxed text-muted-foreground">{copy.partialDebt}</p>
+              )}
+            </FieldSet>
+
+            {amountMode === 'specific' && (
+              <FieldGroup>
+                <Field data-invalid={Boolean(amountInputError)}>
+                  <div className="flex items-center justify-between gap-3">
+                    <FieldLabel htmlFor="referral-payout-amount">{copy.amountLabel}</FieldLabel>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      onClick={() => setAmountText(formatReferralTryInput(maximumCents, language))}
+                    >
+                      {copy.useMaximum}
+                    </Button>
+                  </div>
+                  <Input
+                    id="referral-payout-amount"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={amountText}
+                    onChange={(event) => {
+                      setAmountText(event.target.value)
+                      setFeedback(null)
+                    }}
+                    aria-invalid={Boolean(amountInputError)}
+                    aria-describedby="referral-payout-amount-description"
+                    placeholder={formatReferralTryInput(maximumCents, language)}
+                  />
+                  <FieldDescription id="referral-payout-amount-description">
+                    {copy.amountDescription.replace('{maximum}', formatReferralTry(maximumCents, language))}
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            )}
+
+            {legacyCompanyCash && (
+              <Alert><AlertDescription>{copy.legacyVat}</AlertDescription></Alert>
+            )}
+            {companyVatRequired && (
+              <FieldSet>
+                <FieldLegend>{copy.vatModeTitle}</FieldLegend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className={cn('flex cursor-pointer items-start gap-3 rounded-md border p-3', vatMode === 'included' && 'border-primary bg-muted/40', !state?.partialPayoutsAvailable && 'cursor-not-allowed opacity-60')}>
+                    <input
+                      type="radio"
+                      name="referral-payout-vat-mode"
+                      value="included"
+                      checked={vatMode === 'included'}
+                      disabled={!state?.partialPayoutsAvailable || isSubmitting}
+                      onChange={() => setVatMode('included')}
+                      className="mt-1 accent-primary"
+                    />
+                    <span className="flex flex-col gap-1">
+                      <span className="text-sm font-medium">{copy.vatIncluded}</span>
+                      <span className="text-sm leading-relaxed text-muted-foreground">{copy.vatIncludedHint}</span>
+                    </span>
+                  </label>
+                  <label className={cn('flex cursor-pointer items-start gap-3 rounded-md border p-3', vatMode === 'added' && 'border-primary bg-muted/40', !state?.partialPayoutsAvailable && 'cursor-not-allowed opacity-60')}>
+                    <input
+                      type="radio"
+                      name="referral-payout-vat-mode"
+                      value="added"
+                      checked={vatMode === 'added'}
+                      disabled={!state?.partialPayoutsAvailable || isSubmitting}
+                      onChange={() => setVatMode('added')}
+                      className="mt-1 accent-primary"
+                    />
+                    <span className="flex flex-col gap-1">
+                      <span className="text-sm font-medium">{copy.vatAdded}</span>
+                      <span className="text-sm leading-relaxed text-muted-foreground">{copy.vatAddedHint}</span>
+                    </span>
+                  </label>
+                </div>
+              </FieldSet>
+            )}
+
+            {payoutError && (
+              <Alert variant="destructive"><AlertDescription role="alert">{copy.errors[payoutError]}</AlertDescription></Alert>
+            )}
             {preview && (
               <dl className="grid gap-2 rounded-lg bg-muted/30 p-3 text-sm">
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-muted-foreground">{copy.commissionValue}</dt>
-                  <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
+                  <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.balanceCents, language)}</dd>
                 </div>
                 {method === 'cash' ? (
                   <>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.bankAmount}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.payoutCents, language)}</dd>
                     </div>
+                    {preview.vatMode && preview.invoiceNetCents !== null && preview.invoiceVatCents !== null && preview.invoiceGrossCents !== null && (
+                      <>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-foreground">{copy.vatModeTitle}</dt>
+                          <dd className="font-medium text-foreground">{preview.vatMode === 'included' ? copy.vatIncluded : copy.vatAdded}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-foreground">{copy.invoiceNet}</dt>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceNetCents, language)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-foreground">{copy.invoiceVat}</dt>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceVatCents, language)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-muted-foreground">{copy.invoiceGross}</dt>
+                          <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.invoiceGrossCents, language)}</dd>
+                        </div>
+                      </>
+                    )}
                     <p className="text-xs leading-relaxed text-muted-foreground">{preview.invoiceRequired ? copy.invoice : copy.noInvoice}</p>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.credits}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{new Intl.NumberFormat(locale).format(preview.creditAmount ?? 0)}</dd>
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <dt className="text-muted-foreground">{copy.topup}</dt>
-                      <dd className="font-medium tabular-nums text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
+                      <dd className="font-medium tabular-nums whitespace-nowrap text-foreground">{formatReferralTry(preview.systemTopupCents, language)}</dd>
                     </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">{copy.creditImmediate}</p>
                   </>
                 )}
+                <div className="flex items-center justify-between gap-4 border-t pt-2">
+                  <dt className="text-muted-foreground">{preview.partial ? copy.partial : copy.full}</dt>
+                  <dd className="font-medium text-foreground">{preview.partial ? copy.partial : copy.full}</dd>
+                </div>
               </dl>
             )}
             {feedback?.kind === 'error' && (
               <Alert variant="destructive"><AlertDescription role="alert">{feedback.text}</AlertDescription></Alert>
             )}
-            <Button type="button" variant="outline" onClick={() => setDialogStep('method')} disabled={isSubmitting}>
-              {copy.changeMethod}
-            </Button>
           </div>
         )}
       </ConfirmDialog>

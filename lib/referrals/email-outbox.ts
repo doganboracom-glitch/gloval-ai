@@ -6,6 +6,7 @@ import { sendTransactionalEmailDetailed } from '@/lib/notify'
 import { maskEmail } from '@/lib/store-order-privacy'
 import { buildReferralPayoutNoticeEmail, type ReferralPayoutNoticeType } from '@/lib/email/referral-payout-mail'
 import { isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
+import type { ReferralVatMode } from '@/lib/referrals/partner-types'
 
 const REFERRAL_EMAIL_TYPES: readonly ReferralPayoutNoticeType[] = [
   'referral_partner_signup',
@@ -32,6 +33,12 @@ type ReferralOutboxState = {
   creditAmount?: number
   systemTopupCents?: number
   signupCount?: number
+  partial?: boolean
+  invoiceRequired?: boolean
+  vatMode?: ReferralVatMode | null
+  invoiceNetCents?: number
+  invoiceVatCents?: number
+  invoiceGrossCents?: number
   windowEndsAt?: string
 }
 
@@ -66,7 +73,13 @@ function parseState(value: unknown): ReferralOutboxState | null {
       !optionalInteger('amountCents') ||
       !optionalInteger('creditAmount') ||
       !optionalInteger('systemTopupCents') ||
-      !optionalInteger('signupCount')
+      !optionalInteger('signupCount') ||
+      !optionalInteger('invoiceNetCents') ||
+      !optionalInteger('invoiceVatCents') ||
+      !optionalInteger('invoiceGrossCents') ||
+      (parsed.partial != null && typeof parsed.partial !== 'boolean') ||
+      (parsed.invoiceRequired != null && typeof parsed.invoiceRequired !== 'boolean') ||
+      (parsed.vatMode != null && parsed.vatMode !== 'included' && parsed.vatMode !== 'added')
     ) return null
 
     const state: ReferralOutboxState = {
@@ -77,10 +90,22 @@ function parseState(value: unknown): ReferralOutboxState | null {
     if (typeof parsed.attributionId === 'string' && UUID_PATTERN.test(parsed.attributionId)) {
       state.attributionId = parsed.attributionId
     }
-    for (const key of ['commissionCents', 'amountCents', 'creditAmount', 'systemTopupCents', 'signupCount'] as const) {
+    for (const key of [
+      'commissionCents',
+      'amountCents',
+      'creditAmount',
+      'systemTopupCents',
+      'signupCount',
+      'invoiceNetCents',
+      'invoiceVatCents',
+      'invoiceGrossCents',
+    ] as const) {
       const field = parsed[key]
       if (typeof field === 'number') state[key] = field
     }
+    if (typeof parsed.partial === 'boolean') state.partial = parsed.partial
+    if (typeof parsed.invoiceRequired === 'boolean') state.invoiceRequired = parsed.invoiceRequired
+    if (parsed.vatMode === 'included' || parsed.vatMode === 'added') state.vatMode = parsed.vatMode
     for (const key of ['availableAt', 'windowEndsAt'] as const) {
       const field = parsed[key]
       if (typeof field === 'string' && Number.isFinite(Date.parse(field))) state[key] = field
@@ -165,8 +190,15 @@ export async function queueReferralPayoutNotification(input: {
   payoutRequestId: string
   lang: 'tr' | 'en'
   amountCents?: number
+  commissionCents?: number
   creditAmount?: number
   systemTopupCents?: number
+  partial?: boolean
+  invoiceRequired?: boolean
+  vatMode?: ReferralVatMode | null
+  invoiceNetCents?: number | null
+  invoiceVatCents?: number | null
+  invoiceGrossCents?: number | null
 }) {
   if (!isReferralPayoutsEnabled()) return
   if (!UUID_PATTERN.test(input.partnerId) || !UUID_PATTERN.test(input.payoutRequestId)) return
@@ -181,8 +213,23 @@ export async function queueReferralPayoutNotification(input: {
     ...(Number.isSafeInteger(input.creditAmount) && input.creditAmount! >= 0
       ? { creditAmount: input.creditAmount }
       : {}),
+    ...(Number.isSafeInteger(input.commissionCents) && input.commissionCents! >= 0
+      ? { commissionCents: input.commissionCents }
+      : {}),
     ...(Number.isSafeInteger(input.systemTopupCents) && input.systemTopupCents! >= 0
       ? { systemTopupCents: input.systemTopupCents }
+      : {}),
+    ...(typeof input.partial === 'boolean' ? { partial: input.partial } : {}),
+    ...(typeof input.invoiceRequired === 'boolean' ? { invoiceRequired: input.invoiceRequired } : {}),
+    ...(input.vatMode === 'included' || input.vatMode === 'added' ? { vatMode: input.vatMode } : {}),
+    ...(typeof input.invoiceNetCents === 'number' && Number.isSafeInteger(input.invoiceNetCents) && input.invoiceNetCents >= 0
+      ? { invoiceNetCents: input.invoiceNetCents }
+      : {}),
+    ...(typeof input.invoiceVatCents === 'number' && Number.isSafeInteger(input.invoiceVatCents) && input.invoiceVatCents >= 0
+      ? { invoiceVatCents: input.invoiceVatCents }
+      : {}),
+    ...(typeof input.invoiceGrossCents === 'number' && Number.isSafeInteger(input.invoiceGrossCents) && input.invoiceGrossCents >= 0
+      ? { invoiceGrossCents: input.invoiceGrossCents }
       : {}),
   }
   const dedupeKey = `${input.type}:${input.payoutRequestId}`
@@ -275,7 +322,9 @@ async function deliverReferralEmailByDedupeKey(dedupeKey: string) {
     }
   }
 
-  const requestReference = type === 'referral_cash_admin' ? dedupeKey.slice(type.length + 1) : undefined
+  const requestReference = type === 'referral_cash_admin' || type === 'referral_cash_requested'
+    ? dedupeKey.slice(type.length + 1)
+    : undefined
   const signupDetails = type === 'referral_partner_signup'
     ? await getSignupEmailDetails(admin, previousState.attributionId, job.created_at)
     : null
@@ -289,6 +338,12 @@ async function deliverReferralEmailByDedupeKey(dedupeKey: string) {
     systemTopupCents: previousState.systemTopupCents,
     signupCount: previousState.signupCount,
     requestReference,
+    partial: previousState.partial,
+    invoiceRequired: previousState.invoiceRequired,
+    vatMode: previousState.vatMode,
+    invoiceNetCents: previousState.invoiceNetCents,
+    invoiceVatCents: previousState.invoiceVatCents,
+    invoiceGrossCents: previousState.invoiceGrossCents,
     maskedEmail: signupDetails?.maskedEmail,
     signupDate: signupDetails?.signupDate,
   })

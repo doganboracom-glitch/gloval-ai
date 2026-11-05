@@ -70,6 +70,10 @@ describe('referral payout panel data', () => {
       availableCents: 700,
       totalCents: 1_200,
       convertibleCents: 700,
+      maxCreditCents: 700,
+      maxCashCents: 700,
+      hasDebtBucket: false,
+      partialPayoutsAvailable: false,
     })
   })
 
@@ -80,5 +84,25 @@ describe('referral payout panel data', () => {
 
     expect(data?.state?.convertibleCents).toBe(1_200)
     expect(data?.state?.totalCents).toBe(1_200)
+  })
+
+  it('reads partial limits and future debt from the enhanced balance RPC', async () => {
+    state.balance = {
+      ...state.balance,
+      convertibleCents: 1_200,
+      maxCreditCents: 1_100,
+      maxCashCents: 700,
+      hasDebtBucket: true,
+    }
+
+    const data = await getReferralPayoutPanelData()
+
+    expect(data?.state).toMatchObject({
+      convertibleCents: 1_200,
+      maxCreditCents: 1_100,
+      maxCashCents: 700,
+      hasDebtBucket: true,
+      partialPayoutsAvailable: true,
+    })
   })
 })

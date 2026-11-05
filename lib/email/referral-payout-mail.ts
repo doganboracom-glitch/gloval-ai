@@ -20,6 +20,12 @@ export type ReferralPayoutNotice = {
   availableAt?: string
   creditAmount?: number
   systemTopupCents?: number
+  partial?: boolean
+  invoiceRequired?: boolean
+  vatMode?: 'included' | 'added' | null
+  invoiceNetCents?: number
+  invoiceVatCents?: number
+  invoiceGrossCents?: number
   signupCount?: number
   requestReference?: string
   maskedEmail?: string | null
@@ -27,12 +33,17 @@ export type ReferralPayoutNotice = {
 }
 
 function formatTry(cents: number, lang: EmailLang) {
-  return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
-    style: 'currency',
-    currency: 'TRY',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(cents / 100)
+  const absoluteCents = BigInt(Math.abs(Number.isSafeInteger(cents) ? cents : 0))
+  const centsPerLira = BigInt(100)
+  const whole = Number(absoluteCents / centsPerLira)
+  const fraction = String(absoluteCents % centsPerLira).padStart(2, '0')
+  const formattedWhole = new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
+    maximumFractionDigits: 0,
+  }).format(whole)
+  const sign = cents < 0 ? '-' : ''
+  return lang === 'tr'
+    ? `${sign}${formattedWhole},${fraction} TL`
+    : `${sign}TRY ${formattedWhole}.${fraction}`
 }
 
 function formatDate(value: string | undefined, lang: EmailLang) {
@@ -42,6 +53,51 @@ function formatDate(value: string | undefined, lang: EmailLang) {
     timeStyle: 'short',
     timeZone: 'UTC',
   }).format(new Date(value))
+}
+
+function payoutDetailRows(
+  input: ReferralPayoutNotice,
+  copy: {
+    amount: string
+    requestReference: string
+    commissionAmount: string
+    requestType: string
+    partialRequest: string
+    fullRequest: string
+    vatMode: string
+    vatIncluded: string
+    vatAdded: string
+    invoiceRequired: string
+    yes: string
+    invoiceNet: string
+    invoiceVat: string
+    invoiceGross: string
+  },
+  lang: EmailLang,
+) {
+  const rows: [string, string][] = []
+  if (input.requestReference) rows.push([copy.requestReference, input.requestReference])
+  rows.push([copy.amount, formatTry(input.amountCents ?? 0, lang)])
+  if (input.commissionCents != null) {
+    rows.push([copy.commissionAmount, formatTry(input.commissionCents, lang)])
+  }
+  if (input.partial != null) {
+    rows.push([copy.requestType, input.partial ? copy.partialRequest : copy.fullRequest])
+  }
+  if (input.invoiceRequired) rows.push([copy.invoiceRequired, copy.yes])
+  if (input.vatMode) {
+    rows.push([copy.vatMode, input.vatMode === 'included' ? copy.vatIncluded : copy.vatAdded])
+  }
+  if (
+    input.invoiceNetCents != null &&
+    input.invoiceVatCents != null &&
+    input.invoiceGrossCents != null
+  ) {
+    rows.push([copy.invoiceNet, formatTry(input.invoiceNetCents, lang)])
+    rows.push([copy.invoiceVat, formatTry(input.invoiceVatCents, lang)])
+    rows.push([copy.invoiceGross, formatTry(input.invoiceGrossCents, lang)])
+  }
+  return rows
 }
 
 export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
@@ -66,6 +122,18 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         adminIntro: 'Satış ortaklığı nakit ödeme talebi yönetici incelemesi bekliyor.',
         requestReference: 'Talep kimliği',
         amount: 'Ödeme tutarı',
+        commissionAmount: 'Komisyon bakiyesi kullanılan',
+        requestType: 'Talep türü',
+        partialRequest: 'Kısmi tutar',
+        fullRequest: 'Tam tutar',
+        vatMode: 'KDV modu',
+        vatIncluded: 'KDV tutara dahil',
+        vatAdded: 'KDV tutara eklendi',
+        invoiceRequired: 'Fatura gerekiyor',
+        invoiceNet: 'Fatura net tutarı',
+        invoiceVat: 'KDV tutarı',
+        invoiceGross: 'Fatura brüt tutarı',
+        yes: 'Evet',
         paidTitle: 'Nakit ödemeniz işlendi',
         paidIntro: 'Ödeme talebiniz tamamlandı.',
         rejectedTitle: 'Ödeme talebiniz reddedildi',
@@ -97,6 +165,18 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
         adminIntro: 'A referral partner cash payout request is waiting for administrator review.',
         requestReference: 'Request ID',
         amount: 'Payout amount',
+        commissionAmount: 'Commission balance used',
+        requestType: 'Request type',
+        partialRequest: 'Partial amount',
+        fullRequest: 'Full amount',
+        vatMode: 'VAT mode',
+        vatIncluded: 'VAT included in amount',
+        vatAdded: 'VAT added on top',
+        invoiceRequired: 'Invoice required',
+        invoiceNet: 'Invoice net',
+        invoiceVat: 'VAT amount',
+        invoiceGross: 'Invoice gross',
+        yes: 'Yes',
         paidTitle: 'Your cash payout was processed',
         paidIntro: 'Your payout request is complete.',
         rejectedTitle: 'Your payout request was rejected',
@@ -137,20 +217,17 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
     case 'referral_cash_requested':
       title = copy.requestedTitle
       intro = copy.requestedIntro
-      rows = [[copy.amount, formatTry(input.amountCents ?? 0, lang)]]
+      rows = payoutDetailRows(input, copy, lang)
       break
     case 'referral_cash_paid':
       title = copy.paidTitle
       intro = copy.paidIntro
-      rows = [[copy.amount, formatTry(input.amountCents ?? 0, lang)]]
+      rows = payoutDetailRows(input, copy, lang)
       break
     case 'referral_cash_admin':
       title = copy.adminTitle
       intro = copy.adminIntro
-      rows = [
-        [copy.requestReference, input.requestReference ?? ''],
-        [copy.amount, formatTry(input.amountCents ?? 0, lang)],
-      ]
+      rows = payoutDetailRows(input, copy, lang)
       break
     case 'referral_cash_rejected':
       title = copy.rejectedTitle
@@ -160,6 +237,12 @@ export function buildReferralPayoutNoticeEmail(input: ReferralPayoutNotice) {
       title = copy.creditTitle
       intro = copy.creditIntro
       rows = [
+        ...(input.commissionCents != null
+          ? [[copy.commissionAmount, formatTry(input.commissionCents, lang)] as [string, string]]
+          : []),
+        ...(input.partial != null
+          ? [[copy.requestType, input.partial ? copy.partialRequest : copy.fullRequest] as [string, string]]
+          : []),
         [copy.credits, String(input.creditAmount ?? 0)],
         [copy.topup, formatTry(input.systemTopupCents ?? 0, lang)],
       ]

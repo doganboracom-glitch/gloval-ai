@@ -134,7 +134,14 @@ describe('referral payout email outbox', () => {
       partnerId: PARTNER_ID,
       payoutRequestId: REQUEST_ID,
       lang: 'tr',
-      amountCents: 120_000,
+      amountCents: 120_006,
+      commissionCents: 100_005,
+      partial: true,
+      invoiceRequired: true,
+      vatMode: 'added',
+      invoiceNetCents: 100_005,
+      invoiceVatCents: 20_001,
+      invoiceGrossCents: 120_006,
     })
 
     expect(state.rows).toHaveLength(1)
@@ -154,6 +161,12 @@ describe('referral payout email outbox', () => {
     expect(state.send.mock.calls[0][0]).toMatchObject({
       subject: 'Yeni nakit ödeme talebi',
     })
+    const sentEmail = state.send.mock.calls[0][0] as { text: string }
+    expect(sentEmail.text).toContain('Kısmi tutar')
+    expect(sentEmail.text).toContain('KDV tutara eklendi')
+    expect(sentEmail.text).toContain('1.000,05 TL')
+    expect(sentEmail.text).toContain('200,01 TL')
+    expect(sentEmail.text).toContain('1.200,06 TL')
     expect(state.rows[0].status).toBe('sent')
   })
 

@@ -8,6 +8,7 @@ import {
   REFERRAL_PAYOUT_CREDIT_KIND,
 } from './referral-sql-test-kinds'
 import { CREDIT_MIN_CENTS } from './commission-config'
+import { calculateReferralInvoiceBreakdown } from './payout-core'
 
 vi.setConfig({ testTimeout: 30_000 })
 
@@ -17,6 +18,7 @@ const ADMIN_SQL = readFileSync(path.join(ROOT, 'scripts/098-referral-partner-eve
 const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commission-ledger.sql'), 'utf8')
 const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/103-referral-payout-workflows.sql'), 'utf8')
 const CREDIT_CONVERSION_SQL = readFileSync(path.join(ROOT, 'scripts/108-referral-credit-conversion.sql'), 'utf8')
+const PARTIAL_PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/113-referral-partial-payouts.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -64,6 +66,7 @@ async function withDatabase<T>(run: (db: PGlite) => Promise<T>): Promise<T> {
     await db.exec(COMMISSION_SQL)
     await db.exec(PAYOUT_SQL)
     await db.exec(CREDIT_CONVERSION_SQL)
+    await db.exec(PARTIAL_PAYOUT_SQL)
     return await run(db)
   } finally {
     await db.close()
@@ -148,11 +151,16 @@ async function requestPayout(
   userId: string,
   method: 'cash' | 'credit',
   idempotencyKey = crypto.randomUUID(),
+  options: { amountCents?: number; vatMode?: 'included' | 'added' } = {},
 ): Promise<RpcResult> {
-  const { rows } = await db.query<{ result: RpcResult }>(
-    'select public.request_referral_payout($1::uuid, $2::uuid, $3, $4::uuid) as result',
-    [partnerId, userId, method, idempotencyKey],
-  )
+  const usesExtendedArguments = options.amountCents !== undefined || options.vatMode !== undefined
+  const sql = usesExtendedArguments
+    ? 'select public.request_referral_payout($1::uuid, $2::uuid, $3, $4::uuid, $5::bigint, $6::text) as result'
+    : 'select public.request_referral_payout($1::uuid, $2::uuid, $3, $4::uuid) as result'
+  const parameters = usesExtendedArguments
+    ? [partnerId, userId, method, idempotencyKey, options.amountCents ?? null, options.vatMode ?? null]
+    : [partnerId, userId, method, idempotencyKey]
+  const { rows } = await db.query<{ result: RpcResult }>(sql, parameters)
   return rows[0].result
 }
 
@@ -171,9 +179,9 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
           has_function_privilege('anon', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_anon,
           has_function_privilege('authenticated', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_authenticated,
           has_function_privilege('service_role', 'public.referral_partner_payout_balance(uuid)', 'EXECUTE') as balance_service_role,
-          has_function_privilege('anon', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_anon,
-          has_function_privilege('authenticated', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_authenticated,
-          has_function_privilege('service_role', 'public.request_referral_payout(uuid,uuid,text,uuid)', 'EXECUTE') as request_service_role
+          has_function_privilege('anon', 'public.request_referral_payout(uuid,uuid,text,uuid,bigint,text)', 'EXECUTE') as request_anon,
+          has_function_privilege('authenticated', 'public.request_referral_payout(uuid,uuid,text,uuid,bigint,text)', 'EXECUTE') as request_authenticated,
+          has_function_privilege('service_role', 'public.request_referral_payout(uuid,uuid,text,uuid,bigint,text)', 'EXECUTE') as request_service_role
       `)
 
       expect(rows).toEqual([{
@@ -597,8 +605,8 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
       await addAvailableBalance(db, partner.id, 200_000, 'company-cash')
 
       const cashKey = crypto.randomUUID()
-      const cash = await requestPayout(db, partner.id, partner.user_id, 'cash', cashKey)
-      const duplicateCash = await requestPayout(db, partner.id, partner.user_id, 'cash', cashKey)
+      const cash = await requestPayout(db, partner.id, partner.user_id, 'cash', cashKey, { vatMode: 'added' })
+      const duplicateCash = await requestPayout(db, partner.id, partner.user_id, 'cash', cashKey, { vatMode: 'added' })
       const secondCash = await requestPayout(db, partner.id, partner.user_id, 'cash')
 
       expect(cash).toMatchObject({ ok: true, duplicate: false, status: 'requested', balanceCents: 200_000, payoutCents: 240_000, invoiceRequired: true })
@@ -708,6 +716,220 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
         'select amount_cents::text from public.referral_commission_ledger order by created_at',
       )
       expect(ledger.map((row) => Number(row.amount_cents))).toEqual([100_000, -100_000, 100_000])
+    })
+  })
+
+  it('supports partial cash, processes it without a false balance_adjusted error, and rejects it without changing commission state', async () => {
+    await withDatabase(async (db) => {
+      const processPartner = await newPartner(db, { email: 'partial-process@gloval.test' })
+      const adminUserId = await newUser(db, 'partial-admin@gloval.test')
+      await addAvailableBalance(db, processPartner.id, 250_000, 'partial-process-cash')
+      const processRequest = await requestPayout(db, processPartner.id, processPartner.user_id, 'cash', crypto.randomUUID(), { amountCents: 100_000 })
+      expect(processRequest).toMatchObject({ ok: true, partial: true, balanceCents: 100_000, payoutCents: 100_000 })
+
+      const processed = await db.query<{ result: RpcResult }>(
+        'select public.process_referral_cash_payout($1::uuid, $2::uuid, $3) as result',
+        [processRequest.requestId, adminUserId, 'PARTIAL-BANK-001'],
+      )
+      expect(processed.rows[0].result).toMatchObject({ ok: true, alreadyProcessed: false, payoutCents: 100_000 })
+      expect(processed.rows[0].result.error).not.toBe('balance_adjusted')
+
+      const rejectPartner = await newPartner(db, { email: 'partial-reject@gloval.test' })
+      const commission = await newCommission(db, rejectPartner.id)
+      await db.query(
+        "update public.referral_commissions set status = 'available', available_at = now() - interval '1 day' where id = $1",
+        [commission.commissionId],
+      )
+      await addAvailableBalance(db, rejectPartner.id, 250_000, 'partial-reject-cash')
+      const rejectRequest = await requestPayout(db, rejectPartner.id, rejectPartner.user_id, 'cash', crypto.randomUUID(), { amountCents: 100_000 })
+      expect(rejectRequest).toMatchObject({ ok: true, partial: true, balanceCents: 100_000 })
+
+      const beforeReject = await db.query<{ status: string; payout_request_id: string | null }>(
+        'select status, payout_request_id from public.referral_commissions where id = $1',
+        [commission.commissionId],
+      )
+      expect(beforeReject.rows[0]).toEqual({ status: 'available', payout_request_id: null })
+
+      const rejected = await db.query<{ result: RpcResult }>(
+        'select public.reject_referral_cash_payout($1::uuid, $2::uuid, $3, $4) as result',
+        [rejectRequest.requestId, adminUserId, 'details_incomplete', 'Please update payout details'],
+      )
+      expect(rejected.rows[0].result).toMatchObject({ ok: true, alreadyProcessed: false, balanceCents: 100_000 })
+      const afterReject = await db.query<{ status: string; payout_request_id: string | null }>(
+        'select status, payout_request_id from public.referral_commissions where id = $1',
+        [commission.commissionId],
+      )
+      expect(afterReject.rows[0]).toEqual({ status: 'available', payout_request_id: null })
+      const balance = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [rejectPartner.id],
+      )
+      expect(balance.rows[0].result.availableCents).toBe(250_000)
+      expect(balance.rows[0].result.convertibleCents).toBe(252_017)
+    })
+  })
+
+  it('deducts partial credit from matured funds first and then future maturity buckets in FIFO order', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'credit-fifo-partial@gloval.test' })
+      await addAvailableBalance(db, partner.id, 100_000, 'credit-fifo-matured')
+      const firstMaturity = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+      const secondMaturity = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
+      await addLedgerEntryAt(db, partner.id, 50_000, firstMaturity, 'credit-fifo-future-a')
+      await addLedgerEntryAt(db, partner.id, 30_000, secondMaturity, 'credit-fifo-future-b')
+
+      const request = await requestPayout(db, partner.id, partner.user_id, 'credit', crypto.randomUUID(), { amountCents: 120_000 })
+      expect(request).toMatchObject({ ok: true, partial: true, balanceCents: 120_000, creditAmount: 400, systemTopupCents: 0 })
+      const deductions = await db.query<{ amount_cents: string; available_at: string }>(`
+        select amount_cents::text, available_at::text
+        from public.referral_commission_ledger
+        where payout_request_id = $1
+        order by available_at
+      `, [request.requestId])
+      expect(deductions.rows.map((row) => Number(row.amount_cents))).toEqual([-100_000, -20_000])
+      expect(new Date(deductions.rows[0].available_at).getTime()).toBeLessThan(Date.now())
+      expect(new Date(deductions.rows[1].available_at).getTime()).toBe(new Date(firstMaturity).getTime())
+
+      const balance = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+      expect(balance.rows[0].result).toMatchObject({
+        maxCreditCents: 60_000,
+        maxCashCents: 0,
+        hasDebtBucket: false,
+        availableCents: 0,
+      })
+      const maturedAfterRequest = await db.query<{ amount_cents: string }>(`
+        select coalesce(sum(amount_cents), 0)::text as amount_cents
+        from public.referral_commission_ledger
+        where partner_id = $1 and available_at <= clock_timestamp()
+      `, [partner.id])
+      expect(Number(maturedAfterRequest.rows[0].amount_cents)).toBe(0)
+    })
+  })
+
+  it('blocks partial credit while a future net bucket is negative but still allows full cleanup', async () => {
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'credit-negative-bucket@gloval.test' })
+      await addAvailableBalance(db, partner.id, 700, 'credit-negative-available')
+      const maturity = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+      await addLedgerEntryAt(db, partner.id, 1_500, maturity, 'credit-negative-future-positive')
+      await addLedgerEntryAt(db, partner.id, -1_700, maturity, 'credit-negative-future-negative', 'refund_pre_hold')
+
+      const balanceBefore = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+      expect(balanceBefore.rows[0].result).toMatchObject({ maxCreditCents: 500, hasDebtBucket: true })
+      const partial = await requestPayout(db, partner.id, partner.user_id, 'credit', crypto.randomUUID(), { amountCents: 300 })
+      expect(partial).toMatchObject({ ok: false, error: 'partial_unavailable_debt' })
+      const requestCount = await db.query<{ count: number }>(
+        'select count(*)::integer as count from public.referral_payout_requests where partner_id = $1',
+        [partner.id],
+      )
+      expect(requestCount.rows[0].count).toBe(0)
+
+      const full = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(full).toMatchObject({ ok: true, partial: false, balanceCents: 500 })
+      const finalBalance = await db.query<{ result: RpcResult }>(
+        'select public.referral_partner_payout_balance($1::uuid) as result',
+        [partner.id],
+      )
+      expect(finalBalance.rows[0].result).toMatchObject({ maxCreditCents: 0, hasDebtBucket: false })
+    })
+  })
+
+  it('shares integer-cent VAT rounding with TypeScript for included and added company modes', async () => {
+    await withDatabase(async (db) => {
+      const includedPartner = await newPartner(db, { email: 'vat-included@gloval.test', taxStatus: 'company' })
+      const addedPartner = await newPartner(db, { email: 'vat-added@gloval.test', taxStatus: 'company' })
+      const amountCents = 100_005
+      await addAvailableBalance(db, includedPartner.id, amountCents, 'vat-included-balance')
+      await addAvailableBalance(db, addedPartner.id, amountCents, 'vat-added-balance')
+
+      for (const [partner, vatMode] of [[includedPartner, 'included'], [addedPartner, 'added']] as const) {
+        const result = await requestPayout(db, partner.id, partner.user_id, 'cash', crypto.randomUUID(), { vatMode })
+        const expected = calculateReferralInvoiceBreakdown(amountCents, vatMode)
+        expect(expected).not.toBeNull()
+        expect(result).toMatchObject({ ok: true, invoiceRequired: true, vatMode, ...expected })
+        const stored = await db.query<{
+          invoice_net_cents: string
+          invoice_vat_cents: string
+          invoice_gross_cents: string
+          payout_cents: string
+        }>(`
+          select invoice_net_cents::text, invoice_vat_cents::text,
+            invoice_gross_cents::text, payout_cents::text
+          from public.referral_payout_requests where id = $1
+        `, [result.requestId])
+        const sqlBreakdown = {
+          invoiceNetCents: Number(stored.rows[0].invoice_net_cents),
+          invoiceVatCents: Number(stored.rows[0].invoice_vat_cents),
+          invoiceGrossCents: Number(stored.rows[0].invoice_gross_cents),
+          payoutCents: Number(stored.rows[0].payout_cents),
+        }
+        expect(sqlBreakdown).toEqual(expected)
+      }
+      expect(calculateReferralInvoiceBreakdown(amountCents, 'included')).toMatchObject({
+        invoiceNetCents: 83_338,
+        invoiceVatCents: 16_667,
+        invoiceGrossCents: 100_005,
+      })
+    })
+  })
+
+  it('rejects amount and VAT idempotency mismatches and serializes simultaneous cash requests', async () => {
+    await withDatabase(async (db) => {
+      const company = await newPartner(db, { email: 'vat-idempotency@gloval.test', taxStatus: 'company' })
+      await addAvailableBalance(db, company.id, 200_000, 'vat-idempotency-balance')
+      const idempotencyKey = crypto.randomUUID()
+      const first = await requestPayout(db, company.id, company.user_id, 'cash', idempotencyKey, { vatMode: 'included' })
+      expect(first).toMatchObject({ ok: true, balanceCents: 200_000 })
+      await expect(requestPayout(db, company.id, company.user_id, 'cash', idempotencyKey, { vatMode: 'added' })).resolves.toMatchObject({
+        ok: false,
+        error: 'idempotency_conflict',
+      })
+      await expect(requestPayout(db, company.id, company.user_id, 'cash', idempotencyKey, { amountCents: 100_000, vatMode: 'included' })).resolves.toMatchObject({
+        ok: false,
+        error: 'idempotency_conflict',
+      })
+      await expect(requestPayout(db, company.id, company.user_id, 'credit', idempotencyKey)).resolves.toMatchObject({
+        ok: false,
+        error: 'idempotency_conflict',
+      })
+
+      const individual = await newPartner(db, { email: 'cash-race@gloval.test' })
+      await addAvailableBalance(db, individual.id, 300_000, 'cash-race-balance')
+      const simultaneous = await Promise.all([
+        requestPayout(db, individual.id, individual.user_id, 'cash', crypto.randomUUID(), { amountCents: 100_000 }),
+        requestPayout(db, individual.id, individual.user_id, 'cash', crypto.randomUUID(), { amountCents: 150_000 }),
+      ])
+      expect(simultaneous.filter((result) => result.ok === true)).toHaveLength(1)
+      expect(simultaneous.filter((result) => result.error === 'open_cash_request')).toHaveLength(1)
+      const persisted = await db.query<{ request_count: number; request_balance: string; available: string }>(`
+        select
+          (select count(*)::integer from public.referral_payout_requests where partner_id = $1 and method = 'cash' and status = 'requested') as request_count,
+          (select balance_cents::text from public.referral_payout_requests where partner_id = $1 and method = 'cash' and status = 'requested' limit 1) as request_balance,
+          (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1 and available_at <= clock_timestamp()) as available
+      `, [individual.id])
+      expect(persisted.rows[0].request_count).toBe(1)
+      expect(Number(persisted.rows[0].request_balance)).toBeOneOf([100_000, 150_000])
+      expect(Number(persisted.rows[0].available)).toBe(300_000 - Number(persisted.rows[0].request_balance))
+    })
+  })
+
+  it('keeps the new migration unapplied and safe to re-run', async () => {
+    await withDatabase(async (db) => {
+      await expect(db.exec(PARTIAL_PAYOUT_SQL)).resolves.toBeDefined()
+      const functions = await db.query<{ count: number }>(`
+        select count(*)::integer as count
+        from pg_catalog.pg_proc as proc
+        join pg_catalog.pg_namespace as namespace on namespace.oid = proc.pronamespace
+        where namespace.nspname = 'public' and proc.proname = 'request_referral_payout'
+      `)
+      expect(functions.rows[0].count).toBe(1)
+      expect(PARTIAL_PAYOUT_SQL).toMatch(/NOT APPLIED/iu)
     })
   })
 })

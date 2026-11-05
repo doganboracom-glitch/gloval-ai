@@ -19,6 +19,7 @@ export function ConfirmDialog({
   cancelLabel,
   destructive = false,
   confirmDisabled = false,
+  stickyActions = false,
   children,
   onConfirm,
   onCancel,
@@ -30,6 +31,7 @@ export function ConfirmDialog({
   cancelLabel: string
   destructive?: boolean
   confirmDisabled?: boolean
+  stickyActions?: boolean
   children?: ReactNode
   onConfirm: () => void
   onCancel: () => void
@@ -83,7 +85,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-xl"
       >
         <h2 id={titleId} className="text-base font-semibold text-foreground">
           {title}
@@ -92,7 +94,13 @@ export function ConfirmDialog({
           {description}
         </p>
         {children}
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <div
+          className={
+            stickyActions
+              ? 'sticky bottom-0 -mx-6 -mb-6 mt-6 flex flex-col-reverse gap-2 border-t border-border bg-card px-6 pb-6 pt-4 sm:flex-row sm:justify-end'
+              : 'mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end'
+          }
+        >
           <button
             ref={cancelRef}
             type="button"
