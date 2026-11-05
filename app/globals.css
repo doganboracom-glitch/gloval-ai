@@ -217,6 +217,35 @@
   }
 }
 
+/* Keep native autofill colors on the app theme without replacing the shared
+   input's Tailwind focus ring or the Ads address field's wrapper focus ring. */
+.theme-aware-autofill {
+  --autofill-background: var(--card);
+}
+
+input.theme-aware-autofill:is(:-webkit-autofill, :autofill),
+input.theme-aware-autofill:is(:-webkit-autofill, :autofill):hover,
+input.theme-aware-autofill:is(:-webkit-autofill, :autofill):focus {
+  background-color: var(--autofill-background, var(--card)) !important;
+  -webkit-text-fill-color: var(--foreground) !important;
+  caret-color: var(--foreground) !important;
+  -webkit-box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000),
+    var(--tw-inset-ring-shadow, 0 0 #0000),
+    inset 0 0 0 1000px var(--autofill-background, var(--card)),
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000) !important;
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000),
+    var(--tw-inset-ring-shadow, 0 0 #0000),
+    inset 0 0 0 1000px var(--autofill-background, var(--card)),
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000) !important;
+  transition: background-color 9999s ease-out 0s !important;
+}
+
 @layer utilities {
   .grid-bg {
     background-image:

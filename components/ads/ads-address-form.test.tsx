@@ -33,6 +33,7 @@ vi.mock('@/lib/ads/scan-client', async (importOriginal) => {
 
 const copy = dictionary.tr.ads
 const globalStyles = readFileSync('app/globals.css', 'utf8')
+const sharedInputSource = readFileSync('components/ui/input.tsx', 'utf8')
 
 function submitAddress(value: string) {
   fireEvent.change(screen.getByLabelText(copy.addressLabel), { target: { value } })
@@ -93,6 +94,32 @@ describe('AdsAddressForm', () => {
     expect(input.className).toContain('ads-address-input')
     expect(input.getAttribute('aria-label')).toBe(copy.addressLabel)
     expect(input.getAttribute('placeholder')).toBe('')
+  })
+
+  it('uses theme-aware autofill styles on the address and shared inputs without changing focus or radius', () => {
+    render(<AdsAddressForm />)
+    const input = screen.getByLabelText(copy.addressLabel)
+    const frame = input.closest('[data-invalid]')
+    const autofillRule = globalStyles.match(/input\.theme-aware-autofill:is\(:-webkit-autofill, :autofill\)[\s\S]*?\{([^}]*)\}/)
+    const autofillDeclarations = autofillRule?.[1] ?? ''
+
+    expect(input.className).toContain('theme-aware-autofill')
+    expect(frame?.className).toContain('rounded-3xl')
+    expect(frame?.className).toContain('focus-within:ring-4')
+    expect(frame?.className).toContain('focus-within:ring-brand/20')
+    expect(sharedInputSource).toContain('theme-aware-autofill h-8')
+    expect(sharedInputSource).toContain('rounded-lg')
+    expect(sharedInputSource).toContain('focus-visible:ring-3')
+    expect(autofillRule?.[0]).toContain(':-webkit-autofill')
+    expect(autofillRule?.[0]).toContain(':autofill')
+    expect(autofillDeclarations).toContain('background-color: var(--autofill-background, var(--card)) !important;')
+    expect(autofillDeclarations).toContain('-webkit-text-fill-color: var(--foreground) !important;')
+    expect(autofillDeclarations).toContain('caret-color: var(--foreground) !important;')
+    expect(autofillDeclarations).toContain('inset 0 0 0 1000px var(--autofill-background, var(--card))')
+    expect(autofillDeclarations).toContain('var(--tw-ring-offset-shadow')
+    expect(autofillDeclarations).toContain('var(--tw-ring-shadow')
+    expect(autofillDeclarations).toContain('transition: background-color 9999s ease-out 0s !important;')
+    expect(autofillDeclarations).not.toMatch(/border-radius|outline\s*:/)
   })
 
   it('keeps the mobile address field at least 64px tall and full width', () => {
