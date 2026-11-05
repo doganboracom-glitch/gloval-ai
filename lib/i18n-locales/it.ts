@@ -974,8 +974,10 @@ const it: DeepPartial<Dict> = {
       statusActive: "Finestra di trasferimento attiva — il blocco verrà riattivato automaticamente tra {time}.",
       statusUnlocked: "Sbloccato — trasferibile. Riattiva il blocco per proteggere il dominio.",
       unavailable: "La finestra di trasferimento non è al momento disponibile; il blocco del dominio non è stato modificato.",
-      restrictionUnknown: "Non è stato possibile verificare il periodo di attesa per il trasferimento; il recupero del codice è disattivato.",
-      guideTitle: "Procedura di trasferimento e sicurezza",
+  restrictionUnknown: "Non è stato possibile verificare il periodo di attesa per il trasferimento; il recupero del codice è disattivato.",
+  startDateUnverifiedWarning: "Non è stato possibile verificare la data di registrazione. Il registrar applica una regola di 60 giorni dopo una nuova registrazione o un trasferimento; se la regola si applica, il trasferimento potrebbe essere rifiutato.",
+  startDateConfirmationLabel: "Comprendo che il trasferimento potrebbe essere rifiutato se si applica la regola dei 60 giorni del registrar.",
+  guideTitle: "Procedura di trasferimento e sicurezza",
       trUnsupported: "I domini .tr seguono una procedura diversa e non sono inclusi in questo flusso.",
       guideItems: [
         "Quando richiedi il codice di trasferimento, il blocco del dominio viene rimosso per 72 ore. Il codice resta visibile sullo schermo per 60 secondi e non viene salvato via e-mail né nel database.",

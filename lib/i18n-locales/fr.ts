@@ -934,8 +934,10 @@ const fr: DeepPartial<Dict> = {
       statusActive: "Fenêtre de transfert active — le verrou sera réactivé dans {time}.",
       statusUnlocked: "Déverrouillé — transférable. Réactivez le verrou pour protéger votre domaine.",
       unavailable: "La fenêtre de transfert est momentanément indisponible ; le verrou du domaine n’a pas été modifié.",
-      restrictionUnknown: "La période d’attente du transfert n’a pas pu être vérifiée ; la récupération du code est désactivée.",
-      guideTitle: "Déroulement du transfert et sécurité",
+  restrictionUnknown: "La période d’attente du transfert n’a pas pu être vérifiée ; la récupération du code est désactivée.",
+  startDateUnverifiedWarning: "La date d’enregistrement n’a pas pu être vérifiée. Le bureau d’enregistrement applique une règle de 60 jours après un nouvel enregistrement ou un transfert ; si elle s’applique, le transfert peut être refusé.",
+  startDateConfirmationLabel: "Je comprends que le transfert peut être refusé si la règle des 60 jours du bureau d’enregistrement s’applique.",
+  guideTitle: "Déroulement du transfert et sécurité",
       trUnsupported: "Les domaines en .tr suivent une procédure différente et ne sont pas pris en charge par ce parcours.",
       guideItems: [
         "Lorsque vous demandez le code, le verrou du domaine est désactivé pendant 72 heures. Le code apparaît à l’écran pendant 60 secondes et n’est conservé ni dans un e-mail ni dans la base de données.",

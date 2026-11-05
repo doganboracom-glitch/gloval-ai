@@ -17,8 +17,15 @@ export type DomainAuditEventType =
   | 'renewal_started'
   | 'renewal_completed'
 
+export type DomainAuditReason =
+  | 'locked_unreadable'
+  | 'status_unknown'
+  | 'start_date_missing'
+  | 'start_date_unparseable'
+
 export type DomainAuditDetails = {
   outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
+  reason?: DomainAuditReason
   changed?: boolean
   nameserverCount?: number
   previousLocked?: boolean | null
@@ -31,6 +38,7 @@ export type DomainAuditDetails = {
 
 const DETAIL_KEYS = [
   'outcome',
+  'reason',
   'changed',
   'nameserverCount',
   'previousLocked',
@@ -47,6 +55,12 @@ const AUDIT_SOURCES = new Set<NonNullable<DomainAuditDetails['source']>>([
   'auto_relock_deferred',
   'window_extended',
 ])
+const AUDIT_REASONS = new Set<DomainAuditReason>([
+  'locked_unreadable',
+  'status_unknown',
+  'start_date_missing',
+  'start_date_unparseable',
+])
 
 function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string, string | number | boolean | null> {
   const out: Record<string, string | number | boolean | null> = {}
@@ -59,6 +73,8 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
     } else if (key === 'outcome' && typeof value === 'string' && /^[a-z_]{1,20}$/.test(value)) {
       out[key] = value
     } else if (key === 'source' && typeof value === 'string' && AUDIT_SOURCES.has(value as DomainAuditDetails['source'] & string)) {
+      out[key] = value
+    } else if (key === 'reason' && typeof value === 'string' && AUDIT_REASONS.has(value as DomainAuditReason)) {
       out[key] = value
     }
   }

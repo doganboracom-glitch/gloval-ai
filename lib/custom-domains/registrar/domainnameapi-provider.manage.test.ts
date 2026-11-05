@@ -125,6 +125,17 @@ describe('getManagedDetails', () => {
     expect(d?.expiresAt).toBe('2027-10-04T17:55:29.000Z')
   })
 
+  it('reads alternate registration-date fields and only reports their names', async () => {
+    const rawDate = '2025-01-01T10:00:00Z'
+    queueDetails(body({ startDate: undefined, registrationDate: rawDate }))
+
+    const details = await provider().getManagedDetails(DOMAIN)
+
+    expect(details?.startedAtRaw).toBe(rawDate)
+    expect(details?.rawFieldNames).toContain('registrationDate')
+    expect(JSON.stringify(details?.rawFieldNames)).not.toContain(rawDate)
+  })
+
   it('does not guess a missing flag: absent means null, not false', async () => {
     queueDetails(body({ lockStatus: undefined, privacyProtectionStatus: 'true' }))
     const d = await provider().getManagedDetails(DOMAIN)

@@ -12,7 +12,7 @@ import DNARest from 'nodejs-dna/src/DNARest'
 import { buildRegistrarDiagnostic, formatRegistrarDiagnostic } from './diagnostics'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
-import { isLaterRawDate, parseProviderDate, readRawField } from './provider-date'
+import { isLaterRawDate, parseProviderDate, readFirstRawField, readRawField } from './provider-date'
 import {
   RegistrarError,
   type DomainAvailabilityResult,
@@ -575,7 +575,7 @@ export class DomainNameApiProvider
   const raw = client.lastResponse
   const rawFields = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const expiry = parseProviderDate(readRawField(raw, 'expirationDate'))
-  const start = parseProviderDate(readRawField(raw, 'startDate'))
+  const start = parseProviderDate(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
   const remaining = rawFields.remainingDay
   return {
     locked: asLockFlag(rawFields.lockStatus) ?? asLockFlag(d.LockStatus),
@@ -587,6 +587,9 @@ export class DomainNameApiProvider
       startedAtRaw: start.raw,
       status: String(d.Status ?? ''),
       hasAuthCode: String(d.AuthCode ?? '').length > 0,
+      rawFieldNames: Object.keys(rawFields)
+        .filter((key) => /^[A-Za-z0-9_]{1,64}$/.test(key))
+        .slice(0, 60),
     }
   }
 
@@ -692,7 +695,7 @@ export class DomainNameApiProvider
       unknown
     >
     const expiry = parseProviderDate(raw.expirationDate)
-    const start = parseProviderDate(raw.startDate)
+    const start = parseProviderDate(readFirstRawField(raw, ['startDate', 'creationDate', 'registrationDate', 'createdDate']))
     const days = typeof raw.remainingDay === 'number' && Number.isFinite(raw.remainingDay) ? raw.remainingDay : null
     return {
       domain: String(d.DomainName || domain),
