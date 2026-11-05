@@ -124,6 +124,7 @@ function setup(options: {
   preflightResult?: GoogleAdsPublishPreflightResult
   connection?: Partial<GoogleAdsConnectionRow>
   accessEnabled?: boolean
+  validationTestEnabled?: boolean
   finalizeResult?: { ok: true; balance: number; alreadyCharged: boolean; chargedAmount: number } | { ok: false; reason: 'insufficient_credits' | 'finalize_failed'; balance: number }
 } = {}) {
   const events: string[] = []
@@ -181,6 +182,7 @@ function setup(options: {
 
   const deps: GoogleAdsPublishServiceDeps = {
     accessEnabled: () => options.accessEnabled ?? true,
+    validationTestEnabled: () => options.validationTestEnabled ?? false,
     createRequestId: () => REQUEST_ID,
     loadPlan: vi.fn(async () => options.plan ?? plan()),
     withAccess: vi.fn(async ({ action }) => {
@@ -209,6 +211,7 @@ function setup(options: {
     markReconciling: vi.fn(async () => { events.push('reconciling') }),
     markCampaignStatus: vi.fn(async () => { events.push('status-saved') }),
     alertReconciling: vi.fn(async () => { events.push('alert') }),
+    alertPublishFailure: vi.fn(async () => { events.push('publish-alert') }),
   }
 
   return { service: createGoogleAdsPublishService(deps), deps, provider, events }
@@ -220,9 +223,80 @@ const confirmedPublish = {
   expectedVersion: 1,
   approvalHash: APPROVAL_HASH,
   userConfirmed: true,
+  finalConfirmation: true,
 }
 
 describe('Google Ads E2 publish service', () => {
+  it('requires a separate final confirmation before a real campaign mutation', async () => {
+    const { service, deps, provider } = setup()
+
+    expect(await service.publish({ ...confirmedPublish, finalConfirmation: false }))
+      .toMatchObject({ ok: false, reason: 'confirmation_required' })
+    expect(deps.loadPlan).not.toHaveBeenCalled()
+    expect(deps.preflightPublishUrl).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
+  it('allows an admin-gated validate_only test while live publishing is off without persisting plan state', async () => {
+    const { service, deps, provider } = setup({
+      accessEnabled: false,
+      validationTestEnabled: true,
+      plan: plan({
+        status: 'draft',
+        approved_version: null,
+        approval_id: null,
+        approval_hash: null,
+        validation_hash: null,
+        validated_version: null,
+        eu_political_advertising: null,
+        eu_political_declaration_confirmed_at: null,
+        approval_user_daily_budget_limit_minor: null,
+      }),
+      publishResult: {
+        externalCampaignId: null,
+        status: 'paused',
+        validateOnly: true,
+        billingVerified: true,
+        paymentMethodWarning: false,
+      },
+    })
+
+    const result = await service.publish({
+      userId: USER_ID,
+      planId: PLAN_ID,
+      userConfirmed: true,
+      validateOnly: true,
+      validationTestMode: true,
+      euPoliticalAdvertising: 'no',
+      euPoliticalDeclarationConfirmed: true,
+    })
+
+    expect(result).toMatchObject({ ok: true, state: 'validation_test_passed', externalCampaignId: null, creditsCharged: 0 })
+    expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({
+      validateOnly: true,
+      validationTestMode: true,
+      userConfirmed: true,
+    }))
+    expect(deps.markValidated).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(deps.markPublished).not.toHaveBeenCalled()
+  })
+
+  it('keeps validate_only test mode closed unless its separate server flag is enabled', async () => {
+    const { service, deps, provider } = setup({ accessEnabled: false, validationTestEnabled: false })
+
+    expect(await service.publish({
+      userId: USER_ID,
+      planId: PLAN_ID,
+      userConfirmed: true,
+      validateOnly: true,
+      validationTestMode: true,
+    })).toMatchObject({ ok: false, reason: 'publish_disabled' })
+    expect(deps.loadPlan).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+
   it('requires explicit confirmation and the exact approval hash before any preflight or provider call', async () => {
     const { service, deps, provider } = setup()
 
@@ -353,6 +427,7 @@ describe('Google Ads E2 publish service', () => {
       reason: 'provider_error',
     }))
     expect(events).toContain('released')
+    expect(deps.alertPublishFailure).toHaveBeenCalledWith(PLAN_ID, REQUEST_ID, 'provider_error', 'publish')
     expect(deps.alertReconciling).not.toHaveBeenCalled()
   })
 

@@ -12,6 +12,8 @@ export const maxDuration = 120
 const validationTestSchema = z.object({
   planId: z.string().uuid(),
   confirm: z.literal(true),
+  euPoliticalAdvertising: z.enum(['yes', 'no']),
+  euPoliticalDeclarationConfirmed: z.literal(true),
 }).strict()
 
 function responseStatus(reason: string): number {
@@ -21,7 +23,7 @@ function responseStatus(reason: string): number {
   if (reason === 'api_quota_exceeded' || reason === 'rate_limited') return 429
   if (reason === 'provider_unavailable') return 502
   if (reason === 'provider_error' || reason === 'quota_check_failed' || reason === 'configuration_missing') return 503
-  if (reason === 'invalid_request' || reason === 'confirmation_required') return 400
+  if (reason === 'invalid_request' || reason === 'confirmation_required' || reason === 'eu_political_declaration_required') return 400
   return 409
 }
 
@@ -45,6 +47,8 @@ export async function POST(request: Request) {
     userConfirmed: input.data.confirm,
     validateOnly: true,
     validationTestMode: true,
+    euPoliticalAdvertising: input.data.euPoliticalAdvertising,
+    euPoliticalDeclarationConfirmed: input.data.euPoliticalDeclarationConfirmed,
   })
 
   if (!result.ok) {

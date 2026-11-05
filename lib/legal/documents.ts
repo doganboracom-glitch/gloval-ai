@@ -135,7 +135,7 @@ const privacy: LegalDoc = {
         id: 'google-ads-verileri',
         blocks: [
           p(
-            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Bağlı hesabınızda yalnızca planı onaylamanız ve yayın öncesi ayrı onay vermeniz hâlinde, onaylanan kampanya planı Google Ads API’ye gönderilir ve kampanya duraklatılmış (PAUSED) durumda oluşturulur; ayrıca etkinleştirilmedikçe reklam yayınlanmaz. validate_only doğrulaması Google Ads isteğini sınar ve hesapta kampanya oluşturmaz.',
+            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Bağlı hesabınızda yalnızca planı onaylamanız ve yayın öncesi ayrı onay vermeniz hâlinde, onaylanan kampanya planı Google Ads API’ye gönderilir ve kampanya duraklatılmış (PAUSED) durumda oluşturulur; ayrıca etkinleştirilmedikçe reklam yayınlanmaz. validate_only doğrulaması Google Ads isteğini sınar ve hesapta kampanya oluşturmaz. Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, GLOVAL yöneticisi kaydedilmiş bir taslak planı yalnızca doğrulama amacıyla Google Ads API’ye gönderebilir; bu test kampanya oluşturmaz veya hesap durumunu değiştirmez.',
           ),
           p(
             'Hesap seçimi sırasında erişilebilir müşteri hesaplarının kimliği, adı, para birimi ve yönetici/alt hesap ilişkisi okunabilir. Seçtiğiniz müşteri hesabı için son 7 veya 30 güne ait raporda en fazla 100 kampanyanın adı ve durumu ile gösterim, tıklama, harcama ve dönüşüm ölçümleri alınır.',
@@ -290,13 +290,13 @@ const privacy: LegalDoc = {
         id: 'google-ads-verileri',
         blocks: [
           p(
-            'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. The current implementation only calls the Google Ads API to list accessible customer accounts and read performance reports; it does not create, edit or publish campaigns.',
+            'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. A campaign plan is sent to the Google Ads API only after you approve the plan and provide a separate final confirmation. The campaign is created paused (PAUSED) and will not serve ads unless you separately enable it. The validate_only check validates the API request without creating a campaign in the account. When a separate server-side flag is enabled, an authorized GLOVAL administrator may submit a saved draft plan via validate_only solely to validate the request; this test does not create a campaign or change account status.',
           ),
           p(
             'During account selection, accessible customer account IDs, names, currencies and manager/client-account relationships may be read. For the customer account you select, the service reads up to 100 campaigns in a report covering the last 7 or 30 days, including campaign names and statuses, impressions, clicks, spend and conversions.',
           ),
           p(
-            'Performance reports are fetched from the Google Ads API when requested and returned for display in the connected user’s dashboard; they are not persistently stored in the application database.',
+            'The campaign plan’s campaign/brand name, ad headlines and descriptions, keywords and negative keywords, targeting, final URL, daily budget, bid ceiling, approval version/time, and Google customer/campaign IDs and status are stored in the GLOVAL AI database to provide publishing and campaign management. Performance reports are fetched from the Google Ads API when requested and returned for display in the connected user’s dashboard; report contents are not persistently stored.',
           ),
           p(
             'This flow uses Google OAuth and the Google Ads API (authorization and data queries), Vercel (application hosting and runtime) and Supabase (authentication and database). Connection and account metadata and the Google refresh token are stored in Supabase. The refresh token is encrypted with AES-256-GCM, is not sent to the client and is not written to application logs.',
@@ -319,7 +319,7 @@ const privacy: LegalDoc = {
             true,
           ),
           p(
-            'You can disconnect Google Ads from the dashboard, which sends a revocation request and clears the stored token. You can also remove GLOVAL AI’s access in your Google Account permissions. When you delete your account, pending Google tokens are revoked and connection records are deleted; operation metadata detached from account identifiers may remain for up to 25 hours.',
+            'Disconnecting Google Ads in the dashboard sends a revocation request and clears the stored token, but it does not pause or delete campaigns in your Google Ads account and does not stop Google billing. If a campaign is active, pause it in Google Ads or through GLOVAL while the connection is still available. Closing your GLOVAL account or revoking access does not cancel an existing campaign. You can also remove GLOVAL AI’s access in your Google Account permissions. When you delete your account, pending Google tokens are revoked and connection records are deleted; operation metadata detached from account identifiers may remain for up to 25 hours.',
           ),
           link(
             'https://myaccount.google.com/permissions',
@@ -722,6 +722,18 @@ const cookies: LegalDoc = {
           p(
             'Alan adı kaydı/yenilemesi ve bazı entegrasyonlar üçüncü taraf sağlayıcılar üzerinden yürür. Bu hizmetlerin kendi koşulları ve ücretleri geçerli olabilir.',
           ),
+          p(
+            'Google Ads hesabınızı bağladıktan sonra, kampanya planını onaylamanız ve yayın öncesi ayrı bir son onay vermeniz hâlinde GLOVAL AI, gösterilen planı Google Ads API üzerinden sizin adınıza hesabınıza gönderebilir ve kampanya, reklam grubu, reklam ve bütçe kayıtlarını oluşturabilir. Kampanya başlangıçta duraklatılmış (PAUSED) oluşturulur; siz ayrıca etkinleştirmedikçe reklam gösterimi başlamaz. Onaylanmamış bir plan gönderilmez.',
+          ),
+          p(
+            'Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, yetkili bir GLOVAL yöneticisi kaydedilmiş bir taslağı validate_only modunda yalnızca istek doğrulaması için Google Ads API’ye gönderebilir. Bu test kampanya oluşturmaz veya hesap durumunu değiştirmez; ancak plan alanları doğrulama amacıyla Google’a iletilir.',
+          ),
+          p(
+            'Son onay ekranında Google Ads hesabı, marka/plan, açılış sayfası URL’si, reklam başlık ve açıklamaları, anahtar kelimeler, hedefleme, günlük bütçe ve CPC teklif tavanı gösterilir. Google Ads reklam ücretleri doğrudan Google tarafından bağlı hesabınızdan tahsil edilir; GLOVAL AI reklam bütçesini tutmaz. Günlük bütçe ve GLOVAL’ın plan limitleri toplam harcama için kesin bir tavan garantisi değildir; gerçek harcama Google Ads bütçe kurallarına göre değişebilir. Varsa GLOVAL kredi bedeli ayrıca gösterilir.',
+          ),
+          p(
+            'Reklam içeriğinin doğruluğu ve hukuka/Google Ads politikalarına uygunluğu size aittir; yayın veya performans sonucu garanti edilmez. Harcamayı durdurmak için kampanyayı GLOVAL bağlantısı kullanılabilirken panelden veya doğrudan Google Ads hesabından duraklatın. GLOVAL aboneliğini iptal etmek, hesabı kapatmak ya da Google bağlantısını kesmek mevcut kampanyayı duraklatmaz veya silmez ve Google tahsilatını durdurmaz; kampanyayı Google Ads’te ayrıca durdurmanız gerekir.',
+          ),
         ],
       },
       {
@@ -829,6 +841,18 @@ const cookies: LegalDoc = {
         blocks: [
           p(
             'Domain registration/renewal and some integrations run through third-party providers. These services may have their own terms and fees.',
+          ),
+          p(
+            'After you connect a Google Ads account, if you approve a campaign plan and provide a separate final confirmation before publishing, GLOVAL AI may submit the displayed plan through the Google Ads API on your behalf and create campaign, ad group, ad and budget records in that account. The campaign is created paused (PAUSED); ads will not serve unless you separately enable it. An unapproved plan is not submitted.',
+          ),
+          p(
+            'When a separate server-side flag is enabled and administrator access is verified, an authorised GLOVAL administrator may submit a saved draft in validate_only mode solely to validate the request. This test does not create a campaign or change account status, but plan fields are sent to Google for validation.',
+          ),
+          p(
+            'The final confirmation shows the Google Ads account, brand/plan, landing page URL, ad headlines and descriptions, keywords, targeting, daily budget and CPC bid ceiling. Google bills advertising charges directly to your connected account; GLOVAL AI does not hold campaign funds. The daily budget and GLOVAL plan limits are not a guaranteed cap on total spend; actual spend can vary under Google Ads budget rules. Any GLOVAL credit charge is shown separately.',
+          ),
+          p(
+            'You are responsible for the accuracy and legal and Google Ads policy compliance of ad content; publication or performance results are not guaranteed. To stop spend, pause the campaign in the GLOVAL dashboard while connected or directly in Google Ads. Cancelling your GLOVAL subscription, closing your account or disconnecting Google does not pause or delete an existing campaign or stop Google billing; you must pause the campaign separately in Google Ads.',
           ),
         ],
       },
@@ -1328,7 +1352,7 @@ const delivery: LegalDoc = {
         heading: '4. Yayınlama ve Alan Adı Bağlama',
         blocks: [
           p(
-            'Sitenizi tek tıkla yayınlayabilirsiniz. Yayınlanan siteniz varsayılan olarak bir alt alan adında erişilebilir; dilerseniz kendi özel alan adınızı bağlayabilirsiniz. Alan adı doğrulama/DNS süreçleri sağlayıcıya bağlı olarak zaman alabilir.',
+            'Sitenizi tek tıkla yayınlayabilirsiniz. Yayınlanan siteniz varsayılan olarak bir alt alan adında erişilebilir; dilerseniz kendi özel alan adınızı bağlayabilirsiniz. Alan adı doğrulama/DNS s��reçleri sağlayıcıya bağlı olarak zaman alabilir.',
           ),
         ],
       },

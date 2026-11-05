@@ -286,6 +286,31 @@ describe('Google Ads provider', () => {
     expect(body?.validateOnly).toBe(true)
   })
 
+  it('allows the admin-only validation test when live publishing is disabled and still sends validateOnly', async () => {
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '0')
+    vi.stubEnv('GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED', '1')
+    const calls: GoogleAdsApiCall[] = []
+    const requestAdsApi: GoogleAdsApiTransport = async (call) => {
+      calls.push(call)
+      if (call.method === 'googleAds.mutate') return {}
+      if (call.method === 'geoTargetConstants.suggest') return geoSuggestionResponse()
+      return [{ results: [] }]
+    }
+    const provider = createGoogleAdsProvider({ clientId: 'client-id', requestAdsApi })
+
+    const result = await provider.publishCampaign(publishInput({
+      validateOnly: true,
+      validationTestMode: true,
+    }) as AdsCampaignPublishInput)
+    const mutateCall = calls.find((call) => call.method === 'googleAds.mutate')
+    const body = mutateCall?.body as GoogleAdsMutateRequest | undefined
+    const campaignOperation = body?.mutateOperations.find((operation) => 'campaignOperation' in operation)
+
+    expect(result).toMatchObject({ externalCampaignId: null, validateOnly: true, status: 'paused' })
+    expect(body?.validateOnly).toBe(true)
+    expect((campaignOperation?.campaignOperation as { create: { status: string } }).create.status).toBe('PAUSED')
+  })
+
   it('requires explicit user confirmation before any publish or management write', async () => {
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)

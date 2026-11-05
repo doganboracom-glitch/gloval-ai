@@ -81,6 +81,32 @@ describe('Kullanım Koşulları — Hizmet Sağlayıcı bölümü', () => {
   })
 })
 
+describe('Google Ads legal disclosures', () => {
+  it('dates and explains campaign creation, budget, data use and cancellation in Turkish and English', async () => {
+    const { docs } = await load()
+    const terms = docs.getLegalDoc('kullanim-kosullari')!
+    const privacy = docs.getLegalDoc('gizlilik-politikasi')!
+
+    expect(terms.lastUpdated).toBe('2026-11-05')
+    expect(privacy.lastUpdated).toBe('2026-11-05')
+
+    for (const lang of ['tr', 'en'] as const) {
+      const termsSection = terms[lang].sections.find((section) => section.heading.startsWith('8. '))
+      expect(termsSection).toBeDefined()
+      const termsText = flatten(termsSection as Section).join(' ').toLowerCase()
+      const privacyText = privacy[lang].sections.flatMap((section) => flatten(section)).join(' ').toLowerCase()
+
+      expect(termsText).toContain('google ads')
+      expect(termsText).toContain('paused')
+      expect(termsText).toMatch(/daily budget|günlük bütçe/)
+      expect(termsText).toMatch(/cancel|iptal/)
+      expect(privacyText).toMatch(/campaign plan|kampanya plan/)
+      expect(privacyText).toMatch(/google ads api/)
+      expect(privacyText).toMatch(/pause|duraklat/)
+    }
+  })
+})
+
 describe('LEGAL_LAST_UPDATED', () => {
   it('tek sabittir ve 2026-10-21 değerindedir', async () => {
     const { LEGAL_LAST_UPDATED } = await load()

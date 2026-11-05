@@ -495,6 +495,32 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     return plan
   }
 
+  async function loadValidationTestPlan(
+    userId: string,
+    planId: string,
+    euPoliticalAdvertising: 'yes' | 'no',
+  ): Promise<PublishPlanRow | GoogleAdsPublishServiceResult> {
+    const loaded = await loadPlanRow(userId, planId)
+    if ('ok' in loaded) return loaded
+    if (!Number.isSafeInteger(loaded.version) || loaded.version < 1) return failed('plan_changed')
+    if (!['draft', 'failed', 'approved'].includes(loaded.status) || loaded.external_campaign_id) {
+      return failed('plan_not_approved')
+    }
+    if (loaded.status === 'approved') {
+      if (loaded.approved_version !== loaded.version || loaded.eu_political_advertising !== euPoliticalAdvertising) {
+        return failed('plan_changed')
+      }
+      if (!loaded.eu_political_declaration_confirmed_at) return failed('eu_political_declaration_required')
+    }
+    if (!loaded.connection_id) return failed('connection_not_found')
+    try {
+      requirePlanBudget(loaded)
+    } catch (error) {
+      return failed(failureReason(error))
+    }
+    return loaded
+  }
+
   async function publish(input: {
     userId: string
     planId: string
@@ -503,13 +529,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     userConfirmed: boolean
     validateOnly?: boolean
     validationTestMode?: boolean
+    euPoliticalAdvertising?: 'yes' | 'no'
+    euPoliticalDeclarationConfirmed?: boolean
     finalConfirmation?: boolean
   }): Promise<GoogleAdsPublishServiceResult> {
     const validationTestMode = input.validationTestMode === true
     if (validationTestMode) {
-      if (input.validateOnly !== true || !deps.validationTestEnabled(input.userId)) {
-        return failed('publish_disabled')
-      }
+      if (input.validateOnly !== true || !deps.validationTestEnabled(input.userId)) return failed('publish_disabled')
+      if (
+        (input.euPoliticalAdvertising !== 'yes' && input.euPoliticalAdvertising !== 'no') ||
+        input.euPoliticalDeclarationConfirmed !== true
+      ) return failed('eu_political_declaration_required')
     } else if (!deps.accessEnabled(input.userId)) {
       return failed('publish_disabled')
     }
@@ -520,11 +550,9 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       (!Number.isSafeInteger(input.expectedVersion) || (input.expectedVersion ?? 0) < 1 || !/^[a-f0-9]{64}$/.test(input.approvalHash ?? ''))
     ) return failed('confirmation_required')
 
-    const loaded = await loadApprovedPlan(
-      input.userId,
-      input.planId,
-      validationTestMode ? undefined : input.expectedVersion,
-    )
+    const loaded = validationTestMode
+      ? await loadValidationTestPlan(input.userId, input.planId, input.euPoliticalAdvertising as 'yes' | 'no')
+      : await loadApprovedPlan(input.userId, input.planId, input.expectedVersion)
     if ('ok' in loaded) {
       if (validationTestMode && loaded.ok) return failed('plan_not_approved')
       return loaded
@@ -565,17 +593,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       }
     }
     const plan = loaded
-    const expectedVersion = input.expectedVersion ?? plan.version
-    const approvalHash = validationTestMode ? plan.approval_hash : input.approvalHash
-    if (typeof approvalHash !== 'string' || !/^[a-f0-9]{64}$/.test(approvalHash)) {
-      return failed('confirmation_required')
+    const expectedVersion = validationTestMode ? plan.version : input.expectedVersion ?? plan.version
+    const approvalHash = validationTestMode ? 'validate-only-test' : input.approvalHash ?? ''
+    if (!validationTestMode) {
+      if (!/^[a-f0-9]{64}$/.test(approvalHash)) return failed('confirmation_required')
+      if (plan.approval_hash !== approvalHash) return failed('plan_changed')
+      if (
+        !input.validateOnly &&
+        (plan.validation_hash !== approvalHash || plan.validated_version !== expectedVersion)
+      ) return failed('confirmation_required')
+      if (!plan.approval_id || !plan.approval_user_daily_budget_limit_minor) return failed('confirmation_required')
     }
-    if (plan.approval_hash !== approvalHash) return failed('plan_changed')
-    if (
-      !input.validateOnly &&
-      (plan.validation_hash !== approvalHash || plan.validated_version !== expectedVersion)
-    ) return failed('confirmation_required')
-    if (!plan.approval_id || !plan.approval_user_daily_budget_limit_minor) return failed('confirmation_required')
     const requestId = deps.createRequestId()
     if (!PLAN_ID_PATTERN.test(requestId)) return failed('invalid_request')
     const budget = requirePlanBudget(plan)
@@ -588,7 +616,13 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     let planJson: unknown
     let finalUrl: string
     try {
-      planJson = approvedPlanJson(plan)
+      planJson = validationTestMode
+        ? {
+            ...parseGoogleAdsPublishPlan(plan.plan),
+            euPoliticalAdvertising: input.euPoliticalAdvertising,
+            euPoliticalDeclarationConfirmed: true,
+          }
+        : approvedPlanJson(plan)
       finalUrl = parseGoogleAdsPublishPlan(planJson).finalUrl
     } catch (error) {
       return failed(failureReason(error))
@@ -611,19 +645,21 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
             return failed(connection.is_manager ? 'manager_account' : 'reauth_required')
           }
           if (connection.currency_code !== budget.currency) return failed('currency_mismatch')
-          const recomputedApprovalHash = createGoogleAdsPlanApprovalHash({
-            userId: input.userId,
-            planId: plan.id,
-            planVersion: plan.version,
-            connectionId: connection.id,
-            customerId: connection.external_account_id,
-            currency: budget.currency,
-            dailyBudgetMinor: budget.dailyMinor,
-            budgetCapMinor: budget.capMinor,
-            userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor as number,
-            plan: planJson,
-          })
-          if (recomputedApprovalHash !== approvalHash) return failed('plan_changed')
+          if (!validationTestMode) {
+            const recomputedApprovalHash = createGoogleAdsPlanApprovalHash({
+              userId: input.userId,
+              planId: plan.id,
+              planVersion: plan.version,
+              connectionId: connection.id,
+              customerId: connection.external_account_id,
+              currency: budget.currency,
+              dailyBudgetMinor: budget.dailyMinor,
+              budgetCapMinor: budget.capMinor,
+              userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor as number,
+              plan: planJson,
+            })
+            if (recomputedApprovalHash !== approvalHash) return failed('plan_changed')
+          }
 
           if (input.validateOnly) {
             try {
@@ -938,6 +974,8 @@ export function publishGoogleAdsPlan(input: {
   userConfirmed: boolean
   validateOnly?: boolean
   validationTestMode?: boolean
+  euPoliticalAdvertising?: 'yes' | 'no'
+  euPoliticalDeclarationConfirmed?: boolean
   finalConfirmation?: boolean
 }) {
   return defaultService.publish(input)
