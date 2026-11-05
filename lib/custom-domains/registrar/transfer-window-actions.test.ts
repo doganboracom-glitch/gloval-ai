@@ -42,6 +42,7 @@ import {
   relockMyTransferWindow,
   requestMyTransferOutCode,
 } from './transfer-window-actions'
+import type { OwnedDomainInfo } from './types'
 
 const EPP = 'EPP-TEST-ONLY'
 const expiresAt = new Date(Date.now() + 180 * 86_400_000).toISOString()
@@ -62,19 +63,27 @@ const activeWindow = (extensions = 0) => ({
   relock_lease_until: null,
 })
 
+function ownedInfo(overrides: Partial<OwnedDomainInfo> = {}): OwnedDomainInfo {
+  const startedAt = new Date(Date.now() - 90 * 86_400_000).toISOString()
+  return {
+    locked: true,
+    expiresAt,
+    startedAt,
+    startedAtRaw: startedAt,
+    remainingDays: 180,
+    status: 'Active',
+    hasAuthCode: true,
+    ...overrides,
+  }
+}
+
 function makeRegistrar(initiallyLocked = true) {
   let locked = initiallyLocked
   const registrar = {
     checkTransferIn: vi.fn(),
     getTransferPrice: vi.fn(),
     startTransferIn: vi.fn(),
-    getOwnedDomainInfo: vi.fn(async () => ({
-      locked,
-      expiresAt,
-      startedAt: new Date(Date.now() - 90 * 86_400_000).toISOString(),
-      status: 'Active',
-      hasAuthCode: true,
-    })),
+    getOwnedDomainInfo: vi.fn(async (): Promise<OwnedDomainInfo> => ownedInfo({ locked })),
     getAuthCode: vi.fn(async () => EPP),
     getManagedDetails: vi.fn(async () => ({
       locked,
@@ -162,6 +171,99 @@ describe('transfer window access controls', () => {
     await expect(requestMyTransferOutCode('example.com', 'example.net')).resolves.toEqual({
       ok: false,
       error: 'CONFIRMATION_MISMATCH',
+    })
+    expect(registrar.changeLock).not.toHaveBeenCalled()
+    expect(registrar.getAuthCode).not.toHaveBeenCalled()
+  })
+
+  it('blocks a missing registration date until the user confirms the 60-day risk', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({ startedAt: null, startedAtRaw: null }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'START_DATE_CONFIRMATION_REQUIRED',
+    })
+    expect(registrar.changeLock).not.toHaveBeenCalled()
+    expect(registrar.getAuthCode).not.toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_code_viewed',
+      details: { outcome: 'failed', reason: 'start_date_missing' },
+    }))
+  })
+
+  it('opens the normal transfer window after explicit confirmation for a missing date', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({ startedAt: null, startedAtRaw: null }))
+
+    const result = await requestMyTransferOutCode('example.com', 'example.com', true)
+
+    expect(result).toMatchObject({ ok: true, authCode: EPP, created: true })
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false)
+    expect(mocks.insertOpenWindow).toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({ reason: 'start_date_missing' }),
+    }))
+    expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain(EPP)
+  })
+
+  it('fails closed and audits an unreadable lock without attempting an unlock', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({ locked: null }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'STATUS_UNVERIFIED',
+    })
+    expect(registrar.changeLock).not.toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_code_viewed',
+      details: { outcome: 'failed', reason: 'locked_unreadable' },
+    }))
+  })
+
+  it('fails closed and audits an unknown registrar transfer status', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({ status: 'unrecognized-status' }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'STATUS_UNVERIFIED',
+    })
+    expect(registrar.changeLock).not.toHaveBeenCalled()
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_code_viewed',
+      details: { outcome: 'failed', reason: 'status_unknown' },
+    }))
+  })
+
+  it('requires confirmation for an unparseable registration date and audits only its safe reason code', async () => {
+    const registrar = makeRegistrar(true)
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({
+      startedAt: null,
+      startedAtRaw: '2026-01-01T10:00:00',
+    }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toEqual({
+      ok: false,
+      error: 'START_DATE_CONFIRMATION_REQUIRED',
+    })
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_code_viewed',
+      details: { outcome: 'failed', reason: 'start_date_unparseable' },
+    }))
+    expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('2026-01-01T10:00:00')
+  })
+
+  it('keeps the 60-day restriction even when the user confirms the date warning', async () => {
+    const registrar = makeRegistrar(true)
+    const startedAt = new Date(Date.now() - 59 * 86_400_000).toISOString()
+    registrar.getOwnedDomainInfo.mockResolvedValue(ownedInfo({ startedAt, startedAtRaw: startedAt }))
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com', true)).resolves.toEqual({
+      ok: false,
+      error: 'RESTRICTED_60_DAYS',
     })
     expect(registrar.changeLock).not.toHaveBeenCalled()
     expect(registrar.getAuthCode).not.toHaveBeenCalled()

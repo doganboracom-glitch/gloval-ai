@@ -138,6 +138,19 @@ describe('DomainNameApiProvider transfer support', () => {
     expect(info?.startedAtRaw).toBeNull()
   })
 
+  it('reads registration-date aliases and exposes only raw field names for diagnostics', async () => {
+    const rawDate = '2025-01-01T10:00:00Z'
+    sdk.GetDetails.mockResolvedValue({ result: 'OK', data: { Status: 'Active', LockStatus: 'true' } })
+    sdk.state.lastResponse = { CreatedDate: rawDate, ExpirationDate: '2027-01-01T10:00:00Z' }
+
+    const info = await provider().getOwnedDomainInfo('example.com')
+
+    expect(info?.startedAt).toBe('2025-01-01T10:00:00.000Z')
+    expect(info?.startedAtRaw).toBe(rawDate)
+    expect(info?.rawFieldNames).toContain('CreatedDate')
+    expect(JSON.stringify(info?.rawFieldNames)).not.toContain(rawDate)
+  })
+
   describe('listOwnedDomains', () => {
     const row = {
       domainName: 'glovalotemutxxbd7.com',

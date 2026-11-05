@@ -5,7 +5,10 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { ArrowRightLeft, Check, Copy, Loader2, ShieldAlert } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { DomainModal, fill } from '@/components/domains/domain-chrome'
 import {
@@ -291,7 +294,14 @@ export function TransferOutPanel({
           setError(outErrorText(result.error, d))
           return
         }
-        if (confirmedStartDateRisk && 'window' in result) {
+        if (
+          confirmedStartDateRisk &&
+          'window' in result &&
+          typeof result.window === 'object' &&
+          result.window !== null &&
+          'id' in result.window &&
+          typeof result.window.id === 'string'
+        ) {
           setDateRiskAcknowledgement({ domain, windowId: result.window.id })
           setServerDateConfirmationDomain(null)
         }
@@ -489,27 +499,26 @@ export function TransferOutPanel({
             <p className="text-sm text-muted-foreground">{statusCopy.restrictionUnknown}</p>
           )}
           {startDateConfirmationRequired && (
-            <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-              <p role="alert" className="flex items-start gap-2 text-sm leading-relaxed text-foreground">
-                <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" />
-                <span>{statusCopy.startDateUnverifiedWarning}</span>
-              </p>
-              <label htmlFor={dateRiskCheckboxId} className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-foreground">
-                <input
+            <Alert variant="destructive" className="gap-3 p-3">
+              <ShieldAlert aria-hidden="true" />
+              <AlertDescription className="leading-relaxed">
+                {statusCopy.startDateUnverifiedWarning}
+              </AlertDescription>
+              <Field orientation="horizontal" className="items-start gap-3">
+                <Checkbox
                   id={dateRiskCheckboxId}
-                  type="checkbox"
-                  className="mt-1 size-4 shrink-0 accent-primary"
                   checked={startDateConfirmationChecked}
                   disabled={isPending}
-                  onChange={(event) =>
-                    setDateRiskAcknowledgement(
-                      event.currentTarget.checked ? { domain, windowId: activeWindowId } : null,
-                    )
+                  className="mt-1"
+                  onCheckedChange={(checked) =>
+                    setDateRiskAcknowledgement(checked ? { domain, windowId: activeWindowId } : null)
                   }
                 />
-                <span>{statusCopy.startDateConfirmationLabel}</span>
-              </label>
-            </div>
+                <FieldLabel htmlFor={dateRiskCheckboxId} className="cursor-pointer leading-relaxed">
+                  {statusCopy.startDateConfirmationLabel}
+                </FieldLabel>
+              </Field>
+            </Alert>
           )}
           {restrictedDate && <p className="text-sm text-muted-foreground">{fill(d.outRestricted, { date: restrictedDate })}</p>}
 
