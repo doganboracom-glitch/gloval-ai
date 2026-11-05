@@ -85,14 +85,14 @@ describe('transport behaviour', () => {
     expect(hits).toBe(1)
   })
 
-  it('does not read the body of a non-2xx answer', async () => {
+  it('reads only a small prefix of a non-2xx answer', async () => {
     handler = (_req, res) => {
       res.writeHead(404, { 'content-type': 'text/html' })
       res.end('<h1>not found</h1>'.repeat(1000))
     }
     const response = await get(url(), options())
     expect(response.status).toBe(404)
-    expect(response.bytes.length).toBe(0)
+    expect(response.bytes.length).toBeLessThanOrEqual(16_384)
   })
 
   it('truncates an oversized body when asked to, and flags it', async () => {
@@ -247,13 +247,13 @@ describe('the SSRF guard sits on the real connection path', () => {
     expect(resolveAll).toHaveBeenCalledTimes(2)
   })
 
-  it('treats a DNS failure as a network error', async () => {
+  it('reports a DNS failure with its own internal reason', async () => {
     const guarded = createNodeScanGet(
       createGuardedLookup(async () => {
         throw Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' })
       }),
     )
-    await expect(guarded(url(), options())).rejects.toMatchObject({ code: 'NETWORK' })
+    await expect(guarded(url(), options())).rejects.toMatchObject({ code: 'DNS_FAILURE' })
   })
 })
 

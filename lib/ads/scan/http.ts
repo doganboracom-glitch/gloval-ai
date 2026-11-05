@@ -1,7 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import { createGuardedLookup } from '@/lib/whois/ip-guard'
-import { SCAN_USER_AGENT } from './config'
+import { SCAN_LIMITS, SCAN_USER_AGENT } from './config'
 import { ScanFetchError } from './errors'
 
 /**
@@ -14,8 +14,8 @@ import { ScanFetchError } from './errors'
  *   public IP once and a private IP the next time (DNS rebinding) is refused on
  *   the second connection.
  * - Redirects are never followed here; the caller re-validates every hop.
- * - Only 2xx bodies are read; for any other status the socket is dropped as soon
- *   as the headers are in.
+ * - A 2xx body is streamed up to `maxBytes`; any other status reads only a small
+ *   prefix (enough to recognise a WAF challenge page) and then drops the socket.
  * - The body is capped, `Accept-Encoding: identity` is sent (no compression bombs)
  *   and a compressed answer is refused, TLS certificates are verified, and one
  *   timer covers connect + headers + body (a slow-loris body cannot outlive it).
@@ -29,6 +29,8 @@ export type ScanGetOptions = {
   contentType: RegExp | null
   /** `truncate` keeps the first `maxBytes` and flags it; `reject` fails with TOO_LARGE. */
   onOverflow: 'truncate' | 'reject'
+  /** When the timer fires after the 2xx body has started, return what arrived (flagged truncated) instead of failing. */
+  partialOnTimeout?: boolean
 }
 
 export type ScanResponse = {
@@ -36,6 +38,8 @@ export type ScanResponse = {
   location: string | null
   contentType: string | null
   xRobotsTag: string | null
+  /** Value of Cloudflare's `cf-mitigated` header (`challenge` on a verification page). */
+  cfMitigated?: string | null
   bytes: Buffer
   truncated: boolean
 }
@@ -50,8 +54,33 @@ function headerValue(value: string | string[] | undefined): string | null {
   return null
 }
 
+const DNS_CODES = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_NODATA', 'EAI_NONAME', 'ENODATA'])
+const TLS_CODES = new Set([
+  'CERT_HAS_EXPIRED',
+  'CERT_NOT_YET_VALID',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'HOSTNAME_MISMATCH',
+])
+
+/** Turns a socket-level error into a reason; only the code and name are inspected, never the message. */
+export function classifyNetworkError(error: Error): ScanFetchError {
+  if (error.name === 'BlockedAddressError') return new ScanFetchError('BLOCKED')
+  const code = (error as { code?: unknown }).code
+  if (typeof code === 'string') {
+    if (DNS_CODES.has(code)) return new ScanFetchError('DNS_FAILURE')
+    if (code === 'ETIMEDOUT') return new ScanFetchError('TIMEOUT')
+    if (TLS_CODES.has(code) || code.startsWith('ERR_TLS') || code.startsWith('ERR_SSL')) {
+      return new ScanFetchError('TLS_ERROR')
+    }
+  }
+  return new ScanFetchError('NETWORK')
+}
+
 export function createNodeScanGet(lookup: GuardedLookup = createGuardedLookup()): ScanGet {
-  return (url, { timeoutMs, maxBytes, contentType, onOverflow }) =>
+  return (url, { timeoutMs, maxBytes, contentType, onOverflow, partialOnTimeout = false }) =>
     new Promise<ScanResponse>((resolve, reject) => {
       const secure = url.protocol === 'https:'
       if (!secure && url.protocol !== 'http:') {
@@ -60,6 +89,8 @@ export function createNodeScanGet(lookup: GuardedLookup = createGuardedLookup())
       }
 
       let settled = false
+      /** Builds what has arrived so far, once headers are in. */
+      let partial: (() => ScanResponse) | null = null
       const finish = (fn: () => void) => {
         if (settled) return
         settled = true
@@ -92,11 +123,33 @@ export function createNodeScanGet(lookup: GuardedLookup = createGuardedLookup())
             location: headerValue(res.headers.location),
             contentType: headerValue(res.headers['content-type']),
             xRobotsTag: headerValue(res.headers['x-robots-tag']),
+            cfMitigated: headerValue(res.headers['cf-mitigated']),
           }
 
           if (status < 200 || status >= 300) {
-            finish(() => resolve({ ...meta, bytes: Buffer.alloc(0), truncated: false }))
-            res.destroy()
+            const errorChunks: Buffer[] = []
+            let errorSize = 0
+            const errorResponse = (): ScanResponse => ({
+              ...meta,
+              bytes: Buffer.concat(errorChunks),
+              truncated: errorSize >= SCAN_LIMITS.errorBodyMaxBytes,
+            })
+            partial = errorResponse
+            res.on('data', (chunk: Buffer) => {
+              if (settled) return
+              const room = SCAN_LIMITS.errorBodyMaxBytes - errorSize
+              if (room > 0) {
+                const piece = chunk.length > room ? chunk.subarray(0, room) : chunk
+                errorChunks.push(piece)
+                errorSize += piece.length
+              }
+              if (errorSize >= SCAN_LIMITS.errorBodyMaxBytes) {
+                finish(() => resolve(errorResponse()))
+                res.destroy()
+              }
+            })
+            res.on('end', () => finish(() => resolve(errorResponse())))
+            res.on('error', () => finish(() => resolve(errorResponse())))
             return
           }
 
@@ -114,6 +167,7 @@ export function createNodeScanGet(lookup: GuardedLookup = createGuardedLookup())
 
           const chunks: Buffer[] = []
           let size = 0
+          partial = () => ({ ...meta, bytes: Buffer.concat(chunks), truncated: true })
           res.on('data', (chunk: Buffer) => {
             if (settled) return
             const room = maxBytes - size
@@ -136,13 +190,15 @@ export function createNodeScanGet(lookup: GuardedLookup = createGuardedLookup())
       )
 
       const timer = setTimeout(() => {
-        finish(() => reject(new ScanFetchError('TIMEOUT')))
+        const snapshot = partial?.()
+        // A page whose body had started is still useful: its head holds the title and meta tags.
+        const usable = snapshot && (snapshot.status >= 300 || (partialOnTimeout && snapshot.bytes.length > 0))
+        if (snapshot && usable) finish(() => resolve(snapshot))
+        else finish(() => reject(new ScanFetchError('TIMEOUT')))
         req.destroy()
       }, timeoutMs)
 
-      req.on('error', (error: Error) =>
-        finish(() => reject(new ScanFetchError(error.name === 'BlockedAddressError' ? 'BLOCKED' : 'NETWORK'))),
-      )
+      req.on('error', (error: Error) => finish(() => reject(classifyNetworkError(error))))
       req.end()
     })
 }

@@ -67,6 +67,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry('/sss', { changeFrequency: 'monthly', priority: 0.7 }),
     entry('/sss/rehber', { changeFrequency: 'monthly', priority: 0.7 }),
     entry('/iletisim', { changeFrequency: 'yearly', priority: 0.5 }),
+    entry('/bot', { changeFrequency: 'yearly', priority: 0.3 }),
     entry('/alan-adi-sorgula', { changeFrequency: 'monthly', priority: 0.6 }),
     ...(isWhoisLookupEnabled() ? [entry(WHOIS_LOOKUP_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),
     ...(isAdsFeatureUiEnabled() ? [entry(ADS_PATH, { changeFrequency: 'monthly', priority: 0.5 })] : []),

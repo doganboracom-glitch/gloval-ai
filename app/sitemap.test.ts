@@ -13,7 +13,7 @@ describe('platform sitemap', () => {
 
   it('lists the marketing pages on the platform host only', () => {
     const urls = entries.map((e) => e.url)
-    for (const path of ['/', '/blog', '/sss', '/iletisim']) {
+    for (const path of ['/', '/blog', '/sss', '/iletisim', '/bot']) {
       expect(urls).toContain(`https://gloval.ai${path}`)
     }
     for (const url of urls) {

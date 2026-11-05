@@ -279,7 +279,8 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     // ---- read the site ---------------------------------------------------------
     const scan = await deps.scanSite(normalized.url)
     if (!scan.ok) {
-      finalCode = scan.code
+      // The usage row keeps the precise reason; the visitor only gets the coarse code.
+      finalCode = scan.code === scan.detail ? scan.code : `${scan.code}:${scan.detail}`
       return fail({ code: scan.code === 'invalid_address' ? 'invalid_request' : scan.code })
     }
     const snapshot: SiteSnapshot = scan.snapshot

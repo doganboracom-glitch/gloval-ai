@@ -2133,6 +2133,12 @@ const dict = {
         'Önceki deneme tamamlanmış olabilir ama sonucu alamadık. Yeni bir tarama başlatabilirsin (hakkın düşebilir).',
       errUnreachable:
         'Bu siteyi şu an okuyamadık. Adres doğruysa site geçici olarak yanıt vermiyor ya da otomatik erişime izin vermiyor olabilir. Site sahibiysen robots.txt dosyanda GlovalAdsBot’a izin verebilirsin. Bu deneme hakkından düşülmedi.',
+      errSiteBlocked:
+        'Site, otomatik erişimi engelliyor (güvenlik duvarı, “insan doğrulaması” sayfası, erişim reddi ya da robots.txt kuralı). Biz bu korumaları aşmaya çalışmayız. Site sahibiysen GlovalAdsBot’a izin verebilirsin. Bu deneme hakkından düşülmedi.',
+      errSiteUnresponsive:
+        'Site zamanında yanıt vermedi ya da geçici bir sunucu hatası döndürdü. Biraz sonra tekrar deneyebilirsin. Bu deneme hakkından düşülmedi.',
+      errPageTooLarge:
+        'Sitenin ana sayfası çok büyük olduğu için okunabilir içeriğe ulaşamadık. Bu deneme hakkından düşülmedi.',
       errInsufficientContent:
         'Sitede reklam planı çıkaracak kadar okunabilir metin bulamadık (içerik çok az olabilir ya da yalnızca JavaScript ile yükleniyor olabilir). Bu deneme hakkından düşülmedi.',
       errPolicyBlocked:
@@ -4432,6 +4438,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
         'The previous attempt may have finished but we could not get its result. You can start a new scan (it may use an allowance).',
       errUnreachable:
         'We could not read this site right now. If the address is correct, the site may be temporarily down or may not allow automated access. If you own the site, you can allow GlovalAdsBot in your robots.txt. This attempt was not counted.',
+      errSiteBlocked:
+        'The site blocks automated access (a firewall, a “verify you are human” page, an access denied answer or a robots.txt rule). We never try to get around these protections. If you own the site, you can allow GlovalAdsBot. This attempt was not counted.',
+      errSiteUnresponsive:
+        'The site did not answer in time or returned a temporary server error. You can try again in a little while. This attempt was not counted.',
+      errPageTooLarge:
+        'The home page is so large that we could not reach readable content. This attempt was not counted.',
       errInsufficientContent:
         'We could not find enough readable text on the site to build an ad plan (the content may be very short or loaded only with JavaScript). This attempt was not counted.',
       errPolicyBlocked:

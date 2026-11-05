@@ -118,7 +118,7 @@ describe('redirects', () => {
       'https://example.com/a': redirect('/'),
     })
     await expect(fetcherFor(t.httpGet).fetchPage(new URL('https://example.com/'))).rejects.toMatchObject({
-      code: 'REDIRECT_LIMIT',
+      code: 'REDIRECT_LOOP',
     })
   })
 
@@ -176,7 +176,7 @@ describe('redirects', () => {
       'https://example.com/': html(),
     })
     await expect(fetcherFor(t.httpGet).fetchPage(new URL('https://example.com/'))).rejects.toMatchObject({
-      code: 'ROBOTS_DISALLOWED',
+      code: 'ROBOTS_UNAVAILABLE',
     })
     expect(t.urls()).not.toContain('http://127.0.0.1/robots.txt')
   })
@@ -211,13 +211,13 @@ describe('robots.txt (RFC 9309)', () => {
 
   it.each([500, 502, 503])('treats a %s robots.txt as "everything disallowed"', async (code) => {
     const { t, result } = page({ 'https://example.com/robots.txt': status(code) })
-    await expect(result).rejects.toMatchObject({ code: 'ROBOTS_DISALLOWED' })
+    await expect(result).rejects.toMatchObject({ code: 'ROBOTS_UNAVAILABLE' })
     expect(t.urls()).toEqual(['https://example.com/robots.txt'])
   })
 
   it('treats an unreachable robots.txt as "everything disallowed"', async () => {
     const { result } = page({ 'https://example.com/robots.txt': new ScanFetchError('TIMEOUT') })
-    await expect(result).rejects.toMatchObject({ code: 'ROBOTS_DISALLOWED' })
+    await expect(result).rejects.toMatchObject({ code: 'ROBOTS_UNAVAILABLE' })
   })
 
   it('treats a robots.txt that answers HTML (soft 404) as "no rules"', async () => {
@@ -241,11 +241,11 @@ describe('robots.txt (RFC 9309)', () => {
 })
 
 describe('request limits', () => {
-  it('asks for pages with the 1 MB cap and an HTML-only content-type filter', async () => {
+  it('asks for pages with the page size cap and an HTML-only content-type filter', async () => {
     const t = fakeGet({ ...ROBOTS_OK, 'https://example.com/': html() })
     await fetcherFor(t.httpGet).fetchPage(new URL('https://example.com/'))
     const pageCall = t.calls.find((c) => c.url === 'https://example.com/')
-    expect(pageCall?.options.maxBytes).toBe(1_048_576)
+    expect(pageCall?.options.maxBytes).toBe(SCAN_LIMITS.pageMaxBytes)
     expect(pageCall?.options.contentType?.test('text/html; charset=utf-8')).toBe(true)
     expect(pageCall?.options.contentType?.test('application/pdf')).toBe(false)
     expect(pageCall?.options.contentType?.test('text/htmlx')).toBe(false)
@@ -279,7 +279,7 @@ describe('request limits', () => {
   it('refuses a final non-2xx answer', async () => {
     const t = fakeGet({ ...ROBOTS_OK, 'https://example.com/': status(404, '<p>nope</p>') })
     await expect(fetcherFor(t.httpGet).fetchPage(new URL('https://example.com/'))).rejects.toMatchObject({
-      code: 'BAD_STATUS',
+      code: 'HTTP_NOT_FOUND',
     })
   })
 
