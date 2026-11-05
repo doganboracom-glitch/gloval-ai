@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Panel, DataTable, Th, Td, Tr, StatusBadge } from '@/components/admin/admin-ui'
-import { changeUserPlan, setUserSiteLimitOverride, setUserPeriodEnd } from '@/lib/admin/actions'
+import { changeUserPlan, recordIyzicoRefund, setUserSiteLimitOverride, setUserPeriodEnd } from '@/lib/admin/actions'
 import { SITE_LIMITS, PAGE_LIMITS, PRODUCT_LIMITS } from '@/lib/pricing-config'
 import type { AdminPackageDetail, AdminUser } from '@/lib/admin/queries'
 import { useLanguage } from '@/components/language-provider'
@@ -45,7 +45,8 @@ function summarize(v: unknown, lang: string, none: string): string {
 export function PackageManager({ user, detail }: { user: AdminUser; detail: AdminPackageDetail }) {
   const router = useRouter()
   const { lang } = useLanguage()
-  const p = adminT(lang).pkg
+  const adminCopy = adminT(lang)
+  const p = adminCopy.pkg
   const date = (v: string | null | undefined) => fmtDate(lang, v)
   const sub = detail.subscription
   const planKey = (user.planCode ?? 'free') as keyof typeof SITE_LIMITS
@@ -62,6 +63,8 @@ export function PackageManager({ user, detail }: { user: AdminUser; detail: Admi
   const [periodEnd, setPeriodEnd] = useState(toLocalInput(sub?.currentPeriodEnd))
   const [periodReason, setPeriodReason] = useState('')
   const [notice, setNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [refundNotice, setRefundNotice] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const [refundReferences, setRefundReferences] = useState<Record<string, string>>({})
   const [pending, start] = useTransition()
   const keys = useRef({ plan: crypto.randomUUID(), limit: crypto.randomUUID(), period: crypto.randomUUID() })
 
@@ -73,6 +76,42 @@ export function PackageManager({ user, detail }: { user: AdminUser; detail: Admi
     } else {
       setNotice({ tone: 'err', text: p.err[res.error ?? ''] ?? p.err.generic })
     }
+  }
+
+  function hasRefundRecord(transactionId: string) {
+    return detail.transactions.some(
+      (row) =>
+        row.kind === 'refund' &&
+        (row.refundOfTransactionId === transactionId || row.idempotencyKey === `iyzico-refund:${transactionId}`),
+    )
+  }
+
+  function submitRefund(transactionId: string, amountCents: number, currency: string) {
+    const providerReference = refundReferences[transactionId]?.trim() ?? ''
+    if (!providerReference) {
+      setRefundNotice({ tone: 'err', text: adminCopy.refunds.referenceRequired })
+      return
+    }
+    const confirmed = window.confirm(
+      `${adminCopy.refunds.confirm}\n\n${fmtMoney(lang, amountCents, currency)}`,
+    )
+    if (!confirmed) return
+
+    setRefundNotice(null)
+    start(async () => {
+      const result = await recordIyzicoRefund({ transactionId, providerReference })
+      if (result.ok) {
+        setRefundReferences((current) => ({ ...current, [transactionId]: '' }))
+        setRefundNotice({
+          tone: 'ok',
+          text: result.duplicate ? adminCopy.refunds.duplicate : adminCopy.refunds.recorded,
+        })
+        router.refresh()
+      } else {
+        const errors = adminCopy.refunds.errors as Record<string, string>
+        setRefundNotice({ tone: 'err', text: errors[result.error] ?? adminCopy.refunds.failed })
+      }
+    })
   }
 
   function submitPlan(e: React.FormEvent) {
@@ -261,6 +300,7 @@ export function PackageManager({ user, detail }: { user: AdminUser; detail: Admi
               <Th>{p.colAction}</Th>
               <Th>{p.colStatus}</Th>
               <Th className="text-end">{p.colAmount}</Th>
+              <Th>{adminCopy.refunds.column}</Th>
             </>
           }
         >
@@ -268,15 +308,70 @@ export function PackageManager({ user, detail }: { user: AdminUser; detail: Admi
             <Tr key={tx.id}>
               <Td className="whitespace-nowrap text-muted-foreground">{date(tx.createdAt)}</Td>
               <Td>
-                {tx.kind} <span className="text-muted-foreground">· {tx.provider}{tx.description ? ` · ${tx.description}` : ''}</span>
+                {tx.kind === 'refund' ? adminCopy.refunds.column : tx.kind}{' '}
+                <span className="text-muted-foreground">
+                  · {tx.provider}{tx.description ? ` · ${tx.description}` : ''}
+                  {tx.kind === 'refund' && tx.providerRef ? ` · ${tx.providerRef}` : ''}
+                </span>
               </Td>
               <Td>
                 <StatusBadge tone={tx.status === 'succeeded' ? 'success' : tx.status === 'failed' ? 'danger' : 'muted'}>{tx.status}</StatusBadge>
+                {tx.refundStatus === 'refunded' ? (
+                  <StatusBadge tone="warning" className="ml-2">
+                    {adminCopy.refunds.refunded} · {fmtMoney(lang, tx.refundedAmountCents, tx.currency)}
+                  </StatusBadge>
+                ) : null}
               </Td>
               <Td className="text-end tabular-nums">{fmtMoney(lang, tx.amountCents, tx.currency)}</Td>
+              <Td>
+                {tx.kind === 'charge' &&
+                tx.provider === 'iyzico' &&
+                tx.status === 'succeeded' &&
+                tx.refundStatus !== 'refunded' &&
+                !hasRefundRecord(tx.id) ? (
+                  <div className="flex min-w-64 items-center gap-2">
+                    <label className="sr-only" htmlFor={`refund-reference-${tx.id}`}>
+                      {adminCopy.refunds.reference}
+                    </label>
+                    <input
+                      id={`refund-reference-${tx.id}`}
+                      value={refundReferences[tx.id] ?? ''}
+                      onChange={(event) =>
+                        setRefundReferences((current) => ({ ...current, [tx.id]: event.target.value }))
+                      }
+                      maxLength={128}
+                      autoComplete="off"
+                      className={input}
+                      placeholder={adminCopy.refunds.referencePlaceholder}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pending || !refundReferences[tx.id]?.trim()}
+                      onClick={() => submitRefund(tx.id, tx.amountCents, tx.currency)}
+                    >
+                      {adminCopy.refunds.record}
+                    </Button>
+                  </div>
+                ) : tx.refundStatus === 'refunded' || hasRefundRecord(tx.id) ? (
+                  <span className="text-sm text-muted-foreground">{adminCopy.refunds.refunded}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </Td>
             </Tr>
           ))}
         </DataTable>
+        {refundNotice ? (
+          <p
+            role={refundNotice.tone === 'err' ? 'alert' : 'status'}
+            aria-live="polite"
+            className={refundNotice.tone === 'err' ? 'text-sm text-destructive' : 'text-sm text-brand'}
+          >
+            {refundNotice.text}
+          </p>
+        ) : null}
       </section>
 
       <section className="flex flex-col gap-3">

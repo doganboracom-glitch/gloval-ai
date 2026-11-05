@@ -70,6 +70,12 @@ export type AdminPackageTransaction = {
   status: string
   provider: string
   description: string | null
+  providerRef: string | null
+  idempotencyKey: string | null
+  refundOfTransactionId: string | null
+  refundStatus: string | null
+  refundedAmountCents: number
+  refundedAt: string | null
   createdAt: string
 }
 
@@ -513,12 +519,55 @@ export async function listCredits(): Promise<{
   }
 }
 
+const EXPIRY_SYNC_PENDING = 'expiry_sync_pending'
+
+function isMissingDbColumn(error: unknown, column: string): boolean {
+  if (!error || typeof error !== 'object') return false
+  const issue = error as { code?: unknown; message?: unknown }
+  const message = typeof issue.message === 'string' ? issue.message.toLowerCase() : ''
+  return (issue.code === '42703' || issue.code === 'PGRST204') && message.includes(column)
+}
+
+async function listPendingRenewalKeys(admin: ReturnType<typeof createAdminClient>): Promise<Set<string>> {
+  const keys = new Set<string>()
+  const chunkSize = 1000
+  let useLegacyMarker = false
+
+  for (let from = 0; ; from += chunkSize) {
+    const loadPage = async (legacy: boolean) => {
+      let query: any = admin
+        .from('domain_renewals')
+        .select('user_id, domain')
+        .eq('status', 'completed')
+      query = legacy
+        ? query.eq('error_message', EXPIRY_SYNC_PENDING)
+        : query.eq('expiry_sync_pending', true)
+      return query.order('id', { ascending: true }).range(from, from + chunkSize - 1)
+    }
+
+    let page = await loadPage(useLegacyMarker)
+    if (page.error && !useLegacyMarker && isMissingDbColumn(page.error, 'expiry_sync_pending')) {
+      useLegacyMarker = true
+      page = await loadPage(true)
+    }
+    if (page.error) throw page.error
+
+    const rows = (page.data ?? []) as Array<{ user_id: string | null; domain: string | null }>
+    for (const row of rows) {
+      if (row.user_id && row.domain) keys.add(`${row.user_id}:${row.domain.toLowerCase()}`)
+    }
+    if (rows.length < chunkSize) break
+  }
+
+  return keys
+}
+
 /** All custom domains across tenants (reuses the shared domain read layer). */
 export async function listDomains(): Promise<AdminDomainRow[]> {
   await requireAdmin()
   const admin = createAdminClient()
   const users = await buildUserLookup(admin)
-  const domains = await listAllDomains()
+  const [domains, pendingRenewals] = await Promise.all([listAllDomains(), listPendingRenewalKeys(admin)])
 
   // The shared domain model does not carry provider / order / quarantine; the
   // "Devret" link needs them, so read those three columns in id-ordered chunks.
@@ -553,6 +602,7 @@ export async function listDomains(): Promise<AdminDomainRow[]> {
     provider: extras.get(d.id)?.provider ?? null,
     orderId: extras.get(d.id)?.orderId ?? null,
     heldAt: extras.get(d.id)?.heldAt ?? null,
+    expirySyncPending: pendingRenewals.has(`${d.userId}:${d.domain.toLowerCase()}`),
   }))
 }
 
@@ -732,6 +782,27 @@ export async function getOverview(): Promise<AdminOverview> {
   }
 }
 
+const BILLING_TRANSACTION_BASE_SELECT =
+  'id, kind, amount_cents, currency, status, provider, description, created_at, provider_ref, idempotency_key'
+const BILLING_TRANSACTION_REFUND_SELECT =
+  `${BILLING_TRANSACTION_BASE_SELECT}, refund_of_transaction_id, refund_status, refunded_amount_cents, refunded_at`
+
+async function loadUserBillingTransactions(admin: ReturnType<typeof createAdminClient>, userId: string) {
+  const load = (columns: string) =>
+    admin
+      .from('billing_transactions')
+      .select(columns)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+  const expanded = await load(BILLING_TRANSACTION_REFUND_SELECT)
+  if (!expanded.error) return expanded
+  const refundColumns = ['refund_of_transaction_id', 'refund_status', 'refunded_amount_cents', 'refunded_at']
+  if (!refundColumns.some((column) => isMissingDbColumn(expanded.error, column))) return expanded
+  return load(BILLING_TRANSACTION_BASE_SELECT)
+}
+
 /**
  * Package-management data for one user: live subscription row, the selectable
  * plan catalog (add-ons excluded), payment history, immutable admin audit trail
@@ -759,12 +830,7 @@ export async function getUserPackageDetail(userId: string): Promise<AdminPackage
         .eq('active', true)
         .neq('product_category', 'addon')
         .order('sort_order', { ascending: true }),
-      admin
-        .from('billing_transactions')
-        .select('id, kind, amount_cents, currency, status, provider, description, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(30),
+      loadUserBillingTransactions(admin, userId),
       admin
         .from('admin_package_audit')
         .select('id, created_at, admin_email, action, field, old_value, new_value, reason, status, error')
@@ -824,7 +890,7 @@ export async function getUserPackageDetail(userId: string): Promise<AdminPackage
       interval: r.interval as string,
       productCategory: (r.product_category as string) ?? null,
     })),
-    transactions: (txRows ?? []).map((r) => ({
+    transactions: ((txRows ?? []) as unknown as Array<Record<string, unknown>>).map((r) => ({
       id: r.id as string,
       kind: r.kind as string,
       amountCents: r.amount_cents as number,
@@ -832,6 +898,12 @@ export async function getUserPackageDetail(userId: string): Promise<AdminPackage
       status: r.status as string,
       provider: r.provider as string,
       description: (r.description as string) ?? null,
+      providerRef: (r.provider_ref as string) ?? null,
+      idempotencyKey: (r.idempotency_key as string) ?? null,
+      refundOfTransactionId: (r.refund_of_transaction_id as string) ?? null,
+      refundStatus: (r.refund_status as string) ?? null,
+      refundedAmountCents: (r.refunded_amount_cents as number) ?? 0,
+      refundedAt: (r.refunded_at as string) ?? null,
       createdAt: r.created_at as string,
     })),
     audit: (auditRows ?? []).map((r) => ({

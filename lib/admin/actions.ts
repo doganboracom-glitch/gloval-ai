@@ -678,6 +678,180 @@ export async function setUserPeriodEnd(input: {
   return { ok: true }
 }
 
+export type RecordIyzicoRefundResult = { ok: true; duplicate: boolean } | { ok: false; error: string }
+
+type IyzicoRefundCharge = {
+  id: string
+  user_id: string
+  kind: string
+  status: string
+  provider: string
+  amount_cents: number
+  subscription_id: string | null
+  currency: string
+}
+
+function isMissingRefundRpc(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const issue = error as { code?: unknown; message?: unknown }
+  const message = typeof issue.message === 'string' ? issue.message.toLowerCase() : ''
+  return issue.code === 'PGRST202' || issue.code === '42883' || message.includes('record_iyzico_billing_refund')
+}
+
+function isMissingRefundSummaryColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const issue = error as { code?: unknown; message?: unknown }
+  const message = typeof issue.message === 'string' ? issue.message.toLowerCase() : ''
+  return (
+    (issue.code === '42703' || issue.code === 'PGRST204') &&
+    (message.includes('refund_status') || message.includes('refunded_amount_cents') || message.includes('refunded_at'))
+  )
+}
+
+async function recordRefundWithExistingSchema(
+  admin: ReturnType<typeof createAdminClient>,
+  charge: IyzicoRefundCharge,
+  providerReference: string,
+  idempotencyKey: string,
+): Promise<RecordIyzicoRefundResult> {
+  const byKey = await admin
+    .from('billing_transactions')
+    .select('id, kind, status, provider_ref, idempotency_key')
+    .eq('user_id', charge.user_id)
+    .eq('idempotency_key', idempotencyKey)
+    .maybeSingle()
+  if (byKey.error) return { ok: false, error: 'refund_record_failed' }
+  if (byKey.data) {
+    return byKey.data.kind === 'refund' && byKey.data.provider_ref === providerReference
+      ? { ok: true, duplicate: true }
+      : { ok: false, error: 'refund_already_recorded' }
+  }
+
+  const byProviderReference = await admin
+    .from('billing_transactions')
+    .select('id, idempotency_key')
+    .eq('provider', 'iyzico')
+    .eq('kind', 'refund')
+    .eq('provider_ref', providerReference)
+    .maybeSingle()
+  if (byProviderReference.error) return { ok: false, error: 'refund_record_failed' }
+  if (byProviderReference.data) {
+    return byProviderReference.data.idempotency_key === idempotencyKey
+      ? { ok: true, duplicate: true }
+      : { ok: false, error: 'refund_reference_conflict' }
+  }
+
+  const { data: refund, error: insertError } = await admin
+    .from('billing_transactions')
+    .insert({
+      user_id: charge.user_id,
+      subscription_id: charge.subscription_id,
+      kind: 'refund',
+      amount_cents: -charge.amount_cents,
+      currency: charge.currency,
+      status: 'succeeded',
+      provider: 'iyzico',
+      provider_ref: providerReference,
+      idempotency_key: idempotencyKey,
+      description: `iyzico refund for ${charge.id}`,
+    })
+    .select('id')
+    .single()
+
+  if (insertError) {
+    if (insertError.code === '23505') {
+      const duplicate = await admin
+        .from('billing_transactions')
+        .select('kind, provider_ref')
+        .eq('user_id', charge.user_id)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      if (duplicate.data?.kind === 'refund' && duplicate.data.provider_ref === providerReference) {
+        return { ok: true, duplicate: true }
+      }
+      return { ok: false, error: 'refund_reference_conflict' }
+    }
+    return { ok: false, error: 'refund_record_failed' }
+  }
+
+  const { error: summaryError } = await admin
+    .from('billing_transactions')
+    .update({
+      refund_status: 'refunded',
+      refunded_amount_cents: charge.amount_cents,
+      refunded_at: new Date().toISOString(),
+    })
+    .eq('id', charge.id)
+  if (summaryError && !isMissingRefundSummaryColumn(summaryError)) {
+    console.warn('[admin-refund] refund row saved; parent summary update failed', summaryError.code)
+  }
+
+  // The existing billing_transactions trigger invokes the referral reversal function.
+  // This fallback is used only before script 114 is applied; its transaction row
+  // still carries the same deterministic idempotency key.
+  void refund
+  return { ok: true, duplicate: false }
+}
+
+/**
+ * Admin-only bookkeeping for a full refund that has already been completed in
+ * iyzico. This records the refund; it never initiates or changes a payment.
+ */
+export async function recordIyzicoRefund(input: {
+  transactionId: string
+  providerReference: string
+}): Promise<RecordIyzicoRefundResult> {
+  await requireAdmin()
+  const transactionId = typeof input?.transactionId === 'string' ? input.transactionId.trim() : ''
+  const providerReference = typeof input?.providerReference === 'string' ? input.providerReference.trim() : ''
+  if (!UUID_RE.test(transactionId)) return { ok: false, error: 'invalid_transaction' }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(providerReference)) {
+    return { ok: false, error: 'invalid_refund_reference' }
+  }
+
+  const admin = createAdminClient()
+  const { data: charge, error: chargeError } = await admin
+    .from('billing_transactions')
+    .select('id, user_id, kind, status, provider, amount_cents, subscription_id, currency')
+    .eq('id', transactionId)
+    .maybeSingle()
+  if (chargeError || !charge) return { ok: false, error: 'invalid_transaction' }
+
+  const row = charge as IyzicoRefundCharge
+  if (
+    row.user_id == null ||
+    row.kind !== 'charge' ||
+    row.status !== 'succeeded' ||
+    row.provider !== 'iyzico' ||
+    !Number.isSafeInteger(row.amount_cents) ||
+    row.amount_cents <= 0
+  ) {
+    return { ok: false, error: 'payment_not_refundable' }
+  }
+
+  const idempotencyKey = `iyzico-refund:${row.id}`
+  const { data, error } = await admin.rpc('record_iyzico_billing_refund', {
+    p_charge_id: row.id,
+    p_provider_ref: providerReference,
+    p_idempotency_key: idempotencyKey,
+  })
+
+  if (error && !isMissingRefundRpc(error)) return { ok: false, error: 'refund_record_failed' }
+  if (error) {
+    const fallback = await recordRefundWithExistingSchema(admin, row, providerReference, idempotencyKey)
+    if (fallback.ok) revalidateUserPackage(row.user_id)
+    return fallback
+  }
+
+  const result = data as Record<string, unknown> | null
+  if (!result || result.ok !== true) {
+    return { ok: false, error: String(result?.error ?? 'refund_record_failed') }
+  }
+
+  revalidateUserPackage(row.user_id)
+  return { ok: true, duplicate: result.duplicate === true }
+}
+
 /* -------------------------------- support -------------------------------- */
 
 /** Post an admin reply to a ticket and bump the ticket's updated_at. */

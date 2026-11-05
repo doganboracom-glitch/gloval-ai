@@ -15,6 +15,8 @@ export type AdminDomainRow = CustomDomain & {
   orderId: string | null
   /** Raw `custom_domains.mail_transfer_hold_at`; set while mail is quarantined. */
   heldAt: string | null
+  /** A completed registrar renewal whose provider expiry still needs syncing. */
+  expirySyncPending?: boolean
 }
 
 export type HandoverBlockReason = 'not_registrar' | 'no_order' | 'not_active'

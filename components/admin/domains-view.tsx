@@ -146,11 +146,17 @@ export function DomainsView({
                   {t.domains.mock}
                 </span>
               ) : null}
-              {d.heldAt ? (
-                <StatusBadge tone="warning" className="ml-2">
-                  {t.domains.held}
-                </StatusBadge>
-              ) : null}
+          {d.heldAt ? (
+            <StatusBadge tone="warning" className="ml-2">
+              {t.domains.held}
+            </StatusBadge>
+          ) : null}
+          {d.expirySyncPending ? (
+            <StatusBadge tone="warning" className="ml-2">
+              {t.domains.expirySyncPending}
+            </StatusBadge>
+          ) : null}
+
             </Td>
             <Td className="text-muted-foreground">
               {d.ownerEmail ? (

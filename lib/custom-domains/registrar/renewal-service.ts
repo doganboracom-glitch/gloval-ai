@@ -7,7 +7,7 @@ import { toQuoteView, type DomainPriceSnapshot, type DomainQuoteView } from '../
 import { recordDomainAuditEvent } from './audit'
 import { guard, toDomainError } from './manage-service'
 import { getDomainRegistrarProvider } from './provider'
-import { isLaterRawDate } from './provider-date'
+import { isLaterRawDate, parseProviderDateAssumingIstanbul } from './provider-date'
 import { STALE_PENDING_MS } from './transfer-service'
 import { isManageCapable, isTransferCapable, RegistrarError } from './types'
 
@@ -61,6 +61,136 @@ export type RenewalQuoteResult = ({ ok: true } & { quote: RenewalQuote }) | { ok
 
 function tldOf(domain: string): string {
   return domain.split('.').slice(1).join('.')
+}
+
+const EXPIRY_SYNC_PENDING = 'expiry_sync_pending'
+
+type RenewalExpiryRow = {
+  id: string
+  user_id: string
+  domain: string
+  period_years: number
+  baseline_expires_raw: string | null
+  provider_expires_raw?: string | null
+}
+
+function isMissingExpirySyncColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const issue = error as { code?: unknown; message?: unknown }
+  const message = typeof issue.message === 'string' ? issue.message.toLowerCase() : ''
+  return (issue.code === '42703' || issue.code === 'PGRST204') && message.includes('expiry_sync_pending')
+}
+
+async function updateRenewalExpiryState(
+  admin: ReturnType<typeof createAdminClient>,
+  rowId: string,
+  fields: Record<string, unknown>,
+  pending: boolean,
+  expectedStatus?: RenewalStatus,
+): Promise<Array<{ id: string }>> {
+  const updatedAt = new Date().toISOString()
+  const apply = async (patch: Record<string, unknown>) => {
+    let query = admin.from('domain_renewals').update(patch).eq('id', rowId)
+    if (expectedStatus) query = query.eq('status', expectedStatus)
+    return query.select('id')
+  }
+
+  const result = await apply({
+    ...fields,
+    expiry_sync_pending: pending,
+    error_message: pending ? EXPIRY_SYNC_PENDING : null,
+    updated_at: updatedAt,
+  })
+  if (result.error && isMissingExpirySyncColumn(result.error)) {
+    const fallback = await apply({
+      ...fields,
+      error_message: pending ? EXPIRY_SYNC_PENDING : null,
+      updated_at: updatedAt,
+    })
+    if (fallback.error) throw fallback.error
+    return (fallback.data ?? []) as Array<{ id: string }>
+  }
+  if (result.error) throw result.error
+  return (result.data ?? []) as Array<{ id: string }>
+}
+
+async function syncCompletedRenewalExpiry(
+  admin: ReturnType<typeof createAdminClient>,
+  row: RenewalExpiryRow,
+  rawExpiry: string | null,
+): Promise<boolean> {
+  if (!rawExpiry || !isLaterRawDate(rawExpiry, row.baseline_expires_raw)) return false
+
+  // Relative renewal verification above uses the untouched provider strings.
+  // This import/display-only conversion is used only to persist the expiry.
+  const expiry = parseProviderDateAssumingIstanbul(rawExpiry)
+  if (!expiry.instant) return false
+
+  try {
+    const { data, error } = await admin
+      .from('custom_domains')
+      .update({ expires_at: expiry.instant })
+      .eq('user_id', row.user_id)
+      .eq('domain', row.domain)
+      .select('id')
+    if (error) throw error
+    if (!data?.length) return false
+
+    const cleared = await updateRenewalExpiryState(
+      admin,
+      row.id,
+      { provider_expires_raw: rawExpiry },
+      false,
+      'completed',
+    )
+    return cleared.length > 0
+  } catch (error) {
+    console.warn('[domain-renewal] expiry sync remains pending', row.id, error instanceof Error ? error.name : 'unknown')
+    return false
+  }
+}
+
+async function markRenewalCompleted(
+  admin: ReturnType<typeof createAdminClient>,
+  row: RenewalExpiryRow,
+  rawExpiry: string | null,
+  expectedStatus: RenewalStatus,
+): Promise<boolean> {
+  const completed = await updateRenewalExpiryState(
+    admin,
+    row.id,
+    { status: 'completed', provider_expires_raw: rawExpiry },
+    true,
+    expectedStatus,
+  )
+  if (!completed.length) return false
+  await syncCompletedRenewalExpiry(admin, row, rawExpiry)
+  return true
+}
+
+async function listPendingExpirySyncRows(
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<RenewalExpiryRow[]> {
+  const select = 'id, user_id, domain, period_years, baseline_expires_raw, provider_expires_raw'
+  const primary = await admin
+    .from('domain_renewals')
+    .select(select)
+    .eq('status', 'completed')
+    .eq('expiry_sync_pending', true)
+    .order('updated_at', { ascending: true })
+    .limit(50)
+  if (!primary.error) return (primary.data ?? []) as RenewalExpiryRow[]
+  if (!isMissingExpirySyncColumn(primary.error)) throw primary.error
+
+  const fallback = await admin
+    .from('domain_renewals')
+    .select(select)
+    .eq('status', 'completed')
+    .eq('error_message', EXPIRY_SYNC_PENDING)
+    .order('updated_at', { ascending: true })
+    .limit(50)
+  if (fallback.error) throw fallback.error
+  return (fallback.data ?? []) as RenewalExpiryRow[]
 }
 
 /** Prices a renewal from provider data only. No client value is accepted. */
@@ -185,20 +315,21 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
     try {
       const info = await registrar.getOwnedDomainInfo(row.domain)
       if (info && isLaterRawDate(info.expiresAtRaw ?? null, row.baseline_expires_raw)) {
-        requireOk(
-          'domainRenewal.markCompletedReplay',
-          await admin
-            .from('domain_renewals')
-            .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
-            .eq('id', row.id),
+        const completed = await markRenewalCompleted(
+          admin,
+          row,
+          info.expiresAtRaw ?? null,
+          'renewal_submitting',
         )
-        await recordDomainAuditEvent({
-          userId: row.user_id,
-          domain: row.domain,
-          eventType: 'renewal_completed',
-          actor: 'system',
-          details: { outcome: 'success', periodYears: row.period_years },
-        })
+        if (completed) {
+          await recordDomainAuditEvent({
+            userId: row.user_id,
+            domain: row.domain,
+            eventType: 'renewal_completed',
+            actor: 'system',
+            details: { outcome: 'success', periodYears: row.period_years },
+          })
+        }
         return
       }
     } catch (e) {
@@ -232,22 +363,19 @@ export async function finalizeRenewal(renewalId: string): Promise<void> {
       }
       return
     }
-    // If this write fails the row stays renewal_submitting; the sweeper moves it
-    // to reconciliation, which completes it once the new expiry is observed.
-    requireOk(
-      'domainRenewal.markCompleted',
-      await admin
-        .from('domain_renewals')
-        .update({ status: 'completed', provider_expires_raw: result.expiresAtRaw, error_message: null })
-        .eq('id', row.id),
-    )
-    await recordDomainAuditEvent({
-      userId: row.user_id,
-      domain: row.domain,
-      eventType: 'renewal_completed',
-      actor: 'system',
-      details: { outcome: 'success', periodYears: row.period_years },
-    })
+    // Persist the provider success before syncing expires_at. If the read-back is
+    // unavailable or still stale, the renewal remains completed and only the
+    // read-only expiry sync is retried by the cron.
+    const completed = await markRenewalCompleted(admin, row, result.expiresAtRaw, 'renewal_submitting')
+    if (completed) {
+      await recordDomainAuditEvent({
+        userId: row.user_id,
+        domain: row.domain,
+        eventType: 'renewal_completed',
+        actor: 'system',
+        details: { outcome: 'success', periodYears: row.period_years },
+      })
+    }
   } catch (e) {
     console.error('[domain-renewal] finalize crashed', renewalId, e instanceof Error ? e.name : 'unknown')
   }
@@ -265,26 +393,32 @@ export async function reconcileRenewals(): Promise<{ checked: number; completed:
     'domainRenewal.reconcileList',
     await admin
       .from('domain_renewals')
-      .select('id, domain, baseline_expires_raw')
+      .select('id, user_id, domain, period_years, baseline_expires_raw, provider_expires_raw')
       .eq('status', 'renewal_reconciliation_required')
       .order('updated_at', { ascending: true })
       .limit(50),
   )
   let completed = 0
-  for (const row of (rows ?? []) as { id: string; domain: string; baseline_expires_raw: string | null }[]) {
+  for (const row of (rows ?? []) as RenewalExpiryRow[]) {
     try {
       const info = await registrar.getOwnedDomainInfo(row.domain)
       if (info && isLaterRawDate(info.expiresAtRaw ?? null, row.baseline_expires_raw)) {
-        const done = requireOk(
-          'domainRenewal.reconcileComplete',
-          await admin
-            .from('domain_renewals')
-            .update({ status: 'completed', provider_expires_raw: info.expiresAtRaw ?? null, error_message: null })
-            .eq('id', row.id)
-            .eq('status', 'renewal_reconciliation_required')
-            .select('id'),
+        const done = await markRenewalCompleted(
+          admin,
+          row,
+          info.expiresAtRaw ?? null,
+          'renewal_reconciliation_required',
         )
-        if (done.data && done.data.length > 0) completed++
+        if (done) {
+          completed++
+          await recordDomainAuditEvent({
+            userId: row.user_id,
+            domain: row.domain,
+            eventType: 'renewal_completed',
+            actor: 'system',
+            details: { outcome: 'success', periodYears: row.period_years },
+          })
+        }
       } else {
         warnOnError(
           'domainRenewal.reconcileTouch',
@@ -308,6 +442,32 @@ export async function reconcileRenewals(): Promise<{ checked: number; completed:
     }
   }
   return { checked: rows?.length ?? 0, completed }
+}
+
+/**
+ * Re-reads only completed renewals whose provider expiry was not yet persisted.
+ * This never calls Renew and never changes an uncertain renewal outcome.
+ */
+export async function syncPendingRenewalExpiries(): Promise<{ checked: number; synced: number }> {
+  const registrar = getDomainRegistrarProvider()
+  if (!isTransferCapable(registrar)) return { checked: 0, synced: 0 }
+
+  const admin = createAdminClient()
+  const rows = await listPendingExpirySyncRows(admin)
+  let synced = 0
+  for (const row of rows) {
+    try {
+      const info = await registrar.getOwnedDomainInfo(row.domain)
+      if (info && (await syncCompletedRenewalExpiry(admin, row, info.expiresAtRaw ?? null))) synced++
+    } catch (error) {
+      if (isDbQueryError(error)) {
+        console.error('[domain-renewal] expiry retry query failed', row.id, error.code)
+      } else {
+        console.warn('[domain-renewal] expiry retry read failed', row.id, error instanceof Error ? error.name : 'unknown')
+      }
+    }
+  }
+  return { checked: rows.length, synced }
 }
 
 /**

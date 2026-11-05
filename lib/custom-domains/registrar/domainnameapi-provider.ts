@@ -893,7 +893,10 @@ export class DomainNameApiProvider
     return { renewCents: Math.round(price * 100), currency: row.currencies?.renew || 'USD' }
   }
 
-  async renewDomain(domain: string, years: number): Promise<{ expiresAtRaw: string | null }> {
+  async renewDomain(
+    domain: string,
+    years: number,
+  ): Promise<{ expiresAtRaw: string | null; expirySyncPending?: boolean }> {
     if (!Number.isInteger(years) || years < 1 || years > 10) {
       throw new RegistrarError('INVALID_INPUT', 'renew:years')
     }
@@ -919,7 +922,7 @@ export class DomainNameApiProvider
       after = null
     }
     if (after && isLaterRawDate(after.expiresAtRaw ?? null, before.expiresAtRaw ?? null)) {
-      return { expiresAtRaw: after.expiresAtRaw ?? null }
+      return { expiresAtRaw: after.expiresAtRaw ?? null, expirySyncPending: false }
     }
 
     if (res && res.result !== 'OK' && isDefiniteRegisterRejection(res.error?.Code) && after) {
@@ -928,6 +931,12 @@ export class DomainNameApiProvider
     if (!res) throw new RegistrarError('OUTCOME_UNKNOWN', 'domainnameapi:RENEW_EXCEPTION')
     if (res.result !== 'OK') {
       throw new RegistrarError('OUTCOME_UNKNOWN', `domainnameapi:RENEW_${res.error?.Code ?? 'UNKNOWN'}`)
+    }
+    if (!res.error?.Code) {
+      // The provider acknowledged Renew but GetDetails has not caught up (or
+      // is temporarily unavailable). Persist success and retry only the read;
+      // never issue another paid Renew for this attempt.
+      return { expiresAtRaw: after?.expiresAtRaw ?? null, expirySyncPending: true }
     }
     throw new RegistrarError('OUTCOME_UNKNOWN', 'domainnameapi:RENEW_NOT_CONFIRMED')
   }

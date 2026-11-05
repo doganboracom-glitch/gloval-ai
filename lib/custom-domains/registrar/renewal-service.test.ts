@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({
   results: [] as Array<{ data: unknown; error: null }>,
   /** Every `.update(values)` payload, in call order. */
   updates: [] as Array<Record<string, unknown>>,
+  auditEvents: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('@/lib/supabase/admin', () => ({
@@ -26,12 +27,17 @@ vi.mock('@/lib/supabase/admin', () => ({
   }),
 }))
 vi.mock('./provider', () => ({ getDomainRegistrarProvider: () => m.provider }))
+vi.mock('./audit', () => ({
+  recordDomainAuditEvent: async (event: Record<string, unknown>) => {
+    m.auditEvents.push(event)
+  },
+}))
 vi.mock('../pricing/context', () => ({ loadPricingContext: async () => ({}) }))
 vi.mock('../pricing/order', () => ({ resolveOrderPricing: vi.fn() }))
 vi.mock('./manage-service', () => ({ guard: vi.fn(), toDomainError: vi.fn() }))
 vi.mock('./transfer-service', () => ({ STALE_PENDING_MS: 1000 }))
 
-import { finalizeRenewal, reconcileRenewals, sweepStaleRenewals } from './renewal-service'
+import { finalizeRenewal, reconcileRenewals, sweepStaleRenewals, syncPendingRenewalExpiries } from './renewal-service'
 import { RegistrarError } from './types'
 
 const row = {
@@ -59,6 +65,7 @@ beforeEach(() => {
   m.provider = provider()
   m.results = []
   m.updates = []
+  m.auditEvents = []
 })
 
 describe('finalizeRenewal', () => {
@@ -78,6 +85,47 @@ describe('finalizeRenewal', () => {
       status: 'completed',
       provider_expires_raw: '2028-01-01T00:00:00Z',
     })
+  })
+
+  it('keeps a provider-confirmed renewal completed when expiry read-back is unavailable', async () => {
+    m.provider = provider({
+      renewDomain: vi.fn().mockResolvedValue({ expiresAtRaw: null, expirySyncPending: true }),
+    })
+    m.results = [
+      { data: [row], error: null },
+      { data: [{ id: 'r1' }], error: null },
+    ]
+
+    await finalizeRenewal('r1')
+
+    expect(m.updates.at(-1)).toMatchObject({
+      status: 'completed',
+      expiry_sync_pending: true,
+      error_message: 'expiry_sync_pending',
+      provider_expires_raw: null,
+    })
+    expect(m.auditEvents).toContainEqual(
+      expect.objectContaining({ eventType: 'renewal_completed', details: { outcome: 'success', periodYears: 1 } }),
+    )
+  })
+
+  it('updates custom_domains.expires_at and clears the pending marker when the new expiry is readable', async () => {
+    m.results = [
+      { data: [row], error: null },
+      { data: [{ id: 'r1' }], error: null },
+      { data: [{ id: 'domain-row' }], error: null },
+      { data: [{ id: 'r1' }], error: null },
+    ]
+
+    await finalizeRenewal('r1')
+
+    expect(m.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'completed', expiry_sync_pending: true }),
+        { expires_at: '2028-01-01T00:00:00.000Z' },
+        expect.objectContaining({ expiry_sync_pending: false, error_message: null }),
+      ]),
+    )
   })
 
   it('does not renew again when the provider expiry already moved past the baseline', async () => {
@@ -137,7 +185,13 @@ describe('finalizeRenewal', () => {
 })
 
 describe('reconcileRenewals', () => {
-  const pending = { id: 'r1', domain: 'example.com', baseline_expires_raw: '2027-01-01T00:00:00Z' }
+  const pending = {
+    id: 'r1',
+    user_id: 'u1',
+    domain: 'example.com',
+    period_years: 1,
+    baseline_expires_raw: '2027-01-01T00:00:00Z',
+  }
 
   it('completes only when the expiry is observed past the baseline, and never calls Renew', async () => {
     m.provider = provider({ getOwnedDomainInfo: vi.fn().mockResolvedValue({ expiresAtRaw: '2028-01-01T00:00:00Z' }) })
@@ -160,6 +214,29 @@ describe('reconcileRenewals', () => {
     m.results = [{ data: [pending], error: null }]
     expect(await reconcileRenewals()).toEqual({ checked: 1, completed: 0 })
     expect(m.updates.some((u) => u.status === 'completed')).toBe(false)
+  })
+})
+
+describe('syncPendingRenewalExpiries', () => {
+  it('retries only the provider read and clears the flag after updating expires_at', async () => {
+    const p = provider({
+      getOwnedDomainInfo: vi.fn().mockResolvedValue({ expiresAtRaw: '2028-01-01T00:00:00Z' }),
+      renewDomain: vi.fn(),
+    })
+    m.provider = p
+    m.results = [
+      { data: [row], error: null },
+      { data: [{ id: 'domain-row' }], error: null },
+      { data: [{ id: 'r1' }], error: null },
+    ]
+
+    expect(await syncPendingRenewalExpiries()).toEqual({ checked: 1, synced: 1 })
+    expect(p.getOwnedDomainInfo).toHaveBeenCalledWith('example.com')
+    expect(p.renewDomain).not.toHaveBeenCalled()
+    expect(m.updates).toEqual([
+      { expires_at: '2028-01-01T00:00:00.000Z' },
+      expect.objectContaining({ provider_expires_raw: '2028-01-01T00:00:00Z', expiry_sync_pending: false }),
+    ])
   })
 })
 
