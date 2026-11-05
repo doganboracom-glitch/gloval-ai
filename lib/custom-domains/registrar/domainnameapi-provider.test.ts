@@ -2,11 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RegistrantContact, RegistrarError } from './types'
 
 type FakeBehavior = { delayMs: number; body: unknown }
+type FakeDetailsReply = { result: string; data?: Record<string, unknown> }
 type FakeSuccess = {
   registerData: Record<string, unknown>
-  details: { result: string; data?: Record<string, unknown> } | 'throw'
+  details: FakeDetailsReply | 'throw'
   /** Unformatted GetDetails body the real SDK leaves on `lastResponse`. */
   detailsRaw?: Record<string, unknown>
+  detailsSequence?: Array<FakeDetailsReply | 'throw'>
+  detailsRawSequence?: Array<Record<string, unknown> | undefined>
+  /** Overrides the renewal reply for read-back lag tests. */
+  renewReply?: { result: string; data?: Record<string, unknown>; error?: { Code?: string; Message?: string } }
   /** Overrides the register reply (e.g. an empty-body ERROR from the SDK). */
   registerReply?: { result: string; error?: { Code?: string; Message?: string } }
 }
@@ -24,9 +29,14 @@ vi.mock('nodejs-dna/src/DNARest', () => ({
     }
     async GetDetails(domain: string) {
       const success = successes.get(domain)!
-      if (success.details === 'throw') throw new Error('network down')
-      if (success.detailsRaw) this.lastResponse = success.detailsRaw
-      return success.details
+      const details = success.detailsSequence?.shift() ?? success.details
+      if (details === 'throw') throw new Error('network down')
+      const detailsRaw = success.detailsRawSequence?.shift() ?? success.detailsRaw
+      if (detailsRaw) this.lastResponse = detailsRaw
+      return details
+    }
+    async Renew(domain: string) {
+      return successes.get(domain)?.renewReply ?? { result: 'OK', data: { Status: 'Renewed' } }
     }
     async RegisterWithContactInfo(domain: string) {
       const success = successes.get(domain)
@@ -124,15 +134,42 @@ describe('DomainNameApiProvider transfer status parsing', () => {
         lockStatus: false,
         expirationDate: '2027-10-04T14:55:29Z',
         startDate: '2026-01-01T00:00:00Z',
+        updatedDate: '2026-02-01T00:00:00Z',
+        transferDate: '0001-01-01T00:00:00',
         remainingDay: 90,
       },
     })
     const provider = new DomainNameApiProvider('user-uuid', 'api-key', true)
 
-    await expect(provider.getOwnedDomainInfo('pending-out.com')).resolves.toMatchObject({
+    const info = await provider.getOwnedDomainInfo('pending-out.com')
+    expect(info).toMatchObject({
       locked: false,
       status: '11',
       remainingDays: 90,
+    })
+    expect(info?.rawFieldNames).toEqual(
+      expect.arrayContaining(['domainName', 'expirationDate', 'startDate', 'updatedDate', 'transferDate']),
+    )
+  })
+})
+
+describe('DomainNameApiProvider renewal expiry read-back', () => {
+  it('returns a pending expiry sync after an acknowledged Renew when GetDetails fails', async () => {
+    successes.set('renew-pending.com', {
+      registerData: {},
+      details: { result: 'OK', data: { DomainName: 'renew-pending.com', Status: 'Active' } },
+      detailsSequence: [
+        { result: 'OK', data: { DomainName: 'renew-pending.com', Status: 'Active' } },
+        'throw',
+      ],
+      detailsRawSequence: [{ expirationDate: '2027-10-04T14:55:29Z' }, undefined],
+      renewReply: { result: 'OK', data: { Status: 'Renewed' } },
+    })
+    const provider = new DomainNameApiProvider('user-uuid', 'api-key', true)
+
+    await expect(provider.renewDomain('renew-pending.com', 1)).resolves.toEqual({
+      expiresAtRaw: null,
+      expirySyncPending: true,
     })
   })
 })

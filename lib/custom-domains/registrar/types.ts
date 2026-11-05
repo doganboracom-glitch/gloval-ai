@@ -240,9 +240,10 @@ export interface DomainManageCapable {
   getRenewalPrice(tld: string, years: number): Promise<{ renewCents: number; currency: string } | null>
   /**
    * PAID. Not reachable from any user action until a payment flow settles first.
-   * Never retried automatically; an unconfirmed result is `OUTCOME_UNKNOWN`.
+   * An acknowledged Renew with an unavailable/stale GetDetails read-back returns
+   * `expirySyncPending`; an indeterminate Renew result remains `OUTCOME_UNKNOWN`.
    */
-  renewDomain(domain: string, years: number): Promise<{ expiresAtRaw: string | null }>
+  renewDomain(domain: string, years: number): Promise<{ expiresAtRaw: string | null; expirySyncPending?: boolean }>
 }
 
 export type DomainContactRole = 'registrant' | 'admin' | 'tech' | 'billing'

@@ -2,7 +2,7 @@ import { sweepAiImagePreviews } from '@/lib/ai-preview/sweep'
 import { NextResponse } from 'next/server'
 import { reconcileDomainOrders, sweepStaleOrders } from '@/lib/custom-domains/registrar/service'
 import { getDomainProvider } from '@/lib/custom-domains/provider'
-import { reconcileRenewals, sweepStaleRenewals } from '@/lib/custom-domains/registrar/renewal-service'
+import { reconcileRenewals, sweepStaleRenewals, syncPendingRenewalExpiries } from '@/lib/custom-domains/registrar/renewal-service'
 import { syncAllTransfers } from '@/lib/custom-domains/registrar/transfer-service'
 import { reconcileSubscriptionLifecycle } from '@/lib/billing-lifecycle'
 import { syncAllMailAccess } from '@/lib/mail/access-sync'
@@ -248,6 +248,13 @@ export async function GET(request: Request) {
     const transfers = await syncAllTransfers()
     const sweptRenewals = await sweepStaleRenewals()
     const renewals = await reconcileRenewals()
+    let renewalExpirySync: Awaited<ReturnType<typeof syncPendingRenewalExpiries>> | { error: string }
+    try {
+      renewalExpirySync = await syncPendingRenewalExpiries()
+    } catch (error) {
+      console.log('[domain-renewal] expiry sync sweep failed:', error instanceof Error ? error.message : 'unknown')
+      renewalExpirySync = { error: 'expiry_sync_sweep_failed' }
+    }
     const provider = getDomainProvider()
     const connections =
       'refreshPendingConnections' in provider
@@ -256,7 +263,7 @@ export async function GET(request: Request) {
             CONNECTION_BUDGET_MS,
           )
         : 0
-    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, signupDrafts, rateLimitCounters, indexNow, projectBackups, registrarProbe, sweptOrders, orders, transfers, sweptRenewals, renewals, connections })
+    return NextResponse.json({ ok: true, billing, mailAccess, aiCredits, customerDeletions, storeStock, iyzicoOrders, iyzicoRefunds, contactMessages, aiEvents, aiImagePreviews, signupAttribution, signupDrafts, rateLimitCounters, indexNow, projectBackups, registrarProbe, sweptOrders, orders, transfers, sweptRenewals, renewals, renewalExpirySync, connections })
   } catch {
     return NextResponse.json({ error: 'reconciliation_failed', billing, aiCredits }, { status: 500 })
   }

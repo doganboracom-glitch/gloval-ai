@@ -17,6 +17,17 @@ const state = vi.hoisted(() => ({
   inserts: [] as Array<{ table: string; row: Record<string, unknown> }>,
   profileUpdates: [] as Array<{ table: string; patch: Record<string, unknown>; column: string; value: unknown }>,
   liveSub: null as null | { provider: string; provider_ref: string | null; status: string },
+  billingTransaction: null as null | {
+    id: string
+    user_id: string
+    kind: string
+    status: string
+    provider: string
+    amount_cents: number
+    subscription_id: string | null
+    currency: string
+  },
+  refundRows: [] as Array<{ id: string; kind: string; status: string; provider_ref: string; idempotency_key: string; user_id: string }>,
   clientCreated: 0,
 }))
 
@@ -38,33 +49,68 @@ vi.mock('@/lib/mail/admin-guard', () => ({
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => {
     state.clientCreated++
-    const chain: Record<string, unknown> = {}
-    for (const m of ['select', 'eq', 'in', 'order', 'limit']) chain[m] = () => chain
-    chain.maybeSingle = async () => ({ data: state.liveSub })
     return {
       rpc: state.rpc,
-      from: (table: string) => ({
-        ...chain,
-        insert: async (row: Record<string, unknown>) => {
+      from: (table: string) => {
+        const filters: Record<string, unknown> = {}
+        const chain: Record<string, unknown> = {}
+        for (const method of ['select', 'in', 'order', 'limit']) chain[method] = () => chain
+        chain.eq = (column: string, value: unknown) => {
+          filters[column] = value
+          return chain
+        }
+        chain.maybeSingle = async () => {
+          if (table === 'billing_transactions') {
+            if (filters.id === state.billingTransaction?.id) return { data: state.billingTransaction, error: null }
+            if (filters.idempotency_key) {
+              return { data: state.refundRows.find((row) => row.idempotency_key === filters.idempotency_key) ?? null, error: null }
+            }
+            if (filters.provider_ref) {
+              return { data: state.refundRows.find((row) => row.provider_ref === filters.provider_ref) ?? null, error: null }
+            }
+          }
+          return { data: state.liveSub, error: null }
+        }
+        chain.single = async () => ({ data: { id: 'refund-row-id' }, error: null })
+        chain.insert = (row: Record<string, unknown>) => {
           state.inserts.push({ table, row })
-          return { error: null }
-        },
-        update: (patch: Record<string, unknown>) => ({
+          if (table === 'billing_transactions') {
+            state.refundRows.push({
+              id: 'refund-row-id',
+              kind: String(row.kind),
+              status: String(row.status),
+              provider_ref: String(row.provider_ref),
+              idempotency_key: String(row.idempotency_key),
+              user_id: String(row.user_id),
+            })
+          }
+          const result = { data: { id: 'refund-row-id' }, error: null }
+          return {
+            select: () => chain,
+            single: async () => result,
+            then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+              Promise.resolve({ error: null }).then(resolve, reject),
+          }
+        }
+        chain.update = (patch: Record<string, unknown>) => ({
           eq: async (column: string, value: unknown) => {
             state.profileUpdates.push({ table, patch, column, value })
             return { error: null }
           },
-        }),
-      }),
+        })
+        return chain
+      },
     }
   },
 }))
 
-import { changeUserPlan, grantCredits, setUserPeriodEnd, setUserSiteLimitOverride, setUserStatus } from './actions'
+import { changeUserPlan, grantCredits, recordIyzicoRefund, setUserPeriodEnd, setUserSiteLimitOverride, setUserStatus } from './actions'
 
 beforeEach(() => {
   state.adminOk = true
   state.liveSub = null
+  state.billingTransaction = null
+  state.refundRows = []
   state.inserts = []
   state.profileUpdates = []
   state.clientCreated = 0
@@ -80,6 +126,7 @@ describe('non-admin access', () => {
       () => grantCredits({ userId: USER_ID, amount: 10, reason: 'x' }),
       () => setUserPeriodEnd({ userId: USER_ID, periodEnd: null, reason: 'x' }),
       () => setUserSiteLimitOverride({ userId: USER_ID, siteLimit: 3, reason: 'x' }),
+      () => recordIyzicoRefund({ transactionId: USER_ID, providerReference: 'refund-ref' }),
       () => setUserStatus(USER_ID, 'suspended'),
     ]
     for (const call of calls) await expect(call()).rejects.toThrow('NEXT_NOT_FOUND')
@@ -161,6 +208,81 @@ describe('changeUserPlan', () => {
   it('never writes to payment tables', async () => {
     await changeUserPlan({ userId: USER_ID, planId: PLAN_ID })
     expect(state.inserts.some((i) => i.table.startsWith('billing_transactions'))).toBe(false)
+  })
+})
+
+describe('recordIyzicoRefund', () => {
+  const charge = {
+    id: USER_ID,
+    user_id: PLAN_ID,
+    kind: 'charge',
+    status: 'succeeded',
+    provider: 'iyzico',
+    amount_cents: 12_105,
+    subscription_id: '44444444-4444-4444-8444-444444444444',
+    currency: 'TRY',
+  }
+
+  it('records an already-completed full refund through the restricted RPC', async () => {
+    state.billingTransaction = charge
+    state.rpc.mockResolvedValue({
+      data: { ok: true, duplicate: false, refundTransactionId: '55555555-5555-4555-8555-555555555555' },
+      error: null,
+    })
+
+    expect(await recordIyzicoRefund({ transactionId: charge.id, providerReference: 'iyzico-host-ref-1' })).toEqual({
+      ok: true,
+      duplicate: false,
+    })
+    expect(state.rpc).toHaveBeenCalledWith('record_iyzico_billing_refund', {
+      p_charge_id: charge.id,
+      p_provider_ref: 'iyzico-host-ref-1',
+      p_idempotency_key: `iyzico-refund:${charge.id}`,
+    })
+    expect(state.inserts.some((row) => row.table === 'billing_transactions')).toBe(false)
+  })
+
+  it('validates transaction and provider reference before creating a database client', async () => {
+    expect(await recordIyzicoRefund({ transactionId: 'bad-id', providerReference: 'refund-1' })).toEqual({
+      ok: false,
+      error: 'invalid_transaction',
+    })
+    expect(await recordIyzicoRefund({ transactionId: charge.id, providerReference: 'bad reference' })).toEqual({
+      ok: false,
+      error: 'invalid_refund_reference',
+    })
+    expect(state.clientCreated).toBe(0)
+  })
+
+  it('uses a legacy-schema fallback and prevents the same refund from being recorded twice', async () => {
+    state.billingTransaction = charge
+    state.rpc.mockResolvedValue({ data: null, error: { code: 'PGRST202', message: 'record_iyzico_billing_refund not found' } })
+
+    const input = { transactionId: charge.id, providerReference: 'iyzico-host-ref-2' }
+    expect(await recordIyzicoRefund(input)).toEqual({ ok: true, duplicate: false })
+    const refundInsert = state.inserts.find((row) => row.table === 'billing_transactions')
+    expect(refundInsert?.row).toMatchObject({
+      user_id: charge.user_id,
+      kind: 'refund',
+      amount_cents: -charge.amount_cents,
+      currency: 'TRY',
+      status: 'succeeded',
+      provider: 'iyzico',
+      provider_ref: 'iyzico-host-ref-2',
+      idempotency_key: `iyzico-refund:${charge.id}`,
+    })
+
+    expect(await recordIyzicoRefund(input)).toEqual({ ok: true, duplicate: true })
+    expect(state.inserts.filter((row) => row.table === 'billing_transactions')).toHaveLength(1)
+  })
+
+  it('rejects non-successful, non-iyzico, or already-refunded charges', async () => {
+    state.billingTransaction = { ...charge, provider: 'stripe' }
+    expect(await recordIyzicoRefund({ transactionId: charge.id, providerReference: 'iyzico-host-ref-3' })).toEqual({
+      ok: false,
+      error: 'payment_not_refundable',
+    })
+    expect(state.rpc).not.toHaveBeenCalled()
   })
 })
 
