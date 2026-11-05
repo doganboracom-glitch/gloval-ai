@@ -723,6 +723,10 @@ const pt: DeepPartial<Dict> = {
   renewItemSuffix: 'renovação',
   publishSuspended: 'Sua assinatura está suspensa porque um pagamento falhou. Conclua o pagamento para publicar.',
     addOns: {
+      websiteAllowanceDescription: 'Adiciona ao limite de sites do seu plano um direito de publicação do tipo selecionado. É válido durante o período de faturamento atual da sua assinatura principal.',
+      websiteAllowanceDescriptionYearly: 'Adiciona ao limite de sites do seu plano um direito de publicação do tipo selecionado. É válido por 12 meses, não se renova automaticamente e é cobrado uma única vez.',
+      emailAllowanceDescription: 'Adiciona a quantidade selecionada de contas de e-mail. A capacidade é válida durante o período de faturamento atual da sua assinatura principal.',
+      emailAllowanceDescriptionYearly: 'Adiciona a quantidade selecionada de contas de e-mail. A capacidade é válida por 12 meses, não se renova automaticamente e é cobrada uma única vez.',
       title: 'Serviços adicionais',
       subtitle: 'Adicione capacidade extra de sites e produtos além dos limites do seu plano.',
       summaryHint: 'Sua capacidade extra ativa e os serviços disponíveis no seu plano.',

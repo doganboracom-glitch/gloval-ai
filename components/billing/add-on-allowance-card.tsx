@@ -1,10 +1,11 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Building2, Loader2, Mail, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatMoney } from '@/lib/billing-utils'
 import { fillTemplate } from '@/lib/addon-purchase-outcome'
+import { addonCardId } from '@/lib/billing-addon-focus'
 import type { AddOnBillingPeriod, AddOnCatalogItem, AddOnCode } from '@/lib/add-ons'
 
 type AddOnAllowanceCardProps = {
@@ -15,6 +16,7 @@ type AddOnAllowanceCardProps = {
   defaultPeriod: AddOnBillingPeriod
   title: string
   description: string
+  yearlyDescription?: string
   selectLabel: string
   optionLabel: string
   currencyLabel: string
@@ -33,6 +35,7 @@ type AddOnAllowanceCardProps = {
   onBuy: (code: AddOnCode) => void
   busyCode: AddOnCode | null
   purchaseLocked: boolean
+  highlightedCode?: string | null
 }
 
 const ICONS = { site: Building2, mail: Mail, product: Package } as const
@@ -53,6 +56,7 @@ export function AddOnAllowanceCard({
   defaultPeriod,
   title,
   description,
+  yearlyDescription,
   selectLabel,
   optionLabel,
   currencyLabel,
@@ -71,15 +75,34 @@ export function AddOnAllowanceCard({
   onBuy,
   busyCode,
   purchaseLocked,
+  highlightedCode = null,
 }: AddOnAllowanceCardProps) {
   const id = useId()
   const [selectedCode, setSelectedCode] = useState<AddOnCode | null>(
     () => pickDefaultItem(items, defaultPeriod)?.code ?? null,
   )
+  const appliedHighlightRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!highlightedCode) {
+      appliedHighlightRef.current = null
+      return
+    }
+    if (appliedHighlightRef.current === highlightedCode) return
+    if (!items.some((item) => item.code === highlightedCode)) return
+
+    appliedHighlightRef.current = highlightedCode
+    setSelectedCode(highlightedCode as AddOnCode)
+  }, [highlightedCode, items])
+
+  const isHighlighted =
+    highlightedCode !== null && items.some((item) => item.code === highlightedCode)
   const eligible = items.some((item) => item.eligible)
   const selectedItem =
     items.find((item) => item.code === selectedCode && item.eligible) ??
     pickDefaultItem(items, defaultPeriod)
+  const displayedDescription =
+    selectedItem?.period === 'year' && yearlyDescription ? yearlyDescription : description
   const hasUnavailableOffers = eligible && items.some((item) => !item.eligible)
   const itemLabel = selectedItem ? unitLabelFor(selectedItem) : ''
   const priceLabel = selectedItem ? formatMoney(selectedItem.priceCents, selectedItem.currency) : ''
@@ -89,9 +112,13 @@ export function AddOnAllowanceCard({
 
   return (
     <article
+      id={isHighlighted ? addonCardId(highlightedCode) : undefined}
       aria-labelledby={`${id}-title`}
       data-addon-card={kind}
-      className={`min-w-0 rounded-2xl border border-border bg-card/70 p-4 sm:p-5 ${eligible ? '' : 'opacity-70'}`}
+      data-highlighted={isHighlighted ? 'true' : undefined}
+      className={`flex h-full min-w-0 flex-col rounded-2xl border bg-card/70 p-3 sm:p-5 ${
+        isHighlighted ? 'border-brand ring-2 ring-brand' : 'border-border'
+      } ${eligible ? '' : 'opacity-70'}`}
     >
       <div className="flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
@@ -102,7 +129,7 @@ export function AddOnAllowanceCard({
             {title}
           </h3>
           <p id={`${id}-description`} className="mt-0.5 text-sm text-muted-foreground">
-            {description}
+            {displayedDescription}
           </p>
         </div>
       </div>
@@ -116,7 +143,7 @@ export function AddOnAllowanceCard({
             <select
               id={`${id}-offer`}
               aria-describedby={`${id}-description`}
-              className="h-10 w-full min-w-0 max-w-full truncate rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-10 w-full min-w-0 max-w-full rounded-lg border border-input bg-background px-1 text-xs text-foreground tracking-tight shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm"
               value={selectedItem.code}
               disabled={purchaseLocked}
               onChange={(event) => setSelectedCode(event.currentTarget.value as AddOnCode)}
@@ -130,7 +157,7 @@ export function AddOnAllowanceCard({
                   currency: currencyLabel,
                   period: periodLabels[item.period],
                 })
-                const label = item.period === 'year' ? `${base} · ${yearlyBadge}` : base
+                const label = base
                 return (
                   <option key={item.code} value={item.code} disabled={!item.eligible}>
                     {item.eligible ? label : `${label} — ${unavailableOptionLabel}`}

@@ -722,6 +722,10 @@ const az: DeepPartial<Dict> = {
   renewItemSuffix: 'yenilənmə',
   publishSuspended: 'Ödəniş uğursuz olduğu üçün abunəliyiniz dayandırılıb. Yayımlamaq üçün ödənişi tamamlayın.',
     addOns: {
+      websiteAllowanceDescription: 'Planınızın sayt limitinə seçilmiş növdə bir yayım hüququ əlavə edir. Əsas abunəliyinizin cari hesablaşma dövrü ərzində qüvvədədir.',
+      websiteAllowanceDescriptionYearly: 'Planınızın sayt limitinə seçilmiş növdə bir yayım hüququ əlavə edir. 12 ay qüvvədədir, avtomatik yenilənmir və ödəniş bir dəfə tutulur.',
+      emailAllowanceDescription: 'Seçilmiş sayda e-poçt hesabı əlavə edir. Tutum əsas abunəliyinizin cari hesablaşma dövrü ərzində qüvvədədir.',
+      emailAllowanceDescriptionYearly: 'Seçilmiş sayda e-poçt hesabı əlavə edir. Tutum 12 ay qüvvədədir, avtomatik yenilənmir və ödəniş bir dəfə tutulur.',
       title: 'Əlavə xidmətlər',
       subtitle: 'Paket limitlərinizin üzərinə əlavə sayt və məhsul tutumu əlavə edin.',
       summaryHint: 'Aktiv əlavə tutumunuz və paketinizdə mövcud olan əlavə xidmətlər.',

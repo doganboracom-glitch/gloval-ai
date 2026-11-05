@@ -17,6 +17,8 @@ import {
   Receipt,
 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
+import { AddOnAllowanceCards } from '@/components/billing/add-on-allowance-cards'
+import { AddOnOutcomeBanner } from '@/components/billing/add-on-outcome-banner'
 import { getInvoiceCopy } from '@/lib/invoices/copy'
 import { HistoryInvoiceActionButton } from '@/components/billing/history-invoice-action'
 import { PaymentHistoryRow } from '@/components/billing/payment-history-row'
@@ -25,6 +27,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { BrandLogo } from '@/components/brand-logo'
 import { SiteCapacityCard, CreditSummaryCard } from '@/components/billing/capacity-credits-cards'
 import type { AddOnOverview } from '@/lib/add-ons'
+import type { AddOnPurchaseOutcome } from '@/lib/addon-purchase-outcome'
 import type { PublishBanner } from '@/lib/billing-publish-banner'
 import { isFreePlanShown, resolveImplicitFreePlan, type CreditSummary, type SiteCapacity } from '@/lib/billing-summary'
 import { Button } from '@/components/ui/button'
@@ -47,6 +50,7 @@ import type {
 import { tenantHost } from '@/lib/domains'
 import { PermanentRightsSection } from '@/components/billing/permanent-rights-section'
 import {
+  ADD_ONS_ANCHOR,
   CollapsibleAddOnsSection,
   CollapsibleSection,
   HISTORY_ANCHOR,
@@ -144,6 +148,12 @@ function paymentInitErrorMessage(
 
 type Usage = { corporate: number; ecommerce: number }
 
+const PROJECT_RIGHT_ADDON_CODES = new Set<string>([
+  BRANDING_REMOVAL_CODE,
+  AURA_CURSOR_CODE,
+  MULTILANG_CODE,
+])
+
 /** Minimal site shape needed to pick a target for a per-site purchase. */
 export type BillingProject = {
   id: string
@@ -176,6 +186,7 @@ export function BillingClient({
   publishBanner = null,
   freeChosenToken = null,
   initialTopUpId = null,
+  addOnOutcome = null,
 }: {
   plans: PlanRow[]
   subscription: SubscriptionRow | null
@@ -208,6 +219,8 @@ export function BillingClient({
   freeChosenToken?: string | null
   /** Pack chosen in the out-of-credits modal; opens its checkout on arrival. */
   initialTopUpId?: string | null
+  /** Callback-verified result of the latest capacity add-on purchase. */
+  addOnOutcome?: AddOnPurchaseOutcome | null
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -886,13 +899,10 @@ export function BillingClient({
     )
   }
 
-  // Katalogda kalan abonelik dışı eklentiler (ör. tek seferlik marka kaldırma).
-  const addonPlans = useMemo(
+  const oneTimeRightPlans = useMemo(
     () =>
       visiblePlans.filter(
-        (p) =>
-          (p.product_category ?? 'corporate') === 'addon' ||
-          p.code === BRANDING_REMOVAL_CODE,
+        (plan) => plan.interval === 'once' && PROJECT_RIGHT_ADDON_CODES.has(plan.code),
       ),
     [visiblePlans],
   )
@@ -1249,69 +1259,93 @@ export function BillingClient({
           </div>
         </section>
 
-        {/* Abonelik dışı eklentiler (tek seferlik marka kaldırma) korunur. */}
-        {addonPlans.length > 0 && (
+        {/* Capacity packages and the remaining one-time project rights. */}
+        {(addOns || oneTimeRightPlans.length > 0 || addOnOutcome) && (
           <CollapsibleAddOnsSection
             title={b.catAddonMore}
-            summary={b.catAddonCount.replace('{n}', String(addonPlans.length))}
+            summary={b.catAddonCount.replace(
+              '{n}',
+              String(oneTimeRightPlans.length + (addOns ? 3 : 0)),
+            )}
             forceOpen={publishProjectId !== null}
           >
-            <div className="grid gap-4 sm:grid-cols-2">
-              {addonPlans.map((p) => {
-                const busy = busyPlanId === p.id && (isPending || previewing)
-                return (
-                  <div
-                    key={p.id}
-                    id={addonCardId(p.code)}
-                    data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
-                    className={`relative flex scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-6 transition-[color,box-shadow,border-color] hover:border-primary/50 ${
-                      highlightedAddonCode === p.code
-                        ? 'border-brand ring-2 ring-brand'
-                        : 'border-border'
-                    }`}
-                  >
-                    <h3 className="font-display text-xl font-bold">{p.name}</h3>
-                    <div className="mt-2 flex items-baseline gap-1">
-                      <span className="font-display text-3xl font-bold">
-                        {formatMoney(p.price_cents, p.currency)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        {intervalLabel(p)}
-                      </span>
-                    </div>
-                    {p.description && (
-                      <p className="mt-3 text-sm text-muted-foreground">{p.description}</p>
-                    )}
-                    <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm">
-                      {p.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <Check className="mt-0.5 size-4 shrink-0 text-accent" />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-6">
-                      {projects.length === 0 ? (
-                        <Button variant="outline" className="w-full" disabled>
-                          {b.noSites}
-                        </Button>
-                      ) : eligibleProjectsFor(p.code).length === 0 ? (
-                        <Button variant="outline" className="w-full" disabled>
-                          {b.owned}
-                        </Button>
-                      ) : (
-                        <Button
-                          className="w-full"
-                          disabled={busy}
-                          onClick={() => openSitePicker(p)}
-                        >
-                          {busy ? <Loader2 className="size-4 animate-spin" /> : b.buy}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="flex flex-col gap-4">
+              {addOnOutcome ? (
+                <AddOnOutcomeBanner
+                  outcome={addOnOutcome}
+                  overview={addOns}
+                  onRefresh={() => router.refresh()}
+                  onDismiss={() => router.replace(`/billing#${ADD_ONS_ANCHOR}`)}
+                />
+              ) : null}
+              {addOns ? (
+                <AddOnAllowanceCards
+                  overview={addOns}
+                  planInterval={currentPlan?.interval === 'year' ? 'year' : 'month'}
+                  userEmail={userEmail}
+                  profileComplete={billingProfileComplete}
+                  highlightedCode={highlightedAddonCode}
+                />
+              ) : null}
+              {oneTimeRightPlans.length > 0 ? (
+                <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {oneTimeRightPlans.map((p) => {
+                    const busy = busyPlanId === p.id && (isPending || previewing)
+                    return (
+                      <div
+                        key={p.id}
+                        id={addonCardId(p.code)}
+                        data-highlighted={highlightedAddonCode === p.code ? 'true' : undefined}
+                        className={`relative flex h-full scroll-mt-24 flex-col rounded-2xl border bg-card/70 p-3 transition-[color,box-shadow,border-color] hover:border-primary/50 sm:p-5 ${
+                          highlightedAddonCode === p.code
+                            ? 'border-brand ring-2 ring-brand'
+                            : 'border-border'
+                        }`}
+                      >
+                        <h3 className="font-display text-xl font-bold">{p.name}</h3>
+                        <div className="mt-2 flex items-baseline gap-1">
+                          <span className="font-display text-3xl font-bold">
+                            {formatMoney(p.price_cents, p.currency)}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {intervalLabel(p)}
+                          </span>
+                        </div>
+                        {p.description ? (
+                          <p className="mt-3 text-sm text-muted-foreground">{p.description}</p>
+                        ) : null}
+                        <ul className="mt-4 flex flex-1 flex-col gap-2 text-sm">
+                          {p.features.map((feature) => (
+                            <li key={feature} className="flex items-start gap-2">
+                              <Check className="mt-0.5 size-4 shrink-0 text-accent" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mt-6">
+                          {projects.length === 0 ? (
+                            <Button variant="outline" className="w-full" disabled>
+                              {b.noSites}
+                            </Button>
+                          ) : eligibleProjectsFor(p.code).length === 0 ? (
+                            <Button variant="outline" className="w-full" disabled>
+                              {b.owned}
+                            </Button>
+                          ) : (
+                            <Button
+                              className="w-full"
+                              disabled={busy}
+                              onClick={() => openSitePicker(p)}
+                            >
+                              {busy ? <Loader2 className="size-4 animate-spin" /> : b.buy}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
             </div>
           </CollapsibleAddOnsSection>
         )}

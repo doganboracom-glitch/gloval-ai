@@ -81,7 +81,7 @@ export function SiteCapacityCard({ capacity }: { capacity: SiteCapacity | null }
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-sm font-medium text-muted-foreground">{c.siteTitle}</h2>
         <Link
-          href="/billing/add-ons"
+          href="/billing#ek-paketler"
           className="rounded-lg border border-border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted"
         >
           {c.manage}

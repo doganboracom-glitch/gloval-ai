@@ -751,6 +751,10 @@ const de: DeepPartial<Dict> = {
   renewItemSuffix: 'Verlängerung',
   publishSuspended: 'Ihr Abonnement ist ausgesetzt, weil eine Zahlung fehlgeschlagen ist. Schließen Sie die Zahlung ab, um zu veröffentlichen.',
     addOns: {
+      websiteAllowanceDescription: 'Fügt Ihrem Website-Limit ein Veröffentlichungsrecht des gewählten Typs hinzu. Es gilt während des Abrechnungszeitraums Ihres Hauptabonnements.',
+      websiteAllowanceDescriptionYearly: 'Fügt Ihrem Website-Limit ein Veröffentlichungsrecht des gewählten Typs hinzu. Es gilt 12 Monate, verlängert sich nicht automatisch und wird einmalig berechnet.',
+      emailAllowanceDescription: 'Fügt die ausgewählte Anzahl an E-Mail-Konten hinzu. Das Kontingent gilt während des Abrechnungszeitraums Ihres Hauptabonnements.',
+      emailAllowanceDescriptionYearly: 'Fügt die ausgewählte Anzahl an E-Mail-Konten hinzu. Das Kontingent gilt 12 Monate, verlängert sich nicht automatisch und wird einmalig berechnet.',
       title: 'Zusatzleistungen',
       subtitle: 'Fügen Sie zusätzlich zu Ihren Paketlimits weitere Website- und Produktkapazität hinzu.',
       summaryHint: 'Ihre aktive Zusatzkapazität und die in Ihrem Paket verfügbaren Zusatzleistungen.',

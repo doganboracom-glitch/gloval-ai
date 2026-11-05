@@ -722,6 +722,10 @@ const et: DeepPartial<Dict> = {
   renewItemSuffix: 'pikendamine',
   publishSuspended: 'Teie tellimus on peatatud, kuna makse ebaõnnestus. Avaldamiseks lõpetage makse.',
     addOns: {
+      websiteAllowanceDescription: 'Lisab sinu plaani saidipiirangule ühe valitud tüüpi avaldamisõiguse. See kehtib sinu põhitellimuse praeguse arveldusperioodi lõpuni.',
+      websiteAllowanceDescriptionYearly: 'Lisab sinu plaani saidipiirangule ühe valitud tüüpi avaldamisõiguse. See kehtib 12 kuud, ei uuene automaatselt ja selle eest tasutakse üks kord.',
+      emailAllowanceDescription: 'Lisab valitud arvu e-posti kontosid. Maht kehtib sinu põhitellimuse praeguse arveldusperioodi lõpuni.',
+      emailAllowanceDescriptionYearly: 'Lisab valitud arvu e-posti kontosid. Maht kehtib 12 kuud, ei uuene automaatselt ja selle eest tasutakse üks kord.',
       title: 'Lisateenused',
       subtitle: 'Lisa oma paketi piirangutele juurde täiendav saitide ja toodete maht.',
       summaryHint: 'Sinu aktiivne lisamaht ja sinu paketis saadaolevad lisateenused.',

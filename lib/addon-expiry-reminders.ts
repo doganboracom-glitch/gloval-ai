@@ -14,7 +14,7 @@ import { resolveEmailLang } from '@/lib/email/lang'
 import { claimNotification, releaseNotificationClaim, sendTransactionalEmailDetailed } from '@/lib/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const RENEW_URL = 'https://gloval.ai/billing/add-ons'
+const RENEW_URL = 'https://gloval.ai/billing#ek-paketler'
 const SWEEP_LIMIT = 500
 
 export type AddOnReminderSweepResult = { scanned: number; sent: number; skipped: number; failed: number }

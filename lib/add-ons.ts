@@ -394,7 +394,7 @@ export type AddOnCatalogItem = {
 }
 
 /**
- * /billing ve /billing/add-ons ekranlarının tükettiği, istemciye güvenle
+ * /billing ekranının tükettiği, istemciye güvenle
  * serileştirilebilen özet. Uygunluk ve kapasite yalnızca sunucuda hesaplanır;
  * istemci bu değerleri değiştirmez, yalnızca gösterir.
  */
