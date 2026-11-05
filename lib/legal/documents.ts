@@ -1352,7 +1352,7 @@ const delivery: LegalDoc = {
         heading: '4. Yayınlama ve Alan Adı Bağlama',
         blocks: [
           p(
-            'Sitenizi tek tıkla yayınlayabilirsiniz. Yayınlanan siteniz varsayılan olarak bir alt alan adında erişilebilir; dilerseniz kendi özel alan adınızı bağlayabilirsiniz. Alan adı doğrulama/DNS s��reçleri sağlayıcıya bağlı olarak zaman alabilir.',
+            'Sitenizi tek tıkla yayınlayabilirsiniz. Yayınlanan siteniz varsayılan olarak bir alt alan adında erişilebilir; dilerseniz kendi özel alan adınızı bağlayabilirsiniz. Alan adı doğrulama/DNS süreçleri sağlayıcıya bağlı olarak zaman alabilir.',
           ),
         ],
       },

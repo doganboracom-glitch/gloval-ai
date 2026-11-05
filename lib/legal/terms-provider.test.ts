@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-type Block = { type: 'p'; text: string } | { type: 'list'; items: string[] }
+type Block =
+  | { type: 'p'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'link'; href: string; label: string; external?: boolean }
 type Section = { heading: string; blocks: Block[] }
 
 async function load(phone = '') {
@@ -12,7 +15,7 @@ async function load(phone = '') {
 }
 
 function flatten(section: Section): string[] {
-  return section.blocks.flatMap((b) => (b.type === 'p' ? [b.text] : b.items))
+  return section.blocks.flatMap((b) => (b.type === 'p' ? [b.text] : b.type === 'list' ? b.items : [b.label]))
 }
 
 afterEach(() => {
