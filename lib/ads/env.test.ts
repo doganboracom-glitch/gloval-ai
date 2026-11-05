@@ -6,6 +6,7 @@ import {
   resolveGoogleAdsOAuthSettings,
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsReadDailyLimits,
+  resolveGoogleAdsValidateOnlyTestEnabled,
 } from '@/lib/ads/env'
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
@@ -103,6 +104,12 @@ describe('Google Ads access configuration', () => {
       GOOGLE_ADS_PUBLISH_ENABLED: '1',
       GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS: ` ${OTHER_USER_ID}, ${USER_ID.toUpperCase()} `,
     })).toBe(true)
+  })
+
+  it('keeps the separate validate-only test gate closed unless the strict environment flag is set', () => {
+    expect(resolveGoogleAdsValidateOnlyTestEnabled({})).toBe(false)
+    expect(resolveGoogleAdsValidateOnlyTestEnabled({ GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED: 'true' })).toBe(false)
+    expect(resolveGoogleAdsValidateOnlyTestEnabled({ GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED: '1' })).toBe(true)
   })
 
   it('resolves OAuth without any developer-token setting', () => {

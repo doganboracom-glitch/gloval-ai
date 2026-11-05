@@ -27,6 +27,7 @@ export const ADS_ENV = {
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
   googleAdsPublishDailyBudgetCapsMinor: 'GOOGLE_ADS_PUBLISH_DAILY_BUDGET_CAPS_MINOR',
+  googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
 } as const
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -133,6 +134,11 @@ export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = 
       .filter((value) => UUID_PATTERN.test(value)),
   )
   return allowedUserIds.has(normalizedUserId)
+}
+
+/** Separate, fail-closed gate for the admin-only Google Ads validate_only test route. */
+export function resolveGoogleAdsValidateOnlyTestEnabled(env: Env = process.env): boolean {
+  return env[ADS_ENV.googleAdsValidateOnlyTestEnabled]?.trim() === '1'
 }
 
 /** Fail closed until an explicit per-currency daily budget cap is configured. */

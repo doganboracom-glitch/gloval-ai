@@ -99,6 +99,8 @@ export type AdsCampaignPublishInput = {
   /** Persisted, validated plan JSON; provider code builds every mutate body from it. */
   planJson: unknown
   validateOnly: boolean
+  /** Allows the dedicated server-side admin test route to bypass the live-publish gate, only with validateOnly=true. */
+  validationTestMode?: boolean
   userConfirmed: boolean
 }
 

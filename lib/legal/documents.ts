@@ -56,7 +56,7 @@ const link = (href: string, label: string, external = false): LegalBlock => ({
 
 const privacy: LegalDoc = {
   slug: 'gizlilik-politikasi',
-  lastUpdated: '2026-10-31',
+  lastUpdated: '2026-11-05',
   tr: {
     title: 'Gizlilik Politikası',
     description:
@@ -135,13 +135,13 @@ const privacy: LegalDoc = {
         id: 'google-ads-verileri',
         blocks: [
           p(
-            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Uygulama şu anda yalnızca erişilebilir müşteri hesaplarını listeleyen ve performans raporlarını okuyan Google Ads API çağrıları yapar; kampanya oluşturma, düzenleme veya yayımlama işlemi yapmaz.',
+            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Bağlı hesabınızda yalnızca planı onaylamanız ve yayın öncesi ayrı onay vermeniz hâlinde, onaylanan kampanya planı Google Ads API’ye gönderilir ve kampanya duraklatılmış (PAUSED) durumda oluşturulur; ayrıca etkinleştirilmedikçe reklam yayınlanmaz. validate_only doğrulaması Google Ads isteğini sınar ve hesapta kampanya oluşturmaz.',
           ),
           p(
             'Hesap seçimi sırasında erişilebilir müşteri hesaplarının kimliği, adı, para birimi ve yönetici/alt hesap ilişkisi okunabilir. Seçtiğiniz müşteri hesabı için son 7 veya 30 güne ait raporda en fazla 100 kampanyanın adı ve durumu ile gösterim, tıklama, harcama ve dönüşüm ölçümleri alınır.',
           ),
           p(
-            'Performans raporları istek sırasında Google Ads API’den alınır ve bağlı kullanıcının panelinde gösterilmek üzere iletilir; uygulamanın veritabanında kalıcı olarak saklanmaz.',
+            'Yayınlama için seçtiğiniz planın kampanya adı, reklam başlıkları ve açıklamaları, anahtar kelimeler/negatif anahtar kelimeler, hedefleme, son URL, günlük bütçe ve teklif sınırı Google Ads hesabınıza gönderilir. Kampanya planı, onay sürümü/zamanı, Google müşteri/kampanya kimliği ve durum bilgileri yayınlama ve kampanya yönetimi için GLOVAL AI veritabanında saklanır; performans raporları ise istek üzerine alınır ve kalıcı olarak saklanmaz.',
           ),
           p(
             'Bu akışta Google OAuth ve Google Ads API (izin ve veri sorguları), Vercel (uygulama barındırma ve çalıştırma) ve Supabase (kimlik doğrulama ve veritabanı) kullanılır. Bağlantı ve hesap metaverileri ile Google yenileme tokenı Supabase’te saklanır; yenileme tokenı AES-256-GCM ile şifrelenir, istemciye gönderilmez ve uygulama günlüklerine yazılmaz.',
@@ -164,7 +164,7 @@ const privacy: LegalDoc = {
             true,
           ),
           p(
-            'Google Ads bağlantısını panelden kestiğinizde erişim tokenı iptal edilir. Google hesabınızdaki uygulama izinlerini dilediğiniz zaman ayrıca kaldırabilirsiniz. Hesabınızı sildiğinizde bekleyen Google tokenları iptal edilir ve bağlantı kayıtları silinir; kimliklerle ilişkilendirilmiş olmayan işlem metaverisi 25 saate kadar tutulabilir.',
+            'Google Ads bağlantısını panelden kestiğinizde erişim tokenı iptal edilir. Bu işlem Google Ads hesabınızdaki kampanyaları duraklatmaz veya silmez; etkin bir kampanyayı Google Ads’te ya da bağlantı hâlâ kullanılabiliyorken GLOVAL panelinde ayrıca duraklatmanız gerekir. GLOVAL hesabını kapatmak veya bağlantıyı kesmek Google’ın reklam harcaması tahsilatını durdurmaz. Google hesabınızdaki uygulama izinlerini dilediğiniz zaman ayrıca kaldırabilirsiniz. Hesabınızı sildiğinizde bekleyen Google tokenları iptal edilir ve bağlantı kayıtları silinir; kimliklerle ilişkilendirilmiş olmayan işlem metaverisi 25 saate kadar tutulabilir.',
           ),
           link(
             'https://myaccount.google.com/permissions',
@@ -631,9 +631,10 @@ const cookies: LegalDoc = {
 /* Kullanım Koşulları — Terms of Use                                           */
 /* -------------------------------------------------------------------------- */
 
-const terms: LegalDoc = {
-  slug: 'kullanim-kosullari',
-  tr: {
+  const terms: LegalDoc = {
+    slug: 'kullanim-kosullari',
+    lastUpdated: '2026-11-05',
+    tr: {
     title: 'Kullanım Koşulları',
     description:
       'GLOVAL AI hizmetlerini kullanırken geçerli olan koşullar; hesap, içerik, limitler, ödeme ve sorumluluklar.',
