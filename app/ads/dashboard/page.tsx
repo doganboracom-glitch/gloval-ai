@@ -19,6 +19,7 @@ type SearchParams = Promise<{
   url?: string | string[]
   google?: string | string[]
   google_flow?: string | string[]
+  plan?: string | string[]
 }>
 
 function firstValue(value: string | string[] | undefined): string | null {
@@ -39,11 +40,14 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
   const rawAddress = firstValue(params.url)
   const normalized = rawAddress ? normalizeSiteAddress(rawAddress) : null
   const address = normalized?.ok ? normalized.host : null
+  const rawPlanId = firstValue(params.plan)
+  const initialPlanId = rawPlanId && /^[0-9a-f-]{36}$/i.test(rawPlanId) ? rawPlanId : null
   const connections = await listGoogleAdsConnectionsForUser(user.id).catch(() => [])
 
   return (
     <AdsDashboardClient
       address={address}
+      initialPlanId={initialPlanId}
       connections={connections}
       pendingFlowId={firstValue(params.google_flow)}
       googleStatus={firstValue(params.google)}
