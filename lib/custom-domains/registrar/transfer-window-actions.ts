@@ -96,6 +96,11 @@ function providerCodeFromError(error: unknown): string | undefined {
   return error.message.match(/^[A-Za-z0-9_:]{1,80}/)?.[0]
 }
 
+function safeErrorName(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined
+  return /^[A-Za-z0-9_]{1,40}$/.test(error.name) ? error.name : undefined
+}
+
 function shapeProviderDate(value: string | null | undefined): string | undefined {
   if (!value) return undefined
   return Array.from(value)
@@ -225,51 +230,20 @@ async function fetchWindowCode(
   }
   if (!isTransferCapable(registrar)) return { ok: false, error: 'NOT_CONFIGURED' }
 
+  // Only the provider call may fail the code request. Once a code is in hand,
+  // nothing else (audit, notice email, summary) is allowed to take it away.
+  let authCode: string | null
+  let fetchError: unknown = null
   try {
-    const authCode = await registrar.getAuthCode(window.domain)
-    if (!authCode) {
-      await recordDomainAuditEvent({
-        userId,
-        customDomainId: window.custom_domain_id,
-        domain: window.domain,
-        eventType: 'transfer_code_viewed',
-        details: {
-          outcome: 'failed',
-          stage: 'code_fetch',
-          ...eligibilityAudit,
-        },
-      })
-      await relockAfterFailedCode(registrar, admin, window, userId, 'auth_code_unavailable')
-      return { ok: false, error: 'PROVIDER_ERROR' }
-    }
-
-    await recordDomainAuditEvent({
-      userId,
-      customDomainId: window.custom_domain_id,
-      domain: window.domain,
-      eventType: 'transfer_code_viewed',
-      details: {
-        outcome: 'success',
-        stage: 'code_fetch',
-        ...eligibilityAudit,
-      },
-    })
-
-    if (created) {
-      await sendTransferWindowNotice({
-        kind: 'opened',
-        email,
-        lang,
-        domain: window.domain,
-        customDomainId: window.custom_domain_id ?? '',
-        windowId: window.id,
-        relockAt: window.relock_at,
-      })
-    }
-
-    return { ok: true, authCode, window: toSummary(window), created }
+    authCode = await registrar.getAuthCode(window.domain)
   } catch (error) {
-    const providerCode = providerCodeFromError(error)
+    authCode = null
+    fetchError = error
+  }
+
+  if (!authCode) {
+    const providerCode = providerCodeFromError(fetchError)
+    const errorName = safeErrorName(fetchError)
     await recordDomainAuditEvent({
       userId,
       customDomainId: window.custom_domain_id,
@@ -279,12 +253,59 @@ async function fetchWindowCode(
         outcome: 'failed',
         stage: 'code_fetch',
         ...(providerCode ? { providerCode } : {}),
+        ...(errorName ? { errorName } : {}),
         ...eligibilityAudit,
       },
     })
-    await relockAfterFailedCode(registrar, admin, window, userId, 'auth_code_unavailable')
+    try {
+      await relockAfterFailedCode(registrar, admin, window, userId, 'auth_code_unavailable')
+    } catch {
+      console.error('[transfer-window] relock after failed code crashed')
+    }
     return { ok: false, error: 'PROVIDER_ERROR' }
   }
+
+  await recordDomainAuditEvent({
+    userId,
+    customDomainId: window.custom_domain_id,
+    domain: window.domain,
+    eventType: 'transfer_code_viewed',
+    details: {
+      outcome: 'success',
+      stage: 'code_fetch',
+      ...eligibilityAudit,
+    },
+  })
+
+  if (created) {
+    try {
+      await sendTransferWindowNotice({
+        kind: 'opened',
+        email,
+        lang,
+        domain: window.domain,
+        customDomainId: window.custom_domain_id ?? '',
+        windowId: window.id,
+        relockAt: window.relock_at,
+      })
+    } catch (error) {
+      const errorName = safeErrorName(error)
+      await recordDomainAuditEvent({
+        userId,
+        customDomainId: window.custom_domain_id,
+        domain: window.domain,
+        eventType: 'transfer_lock_changed',
+        details: {
+          outcome: 'failed',
+          stage: 'notice',
+          source: 'user_code_request',
+          ...(errorName ? { errorName } : {}),
+        },
+      })
+    }
+  }
+
+  return { ok: true, authCode, window: toSummary(window), created }
 }
 
 export type TransferWindowCodeResult =
