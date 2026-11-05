@@ -1,9 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useId, useState, useTransition } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { ArrowRightLeft, Check, Copy, Loader2, ShieldAlert } from 'lucide-react'
+import { ArrowRightLeft, Check, Copy, EyeOff, Loader2, ShieldAlert } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,20 @@ import {
 import type { Dict } from '@/lib/i18n'
 
 const CODE_VISIBLE_MS = 60_000
+const STATUS_POLL_MS = 10_000
+/** How long we keep waiting for the registry to apply the unlock before showing the plain "locked" state. */
+const UNLOCK_WAIT_MS = 180_000
+
+/**
+ * Polls every 10 s only while a window is open but the registry still reads
+ * "locked" (unlock pending), and stops once the 3-minute wait is over.
+ */
+function statusRefreshInterval(latest: TransferOutStatus | undefined): number {
+  if (!latest?.ok || !latest.supported || !latest.featureEnabled) return 0
+  if (!latest.activeWindow || latest.locked !== true) return 0
+  const elapsed = Date.now() - Date.parse(latest.activeWindow.openedAt)
+  return elapsed < UNLOCK_WAIT_MS ? STATUS_POLL_MS : 0
+}
 
 type TransferOutPanelActions = {
   getStatus: typeof getMyTransferOutStatus
@@ -106,7 +120,10 @@ function TransferCodeCard({
   copiedLabel,
   note,
   autoHide,
+  countdown,
+  hideLabel,
   onCopy,
+  onHide,
 }: {
   code: string
   copied: boolean
@@ -114,19 +131,31 @@ function TransferCodeCard({
   copiedLabel: string
   note: string
   autoHide: string
+  countdown: string
+  hideLabel: string
   onCopy: () => void
+  onHide: () => void
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-border bg-background/60 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <code className="min-w-0 break-all font-mono text-sm">{code}</code>
-        <Button type="button" variant="ghost" size="sm" onClick={onCopy}>
-          {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-          {copied ? copiedLabel : copyLabel}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={onCopy}>
+            {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+            {copied ? copiedLabel : copyLabel}
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onHide}>
+            <EyeOff data-icon="inline-start" />
+            {hideLabel}
+          </Button>
+        </div>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">{note}</p>
       <p className="text-xs leading-relaxed text-muted-foreground">{autoHide}</p>
+      <p data-testid="transfer-code-countdown" className="text-xs font-medium tabular-nums text-foreground">
+        {countdown}
+      </p>
     </div>
   )
 }
@@ -228,34 +257,51 @@ export function TransferOutPanel({
   const dateRiskCheckboxId = useId()
   const [now, setNow] = useState(() => Date.now())
   const [isPending, startTransition] = useTransition()
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null)
+  const [codeSecondsLeft, setCodeSecondsLeft] = useState(CODE_VISIBLE_MS / 1000)
   const statusKey = ['registrar-transfer-out', domain] as const
-  const { data: status, error: statusError, isLoading, mutate } = useSWR(statusKey, () => actions.getStatus(domain))
+  const {
+    data: status,
+    error: statusError,
+    isLoading,
+    mutate,
+  } = useSWR(statusKey, () => actions.getStatus(domain), { refreshInterval: statusRefreshInterval })
 
   const clearCode = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    hideTimer.current = null
     setCode(null)
     setCopied(false)
+    setCodeExpiresAt(null)
   }, [])
 
   const relockAt = status?.ok && status.supported && status.activeWindow ? status.activeWindow.relockAt : null
 
   useEffect(() => {
     if (!relockAt) return
-    const interval = setInterval(() => setNow(Date.now()), 30_000)
+    const interval = setInterval(() => setNow(Date.now()), 10_000)
     return () => clearInterval(interval)
   }, [relockAt])
 
   useEffect(() => {
-    return () => {
-      if (hideTimer.current) clearTimeout(hideTimer.current)
-    }
-  }, [])
+    if (codeExpiresAt === null) return
+    const interval = setInterval(() => {
+      const secondsLeft = Math.ceil((codeExpiresAt - Date.now()) / 1000)
+      if (secondsLeft <= 0) clearCode()
+      else setCodeSecondsLeft(secondsLeft)
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [codeExpiresAt, clearCode])
 
+  // The raw lock flag is deliberately ignored here: the registry may apply the
+  // unlock late, so "still locked" must not hide a code that was just issued.
   useEffect(() => {
     if (!status?.ok || !status.supported || !status.featureEnabled) return
-    if (status.locked !== false || status.transferState !== 'held' || !status.activeWindow) clearCode()
+    if (
+      !status.activeWindow ||
+      status.transferState === 'pending_outgoing' ||
+      status.transferState === 'transferred_out'
+    ) {
+      clearCode()
+    }
   }, [status, clearCode])
 
   useEffect(() => {
@@ -310,8 +356,9 @@ export function TransferOutPanel({
         }
         setCode(result.authCode)
         setCopied(false)
-        if (hideTimer.current) clearTimeout(hideTimer.current)
-        hideTimer.current = setTimeout(clearCode, CODE_VISIBLE_MS)
+        setCodeSecondsLeft(CODE_VISIBLE_MS / 1000)
+        setCodeExpiresAt(Date.now() + CODE_VISIBLE_MS)
+        setNow(Date.now())
         void mutate()
       } catch {
         setError(d.outErr)
@@ -430,15 +477,23 @@ export function TransferOutPanel({
   const canLockNow = liveVerified && status.locked === false
   const legacyBlocked = status.locked !== false || Boolean(status.restrictedUntil)
 
+  const unlockPending =
+    Boolean(activeWindow) &&
+    !windowExpired &&
+    status.locked === true &&
+    status.transferState === 'held' &&
+    now - Date.parse(activeWindow?.openedAt ?? '') < UNLOCK_WAIT_MS
+  const windowRemainingLabel = fill(statusCopy.statusActive, {
+    time: formatRemainingTime(windowRemainingMs, statusCopy),
+  })
+
   let statusLabel = statusCopy.statusUnverified
   if (liveVerified) {
     if (status.transferState === 'pending_outgoing') statusLabel = statusCopy.statusPending
+    else if (unlockPending) statusLabel = statusCopy.statusUnlocking
     else if (status.locked === true) statusLabel = statusCopy.statusLocked
-    else if (status.locked === false && activeWindow) {
-      statusLabel = fill(statusCopy.statusActive, {
-        time: formatRemainingTime(windowRemainingMs, statusCopy),
-      })
-    } else if (status.locked === false) statusLabel = statusCopy.statusUnlocked
+    else if (status.locked === false && activeWindow) statusLabel = statusCopy.statusUnlockedStart
+    else if (status.locked === false) statusLabel = statusCopy.statusUnlocked
   }
 
   const restrictedDate = status.restrictedUntil
@@ -481,7 +536,10 @@ export function TransferOutPanel({
               copiedLabel={d.outCopied}
               note={d.outCodeNote}
               autoHide={d.outCodeAutoHide}
+              countdown={fill(statusCopy.codeCountdown, { seconds: String(codeSecondsLeft) })}
+              hideLabel={statusCopy.hideCode}
               onCopy={copyCodeHandler}
+              onHide={clearCode}
             />
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -492,6 +550,9 @@ export function TransferOutPanel({
           <p role="status" aria-live="polite" className="text-sm font-medium text-foreground">
             {statusLabel}
           </p>
+          {liveVerified && status.locked === false && activeWindow && status.transferState !== 'pending_outgoing' && (
+            <p className="text-sm text-muted-foreground">{windowRemainingLabel}</p>
+          )}
           {!status.liveStatusReadable && <p className="text-sm text-muted-foreground">{statusCopy.statusUnverified}</p>}
           {!status.windowAvailable && (
             <p role="status" className="rounded-lg border border-border bg-background/50 p-3 text-sm text-muted-foreground">
@@ -527,7 +588,7 @@ export function TransferOutPanel({
 
           {status.transferState === 'pending_outgoing' && activeWindow && (
             <p className="text-sm text-muted-foreground" aria-live="polite">
-              {fill(statusCopy.statusActive, { time: formatRemainingTime(windowRemainingMs, statusCopy) })}
+              {windowRemainingLabel}
             </p>
           )}
           <p className="text-pretty text-xs leading-relaxed text-muted-foreground">{d.outFeeNote}</p>
@@ -585,7 +646,10 @@ export function TransferOutPanel({
               copiedLabel={d.outCopied}
               note={d.outCodeNote}
               autoHide={d.outCodeAutoHide}
+              countdown={fill(statusCopy.codeCountdown, { seconds: String(codeSecondsLeft) })}
+              hideLabel={statusCopy.hideCode}
               onCopy={copyCodeHandler}
+              onHide={clearCode}
             />
           )}
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
