@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { BrandLogo } from '@/components/brand-logo'
 import { getBillingProfileCopy } from '@/lib/billing-profile-copy'
 import { ReferralPartnerCard } from '@/components/settings/referral-partner-card'
-import type { ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import type { ReferralDashboardData, ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -22,6 +22,7 @@ export function SettingsClient({
   fullName,
   referralEnabled = false,
   referralPartner = null,
+  referralDashboardData = null,
   payoutsEnabled = false,
   cashPayoutsEnabled = false,
   referralPayoutData = null,
@@ -30,6 +31,7 @@ export function SettingsClient({
   fullName: string
   referralEnabled?: boolean
   referralPartner?: ReferralPartnerSettings | null
+  referralDashboardData?: ReferralDashboardData | null
   payoutsEnabled?: boolean
   cashPayoutsEnabled?: boolean
   referralPayoutData?: ReferralPayoutPanelData | null
@@ -227,6 +229,7 @@ export function SettingsClient({
         <ReferralPartnerCard
           enabled={referralEnabled}
           partner={referralPartner}
+          dashboardData={referralDashboardData}
           payoutsEnabled={payoutsEnabled}
           cashPayoutsEnabled={cashPayoutsEnabled}
           payoutData={referralPayoutData}
