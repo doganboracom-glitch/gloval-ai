@@ -69,7 +69,7 @@ describe('Gizlilik Politikası — Veri Sorumlusu bloğu', () => {
   it('Google Ads bölümünü iki dilde, Limited Use beyanı ve bağlantılarıyla ekler', async () => {
     const { docs } = await load()
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
-    expect(privacy.lastUpdated).toBe('2026-10-31')
+    expect(privacy.lastUpdated).toBe('2026-11-05')
     expect(docs.getLegalDoc('kvkk')?.lastUpdated).toBeUndefined()
 
     const limitedUseStatements = {

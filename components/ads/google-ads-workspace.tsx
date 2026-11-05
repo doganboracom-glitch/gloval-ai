@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import useSWR from 'swr'
 import { AlertCircle, Check, RefreshCw, Save, ShieldCheck } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
@@ -19,6 +20,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldLegend 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
+import { GoogleAdsPublishReview } from '@/components/ads/google-ads-publish-review'
 import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
@@ -135,6 +137,10 @@ function splitLines(value: string): string[] {
   return value.split('\n').map((item) => item.trim()).filter(Boolean)
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
 function currencyDigits(currency: string): number {
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2
@@ -153,6 +159,16 @@ function majorToMinor(value: string, currency: string): number | null {
 function minorToMajor(value: number | null | undefined, currency: string): string {
   if (!Number.isSafeInteger(value) || (value ?? 0) <= 0) return ''
   return ((value as number) / 10 ** currencyDigits(currency)).toFixed(currencyDigits(currency))
+}
+
+function formatCurrencyAmount(value: number | null | undefined, currency: string, isTr: boolean): string {
+  const amount = minorToMajor(value, currency)
+  if (!amount) return '—'
+  try {
+    return new Intl.NumberFormat(isTr ? 'tr-TR' : 'en-US', { style: 'currency', currency }).format(Number(amount))
+  } catch {
+    return `${currency} ${amount}`
+  }
 }
 
 function microsToMajor(value: string | undefined, currency: string): string {
@@ -248,33 +264,59 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-    budget_limit_exceeded: 'Günlük toplam bütçe üst sınırı aşılıyor.',
+    budget_limit_exceeded: 'Bu plan, kullanıcı için ayarlı toplam günlük bütçe sınırını aşacak.',
     budget_limit_not_configured: 'Bu para birimi için günlük üst sınır yapılandırılmamış.',
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
-    confirmation_required: 'Devam etmek için tüm onayları açıkça işaretleyin.',
+    confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
     eu_political_declaration_required: 'AB siyasi reklam beyanı onayı gerekiyor.',
     ad_disapproved: 'Reklam Google tarafından reddedildi; etkinleştirilemez.',
     ad_review_in_progress: 'Reklam incelemesi tamamlanmadan etkinleştirilemez.',
     ad_review_status_unavailable: 'Reklam inceleme durumu doğrulanamadı.',
     reauth_required: 'Google Ads bağlantısı yeniden yetkilendirilmeli.',
+    not_authorized: 'Google Ads hesabı bu isteğe izin vermedi. Bağlantı ve hesap yetkilerini kontrol edin.',
+    connection_not_found: 'Seçili Google Ads hesabı bulunamadı. Hesabı yeniden bağlayıp seçin.',
+    manager_account: 'Yayınlama için yönetici hesabı değil, müşteri hesabı seçilmelidir.',
+    connection_busy: 'Google Ads hesabında başka bir API işlemi sürüyor. Biraz sonra tekrar deneyin.',
     publish_in_progress: 'Bu kampanya için başka bir işlem devam ediyor.',
+    provider_error: 'Google Ads isteği tamamlanamadı. Kampanya bilgilerini ve hesabı kontrol edin.',
+    provider_unavailable: 'Google Ads yanıtı doğrulanamadı. Kampanya oluşmuş olabilir; tekrar yayınlamayın, yönetici incelemesini bekleyin.',
+    api_quota_exceeded: 'Google Ads API kotasına ulaşıldı. Bir süre bekleyip tekrar deneyin.',
+    quota_check_failed: 'API kotası doğrulanamadı; güvenlik için Google Ads isteği gönderilmedi.',
+    configuration_missing: 'Google Ads yayınlama yapılandırması eksik. Yöneticiye bildirim gönderildi.',
+    reservation_failed: 'Yayın rezervasyonunun sonucu belirsiz. Yeniden yayınlamayın; yönetici kontrolünü bekleyin.',
+    status_update_failed: 'Yayın durumu kaydedilemedi. Kampanya durumunu Google Ads hesabında kontrol edin; yönetici bilgilendirildi.',
+    destination_unreachable: 'Açılış sayfasına güvenli şekilde ulaşılamadı. URL’yi kontrol edip tekrar deneyin.',
+    site_policy_blocked: 'Açılış sayfası yayınlama güvenlik denetiminden geçemedi. İçeriği veya URL’yi kontrol edin.',
   }
   const en: Record<string, string> = {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-    budget_limit_exceeded: 'The aggregate daily budget cap would be exceeded.',
+    budget_limit_exceeded: 'This plan would exceed the configured aggregate daily budget limit for the user.',
     budget_limit_not_configured: 'A daily cap is not configured for this currency.',
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
-    confirmation_required: 'Explicitly confirm each required item before continuing.',
+    confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
     eu_political_declaration_required: 'The EU political advertising declaration must be confirmed.',
     ad_disapproved: 'Google disapproved the ad; it cannot be enabled.',
     ad_review_in_progress: 'The ad cannot be enabled until review is complete.',
     ad_review_status_unavailable: 'The ad review status could not be verified.',
     reauth_required: 'Reconnect Google Ads to continue.',
+    not_authorized: 'Google Ads did not authorize this request. Check the connection and account permissions.',
+    connection_not_found: 'The selected Google Ads account was not found. Reconnect and select it again.',
+    manager_account: 'Select a customer account, not a manager account, to publish.',
+    connection_busy: 'Another Google Ads API operation is in progress. Try again shortly.',
     publish_in_progress: 'Another action is already in progress for this campaign.',
+    provider_error: 'The Google Ads request could not be completed. Check the campaign details and account.',
+    provider_unavailable: 'The Google Ads response could not be verified. A campaign may exist; do not retry publishing and wait for admin review.',
+    api_quota_exceeded: 'The Google Ads API quota was reached. Wait before trying again.',
+    quota_check_failed: 'The API quota could not be verified, so no Google Ads request was sent.',
+    configuration_missing: 'Google Ads publishing configuration is incomplete. The administrator was notified.',
+    reservation_failed: 'The publish reservation result is uncertain. Do not retry; wait for administrator review.',
+    status_update_failed: 'The publish status could not be saved. Check Google Ads directly; the administrator was notified.',
+    destination_unreachable: 'The landing page could not be reached safely. Check the URL and try again.',
+    site_policy_blocked: 'The landing page did not pass the publishing security check. Review its content or URL.',
   }
   const dict = isTr ? tr : en
   return (code && dict[code]) || (isTr ? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.' : 'The action could not be completed. Try again.')
@@ -363,12 +405,12 @@ export function GoogleAdsWorkspace({
         brand: 'Marka adı', sector: 'Sektör', sectorLabel: 'Sektör açıklaması', services: 'Ürün veya hizmetler (satır başına bir tane)',
         language: 'Reklam dili', country: 'Hedef ülke', cities: 'Hedef şehirler (satır başına bir tane)', url: 'Açılış sayfası URL’si',
         keywords: 'Anahtar kelimeler (satır başına bir tane)', negatives: 'Hariç tutulacak anahtar kelimeler', headlines: 'Başlıklar (satır başına bir tane)',
-        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe', cap: 'Kampanya bütçe üst sınırı',
+        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe', cap: 'GLOVAL günlük bütçe üst sınırı',
         policyCategory: 'Kısıtlı içerik kategorisi', policyEvidence: 'Politika kanıtı', createHint: 'Planı kaydetmek Google Ads’te kampanya oluşturmaz.',
         reviewTitle: 'Onay ve yayınlama', noSelection: 'Yayınlamadan önce bir taslak plan seçin.',
         declaration: 'AB siyasi reklam beyanı', euNo: 'Hayır', euYes: 'Evet', confirmEu: 'Bu beyanın doğru olduğunu onaylıyorum.',
-        acceptTerms: 'Google politikalarına uygunluktan ben sorumluyum ve sonuç garantisi olmadığını anlıyorum.', approve: 'Planı onayla', approved: 'Onay kaydedildi. Önce validate_only ile doğrulayın.',
-        validate: 'Google’da doğrula (validate_only)', publish: 'Duraklatılmış kampanyayı yayınla', validating: 'Doğrulanıyor…', publishing: 'Yayınlanıyor…',
+        acceptTerms: 'Yayın öncesi ikinci onayımı verdikten sonra, bu planın Google Ads hesabımda duraklatılmış kampanya olarak oluşturulmasına GLOVAL AI’a yetki veriyorum; politika uyumu ve Google tahsilatları bana aittir.', approve: 'Planı onayla', approved: 'Onay kaydedildi. Önce validate_only ile doğrulayın.',
+        validate: 'Google’da doğrula (validate_only)', publish: 'Kampanyayı duraklatılmış oluştur', reviewBeforePublish: 'Yayın öncesi özeti incele', reviewBack: 'Özete dön', validating: 'Doğrulanıyor…', publishing: 'Oluşturuluyor…',
         summary: 'Plan özeti', dailyLabel: 'Günlük bütçe', cpc: 'CPC teklif tavanı', target: 'Hedefleme', terms: 'Arama terimleri', noTerms: 'Belirtilmedi',
         pausedNote: 'Kampanya Google Ads’te önce DURAKLATILMIŞ oluşturulur. Etkinleştirme ayrı ve açık bir kullanıcı işlemidir.',
         directBilling: 'Reklam bütçesi doğrudan Google Ads hesabınızdan tahsil edilir; GLOVAL bütçe tutmaz.', credits: 'Yayınlama başarılı olursa 15 GLOVAL kredisi düşer.',
@@ -379,7 +421,7 @@ export function GoogleAdsWorkspace({
         copyEdit: 'Reklam metnini değiştir', apply: 'Değişikliği uygula', reviewAcknowledged: 'Bütçe ve olası performans değişikliğini anlıyorum.',
         before: 'Önce', after: 'Sonra', reviewRequired: 'Etkinleştirmeden önce Google incelemesi tamamlanmalı.',
         restricted: 'Kısıtlı sektör uyarısı: sağlık, finans, kumar ve benzeri kategoriler ek Google politikalarına tabi olabilir.',
-        summaryGuarantee: 'Sonuç garantisi yoktur. Harcama ve kampanya performansını Google Ads hesabınızdan takip edin.',
+        summaryGuarantee: 'Sonuç garantisi yoktur. Günlük bütçe toplam harcama tavanı değildir; Google’ın uyguladığı bütçe kuralları nedeniyle gerçek harcama değişebilir. Harcamayı Google Ads hesabınızdan takip edin.',
         close: 'Temizle', edit: 'Planı düzenle', noActive: 'Bu hesapta yönetilebilir aktif kampanya yok.',
       }
     : {
@@ -389,12 +431,12 @@ export function GoogleAdsWorkspace({
         brand: 'Brand name', sector: 'Sector', sectorLabel: 'Sector label', services: 'Products or services (one per line)',
         language: 'Ad language', country: 'Target country', cities: 'Target cities (one per line)', url: 'Landing page URL',
         keywords: 'Keywords (one per line)', negatives: 'Negative keywords', headlines: 'Headlines (one per line)',
-        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget', cap: 'Campaign budget ceiling',
+        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget', cap: 'GLOVAL daily budget ceiling',
         policyCategory: 'Restricted content category', policyEvidence: 'Policy evidence', createHint: 'Saving a draft does not create a Google Ads campaign.',
         reviewTitle: 'Approval and publishing', noSelection: 'Select a draft plan before publishing.',
         declaration: 'EU political advertising declaration', euNo: 'No', euYes: 'Yes', confirmEu: 'I confirm this declaration is accurate.',
-        acceptTerms: 'I am responsible for Google policy compliance and understand that results are not guaranteed.', approve: 'Approve plan', approved: 'Approval recorded. Validate with validate_only first.',
-        validate: 'Validate with Google (validate_only)', publish: 'Publish paused campaign', validating: 'Validating…', publishing: 'Publishing…',
+        acceptTerms: 'After my separate final confirmation, I authorize GLOVAL AI to create this plan as a paused campaign in my Google Ads account; I am responsible for policy compliance and Google charges.', approve: 'Approve plan', approved: 'Approval recorded. Validate with validate_only first.',
+        validate: 'Validate with Google (validate_only)', publish: 'Create campaign paused', reviewBeforePublish: 'Review before publishing', reviewBack: 'Back to review', validating: 'Validating…', publishing: 'Creating…',
         summary: 'Plan summary', dailyLabel: 'Daily budget', cpc: 'CPC bid ceiling', target: 'Targeting', terms: 'Search terms', noTerms: 'Not specified',
         pausedNote: 'The campaign is created PAUSED in Google Ads first. Enabling it is a separate, explicit user action.',
         directBilling: 'Google Ads bills the ad budget directly; GLOVAL does not hold campaign funds.', credits: '15 GLOVAL credits are charged only after a successful publish.',
@@ -405,9 +447,57 @@ export function GoogleAdsWorkspace({
         copyEdit: 'Edit ad copy', apply: 'Apply change', reviewAcknowledged: 'I understand the budget and possible performance impact.',
         before: 'Before', after: 'After', reviewRequired: 'Google review must be complete before enabling.',
         restricted: 'Restricted-industry notice: health, finance, gambling, and similar categories may have additional Google policy requirements.',
-        summaryGuarantee: 'Results are not guaranteed. Monitor spend and performance in your Google Ads account.',
+        summaryGuarantee: 'Results are not guaranteed. The daily budget is not a guaranteed total-spend cap; actual spend can vary under Google’s budget rules. Monitor charges in Google Ads.',
         close: 'Clear', edit: 'Edit plan', noActive: 'No manageable active campaign is available for this account.',
       }
+
+  const reviewCopy = isTr ? {
+    title: 'Yayın öncesi son kontrol',
+    description: 'Aşağıdaki hesap ve kampanya ayrıntılarını dikkatle kontrol edin. Bu ikinci onaydan sonra Google Ads API üzerinden kampanya oluşturma isteği gönderilir.',
+    account: 'Google Ads hesabı',
+    campaign: 'Kampanya / marka',
+    finalUrl: 'Açılış sayfası',
+    dailyBudget: 'Google Ads günlük bütçesi',
+    dailyPlanLimit: 'GLOVAL günlük plan üst sınırı',
+    cpcCeiling: 'CPC teklif tavanı',
+    targeting: 'Hedefleme',
+    keywords: 'Anahtar kelimeler',
+    negativeKeywords: 'Hariç tutulan anahtar kelimeler',
+    headlines: 'Reklam başlıkları',
+    descriptions: 'Reklam açıklamaları',
+    notSpecified: 'Belirtilmedi',
+    budgetDisclosure: copy.summaryGuarantee,
+    pausedNote: copy.pausedNote,
+    billingNote: copy.directBilling,
+    creditsNote: copy.credits,
+    consentLegend: 'İkinci yayın onayı',
+    consentText: 'Bu Google Ads hesabında yukarıda gösterilen planın, belirtilen günlük bütçeyle duraklatılmış kampanya olarak oluşturulmasını onaylıyorum. Google reklam harcamalarını doğrudan hesabımdan tahsil eder; iptal veya bağlantıyı kesme kampanyayı durdurmaz. Gerekirse kampanyayı Google Ads’te ayrıca duraklatacağımı biliyorum.',
+    termsLink: 'Kullanım Koşulları',
+    privacyLink: 'Gizlilik Politikası',
+  } : {
+    title: 'Final pre-publish review',
+    description: 'Review the account and campaign details below. After this second confirmation, a campaign creation request will be sent through the Google Ads API.',
+    account: 'Google Ads account',
+    campaign: 'Campaign / brand',
+    finalUrl: 'Landing page',
+    dailyBudget: 'Google Ads daily budget',
+    dailyPlanLimit: 'GLOVAL daily plan limit',
+    cpcCeiling: 'CPC bid ceiling',
+    targeting: 'Targeting',
+    keywords: 'Keywords',
+    negativeKeywords: 'Negative keywords',
+    headlines: 'Ad headlines',
+    descriptions: 'Ad descriptions',
+    notSpecified: 'Not specified',
+    budgetDisclosure: copy.summaryGuarantee,
+    pausedNote: copy.pausedNote,
+    billingNote: copy.directBilling,
+    creditsNote: copy.credits,
+    consentLegend: 'Second publishing confirmation',
+    consentText: 'I confirm that the plan shown above will be created as a paused campaign in this Google Ads account with the stated daily budget. Google bills advertising spend directly to my account; cancellation or disconnecting the connection does not stop a campaign. I understand I must pause it separately in Google Ads when needed.',
+    termsLink: 'Terms of Service',
+    privacyLink: 'Privacy Policy',
+  }
 
   const availableConnections = connections.filter((connection) => connection.status === 'active' && !connection.isManager)
   const [connectionId, setConnectionId] = useState(() => availableConnections[0]?.id ?? '')
@@ -426,6 +516,8 @@ export function GoogleAdsWorkspace({
   const [pending, setPending] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
+  const [showPublishReview, setShowPublishReview] = useState(false)
+  const [finalPublishConfirmed, setFinalPublishConfirmed] = useState(false)
 
   const { data: plansData, error: plansError, isLoading: plansLoading, mutate: mutatePlans } = useSWR<PlansPayload>(
     enabled ? '/api/ads/google/plans' : null,
@@ -459,6 +551,34 @@ export function GoogleAdsWorkspace({
     }
   }, [selectedPlan])
 
+  const reviewDetails = selectedPlan ? (() => {
+    const plan = selectedPlan.plan
+    const adCopy = plan.adCopy && typeof plan.adCopy === 'object' ? plan.adCopy as Record<string, unknown> : {}
+    const cities = stringArray(plan.cities)
+    const targeting = [
+      typeof plan.country === 'string' ? plan.country : '',
+      typeof plan.language === 'string' ? plan.language.toUpperCase() : '',
+      ...cities,
+    ].filter(Boolean).join(' · ')
+    const currency = selectedPlan.currency
+    const dailyBudgetAmount = minorToMajor(selectedPlan.daily_budget_minor, currency)
+    const dailyPlanLimitAmount = minorToMajor(selectedPlan.budget_cap_minor, currency)
+
+    return {
+      account: selectedConnection?.name ?? selectedConnection?.externalAccountId ?? copy.noTerms,
+      campaign: typeof plan.brand === 'string' ? plan.brand : copy.noTerms,
+      finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : copy.noTerms,
+      dailyBudget: dailyBudgetAmount ? `${currency} ${dailyBudgetAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
+      dailyPlanLimit: dailyPlanLimitAmount ? `${currency} ${dailyPlanLimitAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
+      cpcCeiling: summary ? `${currency} ${minorToMajor(summary.cpcBidCeilingMinor, currency)}` : copy.noTerms,
+      targeting: targeting || copy.noTerms,
+      keywords: stringArray(plan.keywords),
+      negativeKeywords: stringArray(plan.negativeKeywords),
+      headlines: stringArray(adCopy.headlines),
+      descriptions: stringArray(adCopy.descriptions),
+    }
+  })() : null
+
   if (!enabled) return null
 
   function updateForm<K extends keyof PlanForm>(key: K, value: PlanForm[K]) {
@@ -475,6 +595,8 @@ export function GoogleAdsWorkspace({
     setAcceptedTerms(false)
     setMessage(null)
     setErrorCode(null)
+    setShowPublishReview(false)
+    setFinalPublishConfirmed(false)
   }
 
   function selectPlan(plan: PlanRow) {
@@ -488,6 +610,8 @@ export function GoogleAdsWorkspace({
     setAcceptedTerms(false)
     setMessage(null)
     setErrorCode(null)
+    setShowPublishReview(false)
+    setFinalPublishConfirmed(false)
     setManagementBudget(minorToMajor(plan.google_daily_budget_minor ?? plan.daily_budget_minor, plan.currency))
     setManagementHeadlines('')
     setManagementDescriptions('')
@@ -512,6 +636,8 @@ export function GoogleAdsWorkspace({
       const response = await postJson('/api/ads/google/plans', selectedPlan ? 'PATCH' : 'POST', body)
       if (response.planId) setPlanId(response.planId)
       await mutatePlans()
+      setShowPublishReview(false)
+      setFinalPublishConfirmed(false)
       setMessage(isTr ? 'Taslak kaydedildi. Google Ads’te henüz değişiklik yapılmadı.' : 'Draft saved. No Google Ads changes were made.')
     } catch (error) {
       setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
@@ -544,6 +670,10 @@ export function GoogleAdsWorkspace({
 
   async function runPublish(phase: 'validate' | 'publish') {
     if (!selectedPlan?.approval_hash || pending) return
+    if (phase === 'publish' && !finalPublishConfirmed) {
+      setErrorCode('confirmation_required')
+      return
+    }
     setPending(phase)
     setErrorCode(null)
     setMessage(null)
@@ -554,16 +684,22 @@ export function GoogleAdsWorkspace({
         approvalHash: selectedPlan.approval_hash,
         confirm: true,
         phase,
+        publishConfirmed: phase === 'publish' && finalPublishConfirmed,
       })
       await mutatePlans()
       if (response.state === 'validated') {
         setMessage(isTr ? 'Google validate_only doğrulaması başarılı. Kampanya henüz oluşturulmadı.' : 'Google validate_only succeeded. The campaign has not been created.')
       } else if (response.state === 'published') {
+        setShowPublishReview(false)
+        setFinalPublishConfirmed(false)
         setMessage(isTr ? 'Kampanya duraklatılmış olarak oluşturuldu.' : 'The campaign was created in paused state.')
       } else if (response.state === 'reconciling') {
+        setShowPublishReview(false)
+        setFinalPublishConfirmed(false)
         setMessage(isTr ? 'Google sonucu belirsiz. Tekrar yayınlamayın; durum incelemeye alındı.' : 'Google’s result is uncertain. Do not retry publishing; the result is being reconciled.')
       }
     } catch (error) {
+      if (phase === 'publish') setFinalPublishConfirmed(false)
       setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
     } finally {
       setPending(null)
@@ -821,6 +957,11 @@ export function GoogleAdsWorkspace({
                         <input id="google-ads-terms-confirm" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="size-4 rounded border-input accent-primary" />
                         <FieldLabel htmlFor="google-ads-terms-confirm">{copy.acceptTerms}</FieldLabel>
                       </Field>
+                      <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
+                        <Link className="text-primary underline underline-offset-4" href="/yasal/kullanim-kosullari">{reviewCopy.termsLink}</Link>
+                        <span aria-hidden="true">·</span>
+                        <Link className="text-primary underline underline-offset-4" href="/yasal/gizlilik-politikasi">{reviewCopy.privacyLink}</Link>
+                      </p>
                       <Button type="button" variant="outline" onClick={() => void approvePlan()} disabled={!confirmedEu || !acceptedTerms || pending !== null || selectedPlan.status === 'published'}>
                         {pending === 'approve' ? copy.saving : copy.approve}
                       </Button>
@@ -834,9 +975,36 @@ export function GoogleAdsWorkspace({
                     <Button type="button" variant="outline" onClick={() => void runPublish('validate')} disabled={!selectedPlan.approval_hash || pending !== null || selectedPlan.validation_hash === selectedPlan.approval_hash}>
                       {pending === 'validate' ? copy.validating : copy.validate}
                     </Button>
-                    <Button type="button" onClick={() => void runPublish('publish')} disabled={!selectedPlan.approval_hash || selectedPlan.validation_hash !== selectedPlan.approval_hash || pending !== null}>
-                      {pending === 'publish' ? copy.publishing : copy.publish}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowPublishReview(true)
+                        setFinalPublishConfirmed(false)
+                        setErrorCode(null)
+                      }}
+                      disabled={!selectedPlan.approval_hash || selectedPlan.validation_hash !== selectedPlan.approval_hash || pending !== null}
+                    >
+                      {copy.reviewBeforePublish}
                     </Button>
+                    {showPublishReview && reviewDetails ? (
+                      <>
+                        <GoogleAdsPublishReview
+                          details={reviewDetails}
+                          copy={reviewCopy}
+                          confirmed={finalPublishConfirmed}
+                          onConfirmedChange={setFinalPublishConfirmed}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="outline" onClick={() => { setShowPublishReview(false); setFinalPublishConfirmed(false) }} disabled={pending !== null}>
+                            {copy.reviewBack}
+                          </Button>
+                          <Button type="button" onClick={() => void runPublish('publish')} disabled={!finalPublishConfirmed || pending !== null}>
+                            {pending === 'publish' ? copy.publishing : copy.publish}
+                          </Button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
 

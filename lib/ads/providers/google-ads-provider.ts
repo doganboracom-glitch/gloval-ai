@@ -18,7 +18,10 @@ import {
   type GoogleAdsRefreshResult,
 } from '@/lib/ads/providers/types'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
-import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import {
+  resolveGoogleAdsPublishAccess,
+  resolveGoogleAdsValidateOnlyTestEnabled,
+} from '@/lib/ads/env'
 import {
   buildGoogleAdsMutateRequest,
   parseGoogleAdsPublishPlan,
@@ -233,7 +236,11 @@ function requireApiTransport(config: GoogleAdsProviderConfig): GoogleAdsApiTrans
   return config.requestAdsApi
 }
 
-function requirePublishAccess(userId: string): void {
+function requirePublishAccess(userId: string, validationTestMode = false): void {
+  if (validationTestMode) {
+    if (!resolveGoogleAdsValidateOnlyTestEnabled()) throw new GoogleAdsError('publish_disabled')
+    return
+  }
   if (!resolveGoogleAdsPublishAccess(userId)) throw new GoogleAdsError('publish_disabled')
 }
 
@@ -753,7 +760,9 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     },
 
     async publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {
-      requirePublishAccess(input.context.userId)
+      const validationTestMode = input.validationTestMode === true
+      if (validationTestMode && !input.validateOnly) throw new GoogleAdsError('invalid_request')
+      requirePublishAccess(input.context.userId, validationTestMode)
       const customerId = normalizeCustomerId(input.externalAccountId)
       if (!customerId || !input.accessToken || !input.context.connectionId) {
         throw new GoogleAdsError('invalid_request')

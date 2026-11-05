@@ -8,6 +8,8 @@ import type { AdsRpcClient } from '@/lib/ads/credits'
 export type AnonCapAlertKind = 'anon_global_cap_50' | 'anon_global_cap'
 export type PolicyBlockAlertKind = 'policy_block_global_cap'
 export type GooglePublishAlertKind = `google_publish_reconciling:${string}`
+export type GooglePublishFailureAlertKind = `google_publish_failure:${string}`
+export type GooglePublishFailureStage = 'validate_only' | 'publish'
 export type GooglePublishReconciliationReason =
   | 'google_publish_result_unknown'
   | 'publish_result_persist_failed'
@@ -15,7 +17,11 @@ export type GooglePublishReconciliationReason =
   | 'publish_reservation_result_unknown'
   | 'publish_stale_timeout'
   | 'publish_refund_failed'
-export type AdsAlertKind = AnonCapAlertKind | PolicyBlockAlertKind | GooglePublishAlertKind
+export type AdsAlertKind =
+  | AnonCapAlertKind
+  | PolicyBlockAlertKind
+  | GooglePublishAlertKind
+  | GooglePublishFailureAlertKind
 
 export const ANON_CAP_ALERT_KIND = {
   half: 'anon_global_cap_50',
@@ -24,6 +30,7 @@ export const ANON_CAP_ALERT_KIND = {
 
 export const POLICY_BLOCK_CAP_ALERT_KIND: PolicyBlockAlertKind = 'policy_block_global_cap'
 export const GOOGLE_PUBLISH_RECONCILING_ALERT_KIND = 'google_publish_reconciling'
+export const GOOGLE_PUBLISH_FAILURE_ALERT_KIND = 'google_publish_failure'
 
 /** Number of anonymous free actions at which the 50 % warning fires. */
 export function halfCapThreshold(cap: number): number {
@@ -132,5 +139,34 @@ export async function notifyGooglePublishReconciling(
     })
   } catch (error) {
     console.error('[ads-alert] publish reconciliation notify failed:', error instanceof Error ? error.message : 'unknown')
+  }
+}
+
+/** Sends a once-daily admin alert for a safe, non-ambiguous Google Ads operation error. */
+export async function notifyGooglePublishFailure(
+  planId: string,
+  requestId: string,
+  reason: string,
+  stage: GooglePublishFailureStage,
+  deps: AdsAlertDeps = defaultDeps,
+): Promise<void> {
+  const kind: GooglePublishFailureAlertKind = `${GOOGLE_PUBLISH_FAILURE_ALERT_KIND}:${planId}`
+  const safeReason = /^[a-z][a-z0-9_]{0,63}$/.test(reason) ? reason : 'provider_error'
+  try {
+    const first = await deps.recordOnce(kind, { planId, requestId, reason: safeReason, stage })
+    if (!first) return
+    const subject = 'GLOVAL Ads: Google Ads işlem hatası'
+    const action = stage === 'validate_only'
+      ? 'validate_only isteği başarısız oldu; bu mod Google Ads hesabında kampanya oluşturmaz.'
+      : 'Yayın isteği başarısız olarak kaydedildi ve kredi rezervasyonunun bırakılması istendi.'
+    const text = `Google Ads ${stage} işlemi için yönetici kontrolü gerekiyor. Plan: ${planId}; deneme: ${requestId}; hata kodu: ${safeReason}. ${action} Yeniden denemeden önce Google Ads hesabındaki durumu kontrol edin.`
+    await deps.sendEmail({
+      subject,
+      text,
+      html: `<p>${text}</p>`,
+      idempotencyKey: `${kind}-${istanbulDay()}`,
+    })
+  } catch (error) {
+    console.error('[ads-alert] publish failure notify failed:', error instanceof Error ? error.message : 'unknown')
   }
 }

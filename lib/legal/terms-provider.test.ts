@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-type Block = { type: 'p'; text: string } | { type: 'list'; items: string[] }
+type Block =
+  | { type: 'p'; text: string }
+  | { type: 'list'; items: string[] }
+  | { type: 'link'; href: string; label: string; external?: boolean }
 type Section = { heading: string; blocks: Block[] }
 
 async function load(phone = '') {
@@ -12,7 +15,7 @@ async function load(phone = '') {
 }
 
 function flatten(section: Section): string[] {
-  return section.blocks.flatMap((b) => (b.type === 'p' ? [b.text] : b.items))
+  return section.blocks.flatMap((b) => (b.type === 'p' ? [b.text] : b.type === 'list' ? b.items : [b.label]))
 }
 
 afterEach(() => {
@@ -77,6 +80,32 @@ describe('Kullanım Koşulları — Hizmet Sağlayıcı bölümü', () => {
       expect(text).toContain('Test Mah. Deneme Sk. No:1 Kadıköy/İstanbul')
       expect(text).toContain('0212 111 22 33')
       expect(text).toContain('destek@example.test')
+    }
+  })
+})
+
+describe('Google Ads legal disclosures', () => {
+  it('dates and explains campaign creation, budget, data use and cancellation in Turkish and English', async () => {
+    const { docs } = await load()
+    const terms = docs.getLegalDoc('kullanim-kosullari')!
+    const privacy = docs.getLegalDoc('gizlilik-politikasi')!
+
+    expect(terms.lastUpdated).toBe('2026-11-05')
+    expect(privacy.lastUpdated).toBe('2026-11-05')
+
+    for (const lang of ['tr', 'en'] as const) {
+      const termsSection = terms[lang].sections.find((section) => section.heading.startsWith('8. '))
+      expect(termsSection).toBeDefined()
+      const termsText = flatten(termsSection as Section).join(' ').toLowerCase()
+      const privacyText = privacy[lang].sections.flatMap((section) => flatten(section)).join(' ').toLowerCase()
+
+      expect(termsText).toContain('google ads')
+      expect(termsText).toContain('paused')
+      expect(termsText).toMatch(/daily budget|günlük bütçe/)
+      expect(termsText).toMatch(/cancel|iptal/)
+      expect(privacyText).toMatch(/campaign plan|kampanya plan/)
+      expect(privacyText).toMatch(/google ads api/)
+      expect(privacyText).toMatch(/pause|duraklat/)
     }
   })
 })
