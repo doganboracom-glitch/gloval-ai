@@ -21,7 +21,7 @@ export type ProviderDate = {
 }
 
 const EXPLICIT_ZONE = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i
-const ISO_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?/
+const ISO_SHAPE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?/
 // 0001-01-01 is the provider's "never happened" placeholder (e.g. transferDate).
 const PLACEHOLDER = /^0001-01-01/
 
@@ -32,7 +32,7 @@ export function parseProviderDate(value: unknown): ProviderDate {
   if (!ISO_SHAPE.test(raw) || !EXPLICIT_ZONE.test(raw)) return { raw, instant: null, zone: 'unknown' }
 
   // V8 only guarantees millisecond fractions; trim longer ones before parsing.
-  const normalized = raw.replace(/(\.\d{3})\d+/, '$1')
+  const normalized = raw.replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T').replace(/(\.\d{3})\d+/, '$1')
   const time = Date.parse(normalized)
   if (!Number.isFinite(time)) return { raw, instant: null, zone: 'unknown' }
   return { raw, instant: new Date(time).toISOString(), zone: 'explicit' }
@@ -54,7 +54,9 @@ const ISTANBUL_OFFSET_MS = 3 * 60 * 60 * 1000
 
 const WALL_ISO = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
 const WALL_DOTTED = /^(\d{2})\.(\d{2})\.(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
+const WALL_SLASH = /^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?)?$/
 const DOTTED_PLACEHOLDER = /^01\.01\.0001/
+const SLASH_PLACEHOLDER = /^01\/01\/0001/
 
 function istanbulWallToInstant(
   year: number,
@@ -76,32 +78,35 @@ function istanbulWallToInstant(
 }
 
 /**
- * Import/display-only counterpart of `parseProviderDate`.
+ * Istanbul-assuming counterpart of `parseProviderDate` for registrar fields
+ * whose zone-less wall-clock format is known to use Europe/Istanbul.
  *
  * A value that names its own zone is converted exactly like the strict parser.
  * A zone-less value is read as Europe/Istanbul wall-clock time and labelled
- * `assumed_istanbul`; a date with no time-of-day resolves to 23:59:59 Istanbul
- * so the domain is never shown as expiring earlier than it really does.
+ * `assumed_istanbul`; a date with no time-of-day resolves to 23:59:59 Istanbul.
  *
- * Never use this for renewal verification or any money-affecting decision:
- * those keep the strict rule that a zone-less value is not an instant.
+ * Use only for non-monetary registration-age checks and display. Renewal and
+ * payment verification keep the strict rule that a zone-less value is not an instant.
  */
 export function parseProviderDateAssumingIstanbul(value: unknown): AssumedProviderDate {
   const none: AssumedProviderDate = { raw: null, instant: null, source: null, dateOnly: false }
   if (typeof value !== 'string') return none
   const raw = value.trim()
-  if (!raw || PLACEHOLDER.test(raw) || DOTTED_PLACEHOLDER.test(raw)) return none
+  if (!raw || PLACEHOLDER.test(raw) || DOTTED_PLACEHOLDER.test(raw) || SLASH_PLACEHOLDER.test(raw)) return none
 
   const strict = parseProviderDate(raw)
   if (strict.instant) return { raw, instant: strict.instant, source: 'provider_explicit', dateOnly: false }
 
   const iso = WALL_ISO.exec(raw)
   const dotted = iso ? null : WALL_DOTTED.exec(raw)
+  const slash = iso || dotted ? null : WALL_SLASH.exec(raw)
   const parts = iso
     ? { y: iso[1], m: iso[2], d: iso[3], h: iso[4], min: iso[5], s: iso[6] }
     : dotted
       ? { y: dotted[3], m: dotted[2], d: dotted[1], h: dotted[4], min: dotted[5], s: dotted[6] }
-      : null
+      : slash
+        ? { y: slash[3], m: slash[2], d: slash[1], h: slash[4], min: slash[5], s: slash[6] }
+        : null
   if (!parts) return { raw, instant: null, source: null, dateOnly: false }
 
   const dateOnly = parts.h === undefined

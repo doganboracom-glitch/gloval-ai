@@ -109,8 +109,9 @@ export type TransferPrice = {
 export type OwnedDomainInfo = {
   /** Null when the provider did not report a usable lock flag. */
   locked: boolean | null
-  /** UTC ISO instant; null unless the provider named the zone (never guessed). */
+  /** Strict UTC ISO instant; zone-less expiry values are not guessed. */
   expiresAt: string | null
+  /** UTC ISO instant; zone-less registration dates are interpreted as Europe/Istanbul for the transfer-age check. */
   startedAt: string | null
   remainingDays?: number | null
   /** Verbatim provider date strings (may be zone-less, zone not documented). */

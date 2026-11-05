@@ -4,7 +4,7 @@ import { requireRequestUser } from '@/lib/supabase/request-user'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { getDomainRegistrarProvider } from './provider'
-import { isManageCapable, isTransferCapable } from './types'
+import { isManageCapable, isTransferCapable, RegistrarError } from './types'
 import type { OwnedDomainInfo, ManagedDomainDetails, DomainManageCapable, DomainTransferCapable } from './types'
 import { requireRegisteredByUs } from './ownership'
 import { parsePurchaseDomain } from './service'
@@ -23,6 +23,8 @@ import {
 import {
   getRegistrarTransferState,
   initialTransferRelockAt,
+  TRANSFER_LOCK_READBACK_DELAY_MS,
+  TRANSFER_LOCK_READBACK_RETRIES,
   isTransferWindowExpired,
   nextTransferExtensionAt,
 } from './transfer-window-logic'
@@ -90,6 +92,59 @@ function isEligibleForTransfer(info: OwnedDomainInfo, nowMs = Date.now()): Trans
   return { error: null, reason: null, requiresStartDateConfirmation: false }
 }
 
+function providerCodeFromError(error: unknown): string | undefined {
+  if (!(error instanceof RegistrarError)) return undefined
+  return error.message.match(/^[A-Za-z0-9_:]{1,80}/)?.[0]
+}
+
+function shapeProviderDate(value: string | null | undefined): string | undefined {
+  if (!value) return undefined
+  return Array.from(value)
+    .slice(0, 120)
+    .map((character) => (/[\p{N}]/u.test(character) ? '9' : /[\p{L}]/u.test(character) ? 'a' : character))
+    .join('')
+}
+
+type TransferEligibilityAudit = { reason?: DomainAuditReason; startDateShape?: string }
+
+function eligibilityAuditDetails(
+  info: OwnedDomainInfo,
+  reason: DomainAuditReason | null | undefined,
+): TransferEligibilityAudit {
+  const startDateShape = reason === 'start_date_unparseable' ? shapeProviderDate(info.startedAtRaw) : undefined
+  return {
+    ...(reason ? { reason } : {}),
+    ...(startDateShape ? { startDateShape } : {}),
+  }
+}
+
+async function readUnlockedDetails(
+  registrar: WindowRegistrar,
+  domain: string,
+): Promise<{ details: ManagedDomainDetails | null; error: unknown | null }> {
+  let details: ManagedDomainDetails | null = null
+  let error: unknown | null = null
+
+  for (let retry = 0; retry <= TRANSFER_LOCK_READBACK_RETRIES; retry += 1) {
+    try {
+      details = await registrar.getManagedDetails(domain)
+      error = null
+    } catch (readError) {
+      details = null
+      error = readError
+    }
+
+    if (details?.locked === false && getRegistrarTransferState(details.status) !== 'unknown') {
+      return { details, error: null }
+    }
+    if (retry < TRANSFER_LOCK_READBACK_RETRIES) {
+      await new Promise((resolve) => setTimeout(resolve, TRANSFER_LOCK_READBACK_DELAY_MS))
+    }
+  }
+
+  return { details, error }
+}
+
 async function reserveCodeView(userId: string, domain: string): Promise<TransferErrorCode | null> {
   const reservation = await reserveUserHourly('transfer-code', 'domain:transfer-code', userId)
   if (reservation === 'allowed') return null
@@ -144,13 +199,15 @@ async function relockAfterFailedCode(
   errorCode: string,
 ): Promise<boolean> {
   let confirmed = false
+  let relockError: unknown = null
   if (isManageCapable(registrar)) {
     try {
       await registrar.changeLock(window.domain, true)
       const readback = await registrar.getManagedDetails(window.domain)
       confirmed = readback?.locked === true
-    } catch {
+    } catch (error) {
       confirmed = false
+      relockError = error
     }
   }
 
@@ -162,6 +219,7 @@ async function relockAfterFailedCode(
       ? { status: 'failed', closed_at: now, last_error_code: errorCode, relock_lease_until: null }
       : { relock_at: now, last_error_code: `${errorCode}_relock_unconfirmed`, relock_lease_until: null },
   )
+  const providerCode = providerCodeFromError(relockError)
   await recordDomainAuditEvent({
     userId,
     customDomainId: window.custom_domain_id,
@@ -170,6 +228,8 @@ async function relockAfterFailedCode(
     details: {
       outcome: confirmed ? 'failed' : 'unconfirmed',
       locked: confirmed ? true : null,
+      stage: 'code_fetch',
+      ...(providerCode ? { providerCode } : {}),
       source: 'user_code_request',
     },
   })
@@ -185,7 +245,7 @@ async function fetchWindowCode(
   lang: ReturnType<typeof resolveEmailLang>,
   created: boolean,
   rateAlreadyReserved = false,
-  eligibilityReason?: DomainAuditReason,
+  eligibilityAudit: TransferEligibilityAudit = {},
 ): Promise<TransferWindowCodeResult> {
   if (!rateAlreadyReserved) {
     const limitError = await reserveCodeView(userId, window.domain)
@@ -203,7 +263,8 @@ async function fetchWindowCode(
         eventType: 'transfer_code_viewed',
         details: {
           outcome: 'failed',
-          ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+          stage: 'code_fetch',
+          ...eligibilityAudit,
         },
       })
       await relockAfterFailedCode(registrar, admin, window, userId, 'auth_code_unavailable')
@@ -217,7 +278,8 @@ async function fetchWindowCode(
       eventType: 'transfer_code_viewed',
       details: {
         outcome: 'success',
-        ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+        stage: 'code_fetch',
+        ...eligibilityAudit,
       },
     })
 
@@ -234,16 +296,19 @@ async function fetchWindowCode(
     }
 
     return { ok: true, authCode, window: toSummary(window), created }
-  } catch {
+  } catch (error) {
+    const providerCode = providerCodeFromError(error)
     await recordDomainAuditEvent({
       userId,
       customDomainId: window.custom_domain_id,
       domain: window.domain,
       eventType: 'transfer_code_viewed',
       details: {
-          outcome: 'failed',
-          ...(eligibilityReason ? { reason: eligibilityReason } : {}),
-        },
+        outcome: 'failed',
+        stage: 'code_fetch',
+        ...(providerCode ? { providerCode } : {}),
+        ...eligibilityAudit,
+      },
     })
     await relockAfterFailedCode(registrar, admin, window, userId, 'auth_code_unavailable')
     return { ok: false, error: 'PROVIDER_ERROR' }
@@ -289,7 +354,7 @@ export async function requestMyTransferOutCode(
         userId,
         domain,
         eventType: 'transfer_code_viewed',
-        details: { outcome: 'failed', reason: eligibility.reason },
+        details: { outcome: 'failed', ...eligibilityAuditDetails(info, eligibility.reason) },
       })
     }
     return { ok: false, error: eligibility.error }
@@ -299,11 +364,16 @@ export async function requestMyTransferOutCode(
       userId,
       domain,
       eventType: 'transfer_code_viewed',
-      details: { outcome: 'failed', reason: eligibility.reason ?? 'start_date_missing' },
+      details: {
+        outcome: 'failed',
+        ...eligibilityAuditDetails(info, eligibility.reason ?? 'start_date_missing'),
+      },
     })
     return { ok: false, error: 'START_DATE_CONFIRMATION_REQUIRED' }
   }
-  const eligibilityReason = eligibility.requiresStartDateConfirmation ? eligibility.reason ?? undefined : undefined
+  const eligibilityAudit = eligibility.requiresStartDateConfirmation
+    ? eligibilityAuditDetails(info, eligibility.reason ?? 'start_date_missing')
+    : {}
 
   const existing = existingResult.value
   if (existing) {
@@ -317,7 +387,7 @@ export async function requestMyTransferOutCode(
       return { ok: false, error: 'DOMAIN_LOCKED' }
     }
     if (isTransferWindowExpired(existing.relock_at)) return { ok: false, error: 'WINDOW_EXPIRED' }
-    return fetchWindowCode(registrar, admin, existing, userId, email, lang, false, false, eligibilityReason)
+    return fetchWindowCode(registrar, admin, existing, userId, email, lang, false, false, eligibilityAudit)
   }
 
   if (info.locked !== true) return { ok: false, error: 'WINDOW_NOT_OPEN' }
@@ -331,9 +401,10 @@ export async function requestMyTransferOutCode(
 
   try {
     await registrar.changeLock(domain, false)
-  } catch {
+  } catch (error) {
     const relocked = await ensureTransferLock(registrar, domain)
     if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
+    const providerCode = providerCodeFromError(error)
     await recordDomainAuditEvent({
       userId,
       customDomainId,
@@ -342,19 +413,17 @@ export async function requestMyTransferOutCode(
       details: {
         outcome: relocked ? 'failed' : 'unconfirmed',
         locked: relocked ? true : null,
+        stage: 'unlock_request',
+        ...(providerCode ? { providerCode } : {}),
         source: 'user_code_request',
-        ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+        ...eligibilityAudit,
       },
     })
     return { ok: false, error: 'PROVIDER_ERROR' }
   }
 
-  let postUnlock: ManagedDomainDetails | null = null
-  try {
-    postUnlock = await registrar.getManagedDetails(domain)
-  } catch {
-    postUnlock = null
-  }
+  const postUnlockRead = await readUnlockedDetails(registrar, domain)
+  const postUnlock = postUnlockRead.details
   const postUnlockState = postUnlock ? getRegistrarTransferState(postUnlock.status) : 'unknown'
   const postUnlockReason =
     !postUnlock || typeof postUnlock.locked !== 'boolean'
@@ -373,13 +442,15 @@ export async function requestMyTransferOutCode(
       details: {
         outcome: relocked ? 'failed' : 'unconfirmed',
         locked: relocked ? true : (postUnlock?.locked ?? null),
+        stage: 'unlock_readback',
+        ...(providerCodeFromError(postUnlockRead.error)
+          ? { providerCode: providerCodeFromError(postUnlockRead.error) }
+          : {}),
         source: 'user_code_request',
-        ...(postUnlockReason
-          ? { reason: postUnlockReason }
-          : eligibilityReason
-            ? { reason: eligibilityReason }
-            : {}),
+        ...(postUnlockReason ? { reason: postUnlockReason } : eligibilityAudit),
+        ...(eligibilityAudit.startDateShape ? { startDateShape: eligibilityAudit.startDateShape } : {}),
       },
+
     })
     return { ok: false, error: postUnlockReason ? 'STATUS_UNVERIFIED' : 'DOMAIN_LOCKED' }
   }
@@ -406,21 +477,25 @@ export async function requestMyTransferOutCode(
             outcome: 'success',
             changed: true,
             locked: false,
+            stage: 'window_insert',
             source: 'user_code_request',
-            ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+            ...eligibilityAudit,
           },
         })
-        return fetchWindowCode(registrar, admin, winner.value, userId, email, lang, false, true, eligibilityReason)
+        return fetchWindowCode(registrar, admin, winner.value, userId, email, lang, false, true, eligibilityAudit)
       }
     }
 
     let relocked = false
+    let relockError: unknown = null
     try {
       await registrar.changeLock(domain, true)
       relocked = (await registrar.getManagedDetails(domain))?.locked === true
-    } catch {
+    } catch (error) {
       relocked = false
+      relockError = error
     }
+    if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
     await recordDomainAuditEvent({
       userId,
       customDomainId,
@@ -429,8 +504,10 @@ export async function requestMyTransferOutCode(
       details: {
         outcome: relocked ? 'failed' : 'unconfirmed',
         locked: relocked ? true : null,
+        stage: 'window_insert',
+        ...(providerCodeFromError(relockError) ? { providerCode: providerCodeFromError(relockError) } : {}),
         source: 'user_code_request',
-        ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+        ...eligibilityAudit,
       },
     })
     return { ok: false, error: inserted.error === 'unique' ? 'WINDOW_NOT_OPEN' : 'WINDOW_UNAVAILABLE' }
@@ -445,11 +522,12 @@ export async function requestMyTransferOutCode(
       outcome: 'success',
       changed: true,
       locked: false,
+      stage: 'window_insert',
       source: 'user_code_request',
-      ...(eligibilityReason ? { reason: eligibilityReason } : {}),
+      ...eligibilityAudit,
     },
   })
-  return fetchWindowCode(registrar, admin, inserted.value, userId, email, lang, true, true, eligibilityReason)
+  return fetchWindowCode(registrar, admin, inserted.value, userId, email, lang, true, true, eligibilityAudit)
 }
 
 export type TransferWindowMutationResult =
