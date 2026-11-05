@@ -1164,6 +1164,16 @@ const dict = {
   publishSuspended: 'Ödeme alınamadığı için aboneliğiniz askıda. Yayınlamak için önce ödemeyi tamamlayın.',
   addOns: {
     title: 'Ek Hizmetler',
+    multilang: {
+      title: 'Dil Eklentisi',
+      description: 'KDV dahil, tek seferlik ödeme. Bir site için geçerlidir; ana aboneliğe bağlı değildir.',
+      featureLanguages: 'Site içeriğini Türkçe veya İngilizce yayınlama',
+      featureTranslation: 'AI düzenleyiciyle tüm siteyi tek istekte çevirme',
+      featurePublished: 'Kaydedilen değişiklikleri yayındaki sitede görme',
+      active: 'Aktif',
+      manageSite: 'Siteyi yönet',
+      buyAnotherSite: 'Başka site için satın al',
+    },
     subtitle: 'Paket limitinin üzerine ek site ve ek ürün kapasitesi ekle.',
     summaryHint: 'Aktif ek kapasiten ve paketinde kullanılabilen ek hizmetler.',
     manage: 'Ek hizmetleri görüntüle',
@@ -3452,6 +3462,16 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
   publishSuspended: 'Your subscription is suspended because a payment failed. Complete the payment to publish.',
   addOns: {
     title: 'Add-ons',
+    multilang: {
+      title: 'Language Add-on',
+      description: 'One-time payment, including VAT. Applies to one site and is not tied to a subscription.',
+      featureLanguages: 'Publish site content in Turkish or English',
+      featureTranslation: 'Translate the full site in one AI editor request',
+      featurePublished: 'Saved changes appear on the live site',
+      active: 'Active',
+      manageSite: 'Manage site',
+      buyAnotherSite: 'Buy for another site',
+    },
     subtitle: 'Add extra site and product capacity on top of your plan limits.',
     summaryHint: 'Your active extra capacity and the add-ons available on your plan.',
     manage: 'View add-ons',

@@ -24,6 +24,7 @@ import { getMyInvoiceState } from '@/lib/invoices/customer'
 import { reconcilePendingPayments } from '@/lib/payments/reconcile-store'
 import { getLatestAddOnPurchaseOutcome } from '@/lib/addon-purchase-outcome-loader'
 import { isAddOnPaymentReturn } from '@/lib/billing-add-ons-route'
+import { AURA_CURSOR_CODE, MULTILANG_CODE } from '@/lib/billing-utils'
 
 // Per-user, auth-gated billing state must always render fresh so a plan change
 // made moments earlier is never served from a stale cache.
@@ -92,8 +93,11 @@ export default async function BillingPage({
 
   const multilangPlan = unwrap(multilangPlanResult, null, 'multilang plan')
   const auraCursorPlan = unwrap(auraCursorPlanResult, null, 'aura cursor plan')
+  const catalogPlans = unwrap(plansResult, [], 'plans')
   const plans = [
-    ...unwrap(plansResult, [], 'plans'),
+    ...catalogPlans.filter(
+      (plan) => plan.code !== MULTILANG_CODE && plan.code !== AURA_CURSOR_CODE,
+    ),
     ...(multilangPlan ? [multilangPlan] : []),
     ...(auraCursorPlan ? [auraCursorPlan] : []),
   ]

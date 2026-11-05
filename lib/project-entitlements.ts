@@ -228,9 +228,9 @@ async function purchaseSiteRight(
     .select('code, name, price_cents, currency, active')
     .eq('code', code)
     .maybeSingle()
-  // The multilang and aura_cursor rows ship inactive so legacy catalog readers
-  // skip them; their feature flags (checked by the caller) are what allow selling.
-  const soldByFlag = code === MULTILANG_CODE || code === AURA_CURSOR_CODE
+  // Aura Cursor remains feature-flagged while its catalog row is inactive.
+  // Multilang must be explicitly activated in the catalog before it can be sold.
+  const soldByFlag = code === AURA_CURSOR_CODE
   if (planErr || !plan || (!soldByFlag && !plan.active)) {
     return { ok: false, error: 'not_found' }
   }

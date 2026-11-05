@@ -751,6 +751,16 @@ const es: DeepPartial<Dict> = {
   renewItemSuffix: 'renovación',
   publishSuspended: 'Tu suscripción está suspendida porque un pago falló. Completa el pago para publicar.',
     addOns: {
+      multilang: {
+        title: 'Complemento de idioma',
+        description: 'Pago único con IVA incluido. Válido para un sitio y no está vinculado a una suscripción.',
+        featureLanguages: 'Publica el contenido del sitio en turco o inglés',
+        featureTranslation: 'Traduce todo el sitio en una sola solicitud al editor de IA',
+        featurePublished: 'Los cambios guardados aparecen en el sitio publicado',
+        active: 'Activo',
+        manageSite: 'Administrar sitio',
+        buyAnotherSite: 'Comprar para otro sitio',
+      },
       websiteAllowanceDescription: 'Añade un derecho de publicación del tipo seleccionado al límite de sitios de tu plan. Es válido durante el período de facturación actual de tu suscripción principal.',
       websiteAllowanceDescriptionYearly: 'Añade un derecho de publicación del tipo seleccionado al límite de sitios de tu plan. Es válido durante 12 meses, no se renueva automáticamente y se cobra una sola vez.',
       emailAllowanceDescription: 'Añade la cantidad seleccionada de cuentas de correo. El cupo es válido durante el período de facturación actual de tu suscripción principal.',

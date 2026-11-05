@@ -751,6 +751,16 @@ const de: DeepPartial<Dict> = {
   renewItemSuffix: 'Verlängerung',
   publishSuspended: 'Ihr Abonnement ist ausgesetzt, weil eine Zahlung fehlgeschlagen ist. Schließen Sie die Zahlung ab, um zu veröffentlichen.',
     addOns: {
+      multilang: {
+        title: 'Sprach-Add-on',
+        description: 'Einmalige Zahlung inklusive MwSt. Gilt für eine Website und ist nicht an ein Abonnement gebunden.',
+        featureLanguages: 'Website-Inhalte auf Türkisch oder Englisch veröffentlichen',
+        featureTranslation: 'Die gesamte Website mit einer Anfrage im KI-Editor übersetzen',
+        featurePublished: 'Gespeicherte Änderungen erscheinen auf der Live-Website',
+        active: 'Aktiv',
+        manageSite: 'Website verwalten',
+        buyAnotherSite: 'Für eine weitere Website kaufen',
+      },
       websiteAllowanceDescription: 'Fügt Ihrem Website-Limit ein Veröffentlichungsrecht des gewählten Typs hinzu. Es gilt während des Abrechnungszeitraums Ihres Hauptabonnements.',
       websiteAllowanceDescriptionYearly: 'Fügt Ihrem Website-Limit ein Veröffentlichungsrecht des gewählten Typs hinzu. Es gilt 12 Monate, verlängert sich nicht automatisch und wird einmalig berechnet.',
       emailAllowanceDescription: 'Fügt die ausgewählte Anzahl an E-Mail-Konten hinzu. Das Kontingent gilt während des Abrechnungszeitraums Ihres Hauptabonnements.',
