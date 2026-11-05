@@ -6,6 +6,8 @@ export const TRANSFER_WINDOW_MAX_RELOCK_ATTEMPTS = 5
 export const TRANSFER_WINDOW_PENDING_DELAY_MS = 24 * 60 * 60 * 1000
 export const TRANSFER_LOCK_READBACK_RETRIES = 4
 export const TRANSFER_LOCK_READBACK_DELAY_MS = 1_500
+/** Raw lock-flag reads after a diagnosed lock call: 5 s, then 20 s after the call. */
+export const LOCK_CALL_READ_AT_MS = [5_000, 20_000] as const
 /** The registry may apply an accepted unlock a few minutes after the request. */
 export const TRANSFER_UNLOCK_PENDING_GRACE_MS = 3 * 60 * 1000
 

@@ -13,7 +13,7 @@ import { buildRegistrarDiagnostic, formatRegistrarDiagnostic } from './diagnosti
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
 import { isLaterRawDate, parseProviderDate, parseProviderDateAssumingIstanbul, readFirstRawField, readRawField } from './provider-date'
-import { TRANSFER_LOCK_READBACK_DELAY_MS, TRANSFER_LOCK_READBACK_RETRIES } from './transfer-window-logic'
+import { LOCK_CALL_READ_AT_MS, TRANSFER_LOCK_READBACK_DELAY_MS, TRANSFER_LOCK_READBACK_RETRIES } from './transfer-window-logic'
 import {
   RegistrarError,
   type DomainAvailabilityResult,
@@ -26,6 +26,8 @@ import {
   type DomainRegistrarProvider,
   type DomainTldCatalogCapable,
   type RegistrarTldRegistrationPrice,
+  type LockCallSummary,
+  type LockRawShape,
   type ManageChange,
   type ManagedDomainDetails,
   type RegisterDomainInput,
@@ -149,6 +151,40 @@ function asLockFlag(value: unknown): boolean | null {
   if (normalized === 'true') return true
   if (normalized === 'false') return false
   return null
+}
+
+function classifyLockShape(value: unknown): LockRawShape {
+  if (value === true) return 'true'
+  if (value === false) return 'false'
+  if (value === 1) return '1'
+  if (value === 0) return '0'
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (normalized === 'true') return '"true"'
+    if (normalized === 'false') return '"false"'
+  }
+  return 'other'
+}
+
+type AxiosLike = {
+  interceptors?: {
+    response: {
+      use(onFulfilled: (response: { status: number; config?: { url?: string } }) => unknown): number
+      eject(id: number): void
+    }
+  }
+}
+
+function safeErrorCode(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value) ? value : undefined
+}
+
+/** Code-only fields of a lock response body; message and details text are never read. */
+function safeBodyErrorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined
+  const record = body as Record<string, unknown>
+  const nested = record.error && typeof record.error === 'object' ? (record.error as Record<string, unknown>) : {}
+  return safeErrorCode(record.code) ?? safeErrorCode(record.errorCode) ?? safeErrorCode(nested.code)
 }
 
 function handleOf(contacts: unknown, key: string): string | null {
@@ -802,13 +838,92 @@ export class DomainNameApiProvider
     return { changed: true }
   }
 
+  /** Raw wire form of `lockStatus` from a fresh read; the flag's meaning is never inferred here. */
+  private async readRawLockShape(domain: string): Promise<LockRawShape> {
+    const client = this.transferClient()
+    try {
+      const res = await client.GetDetails(domain)
+      if (res.result !== 'OK') return 'unreadable'
+      const raw = client.lastResponse
+      if (!raw || typeof raw !== 'object') return 'unreadable'
+      return classifyLockShape((raw as Record<string, unknown>).lockStatus)
+    } catch {
+      return 'unreadable'
+    }
+  }
+
+  /**
+   * Sends the lock call exactly once, then reads the raw flag back at 5 s and
+   * 20 s. `summary` is filled in place so a throwing call still reports it.
+   */
+  private async changeLockWithDiagnostics(
+    domain: string,
+    locked: boolean,
+    summary: LockCallSummary,
+  ): Promise<ManageChange> {
+    const client = this.transferClient()
+    const axiosLike = (client as unknown as { _axios?: AxiosLike })._axios
+    const interceptors = axiosLike?.interceptors?.response
+    const interceptorId = interceptors?.use((response) => {
+      if (response?.config?.url && /domains\/lock$/.test(String(response.config.url)) && Number.isInteger(response.status)) {
+        summary.httpStatus = response.status
+      }
+      return response
+    })
+
+    let res: Envelope | null = null
+    const sentAt = Date.now()
+    try {
+      res = locked ? await client.EnableTheftProtectionLock(domain) : await client.DisableTheftProtectionLock(domain)
+    } catch {
+      res = null
+    } finally {
+      if (interceptors && interceptorId !== undefined) interceptors.eject(interceptorId)
+    }
+
+    const body = client.lastResponse
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      summary.bodyKeys = Object.keys(body)
+        .filter((key) => /^[A-Za-z0-9_]{1,40}$/.test(key))
+        .slice(0, 8)
+    }
+    const errorCode = safeErrorCode(res?.error?.Code) ?? safeBodyErrorCode(body)
+    if (errorCode) summary.errorCode = errorCode
+    if (summary.httpStatus === undefined) {
+      const statusFromCode = /^API_(\d{3})$/.exec(errorCode ?? '')
+      if (statusFromCode) summary.httpStatus = Number(statusFromCode[1])
+    }
+
+    if (!res) throw new RegistrarError('PROVIDER_ERROR', 'domainnameapi:LOCK_EXCEPTION')
+    if (res.result !== 'OK') throw providerFailure(res)
+
+    const wantedShapes: LockRawShape[] = locked ? ['true', '"true"', '1'] : ['false', '"false"', '0']
+    const shapes: LockRawShape[] = []
+    for (const [index, readAt] of LOCK_CALL_READ_AT_MS.entries()) {
+      const wait = readAt - (Date.now() - sentAt)
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+      const shape = await this.readRawLockShape(domain)
+      shapes.push(shape)
+      if (index === 0) summary.lockAfter5s = shape
+      else summary.lockAfter20s = shape
+      if (wantedShapes.includes(shape)) return { changed: true }
+    }
+
+    const stillOpposite = (shape: LockRawShape) => (locked ? ['false', '"false"', '0'] : ['true', '"true"', '1']).includes(shape)
+    if (locked) throw new RegistrarError('OUTCOME_UNKNOWN', 'domainnameapi:LOCK_NOT_CONFIRMED')
+    if (!errorCode && shapes.every(stillOpposite)) return { changed: true, ineffective: true }
+    return { changed: true, pending: true }
+  }
+
   async changeLock(
     domain: string,
     locked: boolean,
-    options: { acceptUnconfirmed?: boolean } = {},
+    options: { acceptUnconfirmed?: boolean; lockCall?: LockCallSummary } = {},
   ): Promise<ManageChange> {
     const current = await this.requireDetails(domain)
     if (current.locked === locked) return { changed: false }
+
+    if (options.lockCall) return this.changeLockWithDiagnostics(domain, locked, options.lockCall)
 
     // Unlocks that the caller accepts as pending are sent once and read back
     // once: the registry often applies them a few minutes later.

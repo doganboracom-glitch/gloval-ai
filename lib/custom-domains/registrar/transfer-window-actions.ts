@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { getDomainRegistrarProvider } from './provider'
 import { isManageCapable, isTransferCapable, RegistrarError } from './types'
-import type { OwnedDomainInfo, ManagedDomainDetails, DomainManageCapable, DomainTransferCapable } from './types'
+import type { OwnedDomainInfo, ManagedDomainDetails, DomainManageCapable, DomainTransferCapable, LockCallSummary } from './types'
 import { requireRegisteredByUs } from './ownership'
 import { parsePurchaseDomain } from './service'
 import { isTransferSupportedTld } from './transfer-service'
@@ -395,9 +395,25 @@ export async function requestMyTransferOutCode(
   if (!customDomainId) return { ok: false, error: 'NOT_FOUND' }
 
   let unlockChange: Awaited<ReturnType<WindowRegistrar['changeLock']>>
+  const lockCall: LockCallSummary = {}
+  const recordLockCall = (outcome: 'success' | 'failed' | 'deferred') =>
+    recordDomainAuditEvent({
+      userId,
+      customDomainId,
+      domain,
+      eventType: 'transfer_lock_changed',
+      details: {
+        outcome,
+        stage: 'lock_call',
+        source: 'user_code_request',
+        ...lockCall,
+        ...eligibilityAudit,
+      },
+    })
   try {
-    unlockChange = await registrar.changeLock(domain, false, { acceptUnconfirmed: true })
+    unlockChange = await registrar.changeLock(domain, false, { acceptUnconfirmed: true, lockCall })
   } catch (error) {
+    await recordLockCall('failed')
     const relocked = await ensureTransferLock(registrar, domain)
     if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
     const providerCode = providerCodeFromError(error)
@@ -421,6 +437,29 @@ export async function requestMyTransferOutCode(
   // The provider accepted the unlock without an error. The registry can apply
   // it minutes later, so a not-yet-unlocked read-back is not a failure: the
   // window opens and the scheduled relock/status checks remain the safety net.
+  await recordLockCall(unlockChange.ineffective ? 'failed' : unlockChange.pending ? 'deferred' : 'success')
+
+  if (unlockChange.ineffective) {
+    // Accepted without any error code, yet the flag stayed locked for 20 s: the
+    // registrar silently ignored the unlock. No window is opened for it.
+    const relocked = await ensureTransferLock(registrar, domain)
+    if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
+    await recordDomainAuditEvent({
+      userId,
+      customDomainId,
+      domain,
+      eventType: 'transfer_lock_changed',
+      details: {
+        outcome: relocked ? 'failed' : 'unconfirmed',
+        locked: relocked ? true : null,
+        stage: 'unlock_ineffective',
+        source: 'user_code_request',
+        ...eligibilityAudit,
+      },
+    })
+    return { ok: false, error: 'UNLOCK_INEFFECTIVE' }
+  }
+
   const unlockPending = unlockChange.pending === true
   await recordDomainAuditEvent({
     userId,

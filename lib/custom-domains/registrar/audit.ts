@@ -31,8 +31,20 @@ export type DomainAuditStage =
   | 'window_insert'
   | 'code_fetch'
   | 'notice'
+  | 'lock_call'
+  | 'unlock_ineffective'
+
+export type DomainAuditLockShape = '"true"' | '"false"' | 'true' | 'false' | '1' | '0' | 'other' | 'unreadable'
 
 export type DomainAuditDetails = {
+  /** HTTP status of the lock call (100-599). */
+  httpStatus?: number
+  /** Top-level response key names only, never values. Kept to 8 safe names. */
+  bodyKeys?: string[]
+  /** Provider error code, `[A-Za-z0-9_:]` and at most 80 characters. */
+  errorCode?: string
+  lockAfter5s?: DomainAuditLockShape
+  lockAfter20s?: DomainAuditLockShape
   outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
   reason?: DomainAuditReason
   stage?: DomainAuditStage
@@ -51,6 +63,11 @@ export type DomainAuditDetails = {
 }
 
 const DETAIL_KEYS = [
+  'httpStatus',
+  'bodyKeys',
+  'errorCode',
+  'lockAfter5s',
+  'lockAfter20s',
   'outcome',
   'reason',
   'stage',
@@ -87,7 +104,11 @@ const AUDIT_STAGES = new Set<DomainAuditStage>([
   'window_insert',
   'code_fetch',
   'notice',
+  'lock_call',
+  'unlock_ineffective',
 ])
+const AUDIT_LOCK_SHAPES = new Set<DomainAuditLockShape>(['"true"', '"false"', 'true', 'false', '1', '0', 'other', 'unreadable'])
+const SAFE_BODY_KEY = /^[A-Za-z0-9_]{1,40}$/
 
 function isSafeStartDateShape(value: string): boolean {
   if (!value || value.length > 120 || /[\u0000-\u001f\u007f-\u009f]/.test(value)) return false
@@ -108,8 +129,23 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
       if (typeof value === 'string' && AUDIT_STAGES.has(value as DomainAuditStage)) out[key] = value
       continue
     }
-    if (key === 'providerCode') {
+    if (key === 'providerCode' || key === 'errorCode') {
       if (typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value)) out[key] = value
+      continue
+    }
+    if (key === 'httpStatus') {
+      if (typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599) out[key] = value
+      continue
+    }
+    if (key === 'bodyKeys') {
+      if (Array.isArray(value)) {
+        const safe = value.filter((name): name is string => typeof name === 'string' && SAFE_BODY_KEY.test(name)).slice(0, 8)
+        if (safe.length > 0) out[key] = safe.join(',')
+      }
+      continue
+    }
+    if (key === 'lockAfter5s' || key === 'lockAfter20s') {
+      if (typeof value === 'string' && AUDIT_LOCK_SHAPES.has(value as DomainAuditLockShape)) out[key] = value
       continue
     }
     if (key === 'errorName') {
