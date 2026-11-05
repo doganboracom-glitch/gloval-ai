@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { blocksToMarkup, sanitizeBlogMarkup } from '@/lib/blog-markup'
+import { blocksToMarkup, readingTimeMinutes, sanitizeBlogMarkup } from '@/lib/blog-markup'
 import { LIMITS, SLUG_PATTERN } from '@/lib/blog-admin-shared'
 import { staticCategories, staticPosts } from './blog-static'
 import type { BlogCategory, BlogPost, Localized, StaticBlogPost } from './types'
@@ -158,14 +158,20 @@ export function mapPostRow(row: PostRow, categories: Map<string, CategoryRow>, w
 
 function fromStatic(post: StaticBlogPost): BlogPost {
   const category = staticCategories.find((c) => c.id === post.category)
-  const l = <T,>(value: Localized<T>): Localized<T> => ({ tr: value.tr ?? value.en, en: value.en })
+  const hasEnglish = Boolean(post.title.en.trim())
+  const l = <T,>(value: Localized<T>): Localized<T> => {
+    const tr = value.tr ?? value.en
+    return { tr, en: hasEnglish ? value.en : tr }
+  }
+  const trMarkup = blocksToMarkup(post.body, 'tr')
+  const enMarkup = blocksToMarkup(post.body, hasEnglish ? 'en' : 'tr')
   return {
     slug: post.slug,
     title: l(post.title),
     excerpt: l(post.excerpt),
-    markup: { tr: blocksToMarkup(post.body, 'tr'), en: blocksToMarkup(post.body, 'en') },
+    markup: { tr: trMarkup, en: enMarkup },
     coverImage: post.coverImage,
-    coverAlt: post.coverAlt,
+    coverAlt: post.coverAlt ? l(post.coverAlt) : undefined,
     category: post.category,
     categoryLabel: category?.label,
     author: post.author,
@@ -177,8 +183,8 @@ function fromStatic(post: StaticBlogPost): BlogPost {
     tags: post.keywords.tr ?? post.keywords.en,
     featured: post.featured,
     noindex: false,
-    readingTime: 1,
-    hasEnglish: true,
+    readingTime: readingTimeMinutes(trMarkup),
+    hasEnglish,
   }
 }
 

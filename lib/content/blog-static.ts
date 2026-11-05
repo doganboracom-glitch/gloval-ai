@@ -17,6 +17,7 @@ export const staticCategories: BlogCategory[] = [
   { id: 'ecommerce', label: { tr: 'E-Ticaret', en: 'E-Commerce' } },
   { id: 'gloval', label: { tr: 'GLOVAL AI', en: 'GLOVAL AI' } },
   { id: 'guides', label: { tr: 'Rehberler', en: 'Guides' } },
+  { id: 'isbirligi', label: { tr: 'İşbirliği', en: 'Collaboration' } },
 ]
 
 export const staticPosts: StaticBlogPost[] = [
@@ -506,6 +507,144 @@ export const staticPosts: StaticBlogPost[] = [
         text: {
           tr: 'Ödeme altyapısı, mesafeli satış sözleşmesi, iade koşulları ve gizlilik politikası gibi konular ülkenizin mevzuatına göre değişir. Mağazanızı yayına almadan önce bu gereklilikleri kendi ülkenizdeki güncel kurallara göre kontrol etmenizi öneririz.',
           en: 'Payment infrastructure, distance selling terms, return conditions, and privacy policies vary by jurisdiction. We recommend checking these requirements against the current rules in your own country before you launch.',
+        },
+      },
+    ],
+  },
+  {
+    slug: 'iyzico-gloval-ai-isbirligi-e-ticaret-websiteni-bugun-kur',
+    featured: false,
+    category: 'isbirligi',
+    author: 'GLOVAL AI',
+    publishedAt: '2026-11-05',
+    updatedAt: '2026-11-05',
+    title: {
+      tr: 'iyzico × GLOVAL AI İşbirliği: E-Ticaret Websiteni Bugün Kur',
+      en: '',
+    },
+    excerpt: {
+      tr: 'GLOVAL AI ve iyzico işbirliğiyle e-ticaret mağazanı yapay zekâ destekli bir taslakla oluştur, ürünlerini ekle ve ödeme alma adımlarını incele.',
+      en: '',
+    },
+    seoTitle: {
+      tr: 'iyzico × GLOVAL AI İşbirliği: E-Ticaret Mağazanı Kur',
+      en: '',
+    },
+    seoDescription: {
+      tr: 'GLOVAL AI ile e-ticaret mağazanı yapay zekâ desteğiyle dakikalar içinde oluştur. iyzico ile ödeme adımları ve 7 gün vadede %2.29 duyurusu.',
+      en: '',
+    },
+    keywords: {
+      tr: ['iyzico', 'GLOVAL AI', 'e-ticaret sitesi kurma', 'online ödeme', 'e-ticaret ödeme'],
+      en: [],
+    },
+    coverImage: '/blog/isbirligi/blog-cover-isbirligi-1600x900.png',
+    coverAlt: {
+      tr: 'İndirim etiketi taşıyan çevrimiçi mağaza ve ödeme kartı illüstrasyonu',
+      en: '',
+    },
+    body: [
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'GLOVAL AI ile iyzico, e-ticaret mağazasını çevrimiçi kurmak ve müşterilerinden ödeme almak isteyen işletmeler için yeni bir işbirliği başlattı. Amaç, mağaza hazırlığını ve ödeme adımını tek bir yolculukta buluşturmak: GLOVAL AI yapay zekâ ile ilk mağaza taslağını oluşturmana yardımcı olur; sen taslağı düzenleyip ürünlerini eklersin; iyzico ile ödeme seçeneğini bağlarsın. Hesap başvurusu, işletme uygunluğu ve ödeme koşulları iyzico’nun kendi süreçlerine ve anlaşma şartlarına tabidir.',
+          en: '',
+        },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'İşbirliğinin duyurusu, mağaza kurmak isteyen işletmeler için iki ayrı işi sadeleştirmeye odaklanıyor. Bir yanda site taslağını sıfırdan kurmadan hazırlamak, diğer yanda ürünleri ve alışveriş akışını tamamladıktan sonra online ödeme alabilmek var. Hizmetin gerçek kullanımı için GLOVAL AI hesabı, mağaza içeriği ve iyzico hesabı gerekir; bu adımların tamamlanma süresi işletmenin hazırlığına ve ilgili sağlayıcının süreçlerine göre değişir.',
+          en: '',
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'Mağazanı yapay zekâ ile dakikalar içinde hazırla', en: '' },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'GLOVAL AI’da ana sayfadaki kurulum alanına işletmeni, hedef kitleni ve satacağın ürünleri yazarak ilk taslağı oluşturabilirsin. Yapay zekâ, mağazanın temel sayfa yapısını ve içerik başlangıcını dakikalar içinde hazırlar; taslağın son hâli için ürün bilgilerini, marka dilini, görselleri, teslimat ve iade bilgilerini senin kontrol edip düzenlemen gerekir. AI taslağı bir başlangıç noktasıdır; mağazanın hazır olduğunu veya satış yapacağını tek başına garanti etmez.',
+          en: '',
+        },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'E-Ticaret paketinin ürün, sepet ve mağaza yönetimi kapsamını [fiyatlandırma sayfasında](/#pricing) inceleyebilir; doğrudan [e-ticaret kurulum alanına](/#hero-input) giderek ilk mağaza taslağını oluşturmaya başlayabilirsin.',
+          en: '',
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'iyzico ile ödeme ve %2.29 duyurusu', en: '' },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'İşbirliği kapsamında paylaşılan duyuruda “iyzico ile ödeme: %2.29 işlem oranı*” ifadesi yer alıyor. Dipnot, bu oranı “7 gün vadede %2.29” olarak açıklıyor. Ayrıntılar iyzico ile yapılan anlaşma koşullarına tabidir. Başvuru, hesap onayı, vade ve işlem koşullarını ödeme almaya başlamadan önce iyzico’dan doğrula. Bu metin tüm mağazalar için aynı koşulların geçerli olduğu, başvurunun kabul edileceği veya satışların belirli bir seviyeye ulaşacağı yönünde bir taahhüt değildir.',
+          en: '',
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'Mağazanı açmak için dört adım', en: '' },
+      },
+      {
+        type: 'list',
+        items: {
+          tr: [
+            '**Kayıt ol.** GLOVAL AI hesabını aç ve giriş adımlarını tamamla. Mağaza bilgilerini hazırlarken işletme adını, iletişim kanalını ve satış yaptığın alanı doğru gir.',
+            '**Mağazanı oluştur.** Ana sayfadaki kurulum alanına işletmeni ve hedefini yaz; yapay zekânın oluşturduğu ilk taslağı incele. Menüleri, sayfa metinlerini, marka görünümünü ve iletişim bilgilerini kendi bilgilerinle güncelle.',
+            '**Ürünlerini ekle.** Her ürün için anlaşılır bir ad, açıklama, doğru fiyat, görsel ve gerekiyorsa varyant veya stok bilgisini ekle. Kategorileri düzenle; ürün detayında teslimat, iade ve satış şartlarını netleştir. Eksik bilgileri yayın öncesinde kontrol et.',
+            '**iyzico ile ödeme almayı hazırla.** Mağaza yönetimindeki ödeme ayarlarından iyzico’yu seç ve bağlantı adımlarını izle. Gerekli hesap, işletme doğrulaması veya başvuru adımları için iyzico yönergelerini takip et. Ödeme yönteminin etkin olduğunu ve sepetten ödeme akışını test ettikten sonra mağazayı yayınla.',
+          ],
+          en: [],
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'Sık sorulan sorular', en: '' },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'iyzico ile ödeme almak için ne yapmalıyım?', en: '' },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'GLOVAL AI mağazandaki ödeme ayarlarından iyzico bağlantısını seçip ekrandaki adımları izle. Gerekli hesap başvurusu, işletme bilgileri ve doğrulama süreci iyzico tarafından yürütülür; mağazanı yayınlamadan önce bağlantının etkin olduğunu ve ödeme akışının doğru çalıştığını kontrol et.',
+          en: '',
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: '%2.29 oranı tüm mağazalar için geçerli mi?', en: '' },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'Duyuruda oran “7 gün vadede %2.29” dipnotuyla paylaşılıyor. Uygunluk, hesap onayı ve geçerli koşullar için iyzico ile yapılan anlaşmayı incele; bu yazı her mağaza için aynı oranın geçerli olacağını taahhüt etmez.',
+          en: '',
+        },
+      },
+      {
+        type: 'heading',
+        text: { tr: 'Mağaza ve ürün bilgileri otomatik tamamlanıyor mu?', en: '' },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: 'Yapay zekâ ilk taslağı hazırlamaya yardımcı olur; ürün adları, fiyatlar, stok, görseller ve teslimat bilgilerini senin ekleyip doğrulaman gerekir. Yayına almadan önce mağazayı ve ödeme adımını kendin test et.',
+          en: '',
+        },
+      },
+      {
+        type: 'paragraph',
+        text: {
+          tr: '* 7 gün vadede %2.29. Ayrıntılar iyzico ile yapılan anlaşma koşullarına tabidir.',
+          en: '',
         },
       },
     ],

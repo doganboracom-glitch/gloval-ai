@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BLOG_MAX_POSTS } from '@/lib/blog'
 import { PINNED_ITEM_IDS, buildComparison, buildPlanView, splitPlanItems } from '@/lib/plan-copy'
+import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
 import {
   AI_CREDIT_CONFIG,
   PAGE_LIMITS,
@@ -60,6 +61,18 @@ describe('blog rows in plan copy', () => {
       expect(order[order.indexOf(LABELS[lang].group) - 1]).toBe('Site')
     })
   }
+
+  it.each(SUPPORTED_LOCALES)('%s: shows the iyzico rate and 7-day footnote only on E-COMMERCE', (locale) => {
+    const ecommerce = buildPlanView('ecommerce', 'yearly', locale)
+    const pro = buildPlanView('pro', 'yearly', locale)
+
+    expect(ecommerce.ecommercePaymentRateLine).toContain('%2.29')
+    expect(ecommerce.ecommercePaymentRateFootnote).toContain('%2.29')
+    expect(ecommerce.ecommercePaymentRateFootnote).toContain('7 gün')
+    expect(pro.groups.flatMap((group) => group.items.map((item) => item.label))).not.toContain(
+      ecommerce.ecommercePaymentRateLine,
+    )
+  })
 
   it('does not touch prices, limits or credit amounts', () => {
     expect(PLANS.map((p) => [p.code, p.monthlyPrice, p.yearlyPrice])).toEqual([
