@@ -217,7 +217,14 @@ export type DomainContactSet = {
 }
 
 /** `changed: false` means the provider already had the requested state and nothing was sent. */
-export type ManageChange = { changed: boolean }
+export type ManageChange = {
+  changed: boolean
+  /**
+   * The provider accepted the request but the read-back did not show it yet
+   * (only possible when the caller opted in with `acceptUnconfirmed`).
+   */
+  pending?: boolean
+}
 
 /**
  * Account-management operations on a domain we hold at the provider. Every
@@ -228,7 +235,13 @@ export interface DomainManageCapable {
   getManagedDetails(domain: string): Promise<ManagedDomainDetails | null>
   setNameservers(domain: string, nameservers: string[]): Promise<ManageChange>
   setPrivacy(domain: string, enabled: boolean): Promise<ManageChange>
-  changeLock(domain: string, locked: boolean): Promise<ManageChange>
+  /**
+   * With `acceptUnconfirmed`, an accepted request whose single immediate
+   * read-back does not show the change yet resolves as `{ pending: true }`
+   * instead of waiting and throwing `OUTCOME_UNKNOWN`. Explicit provider
+   * errors still throw.
+   */
+  changeLock(domain: string, locked: boolean, options?: { acceptUnconfirmed?: boolean }): Promise<ManageChange>
   getContacts(domain: string): Promise<DomainContactSet>
   /** Applies one contact to all four WHOIS roles, as registration does. */
   updateContacts(domain: string, contact: DomainContact): Promise<ManageChange>

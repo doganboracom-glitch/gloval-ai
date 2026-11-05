@@ -725,7 +725,8 @@ export class DomainNameApiProvider
     confirmed: () => Promise<boolean>,
     failureKey: string,
     readbackRetries = 0,
-  ): Promise<void> {
+    acceptUnconfirmed = false,
+  ): Promise<boolean> {
     let res: Envelope | null = null
     try {
       res = await send()
@@ -743,12 +744,14 @@ export class DomainNameApiProvider
         applied = false
         readBackFailed = true
       }
-      if (applied) return
+      if (applied) return true
 
       const outcomeUnknown = readBackFailed || res?.result === 'OK'
       if (!outcomeUnknown || retry === readbackRetries) break
       await new Promise((resolve) => setTimeout(resolve, TRANSFER_LOCK_READBACK_DELAY_MS))
     }
+
+    if (acceptUnconfirmed && res?.result === 'OK') return false
 
     if (readBackFailed) {
       throw new RegistrarError('OUTCOME_UNKNOWN', `domainnameapi:${failureKey}_UNCONFIRMED`)
@@ -799,18 +802,26 @@ export class DomainNameApiProvider
     return { changed: true }
   }
 
-  async changeLock(domain: string, locked: boolean): Promise<ManageChange> {
+  async changeLock(
+    domain: string,
+    locked: boolean,
+    options: { acceptUnconfirmed?: boolean } = {},
+  ): Promise<ManageChange> {
     const current = await this.requireDetails(domain)
     if (current.locked === locked) return { changed: false }
 
+    // Unlocks that the caller accepts as pending are sent once and read back
+    // once: the registry often applies them a few minutes later.
+    const acceptUnconfirmed = options.acceptUnconfirmed === true && !locked
     const client = this.transferClient()
-    await this.applyAndVerify(
+    const confirmed = await this.applyAndVerify(
       () => (locked ? client.EnableTheftProtectionLock(domain) : client.DisableTheftProtectionLock(domain)),
       async () => (await this.requireDetails(domain)).locked === locked,
       'LOCK',
-      locked ? 0 : TRANSFER_LOCK_READBACK_RETRIES,
+      locked || acceptUnconfirmed ? 0 : TRANSFER_LOCK_READBACK_RETRIES,
+      acceptUnconfirmed,
     )
-    return { changed: true }
+    return confirmed ? { changed: true } : { changed: true, pending: true }
   }
 
   async getContacts(domain: string): Promise<DomainContactSet> {
