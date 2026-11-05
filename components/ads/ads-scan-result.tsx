@@ -40,7 +40,7 @@ function PlanSummary({ result }: { result: PublicScanResult }) {
   return (
     <section aria-labelledby="ads-summary" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
       <h3 id="ads-summary" className="text-lg font-semibold">
-        {copy.summaryTitle}
+        {result.source === 'manual' ? copy.manualFallback.summaryTitle : copy.summaryTitle}
       </h3>
       <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
         {rows.map(([label, value]) => (
@@ -141,8 +141,13 @@ export function AdsScanResult({ result, onNewScan }: { result: PublicScanResult;
   return (
     <div className="flex w-full flex-col gap-4 text-start">
       <h2 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none">
-        {copy.resultTitle}: {result.host}
+        {result.source === 'manual' ? copy.manualFallback.resultTitle : `${copy.resultTitle}: ${result.host}`}
       </h2>
+      {result.source === 'manual' ? (
+        <p role="note" className="rounded-xl bg-secondary px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+          {copy.manualFallback.note}
+        </p>
+      ) : null}
       {result.restricted.length > 0 ? (
         <div role="note" className="rounded-2xl border border-border bg-secondary p-4 text-sm">
           <p className="font-semibold text-foreground">{copy.restrictedTitle}</p>

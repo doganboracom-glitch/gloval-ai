@@ -18,7 +18,32 @@ describe('requestScan', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('/api/ads/scan')
+    expect(init.cache).toBe('no-store')
     expect(JSON.parse(String(init.body))).toEqual(input)
+  })
+
+  it('sends manual details through a fresh POST for the same address', async () => {
+    const manual = {
+      businessName: 'Northline Studio',
+      industry: 'Custom furniture',
+      services: 'Made-to-measure tables; installation',
+      location: 'Ankara',
+      language: 'en' as const,
+    }
+    const fetchImpl = vi.fn(async (_url: string, _init?: RequestInit) => jsonResponse({ result: sampleScanResult }))
+
+    await requestScan({ ...input, manual }, { fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep })
+    await requestScan(
+      { ...input, requestId: 'req-87654321', manual },
+      { fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep },
+    )
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    for (const [url, init] of fetchImpl.mock.calls) {
+      expect(url).toBe('/api/ads/scan')
+      expect(init?.cache).toBe('no-store')
+      expect(JSON.parse(String(init?.body)).manual).toEqual(manual)
+    }
   })
 
   it('keeps typed extras from an error body and ignores anything else', async () => {

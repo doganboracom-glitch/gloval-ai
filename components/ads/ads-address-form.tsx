@@ -4,9 +4,12 @@ import { useState, type FormEvent } from 'react'
 import { ArrowRight, Globe, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { AdsScanError } from '@/components/ads/ads-scan-error'
+import { AdsManualPlanForm } from '@/components/ads/ads-manual-plan-form'
 import { AdsScanResult } from '@/components/ads/ads-scan-result'
 import { useAdsScan } from '@/components/ads/use-ads-scan'
 import { MAX_SITE_ADDRESS_LENGTH, normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
+import { describeScanError } from '@/lib/ads/scan-messages'
+import type { ManualPlanInput } from '@/lib/ads/manual-plan'
 import type { ScanStage } from '@/lib/ads/scan-client'
 
 const STAGE_KEY = {
@@ -25,9 +28,22 @@ export function AdsAddressForm() {
   const [value, setValue] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const [validationError, setValidationError] = useState<AddressValidationError | null>(null)
+  const [manualFallbackAvailable, setManualFallbackAvailable] = useState(false)
   const busy = state.phase === 'busy'
   const showGuidance = value.length === 0 && !isFocused
   const errorMessage = validationError === 'required' ? copy.addressRequired : copy.addressInvalid
+
+  async function startSiteScan(address: string) {
+    setManualFallbackAvailable(false)
+    const outcome = await start(address)
+    if (
+      outcome &&
+      !outcome.ok &&
+      (outcome.error.code === 'site_blocked' || outcome.error.code === 'site_unresponsive')
+    ) {
+      setManualFallbackAvailable(true)
+    }
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -39,13 +55,39 @@ export function AdsAddressForm() {
     }
     setValidationError(null)
     setValue(result.host)
-    void start(result.host)
+    void startSiteScan(result.host)
+  }
+
+  function submitManual(input: ManualPlanInput) {
+    if (busy) return
+    const result = normalizeSiteAddress(value)
+    if (!result.ok) {
+      setValidationError(result.reason === 'empty' ? 'required' : 'invalid')
+      return
+    }
+    setValidationError(null)
+    setValue(result.host)
+    void start(result.host, input)
+  }
+
+  function handleErrorAction() {
+    if (state.phase === 'error' && describeScanError(state.error, copy).action === 'retry') {
+      const result = normalizeSiteAddress(value)
+      if (result.ok) {
+        setValidationError(null)
+        setValue(result.host)
+        void startSiteScan(result.host)
+        return
+      }
+    }
+    newScan()
   }
 
   function newScan() {
     reset()
     setValue('')
     setValidationError(null)
+    setManualFallbackAvailable(false)
   }
 
   return (
@@ -156,9 +198,13 @@ export function AdsAddressForm() {
             {copy[STAGE_KEY[state.stage]]}
           </p>
         ) : null}
-        {state.phase === 'error' ? <AdsScanError error={state.error} onAction={newScan} /> : null}
+        {state.phase === 'error' ? <AdsScanError error={state.error} onAction={handleErrorAction} /> : null}
         {state.phase === 'done' ? <AdsScanResult result={state.result} onNewScan={newScan} /> : null}
       </div>
+
+      {manualFallbackAvailable && state.phase !== 'done' ? (
+        <AdsManualPlanForm disabled={busy} onSubmit={submitManual} />
+      ) : null}
     </div>
   )
 }

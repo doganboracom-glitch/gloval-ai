@@ -1460,6 +1460,7 @@ const ar: DeepPartial<Dict> = {
     noticeTerms: 'لشروط الإلغاء والاسترداد راجع:',
   },
   ads: {
+    manualFallback: { title: 'مسودة خطة من معلومات النشاط التجاري', description: 'إذا تعذرت قراءة الموقع، أدخل معلومات النشاط أدناه. لن نتجاوز robots.txt أو ضوابط الوصول.', note: 'تعتمد هذه المسودة على المعلومات التي تقدمها فقط؛ لن يتم فحص الموقع أو التحقق من عنوان الوجهة.', resultTitle: 'مسودة خطة من معلومات النشاط التجاري', summaryTitle: 'معلومات النشاط المقدمة', businessLabel: 'اسم النشاط التجاري', industryLabel: 'المجال', servicesLabel: 'المنتجات أو الخدمات', locationLabel: 'نطاق الخدمة (اختياري)', languageLabel: 'لغة الإعلان', submitLabel: 'إنشاء مسودة' },
     disconnectDialog: {
       title: 'هل تريد قطع اتصال Google Ads؟',
       description: 'عند قطع الاتصال، سيُلغى وصول GLOVAL إلى حسابك على Google وسيُحذف رمز الوصول المحفوظ. يمكنك إعادة الاتصال في أي وقت.',

@@ -1,5 +1,6 @@
 import { ADS_SCAN_ERROR_STATUS, type AdsScanError, type AdsScanErrorCode } from '@/lib/ads/public-errors'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
+import type { ManualPlanInput } from '@/lib/ads/manual-plan'
 
 export const ADS_SCAN_PATH = '/api/ads/scan'
 export const ADS_SESSION_PATH = '/api/ads/session'
@@ -70,7 +71,7 @@ async function parse(response: Response): Promise<ClientScanOutcome> {
  * requestId, and a 409 on that retry means the first attempt ran.
  */
 export async function requestScan(
-  input: { address: string; requestId: string },
+  input: { address: string; requestId: string; manual?: ManualPlanInput },
   deps: ScanClientDeps = {},
 ): Promise<ClientScanOutcome> {
   const doFetch = deps.fetchImpl ?? fetch
@@ -82,7 +83,8 @@ export async function requestScan(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ address: input.address, requestId: input.requestId }),
+        cache: 'no-store',
+        body: JSON.stringify(input),
       }),
     )
 

@@ -3,6 +3,8 @@ import { BotPageClient } from '@/components/bot/bot-page-client'
 import { SUPPORT_EMAIL } from '@/lib/notify'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
+export const dynamic = 'force-dynamic'
+
 /** The page the GlovalAdsBot user agent links to (`lib/ads/scan/config.ts`). */
 export async function generateMetadata({
   searchParams,

@@ -1510,6 +1510,7 @@ const fr: DeepPartial<Dict> = {
     noticeTerms: 'Pour les conditions d’annulation et de remboursement, consultez :',
   },
   ads: {
+    manualFallback: { title: 'Brouillon basé sur les informations de votre activité', description: 'Si le site ne peut pas être lu, indiquez les informations de votre activité ci-dessous. Nous ne contournons pas robots.txt ni les contrôles de sécurité.', note: 'Ce brouillon utilise uniquement les informations fournies ; le site et son adresse de destination ne sont pas vérifiés.', resultTitle: 'Brouillon basé sur les informations de votre activité', summaryTitle: 'Informations sur l’activité fournies', businessLabel: 'Nom commercial', industryLabel: 'Secteur d’activité', servicesLabel: 'Produits ou services', locationLabel: 'Zone desservie (facultatif)', languageLabel: 'Langue des annonces', submitLabel: 'Créer le brouillon' },
     addressLabel: 'Adresse du site web',
     addressGuidance: 'Entrez le lien du site ici',
     addressPlaceholder: 'exemple.fr',

@@ -24,6 +24,7 @@ import {
   type AdCopy,
 } from '@/lib/ads/ad-copy'
 import type { AdsScanError } from '@/lib/ads/public-errors'
+import { buildManualSnapshot, manualPlanSchema, type ManualPlanInput } from '@/lib/ads/manual-plan'
 import type { AdsChargeResult, AdsRefundResult } from '@/lib/ads/credits'
 import type { AdsFreeReservation, AdsFreeSubjects } from '@/lib/ads/free-quota'
 import { halfCapThreshold } from '@/lib/ads/admin-alert'
@@ -45,9 +46,11 @@ export type ScanActor =
   | { kind: 'user'; userId: string; planCode: string | null; ip?: string | null }
   | { kind: 'anon'; anonId: string; ip: string }
 
-export type ScanRequest = { address: string; requestId: string; actor: ScanActor }
+export type ScanRequest = { address: string; requestId: string; actor: ScanActor; manual?: ManualPlanInput }
 
 export type PublicScanResult = {
+  /** Present only when the plan was drafted from user-entered details rather than a site scan. */
+  source?: 'manual'
   host: string
   mode: 'free' | 'paid'
   plan: {
@@ -167,6 +170,13 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
   const normalized = normalizeSiteAddress(request.address)
   if (!normalized.ok) return fail({ code: 'invalid_request' })
 
+  let manual: ManualPlanInput | undefined
+  if (request.manual !== undefined) {
+    const parsed = manualPlanSchema.safeParse(request.manual)
+    if (!parsed.success) return fail({ code: 'invalid_request' })
+    manual = parsed.data
+  }
+
   const byActor = deps.rateLimit(`ads-scan:actor:${actorKey(actor)}`, RATE_LIMITS.perActorPerMinute, 60_000)
   if (!byActor.allowed) {
     return fail({ code: 'rate_limited', retryAfterSeconds: Math.max(1, Math.ceil(byActor.retryAfterMs / 1000)) })
@@ -276,14 +286,20 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
   }
 
   try {
-    // ---- read the site ---------------------------------------------------------
-    const scan = await deps.scanSite(normalized.url)
-    if (!scan.ok) {
-      // The usage row keeps the precise reason; the visitor only gets the coarse code.
-      finalCode = scan.code === scan.detail ? scan.code : `${scan.code}:${scan.detail}`
-      return fail({ code: scan.code === 'invalid_address' ? 'invalid_request' : scan.code })
+    // ---- read the site or build a user-provided brief --------------------------
+    let snapshot: SiteSnapshot
+    if (manual) {
+      // Manual mode never contacts the submitted site; it is not a crawler bypass.
+      snapshot = buildManualSnapshot(normalized.host, manual)
+    } else {
+      const scan = await deps.scanSite(normalized.url)
+      if (!scan.ok) {
+        // The usage row keeps the precise reason; the visitor only gets the coarse code.
+        finalCode = scan.code === scan.detail ? scan.code : `${scan.code}:${scan.detail}`
+        return fail({ code: scan.code === 'invalid_address' ? 'invalid_request' : scan.code })
+      }
+      snapshot = scan.snapshot
     }
-    const snapshot: SiteSnapshot = scan.snapshot
 
     // ---- policy before any model call -------------------------------------------
     const pre = evaluateSnapshotPolicy(snapshot)
@@ -343,7 +359,14 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     const plannerModel = deps.resolveModel('adsPlanner', planCode)
     let plan: AdsPlan | null
     try {
-      const raw = await ask('plan', plannerModel, plannerOutputSchema, PLANNER_SYSTEM, buildPlannerPrompt(snapshot, newBoundaryToken()), PLANNER_MAX_MS)
+      const raw = await ask(
+        'plan',
+        plannerModel,
+        plannerOutputSchema,
+        PLANNER_SYSTEM,
+        buildPlannerPrompt(snapshot, newBoundaryToken(), manual ? 'manual' : 'site'),
+        PLANNER_MAX_MS,
+      )
       plan = validatePlan(raw, snapshot)
     } catch (error) {
       return failAi(error)
@@ -386,6 +409,7 @@ export async function runScan(request: ScanRequest, deps: ScanDeps): Promise<Sca
     return {
       ok: true,
       result: {
+        ...(manual ? { source: 'manual' as const } : {}),
         host: snapshot.finalHost,
         mode,
         plan: {

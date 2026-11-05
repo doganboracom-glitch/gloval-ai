@@ -46,6 +46,7 @@ describe('BotPageClient', () => {
     expect(document.body.textContent).toContain('User-agent: GlovalAdsBot')
     expect(document.body.textContent).toContain('Disallow: /')
     expect(document.body.textContent).toContain('Allow: /')
+    expect(document.body.textContent).toContain('korumaları aşmaya çalışmayız')
     expect(screen.getByRole('link', { name: 'support@gloval.ai' }).getAttribute('href')).toBe(
       'mailto:support@gloval.ai',
     )
@@ -56,5 +57,6 @@ describe('BotPageClient', () => {
 
     expect(screen.getByRole('heading', { name: 'What does it read?' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'How to block or allow it' })).toBeTruthy()
+    expect(document.body.textContent).toContain('do not try to bypass it')
   })
 })

@@ -30,11 +30,20 @@ function post(body: unknown, headers: Record<string, string> = {}) {
 }
 
 const VALID = { address: 'ornekmutfak.com', requestId: 'req_12345678' }
+const MANUAL = {
+  businessName: 'Northline Studio',
+  industry: 'Custom furniture',
+  services: 'Made-to-measure tables; installation',
+  location: 'Ankara',
+  language: 'en',
+}
 
 describe('POST /api/ads/scan handler', () => {
-  it('is a 404 while the feature flag is off', async () => {
+  it('is a non-cacheable 404 while the feature flag is off', async () => {
     const { env } = setup({ featureEnabled: false })
-    expect((await handleScanRequest(post(VALID), env)).status).toBe(404)
+    const response = await handleScanRequest(post(VALID), env)
+    expect(response.status).toBe(404)
+    expect(response.headers.get('cache-control')).toBe('no-store')
   })
 
   it('asks a visitor without a cookie to load the page first (428)', async () => {
@@ -53,6 +62,55 @@ describe('POST /api/ads/scan handler', () => {
     const json = await response.json()
     expect(json.result.mode).toBe('free')
     expect(response.headers.get('cache-control')).toBe('no-store')
+  })
+
+  it('creates a manual draft without contacting the submitted site or bypassing scan limits', async () => {
+    const issued = issueAnonCookie({ ADS_ANON_HASH_SECRET: SECRET })!
+    const { env, calls } = setup({}, issued.value)
+    const scanSite = vi.fn(env.deps.scanSite)
+    env.deps.scanSite = scanSite
+
+    const response = await handleScanRequest(post({ ...VALID, manual: MANUAL }), env)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(json.result.source).toBe('manual')
+    expect(scanSite).not.toHaveBeenCalled()
+    expect(calls.reserve).toBe(1)
+    expect(calls.reservePolicy).toBe(1)
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({
+      outcome: 'ok',
+      free_quota_used: true,
+    })
+  })
+
+  it('reads the same website address again instead of reusing a cached scan', async () => {
+    const issued = issueAnonCookie({ ADS_ANON_HASH_SECRET: SECRET })!
+    const { env } = setup({}, issued.value)
+    let reads = 0
+    const scanSite = vi.fn(async () => {
+      reads++
+      return {
+        ok: false,
+        code: reads === 1 ? 'site_blocked' : 'site_unresponsive',
+        detail: reads === 1 ? 'robots_disallowed' : 'timeout',
+      } as never
+    })
+    env.deps.scanSite = scanSite
+
+    const first = await handleScanRequest(post(VALID), env)
+    const second = await handleScanRequest(post({ ...VALID, requestId: 'req_87654321' }), env)
+    const firstJson = await first.json()
+    const secondJson = await second.json()
+
+    expect(first.status).toBe(422)
+    expect(second.status).toBe(422)
+    expect(firstJson.error.code).toBe('site_blocked')
+    expect(secondJson.error.code).toBe('site_unresponsive')
+    expect(scanSite).toHaveBeenCalledTimes(2)
+    expect(first.headers.get('cache-control')).toBe('no-store')
+    expect(second.headers.get('cache-control')).toBe('no-store')
   })
 
   it('does not show the adult notice for a standalone sex-shop SEO label', async () => {
@@ -96,6 +154,9 @@ describe('POST /api/ads/scan handler', () => {
     expect((await handleScanRequest(post('{nope'), env)).status).toBe(400)
     expect((await handleScanRequest(post({ address: '', requestId: 'req_12345678' }), env)).status).toBe(400)
     expect((await handleScanRequest(post({ ...VALID, address: 'a'.repeat(3000) }), env)).status).toBe(400)
+    expect(
+      (await handleScanRequest(post({ ...VALID, manual: { ...MANUAL, services: 'x'.repeat(501) } }), env)).status,
+    ).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://evil.example' }), env)).status).toBe(400)
     expect((await handleScanRequest(post(VALID, { origin: 'https://gloval.ai' }), env)).status).toBe(200)
     expect((await handleScanRequest(post({ ...VALID, requestId: 'policy_12345678' }), env)).status).toBe(400)

@@ -41,6 +41,13 @@ function nextWithSanitizedRequestHeaders(request: NextRequest): NextResponse {
   })
 }
 
+function withBotNoStore(response: NextResponse, request: NextRequest): NextResponse {
+  if (request.nextUrl.pathname === '/bot') {
+    response.headers.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate')
+  }
+  return response
+}
+
 function rewriteWithSanitizedRequestHeaders(
   request: NextRequest,
   destination: URL,
@@ -124,7 +131,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname + request.nextUrl.search,
   )
   if (redirectUrl) {
-    return NextResponse.redirect(redirectUrl, 308)
+    return withBotNoStore(NextResponse.redirect(redirectUrl, 308), request)
   }
 
   // 3) Canonical platform host (gloval.ai / previews / localhost): resolve
@@ -136,7 +143,7 @@ export async function middleware(request: NextRequest) {
   // has no language cookie yet.
   request.cookies.set(LANG_COOKIE, renderLang)
 
-  const response = await updateSession(request)
+  const response = withBotNoStore(await updateSession(request), request)
 
   // Only write the cookie back to the browser when we're actually
   // establishing/changing the stored preference. A manual switcher pick and
@@ -182,10 +189,13 @@ export async function middleware(request: NextRequest) {
       destination.searchParams.delete('ref')
       if (destination.origin !== request.nextUrl.origin) return response
 
-      const cleanResponse = redirectWithResponseCookies(
-        response,
-        destination,
-        location ? response.status : 307,
+      const cleanResponse = withBotNoStore(
+        redirectWithResponseCookies(
+          response,
+          destination,
+          location ? response.status : 307,
+        ),
+        request,
       )
       if (capture.cookieToken) {
         cleanResponse.cookies.set(

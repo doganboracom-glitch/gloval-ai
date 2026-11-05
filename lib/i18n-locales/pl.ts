@@ -1521,6 +1521,7 @@ const pl: DeepPartial<Dict> = {
     noticeTerms: 'Warunki anulowania i zwrotu znajdziesz tutaj:',
   },
   ads: {
+    manualFallback: { title: 'Szkic planu na podstawie danych firmy', description: 'Jeśli nie można odczytać strony, podaj poniżej dane firmy. Nie omijamy robots.txt ani zabezpieczeń dostępu.', note: 'Szkic opiera się wyłącznie na podanych informacjach; strona nie jest skanowana, a adres docelowy nie jest weryfikowany.', resultTitle: 'Szkic planu na podstawie danych firmy', summaryTitle: 'Podane dane firmy', businessLabel: 'Nazwa firmy', industryLabel: 'Branża', servicesLabel: 'Produkty lub usługi', locationLabel: 'Obszar działania (opcjonalnie)', languageLabel: 'Język reklam', submitLabel: 'Utwórz szkic' },
     disconnectDialog: {
       title: 'Odłączyć Google Ads?',
       description: 'Po odłączeniu dostęp GLOVAL do Twojego konta Google zostanie cofnięty, a zapisany token dostępu usunięty. W każdej chwili możesz połączyć konto ponownie.',
