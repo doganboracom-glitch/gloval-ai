@@ -1,8 +1,10 @@
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { HTML_CONTENT_TYPE, SCAN_LIMITS } from './config'
 import { ScanFetchError } from './errors'
+import { reasonForStatus } from './failure'
 import { nodeScanGet, type ScanGet, type ScanResponse } from './http'
 import { ALLOW_ALL, DISALLOW_ALL, headerForbidsUse, parseRobots, type RobotsRules } from './robots'
+import { detectWafChallenge } from './waf'
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
@@ -46,6 +48,9 @@ export function assertScannable(url: URL): void {
   if (!normalizeSiteAddress(url.hostname).ok) throw new ScanFetchError('NOT_ALLOWED')
 }
 
+/** robots.txt rules plus whether they are a "could not read it" fallback (RFC 9309: unreachable means disallow). */
+type LoadedRobots = { rules: RobotsRules; unavailable: boolean }
+
 export type FetchedPage = {
   finalUrl: URL
   html: string
@@ -64,22 +69,24 @@ export type ScanFetcherOptions = {
 export type ScanFetcher = { fetchPage(url: URL): Promise<FetchedPage> }
 
 export function createScanFetcher({ httpGet = nodeScanGet, deadline, now = Date.now }: ScanFetcherOptions): ScanFetcher {
-  const robotsByOrigin = new Map<string, Promise<RobotsRules>>()
+  const robotsByOrigin = new Map<string, Promise<LoadedRobots>>()
 
   async function get(
     start: URL,
-    options: { contentType: RegExp | null; maxBytes: number; checkRobots: boolean },
+    options: { contentType: RegExp | null; maxBytes: number; checkRobots: boolean; partialOnTimeout: boolean },
   ): Promise<{ response: ScanResponse; finalUrl: URL }> {
     let url = start
     const seen = new Set<string>()
     for (let hop = 0; ; hop++) {
       assertScannable(url)
-      if (seen.has(url.href)) throw new ScanFetchError('REDIRECT_LIMIT')
+      if (seen.has(url.href)) throw new ScanFetchError('REDIRECT_LOOP')
       seen.add(url.href)
 
       if (options.checkRobots) {
-        const rules = await robotsFor(url.origin)
-        if (!rules.isAllowed(`${url.pathname}${url.search}`)) throw new ScanFetchError('ROBOTS_DISALLOWED')
+        const { rules, unavailable } = await robotsFor(url.origin)
+        if (!rules.isAllowed(`${url.pathname}${url.search}`)) {
+          throw new ScanFetchError(unavailable ? 'ROBOTS_UNAVAILABLE' : 'ROBOTS_DISALLOWED')
+        }
       }
 
       const remaining = deadline - now()
@@ -89,6 +96,7 @@ export function createScanFetcher({ httpGet = nodeScanGet, deadline, now = Date.
         maxBytes: options.maxBytes,
         contentType: options.contentType,
         onOverflow: 'truncate',
+        partialOnTimeout: options.partialOnTimeout,
       })
 
       if (REDIRECT_STATUSES.has(response.status)) {
@@ -109,7 +117,7 @@ export function createScanFetcher({ httpGet = nodeScanGet, deadline, now = Date.
     }
   }
 
-  function robotsFor(origin: string): Promise<RobotsRules> {
+  function robotsFor(origin: string): Promise<LoadedRobots> {
     let pending = robotsByOrigin.get(origin)
     if (!pending) {
       pending = loadRobots(origin)
@@ -118,19 +126,31 @@ export function createScanFetcher({ httpGet = nodeScanGet, deadline, now = Date.
     return pending
   }
 
-  async function loadRobots(origin: string): Promise<RobotsRules> {
+  async function loadRobots(origin: string): Promise<LoadedRobots> {
     try {
       const { response } = await get(new URL('/robots.txt', origin), {
         contentType: null,
         maxBytes: SCAN_LIMITS.robotsMaxBytes,
         checkRobots: false,
+        partialOnTimeout: false,
       })
-      if (response.status >= 200 && response.status < 300) return parseRobots(response.bytes.toString('utf8'))
-      if (response.status >= 400 && response.status < 500) return ALLOW_ALL
-      return DISALLOW_ALL
+      if (response.status >= 200 && response.status < 300) {
+        return { rules: parseRobots(response.bytes.toString('utf8')), unavailable: false }
+      }
+      if (response.status >= 400 && response.status < 500) return { rules: ALLOW_ALL, unavailable: false }
+      return { rules: DISALLOW_ALL, unavailable: true }
     } catch {
-      return DISALLOW_ALL
+      return { rules: DISALLOW_ALL, unavailable: true }
     }
+  }
+
+  /** Reads a non-2xx answer's reason; a verification page is reported as such and never worked around. */
+  function failureForStatus(response: ScanResponse): ScanFetchError {
+    const body = response.bytes.toString('utf8')
+    if (detectWafChallenge({ status: response.status, cfMitigated: response.cfMitigated, body, bodyBytes: response.bytes.length })) {
+      return new ScanFetchError('WAF_CHALLENGE')
+    }
+    return new ScanFetchError(reasonForStatus(response.status))
   }
 
   return {
@@ -139,11 +159,17 @@ export function createScanFetcher({ httpGet = nodeScanGet, deadline, now = Date.
         contentType: HTML_CONTENT_TYPE,
         maxBytes: SCAN_LIMITS.pageMaxBytes,
         checkRobots: true,
+        partialOnTimeout: true,
       })
-      if (response.status < 200 || response.status >= 300) throw new ScanFetchError('BAD_STATUS')
+      if (response.status < 200 || response.status >= 300) throw failureForStatus(response)
+      const html = decodeHtml(response.bytes, response.contentType)
+      // A challenge page can also answer 200; it is small, so a full-size page is never mistaken for one.
+      if (detectWafChallenge({ status: response.status, cfMitigated: response.cfMitigated, body: html, bodyBytes: response.bytes.length })) {
+        throw new ScanFetchError('WAF_CHALLENGE')
+      }
       return {
         finalUrl,
-        html: decodeHtml(response.bytes, response.contentType),
+        html,
         truncated: response.truncated,
         headerForbidsUse: headerForbidsUse(response.xRobotsTag),
       }

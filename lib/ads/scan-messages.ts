@@ -13,6 +13,9 @@ export type ScanErrorCopy = {
   errDuplicate: string
   errDuplicateLost: string
   errUnreachable: string
+  errSiteBlocked: string
+  errSiteUnresponsive: string
+  errPageTooLarge: string
   errInsufficientContent: string
   errPolicyBlocked: string
   errPolicyConsumed: string
@@ -53,6 +56,12 @@ export function describeScanError(error: ClientScanError, copy: ScanErrorCopy): 
       return { message: copy.errDuplicateLost, action: 'newScan' }
     case 'unreachable':
       return { message: copy.errUnreachable, action: 'retry' }
+    case 'site_blocked':
+      return { message: copy.errSiteBlocked, action: 'none' }
+    case 'site_unresponsive':
+      return { message: copy.errSiteUnresponsive, action: 'retry' }
+    case 'page_too_large':
+      return { message: copy.errPageTooLarge, action: 'none' }
     case 'insufficient_content':
       return { message: copy.errInsufficientContent, action: 'none' }
     case 'policy_blocked':

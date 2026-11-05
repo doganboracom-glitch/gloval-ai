@@ -159,7 +159,7 @@ describe('runScan: refunds on failure', () => {
     expect(await runScan({ ...REQUEST, actor: ANON_ACTOR }, deps)).toEqual({ ok: false, error: { code: 'unreachable' } })
     expect(calls.release).toBe(1)
     expect(calls.generate).toHaveLength(0)
-    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ outcome: 'error', error_code: 'unreachable', free_quota_used: false })
+    expect(calls.usage.find((row) => row.flow === 'scan')).toMatchObject({ outcome: 'error', error_code: 'unreachable:robots_disallowed', free_quota_used: false })
   })
 
   it('maps thin pages to insufficient_content and refunds a paid scan', async () => {

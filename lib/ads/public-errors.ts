@@ -1,8 +1,10 @@
 /**
  * The only failure vocabulary a visitor ever sees. The server sends a code and a
  * few typed extras; the client turns the code into a translated message. Every
- * transport, SSRF, robots and noindex failure is the same `unreachable`, so the
- * response cannot be used to map a private network.
+ * transport, SSRF, DNS, TLS and redirect failure is the same `unreachable`, so
+ * the response cannot be used to map a private network. Only reasons that come
+ * from the site's own answer are told apart: `site_blocked` (firewall, 403/429,
+ * robots, noindex), `site_unresponsive` (timeout, 5xx) and `page_too_large`.
  */
 
 import type { PolicyBlockedMessageKey } from '@/lib/ads/policy-message'
@@ -17,6 +19,9 @@ export const ADS_SCAN_ERROR_STATUS = {
   credits_required: 402,
   duplicate: 409,
   unreachable: 422,
+  site_blocked: 422,
+  site_unresponsive: 422,
+  page_too_large: 422,
   insufficient_content: 422,
   policy_blocked: 422,
   generation_failed: 502,

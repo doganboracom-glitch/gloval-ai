@@ -112,32 +112,32 @@ describe('scanSite', () => {
   })
 })
 
-describe('failures never reveal why', () => {
-  const failures: Array<[string, Record<string, ScanResponse | Error>]> = [
-    ['blocked address', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('BLOCKED') }],
-    ['dns / network', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('NETWORK') }],
-    ['timeout', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('TIMEOUT') }],
-    ['404', { 'https://ornek.com/robots.txt': notFound }],
-    ['robots disallow', { 'https://ornek.com/robots.txt': res('User-agent: *\nDisallow: /', { contentType: 'text/plain' }) }],
-    ['robots 5xx', { 'https://ornek.com/robots.txt': { ...notFound, status: 503 } }],
-    ['not html', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('BAD_CONTENT_TYPE') }],
-    ['redirect to metadata', {
+describe('failures only reveal what the site itself said', () => {
+  const failures: Array<[string, string, Record<string, ScanResponse | Error>]> = [
+    ['blocked address', 'unreachable', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('BLOCKED') }],
+    ['dns / network', 'site_unresponsive', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('NETWORK') }],
+    ['timeout', 'site_unresponsive', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('TIMEOUT') }],
+    ['404', 'unreachable', { 'https://ornek.com/robots.txt': notFound }],
+    ['robots disallow', 'site_blocked', { 'https://ornek.com/robots.txt': res('User-agent: *\nDisallow: /', { contentType: 'text/plain' }) }],
+    ['robots 5xx', 'site_unresponsive', { 'https://ornek.com/robots.txt': { ...notFound, status: 503 } }],
+    ['not html', 'unreachable', { 'https://ornek.com/robots.txt': notFound, 'https://ornek.com/': new ScanFetchError('BAD_CONTENT_TYPE') }],
+    ['redirect to metadata', 'unreachable', {
       'https://ornek.com/robots.txt': notFound,
       'https://ornek.com/': res('', { status: 302, location: 'http://169.254.169.254/', bytes: Buffer.alloc(0) }),
     }],
-    ['noindex header', {
+    ['noindex header', 'site_blocked', {
       'https://ornek.com/robots.txt': notFound,
       'https://ornek.com/': res(HOME, { xRobotsTag: 'noindex' }),
     }],
-    ['noindex meta', {
+    ['noindex meta', 'site_blocked', {
       'https://ornek.com/robots.txt': notFound,
       'https://ornek.com/': res(HOME.replace('<head>', '<head><meta name="robots" content="noindex">')),
     }],
   ]
 
-  it.each(failures)('%s -> the same generic "unreachable" code', async (_name, routes) => {
+  it.each(failures)('%s -> the coarse public code %s', async (_name, code, routes) => {
     const result = await scanSite('ornek.com', { httpGet: site(routes).httpGet })
-    expect(result).toMatchObject({ ok: false, code: 'unreachable' })
+    expect(result).toMatchObject({ ok: false, code })
   })
 
   it('rejects an address that is not a public site name before any request', async () => {

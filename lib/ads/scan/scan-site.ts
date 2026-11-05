@@ -3,6 +3,7 @@ import { wordIncludes } from '@/lib/visual-subjects'
 import { SCAN_LIMITS } from './config'
 import { ScanFetchError, type ScanFetchErrorCode } from './errors'
 import { extractPage, cleanText, type PageExtract } from './extract'
+import { publicCodeForFetchError, type ScanPublicCode } from './failure'
 import { createScanFetcher, type FetchedPage } from './fetch-page'
 import type { ScanGet } from './http'
 
@@ -25,12 +26,17 @@ export type SiteSnapshot = {
 export type ScanFailureDetail = ScanFetchErrorCode | 'insufficient_content' | 'invalid_address'
 
 /**
- * `code` is the only thing a visitor may be told. Every transport / SSRF /
- * robots failure collapses into `unreachable`; `detail` is for server logs.
+ * `code` is the only thing a visitor may be told (see failure.ts for which
+ * reasons may be told apart); `detail` is the precise reason for server logs
+ * and the usage table.
  */
 export type ScanSiteResult =
   | { ok: true; snapshot: SiteSnapshot }
-  | { ok: false; code: 'invalid_address' | 'unreachable' | 'insufficient_content'; detail: ScanFailureDetail }
+  | {
+      ok: false
+      code: 'invalid_address' | 'insufficient_content' | ScanPublicCode
+      detail: ScanFailureDetail
+    }
 
 export type ScanSiteOptions = { httpGet?: ScanGet; now?: () => number }
 
@@ -94,8 +100,16 @@ function decodeURIComponentSafe(value: string): string {
 }
 
 function failure(error: unknown): ScanSiteResult {
-  const detail: ScanFailureDetail = error instanceof ScanFetchError ? error.code : 'NETWORK'
-  return { ok: false, code: 'unreachable', detail }
+  const detail: ScanFetchErrorCode = error instanceof ScanFetchError ? error.code : 'NETWORK'
+  return { ok: false, code: publicCodeForFetchError(detail), detail }
+}
+
+function parse(html: string): PageExtract | null {
+  try {
+    return extractPage(html)
+  } catch {
+    return null
+  }
 }
 
 function pageUsable(page: FetchedPage, extract: PageExtract): boolean {
@@ -119,15 +133,16 @@ export async function scanSite(address: string, options: ScanSiteOptions = {}): 
   } catch (error) {
     return failure(error)
   }
-  const home = extractPage(homePage.html)
-  if (!pageUsable(homePage, home)) return { ok: false, code: 'unreachable', detail: 'NOINDEX' }
+  const home = parse(homePage.html)
+  if (!home) return failure(new ScanFetchError('PARSE_ERROR'))
+  if (!pageUsable(homePage, home)) return failure(new ScanFetchError('NOINDEX'))
 
   const extras: Array<{ url: URL; extract: PageExtract }> = []
   for (const url of pickExtraPages(homePage.finalUrl, home.links)) {
     try {
       const page = await fetcher.fetchPage(url)
-      const extract = extractPage(page.html)
-      if (pageUsable(page, extract)) extras.push({ url: page.finalUrl, extract })
+      const extract = parse(page.html)
+      if (extract && pageUsable(page, extract)) extras.push({ url: page.finalUrl, extract })
     } catch {
       // An extra page that cannot be read only makes the snapshot a little thinner.
     }
@@ -158,6 +173,10 @@ export async function scanSite(address: string, options: ScanSiteOptions = {}): 
   }
 
   const informative = snapshot.title.length + snapshot.description.length + snapshot.headings.join('').length + text.length
-  if (informative < 100) return { ok: false, code: 'insufficient_content', detail: 'insufficient_content' }
+  if (informative < 100) {
+    // A page cut at the size limit that still shows nothing readable is mostly inline script / markup.
+    if (homePage.truncated) return failure(new ScanFetchError('TOO_LARGE'))
+    return { ok: false, code: 'insufficient_content', detail: 'insufficient_content' }
+  }
   return { ok: true, snapshot }
 }
