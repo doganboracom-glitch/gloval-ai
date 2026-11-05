@@ -15,7 +15,7 @@ import { platformUrl } from '@/lib/domains'
  */
 
 export type SeoLang = 'tr' | 'en'
-export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch' | 'whois' | 'ads'
+export type SeoPageKey = 'home' | 'blog' | 'faq' | 'contact' | 'domainSearch' | 'whois' | 'ads' | 'bot'
 
 type PageCopy = {
   /** <title> and og:title / twitter:title. */
@@ -152,6 +152,23 @@ export const SEO_PAGES: Record<SeoPageKey, PageSeo> = {
         'Set up your ads easily with GLOVAL Ads AI, improve them with artificial intelligence and report performance. Manage your advertising from a single platform.',
       heading: 'GLOVAL Ads (BETA)',
       tagline: TAGLINE.en,
+    },
+  },
+  bot: {
+    path: '/bot',
+    tr: {
+      title: 'GlovalAdsBot: Tarayıcı Bilgisi | GLOVAL AI',
+      description:
+        'GlovalAdsBot, GLOVAL AI’ın reklam planı için siteyi tek seferlik okuyan tarayıcısıdır. Ne okuduğunu, robots.txt ile nasıl engelleyeceğini öğren.',
+      heading: 'GlovalAdsBot',
+      tagline: 'GLOVAL AI reklam planı tarayıcısı',
+    },
+    en: {
+      title: 'GlovalAdsBot: Crawler Information | GLOVAL AI',
+      description:
+        'GlovalAdsBot is the GLOVAL AI crawler that reads a site once to prepare an ad plan. See what it reads and how to block or allow it with robots.txt.',
+      heading: 'GlovalAdsBot',
+      tagline: 'The GLOVAL AI ad plan crawler',
     },
   },
 }
