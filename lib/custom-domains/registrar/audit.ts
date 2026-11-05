@@ -23,7 +23,13 @@ export type DomainAuditReason =
   | 'start_date_missing'
   | 'start_date_unparseable'
 
-export type DomainAuditStage = 'unlock_request' | 'unlock_readback' | 'window_insert' | 'code_fetch'
+export type DomainAuditStage =
+  | 'unlock_request'
+  | 'unlock_pending'
+  | 'unlock_confirmed'
+  | 'unlock_readback'
+  | 'window_insert'
+  | 'code_fetch'
 
 export type DomainAuditDetails = {
   outcome?: 'success' | 'failed' | 'rate_limited' | 'unconfirmed' | 'unchanged' | 'deferred'
@@ -69,7 +75,14 @@ const AUDIT_REASONS = new Set<DomainAuditReason>([
   'start_date_missing',
   'start_date_unparseable',
 ])
-const AUDIT_STAGES = new Set<DomainAuditStage>(['unlock_request', 'unlock_readback', 'window_insert', 'code_fetch'])
+const AUDIT_STAGES = new Set<DomainAuditStage>([
+  'unlock_request',
+  'unlock_pending',
+  'unlock_confirmed',
+  'unlock_readback',
+  'window_insert',
+  'code_fetch',
+])
 
 function isSafeStartDateShape(value: string): boolean {
   if (!value || value.length > 120 || /[\u0000-\u001f\u007f-\u009f]/.test(value)) return false

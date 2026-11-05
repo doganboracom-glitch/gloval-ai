@@ -200,7 +200,7 @@ describe('transfer window access controls', () => {
     const result = await requestMyTransferOutCode('example.com', 'example.com', true)
 
     expect(result).toMatchObject({ ok: true, authCode: EPP, created: true })
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false)
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
     expect(mocks.insertOpenWindow).toHaveBeenCalled()
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'transfer_lock_changed',
@@ -273,7 +273,7 @@ describe('transfer window access controls', () => {
     })
 
     expect(registrar.changeLock.mock.calls).toEqual([
-      ['example.com', false],
+      ['example.com', false, { acceptUnconfirmed: true }],
       ['example.com', true],
     ])
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -286,52 +286,41 @@ describe('transfer window access controls', () => {
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain('private-domain-token')
   })
 
-  it('waits for a stale post-unlock read-back without resending the unlock', async () => {
-    const registrar = makeRegistrar(true)
-    registrar.getManagedDetails
-      .mockResolvedValueOnce({ locked: true, expiresAt, remainingDays: 180, status: 'Active' })
-      .mockResolvedValueOnce({ locked: false, expiresAt, remainingDays: 180, status: 'Active' })
-
-    vi.useFakeTimers()
-    try {
-      const operation = requestMyTransferOutCode('example.com', 'example.com')
-      await vi.runAllTimersAsync()
-      await expect(operation).resolves.toMatchObject({ ok: true, authCode: EPP, created: true })
-    } finally {
-      vi.useRealTimers()
-    }
-
-    expect(registrar.changeLock).toHaveBeenCalledTimes(1)
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false)
-    expect(registrar.getManagedDetails).toHaveBeenCalledTimes(2)
-  })
-
-  it('relocks and fails closed when post-unlock read-back never confirms', async () => {
+  it('opens the window without waiting when the registry has not applied the unlock yet', async () => {
     const registrar = makeRegistrar(true)
     registrar.changeLock.mockImplementationOnce(async () => ({
       changed: true,
+      pending: true,
       previousLocked: true,
-      locked: false,
+      locked: true,
     }))
 
-    vi.useFakeTimers()
-    try {
-      const operation = requestMyTransferOutCode('example.com', 'example.com')
-      await vi.runAllTimersAsync()
-      await expect(operation).resolves.toEqual({ ok: false, error: 'DOMAIN_LOCKED' })
-    } finally {
-      vi.useRealTimers()
-    }
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toMatchObject({
+      ok: true,
+      authCode: EPP,
+      created: true,
+    })
 
-    expect(registrar.changeLock.mock.calls).toEqual([
-      ['example.com', false],
-      ['example.com', true],
-    ])
-    expect(registrar.getManagedDetails).toHaveBeenCalledTimes(6)
-    expect(mocks.insertOpenWindow).not.toHaveBeenCalled()
+    expect(registrar.changeLock).toHaveBeenCalledTimes(1)
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
+    expect(mocks.insertOpenWindow).toHaveBeenCalledTimes(1)
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'transfer_lock_changed',
-      details: expect.objectContaining({ stage: 'unlock_readback', locked: true }),
+      details: expect.objectContaining({ stage: 'unlock_pending', outcome: 'deferred', locked: null }),
+    }))
+  })
+
+  it('records a confirmed unlock stage when the provider confirms the new state', async () => {
+    makeRegistrar(true)
+
+    await expect(requestMyTransferOutCode('example.com', 'example.com')).resolves.toMatchObject({
+      ok: true,
+      created: true,
+    })
+
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'transfer_lock_changed',
+      details: expect.objectContaining({ stage: 'unlock_confirmed', outcome: 'success', locked: false }),
     }))
   })
 
@@ -340,7 +329,6 @@ describe('transfer window access controls', () => {
     registrar.changeLock
       .mockImplementationOnce(async () => ({ changed: true, previousLocked: true, locked: false }))
       .mockRejectedValueOnce(new RegistrarError('PROVIDER_ERROR', 'domainnameapi:LOCK_EXCEPTION private-value'))
-    registrar.getManagedDetails.mockResolvedValueOnce({ locked: false, expiresAt, remainingDays: 180, status: 'Active' })
     mocks.insertOpenWindow
       .mockResolvedValueOnce({ ok: false, error: 'unavailable' })
       .mockResolvedValueOnce({ ok: true, value: { ...activeWindow(), id: 'recovery-window' } })
@@ -351,7 +339,7 @@ describe('transfer window access controls', () => {
     })
 
     expect(registrar.changeLock.mock.calls).toEqual([
-      ['example.com', false],
+      ['example.com', false, { acceptUnconfirmed: true }],
       ['example.com', true],
     ])
     expect(mocks.insertOpenWindow).toHaveBeenCalledTimes(2)
@@ -409,12 +397,9 @@ describe('transfer window access controls', () => {
     const result = await requestMyTransferOutCode('example.com', 'example.com')
 
     expect(result).toMatchObject({ ok: true, authCode: EPP, created: true })
-    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false)
-    expect(registrar.getManagedDetails.mock.invocationCallOrder[0]).toBeGreaterThan(
-      registrar.changeLock.mock.invocationCallOrder[0],
-    )
+    expect(registrar.changeLock).toHaveBeenCalledWith('example.com', false, { acceptUnconfirmed: true })
     expect(mocks.insertOpenWindow.mock.invocationCallOrder[0]).toBeGreaterThan(
-      registrar.getManagedDetails.mock.invocationCallOrder[0],
+      registrar.changeLock.mock.invocationCallOrder[0],
     )
     expect(registrar.getAuthCode.mock.invocationCallOrder[0]).toBeGreaterThan(
       mocks.insertOpenWindow.mock.invocationCallOrder[0],

@@ -23,8 +23,7 @@ import {
 import {
   getRegistrarTransferState,
   initialTransferRelockAt,
-  TRANSFER_LOCK_READBACK_DELAY_MS,
-  TRANSFER_LOCK_READBACK_RETRIES,
+  isTransferUnlockPending,
   isTransferWindowExpired,
   nextTransferExtensionAt,
 } from './transfer-window-logic'
@@ -116,33 +115,6 @@ function eligibilityAuditDetails(
     ...(reason ? { reason } : {}),
     ...(startDateShape ? { startDateShape } : {}),
   }
-}
-
-async function readUnlockedDetails(
-  registrar: WindowRegistrar,
-  domain: string,
-): Promise<{ details: ManagedDomainDetails | null; error: unknown | null }> {
-  let details: ManagedDomainDetails | null = null
-  let error: unknown | null = null
-
-  for (let retry = 0; retry <= TRANSFER_LOCK_READBACK_RETRIES; retry += 1) {
-    try {
-      details = await registrar.getManagedDetails(domain)
-      error = null
-    } catch (readError) {
-      details = null
-      error = readError
-    }
-
-    if (details?.locked === false && getRegistrarTransferState(details.status) !== 'unknown') {
-      return { details, error: null }
-    }
-    if (retry < TRANSFER_LOCK_READBACK_RETRIES) {
-      await new Promise((resolve) => setTimeout(resolve, TRANSFER_LOCK_READBACK_DELAY_MS))
-    }
-  }
-
-  return { details, error }
 }
 
 async function reserveCodeView(userId: string, domain: string): Promise<TransferErrorCode | null> {
@@ -379,6 +351,8 @@ export async function requestMyTransferOutCode(
   if (existing) {
     if (existing.user_id !== userId) return { ok: false, error: 'WINDOW_NOT_OPEN' }
     if (info.locked === true) {
+      // A just-accepted unlock may not be visible yet; keep the window open.
+      if (isTransferUnlockPending(existing.opened_at)) return { ok: false, error: 'DOMAIN_LOCKED' }
       await updateOpenTransferWindow(admin, existing.id, {
         status: 'cancelled',
         closed_at: new Date().toISOString(),
@@ -399,8 +373,9 @@ export async function requestMyTransferOutCode(
   const customDomainId = await getOwnedCustomDomainId(admin, userId, domain)
   if (!customDomainId) return { ok: false, error: 'NOT_FOUND' }
 
+  let unlockChange: Awaited<ReturnType<WindowRegistrar['changeLock']>>
   try {
-    await registrar.changeLock(domain, false)
+    unlockChange = await registrar.changeLock(domain, false, { acceptUnconfirmed: true })
   } catch (error) {
     const relocked = await ensureTransferLock(registrar, domain)
     if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
@@ -422,38 +397,24 @@ export async function requestMyTransferOutCode(
     return { ok: false, error: 'PROVIDER_ERROR' }
   }
 
-  const postUnlockRead = await readUnlockedDetails(registrar, domain)
-  const postUnlock = postUnlockRead.details
-  const postUnlockState = postUnlock ? getRegistrarTransferState(postUnlock.status) : 'unknown'
-  const postUnlockReason =
-    !postUnlock || typeof postUnlock.locked !== 'boolean'
-      ? 'locked_unreadable'
-      : postUnlockState === 'unknown'
-        ? 'status_unknown'
-        : null
-  if (postUnlockReason || postUnlock?.locked !== false) {
-    const relocked = await ensureTransferLock(registrar, domain)
-    if (!relocked) await scheduleImmediateRelockRecovery(admin, customDomainId, domain, userId)
-    await recordDomainAuditEvent({
-      userId,
-      customDomainId,
-      domain,
-      eventType: 'transfer_lock_changed',
-      details: {
-        outcome: relocked ? 'failed' : 'unconfirmed',
-        locked: relocked ? true : (postUnlock?.locked ?? null),
-        stage: 'unlock_readback',
-        ...(providerCodeFromError(postUnlockRead.error)
-          ? { providerCode: providerCodeFromError(postUnlockRead.error) }
-          : {}),
-        source: 'user_code_request',
-        ...(postUnlockReason ? { reason: postUnlockReason } : eligibilityAudit),
-        ...(eligibilityAudit.startDateShape ? { startDateShape: eligibilityAudit.startDateShape } : {}),
-      },
-
-    })
-    return { ok: false, error: postUnlockReason ? 'STATUS_UNVERIFIED' : 'DOMAIN_LOCKED' }
-  }
+  // The provider accepted the unlock without an error. The registry can apply
+  // it minutes later, so a not-yet-unlocked read-back is not a failure: the
+  // window opens and the scheduled relock/status checks remain the safety net.
+  const unlockPending = unlockChange.pending === true
+  await recordDomainAuditEvent({
+    userId,
+    customDomainId,
+    domain,
+    eventType: 'transfer_lock_changed',
+    details: {
+      outcome: unlockPending ? 'deferred' : 'success',
+      changed: true,
+      locked: unlockPending ? null : false,
+      stage: unlockPending ? 'unlock_pending' : 'unlock_confirmed',
+      source: 'user_code_request',
+      ...eligibilityAudit,
+    },
+  })
 
   const openedAtMs = Date.now()
   const inserted = await insertOpenTransferWindow(admin, {

@@ -6,6 +6,14 @@ export const TRANSFER_WINDOW_MAX_RELOCK_ATTEMPTS = 5
 export const TRANSFER_WINDOW_PENDING_DELAY_MS = 24 * 60 * 60 * 1000
 export const TRANSFER_LOCK_READBACK_RETRIES = 4
 export const TRANSFER_LOCK_READBACK_DELAY_MS = 1_500
+/** The registry may apply an accepted unlock a few minutes after the request. */
+export const TRANSFER_UNLOCK_PENDING_GRACE_MS = 3 * 60 * 1000
+
+/** True while an accepted unlock request is still within its expected delay. */
+export function isTransferUnlockPending(openedAt: string, nowMs = Date.now()): boolean {
+  const openedMs = Date.parse(openedAt)
+  return Number.isFinite(openedMs) && nowMs - openedMs >= 0 && nowMs - openedMs < TRANSFER_UNLOCK_PENDING_GRACE_MS
+}
 
 const DOMAIN_STATUS_BY_CODE: Record<number, string> = {
   0: 'Active',
