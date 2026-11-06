@@ -7,7 +7,8 @@ import { Check, Copy, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { activateReferralPartner, closeReferralPartner, saveReferralPartnerIban } from '@/lib/referrals/partner-actions'
 import { REFERRAL_TERMS, REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
-import { CREDIT_MIN_CENTS, REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
+import { ReferralTermsReacceptance } from '@/components/settings/referral-terms-reacceptance'
+import { REFERRAL_PAYOUT_MIN_TRY } from '@/lib/referrals/commission-config'
 import type { ReferralDashboardData, ReferralPartnerSettings, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 import { ReferralCustomerDetails } from '@/components/referral-customer-details'
 import { ReferralMetrics } from '@/components/referral-metrics'
@@ -27,8 +28,6 @@ import { Input } from '@/components/ui/input'
 
 const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
-const minimumCreditTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(CREDIT_MIN_CENTS / 100)
-const minimumCreditEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(CREDIT_MIN_CENTS / 100)
 
 const COPY = {
   tr: {
@@ -44,8 +43,8 @@ const COPY = {
     copied: 'Kopyalandı',
     copyFailed: 'Bağlantı kopyalanamadı.',
     ibanLast4: 'Kayıtlı IBAN son 4 hane',
-    payoutHint: `Toplam bakiye en az ${minimumCreditTr} TL olduğunda beklemeden AI kredisine çevirebilirsiniz. IBAN ödemesi için 14 günlük bekleme tamamlanmalı ve kullanılabilir bakiye en az ${minimumPayoutTr} TL olmalıdır.`,
-    creditOnlyPayoutHint: `Toplam bakiye en az ${minimumCreditTr} TL olduğunda tamamını beklemeden AI kredisine çevirebilirsiniz.`,
+    payoutHint: `Pozitif toplam bakiyenizi beklemeden AI kredisine çevirebilirsiniz. IBAN ödemesi için 14 günlük bekleme tamamlanmalı ve kullanılabilir bakiye en az ${minimumPayoutTr} TL olmalıdır.`,
+    creditOnlyPayoutHint: 'Pozitif toplam bakiyenizin tamamını beklemeden AI kredisine çevirebilirsiniz.',
     close: 'Ortaklığı kapat',
     joinTitle: 'Programa katılın',
     termsIntro: 'Katılım şartlarını aşağıdaki kutudan okuyun. Kabul kutusu şartların hemen ardından yer alır.',
@@ -112,8 +111,8 @@ const COPY = {
     copied: 'Copied',
     copyFailed: 'Could not copy the link.',
     ibanLast4: 'Last 4 digits of the saved IBAN',
-    payoutHint: `Once your total balance reaches TRY ${minimumCreditEn}, you can convert it to AI credits without waiting. IBAN payout requires the 14-day hold to end and at least TRY ${minimumPayoutEn} in available balance.`,
-    creditOnlyPayoutHint: `Once your total balance reaches TRY ${minimumCreditEn}, you can convert the full amount to AI credits without waiting.`,
+    payoutHint: `You can convert any positive total balance to AI credits without waiting. IBAN payout requires the 14-day hold to end and at least TRY ${minimumPayoutEn} in available balance.`,
+    creditOnlyPayoutHint: 'You can convert any positive total balance to AI credits without waiting.',
     close: 'Close partnership',
     joinTitle: 'Join the program',
     termsIntro: 'Read the participation terms in the box below. The acceptance checkbox follows the terms.',
@@ -334,6 +333,9 @@ export function ReferralPartnerCard({
   const taxVerificationRequired = Boolean(
     payoutsEnabled && partner?.status === 'suspended' && payoutState && !payoutState.taxVerified,
   )
+  const needsTermsReacceptance = Boolean(
+    partner && partner.status !== 'closed' && partner.termsVersion !== REFERRAL_TERMS_VERSION,
+  )
 
   return (
     <>
@@ -359,7 +361,12 @@ export function ReferralPartnerCard({
           </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
-            {partner?.status === 'active' && referralUrl ? (
+            {needsTermsReacceptance && partner ? (
+              <ReferralTermsReacceptance
+                acceptedVersion={partner.termsVersion}
+                currentVersion={REFERRAL_TERMS_VERSION}
+              />
+            ) : partner?.status === 'active' && referralUrl ? (
               <>
                 {dashboardData && (
                   <div className="flex flex-col gap-3">

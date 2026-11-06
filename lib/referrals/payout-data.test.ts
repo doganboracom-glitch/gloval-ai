@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
     tax_status: 'individual',
     iban_last4: '1234',
     tax_verified_at: '2026-11-04T12:00:00.000Z',
+    terms_version: 'v1.2',
   } as any,
   balance: {} as Record<string, unknown>,
   balanceError: null as Error | null,
@@ -44,6 +45,7 @@ beforeEach(() => {
     tax_status: 'individual',
     iban_last4: '1234',
     tax_verified_at: '2026-11-04T12:00:00.000Z',
+    terms_version: 'v1.2',
   }
   state.balance = {
     pendingCents: 500,
@@ -75,6 +77,12 @@ describe('referral payout panel data', () => {
       hasDebtBucket: false,
       partialPayoutsAvailable: false,
     })
+  })
+
+  it('hides payout data until an existing partner accepts the current terms', async () => {
+    state.partner.terms_version = 'v1.1'
+
+    await expect(getReferralPayoutPanelData()).resolves.toEqual({ state: null, unavailable: false })
   })
 
   it('uses the full convertible total from the updated balance RPC', async () => {

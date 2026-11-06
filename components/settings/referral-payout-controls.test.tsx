@@ -48,15 +48,24 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('referral payout controls', () => {
-  it('keeps payout hidden behind the feature flag and disabled below the 3 TL credit minimum', () => {
+  it('keeps payout hidden behind the feature flag and allows a one-kuruş credit conversion', () => {
     const hidden = render(<ReferralPayoutControls enabled={false} cashEnabled={false} data={payoutData()} />)
     expect(hidden.container.textContent).toBe('')
     hidden.unmount()
 
-    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData()} />)
+    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
+      availableCents: 1,
+      totalCents: 1,
+      convertibleCents: 1,
+      maxCreditCents: 1,
+      maxCashCents: 1,
+    })} />)
     const requestButton = screen.getByRole('button', { name: 'Ödeme İste' })
-    expect(requestButton.hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText('AI kredisine dönüşüm için toplam bakiyenin en az 3 TL olması gerekir.')).toBeTruthy()
+    expect(requestButton.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(requestButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    expect(screen.getAllByText('0,01 TL').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('2,99 TL').length).toBeGreaterThan(0)
   })
 
   it('shows the immediate full credit preview after continuing, including zero system top-up at exactly 3 TL', () => {

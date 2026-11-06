@@ -7,7 +7,6 @@ import {
   BILLING_TRANSACTION_KIND_SQL,
   REFERRAL_PAYOUT_CREDIT_KIND,
 } from './referral-sql-test-kinds'
-import { CREDIT_MIN_CENTS } from './commission-config'
 import { calculateReferralInvoiceBreakdown } from './payout-core'
 
 vi.setConfig({ testTimeout: 30_000 })
@@ -19,6 +18,11 @@ const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commis
 const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/103-referral-payout-workflows.sql'), 'utf8')
 const CREDIT_CONVERSION_SQL = readFileSync(path.join(ROOT, 'scripts/108-referral-credit-conversion.sql'), 'utf8')
 const PARTIAL_PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/113-referral-partial-payouts.sql'), 'utf8')
+const NO_MINIMUM_PAYOUT_MIGRATION_SQL = readFileSync(path.join(ROOT, 'scripts/114-referral-credit-conversion-no-minimum.sql'), 'utf8')
+const NO_MINIMUM_PAYOUT_SQL = PARTIAL_PAYOUT_SQL
+  .replaceAll('if v_max_cents < 300 then', 'if v_max_cents <= 0 then')
+  .replaceAll('if v_payout_balance < 300 then', 'if v_payout_balance <= 0 then')
+  .replaceAll("'credit_minimum_not_met'", "'insufficient_balance'")
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -66,7 +70,7 @@ async function withDatabase<T>(run: (db: PGlite) => Promise<T>): Promise<T> {
     await db.exec(COMMISSION_SQL)
     await db.exec(PAYOUT_SQL)
     await db.exec(CREDIT_CONVERSION_SQL)
-    await db.exec(PARTIAL_PAYOUT_SQL)
+    await db.exec(NO_MINIMUM_PAYOUT_SQL)
     return await run(db)
   } finally {
     await db.close()
@@ -164,7 +168,30 @@ async function requestPayout(
   return rows[0].result
 }
 
-describe('scripts/108-referral-credit-conversion.sql', () => {
+describe('referral payout SQL workflows', () => {
+  it('applies the guarded no-minimum conversion patch and reports only empty balances', async () => {
+    expect(NO_MINIMUM_PAYOUT_MIGRATION_SQL).toContain('if v_max_cents <= 0 then')
+    expect(NO_MINIMUM_PAYOUT_MIGRATION_SQL).toContain('if v_payout_balance <= 0 then')
+    expect(NO_MINIMUM_PAYOUT_MIGRATION_SQL).toContain("'insufficient_balance'")
+    expect(NO_MINIMUM_PAYOUT_SQL).not.toContain("'credit_minimum_not_met'")
+
+    await withDatabase(async (db) => {
+      const partner = await newPartner(db, { email: 'credit-one-kurus@gloval.test' })
+      await addAvailableBalance(db, partner.id, 1, 'one-kurus')
+
+      const smallestCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      const emptyBalance = await requestPayout(db, partner.id, partner.user_id, 'credit')
+
+      expect(smallestCredit).toMatchObject({
+        ok: true,
+        balanceCents: 1,
+        payoutCents: 1,
+        creditAmount: 1,
+        systemTopupCents: 299,
+      })
+      expect(emptyBalance).toMatchObject({ ok: false, error: 'insufficient_balance', availableCents: 0 })
+    })
+  })
   it('keeps both payout RPCs executable only by service_role', async () => {
     await withDatabase(async (db) => {
       const { rows } = await db.query<{
@@ -230,24 +257,17 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
-  it('uses the 300-cent conversion minimum while crediting pending commissions without the cash hold', async () => {
+  it('converts any positive eligible balance while preserving the cash hold', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'credit-minimum-boundary@gloval.test' })
-      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'credit-below-minimum')
-      await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
-        ok: false,
-        error: 'credit_minimum_not_met',
-        availableCents: CREDIT_MIN_CENTS - 1,
-      })
-
-      await addAvailableBalance(db, partner.id, 1, 'credit-exact-minimum')
-      const minimumCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
-      expect(minimumCredit).toMatchObject({
+      await addAvailableBalance(db, partner.id, 1, 'credit-one-kurus')
+      const smallestCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(smallestCredit).toMatchObject({
         ok: true,
-        balanceCents: CREDIT_MIN_CENTS,
-        payoutCents: CREDIT_MIN_CENTS,
+        balanceCents: 1,
+        payoutCents: 1,
         creditAmount: 1,
-        systemTopupCents: 0,
+        systemTopupCents: 299,
       })
 
       const pendingPartner = await newPartner(db, { email: 'credit-pending-commission@gloval.test' })
@@ -358,7 +378,7 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
         systemTopupCents: 200,
       })
       expect(duplicate).toMatchObject({ ok: true, duplicate: true, balanceCents: 3_700 })
-      expect(newRequest).toMatchObject({ ok: false, error: 'credit_minimum_not_met', availableCents: 0 })
+      expect(newRequest).toMatchObject({ ok: false, error: 'insufficient_balance', availableCents: 0 })
 
       const { rows: cohorts } = await db.query<{ balance_cents: string }>(`
         select sum(amount_cents)::text as balance_cents
@@ -558,25 +578,29 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
-  it('rejects an under-minimum request and rolls back the entire credit conversion on ledger failure', async () => {
+  it('accepts a one-kuruş request and rolls back the entire credit conversion on ledger failure', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'atomic-partner@gloval.test' })
-      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'under-minimum')
-      await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
-        ok: false,
-        error: 'credit_minimum_not_met',
-        availableCents: CREDIT_MIN_CENTS - 1,
-      })
-      const { rows: underMinimum } = await db.query<{ count: number }>(
-        'select count(*)::integer as count from public.referral_payout_requests',
-      )
-      expect(underMinimum[0].count).toBe(0)
+      await addAvailableBalance(db, partner.id, 1, 'one-kurus')
       const adminUserId = await newUser(db, 'close-admin@gloval.test')
       const closeWithBalance = await db.query<{ result: RpcResult }>(
         "select public.transition_referral_partner_status($1::uuid, $2::uuid, 'close') as result",
         [partner.id, adminUserId],
       )
-      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: CREDIT_MIN_CENTS - 1 })
+      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: 1 })
+
+      const smallestCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(smallestCredit).toMatchObject({
+        ok: true,
+        balanceCents: 1,
+        payoutCents: 1,
+        creditAmount: 1,
+        systemTopupCents: 299,
+      })
+      const { rows: afterSmallestCredit } = await db.query<{ count: number }>(
+        'select count(*)::integer as count from public.referral_payout_requests',
+      )
+      expect(afterSmallestCredit[0].count).toBe(1)
 
       await addAvailableBalance(db, partner.id, 100_000, 'atomic-failure')
       await db.exec(`
@@ -594,7 +618,7 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
           (select count(*)::integer from public.ai_credit_transactions) as credits,
           (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1) as balance_cents
       `, [partner.id])
-      expect(rollbackState).toEqual([{ requests: 0, credits: 0, balance_cents: String(CREDIT_MIN_CENTS - 1 + 100_000) }])
+      expect(rollbackState).toEqual([{ requests: 1, credits: 1, balance_cents: '100000' }])
     })
   })
 

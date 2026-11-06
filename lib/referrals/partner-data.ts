@@ -5,6 +5,7 @@ import { getRequestUser } from '@/lib/supabase/request-user'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { maskEmail } from '@/lib/store-order-privacy'
 import { isReferralFeatureEnabled, normalizeReferralCode } from '@/lib/referrals/core'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import type {
   ReferralAdminPartner,
   ReferralCustomer,
@@ -133,7 +134,7 @@ export async function getReferralPartnerForCurrentUser(): Promise<ReferralPartne
   try {
     const { data, error } = await createAdminClient()
       .from('referral_partners')
-      .select('referral_code,status,iban_last4')
+      .select('referral_code,status,iban_last4,terms_version')
       .eq('user_id', authState.user.id)
       .maybeSingle()
 
@@ -142,7 +143,12 @@ export async function getReferralPartnerForCurrentUser(): Promise<ReferralPartne
     const status = partnerStatus(data.status)
     if (!referralCode || !status) return null
 
-    return { referralCode, status, ibanLast4: lastFour(data.iban_last4) }
+    return {
+      referralCode,
+      status,
+      ibanLast4: lastFour(data.iban_last4),
+      termsVersion: typeof data.terms_version === 'string' ? data.terms_version : null,
+    }
   } catch {
     return null
   }
@@ -158,10 +164,11 @@ export async function getReferralDashboardData(): Promise<ReferralDashboardData 
     const admin = createAdminClient()
     const { data: partner, error: partnerError } = await admin
       .from('referral_partners')
-      .select('id')
+      .select('id,terms_version')
       .eq('user_id', authState.user.id)
       .maybeSingle()
     if (partnerError) return null
+    if (partner && partner.terms_version !== REFERRAL_TERMS_VERSION) return null
     if (typeof partner?.id === 'string') {
       await admin.rpc('referral_sync_commissions', { p_partner_id: partner.id })
     }

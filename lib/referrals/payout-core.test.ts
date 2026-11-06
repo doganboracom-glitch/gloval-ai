@@ -10,7 +10,6 @@ import {
   validateReferralPayoutAmount,
   REFERRAL_PAYOUT_MIN_CENTS,
 } from './payout-core'
-import { CREDIT_MIN_CENTS } from './commission-config'
 
 const MINIMUM_PAYOUT_CENTS = REFERRAL_PAYOUT_MIN_CENTS
 
@@ -51,14 +50,13 @@ describe('referral payout math', () => {
     expect(calculateReferralCreditConversion(-1)).toBeNull()
   })
 
-  it('applies separate total-credit and available-cash minimums', () => {
-    expect(CREDIT_MIN_CENTS).toBe(300)
-    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS - 1, 'credit', 'individual')).toBeNull()
-    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS, 'credit', 'individual')).toMatchObject({
-      balanceCents: 300,
-      payoutCents: 300,
+  it('allows any positive credit balance while preserving the cash payout minimum', () => {
+    expect(calculateReferralPayoutPreview(0, 'credit', 'individual')).toBeNull()
+    expect(calculateReferralPayoutPreview(1, 'credit', 'individual')).toMatchObject({
+      balanceCents: 1,
+      payoutCents: 1,
       creditAmount: 1,
-      systemTopupCents: 0,
+      systemTopupCents: 299,
     })
     expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS - 1, 'cash', 'individual')).toBeNull()
     expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS, 'cash', 'individual')).toMatchObject({
@@ -110,7 +108,7 @@ describe('referral payout math', () => {
     expect(validateReferralPayoutAmount(100_000, 250_000, 'cash')).toBeNull()
     expect(validateReferralPayoutAmount(99_999, 250_000, 'cash')).toBe('minimum_not_met')
     expect(validateReferralPayoutAmount(250_001, 250_000, 'cash')).toBe('amount_exceeds_balance')
-    expect(validateReferralPayoutAmount(300, 1_000, 'credit', true)).toBe('partial_unavailable_debt')
+    expect(validateReferralPayoutAmount(1, 1_000, 'credit', true)).toBe('partial_unavailable_debt')
     expect(validateReferralPayoutAmount(1_000, 1_000, 'credit', true)).toBeNull()
     expect(calculateReferralPayoutPreview(1_000, 'credit', 'individual', { amountCents: 600 })).toMatchObject({
       balanceCents: 600,
