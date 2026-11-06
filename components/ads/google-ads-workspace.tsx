@@ -31,6 +31,13 @@ import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 import { GoogleAdsSetupJourney } from '@/components/ads/google-ads-setup-journey'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
+import {
+  describeGoogleErrorField,
+  explainGoogleError,
+  formatGoogleErrorCode,
+  sanitizeGoogleErrorDetails,
+  type GoogleErrorDetail,
+} from '@/lib/ads/google-error-detail'
 
 type PlanRow = {
   id: string
@@ -58,6 +65,7 @@ type PlansPayload = { plans: PlanRow[] }
 type ApiPayload = {
   ok?: boolean
   error?: string
+  googleErrors?: unknown
   planId?: string
   version?: number
   approvalId?: string
@@ -108,7 +116,7 @@ function countOver(value: string, limit: number): number {
 }
 
 class WorkspaceApiError extends Error {
-  constructor(readonly code: string) {
+  constructor(readonly code: string, readonly googleErrors: GoogleErrorDetail[] = []) {
     super(code)
   }
 }
@@ -120,7 +128,7 @@ async function fetchJson<T>(url: string): Promise<T> {
     const code = payload && typeof payload === 'object' && typeof (payload as ApiPayload).error === 'string'
       ? String((payload as ApiPayload).error)
       : 'provider_error'
-    throw new WorkspaceApiError(code)
+    throw new WorkspaceApiError(code, sanitizeGoogleErrorDetails((payload as ApiPayload | null)?.googleErrors))
   }
   return payload as T
 }
@@ -136,7 +144,7 @@ async function postJson(url: string, method: 'POST' | 'PATCH', body: unknown): P
     const code = payload && typeof payload === 'object' && typeof (payload as ApiPayload).error === 'string'
       ? String((payload as ApiPayload).error)
       : 'provider_error'
-    throw new WorkspaceApiError(code)
+    throw new WorkspaceApiError(code, sanitizeGoogleErrorDetails((payload as ApiPayload | null)?.googleErrors))
   }
   return payload as ApiPayload
 }
@@ -544,6 +552,11 @@ export function GoogleAdsWorkspace({
   const [pending, setPending] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
+  const [googleErrors, setGoogleErrors] = useState<GoogleErrorDetail[]>([])
+  const reportError = useCallback((error: unknown) => {
+    setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+    setGoogleErrors(error instanceof WorkspaceApiError ? error.googleErrors : [])
+  }, [])
   const [showPublishReview, setShowPublishReview] = useState(false)
   const [finalPublishConfirmed, setFinalPublishConfirmed] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -677,7 +690,7 @@ export function GoogleAdsWorkspace({
         ? 'Plan sitenizden hazırlandı. Kontrol edip taslak olarak kaydedin; Google Ads’te henüz değişiklik yapılmadı.'
         : 'The plan was prepared from your site. Review and save it as a draft; nothing has changed in Google Ads yet.')
     } catch (error) {
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+      reportError(error)
     } finally {
       setPending(null)
     }
@@ -772,7 +785,7 @@ export function GoogleAdsWorkspace({
       setFinalPublishConfirmed(false)
       setMessage(isTr ? 'Taslak kaydedildi. Google Ads’te henüz değişiklik yapılmadı.' : 'Draft saved. No Google Ads changes were made.')
     } catch (error) {
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+      reportError(error)
     } finally {
       setPending(null)
     }
@@ -794,7 +807,7 @@ export function GoogleAdsWorkspace({
       await mutatePlans()
       setMessage(isTr ? 'Onay kaydedildi. Google Ads’te değişiklik yapılmadı; sıradaki adım validate_only doğrulamasıdır.' : 'Approval recorded. No Google Ads changes were made; run validate_only next.')
     } catch (error) {
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+      reportError(error)
     } finally {
       setPending(null)
     }
@@ -832,7 +845,7 @@ export function GoogleAdsWorkspace({
       }
     } catch (error) {
       if (phase === 'publish') setFinalPublishConfirmed(false)
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
+      reportError(error)
     } finally {
       setPending(null)
     }
@@ -897,7 +910,25 @@ export function GoogleAdsWorkspace({
         <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>{errorText(plansError instanceof WorkspaceApiError ? plansError.code : undefined, isTr)}</AlertTitle></Alert>
       ) : null}
       {errorCode ? (
-        <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>{errorText(errorCode, isTr)}</AlertTitle></Alert>
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{errorText(errorCode, isTr)}</AlertTitle>
+          {googleErrors.length ? (
+            <AlertDescription>
+              <ul className="mt-1 flex flex-col gap-1">
+                {googleErrors.slice(0, 5).map((detail, index) => {
+                  const field = describeGoogleErrorField(detail.fieldPath)
+                  return (
+                    <li key={`${detail.category}-${detail.value}-${detail.fieldPath ?? index}`}>
+                      {field ? <span className="font-medium">{field}: </span> : null}
+                      {isTr ? explainGoogleError(detail) : formatGoogleErrorCode(detail)}
+                    </li>
+                  )
+                })}
+              </ul>
+            </AlertDescription>
+          ) : null}
+        </Alert>
       ) : null}
       {message ? (
         <Alert><Check aria-hidden="true" /><AlertDescription>{message}</AlertDescription></Alert>
