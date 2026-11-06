@@ -131,6 +131,19 @@ function sanitizeAnalysis(output: GoogleAdsAnalysis, report: GoogleAdsInsightsRe
   }
 }
 
+export async function getCachedGoogleAdsAnalysis(input: {
+  userId: string
+  connectionId: string
+  report: GoogleAdsInsightsReport
+}): Promise<GoogleAdsAnalysis | null> {
+  const analysisInput = makeAnalysisInput(input.report)
+  const contentHash = createHash('sha256').update(JSON.stringify(analysisInput)).digest('hex')
+  const cacheKey = createGoogleAdsReportCacheKey('analysis', { contentHash, model: ANALYSIS_MODEL, version: 1 })
+  const cached = await getGoogleAdsReportCache<unknown>({ userId: input.userId, connectionId: input.connectionId, key: cacheKey })
+  const parsedCache = cached ? googleAdsAnalysisSchema.safeParse((cached.payload as { analysis?: unknown })?.analysis) : null
+  return parsedCache?.success ? parsedCache.data : null
+}
+
 export async function generateGoogleAdsAnalysis(input: {
   userId: string
   connectionId: string

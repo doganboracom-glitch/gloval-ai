@@ -59,7 +59,7 @@ function buildQueries(range: GoogleAdsDatePeriod): {
 
 async function fetchGoogleAdsInsights(input: LoadGoogleAdsInsightsInput): Promise<GoogleAdsInsightsReport> {
   const resolved = resolveGoogleAdsOAuthSettings()
-  if (!resolved.ok) throw new GoogleAdsError(resolved.reason)
+  if (!resolved.ok) throw new GoogleAdsError(resolved.reason === 'redirect_uri_invalid' ? 'configuration_missing' : resolved.reason)
 
   const authProvider = createGoogleAdsProvider({
     clientId: resolved.settings.clientId,

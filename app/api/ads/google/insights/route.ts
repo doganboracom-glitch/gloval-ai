@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { GoogleAdsAnalysisLimitError, generateGoogleAdsAnalysis } from '@/lib/ads/google-ads-insight-analysis'
 import { getGoogleAdsDatePeriod, parseGoogleAdsCustomPeriod, type GoogleAdsRangePreset } from '@/lib/ads/google-ads-insights-shared'
 import { loadGoogleAdsInsights } from '@/lib/ads/google-ads-insights-server'
-import { GoogleAdsError, googleAdsErrorResponse } from '@/lib/ads/google-ads-error'
+import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
 import { GoogleAdsReportStorageError } from '@/lib/ads/google-ads-report-store'
 import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 
@@ -20,7 +20,7 @@ const analysisRequestSchema = z.object({
 
 function parseRange(range: string | null, from: string | null, to: string | null) {
   if (range === 'custom') return parseGoogleAdsCustomPeriod(from, to)
-  if (range === '7d' || range === '30d' || range === '90d') return getGoogleAdsDatePeriod(range as GoogleAdsRangePreset)
+  if (range === '7d' || range === '30d' || range === '90d') return getGoogleAdsDatePeriod(range as Exclude<GoogleAdsRangePreset, 'custom'>)
   return null
 }
 
@@ -28,7 +28,8 @@ function apiError(error: unknown) {
   if (error instanceof GoogleAdsReportStorageError) {
     return googleAdsJson({ ok: false, error: 'report_storage_unavailable' }, 503)
   }
-  return googleAdsErrorResponse(error)
+  const code = googleAdsErrorCode(error)
+  return googleAdsJson({ ok: false, error: code }, googleAdsHttpStatus(code))
 }
 
 export async function GET(request: Request) {
@@ -92,7 +93,10 @@ export async function POST(request: Request) {
       }, 429)
     }
     if (error instanceof GoogleAdsReportStorageError) return apiError(error)
-    if (error instanceof GoogleAdsError) return googleAdsErrorResponse(error)
+    if (error instanceof GoogleAdsError) {
+      const code = googleAdsErrorCode(error)
+      return googleAdsJson({ ok: false, error: code }, googleAdsHttpStatus(code))
+    }
     return googleAdsJson({ ok: false, error: 'analysis_unavailable' }, 502)
   }
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { GoogleAdsError, googleAdsErrorResponse } from '@/lib/ads/google-ads-error'
+import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
 import { getGoogleAdsConnectionForUser } from '@/lib/ads/google-connections'
 import { GoogleAdsReportStorageError, getGoogleAdsReportPreferences, saveGoogleAdsReportPreferences } from '@/lib/ads/google-ads-report-store'
 import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
@@ -26,10 +26,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const preferences = await getGoogleAdsReportPreferences(userId)
+    const admin = createAdminClient()
+    const [{ data: authUser, error: authError }, preferences] = await Promise.all([
+      admin.auth.admin.getUserById(userId),
+      getGoogleAdsReportPreferences(userId),
+    ])
+    const email = !authError && typeof authUser?.user?.email === 'string' ? authUser.user.email.trim() : ''
+    const emailConfigured = email.includes('@')
     const matches = preferences?.connectionId === connectionId
     return googleAdsJson({
       ok: true,
+      emailConfigured,
       preferences: {
         connectionId,
         weeklyEnabled: matches ? preferences.weeklyEnabled : false,
@@ -79,7 +86,10 @@ export async function POST(request: Request) {
     if (error instanceof GoogleAdsReportStorageError) {
       return googleAdsJson({ ok: false, error: 'report_storage_unavailable' }, 503)
     }
-    if (error instanceof GoogleAdsError) return googleAdsErrorResponse(error)
+    if (error instanceof GoogleAdsError) {
+      const code = googleAdsErrorCode(error)
+      return googleAdsJson({ ok: false, error: code }, googleAdsHttpStatus(code))
+    }
     return googleAdsJson({ ok: false, error: 'provider_error' }, 500)
   }
 }

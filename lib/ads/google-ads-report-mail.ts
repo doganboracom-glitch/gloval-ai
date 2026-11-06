@@ -6,12 +6,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { googleAdsConnectAllowed, googleAdsFeatureEnabled } from '@/lib/ads/google-route-utils'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { loadGoogleAdsInsights } from '@/lib/ads/google-ads-insights-server'
-import { generateGoogleAdsAnalysis } from '@/lib/ads/google-ads-insight-analysis'
+import { getCachedGoogleAdsAnalysis } from '@/lib/ads/google-ads-insight-analysis'
 import { buildGoogleAdsReportEmail } from '@/lib/ads/google-ads-report-email-template'
 import { addGoogleAdsReportUnsubscribeToken, GoogleAdsReportStorageError, isGoogleAdsReportStillEnabled, listDueGoogleAdsReportPreferences, markGoogleAdsReportSent, type GoogleAdsReportFrequency } from '@/lib/ads/google-ads-report-store'
 import { getGoogleAdsDatePeriod, type GoogleAdsDatePeriod } from '@/lib/ads/google-ads-insights-shared'
 
-const MAX_REPORT_RECIPIENTS_PER_RUN = 200
+const MAX_REPORT_RECIPIENTS_PER_RUN = 1000
 
 type ReportPeriod = GoogleAdsDatePeriod & { endDate: string }
 
@@ -64,24 +64,26 @@ export async function runGoogleAdsReportSweep(
   const admin = createAdminClient()
   let sent = 0
   let skipped = 0
+  const batch = preferences.slice(0, MAX_REPORT_RECIPIENTS_PER_RUN)
+  let nextIndex = 0
 
-  for (const preference of preferences.slice(0, MAX_REPORT_RECIPIENTS_PER_RUN)) {
+  async function processPreference(preference: (typeof preferences)[number]): Promise<void> {
     if (!googleAdsConnectAllowed(preference.userId)) {
       skipped += 1
-      continue
+      return
     }
 
     try {
       if (!await isGoogleAdsReportStillEnabled(preference.userId, preference.connectionId, frequency)) {
         skipped += 1
-        continue
+        return
       }
 
       const { data: authUser, error: authError } = await admin.auth.admin.getUserById(preference.userId)
       const recipient = !authError ? userEmail(authUser?.user) : null
       if (!recipient) {
         skipped += 1
-        continue
+        return
       }
 
       const loaded = await loadGoogleAdsInsights({
@@ -90,21 +92,15 @@ export async function runGoogleAdsReportSweep(
         range: period,
         bypassRefreshCooldown: true,
       })
-      let analysis = null
-      try {
-        const generated = await generateGoogleAdsAnalysis({
-          userId: preference.userId,
-          connectionId: preference.connectionId,
-          report: loaded.report,
-        })
-        analysis = generated.analysis
-      } catch {
-        analysis = null
-      }
+      const analysis = await getCachedGoogleAdsAnalysis({
+        userId: preference.userId,
+        connectionId: preference.connectionId,
+        report: loaded.report,
+      }).catch(() => null)
 
       if (!await isGoogleAdsReportStillEnabled(preference.userId, preference.connectionId, frequency)) {
         skipped += 1
-        continue
+        return
       }
 
       const token = randomBytes(32).toString('base64url')
@@ -122,12 +118,12 @@ export async function runGoogleAdsReportSweep(
         html: message.html,
         text: message.text,
         fromDisplayName: 'GLOVAL AI · Google Ads',
-        idempotencyKey: `google-ads-report:${frequency}:${preference.userId}:${period.endDate}`,
+        idempotencyKey: `google-ads-report:${createHash('sha256').update(`${frequency}:${preference.userId}:${period.endDate}`).digest('hex')}`,
       })
 
       if (!delivered) {
         skipped += 1
-        continue
+        return
       }
 
       await markGoogleAdsReportSent(preference.userId, preference.connectionId, frequency, period.endDate)
@@ -135,11 +131,21 @@ export async function runGoogleAdsReportSweep(
     } catch (error) {
       if (error instanceof GoogleAdsError || error instanceof GoogleAdsReportStorageError) {
         skipped += 1
-        continue
+        return
       }
       skipped += 1
     }
   }
 
+  async function worker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++
+      const preference = batch[index]
+      if (!preference) return
+      await processPreference(preference)
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(5, batch.length) }, () => worker()))
   return { scanned: preferences.length, sent, skipped }
 }

@@ -183,6 +183,7 @@ export async function saveGoogleAdsReportPreferences(input: {
       connection_id: input.connectionId,
       weekly_enabled: input.weeklyEnabled,
       monthly_enabled: input.monthlyEnabled,
+      updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' })
   if (error) throw new GoogleAdsReportStorageError()
 }
@@ -199,6 +200,7 @@ export async function listDueGoogleAdsReportPreferences(
     .select('user_id,connection_id,weekly_enabled,monthly_enabled,last_weekly_period_end,last_monthly_period_end')
     .eq(enabledColumn, true)
     .or(`${sentColumn}.is.null,${sentColumn}.lt.${periodEnd}`)
+    .order(sentColumn, { ascending: true, nullsFirst: true })
     .order('user_id', { ascending: true })
     .limit(1000)
 
