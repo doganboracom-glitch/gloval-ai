@@ -16,6 +16,7 @@ import { countOwnerUnreadContactMessages } from '@/lib/site-contact-store'
 import { isReferralFeatureEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
 import { getReferralDashboardData, getReferralPartnerForCurrentUser } from '@/lib/referrals/partner-data'
 import { getReferralPayoutPanelData } from '@/lib/referrals/payout-data'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import { nonCritical, withOneRetry } from '@/lib/dashboard-resilience'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
@@ -109,6 +110,11 @@ export default async function DashboardPage() {
         referralPayoutData={referralPayoutData}
         referralEnabled={referralEnabled}
         hasReferralPartner={Boolean(referralPartner)}
+        needsReferralTermsAcceptance={Boolean(
+          referralPartner && referralPartner.status !== 'closed' && referralPartner.termsVersion !== REFERRAL_TERMS_VERSION,
+        )}
+        referralAcceptedTermsVersion={referralPartner?.termsVersion ?? null}
+        referralCurrentTermsVersion={REFERRAL_TERMS_VERSION}
         payoutsEnabled={payoutsEnabled}
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}

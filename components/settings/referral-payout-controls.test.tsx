@@ -48,15 +48,26 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('referral payout controls', () => {
-  it('keeps payout hidden behind the feature flag and disabled below the 3 TL credit minimum', () => {
+  it('keeps payout hidden behind the feature flag and allows a full credit conversion below 3 TL', () => {
     const hidden = render(<ReferralPayoutControls enabled={false} cashEnabled={false} data={payoutData()} />)
     expect(hidden.container.textContent).toBe('')
     hidden.unmount()
 
-    render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData()} />)
+    render(<ReferralPayoutControls enabled={true} cashEnabled={false} data={payoutData({
+      availableCents: 250,
+      totalCents: 250,
+      convertibleCents: 250,
+      maxCreditCents: 250,
+    })} />)
     const requestButton = screen.getByRole('button', { name: 'Ödeme İste' })
-    expect(requestButton.hasAttribute('disabled')).toBe(true)
-    expect(screen.getByText('AI kredisine dönüşüm için toplam bakiyenin en az 3 TL olması gerekir.')).toBeTruthy()
+    expect(requestButton.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(requestButton)
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    expect(screen.getByText('Kullanılacak komisyon bakiyesi')).toBeTruthy()
+    expect(screen.getAllByText('2,50 TL').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('0,50 TL').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Onayla' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('shows the immediate full credit preview after continuing, including zero system top-up at exactly 3 TL', () => {
@@ -129,7 +140,7 @@ describe('referral payout controls', () => {
     expect(screen.getAllByText(/Bir sonraki nakit ödeme için vergi bilgilerinizin doğrulanması gerekiyor/u).length).toBeGreaterThan(0)
   })
 
-  it('parses a partial credit amount in Turkish formatting without rounding the entered kuruş', () => {
+  it('accepts a partial credit amount only on a 3 TL boundary', () => {
     render(<ReferralPayoutControls enabled={true} cashEnabled={true} data={payoutData({
       pendingCents: 0,
       availableCents: 200_000,
@@ -141,11 +152,29 @@ describe('referral payout controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
     fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
     fireEvent.click(screen.getByRole('button', { name: 'Belirli tutar' }))
-    fireEvent.change(screen.getByLabelText('Talep edilecek tutar (TL)'), { target: { value: '1.234,50' } })
+    fireEvent.change(screen.getByLabelText('Talep edilecek tutar (TL)'), { target: { value: '1.236,00' } })
 
-    expect(screen.getByText('1.234,50 TL')).toBeTruthy()
+    expect(screen.getByText('1.236,00 TL')).toBeTruthy()
     expect(screen.getByText('412')).toBeTruthy()
-    expect(screen.getByText('1,50 TL')).toBeTruthy()
+    expect(screen.getAllByText('0,00 TL').length).toBeGreaterThan(0)
+  })
+
+  it('blocks a non-multiple partial credit amount and explains the 3 TL rule', () => {
+    render(<ReferralPayoutControls enabled={true} cashEnabled={false} data={payoutData({
+      availableCents: 20_000,
+      totalCents: 20_000,
+      convertibleCents: 20_000,
+      maxCreditCents: 20_000,
+    })} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ödeme İste' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Devam et' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Belirli tutar' }))
+    fireEvent.change(screen.getByLabelText('Talep edilecek tutar (TL)'), { target: { value: '1,50' } })
+
+    expect(screen.getByText(/Kısmi AI kredi dönüşümü tutarı 3 TL’nin katı olmalıdır/u)).toBeTruthy()
+    expect(screen.getByLabelText('Talep edilecek tutar (TL)').getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Onayla' }).hasAttribute('disabled')).toBe(true)
   })
 
   it('offers both company VAT modes and recalculates the invoice preview in kuruş', () => {

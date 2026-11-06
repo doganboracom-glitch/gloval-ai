@@ -84,6 +84,9 @@ type Props = {
   auraSiteIds: string[]
   referralEnabled: boolean
   hasReferralPartner: boolean
+  needsReferralTermsAcceptance: boolean
+  referralAcceptedTermsVersion: string | null
+  referralCurrentTermsVersion: string
   referralDashboard: unknown
 }
 
@@ -130,16 +133,29 @@ describe('dashboard page resilience', () => {
       customers: [],
     }
     mocks.referralFeatureEnabled.mockReturnValue(true)
-    mocks.getReferralPartner.mockResolvedValue({ referralCode: 'PARTNER1234', status: 'active' })
+    mocks.getReferralPartner.mockResolvedValue({ referralCode: 'PARTNER1234', status: 'active', termsVersion: 'v1.2' })
     mocks.getReferralDashboard.mockResolvedValue(dashboardData)
 
     const props = await renderProps()
 
     expect(props.referralEnabled).toBe(true)
     expect(props.hasReferralPartner).toBe(true)
+    expect(props.needsReferralTermsAcceptance).toBe(false)
+    expect(props.referralAcceptedTermsVersion).toBe('v1.2')
+    expect(props.referralCurrentTermsVersion).toBe('v1.2')
     expect(props.referralDashboard).toEqual(dashboardData)
     expect(mocks.getReferralPartner).toHaveBeenCalledTimes(1)
     expect(mocks.getReferralDashboard).toHaveBeenCalledTimes(1)
+  })
+
+  it('requests current terms acceptance for an existing partner with an older version', async () => {
+    mocks.referralFeatureEnabled.mockReturnValue(true)
+    mocks.getReferralPartner.mockResolvedValue({ referralCode: 'PARTNER1234', status: 'active', termsVersion: 'v1.1' })
+
+    const props = await renderProps()
+
+    expect(props.needsReferralTermsAcceptance).toBe(true)
+    expect(props.referralAcceptedTermsVersion).toBe('v1.1')
   })
 
   it('unreadMessages failure falls back to 0 and the panel still renders', async () => {

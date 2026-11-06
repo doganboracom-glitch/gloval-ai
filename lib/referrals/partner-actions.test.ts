@@ -32,6 +32,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         select: () => {
           const query: any = {
             eq: () => query,
+            in: () => query,
             maybeSingle: async () => ({ data: state.existingPartner, error: state.lookupError }),
           }
           return query
@@ -51,6 +52,7 @@ vi.mock('@/lib/supabase/admin', () => ({
           state.updatePayload = value
           const query: any = {
             eq: () => query,
+            in: () => query,
             is: () => query,
             select: () => query,
             maybeSingle: async () => ({
@@ -76,6 +78,7 @@ vi.mock('@/lib/maker-requests/outbox', () => ({
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import {
+  acceptReferralTerms,
   activateReferralPartner,
   closeReferralPartner,
   saveReferralPartnerIban,
@@ -204,7 +207,30 @@ describe('referral partner actions', () => {
     expect(consoleError).toHaveBeenCalledWith('[referrals] activation notification enqueue failed')
   })
 
+  it('records explicit acceptance of the current terms for an existing partner', async () => {
+    state.existingPartner = { id: 'partner-id', status: 'active' }
+
+    const result = await acceptReferralTerms({ termsAccepted: true, termsVersion: REFERRAL_TERMS_VERSION })
+
+    expect(result).toEqual({ ok: true })
+    expect(state.updatePayload).toMatchObject({ terms_version: REFERRAL_TERMS_VERSION })
+    expect(state.updatePayload?.terms_accepted_at).toEqual(expect.any(String))
+  })
+
+  it('does not record a stale or unchecked terms acceptance', async () => {
+    await expect(acceptReferralTerms({ termsAccepted: true, termsVersion: 'v1.1' })).resolves.toEqual({
+      ok: false,
+      error: 'terms_required',
+    })
+    await expect(acceptReferralTerms({ termsAccepted: false, termsVersion: REFERRAL_TERMS_VERSION })).resolves.toEqual({
+      ok: false,
+      error: 'terms_required',
+    })
+    expect(state.adminCalls).toBe(0)
+  })
+
   it('saves an IBAN only for an active partner with no stored IBAN', async () => {
+    state.existingPartner = { id: 'partner-id', terms_version: REFERRAL_TERMS_VERSION }
     const iban = validTurkishIban()
 
     const result = await saveReferralPartnerIban({ iban })

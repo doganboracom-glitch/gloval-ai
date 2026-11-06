@@ -38,6 +38,7 @@ import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
 import { ReferralDashboardPanel } from '@/components/dashboard/referral-dashboard-panel'
+import { ReferralTermsReacceptance } from '@/components/settings/referral-terms-reacceptance'
 import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const headerActionClass =
@@ -56,6 +57,9 @@ export function DashboardClient({
   referralPayoutData = null,
   referralEnabled = false,
   hasReferralPartner = false,
+  needsReferralTermsAcceptance = false,
+  referralAcceptedTermsVersion = null,
+  referralCurrentTermsVersion = '',
   payoutsEnabled = false,
 }: {
   projects: ProjectListItem[]
@@ -75,6 +79,9 @@ export function DashboardClient({
   referralPayoutData?: ReferralPayoutPanelData | null
   referralEnabled?: boolean
   hasReferralPartner?: boolean
+  needsReferralTermsAcceptance?: boolean
+  referralAcceptedTermsVersion?: string | null
+  referralCurrentTermsVersion?: string
   payoutsEnabled?: boolean
 }) {
   const { t, lang } = useLanguage()
@@ -419,6 +426,12 @@ export function DashboardClient({
               </li>
             ))}
           </ul>
+        )}
+        {needsReferralTermsAcceptance && (
+          <ReferralTermsReacceptance
+            acceptedVersion={referralAcceptedTermsVersion}
+            currentVersion={referralCurrentTermsVersion}
+          />
         )}
         <ReferralDashboardPanel
           data={referralDashboard}

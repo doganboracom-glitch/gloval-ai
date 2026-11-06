@@ -19,6 +19,7 @@ const serverBadgeSnapshot = () => false
 export function SiteFooter({ now }: { now?: Date } = {}) {
   const { t } = useLanguage()
   const l = t.footer.links
+  const showReferralTerms = process.env.NEXT_PUBLIC_REFERRAL_ENABLED === '1'
   // The server (and hydration) snapshot is always "no badge", so cached or
   // prerendered HTML can never disagree with the client; the badge appears
   // right after hydration while the date is still before the cutoff.
@@ -59,6 +60,9 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: l.preInfo, href: '/yasal/on-bilgilendirme-formu' },
         { label: l.refund, href: '/yasal/iptal-ve-iade' },
         { label: l.delivery, href: '/yasal/hizmet-sunumu' },
+        ...(showReferralTerms
+          ? [{ label: l.referralTerms, href: '/yasal/satis-ortakligi-sartlari' }]
+          : []),
       ],
     },
   ]

@@ -27,7 +27,7 @@ describe('GoogleAdsWorkspace publish feature gate', () => {
     )
 
     expect(container.firstChild).toBeNull()
-    expect(mocks.useSWR).toHaveBeenCalledTimes(2)
+    expect(mocks.useSWR).toHaveBeenCalledTimes(1)
     expect(mocks.useSWR.mock.calls.every(([key]) => key === null)).toBe(true)
   })
 

@@ -1018,8 +1018,10 @@ const dict = {
         cookiePrefs: 'Çerez tercihleri',
         distanceSales: 'Mesafeli Satış Sözleşmesi',
         preInfo: 'Ön Bilgilendirme Formu',
-        refund: 'İptal ve İade',
-        delivery: 'Hizmet Sunumu',
+  refund: 'İptal ve İade',
+  delivery: 'Hizmet Sunumu',
+  referralTerms: 'Satış Ortaklığı Şartları',
+
       },
     },
     cookie: {
@@ -3331,8 +3333,10 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
         cookiePrefs: 'Cookie preferences',
         distanceSales: 'Distance Sales Agreement',
         preInfo: 'Pre-Sale Information Form',
-        refund: 'Cancellation & Refund',
-        delivery: 'Service Delivery',
+  refund: 'Cancellation & Refund',
+  delivery: 'Service Delivery',
+  referralTerms: 'Referral Partner Terms',
+
       },
     },
     cookie: {
