@@ -3,7 +3,7 @@ import 'server-only'
 import { NextResponse } from 'next/server'
 import { AuthUnavailableError, getRequestUser } from '@/lib/supabase/request-user'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
-import { resolveGoogleAdsAccess, resolveGoogleAdsConnectAccess } from '@/lib/ads/env'
+import { resolveGoogleAdsAccess } from '@/lib/ads/env'
 import type { GoogleAdsAccessIdentity } from '@/lib/ads/env'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
@@ -16,10 +16,6 @@ const NO_STORE_HEADERS = {
 
 export function googleAdsFeatureEnabled(): boolean {
   return isAdsFeatureUiEnabled()
-}
-
-export function googleAdsConnectAllowed(userId: string | null): boolean {
-  return resolveGoogleAdsConnectAccess(userId)
 }
 
 export type GoogleAdsRequestAccess = {

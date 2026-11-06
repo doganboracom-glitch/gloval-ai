@@ -4,7 +4,7 @@ import { getGoogleAdsDatePeriod, parseGoogleAdsCustomPeriod, type GoogleAdsRange
 import { loadGoogleAdsInsights } from '@/lib/ads/google-ads-insights-server'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
 import { GoogleAdsReportStorageError } from '@/lib/ads/google-ads-report-store'
-import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsRequestAccess, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -34,9 +34,10 @@ function apiError(error: unknown) {
 
 export async function GET(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsNotFound()
-  const userId = await googleAdsUserId()
-  if (!userId) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const access = await googleAdsRequestAccess()
+  if (!access) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
+  if (!access.decision.canConnect) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const userId = access.userId
 
   const url = new URL(request.url)
   const connectionId = connectionIdSchema.safeParse(url.searchParams.get('connectionId'))
@@ -60,9 +61,10 @@ export async function POST(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsNotFound()
   if (!isSameOriginGoogleAdsPost(request)) return googleAdsJson({ ok: false, error: 'invalid_origin' }, 403)
 
-  const userId = await googleAdsUserId()
-  if (!userId) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const access = await googleAdsRequestAccess()
+  if (!access) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
+  if (!access.decision.canConnect) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const userId = access.userId
 
   const body = await request.json().catch(() => null)
   const parsed = analysisRequestSchema.safeParse(body)

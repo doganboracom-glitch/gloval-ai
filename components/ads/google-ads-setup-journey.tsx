@@ -9,10 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 type SetupStage = 'no-connection' | 'connected' | 'draft' | 'approved' | 'published'
 
 const stepsTr = [
-  { title: 'חשבון Google Ads', description: 'צור חשבון Google Ads אם עדיין אין לך.' },
-  { title: 'חיבור חשבון', description: 'חבר חשבון לקוח פעיל; חשבון מנהל (MCC) אינו נתמך.' },
-  { title: 'תכנון וטיוטה', description: 'בדוק את כתובת האתר, התקציב, המיקוד והמודעה לפני שמירת הטיוטה.' },
-  { title: 'אישור ופרסום', description: 'אשר תנאים, אמת מול Google בפרסום בדיקה, ואז פרסם כשהקמפיין מושהה.' },
+  { title: 'Google Ads hesabı oluşturun', description: 'Henüz hesabınız yoksa bir Google Ads hesabı oluşturun.' },
+  { title: 'Hesabı bağlayın', description: 'Etkin bir müşteri hesabı bağlayın; yönetici (MCC) hesabı yayınlama için kullanılamaz.' },
+  { title: 'Planlayın ve kontrol edin', description: 'Taslağı kaydetmeden önce açılış sayfasını, bütçeyi, hedeflemeyi ve reklamı kontrol edin.' },
+  { title: 'Onaylayın ve yayınlayın', description: 'Şartları onaylayın, Google ile doğrulayın, ardından kampanyayı duraklatılmış olarak yayınlayın.' },
 ] as const
 const stepsEn = [
   { title: 'Google Ads account', description: 'Create a Google Ads account if you do not have one yet.' },
