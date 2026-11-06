@@ -18,12 +18,13 @@ import { BLOG_MAX_POSTS } from '@/lib/blog'
 import { matchLocaleTag, type SupportedLocale } from '@/lib/locale-registry'
 
 /**
- * User-facing plan copy is TR + EN; the card-payment comparison row supports all locales.
+ * Core plan descriptions are TR + EN; plan-credit and card-payment copy support
+ * every locale in the shared 12-language registry.
  *
  * This file only decides how plans are DESCRIBED. Prices, limits, credits and
  * mailbox counts are read from `pricing-config.ts` and `access-state.ts`, so
- * the wording can change without touching behaviour. The shared 11-language
- * dictionary is intentionally not used here.
+ * the wording can change without touching behaviour. The shared platform
+ * dictionary is intentionally not used for plan-specific copy.
  *
  * It is the ONLY place feature rows are written down. The plan cards use
  * `buildPlanView` and the comparison table is DERIVED from the very same items
@@ -47,6 +48,21 @@ type CardPaymentCopy = {
   note: string
   ecommerceRateLine: string
   ecommerceRateFootnote: string
+}
+
+type PlanCreditCopy = {
+  comparisonGroup: string
+  creditsRow: string
+  rolloverRow: string
+  maxBalanceRow: string
+  freeSummary: (n: string) => string
+  freeNote: string
+  starterSummary: (n: string) => string
+  starterNote: string
+  firstPeriod: (n: string) => string
+  following: (n: string) => string
+  rolloverNote: string
+  maxBalanceNote: (n: string) => string
 }
 
 const CARD_PAYMENT_PROVIDER = 'iyzico'
@@ -126,9 +142,202 @@ const CARD_PAYMENT_COPY: Record<SupportedLocale, CardPaymentCopy> = {
   },
 }
 
+const PLAN_CREDIT_COPY: Record<SupportedLocale, PlanCreditCopy> = {
+  tr: {
+    comparisonGroup: 'Yapay zekâ kredileri',
+    creditsRow: 'Dönem başına AI kredisi',
+    rolloverRow: 'Kullanılmayan krediler devreder',
+    maxBalanceRow: 'Maksimum bakiye',
+    freeSummary: (n) => `${n} AI kredisi`,
+    freeNote: 'Bir defalık; aylık yenilenmez.',
+    starterSummary: (n) => `${n} AI kredisi / 30 gün`,
+    starterNote: 'Kullanılmayan krediler devretmez.',
+    firstPeriod: (n) => `İlk dönemde ${n} AI kredisi.`,
+    following: (n) => `Sonraki her ay ${n} AI kredisi.`,
+    rolloverNote: 'Kullanılmayan krediler devreder.',
+    maxBalanceNote: (n) => `Maksimum bakiye: ${n} AI kredisi.`,
+  },
+  en: {
+    comparisonGroup: 'AI credits',
+    creditsRow: 'AI credits per period',
+    rolloverRow: 'Unused credits roll over',
+    maxBalanceRow: 'Maximum balance',
+    freeSummary: (n) => `${n} AI credits`,
+    freeNote: 'One-time; does not renew monthly.',
+    starterSummary: (n) => `${n} AI credits / 30 days`,
+    starterNote: 'Unused credits do not carry over.',
+    firstPeriod: (n) => `${n} AI credits in the first period.`,
+    following: (n) => `${n} AI credits per month after that.`,
+    rolloverNote: 'Unused credits roll over.',
+    maxBalanceNote: (n) => `Maximum balance: ${n} AI credits.`,
+  },
+  fr: {
+    comparisonGroup: 'Crédits IA',
+    creditsRow: 'Crédits IA par période',
+    rolloverRow: 'Report des crédits inutilisés',
+    maxBalanceRow: 'Solde maximal',
+    freeSummary: (n) => `${n} crédits IA`,
+    freeNote: 'Une seule fois, sans renouvellement mensuel.',
+    starterSummary: (n) => `${n} crédits IA / 30 jours`,
+    starterNote: 'Les crédits inutilisés ne sont pas reportés.',
+    firstPeriod: (n) => `${n} crédits IA pendant la première période.`,
+    following: (n) => `${n} crédits IA par mois ensuite.`,
+    rolloverNote: 'Les crédits inutilisés sont reportés.',
+    maxBalanceNote: (n) => `Solde maximal : ${n} crédits IA.`,
+  },
+  de: {
+    comparisonGroup: 'KI-Credits',
+    creditsRow: 'KI-Credits pro Zeitraum',
+    rolloverRow: 'Übertragung ungenutzter Credits',
+    maxBalanceRow: 'Maximaler Kontostand',
+    freeSummary: (n) => `${n} KI-Credits`,
+    freeNote: 'Einmalig; keine monatliche Erneuerung.',
+    starterSummary: (n) => `${n} KI-Credits / 30 Tage`,
+    starterNote: 'Ungenutzte Credits werden nicht übertragen.',
+    firstPeriod: (n) => `${n} KI-Credits im ersten Zeitraum.`,
+    following: (n) => `Danach ${n} KI-Credits pro Monat.`,
+    rolloverNote: 'Ungenutzte Credits werden übertragen.',
+    maxBalanceNote: (n) => `Maximaler Kontostand: ${n} KI-Credits.`,
+  },
+  it: {
+    comparisonGroup: 'Crediti IA',
+    creditsRow: 'Crediti IA per periodo',
+    rolloverRow: 'Riporto dei crediti inutilizzati',
+    maxBalanceRow: 'Saldo massimo',
+    freeSummary: (n) => `${n} crediti IA`,
+    freeNote: 'Una tantum; non si rinnova ogni mese.',
+    starterSummary: (n) => `${n} crediti IA / 30 giorni`,
+    starterNote: 'I crediti non utilizzati non vengono riportati.',
+    firstPeriod: (n) => `${n} crediti IA nel primo periodo.`,
+    following: (n) => `Poi ${n} crediti IA al mese.`,
+    rolloverNote: 'I crediti non utilizzati vengono riportati.',
+    maxBalanceNote: (n) => `Saldo massimo: ${n} crediti IA.`,
+  },
+  et: {
+    comparisonGroup: 'AI-krediidid',
+    creditsRow: 'AI-krediite perioodi kohta',
+    rolloverRow: 'Kasutamata krediitide ülekandmine',
+    maxBalanceRow: 'Maksimaalne saldo',
+    freeSummary: (n) => `${n} AI-krediiti`,
+    freeNote: 'Ühekordne; kord kuus ei uuene.',
+    starterSummary: (n) => `${n} AI-krediiti / 30 päeva`,
+    starterNote: 'Kasutamata krediite üle ei kanta.',
+    firstPeriod: (n) => `Esimesel perioodil ${n} AI-krediiti.`,
+    following: (n) => `Seejärel ${n} AI-krediiti kuus.`,
+    rolloverNote: 'Kasutamata krediidid kantakse üle.',
+    maxBalanceNote: (n) => `Maksimaalne saldo: ${n} AI-krediiti.`,
+  },
+  pl: {
+    comparisonGroup: 'Kredyty AI',
+    creditsRow: 'Kredyty AI na okres',
+    rolloverRow: 'Przenoszenie niewykorzystanych kredytów',
+    maxBalanceRow: 'Maksymalne saldo',
+    freeSummary: (n) => `${n} kredytów AI`,
+    freeNote: 'Jednorazowo; nie odnawia się co miesiąc.',
+    starterSummary: (n) => `${n} kredytów AI / 30 dni`,
+    starterNote: 'Niewykorzystane kredyty nie przechodzą na kolejny okres.',
+    firstPeriod: (n) => `${n} kredytów AI w pierwszym okresie.`,
+    following: (n) => `Następnie ${n} kredytów AI miesięcznie.`,
+    rolloverNote: 'Niewykorzystane kredyty przechodzą na kolejny okres.',
+    maxBalanceNote: (n) => `Maksymalne saldo: ${n} kredytów AI.`,
+  },
+  es: {
+    comparisonGroup: 'Créditos de IA',
+    creditsRow: 'Créditos de IA por periodo',
+    rolloverRow: 'Acumulación de créditos no utilizados',
+    maxBalanceRow: 'Saldo máximo',
+    freeSummary: (n) => `${n} créditos de IA`,
+    freeNote: 'Una sola vez; no se renueva cada mes.',
+    starterSummary: (n) => `${n} créditos de IA / 30 días`,
+    starterNote: 'Los créditos no utilizados no se acumulan.',
+    firstPeriod: (n) => `${n} créditos de IA en el primer periodo.`,
+    following: (n) => `Después, ${n} créditos de IA al mes.`,
+    rolloverNote: 'Los créditos no utilizados se acumulan.',
+    maxBalanceNote: (n) => `Saldo máximo: ${n} créditos de IA.`,
+  },
+  pt: {
+    comparisonGroup: 'Créditos de IA',
+    creditsRow: 'Créditos de IA por período',
+    rolloverRow: 'Acúmulo de créditos não utilizados',
+    maxBalanceRow: 'Saldo máximo',
+    freeSummary: (n) => `${n} créditos de IA`,
+    freeNote: 'Uso único; não renova mensalmente.',
+    starterSummary: (n) => `${n} créditos de IA / 30 dias`,
+    starterNote: 'Créditos não utilizados não são acumulados.',
+    firstPeriod: (n) => `${n} créditos de IA no primeiro período.`,
+    following: (n) => `Depois, ${n} créditos de IA por mês.`,
+    rolloverNote: 'Créditos não utilizados são acumulados.',
+    maxBalanceNote: (n) => `Saldo máximo: ${n} créditos de IA.`,
+  },
+  ar: {
+    comparisonGroup: 'أرصدة الذكاء الاصطناعي',
+    creditsRow: 'أرصدة الذكاء الاصطناعي لكل فترة',
+    rolloverRow: 'ترحيل الأرصدة غير المستخدمة',
+    maxBalanceRow: 'الحد الأقصى للرصيد',
+    freeSummary: (n) => `${n} رصيد ذكاء اصطناعي`,
+    freeNote: 'مرة واحدة؛ لا يتجدد شهريًا.',
+    starterSummary: (n) => `${n} رصيد ذكاء اصطناعي / 30 يومًا`,
+    starterNote: 'لا تُرحّل الأرصدة غير المستخدمة.',
+    firstPeriod: (n) => `${n} رصيد ذكاء اصطناعي في الفترة الأولى.`,
+    following: (n) => `${n} رصيد ذكاء اصطناعي شهريًا بعد ذلك.`,
+    rolloverNote: 'تُرحّل الأرصدة غير المستخدمة.',
+    maxBalanceNote: (n) => `الحد الأقصى للرصيد: ${n} رصيد ذكاء اصطناعي.`,
+  },
+  ru: {
+    comparisonGroup: 'Кредиты ИИ',
+    creditsRow: 'Кредиты ИИ за период',
+    rolloverRow: 'Перенос неиспользованных кредитов',
+    maxBalanceRow: 'Максимальный баланс',
+    freeSummary: (n) => `${n} кредитов ИИ`,
+    freeNote: 'Однократно; ежемесячно не обновляется.',
+    starterSummary: (n) => `${n} кредитов ИИ / 30 дней`,
+    starterNote: 'Неиспользованные кредиты не переносятся.',
+    firstPeriod: (n) => `${n} кредитов ИИ в первом периоде.`,
+    following: (n) => `Затем ${n} кредитов ИИ каждый месяц.`,
+    rolloverNote: 'Неиспользованные кредиты переносятся.',
+    maxBalanceNote: (n) => `Максимальный баланс: ${n} кредитов ИИ.`,
+  },
+  az: {
+    comparisonGroup: 'Süni intellekt kreditləri',
+    creditsRow: 'Dövr üzrə süni intellekt krediti',
+    rolloverRow: 'İstifadə olunmayan kreditlərin növbəti dövrə keçirilməsi',
+    maxBalanceRow: 'Maksimum balans',
+    freeSummary: (n) => `${n} süni intellekt krediti`,
+    freeNote: 'Birdəfəlikdir; hər ay yenilənmir.',
+    starterSummary: (n) => `${n} süni intellekt krediti / 30 gün`,
+    starterNote: 'İstifadə olunmayan kreditlər növbəti dövrə keçmir.',
+    firstPeriod: (n) => `İlk dövrdə ${n} süni intellekt krediti.`,
+    following: (n) => `Sonra hər ay ${n} süni intellekt krediti.`,
+    rolloverNote: 'İstifadə olunmayan kreditlər növbəti dövrə keçir.',
+    maxBalanceNote: (n) => `Maksimum balans: ${n} süni intellekt krediti.`,
+  },
+}
+
+function getPlanLocale(langInput: string | null | undefined): SupportedLocale {
+  return matchLocaleTag(langInput?.replace(/_/g, '-') ?? '') ?? 'en'
+}
+
+function getPlanCreditCopy(langInput: string | null | undefined): PlanCreditCopy {
+  return PLAN_CREDIT_COPY[getPlanLocale(langInput)]
+}
+
+function getPlanCreditValue(
+  code: PlanCode,
+  nf: Intl.NumberFormat,
+  copy: PlanCreditCopy,
+): string {
+  if (code === 'free') {
+    return `${copy.freeSummary(nf.format(AI_CREDIT_CONFIG.free.credits))} — ${copy.freeNote}`
+  }
+  if (code === 'starter') {
+    return `${copy.starterSummary(nf.format(AI_CREDIT_CONFIG.starter.credits))} — ${copy.starterNote}`
+  }
+  const plan = code === 'pro' ? AI_CREDIT_CONFIG.pro : AI_CREDIT_CONFIG.ecommerce
+  return `${copy.firstPeriod(nf.format(plan.initialCredits))} ${copy.following(nf.format(plan.monthlyCredits))}`
+}
+
 function getCardPaymentCopy(langInput: string | null | undefined): CardPaymentCopy {
-  const locale = matchLocaleTag(langInput?.replace(/_/g, '-') ?? '') ?? 'en'
-  return CARD_PAYMENT_COPY[locale]
+  return CARD_PAYMENT_COPY[getPlanLocale(langInput)]
 }
 
 export type GroupKey = 'site' | 'store' | 'email' | 'support'
@@ -216,13 +425,7 @@ type Strings = {
   common: CommonPlanCopy
   comparison: ComparisonCopy & {
     soon: string
-    groups: Record<GroupKey | 'ai' | 'content', string>
-    ai: {
-      credits: string
-      rollover: string
-      maxBalance: string
-      creditsValue: (code: PlanCode, nf: Intl.NumberFormat) => string
-    }
+    groups: Record<GroupKey | 'content', string>
   }
   /** Card section titles (the first one is the "what's included" heading). */
   groups: Record<GroupKey, string>
@@ -240,15 +443,6 @@ type Strings = {
       badge?: string
     }
   >
-  credits: {
-    freeSummary: (n: string) => string
-    freeNote: string
-    starterSummary: (n: string) => string
-    starterNote: string
-    firstPeriod: (n: string) => string
-    following: (n: string) => string
-    rollover: string
-  }
   f: {
     sites: (n: number) => string
     sitesRight: (n: number) => string
@@ -336,7 +530,7 @@ const TR: Strings = {
     showAllFeatures: 'Tüm özellikleri göster',
     showFewerFeatures: 'Daha az göster',
     maxBalanceTip: (n) =>
-      `Kullanılmayan işlemler devreder; en fazla ${n} işlem bakiyesi birikebilir`,
+      `Kullanılmayan krediler devreder; en fazla ${n} AI kredisi birikebilir`,
     saving: (amount) => `Yıllık ödemede ${amount} avantaj`,
   },
   comparison: {
@@ -348,26 +542,11 @@ const TR: Strings = {
     popular: 'En çok tercih edilen',
     soon: 'Yakında',
     groups: {
-      ai: 'Yapay zeka işlemleri',
       content: 'İçerik ve blog',
       site: 'Site',
       store: 'Mağaza',
       email: 'E-posta',
       support: 'Destek',
-    },
-    ai: {
-      credits: 'Yapay zeka işlemi',
-      rollover: 'Kullanılmayan işlemler devreder',
-      maxBalance: 'Maksimum işlem bakiyesi',
-      creditsValue: (code, nf) => {
-        const c = AI_CREDIT_CONFIG
-        if (code === 'free') return `${nf.format(c.free.credits)} (bir defa)`
-        if (code === 'starter') {
-          return `${nf.format(c.starter.credits)} / ${c.starter.creditPeriodDays} gün`
-        }
-        const p = code === 'pro' ? c.pro : c.ecommerce
-        return `${nf.format(p.initialCredits)} + ${nf.format(p.monthlyCredits)} / ay`
-      },
     },
   },
   groups: {
@@ -406,15 +585,6 @@ const TR: Strings = {
       description: 'Mağazasını internete taşımak isteyen işletmeler için.',
       cta: 'E-Ticarete Başla',
     },
-  },
-  credits: {
-    freeSummary: (n) => `${n} yapay zeka işlemi`,
-    freeNote: 'Bir defalık. Aylık yenilenmez.',
-    starterSummary: (n) => `${n} yapay zeka işlemi / 30 gün`,
-    starterNote: 'Kullanılmayan işlemler devretmez.',
-    firstPeriod: (n) => `İlk ay ${n} yapay zeka işlemi`,
-    following: (n) => `Sonraki dönemlerde ${n} yapay zeka işlemi.`,
-    rollover: 'Kullanılmayan işlemler devreder.',
   },
   f: {
     sites: (n) => `${n} site`,
@@ -505,7 +675,7 @@ const EN: Strings = {
     showAllFeatures: 'Show all features',
     showFewerFeatures: 'Show less',
     maxBalanceTip: (n) =>
-      `Unused actions carry over; up to ${n} actions can accumulate`,
+      `Unused credits carry over; up to ${n} AI credits can accumulate`,
     saving: (amount) => `Save ${amount} with yearly billing`,
   },
   comparison: {
@@ -517,26 +687,11 @@ const EN: Strings = {
     popular: 'Most popular',
     soon: 'Soon',
     groups: {
-      ai: 'AI actions',
       content: 'Content and blog',
       site: 'Site',
       store: 'Store',
       email: 'Email',
       support: 'Support',
-    },
-    ai: {
-      credits: 'AI actions',
-      rollover: 'Unused actions carry over',
-      maxBalance: 'Maximum action balance',
-      creditsValue: (code, nf) => {
-        const c = AI_CREDIT_CONFIG
-        if (code === 'free') return `${nf.format(c.free.credits)} (one-time)`
-        if (code === 'starter') {
-          return `${nf.format(c.starter.credits)} / ${c.starter.creditPeriodDays} days`
-        }
-        const p = code === 'pro' ? c.pro : c.ecommerce
-        return `${nf.format(p.initialCredits)} + ${nf.format(p.monthlyCredits)} / mo`
-      },
     },
   },
   groups: {
@@ -575,15 +730,6 @@ const EN: Strings = {
       description: 'For businesses that want to take their store online.',
       cta: 'Start Selling',
     },
-  },
-  credits: {
-    freeSummary: (n) => `${n} AI actions`,
-    freeNote: 'One-time. Does not renew monthly.',
-    starterSummary: (n) => `${n} AI actions / 30 days`,
-    starterNote: 'Unused actions do not carry over.',
-    firstPeriod: (n) => `${n} AI actions in the first month`,
-    following: (n) => `${n} AI actions in following periods.`,
-    rollover: 'Unused actions carry over.',
   },
   f: {
     sites: (n) => `${n} ${n === 1 ? 'site' : 'sites'}`,
@@ -675,8 +821,8 @@ export function getComparisonCopy(lang: string | null | undefined): ComparisonCo
   return { toggle, featureColumn, yes, no, planPicker, popular }
 }
 
-function numberFormatter(lang: CopyLang) {
-  return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US')
+function numberFormatter(langInput: string | null | undefined) {
+  return new Intl.NumberFormat(getPlanLocale(langInput))
 }
 
 /** Nothing is shown for a plan without mailboxes (FREE): no "not included" row. */
@@ -713,7 +859,8 @@ function buildRawPlanView(
 ): PlanView {
   const lang = copyLang(langInput)
   const s = STRINGS[lang]
-  const nf = numberFormatter(lang)
+  const nf = numberFormatter(langInput)
+  const creditCopy = getPlanCreditCopy(langInput)
   const base = s.plans[code]
   const { f, groups: g } = s
   const paymentCopy = getCardPaymentCopy(langInput)
@@ -784,8 +931,8 @@ function buildRawPlanView(
   if (code === 'free') {
     return {
       ...head,
-      creditSummary: s.credits.freeSummary(nf.format(AI_CREDIT_CONFIG.free.credits)),
-      creditNotes: [s.credits.freeNote],
+      creditSummary: creditCopy.freeSummary(nf.format(AI_CREDIT_CONFIG.free.credits)),
+      creditNotes: [creditCopy.freeNote],
       groups: [
         {
           key: 'site',
@@ -809,8 +956,8 @@ function buildRawPlanView(
   if (code === 'starter') {
     return {
       ...head,
-      creditSummary: s.credits.starterSummary(nf.format(AI_CREDIT_CONFIG.starter.credits)),
-      creditNotes: [s.credits.starterNote],
+      creditSummary: creditCopy.starterSummary(nf.format(AI_CREDIT_CONFIG.starter.credits)),
+      creditNotes: [creditCopy.starterNote],
       groups: [
         {
           key: 'site',
@@ -855,10 +1002,11 @@ function buildRawPlanView(
     return {
       ...head,
       extendsLabel: s.extendsLabel.starter,
-      creditSummary: s.credits.firstPeriod(nf.format(AI_CREDIT_CONFIG.pro.initialCredits)),
+      creditSummary: creditCopy.firstPeriod(nf.format(AI_CREDIT_CONFIG.pro.initialCredits)),
       creditNotes: [
-        s.credits.following(nf.format(AI_CREDIT_CONFIG.pro.monthlyCredits)),
-        s.credits.rollover,
+        creditCopy.following(nf.format(AI_CREDIT_CONFIG.pro.monthlyCredits)),
+        creditCopy.rolloverNote,
+        creditCopy.maxBalanceNote(nf.format(AI_CREDIT_CONFIG.pro.maxBalance)),
       ],
       groups: [
         {
@@ -899,10 +1047,11 @@ function buildRawPlanView(
   return {
     ...head,
     extendsLabel: s.extendsLabel.pro,
-    creditSummary: s.credits.firstPeriod(nf.format(AI_CREDIT_CONFIG.ecommerce.initialCredits)),
+    creditSummary: creditCopy.firstPeriod(nf.format(AI_CREDIT_CONFIG.ecommerce.initialCredits)),
     creditNotes: [
-      s.credits.following(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits)),
-      s.credits.rollover,
+      creditCopy.following(nf.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits)),
+      creditCopy.rolloverNote,
+      creditCopy.maxBalanceNote(nf.format(AI_CREDIT_CONFIG.ecommerce.maxBalance)),
     ],
     groups: [
       {
@@ -1092,7 +1241,8 @@ export function buildComparison(
 ): ComparisonGroup[] {
   const lang = copyLang(langInput)
   const s = STRINGS[lang]
-  const nf = numberFormatter(lang)
+  const nf = numberFormatter(langInput)
+  const creditCopy = getPlanCreditCopy(langInput)
 
   const rowLabels = new Map<string, string>()
   const rowOrder: Record<GroupKey | 'ai' | 'content', string[]> = {
@@ -1133,24 +1283,24 @@ export function buildComparison(
 
   const aiCodes = AI_CREDIT_CONFIG
   const aiGroup: ComparisonGroup = {
-    category: s.comparison.groups.ai,
+    category: creditCopy.comparisonGroup,
     rows: [
       {
-        label: s.comparison.ai.credits,
-        free: s.comparison.ai.creditsValue('free', nf),
-        starter: s.comparison.ai.creditsValue('starter', nf),
-        pro: s.comparison.ai.creditsValue('pro', nf),
-        ecommerce: s.comparison.ai.creditsValue('ecommerce', nf),
+        label: creditCopy.creditsRow,
+        free: getPlanCreditValue('free', nf, creditCopy),
+        starter: getPlanCreditValue('starter', nf, creditCopy),
+        pro: getPlanCreditValue('pro', nf, creditCopy),
+        ecommerce: getPlanCreditValue('ecommerce', nf, creditCopy),
       },
       {
-        label: s.comparison.ai.rollover,
+        label: creditCopy.rolloverRow,
         free: false,
         starter: false,
         pro: aiCodes.pro.rollover,
         ecommerce: aiCodes.ecommerce.rollover,
       },
       {
-        label: s.comparison.ai.maxBalance,
+        label: creditCopy.maxBalanceRow,
         free: false,
         starter: false,
         pro: nf.format(aiCodes.pro.maxBalance),
