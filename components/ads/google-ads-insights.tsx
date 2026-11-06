@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { AlertCircle, Download, LoaderCircle, Printer, RefreshCw, Sparkles } from 'lucide-react'
@@ -12,12 +13,29 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { GoogleAdsInsightsCharts, type GoogleAdsTrendMetric } from '@/components/ads/google-ads-insights-charts'
+import type { GoogleAdsTrendMetric } from '@/components/ads/google-ads-insights-charts'
 import { GoogleAdsReportSettings } from '@/components/ads/google-ads-report-settings'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import type { GoogleAdsInsightsReport, GoogleAdsMetrics, GoogleAdsRangePreset } from '@/lib/ads/google-ads-insights-shared'
 import { buildGoogleAdsInsightsCsv, getGoogleAdsDatePeriod, parseGoogleAdsCustomPeriod, percentChange } from '@/lib/ads/google-ads-insights-shared'
 import type { GoogleAdsAnalysis } from '@/lib/ads/google-ads-analysis-contract'
+
+const GoogleAdsInsightsCharts = dynamic(
+  () => import('@/components/ads/google-ads-insights-charts').then((module) => module.GoogleAdsInsightsCharts),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid gap-4 xl:grid-cols-2" role="status" aria-live="polite">
+        <Card className="xl:col-span-2">
+          <CardContent className="flex min-h-72 items-center">
+            <Skeleton className="h-56 w-full" />
+            <span className="sr-only">Grafikler yükleniyor</span>
+          </CardContent>
+        </Card>
+      </div>
+    ),
+  },
+)
 
 const MAX_ANALYSES_PER_DAY = 3
 
