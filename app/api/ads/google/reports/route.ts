@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
 import { getGoogleAdsConnectionForUser } from '@/lib/ads/google-connections'
 import { GoogleAdsReportStorageError, getGoogleAdsReportPreferences, saveGoogleAdsReportPreferences } from '@/lib/ads/google-ads-report-store'
-import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsFeatureEnabled, googleAdsJson, googleAdsNotFound, googleAdsRequestAccess, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -16,9 +16,10 @@ const preferenceSchema = z.object({
 
 export async function GET(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsNotFound()
-  const userId = await googleAdsUserId()
-  if (!userId) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const access = await googleAdsRequestAccess()
+  if (!access) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
+  if (!access.decision.canConnect) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const userId = access.userId
 
   const connectionId = new URL(request.url).searchParams.get('connectionId')
   if (!connectionId || !z.string().uuid().safeParse(connectionId).success) {
@@ -55,9 +56,10 @@ export async function POST(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsNotFound()
   if (!isSameOriginGoogleAdsPost(request)) return googleAdsJson({ ok: false, error: 'invalid_origin' }, 403)
 
-  const userId = await googleAdsUserId()
-  if (!userId) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const access = await googleAdsRequestAccess()
+  if (!access) return googleAdsJson({ ok: false, error: 'not_authenticated' }, 401)
+  if (!access.decision.canConnect) return googleAdsJson({ ok: false, error: 'not_authorized' }, 403)
+  const userId = access.userId
 
   const body = await request.json().catch(() => null)
   const parsed = preferenceSchema.safeParse(body)

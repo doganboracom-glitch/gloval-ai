@@ -3,7 +3,9 @@ import 'server-only'
 import { createHash, randomBytes } from 'node:crypto'
 import { sendTransactionalEmail } from '@/lib/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { googleAdsConnectAllowed, googleAdsFeatureEnabled } from '@/lib/ads/google-route-utils'
+import { googleAdsFeatureEnabled } from '@/lib/ads/google-route-utils'
+import { resolveGoogleAdsAccess } from '@/lib/ads/env'
+import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { loadGoogleAdsInsights } from '@/lib/ads/google-ads-insights-server'
 import { getCachedGoogleAdsAnalysis } from '@/lib/ads/google-ads-insight-analysis'
@@ -68,11 +70,6 @@ export async function runGoogleAdsReportSweep(
   let nextIndex = 0
 
   async function processPreference(preference: (typeof preferences)[number]): Promise<void> {
-    if (!googleAdsConnectAllowed(preference.userId)) {
-      skipped += 1
-      return
-    }
-
     try {
       if (!await isGoogleAdsReportStillEnabled(preference.userId, preference.connectionId, frequency)) {
         skipped += 1
@@ -80,8 +77,18 @@ export async function runGoogleAdsReportSweep(
       }
 
       const { data: authUser, error: authError } = await admin.auth.admin.getUserById(preference.userId)
-      const recipient = !authError ? userEmail(authUser?.user) : null
-      if (!recipient) {
+      const user = !authError ? authUser?.user : null
+      const recipient = userEmail(user)
+      if (!user || !recipient) {
+        skipped += 1
+        return
+      }
+
+      const decision = resolveGoogleAdsAccess(preference.userId, {
+        emailConfirmed: Boolean(user.email_confirmed_at),
+        isAdmin: isAdminEmail(user.email),
+      })
+      if (!decision.canConnect) {
         skipped += 1
         return
       }

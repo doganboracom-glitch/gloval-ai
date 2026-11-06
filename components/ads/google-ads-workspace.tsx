@@ -288,9 +288,12 @@ function errorText(code: string | undefined, isTr: boolean): string {
     destination_unreachable: 'Açılış sayfasına güvenli şekilde ulaşılamadı. URL’yi kontrol edip tekrar deneyin.',
     site_policy_blocked: 'Açılış sayfası yayınlama güvenlik denetiminden geçemedi. İçeriği veya URL’yi kontrol edin.',
     publish_disabled: 'Google Ads erişimi veya yayınlama izni bu kullanıcı için etkin değil.',
-    kill_switch_active: 'Güvenlik nedeniyle Google Ads yayınlama geçici olarak durduruldu.',
-  user_publish_limit_reached: '24 saat içindeki yayın denemesi kotanız doldu. Lütfen daha sonra tekrar deneyin.',
-  global_publish_limit_reached: 'Google Ads için genel 24 saatlik yayın denemesi kotası doldu. Lütfen daha sonra tekrar deneyin.',
+    kill_switch_active: 'Güvenlik nedeniyle Google Ads işlemleri geçici olarak durduruldu.',
+    not_found: 'Google Ads yayınlama bu hesap için henüz açık değil.',
+    not_authenticated: 'Oturumunuz sona ermiş. Lütfen yeniden giriş yapın.',
+    rate_limited: 'Çok fazla istek gönderildi. Lütfen biraz bekleyip tekrar deneyin.',
+    user_publish_limit_reached: '24 saat içindeki yayın denemesi kotanız doldu. Lütfen daha sonra tekrar deneyin.',
+    global_publish_limit_reached: 'Google Ads için genel 24 saatlik yayın denemesi kotası doldu. Lütfen daha sonra tekrar deneyin.',
     unsupported_currency: 'Yalnızca TRY, USD ve EUR ile yayın yapılabilir.',
     currency_mismatch: 'Google Ads hesabının para birimi planla eşleşmiyor.',
     terms_reaccept_required: 'Yayın koşulları güncellendi. Devam etmeden önce tekrar kabul edin.',
@@ -323,7 +326,10 @@ function errorText(code: string | undefined, isTr: boolean): string {
     destination_unreachable: 'The landing page could not be reached safely. Check the URL and try again.',
     site_policy_blocked: 'The landing page did not pass the publishing security check. Review its content or URL.',
     publish_disabled: 'Google Ads access or publishing is not enabled for this user.',
-    kill_switch_active: 'Google Ads publishing is temporarily stopped for safety.',
+    kill_switch_active: 'Google Ads operations are temporarily stopped for safety.',
+    not_found: 'Google Ads publishing is not yet enabled for this account.',
+    not_authenticated: 'Your session has expired. Please sign in again.',
+    rate_limited: 'Too many requests. Wait a moment and try again.',
     user_publish_limit_reached: 'Your 24-hour publish attempt quota is used. Please try again later.',
     global_publish_limit_reached: 'The global 24-hour Google Ads publish attempt quota is used. Please try again later.',
     unsupported_currency: 'Publishing supports TRY, USD, and EUR only.',
@@ -842,15 +848,15 @@ export function GoogleAdsWorkspace({
       {killSwitchEnabled ? (
         <Alert role="status">
           <AlertCircle aria-hidden="true" />
-          <AlertTitle>{isTr ? 'מתג העצירה של פרסום Google Ads פעיל' : 'The Google Ads publishing kill switch is on'}</AlertTitle>
-          <AlertDescription>{isTr ? 'פרסום חדש, הפעלה והגדלת תקציב חסומים. צפייה, השהיה והפחתת תקציב נשארות זמינות.' : 'New publishes, campaign enabling, and budget increases are blocked. Viewing, pausing, and budget decreases remain available.'}</AlertDescription>
+          <AlertTitle>{isTr ? 'Google Ads yayınlama güvenlik anahtarı etkin' : 'The Google Ads publishing kill switch is on'}</AlertTitle>
+          <AlertDescription>{isTr ? 'Yeni yayınlar, kampanya etkinleştirme ve bütçe artırma engellendi. Görüntüleme, duraklatma ve bütçe azaltma kullanılabilir.' : 'New publishes, campaign enabling, and budget increases are blocked. Viewing, pausing, and budget decreases remain available.'}</AlertDescription>
         </Alert>
       ) : null}
       {!publishEnabled ? (
         <Alert role="status">
           <AlertCircle aria-hidden="true" />
-          <AlertTitle>{isTr ? 'פרסום Google Ads אינו זמין כרגע' : 'Google Ads publishing is currently unavailable'}</AlertTitle>
-          <AlertDescription>{isTr ? 'אפשר להמשיך להכין טיוטות. חיבור החשבון והפרסום נשלטים בנפרד.' : 'You can continue preparing drafts. Account access and publishing are controlled separately.'}</AlertDescription>
+          <AlertTitle>{isTr ? 'Google Ads yayınlama şu anda kullanılamıyor' : 'Google Ads publishing is currently unavailable'}</AlertTitle>
+          <AlertDescription>{isTr ? 'Taslak hazırlamaya devam edebilirsiniz. Hesap erişimi ve yayınlama ayrı ayrı yönetilir.' : 'You can continue preparing drafts. Account access and publishing are controlled separately.'}</AlertDescription>
         </Alert>
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1025,9 +1031,9 @@ export function GoogleAdsWorkspace({
                       <Save data-icon="inline-start" aria-hidden="true" />{pending === 'save' ? copy.saving : copy.saveDraft}
                     </Button>
                   </FieldGroup>
-                  <Alert variant="destructive">
+                  <Alert role="note" className="border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300">
                     <AlertCircle aria-hidden="true" />
-                    <AlertDescription>{copy.restricted}</AlertDescription>
+                    <AlertDescription className="text-amber-900 dark:text-amber-300">{copy.restricted}</AlertDescription>
                   </Alert>
                 </CardContent>
               </Card>
@@ -1112,7 +1118,7 @@ export function GoogleAdsWorkspace({
                       </Field>
                       {acceptedTerms ? (
                         <p role="status" className="text-sm leading-relaxed text-muted-foreground">
-                          {isTr ? 'תנאי הפרסום אושרו' : 'Publishing terms accepted'} · v{GOOGLE_ADS_PUBLISH_TERMS_VERSION}
+                          {isTr ? 'Yayın şartları onaylandı' : 'Publishing terms accepted'} · v{GOOGLE_ADS_PUBLISH_TERMS_VERSION}
                           {termsAcceptedAt ? ` · ${new Date(termsAcceptedAt).toLocaleDateString(isTr ? 'tr-TR' : 'en-US')}` : ''}
                         </p>
                       ) : (
