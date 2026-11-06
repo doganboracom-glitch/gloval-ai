@@ -89,9 +89,7 @@ export type SuggestedBudget = {
   currency: string
   dailyMinor: number
   capMinor: number
-  serverCapMinor: number
-  /** True when the suggestion was lowered to the server ceiling. */
-  clamped: boolean
+  serverCapMinor: number | null
   /** True when the amount was converted from TRY with a rough factor. */
   approximate: boolean
 }
@@ -99,7 +97,7 @@ export type SuggestedBudget = {
 export type PlanSuggestion = {
   plan: SuggestedPlan
   budget: SuggestedBudget | null
-  budgetIssue: 'cap_not_configured' | null
+  budgetIssue: 'budget_sanity_ceiling_exceeded' | null
   adjustments: { headlinesDropped: number; descriptionsDropped: number; toppedUp: boolean }
 }
 
@@ -177,23 +175,18 @@ export function suggestDailyBudget(input: {
   scanDailyTry: number
   currency: string
   serverCapMinor: number | null
-}): SuggestedBudget | null {
-  if (!input.serverCapMinor) return null
+}): SuggestedBudget {
   const unit = 10 ** currencyDigits(input.currency)
   const factor = APPROX_PER_TRY[input.currency]
   const approximate = input.currency !== 'TRY'
   const wantedMajor = factor === undefined ? FALLBACK_DAILY_MAJOR : input.scanDailyTry * factor
   const wantedDaily = Math.max(unit, Math.round(wantedMajor * unit))
   const wantedCap = Math.max(wantedDaily, wantedDaily * MAX_DAILY_SPEND_FACTOR)
-
-  const dailyMinor = Math.min(wantedDaily, input.serverCapMinor)
-  const capMinor = Math.max(dailyMinor, Math.min(wantedCap, input.serverCapMinor))
   return {
     currency: input.currency,
-    dailyMinor,
-    capMinor,
+    dailyMinor: wantedDaily,
+    capMinor: wantedCap,
     serverCapMinor: input.serverCapMinor,
-    clamped: dailyMinor < wantedDaily || capMinor < wantedCap,
     approximate,
   }
 }
@@ -267,12 +260,15 @@ export function buildPlanSuggestion(
   const budget = options.currency
     ? suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency, serverCapMinor: options.serverCapMinor })
     : null
+  const budgetIssue = budget && options.serverCapMinor !== null && budget.dailyMinor > options.serverCapMinor
+    ? 'budget_sanity_ceiling_exceeded'
+    : null
   return {
     ok: true,
     suggestion: {
       plan,
       budget,
-      budgetIssue: options.currency && !options.serverCapMinor ? 'cap_not_configured' : null,
+      budgetIssue,
       adjustments: {
         headlinesDropped: headlineResult.dropped,
         descriptionsDropped: descriptionResult.dropped,

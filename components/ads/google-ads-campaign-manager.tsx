@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
-import { AlertCircle, Archive, Check, Clock3, Pause, Play, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { AlertCircle, Archive, Check, Pause, Play, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
+import { evaluateGoogleAdsAmountRisk, googleAdsMonthlyBudgetUpperBoundMinor, googleAdsRiskConfirmationError } from '@/lib/ads/google-ads-risk'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,7 +23,6 @@ type ManagementResponse = {
   error?: string
   snapshot?: GoogleAdsManagementSnapshot
   actions?: GoogleAdsManagementAction[]
-  budgetIncreaseAvailableAt?: string | null
   stateVerified?: boolean
 }
 type Confirmation = {
@@ -33,6 +33,10 @@ type Confirmation = {
   before?: string
   after?: string
   irreversible?: boolean
+  budgetAmountMinor?: number | null
+  assessRisk?: boolean
+  previousDailyBudgetMinor?: number | null
+  risk?: ReturnType<typeof evaluateGoogleAdsAmountRisk> | null
 }
 
 class ManagementApiError extends Error {
@@ -64,6 +68,25 @@ function minorFromMajor(value: string, currency: string) {
   const amount = Number(value)
   if (!Number.isFinite(amount) || amount <= 0) return null
   const minor = Math.round(amount * 10 ** currencyDigits(currency))
+  return Number.isSafeInteger(minor) ? minor : null
+}
+
+function minorFromLocalizedAmount(value: string, currency: string, isTr: boolean) {
+  const trimmed = value.trim().replace(/\s/g, '')
+  if (!trimmed) return null
+  const locale = isTr ? 'tr-TR' : 'en-US'
+  const parts = new Intl.NumberFormat(locale).formatToParts(1234.5)
+  const group = parts.find((part) => part.type === 'group')?.value ?? ','
+  const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.'
+  let normalized = trimmed.replaceAll(group, '')
+  if (decimal !== '.' && normalized.includes('.') && !normalized.includes(decimal)) {
+    const trailingDigits = normalized.length - normalized.lastIndexOf('.') - 1
+    if (trailingDigits !== 3) normalized = normalized.replace('.', decimal)
+  }
+  normalized = normalized.replace(decimal, '.').replace(/[^\d.]/g, '')
+  const major = Number(normalized)
+  if (!Number.isFinite(major) || major <= 0) return null
+  const minor = Math.round(major * 10 ** currencyDigits(currency))
   return Number.isSafeInteger(minor) ? minor : null
 }
 
@@ -124,9 +147,9 @@ function actionStatus(action: GoogleAdsManagementAction, isTr: boolean, wasUndon
 
 function errorMessage(code: string | undefined, isTr: boolean) {
   const messages: Record<string, [string, string]> = {
-    budget_increase_limit_exceeded: ['Bütçe artışı tek adımda en fazla %25 olabilir.', 'A single budget increase may not exceed 25%.'],
-    budget_cooldown_active: ['Yeni bir bütçe artışı için son artıştan itibaren 1 saat bekleyin.', 'Wait one hour after the last increase before raising the budget again.'],
-    budget_limit_exceeded: ['Bu tutar hesap için tanımlanan günlük bütçe sınırını aşıyor.', 'This exceeds the configured daily budget cap.'],
+    budget_sanity_ceiling_exceeded: ['Yapılandırılmış teknik güvenlik tavanı aşılıyor. Devam etmek için destek ekibiyle iletişime geçin.', 'This exceeds the configured technical safety ceiling. Contact support to proceed.'],
+    risk_confirmation_required: ['Riskli tutarı tekrar yazıp onay kutusunu işaretleyin.', 'Re-enter the risky amount and check the acknowledgment box.'],
+    risk_confirmation_mismatch: ['Tekrar yazdığınız tutar işlem tutarıyla eşleşmiyor.', 'The re-entered amount does not match the action amount.'],
     action_not_reversible: ['Bu işlem güvenli biçimde geri alınamıyor.', 'This action cannot be safely undone.'],
     action_outcome_unknown: ['Google Ads sonucu henüz doğrulanamadı. Tekrar uygulamayın; durumu yenileyip işlem günlüğünü kontrol edin.', 'Google Ads has not confirmed the outcome. Do not retry; refresh the status and check the activity log.'],
     plan_changed: ['Kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.', 'Campaign state changed. Refresh and review it before acting.'],
@@ -137,6 +160,38 @@ function errorMessage(code: string | undefined, isTr: boolean) {
   }
   const value = code ? messages[code] : undefined
   return value ? (isTr ? value[0] : value[1]) : (isTr ? 'İşlem tamamlanamadı. Durumu yenileyip tekrar deneyin.' : 'The action could not be completed. Refresh the state before trying again.')
+}
+
+function formatMinorAmount(amountMinor: number, currency: string, isTr: boolean) {
+  return new Intl.NumberFormat(isTr ? 'tr-TR' : 'en-US', { style: 'currency', currency })
+    .format(amountMinor / 10 ** currencyDigits(currency))
+}
+
+function riskReasonText(reason: string, isTr: boolean) {
+  const reasons: Record<string, [string, string]> = {
+    above_plan_cap: [
+      'Seçtiğiniz plan bütçe referansı aşılıyor; onaylarsanız referans tavan yeni tutara yükseltilir.',
+      'This exceeds your chosen plan reference; confirming raises that reference to the new amount.',
+    ],
+    above_recommendation: [
+      'Tutar ilk plan önerisinin 3 katından fazla.',
+      'The amount is more than 3 times the initial plan recommendation.',
+    ],
+    above_recent_spend: [
+      'Tutar, son 30 gün ortalama günlük harcamanın 3 katından fazla.',
+      'The amount is more than 3 times the last 30-day average daily spend.',
+    ],
+    tenfold_previous_budget: [
+      'Önceki bütçenin en az 10 katı; fazladan sıfır yazılmadığını kontrol edin.',
+      'At least 10 times the previous budget; check for an extra zero.',
+    ],
+    absolute_threshold: [
+      '1.000 TL eşdeğeri mutlak risk eşiği aşılıyor.',
+      'The absolute risk threshold equivalent to TRY 1,000 is exceeded.',
+    ],
+  }
+  const copy = reasons[reason]
+  return copy ? (isTr ? copy[0] : copy[1]) : reason
 }
 
 function actionSummary(action: GoogleAdsManagementAction, currency: string, isTr: boolean) {
@@ -178,8 +233,8 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
   const [keywordMatch, setKeywordMatch] = useState<'PHRASE' | 'EXACT'>('PHRASE')
   const [keywordNegative, setKeywordNegative] = useState(false)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
-  const [acknowledged, setAcknowledged] = useState(false)
-  const [budgetAck, setBudgetAck] = useState(false)
+  const [riskAmountText, setRiskAmountText] = useState('')
+  const [riskAck, setRiskAck] = useState(false)
   const [billingAck, setBillingAck] = useState(false)
   const [pending, setPending] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
@@ -189,14 +244,15 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
   const activeCampaign = plan?.status === 'published' && management !== undefined && management.campaignStatus !== 'REMOVED'
   const currentBudget = management ? majorFromMicros(management.dailyBudgetMicros, currency) : ''
   const inputBudget = budgetValue || currentBudget
-  const increaseAvailableAt = data?.budgetIncreaseAvailableAt ? Date.parse(data.budgetIncreaseAvailableAt) : null
-  const cooldownActive = increaseAvailableAt !== null && Number.isFinite(increaseAvailableAt) && increaseAvailableAt > Date.now()
   const targetMinor = minorFromMajor(inputBudget, currency)
-  const targetMicros = targetMinor ? microsFromMinor(targetMinor, currency) : null
-  const currentMicros = management ? Number(management.dailyBudgetMicros) : null
-  const exceedsStepCap = Boolean(
-    targetMicros !== null && currentMicros !== null && Number.isSafeInteger(currentMicros) &&
-    targetMicros > currentMicros && targetMicros / currentMicros > 1.25,
+  const currentBudgetMinor = currentBudget ? minorFromMajor(currentBudget, currency) : null
+  const exceedsSanityCeiling = Boolean(
+    targetMinor !== null && management?.budgetSanityCeilingMinor !== null &&
+    management?.budgetSanityCeilingMinor !== undefined && targetMinor > management.budgetSanityCeilingMinor,
+  )
+  const currentExceedsSanityCeiling = Boolean(
+    currentBudgetMinor !== null && management?.budgetSanityCeilingMinor !== null &&
+    management?.budgetSanityCeilingMinor !== undefined && currentBudgetMinor > management.budgetSanityCeilingMinor,
   )
   const currentStatus = management?.campaignStatus
   const performance = management?.performance ?? null
@@ -255,8 +311,8 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
       setDescriptionsValue('')
       setKeywordValue('')
       setConfirmation(null)
-      setAcknowledged(false)
-      setBudgetAck(false)
+      setRiskAmountText('')
+      setRiskAck(false)
       setBillingAck(false)
     } catch (caught) {
       setActionError(errorMessage(caught instanceof ManagementApiError ? caught.code : undefined, isTr))
@@ -267,16 +323,35 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
   }
 
   function openConfirmation(next: Confirmation) {
-    if (previewMode) return
-    setConfirmation(next)
-    setAcknowledged(false)
-    setBudgetAck(false)
+    const amountMinor = next.budgetAmountMinor ?? currentBudgetMinor
+    const assessRisk = next.assessRisk === true
+    const risk = assessRisk && amountMinor !== null && management
+      ? evaluateGoogleAdsAmountRisk({
+          amountMinor,
+          currency,
+          recommendedDailyBudgetMinor: management.recommendedDailyBudgetMinor,
+          planBudgetCapMinor: management.planBudgetCapMinor,
+          averageDailySpend30dMinor: management.averageDailySpend30dMinor,
+          previousDailyBudgetMinor: next.previousDailyBudgetMinor ?? null,
+        })
+      : null
+    setConfirmation({ ...next, budgetAmountMinor: amountMinor, risk })
+    setRiskAmountText('')
+    setRiskAck(false)
     setBillingAck(false)
   }
 
   function confirmAction() {
-    if (!confirmation || !acknowledged || (confirmation.action === 'enable' && (!budgetAck || (management?.paymentMethodWarning && !billingAck)))) return
-    void sendAction(confirmation.action, confirmation.payload)
+    if (!confirmation) return
+    const riskRequired = confirmation.risk?.risky === true
+    const typedMinor = riskRequired ? minorFromLocalizedAmount(riskAmountText, currency, isTr) : null
+    if (riskRequired && (typedMinor !== confirmation.budgetAmountMinor || !riskAck)) return
+    if (confirmation.action === 'enable' && management?.paymentMethodWarning && !billingAck) return
+    const payload = {
+      ...confirmation.payload,
+      ...(riskRequired ? { riskConfirmedAmountMinor: confirmation.budgetAmountMinor } : {}),
+    }
+    void sendAction(confirmation.action, payload)
   }
 
   function goTo(id: string) {

@@ -37,7 +37,7 @@ export function createGoogleAdsPlanApprovalHash(input: {
   currency: string
   dailyBudgetMinor: number
   budgetCapMinor: number
-  userDailyBudgetCapMinor: number
+  userDailyBudgetCapMinor: number | null
   plan: unknown
 }): string {
   return hashGoogleAdsApprovalPayload({ kind: 'google-ads-plan-v1', ...input })

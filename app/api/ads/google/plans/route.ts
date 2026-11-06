@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
-import { resolveGoogleAdsPublishDailyBudgetCapMinor } from '@/lib/ads/env'
+import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
@@ -41,10 +41,14 @@ function parsePlan(value: unknown) {
 }
 
 function budgetError(currency: string, dailyBudgetMinor: number, budgetCapMinor: number) {
-  const userLimit = resolveGoogleAdsPublishDailyBudgetCapMinor(currency)
-  if (!userLimit) return { error: 'budget_limit_not_configured', status: 503 }
-  if (dailyBudgetMinor > userLimit) {
-    return { error: 'budget_limit_exceeded', status: 400 }
+  let safetyCeiling: number | null
+  try {
+    safetyCeiling = resolveGoogleAdsBudgetSanityCeilingMinor()
+  } catch {
+    return { error: 'configuration_missing', status: 503 }
+  }
+  if (safetyCeiling !== null && dailyBudgetMinor > safetyCeiling) {
+    return { error: 'budget_sanity_ceiling_exceeded', status: 400 }
   }
   try {
     buildGoogleAdsApprovalSummary({ currency, dailyBudgetMinor, budgetCapMinor })

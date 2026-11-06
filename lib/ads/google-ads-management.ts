@@ -2,12 +2,14 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
-import { resolveGoogleAdsPublishDailyBudgetCapMinor, resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import { resolveGoogleAdsBudgetSanityCeilingMinor, resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText } from '@/lib/ads/planner'
 import { createGoogleAdsActionApprovalHash, hashGoogleAdsApprovalPayload } from '@/lib/ads/google-ads-approval'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { buildGoogleAdsApprovalSummary, googleAdsMicrosFromMinorUnits } from '@/lib/ads/google-ads-publish-plan'
+import { evaluateGoogleAdsAmountRisk, googleAdsMonthlyBudgetUpperBoundMinor, googleAdsRiskConfirmationError } from '@/lib/ads/google-ads-risk'
+import { logUserEvent } from '@/lib/notify'
 import { withGoogleAdsPublishAccess, type GoogleAdsAccess } from '@/lib/ads/google-ads-publish'
 import type { GoogleAdsCampaignManagementState } from '@/lib/ads/providers/types'
 
@@ -55,6 +57,10 @@ export type GoogleAdsManagementSnapshot = SnapshotState & {
   billingVerified: boolean
   paymentMethodWarning: boolean
   performance: ManagementPerformance | null
+  recommendedDailyBudgetMinor: number | null
+  planBudgetCapMinor: number | null
+  averageDailySpend30dMinor: number | null
+  budgetSanityCeilingMinor: number | null
 }
 
 export type GoogleAdsManagementAction = {
@@ -88,6 +94,7 @@ type ActionInput = {
   keywordResourceName?: string
   undoActionId?: string
   acknowledgedBillingWarning?: boolean
+  riskConfirmedAmountMinor?: number
   acknowledgedBudget?: boolean
   userConfirmed: boolean
 }
@@ -195,6 +202,30 @@ async function readPerformance(access: GoogleAdsAccess, plan: ManagementPlan): P
   }
 }
 
+async function readAverageDailySpend30dMinor(access: GoogleAdsAccess, plan: ManagementPlan): Promise<number | null> {
+  try {
+    const currency = access.connection.currency_code ?? plan.currency
+    const report = await access.provider.getPerformance({
+      customerId: access.connection.external_account_id,
+      loginCustomerId: access.connection.login_customer_id,
+      accessToken: access.accessToken,
+      range: '30d',
+      currency,
+      context: access.context,
+    })
+    const campaign = report.campaigns.find((row) => row.id === plan.external_campaign_id)
+    if (!campaign || typeof campaign !== 'object') return null
+    const row = campaign as Record<string, unknown>
+    const metrics = row.metrics && typeof row.metrics === 'object' ? row.metrics as Record<string, unknown> : row
+    const costMicros = numberValue(metrics.costMicros ?? metrics.cost_micros)
+    const microsPerMinorUnit = Number(googleAdsMicrosFromMinorUnits(1, currency))
+    if (costMicros === null || !Number.isSafeInteger(microsPerMinorUnit) || microsPerMinorUnit <= 0) return null
+    return Math.max(0, costMicros / microsPerMinorUnit / 30)
+  } catch {
+    return null
+  }
+}
+
 async function readCampaignState(access: GoogleAdsAccess, plan: ManagementPlan) {
   return access.provider.getCampaignManagementState({
     customerId: access.connection.external_account_id,
@@ -207,10 +238,11 @@ async function readCampaignState(access: GoogleAdsAccess, plan: ManagementPlan) 
 
 async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
   const state = await readCampaignState(access, plan)
-  const [review, billing, performance] = state.campaignStatus === 'REMOVED'
+  const [review, billing, performance, averageDailySpend30dMinor] = state.campaignStatus === 'REMOVED'
     ? [
         { status: 'unavailable' as const },
         { verified: false, paymentMethodWarning: false },
+        null,
         null,
       ]
     : await Promise.all([
@@ -228,6 +260,7 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
           context: access.context,
         }),
         readPerformance(access, plan),
+        readAverageDailySpend30dMinor(access, plan),
       ])
   const stateForHash = snapshotState(state)
   return {
@@ -239,6 +272,10 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
       billingVerified: billing.verified,
       paymentMethodWarning: billing.paymentMethodWarning,
       performance,
+      recommendedDailyBudgetMinor: plan.daily_budget_minor,
+      planBudgetCapMinor: plan.budget_cap_minor,
+      averageDailySpend30dMinor,
+      budgetSanityCeilingMinor: resolveGoogleAdsBudgetSanityCeilingMinor(),
     } satisfies GoogleAdsManagementSnapshot,
   }
 }
@@ -317,31 +354,6 @@ async function listActions(userId: string, planId: string): Promise<RawAction[]>
   return (data ?? []) as unknown as RawAction[]
 }
 
-async function lastBudgetIncrease(userId: string, planId: string): Promise<string | null> {
-  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('ads_actions')
-    .select('target,before_state,applied_at')
-    .eq('user_id', userId)
-    .eq('plan_id', planId)
-    .eq('action_type', 'google_ads_budget_update')
-    .eq('status', 'applied')
-    .gte('applied_at', since)
-    .order('applied_at', { ascending: false })
-    .limit(100)
-  if (error) throw new GoogleAdsError('provider_error')
-  for (const row of data ?? []) {
-    const target = Number((row.target as Record<string, unknown> | null)?.dailyBudgetMicros)
-    const before = Number((row.before_state as Record<string, unknown> | null)?.dailyBudgetMicros)
-    if (Number.isSafeInteger(target) && Number.isSafeInteger(before) && target > before && typeof row.applied_at === 'string') {
-      const appliedAt = Date.parse(row.applied_at)
-      if (Number.isFinite(appliedAt)) return new Date(appliedAt + 60 * 60 * 1000).toISOString()
-    }
-  }
-  return null
-}
-
 function safeAction(row: RawAction): GoogleAdsManagementAction {
   return {
     id: row.id,
@@ -409,25 +421,9 @@ export async function getGoogleAdsManagementSnapshot(userId: string, planId: str
       return {
         snapshot,
         actions: refreshedActions.map(safeAction),
-        budgetIncreaseAvailableAt: await lastBudgetIncrease(userId, plan.id),
       }
     },
   })
-}
-
-async function checkBudgetIncrease(input: { userId: string; planId: string; currentMicros: string; targetMicros: string }) {
-  const current = Number(input.currentMicros)
-  const target = Number(input.targetMicros)
-  if (!Number.isSafeInteger(current) || !Number.isSafeInteger(target) || current <= 0 || target <= 0) {
-    throw new GoogleAdsError('invalid_budget')
-  }
-  if (target > current) {
-    const maximum = current > Number.MAX_SAFE_INTEGER / 1.25
-      ? Number.MAX_SAFE_INTEGER
-      : current + Math.floor(current / 4)
-    if (target > maximum) throw new GoogleAdsError('budget_increase_limit_exceeded')
-    if (await lastBudgetIncrease(input.userId, input.planId)) throw new GoogleAdsError('budget_cooldown_active')
-  }
 }
 
 function minorUnitsFromMicros(micros: string, currency: string): number {
@@ -449,6 +445,98 @@ function validateStatus(snapshot: GoogleAdsManagementSnapshot, action: 'pause' |
     if (snapshot.reviewStatus === 'disapproved') throw new GoogleAdsError('ad_disapproved')
     if (snapshot.reviewStatus === 'review_in_progress') throw new GoogleAdsError('ad_review_in_progress')
     if (snapshot.reviewStatus === 'unavailable') throw new GoogleAdsError('ad_review_status_unavailable')
+  }
+}
+
+function resolveBudgetSanityCeilingMinor() {
+  try {
+    return resolveGoogleAdsBudgetSanityCeilingMinor()
+  } catch {
+    throw new GoogleAdsError('configuration_missing')
+  }
+}
+
+function assessPreparedActionRisk(
+  prepared: PreparedAction,
+  access: GoogleAdsAccess,
+  plan: ManagementPlan,
+  state: GoogleAdsCampaignManagementState,
+  snapshot: GoogleAdsManagementSnapshot,
+) {
+  if (prepared.action !== 'budget' && prepared.action !== 'enable') return null
+  const currency = access.connection.currency_code ?? plan.currency
+  const amountMinor = prepared.action === 'budget'
+    ? Number(prepared.target.dailyBudgetMinor)
+    : minorUnitsFromMicros(state.dailyBudgetMicros, currency)
+  const previousDailyBudgetMinor = prepared.action === 'budget'
+    ? minorUnitsFromMicros(state.dailyBudgetMicros, currency)
+    : null
+  const risk = evaluateGoogleAdsAmountRisk({
+    amountMinor,
+    currency,
+    recommendedDailyBudgetMinor: snapshot.recommendedDailyBudgetMinor,
+    planBudgetCapMinor: snapshot.planBudgetCapMinor,
+    averageDailySpend30dMinor: snapshot.averageDailySpend30dMinor,
+    previousDailyBudgetMinor,
+  })
+  return { amountMinor, risk, currency }
+}
+
+function formatMinorCurrency(amountMinor: number, currency: string) {
+  try {
+    const formatter = new Intl.NumberFormat('tr-TR', { style: 'currency', currency })
+    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits
+    return formatter.format(amountMinor / 10 ** fractionDigits)
+  } catch {
+    return `${amountMinor.toLocaleString('tr-TR')} ${currency}`
+  }
+}
+
+async function notifyCampaignAction(input: {
+  userId: string
+  plan: ManagementPlan
+  prepared: PreparedAction
+  actionId: string
+  risk: ReturnType<typeof evaluateGoogleAdsAmountRisk> | null
+  currency: string
+  amountMinor: number
+  stateVerified: boolean
+}) {
+  if (!['pause', 'enable', 'budget', 'archive'].includes(input.prepared.action)) return
+  const labels: Record<string, string> = {
+    pause: 'duraklatıldı',
+    enable: 'etkinleştirildi',
+    budget: 'günlük bütçesi güncellendi',
+    archive: 'arşivlendi',
+  }
+  const monthlyUpperBoundMinor = googleAdsMonthlyBudgetUpperBoundMinor(input.amountMinor)
+  const verification = input.stateVerified ? 'Google Ads durumu doğrulandı.' : 'Değişiklik uygulandı; Google Ads durum doğrulaması tamamlanamadı.'
+  const body = `Kampanya ${labels[input.prepared.action]}. Günlük bütçe: ${formatMinorCurrency(input.amountMinor, input.currency)}. 30,4 günlük tahmini üst sınır: ${formatMinorCurrency(monthlyUpperBoundMinor, input.currency)}. ${verification}`
+  const riskReasons: Record<string, string> = {
+    above_plan_cap: 'seçilen plan bütçe referansının aşılması',
+    above_recommendation: 'ilk plan önerisinin 3 katının aşılması',
+    above_recent_spend: '30 günlük ortalama günlük harcamanın 3 katının aşılması',
+    tenfold_previous_budget: 'önceki bütçenin en az 10 katına çıkılması',
+    absolute_threshold: 'mutlak risk eşiğinin aşılması',
+  }
+  const riskDetail = input.risk?.risky
+    ? input.risk.reasons.map((reason) => riskReasons[reason] ?? reason).join(', ')
+    : ''
+  try {
+    await logUserEvent({
+      userId: input.userId,
+      type: 'google_ads_campaign_lifecycle',
+      subject: 'Google Ads kampanya değişikliği tamamlandı',
+      body,
+      userSubject: `Google Ads kampanyanız ${labels[input.prepared.action]}`,
+      userBody: body,
+      emailAdmin: Boolean(input.risk?.risky),
+      adminSubject: () => '[Google Ads] Riskli bütçe işlemi onaylandı',
+      adminBody: () => `${body} Risk nedenleri: ${riskDetail}. İşlem kimliği: ${input.actionId}.`,
+      dedupeKey: `google_ads_management_${input.actionId}`,
+    })
+  } catch {
+    // Notification delivery is best-effort and never changes the Ads result.
   }
 }
 
@@ -515,20 +603,20 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
   const target: Record<string, unknown> = {}
   if (action === 'pause' || action === 'enable') {
     validateStatus(snapshot, action)
-    if (action === 'enable') {
-      if (input.acknowledgedBudget !== true) throw new GoogleAdsError('confirmation_required')
-      if (snapshot.paymentMethodWarning && input.acknowledgedBillingWarning !== true) throw new GoogleAdsError('confirmation_required')
+    if (action === 'enable' && snapshot.paymentMethodWarning && input.acknowledgedBillingWarning !== true) {
+      throw new GoogleAdsError('confirmation_required')
     }
     target.status = action === 'enable' ? 'ENABLED' : 'PAUSED'
   } else if (action === 'budget') {
     const dailyBudgetMinor = input.dailyBudgetMinor
     if (!Number.isSafeInteger(dailyBudgetMinor) || (dailyBudgetMinor ?? 0) <= 0) throw new GoogleAdsError('invalid_budget')
     const currency = access.connection.currency_code ?? plan.currency
-    const dailyBudgetLimitMinor = resolveGoogleAdsPublishDailyBudgetCapMinor(currency)
-    if (!dailyBudgetLimitMinor || dailyBudgetMinor! > dailyBudgetLimitMinor) throw new GoogleAdsError('budget_limit_exceeded')
-    buildGoogleAdsApprovalSummary({ currency, dailyBudgetMinor: dailyBudgetMinor!, budgetCapMinor: dailyBudgetLimitMinor })
+    buildGoogleAdsApprovalSummary({
+      currency,
+      dailyBudgetMinor: dailyBudgetMinor!,
+      budgetCapMinor: Math.max(plan.budget_cap_minor ?? 0, dailyBudgetMinor!),
+    })
     const dailyBudgetMicros = googleAdsMicrosFromMinorUnits(dailyBudgetMinor!, currency)
-    await checkBudgetIncrease({ userId: input.userId, planId: plan.id, currentMicros: state.dailyBudgetMicros, targetMicros: dailyBudgetMicros })
     target.dailyBudgetMinor = dailyBudgetMinor
     target.dailyBudgetMicros = dailyBudgetMicros
   } else if (action === 'ad_copy') {
@@ -564,7 +652,6 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
     target.campaignStatus = 'REMOVED'
   }
   target.acknowledgedBillingWarning = input.acknowledgedBillingWarning === true
-  target.acknowledgedBudget = input.acknowledgedBudget === true
   return { action, actionType, target, undoOf: null }
 }
 
@@ -639,10 +726,12 @@ async function beginAction(input: {
   target: Record<string, unknown>
   before: SnapshotState
   dailyBudgetLimitMinor: number | null
+  riskConfirmationRequired: boolean
+  riskConfirmedAmountMinor: number | null
   undoOf: string | null
 }) {
   const rpc = createAdminClient() as unknown as AdsRpcClient
-  const { data, error } = await rpc.rpc('ads_begin_google_ads_management_action_v3', {
+  const { data, error } = await rpc.rpc('ads_begin_google_ads_management_action_v4', {
     p_user_id: input.userId,
     p_plan_id: input.plan.id,
     p_action_id: input.actionId,
@@ -652,15 +741,17 @@ async function beginAction(input: {
     p_target: input.target,
     p_before_state: input.before,
     p_user_daily_budget_limit_minor: input.dailyBudgetLimitMinor,
+    p_risk_confirmation_required: input.riskConfirmationRequired,
+    p_risk_confirmed_amount_minor: input.riskConfirmedAmountMinor,
     p_user_confirmed: true,
     p_undo_of: input.undoOf,
   }).maybeSingle()
   if (error || !data) throw new GoogleAdsError('status_update_failed')
   const row = data as { state?: string; action_id?: string }
   if (row.state !== 'approved') {
-    if (row.state === 'budget_limit_exceeded') throw new GoogleAdsError('budget_limit_exceeded')
-    if (row.state === 'budget_increase_limit_exceeded') throw new GoogleAdsError('budget_increase_limit_exceeded')
-    if (row.state === 'budget_cooldown_active') throw new GoogleAdsError('budget_cooldown_active')
+    if (row.state === 'budget_sanity_ceiling_exceeded') throw new GoogleAdsError('budget_sanity_ceiling_exceeded')
+    if (row.state === 'risk_confirmation_required') throw new GoogleAdsError('risk_confirmation_required')
+    if (row.state === 'risk_confirmation_mismatch') throw new GoogleAdsError('risk_confirmation_mismatch')
     if (row.state === 'plan_changed') throw new GoogleAdsError('plan_changed')
     if (row.state === 'not_found') throw new GoogleAdsError('plan_not_found')
     if (row.state === 'action_not_reversible' || row.state === 'pause_before_archive') throw new GoogleAdsError('action_not_reversible')
@@ -681,6 +772,10 @@ async function runLoggedMutation(input: {
   actionId: string
   expectedStateHash: string
   dailyBudgetLimitMinor: number | null
+  riskConfirmationRequired: boolean
+  riskConfirmedAmountMinor: number | null
+  risk: ReturnType<typeof evaluateGoogleAdsAmountRisk> | null
+  currency: string
 }) {
   const approvalHash = createGoogleAdsActionApprovalHash({
     userId: input.userId,
@@ -701,6 +796,8 @@ async function runLoggedMutation(input: {
     target: input.prepared.target,
     before: input.before,
     dailyBudgetLimitMinor: input.dailyBudgetLimitMinor,
+    riskConfirmationRequired: input.riskConfirmationRequired,
+    riskConfirmedAmountMinor: input.riskConfirmedAmountMinor,
     undoOf: input.prepared.undoOf,
   })
 
@@ -720,6 +817,14 @@ async function runLoggedMutation(input: {
         const actual = snapshotState(await readCampaignState(input.access, input.plan))
         if (actionMatchesTarget(actual, input.prepared.actionType, input.prepared.target)) {
           await finishAction({ userId: input.userId, actionId: input.actionId, result: 'applied', after: actual, failureReason: null })
+          await notifyCampaignAction({
+            userId: input.userId, plan: input.plan, prepared: input.prepared, actionId: input.actionId,
+            risk: input.risk, currency: input.currency,
+            amountMinor: input.prepared.action === 'budget'
+              ? Number(input.prepared.target.dailyBudgetMinor)
+              : minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
+            stateVerified: true,
+          })
           return { actionId: input.actionId, afterState: actual, stateVerified: true }
         }
         if (stateMatches(actual, input.before)) {
@@ -748,6 +853,14 @@ async function runLoggedMutation(input: {
     after: afterState,
     failureReason: afterState ? null : 'state_unverified',
   })
+  await notifyCampaignAction({
+    userId: input.userId, plan: input.plan, prepared: input.prepared, actionId: input.actionId,
+    risk: input.risk, currency: input.currency,
+    amountMinor: input.prepared.action === 'budget'
+      ? Number(input.prepared.target.dailyBudgetMinor)
+      : minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
+    stateVerified: afterState !== null,
+  })
   return { actionId: input.actionId, afterState, stateVerified: afterState !== null }
 }
 
@@ -763,7 +876,20 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
       const { state, snapshot } = await readSnapshot(access, plan)
       if (snapshot.stateHash !== input.expectedStateHash) throw new GoogleAdsError('plan_changed')
       const prepared = await resolvePreparedAction(input, access, plan, state, snapshot)
-      const dailyBudgetLimitMinor = resolveGoogleAdsPublishDailyBudgetCapMinor(access.connection.currency_code ?? plan.currency)
+      const riskAssessment = assessPreparedActionRisk(prepared, access, plan, state, snapshot)
+      const riskError = riskAssessment
+        ? googleAdsRiskConfirmationError({
+            risky: riskAssessment.risk.risky,
+            amountMinor: riskAssessment.amountMinor,
+            riskConfirmedAmountMinor: input.riskConfirmedAmountMinor,
+          })
+        : input.riskConfirmedAmountMinor == null ? null : 'risk_confirmation_mismatch'
+      if (riskError) throw new GoogleAdsError(riskError)
+      if (riskAssessment?.risk.risky) prepared.target.riskConfirmedAmountMinor = input.riskConfirmedAmountMinor
+      const dailyBudgetLimitMinor = riskAssessment ? resolveBudgetSanityCeilingMinor() : null
+      if (riskAssessment && dailyBudgetLimitMinor !== null && riskAssessment.amountMinor > dailyBudgetLimitMinor) {
+        throw new GoogleAdsError('budget_sanity_ceiling_exceeded')
+      }
       const result = await runLoggedMutation({
         userId: input.userId,
         plan,
@@ -774,6 +900,10 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         actionId: input.actionId,
         expectedStateHash: snapshot.stateHash,
         dailyBudgetLimitMinor,
+        riskConfirmationRequired: Boolean(riskAssessment?.risk.risky),
+        riskConfirmedAmountMinor: riskAssessment?.risk.risky ? input.riskConfirmedAmountMinor ?? null : null,
+        risk: riskAssessment?.risk ?? null,
+        currency: riskAssessment?.currency ?? access.connection.currency_code ?? plan.currency,
       })
       return { ...result, action: prepared.action, stateVerified: result.stateVerified }
     },

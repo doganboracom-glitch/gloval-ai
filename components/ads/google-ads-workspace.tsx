@@ -263,8 +263,8 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-    budget_limit_exceeded: 'Bu plan, kullanıcı için ayarlı toplam günlük bütçe sınırını aşacak.',
-    budget_limit_not_configured: 'Bu para birimi için günlük üst sınır yapılandırılmamış.',
+budget_sanity_ceiling_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
+  budget_limit_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -292,8 +292,8 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-    budget_limit_exceeded: 'This plan would exceed the configured aggregate daily budget limit for the user.',
-    budget_limit_not_configured: 'A daily cap is not configured for this currency.',
+budget_sanity_ceiling_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
+  budget_limit_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -606,11 +606,7 @@ export function GoogleAdsWorkspace({
       if (!suggestion) throw new WorkspaceApiError('provider_error')
       const currency = suggestion.budget?.currency ?? selectedConnection.currency ?? 'TRY'
       const nextNotices: string[] = []
-      if (suggestion.budget?.clamped) {
-        nextNotices.push(isTr
-          ? `Önerilen bütçe, sunucudaki üst sınır olan ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, true)} / gün değerine indirildi.`
-          : `The suggested budget was lowered to the server ceiling of ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, false)} / day.`)
-      }
+      if (suggestion.budgetIssue) nextNotices.push(errorText(suggestion.budgetIssue, isTr))
       if (suggestion.budget?.approximate) {
         nextNotices.push(isTr
           ? 'Bütçe, hesabınızın para birimine yaklaşık dönüşümle hesaplandı. Kaydetmeden önce kontrol edin.'

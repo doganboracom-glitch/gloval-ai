@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { ADS_ENV, resolveGoogleAdsPublishDailyBudgetCapMinor } from '@/lib/ads/env'
+import { ADS_ENV, resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 
-describe('Google Ads per-currency daily caps', () => {
-  it('fails closed when the cap is absent, malformed, duplicated, or non-positive', () => {
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('TRY', {})).toBeNull()
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('TRY', { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=100,broken' })).toBeNull()
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('TRY', { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=100,TRY=200' })).toBeNull()
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('TRY', { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=0' })).toBeNull()
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('try', { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=100' })).toBeNull()
+describe('optional Google Ads budget sanity ceiling', () => {
+  it('allows uncapped budgets when the optional setting is absent', () => {
+    expect(resolveGoogleAdsBudgetSanityCeilingMinor({})).toBeNull()
   })
 
-  it('reads explicit minor-unit ceilings by currency without falling back across currencies', () => {
-    const env = { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=250000,USD=12000' }
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('TRY', env)).toBe(250000)
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('USD', env)).toBe(12000)
-    expect(resolveGoogleAdsPublishDailyBudgetCapMinor('EUR', env)).toBeNull()
+  it('reads one optional ceiling in minor units', () => {
+    expect(resolveGoogleAdsBudgetSanityCeilingMinor({ [ADS_ENV.googleAdsBudgetSanityCeilingMinor]: '250000' })).toBe(250000)
+  })
+
+  it('fails closed for malformed, zero, fractional, or unsafe configured ceilings', () => {
+    for (const value of ['0', '1.5', '-4', 'not-a-number', '9007199254740992']) {
+      expect(() => resolveGoogleAdsBudgetSanityCeilingMinor({ [ADS_ENV.googleAdsBudgetSanityCeilingMinor]: value })).toThrow()
+    }
   })
 })
