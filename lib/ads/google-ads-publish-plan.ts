@@ -336,6 +336,55 @@ export function buildGoogleAdsMutateRequest(input: {
   }
 }
 
+export type GoogleAdsOperationTarget =
+  | { kind: 'budget' }
+  | { kind: 'campaign' }
+  | { kind: 'adGroup' }
+  | { kind: 'geoTarget'; itemIndex: number }
+  | { kind: 'language' }
+  | { kind: 'keyword'; itemIndex: number }
+  | { kind: 'negativeKeyword'; itemIndex: number }
+  | { kind: 'ad' }
+
+/** `index` is 0-based, exactly like Google's `mutate_operations[N]` field path. */
+export type GoogleAdsOperationMapEntry = { index: number } & GoogleAdsOperationTarget
+
+/**
+ * Which plan item each mutate operation carries. Order MUST mirror buildGoogleAdsMutateRequest:
+ * budget, campaign, ad group, geo targets, language, keywords, negative keywords, ad.
+ */
+export function buildGoogleAdsOperationMap(counts: {
+  geoTargets: number
+  keywords: number
+  negativeKeywords: number
+}): GoogleAdsOperationMapEntry[] {
+  const targets: GoogleAdsOperationTarget[] = [
+    { kind: 'budget' },
+    { kind: 'campaign' },
+    { kind: 'adGroup' },
+    ...Array.from({ length: counts.geoTargets }, (_, itemIndex): GoogleAdsOperationTarget => ({ kind: 'geoTarget', itemIndex })),
+    { kind: 'language' },
+    ...Array.from({ length: counts.keywords }, (_, itemIndex): GoogleAdsOperationTarget => ({ kind: 'keyword', itemIndex })),
+    ...Array.from({ length: counts.negativeKeywords }, (_, itemIndex): GoogleAdsOperationTarget => ({ kind: 'negativeKeyword', itemIndex })),
+    { kind: 'ad' },
+  ]
+  return targets.map((target, index) => ({ index, ...target }))
+}
+
+/** Operation map for a stored plan. City targets resolve to one location each; no cities means one country target. */
+export function googleAdsOperationMapForPlan(plan: {
+  keywords?: readonly unknown[]
+  negativeKeywords?: readonly unknown[]
+  cities?: readonly unknown[]
+}): GoogleAdsOperationMapEntry[] {
+  const cities = new Set((plan.cities ?? []).filter((city): city is string => typeof city === 'string')).size
+  return buildGoogleAdsOperationMap({
+    geoTargets: Math.max(1, cities),
+    keywords: plan.keywords?.length ?? 0,
+    negativeKeywords: plan.negativeKeywords?.length ?? 0,
+  })
+}
+
 export function readGoogleAdsCampaignId(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
   const response = payload as { mutateOperationResponses?: unknown; mutate_operation_responses?: unknown }

@@ -10,6 +10,7 @@ import {
 import { googleAdsMicrosFromMinorUnits, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText, PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
+import { partitionRestrictedKeywords } from '@/lib/ads/restricted-keywords'
 import { fold } from '@/lib/visual-subjects'
 
 /**
@@ -93,7 +94,13 @@ export type SuggestedBudget = {
 export type PlanSuggestion = {
   plan: SuggestedPlan
   budget: SuggestedBudget | null
-  adjustments: { headlinesDropped: number; descriptionsDropped: number; toppedUp: boolean }
+  adjustments: {
+    headlinesDropped: number
+    descriptionsDropped: number
+    toppedUp: boolean
+    /** Restricted-industry keywords kept out of the default suggestion (the owner may add them manually). */
+    restrictedKeywordsRemoved: string[]
+  }
 }
 
 export type PlanSuggestionResult =
@@ -201,9 +208,21 @@ export function buildPlanSuggestion(
   const services = sanitizeLines(input.plan.services, { max: MAX_SERVICE, limit: MAX_SERVICES }).lines
   if (services.length === 0) services.push(...sanitizeLines([sectorLabel || brand], { max: MAX_SERVICE, limit: 1 }).lines)
 
-  const keywordPool = [...input.plan.keywords, ...(input.plan.keywords.length < MIN_KEYWORDS ? [brand, ...services] : [])]
+  const scanKeywords = partitionRestrictedKeywords(input.plan.keywords)
+  const fallbackKeywords = partitionRestrictedKeywords([brand, ...services])
+  const needsFallback = sanitizeLines(scanKeywords.allowed, { max: MAX_KEYWORD, limit: MAX_KEYWORDS }).lines.length < MIN_KEYWORDS
+  const keywordPool = needsFallback ? [...scanKeywords.allowed, ...fallbackKeywords.allowed] : scanKeywords.allowed
   const keywords = sanitizeLines(keywordPool, { max: MAX_KEYWORD, limit: MAX_KEYWORDS }).lines
-  if (keywords.length < MIN_KEYWORDS) return { ok: false, error: 'keywords_insufficient' }
+  const restrictedKeywordsRemoved = [
+    ...new Map(
+      [...scanKeywords.restricted, ...(needsFallback ? fallbackKeywords.restricted : [])]
+        .map((hit) => [fold(squash(hit.keyword)), squash(hit.keyword)] as const),
+    ).values(),
+  ]
+  // Restricted terms were removed on purpose; the owner adds their own, so a short list is allowed here.
+  if (keywords.length < MIN_KEYWORDS && restrictedKeywordsRemoved.length === 0) {
+    return { ok: false, error: 'keywords_insufficient' }
+  }
   const negatives = sanitizeLines(input.plan.negativeKeywords, { max: MAX_KEYWORD, limit: MAX_NEGATIVE_KEYWORDS }).lines
   const cities = sanitizeLines(input.plan.cities, { max: MAX_CITY, limit: MAX_CITIES }).lines
 
@@ -244,7 +263,11 @@ export function buildPlanSuggestion(
   }
 
   try {
-    parseGoogleAdsPublishPlan(plan)
+    const placeholders = ['placeholder alpha', 'placeholder beta', 'placeholder gamma']
+    parseGoogleAdsPublishPlan({
+      ...plan,
+      keywords: [...keywords, ...placeholders].slice(0, Math.max(keywords.length, MIN_KEYWORDS)),
+    })
   } catch {
     return { ok: false, error: 'invalid_publish_plan' }
   }
@@ -267,6 +290,7 @@ export function buildPlanSuggestion(
         headlinesDropped: headlineResult.dropped,
         descriptionsDropped: descriptionResult.dropped,
         toppedUp,
+        restrictedKeywordsRemoved,
       },
     },
   }

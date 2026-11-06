@@ -30,6 +30,9 @@ import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 import { GoogleAdsSetupJourney } from '@/components/ads/google-ads-setup-journey'
+import { GoogleAdsPublishStepper, GoogleAdsReviewFeedback } from '@/components/ads/google-ads-review-feedback'
+import { removeLineFromText } from '@/lib/ads/google-error-target'
+import { partitionRestrictedKeywords, restrictedCategoryLabel } from '@/lib/ads/restricted-keywords'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import {
   describeGoogleErrorField,
@@ -108,6 +111,11 @@ const ALL_PLAN_FIELDS: AiFieldKey[] = [
   'brand', 'sector', 'sectorLabel', 'services', 'language', 'keywords', 'negativeKeywords', 'country', 'cities',
   'finalUrl', 'modelPolicyCategory', 'modelPolicyEvidence', 'headlines', 'descriptions', 'displayUrl',
 ]
+/** Session, account and access problems stay in the top banner; everything else shows next to the action. */
+const GENERAL_ERROR_CODES: ReadonlySet<string> = new Set([
+  'not_authenticated', 'reauth_required', 'connection_not_found', 'not_authorized', 'manager_account',
+  'google_access_level_insufficient', 'publish_disabled', 'kill_switch_active', 'not_found', 'configuration_missing',
+])
 const HEADLINE_LIMIT = 30
 const DESCRIPTION_LIMIT = 90
 
@@ -553,9 +561,26 @@ export function GoogleAdsWorkspace({
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
   const [googleErrors, setGoogleErrors] = useState<GoogleErrorDetail[]>([])
-  const reportError = useCallback((error: unknown) => {
-    setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
-    setGoogleErrors(error instanceof WorkspaceApiError ? error.googleErrors : [])
+  const [reviewError, setReviewError] = useState<{ code: string; googleErrors: GoogleErrorDetail[] } | null>(null)
+  const [saveError, setSaveError] = useState<{ code: string; googleErrors: GoogleErrorDetail[] } | null>(null)
+  const [feedbackTick, setFeedbackTick] = useState(0)
+  const feedbackRef = useRef<HTMLDivElement>(null)
+  const reportError = useCallback((error: unknown, scope: 'general' | 'review' | 'save' = 'general') => {
+    const code = error instanceof WorkspaceApiError ? error.code : 'provider_error'
+    const details = error instanceof WorkspaceApiError ? error.googleErrors : []
+    if (scope === 'review') setReviewError({ code, googleErrors: details })
+    else if (scope === 'save') setSaveError({ code, googleErrors: details })
+    if (scope === 'general' || GENERAL_ERROR_CODES.has(code)) {
+      setErrorCode(code)
+      setGoogleErrors(details)
+    }
+    if (scope !== 'general') setFeedbackTick((tick) => tick + 1)
+  }, [])
+  const clearActionErrors = useCallback(() => {
+    setErrorCode(null)
+    setGoogleErrors([])
+    setReviewError(null)
+    setSaveError(null)
   }, [])
   const [showPublishReview, setShowPublishReview] = useState(false)
   const [finalPublishConfirmed, setFinalPublishConfirmed] = useState(false)
@@ -585,6 +610,11 @@ export function GoogleAdsWorkspace({
         : plans.length > 0
           ? 'draft'
           : 'connected'
+
+  const restrictedKeywordHits = useMemo(
+    () => partitionRestrictedKeywords(splitLines(form.keywords)).restricted,
+    [form.keywords],
+  )
 
   const summary = useMemo(() => {
     if (!selectedPlan) return null
@@ -625,6 +655,11 @@ export function GoogleAdsWorkspace({
   })() : null
 
   useEffect(() => {
+    if (feedbackTick === 0) return
+    feedbackRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  }, [feedbackTick])
+
+  useEffect(() => {
     if (!initialPlanId || handoffApplied.current) return
     const handoffPlan = plans.find((plan) => plan.id === initialPlanId)
     if (!handoffPlan) return
@@ -639,7 +674,7 @@ export function GoogleAdsWorkspace({
   const applyScanResult = useCallback(async (result: PublicScanResult) => {
     if (!selectedConnection) return
     setPending('suggest')
-    setErrorCode(null)
+    clearActionErrors()
     setMessage(null)
     try {
       const response = await postJson('/api/ads/google/plans/suggest', 'POST', {
@@ -663,6 +698,13 @@ export function GoogleAdsWorkspace({
         nextNotices.push(isTr
           ? `${dropped} reklam satırı Google Ads kurallarına uymadığı için çıkarıldı.`
           : `${dropped} ad lines were removed because they did not meet Google Ads rules.`)
+      }
+      const removedRestricted = suggestion.adjustments.restrictedKeywordsRemoved ?? []
+      if (removedRestricted.length > 0) {
+        const listed = removedRestricted.slice(0, 5).join(', ')
+        nextNotices.push(isTr
+          ? `Kısıtlı sektör terimleri (${listed}) Google politikası riski nedeniyle önerilen listeye eklenmedi. İsterseniz kendiniz ekleyebilirsiniz; ek Google incelemesi gerekebilir.`
+          : `Restricted-industry terms (${listed}) were left out of the suggested list because of Google policy risk. You can add them yourself; extra Google review may apply.`)
       }
       if (suggestion.adjustments.toppedUp) {
         nextNotices.push(isTr
@@ -735,7 +777,7 @@ export function GoogleAdsWorkspace({
     setConfirmedEu(false)
     setAcceptedTerms(false)
     setMessage(null)
-    setErrorCode(null)
+    clearActionErrors()
     setShowPublishReview(false)
     setFinalPublishConfirmed(false)
   }
@@ -756,15 +798,24 @@ export function GoogleAdsWorkspace({
     setConfirmedEu(false)
     setAcceptedTerms(false)
     setMessage(null)
-    setErrorCode(null)
+    clearActionErrors()
     setShowPublishReview(false)
     setFinalPublishConfirmed(false)
+  }
+
+  function removeKeywordFromForm(kind: 'keyword' | 'negativeKeyword', text: string) {
+    const key = kind === 'keyword' ? 'keywords' : 'negativeKeywords'
+    updateForm(key, removeLineFromText(form[key], text))
+    setReviewError(null)
+    setMessage(isTr
+      ? `«${text}» listeden kaldırıldı. Değişikliği kaydedip planı yeniden onaylayın.`
+      : `“${text}” was removed from the list. Save the change and approve the plan again.`)
   }
 
   async function saveDraft() {
     if (!selectedConnection || pending) return
     setPending('save')
-    setErrorCode(null)
+    clearActionErrors()
     setMessage(null)
     try {
       const dailyBudgetMinor = majorToMinor(dailyBudget, selectedConnection.currency ?? selectedCurrency)
@@ -783,9 +834,9 @@ export function GoogleAdsWorkspace({
       await mutatePlans()
       setShowPublishReview(false)
       setFinalPublishConfirmed(false)
-      setMessage(isTr ? 'Taslak kaydedildi. Google Ads’te henüz değişiklik yapılmadı.' : 'Draft saved. No Google Ads changes were made.')
+      setFeedbackTick((tick) => tick + 1)
     } catch (error) {
-      reportError(error)
+      reportError(error, 'save')
     } finally {
       setPending(null)
     }
@@ -794,7 +845,7 @@ export function GoogleAdsWorkspace({
   async function approvePlan() {
     if (!selectedPlan || !confirmedEu || !acceptedTerms || pending) return
     setPending('approve')
-    setErrorCode(null)
+    clearActionErrors()
     setMessage(null)
     try {
       await postJson('/api/ads/google/approval', 'POST', {
@@ -805,9 +856,9 @@ export function GoogleAdsWorkspace({
         termsAccepted: true,
       })
       await mutatePlans()
-      setMessage(isTr ? 'Onay kaydedildi. Google Ads’te değişiklik yapılmadı; sıradaki adım validate_only doğrulamasıdır.' : 'Approval recorded. No Google Ads changes were made; run validate_only next.')
+      setFeedbackTick((tick) => tick + 1)
     } catch (error) {
-      reportError(error)
+      reportError(error, 'review')
     } finally {
       setPending(null)
     }
@@ -816,11 +867,12 @@ export function GoogleAdsWorkspace({
   async function runPublish(phase: 'validate' | 'publish') {
     if (!selectedPlan?.approval_hash || pending) return
     if (phase === 'publish' && !finalPublishConfirmed) {
-      setErrorCode('confirmation_required')
+      setReviewError({ code: 'confirmation_required', googleErrors: [] })
+      setFeedbackTick((tick) => tick + 1)
       return
     }
     setPending(phase)
-    setErrorCode(null)
+    clearActionErrors()
     setMessage(null)
     try {
       const response = await postJson('/api/ads/google/publish', 'POST', {
@@ -832,20 +884,14 @@ export function GoogleAdsWorkspace({
         publishConfirmed: phase === 'publish' && finalPublishConfirmed,
       })
       await mutatePlans()
-      if (response.state === 'validated') {
-        setMessage(isTr ? 'Google validate_only doğrulaması başarılı. Kampanya henüz oluşturulmadı.' : 'Google validate_only succeeded. The campaign has not been created.')
-      } else if (response.state === 'published') {
+      if (response.state === 'published' || response.state === 'reconciling') {
         setShowPublishReview(false)
         setFinalPublishConfirmed(false)
-        setMessage(isTr ? 'Kampanya duraklatılmış olarak oluşturuldu.' : 'The campaign was created in paused state.')
-      } else if (response.state === 'reconciling') {
-        setShowPublishReview(false)
-        setFinalPublishConfirmed(false)
-        setMessage(isTr ? 'Google sonucu belirsiz. Tekrar yayınlamayın; durum incelemeye alındı.' : 'Google’s result is uncertain. Do not retry publishing; the result is being reconciled.')
       }
+      setFeedbackTick((tick) => tick + 1)
     } catch (error) {
       if (phase === 'publish') setFinalPublishConfirmed(false)
-      reportError(error)
+      reportError(error, 'review')
     } finally {
       setPending(null)
     }
@@ -1007,6 +1053,18 @@ export function GoogleAdsWorkspace({
                         : null}
                     />
                     <TextAreaField id="google-ads-keywords" label={copy.keywords} value={form.keywords} onChange={(value) => updateForm('keywords', value)} disabled={!isEditable || pending !== null} aiSuggested={isAi('keywords')} />
+                    {restrictedKeywordHits.length > 0 ? (
+                      <Alert role="note" className="border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300">
+                        <AlertCircle aria-hidden="true" />
+                        <AlertTitle>{isTr ? 'Kısıtlı sektör terimi' : 'Restricted-industry term'}</AlertTitle>
+                        <AlertDescription className="text-amber-900 dark:text-amber-300">
+                          {isTr
+                            ? 'Bu anahtar kelimeler Google politikasında kısıtlı sektörlere girebilir ve ek incelemeye takılabilir: '
+                            : 'These keywords may fall under restricted industries in Google policy and trigger extra review: '}
+                          {restrictedKeywordHits.map((hit) => `${hit.keyword} (${restrictedCategoryLabel(hit.category, isTr)})`).join(', ')}
+                        </AlertDescription>
+                      </Alert>
+                    ) : null}
 
                     <div>
                       <Button type="button" variant="ghost" size="sm" aria-expanded={advancedOpen} aria-controls="google-ads-advanced-fields" onClick={() => setAdvancedOpen((open) => !open)}>
@@ -1061,6 +1119,12 @@ export function GoogleAdsWorkspace({
                     <Button type="button" onClick={() => void saveDraft()} disabled={!selectedConnection || !isEditable || pending !== null}>
                       <Save data-icon="inline-start" aria-hidden="true" />{pending === 'save' ? copy.saving : copy.saveDraft}
                     </Button>
+                    {saveError ? (
+                      <Alert variant="destructive" role="alert">
+                        <AlertCircle aria-hidden="true" />
+                        <AlertTitle>{errorText(saveError.code, isTr)}</AlertTitle>
+                      </Alert>
+                    ) : null}
                   </FieldGroup>
                   <Alert role="note" className="border-amber-800/30 bg-amber-50 text-amber-900 dark:border-amber-300/40 dark:bg-amber-950/50 dark:text-amber-300">
                     <AlertCircle aria-hidden="true" />
@@ -1121,6 +1185,17 @@ export function GoogleAdsWorkspace({
                 <CardDescription>{statusText(selectedPlan.status, isTr)} · v{selectedPlan.version}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                <div ref={feedbackRef} className="flex scroll-mt-4 flex-col gap-3">
+                  <GoogleAdsPublishStepper plan={selectedPlan} isTr={isTr} />
+                  <GoogleAdsReviewFeedback
+                    plan={selectedPlan}
+                    errorTitle={reviewError ? errorText(reviewError.code, isTr) : null}
+                    googleErrors={reviewError?.googleErrors ?? []}
+                    isTr={isTr}
+                    canEdit={isEditable}
+                    onRemoveItem={removeKeywordFromForm}
+                  />
+                </div>
                 <div className="rounded-xl border border-border bg-muted/30 p-4">
                   <h3 className="mb-3 text-sm font-semibold">{copy.summary}</h3>
                   <dl className="grid gap-2 text-sm">
@@ -1218,9 +1293,6 @@ export function GoogleAdsWorkspace({
                   </div>
                 ) : null}
 
-                {selectedPlan.status === 'reconciling' ? (
-                  <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>{isTr ? 'Yayın sonucu belirsiz' : 'Publish result is uncertain'}</AlertTitle><AlertDescription>{isTr ? 'Kampanyayı tekrar yayınlamayın. Google Ads hesabını kontrol edin; durum yönetici incelemesinde.' : 'Do not publish again. Check Google Ads; the result is being reconciled.'}</AlertDescription></Alert>
-                ) : null}
               </CardContent>
               <CardFooter className="flex flex-wrap gap-2">
                 <Button type="button" size="sm" variant="ghost" onClick={clearSelection}>{copy.close}</Button>
