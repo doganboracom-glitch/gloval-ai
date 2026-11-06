@@ -30,7 +30,7 @@ import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 import { GoogleAdsSetupJourney } from '@/components/ads/google-ads-setup-journey'
-import { GoogleAdsPublishStepper, GoogleAdsReviewFeedback } from '@/components/ads/google-ads-review-feedback'
+import { GoogleAdsPublishStepper, GoogleAdsReviewFeedback, GoogleAdsSuccessNotice } from '@/components/ads/google-ads-review-feedback'
 import { removeLineFromText } from '@/lib/ads/google-error-target'
 import { partitionRestrictedKeywords, restrictedCategoryLabel } from '@/lib/ads/restricted-keywords'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
@@ -296,7 +296,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     publish_in_progress: 'Bu kampanya için başka bir işlem devam ediyor.',
     provider_error: 'Google Ads isteği tamamlanamadı. Kampanya bilgilerini ve hesabı kontrol edin.',
     provider_unavailable: 'Google Ads yanıtı doğrulanamadı. Kampanya oluşmuş olabilir; tekrar yayınlamayın, yönetici incelemesini bekleyin.',
-    api_quota_exceeded: 'Google Ads API kotasına ulaşıldı. Bir süre bekleyip tekrar deneyin.',
+    api_quota_exceeded: 'Günlük Google Ads işlem sınırına ulaşıldı. Sınır 24 saat içinde yenilenir; yarın tekrar deneyin.',
     quota_check_failed: 'API kotası doğrulanamadı; güvenlik için Google Ads isteği gönderilmedi.',
     configuration_missing: 'Google Ads yayınlama yapılandırması eksik. Yöneticiye bildirim gönderildi.',
     reservation_failed: 'Yayın rezervasyonunun sonucu belirsiz. Yeniden yayınlamayın; yönetici kontrolünü bekleyin.',
@@ -334,7 +334,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     publish_in_progress: 'Another action is already in progress for this campaign.',
     provider_error: 'The Google Ads request could not be completed. Check the campaign details and account.',
     provider_unavailable: 'The Google Ads response could not be verified. A campaign may exist; do not retry publishing and wait for admin review.',
-    api_quota_exceeded: 'The Google Ads API quota was reached. Wait before trying again.',
+    api_quota_exceeded: 'The daily Google Ads operation limit was reached. The limit renews within 24 hours; try again tomorrow.',
     quota_check_failed: 'The API quota could not be verified, so no Google Ads request was sent.',
     configuration_missing: 'Google Ads publishing configuration is incomplete. The administrator was notified.',
     reservation_failed: 'The publish reservation result is uncertain. Do not retry; wait for administrator review.',
@@ -976,9 +976,7 @@ export function GoogleAdsWorkspace({
           ) : null}
         </Alert>
       ) : null}
-      {message ? (
-        <Alert><Check aria-hidden="true" /><AlertDescription>{message}</AlertDescription></Alert>
-      ) : null}
+      {message ? <GoogleAdsSuccessNotice text={message} /> : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.7fr)]">
         <div className="flex min-w-0 flex-col gap-5">

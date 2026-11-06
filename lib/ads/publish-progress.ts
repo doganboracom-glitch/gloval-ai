@@ -50,6 +50,13 @@ export function nextStepText(plan: PublishProgressPlan, isTr: boolean): string |
   }
 }
 
+/** Splits "Headline. Details." into a bold headline and a supporting line; single sentences have no detail. */
+export function splitSuccessMessage(text: string): { title: string; detail: string | null } {
+  const match = /^(.+?[.!])\s+(.+)$/.exec(text.trim())
+  if (!match) return { title: text.trim(), detail: null }
+  return { title: match[1], detail: match[2] }
+}
+
 export type PersistedFeedback = { tone: 'success' | 'warning' | 'error'; text: string }
 
 /** What the stored plan state means for the user, so the message survives refreshes and reopening the plan. */
