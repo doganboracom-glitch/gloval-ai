@@ -12,6 +12,7 @@ import { isTransferSupportedTld } from './transfer-service'
 import { isTransferLockChangeEnabled } from './capabilities'
 import { reserveUserDailyTransferExtension, reserveUserHourly } from './rate-limit'
 import { recordDomainAuditEvent, type DomainAuditReason } from './audit'
+import { classifyLockFailureCode } from './lock-error-codes'
 import {
   findOpenTransferWindow,
   getOwnedCustomDomainId,
@@ -93,7 +94,7 @@ function isEligibleForTransfer(info: OwnedDomainInfo, nowMs = Date.now()): Trans
 
 function providerCodeFromError(error: unknown): string | undefined {
   if (!(error instanceof RegistrarError)) return undefined
-  return error.message.match(/^[A-Za-z0-9_:]{1,80}/)?.[0]
+  return error.message.match(/^[A-Za-z0-9_:.]{1,80}/)?.[0]
 }
 
 function safeErrorName(error: unknown): string | undefined {
@@ -431,7 +432,7 @@ export async function requestMyTransferOutCode(
         ...eligibilityAudit,
       },
     })
-    return { ok: false, error: 'PROVIDER_ERROR' }
+    return { ok: false, error: classifyLockFailureCode(providerCode?.replace(/^domainnameapi:/, '')) }
   }
 
   // The provider accepted the unlock without an error. The registry can apply

@@ -10,6 +10,7 @@
 // `types/nodejs-dna.d.ts` for the ambient module declaration.
 import DNARest from 'nodejs-dna/src/DNARest'
 import { buildRegistrarDiagnostic, formatRegistrarDiagnostic } from './diagnostics'
+import { SAFE_PROVIDER_CODE } from './lock-error-codes'
 import { isActiveAndUnexpired } from './nameserver-access'
 import { normalizeNameservers } from './nameserver-validation'
 import { isLaterRawDate, parseProviderDate, parseProviderDateAssumingIstanbul, readFirstRawField, readRawField } from './provider-date'
@@ -100,13 +101,15 @@ type Envelope<T = Record<string, unknown>> = { result?: string; data?: T; error?
 
 type TransferClient = {
   lastResponse?: unknown
+  lastParsedResponse?: unknown
+  /** The SDK's HTTP core; used for endpoints the SDK has no correct wrapper for. */
+  request(method: string, endpoint: string, data?: Record<string, unknown>): Promise<unknown>
   GetList(params?: Record<string, unknown>): Promise<Envelope & { TotalCount?: number }>
   CheckTransfer(domain: string, authCode: string): Promise<Envelope>
   Transfer(domain: string, authCode: string, period: number, contacts?: unknown[]): Promise<Envelope>
   GetDetails(domain: string): Promise<Envelope>
   GetTldList(count?: number): Promise<{ result?: string; data?: { tlds?: TldRow[] } | TldRow[]; error?: { Code?: string } }>
   EnableTheftProtectionLock(domain: string): Promise<Envelope>
-  DisableTheftProtectionLock(domain: string): Promise<Envelope>
   ModifyNameServer(domain: string, nameServers: string[]): Promise<Envelope>
   ModifyPrivacyProtectionStatus(domain: string, status: boolean, reason?: string): Promise<Envelope>
   GetContacts(domain: string): Promise<Envelope>
@@ -176,7 +179,7 @@ type AxiosLike = {
 }
 
 function safeErrorCode(value: unknown): string | undefined {
-  return typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value) ? value : undefined
+  return typeof value === 'string' && SAFE_PROVIDER_CODE.test(value) ? value : undefined
 }
 
 /** Code-only fields of a lock response body; message and details text are never read. */
@@ -688,11 +691,41 @@ export class DomainNameApiProvider
     return { total, items }
   }
 
+  /**
+   * Removes the transfer lock through the dedicated `domains/unlock` endpoint.
+   * The SDK's `DisableTheftProtectionLock` posts `lockStatus: false` to
+   * `domains/lock`, which the API ignores (it re-locks), so it must not be used.
+   * The success response is 204 with no body; the error code, when there is one,
+   * is read from the response and never the message.
+   */
+  private async sendUnlock(client: TransferClient, domain: string): Promise<Envelope> {
+    let out: unknown
+    try {
+      out = await client.request('POST', 'domains/unlock', { domainName: domain })
+    } catch (error) {
+      const status = (error as { statusCode?: unknown } | null)?.statusCode
+      const code =
+        safeBodyErrorCode(client.lastResponse) ??
+        (typeof status === 'number' && Number.isInteger(status) ? `API_${status}` : 'UNLOCK_EXCEPTION')
+      return { result: 'ERROR', error: { Code: code } }
+    }
+
+    // The SDK reports a network failure by returning `{}` and recording the error.
+    const parsed = client.lastParsedResponse as Envelope | null | undefined
+    if (parsed && typeof parsed === 'object' && parsed.result === 'ERROR') {
+      return { result: 'ERROR', error: { Code: safeErrorCode(parsed.error?.Code) ?? 'UNLOCK_EXCEPTION' } }
+    }
+    if (out && typeof out === 'object' && (out as { code?: unknown }).code === 'CREDENTIALS') {
+      return { result: 'ERROR', error: { Code: 'CREDENTIALS' } }
+    }
+    return { result: 'OK' }
+  }
+
   async setTransferLock(domain: string, locked: boolean): Promise<void> {
     const client = this.transferClient()
     let res: Envelope
     try {
-      res = locked ? await client.EnableTheftProtectionLock(domain) : await client.DisableTheftProtectionLock(domain)
+      res = locked ? await client.EnableTheftProtectionLock(domain) : await this.sendUnlock(client, domain)
     } catch {
       throw new RegistrarError('PROVIDER_ERROR', 'domainnameapi:LOCK_EXCEPTION')
     }
@@ -865,7 +898,7 @@ export class DomainNameApiProvider
     const axiosLike = (client as unknown as { _axios?: AxiosLike })._axios
     const interceptors = axiosLike?.interceptors?.response
     const interceptorId = interceptors?.use((response) => {
-      if (response?.config?.url && /domains\/lock$/.test(String(response.config.url)) && Number.isInteger(response.status)) {
+      if (response?.config?.url && /domains\/(?:un)?lock$/.test(String(response.config.url)) && Number.isInteger(response.status)) {
         summary.httpStatus = response.status
       }
       return response
@@ -874,7 +907,7 @@ export class DomainNameApiProvider
     let res: Envelope | null = null
     const sentAt = Date.now()
     try {
-      res = locked ? await client.EnableTheftProtectionLock(domain) : await client.DisableTheftProtectionLock(domain)
+      res = locked ? await client.EnableTheftProtectionLock(domain) : await this.sendUnlock(client, domain)
     } catch {
       res = null
     } finally {
@@ -930,7 +963,7 @@ export class DomainNameApiProvider
     const acceptUnconfirmed = options.acceptUnconfirmed === true && !locked
     const client = this.transferClient()
     const confirmed = await this.applyAndVerify(
-      () => (locked ? client.EnableTheftProtectionLock(domain) : client.DisableTheftProtectionLock(domain)),
+      () => (locked ? client.EnableTheftProtectionLock(domain) : this.sendUnlock(client, domain)),
       async () => (await this.requireDetails(domain)).locked === locked,
       'LOCK',
       locked || acceptUnconfirmed ? 0 : TRANSFER_LOCK_READBACK_RETRIES,

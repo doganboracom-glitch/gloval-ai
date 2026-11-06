@@ -6,9 +6,9 @@ const sdk = vi.hoisted(() => ({
   GetDetails: vi.fn(),
   GetTldList: vi.fn(),
   EnableTheftProtectionLock: vi.fn(),
-  DisableTheftProtectionLock: vi.fn(),
+  request: vi.fn(),
   GetList: vi.fn(),
-  state: { lastResponse: null as unknown },
+  state: { lastResponse: null as unknown, lastParsedResponse: null as unknown },
 }))
 
 vi.mock('nodejs-dna/src/DNARest', () => ({
@@ -16,13 +16,16 @@ vi.mock('nodejs-dna/src/DNARest', () => ({
     get lastResponse() {
       return sdk.state.lastResponse
     }
+    get lastParsedResponse() {
+      return sdk.state.lastParsedResponse
+    }
     GetList = sdk.GetList
     CheckTransfer = sdk.CheckTransfer
     Transfer = sdk.Transfer
     GetDetails = sdk.GetDetails
     GetTldList = sdk.GetTldList
     EnableTheftProtectionLock = sdk.EnableTheftProtectionLock
-    DisableTheftProtectionLock = sdk.DisableTheftProtectionLock
+    request = sdk.request
   },
 }))
 
@@ -34,6 +37,7 @@ const provider = () => new DomainNameApiProvider('user', 'key', true)
 beforeEach(() => {
   vi.clearAllMocks()
   sdk.state.lastResponse = null
+  sdk.state.lastParsedResponse = null
 })
 
 describe('DomainNameApiProvider transfer support', () => {
@@ -105,7 +109,7 @@ describe('DomainNameApiProvider transfer support', () => {
 
   it('enables and disables the transfer lock and propagates provider errors', async () => {
     sdk.EnableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
-    sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'ERROR', error: { Code: 'API_403' } })
+    sdk.request.mockRejectedValue(Object.assign(new Error('forbidden'), { statusCode: 403 }))
     await provider().setTransferLock('example.com', true)
     expect(sdk.EnableTheftProtectionLock).toHaveBeenCalledWith('example.com')
     await expect(provider().setTransferLock('example.com', false)).rejects.toThrow('domainnameapi:API_403')
