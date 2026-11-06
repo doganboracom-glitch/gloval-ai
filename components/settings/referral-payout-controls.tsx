@@ -53,7 +53,9 @@ const COPY = {
     requested: 'İşlemde',
     converted: 'Krediye çevrildi',
     paid: 'Ödendi',
-    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; toplam bakiye en az ${minimumCreditTr} TL olduğunda tamamı veya uygun durumlarda bir kısmı beklemeden AI kredisine çevrilebilir.`,
+    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; bekleyen tutarlar da AI kredisine hemen çevrilebilir. Kısmi kredi dönüşümleri 3 TL'nin katlarıyla yapılır.`,
+    partialCreditMultipleHint: `Kısmi AI kredi dönüşümü yalnızca ${minimumCreditTr} TL'nin katlarıyla yapılabilir. Bakiyenin tamamı her zaman seçilebilir.`,
+
     request: 'Ödeme İste',
     requestTitle: 'Bakiyenizi nasıl almak istersiniz?',
     requestDescription: 'Önce ödeme yöntemini seçin; sonraki adımda tutarı ve varsa fatura KDV seçeneğini inceleyin.',
@@ -96,7 +98,7 @@ const COPY = {
     successCredit: 'Talebiniz işleme alındı. AI kredileriniz bakiyenize eklendi.',
     cashUnavailable: 'Nakit ödeme şu anda kullanılamıyor.',
     noIban: 'Nakit ödeme için kayıtlı bir IBAN gerekir.',
-    creditThreshold: `AI kredisine dönüşüm için toplam bakiyenin en az ${minimumCreditTr} TL olması gerekir.`,
+    creditThreshold: 'AI kredisine dönüşüm için kullanılabilir bir bakiye gerekir. Kısmi dönüşüm tutarı 3 TL katlarıyla olmalıdır; tam bakiye her zaman seçilebilir.',
     cashWaiting: `14 günlük bekleme tamamlandığında ve kullanılabilir bakiye ${minimumPayoutTr} TL'ye ulaştığında IBAN ödemesi aktif olur.`,
     cashMinimum: `Kullanılabilir bakiye ${minimumPayoutTr} TL'ye ulaştığında IBAN ödemesi aktif olur.`,
     openCash: 'Açık bir nakit ödeme isteğiniz var; bu istek sonuçlanana kadar yeni IBAN isteği oluşturamazsınız. AI kredisine dönüşüm kullanılabilir.',
@@ -113,6 +115,7 @@ const COPY = {
       minimum_not_met: `Nakit ödeme tutarı en az ${minimumPayoutTr} TL olmalıdır.`,
       credit_minimum_not_met: `AI kredisine dönüşüm için tutar en az ${minimumCreditTr} TL olmalıdır.`,
       amount_exceeds_balance: 'Girilen tutar kullanılabilir bakiyeyi aşamaz.',
+      partial_credit_must_be_multiple: 'Kısmi AI kredi dönüşümü tutarı 3 TL’nin katı olmalıdır. Tam bakiyeyi seçebilir veya tutarı düzeltebilirsiniz.',
       partial_unavailable_debt: 'Negatif vade dilimi varken kısmi kredi dönüşümü yapılamaz; tam tutarı seçin.',
       vat_mode_required: 'Şirket ödemesi için bir KDV seçeneği belirleyin.',
       vat_mode_not_allowed: 'KDV seçeneği yalnızca şirket statüsündeki nakit ödemelerde kullanılabilir.',
@@ -137,7 +140,9 @@ const COPY = {
     requested: 'In progress',
     converted: 'Converted to credits',
     paid: 'Paid',
-    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; once the total reaches TRY ${minimumCreditEn}, the full amount or an eligible partial amount can be converted to AI credits immediately.`,
+    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; pending amounts can also be converted to AI credits immediately. Partial credit conversions must be in multiples of TRY ${minimumCreditEn}.`,
+    partialCreditMultipleHint: `Partial AI credit conversions must be in multiples of TRY ${minimumCreditEn}. The full balance can always be selected.`,
+
     request: 'Request payout',
     requestTitle: 'How would you like to receive your balance?',
     requestDescription: 'Choose a payout method first; the next step lets you review the amount and, when required, the invoice VAT option.',
@@ -180,7 +185,7 @@ const COPY = {
     successCredit: 'Your request is being processed, and the AI credits have been added to your balance.',
     cashUnavailable: 'Cash payout is not available right now.',
     noIban: 'A saved IBAN is required for cash payout.',
-    creditThreshold: `At least TRY ${minimumCreditEn} in total balance is required to convert to AI credits.`,
+    creditThreshold: 'A positive available balance is required for AI credit conversion. Partial conversions must be in multiples of TRY 3; the full balance can always be selected.',
     cashWaiting: `IBAN payout becomes available when the ${REFERRAL_HOLD_DAYS}-day hold ends and available balance reaches TRY ${minimumPayoutEn}.`,
     cashMinimum: `IBAN payout becomes available when available balance reaches TRY ${minimumPayoutEn}.`,
     openCash: 'You have an open cash payout request; a new IBAN request is unavailable until it is resolved. AI credit conversion remains available.',
@@ -197,6 +202,7 @@ const COPY = {
       minimum_not_met: `A cash payout must be at least TRY ${minimumPayoutEn}.`,
       credit_minimum_not_met: `A credit conversion must be at least TRY ${minimumCreditEn}.`,
       amount_exceeds_balance: 'The amount cannot exceed the available balance.',
+      partial_credit_must_be_multiple: 'Partial AI credit conversion amounts must be multiples of TRY 3. Select the full balance or adjust the amount.',
       partial_unavailable_debt: 'Partial credit conversion is unavailable while a maturity bucket is negative. Select the full amount.',
       vat_mode_required: 'Choose a VAT option for a company payout.',
       vat_mode_not_allowed: 'VAT options are only available for company cash payouts.',
@@ -254,14 +260,14 @@ export function ReferralPayoutControls({
   const cashUnavailable = !cashEnabled || !state?.hasIban || taxVerificationRequired || !validCashTaxStatus
   const hasOpenCashRequest = state?.hasOpenCashRequest ?? false
   const hasPendingBalance = (state?.pendingCents ?? 0) > 0
-  const meetsCreditMinimum = maxCreditCents >= CREDIT_MIN_CENTS
+  const hasConvertibleCredit = maxCreditCents > 0
   const meetsCashMinimum = maxCashCents >= REFERRAL_PAYOUT_MIN_CENTS
   const cashBalanceHeld = !meetsCashMinimum || hasPendingBalance
   const cashOptionDisabled = cashUnavailable || hasOpenCashRequest || cashBalanceHeld
   const canRequest = Boolean(
     state &&
     state.partnerStatus !== 'closed' &&
-    (meetsCreditMinimum || (cashEnabled && !cashOptionDisabled && meetsCashMinimum)),
+    (hasConvertibleCredit || (cashEnabled && !cashOptionDisabled && meetsCashMinimum)),
   )
   const maximumCents = method === 'credit' ? maxCreditCents : maxCashCents
   const parsedAmountCents = amountMode === 'specific' ? parseReferralPayoutAmount(amountText) : null
@@ -292,7 +298,7 @@ export function ReferralPayoutControls({
       })
     : null
   const canContinue = method === 'credit'
-    ? meetsCreditMinimum
+    ? hasConvertibleCredit
     : meetsCashMinimum && !cashOptionDisabled
   const canSubmit = Boolean(
     preview &&
@@ -302,7 +308,7 @@ export function ReferralPayoutControls({
 
   function startRequest() {
     if (!canRequest || isSubmitting) return
-    setMethod(meetsCreditMinimum ? 'credit' : 'cash')
+    setMethod(hasConvertibleCredit ? 'credit' : 'cash')
     setAmountMode('all')
     setAmountText('')
     setVatMode(null)
@@ -426,7 +432,7 @@ export function ReferralPayoutControls({
             {hasOpenCashRequest && (
               <Alert><AlertDescription>{copy.openCash}</AlertDescription></Alert>
             )}
-            {!meetsCreditMinimum && variant === 'dashboard' && (
+            {!hasConvertibleCredit && variant === 'dashboard' && (
               <p className="text-xs text-muted-foreground">{copy.creditThreshold}</p>
             )}
             {cashEnabled && cashBalanceHeld && (
@@ -477,7 +483,7 @@ export function ReferralPayoutControls({
               value={[method]}
               onValueChange={(value) => {
                 const selectedMethod = value[0]
-                if (selectedMethod === 'credit' && meetsCreditMinimum) {
+                if (selectedMethod === 'credit' && hasConvertibleCredit) {
                   setMethod(selectedMethod)
                   setAmountMode('all')
                   setAmountText('')
@@ -496,7 +502,7 @@ export function ReferralPayoutControls({
               aria-label={copy.requestTitle}
               className="w-full min-w-0 flex-col sm:flex-row"
             >
-              <ToggleGroupItem value="credit" disabled={!meetsCreditMinimum || isSubmitting} className="w-full min-w-0 flex-1 justify-start">
+              <ToggleGroupItem value="credit" disabled={!hasConvertibleCredit || isSubmitting} className="w-full min-w-0 flex-1 justify-start">
                 <Coins data-icon="inline-start" />
                 {copy.credit}
               </ToggleGroupItem>
@@ -507,7 +513,7 @@ export function ReferralPayoutControls({
                 </ToggleGroupItem>
               )}
             </ToggleGroup>
-            {method === 'credit' && !meetsCreditMinimum && (
+            {method === 'credit' && !hasConvertibleCredit && (
               <Alert><AlertDescription>{copy.creditThreshold}</AlertDescription></Alert>
             )}
             {cashEnabled && cashOptionDisabled && (
@@ -610,6 +616,7 @@ export function ReferralPayoutControls({
                   />
                   <FieldDescription id="referral-payout-amount-description">
                     {copy.amountDescription.replace('{maximum}', formatReferralTry(maximumCents, language))}
+                    {method === 'credit' ? ` ${copy.partialCreditMultipleHint}` : ''}
                   </FieldDescription>
                 </Field>
               </FieldGroup>

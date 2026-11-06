@@ -51,15 +51,16 @@ describe('referral payout math', () => {
     expect(calculateReferralCreditConversion(-1)).toBeNull()
   })
 
-  it('applies separate total-credit and available-cash minimums', () => {
+  it('allows any positive full credit balance while retaining the cash minimum', () => {
     expect(CREDIT_MIN_CENTS).toBe(300)
-    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS - 1, 'credit', 'individual')).toBeNull()
-    expect(calculateReferralPayoutPreview(CREDIT_MIN_CENTS, 'credit', 'individual')).toMatchObject({
-      balanceCents: 300,
-      payoutCents: 300,
+    expect(calculateReferralPayoutPreview(250, 'credit', 'individual')).toMatchObject({
+      balanceCents: 250,
+      payoutCents: 250,
+      partial: false,
       creditAmount: 1,
-      systemTopupCents: 0,
+      systemTopupCents: 50,
     })
+    expect(calculateReferralPayoutPreview(0, 'credit', 'individual')).toBeNull()
     expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS - 1, 'cash', 'individual')).toBeNull()
     expect(calculateReferralPayoutPreview(MINIMUM_PAYOUT_CENTS, 'cash', 'individual')).toMatchObject({
       balanceCents: MINIMUM_PAYOUT_CENTS,
@@ -106,12 +107,25 @@ describe('referral payout math', () => {
     expect(formatReferralTryInput(123_450, 'en')).toBe('1,234.50')
   })
 
-  it('validates payout bounds and prevents partial credit withdrawals while a debt bucket exists', () => {
+  it('requires partial credit amounts to use 300-cent increments but permits any positive full balance', () => {
     expect(validateReferralPayoutAmount(100_000, 250_000, 'cash')).toBeNull()
     expect(validateReferralPayoutAmount(99_999, 250_000, 'cash')).toBe('minimum_not_met')
     expect(validateReferralPayoutAmount(250_001, 250_000, 'cash')).toBe('amount_exceeds_balance')
+
+    for (const amountCents of [1, 150, 299]) {
+      expect(validateReferralPayoutAmount(amountCents, 1_000, 'credit')).toBe('partial_credit_must_be_multiple')
+    }
+    expect(validateReferralPayoutAmount(300, 1_000, 'credit')).toBeNull()
+    expect(validateReferralPayoutAmount(600, 1_000, 'credit')).toBeNull()
+    expect(validateReferralPayoutAmount(250, 250, 'credit')).toBeNull()
     expect(validateReferralPayoutAmount(300, 1_000, 'credit', true)).toBe('partial_unavailable_debt')
     expect(validateReferralPayoutAmount(1_000, 1_000, 'credit', true)).toBeNull()
+    expect(calculateReferralPayoutPreview(250, 'credit', 'individual')).toMatchObject({
+      balanceCents: 250,
+      partial: false,
+      creditAmount: 1,
+      systemTopupCents: 50,
+    })
     expect(calculateReferralPayoutPreview(1_000, 'credit', 'individual', { amountCents: 600 })).toMatchObject({
       balanceCents: 600,
       partial: true,

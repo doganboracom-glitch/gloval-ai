@@ -112,7 +112,7 @@ describe('referral payout feature flags', () => {
     expect(state.queue).toHaveBeenCalledOnce()
   })
 
-  it('maps the method-specific minimum errors', async () => {
+  it('maps the method-specific minimum and partial denomination errors', async () => {
     vi.stubEnv('REFERRAL_ENABLED', '1')
     vi.stubEnv('REFERRAL_PAYOUTS_ENABLED', '1')
     vi.stubEnv('REFERRAL_CASH_PAYOUTS_ENABLED', '1')
@@ -122,6 +122,13 @@ describe('referral payout feature flags', () => {
       method: 'credit',
       idempotencyKey: '66666666-6666-4666-8666-666666666666',
     })).resolves.toEqual({ ok: false, error: 'credit_minimum_not_met' })
+
+    state.rpcData = { ok: false, error: 'partial_credit_must_be_multiple' }
+    await expect(createReferralPayoutRequest({
+      method: 'credit',
+      amountCents: 150,
+      idempotencyKey: '99999999-9999-4999-8999-999999999999',
+    })).resolves.toEqual({ ok: false, error: 'partial_credit_must_be_multiple' })
 
     state.rpcData = { ok: false, error: 'minimum_not_met' }
     await expect(createReferralPayoutRequest({

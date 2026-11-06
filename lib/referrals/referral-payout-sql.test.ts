@@ -19,6 +19,7 @@ const COMMISSION_SQL = readFileSync(path.join(ROOT, 'scripts/102-referral-commis
 const PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/103-referral-payout-workflows.sql'), 'utf8')
 const CREDIT_CONVERSION_SQL = readFileSync(path.join(ROOT, 'scripts/108-referral-credit-conversion.sql'), 'utf8')
 const PARTIAL_PAYOUT_SQL = readFileSync(path.join(ROOT, 'scripts/113-referral-partial-payouts.sql'), 'utf8')
+const PARTIAL_CREDIT_GUARD_SQL = readFileSync(path.join(ROOT, 'scripts/122-referral-partial-credit-topup-guard.sql'), 'utf8')
 const BASE_SCHEMA = `
 create role anon;
 create role authenticated;
@@ -67,6 +68,7 @@ async function withDatabase<T>(run: (db: PGlite) => Promise<T>): Promise<T> {
     await db.exec(PAYOUT_SQL)
     await db.exec(CREDIT_CONVERSION_SQL)
     await db.exec(PARTIAL_PAYOUT_SQL)
+    await db.exec(PARTIAL_CREDIT_GUARD_SQL)
     return await run(db)
   } finally {
     await db.close()
@@ -230,25 +232,20 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
-  it('uses the 300-cent conversion minimum while crediting pending commissions without the cash hold', async () => {
+  it('allows any positive full credit balance while crediting pending commissions without the cash hold', async () => {
     await withDatabase(async (db) => {
-      const partner = await newPartner(db, { email: 'credit-minimum-boundary@gloval.test' })
-      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'credit-below-minimum')
-      await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
-        ok: false,
-        error: 'credit_minimum_not_met',
-        availableCents: CREDIT_MIN_CENTS - 1,
-      })
-
-      await addAvailableBalance(db, partner.id, 1, 'credit-exact-minimum')
-      const minimumCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
-      expect(minimumCredit).toMatchObject({
+      const partner = await newPartner(db, { email: 'credit-low-full-balance@gloval.test' })
+      await addAvailableBalance(db, partner.id, 250, 'credit-low-full-balance')
+      const lowFullCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(lowFullCredit).toMatchObject({
         ok: true,
-        balanceCents: CREDIT_MIN_CENTS,
-        payoutCents: CREDIT_MIN_CENTS,
+        partial: false,
+        balanceCents: 250,
+        payoutCents: 250,
         creditAmount: 1,
-        systemTopupCents: 0,
+        systemTopupCents: 50,
       })
+      expect(Number(lowFullCredit.systemTopupCents)).toBeLessThanOrEqual(299)
 
       const pendingPartner = await newPartner(db, { email: 'credit-pending-commission@gloval.test' })
       const pendingCommission = await newCommission(db, pendingPartner.id)
@@ -558,25 +555,22 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
-  it('rejects an under-minimum request and rolls back the entire credit conversion on ledger failure', async () => {
+  it('converts a small full balance and rolls back the entire credit conversion on ledger failure', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'atomic-partner@gloval.test' })
-      await addAvailableBalance(db, partner.id, CREDIT_MIN_CENTS - 1, 'under-minimum')
-      await expect(requestPayout(db, partner.id, partner.user_id, 'credit')).resolves.toMatchObject({
-        ok: false,
-        error: 'credit_minimum_not_met',
-        availableCents: CREDIT_MIN_CENTS - 1,
-      })
-      const { rows: underMinimum } = await db.query<{ count: number }>(
-        'select count(*)::integer as count from public.referral_payout_requests',
-      )
-      expect(underMinimum[0].count).toBe(0)
+      await addAvailableBalance(db, partner.id, 250, 'atomic-small-full-balance')
+      const lowFullCredit = await requestPayout(db, partner.id, partner.user_id, 'credit')
+      expect(lowFullCredit).toMatchObject({ ok: true, partial: false, balanceCents: 250, creditAmount: 1, systemTopupCents: 50 })
+      expect(Number(lowFullCredit.systemTopupCents)).toBeLessThanOrEqual(299)
+
+      const balancePartner = await newPartner(db, { email: 'outstanding-balance@gloval.test' })
+      await addAvailableBalance(db, balancePartner.id, 299, 'outstanding-balance')
       const adminUserId = await newUser(db, 'close-admin@gloval.test')
       const closeWithBalance = await db.query<{ result: RpcResult }>(
         "select public.transition_referral_partner_status($1::uuid, $2::uuid, 'close') as result",
-        [partner.id, adminUserId],
+        [balancePartner.id, adminUserId],
       )
-      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: CREDIT_MIN_CENTS - 1 })
+      expect(closeWithBalance.rows[0].result).toMatchObject({ ok: false, error: 'balance_outstanding', balanceCents: 299 })
 
       await addAvailableBalance(db, partner.id, 100_000, 'atomic-failure')
       await db.exec(`
@@ -590,11 +584,11 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
 
       const { rows: rollbackState } = await db.query<{ requests: number; credits: number; balance_cents: string }>(`
         select
-          (select count(*)::integer from public.referral_payout_requests) as requests,
+          (select count(*)::integer from public.referral_payout_requests where partner_id = $1) as requests,
           (select count(*)::integer from public.ai_credit_transactions) as credits,
           (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1) as balance_cents
       `, [partner.id])
-      expect(rollbackState).toEqual([{ requests: 0, credits: 0, balance_cents: String(CREDIT_MIN_CENTS - 1 + 100_000) }])
+      expect(rollbackState).toEqual([{ requests: 1, credits: 1, balance_cents: '100000' }])
     })
   })
 
@@ -769,6 +763,63 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
+  it('rejects non-multiple partial credit attempts, accepts 300 and 600 cents, and rejects repeated 1-cent attempts', async () => {
+    await withDatabase(async (db) => {
+      let partnerIndex = 0
+      const createGuardPartner = () => newPartner(db, {
+        email: `partial-credit-guard-${'x'.repeat(partnerIndex++)}@gloval.test`,
+      })
+
+      for (const [index, amountCents] of [1, 150, 299].entries()) {
+        const partner = await createGuardPartner()
+        await addAvailableBalance(db, partner.id, 1_000, `partial-invalid-${index}`)
+        const result = await requestPayout(db, partner.id, partner.user_id, 'credit', crypto.randomUUID(), { amountCents })
+        expect(result).toMatchObject({ ok: false, error: 'partial_credit_must_be_multiple' })
+        const persisted = await db.query<{ requests: number; credits: number; balance: string }>(`
+          select
+            (select count(*)::integer from public.referral_payout_requests where partner_id = $1) as requests,
+            (select count(*)::integer from public.ai_credit_transactions where user_id = $2) as credits,
+            (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1) as balance
+        `, [partner.id, partner.user_id])
+        expect(persisted.rows[0]).toEqual({ requests: 0, credits: 0, balance: '1000' })
+      }
+
+      for (const amountCents of [CREDIT_MIN_CENTS, 600]) {
+        const partner = await createGuardPartner()
+        await addAvailableBalance(db, partner.id, amountCents + CREDIT_MIN_CENTS, `partial-valid-${amountCents}`)
+        const result = await requestPayout(db, partner.id, partner.user_id, 'credit', crypto.randomUUID(), { amountCents })
+        expect(result).toMatchObject({
+          ok: true,
+          partial: true,
+          balanceCents: amountCents,
+          creditAmount: amountCents / CREDIT_MIN_CENTS,
+          systemTopupCents: 0,
+        })
+        expect(Number(result.systemTopupCents)).toBeLessThanOrEqual(299)
+      }
+
+      const repeatedPartner = await createGuardPartner()
+      await addAvailableBalance(db, repeatedPartner.id, 1_000, 'partial-repeated-one-cent')
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await expect(requestPayout(
+          db,
+          repeatedPartner.id,
+          repeatedPartner.user_id,
+          'credit',
+          crypto.randomUUID(),
+          { amountCents: 1 },
+        )).resolves.toMatchObject({ ok: false, error: 'partial_credit_must_be_multiple' })
+      }
+      const repeatedState = await db.query<{ requests: number; credits: number; balance: string }>(`
+        select
+          (select count(*)::integer from public.referral_payout_requests where partner_id = $1) as requests,
+          (select count(*)::integer from public.ai_credit_transactions where user_id = $2) as credits,
+          (select sum(amount_cents)::text from public.referral_commission_ledger where partner_id = $1) as balance
+        `, [repeatedPartner.id, repeatedPartner.user_id])
+      expect(repeatedState.rows[0]).toEqual({ requests: 0, credits: 0, balance: '1000' })
+    })
+  })
+
   it('deducts partial credit from matured funds first and then future maturity buckets in FIFO order', async () => {
     await withDatabase(async (db) => {
       const partner = await newPartner(db, { email: 'credit-fifo-partial@gloval.test' })
@@ -919,9 +970,9 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
     })
   })
 
-  it('keeps the new migration unapplied and safe to re-run', async () => {
+  it('keeps the credit guard unapplied and safe to re-run locally', async () => {
     await withDatabase(async (db) => {
-      await expect(db.exec(PARTIAL_PAYOUT_SQL)).resolves.toBeDefined()
+      await expect(db.exec(PARTIAL_CREDIT_GUARD_SQL)).resolves.toBeDefined()
       const functions = await db.query<{ count: number }>(`
         select count(*)::integer as count
         from pg_catalog.pg_proc as proc
@@ -930,6 +981,7 @@ describe('scripts/108-referral-credit-conversion.sql', () => {
       `)
       expect(functions.rows[0].count).toBe(1)
       expect(PARTIAL_PAYOUT_SQL).toMatch(/NOT APPLIED/iu)
+      expect(PARTIAL_CREDIT_GUARD_SQL).toMatch(/NOT APPLIED/iu)
     })
   })
 })
