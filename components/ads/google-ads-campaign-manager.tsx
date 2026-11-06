@@ -88,25 +88,33 @@ function statusLabel(status: string, isTr: boolean) {
 }
 
 function actionLabel(action: GoogleAdsManagementAction, isTr: boolean) {
-  if (action.undone_of) return isTr ? 'Önceki işlem geri alındı' : 'Previous action undone'
+  let label: string
   if (action.action_type === 'google_ads_campaign_status_update') {
-    return action.target.status === 'ENABLED'
+    label = action.target.status === 'ENABLED'
       ? (isTr ? 'Kampanya etkinleştirildi' : 'Campaign enabled')
       : (isTr ? 'Kampanya duraklatıldı' : 'Campaign paused')
-  }
-  if (action.action_type === 'google_ads_budget_update') return isTr ? 'Günlük bütçe değiştirildi' : 'Daily budget changed'
-  if (action.action_type === 'google_ads_ad_copy_update') return isTr ? 'Reklam metni değiştirildi' : 'Ad copy changed'
-  if (action.action_type === 'google_ads_keyword_update') {
+  } else if (action.action_type === 'google_ads_budget_update') {
+    label = isTr ? 'Günlük bütçe değiştirildi' : 'Daily budget changed'
+  } else if (action.action_type === 'google_ads_ad_copy_update') {
+    label = isTr ? 'Reklam metni değiştirildi' : 'Ad copy changed'
+  } else if (action.action_type === 'google_ads_keyword_update') {
     const word = typeof action.target.keywordText === 'string' ? ` · ${action.target.keywordText}` : ''
     const operation = action.target.keywordOperation === 'remove' ? (isTr ? 'Anahtar kelime kaldırıldı' : 'Keyword removed') : (isTr ? 'Anahtar kelime eklendi' : 'Keyword added')
     const negative = action.target.keywordNegative ? (isTr ? ' (negatif)' : ' (negative)') : ''
-    return `${operation}${negative}${word}`
+    label = `${operation}${negative}${word}`
+  } else {
+    label = isTr ? 'Kampanya arşivlendi (kalıcı)' : 'Campaign archived (permanent)'
   }
-  return isTr ? 'Kampanya arşivlendi (kalıcı)' : 'Campaign archived (permanent)'
+  return action.undone_of ? `${isTr ? 'Geri alma işlemi' : 'Undo action'} · ${label}` : label
 }
 
-function actionStatus(action: GoogleAdsManagementAction, isTr: boolean) {
+function actionWasUndone(action: GoogleAdsManagementAction, actions: GoogleAdsManagementAction[]) {
+  return actions.some((candidate) => candidate.undone_of === action.id && ['approved', 'applied'].includes(candidate.status))
+}
+
+function actionStatus(action: GoogleAdsManagementAction, isTr: boolean, wasUndone: boolean) {
   if (action.failure_reason === 'state_unverified') return isTr ? 'Uygulandı · durum doğrulanamadı' : 'Applied · state not verified'
+  if (wasUndone) return isTr ? 'Geri alındı' : 'Undone'
   if (action.status === 'applied') return isTr ? 'Uygulandı' : 'Applied'
   if (action.status === 'failed') return isTr ? 'Uygulanmadı' : 'Not applied'
   if (action.status === 'undone') return isTr ? 'Geri alındı' : 'Undone'
@@ -140,18 +148,26 @@ function actionSummary(action: GoogleAdsManagementAction, currency: string, isTr
     const descriptions = Array.isArray(action.target.descriptions) ? action.target.descriptions.length : 0
     return isTr ? `${headlines} başlık · ${descriptions} açıklama` : `${headlines} headlines · ${descriptions} descriptions`
   }
+  if (action.action_type === 'google_ads_keyword_update') {
+    return typeof action.target.keywordText === 'string' ? action.target.keywordText : ''
+  }
   if (action.action_type === 'google_ads_campaign_archive') return isTr ? 'Google Ads kampanyası kalıcı kaldırıldı' : 'Permanently removed from Google Ads'
   return ''
 }
 
-export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }: {
+export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, previewData, previewLabel, previewMode = false }: {
   plan: Plan | null
   hasConnection: boolean
   currency: string
   isTr: boolean
+  previewData?: ManagementResponse
+  previewLabel?: string
+  previewMode?: boolean
 }) {
-  const key = plan?.status === 'published' ? `/api/ads/google/management?planId=${encodeURIComponent(plan.id)}` : null
-  const { data, error, isLoading, mutate } = useSWR<ManagementResponse>(key, fetchManagement, {
+  const liveKey = plan?.status === 'published' ? `/api/ads/google/management?planId=${encodeURIComponent(plan.id)}` : null
+  const key = liveKey && previewData ? `${liveKey}#${previewLabel ?? 'preview'}` : liveKey
+  const fetcher = previewData ? () => Promise.resolve(previewData) : fetchManagement
+  const { data, error, isLoading, mutate } = useSWR<ManagementResponse>(key, fetcher, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   })
@@ -209,7 +225,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   }, [isTr, management, performance])
 
   async function sendAction(action: ActionName, payload: Record<string, unknown> = {}) {
-    if (!plan || !management || pending) return
+    if (!plan || !management || pending || previewMode) return
     setPending(true)
     setActionError(null)
     setStatusMessage('')
@@ -251,6 +267,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   }
 
   function openConfirmation(next: Confirmation) {
+    if (previewMode) return
     setConfirmation(next)
     setAcknowledged(false)
     setBudgetAck(false)
@@ -418,10 +435,13 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
               <section className="flex flex-col gap-3 border-t border-border pt-5" aria-labelledby="ads-manager-activity-title">
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="ads-manager-activity-title" className="font-semibold">{isTr ? 'İşlem geçmişi' : 'Activity log'}</h3><p className="text-sm text-muted-foreground">{isTr ? 'Kullanıcı, onay, önce/sonra ve geri alınabilirlik bilgileri.' : 'Actor, approval, before/after, and reversibility are recorded.'}</p></div><Button type="button" size="sm" variant="ghost" onClick={() => void mutate()} disabled={isLoading || pending}><RefreshCw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geçmişi yenile' : 'Refresh log'}</Button></div>
                 {activity.length ? <ol className="flex flex-col gap-2">
-                  {activity.map((action) => <li key={action.id} className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex min-w-0 flex-col gap-1"><p className="font-medium">{actionLabel(action, isTr)}</p><p className="text-sm text-muted-foreground">{actionSummary(action, currency, isTr)}</p><p className="text-xs text-muted-foreground"><time dateTime={action.created_at}>{new Intl.DateTimeFormat(isTr ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(action.created_at))}</time> · {actionStatus(action, isTr)}</p>{action.failure_reason && action.failure_reason !== 'state_unverified' ? <p className="text-xs text-muted-foreground">{isTr ? 'Ayrıntı' : 'Detail'}: {action.failure_reason}</p> : null}</div>
-                    {action.status === 'applied' && action.reversible && action.after_state && !action.undone_of ? <Button type="button" size="sm" variant="outline" onClick={() => openConfirmation({ action: 'undo', payload: { undoActionId: action.id }, title: isTr ? 'Bu işlemi geri al?' : 'Undo this action?', description: isTr ? 'Önceki değer Google Ads’ten yeniden okunacak ve yalnızca hâlâ aynıysa geri yüklenecek.' : 'The prior value will be restored only if Google Ads still matches this action’s after-state.', before: actionSummary(action, currency, isTr) || actionLabel(action, isTr), after: isTr ? 'Önceki değer' : 'Previous value' })} disabled={pending}><RotateCcw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geri al' : 'Undo'}</Button> : null}
-                  </li>)}
+                  {activity.map((action) => {
+                    const wasUndone = actionWasUndone(action, activity)
+                    return <li key={action.id} className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex min-w-0 flex-col gap-1"><p className="font-medium">{actionLabel(action, isTr)}</p><p className="text-sm text-muted-foreground">{actionSummary(action, currency, isTr)}</p><p className="text-xs text-muted-foreground"><time dateTime={action.created_at}>{new Intl.DateTimeFormat(isTr ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(action.created_at))}</time> · {actionStatus(action, isTr, wasUndone)}</p>{action.failure_reason && action.failure_reason !== 'state_unverified' ? <p className="text-xs text-muted-foreground">{isTr ? 'Ayrıntı' : 'Detail'}: {action.failure_reason}</p> : null}</div>
+                      {action.status === 'applied' && action.reversible && action.after_state && !wasUndone ? <Button type="button" size="sm" variant="outline" onClick={() => openConfirmation({ action: 'undo', payload: { undoActionId: action.id }, title: isTr ? 'Bu işlemi geri al?' : 'Undo this action?', description: isTr ? 'Önceki değer Google Ads’ten yeniden okunacak ve yalnızca hâlâ aynıysa geri yüklenecek.' : 'The prior value will be restored only if Google Ads still matches this action’s after-state.', before: actionSummary(action, currency, isTr) || actionLabel(action, isTr), after: isTr ? 'Önceki değer' : 'Previous value' })} disabled={pending}><RotateCcw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geri al' : 'Undo'}</Button> : null}
+                    </li>
+                  })}
                 </ol> : <p className="text-sm text-muted-foreground">{isTr ? 'Henüz yönetim işlemi yok.' : 'No management actions yet.'}</p>}
               </section>
             </>

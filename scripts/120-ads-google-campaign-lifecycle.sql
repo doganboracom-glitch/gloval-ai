@@ -301,7 +301,7 @@ begin
          set google_campaign_status = 'REMOVED'
        where p.id = v_plan.id and p.user_id = p_user_id;
     end if;
-
+  end if;
 
   update public.ads_actions a set
     status = p_result,
