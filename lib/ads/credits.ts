@@ -43,7 +43,7 @@ export type AdsPublishBeginResult =
         | 'plan_not_found'
         | 'plan_changed'
         | 'currency_mismatch'
-        | 'budget_limit_exceeded'
+        | 'budget_sanity_ceiling_exceeded'
         | 'reservation_failed'
       balance: number
     }
@@ -157,7 +157,7 @@ export async function beginAdsGooglePublishE2(
     expectedVersion: number
     approvalId: string
     approvalHash: string
-    userDailyBudgetLimitMinor: number
+    userDailyBudgetLimitMinor: number | null
     approvalSummary: GoogleAdsApprovalSummary
   },
   client: AdsRpcClient = defaultClient(),
@@ -183,7 +183,7 @@ export async function beginAdsGooglePublishE2(
     return { ok: true, balance, alreadyCharged: Boolean(row.already_charged), chargedAmount: row.charged_amount ?? 0 }
   }
   if (row.state === 'insufficient_credits') return { ok: false, reason: 'insufficient_credits', balance }
-  if (row.state === 'budget_limit_exceeded') return { ok: false, reason: 'budget_limit_exceeded', balance }
+  if (row.state === 'budget_sanity_ceiling_exceeded') return { ok: false, reason: 'budget_sanity_ceiling_exceeded', balance }
   if (row.state === 'publish_in_progress' || row.state === 'already_published') {
     return { ok: false, reason: 'publish_in_progress', balance }
   }

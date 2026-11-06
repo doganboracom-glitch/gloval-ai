@@ -61,17 +61,42 @@ function hasOnlyCreateOrUpdate(operation: Record<string, unknown>): boolean {
     resourceOperation.updateMask.trim().length > 0
 }
 
-function mutateOperationCount(body: unknown): number | null {
+function hasOnlySafeRemove(operation: Record<string, unknown>, customerId: string): boolean {
+  if (Object.keys(operation).length !== 1) return false
+  const operationType = Object.keys(operation)[0]
+  if (operationType !== 'campaignOperation' && operationType !== 'adGroupCriterionOperation') return false
+  const resourceOperation = record(operation[operationType])
+  if (!resourceOperation || Object.keys(resourceOperation).length !== 1 || typeof resourceOperation.remove !== 'string') {
+    return false
+  }
+  if (operationType === 'campaignOperation') {
+    return new RegExp(`^customers/${customerId}/campaigns/\\d{1,20}$`).test(resourceOperation.remove)
+  }
+  return new RegExp(`^customers/${customerId}/adGroupCriteria/\\d{1,20}~\\d{1,20}$`).test(resourceOperation.remove)
+}
+
+function mutateOperationCount(body: unknown, path: string): number | null {
   const request = record(body)
   if (!request || request.partialFailure !== false || typeof request.validateOnly !== 'boolean') return null
   if (!Array.isArray(request.mutateOperations) || request.mutateOperations.length < 1 || request.mutateOperations.length > 100) {
     return null
   }
+  const customerId = /^customers\/(\d{6,20})\/googleAds:mutate$/.exec(path)?.[1]
+  if (!customerId) return null
   for (const operation of request.mutateOperations) {
     const value = record(operation)
     if (!value) return null
     const kinds = MUTATE_OPERATION_TYPES.filter((kind) => Object.hasOwn(value, kind))
-    if (kinds.length !== 1 || !hasOnlyCreateOrUpdate(value)) return null
+    if (kinds.length !== 1) return null
+    const hasRemove = Object.values(value).some((item) => {
+      const resourceOperation = record(item)
+      return Boolean(resourceOperation && Object.hasOwn(resourceOperation, 'remove'))
+    })
+    if (hasRemove) {
+      if (request.mutateOperations.length !== 1 || !hasOnlySafeRemove(value, customerId)) return null
+    } else if (!hasOnlyCreateOrUpdate(value)) {
+      return null
+    }
   }
   return request.mutateOperations.length
 }
@@ -187,8 +212,9 @@ export function createGoogleAdsApiTransport(input: {
 
     const isMutation = call.method === 'googleAds.mutate' || call.method === 'ads.mutateAds'
     const usesQuotaV2 = isMutation || call.method === 'geoTargetConstants.suggest'
-    const operationCount = call.method === 'googleAds.mutate'
-      ? mutateOperationCount(call.body)
+  const operationCount = call.method === 'googleAds.mutate'
+    ? mutateOperationCount(call.body, call.path)
+
       : call.method === 'ads.mutateAds'
         ? adMutateOperationCount(call.body as GoogleAdsAdMutateRequest)
         : 1
