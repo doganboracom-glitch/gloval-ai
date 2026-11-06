@@ -1,5 +1,4 @@
--- DRAFT ONLY: review and apply explicitly through the Supabase MCP. This file has
--- not been run against the live database. Runtime code calls the v2 RPCs below.
+-- DRAFT ONLY: review and apply explicitly through the Supabase MCP. This file has not been run against the live database; runtime code calls the v2 RPCs below.
 
 BEGIN;
 
@@ -459,12 +458,13 @@ begin
 
   if v_denial is not null then
     insert into public.ads_actions (
-      user_id, plan_id, connection_id, actor, action_type, target, before_state,
+      user_id, plan_id, connection_id, actor, action_type, target, before_state, after_state,
       reversible, status, idempotency_key, expected_version, failure_reason, applied_at
     ) values (
       p_user_id, p_plan_id, p_connection_id, 'system', 'google_ads_policy_blocked',
       jsonb_build_object('operation', 'publish_attempt_quota'), '{}'::jsonb,
-      false, 'failed', p_request_id, v_plan.version, v_denial, now()
+      jsonb_build_object('reason_code', v_denial), false, 'failed', p_request_id,
+      v_plan.version, v_denial, now()
     );
     return query select v_denial, null::uuid; return;
   end if;

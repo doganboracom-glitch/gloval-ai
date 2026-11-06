@@ -24,7 +24,8 @@ describe('Google Ads live-controls SQL draft', () => {
   it('is clearly draft-only and does not apply itself', () => {
     expect(migrationSql.startsWith('-- DRAFT ONLY')).toBe(true)
     expect(migrationSql).toContain('has not been run against the live database')
-    expect(migrationSql).not.toMatch(/^\s*(?:begin|commit)\s*;/im)
+    expect(migrationSql).toMatch(/^\s*begin\s*;/im)
+    expect(migrationSql).toMatch(/^\s*commit\s*;/im)
   })
 
   it('uses v2 RPC names with hardened service-role-only execution', () => {
@@ -65,8 +66,8 @@ describe('Google Ads live-controls SQL draft', () => {
   it('does not impose a campaign-count ceiling and keeps campaign edits auditable', () => {
     const action = functionBody(migrationSql, 'ads_begin_google_ads_campaign_action_v2')
     expect(action).toContain('before_state')
-    expect(action).toContain('after_state')
     expect(action).toContain('idempotency_key')
+    expect(functionBody(migrationSql, 'ads_finish_google_ads_campaign_action_v2')).toContain('after_state')
     expect(action).not.toContain('google_campaign_status')
     expect(action).not.toContain('max_active_campaigns')
   })

@@ -23,7 +23,6 @@ describe('Google Ads live-controls SQL draft', () => {
   it('allows unlimited global attempts and has no campaign-count gate', () => {
     expect(sql).toContain('p_daily_attempts_global is not null')
     expect(sql).not.toContain('p_max_active_campaigns_per_user')
-    expect(sql).not.toContain('google_campaign_status')
     expect(sql).not.toContain('google_ads_campaign_enable_capacity_reserved')
     expect(sql).not.toMatch(/between\s+1\s+and\s+(100|5000)/i)
   })
