@@ -26,7 +26,7 @@ export const ADS_ENV = {
   googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
-  googleAdsBudgetSanityCeilingMinor: 'GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR',
+  googleAdsPublishDailyBudgetCapsMinor: 'GOOGLE_ADS_PUBLISH_DAILY_BUDGET_CAPS_MINOR',
   googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
 } as const
 
@@ -142,13 +142,19 @@ export function resolveGoogleAdsValidateOnlyTestEnabled(env: Env = process.env):
 }
 
 /** Optional technical safety ceiling. No value means no configured ceiling. */
-export function resolveGoogleAdsBudgetSanityCeilingMinor(env: Env = process.env): number | null {
-  const raw = env[ADS_ENV.googleAdsBudgetSanityCeilingMinor]?.trim()
+export function resolveGoogleAdsBudgetSanityCeilingMinor(currency: string, env: Env = process.env): number | null {
+  const raw = env[ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]?.trim()
   if (!raw) return null
-  if (!/^[1-9]\d{0,15}$/.test(raw)) throw new Error('invalid_google_ads_budget_sanity_ceiling')
-  const amount = Number(raw)
-  if (!Number.isSafeInteger(amount)) throw new Error('invalid_google_ads_budget_sanity_ceiling')
-  return amount
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('invalid_google_ads_budget_currency')
+  const ceilings = new Map<string, number>()
+  for (const entry of raw.split(',')) {
+    const match = entry.trim().match(/^([A-Z]{3})=([1-9]\d{0,15})$/)
+    if (!match || ceilings.has(match[1])) throw new Error('invalid_google_ads_budget_sanity_ceiling')
+    const amount = Number(match[2])
+    if (!Number.isSafeInteger(amount)) throw new Error('invalid_google_ads_budget_sanity_ceiling')
+    ceilings.set(match[1], amount)
+  }
+  return ceilings.get(currency) ?? null
 }
 
 export type GoogleAdsOAuthSettingsResult =

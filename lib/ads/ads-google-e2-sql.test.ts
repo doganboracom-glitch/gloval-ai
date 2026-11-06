@@ -145,13 +145,13 @@ async function newConnection(userId: string): Promise<{ id: string; customerId: 
   return { id: rows[0].id, customerId }
 }
 
-async function newDraft(userId: string, connectionId: string) {
-  const { rows } = await db.query<{ state: string; plan_id: string; plan_version: number }>(
-    `select * from public.ads_create_google_ads_plan_draft_e2(
-      $1, $2, $3::jsonb, 'Local Search Studio', 'services', 'en', 15000, 90000, 'USD'
-    )`,
-    [userId, connectionId, JSON.stringify(PLAN)],
-  )
+  async function newDraft(userId: string, connectionId: string, dailyBudgetMinor = 15000, budgetCapMinor = 90000) {
+    const { rows } = await db.query<{ state: string; plan_id: string; plan_version: number }>(
+      `select * from public.ads_create_google_ads_plan_draft_e2(
+        $1, $2, $3::jsonb, 'Local Search Studio', 'services', 'en', $4, $5, 'USD'
+      )`,
+      [userId, connectionId, JSON.stringify(PLAN), dailyBudgetMinor, budgetCapMinor],
+    )
   return rows[0]
 }
 
@@ -165,7 +165,7 @@ async function approvePlan(input: {
   expectedVersion?: number
   dailyBudgetMinor?: number
   budgetCapMinor?: number
-  userDailyBudgetLimitMinor?: number
+  userDailyBudgetLimitMinor?: number | null
   approvalSummary?: Record<string, unknown>
 }) {
   const { rows } = await db.query<{ state: string; approval_id: string | null; plan_version: number | null }>(
@@ -184,7 +184,7 @@ async function approvePlan(input: {
       input.expectedVersion ?? 1,
       input.dailyBudgetMinor ?? 15000,
       input.budgetCapMinor ?? 90000,
-      input.userDailyBudgetLimitMinor ?? 200000,
+      input.userDailyBudgetLimitMinor === undefined ? 200000 : input.userDailyBudgetLimitMinor,
     ],
   )
   return rows[0]
@@ -413,11 +413,10 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     expect(afterDelete.rows[0]).toEqual({ connections: 0, plans: 0, approvals: 0, reservations: 0 })
   })
 
-  it('allows a campaign-level daily cap above the user aggregate daily limit', async () => {
+  it('approves and publishes an uncapped per-campaign budget without applying a user aggregate ceiling', async () => {
     const userId = await newUser()
     const connection = await newConnection(userId)
-    const draft = await newDraft(userId, connection.id)
-    await db.query('update public.ads_plans set budget_cap_minor = 300000 where id = $1', [draft.plan_id])
+    const draft = await newDraft(userId, connection.id, 150000, 300000)
 
     const approval = await approvePlan({
       userId,
@@ -426,14 +425,22 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       customerId: connection.customerId,
       declarationConfirmed: true,
       termsAccepted: true,
-      expectedVersion: 2,
-      dailyBudgetMinor: 15000,
+      dailyBudgetMinor: 150000,
       budgetCapMinor: 300000,
-      userDailyBudgetLimitMinor: 20000,
-      approvalSummary: { currency: 'USD', dailyBudgetMinor: 15000, budgetCapMinor: 300000 },
+      userDailyBudgetLimitMinor: null,
+      approvalSummary: { currency: 'USD', dailyBudgetMinor: 150000, budgetCapMinor: 300000 },
     })
+    expect(approval).toMatchObject({ state: 'approved', plan_version: 1 })
 
-    expect(approval).toMatchObject({ state: 'approved', plan_version: 2 })
+    const requestId = '123e4567-e89b-42d3-a456-426614174098'
+    await db.query('select * from public.ads_record_google_ads_validation_e2($1, $2, 1, $3, $4)', [
+      userId, draft.plan_id, approval.approval_id, PLAN_HASH,
+    ])
+    const publish = await db.query<{ state: string }>(`select * from public.ads_begin_google_ads_publish_e2(
+      $1::uuid, $2::uuid, $3::uuid, 1::integer, $4::uuid, $5::text,
+      null::integer, 15000::integer, 150000000::bigint, 2::smallint
+    )`, [userId, draft.plan_id, requestId, approval.approval_id, PLAN_HASH])
+    expect(publish.rows[0].state).toBe('started')
   })
 
   it('does not replay a reconciling publish and releases its credit hold without charging', async () => {
@@ -595,15 +602,16 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     const target = { status: 'ENABLED' }
     const before = { status: 'PAUSED' }
     const beginAction = () => db.query<{ state: string; action_id: string }>(
-      `select * from public.ads_begin_google_ads_campaign_action_e2(
-        $1, $2, $3, 'google_ads_campaign_status_update', 1, $4, $5::jsonb, $6::jsonb, 200000, true
+      `select * from public.ads_begin_google_ads_management_action_v4(
+        $1::uuid, $2::uuid, $3::uuid, 'google_ads_campaign_status_update', 1::integer, $4::text,
+        $5::jsonb, $6::jsonb, 200000::integer, false, null::integer, true, null::uuid
       )`,
       [userId, draft.plan_id, actionId, PLAN_HASH, JSON.stringify(target), JSON.stringify(before)],
     )
     await expect(beginAction()).resolves.toMatchObject({ rows: [{ state: 'approved', action_id: actionId }] })
     await expect(beginAction()).resolves.toMatchObject({ rows: [{ state: 'existing', action_id: actionId }] })
     await expect(db.query(
-      `select * from public.ads_finish_google_ads_campaign_action_e2($1, $2, 'applied', $3::jsonb, null)`,
+      `select * from public.ads_finish_google_ads_management_action_v4($1, $2, 'applied', $3::jsonb, null)`,
       [userId, actionId, JSON.stringify({ status: 'ENABLED' })],
     )).resolves.toMatchObject({ rows: [{ state: 'applied' }] })
 
@@ -619,7 +627,7 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     expect(plan.rows[0].google_campaign_status).toBe('ENABLED')
   })
 
-  it('enforces budget guardrails, append-only undo, and permanent archive state', async () => {
+  it('requires exact confirmation for high-risk budgets, keeps increases uncapped, and preserves undo/archive', async () => {
     const userId = await newUser()
     const connection = await newConnection(userId)
     const draft = await newDraft(userId, connection.id)
@@ -644,51 +652,83 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     ])
 
     const before = { campaignStatus: 'PAUSED', dailyBudgetMicros: '150000000' }
-    const beginManagementAction = (actionId: string, target: Record<string, unknown>, state: Record<string, unknown>, undoOf: string | null = null) =>
-      db.query<{ state: string; action_id: string }>(
-        `select * from public.ads_begin_google_ads_management_action_v3(
-          $1::uuid, $2::uuid, $3::uuid, $4::text, 1::integer, $5::text,
-          $6::jsonb, $7::jsonb, 200000::integer, true, $8::uuid
-        )`,
-        [userId, draft.plan_id, actionId, 'google_ads_budget_update', PLAN_HASH, JSON.stringify(target), JSON.stringify(state), undoOf],
-      )
+    const beginManagementAction = (
+      actionId: string,
+      target: Record<string, unknown>,
+      state: Record<string, unknown>,
+      undoOf: string | null = null,
+      riskRequired = false,
+      riskAmount: number | null = null,
+      safetyCeiling: number | null = 200000,
+    ) => db.query<{ state: string; action_id: string }>(
+      `select * from public.ads_begin_google_ads_management_action_v4(
+        $1::uuid, $2::uuid, $3::uuid, 'google_ads_budget_update', 1::integer, $4::text,
+        $5::jsonb, $6::jsonb, $7::integer, $8::boolean, $9::integer, true, $10::uuid
+      )`,
+      [userId, draft.plan_id, actionId, PLAN_HASH, JSON.stringify(target), JSON.stringify(state), safetyCeiling, riskRequired, riskAmount, undoOf],
+    )
 
-    const overCap = await beginManagementAction(
-      '123e4567-e89b-42d3-a456-426614174086',
+    const stepIncreaseId = '123e4567-e89b-42d3-a456-426614174085'
+    const stepIncrease = await beginManagementAction(
+      stepIncreaseId,
       { dailyBudgetMinor: 20000, dailyBudgetMicros: '200000000' },
       before,
     )
-    expect(overCap.rows[0].state).toBe('budget_increase_limit_exceeded')
+    expect(stepIncrease.rows[0].state).toBe('approved')
+    await db.query(`select * from public.ads_finish_google_ads_management_action_v4(
+      $1::uuid, $2::uuid, 'applied', $3::jsonb, null
+    )`, [userId, stepIncreaseId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' })])
 
-    const increaseId = '123e4567-e89b-42d3-a456-426614174085'
+    const highTarget = { dailyBudgetMinor: 100000, dailyBudgetMicros: '1000000000' }
+    const missingRisk = await beginManagementAction(
+      '123e4567-e89b-42d3-a456-426614174086', highTarget,
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+    )
+    expect(missingRisk.rows[0].state).toBe('risk_confirmation_required')
+
+    const mismatch = await beginManagementAction(
+      '123e4567-e89b-42d3-a456-426614174084',
+      { ...highTarget, riskConfirmedAmountMinor: 100000 },
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+      null, true, 99999,
+    )
+    expect(mismatch.rows[0].state).toBe('risk_confirmation_mismatch')
+
+    const blockedByTechnicalCeiling = await beginManagementAction(
+      '123e4567-e89b-42d3-a456-426614174083', highTarget,
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+      null, false, null, 50000,
+    )
+    expect(blockedByTechnicalCeiling.rows[0].state).toBe('budget_sanity_ceiling_exceeded')
+
+    const increaseId = '123e4567-e89b-42d3-a456-426614174080'
     const increase = await beginManagementAction(
       increaseId,
-      { dailyBudgetMinor: 18750, dailyBudgetMicros: '187500000' },
-      before,
+      { ...highTarget, riskConfirmedAmountMinor: 100000 },
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+      null, true, 100000,
     )
     expect(increase.rows[0].state).toBe('approved')
-    await db.query(`select * from public.ads_finish_google_ads_management_action_v3(
+    await db.query(`select * from public.ads_finish_google_ads_management_action_v4(
       $1::uuid, $2::uuid, 'applied', $3::jsonb, null
-    )`, [userId, increaseId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: '187500000' })])
-
-    const cooldown = await beginManagementAction(
-      '123e4567-e89b-42d3-a456-426614174084',
-      { dailyBudgetMinor: 20000, dailyBudgetMicros: '200000000' },
-      { campaignStatus: 'PAUSED', dailyBudgetMicros: '187500000' },
+    )`, [userId, increaseId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: '1000000000' })])
+    const planAfterIncrease = await db.query<{ budget_cap_minor: number; google_daily_budget_minor: number }>(
+      'select budget_cap_minor, google_daily_budget_minor from public.ads_plans where id = $1',
+      [draft.plan_id],
     )
-    expect(cooldown.rows[0].state).toBe('budget_cooldown_active')
+    expect(planAfterIncrease.rows[0]).toEqual({ budget_cap_minor: 90000, google_daily_budget_minor: 100000 })
 
-    const undoId = '123e4567-e89b-42d3-a456-426614174083'
+    const undoId = '123e4567-e89b-42d3-a456-426614174079'
     const undo = await beginManagementAction(
       undoId,
-      { dailyBudgetMinor: 15000, dailyBudgetMicros: '150000000' },
-      { campaignStatus: 'PAUSED', dailyBudgetMicros: '187500000' },
+      { dailyBudgetMinor: 20000, dailyBudgetMicros: '200000000' },
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '1000000000' },
       increaseId,
     )
     expect(undo.rows[0].state).toBe('approved')
-    await db.query(`select * from public.ads_finish_google_ads_management_action_v3(
+    await db.query(`select * from public.ads_finish_google_ads_management_action_v4(
       $1::uuid, $2::uuid, 'applied', $3::jsonb, null
-    )`, [userId, undoId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: '150000000' })])
+    )`, [userId, undoId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' })])
     const undoAudit = await db.query<{ original_status: string; undo_status: string; undone_of: string }>(`
       select original.status as original_status, undo.status as undo_status, undo.undone_of
         from public.ads_actions original
@@ -697,15 +737,15 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     `, [increaseId, undoId])
     expect(undoAudit.rows[0]).toEqual({ original_status: 'applied', undo_status: 'applied', undone_of: increaseId })
 
-    const archiveId = '123e4567-e89b-42d3-a456-426614174082'
+    const archiveId = '123e4567-e89b-42d3-a456-426614174078'
     const archive = await db.query<{ state: string }>(`
-      select * from public.ads_begin_google_ads_management_action_v3(
+      select * from public.ads_begin_google_ads_management_action_v4(
         $1::uuid, $2::uuid, $3::uuid, 'google_ads_campaign_archive', 1::integer, $4::text,
-        $5::jsonb, $6::jsonb, 200000::integer, true, null::uuid
+        $5::jsonb, $6::jsonb, 200000::integer, false, null::integer, true, null::uuid
       )
     `, [userId, draft.plan_id, archiveId, PLAN_HASH, JSON.stringify({ campaignStatus: 'REMOVED' }), JSON.stringify({ campaignStatus: 'PAUSED' })])
     expect(archive.rows[0].state).toBe('approved')
-    await db.query(`select * from public.ads_finish_google_ads_management_action_v3(
+    await db.query(`select * from public.ads_finish_google_ads_management_action_v4(
       $1::uuid, $2::uuid, 'applied', $3::jsonb, null
     )`, [userId, archiveId, JSON.stringify({ campaignStatus: 'REMOVED' })])
     const archived = await db.query<{ google_campaign_status: string }>(

@@ -535,8 +535,7 @@ begin
         return query select 'risk_confirmation_required'::text; return;
       end if;
       update public.ads_plans p
-         set google_daily_budget_minor = v_budget,
-             budget_cap_minor = greatest(p.budget_cap_minor, v_budget)
+         set google_daily_budget_minor = v_budget
        where p.id = v_plan.id and p.user_id = p_user_id;
     elsif v_action.action_type = 'google_ads_campaign_status_update' then
       v_status := v_action.target->>'status';
@@ -569,6 +568,8 @@ begin
 end
 $$;
 
+drop function if exists public.ads_begin_google_ads_campaign_action_e2(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean);
+drop function if exists public.ads_finish_google_ads_campaign_action_e2(uuid, uuid, text, jsonb, text);
 drop function if exists public.ads_begin_google_ads_management_action_v3(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, uuid);
 drop function if exists public.ads_finish_google_ads_management_action_v3(uuid, uuid, text, jsonb, text);
 

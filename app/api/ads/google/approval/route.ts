@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   let userDailyBudgetCapMinor: number | null
   try {
-    userDailyBudgetCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
+    userDailyBudgetCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor(connection.currency_code)
   } catch {
     return googleAdsJson({ ok: false, error: 'configuration_missing' }, 503)
   }

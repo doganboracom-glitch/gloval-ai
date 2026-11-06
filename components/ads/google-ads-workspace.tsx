@@ -263,8 +263,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-budget_sanity_ceiling_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
-  budget_limit_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
+    budget_sanity_ceiling_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -292,8 +291,7 @@ budget_sanity_ceiling_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik 
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-budget_sanity_ceiling_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
-  budget_limit_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
+    budget_sanity_ceiling_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -513,6 +511,7 @@ export function GoogleAdsWorkspace({
   const [form, setForm] = useState<PlanForm>(() => defaultPlanForm(initialAddress))
   const [dailyBudget, setDailyBudget] = useState('1000')
   const [budgetCap, setBudgetCap] = useState('1000')
+  const [aiRecommendedBudgetMinor, setAiRecommendedBudgetMinor] = useState<number | null>(null)
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -628,6 +627,7 @@ export function GoogleAdsWorkspace({
       }
       setPlanId(null)
       setForm(formFromPlan(suggestion.plan as Record<string, unknown>))
+      setAiRecommendedBudgetMinor(suggestion.budget?.dailyMinor ?? null)
       setDailyBudget(suggestion.budget ? minorToMajor(suggestion.budget.dailyMinor, currency) : '')
       setBudgetCap(suggestion.budget ? minorToMajor(suggestion.budget.capMinor, currency) : '')
       setEuPoliticalAdvertising('no')
@@ -687,6 +687,7 @@ export function GoogleAdsWorkspace({
     setAiFields(new Set())
     setNotices([])
     setForm(defaultPlanForm(initialAddress))
+    setAiRecommendedBudgetMinor(null)
     setDailyBudget('1000')
     setBudgetCap('1000')
     setEuPoliticalAdvertising('no')
@@ -706,6 +707,8 @@ export function GoogleAdsWorkspace({
     setPlanId(plan.id)
     setConnectionId(plan.connection_id ?? '')
     setForm(formFromPlan(plan.plan))
+    const storedRecommendation = Number(plan.plan.aiRecommendedDailyBudgetMinor)
+    setAiRecommendedBudgetMinor(Number.isSafeInteger(storedRecommendation) && storedRecommendation > 0 ? storedRecommendation : null)
     setDailyBudget(minorToMajor(plan.daily_budget_minor, plan.currency))
     setBudgetCap(minorToMajor(plan.budget_cap_minor, plan.currency))
     setEuPoliticalAdvertising(plan.eu_political_advertising ?? 'no')
@@ -728,7 +731,10 @@ export function GoogleAdsWorkspace({
       if (!dailyBudgetMinor || !budgetCapMinor) throw new WorkspaceApiError('invalid_budget')
       const body = {
         connectionId: selectedConnection.id,
-        plan: planFromForm(form),
+        plan: {
+          ...planFromForm(form),
+          ...(aiRecommendedBudgetMinor === null ? {} : { aiRecommendedDailyBudgetMinor: aiRecommendedBudgetMinor }),
+        },
         dailyBudgetMinor,
         budgetCapMinor,
         ...(selectedPlan ? { planId: selectedPlan.id, expectedVersion: selectedPlan.version } : {}),
