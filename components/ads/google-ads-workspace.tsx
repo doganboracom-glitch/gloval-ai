@@ -28,6 +28,8 @@ import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
 import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
+import { GoogleAdsSetupJourney } from '@/components/ads/google-ads-setup-journey'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 
 type PlanRow = {
   id: string
@@ -405,11 +407,19 @@ function TextAreaField({
 
 export function GoogleAdsWorkspace({
   enabled,
+  publishEnabled = true,
+  killSwitchEnabled = false,
+  initialTermsAccepted = false,
+  termsAcceptedAt = null,
   connections,
   initialAddress,
   initialPlanId = null,
 }: {
   enabled: boolean
+  publishEnabled?: boolean
+  killSwitchEnabled?: boolean
+  initialTermsAccepted?: boolean
+  termsAcceptedAt?: string | null
   connections: GoogleAdsConnectionView[]
   initialAddress: string | null
   initialPlanId?: string | null
@@ -526,7 +536,7 @@ export function GoogleAdsWorkspace({
   const [budgetCap, setBudgetCap] = useState('1000')
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
-  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(initialTermsAccepted)
   const [enableBudgetAcknowledged, setEnableBudgetAcknowledged] = useState(false)
   const [enableBillingAcknowledged, setEnableBillingAcknowledged] = useState(false)
   const [managementBudget, setManagementBudget] = useState('')
@@ -562,6 +572,18 @@ export function GoogleAdsWorkspace({
   const management = managementData?.snapshot
   const isEditable = !selectedPlan || ['draft', 'failed', 'approved'].includes(selectedPlan.status)
   const selectedCurrency = selectedPlan?.currency ?? selectedConnection?.currency ?? 'TRY'
+  const journeyStage = availableConnections.length === 0
+    ? 'no-connection'
+    : plans.some((plan) => plan.status === 'published')
+      ? 'published'
+      : plans.some((plan) => plan.status === 'approved' || plan.status === 'publishing' || plan.status === 'reconciling')
+        ? 'approved'
+        : plans.length > 0
+          ? 'draft'
+          : 'connected'
+  const currentBudgetMajor = management ? Number(microsToMajor(management.dailyBudgetMicros, selectedCurrency)) : 0
+  const proposedBudgetMajor = Number(managementBudget || (management ? microsToMajor(management.dailyBudgetMicros, selectedCurrency) : '0'))
+  const isBudgetIncrease = Number.isFinite(proposedBudgetMajor) && proposedBudgetMajor > currentBudgetMajor
 
   const summary = useMemo(() => {
     if (!selectedPlan) return null
@@ -881,6 +903,21 @@ export function GoogleAdsWorkspace({
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="google-ads-workspace-title">
+      <GoogleAdsSetupJourney stage={journeyStage} onStartPlan={() => startManual(initialAddress || form.finalUrl)} />
+      {killSwitchEnabled ? (
+        <Alert role="status">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{isTr ? 'מתג העצירה של פרסום Google Ads פעיל' : 'The Google Ads publishing kill switch is on'}</AlertTitle>
+          <AlertDescription>{isTr ? 'פרסום חדש, הפעלה והגדלת תקציב חסומים. צפייה, השהיה והפחתת תקציב נשארות זמינות.' : 'New publishes, campaign enabling, and budget increases are blocked. Viewing, pausing, and budget decreases remain available.'}</AlertDescription>
+        </Alert>
+      ) : null}
+      {!publishEnabled ? (
+        <Alert role="status">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{isTr ? 'פרסום Google Ads אינו זמין כרגע' : 'Google Ads publishing is currently unavailable'}</AlertTitle>
+          <AlertDescription>{isTr ? 'אפשר להמשיך להכין טיוטות. חיבור החשבון והפרסום נשלטים בנפרד.' : 'You can continue preparing drafts. Account access and publishing are controlled separately.'}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -936,7 +973,7 @@ export function GoogleAdsWorkspace({
           />
 
           {editorOpen ? (
-            <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+            <div id="google-ads-plan-editor" className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
               <Card>
                 <CardHeader>
                   <CardTitle>{copy.builder}</CardTitle>
@@ -1109,7 +1146,7 @@ export function GoogleAdsWorkspace({
               <CardContent><p className="text-sm text-muted-foreground">{copy.noSelection}</p></CardContent>
             </Card>
           ) : (
-            <Card>
+            <Card id="google-ads-publish-review">
               <CardHeader>
                 <CardTitle>{copy.reviewTitle}</CardTitle>
                 <CardDescription>{statusText(selectedPlan.status, isTr)} · v{selectedPlan.version}</CardDescription>
@@ -1141,10 +1178,17 @@ export function GoogleAdsWorkspace({
                         <input id="google-ads-eu-confirm" type="checkbox" checked={confirmedEu} onChange={(event) => setConfirmedEu(event.target.checked)} className="size-4 rounded border-input accent-primary" />
                         <FieldLabel htmlFor="google-ads-eu-confirm">{copy.confirmEu}</FieldLabel>
                       </Field>
-                      <Field orientation="horizontal">
-                        <input id="google-ads-terms-confirm" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                        <FieldLabel htmlFor="google-ads-terms-confirm">{copy.acceptTerms}</FieldLabel>
-                      </Field>
+                      {acceptedTerms ? (
+                        <p role="status" className="text-sm leading-relaxed text-muted-foreground">
+                          {isTr ? 'תנאי הפרסום אושרו' : 'Publishing terms accepted'} · v{GOOGLE_ADS_PUBLISH_TERMS_VERSION}
+                          {termsAcceptedAt ? ` · ${new Date(termsAcceptedAt).toLocaleDateString(isTr ? 'tr-TR' : 'en-US')}` : ''}
+                        </p>
+                      ) : (
+                        <Field orientation="horizontal">
+                          <input id="google-ads-terms-confirm" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="size-4 rounded border-input accent-primary" />
+                          <FieldLabel htmlFor="google-ads-terms-confirm">{copy.acceptTerms}</FieldLabel>
+                        </Field>
+                      )}
                       <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
                         <Link className="text-primary underline underline-offset-4" href="/yasal/kullanim-kosullari">{reviewCopy.termsLink}</Link>
                         <span aria-hidden="true">·</span>
@@ -1160,7 +1204,7 @@ export function GoogleAdsWorkspace({
                 {selectedPlan.status === 'approved' ? (
                   <div className="flex flex-col gap-3">
                     <p className="text-sm text-muted-foreground">{copy.approved}</p>
-                    <Button type="button" variant="outline" onClick={() => void runPublish('validate')} disabled={!selectedPlan.approval_hash || pending !== null || selectedPlan.validation_hash === selectedPlan.approval_hash}>
+                      <Button type="button" variant="outline" onClick={() => void runPublish('validate')} disabled={!publishEnabled || !selectedPlan.approval_hash || pending !== null || selectedPlan.validation_hash === selectedPlan.approval_hash}>
                       {pending === 'validate' ? copy.validating : copy.validate}
                     </Button>
                     <Button
@@ -1187,7 +1231,7 @@ export function GoogleAdsWorkspace({
                           <Button type="button" variant="outline" onClick={() => { setShowPublishReview(false); setFinalPublishConfirmed(false) }} disabled={pending !== null}>
                             {copy.reviewBack}
                           </Button>
-                          <Button type="button" onClick={() => void runPublish('publish')} disabled={!finalPublishConfirmed || pending !== null}>
+                          <Button type="button" onClick={() => void runPublish('publish')} disabled={!publishEnabled || killSwitchEnabled || !finalPublishConfirmed || pending !== null}>
                             {pending === 'publish' ? copy.publishing : copy.publish}
                           </Button>
                         </div>
@@ -1239,7 +1283,7 @@ export function GoogleAdsWorkspace({
                           <Button
                             type="button"
                             onClick={() => void applyAction('enable')}
-                            disabled={pending !== null || management.reviewStatus !== 'approved' || !enableBudgetAcknowledged || (management.paymentMethodWarning && !enableBillingAcknowledged)}
+                            disabled={pending !== null || killSwitchEnabled || management.reviewStatus !== 'approved' || !enableBudgetAcknowledged || (management.paymentMethodWarning && !enableBillingAcknowledged)}
                           >
                             {copy.enable}
                           </Button>
@@ -1271,7 +1315,7 @@ export function GoogleAdsWorkspace({
                       <FieldGroup>
                         <TextField id="google-ads-management-budget" label={`${copy.daily} (${selectedCurrency})`} value={managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)} onChange={setManagementBudget} type="number" />
                         <p className="text-xs text-muted-foreground">{copy.before}: {selectedCurrency} {microsToMajor(management.dailyBudgetMicros, selectedCurrency)} · {copy.after}: {selectedCurrency} {managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)}</p>
-                        <Button type="button" variant="outline" onClick={() => void applyAction('budget')} disabled={pending !== null}>{pending === 'budget' ? copy.saving : copy.apply}</Button>
+                        <Button type="button" variant="outline" onClick={() => void applyAction('budget')} disabled={pending !== null || (killSwitchEnabled && isBudgetIncrease)}>{pending === 'budget' ? copy.saving : copy.apply}</Button>
                       </FieldGroup>
                       <FieldGroup>
                         <TextAreaField id="google-ads-management-headlines" label={copy.headlines} value={managementHeadlines || management.headlines.join('\n')} onChange={setManagementHeadlines} rows={3} />

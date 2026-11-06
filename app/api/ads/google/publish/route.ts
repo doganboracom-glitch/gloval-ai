@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 
   const result = await publishGoogleAdsPlan({
     userId: gate.userId,
+    accessIdentity: gate.identity,
     planId: input.data.planId,
     expectedVersion: input.data.expectedVersion,
     approvalHash: input.data.approvalHash,

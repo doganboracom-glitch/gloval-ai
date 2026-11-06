@@ -1,11 +1,9 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
 import {
-  googleAdsConnectAllowed,
   googleAdsFeatureEnabled,
   googleAdsJson,
-  googleAdsUserId,
+  googleAdsRequestAccess,
 } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
@@ -20,15 +18,14 @@ const NOT_ELIGIBLE = { eligible: false } as const
 export async function GET() {
   if (!googleAdsFeatureEnabled()) return googleAdsJson(NOT_ELIGIBLE)
 
-  let userId: string | null
+  let access: Awaited<ReturnType<typeof googleAdsRequestAccess>>
   try {
-    userId = await googleAdsUserId()
+    access = await googleAdsRequestAccess()
   } catch {
     return googleAdsJson(NOT_ELIGIBLE)
   }
-  if (!userId || !googleAdsConnectAllowed(userId) || !resolveGoogleAdsPublishAccess(userId)) {
-    return googleAdsJson(NOT_ELIGIBLE)
-  }
+  const userId = access?.userId
+  if (!access || !userId || !access.decision.canPublish) return googleAdsJson(NOT_ELIGIBLE)
   if (!checkRateLimit(`google-ads-handoff-access:${userId}`, 60, 60_000).allowed) return googleAdsJson(NOT_ELIGIBLE)
 
   const { data, error } = await createAdminClient()

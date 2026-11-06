@@ -7,7 +7,7 @@ import { createGoogleAdsProvider } from '@/lib/ads/providers/google-ads-provider
 import { GOOGLE_OAUTH_CALLBACK_COOKIE_PATH, createGoogleOAuthState, createGooglePkcePair, googleOAuthCookieName, hashGoogleOAuthState } from '@/lib/ads/google-oauth-state'
 import { googleOAuthTokenContext } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsOAuthSettings } from '@/lib/ads/env'
-import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsJson, googleAdsRedirect, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsFeatureEnabled, googleAdsJson, googleAdsRedirect, googleAdsRequestAccess, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,9 +15,10 @@ export async function POST(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
   if (!isSameOriginGoogleAdsPost(request)) return googleAdsJson({ error: 'csrf_failed' }, 403)
 
-  const userId = await googleAdsUserId()
+  const access = await googleAdsRequestAccess()
+  const userId = access?.userId ?? null
   if (!userId) return NextResponse.redirect(new URL('/auth/login?next=/ads/dashboard', request.url), 303)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
+  if (!access?.decision.canConnect) return googleAdsJson({ error: 'not_found' }, 404)
 
   const rate = checkRateLimit(`google-ads-connect:${userId}`, 3, 60_000)
   if (!rate.allowed) return googleAdsRedirect(request, { google: 'rate_limited' })

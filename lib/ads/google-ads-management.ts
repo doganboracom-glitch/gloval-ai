@@ -2,7 +2,14 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
-import { resolveGoogleAdsPublishDailyBudgetCapMinor, resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import {
+  resolveGoogleAdsPublishDailyBudgetCapMinor,
+  resolveGoogleAdsPublishAccess,
+  resolveGoogleAdsKillSwitch,
+  type GoogleAdsAccessIdentity,
+} from '@/lib/ads/env'
+import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
+import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText } from '@/lib/ads/planner'
 import { createGoogleAdsActionApprovalHash, hashGoogleAdsApprovalPayload } from '@/lib/ads/google-ads-approval'
@@ -39,6 +46,7 @@ type ManagementPlan = {
 
 type ActionInput = {
   userId: string
+  accessIdentity?: GoogleAdsAccessIdentity
   planId: string
   actionId: string
   expectedVersion: number
@@ -84,8 +92,8 @@ async function loadManagementPlan(userId: string, planId: string): Promise<Manag
   return data as ManagementPlan
 }
 
-function assertAccess(userId: string) {
-  if (!resolveGoogleAdsPublishAccess(userId)) throw new GoogleAdsError('publish_disabled')
+function assertAccess(userId: string, identity?: GoogleAdsAccessIdentity) {
+  if (!resolveGoogleAdsPublishAccess(userId, process.env, identity)) throw new GoogleAdsError('publish_disabled')
 }
 
 async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
@@ -124,12 +132,17 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
   }
 }
 
-export async function getGoogleAdsManagementSnapshot(userId: string, planId: string) {
-  assertAccess(userId)
+export async function getGoogleAdsManagementSnapshot(
+  userId: string,
+  planId: string,
+  accessIdentity?: GoogleAdsAccessIdentity,
+) {
+  assertAccess(userId, accessIdentity)
   const plan = await loadManagementPlan(userId, planId)
   return withGoogleAdsPublishAccess({
     userId,
     connectionId: plan.connection_id as string,
+    identity: accessIdentity,
     action: (access) => readSnapshot(access, plan).then(({ snapshot }) => snapshot),
   })
 }
@@ -162,7 +175,7 @@ function validateAdCopy(headlines: string[], descriptions: string[]) {
 }
 
 export async function applyGoogleAdsManagementAction(input: ActionInput) {
-  assertAccess(input.userId)
+  assertAccess(input.userId, input.accessIdentity)
   if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
   const plan = await loadManagementPlan(input.userId, input.planId)
   if (plan.version !== input.expectedVersion || plan.approved_version !== input.expectedVersion) {
@@ -172,6 +185,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
   return withGoogleAdsPublishAccess({
     userId: input.userId,
     connectionId: plan.connection_id as string,
+    identity: input.accessIdentity,
     action: async (access) => {
       const { connection, provider } = access
       if (connection.status !== 'active' || connection.is_manager) {
@@ -179,6 +193,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
       }
       const currency = connection.currency_code
       if (!currency) throw new GoogleAdsError('currency_mismatch')
+      if (!isSupportedGoogleAdsCurrency(currency)) throw new GoogleAdsError('unsupported_currency')
       const { state, snapshot } = await readSnapshot(access, plan)
       const before = snapshotState(state)
       if (hashGoogleAdsApprovalPayload(before) !== input.expectedStateHash) {
@@ -194,6 +209,10 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         actionType = 'google_ads_campaign_status_update'
         target.status = input.action === 'enable' ? 'ENABLED' : 'PAUSED'
         if (input.action === 'enable') {
+          if (resolveGoogleAdsKillSwitch()) {
+            await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'enable' })
+            throw new GoogleAdsError('kill_switch_active')
+          }
           if (input.acknowledgedBudget !== true) throw new GoogleAdsError('confirmation_required')
           if (snapshot.paymentMethodWarning && input.acknowledgedBillingWarning !== true) {
             throw new GoogleAdsError('confirmation_required')
@@ -218,6 +237,10 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         })
         target.dailyBudgetMinor = dailyBudgetMinor
         target.dailyBudgetMicros = googleAdsMicrosFromMinorUnits(dailyBudgetMinor as number, currency)
+        if (resolveGoogleAdsKillSwitch() && BigInt(target.dailyBudgetMicros as string) > BigInt(snapshot.dailyBudgetMicros)) {
+          await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'budget_increase' })
+          throw new GoogleAdsError('kill_switch_active')
+        }
       } else {
         actionType = 'google_ads_ad_copy_update'
         const headlines = input.headlines ?? []

@@ -39,6 +39,12 @@ export type GoogleAdsErrorCode =
   | 'publish_disabled'
   | 'disconnect_failed'
   | 'status_update_failed'
+  | 'unsupported_currency'
+  | 'active_campaign_limit_reached'
+  | 'user_publish_limit_reached'
+  | 'global_publish_limit_reached'
+  | 'kill_switch_active'
+  | 'terms_reaccept_required'
 
 export class GoogleAdsError extends Error {
   readonly code: GoogleAdsErrorCode
@@ -66,6 +72,8 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
       return 403
     case 'rate_limited':
     case 'connection_limit_exceeded':
+    case 'user_publish_limit_reached':
+    case 'global_publish_limit_reached':
       return 429
   case 'connection_not_found':
   case 'plan_not_found':
@@ -74,6 +82,8 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'flow_expired':
       return 404
     case 'connection_busy':
+    case 'active_campaign_limit_reached':
+    case 'terms_reaccept_required':
     case 'plan_changed':
   case 'plan_not_approved':
   case 'confirmation_required':
@@ -84,12 +94,14 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
       return 409
     case 'configuration_missing':
     case 'publish_disabled':
+    case 'kill_switch_active':
       return 503
     case 'api_quota_exceeded':
       return 429
     case 'invalid_request':
     case 'invalid_publish_plan':
     case 'eu_political_declaration_required':
+    case 'unsupported_currency':
     case 'invalid_budget':
     case 'currency_mismatch':
     case 'oauth_denied':

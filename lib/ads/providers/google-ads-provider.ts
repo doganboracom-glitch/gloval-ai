@@ -21,6 +21,8 @@ import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import {
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsValidateOnlyTestEnabled,
+  resolveGoogleAdsKillSwitch,
+  type GoogleAdsAccessIdentity,
 } from '@/lib/ads/env'
 import {
   buildGoogleAdsMutateRequest,
@@ -236,12 +238,16 @@ function requireApiTransport(config: GoogleAdsProviderConfig): GoogleAdsApiTrans
   return config.requestAdsApi
 }
 
-function requirePublishAccess(userId: string, validationTestMode = false): void {
+function requirePublishAccess(
+  userId: string,
+  validationTestMode = false,
+  identity?: GoogleAdsAccessIdentity,
+): void {
   if (validationTestMode) {
     if (!resolveGoogleAdsValidateOnlyTestEnabled()) throw new GoogleAdsError('publish_disabled')
     return
   }
-  if (!resolveGoogleAdsPublishAccess(userId)) throw new GoogleAdsError('publish_disabled')
+  if (!resolveGoogleAdsPublishAccess(userId, process.env, identity)) throw new GoogleAdsError('publish_disabled')
 }
 
 function handleProviderError(error: unknown): never {
@@ -469,7 +475,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     campaignId,
     context,
   }): Promise<GoogleAdsAdReviewStatus> => {
-    requirePublishAccess(context.userId)
+    requirePublishAccess(context.userId, false, context.googleAdsAccess)
     const normalizedCustomerId = normalizeCustomerId(customerId)
     if (!normalizedCustomerId || !accessToken || !context.connectionId || !/^\d{1,20}$/.test(campaignId)) {
       throw new GoogleAdsError('invalid_request')
@@ -762,7 +768,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     async publishCampaign(input: AdsCampaignPublishInput): Promise<AdsCampaignPublishResult> {
       const validationTestMode = input.validationTestMode === true
       if (validationTestMode && !input.validateOnly) throw new GoogleAdsError('invalid_request')
-      requirePublishAccess(input.context.userId, validationTestMode)
+      requirePublishAccess(input.context.userId, validationTestMode, input.context.googleAdsAccess)
       const customerId = normalizeCustomerId(input.externalAccountId)
       if (!customerId || !input.accessToken || !input.context.connectionId) {
         throw new GoogleAdsError('invalid_request')

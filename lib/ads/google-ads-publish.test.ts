@@ -182,6 +182,8 @@ function setup(options: {
 
   const deps: GoogleAdsPublishServiceDeps = {
     accessEnabled: () => options.accessEnabled ?? true,
+    reservePublishCapacity: vi.fn(async () => ({ actionId: 'publish-capacity' })),
+    finishPublishCapacity: vi.fn(async () => {}),
     validationTestEnabled: () => options.validationTestEnabled ?? false,
     createRequestId: () => REQUEST_ID,
     loadPlan: vi.fn(async () => options.plan ?? plan()),
