@@ -27,6 +27,7 @@ import {
   formatReferralTryInput,
   parseReferralPayoutAmount,
   REFERRAL_PAYOUT_MIN_CENTS,
+  TRY_PER_CREDIT_CENTS,
   validateReferralPayoutAmount,
 } from '@/lib/referrals/payout-core'
 import type {
@@ -40,6 +41,8 @@ type PayoutAmountMode = 'all' | 'specific'
 
 const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(REFERRAL_PAYOUT_MIN_TRY)
+const minimumCreditTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(TRY_PER_CREDIT_CENTS / 100)
+const minimumCreditEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(TRY_PER_CREDIT_CENTS / 100)
 
 const COPY = {
   tr: {
@@ -51,7 +54,9 @@ const COPY = {
     requested: 'İşlemde',
     converted: 'Krediye çevrildi',
     paid: 'Ödendi',
-    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; pozitif bakiyenizin tamamını veya uygun durumlarda bir kısmını beklemeden AI kredisine çevirebilirsiniz.`,
+    hold: `Komisyonlar ${REFERRAL_HOLD_DAYS} gün beklemede kalır; bekleyen tutarlar da AI kredisine hemen çevrilebilir. Kısmi dönüşümler ${minimumCreditTr} TL'nin katlarıyla yapılır; bakiyenin tamamı her zaman seçilebilir.`,
+    partialCreditMultipleHint: `Kısmi AI kredi dönüşümü yalnızca ${minimumCreditTr} TL'nin katlarıyla yapılabilir. Bakiyenin tamamı, 3 TL'nin altındaki tutarlar dahil, seçilebilir.`,
+
     request: 'Ödeme İste',
     requestTitle: 'Bakiyenizi nasıl almak istersiniz?',
     requestDescription: 'Önce ödeme yöntemini seçin; sonraki adımda tutarı ve varsa fatura KDV seçeneğini inceleyin.',
@@ -112,6 +117,7 @@ const COPY = {
       credit_balance_empty: 'AI kredisine çevrilebilir pozitif bir bakiye bulunmuyor.',
       terms_required: 'Ödeme isteği oluşturmadan önce güncel ortaklık şartlarını kabul edin.',
       amount_exceeds_balance: 'Girilen tutar kullanılabilir bakiyeyi aşamaz.',
+      partial_credit_must_be_multiple: 'Kısmi AI kredi dönüşümü tutarı 3 TL’nin katı olmalıdır. Tam bakiyeyi seçebilir veya tutarı düzeltebilirsiniz.',
       partial_unavailable_debt: 'Negatif vade dilimi varken kısmi kredi dönüşümü yapılamaz; tam tutarı seçin.',
       vat_mode_required: 'Şirket ödemesi için bir KDV seçeneği belirleyin.',
       vat_mode_not_allowed: 'KDV seçeneği yalnızca şirket statüsündeki nakit ödemelerde kullanılabilir.',
@@ -136,7 +142,9 @@ const COPY = {
     requested: 'In progress',
     converted: 'Converted to credits',
     paid: 'Paid',
-    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; any positive convertible balance can be converted to AI credits immediately, in full or in an eligible partial amount.`,
+    hold: `Commissions stay on hold for ${REFERRAL_HOLD_DAYS} days; pending amounts can also be converted to AI credits immediately. Partial conversions must be in multiples of TRY ${minimumCreditEn}; the full balance is always selectable.`,
+    partialCreditMultipleHint: `Partial AI credit conversions must be in multiples of TRY ${minimumCreditEn}. The full balance, including amounts below TRY 3, can be selected.`,
+
     request: 'Request payout',
     requestTitle: 'How would you like to receive your balance?',
     requestDescription: 'Choose a payout method first; the next step lets you review the amount and, when required, the invoice VAT option.',
@@ -197,6 +205,7 @@ const COPY = {
       credit_balance_empty: 'No positive balance is currently eligible for AI credit conversion.',
       terms_required: 'Accept the current partner terms before requesting a payout.',
       amount_exceeds_balance: 'The amount cannot exceed the available balance.',
+      partial_credit_must_be_multiple: 'Partial AI credit conversion amounts must be multiples of TRY 3. Select the full balance or adjust the amount.',
       partial_unavailable_debt: 'Partial credit conversion is unavailable while a maturity bucket is negative. Select the full amount.',
       vat_mode_required: 'Choose a VAT option for a company payout.',
       vat_mode_not_allowed: 'VAT options are only available for company cash payouts.',
@@ -610,6 +619,7 @@ export function ReferralPayoutControls({
                   />
                   <FieldDescription id="referral-payout-amount-description">
                     {copy.amountDescription.replace('{maximum}', formatReferralTry(maximumCents, language))}
+                    {method === 'credit' ? ` ${copy.partialCreditMultipleHint}` : ''}
                   </FieldDescription>
                 </Field>
               </FieldGroup>
