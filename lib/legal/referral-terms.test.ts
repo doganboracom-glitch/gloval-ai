@@ -6,8 +6,13 @@ import {
 } from '@/lib/referrals/terms'
 
 const REFERRAL_SLUG = 'satis-ortakligi-sartlari'
-const TURKISH_CREDIT_CONVERSION_CLAUSE =
-  'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır. Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir. Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir. Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır. Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.'
+const TURKISH_SECTION_ONE_PARAGRAPHS = [
+  'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır.',
+  'Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir.',
+  'Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir.',
+  'Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır.',
+  'Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.',
+] as const
 const ENGLISH_CREDIT_CONVERSION_CLAUSE =
   'AI credit conversion has no minimum amount. One credit is worth TRY 3; the credit count is rounded up and GLOVAL AI covers the difference, up to TRY 2.99. All pending and available commissions, or a smaller eligible amount up to the convertible balance, can be converted before the 14-day hold ends. A partial conversion is unavailable while a future-dated negative balance adjustment exists.'
 
@@ -49,10 +54,9 @@ describe('referral partner terms', () => {
     expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('November 6, 2026')
   })
 
-  it('uses the exact single Turkish section 1 paragraph and the English credit-conversion clause', () => {
+  it('uses five exact Turkish section 1 paragraphs and preserves the English credit-conversion clause', () => {
     expect(REFERRAL_TERMS.tr.sections[0].heading).toBe('1. Program, komisyon ve ödeme koşulları')
-    expect(REFERRAL_TERMS.tr.sections[0].paragraphs).toHaveLength(1)
-    expect(REFERRAL_TERMS.tr.sections[0].paragraphs[0]).toBe(TURKISH_CREDIT_CONVERSION_CLAUSE)
+    expect(REFERRAL_TERMS.tr.sections[0].paragraphs).toEqual(TURKISH_SECTION_ONE_PARAGRAPHS)
     expect(REFERRAL_TERMS.en.sections[0].paragraphs[4]).toBe(ENGLISH_CREDIT_CONVERSION_CLAUSE)
     expect(REFERRAL_TERMS_VERSION).toBe('v1.2')
     expect(REFERRAL_TERMS_UPDATED_AT).toBe('2026-11-06')
