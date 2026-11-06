@@ -3,6 +3,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
+import { extractGoogleErrorDetails, formatGoogleErrorCode } from '@/lib/ads/google-error-detail'
 import type {
   GoogleAdsAdMutateRequest,
   GoogleAdsApiCall,
@@ -289,13 +290,22 @@ export function createGoogleAdsApiTransport(input: {
       }
 
       const providerError = responseError(payload)
+      const googleErrors = extractGoogleErrorDetails(payload)
       if (providerError.dailyQuota) {
         await recordOutcome(admin, requestId, 'error', 'rate_limited')
         throw new GoogleAdsError('api_quota_exceeded')
       }
       if (providerError.euPoliticalDeclarationRequired) {
         await recordOutcome(admin, requestId, 'error', 'provider_rejected')
-        throw new GoogleAdsError('eu_political_declaration_required')
+        throw new GoogleAdsError('eu_political_declaration_required', googleErrors)
+      }
+      if (googleErrors.length) {
+        console.error('[google-ads] request rejected', {
+          requestId,
+          method: call.method,
+          httpStatus: response.status,
+          errors: googleErrors.map((item) => ({ code: formatGoogleErrorCode(item), fieldPath: item.fieldPath })),
+        })
       }
 
       const shouldRetry = !isMutation && (response.status === 429 || response.status >= 500) &&
@@ -311,11 +321,11 @@ export function createGoogleAdsApiTransport(input: {
         await delay(retryDelay(attempt, response.headers.get('retry-after')))
         continue
       }
-      if (providerError.accessLevelInsufficient) throw new GoogleAdsError('google_access_level_insufficient')
-      if (response.status === 401 || response.status === 403) throw new GoogleAdsError('not_authorized')
+      if (providerError.accessLevelInsufficient) throw new GoogleAdsError('google_access_level_insufficient', googleErrors)
+      if (response.status === 401 || response.status === 403) throw new GoogleAdsError('not_authorized', googleErrors)
       if (response.status === 429) throw new GoogleAdsError('rate_limited')
       if (response.status >= 500) throw new GoogleAdsError('provider_unavailable')
-      throw new GoogleAdsError('provider_error')
+      throw new GoogleAdsError('provider_error', googleErrors)
     }
 
     throw new GoogleAdsError('provider_unavailable')

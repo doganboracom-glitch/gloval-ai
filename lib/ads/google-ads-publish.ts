@@ -26,6 +26,7 @@ import {
 } from '@/lib/ads/env'
 import { reserveGoogleAdsPublishCapacity, finishGoogleAdsPublishCapacity } from '@/lib/ads/google-publish-capacity'
 import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
+import { googleErrorFailureCode, type GoogleErrorDetail } from '@/lib/ads/google-error-detail'
 import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
@@ -159,7 +160,7 @@ export type GoogleAdsPublishServiceResult =
       balance: number | null
       approvalSummary?: GoogleAdsApprovalSummary
     }
-  | { ok: false; reason: GoogleAdsPublishFailureReason; balance?: number }
+  | { ok: false; reason: GoogleAdsPublishFailureReason; balance?: number; googleErrors?: GoogleErrorDetail[] }
 
 export type GoogleAdsPlanStatusInput = {
   userId: string
@@ -229,7 +230,20 @@ export type GoogleAdsPublishServiceDeps = {
     requestId: string,
     reason: GoogleAdsPublishFailureReason,
     stage: GooglePublishFailureStage,
+    googleErrors?: readonly GoogleErrorDetail[],
   ) => Promise<void>
+  recordGoogleFailure?: (input: {
+    userId: string
+    planId: string
+    connectionId: string
+    operation: GooglePublishFailureStage
+    reason: GoogleAdsPublishFailureReason
+    googleErrors: readonly GoogleErrorDetail[]
+  }) => Promise<void>
+}
+
+function googleErrorsOf(error: unknown): GoogleErrorDetail[] {
+  return error instanceof GoogleAdsError ? [...error.details] : []
 }
 
 function isAmbiguousCreateError(error: unknown): boolean {
@@ -281,8 +295,17 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
   return 'provider_error'
 }
 
-function failed(reason: GoogleAdsPublishFailureReason, balance?: number): GoogleAdsPublishServiceResult {
-  return balance === undefined ? { ok: false, reason } : { ok: false, reason, balance }
+function failed(
+  reason: GoogleAdsPublishFailureReason,
+  balance?: number,
+  googleErrors: readonly GoogleErrorDetail[] = [],
+): GoogleAdsPublishServiceResult {
+  return {
+    ok: false,
+    reason,
+    ...(balance === undefined ? {} : { balance }),
+    ...(googleErrors.length ? { googleErrors: [...googleErrors] } : {}),
+  }
 }
 
 function requirePlanBudget(plan: PublishPlanRow): { currency: string; dailyMinor: number } {
@@ -444,8 +467,46 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
     ),
   alertReconciling: (planId, requestId, reason) =>
     notifyGooglePublishReconciling(planId, requestId, undefined, reason),
-  alertPublishFailure: (planId, requestId, reason, stage) =>
-    notifyGooglePublishFailure(planId, requestId, reason, stage),
+  alertPublishFailure: (planId, requestId, reason, stage, googleErrors) =>
+    notifyGooglePublishFailure(planId, requestId, reason, stage, undefined, googleErrors),
+  recordGoogleFailure: (input) =>
+    recordGoogleAdsPolicyBlock({
+      userId: input.userId,
+      planId: input.planId,
+      connectionId: input.connectionId,
+      reason: googleErrorFailureCode(input.googleErrors, input.reason),
+      baseReason: input.reason,
+      operation: input.operation,
+      googleErrors: input.googleErrors,
+    }),
+}
+
+async function reportGoogleFailure(
+  deps: GoogleAdsPublishServiceDeps,
+  input: {
+    userId: string
+    planId: string
+    connectionId: string
+    requestId: string
+    operation: GooglePublishFailureStage
+    reason: GoogleAdsPublishFailureReason
+    googleErrors: readonly GoogleErrorDetail[]
+  },
+): Promise<void> {
+  if (input.googleErrors.length) {
+    await deps.recordGoogleFailure?.({
+      userId: input.userId,
+      planId: input.planId,
+      connectionId: input.connectionId,
+      operation: input.operation,
+      reason: input.reason,
+      googleErrors: input.googleErrors,
+    }).catch(() => undefined)
+  }
+  await (input.googleErrors.length
+    ? deps.alertPublishFailure(input.planId, input.requestId, input.reason, input.operation, input.googleErrors)
+    : deps.alertPublishFailure(input.planId, input.requestId, input.reason, input.operation)
+  ).catch(() => undefined)
 }
 
 export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps = defaultDeps) {
@@ -742,8 +803,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               }
             } catch (error) {
               const reason = failureReason(error)
-              await deps.alertPublishFailure(plan.id, requestId, reason, 'validate_only').catch(() => undefined)
-              return failed(reason)
+              const googleErrors = googleErrorsOf(error)
+              await reportGoogleFailure(deps, {
+                userId: input.userId,
+                planId: plan.id,
+                connectionId: connection.id,
+                requestId,
+                operation: 'validate_only',
+                reason,
+                googleErrors,
+              })
+              return failed(reason, undefined, googleErrors)
             }
           }
 
@@ -924,8 +994,17 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               outcome: 'failure',
               reasonCode: reason,
             })
-            await deps.alertPublishFailure(plan.id, requestId, reason, 'publish').catch(() => undefined)
-            return failed(reason, reservation.balance)
+            const googleErrors = googleErrorsOf(error)
+            await reportGoogleFailure(deps, {
+              userId: input.userId,
+              planId: plan.id,
+              connectionId: connection.id,
+              requestId,
+              operation: 'publish',
+              reason,
+              googleErrors,
+            })
+            return failed(reason, reservation.balance, googleErrors)
           }
         },
       })

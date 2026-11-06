@@ -4,6 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTransactionalEmail } from '@/lib/notify'
 import { COMPANY } from '@/lib/legal/company'
 import type { AdsRpcClient } from '@/lib/ads/credits'
+import {
+  sanitizeGoogleErrorDetails,
+  summarizeGoogleErrors,
+  type GoogleErrorDetail,
+} from '@/lib/ads/google-error-detail'
 
 export type AnonCapAlertKind = 'anon_global_cap_50' | 'anon_global_cap'
 export type PolicyBlockAlertKind = 'policy_block_global_cap'
@@ -149,17 +154,26 @@ export async function notifyGooglePublishFailure(
   reason: string,
   stage: GooglePublishFailureStage,
   deps: AdsAlertDeps = defaultDeps,
+  googleErrors: readonly GoogleErrorDetail[] = [],
 ): Promise<void> {
   const kind: GooglePublishFailureAlertKind = `${GOOGLE_PUBLISH_FAILURE_ALERT_KIND}:${planId}`
   const safeReason = /^[a-z][a-z0-9_]{0,63}$/.test(reason) ? reason : 'provider_error'
+  // Only enum codes and field paths; Google's free-text messages never reach the e-mail.
+  const googleSummary = summarizeGoogleErrors(sanitizeGoogleErrorDetails(googleErrors))
   try {
-    const first = await deps.recordOnce(kind, { planId, requestId, reason: safeReason, stage })
+    const first = await deps.recordOnce(kind, {
+      planId,
+      requestId,
+      reason: safeReason,
+      stage,
+      ...(googleSummary ? { googleErrors: googleSummary } : {}),
+    })
     if (!first) return
     const subject = 'GLOVAL Ads: Google Ads işlem hatası'
     const action = stage === 'validate_only'
       ? 'validate_only isteği başarısız oldu; bu mod Google Ads hesabında kampanya oluşturmaz.'
       : 'Yayın isteği başarısız olarak kaydedildi ve kredi rezervasyonunun bırakılması istendi.'
-    const text = `Google Ads ${stage} işlemi için yönetici kontrolü gerekiyor. Plan: ${planId}; deneme: ${requestId}; hata kodu: ${safeReason}. ${action} Yeniden denemeden önce Google Ads hesabındaki durumu kontrol edin.`
+    const text = `Google Ads ${stage} işlemi için yönetici kontrolü gerekiyor. Plan: ${planId}; deneme: ${requestId}; hata kodu: ${safeReason}.${googleSummary ? ` Google hata kodu: ${googleSummary}.` : ''} ${action} Yeniden denemeden önce Google Ads hesabındaki durumu kontrol edin.`
     await deps.sendEmail({
       subject,
       text,

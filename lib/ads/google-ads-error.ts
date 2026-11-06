@@ -1,3 +1,5 @@
+import type { GoogleErrorDetail } from '@/lib/ads/google-error-detail'
+
 export type GoogleAdsErrorCode =
   | 'configuration_missing'
   | 'invalid_request'
@@ -51,11 +53,14 @@ export type GoogleAdsErrorCode =
 
 export class GoogleAdsError extends Error {
   readonly code: GoogleAdsErrorCode
+  /** Safe, allow-listed summary of Google's error response (never the raw body). */
+  readonly details: readonly GoogleErrorDetail[]
 
-  constructor(code: GoogleAdsErrorCode) {
+  constructor(code: GoogleAdsErrorCode, details: readonly GoogleErrorDetail[] = []) {
     super(code)
     this.name = 'GoogleAdsError'
     this.code = code
+    this.details = details
   }
 }
 

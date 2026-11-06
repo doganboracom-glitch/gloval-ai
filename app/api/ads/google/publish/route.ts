@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { publishGoogleAdsPlan } from '@/lib/ads/google-ads-publish'
+import { sanitizeGoogleErrorDetails } from '@/lib/ads/google-error-detail'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
 
@@ -62,6 +63,17 @@ export async function POST(request: Request) {
     finalConfirmation: input.data.phase === 'publish' && input.data.publishConfirmed === true,
   })
 
-  if (!result.ok) return googleAdsJson({ ok: false, error: result.reason, balance: result.balance }, responseStatus(result.reason))
+  if (!result.ok) {
+    const googleErrors = sanitizeGoogleErrorDetails(result.googleErrors)
+    return googleAdsJson(
+      {
+        ok: false,
+        error: result.reason,
+        balance: result.balance,
+        ...(googleErrors.length ? { googleErrors } : {}),
+      },
+      responseStatus(result.reason),
+    )
+  }
   return googleAdsJson(result)
 }
