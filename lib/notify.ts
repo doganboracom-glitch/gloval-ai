@@ -346,6 +346,12 @@ export async function logUserEvent(input: {
   adminSubject?: (userEmail: string) => string
   adminBody?: (userEmail: string) => string
   /**
+   * Builds the complete administrator email with the shared layout. Takes
+   * precedence over `adminSubject`/`adminBody`; if it throws, the plain admin
+   * email is sent instead.
+   */
+  adminEmail?: (userEmail: string) => { subject: string; html: string; text: string }
+  /**
    * Identifies one lifecycle/payment event. When set, the event is delivered at
    * most once: the log row (unique on this key) is claimed before anything is
    * emailed, so repeated callbacks or overlapping cron runs stay silent.
@@ -424,14 +430,26 @@ export async function logUserEvent(input: {
   if (input.emailAdmin) {
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL?.trim() || 'doganboracom@gmail.com'
     const userEmail = user?.email ?? 'Bilinmiyor'
-    const adminBody = input.adminBody?.(userEmail) ?? input.body ?? input.subject
-    const adminSubject = input.adminSubject?.(userEmail) ?? `[Gloval AI] ${input.subject}`
-    await sendTransactionalEmail({
-      to: adminEmail,
-      subject: adminSubject,
-      text: adminBody,
-      html: emailShell(adminSubject, `<p>${adminBody}</p>`),
-    })
+    let custom: { subject: string; html: string; text: string } | null = null
+    if (input.adminEmail) {
+      try {
+        custom = input.adminEmail(userEmail)
+      } catch (error) {
+        console.log('[notify] custom admin email failed, using plain email:', error instanceof Error ? error.message : 'unknown')
+      }
+    }
+    if (custom) {
+      await sendTransactionalEmail({ to: adminEmail, ...custom })
+    } else {
+      const adminBody = input.adminBody?.(userEmail) ?? input.body ?? input.subject
+      const adminSubject = input.adminSubject?.(userEmail) ?? `[Gloval AI] ${input.subject}`
+      await sendTransactionalEmail({
+        to: adminEmail,
+        subject: adminSubject,
+        text: adminBody,
+        html: emailShell(adminSubject, `<p>${adminBody}</p>`),
+      })
+    }
   }
 
   return true

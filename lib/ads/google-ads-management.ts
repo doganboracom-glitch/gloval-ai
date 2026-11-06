@@ -15,6 +15,11 @@ import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { buildGoogleAdsApprovalSummary, googleAdsMicrosFromMinorUnits } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateGoogleAdsAmountRisk, googleAdsMonthlyBudgetUpperBoundMinor, googleAdsRiskConfirmationError } from '@/lib/ads/google-ads-risk'
 import { logUserEvent } from '@/lib/notify'
+import {
+  buildAdsAdminRiskyBudgetEmail,
+  buildAdsCampaignActionEmail,
+  type AdsCampaignAction,
+} from '@/lib/email/ads-mail'
 import { withGoogleAdsPublishAccess, type GoogleAdsAccess } from '@/lib/ads/google-ads-publish'
 import type { GoogleAdsCampaignManagementState } from '@/lib/ads/providers/types'
 
@@ -519,15 +524,10 @@ async function notifyCampaignAction(input: {
     ? `Önceki günlük bütçe: ${formatMinorCurrency(input.previousAmountMinor, input.currency)}. Yeni günlük bütçe: ${formatMinorCurrency(input.amountMinor, input.currency)}.`
     : `Günlük bütçe: ${formatMinorCurrency(input.amountMinor, input.currency)}.`
   const body = `Kampanya ${labels[input.prepared.action]}. ${budgetDetails} 30,4 günlük tahmini harcama: ${formatMinorCurrency(monthlyUpperBoundMinor, input.currency)}. ${verification}`
-  const riskReasons: Record<string, string> = {
-    above_recommendation: 'ilk plan önerisinin 3 katının aşılması',
-    above_recent_spend: '30 günlük ortalama günlük harcamanın 3 katının aşılması',
-    fivefold_previous_budget: 'önceki bütçenin en az 5 katına çıkılması',
-    absolute_threshold: 'mutlak risk eşiğinin aşılması',
-  }
-  const riskDetail = input.risk?.risky
-    ? input.risk.reasons.map((reason) => riskReasons[reason] ?? reason).join(', ')
-    : ''
+  const riskReasonCodes = input.risk?.risky ? [...input.risk.reasons] : []
+  const action = input.prepared.action as AdsCampaignAction
+  const dailyBudget = formatMinorCurrency(input.amountMinor, input.currency)
+  const monthlyEstimate = formatMinorCurrency(monthlyUpperBoundMinor, input.currency)
   try {
     await logUserEvent({
       userId: input.userId,
@@ -536,9 +536,26 @@ async function notifyCampaignAction(input: {
       body,
       userSubject: `Google Ads kampanyanız ${labels[input.prepared.action]}`,
       userBody: body,
+      userEmail: () =>
+        buildAdsCampaignActionEmail({
+          action,
+          dailyBudget,
+          previousDailyBudget: formatMinorCurrency(input.previousAmountMinor, input.currency),
+          monthlyEstimate,
+          stateVerified: input.stateVerified,
+        }),
       emailAdmin: Boolean(input.risk?.risky),
       adminSubject: () => '[Google Ads] Riskli bütçe işlemi onaylandı',
-      adminBody: () => `${body} Risk nedenleri: ${riskDetail}. İşlem kimliği: ${input.actionId}.`,
+      adminBody: () => `${body} Risk nedenleri: ${riskReasonCodes.join(', ')}. İşlem kimliği: ${input.actionId}.`,
+      adminEmail: (userEmail) =>
+        buildAdsAdminRiskyBudgetEmail({
+          userEmail,
+          actionLabel: labels[input.prepared.action],
+          dailyBudget,
+          monthlyEstimate,
+          riskReasons: riskReasonCodes,
+          actionId: input.actionId,
+        }),
       dedupeKey: `google_ads_management_${input.actionId}`,
     })
   } catch {

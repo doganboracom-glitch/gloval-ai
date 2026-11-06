@@ -25,6 +25,7 @@ function responseStatus(reason: string): number {
   if (reason === 'provider_unavailable') return 502
   if (
     reason === 'reservation_failed' ||
+    reason === 'publish_not_started' ||
     reason === 'provider_error' ||
     reason === 'quota_check_failed' ||
     reason === 'configuration_missing' ||
