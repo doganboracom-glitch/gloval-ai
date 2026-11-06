@@ -25,6 +25,7 @@
     "nodejs-dna": "^3.0.0",
     "react": "^19",
     "react-dom": "^19",
+    "recharts": "3.8.0",
     "shadcn": "^4.8.0",
     "sharp": "^0.35.4",
     "swr": "^2.5.1",

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migrationSql = readFileSync(resolve(process.cwd(), 'scripts/106-ads-google-publish-e2.sql'), 'utf8')
+const lifecycleMigrationSql = readFileSync(resolve(process.cwd(), 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
 const vercelConfig = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8')) as {
   crons: Array<{ path: string; schedule: string }>
 }
@@ -21,6 +22,19 @@ describe('Google Ads E2 SQL draft', () => {
     expect(migrationSql).toContain('scripts/099-ads-google-public-readonly-quotas.sql')
     expect(migrationSql).toContain('begin;')
     expect(migrationSql).toContain('commit;')
+  })
+
+  it('keeps the lifecycle migration unapplied, transaction-neutral, and on the confirmed V4 RPC', () => {
+    expect(lifecycleMigrationSql).toContain('UNAPPLIED DRAFT')
+    expect(lifecycleMigrationSql).not.toMatch(/^\s*(?:begin|commit)\s*;/im)
+    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_begin_google_ads_management_action_v3')
+    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_finish_google_ads_management_action_v3')
+    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_begin_google_ads_campaign_action_e2')
+    expect(lifecycleMigrationSql).toContain('ads_begin_google_ads_management_action_v4')
+    expect(lifecycleMigrationSql).toContain('p_risk_confirmed_amount_minor')
+    expect(lifecycleMigrationSql).toContain('budget_sanity_ceiling_exceeded')
+    expect(lifecycleMigrationSql).not.toContain('budget_increase_limit_exceeded')
+    expect(lifecycleMigrationSql).not.toContain('budget_cooldown_active')
   })
 
   it('keeps the live six-argument read RPC and never recreates the old four-argument overload', () => {

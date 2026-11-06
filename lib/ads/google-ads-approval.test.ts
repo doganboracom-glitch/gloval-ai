@@ -36,6 +36,11 @@ describe('Google Ads approval fingerprints', () => {
     expect(createGoogleAdsPlanApprovalHash({ ...planInput, plan: { name: 'Search', keywords: ['changed'] } })).not.toBe(baseline)
   })
 
+  it('includes an optional technical ceiling in the approval fingerprint without requiring one', () => {
+    const uncapped = createGoogleAdsPlanApprovalHash({ ...planInput, userDailyBudgetCapMinor: null })
+    expect(createGoogleAdsPlanApprovalHash({ ...planInput, userDailyBudgetCapMinor: 250001 })).not.toBe(uncapped)
+  })
+
   it('binds a management approval to the exact before and requested states', () => {
     const action = {
       userId: planInput.userId,

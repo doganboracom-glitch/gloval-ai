@@ -72,7 +72,7 @@ type PublishPlanRow = {
   publish_request_id: string | null
   publish_started_at: string | null
   publish_billing_verified: boolean | null
-  google_campaign_status: 'PAUSED' | 'ENABLED'
+  google_campaign_status: 'PAUSED' | 'ENABLED' | 'REMOVED' | 'UNKNOWN'
 }
 
 type GoogleAdsPublishProvider = Pick<
@@ -80,8 +80,11 @@ type GoogleAdsPublishProvider = Pick<
   | 'publishCampaign'
   | 'setCampaignStatus'
   | 'verifyBilling'
-  | 'getAdReviewStatus'
   | 'getCampaignManagementState'
+  | 'getPerformance'
+  | 'removeCampaign'
+  | 'mutateKeyword'
+  | 'getAdReviewStatus'
   | 'updateCampaignBudget'
   | 'updateResponsiveSearchAd'
 >
@@ -117,7 +120,7 @@ export type GoogleAdsPublishFailureReason =
   | 'destination_unreachable'
   | 'site_policy_blocked'
   | 'insufficient_credits'
-  | 'budget_limit_exceeded'
+  | 'budget_sanity_ceiling_exceeded'
   | 'reservation_failed'
   | 'provider_error'
   | 'provider_unavailable'
@@ -176,7 +179,7 @@ export type GoogleAdsPublishServiceDeps = {
     approvalSummary: GoogleAdsApprovalSummary,
     approvalId: string,
     approvalHash: string,
-    userDailyBudgetLimitMinor: number,
+    userDailyBudgetLimitMinor: number | null,
   ) => Promise<AdsPublishBeginResult>
   markValidated: (input: {
     userId: string
@@ -237,7 +240,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'invalid_budget',
       'currency_mismatch',
       'insufficient_credits',
-      'budget_limit_exceeded',
+      'budget_sanity_ceiling_exceeded',
       'reservation_failed',
       'provider_error',
       'provider_unavailable',
@@ -447,7 +450,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       plan.version !== approvedVersion ||
       plan.approved_version !== approvedVersion
     ) return failed('plan_changed')
-    if (!plan.approval_id || !plan.approval_hash || !plan.approval_user_daily_budget_limit_minor) {
+    if (!plan.approval_id || !plan.approval_hash) {
       return failed('confirmation_required')
     }
     if (
@@ -602,7 +605,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
         !input.validateOnly &&
         (plan.validation_hash !== approvalHash || plan.validated_version !== expectedVersion)
       ) return failed('confirmation_required')
-      if (!plan.approval_id || !plan.approval_user_daily_budget_limit_minor) return failed('confirmation_required')
+      if (!plan.approval_id) return failed('confirmation_required')
     }
     const requestId = deps.createRequestId()
     if (!PLAN_ID_PATTERN.test(requestId)) return failed('invalid_request')
@@ -655,7 +658,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               currency: budget.currency,
               dailyBudgetMinor: budget.dailyMinor,
               budgetCapMinor: budget.capMinor,
-              userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor as number,
+              userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor,
               plan: planJson,
             })
             if (recomputedApprovalHash !== approvalHash) return failed('plan_changed')
@@ -713,7 +716,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               approvalSummary,
               plan.approval_id as string,
               approvalHash,
-              plan.approval_user_daily_budget_limit_minor as number,
+              plan.approval_user_daily_budget_limit_minor,
             )
           } catch {
             reservation = { ok: false, reason: 'reservation_failed', balance: 0 }

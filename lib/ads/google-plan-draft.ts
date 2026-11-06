@@ -2,7 +2,7 @@ import 'server-only'
 
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveGoogleAdsPublishDailyBudgetCapMinor } from '@/lib/ads/env'
+import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import { buildPlanSuggestion, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
 import { buildGoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 import type { AdsRpcClient } from '@/lib/ads/credits'
@@ -46,9 +46,15 @@ export function suggestForConnection(
   scanResult: unknown,
   connection: DraftConnection,
 ): { ok: true; suggestion: PlanSuggestion } | ({ ok: false } & DraftFailure) {
+  let serverCapMinor: number | null
+  try {
+    serverCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor(connection.currency)
+  } catch {
+    return { ok: false, error: 'configuration_missing', status: 503 }
+  }
   const outcome = buildPlanSuggestion(scanResult, {
     currency: connection.currency,
-    serverCapMinor: resolveGoogleAdsPublishDailyBudgetCapMinor(connection.currency),
+    serverCapMinor,
   })
   if (!outcome.ok) {
     const status = outcome.error === 'invalid_request' || outcome.error === 'invalid_publish_plan' ? 400 : 422
@@ -63,7 +69,7 @@ export async function createDraftFromSuggestion(
   suggestion: PlanSuggestion,
 ): Promise<{ ok: true; planId: string; version: number } | ({ ok: false } & DraftFailure)> {
   const { budget, plan } = suggestion
-  if (!budget) return { ok: false, error: 'budget_limit_not_configured', status: 503 }
+  if (!budget) return { ok: false, error: 'invalid_budget', status: 400 }
   try {
     buildGoogleAdsApprovalSummary({
       currency: connection.currency,
@@ -79,7 +85,10 @@ export async function createDraftFromSuggestion(
     .rpc('ads_create_google_ads_plan_draft_e2', {
       p_user_id: userId,
       p_connection_id: connection.id,
-      p_plan: plan,
+      p_plan: {
+        ...plan,
+        aiRecommendedDailyBudgetMinor: plan.aiRecommendedDailyBudgetMinor ?? budget.dailyMinor,
+      },
       p_display_name: plan.brand,
       p_sector: plan.sector,
       p_language: plan.language,

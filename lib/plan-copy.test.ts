@@ -80,9 +80,11 @@ describe('plan copy TR/EN parity', () => {
     for (const lang of ['en', 'de', 'ar', 'ru', '', null, undefined]) {
       expect(copyLang(lang)).toBe('en')
     }
-    expect(buildPlanView('pro', 'yearly', 'de')).toEqual(
-      buildPlanView('pro', 'yearly', 'en'),
-    )
+    const de = buildPlanView('pro', 'yearly', 'de')
+    const en = buildPlanView('pro', 'yearly', 'en')
+    expect(de.headline).toBe(en.headline)
+    expect(de.creditSummary).not.toBe(en.creditSummary)
+    expect(de.creditNotes).not.toEqual(en.creditNotes)
     expect(getCommonPlanCopy('fr')).toBe(getCommonPlanCopy('en'))
   })
 
@@ -158,30 +160,55 @@ describe('plan copy follows the configuration', () => {
     expect(pages.safeParse(Array.from({ length: SITE_PAGE_HARD_CAP + 1 }, (_, i) => page(i))).success).toBe(false)
   })
 
-  it('PRO credits are identical for monthly and yearly billing', () => {
-    for (const lang of ['tr', 'en']) {
-      const monthly = buildPlanView('pro', 'monthly', lang)
-      const yearly = buildPlanView('pro', 'yearly', lang)
-      expect(monthly.creditSummary).toBe(yearly.creditSummary)
-      expect(monthly.creditNotes).toEqual(yearly.creditNotes)
-      expect(monthly.creditNotes[0]).toContain(String(AI_CREDIT_CONFIG.pro.monthlyCredits))
+  it('credit allowances are identical for monthly and yearly billing', () => {
+    for (const lang of SUPPORTED_LOCALES) {
+      for (const code of ['starter', 'pro', 'ecommerce'] as const) {
+        const monthly = buildPlanView(code, 'monthly', lang)
+        const yearly = buildPlanView(code, 'yearly', lang)
+        expect(monthly.creditSummary).toBe(yearly.creditSummary)
+        expect(monthly.creditNotes).toEqual(yearly.creditNotes)
+      }
     }
   })
 
-  it('PRO and e-commerce share the same rollover rule and balance cap', () => {
+  it('PRO and e-commerce share rollover and the same 1,000-credit balance cap', () => {
     expect(AI_CREDIT_CONFIG.ecommerce.rollover).toBe(AI_CREDIT_CONFIG.pro.rollover)
-    expect(AI_CREDIT_CONFIG.ecommerce.maxBalance).toBe(AI_CREDIT_CONFIG.pro.maxBalance)
-    expect(AI_CREDIT_CONFIG.ecommerce.monthlyCredits).toBe(AI_CREDIT_CONFIG.pro.monthlyCredits)
+    expect(AI_CREDIT_CONFIG.pro.maxBalance).toBe(1000)
+    expect(AI_CREDIT_CONFIG.ecommerce.maxBalance).toBe(1000)
+    expect(AI_CREDIT_CONFIG.ecommerce.monthlyCredits).toBe(100)
+    expect(AI_CREDIT_CONFIG.pro.monthlyCredits).toBe(50)
   })
 
   it('e-commerce credits come from the config, not from literals', () => {
     const view = buildPlanView('ecommerce', 'monthly', 'en')
+    const number = new Intl.NumberFormat('en')
     expect(view.creditSummary).toContain(
-      String(AI_CREDIT_CONFIG.ecommerce.initialCredits),
+      number.format(AI_CREDIT_CONFIG.ecommerce.initialCredits),
     )
     expect(view.creditNotes[0]).toContain(
-      String(AI_CREDIT_CONFIG.ecommerce.monthlyCredits),
+      number.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits),
     )
+  })
+
+  it('localizes plan credit allowances and caps for all 12 supported languages', () => {
+    expect(SUPPORTED_LOCALES).toHaveLength(12)
+
+    for (const lang of SUPPORTED_LOCALES) {
+      const number = new Intl.NumberFormat(lang)
+      const free = buildPlanView('free', 'monthly', lang)
+      const starter = buildPlanView('starter', 'yearly', lang)
+      const pro = buildPlanView('pro', 'yearly', lang)
+      const ecommerce = buildPlanView('ecommerce', 'monthly', lang)
+
+      expect(free.creditSummary).toContain(number.format(AI_CREDIT_CONFIG.free.credits))
+      expect(starter.creditSummary).toContain(number.format(AI_CREDIT_CONFIG.starter.credits))
+      expect(pro.creditSummary).toContain(number.format(AI_CREDIT_CONFIG.pro.initialCredits))
+      expect(pro.creditNotes[0]).toContain(number.format(AI_CREDIT_CONFIG.pro.monthlyCredits))
+      expect(pro.creditNotes[2]).toContain(number.format(AI_CREDIT_CONFIG.pro.maxBalance))
+      expect(ecommerce.creditSummary).toContain(number.format(AI_CREDIT_CONFIG.ecommerce.initialCredits))
+      expect(ecommerce.creditNotes[0]).toContain(number.format(AI_CREDIT_CONFIG.ecommerce.monthlyCredits))
+      expect(ecommerce.creditNotes[2]).toContain(number.format(AI_CREDIT_CONFIG.ecommerce.maxBalance))
+    }
   })
 })
 
@@ -281,7 +308,7 @@ describe('comparison table is derived from the cards', () => {
 
   const listed = (lang: string) =>
     buildComparison(lang)
-      .filter((g) => g.category !== (lang === 'tr' ? 'Yapay zeka işlemleri' : 'AI actions'))
+      .filter((g) => g.category !== (lang === 'tr' ? 'Yapay zekâ kredileri' : 'AI credits'))
       .flatMap((g) => g.rows)
 
   it('has the same rows in TR and EN', () => {
@@ -375,19 +402,23 @@ describe('comparison table is derived from the cards', () => {
   })
 })
 
-describe('credit box content (N1)', () => {
-  it('keeps the balance cap out of the visible credit notes', () => {
-    for (const lang of ['tr', 'en']) {
-      for (const code of ['pro', 'ecommerce'] as const) {
-        const notes = buildPlanView(code, 'yearly', lang).creditNotes.join(' ')
-        expect(notes).not.toContain('1.500')
-        expect(notes).not.toContain('1,500')
-        expect(notes).not.toMatch(/bakiye|capped/i)
+describe('credit box content', () => {
+  it('shows each paid plan period allowance and the maximum balance on the cards', () => {
+    for (const lang of SUPPORTED_LOCALES) {
+      const number = new Intl.NumberFormat(lang)
+      for (const [code, monthlyCredits, initialCredits] of [
+        ['pro', AI_CREDIT_CONFIG.pro.monthlyCredits, AI_CREDIT_CONFIG.pro.initialCredits],
+        ['ecommerce', AI_CREDIT_CONFIG.ecommerce.monthlyCredits, AI_CREDIT_CONFIG.ecommerce.initialCredits],
+      ] as const) {
+        const view = buildPlanView(code, 'yearly', lang)
+        expect(view.creditSummary).toContain(number.format(initialCredits))
+        expect(view.creditNotes[0]).toContain(number.format(monthlyCredits))
+        expect(view.creditNotes[2]).toContain(number.format(1000))
       }
     }
   })
 
-  it('moves rollover and cap into the "i" tooltip with the configured value', () => {
+  it('keeps the configured rollover and cap in the info tooltip', () => {
     const cap = AI_CREDIT_CONFIG.pro.maxBalance.toLocaleString('tr-TR')
     const tr = getCommonPlanCopy('tr').maxBalanceTip(cap)
     expect(tr).toContain(cap)
@@ -396,7 +427,7 @@ describe('credit box content (N1)', () => {
       AI_CREDIT_CONFIG.pro.maxBalance.toLocaleString('en-US'),
     )
     expect(en).toContain('carry over')
-    expect(en).toContain('1,500')
+    expect(en).toContain('1,000')
   })
 })
 

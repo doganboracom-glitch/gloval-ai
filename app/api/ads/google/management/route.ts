@@ -12,12 +12,18 @@ const actionSchema = z.object({
   actionId: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
   expectedStateHash: z.string().regex(/^[a-f0-9]{64}$/),
-  action: z.enum(['pause', 'enable', 'budget', 'ad_copy']),
+  action: z.enum(['pause', 'enable', 'budget', 'ad_copy', 'keyword', 'archive', 'undo']),
   dailyBudgetMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
   headlines: z.array(z.string().max(30)).optional(),
   descriptions: z.array(z.string().max(90)).optional(),
+  keywordOperation: z.enum(['add', 'remove']).optional(),
+  keywordText: z.string().max(80).optional(),
+  keywordMatchType: z.enum(['EXACT', 'PHRASE']).optional(),
+  keywordNegative: z.boolean().optional(),
+  keywordResourceName: z.string().max(160).optional(),
+  undoActionId: z.string().uuid().optional(),
   acknowledgedBillingWarning: z.boolean().optional(),
-  acknowledgedBudget: z.boolean().optional(),
+  riskConfirmedAmountMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).optional(),
   confirm: z.literal(true),
 })
 
@@ -31,8 +37,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const snapshot = await getGoogleAdsManagementSnapshot(gate.userId, planId)
-    return googleAdsJson({ ok: true, snapshot })
+    const management = await getGoogleAdsManagementSnapshot(gate.userId, planId)
+    return googleAdsJson({ ok: true, ...management })
   } catch (error) {
     return googleAdsErrorResponse(error instanceof GoogleAdsError ? error : new GoogleAdsError('provider_error'))
   }
@@ -62,8 +68,14 @@ export async function POST(request: Request) {
       dailyBudgetMinor: input.data.dailyBudgetMinor,
       headlines: input.data.headlines,
       descriptions: input.data.descriptions,
+      keywordOperation: input.data.keywordOperation,
+      keywordText: input.data.keywordText,
+      keywordMatchType: input.data.keywordMatchType,
+      keywordNegative: input.data.keywordNegative,
+      keywordResourceName: input.data.keywordResourceName,
+      undoActionId: input.data.undoActionId,
       acknowledgedBillingWarning: input.data.acknowledgedBillingWarning,
-      acknowledgedBudget: input.data.acknowledgedBudget,
+      riskConfirmedAmountMinor: input.data.riskConfirmedAmountMinor,
       userConfirmed: input.data.confirm,
     })
     return googleAdsJson({ ok: true, ...result })

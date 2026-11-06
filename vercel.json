@@ -26,6 +26,14 @@
     {
       "path": "/api/cron/ads-publish-reconcile",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/google-ads-reports/weekly",
+      "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/google-ads-reports/monthly",
+      "schedule": "0 12 1 * *"
     }
   ]
 }
