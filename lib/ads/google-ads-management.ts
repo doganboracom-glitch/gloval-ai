@@ -49,6 +49,7 @@ type ManagementPlan = {
   budget_cap_minor: number | null
   google_daily_budget_minor: number | null
   external_campaign_id: string | null
+  plan: Record<string, unknown>
 }
 
 export type GoogleAdsManagementSnapshot = SnapshotState & {
@@ -58,6 +59,7 @@ export type GoogleAdsManagementSnapshot = SnapshotState & {
   paymentMethodWarning: boolean
   performance: ManagementPerformance | null
   recommendedDailyBudgetMinor: number | null
+  recommendationSource: 'ai' | 'saved' | 'unavailable'
   planBudgetCapMinor: number | null
   averageDailySpend30dMinor: number | null
   budgetSanityCeilingMinor: number | null
@@ -95,7 +97,6 @@ type ActionInput = {
   undoActionId?: string
   acknowledgedBillingWarning?: boolean
   riskConfirmedAmountMinor?: number
-  acknowledgedBudget?: boolean
   userConfirmed: boolean
 }
 
@@ -143,7 +144,7 @@ async function loadManagementPlan(userId: string, planId: string): Promise<Manag
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('ads_plans')
-    .select('id,user_id,connection_id,status,version,approved_version,currency,daily_budget_minor,budget_cap_minor,google_daily_budget_minor,external_campaign_id')
+    .select('id,user_id,connection_id,status,version,approved_version,currency,daily_budget_minor,budget_cap_minor,google_daily_budget_minor,external_campaign_id,plan')
     .eq('id', planId)
     .eq('user_id', userId)
     .eq('platform', 'google_ads')
@@ -262,6 +263,12 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
         readPerformance(access, plan),
         readAverageDailySpend30dMinor(access, plan),
       ])
+  const storedAiRecommendation = plan.plan && typeof plan.plan === 'object'
+    ? Number((plan.plan as Record<string, unknown>).aiRecommendedDailyBudgetMinor)
+    : Number.NaN
+  const aiRecommendation = Number.isSafeInteger(storedAiRecommendation) && storedAiRecommendation > 0
+    ? storedAiRecommendation
+    : null
   const stateForHash = snapshotState(state)
   return {
     state,
@@ -272,10 +279,11 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
       billingVerified: billing.verified,
       paymentMethodWarning: billing.paymentMethodWarning,
       performance,
-      recommendedDailyBudgetMinor: plan.daily_budget_minor,
+      recommendedDailyBudgetMinor: aiRecommendation ?? plan.daily_budget_minor,
+      recommendationSource: aiRecommendation !== null ? 'ai' : plan.daily_budget_minor !== null ? 'saved' : 'unavailable',
       planBudgetCapMinor: plan.budget_cap_minor,
       averageDailySpend30dMinor,
-      budgetSanityCeilingMinor: resolveGoogleAdsBudgetSanityCeilingMinor(),
+      budgetSanityCeilingMinor: resolveGoogleAdsBudgetSanityCeilingMinor(access.connection.currency_code ?? plan.currency),
     } satisfies GoogleAdsManagementSnapshot,
   }
 }
@@ -378,7 +386,7 @@ async function finishAction(input: {
   failureReason: string | null
 }) {
   const rpc = createAdminClient() as unknown as AdsRpcClient
-  const { data, error } = await rpc.rpc('ads_finish_google_ads_management_action_v3', {
+  const { data, error } = await rpc.rpc('ads_finish_google_ads_management_action_v4', {
     p_user_id: input.userId,
     p_action_id: input.actionId,
     p_result: input.result,
@@ -448,9 +456,9 @@ function validateStatus(snapshot: GoogleAdsManagementSnapshot, action: 'pause' |
   }
 }
 
-function resolveBudgetSanityCeilingMinor() {
+function resolveBudgetSanityCeilingMinor(currency: string) {
   try {
-    return resolveGoogleAdsBudgetSanityCeilingMinor()
+    return resolveGoogleAdsBudgetSanityCeilingMinor(currency)
   } catch {
     throw new GoogleAdsError('configuration_missing')
   }
@@ -485,7 +493,7 @@ function assessPreparedActionRisk(
 function formatMinorCurrency(amountMinor: number, currency: string) {
   try {
     const formatter = new Intl.NumberFormat('tr-TR', { style: 'currency', currency })
-    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits
+    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2
     return formatter.format(amountMinor / 10 ** fractionDigits)
   } catch {
     return `${amountMinor.toLocaleString('tr-TR')} ${currency}`
@@ -886,7 +894,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         : input.riskConfirmedAmountMinor == null ? null : 'risk_confirmation_mismatch'
       if (riskError) throw new GoogleAdsError(riskError)
       if (riskAssessment?.risk.risky) prepared.target.riskConfirmedAmountMinor = input.riskConfirmedAmountMinor
-      const dailyBudgetLimitMinor = riskAssessment ? resolveBudgetSanityCeilingMinor() : null
+      const dailyBudgetLimitMinor = riskAssessment ? resolveBudgetSanityCeilingMinor(riskAssessment.currency) : null
       if (riskAssessment && dailyBudgetLimitMinor !== null && riskAssessment.amountMinor > dailyBudgetLimitMinor) {
         throw new GoogleAdsError('budget_sanity_ceiling_exceeded')
       }

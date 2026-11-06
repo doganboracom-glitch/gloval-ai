@@ -79,6 +79,7 @@ export type SuggestedPlan = {
   cities: string[]
   modelPolicyCategory: string | null
   modelPolicyEvidence: 'none' | 'ambiguous'
+  aiRecommendedDailyBudgetMinor?: number | null
   euPoliticalAdvertising: 'no'
   euPoliticalDeclarationConfirmed: false
   finalUrl: string
@@ -263,6 +264,7 @@ export function buildPlanSuggestion(
   const budgetIssue = budget && options.serverCapMinor !== null && budget.dailyMinor > options.serverCapMinor
     ? 'budget_sanity_ceiling_exceeded'
     : null
+  if (budget) plan.aiRecommendedDailyBudgetMinor = budget.dailyMinor
   return {
     ok: true,
     suggestion: {

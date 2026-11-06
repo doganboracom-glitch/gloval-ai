@@ -16,7 +16,15 @@ describe('Google Ads amount-risk policy', () => {
     })).toMatchObject({ risky: false, reasons: [] })
   })
 
-  it('flags amounts above three times the proposed plan budget', () => {
+  it('flags amounts above the saved plan budget reference', () => {
+    expect(evaluateGoogleAdsAmountRisk({
+      amountMinor: 20_001,
+      currency: 'TRY',
+      planBudgetCapMinor: 20_000,
+    }).reasons).toEqual(['above_plan_cap'])
+  })
+
+  it('flags amounts above three times the proposed AI plan budget', () => {
     expect(evaluateGoogleAdsAmountRisk({
       amountMinor: 150_001,
       currency: 'TRY',

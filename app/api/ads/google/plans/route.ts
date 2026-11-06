@@ -43,7 +43,7 @@ function parsePlan(value: unknown) {
 function budgetError(currency: string, dailyBudgetMinor: number, budgetCapMinor: number) {
   let safetyCeiling: number | null
   try {
-    safetyCeiling = resolveGoogleAdsBudgetSanityCeilingMinor()
+    safetyCeiling = resolveGoogleAdsBudgetSanityCeilingMinor(currency)
   } catch {
     return { error: 'configuration_missing', status: 503 }
   }
