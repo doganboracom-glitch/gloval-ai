@@ -507,6 +507,7 @@ export function GoogleAdsWorkspace({
   const [planId, setPlanId] = useState<string | null>(null)
   const [form, setForm] = useState<PlanForm>(() => defaultPlanForm(initialAddress))
   const [dailyBudget, setDailyBudget] = useState('1000')
+  const [aiRecommendedBudgetMinor, setAiRecommendedBudgetMinor] = useState<number | null>(null)
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
@@ -618,6 +619,7 @@ export function GoogleAdsWorkspace({
       }
       setPlanId(null)
       setForm(formFromPlan(suggestion.plan as Record<string, unknown>))
+      setAiRecommendedBudgetMinor(suggestion.budget?.dailyMinor ?? null)
       setDailyBudget(suggestion.budget ? minorToMajor(suggestion.budget.dailyMinor, currency) : '')
       setEuPoliticalAdvertising('no')
       setConfirmedEu(false)
@@ -675,6 +677,7 @@ export function GoogleAdsWorkspace({
     setAiFields(new Set())
     setNotices([])
     setForm(defaultPlanForm(initialAddress))
+    setAiRecommendedBudgetMinor(null)
     setDailyBudget('1000')
     setEuPoliticalAdvertising('no')
     setConfirmedEu(false)
@@ -693,6 +696,8 @@ export function GoogleAdsWorkspace({
     setPlanId(plan.id)
     setConnectionId(plan.connection_id ?? '')
     setForm(formFromPlan(plan.plan))
+    const storedRecommendation = Number(plan.plan.aiRecommendedDailyBudgetMinor)
+    setAiRecommendedBudgetMinor(Number.isSafeInteger(storedRecommendation) && storedRecommendation > 0 ? storedRecommendation : null)
     setDailyBudget(minorToMajor(plan.daily_budget_minor, plan.currency))
 
     setEuPoliticalAdvertising(plan.eu_political_advertising ?? 'no')
@@ -714,7 +719,10 @@ export function GoogleAdsWorkspace({
       if (!dailyBudgetMinor) throw new WorkspaceApiError('invalid_budget')
       const body = {
         connectionId: selectedConnection.id,
-        plan: planFromForm(form),
+        plan: {
+          ...planFromForm(form),
+          ...(aiRecommendedBudgetMinor === null ? {} : { aiRecommendedDailyBudgetMinor: aiRecommendedBudgetMinor }),
+        },
         dailyBudgetMinor,
         ...(selectedPlan ? { planId: selectedPlan.id, expectedVersion: selectedPlan.version } : {}),
       }

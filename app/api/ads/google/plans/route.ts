@@ -145,7 +145,6 @@ export async function PATCH(request: Request) {
       plan,
       currency: connection.currency_code,
       daily_budget_minor: input.data.dailyBudgetMinor,
-      budget_cap_minor: null,
     })
     .eq('id', input.data.planId)
     .eq('user_id', gate.userId)

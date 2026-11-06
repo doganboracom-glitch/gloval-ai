@@ -74,7 +74,10 @@ export async function createDraftFromSuggestion(
     .rpc('ads_create_google_ads_plan_draft_e2', {
       p_user_id: userId,
       p_connection_id: connection.id,
-      p_plan: plan,
+      p_plan: {
+        ...plan,
+        aiRecommendedDailyBudgetMinor: plan.aiRecommendedDailyBudgetMinor ?? budget.dailyMinor,
+      },
       p_display_name: plan.brand,
       p_sector: plan.sector,
       p_language: plan.language,

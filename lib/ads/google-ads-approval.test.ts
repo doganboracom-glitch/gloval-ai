@@ -34,6 +34,7 @@ describe('Google Ads approval fingerprints', () => {
     expect(createGoogleAdsPlanApprovalHash({ ...planInput, plan: { name: 'Search', keywords: ['changed'] } })).not.toBe(baseline)
   })
 
+
   it('binds a management approval to the exact before and requested states', () => {
     const action = {
       userId: planInput.userId,

@@ -36,126 +36,13 @@ create index if not exists ads_actions_google_management_history_idx
     'google_ads_campaign_archive'
   );
 
-drop function if exists public.ads_create_google_ads_plan_draft_e2(uuid, uuid, jsonb, text, text, text, integer, integer, text);
-drop function if exists public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, integer, integer, integer, text, text, boolean, boolean, jsonb);
-drop function if exists public.ads_begin_google_ads_publish_e2(uuid, uuid, uuid, integer, uuid, text, integer, integer, bigint, smallint);
-drop function if exists public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, integer, boolean, uuid);
-
-do $budget_constraints$
-declare
-  v_constraint record;
-begin
-  for v_constraint in
-    select c.conrelid::regclass as relation_name, c.conname
-      from pg_catalog.pg_constraint c
-     where c.conrelid in ('public.ads_plans'::regclass, 'public.ads_google_publish_approvals'::regclass)
-       and c.contype = 'c'
-       and (
-         pg_catalog.pg_get_constraintdef(c.oid) ilike '%budget_cap_minor%'
-         or pg_catalog.pg_get_constraintdef(c.oid) ilike '%user_daily_budget_limit_minor%'
-       )
-  loop
-    execute pg_catalog.format('alter table %s drop constraint %I', v_constraint.relation_name, v_constraint.conname);
-  end loop;
-end
-$budget_constraints$;
-
-alter table public.ads_plans
-  alter column daily_budget_minor type bigint using daily_budget_minor::bigint,
-  alter column budget_cap_minor type bigint using budget_cap_minor::bigint,
-  alter column budget_cap_minor drop not null,
-  alter column google_daily_budget_minor type bigint using google_daily_budget_minor::bigint,
-  drop column if exists approval_user_daily_budget_limit_minor;
-alter table public.ads_plans
-  drop constraint if exists ads_plans_approval_requires_cap,
-  drop constraint if exists ads_plans_approval_requires_budget;
-alter table public.ads_plans
-  add constraint ads_plans_approval_requires_budget
-  check (
-    status not in ('approved', 'publishing', 'reconciling', 'published')
-    or (daily_budget_minor is not null and daily_budget_minor > 0 and approved_at is not null)
-  );
-
 alter table public.ads_google_publish_approvals
-  alter column daily_budget_minor type bigint using daily_budget_minor::bigint,
-  alter column budget_cap_minor type bigint using budget_cap_minor::bigint,
-  alter column budget_cap_minor drop not null,
-  drop column if exists user_daily_budget_limit_minor;
-
-create or replace function public.ads_create_google_ads_plan_draft_e2(
-  p_user_id uuid,
-  p_connection_id uuid,
-  p_plan jsonb,
-  p_display_name text,
-  p_sector text,
-  p_language text,
-  p_daily_budget_minor bigint,
-  p_currency text
-)
-returns table(state text, plan_id uuid, plan_version integer)
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_connection public.ads_connections%rowtype;
-  v_brand_id uuid;
-  v_plan_id uuid;
-  v_currency_digits smallint;
-begin
-  if p_user_id is null or p_connection_id is null then
-    raise exception 'user and connection are required';
-  end if;
-  if p_plan is null or pg_catalog.jsonb_typeof(p_plan) is distinct from 'object'
-     or p_display_name is null or pg_catalog.length(p_display_name) not between 1 and 80
-     or p_sector is null or pg_catalog.length(p_sector) not between 1 and 60
-     or p_language not in ('tr', 'en')
-     or p_daily_budget_minor is null or p_daily_budget_minor <= 0
-     or p_currency not in ('TRY', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'KRW') then
-    return query select 'invalid_plan'::text, null::uuid, null::integer;
-    return;
-  end if;
-  v_currency_digits := case when p_currency in ('JPY', 'KRW') then 0 else 2 end;
-  if p_daily_budget_minor::numeric * pg_catalog.power(10, 6 - v_currency_digits)
-     > 9223372036854775807::numeric then
-    return query select 'invalid_plan'::text, null::uuid, null::integer;
-    return;
-  end if;
-  if p_plan->>'finalUrl' is null or p_plan->>'finalUrl' !~ '^https://' then
-    return query select 'invalid_plan'::text, null::uuid, null::integer;
-    return;
-  end if;
-
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtext(p_user_id::text || ':' || p_currency)
-  );
-  select c.* into v_connection
-    from public.ads_connections c
-   where c.id = p_connection_id and c.user_id = p_user_id
-     and c.platform = 'google_ads' and c.status = 'active'
-   for update;
-  if not found then
-    return query select 'connection_not_found'::text, null::uuid, null::integer;
-    return;
-  end if;
-  if v_connection.is_manager or v_connection.currency_code is distinct from p_currency then
-    return query select 'connection_ineligible'::text, null::uuid, null::integer;
-    return;
-  end if;
-
-  insert into public.ads_brands (user_id, source, url, display_name, sector, language)
-  values (p_user_id, 'external_url', p_plan->>'finalUrl', p_display_name, p_sector, p_language)
-  returning id into v_brand_id;
-  insert into public.ads_plans (
-    user_id, brand_id, connection_id, platform, status, plan, version,
-    currency, daily_budget_minor, budget_cap_minor, google_campaign_status
-  ) values (
-    p_user_id, v_brand_id, p_connection_id, 'google_ads', 'draft', p_plan, 1,
-    p_currency, p_daily_budget_minor, null, 'PAUSED'
-  ) returning id into v_plan_id;
-  return query select 'created'::text, v_plan_id, 1;
-end
-$$;
+  alter column user_daily_budget_limit_minor drop not null;
+alter table public.ads_google_publish_approvals
+  drop constraint if exists ads_google_publish_approvals_user_daily_budget_limit_minor_check;
+alter table public.ads_google_publish_approvals
+  add constraint ads_google_publish_approvals_user_daily_budget_limit_minor_check
+  check (user_daily_budget_limit_minor is null or user_daily_budget_limit_minor >= daily_budget_minor);
 
 create or replace function public.ads_approve_google_ads_plan_e2(
   p_user_id uuid,
@@ -164,7 +51,9 @@ create or replace function public.ads_approve_google_ads_plan_e2(
   p_connection_id uuid,
   p_customer_id text,
   p_currency text,
-  p_daily_budget_minor bigint,
+  p_daily_budget_minor integer,
+  p_budget_cap_minor integer,
+  p_user_daily_budget_limit_minor integer,
   p_plan_hash text,
   p_eu_political_advertising text,
   p_eu_declaration_confirmed boolean,
@@ -180,7 +69,6 @@ declare
   v_plan public.ads_plans%rowtype;
   v_connection public.ads_connections%rowtype;
   v_approval public.ads_google_publish_approvals%rowtype;
-  v_currency_digits smallint;
 begin
   if p_user_id is null or p_plan_id is null or p_connection_id is null then
     raise exception 'user, plan, and connection are required';
@@ -193,15 +81,15 @@ begin
     or p_terms_accepted is distinct from true then
     return query select 'confirmation_required'::text, null::uuid, null::integer; return;
   end if;
-  if p_currency is null or p_currency not in ('TRY', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'KRW')
+  if p_daily_budget_minor is null or p_daily_budget_minor <= 0
+    or p_budget_cap_minor is null or p_budget_cap_minor < p_daily_budget_minor
+    or p_currency is null or p_currency !~ '^[A-Z]{3}$'
     or p_customer_id is null or p_customer_id !~ '^[0-9-]{1,32}$' then
     return query select 'invalid_budget'::text, null::uuid, null::integer; return;
   end if;
-  v_currency_digits := case when p_currency in ('JPY', 'KRW') then 0 else 2 end;
-  if p_daily_budget_minor is null or p_daily_budget_minor <= 0
-    or p_daily_budget_minor::numeric * pg_catalog.power(10, 6 - v_currency_digits)
-      > 9223372036854775807::numeric then
-    return query select 'invalid_budget'::text, null::uuid, null::integer; return;
+  if p_user_daily_budget_limit_minor is not null
+    and p_daily_budget_minor > p_user_daily_budget_limit_minor then
+    return query select 'budget_sanity_ceiling_exceeded'::text, null::uuid, null::integer; return;
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext(p_user_id::text || ':' || p_currency));
@@ -211,7 +99,8 @@ begin
   if v_plan.version is distinct from p_expected_version
     or v_plan.connection_id is distinct from p_connection_id
     or v_plan.currency is distinct from p_currency
-    or v_plan.daily_budget_minor is distinct from p_daily_budget_minor then
+    or v_plan.daily_budget_minor is distinct from p_daily_budget_minor
+    or v_plan.budget_cap_minor is distinct from p_budget_cap_minor then
     return query select 'plan_changed'::text, null::uuid, v_plan.version; return;
   end if;
   if v_plan.status not in ('draft', 'failed', 'approved') then
@@ -238,19 +127,21 @@ begin
       approved_version = p_expected_version, validation_hash = null,
       validated_version = null, validated_at = null,
       eu_political_advertising = p_eu_political_advertising,
-      eu_political_declaration_confirmed_at = v_approval.eu_declaration_confirmed_at
+      eu_political_declaration_confirmed_at = v_approval.eu_declaration_confirmed_at,
+      approval_user_daily_budget_limit_minor = p_user_daily_budget_limit_minor
     where p.id = p_plan_id and p.user_id = p_user_id;
     return query select 'approved'::text, v_approval.id, p_expected_version; return;
   end if;
 
   insert into public.ads_google_publish_approvals (
     user_id, plan_id, plan_version, plan_hash, connection_id, customer_id, currency,
-    daily_budget_minor, eu_political_advertising, eu_declaration_confirmed_at,
-    terms_accepted_at, approval_summary
+    daily_budget_minor, budget_cap_minor, user_daily_budget_limit_minor,
+    eu_political_advertising, eu_declaration_confirmed_at, terms_accepted_at,
+    approval_summary
   ) values (
     p_user_id, p_plan_id, p_expected_version, p_plan_hash, p_connection_id, p_customer_id,
-    p_currency, p_daily_budget_minor, p_eu_political_advertising, now(), now(),
-    coalesce(p_approval_summary, '{}'::jsonb)
+    p_currency, p_daily_budget_minor, p_budget_cap_minor, p_user_daily_budget_limit_minor,
+    p_eu_political_advertising, now(), now(), coalesce(p_approval_summary, '{}'::jsonb)
   ) returning * into v_approval;
 
   update public.ads_plans p set
@@ -259,7 +150,8 @@ begin
     approved_version = p_expected_version, validation_hash = null,
     validated_version = null, validated_at = null,
     eu_political_advertising = p_eu_political_advertising,
-    eu_political_declaration_confirmed_at = v_approval.eu_declaration_confirmed_at
+    eu_political_declaration_confirmed_at = v_approval.eu_declaration_confirmed_at,
+    approval_user_daily_budget_limit_minor = p_user_daily_budget_limit_minor
   where p.id = p_plan_id and p.user_id = p_user_id;
   return query select 'approved'::text, v_approval.id, p_expected_version;
 end
@@ -272,7 +164,8 @@ create or replace function public.ads_begin_google_ads_publish_e2(
   p_expected_version integer,
   p_approval_id uuid,
   p_plan_hash text,
-  p_cpc_bid_ceiling_minor bigint,
+  p_user_daily_budget_limit_minor integer,
+  p_cpc_bid_ceiling_minor integer,
   p_cpc_bid_ceiling_micros bigint,
   p_currency_fraction_digits smallint
 )
@@ -286,9 +179,10 @@ declare
   v_existing public.ads_google_publish_credit_reservations%rowtype;
   v_balance integer;
   v_reserved integer;
-  v_cpc_minor bigint;
+  v_cpc_minor integer;
   v_cpc_micros bigint;
   v_currency_digits smallint;
+  v_one_unit_minor integer;
 begin
   if p_user_id is null or p_plan_id is null or p_request_id is null then
     raise exception 'user, plan, and request ids are required';
@@ -340,15 +234,22 @@ begin
     or v_plan.approval_id is distinct from p_approval_id
     or v_plan.approval_hash is distinct from p_plan_hash
     or v_plan.validation_hash is distinct from p_plan_hash
-    or v_plan.validated_version is distinct from p_expected_version then
+    or v_plan.validated_version is distinct from p_expected_version
+    or v_plan.approval_user_daily_budget_limit_minor is distinct from p_user_daily_budget_limit_minor then
     return query select 'plan_changed'::text, 0, false, 0; return;
   end if;
   if v_plan.status = 'published' then return query select 'already_published'::text, 0, false, 0; return; end if;
   if v_plan.status in ('publishing', 'reconciling') then return query select 'publish_in_progress'::text, 0, false, 0; return; end if;
   if v_plan.status is distinct from 'approved' then return query select 'plan_not_approved'::text, 0, false, 0; return; end if;
-  if v_plan.daily_budget_minor is null or v_plan.daily_budget_minor <= 0
-    or v_plan.currency not in ('TRY', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'KRW') then
+  if v_plan.daily_budget_minor is null or v_plan.budget_cap_minor is null
+    or v_plan.daily_budget_minor <= 0 or v_plan.daily_budget_minor > v_plan.budget_cap_minor then
     return query select 'invalid_budget'::text, 0, false, 0; return;
+  end if;
+  if p_user_daily_budget_limit_minor is not null and v_plan.daily_budget_minor > p_user_daily_budget_limit_minor then
+    return query select 'budget_sanity_ceiling_exceeded'::text, 0, false, 0; return;
+  end if;
+  if v_plan.currency not in ('TRY', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'KRW') then
+    return query select 'currency_mismatch'::text, 0, false, 0; return;
   end if;
 
   select case v_plan.currency when 'JPY' then 0 when 'KRW' then 0 else 2 end into v_currency_digits;
@@ -358,13 +259,13 @@ begin
   if p_currency_fraction_digits is null or p_currency_fraction_digits not between 0 and 6 then
     return query select 'currency_mismatch'::text, 0, false, 0; return;
   end if;
-  if v_plan.daily_budget_minor::numeric * pg_catalog.power(10, 6 - p_currency_fraction_digits)
-     > 9223372036854775807::numeric then
+  v_one_unit_minor := pg_catalog.power(10, p_currency_fraction_digits)::integer;
+  if v_plan.daily_budget_minor < v_one_unit_minor then
     return query select 'invalid_budget'::text, 0, false, 0; return;
   end if;
   v_cpc_minor := least(
     v_plan.daily_budget_minor,
-    greatest(1::bigint, pg_catalog.floor(v_plan.daily_budget_minor / 10.0)::bigint)
+    greatest(v_one_unit_minor, pg_catalog.floor(v_plan.daily_budget_minor / 10.0)::integer)
   );
   v_cpc_micros := v_cpc_minor::bigint * pg_catalog.power(10, 6 - p_currency_fraction_digits)::bigint;
   if p_cpc_bid_ceiling_minor is distinct from v_cpc_minor
@@ -402,9 +303,9 @@ create or replace function public.ads_begin_google_ads_management_action_v4(
   p_approval_hash text,
   p_target jsonb,
   p_before_state jsonb,
+  p_user_daily_budget_limit_minor integer,
   p_risk_confirmation_required boolean,
-  p_risk_acknowledged boolean,
-  p_risk_confirmed_amount_minor bigint,
+  p_risk_confirmed_amount_minor integer,
   p_user_confirmed boolean,
   p_undo_of uuid default null
 )
@@ -417,10 +318,9 @@ declare
   v_plan public.ads_plans%rowtype;
   v_action public.ads_actions%rowtype;
   v_original public.ads_actions%rowtype;
-  v_target_budget numeric;
+  v_target_budget integer;
   v_current_micros numeric;
   v_target_micros numeric;
-  v_currency_digits smallint;
 begin
   if p_user_id is null or p_plan_id is null or p_action_id is null then
     raise exception 'user, plan, and action ids are required';
@@ -436,9 +336,9 @@ begin
       'google_ads_campaign_archive'
     )
     or p_approval_hash is null or p_approval_hash !~ '^[0-9a-f]{64}$'
-     or p_target is null or jsonb_typeof(p_target) is distinct from 'object'
-     or p_before_state is null or jsonb_typeof(p_before_state) is distinct from 'object'
-     or p_risk_confirmation_required is null or p_risk_acknowledged is null then
+    or p_target is null or jsonb_typeof(p_target) is distinct from 'object'
+    or p_before_state is null or jsonb_typeof(p_before_state) is distinct from 'object'
+    or p_risk_confirmation_required is null then
     return query select 'invalid_action'::text, null::uuid; return;
   end if;
 
@@ -545,39 +445,35 @@ begin
   end if;
 
   if p_risk_confirmation_required then
-    if p_risk_acknowledged is distinct from true or p_risk_confirmed_amount_minor is null then
+    if p_risk_confirmed_amount_minor is null then
       return query select 'risk_confirmation_required'::text, null::uuid; return;
     end if;
     if p_target->>'riskConfirmedAmountMinor' is distinct from p_risk_confirmed_amount_minor::text then
       return query select 'risk_confirmation_mismatch'::text, null::uuid; return;
     end if;
-  elsif p_risk_acknowledged or p_risk_confirmed_amount_minor is not null or p_target ? 'riskConfirmedAmountMinor' then
+  elsif p_risk_confirmed_amount_minor is not null or p_target ? 'riskConfirmedAmountMinor' then
     return query select 'risk_confirmation_mismatch'::text, null::uuid; return;
   end if;
 
   if p_action_type = 'google_ads_budget_update' then
-    if (p_target->>'dailyBudgetMinor') !~ '^[1-9][0-9]{0,18}$'
-       or (p_target->>'dailyBudgetMicros') !~ '^[1-9][0-9]{0,18}$' then
+    if (p_target->>'dailyBudgetMinor') !~ '^[0-9]{1,9}$'
+       or (p_target->>'dailyBudgetMicros') !~ '^[0-9]{1,20}$'
+       or v_plan.budget_cap_minor is null then
       return query select 'invalid_budget'::text, null::uuid; return;
     end if;
-    v_target_budget := (p_target->>'dailyBudgetMinor')::numeric;
+    v_target_budget := (p_target->>'dailyBudgetMinor')::integer;
     v_target_micros := (p_target->>'dailyBudgetMicros')::numeric;
     v_current_micros := nullif(p_before_state->>'dailyBudgetMicros', '')::numeric;
-    if v_target_budget <= 0 or v_target_budget > 9223372036854775807::numeric
-       or v_target_micros <= 0 or v_target_micros > 9223372036854775807::numeric
-       or v_current_micros is null or v_current_micros <= 0
-       or v_plan.currency not in ('TRY', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'KRW') then
+    if v_target_budget <= 0 or v_current_micros is null or v_current_micros <= 0 then
       return query select 'invalid_budget'::text, null::uuid; return;
     end if;
-    v_currency_digits := case when v_plan.currency in ('JPY', 'KRW') then 0 else 2 end;
-    if v_target_micros <> v_target_budget * pg_catalog.power(10, 6 - v_currency_digits) then
-      return query select 'invalid_budget'::text, null::uuid; return;
+    if p_user_daily_budget_limit_minor is not null
+       and v_target_budget > p_user_daily_budget_limit_minor then
+      return query select 'budget_sanity_ceiling_exceeded'::text, null::uuid; return;
     end if;
-    if p_risk_confirmation_required and (
-      p_risk_confirmed_amount_minor::numeric is distinct from v_target_budget
-      or p_target->>'riskConfirmedAmountMinor' is distinct from v_target_budget::text
-    ) then
-      return query select 'risk_confirmation_mismatch'::text, null::uuid; return;
+    if v_target_budget > v_plan.budget_cap_minor
+       and p_risk_confirmed_amount_minor is distinct from v_target_budget then
+      return query select 'risk_confirmation_required'::text, null::uuid; return;
     end if;
   end if;
 
@@ -609,7 +505,7 @@ declare
   v_action public.ads_actions%rowtype;
   v_plan public.ads_plans%rowtype;
   v_original public.ads_actions%rowtype;
-  v_budget bigint;
+  v_budget integer;
   v_status text;
 begin
   select a.* into v_action
@@ -630,9 +526,13 @@ begin
       return query select 'plan_changed'::text; return;
     end if;
     if v_action.action_type = 'google_ads_budget_update' then
-      v_budget := (v_action.target->>'dailyBudgetMinor')::bigint;
+      v_budget := (v_action.target->>'dailyBudgetMinor')::integer;
       if v_budget is null or v_budget <= 0 then
         return query select 'invalid_budget'::text; return;
+      end if;
+      if v_budget > v_plan.budget_cap_minor
+         and (v_action.target->>'riskConfirmedAmountMinor') is distinct from v_budget::text then
+        return query select 'risk_confirmation_required'::text; return;
       end if;
       update public.ads_plans p
          set google_daily_budget_minor = v_budget
@@ -668,16 +568,12 @@ begin
 end
 $$;
 
+drop function if exists public.ads_begin_google_ads_campaign_action_e2(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean);
+drop function if exists public.ads_finish_google_ads_campaign_action_e2(uuid, uuid, text, jsonb, text);
 drop function if exists public.ads_begin_google_ads_management_action_v3(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, uuid);
 drop function if exists public.ads_finish_google_ads_management_action_v3(uuid, uuid, text, jsonb, text);
 
-revoke all on function public.ads_create_google_ads_plan_draft_e2(uuid, uuid, jsonb, text, text, text, bigint, text) from public, anon, authenticated;
-revoke all on function public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, bigint, text, text, boolean, boolean, jsonb) from public, anon, authenticated;
-revoke all on function public.ads_begin_google_ads_publish_e2(uuid, uuid, uuid, integer, uuid, text, bigint, bigint, smallint) from public, anon, authenticated;
-revoke all on function public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, boolean, boolean, bigint, boolean, uuid) from public, anon, authenticated;
+revoke all on function public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, integer, boolean, uuid) from public, anon, authenticated;
 revoke all on function public.ads_finish_google_ads_management_action_v4(uuid, uuid, text, jsonb, text) from public, anon, authenticated;
-grant execute on function public.ads_create_google_ads_plan_draft_e2(uuid, uuid, jsonb, text, text, text, bigint, text) to service_role;
-grant execute on function public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, bigint, text, text, boolean, boolean, jsonb) to service_role;
-grant execute on function public.ads_begin_google_ads_publish_e2(uuid, uuid, uuid, integer, uuid, text, bigint, bigint, smallint) to service_role;
-grant execute on function public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, boolean, boolean, bigint, boolean, uuid) to service_role;
+grant execute on function public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, integer, boolean, uuid) to service_role;
 grant execute on function public.ads_finish_google_ads_management_action_v4(uuid, uuid, text, jsonb, text) to service_role;

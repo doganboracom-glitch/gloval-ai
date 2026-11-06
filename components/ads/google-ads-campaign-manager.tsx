@@ -79,12 +79,12 @@ function minorFromLocalizedAmount(value: string, currency: string, isTr: boolean
   const parts = new Intl.NumberFormat(locale).formatToParts(1234.5)
   const group = parts.find((part) => part.type === 'group')?.value ?? ','
   const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.'
-  let normalized = trimmed.replaceAll(group, '')
-  if (decimal !== '.' && normalized.includes('.') && !normalized.includes(decimal)) {
-    const trailingDigits = normalized.length - normalized.lastIndexOf('.') - 1
-    if (trailingDigits !== 3) normalized = normalized.replace('.', decimal)
+  let localized = trimmed
+  if (decimal !== '.' && localized.includes('.') && !localized.includes(decimal)) {
+    const trailingDigits = localized.length - localized.lastIndexOf('.') - 1
+    if (trailingDigits !== 3) localized = localized.replace('.', decimal)
   }
-  normalized = normalized.replace(decimal, '.').replace(/[^\d.]/g, '')
+  const normalized = localized.replaceAll(group, '').replace(decimal, '.').replace(/[^\d.]/g, '')
   const major = Number(normalized)
   if (!Number.isFinite(major) || major <= 0) return null
   const minor = major * 10 ** currencyDigits(currency)
@@ -206,19 +206,14 @@ function actionSummary(action: GoogleAdsManagementAction, currency: string, isTr
   return ''
 }
 
-export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, previewData, previewLabel, previewMode = false }: {
+export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }: {
   plan: Plan | null
   hasConnection: boolean
   currency: string
   isTr: boolean
-  previewData?: ManagementResponse
-  previewLabel?: string
-  previewMode?: boolean
 }) {
   const liveKey = plan?.status === 'published' ? `/api/ads/google/management?planId=${encodeURIComponent(plan.id)}` : null
-  const key = liveKey && previewData ? `${liveKey}#${previewLabel ?? 'preview'}` : liveKey
-  const fetcher = previewData ? () => Promise.resolve(previewData) : fetchManagement
-  const { data, error, isLoading, mutate } = useSWR<ManagementResponse>(key, fetcher, {
+  const { data, error, isLoading, mutate } = useSWR<ManagementResponse>(liveKey, fetchManagement, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   })
@@ -246,6 +241,12 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
   const currentBudgetMinor = currentBudget ? minorFromMajor(currentBudget, currency) : null
   const currentStatus = management?.campaignStatus
   const performance = management?.performance ?? null
+  const recommendationLabel = management?.recommendationSource === 'ai'
+    ? (isTr ? 'İlk AI önerisi' : 'Initial AI recommendation')
+    : (isTr ? 'Kaydedilen başlangıç bütçesi' : 'Saved starting budget')
+  const confirmationRiskRequired = confirmation?.risk?.risky === true
+  const confirmationTypedMinor = confirmationRiskRequired ? minorFromLocalizedAmount(riskAmountText, currency, isTr) : null
+  const confirmationRiskMatches = confirmationRiskRequired && confirmation?.budgetAmountMinor !== null && confirmation?.budgetAmountMinor !== undefined && confirmationTypedMinor === confirmation.budgetAmountMinor
   const recommendations = useMemo(() => {
     if (!performance) return []
     const items: { key: string; text: string; target: 'copy' | 'keywords' }[] = []
@@ -271,7 +272,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
   }, [isTr, management, performance])
 
   async function sendAction(action: ActionName, payload: Record<string, unknown> = {}) {
-    if (!plan || !management || pending || previewMode) return
+    if (!plan || !management || pending) return
     setPending(true)
     setActionError(null)
     setStatusMessage('')
@@ -419,12 +420,12 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {currentStatus === 'ENABLED' ? (
-                      <Button type="button" variant="outline" onClick={() => void sendAction('pause')} disabled={pending}>
+                      <Button type="button" variant="outline" onClick={() => openConfirmation({ action: 'pause', title: isTr ? 'Kampanyayı duraklat?' : 'Pause this campaign?', description: isTr ? 'Reklam gösterimi durur. Kampanya Google Ads’te istediğiniz zaman yeniden etkinleştirilebilir.' : 'Ad delivery stops. You can re-enable the campaign from Google Ads at any time.', before: statusLabel('ENABLED', isTr), after: statusLabel('PAUSED', isTr) })} disabled={pending}>
                         <Pause data-icon="inline-start" aria-hidden="true" />{isTr ? 'Duraklat' : 'Pause'}
                       </Button>
                     ) : null}
                     {currentStatus === 'PAUSED' ? (
-                      <Button type="button" onClick={() => openConfirmation({ action: 'enable', title: isTr ? 'Kampanyayı etkinleştir?' : 'Enable this campaign?', description: isTr ? 'Bu işlem Google Ads’te reklam gösterimini başlatır ve doğrudan hesabına harcama yansıtabilir.' : 'This starts ad delivery in Google Ads and can create spend billed directly to the account.', before: statusLabel('PAUSED', isTr), after: statusLabel('ENABLED', isTr) })} disabled={pending || management.reviewStatus !== 'approved'}>
+                      <Button type="button" onClick={() => openConfirmation({ action: 'enable', budgetAmountMinor: currentBudgetMinor, assessRisk: true, title: isTr ? 'Kampanyayı etkinleştir?' : 'Enable this campaign?', description: isTr ? 'Bu işlem Google Ads’te reklam gösterimini başlatır ve doğrudan hesabına harcama yansıtabilir.' : 'This starts ad delivery in Google Ads and can create spend billed directly to the account.', before: statusLabel('PAUSED', isTr), after: statusLabel('ENABLED', isTr) })} disabled={pending || management.reviewStatus !== 'approved'}>
                         <Play data-icon="inline-start" aria-hidden="true" />{isTr ? 'Etkinleştir' : 'Enable'}
                       </Button>
                     ) : null}
@@ -438,6 +439,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
                 </div>
                 {management.campaignStatus === 'PAUSED' && management.reviewStatus !== 'approved' ? <p className="text-sm text-muted-foreground">{isTr ? 'Etkinleştirmeden önce Google reklam incelemesi tamamlanmalıdır.' : 'Google ad review must be approved before enabling.'}</p> : null}
                 {management.campaignStatus === 'PAUSED' && management.paymentMethodWarning ? <Alert><AlertCircle aria-hidden="true" /><AlertDescription>{isTr ? 'Google Ads faturalama yöntemi doğrulanamadı; etkinleştirme onayında bunu ayrıca kabul etmeniz gerekir.' : 'Google Ads could not verify the billing method; acknowledge this in the enable confirmation.'}</AlertDescription></Alert> : null}
+
               </section>
 
               {activeCampaign && performance ? (
@@ -462,13 +464,14 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
               {activeCampaign ? (
                 <div className="grid gap-5 xl:grid-cols-2">
                   <section id="google-ads-manager-budget" className="flex flex-col gap-3 rounded-xl border border-border p-4" aria-labelledby="ads-manager-budget-title">
-                    <div><h3 id="ads-manager-budget-title" className="font-semibold">{isTr ? 'Günlük bütçe' : 'Daily budget'}</h3><p className="text-sm leading-relaxed text-muted-foreground">{isTr ? 'Uygulama tarafında bütçe artış veya kampanya sayısı tavanı yoktur. Belirgin artışlarda tutarı yeniden yazıp onaylamanız istenir.' : 'There is no app-side budget increase or campaign-count ceiling. Significant increases require re-entering and confirming the amount.'}</p></div>
+                    <div><h3 id="ads-manager-budget-title" className="font-semibold">{isTr ? 'Günlük bütçe' : 'Daily budget'}</h3><p className="text-sm leading-relaxed text-muted-foreground">{isTr ? 'Uygulama tarafında bütçe veya kampanya sayısı tavanı yoktur. Belirgin artışlarda tutarı yeniden yazıp onaylamanız istenir.' : 'There is no app-side budget or campaign-count ceiling. Significant increases require re-entering and confirming the exact amount.'}</p></div>
                     <FieldGroup>
                       <Field>
                         <FieldLabel htmlFor="google-ads-manager-budget-input">{isTr ? `Yeni günlük bütçe (${currency})` : `New daily budget (${currency})`}</FieldLabel>
                         <Input id="google-ads-manager-budget-input" type="number" min={1 / 10 ** currencyDigits(currency)} step={1 / 10 ** currencyDigits(currency)} value={inputBudget} onChange={(event) => setBudgetValue(event.target.value)} disabled={pending} />
                       </Field>
                       <p className="text-xs text-muted-foreground">{isTr ? `Önce: ${formatMicros(management.dailyBudgetMicros, currency, true)} · Sonra: ${targetMinor ? new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(targetMinor / 10 ** currencyDigits(currency)) : '—'}` : `Before: ${formatMicros(management.dailyBudgetMicros, currency, false)} · After: ${targetMinor ? new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(targetMinor / 10 ** currencyDigits(currency)) : '—'}`}</p>
+                      <p className="text-xs text-muted-foreground">{isTr ? `${recommendationLabel}: ${management.recommendedDailyBudgetMinor === null ? '—' : formatMinorAmount(management.recommendedDailyBudgetMinor, currency, true)} · Son 30 gün ortalama günlük harcama: ${management.averageDailySpend30dMinor === null ? '—' : formatMinorAmount(Math.round(management.averageDailySpend30dMinor), currency, true)}` : `${recommendationLabel}: ${management.recommendedDailyBudgetMinor === null ? '—' : formatMinorAmount(management.recommendedDailyBudgetMinor, currency, false)} · 30-day average daily spend: ${management.averageDailySpend30dMinor === null ? '—' : formatMinorAmount(Math.round(management.averageDailySpend30dMinor), currency, false)}`}</p>
                       <Button type="button" variant="outline" onClick={() => {
                         if (!targetMinor) { setActionError(errorMessage('invalid_budget', isTr)); return }
                         const amount = new Intl.NumberFormat(isTr ? 'tr-TR' : 'en-US', { style: 'currency', currency }).format(targetMinor / 10 ** currencyDigits(currency))
@@ -516,7 +519,13 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
                     const wasUndone = actionWasUndone(action, activity)
                     return <li key={action.id} className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 flex-col gap-1"><p className="font-medium">{actionLabel(action, isTr)}</p><p className="text-sm text-muted-foreground">{actionSummary(action, currency, isTr)}</p><p className="text-xs text-muted-foreground"><time dateTime={action.created_at}>{new Intl.DateTimeFormat(isTr ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(action.created_at))}</time> · {actionStatus(action, isTr, wasUndone)}</p>{action.failure_reason && action.failure_reason !== 'state_unverified' ? <p className="text-xs text-muted-foreground">{isTr ? 'Ayrıntı' : 'Detail'}: {action.failure_reason}</p> : null}</div>
-                      {action.status === 'applied' && action.reversible && action.after_state && !wasUndone ? <Button type="button" size="sm" variant="outline" onClick={() => openConfirmation({ action: 'undo', payload: { undoActionId: action.id }, title: isTr ? 'Bu işlemi geri al?' : 'Undo this action?', description: isTr ? 'Önceki değer Google Ads’ten yeniden okunacak ve yalnızca hâlâ aynıysa geri yüklenecek.' : 'The prior value will be restored only if Google Ads still matches this action’s after-state.', before: actionSummary(action, currency, isTr) || actionLabel(action, isTr), after: isTr ? 'Önceki değer' : 'Previous value' })} disabled={pending}><RotateCcw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geri al' : 'Undo'}</Button> : null}
+                      {action.status === 'applied' && action.reversible && action.after_state && !wasUndone ? <Button type="button" size="sm" variant="outline" onClick={() => {
+                        const undoBudgetMinor = action.action_type === 'google_ads_budget_update' && action.before_state
+                          ? minorFromMajor(majorFromMicros(action.before_state.dailyBudgetMicros, currency), currency)
+                          : null
+                        const undoEnables = action.action_type === 'google_ads_campaign_status_update' && action.before_state?.campaignStatus === 'ENABLED'
+                        openConfirmation({ action: 'undo', budgetAmountMinor: undoBudgetMinor ?? currentBudgetMinor, assessRisk: undoBudgetMinor !== null || undoEnables, previousDailyBudgetMinor: currentBudgetMinor, payload: { undoActionId: action.id }, title: isTr ? 'Bu işlemi geri al?' : 'Undo this action?', description: isTr ? 'Önceki değer Google Ads’ten yeniden okunacak ve yalnızca hâlâ aynıysa geri yüklenecek.' : 'The prior value will be restored only if Google Ads still matches this action’s after-state.', before: actionSummary(action, currency, isTr) || actionLabel(action, isTr), after: isTr ? 'Önceki değer' : 'Previous value' })
+                      }} disabled={pending}><RotateCcw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geri al' : 'Undo'}</Button> : null}
                     </li>
                   })}
                 </ol> : <p className="text-sm text-muted-foreground">{isTr ? 'Henüz yönetim işlemi yok.' : 'No management actions yet.'}</p>}
@@ -532,26 +541,29 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
           <AlertDialog.Popup className="fixed left-1/2 top-1/2 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border border-border bg-background p-5 text-foreground shadow-xl">
             {confirmation ? <>
               <div className="flex flex-col gap-1"><AlertDialog.Title className="text-lg font-semibold">{confirmation.title}</AlertDialog.Title><AlertDialog.Description className="text-sm leading-relaxed text-muted-foreground">{confirmation.description}</AlertDialog.Description></div>
+              {confirmation.budgetAmountMinor !== undefined && confirmation.budgetAmountMinor !== null ? <section className="rounded-xl border border-border bg-muted/40 p-4" aria-label={isTr ? 'Bütçe özeti' : 'Budget summary'}><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{isTr ? 'Günlük bütçe' : 'Daily budget'}</p><p className="mt-1 text-3xl font-semibold tabular-nums text-balance">{formatMinorAmount(confirmation.budgetAmountMinor, currency, isTr)}</p><p className="mt-2 text-sm text-muted-foreground">{isTr ? '30,4 günlük tahmini üst sınır' : 'Estimated 30.4-day upper bound'}: <span className="font-medium text-foreground">{formatMinorAmount(googleAdsMonthlyBudgetUpperBoundMinor(confirmation.budgetAmountMinor), currency, isTr)}</span></p></section> : null}
               {confirmation.before !== undefined || confirmation.after !== undefined ? <dl className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm"><div><dt className="text-xs text-muted-foreground">{isTr ? 'Önce' : 'Before'}</dt><dd className="mt-1 break-words font-medium">{confirmation.before}</dd></div><div><dt className="text-xs text-muted-foreground">{isTr ? 'Sonra' : 'After'}</dt><dd className="mt-1 break-words font-medium">{confirmation.after}</dd></div></dl> : null}
+              {confirmation.risk?.risky ? <Alert className="border-warning/50 bg-warning/10"><AlertCircle aria-hidden="true" /><AlertTitle>{isTr ? 'Yüksek harcama riski' : 'High spend risk'}</AlertTitle><AlertDescription><ul className="list-disc ps-5">{confirmation.risk.reasons.map((reason) => <li key={reason}>{riskReasonText(reason, isTr)}</li>)}</ul></AlertDescription></Alert> : null}
+              {confirmation.risk?.risky ? <FieldSet><FieldGroup>
+                <Field data-invalid={riskAmountText.length > 0 && !confirmationRiskMatches}>
+                  <FieldLabel htmlFor="google-ads-risk-amount">{isTr ? 'Tutarı aynen tekrar yazın' : 'Re-enter the exact amount'}</FieldLabel>
+                  <Input id="google-ads-risk-amount" type="text" inputMode="decimal" autoComplete="off" value={riskAmountText} onChange={(event) => setRiskAmountText(event.target.value)} placeholder={confirmation.budgetAmountMinor === null || confirmation.budgetAmountMinor === undefined ? '' : formatMinorAmount(confirmation.budgetAmountMinor, currency, isTr)} aria-invalid={riskAmountText.length > 0 && !confirmationRiskMatches} aria-describedby="google-ads-risk-amount-help" />
+                  <p id="google-ads-risk-amount-help" className="text-xs text-muted-foreground">{isTr ? 'Para birimi biçimini koruyun; tutar işlemle eşleşmelidir.' : 'Use the displayed currency format; the amount must match the action.'}</p>
+                  {riskAmountText.length > 0 && !confirmationRiskMatches ? <p className="text-sm text-destructive">{isTr ? 'Tutar eşleşmiyor.' : 'The amount does not match.'}</p> : null}
+                </Field>
+                <Field orientation="horizontal"><Checkbox id="google-ads-risk-ack" checked={riskAck} onCheckedChange={(checked) => setRiskAck(checked === true)} /><FieldLabel htmlFor="google-ads-risk-ack">{isTr ? 'Tutarı doğruladım ve bu harcama riskini anlıyorum.' : 'I verified the amount and understand the spend risk.'}</FieldLabel></Field>
+              </FieldGroup></FieldSet> : null}
               {confirmation.irreversible ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{isTr ? 'Bu işlem kalıcıdır ve geri alınamaz.' : 'This action is permanent and cannot be undone.'}</AlertDescription></Alert> : null}
               <FieldSet><FieldGroup>
-                {confirmation.risk?.risky && confirmation.budgetAmountMinor !== null && confirmation.budgetAmountMinor !== undefined ? <>
-                  <Field>
-                    <FieldLabel htmlFor="google-ads-risk-amount">{isTr ? `Bu tutarı aynen yazın: ${formatMinorAmount(confirmation.budgetAmountMinor, currency, true)}` : `Type this exact amount: ${formatMinorAmount(confirmation.budgetAmountMinor, currency, false)}`}</FieldLabel>
-                    <Input id="google-ads-risk-amount" inputMode="decimal" autoComplete="off" value={riskAmountText} onChange={(event) => setRiskAmountText(event.target.value)} disabled={pending} />
-                  </Field>
-                  <Field orientation="horizontal"><Checkbox id="google-ads-risk-ack" checked={riskAck} onCheckedChange={(checked) => setRiskAck(checked === true)} disabled={pending} /><FieldLabel htmlFor="google-ads-risk-ack">{isTr ? 'Yazdığım günlük bütçe tutarını bilerek onaylıyorum.' : 'I knowingly confirm the daily budget amount I entered.'}</FieldLabel></Field>
-                  <ul className="flex flex-col gap-1 text-sm text-muted-foreground">{confirmation.risk.reasons.map((reason) => <li key={reason}>{riskReasonText(reason, isTr)}</li>)}</ul>
-                </> : null}
                 {confirmation.action === 'enable' ? <>
-                  <Field orientation="horizontal"><Checkbox id="google-ads-enable-budget-ack" checked={budgetAck} onCheckedChange={(checked) => setBudgetAck(checked === true)} /><FieldLabel htmlFor="google-ads-enable-budget-ack">{isTr ? 'Günlük bütçeyi ve Google Ads harcamasını anlıyorum.' : 'I understand the daily budget and Google Ads spend.'}</FieldLabel></Field>
-                  {management?.paymentMethodWarning ? <Field orientation="horizontal"><Checkbox id="google-ads-enable-billing-ack" checked={billingAck} onCheckedChange={(checked) => setBillingAck(checked === true)} /><FieldLabel htmlFor="google-ads-enable-billing-ack">{isTr ? 'Faturalama uyarısını kabul ediyorum.' : 'I acknowledge the billing warning.'}</FieldLabel></Field> : null}
+                  <Field orientation="horizontal"><Checkbox id="google-ads-enable-budget-ack" checked={budgetAck} onCheckedChange={(checked) => setBudgetAck(checked === true)} disabled={pending} /><FieldLabel htmlFor="google-ads-enable-budget-ack">{isTr ? 'Günlük bütçeyi ve Google Ads harcamasını anlıyorum.' : 'I understand the daily budget and Google Ads spend.'}</FieldLabel></Field>
+                  {management?.paymentMethodWarning ? <Field orientation="horizontal"><Checkbox id="google-ads-enable-billing-ack" checked={billingAck} onCheckedChange={(checked) => setBillingAck(checked === true)} disabled={pending} /><FieldLabel htmlFor="google-ads-enable-billing-ack">{isTr ? 'Faturalama uyarısını kabul ediyorum.' : 'I acknowledge the billing warning.'}</FieldLabel></Field> : null}
                 </> : null}
-                <Field orientation="horizontal"><Checkbox id="google-ads-action-ack" checked={actionAck} onCheckedChange={(checked) => setActionAck(checked === true)} /><FieldLabel htmlFor="google-ads-action-ack">{confirmation.irreversible
+                <Field orientation="horizontal"><Checkbox id="google-ads-action-ack" checked={actionAck} onCheckedChange={(checked) => setActionAck(checked === true)} disabled={pending} /><FieldLabel htmlFor="google-ads-action-ack">{confirmation.irreversible
                   ? (isTr ? 'Kampanyanın kalıcı olarak kaldırılmasını onaylıyorum.' : 'I confirm permanent campaign removal.')
                   : (isTr ? 'Bu değişikliğin Google Ads’e uygulanmasını onaylıyorum.' : 'I confirm this change will be applied to Google Ads.')}</FieldLabel></Field>
               </FieldGroup></FieldSet>
-              <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button type="button" variant="outline" onClick={() => setConfirmation(null)} disabled={pending}>{isTr ? 'Vazgeç' : 'Cancel'}</Button><Button type="button" variant={confirmation.irreversible ? 'destructive' : 'default'} onClick={confirmAction} disabled={pending || !actionAck || (confirmation.risk?.risky === true && (minorFromLocalizedAmount(riskAmountText, currency, isTr) !== confirmation.budgetAmountMinor || !riskAck)) || (confirmation.action === 'enable' && (!budgetAck || (management?.paymentMethodWarning && !billingAck)))}>{pending ? (isTr ? 'Uygulanıyor…' : 'Applying…') : confirmation.irreversible ? (isTr ? 'Kalıcı kaldır' : 'Remove permanently') : (isTr ? 'Onayla ve uygula' : 'Confirm and apply')}</Button></div>
+              <div className="flex flex-col-reverse justify-end gap-2 sm:flex-row"><Button type="button" variant="outline" onClick={() => setConfirmation(null)} disabled={pending}>{isTr ? 'Vazgeç' : 'Cancel'}</Button><Button type="button" variant={confirmation.irreversible ? 'destructive' : 'default'} onClick={confirmAction} disabled={pending || !actionAck || (confirmationRiskRequired && (!confirmationRiskMatches || !riskAck)) || (confirmation.action === 'enable' && (!budgetAck || (management?.paymentMethodWarning && !billingAck)))}>{pending ? (isTr ? 'Uygulanıyor…' : 'Applying…') : confirmation.irreversible ? (isTr ? 'Kalıcı kaldır' : 'Remove permanently') : (isTr ? 'Onayla ve uygula' : 'Confirm and apply')}</Button></div>
             </> : null}
           </AlertDialog.Popup>
         </AlertDialog.Portal>

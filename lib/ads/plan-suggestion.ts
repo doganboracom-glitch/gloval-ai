@@ -76,6 +76,7 @@ export type SuggestedPlan = {
   cities: string[]
   modelPolicyCategory: string | null
   modelPolicyEvidence: 'none' | 'ambiguous'
+  aiRecommendedDailyBudgetMinor?: number | null
   euPoliticalAdvertising: 'no'
   euPoliticalDeclarationConfirmed: false
   finalUrl: string
@@ -252,6 +253,7 @@ export function buildPlanSuggestion(
   if (options.currency) {
     try {
       budget = suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency })
+      plan.aiRecommendedDailyBudgetMinor = budget.dailyMinor
     } catch {
       return { ok: false, error: 'invalid_budget' }
     }

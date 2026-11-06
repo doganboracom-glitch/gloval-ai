@@ -48,6 +48,7 @@ type ManagementPlan = {
   daily_budget_minor: number | null
   google_daily_budget_minor: number | null
   external_campaign_id: string | null
+  plan: Record<string, unknown>
 }
 
 export type GoogleAdsManagementSnapshot = SnapshotState & {
@@ -57,6 +58,7 @@ export type GoogleAdsManagementSnapshot = SnapshotState & {
   paymentMethodWarning: boolean
   performance: ManagementPerformance | null
   recommendedDailyBudgetMinor: number | null
+  recommendationSource: 'ai' | 'saved' | 'unavailable'
   averageDailySpend30dMinor: number | null
 }
 
@@ -93,7 +95,6 @@ type ActionInput = {
   acknowledgedBillingWarning?: boolean
   riskAcknowledged?: boolean
   riskConfirmedAmountMinor?: number
-  acknowledgedBudget?: boolean
   userConfirmed: boolean
 }
 
@@ -141,7 +142,7 @@ async function loadManagementPlan(userId: string, planId: string): Promise<Manag
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('ads_plans')
-    .select('id,user_id,connection_id,status,version,approved_version,currency,daily_budget_minor,google_daily_budget_minor,external_campaign_id')
+    .select('id,user_id,connection_id,status,version,approved_version,currency,daily_budget_minor,google_daily_budget_minor,external_campaign_id,plan')
     .eq('id', planId)
     .eq('user_id', userId)
     .eq('platform', 'google_ads')
@@ -260,6 +261,12 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
         readPerformance(access, plan),
         readAverageDailySpend30dMinor(access, plan),
       ])
+  const storedAiRecommendation = plan.plan && typeof plan.plan === 'object'
+    ? Number((plan.plan as Record<string, unknown>).aiRecommendedDailyBudgetMinor)
+    : Number.NaN
+  const aiRecommendation = Number.isSafeInteger(storedAiRecommendation) && storedAiRecommendation > 0
+    ? storedAiRecommendation
+    : null
   const stateForHash = snapshotState(state)
   return {
     state,
@@ -270,7 +277,8 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
       billingVerified: billing.verified,
       paymentMethodWarning: billing.paymentMethodWarning,
       performance,
-      recommendedDailyBudgetMinor: plan.daily_budget_minor,
+      recommendedDailyBudgetMinor: aiRecommendation ?? plan.daily_budget_minor,
+      recommendationSource: aiRecommendation !== null ? 'ai' : plan.daily_budget_minor !== null ? 'saved' : 'unavailable',
       averageDailySpend30dMinor,
     } satisfies GoogleAdsManagementSnapshot,
   }

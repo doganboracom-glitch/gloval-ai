@@ -9,7 +9,14 @@ const PART2 = readFileSync(path.join(ROOT, 'scripts/090-ads-core-part2.sql'), 'u
 const PART3 = readFileSync(path.join(ROOT, 'scripts/091-ads-google-readonly.sql'), 'utf8')
 const LIVE_QUOTAS = readFileSync(path.join(ROOT, 'scripts/099-ads-google-public-readonly-quotas.sql'), 'utf8')
 const MIGRATION = readFileSync(path.join(ROOT, 'scripts/106-ads-google-publish-e2.sql'), 'utf8')
-const LIFECYCLE_MIGRATION = readFileSync(path.join(ROOT, 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
+const LIVE_LIFECYCLE_MIGRATION = readFileSync(path.join(ROOT, 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
+const LIVE_BUDGET_COLUMNS = `
+  alter table public.ads_plans add column if not exists budget_cap_minor integer;
+  alter table public.ads_plans add column if not exists approval_user_daily_budget_limit_minor integer;
+  alter table public.ads_google_publish_approvals add column if not exists budget_cap_minor integer;
+  alter table public.ads_google_publish_approvals add column if not exists user_daily_budget_limit_minor integer;
+`
+const LIFECYCLE_MIGRATION = readFileSync(path.join(ROOT, 'scripts/123-ads-google-remove-budget-cap.sql'), 'utf8')
 
 const BASE_SCHEMA = `
 create role anon; create role authenticated; create role service_role;
@@ -93,6 +100,8 @@ beforeAll(async () => {
   `)
   liveBaseline = rows[0]
   await db.exec(MIGRATION)
+  await db.exec(LIVE_BUDGET_COLUMNS)
+  await db.exec(LIVE_LIFECYCLE_MIGRATION)
   await db.exec(LIFECYCLE_MIGRATION)
 })
 
@@ -217,6 +226,10 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       authenticated_can_select_reservations: boolean
       service_role_can_select_approvals: boolean
       service_role_can_select_reservations: boolean
+      plans_budget_cap_present: boolean
+      plans_approval_limit_present: boolean
+      approvals_budget_cap_present: boolean
+      approvals_user_limit_present: boolean
     }>(`
       select
         exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ads_plans' and column_name = 'approved_version') as e1_columns_present,
@@ -233,7 +246,11 @@ describe('Google Ads combined publish migration on current 099 state', () => {
         has_table_privilege('authenticated', 'public.ads_google_publish_approvals', 'SELECT') as authenticated_can_select_approvals,
         has_table_privilege('authenticated', 'public.ads_google_publish_credit_reservations', 'SELECT') as authenticated_can_select_reservations,
         has_table_privilege('service_role', 'public.ads_google_publish_approvals', 'SELECT') as service_role_can_select_approvals,
-        has_table_privilege('service_role', 'public.ads_google_publish_credit_reservations', 'SELECT') as service_role_can_select_reservations
+        has_table_privilege('service_role', 'public.ads_google_publish_credit_reservations', 'SELECT') as service_role_can_select_reservations,
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ads_plans' and column_name = 'budget_cap_minor') as plans_budget_cap_present,
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ads_plans' and column_name = 'approval_user_daily_budget_limit_minor') as plans_approval_limit_present,
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ads_google_publish_approvals' and column_name = 'budget_cap_minor') as approvals_budget_cap_present,
+        exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ads_google_publish_approvals' and column_name = 'user_daily_budget_limit_minor') as approvals_user_limit_present
     `)
     expect(rows[0]).toEqual({
       e1_columns_present: true,
@@ -251,9 +268,16 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       authenticated_can_select_reservations: false,
       service_role_can_select_approvals: true,
       service_role_can_select_reservations: true,
+      plans_budget_cap_present: false,
+      plans_approval_limit_present: false,
+      approvals_budget_cap_present: false,
+      approvals_user_limit_present: false,
     })
 
+    await db.exec(LIVE_BUDGET_COLUMNS)
     await db.exec(MIGRATION)
+    await db.exec(LIVE_BUDGET_COLUMNS)
+    await db.exec(LIVE_LIFECYCLE_MIGRATION)
     await db.exec(LIFECYCLE_MIGRATION)
   })
 
@@ -272,6 +296,8 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     }
 
     const serviceRoleFunctions = [
+      'public.ads_audit_plan_status()',
+      'public.ads_plans_guard_version_and_approval()',
       'public.ads_create_google_ads_plan_draft_e2(uuid,uuid,jsonb,text,text,text,bigint,text)',
       'public.ads_approve_google_ads_plan_e2(uuid,uuid,integer,uuid,text,text,bigint,text,text,boolean,boolean,jsonb)',
       'public.ads_begin_google_ads_publish_e2(uuid,uuid,uuid,integer,uuid,text,bigint,bigint,smallint)',
@@ -456,13 +482,13 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       dailyBudgetMinor,
       approvalSummary: { currency: 'USD', dailyBudgetMinor },
     })
-
     expect(approval).toMatchObject({ state: 'approved', plan_version: 1 })
-    const saved = await db.query<{ daily_budget_minor: number; budget_cap_minor: number | null }>(
-      'select daily_budget_minor, budget_cap_minor from public.ads_plans where id = $1',
+
+    const saved = await db.query<{ daily_budget_minor: number }>(
+      'select daily_budget_minor from public.ads_plans where id = $1',
       [draft.plan_id],
     )
-    expect(saved.rows[0]).toEqual({ daily_budget_minor: dailyBudgetMinor, budget_cap_minor: null })
+    expect(saved.rows[0]).toEqual({ daily_budget_minor: dailyBudgetMinor })
   })
 
   it('does not replay a reconciling publish and releases its credit hold without charging', async () => {
@@ -624,15 +650,16 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     const target = { status: 'ENABLED' }
     const before = { status: 'PAUSED' }
     const beginAction = () => db.query<{ state: string; action_id: string }>(
-      `select * from public.ads_begin_google_ads_campaign_action_e2(
-        $1, $2, $3, 'google_ads_campaign_status_update', 1, $4, $5::jsonb, $6::jsonb, 200000, true
+      `select * from public.ads_begin_google_ads_management_action_v4(
+        $1::uuid, $2::uuid, $3::uuid, 'google_ads_campaign_status_update', 1::integer, $4::text,
+        $5::jsonb, $6::jsonb, false, false, null::bigint, true, null::uuid
       )`,
       [userId, draft.plan_id, actionId, PLAN_HASH, JSON.stringify(target), JSON.stringify(before)],
     )
     await expect(beginAction()).resolves.toMatchObject({ rows: [{ state: 'approved', action_id: actionId }] })
     await expect(beginAction()).resolves.toMatchObject({ rows: [{ state: 'existing', action_id: actionId }] })
     await expect(db.query(
-      `select * from public.ads_finish_google_ads_campaign_action_e2($1, $2, 'applied', $3::jsonb, null)`,
+      `select * from public.ads_finish_google_ads_management_action_v4($1, $2, 'applied', $3::jsonb, null)`,
       [userId, actionId, JSON.stringify({ status: 'ENABLED' })],
     )).resolves.toMatchObject({ rows: [{ state: 'applied' }] })
 
@@ -698,7 +725,23 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       ],
     )
 
-    const increaseId = '123e4567-e89b-42d3-a456-426614174085'
+    const highTarget = { dailyBudgetMinor: 100000, dailyBudgetMicros: '1000000000' }
+    const missingRisk = await beginManagementAction(
+      '123e4567-e89b-42d3-a456-426614174086', highTarget,
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+      { riskRequired: true, riskAmountMinor: 100000 },
+    )
+    expect(missingRisk.rows[0].state).toBe('risk_confirmation_required')
+
+    const mismatch = await beginManagementAction(
+      '123e4567-e89b-42d3-a456-426614174084',
+      { ...highTarget, riskConfirmedAmountMinor: 100000 },
+      { campaignStatus: 'PAUSED', dailyBudgetMicros: '200000000' },
+      { riskRequired: true, riskAcknowledged: true, riskAmountMinor: 99999 },
+    )
+    expect(mismatch.rows[0].state).toBe('risk_confirmation_mismatch')
+
+    const increaseId = '123e4567-e89b-42d3-a456-426614174080'
     const increase = await beginManagementAction(
       increaseId,
       { dailyBudgetMinor: 20000, dailyBudgetMicros: '200000000' },
@@ -744,7 +787,7 @@ describe('Google Ads combined publish migration on current 099 state', () => {
       $1::uuid, $2::uuid, 'applied', $3::jsonb, null
     )`, [userId, largeIncreaseId, JSON.stringify({ campaignStatus: 'PAUSED', dailyBudgetMicros: largeBudgetMicros })])
 
-    const undoId = '123e4567-e89b-42d3-a456-426614174083'
+    const undoId = '123e4567-e89b-42d3-a456-426614174079'
     const undo = await beginManagementAction(
       undoId,
       { dailyBudgetMinor: 20000, dailyBudgetMicros: '200000000' },
@@ -763,7 +806,7 @@ describe('Google Ads combined publish migration on current 099 state', () => {
     `, [largeIncreaseId, undoId])
     expect(undoAudit.rows[0]).toEqual({ original_status: 'applied', undo_status: 'applied', undone_of: largeIncreaseId })
 
-    const archiveId = '123e4567-e89b-42d3-a456-426614174082'
+    const archiveId = '123e4567-e89b-42d3-a456-426614174078'
     const archive = await db.query<{ state: string }>(`
       select * from public.ads_begin_google_ads_management_action_v4(
         $1::uuid, $2::uuid, $3::uuid, 'google_ads_campaign_archive', 1::integer, $4::text,
