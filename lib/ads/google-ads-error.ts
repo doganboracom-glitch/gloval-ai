@@ -32,6 +32,10 @@ export type GoogleAdsErrorCode =
   | 'plan_not_found'
   | 'plan_not_approved'
   | 'budget_limit_exceeded'
+  | 'budget_increase_limit_exceeded'
+  | 'budget_cooldown_active'
+  | 'action_not_reversible'
+  | 'action_outcome_unknown'
   | 'publish_in_progress'
   | 'ad_disapproved'
   | 'ad_review_in_progress'
@@ -78,6 +82,10 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
   case 'plan_not_approved':
   case 'confirmation_required':
   case 'budget_limit_exceeded':
+  case 'budget_increase_limit_exceeded':
+  case 'budget_cooldown_active':
+  case 'action_not_reversible':
+  case 'action_outcome_unknown':
   case 'publish_in_progress':
   case 'ad_disapproved':
     case 'ad_review_in_progress':

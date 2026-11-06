@@ -639,25 +639,31 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
       if (input.loginCustomerId && !normalizeCustomerId(input.loginCustomerId)) {
         throw new GoogleAdsError('invalid_request')
       }
-      const payload = await requireApiTransport(config)({
-        method: 'googleAds.searchStream',
+      const requestAdsApi = requireApiTransport(config)
+      const baseCall = {
+        method: 'googleAds.searchStream' as const,
         path: `customers/${customerId}/googleAds:searchStream`,
         accessToken: input.accessToken,
         loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
-        body: {
-          query: `SELECT campaign.id, campaign.status, campaign_budget.resource_name, campaign_budget.amount_micros, ad_group_ad.ad.resource_name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE campaign.id = ${input.campaignId} AND ad_group_ad.status != 'REMOVED' AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD' ORDER BY ad_group_ad.ad.id LIMIT 1`,
-        },
         context: input.context,
+      }
+      const payload = await requestAdsApi({
+        ...baseCall,
+        body: {
+          query: `SELECT campaign.id, campaign.status, campaign_budget.resource_name, campaign_budget.amount_micros, ad_group.resource_name, ad_group_ad.ad.resource_name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE campaign.id = ${input.campaignId} AND ad_group_ad.status != 'REMOVED' AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD' ORDER BY ad_group_ad.ad.id LIMIT 1`,
+        },
       })
       const row = searchRows(payload)[0]
       const campaign = asRecord(row?.campaign)
       const budget = asRecord(row?.campaignBudget ?? row?.campaign_budget)
+      const adGroup = asRecord(row?.adGroup ?? row?.ad_group)
       const adGroupAd = asRecord(row?.adGroupAd ?? row?.ad_group_ad)
       const ad = asRecord(adGroupAd?.ad)
       const responsive = asRecord(ad?.responsiveSearchAd ?? ad?.responsive_search_ad)
       const budgetResourceName = budget?.resourceName ?? budget?.resource_name
       const dailyBudgetMicros = budget?.amountMicros ?? budget?.amount_micros
       const adResourceName = ad?.resourceName ?? ad?.resource_name
+      const adGroupResourceName = adGroup?.resourceName ?? adGroup?.resource_name
       if (
         !campaign || String(campaign.id ?? '') !== input.campaignId ||
         typeof budgetResourceName !== 'string' ||
@@ -665,6 +671,8 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         !/^\d{1,20}$/.test(String(dailyBudgetMicros)) ||
         typeof adResourceName !== 'string' ||
         !new RegExp(`^customers/${customerId}/ads/\\d{1,20}$`).test(adResourceName) ||
+        typeof adGroupResourceName !== 'string' ||
+        !new RegExp(`^customers/${customerId}/adGroups/\\d{1,20}$`).test(adGroupResourceName) ||
         !responsive
       ) {
         throw new GoogleAdsError('provider_unavailable')
@@ -675,12 +683,37 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
             return typeof text === 'string' ? [text] : []
           })
         : []
+      const keywordPayload = await requestAdsApi({
+        ...baseCall,
+        body: {
+          query: `SELECT ad_group_criterion.resource_name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative FROM ad_group_criterion WHERE campaign.id = ${input.campaignId} AND ad_group_criterion.type = KEYWORD AND ad_group_criterion.status != REMOVED LIMIT 100`,
+        },
+      })
+      const keywords = searchRows(keywordPayload).flatMap((keywordRow) => {
+        const criterion = asRecord(keywordRow?.adGroupCriterion ?? keywordRow?.ad_group_criterion)
+        const keyword = asRecord(criterion?.keyword)
+        const resourceName = criterion?.resourceName ?? criterion?.resource_name
+        const matchType = keyword?.matchType ?? keyword?.match_type
+        const text = keyword?.text
+        if (
+          typeof resourceName !== 'string' ||
+          !new RegExp(`^customers/${customerId}/adGroupCriteria/\\d{1,20}~\\d{1,20}$`).test(resourceName) ||
+          typeof text !== 'string' ||
+          !['EXACT', 'PHRASE', 'BROAD'].includes(String(matchType))
+        ) return []
+        return [{ resourceName, text, matchType: matchType as 'EXACT' | 'PHRASE' | 'BROAD', negative: criterion?.negative === true }]
+      })
+      const campaignStatus = campaign.status === 'ENABLED' || campaign.status === 'PAUSED' || campaign.status === 'REMOVED'
+        ? campaign.status
+        : 'UNKNOWN'
       return {
         campaignId: input.campaignId,
-        campaignStatus: campaign.status === 'ENABLED' || campaign.status === 'PAUSED' ? campaign.status : 'UNKNOWN',
+        campaignStatus,
         budgetResourceName,
         dailyBudgetMicros: String(dailyBudgetMicros),
         adResourceName,
+        adGroupResourceName,
+        keywords,
         headlines: assetTexts(responsive.headlines),
         descriptions: assetTexts(responsive.descriptions),
       }
@@ -751,6 +784,72 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
               updateMask: 'responsiveSearchAd.headlines,responsiveSearchAd.descriptions',
             },
           }],
+          partialFailure: false,
+          validateOnly: input.validateOnly,
+        },
+        context: input.context,
+      })
+      return { validateOnly: input.validateOnly, billingVerified: null, paymentMethodWarning: false }
+    },
+
+    async mutateKeyword(input): Promise<GoogleAdsCampaignMutationResult> {
+      requirePublishAccess(input.context.userId)
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
+      const customerId = normalizeCustomerId(input.customerId)
+      if (!customerId || !input.accessToken || !input.context.connectionId || !/^\\d{1,20}$/.test(input.campaignId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      const operation = input.operation === 'remove'
+        ? (() => {
+            if (!input.keywordResourceName || !new RegExp(`^customers/${customerId}/adGroupCriteria/\\d{1,20}~\\d{1,20}$`).test(input.keywordResourceName)) {
+              throw new GoogleAdsError('invalid_request')
+            }
+            return { adGroupCriterionOperation: { remove: input.keywordResourceName } }
+          })()
+        : (() => {
+            if (
+              !input.adGroupResourceName ||
+              !new RegExp(`^customers/${customerId}/adGroups/\\d{1,20}$`).test(input.adGroupResourceName) ||
+              !input.keywordText?.trim() || input.keywordText.length > 80 ||
+              !['EXACT', 'PHRASE'].includes(input.matchType ?? '') ||
+              typeof input.negative !== 'boolean'
+            ) throw new GoogleAdsError('invalid_publish_plan')
+            return {
+              adGroupCriterionOperation: {
+                create: {
+                  adGroup: input.adGroupResourceName,
+                  status: 'ENABLED',
+                  keyword: { text: input.keywordText.trim(), matchType: input.matchType },
+                  negative: input.negative,
+                },
+              },
+            }
+          })()
+      await requireApiTransport(config)({
+        method: 'googleAds.mutate',
+        path: `customers/${customerId}/googleAds:mutate`,
+        accessToken: input.accessToken,
+        loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+        body: { mutateOperations: [operation], partialFailure: false, validateOnly: input.validateOnly },
+        context: input.context,
+      })
+      return { validateOnly: input.validateOnly, billingVerified: null, paymentMethodWarning: false }
+    },
+
+    async removeCampaign(input): Promise<GoogleAdsCampaignMutationResult> {
+      requirePublishAccess(input.context.userId)
+      if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
+      const customerId = normalizeCustomerId(input.customerId)
+      if (!customerId || !input.accessToken || !input.context.connectionId || !/^\\d{1,20}$/.test(input.campaignId)) {
+        throw new GoogleAdsError('invalid_request')
+      }
+      await requireApiTransport(config)({
+        method: 'googleAds.mutate',
+        path: `customers/${customerId}/googleAds:mutate`,
+        accessToken: input.accessToken,
+        loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
+        body: {
+          mutateOperations: [{ campaignOperation: { remove: `customers/${customerId}/campaigns/${input.campaignId}` } }],
           partialFailure: false,
           validateOnly: input.validateOnly,
         },

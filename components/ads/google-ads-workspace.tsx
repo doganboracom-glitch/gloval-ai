@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import { GoogleAdsPublishReview } from '@/components/ads/google-ads-publish-review'
 import { GoogleAdsAiPlanner } from '@/components/ads/google-ads-ai-planner'
+import { GoogleAdsCampaignManager } from '@/components/ads/google-ads-campaign-manager'
 import { AiSuggestionBadge, GoogleAdsSearchPreview } from '@/components/ads/google-ads-search-preview'
 import { currencyDigits, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
@@ -53,18 +54,6 @@ type PlanRow = {
 }
 
 type PlansPayload = { plans: PlanRow[] }
-type ManagementSnapshot = {
-  campaignId: string
-  campaignStatus: 'PAUSED' | 'ENABLED' | 'UNKNOWN'
-  dailyBudgetMicros: string
-  headlines: string[]
-  descriptions: string[]
-  stateHash: string
-  reviewStatus: 'approved' | 'disapproved' | 'review_in_progress' | 'unavailable'
-  billingVerified: boolean
-  paymentMethodWarning: boolean
-}
-type ManagementPayload = { snapshot: ManagementSnapshot }
 type ApiPayload = {
   ok?: boolean
   error?: string
@@ -527,11 +516,6 @@ export function GoogleAdsWorkspace({
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
-  const [enableBudgetAcknowledged, setEnableBudgetAcknowledged] = useState(false)
-  const [enableBillingAcknowledged, setEnableBillingAcknowledged] = useState(false)
-  const [managementBudget, setManagementBudget] = useState('')
-  const [managementHeadlines, setManagementHeadlines] = useState('')
-  const [managementDescriptions, setManagementDescriptions] = useState('')
   const [pending, setPending] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
@@ -552,14 +536,6 @@ export function GoogleAdsWorkspace({
   const plans = plansData?.plans ?? []
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null
   const selectedConnection = availableConnections.find((connection) => connection.id === connectionId) ?? null
-  const activeCampaignPlan = selectedPlan?.status === 'published' ? selectedPlan : null
-  const managementKey = activeCampaignPlan ? `/api/ads/google/management?planId=${encodeURIComponent(activeCampaignPlan.id)}` : null
-  const { data: managementData, error: managementError, isLoading: managementLoading, mutate: mutateManagement } = useSWR<ManagementPayload>(
-    managementKey,
-    fetchJson,
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  )
-  const management = managementData?.snapshot
   const isEditable = !selectedPlan || ['draft', 'failed', 'approved'].includes(selectedPlan.status)
   const selectedCurrency = selectedPlan?.currency ?? selectedConnection?.currency ?? 'TRY'
 
@@ -743,9 +719,6 @@ export function GoogleAdsWorkspace({
     setErrorCode(null)
     setShowPublishReview(false)
     setFinalPublishConfirmed(false)
-    setManagementBudget(minorToMajor(plan.google_daily_budget_minor ?? plan.daily_budget_minor, plan.currency))
-    setManagementHeadlines('')
-    setManagementDescriptions('')
   }
 
   async function saveDraft() {
@@ -832,44 +805,6 @@ export function GoogleAdsWorkspace({
     } catch (error) {
       if (phase === 'publish') setFinalPublishConfirmed(false)
       setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
-    } finally {
-      setPending(null)
-    }
-  }
-
-  async function applyAction(action: 'pause' | 'enable' | 'budget' | 'ad_copy') {
-    if (!activeCampaignPlan || !management || pending) return
-    setPending(action)
-    setErrorCode(null)
-    setMessage(null)
-    try {
-      const body: Record<string, unknown> = {
-        planId: activeCampaignPlan.id,
-        actionId: crypto.randomUUID(),
-        expectedVersion: activeCampaignPlan.version,
-        expectedStateHash: management.stateHash,
-        action,
-        confirm: true,
-        acknowledgedBillingWarning: enableBillingAcknowledged,
-        acknowledgedBudget: enableBudgetAcknowledged,
-      }
-      if (action === 'budget') {
-        const dailyBudgetMinor = majorToMinor(managementBudget, selectedCurrency)
-        if (!dailyBudgetMinor) throw new WorkspaceApiError('invalid_budget')
-        body.dailyBudgetMinor = dailyBudgetMinor
-      }
-      if (action === 'ad_copy') {
-        body.headlines = splitLines(managementHeadlines)
-        body.descriptions = splitLines(managementDescriptions)
-      }
-      await postJson('/api/ads/google/management', 'POST', body)
-      await Promise.all([mutatePlans(), mutateManagement()])
-      setMessage(isTr ? 'Değişiklik Google Ads’e uygulandı ve işlem geçmişine kaydedildi.' : 'The change was applied to Google Ads and recorded in the activity log.')
-      setEnableBudgetAcknowledged(false)
-      setEnableBillingAcknowledged(false)
-    } catch (error) {
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
-      await mutateManagement()
     } finally {
       setPending(null)
     }
@@ -1215,76 +1150,12 @@ export function GoogleAdsWorkspace({
             </Card>
           )}
 
-          {activeCampaignPlan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{copy.management}</CardTitle>
-                <CardDescription>{copy.directBilling}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {managementLoading ? <Skeleton className="h-24" aria-label={copy.loading} /> : null}
-                {managementError ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{errorText(managementError instanceof WorkspaceApiError ? managementError.code : undefined, isTr)}</AlertDescription></Alert> : null}
-                {management ? (
-                  <>
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
-                      <div>
-                        <p className="text-sm font-medium">{copy.status}: {management.campaignStatus}</p>
-                        <p className="text-sm text-muted-foreground">{copy.review}: {management.reviewStatus}</p>
-                        <p className="text-sm text-muted-foreground">{copy.billing}: {management.billingVerified ? (isTr ? 'Doğrulandı' : 'Verified') : (isTr ? 'Uyarı' : 'Warning')}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {management.campaignStatus === 'ENABLED' ? (
-                          <Button type="button" variant="outline" onClick={() => void applyAction('pause')} disabled={pending !== null}>{copy.pause}</Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            onClick={() => void applyAction('enable')}
-                            disabled={pending !== null || management.reviewStatus !== 'approved' || !enableBudgetAcknowledged || (management.paymentMethodWarning && !enableBillingAcknowledged)}
-                          >
-                            {copy.enable}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    {management.campaignStatus !== 'ENABLED' ? (
-                      <FieldSet className="rounded-xl border border-border p-3">
-                        <FieldLegend>{copy.enable}</FieldLegend>
-                        <FieldGroup>
-                          <Field orientation="horizontal">
-                            <input id="google-ads-enable-budget-ack" type="checkbox" checked={enableBudgetAcknowledged} onChange={(event) => setEnableBudgetAcknowledged(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                            <FieldLabel htmlFor="google-ads-enable-budget-ack">{copy.reviewAcknowledged}</FieldLabel>
-                          </Field>
-                          {management.paymentMethodWarning ? (
-                            <>
-                              <Alert><AlertCircle aria-hidden="true" /><AlertDescription>{copy.billingWarning}</AlertDescription></Alert>
-                              <Field orientation="horizontal">
-                                <input id="google-ads-enable-billing-ack" type="checkbox" checked={enableBillingAcknowledged} onChange={(event) => setEnableBillingAcknowledged(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                                <FieldLabel htmlFor="google-ads-enable-billing-ack">{isTr ? 'Faturalama uyarısını anlıyorum.' : 'I acknowledge the billing warning.'}</FieldLabel>
-                              </Field>
-                            </>
-                          ) : null}
-                          {management.reviewStatus !== 'approved' ? <p className="text-sm text-muted-foreground">{copy.reviewRequired}</p> : null}
-                        </FieldGroup>
-                      </FieldSet>
-                    ) : null}
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <FieldGroup>
-                        <TextField id="google-ads-management-budget" label={`${copy.daily} (${selectedCurrency})`} value={managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)} onChange={setManagementBudget} type="number" />
-                        <p className="text-xs text-muted-foreground">{copy.before}: {selectedCurrency} {microsToMajor(management.dailyBudgetMicros, selectedCurrency)} · {copy.after}: {selectedCurrency} {managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)}</p>
-                        <Button type="button" variant="outline" onClick={() => void applyAction('budget')} disabled={pending !== null}>{pending === 'budget' ? copy.saving : copy.apply}</Button>
-                      </FieldGroup>
-                      <FieldGroup>
-                        <TextAreaField id="google-ads-management-headlines" label={copy.headlines} value={managementHeadlines || management.headlines.join('\n')} onChange={setManagementHeadlines} rows={3} />
-                        <TextAreaField id="google-ads-management-descriptions" label={copy.descriptions} value={managementDescriptions || management.descriptions.join('\n')} onChange={setManagementDescriptions} rows={3} />
-                        <Button type="button" variant="outline" onClick={() => void applyAction('ad_copy')} disabled={pending !== null}>{pending === 'ad_copy' ? copy.saving : copy.apply}</Button>
-                      </FieldGroup>
-                    </div>
-                  </>
-                ) : !managementLoading && !managementError ? <p className="text-sm text-muted-foreground">{copy.noActive}</p> : null}
-              </CardContent>
-              <CardFooter className="text-xs text-muted-foreground">{copy.summaryGuarantee}</CardFooter>
-            </Card>
-          ) : null}
+          <GoogleAdsCampaignManager
+            plan={selectedPlan ? { id: selectedPlan.id, status: selectedPlan.status, version: selectedPlan.version } : null}
+            hasConnection={availableConnections.length > 0}
+            currency={selectedCurrency}
+            isTr={isTr}
+          />
         </div>
       </div>
 

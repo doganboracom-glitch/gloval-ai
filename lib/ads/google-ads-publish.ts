@@ -72,7 +72,7 @@ type PublishPlanRow = {
   publish_request_id: string | null
   publish_started_at: string | null
   publish_billing_verified: boolean | null
-  google_campaign_status: 'PAUSED' | 'ENABLED'
+  google_campaign_status: 'PAUSED' | 'ENABLED' | 'REMOVED' | 'UNKNOWN'
 }
 
 type GoogleAdsPublishProvider = Pick<
@@ -80,8 +80,11 @@ type GoogleAdsPublishProvider = Pick<
   | 'publishCampaign'
   | 'setCampaignStatus'
   | 'verifyBilling'
-  | 'getAdReviewStatus'
   | 'getCampaignManagementState'
+  | 'getPerformance'
+  | 'removeCampaign'
+  | 'mutateKeyword'
+  | 'getAdReviewStatus'
   | 'updateCampaignBudget'
   | 'updateResponsiveSearchAd'
 >
