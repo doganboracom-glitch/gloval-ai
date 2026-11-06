@@ -1,5 +1,5 @@
 import { createGoogleAdsApiTransport } from '@/lib/ads/google-api-client'
-import { googleAdsConnectAllowed, googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsUserId } from '@/lib/ads/google-route-utils'
+import { googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsRequestAccess } from '@/lib/ads/google-route-utils'
 import { createGoogleAdsProvider } from '@/lib/ads/providers/google-ads-provider'
 import { withGoogleAdsAccess } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsOAuthSettings } from '@/lib/ads/env'
@@ -13,9 +13,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 export async function GET(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
-  const userId = await googleAdsUserId()
+  const access = await googleAdsRequestAccess()
+  const userId = access?.userId
   if (!userId) return googleAdsJson({ error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
+  if (!access.decision.canConnect) return googleAdsJson({ error: 'not_found' }, 404)
 
   const url = new URL(request.url)
   const connectionId = url.searchParams.get('connectionId') ?? ''

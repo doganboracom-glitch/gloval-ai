@@ -238,6 +238,26 @@ describe('Google Ads API quota transport', () => {
     expect(fetcher).toHaveBeenCalledOnce()
   })
 
+  it.each([
+    ['CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', 403, { status: 'PERMISSION_DENIED', message: 'Cloud project is not approved for production.', details: [{ errors: [{ errorCode: { authorizationError: 'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION' } }] }] }],
+    ['ACTION_NOT_PERMITTED', 403, { status: 'PERMISSION_DENIED', message: 'Action not permitted.', details: [{ errors: [{ errorCode: { authorizationError: 'ACTION_NOT_PERMITTED' } }] }] }],
+    ['AUTHORIZATION_ERROR', 403, { status: 'PERMISSION_DENIED', message: 'Authorization error.', details: [{ errors: [{ errorCode: { authorizationError: 'AUTHORIZATION_ERROR' } }] }] }],
+    ['AUTHORIZATION_ERROR (HTTP 400)', 400, { status: 'INVALID_ARGUMENT', message: 'x', details: [{ errors: [{ errorCode: { authorizationError: 'AUTHORIZATION_ERROR' } }] }] }],
+  ])('classifies Google %s as google_access_level_insufficient without retrying', async (_name, status, error) => {
+    const fetcher = vi.fn(async () => jsonResponse({ error }, status)) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(call())).rejects.toMatchObject({ code: 'google_access_level_insufficient' })
+    expect(fetcher).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a plain 403 without an access-level code as not_authorized', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ error: { status: 'PERMISSION_DENIED', message: 'Denied.' } }, 403)) as unknown as typeof fetch
+    const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
+
+    await expect(transport(call())).rejects.toMatchObject({ code: 'not_authorized' })
+  })
+
   it('reserves every individual mutation operation before a single external request', async () => {
     const fetcherMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({ mutateOperationResponses: [] }))
     const fetcher = fetcherMock as unknown as typeof fetch

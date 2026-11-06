@@ -2,7 +2,12 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
-import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
+import {
+  buildGoogleAdsApprovalSummary,
+  isSupportedGoogleAdsCurrency,
+  parseGoogleAdsPublishPlan,
+} from '@/lib/ads/google-ads-publish-plan'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
 
@@ -59,6 +64,9 @@ export async function POST(request: Request) {
   if (!connection.currency_code || connection.currency_code !== planRow.currency) {
     return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 409)
   }
+  if (!isSupportedGoogleAdsCurrency(connection.currency_code)) {
+    return googleAdsJson({ ok: false, error: 'unsupported_currency' }, 400)
+  }
 
   if (!Number.isSafeInteger(planRow.daily_budget_minor) || (planRow.daily_budget_minor as number) <= 0) {
     return googleAdsJson({ ok: false, error: 'invalid_budget' }, 400)
@@ -72,10 +80,13 @@ export async function POST(request: Request) {
       euPoliticalAdvertising: input.data.euPoliticalAdvertising,
       euPoliticalDeclarationConfirmed: true,
     })
-    approvalSummary = buildGoogleAdsApprovalSummary({
-      currency: connection.currency_code,
-      dailyBudgetMinor: planRow.daily_budget_minor as number,
-    })
+    approvalSummary = {
+      ...buildGoogleAdsApprovalSummary({
+        currency: connection.currency_code,
+        dailyBudgetMinor: planRow.daily_budget_minor as number,
+      }),
+      termsVersion: GOOGLE_ADS_PUBLISH_TERMS_VERSION,
+    }
   } catch {
     return googleAdsJson({ ok: false, error: 'invalid_publish_plan' }, 400)
   }
@@ -111,6 +122,20 @@ export async function POST(request: Request) {
   if (result.state !== 'approved' || !result.approval_id) {
     const status = result.state === 'not_found' ? 404 : result.state === 'plan_changed' ? 409 : 400
     return googleAdsJson({ ok: false, error: result.state ?? 'plan_not_approved' }, status)
+  }
+
+  const { data: savedAcceptance, error: acceptanceError } = await admin
+    .from('ads_google_publish_approvals')
+    .update({
+      terms_accepted_at: new Date().toISOString(),
+      approval_summary: { ...approvalSummary, termsVersion: GOOGLE_ADS_PUBLISH_TERMS_VERSION },
+    })
+    .eq('id', result.approval_id)
+    .eq('user_id', gate.userId)
+    .select('id')
+    .maybeSingle()
+  if (acceptanceError || !savedAcceptance) {
+    return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
   }
 
   return googleAdsJson({

@@ -3,7 +3,9 @@ import 'server-only'
 import { NextResponse } from 'next/server'
 import { AuthUnavailableError, getRequestUser } from '@/lib/supabase/request-user'
 import { GoogleAdsError, googleAdsErrorCode, googleAdsHttpStatus } from '@/lib/ads/google-ads-error'
-import { resolveGoogleAdsConnectAccess } from '@/lib/ads/env'
+import { resolveGoogleAdsAccess, resolveGoogleAdsConnectAccess } from '@/lib/ads/env'
+import type { GoogleAdsAccessIdentity } from '@/lib/ads/env'
+import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 
 const NO_STORE_HEADERS = {
@@ -20,10 +22,30 @@ export function googleAdsConnectAllowed(userId: string | null): boolean {
   return resolveGoogleAdsConnectAccess(userId)
 }
 
-export async function googleAdsUserId(): Promise<string | null> {
+export type GoogleAdsRequestAccess = {
+  userId: string
+  identity: GoogleAdsAccessIdentity
+  decision: ReturnType<typeof resolveGoogleAdsAccess>
+}
+
+export async function googleAdsRequestAccess(): Promise<GoogleAdsRequestAccess | null> {
   const authState = await getRequestUser()
   if (authState.kind === 'unavailable') throw new AuthUnavailableError()
-  return authState.kind === 'authenticated' ? authState.user.id : null
+  if (authState.kind !== 'authenticated') return null
+
+  const identity: GoogleAdsAccessIdentity = {
+    emailConfirmed: Boolean(authState.user.email_confirmed_at),
+    isAdmin: isAdminEmail(authState.user.email),
+  }
+  return {
+    userId: authState.user.id,
+    identity,
+    decision: resolveGoogleAdsAccess(authState.user.id, identity),
+  }
+}
+
+export async function googleAdsUserId(): Promise<string | null> {
+  return (await googleAdsRequestAccess())?.userId ?? null
 }
 
 export function isSameOriginGoogleAdsPost(request: Request): boolean {

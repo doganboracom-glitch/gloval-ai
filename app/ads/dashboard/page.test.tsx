@@ -25,6 +25,20 @@ vi.mock('@/lib/ads/google-route-utils', async () => {
   return { googleAdsConnectAllowed: resolveGoogleAdsConnectAccess }
 })
 vi.mock('@/lib/supabase/server', () => ({ createClient: () => mocks.createClient() }))
+vi.mock('@/lib/supabase/admin', () => ({
+  createAdminClient: () => ({
+    from: () => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        contains: () => query,
+        order: () => query,
+        limit: async () => ({ data: [], error: null }),
+      }
+      return query
+    },
+  }),
+}))
 vi.mock('@/lib/supabase/page-auth', () => ({ getPageAuthState: (client: unknown) => mocks.getPageAuthState(client) }))
 vi.mock('@/components/ads/ads-dashboard-client', () => ({ AdsDashboardClient: () => null }))
 vi.mock('@/components/auth-unavailable-notice', () => ({ AuthUnavailableNotice: () => null }))
@@ -62,14 +76,20 @@ describe('Ads dashboard access', () => {
     expect(mocks.listConnections).not.toHaveBeenCalled()
   })
 
-  it('renders for any authenticated user when connect and public flags are both enabled', async () => {
-    mocks.getPageAuthState.mockResolvedValue({ kind: 'authenticated', user: { id: USER_ID } })
+  it('renders for a verified authenticated user when connect and public flags are both enabled', async () => {
+    mocks.getPageAuthState.mockResolvedValue({ kind: 'authenticated', user: { id: USER_ID, email_confirmed_at: '2026-09-01T00:00:00.000Z' } })
 
     const page = await AdsDashboardPage({ searchParams: Promise.resolve({}) })
 
     expect(page).toBeTruthy()
     expect(mocks.notFound).not.toHaveBeenCalled()
     expect(mocks.listConnections).toHaveBeenCalledWith(USER_ID)
+  })
+
+  it('requires email confirmation even when public connect is enabled', async () => {
+    mocks.getPageAuthState.mockResolvedValue({ kind: 'authenticated', user: { id: USER_ID } })
+    await expect(AdsDashboardPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('not-found')
+    expect(mocks.listConnections).not.toHaveBeenCalled()
   })
 
   it('keeps the allowlist gate when public connect is off and requires the connect flag', async () => {

@@ -4,7 +4,7 @@ import { saveGoogleAdsConnectionFromOAuth, googleOAuthTokenContext } from '@/lib
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { GOOGLE_ADS_SCOPE, revokeGoogleAdsRefreshToken } from '@/lib/ads/providers/google-ads-provider'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { googleAdsConnectAllowed, googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsUserId, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
+import { googleAdsErrorResponse, googleAdsFeatureEnabled, googleAdsJson, googleAdsRequestAccess, isSameOriginGoogleAdsPost } from '@/lib/ads/google-route-utils'
 import type { AdsAccountSummary } from '@/lib/ads/providers/types'
 
 export const dynamic = 'force-dynamic'
@@ -33,9 +33,10 @@ function safeCandidates(value: unknown): AdsAccountSummary[] {
 
 export async function GET(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
-  const userId = await googleAdsUserId()
+  const access = await googleAdsRequestAccess()
+  const userId = access?.userId
   if (!userId) return googleAdsJson({ error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
+  if (!access.decision.canConnect) return googleAdsJson({ error: 'not_found' }, 404)
 
   const flowId = new URL(request.url).searchParams.get('flowId') ?? ''
   if (!UUID_PATTERN.test(flowId)) return googleAdsJson({ error: 'invalid_request' }, 400)
@@ -60,9 +61,10 @@ export async function POST(request: Request) {
   if (!googleAdsFeatureEnabled()) return googleAdsJson({ error: 'not_found' }, 404)
   if (!isSameOriginGoogleAdsPost(request)) return googleAdsJson({ error: 'csrf_failed' }, 403)
 
-  const userId = await googleAdsUserId()
+  const access = await googleAdsRequestAccess()
+  const userId = access?.userId
   if (!userId) return googleAdsJson({ error: 'not_authenticated' }, 401)
-  if (!googleAdsConnectAllowed(userId)) return googleAdsJson({ error: 'not_found' }, 404)
+  if (!access.decision.canConnect) return googleAdsJson({ error: 'not_found' }, 404)
   const rate = checkRateLimit(`google-ads-select:${userId}`, 10, 60_000)
   if (!rate.allowed) return googleAdsJson({ error: 'rate_limited' }, 429)
 

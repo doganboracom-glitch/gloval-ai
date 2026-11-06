@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const management = await getGoogleAdsManagementSnapshot(gate.userId, planId)
+    const management = await getGoogleAdsManagementSnapshot(gate.userId, planId, gate.identity)
     return googleAdsJson({ ok: true, ...management })
   } catch (error) {
     return googleAdsErrorResponse(error instanceof GoogleAdsError ? error : new GoogleAdsError('provider_error'))
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
   try {
     const result = await applyGoogleAdsManagementAction({
       userId: gate.userId,
+      accessIdentity: gate.identity,
       planId: input.data.planId,
       actionId: input.data.actionId,
       expectedVersion: input.data.expectedVersion,

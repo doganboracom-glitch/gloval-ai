@@ -19,6 +19,8 @@ type AdsDashboardClientProps = {
   pendingFlowId: string | null
   googleStatus: string | null
   publishEnabled: boolean
+  killSwitchEnabled: boolean
+  termsAcceptedAt: string | null
 }
 
 export function AdsDashboardClient({
@@ -28,6 +30,8 @@ export function AdsDashboardClient({
   pendingFlowId,
   googleStatus,
   publishEnabled,
+  killSwitchEnabled,
+  termsAcceptedAt,
 }: AdsDashboardClientProps) {
   const { t } = useLanguage()
   const copy = t.ads
@@ -63,35 +67,16 @@ export function AdsDashboardClient({
 
         <GoogleAdsInsights connections={connections} />
 
-        {publishEnabled ? (
-          <GoogleAdsWorkspace
-            enabled={publishEnabled}
-            connections={connections}
-            initialAddress={address}
-            initialPlanId={initialPlanId}
-          />
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            <section aria-labelledby="ads-plans" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
-              <h2 id="ads-plans" className="text-lg font-semibold">
-                {copy.plansTitle}
-              </h2>
-              {address ? (
-                <p className="text-sm text-muted-foreground">
-                  {copy.receivedAddress}: <span className="font-medium text-foreground">{address}</span>
-                </p>
-              ) : null}
-              <p className="text-sm leading-relaxed text-muted-foreground">{copy.plansEmpty}</p>
-            </section>
-
-            <section aria-labelledby="ads-activity" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
-              <h2 id="ads-activity" className="text-lg font-semibold">
-                {copy.activityTitle}
-              </h2>
-              <p className="text-sm text-muted-foreground">{copy.activityEmpty}</p>
-            </section>
-          </div>
-        )}
+        <GoogleAdsWorkspace
+          enabled
+          publishEnabled={publishEnabled}
+          killSwitchEnabled={killSwitchEnabled}
+          initialTermsAccepted={Boolean(termsAcceptedAt)}
+          termsAcceptedAt={termsAcceptedAt}
+          connections={connections}
+          initialAddress={address}
+          initialPlanId={initialPlanId}
+        />
       </main>
       <SiteFooter />
     </div>

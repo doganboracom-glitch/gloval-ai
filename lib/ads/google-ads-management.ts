@@ -2,7 +2,12 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
-import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import {
+  resolveGoogleAdsKillSwitch,
+  resolveGoogleAdsPublishAccess,
+  type GoogleAdsAccessIdentity,
+} from '@/lib/ads/env'
+import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText } from '@/lib/ads/planner'
 import { createGoogleAdsActionApprovalHash, hashGoogleAdsApprovalPayload } from '@/lib/ads/google-ads-approval'
@@ -78,6 +83,7 @@ export type GoogleAdsManagementAction = {
 
 type ActionInput = {
   userId: string
+  accessIdentity?: GoogleAdsAccessIdentity
   planId: string
   actionId: string
   expectedVersion: number
@@ -155,8 +161,8 @@ async function loadManagementPlan(userId: string, planId: string): Promise<Manag
   return data as ManagementPlan
 }
 
-function assertAccess(userId: string) {
-  if (!resolveGoogleAdsPublishAccess(userId)) throw new GoogleAdsError('publish_disabled')
+function assertAccess(userId: string, identity?: GoogleAdsAccessIdentity) {
+  if (!resolveGoogleAdsPublishAccess(userId, process.env, identity)) throw new GoogleAdsError('publish_disabled')
 }
 
 function numberValue(value: unknown): number | null {
@@ -411,12 +417,17 @@ async function reconcilePendingActions(userId: string, actionRows: RawAction[], 
   }
 }
 
-export async function getGoogleAdsManagementSnapshot(userId: string, planId: string) {
-  assertAccess(userId)
+export async function getGoogleAdsManagementSnapshot(
+  userId: string,
+  planId: string,
+  accessIdentity?: GoogleAdsAccessIdentity,
+) {
+  assertAccess(userId, accessIdentity)
   const plan = await loadManagementPlan(userId, planId)
   return withGoogleAdsPublishAccess({
     userId,
     connectionId: plan.connection_id as string,
+    identity: accessIdentity,
     action: async (access) => {
       const { state, snapshot } = await readSnapshot(access, plan)
       const actions = await listActions(userId, plan.id)
@@ -590,6 +601,17 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
     } else {
       throw new GoogleAdsError('action_not_reversible')
     }
+    if (resolveGoogleAdsKillSwitch()) {
+      // Geri alma da bir etkinleştirme/bütçe artışı olabilir; kill switch açıkken bu yol da kapalı kalmalı.
+      if (action === 'enable') {
+        await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'enable' })
+        throw new GoogleAdsError('kill_switch_active')
+      }
+      if (action === 'budget' && BigInt(String(target.dailyBudgetMicros)) > BigInt(snapshot.dailyBudgetMicros)) {
+        await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'budget_increase' })
+        throw new GoogleAdsError('kill_switch_active')
+      }
+    }
     return { action, actionType: original.action_type, target, undoOf: original.id }
   }
 
@@ -598,6 +620,10 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
   const target: Record<string, unknown> = {}
   if (action === 'pause' || action === 'enable') {
     validateStatus(snapshot, action)
+    if (action === 'enable' && resolveGoogleAdsKillSwitch()) {
+      await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'enable' })
+      throw new GoogleAdsError('kill_switch_active')
+    }
     if (action === 'enable' && snapshot.paymentMethodWarning && input.acknowledgedBillingWarning !== true) {
       throw new GoogleAdsError('confirmation_required')
     }
@@ -611,6 +637,10 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
       dailyBudgetMinor: dailyBudgetMinor!,
     })
     const dailyBudgetMicros = googleAdsMicrosFromMinorUnits(dailyBudgetMinor!, currency)
+    if (resolveGoogleAdsKillSwitch() && BigInt(dailyBudgetMicros) > BigInt(snapshot.dailyBudgetMicros)) {
+      await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'budget_increase' })
+      throw new GoogleAdsError('kill_switch_active')
+    }
     target.dailyBudgetMinor = dailyBudgetMinor
     target.dailyBudgetMicros = dailyBudgetMicros
   } else if (action === 'ad_copy') {
@@ -861,11 +891,12 @@ async function runLoggedMutation(input: {
 
 export async function applyGoogleAdsManagementAction(input: ActionInput) {
   if (!input.userConfirmed) throw new GoogleAdsError('confirmation_required')
-  assertAccess(input.userId)
+  assertAccess(input.userId, input.accessIdentity)
   const plan = await loadManagementPlan(input.userId, input.planId)
   return withGoogleAdsPublishAccess({
     userId: input.userId,
     connectionId: plan.connection_id as string,
+    identity: input.accessIdentity,
     action: async (access) => {
       if (access.connection.is_manager) throw new GoogleAdsError('manager_account')
       const { state, snapshot } = await readSnapshot(access, plan)

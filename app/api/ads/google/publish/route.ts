@@ -17,7 +17,7 @@ const publishSchema = z.object({
 
 function responseStatus(reason: string): number {
   if (reason === 'not_authenticated' || reason === 'reauth_required') return 401
-  if (reason === 'not_authorized') return 403
+  if (reason === 'not_authorized' || reason === 'google_access_level_insufficient') return 403
   if (reason === 'plan_not_found' || reason === 'connection_not_found' || reason === 'publish_disabled') return 404
   if (reason === 'insufficient_credits') return 402
   if (reason === 'api_quota_exceeded' || reason === 'rate_limited') return 429
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 
   const result = await publishGoogleAdsPlan({
     userId: gate.userId,
+    accessIdentity: gate.identity,
     planId: input.data.planId,
     expectedVersion: input.data.expectedVersion,
     approvalHash: input.data.approvalHash,

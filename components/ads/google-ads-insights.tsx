@@ -119,6 +119,8 @@ function apiErrorMessage(error: unknown): string {
     case 'reauth_required':
     case 'not_authorized':
       return 'Google Ads bağlantısının yeniden yetkilendirilmesi gerekiyor.'
+    case 'google_access_level_insufficient':
+      return 'Google Ads erişimi henüz onaylanmadı, destekle iletişime geçin.'
     case 'connection_busy':
       return 'Bu hesapta başka bir okuma işlemi sürüyor. Biraz sonra tekrar deneyin.'
     case 'connection_not_found':

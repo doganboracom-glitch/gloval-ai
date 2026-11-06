@@ -29,6 +29,8 @@ import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
 import { PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { cn } from '@/lib/utils'
 import { buildGoogleAdsApprovalSummary, type GoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
+import { GoogleAdsSetupJourney } from '@/components/ads/google-ads-setup-journey'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 
 type PlanRow = {
   id: string
@@ -262,7 +264,6 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -272,6 +273,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     ad_review_status_unavailable: 'Reklam inceleme durumu doğrulanamadı.',
     reauth_required: 'Google Ads bağlantısı yeniden yetkilendirilmeli.',
     not_authorized: 'Google Ads hesabı bu isteğe izin vermedi. Bağlantı ve hesap yetkilerini kontrol edin.',
+    google_access_level_insufficient: 'Google Ads erişimi henüz onaylanmadı, destekle iletişime geçin.',
     connection_not_found: 'Seçili Google Ads hesabı bulunamadı. Hesabı yeniden bağlayıp seçin.',
     manager_account: 'Yayınlama için yönetici hesabı değil, müşteri hesabı seçilmelidir.',
     connection_busy: 'Google Ads hesabında başka bir API işlemi sürüyor. Biraz sonra tekrar deneyin.',
@@ -285,12 +287,18 @@ function errorText(code: string | undefined, isTr: boolean): string {
     status_update_failed: 'Yayın durumu kaydedilemedi. Kampanya durumunu Google Ads hesabında kontrol edin; yönetici bilgilendirildi.',
     destination_unreachable: 'Açılış sayfasına güvenli şekilde ulaşılamadı. URL’yi kontrol edip tekrar deneyin.',
     site_policy_blocked: 'Açılış sayfası yayınlama güvenlik denetiminden geçemedi. İçeriği veya URL’yi kontrol edin.',
+    publish_disabled: 'Google Ads erişimi veya yayınlama izni bu kullanıcı için etkin değil.',
+    kill_switch_active: 'Güvenlik nedeniyle Google Ads yayınlama geçici olarak durduruldu.',
+  user_publish_limit_reached: '24 saat içindeki yayın denemesi kotanız doldu. Lütfen daha sonra tekrar deneyin.',
+  global_publish_limit_reached: 'Google Ads için genel 24 saatlik yayın denemesi kotası doldu. Lütfen daha sonra tekrar deneyin.',
+    unsupported_currency: 'Yalnızca TRY, USD ve EUR ile yayın yapılabilir.',
+    currency_mismatch: 'Google Ads hesabının para birimi planla eşleşmiyor.',
+    terms_reaccept_required: 'Yayın koşulları güncellendi. Devam etmeden önce tekrar kabul edin.',
   }
   const en: Record<string, string> = {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -300,6 +308,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     ad_review_status_unavailable: 'The ad review status could not be verified.',
     reauth_required: 'Reconnect Google Ads to continue.',
     not_authorized: 'Google Ads did not authorize this request. Check the connection and account permissions.',
+    google_access_level_insufficient: 'Google Ads access has not been approved yet. Please contact support.',
     connection_not_found: 'The selected Google Ads account was not found. Reconnect and select it again.',
     manager_account: 'Select a customer account, not a manager account, to publish.',
     connection_busy: 'Another Google Ads API operation is in progress. Try again shortly.',
@@ -313,6 +322,13 @@ function errorText(code: string | undefined, isTr: boolean): string {
     status_update_failed: 'The publish status could not be saved. Check Google Ads directly; the administrator was notified.',
     destination_unreachable: 'The landing page could not be reached safely. Check the URL and try again.',
     site_policy_blocked: 'The landing page did not pass the publishing security check. Review its content or URL.',
+    publish_disabled: 'Google Ads access or publishing is not enabled for this user.',
+    kill_switch_active: 'Google Ads publishing is temporarily stopped for safety.',
+    user_publish_limit_reached: 'Your 24-hour publish attempt quota is used. Please try again later.',
+    global_publish_limit_reached: 'The global 24-hour Google Ads publish attempt quota is used. Please try again later.',
+    unsupported_currency: 'Publishing supports TRY, USD, and EUR only.',
+    currency_mismatch: 'The Google Ads account currency does not match this plan.',
+    terms_reaccept_required: 'The publishing terms changed. Accept the current terms before continuing.',
   }
   const dict = isTr ? tr : en
   return (code && dict[code]) || (isTr ? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.' : 'The action could not be completed. Try again.')
@@ -391,11 +407,19 @@ function TextAreaField({
 
 export function GoogleAdsWorkspace({
   enabled,
+  publishEnabled = true,
+  killSwitchEnabled = false,
+  initialTermsAccepted = false,
+  termsAcceptedAt = null,
   connections,
   initialAddress,
   initialPlanId = null,
 }: {
   enabled: boolean
+  publishEnabled?: boolean
+  killSwitchEnabled?: boolean
+  initialTermsAccepted?: boolean
+  termsAcceptedAt?: string | null
   connections: GoogleAdsConnectionView[]
   initialAddress: string | null
   initialPlanId?: string | null
@@ -510,7 +534,7 @@ export function GoogleAdsWorkspace({
   const [aiRecommendedBudgetMinor, setAiRecommendedBudgetMinor] = useState<number | null>(null)
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
-  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(initialTermsAccepted)
   const [pending, setPending] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
@@ -533,6 +557,15 @@ export function GoogleAdsWorkspace({
   const selectedConnection = availableConnections.find((connection) => connection.id === connectionId) ?? null
   const isEditable = !selectedPlan || ['draft', 'failed', 'approved'].includes(selectedPlan.status)
   const selectedCurrency = selectedPlan?.currency ?? selectedConnection?.currency ?? 'TRY'
+  const journeyStage = availableConnections.length === 0
+    ? 'no-connection'
+    : plans.some((plan) => plan.status === 'published')
+      ? 'published'
+      : plans.some((plan) => plan.status === 'approved' || plan.status === 'publishing' || plan.status === 'reconciling')
+        ? 'approved'
+        : plans.length > 0
+          ? 'draft'
+          : 'connected'
 
   const summary = useMemo(() => {
     if (!selectedPlan) return null
@@ -805,6 +838,21 @@ export function GoogleAdsWorkspace({
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="google-ads-workspace-title">
+      <GoogleAdsSetupJourney stage={journeyStage} onStartPlan={() => startManual(initialAddress || form.finalUrl)} />
+      {killSwitchEnabled ? (
+        <Alert role="status">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{isTr ? 'מתג העצירה של פרסום Google Ads פעיל' : 'The Google Ads publishing kill switch is on'}</AlertTitle>
+          <AlertDescription>{isTr ? 'פרסום חדש, הפעלה והגדלת תקציב חסומים. צפייה, השהיה והפחתת תקציב נשארות זמינות.' : 'New publishes, campaign enabling, and budget increases are blocked. Viewing, pausing, and budget decreases remain available.'}</AlertDescription>
+        </Alert>
+      ) : null}
+      {!publishEnabled ? (
+        <Alert role="status">
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{isTr ? 'פרסום Google Ads אינו זמין כרגע' : 'Google Ads publishing is currently unavailable'}</AlertTitle>
+          <AlertDescription>{isTr ? 'אפשר להמשיך להכין טיוטות. חיבור החשבון והפרסום נשלטים בנפרד.' : 'You can continue preparing drafts. Account access and publishing are controlled separately.'}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -860,7 +908,7 @@ export function GoogleAdsWorkspace({
           />
 
           {editorOpen ? (
-            <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+            <div id="google-ads-plan-editor" className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
               <Card>
                 <CardHeader>
                   <CardTitle>{copy.builder}</CardTitle>
@@ -1030,7 +1078,7 @@ export function GoogleAdsWorkspace({
               <CardContent><p className="text-sm text-muted-foreground">{copy.noSelection}</p></CardContent>
             </Card>
           ) : (
-            <Card>
+            <Card id="google-ads-publish-review">
               <CardHeader>
                 <CardTitle>{copy.reviewTitle}</CardTitle>
                 <CardDescription>{statusText(selectedPlan.status, isTr)} · v{selectedPlan.version}</CardDescription>
@@ -1062,10 +1110,17 @@ export function GoogleAdsWorkspace({
                         <input id="google-ads-eu-confirm" type="checkbox" checked={confirmedEu} onChange={(event) => setConfirmedEu(event.target.checked)} className="size-4 rounded border-input accent-primary" />
                         <FieldLabel htmlFor="google-ads-eu-confirm">{copy.confirmEu}</FieldLabel>
                       </Field>
-                      <Field orientation="horizontal">
-                        <input id="google-ads-terms-confirm" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                        <FieldLabel htmlFor="google-ads-terms-confirm">{copy.acceptTerms}</FieldLabel>
-                      </Field>
+                      {acceptedTerms ? (
+                        <p role="status" className="text-sm leading-relaxed text-muted-foreground">
+                          {isTr ? 'תנאי הפרסום אושרו' : 'Publishing terms accepted'} · v{GOOGLE_ADS_PUBLISH_TERMS_VERSION}
+                          {termsAcceptedAt ? ` · ${new Date(termsAcceptedAt).toLocaleDateString(isTr ? 'tr-TR' : 'en-US')}` : ''}
+                        </p>
+                      ) : (
+                        <Field orientation="horizontal">
+                          <input id="google-ads-terms-confirm" type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="size-4 rounded border-input accent-primary" />
+                          <FieldLabel htmlFor="google-ads-terms-confirm">{copy.acceptTerms}</FieldLabel>
+                        </Field>
+                      )}
                       <p className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
                         <Link className="text-primary underline underline-offset-4" href="/yasal/kullanim-kosullari">{reviewCopy.termsLink}</Link>
                         <span aria-hidden="true">·</span>
@@ -1081,7 +1136,7 @@ export function GoogleAdsWorkspace({
                 {selectedPlan.status === 'approved' ? (
                   <div className="flex flex-col gap-3">
                     <p className="text-sm text-muted-foreground">{copy.approved}</p>
-                    <Button type="button" variant="outline" onClick={() => void runPublish('validate')} disabled={!selectedPlan.approval_hash || pending !== null || selectedPlan.validation_hash === selectedPlan.approval_hash}>
+                      <Button type="button" variant="outline" onClick={() => void runPublish('validate')} disabled={!publishEnabled || !selectedPlan.approval_hash || pending !== null || selectedPlan.validation_hash === selectedPlan.approval_hash}>
                       {pending === 'validate' ? copy.validating : copy.validate}
                     </Button>
                     <Button
@@ -1108,7 +1163,7 @@ export function GoogleAdsWorkspace({
                           <Button type="button" variant="outline" onClick={() => { setShowPublishReview(false); setFinalPublishConfirmed(false) }} disabled={pending !== null}>
                             {copy.reviewBack}
                           </Button>
-                          <Button type="button" onClick={() => void runPublish('publish')} disabled={!finalPublishConfirmed || pending !== null}>
+                          <Button type="button" onClick={() => void runPublish('publish')} disabled={!publishEnabled || killSwitchEnabled || !finalPublishConfirmed || pending !== null}>
                             {pending === 'publish' ? copy.publishing : copy.publish}
                           </Button>
                         </div>

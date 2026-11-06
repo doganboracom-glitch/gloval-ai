@@ -128,7 +128,14 @@ export function googleAdsMicrosFromMinorUnits(amountMinor: number, currency: str
   return String(micros)
 }
 
+export const GOOGLE_ADS_SUPPORTED_CURRENCIES = ['TRY', 'USD', 'EUR'] as const
+
+export function isSupportedGoogleAdsCurrency(currency: string): boolean {
+  return (GOOGLE_ADS_SUPPORTED_CURRENCIES as readonly string[]).includes(currency.toUpperCase())
+}
+
 export type GoogleAdsApprovalSummary = {
+  termsVersion?: string
   currency: string
   dailyBudgetMinor: number
   currencyFractionDigits: number

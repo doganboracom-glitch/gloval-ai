@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getAdminUser: vi.fn(),
   checkRateLimit: vi.fn(),
-  googleAdsConnectAllowed: vi.fn(),
   googleAdsFeatureEnabled: vi.fn(),
   isSameOriginGoogleAdsPost: vi.fn(),
 }))
@@ -12,7 +11,6 @@ vi.mock('server-only', () => ({}))
 vi.mock('@/lib/mail/admin-guard', () => ({ getAdminUser: mocks.getAdminUser }))
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.checkRateLimit }))
 vi.mock('@/lib/ads/google-route-utils', () => ({
-  googleAdsConnectAllowed: mocks.googleAdsConnectAllowed,
   googleAdsFeatureEnabled: mocks.googleAdsFeatureEnabled,
   googleAdsJson: (body: unknown, status = 200) => new Response(JSON.stringify(body), { status }),
   googleAdsNotFound: () => new Response(null, { status: 404 }),
@@ -34,7 +32,6 @@ beforeEach(() => {
   vi.stubEnv('GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED', '1')
   mocks.getAdminUser.mockResolvedValue({ userId: USER_ID, email: 'admin@gloval.example' })
   mocks.checkRateLimit.mockReturnValue({ allowed: true })
-  mocks.googleAdsConnectAllowed.mockReturnValue(true)
   mocks.googleAdsFeatureEnabled.mockReturnValue(true)
   mocks.isSameOriginGoogleAdsPost.mockReturnValue(true)
 })
@@ -45,7 +42,10 @@ describe('Google Ads validate-only test gate', () => {
 
     const gate = await requireGoogleAdsValidateOnlyTestRequest(request())
 
-    expect(gate).toEqual({ userId: USER_ID })
+    expect(gate).toEqual({
+      userId: USER_ID,
+      identity: { emailConfirmed: true, isAdmin: true },
+    })
     expect(mocks.checkRateLimit).toHaveBeenCalledWith(`google-ads-validate-only-test:${USER_ID}`, 5, 60_000)
   })
 
@@ -66,14 +66,18 @@ describe('Google Ads validate-only test gate', () => {
     expect('response' in gate && gate.response.status).toBe(404)
   })
 
-  it('rejects cross-origin requests and users without Google Ads connection access', async () => {
+  it('rejects cross-origin requests and keeps admin access independent of access mode', async () => {
     mocks.isSameOriginGoogleAdsPost.mockReturnValue(false)
     const csrfGate = await requireGoogleAdsValidateOnlyTestRequest(request())
     expect('response' in csrfGate && csrfGate.response.status).toBe(403)
 
     mocks.isSameOriginGoogleAdsPost.mockReturnValue(true)
-    mocks.googleAdsConnectAllowed.mockReturnValue(false)
-    const connectionGate = await requireGoogleAdsValidateOnlyTestRequest(request())
-    expect('response' in connectionGate && connectionGate.response.status).toBe(404)
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'off')
+    vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '0')
+    const adminGate = await requireGoogleAdsValidateOnlyTestRequest(request())
+    expect(adminGate).toEqual({
+      userId: USER_ID,
+      identity: { emailConfirmed: true, isAdmin: true },
+    })
   })
 })

@@ -18,7 +18,7 @@ const validationTestSchema = z.object({
 
 function responseStatus(reason: string): number {
   if (reason === 'not_authenticated' || reason === 'reauth_required') return 401
-  if (reason === 'not_authorized') return 403
+  if (reason === 'not_authorized' || reason === 'google_access_level_insufficient') return 403
   if (reason === 'plan_not_found' || reason === 'publish_disabled') return 404
   if (reason === 'api_quota_exceeded' || reason === 'rate_limited') return 429
   if (reason === 'provider_unavailable') return 502

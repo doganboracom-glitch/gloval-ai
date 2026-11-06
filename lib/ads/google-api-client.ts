@@ -144,14 +144,19 @@ function responseError(payload: unknown): {
   dailyQuota: boolean
   temporary: boolean
   euPoliticalDeclarationRequired: boolean
+  accessLevelInsufficient: boolean
 } {
-  if (!payload || typeof payload !== 'object') {
-    return { status: '', message: '', dailyQuota: false, temporary: false, euPoliticalDeclarationRequired: false }
+  const empty = {
+    status: '',
+    message: '',
+    dailyQuota: false,
+    temporary: false,
+    euPoliticalDeclarationRequired: false,
+    accessLevelInsufficient: false,
   }
+  if (!payload || typeof payload !== 'object') return empty
   const error = (payload as { error?: unknown }).error
-  if (!error || typeof error !== 'object') {
-    return { status: '', message: '', dailyQuota: false, temporary: false, euPoliticalDeclarationRequired: false }
-  }
+  if (!error || typeof error !== 'object') return empty
   const record = error as { status?: unknown; message?: unknown; details?: unknown }
   const status = typeof record.status === 'string' ? record.status : ''
   const message = typeof record.message === 'string' ? record.message : ''
@@ -164,6 +169,7 @@ function responseError(payload: unknown): {
     temporary: /RESOURCE_TEMPORARILY_EXHAUSTED|TEMPORARY.*EXHAUSTED/.test(combined),
     euPoliticalDeclarationRequired:
       /MISSING_EU_POLITICAL_ADVERTISING_DECLARATION|MISSING_EU_POLITICAL_ADVERTISING_SELF_DECLARATION|EU_POLITICAL_ADVERTISING_DECLARATION_REQUIRED/.test(combined),
+    accessLevelInsufficient: /CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION|ACTION_NOT_PERMITTED|AUTHORIZATION_?ERROR/.test(combined),
   }
 }
 
@@ -305,6 +311,7 @@ export function createGoogleAdsApiTransport(input: {
         await delay(retryDelay(attempt, response.headers.get('retry-after')))
         continue
       }
+      if (providerError.accessLevelInsufficient) throw new GoogleAdsError('google_access_level_insufficient')
       if (response.status === 401 || response.status === 403) throw new GoogleAdsError('not_authorized')
       if (response.status === 429) throw new GoogleAdsError('rate_limited')
       if (response.status >= 500) throw new GoogleAdsError('provider_unavailable')

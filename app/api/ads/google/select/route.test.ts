@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
-    auth: { getUser: async () => ({ data: { user: mocks.userId ? { id: mocks.userId } : null }, error: null }) },
+    auth: { getUser: async () => ({ data: { user: mocks.userId ? { id: mocks.userId, email_confirmed_at: '2026-01-01T00:00:00.000Z' } : null }, error: null }) },
   }),
 }))
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({ from: mocks.from }) }))
@@ -109,7 +109,9 @@ function setupFlow() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
+  vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'allowlist')
   vi.stubEnv('ADS_GOOGLE_CONNECT_ENABLED', '1')
+  vi.stubEnv('ADS_GOOGLE_CONNECT_PUBLIC', '')
   vi.stubEnv('ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS', USER_ID)
   mocks.userId = USER_ID
   mocks.maybeSingleResults = []

@@ -8,7 +8,7 @@ import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { GOOGLE_OAUTH_CALLBACK_COOKIE_PATH, googleOAuthCookieName, hashGoogleOAuthState, readGoogleOAuthFlowId, secureTextEquals, verifyGoogleOAuthState } from '@/lib/ads/google-oauth-state'
 import { googleOAuthTokenContext } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsOAuthSettings } from '@/lib/ads/env'
-import { googleAdsConnectAllowed, googleAdsFeatureEnabled, googleAdsRedirect, googleAdsUserId } from '@/lib/ads/google-route-utils'
+import { googleAdsFeatureEnabled, googleAdsRedirect, googleAdsRequestAccess } from '@/lib/ads/google-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -46,7 +46,8 @@ export async function GET(request: Request) {
     return addCookieCleanup(googleAdsRedirect(request, { google: 'state_invalid' }), flowId)
   }
 
-  const userId = await googleAdsUserId()
+  const access = await googleAdsRequestAccess()
+  const userId = access?.userId ?? null
   if (!userId) {
     return addCookieCleanup(
       NextResponse.redirect(new URL('/auth/login?next=/ads/dashboard', request.url), 303),
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
   if (claims.sub !== userId) {
     return addCookieCleanup(googleAdsRedirect(request, { google: 'state_invalid' }), flowId)
   }
-  if (!googleAdsConnectAllowed(userId)) {
+  if (!access?.decision.canConnect) {
     const admin = createAdminClient()
     await deleteFlow(admin, flowId, userId)
     return addCookieCleanup(googleAdsRedirect(request, { google: 'not_found' }), flowId)

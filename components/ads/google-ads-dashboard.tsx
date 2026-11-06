@@ -81,6 +81,8 @@ function errorMessage(code: string | undefined, copy: ReturnType<typeof useLangu
     case 'reauth_required':
     case 'not_authorized':
       return copy.reauthError
+    case 'google_access_level_insufficient':
+      return copy.accessLevelError
     case 'connection_busy':
       return copy.connectionBusy
     case 'connection_limit_exceeded':

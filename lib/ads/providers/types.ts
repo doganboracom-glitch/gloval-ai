@@ -43,9 +43,12 @@ export type AdsAccountSummary = {
   loginCustomerId: string | null
 }
 
+import type { GoogleAdsAccessIdentity } from '@/lib/ads/env'
+
 export type AdsApiOperationContext = {
   userId: string
   connectionId: string | null
+  googleAdsAccess?: GoogleAdsAccessIdentity
 }
 
 export type GoogleAdsDateRange = '7d' | '30d'

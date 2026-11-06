@@ -20,7 +20,14 @@ import {
   resolveGoogleAdsOAuthSettings,
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsValidateOnlyTestEnabled,
+  resolveGoogleAdsKillSwitch,
+  resolveGoogleAdsPublishLimits,
+  type GoogleAdsAccessIdentity,
 } from '@/lib/ads/env'
+import { reserveGoogleAdsPublishCapacity, finishGoogleAdsPublishCapacity } from '@/lib/ads/google-publish-capacity'
+import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
+import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import {
   buildGoogleAdsApprovalSummary,
@@ -56,6 +63,7 @@ type PublishPlanRow = {
   approved_version: number | null
   approval_summary: unknown
   approval_id: string | null
+  acceptedTermsVersion?: string | null
   approval_hash: string | null
   validation_hash: string | null
   validated_version: number | null
@@ -97,6 +105,7 @@ export type GoogleAdsAccess = {
 type WithAccessInput<T> = {
   userId: string
   connectionId: string
+  identity?: GoogleAdsAccessIdentity
   action: (access: GoogleAdsAccess) => Promise<T>
 }
 
@@ -124,6 +133,7 @@ export type GoogleAdsPublishFailureReason =
   | 'api_quota_exceeded'
   | 'quota_check_failed'
   | 'not_authorized'
+  | 'google_access_level_insufficient'
   | 'configuration_missing'
   | 'status_update_failed'
   | 'plan_changed'
@@ -131,6 +141,11 @@ export type GoogleAdsPublishFailureReason =
   | 'ad_disapproved'
   | 'ad_review_in_progress'
   | 'ad_review_status_unavailable'
+  | 'kill_switch_active'
+  | 'user_publish_limit_reached'
+  | 'global_publish_limit_reached'
+  | 'unsupported_currency'
+  | 'terms_reaccept_required'
 
 export type GoogleAdsPublishServiceResult =
   | {
@@ -148,6 +163,7 @@ export type GoogleAdsPublishServiceResult =
 
 export type GoogleAdsPlanStatusInput = {
   userId: string
+  accessIdentity?: GoogleAdsAccessIdentity
   planId: string
   status: 'paused' | 'enabled'
   validateOnly?: boolean
@@ -162,7 +178,9 @@ export type GoogleAdsPlanBillingResult = {
 }
 
 export type GoogleAdsPublishServiceDeps = {
-  accessEnabled: (userId: string) => boolean
+  accessEnabled: (userId: string, identity?: GoogleAdsAccessIdentity) => boolean
+  reservePublishCapacity: typeof reserveGoogleAdsPublishCapacity
+  finishPublishCapacity: typeof finishGoogleAdsPublishCapacity
   validationTestEnabled: (userId: string) => boolean
   createRequestId: () => string
   loadPlan: (userId: string, planId: string) => Promise<PublishPlanRow | null>
@@ -242,6 +260,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'api_quota_exceeded',
       'quota_check_failed',
       'not_authorized',
+      'google_access_level_insufficient',
       'configuration_missing',
       'status_update_failed',
       'plan_changed',
@@ -249,6 +268,11 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'ad_disapproved',
       'ad_review_in_progress',
       'ad_review_status_unavailable',
+      'kill_switch_active',
+          'user_publish_limit_reached',
+      'global_publish_limit_reached',
+      'unsupported_currency',
+      'terms_reaccept_required',
     ]
     return allowed.includes(error.code as GoogleAdsPublishFailureReason)
       ? (error.code as GoogleAdsPublishFailureReason)
@@ -262,9 +286,9 @@ function failed(reason: GoogleAdsPublishFailureReason, balance?: number): Google
 }
 
 function requirePlanBudget(plan: PublishPlanRow): { currency: string; dailyMinor: number } {
+  if (!plan.currency || !/^[A-Z]{3}$/.test(plan.currency)) throw new GoogleAdsError('invalid_budget')
+  if (!isSupportedGoogleAdsCurrency(plan.currency)) throw new GoogleAdsError('unsupported_currency')
   if (
-    !plan.currency ||
-    !/^[A-Z]{3}$/.test(plan.currency) ||
     !Number.isSafeInteger(plan.daily_budget_minor) ||
     (plan.daily_budget_minor ?? 0) <= 0
   ) {
@@ -289,7 +313,22 @@ async function defaultLoadPlan(userId: string, planId: string): Promise<PublishP
     .maybeSingle()
 
   if (error) throw new GoogleAdsError('provider_error')
-  return (data as PublishPlanRow | null) ?? null
+  const plan = (data as PublishPlanRow | null) ?? null
+  if (!plan?.approval_id) return plan ? { ...plan, acceptedTermsVersion: null } : null
+
+  const { data: approval, error: approvalError } = await admin
+    .from('ads_google_publish_approvals')
+    .select('terms_accepted_at,approval_summary')
+    .eq('id', plan.approval_id)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (approvalError) throw new GoogleAdsError('provider_error')
+  const summary = approval?.approval_summary
+  const termsVersion = summary && typeof summary === 'object' && 'termsVersion' in summary
+    && typeof (summary as Record<string, unknown>).termsVersion === 'string'
+    ? (summary as Record<string, string>).termsVersion
+    : null
+  return { ...plan, acceptedTermsVersion: approval?.terms_accepted_at ? termsVersion : null }
 }
 
 async function defaultWithAccess<T>(input: WithAccessInput<T>): Promise<T> {
@@ -307,7 +346,11 @@ async function defaultWithAccess<T>(input: WithAccessInput<T>): Promise<T> {
     userId: input.userId,
     connectionId: input.connectionId,
     provider,
-    action: (data) => input.action({ ...data, provider }),
+    action: (data) => input.action({
+      ...data,
+      context: { ...data.context, googleAdsAccess: input.identity },
+      provider,
+    }),
   })
 }
 
@@ -345,7 +388,9 @@ function approvedPlanJson(plan: PublishPlanRow): unknown {
 }
 
 const defaultDeps: GoogleAdsPublishServiceDeps = {
-  accessEnabled: (userId) => resolveGoogleAdsPublishAccess(userId),
+  accessEnabled: (userId, identity) => resolveGoogleAdsPublishAccess(userId, process.env, identity),
+  reservePublishCapacity: reserveGoogleAdsPublishCapacity,
+  finishPublishCapacity: finishGoogleAdsPublishCapacity,
   validationTestEnabled: () => resolveGoogleAdsValidateOnlyTestEnabled(),
   createRequestId: randomUUID,
   loadPlan: defaultLoadPlan,
@@ -507,6 +552,9 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       if (!loaded.eu_political_declaration_confirmed_at) return failed('eu_political_declaration_required')
     }
     if (!loaded.connection_id) return failed('connection_not_found')
+    if (loaded.acceptedTermsVersion !== undefined && loaded.acceptedTermsVersion !== GOOGLE_ADS_PUBLISH_TERMS_VERSION) {
+      return failed('terms_reaccept_required')
+    }
     try {
       requirePlanBudget(loaded)
     } catch (error) {
@@ -517,6 +565,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
 
   async function publish(input: {
     userId: string
+    accessIdentity?: GoogleAdsAccessIdentity
     planId: string
     expectedVersion?: number
     approvalHash?: string
@@ -534,8 +583,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
         (input.euPoliticalAdvertising !== 'yes' && input.euPoliticalAdvertising !== 'no') ||
         input.euPoliticalDeclarationConfirmed !== true
       ) return failed('eu_political_declaration_required')
-    } else if (!deps.accessEnabled(input.userId)) {
+    } else if (!deps.accessEnabled(input.userId, input.accessIdentity)) {
       return failed('publish_disabled')
+    }
+    if (!input.validateOnly && resolveGoogleAdsKillSwitch()) {
+      await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: input.planId, reason: 'kill_switch_active', operation: 'publish' })
+      return failed('kill_switch_active')
     }
     if (input.userConfirmed !== true) return failed('confirmation_required')
     if (!input.validateOnly && input.finalConfirmation !== true) return failed('confirmation_required')
@@ -631,6 +684,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     try {
       return await deps.withAccess({
         userId: input.userId,
+        identity: input.accessIdentity,
         connectionId: plan.connection_id as string,
         action: async ({ connection, accessToken, context, provider }) => {
           if (connection.status !== 'active' || connection.is_manager) {
@@ -693,6 +747,20 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
             }
           }
 
+          let capacityActionId: string
+          try {
+            const capacity = await deps.reservePublishCapacity({
+              userId: input.userId,
+              planId: plan.id,
+              connectionId: connection.id,
+              requestId,
+              limits: resolveGoogleAdsPublishLimits(),
+            })
+            capacityActionId = capacity.actionId
+          } catch (error) {
+            return failed(failureReason(error))
+          }
+
           let reservation: AdsPublishBeginResult
           try {
             reservation = await deps.beginPublish(
@@ -728,6 +796,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 approvalSummary,
               }
             }
+            await deps.finishPublishCapacity({
+              userId: input.userId,
+              actionId: capacityActionId,
+              outcome: 'failure',
+              reasonCode: reservation.reason,
+            })
             return failed(reservation.reason, reservation.balance)
           }
 
@@ -777,6 +851,11 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               }
             }
 
+            await deps.finishPublishCapacity({
+              userId: input.userId,
+              actionId: capacityActionId,
+              outcome: 'success',
+            })
             return {
               ok: true,
               state: 'published',
@@ -839,6 +918,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               }
             }
 
+            await deps.finishPublishCapacity({
+              userId: input.userId,
+              actionId: capacityActionId,
+              outcome: 'failure',
+              reasonCode: reason,
+            })
             await deps.alertPublishFailure(plan.id, requestId, reason, 'publish').catch(() => undefined)
             return failed(reason, reservation.balance)
           }
@@ -853,7 +938,11 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     | { ok: true; result: AdsCampaignStatusResult }
     | { ok: false; reason: GoogleAdsPublishFailureReason }
   > {
-    if (!deps.accessEnabled(input.userId)) return { ok: false, reason: 'publish_disabled' }
+    if (!deps.accessEnabled(input.userId, input.accessIdentity)) return { ok: false, reason: 'publish_disabled' }
+    if (input.status === 'enabled' && resolveGoogleAdsKillSwitch()) {
+      await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: input.planId, reason: 'kill_switch_active', operation: 'enable' })
+      return { ok: false, reason: 'kill_switch_active' }
+    }
     if (input.userConfirmed !== true) return { ok: false, reason: 'confirmation_required' }
     if (
       input.status === 'enabled' &&
@@ -870,6 +959,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     try {
       const result = await deps.withAccess({
         userId: input.userId,
+        identity: input.accessIdentity,
         connectionId: loaded.connection_id,
         action: async ({ connection, accessToken, context, provider }) => {
           if (connection.status !== 'active' || connection.is_manager) {
@@ -916,11 +1006,11 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     }
   }
 
-  async function getBillingStatus(input: { userId: string; planId: string }): Promise<
+  async function getBillingStatus(input: { userId: string; planId: string; accessIdentity?: GoogleAdsAccessIdentity }): Promise<
     | { ok: true; result: GoogleAdsPlanBillingResult }
     | { ok: false; reason: GoogleAdsPublishFailureReason }
   > {
-    if (!deps.accessEnabled(input.userId)) return { ok: false, reason: 'publish_disabled' }
+    if (!deps.accessEnabled(input.userId, input.accessIdentity)) return { ok: false, reason: 'publish_disabled' }
     const loaded = await loadPlanRow(input.userId, input.planId)
     if ('ok' in loaded) return { ok: false, reason: loaded.ok ? 'plan_not_approved' : loaded.reason }
     if (loaded.status !== 'published' || !loaded.external_campaign_id || !loaded.connection_id) {
@@ -930,6 +1020,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
     try {
       const result = await deps.withAccess({
         userId: input.userId,
+        identity: input.accessIdentity,
         connectionId: loaded.connection_id,
         action: async ({ connection, accessToken, context, provider }) => {
           const verification = await provider.verifyBilling({
@@ -957,6 +1048,7 @@ const defaultService = createGoogleAdsPublishService()
 
 export function publishGoogleAdsPlan(input: {
   userId: string
+  accessIdentity?: GoogleAdsAccessIdentity
   planId: string
   expectedVersion?: number
   approvalHash?: string
@@ -974,6 +1066,6 @@ export function updateGoogleAdsPlanStatus(input: GoogleAdsPlanStatusInput) {
   return defaultService.updateCampaignStatus(input)
 }
 
-export function getGoogleAdsPlanBillingStatus(input: { userId: string; planId: string }) {
+export function getGoogleAdsPlanBillingStatus(input: { userId: string; planId: string; accessIdentity?: GoogleAdsAccessIdentity }) {
   return defaultService.getBillingStatus(input)
 }

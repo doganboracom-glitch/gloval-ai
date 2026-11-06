@@ -4,8 +4,10 @@ import { AdsDashboardClient } from '@/components/ads/ads-dashboard-client'
 import { ADS_DASHBOARD_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
-import { googleAdsConnectAllowed } from '@/lib/ads/google-route-utils'
-import { resolveGoogleAdsPublishAccess } from '@/lib/ads/env'
+import { resolveGoogleAdsAccess, resolveGoogleAdsKillSwitch } from '@/lib/ads/env'
+import { isAdminEmail } from '@/lib/mail/admin-guard'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { AuthUnavailableNotice } from '@/components/auth-unavailable-notice'
 import { createClient } from '@/lib/supabase/server'
 import { getPageAuthState } from '@/lib/supabase/page-auth'
@@ -34,7 +36,21 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
   if (authState.kind === 'unavailable') return <AuthUnavailableNotice />
   if (authState.kind === 'unauthenticated') redirect(`/auth/login?next=${ADS_DASHBOARD_PATH}`)
   const { user } = authState
-  if (!googleAdsConnectAllowed(user.id)) notFound()
+  const access = resolveGoogleAdsAccess(user.id, {
+    emailConfirmed: Boolean(user.email_confirmed_at),
+    isAdmin: isAdminEmail(user.email),
+  })
+  if (!access.canConnect) notFound()
+
+  const admin = createAdminClient()
+  const { data: acceptedTerms } = await admin
+    .from('ads_google_publish_approvals')
+    .select('terms_accepted_at,approval_summary')
+    .eq('user_id', user.id)
+    .contains('approval_summary', { termsVersion: GOOGLE_ADS_PUBLISH_TERMS_VERSION })
+    .order('terms_accepted_at', { ascending: true })
+    .limit(1)
+  const termsAcceptedAt = acceptedTerms?.[0]?.terms_accepted_at ?? null
 
   const params = await searchParams
   const rawAddress = firstValue(params.url)
@@ -51,7 +67,9 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
       connections={connections}
       pendingFlowId={firstValue(params.google_flow)}
       googleStatus={firstValue(params.google)}
-      publishEnabled={resolveGoogleAdsPublishAccess(user.id)}
+      publishEnabled={access.canPublish}
+      killSwitchEnabled={resolveGoogleAdsKillSwitch()}
+      termsAcceptedAt={termsAcceptedAt}
     />
   )
 }

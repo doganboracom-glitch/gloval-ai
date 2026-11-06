@@ -13,7 +13,11 @@ const REDIRECT_URI = 'https://gloval.ai/api/ads/google/callback'
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const CONNECTION_ID = '123e4567-e89b-42d3-a456-426614174000'
 const CONTEXT = { userId: USER_ID, connectionId: null }
-const PUBLISH_CONTEXT = { userId: USER_ID, connectionId: CONNECTION_ID }
+const PUBLISH_CONTEXT = {
+  userId: USER_ID,
+  connectionId: CONNECTION_ID,
+  googleAdsAccess: { emailConfirmed: true, isAdmin: false },
+}
 const PLAN_ID = '123e4567-e89b-42d3-a456-426614174001'
 const REQUEST_ID = '123e4567-e89b-42d3-a456-426614174002'
 
@@ -235,6 +239,7 @@ describe('Google Ads provider', () => {
   })
 
   it('creates campaigns PAUSED from stored plan JSON and warns when billing is unverified', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const calls: GoogleAdsApiCall[] = []
@@ -267,6 +272,7 @@ describe('Google Ads provider', () => {
   })
 
   it('supports Google Ads validate_only without returning a campaign id', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const calls: GoogleAdsApiCall[] = []
@@ -312,6 +318,7 @@ describe('Google Ads provider', () => {
   })
 
   it('requires explicit user confirmation before any publish or management write', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const requestAdsApi = vi.fn(async (_call: GoogleAdsApiCall) => ({}))
@@ -367,6 +374,7 @@ describe('Google Ads provider', () => {
   })
 
   it('warns on go-live when billing cannot be verified and keeps status actions credit-free', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const calls: GoogleAdsApiCall[] = []
@@ -395,6 +403,7 @@ describe('Google Ads provider', () => {
   })
 
   it('reads all campaign ad policy statuses and blocks while review is ongoing', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const calls: GoogleAdsApiCall[] = []
@@ -424,6 +433,7 @@ describe('Google Ads provider', () => {
   })
 
   it('returns disapproved and unavailable review states without guessing approval', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', USER_ID)
     const payloads: unknown[] = [
@@ -447,6 +457,9 @@ describe('Google Ads provider', () => {
   })
 
   it('never calls the Google transport for a user outside the publish allowlist', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'allowlist')
+    vi.stubEnv('ADS_GOOGLE_CONNECT_ENABLED', '1')
+    vi.stubEnv('ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS', USER_ID)
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', '660e8400-e29b-41d4-a716-446655440000')
     const requestAdsApi = vi.fn(async () => ({}))

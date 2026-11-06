@@ -18,6 +18,10 @@ export const ADS_ENV = {
   googleAdsOAuthClientSecret: 'GOOGLE_ADS_OAUTH_CLIENT_SECRET',
   googleAdsOAuthStateSecret: 'ADS_OAUTH_STATE_SECRET',
   googleAdsOAuthRedirectUri: 'GOOGLE_ADS_OAUTH_REDIRECT_URI',
+  googleAdsAccessMode: 'GOOGLE_ADS_ACCESS_MODE',
+  googleAdsKillSwitch: 'GOOGLE_ADS_KILL_SWITCH',
+  googleAdsPublishDailyUserLimit: 'GOOGLE_ADS_PUBLISH_DAILY_USER_LIMIT',
+  googleAdsPublishDailyGlobalLimit: 'GOOGLE_ADS_PUBLISH_DAILY_GLOBAL_LIMIT',
   googleAdsConnectEnabled: 'ADS_GOOGLE_CONNECT_ENABLED',
   googleAdsConnectPublic: 'ADS_GOOGLE_CONNECT_PUBLIC',
   googleAdsConnectAllowedUserIds: 'ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS',
@@ -71,19 +75,63 @@ export function isGoogleAdsConnectPublic(env: Env = process.env): boolean {
     && env[ADS_ENV.googleAdsConnectPublic]?.trim() === '1'
 }
 
-export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = process.env): boolean {
+export type GoogleAdsAccessMode = 'open' | 'allowlist' | 'off'
+export type GoogleAdsAccessIdentity = { emailConfirmed: boolean; isAdmin: boolean }
+export type GoogleAdsAccessDecision = {
+  mode: GoogleAdsAccessMode
+  canConnect: boolean
+  canPublish: boolean
+  isAdmin: boolean
+}
+
+export function resolveGoogleAdsAccessMode(env: Env = process.env): GoogleAdsAccessMode {
+  const raw = env[ADS_ENV.googleAdsAccessMode]?.trim().toLowerCase()
+  if (!raw) return 'allowlist'
+  return raw === 'open' || raw === 'allowlist' || raw === 'off' ? raw : 'off'
+}
+
+function isAllowedUser(userId: string | null, raw: string | undefined): boolean {
+  if (!userId) return false
+  const normalizedUserId = userId.trim().toLowerCase()
+  if (!UUID_PATTERN.test(normalizedUserId)) return false
+  return (raw ?? '').split(',').some((value) => value.trim().toLowerCase() === normalizedUserId)
+}
+
+function resolveLegacyGoogleAdsConnectAccess(userId: string | null, env: Env): boolean {
   if (!userId || env[ADS_ENV.googleAdsConnectEnabled]?.trim() !== '1') return false
   const normalizedUserId = userId.trim().toLowerCase()
   if (!UUID_PATTERN.test(normalizedUserId)) return false
   if (env[ADS_ENV.googleAdsConnectPublic]?.trim() === '1') return true
+  return isAllowedUser(normalizedUserId, env[ADS_ENV.googleAdsConnectAllowedUserIds])
+}
 
-  const allowedUserIds = new Set(
-    (env[ADS_ENV.googleAdsConnectAllowedUserIds] ?? '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter((value) => UUID_PATTERN.test(value)),
+export function resolveGoogleAdsAccess(
+  userId: string | null,
+  identity: GoogleAdsAccessIdentity,
+  env: Env = process.env,
+): GoogleAdsAccessDecision {
+  const mode = resolveGoogleAdsAccessMode(env)
+  const normalizedUserId = userId?.trim().toLowerCase() ?? ''
+  const validUser = UUID_PATTERN.test(normalizedUserId)
+  const isAdmin = validUser && identity.isAdmin
+  const canConnect = validUser && (
+    isAdmin || (identity.emailConfirmed && mode === 'open') ||
+    (identity.emailConfirmed && mode === 'allowlist' && resolveLegacyGoogleAdsConnectAccess(normalizedUserId, env))
   )
-  return allowedUserIds.has(normalizedUserId)
+  const canPublish = canConnect && env[ADS_ENV.googleAdsPublishEnabled]?.trim() === '1' && (
+    isAdmin ||
+    (identity.emailConfirmed && mode === 'open') ||
+    (identity.emailConfirmed && mode === 'allowlist' && isAllowedUser(normalizedUserId, env[ADS_ENV.googleAdsPublishAllowedUserIds]))
+  )
+  return { mode, canConnect, canPublish, isAdmin }
+}
+
+export function resolveGoogleAdsConnectAccess(
+  userId: string | null,
+  env: Env = process.env,
+  identity: GoogleAdsAccessIdentity = { emailConfirmed: false, isAdmin: false },
+): boolean {
+  return resolveGoogleAdsAccess(userId, identity, env).canConnect
 }
 
 const GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX = 2_879
@@ -121,18 +169,42 @@ export function resolveGoogleAdsReadDailyLimits(env: Env = process.env): { perUs
   }
 }
 
-export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = process.env): boolean {
-  if (!userId || env[ADS_ENV.googleAdsPublishEnabled]?.trim() !== '1') return false
-  const normalizedUserId = userId.trim().toLowerCase()
-  if (!UUID_PATTERN.test(normalizedUserId)) return false
+export function resolveGoogleAdsPublishAccess(
+  userId: string | null,
+  env: Env = process.env,
+  identity: GoogleAdsAccessIdentity = { emailConfirmed: false, isAdmin: false },
+): boolean {
+  return resolveGoogleAdsAccess(userId, identity, env).canPublish
+}
 
-  const allowedUserIds = new Set(
-    (env[ADS_ENV.googleAdsPublishAllowedUserIds] ?? '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter((value) => UUID_PATTERN.test(value)),
-  )
-  return allowedUserIds.has(normalizedUserId)
+export function resolveGoogleAdsKillSwitch(env: Env = process.env): boolean {
+  return env[ADS_ENV.googleAdsKillSwitch]?.trim() === '1'
+}
+
+const POSTGRES_INTEGER_MAX = 2_147_483_647
+
+function resolveOptionalPublishAttemptLimit(raw: string | undefined, fallback: number | null): number | null {
+  const value = raw?.trim()
+  if (!value) return fallback
+  if (!/^\d{1,10}$/.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= POSTGRES_INTEGER_MAX ? parsed : fallback
+}
+
+export type GoogleAdsPublishLimits = {
+  dailyAttemptsPerUser: number
+  dailyAttemptsGlobal: number | null
+}
+
+export function resolveGoogleAdsPublishLimits(env: Env = process.env): GoogleAdsPublishLimits {
+  return {
+    dailyAttemptsPerUser: resolveOptionalPublishAttemptLimit(
+      env[ADS_ENV.googleAdsPublishDailyUserLimit], 30,
+    ) ?? 30,
+    dailyAttemptsGlobal: resolveOptionalPublishAttemptLimit(
+      env[ADS_ENV.googleAdsPublishDailyGlobalLimit], null,
+    ),
+  }
 }
 
 /** Separate, fail-closed gate for the admin-only Google Ads validate_only test route. */
