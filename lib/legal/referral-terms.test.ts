@@ -6,6 +6,10 @@ import {
 } from '@/lib/referrals/terms'
 
 const REFERRAL_SLUG = 'satis-ortakligi-sartlari'
+const TURKISH_CREDIT_CONVERSION_CLAUSE =
+  '14 günlük bekleme süresi dolmadan toplam komisyon bakiyenizi AI kredisine çevirebilirsiniz. Minimum dönüşüm tutarı yoktur ve krediye çevrim sırasında 1 kredi = 3 TL olarak hesaplanır.'
+const ENGLISH_CREDIT_CONVERSION_CLAUSE =
+  'You can convert your total commission balance to AI credits before the 14-day waiting period ends. There is no minimum conversion amount, and one credit is calculated at TRY 3.'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -41,6 +45,13 @@ describe('referral partner terms', () => {
     expect(REFERRAL_TERMS.tr.sections.at(-1)?.paragraphs.join(' ')).toContain('4 Kasım 2026')
     expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('version v1.1')
     expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('November 4, 2026')
+  })
+
+  it('adds the exact Turkish and English credit-conversion clauses after cash payout terms', () => {
+    expect(REFERRAL_TERMS.tr.sections[0].paragraphs[3]).toBe(TURKISH_CREDIT_CONVERSION_CLAUSE)
+    expect(REFERRAL_TERMS.en.sections[0].paragraphs[3]).toBe(ENGLISH_CREDIT_CONVERSION_CLAUSE)
+    expect(REFERRAL_TERMS_VERSION).toBe('v1.1')
+    expect(REFERRAL_TERMS_UPDATED_AT).toBe('2026-11-04')
   })
 
   it('adds only the referral terms slug while the feature flag is enabled', async () => {

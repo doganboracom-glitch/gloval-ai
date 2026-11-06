@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SiteFooter } from './site-footer'
 import { dictionary, type Lang } from '@/lib/i18n'
 import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
@@ -44,6 +44,10 @@ const PARTNER_COPY = [
   ['es', 'Vende sitios web y gana con tu propia marca, sin preocuparte por servidores ni inversión.', 'PRÓXIMAMENTE'],
   ['it', 'Vendi siti web e guadagna con il tuo marchio, senza preoccuparti di server o investimenti.', 'PROSSIMAMENTE'],
 ] as const
+
+beforeEach(() => {
+  vi.stubEnv('NEXT_PUBLIC_REFERRAL_ENABLED', '1')
+})
 
 afterEach(() => {
   cleanup()
@@ -135,6 +139,26 @@ describe('footer GLOVAL Ads link badge', () => {
 
   it('leaves the domain cutoff untouched', () => {
     expect(DOMAIN_LINK_NEW_UNTIL).toBe('2026-12-28T23:59:59+03:00')
+  })
+})
+
+describe('referral terms footer link', () => {
+  it.each(SUPPORTED_LOCALES)('links to the terms in %s', (locale) => {
+    state.lang = locale
+    render(<SiteFooter now={BEFORE} />)
+    const label = dictionary[locale].footer.links.referralTerms
+    const link = screen.getByRole('link', { name: label })
+
+    expect(label.trim()).not.toBe('')
+    expect(label.includes('\uFFFD')).toBe(false)
+    if (locale === 'tr') expect(label).toBe('Satış Ortaklığı Şartları')
+    expect(link.getAttribute('href')).toBe('/yasal/satis-ortakligi-sartlari')
+  })
+
+  it('hides the link while the referral program is disabled', () => {
+    vi.stubEnv('NEXT_PUBLIC_REFERRAL_ENABLED', '0')
+    render(<SiteFooter now={BEFORE} />)
+    expect(screen.queryByRole('link', { name: dictionary.tr.footer.links.referralTerms })).toBeNull()
   })
 })
 

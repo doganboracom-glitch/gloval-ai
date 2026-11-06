@@ -597,8 +597,10 @@ const et: DeepPartial<Dict> = {
       kvkk: 'Andmekaitseteatis',
       distanceSales: 'Kaugmüügileping',
       preInfo: 'Lepingueelne teabevorm',
-      refund: 'Taganemine ja tagastamine',
-      delivery: 'Teenuse osutamine',
+  refund: 'Taganemine ja tagastamine',
+  delivery: 'Teenuse osutamine',
+  referralTerms: 'Partnerprogrammi tingimused',
+
     },
   },
   cookie: {
