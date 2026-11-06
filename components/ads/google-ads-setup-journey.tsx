@@ -39,18 +39,49 @@ export function GoogleAdsSetupJourney({
   const { lang } = useLanguage()
   const isTr = lang === 'tr'
   const steps = isTr ? stepsTr : stepsEn
+  const copy = isTr
+    ? {
+        title: 'Google Ads ile başlayın',
+        description: 'Bağlı hesaptan doğrulanmış ve duraklatılmış kampanyaya giden kısa yol.',
+        progress: 'Google Ads kurulum ilerlemesi',
+        accountLink: 'Google Ads hesabı açın',
+        createPlan: 'Kampanya planı oluştur',
+        billingNote: 'Reklam bütçesi doğrudan Google tarafından tahsil edilir. GLOVAL reklam bütçesini tutmaz; başarılı yayınlamadan sonra yönetim ve yapay zekâ kullanımı için 15 GLOVAL kredisi düşülür.',
+        checklistTitle: 'Bağlamadan önce kontrol edin',
+        checklist: [
+          'Etkin bir müşteri hesabı bağlayın; yönetici hesabı (MCC) yayınlama için kullanılamaz.',
+          'Google Ads ödeme profili ve geçerli bir ödeme yöntemi ayarlayın.',
+          'İşletme alan adınızla eşleşen, HTTPS üzerinden herkese açık bir açılış sayfası kullanın; işletme ve alan adı doğrulamasını tamamlayın.',
+          'Hesap ve plan para birimini TRY, USD veya EUR olarak eşleştirin; yayın öncesinde bütçe sınırını doğrulayın.',
+        ],
+      }
+    : {
+        title: 'Get started with Google Ads',
+        description: 'A short path from a connected account to a verified, paused campaign.',
+        progress: 'Google Ads setup progress',
+        accountLink: 'Open a Google Ads account',
+        createPlan: 'Create campaign plan',
+        billingNote: 'Google charges the advertising budget directly. GLOVAL never holds ad funds; after a successful publish, 15 GLOVAL credits are charged for management and AI usage.',
+        checklistTitle: 'Check before connecting',
+        checklist: [
+          'Connect an active customer account; manager accounts (MCC) cannot publish campaigns.',
+          'Set up a Google Ads billing profile and a valid payment method.',
+          'Use a publicly reachable HTTPS landing page on your business domain, and complete business and domain verification.',
+          'Match the account and plan currency (TRY, USD, or EUR), and review the configured budget ceiling before publishing.',
+        ],
+      }
   const progress = stageProgress[stage]
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>מתחילים עם Google Ads</CardTitle>
-        <CardDescription>מסלול קצר מחשבון מחובר ועד קמפיין מושהה ומאומת.</CardDescription>
+        <CardTitle>{copy.title}</CardTitle>
+        <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <div
           role="progressbar"
-          aria-label="התקדמות בהקמת Google Ads"
+          aria-label={copy.progress}
           aria-valuemin={0}
           aria-valuemax={4}
           aria-valuenow={progress}
@@ -74,6 +105,17 @@ export function GoogleAdsSetupJourney({
             )
           })}
         </ol>
+        <section aria-labelledby="google-ads-readiness-title" className="flex flex-col gap-3 rounded-lg bg-muted/50 p-4">
+          <h3 id="google-ads-readiness-title" className="text-sm font-semibold">{copy.checklistTitle}</h3>
+          <ul className="flex flex-col gap-3">
+            {copy.checklist.map((item) => (
+              <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+                <CircleDot className="mt-1 size-4 shrink-0 text-brand" aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <a
             href="https://ads.google.com/home/"
@@ -81,16 +123,16 @@ export function GoogleAdsSetupJourney({
             rel="noreferrer"
             className="inline-flex items-center gap-2 text-sm font-medium text-brand underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            לפתיחת חשבון Google Ads
+            {copy.accountLink}
             <ExternalLink className="size-4" aria-hidden="true" />
           </a>
           <Button type="button" variant="outline" onClick={onStartPlan} disabled={progress === 0}>
-            יצירת תוכנית קמפיין
+            {copy.createPlan}
           </Button>
         </div>
         <Alert>
           <AlertDescription className="leading-relaxed">
-            תקציב הפרסום נגבה ישירות על ידי Google. GLOVAL אינו מחזיק בכספי הפרסום; רק לאחר פרסום מוצלח ינוכו 15 קרדיטים של GLOVAL עבור ניהול ו-AI.
+            {copy.billingNote}
           </AlertDescription>
         </Alert>
       </CardContent>

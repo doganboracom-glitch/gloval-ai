@@ -637,7 +637,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     verifyBilling,
 
     async getCampaignManagementState(input): Promise<GoogleAdsCampaignManagementState> {
-      requirePublishAccess(input.context.userId)
+      requirePublishAccess(input.context.userId, false, input.context.googleAdsAccess)
       const customerId = normalizeCustomerId(input.customerId)
       if (!customerId || !input.accessToken || !input.context.connectionId || !/^\d{1,20}$/.test(input.campaignId)) {
         throw new GoogleAdsError('invalid_request')
@@ -693,7 +693,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     },
 
     async updateCampaignBudget(input): Promise<GoogleAdsCampaignMutationResult> {
-      requirePublishAccess(input.context.userId)
+      requirePublishAccess(input.context.userId, false, input.context.googleAdsAccess)
       if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
       const customerId = normalizeCustomerId(input.customerId)
       if (
@@ -724,7 +724,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     },
 
     async updateResponsiveSearchAd(input): Promise<GoogleAdsCampaignMutationResult> {
-      requirePublishAccess(input.context.userId)
+      requirePublishAccess(input.context.userId, false, input.context.googleAdsAccess)
       if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
       const customerId = normalizeCustomerId(input.customerId)
       if (!customerId || !input.accessToken || !input.context.connectionId) throw new GoogleAdsError('invalid_request')
@@ -829,7 +829,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
     },
 
     async setCampaignStatus(input): Promise<AdsCampaignStatusResult> {
-      requirePublishAccess(input.context.userId)
+      requirePublishAccess(input.context.userId, false, input.context.googleAdsAccess)
       if (input.userConfirmed !== true) throw new GoogleAdsError('confirmation_required')
       const customerId = normalizeCustomerId(input.externalAccountId)
       if (!customerId || !input.accessToken || !input.context.connectionId) {

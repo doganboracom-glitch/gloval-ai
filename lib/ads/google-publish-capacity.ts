@@ -38,14 +38,70 @@ export async function reserveGoogleAdsPublishCapacity(input: {
 
   const row = Array.isArray(data) ? data[0] : data
   const result = row as { state?: string; action_id?: string } | null
-  if (result?.state === 'user_daily_limit') throw new GoogleAdsError('user_publish_limit_reached')
-  if (result?.state === 'global_daily_limit') throw new GoogleAdsError('global_publish_limit_reached')
-  if (result?.state === 'active_campaign_limit') throw new GoogleAdsError('active_campaign_limit_reached')
+  if (result?.state === 'user_publish_limit_reached') throw new GoogleAdsError('user_publish_limit_reached')
+  if (result?.state === 'global_publish_limit_reached') throw new GoogleAdsError('global_publish_limit_reached')
+  if (result?.state === 'active_campaign_limit_reached') throw new GoogleAdsError('active_campaign_limit_reached')
   if (result?.state !== 'reserved' || typeof result.action_id !== 'string') {
     throw new GoogleAdsError('quota_check_failed')
   }
 
   return { actionId: result.action_id }
+}
+
+export async function reserveGoogleAdsCampaignEnableCapacity(input: {
+  userId: string
+  planId: string
+  connectionId: string
+  requestId: string
+  limits: GoogleAdsPublishLimits
+}): Promise<CapacityReservation> {
+  const admin = createAdminClient()
+  const { data, error } = await admin.rpc('ads_reserve_google_ads_campaign_enable_capacity', {
+    p_user_id: input.userId,
+    p_plan_id: input.planId,
+    p_connection_id: input.connectionId,
+    p_request_id: input.requestId,
+    p_max_active_campaigns_per_user: input.limits.maxActiveCampaignsPerUser,
+  })
+
+  if (error) {
+    await recordGoogleAdsPolicyBlock({
+      userId: input.userId,
+      planId: input.planId,
+      connectionId: input.connectionId,
+      reason: 'quota_check_failed',
+      operation: 'enable',
+    })
+    throw new GoogleAdsError('quota_check_failed')
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+  const result = row as { state?: string; action_id?: string } | null
+  if (result?.state === 'active_campaign_limit_reached') throw new GoogleAdsError('active_campaign_limit_reached')
+  if (result?.state === 'enable_in_progress') throw new GoogleAdsError('publish_in_progress')
+  if (result?.state !== 'reserved' || typeof result.action_id !== 'string') {
+    throw new GoogleAdsError('quota_check_failed')
+  }
+  return { actionId: result.action_id }
+}
+
+export async function finishGoogleAdsCampaignEnableCapacity(input: {
+  userId: string
+  actionId: string
+  outcome: 'success' | 'failure'
+  reasonCode?: string
+}): Promise<void> {
+  const admin = createAdminClient()
+  try {
+    await admin.rpc('ads_finish_google_ads_campaign_enable_capacity', {
+      p_user_id: input.userId,
+      p_action_id: input.actionId,
+      p_outcome: input.outcome,
+      p_reason_code: input.reasonCode ?? null,
+    })
+  } catch {
+    return
+  }
 }
 
 export async function finishGoogleAdsPublishCapacity(input: {

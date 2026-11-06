@@ -32,20 +32,20 @@ function timeLabel(value: string) {
 export default async function AdminGoogleAdsPage() {
   const admin = createAdminClient()
   const since = new Date(Date.now() - DAY_MS).toISOString()
-  const [attemptsResult, blockedResult, connectionsResult, campaignsResult, reconcilingResult] = await Promise.all([
+  const [attemptsResult, blockedResult, connectionsResult, campaignsResult, reconcilingResult, enableHoldsResult] = await Promise.all([
     admin.from('ads_actions')
       .select('id,user_id,action_type,status,target,after_state,created_at')
       .eq('action_type', 'google_ads_publish_attempt_reserved')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
-      .limit(500),
+      .limit(5_000),
     admin.from('ads_actions')
       .select('id,user_id,action_type,status,target,after_state,created_at')
-      .eq('action_type', 'google_ads_publish_blocked')
+      .in('action_type', ['google_ads_publish_blocked', 'google_ads_policy_blocked'])
       .gte('created_at', since)
       .order('created_at', { ascending: false })
-      .limit(100),
-    admin.from('ads_connections').select('user_id').eq('status', 'active').limit(1000),
+      .limit(5_000),
+    admin.from('ads_connections').select('user_id').eq('status', 'active').limit(5_000),
     admin.from('ads_plans')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'published')
@@ -54,10 +54,14 @@ export default async function AdminGoogleAdsPage() {
     admin.from('ads_plans')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'reconciling'),
+    admin.from('ads_actions')
+      .select('id', { count: 'exact', head: true })
+      .eq('action_type', 'google_ads_campaign_enable_capacity_reserved')
+      .eq('status', 'proposed'),
   ])
 
   const queryFailed = Boolean(
-    attemptsResult.error || blockedResult.error || connectionsResult.error || campaignsResult.error || reconcilingResult.error,
+    attemptsResult.error || blockedResult.error || connectionsResult.error || campaignsResult.error || reconcilingResult.error || enableHoldsResult.error,
   )
   const attempts = (attemptsResult.data ?? []) as AuditRow[]
   const blocked = (blockedResult.data ?? []) as AuditRow[]
@@ -94,55 +98,56 @@ export default async function AdminGoogleAdsPage() {
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Google Ads live controls</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">Google Ads canlı kontrolleri</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            שימוש, מכסות, אירועי חסימה ופעולות live — ללא פרטי חשבון, אימיילים או תוכן מודעות.
+            Kullanım, limitler ve canlı işlemler; hesap bilgileri, e-postalar veya reklam içerikleri gösterilmez.
           </p>
         </div>
         <Badge variant={killSwitchEnabled ? 'destructive' : publishEnabled ? 'default' : 'secondary'}>
-          {killSwitchEnabled ? 'מתג עצירה פעיל' : publishEnabled ? 'פרסום מופעל' : 'פרסום כבוי'}
+          {killSwitchEnabled ? 'Acil durdurma etkin' : publishEnabled ? 'Yayınlama etkin' : 'Yayınlama kapalı'}
         </Badge>
       </header>
 
       {queryFailed ? (
         <Alert variant="destructive">
-          <AlertTitle>לא ניתן לטעון את נתוני Google Ads</AlertTitle>
-          <AlertDescription>הנתונים לא הוצגו כדי למנוע הצגת מצב חלקי או מטעה.</AlertDescription>
+          <AlertTitle>Google Ads verileri yüklenemedi</AlertTitle>
+          <AlertDescription>Bir veya daha fazla sorgu başarısız oldu. Aşağıdaki rapor değerlerine güvenmeyin.</AlertDescription>
         </Alert>
       ) : null}
 
-      <section aria-label="מדדי פרסום" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="ניסיונות ב-24 שעות" value={attempts.length} detail={`${successCount} הצליחו · ${failureCount} נכשלו`} />
-        <MetricCard label="קמפיינים פעילים" value={campaignsResult.count ?? 0} detail="ENABLED או PAUSED; REMOVED לא נספרים" />
-        <MetricCard label="חיבורים פעילים" value={connections.length} detail={`${perUser.size} משתמשים עם חשבון מחובר`} />
-        <MetricCard label="ממתינים ל-reconciliation" value={reconcilingResult.count ?? 0} detail="נדרשת התאמה מול Google Ads" />
+      <section aria-label="Yayınlama ölçümleri" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Son 24 saatteki denemeler" value={queryFailed ? '—' : attempts.length} detail={queryFailed ? 'Veri alınamadı' : `${successCount} başarılı · ${failureCount} başarısız`} />
+        <MetricCard label="Etkin kampanyalar" value={queryFailed ? '—' : campaignsResult.count ?? 0} detail="ENABLED ve PAUSED sayılır; REMOVED sayılmaz" />
+        <MetricCard label="Etkin bağlantılar" value={queryFailed ? '—' : connections.length} detail={queryFailed ? 'Veri alınamadı' : `${perUser.size} kullanıcıda bağlı hesap var`} />
+        <MetricCard label="Uzlaştırma bekleyenler" value={queryFailed ? '—' : reconcilingResult.count ?? 0} detail="Google Ads ile eşleştirme gerekli" />
+        <MetricCard label="Etkinleştirme rezervasyonları" value={queryFailed ? '—' : enableHoldsResult.count ?? 0} detail="Tamamlanana kadar etkin kampanya limitinde tutulur" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>מצב גישה ומכסות</CardTitle>
-            <CardDescription>הגדרות נקראות מהסביבה; שום ערך לא שונה.</CardDescription>
+            <CardTitle>Erişim ve limit ayarları</CardTitle>
+            <CardDescription>Ayarlar ortamdan okunur; hiçbir değer değiştirilmez.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-            <ConfigLine label="מצב גישה" value={accessMode} />
-            <ConfigLine label="פרסום גלובלי" value={publishEnabled ? 'מופעל' : 'כבוי'} />
-            <ConfigLine label="מתג עצירה" value={killSwitchEnabled ? 'פעיל' : 'לא פעיל'} />
-            <ConfigLine label="מקסימום קמפיינים למשתמש" value={limits.maxActiveCampaignsPerUser} />
-            <ConfigLine label="ניסיונות למשתמש / 24 שעות" value={limits.dailyAttemptsPerUser} />
-            <ConfigLine label="ניסיונות גלובליים / 24 שעות" value={limits.dailyAttemptsGlobal} />
+            <ConfigLine label="Erişim modu" value={accessMode} />
+            <ConfigLine label="Genel yayınlama" value={publishEnabled ? 'Açık' : 'Kapalı'} />
+            <ConfigLine label="Acil durdurma" value={killSwitchEnabled ? 'Etkin' : 'Devre dışı'} />
+            <ConfigLine label="Kullanıcı başına en fazla kampanya" value={limits.maxActiveCampaignsPerUser} />
+            <ConfigLine label="Kullanıcı başına deneme / 24 saat" value={limits.dailyAttemptsPerUser} />
+            <ConfigLine label="Genel deneme / 24 saat" value={limits.dailyAttemptsGlobal} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>התפלגות קודי חסימה ושגיאה</CardTitle>
-            <CardDescription>קודים בטוחים בלבד; ללא הודעות ספק או נתוני לקוח.</CardDescription>
+            <CardTitle>Engelleme ve hata kodları</CardTitle>
+            <CardDescription>Yalnızca güvenli kodlar; sağlayıcı mesajı veya müşteri verisi içermez.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            {errorCounts.size ? [...errorCounts.entries()].map(([reason, count]) => (
+            {queryFailed ? <p className="text-sm text-muted-foreground">Sorgu başarısız olduğu için dağılım gösterilmiyor.</p> : errorCounts.size ? [...errorCounts.entries()].map(([reason, count]) => (
               <Badge key={reason} variant="outline" className="font-mono">{reason}: {count}</Badge>
-            )) : <p className="text-sm text-muted-foreground">אין אירועים ב-24 השעות האחרונות.</p>}
+            )) : <p className="text-sm text-muted-foreground">Son 24 saatte olay yok.</p>}
           </CardContent>
         </Card>
       </section>
@@ -150,33 +155,33 @@ export default async function AdminGoogleAdsPage() {
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>מכסות לפי משתמש</CardTitle>
-            <CardDescription>מוצג מזהה סדרתי בלבד — לא UUID, אימייל או שם.</CardDescription>
+            <CardTitle>Kullanıcı başına kullanım</CardTitle>
+            <CardDescription>UUID, e-posta veya ad yerine anonim sıra numarası gösterilir.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {[...perUser.values()].map((value, index) => (
+            {queryFailed ? <p className="text-sm text-muted-foreground">Sorgu başarısız olduğu için kullanım dökümü gösterilmiyor.</p> : [...perUser.values()].map((value, index) => (
               <div key={index} className="flex items-center justify-between gap-3 rounded-md bg-muted/50 px-3 py-2 text-sm">
-                <span>משתמש {index + 1}</span>
-                <span className="text-muted-foreground">{value.connections} חיבורים · {value.attempts} ניסיונות</span>
+                <span>Kullanıcı {index + 1}</span>
+                <span className="text-muted-foreground">{value.connections} bağlantı · {value.attempts} deneme</span>
               </div>
             ))}
-            {perUser.size === 0 ? <p className="text-sm text-muted-foreground">אין חיבורים או ניסיונות.</p> : null}
+            {!queryFailed && perUser.size === 0 ? <p className="text-sm text-muted-foreground">Bağlantı veya deneme yok.</p> : null}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>אירועים אחרונים</CardTitle>
-            <CardDescription>סיבת חסימה ומצב פעולה בלבד.</CardDescription>
+            <CardTitle>Son olaylar</CardTitle>
+            <CardDescription>Yalnızca engelleme nedeni ve işlem durumu gösterilir.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            {recentEvents.map((row) => (
+            {queryFailed ? <p className="text-sm text-muted-foreground">Sorgu başarısız olduğu için olaylar gösterilmiyor.</p> : recentEvents.map((row) => (
               <div key={row.id} className="flex flex-col gap-1 rounded-md bg-muted/50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-mono">{safeReason(row)}</span>
                 <span className="text-muted-foreground">{row.status} · {timeLabel(row.created_at)}</span>
               </div>
             ))}
-            {recentEvents.length === 0 ? <p className="text-sm text-muted-foreground">אין אירועים להצגה.</p> : null}
+            {!queryFailed && recentEvents.length === 0 ? <p className="text-sm text-muted-foreground">Gösterilecek olay yok.</p> : null}
           </CardContent>
         </Card>
       </section>
@@ -184,7 +189,7 @@ export default async function AdminGoogleAdsPage() {
   )
 }
 
-function MetricCard({ label, value, detail }: { label: string; value: number; detail: string }) {
+function MetricCard({ label, value, detail }: { label: string; value: number | string; detail: string }) {
   return (
     <Card>
       <CardHeader className="pb-2">

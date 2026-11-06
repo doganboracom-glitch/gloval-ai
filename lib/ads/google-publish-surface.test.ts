@@ -2,23 +2,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const gateState = vi.hoisted(() => ({
   featureEnabled: true,
-  connectAllowed: true,
   sameOrigin: true,
   userId: '550e8400-e29b-41d4-a716-446655440000' as string | null,
 }))
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/ads/google-route-utils', () => ({
-  googleAdsFeatureEnabled: () => gateState.featureEnabled,
-  googleAdsConnectAllowed: () => gateState.connectAllowed,
-  googleAdsUserId: async () => gateState.userId,
-  isSameOriginGoogleAdsPost: () => gateState.sameOrigin,
-  googleAdsNotFound: () => new Response(null, { status: 404 }),
-  googleAdsJson: (body: unknown, status = 200) => new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  }),
-}))
+vi.mock('@/lib/ads/google-route-utils', async () => {
+  const { resolveGoogleAdsAccess } = await vi.importActual<typeof import('@/lib/ads/env')>('@/lib/ads/env')
+  return {
+    googleAdsFeatureEnabled: () => gateState.featureEnabled,
+    googleAdsConnectAllowed: () => true,
+    googleAdsUserId: async () => gateState.userId,
+    googleAdsRequestAccess: async () => {
+      if (!gateState.userId) return null
+      const identity = { emailConfirmed: true, isAdmin: false }
+      return {
+        userId: gateState.userId,
+        identity,
+        decision: resolveGoogleAdsAccess(gateState.userId, identity),
+      }
+    },
+    isSameOriginGoogleAdsPost: () => gateState.sameOrigin,
+    googleAdsNotFound: () => new Response(null, { status: 404 }),
+    googleAdsJson: (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  }
+})
 
 import { GET as listPlans, POST as createPlan, PATCH as updatePlan } from '@/app/api/ads/google/plans/route'
 import { POST as approvePlan } from '@/app/api/ads/google/approval/route'
@@ -36,9 +47,10 @@ function request(method: string, path: string) {
 
 beforeEach(() => {
   gateState.featureEnabled = true
-  gateState.connectAllowed = true
   gateState.sameOrigin = true
   gateState.userId = USER_ID
+  vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'open')
+  vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
 })
 
 afterEach(() => vi.unstubAllEnvs())
@@ -62,6 +74,9 @@ describe('Google Ads E2 route gates', () => {
   })
 
   it('returns 404 when the publish flag is enabled but the user is not in its allowlist', async () => {
+    vi.stubEnv('GOOGLE_ADS_ACCESS_MODE', 'allowlist')
+    vi.stubEnv('ADS_GOOGLE_CONNECT_ENABLED', '1')
+    vi.stubEnv('ADS_GOOGLE_CONNECT_ALLOWED_USER_IDS', USER_ID)
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ENABLED', '1')
     vi.stubEnv('GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS', '')
 

@@ -117,19 +117,23 @@ export function resolveGoogleAdsAccess(
   const validUser = UUID_PATTERN.test(normalizedUserId)
   const isAdmin = validUser && identity.isAdmin
   const canConnect = validUser && (
-    isAdmin || (mode === 'open' && identity.emailConfirmed) ||
-    (mode === 'allowlist' && resolveLegacyGoogleAdsConnectAccess(normalizedUserId, env))
+    isAdmin || (identity.emailConfirmed && mode === 'open') ||
+    (identity.emailConfirmed && mode === 'allowlist' && resolveLegacyGoogleAdsConnectAccess(normalizedUserId, env))
   )
   const canPublish = canConnect && env[ADS_ENV.googleAdsPublishEnabled]?.trim() === '1' && (
     isAdmin ||
-    (mode === 'open' && identity.emailConfirmed) ||
-    (mode === 'allowlist' && isAllowedUser(normalizedUserId, env[ADS_ENV.googleAdsPublishAllowedUserIds]))
+    (identity.emailConfirmed && mode === 'open') ||
+    (identity.emailConfirmed && mode === 'allowlist' && isAllowedUser(normalizedUserId, env[ADS_ENV.googleAdsPublishAllowedUserIds]))
   )
   return { mode, canConnect, canPublish, isAdmin }
 }
 
-export function resolveGoogleAdsConnectAccess(userId: string | null, env: Env = process.env): boolean {
-  return resolveGoogleAdsAccess(userId, { emailConfirmed: false, isAdmin: false }, env).canConnect
+export function resolveGoogleAdsConnectAccess(
+  userId: string | null,
+  env: Env = process.env,
+  identity: GoogleAdsAccessIdentity = { emailConfirmed: false, isAdmin: false },
+): boolean {
+  return resolveGoogleAdsAccess(userId, identity, env).canConnect
 }
 
 const GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX = 2_879

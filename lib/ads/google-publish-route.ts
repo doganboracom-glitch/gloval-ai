@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getAdminUser } from '@/lib/mail/admin-guard'
 import { resolveGoogleAdsAccess, resolveGoogleAdsValidateOnlyTestEnabled } from '@/lib/ads/env'
+import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
 import type { GoogleAdsAccessIdentity } from '@/lib/ads/env'
 import {
   googleAdsFeatureEnabled,
@@ -28,7 +29,10 @@ export async function requireGoogleAdsPublishRequest(request: Request): Promise<
     return { response: googleAdsJson({ ok: false, error: 'auth_unavailable' }, 503) }
   }
   if (!access) return { response: googleAdsJson({ ok: false, error: 'not_authenticated' }, 401) }
-  if (!access.decision.canPublish) return { response: googleAdsNotFound() }
+  if (!access.decision.canPublish) {
+    await recordGoogleAdsPolicyBlock({ userId: access.userId, reason: 'publish_disabled', operation: 'publish_access' })
+    return { response: googleAdsNotFound() }
+  }
 
   const limit = checkRateLimit(`google-ads-publish:${access.userId}`, 30, 60_000)
   if (!limit.allowed) return { response: googleAdsJson({ ok: false, error: 'rate_limited' }, 429) }

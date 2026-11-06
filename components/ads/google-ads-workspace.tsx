@@ -300,6 +300,14 @@ function errorText(code: string | undefined, isTr: boolean): string {
     status_update_failed: 'Yayın durumu kaydedilemedi. Kampanya durumunu Google Ads hesabında kontrol edin; yönetici bilgilendirildi.',
     destination_unreachable: 'Açılış sayfasına güvenli şekilde ulaşılamadı. URL’yi kontrol edip tekrar deneyin.',
     site_policy_blocked: 'Açılış sayfası yayınlama güvenlik denetiminden geçemedi. İçeriği veya URL’yi kontrol edin.',
+    publish_disabled: 'Google Ads erişimi veya yayınlama izni bu kullanıcı için etkin değil.',
+    kill_switch_active: 'Güvenlik nedeniyle Google Ads yayınlama geçici olarak durduruldu.',
+    active_campaign_limit_reached: 'Kullanıcı başına etkin kampanya sınırına ulaşıldı.',
+    user_publish_limit_reached: '24 saatlik kullanıcı yayın denemesi sınırına ulaşıldı.',
+    global_publish_limit_reached: '24 saatlik genel yayın denemesi sınırına ulaşıldı.',
+    unsupported_currency: 'Yalnızca TRY, USD ve EUR ile yayın yapılabilir.',
+    currency_mismatch: 'Google Ads hesabının para birimi planla eşleşmiyor.',
+    terms_reaccept_required: 'Yayın koşulları güncellendi. Devam etmeden önce tekrar kabul edin.',
   }
   const en: Record<string, string> = {
     invalid_request: 'Check the details and try again.',
@@ -329,6 +337,14 @@ function errorText(code: string | undefined, isTr: boolean): string {
     status_update_failed: 'The publish status could not be saved. Check Google Ads directly; the administrator was notified.',
     destination_unreachable: 'The landing page could not be reached safely. Check the URL and try again.',
     site_policy_blocked: 'The landing page did not pass the publishing security check. Review its content or URL.',
+    publish_disabled: 'Google Ads access or publishing is not enabled for this user.',
+    kill_switch_active: 'Google Ads publishing is temporarily stopped for safety.',
+    active_campaign_limit_reached: 'The per-user active campaign limit has been reached.',
+    user_publish_limit_reached: 'The 24-hour per-user publish attempt limit has been reached.',
+    global_publish_limit_reached: 'The 24-hour global publish attempt limit has been reached.',
+    unsupported_currency: 'Publishing supports TRY, USD, and EUR only.',
+    currency_mismatch: 'The Google Ads account currency does not match this plan.',
+    terms_reaccept_required: 'The publishing terms changed. Accept the current terms before continuing.',
   }
   const dict = isTr ? tr : en
   return (code && dict[code]) || (isTr ? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.' : 'The action could not be completed. Try again.')

@@ -25,7 +25,9 @@ import {
   type GoogleAdsAccessIdentity,
 } from '@/lib/ads/env'
 import { reserveGoogleAdsPublishCapacity, finishGoogleAdsPublishCapacity } from '@/lib/ads/google-publish-capacity'
+import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
 import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
+import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import {
   buildGoogleAdsApprovalSummary,
@@ -61,6 +63,7 @@ type PublishPlanRow = {
   approved_version: number | null
   approval_summary: unknown
   approval_id: string | null
+  acceptedTermsVersion?: string | null
   approval_hash: string | null
   validation_hash: string | null
   validated_version: number | null
@@ -285,9 +288,9 @@ function failed(reason: GoogleAdsPublishFailureReason, balance?: number): Google
 }
 
 function requirePlanBudget(plan: PublishPlanRow): { currency: string; dailyMinor: number; capMinor: number } {
+  if (!plan.currency || !/^[A-Z]{3}$/.test(plan.currency)) throw new GoogleAdsError('invalid_budget')
+  if (!isSupportedGoogleAdsCurrency(plan.currency)) throw new GoogleAdsError('unsupported_currency')
   if (
-    !plan.currency ||
-    !isSupportedGoogleAdsCurrency(plan.currency) ||
     !Number.isSafeInteger(plan.daily_budget_minor) ||
     !Number.isSafeInteger(plan.budget_cap_minor) ||
     (plan.daily_budget_minor ?? 0) <= 0 ||
@@ -314,7 +317,22 @@ async function defaultLoadPlan(userId: string, planId: string): Promise<PublishP
     .maybeSingle()
 
   if (error) throw new GoogleAdsError('provider_error')
-  return (data as PublishPlanRow | null) ?? null
+  const plan = (data as PublishPlanRow | null) ?? null
+  if (!plan?.approval_id) return plan ? { ...plan, acceptedTermsVersion: null } : null
+
+  const { data: approval, error: approvalError } = await admin
+    .from('ads_google_publish_approvals')
+    .select('terms_accepted_at,approval_summary')
+    .eq('id', plan.approval_id)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (approvalError) throw new GoogleAdsError('provider_error')
+  const summary = approval?.approval_summary
+  const termsVersion = summary && typeof summary === 'object' && 'termsVersion' in summary
+    && typeof (summary as Record<string, unknown>).termsVersion === 'string'
+    ? (summary as Record<string, string>).termsVersion
+    : null
+  return { ...plan, acceptedTermsVersion: approval?.terms_accepted_at ? termsVersion : null }
 }
 
 async function defaultWithAccess<T>(input: WithAccessInput<T>): Promise<T> {
@@ -540,6 +558,9 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       if (!loaded.eu_political_declaration_confirmed_at) return failed('eu_political_declaration_required')
     }
     if (!loaded.connection_id) return failed('connection_not_found')
+    if (loaded.acceptedTermsVersion !== undefined && loaded.acceptedTermsVersion !== GOOGLE_ADS_PUBLISH_TERMS_VERSION) {
+      return failed('terms_reaccept_required')
+    }
     try {
       requirePlanBudget(loaded)
     } catch (error) {
