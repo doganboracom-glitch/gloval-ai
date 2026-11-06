@@ -7,7 +7,6 @@ export type GoogleAdsPublishReviewDetails = {
   campaign: string
   finalUrl: string
   dailyBudget: string
-  dailyPlanLimit: string
   cpcCeiling: string
   targeting: string
   keywords: string[]
@@ -23,7 +22,6 @@ export type GoogleAdsPublishReviewCopy = {
   campaign: string
   finalUrl: string
   dailyBudget: string
-  dailyPlanLimit: string
   cpcCeiling: string
   targeting: string
   keywords: string
@@ -93,10 +91,6 @@ export function GoogleAdsPublishReview({
         <div className="flex flex-col gap-1">
           <dt className="text-muted-foreground">{copy.dailyBudget}</dt>
           <dd className="font-medium text-foreground">{details.dailyBudget}</dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-muted-foreground">{copy.dailyPlanLimit}</dt>
-          <dd className="font-medium text-foreground">{details.dailyPlanLimit}</dd>
         </div>
         <div className="flex flex-col gap-1">
           <dt className="text-muted-foreground">{copy.cpcCeiling}</dt>

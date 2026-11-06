@@ -2,7 +2,6 @@ import 'server-only'
 
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import { buildPlanSuggestion, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
 import { buildGoogleAdsApprovalSummary } from '@/lib/ads/google-ads-publish-plan'
 import type { AdsRpcClient } from '@/lib/ads/credits'
@@ -46,10 +45,7 @@ export function suggestForConnection(
   scanResult: unknown,
   connection: DraftConnection,
 ): { ok: true; suggestion: PlanSuggestion } | ({ ok: false } & DraftFailure) {
-  const outcome = buildPlanSuggestion(scanResult, {
-    currency: connection.currency,
-    budgetSanityCeilingMinor: resolveGoogleAdsBudgetSanityCeilingMinor(),
-  })
+  const outcome = buildPlanSuggestion(scanResult, { currency: connection.currency })
   if (!outcome.ok) {
     const status = outcome.error === 'invalid_request' || outcome.error === 'invalid_publish_plan' ? 400 : 422
     return { ok: false, error: outcome.error, status }
@@ -63,12 +59,11 @@ export async function createDraftFromSuggestion(
   suggestion: PlanSuggestion,
 ): Promise<{ ok: true; planId: string; version: number } | ({ ok: false } & DraftFailure)> {
   const { budget, plan } = suggestion
-  if (!budget) return { ok: false, error: suggestion.budgetIssue ?? 'invalid_budget', status: 400 }
+  if (!budget) return { ok: false, error: 'invalid_budget', status: 400 }
   try {
     buildGoogleAdsApprovalSummary({
       currency: connection.currency,
       dailyBudgetMinor: budget.dailyMinor,
-      budgetCapMinor: budget.capMinor,
     })
   } catch {
     return { ok: false, error: 'invalid_budget', status: 400 }
@@ -79,12 +74,14 @@ export async function createDraftFromSuggestion(
     .rpc('ads_create_google_ads_plan_draft_e2', {
       p_user_id: userId,
       p_connection_id: connection.id,
-      p_plan: plan,
+      p_plan: {
+        ...plan,
+        aiRecommendedDailyBudgetMinor: plan.aiRecommendedDailyBudgetMinor ?? budget.dailyMinor,
+      },
       p_display_name: plan.brand,
       p_sector: plan.sector,
       p_language: plan.language,
       p_daily_budget_minor: budget.dailyMinor,
-      p_budget_cap_minor: budget.capMinor,
       p_currency: connection.currency,
     })
     .maybeSingle()

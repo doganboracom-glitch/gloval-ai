@@ -2,49 +2,33 @@ import { describe, expect, it } from 'vitest'
 import { buildPlanSuggestion } from '@/lib/ads/plan-suggestion'
 
 const scanResult = {
-  host: 'example.com',
+  host: 'local.example',
   plan: {
-    brand: 'Example',
+    brand: 'Local Service',
     sector: 'services',
-    sectorLabel: 'Services',
-    services: ['Business consulting'],
-    language: 'en' as const,
-    country: 'TR',
+    sectorLabel: 'Local services',
+    services: ['Web design'],
+    language: 'en',
+    country: 'US',
     cities: [],
-    keywords: ['business consulting', 'consulting services', 'business advice'],
+    keywords: ['local service', 'web design', 'nearby studio'],
     negativeKeywords: [],
   },
   ad: {
-    headlines: ['Business consulting', 'Grow your business', 'Expert support'],
-    descriptions: ['Trusted consulting for your business.', 'Talk to our team today.'],
-    displayUrl: '',
+    headlines: ['Local service', 'Get a quote today', 'Trusted local team'],
+    descriptions: ['Contact our local team today.', 'Book a consultation with our team.'],
+    displayUrl: 'https://local.example/services',
   },
-  budget: { daily: 100 },
+  budget: { daily: 1_000_000 },
   restricted: [],
 }
 
 describe('Google Ads plan budget suggestions', () => {
-  it('returns an editable budget when no global budget ceiling is configured', () => {
-    const result = buildPlanSuggestion(scanResult, {
-      currency: 'TRY',
-      budgetSanityCeilingMinor: null,
-    })
-
+  it('keeps large user-editable suggestions and records the initial AI recommendation', () => {
+    const result = buildPlanSuggestion(scanResult, { currency: 'TRY' })
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.suggestion.budget).not.toBeNull()
-    expect(result.suggestion.budgetIssue).toBeNull()
-  })
-
-  it('asks users to contact support when an optional sanity ceiling is exceeded', () => {
-    const result = buildPlanSuggestion(scanResult, {
-      currency: 'TRY',
-      budgetSanityCeilingMinor: 5_000,
-    })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.suggestion.budget).toBeNull()
-    expect(result.suggestion.budgetIssue).toBe('budget_limit_exceeded')
+    expect(result.suggestion.budget?.dailyMinor).toBeGreaterThan(100_000)
+    expect(result.suggestion.plan.aiRecommendedDailyBudgetMinor).toBe(result.suggestion.budget?.dailyMinor)
   })
 })

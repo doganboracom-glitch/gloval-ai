@@ -36,11 +36,9 @@ export function createGoogleAdsPlanApprovalHash(input: {
   customerId: string
   currency: string
   dailyBudgetMinor: number
-  budgetCapMinor: number
-  userDailyBudgetCapMinor: number | null
   plan: unknown
 }): string {
-  return hashGoogleAdsApprovalPayload({ kind: 'google-ads-plan-v1', ...input })
+  return hashGoogleAdsApprovalPayload({ kind: 'google-ads-plan-v2', ...input })
 }
 
 export function createGoogleAdsActionApprovalHash(input: {
@@ -49,7 +47,7 @@ export function createGoogleAdsActionApprovalHash(input: {
   planVersion: number
   connectionId: string
   customerId: string
-  action: 'pause' | 'enable' | 'budget' | 'ad_copy'
+  action: 'pause' | 'enable' | 'budget' | 'ad_copy' | 'keyword' | 'archive'
   before: unknown
   target: unknown
 }): string {

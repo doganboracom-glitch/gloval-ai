@@ -36,7 +36,10 @@ export type LockedFeatureKey =
  * E-TİCARET bunu PRO'dan miras alır.
  */
 const MONTHLY_PLAN_ROLLOVER = true as const
-const MONTHLY_PLAN_MAX_BALANCE = 1500 as const
+const MONTHLY_PLAN_MAX_BALANCE = 1000 as const
+
+/** Bu UTC eşiğinden önce oluşturulan abonelikler ilk dönem bonusunu almaz. */
+export const AI_CREDIT_FIRST_PERIOD_EFFECTIVE_AT = '2026-11-06T00:00:00.000Z'
 
 /**
  * Kredi değerleri ödeme dönemine (aylık/yıllık) BAĞLI DEĞİLDİR. "10 ay öde,
@@ -50,19 +53,19 @@ export const AI_CREDIT_CONFIG = {
     rollover: false,
   },
   starter: {
-    credits: 150,
+    credits: 100,
     creditPeriodDays: 30,
     rollover: false,
   },
   pro: {
-    initialCredits: 450,
-    monthlyCredits: 150,
+    initialCredits: 150,
+    monthlyCredits: 50,
     rollover: MONTHLY_PLAN_ROLLOVER,
     maxBalance: MONTHLY_PLAN_MAX_BALANCE,
   },
   ecommerce: {
-    initialCredits: 500,
-    monthlyCredits: 150,
+    initialCredits: 250,
+    monthlyCredits: 100,
     rollover: MONTHLY_PLAN_ROLLOVER,
     maxBalance: MONTHLY_PLAN_MAX_BALANCE,
   },
@@ -250,10 +253,11 @@ export const PLANS: Plan[] = [
     cta: 'PRO ile Büyümeye Başla',
     badge: 'En Çok Tercih Edilen',
     featured: true,
-    creditSummary: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
+    creditSummary: `İlk dönemde ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
     creditNotes: [
-      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
+      `Sonraki her ay ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
       'Kullanılmayan işlemler devreder.',
+      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} AI işlemi.`,
     ],
   },
   {
@@ -264,10 +268,11 @@ export const PLANS: Plan[] = [
     monthlyPrice: 1999,
     yearlyPrice: 19990,
     cta: 'E-Ticarete Başla',
-    creditSummary: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
+    creditSummary: `İlk dönemde ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     creditNotes: [
-      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
+      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
       'Kullanılmayan işlemler devreder.',
+      `Maksimum bakiye ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} AI işlemi.`,
     ],
   },
 ]
@@ -310,21 +315,21 @@ export const CREDIT_RULES_BY_PLAN: Array<{
   {
     plan: 'pro',
     name: 'PRO',
-    amount: `İlk ay ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
+    amount: `İlk dönemde ${AI_CREDIT_CONFIG.pro.initialCredits} AI işlemi`,
     lines: [
-      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
+      `Sonraki her ay ${AI_CREDIT_CONFIG.pro.monthlyCredits} AI işlemi.`,
       'Kullanılmayan işlemler devreder.',
-      `En fazla ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} işlem bakiyesi.`,
+      `En fazla ${trNumber(AI_CREDIT_CONFIG.pro.maxBalance)} AI işlemi bakiyesi.`,
     ],
   },
   {
     plan: 'ecommerce',
     name: 'E-TİCARET',
-    amount: `İlk ay ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
+    amount: `İlk dönemde ${AI_CREDIT_CONFIG.ecommerce.initialCredits} AI işlemi`,
     lines: [
-      `Sonraki dönemlerde ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
+      `Sonraki her ay ${AI_CREDIT_CONFIG.ecommerce.monthlyCredits} AI işlemi.`,
       'Kullanılmayan işlemler devreder.',
-      `En fazla ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} işlem bakiyesi.`,
+      `En fazla ${trNumber(AI_CREDIT_CONFIG.ecommerce.maxBalance)} AI işlemi bakiyesi.`,
     ],
   },
 ]
@@ -382,11 +387,10 @@ export function creditRulesWhenEmpty(): string[] {
  * listeyi okur; istemciden gelen fiyat/kredi değerine asla güvenilmez.
  *
  * Fiyatlandırma hesabı (TRY, KDV dahil, tek seferlik):
- *   - Referans: STARTER aylık 399 TL / 150 kredi = 2,66 TL/kredi (yıllıkta
- *     3.990 TL / 12 / 150 = 2,22 TL/kredi). Abonelik; site, alan adı, şablon
- *     gibi başka avantajlar da içerdiğinden kredinin yalnızca "fiyatı" değildir.
- *   - Tek seferlik kredi, abonelik kredisinden daha avantajlı olmamalı; bu
- *     yüzden her paket 2,66 TL/kredi referansının ÜZERİNDE.
+ *   - STARTER artık 100 dönem kredisi içerir: 399 TL aylık ve 3.990 TL yıllık
+ *     liste fiyatına göre birim maliyet farklıdır. Abonelik; site, alan adı,
+ *     şablon gibi başka avantajlar da içerdiğinden doğrudan karşılaştırma değildir.
+ *   - Ek kredi paketlerinin fiyatları bu plan kredisi güncellemesinde değişmez.
  *   - Birim fiyat büyük pakette düşer: 50 -> 3,98 TL, 100 -> 3,49 TL
  *     (yaklaşık %12 avantaj), 250 -> 3,00 TL (yaklaşık %25 avantaj).
  */

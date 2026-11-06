@@ -54,8 +54,6 @@ const APPROVAL_HASH = createGoogleAdsPlanApprovalHash({
   customerId: '1234567890',
   currency: 'TRY',
   dailyBudgetMinor: 15000,
-  budgetCapMinor: 90000,
-  userDailyBudgetCapMinor: 200000,
   plan: APPROVED_PLAN,
 })
 
@@ -76,12 +74,10 @@ function plan(overrides: Record<string, unknown> = {}) {
     validated_at: new Date(0).toISOString(),
     eu_political_advertising: 'no' as const,
     eu_political_declaration_confirmed_at: new Date(0).toISOString(),
-    approval_user_daily_budget_limit_minor: 200000,
     publish_credit_charged: false,
     google_daily_budget_minor: null,
     currency: 'TRY',
     daily_budget_minor: 15000,
-    budget_cap_minor: 90000,
     external_campaign_id: null,
     publish_request_id: null,
     publish_started_at: null,
@@ -253,8 +249,7 @@ describe('Google Ads E2 publish service', () => {
         validated_version: null,
         eu_political_advertising: null,
         eu_political_declaration_confirmed_at: null,
-        approval_user_daily_budget_limit_minor: null,
-      }),
+          }),
       publishResult: {
         externalCampaignId: null,
         status: 'paused',
@@ -376,67 +371,18 @@ describe('Google Ads E2 publish service', () => {
       expect.objectContaining({ cpcBidCeilingMinor: 1500, cpcBidCeilingMicros: '15000000' }),
       APPROVAL_ID,
       APPROVAL_HASH,
-      200000,
     )
     expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({
       planJson: expect.objectContaining({ euPoliticalAdvertising: 'no', euPoliticalDeclarationConfirmed: true }),
       validateOnly: false,
       userConfirmed: true,
-      budget: { currency: 'TRY', dailyMinor: 15000, capMinor: 90000 },
+      budget: { currency: 'TRY', dailyMinor: 15000 },
     }))
     expect(deps.markPublished).toHaveBeenCalledWith(expect.objectContaining({
       externalCampaignId: '456789',
       billingVerified: false,
     }))
     expect(deps.markFailed).not.toHaveBeenCalled()
-  })
-
-  it('publishes an approved budget when no sanity ceiling is configured', async () => {
-    const noCeilingHash = createGoogleAdsPlanApprovalHash({
-      userId: USER_ID,
-      planId: PLAN_ID,
-      planVersion: 1,
-      connectionId: CONNECTION_ID,
-      customerId: '1234567890',
-      currency: 'TRY',
-      dailyBudgetMinor: 15000,
-      budgetCapMinor: 90000,
-      userDailyBudgetCapMinor: null,
-      plan: APPROVED_PLAN,
-    })
-    const { service, deps } = setup({
-      plan: plan({
-        approval_hash: noCeilingHash,
-        validation_hash: noCeilingHash,
-        approval_user_daily_budget_limit_minor: null,
-      }),
-    })
-
-    expect(await service.publish({ ...confirmedPublish, approvalHash: noCeilingHash }))
-      .toMatchObject({ ok: true, state: 'published', creditsCharged: 15 })
-    expect(deps.beginPublish).toHaveBeenCalledWith(
-      USER_ID,
-      PLAN_ID,
-      REQUEST_ID,
-      1,
-      expect.any(Object),
-      APPROVAL_ID,
-      noCeilingHash,
-      null,
-    )
-  })
-
-  it('rejects amounts above an explicitly configured sanity ceiling with the support error', async () => {
-    vi.stubEnv('GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR', '10000')
-    try {
-      const { service, deps, provider } = setup()
-
-      expect(await service.publish(confirmedPublish)).toMatchObject({ ok: false, reason: 'budget_limit_exceeded' })
-      expect(deps.beginPublish).not.toHaveBeenCalled()
-      expect(provider.publishCampaign).not.toHaveBeenCalled()
-    } finally {
-      vi.unstubAllEnvs()
-    }
   })
 
   it('does not call Google when the user has insufficient credits', async () => {

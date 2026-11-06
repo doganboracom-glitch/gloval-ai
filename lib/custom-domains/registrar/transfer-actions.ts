@@ -58,6 +58,9 @@ export type TransferErrorCode =
   | 'STATUS_UNVERIFIED'
   | 'START_DATE_CONFIRMATION_REQUIRED'
   | 'UNLOCK_INEFFECTIVE'
+  | 'PENDING_OPERATION'
+  | 'LOCK_STATE_BLOCKED'
+  | 'OPERATION_INCOMPLETE'
   | 'FAILED'
 
 async function requireUser() {

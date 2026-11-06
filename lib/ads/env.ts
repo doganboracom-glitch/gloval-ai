@@ -30,7 +30,6 @@ export const ADS_ENV = {
   googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
-  googleAdsBudgetSanityCeilingMinor: 'GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR',
   googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
 } as const
 
@@ -206,15 +205,6 @@ export function resolveGoogleAdsPublishLimits(env: Env = process.env): GoogleAds
       env[ADS_ENV.googleAdsPublishDailyGlobalLimit], null,
     ),
   }
-}
-
-/** A missing ceiling means no application budget ceiling; malformed values fail closed. */
-export function resolveGoogleAdsBudgetSanityCeilingMinor(env: Env = process.env): number | null {
-  const raw = env[ADS_ENV.googleAdsBudgetSanityCeilingMinor]?.trim()
-  if (!raw) return null
-  if (!/^\d{1,10}$/.test(raw)) return 0
-  const parsed = Number(raw)
-  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= POSTGRES_INTEGER_MAX ? parsed : 0
 }
 
 /** Separate, fail-closed gate for the admin-only Google Ads validate_only test route. */

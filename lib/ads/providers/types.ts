@@ -87,8 +87,8 @@ export type GoogleAdsRefreshResult = {
   refreshToken: string | null
 }
 
-/** Money is always in minor units (kuruş) plus an ISO 4217 code. */
-export type AdsBudgetMinor = { currency: string; dailyMinor: number; capMinor: number }
+/** Daily budgets use positive currency minor units plus an ISO 4217 code. */
+export type AdsBudgetMinor = { currency: string; dailyMinor: number }
 
 export type AdsCampaignPublishInput = {
   externalAccountId: string
@@ -132,12 +132,23 @@ export type GoogleAdsBillingVerification = {
   paymentMethodWarning: boolean
 }
 
+export type GoogleAdsKeywordMatchType = 'EXACT' | 'PHRASE' | 'BROAD'
+
+export type GoogleAdsCampaignKeyword = {
+  resourceName: string
+  text: string
+  matchType: GoogleAdsKeywordMatchType
+  negative: boolean
+}
+
 export type GoogleAdsCampaignManagementState = {
   campaignId: string
-  campaignStatus: 'PAUSED' | 'ENABLED' | 'UNKNOWN'
+  campaignStatus: 'PAUSED' | 'ENABLED' | 'REMOVED' | 'UNKNOWN'
   budgetResourceName: string
   dailyBudgetMicros: string
   adResourceName: string
+  adGroupResourceName?: string
+  keywords?: GoogleAdsCampaignKeyword[]
   headlines: string[]
   descriptions: string[]
 }
@@ -221,6 +232,30 @@ export interface GoogleAdsProvider extends AdsProvider {
     adResourceName: string
     headlines: string[]
     descriptions: string[]
+    validateOnly: boolean
+    userConfirmed: boolean
+  }): Promise<GoogleAdsCampaignMutationResult>
+  mutateKeyword?(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    context: AdsApiOperationContext
+    operation: 'add' | 'remove'
+    campaignId: string
+    adGroupResourceName: string | null
+    keywordResourceName?: string
+    keywordText?: string
+    matchType?: 'EXACT' | 'PHRASE'
+    negative?: boolean
+    validateOnly: boolean
+    userConfirmed: boolean
+  }): Promise<GoogleAdsCampaignMutationResult>
+  removeCampaign?(input: {
+    accessToken: string
+    customerId: string
+    loginCustomerId: string | null
+    context: AdsApiOperationContext
+    campaignId: string
     validateOnly: boolean
     userConfirmed: boolean
   }): Promise<GoogleAdsCampaignMutationResult>

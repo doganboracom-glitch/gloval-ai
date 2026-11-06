@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   resolveGoogleAdsAccessMode,
-  resolveGoogleAdsBudgetSanityCeilingMinor,
   resolveGoogleAdsKillSwitch,
   resolveGoogleAdsPublishLimits,
 } from '@/lib/ads/env'
@@ -94,7 +93,6 @@ export default async function AdminGoogleAdsPage() {
   }
 
   const limits = resolveGoogleAdsPublishLimits()
-  const budgetSanityCeilingMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
   const accessMode = resolveGoogleAdsAccessMode()
   const killSwitchEnabled = resolveGoogleAdsKillSwitch()
   const publishEnabled = process.env.GOOGLE_ADS_PUBLISH_ENABLED?.trim() === '1'
@@ -142,7 +140,6 @@ export default async function AdminGoogleAdsPage() {
             <ConfigLine label="Acil durdurma" value={killSwitchEnabled ? 'Etkin' : 'Devre dışı'} />
             <ConfigLine label="Kullanıcı başına deneme / 24 saat" value={limits.dailyAttemptsPerUser} />
             <ConfigLine label="Genel deneme / 24 saat" value={limits.dailyAttemptsGlobal ?? 'Sınırsız'} />
-            <ConfigLine label="Bütçe güvenlik tavanı" value={budgetSanityCeilingMinor ?? 'Sınırsız'} />
           </CardContent>
         </Card>
 

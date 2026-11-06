@@ -89,7 +89,7 @@ describe('blog rows in plan copy', () => {
     )
   })
 
-  it('does not touch prices, limits or credit amounts', () => {
+  it('updates credit amounts while preserving prices and limits', () => {
     expect(PLANS.map((p) => [p.code, p.monthlyPrice, p.yearlyPrice])).toEqual([
       ['free', 0, 0],
       ['starter', 399, 3990],
@@ -99,7 +99,8 @@ describe('blog rows in plan copy', () => {
     expect(SITE_LIMITS).toEqual({ free: 1, starter: 1, pro: 3, ecommerce: 4 })
     expect(PAGE_LIMITS).toEqual({ free: 5, starter: 8, pro: 15, ecommerce: 15 })
     expect(AI_CREDIT_CONFIG.free.credits).toBe(50)
-    expect(AI_CREDIT_CONFIG.starter.credits).toBe(150)
-    expect(AI_CREDIT_CONFIG.pro.monthlyCredits).toBe(150)
+    expect(AI_CREDIT_CONFIG.starter.credits).toBe(100)
+    expect(AI_CREDIT_CONFIG.pro).toMatchObject({ initialCredits: 150, monthlyCredits: 50, maxBalance: 1000 })
+    expect(AI_CREDIT_CONFIG.ecommerce).toMatchObject({ initialCredits: 250, monthlyCredits: 100, maxBalance: 1000 })
   })
 })

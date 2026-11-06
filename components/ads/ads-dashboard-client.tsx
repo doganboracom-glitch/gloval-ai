@@ -9,6 +9,7 @@ import { AdsProductSwitch } from '@/components/ads/ads-product-switch'
 import { AdsBetaBadge } from '@/components/ads/ads-page-client'
 import { GoogleAdsDashboard, type GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import { GoogleAdsWorkspace } from '@/components/ads/google-ads-workspace'
+import { GoogleAdsInsights } from '@/components/ads/google-ads-insights'
 import { ADS_PATH } from '@/lib/ads/feature-flag'
 
 type AdsDashboardClientProps = {
@@ -63,6 +64,8 @@ export function AdsDashboardClient({
           pendingFlowId={pendingFlowId}
           oauthStatus={googleStatus}
         />
+
+        <GoogleAdsInsights connections={connections} />
 
         <GoogleAdsWorkspace
           enabled

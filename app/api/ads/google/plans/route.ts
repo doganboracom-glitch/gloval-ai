@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
-import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
@@ -12,7 +11,6 @@ const planBodySchema = z.object({
   connectionId: z.string().uuid(),
   plan: z.unknown(),
   dailyBudgetMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
-  budgetCapMinor: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
 })
 const updateBodySchema = planBodySchema.extend({
   planId: z.string().uuid(),
@@ -40,13 +38,9 @@ function parsePlan(value: unknown) {
   }
 }
 
-function budgetError(currency: string, dailyBudgetMinor: number, budgetCapMinor: number) {
-  const sanityCeiling = resolveGoogleAdsBudgetSanityCeilingMinor()
-  if (sanityCeiling !== null && dailyBudgetMinor > sanityCeiling) {
-    return { error: 'budget_limit_exceeded', status: 400 }
-  }
+function budgetError(currency: string, dailyBudgetMinor: number) {
   try {
-    buildGoogleAdsApprovalSummary({ currency, dailyBudgetMinor, budgetCapMinor })
+    buildGoogleAdsApprovalSummary({ currency, dailyBudgetMinor })
   } catch {
     return { error: 'invalid_budget', status: 400 }
   }
@@ -62,11 +56,10 @@ export async function GET(request: Request) {
   const admin = createAdminClient()
   let query = admin
     .from('ads_plans')
-    .select('id,brand_id,connection_id,status,plan,version,approved_version,approval_summary,approval_id,approval_hash,validation_hash,validated_version,eu_political_advertising,eu_political_declaration_confirmed_at,approval_user_daily_budget_limit_minor,currency,daily_budget_minor,budget_cap_minor,google_daily_budget_minor,external_campaign_id,google_campaign_status,publish_billing_verified,publish_credit_charged,updated_at')
+    .select('id,brand_id,connection_id,status,plan,version,approved_version,approval_summary,approval_id,approval_hash,validation_hash,validated_version,eu_political_advertising,eu_political_declaration_confirmed_at,currency,daily_budget_minor,google_daily_budget_minor,external_campaign_id,google_campaign_status,publish_billing_verified,publish_credit_charged,updated_at')
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
     .order('updated_at', { ascending: false })
-    .limit(50)
   if (connectionId) query = query.eq('connection_id', connectionId)
 
   const { data, error } = await query
@@ -97,7 +90,7 @@ export async function POST(request: Request) {
   if (connection.is_manager) return googleAdsJson({ ok: false, error: 'manager_account' }, 400)
   if (!connection.currency_code) return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 400)
 
-  const budgetFailure = budgetError(connection.currency_code, input.data.dailyBudgetMinor, input.data.budgetCapMinor)
+  const budgetFailure = budgetError(connection.currency_code, input.data.dailyBudgetMinor)
   if (budgetFailure) return googleAdsJson({ ok: false, error: budgetFailure.error }, budgetFailure.status)
 
   const rpc = admin as unknown as AdsRpcClient
@@ -109,7 +102,6 @@ export async function POST(request: Request) {
     p_sector: plan.sector,
     p_language: plan.language,
     p_daily_budget_minor: input.data.dailyBudgetMinor,
-    p_budget_cap_minor: input.data.budgetCapMinor,
     p_currency: connection.currency_code,
   }).maybeSingle()
   if (error || !data) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
@@ -143,7 +135,7 @@ export async function PATCH(request: Request) {
   if (!connection || connection.status !== 'active') return googleAdsJson({ ok: false, error: 'connection_not_found' }, 404)
   if (connection.is_manager || !connection.currency_code) return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 400)
 
-  const budgetFailure = budgetError(connection.currency_code, input.data.dailyBudgetMinor, input.data.budgetCapMinor)
+  const budgetFailure = budgetError(connection.currency_code, input.data.dailyBudgetMinor)
   if (budgetFailure) return googleAdsJson({ ok: false, error: budgetFailure.error }, budgetFailure.status)
 
   const { data, error } = await admin
@@ -153,7 +145,6 @@ export async function PATCH(request: Request) {
       plan,
       currency: connection.currency_code,
       daily_budget_minor: input.data.dailyBudgetMinor,
-      budget_cap_minor: input.data.budgetCapMinor,
     })
     .eq('id', input.data.planId)
     .eq('user_id', gate.userId)

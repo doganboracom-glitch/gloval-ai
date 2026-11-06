@@ -115,6 +115,11 @@ function currencyFractionDigits(currency: string): number {
   }
 }
 
+export function maxGoogleAdsBudgetMinor(currency: string): number {
+  const fractionDigits = currencyFractionDigits(currency)
+  return Math.floor(Number.MAX_SAFE_INTEGER / 10 ** (6 - fractionDigits))
+}
+
 export function googleAdsMicrosFromMinorUnits(amountMinor: number, currency: string): string {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return invalidBudget()
   const fractionDigits = currencyFractionDigits(currency)
@@ -133,7 +138,6 @@ export type GoogleAdsApprovalSummary = {
   termsVersion?: string
   currency: string
   dailyBudgetMinor: number
-  budgetCapMinor: number
   currencyFractionDigits: number
   cpcBidCeilingMinor: number
   cpcBidCeilingMicros: string
@@ -142,31 +146,18 @@ export type GoogleAdsApprovalSummary = {
 export function buildGoogleAdsApprovalSummary(input: {
   currency: string
   dailyBudgetMinor: number
-  budgetCapMinor: number
 }): GoogleAdsApprovalSummary {
-  if (
-    !Number.isSafeInteger(input.dailyBudgetMinor) ||
-    !Number.isSafeInteger(input.budgetCapMinor) ||
-    input.dailyBudgetMinor <= 0 ||
-    input.budgetCapMinor <= 0 ||
-    input.dailyBudgetMinor > input.budgetCapMinor
-  ) {
+  if (!Number.isSafeInteger(input.dailyBudgetMinor) || input.dailyBudgetMinor <= 0) {
     return invalidBudget()
   }
 
   const fractionDigits = currencyFractionDigits(input.currency)
-  const oneCurrencyUnitMinor = 10 ** fractionDigits
-  if (input.dailyBudgetMinor < oneCurrencyUnitMinor) return invalidBudget()
-
-  const cpcBidCeilingMinor = Math.min(
-    input.dailyBudgetMinor,
-    Math.max(oneCurrencyUnitMinor, Math.floor(input.dailyBudgetMinor / 10)),
-  )
+  googleAdsMicrosFromMinorUnits(input.dailyBudgetMinor, input.currency)
+  const cpcBidCeilingMinor = Math.min(input.dailyBudgetMinor, Math.max(1, Math.floor(input.dailyBudgetMinor / 10)))
 
   return {
     currency: input.currency,
     dailyBudgetMinor: input.dailyBudgetMinor,
-    budgetCapMinor: input.budgetCapMinor,
     currencyFractionDigits: fractionDigits,
     cpcBidCeilingMinor,
     cpcBidCeilingMicros: googleAdsMicrosFromMinorUnits(cpcBidCeilingMinor, input.currency),
@@ -203,20 +194,12 @@ export function buildGoogleAdsMutateRequest(input: {
   requestId: string
   planJson: unknown
   dailyBudgetMinor: number
-  budgetCapMinor: number
   currency: string
   validateOnly: boolean
   geoTargetResourceNames?: string[]
 }): GoogleAdsMutateRequest {
   const customerId = input.customerId.replaceAll('-', '')
   if (!/^\d{6,20}$/.test(customerId) || !/^[A-Za-z0-9_-]{8,128}$/.test(input.requestId)) return invalidPlan()
-  if (
-    !Number.isSafeInteger(input.budgetCapMinor) ||
-    input.budgetCapMinor <= 0 ||
-    input.dailyBudgetMinor > input.budgetCapMinor
-  ) {
-    return invalidBudget()
-  }
 
   const plan = parseGoogleAdsPublishPlan(input.planJson)
   if (!plan.euPoliticalDeclarationConfirmed) {
@@ -225,7 +208,6 @@ export function buildGoogleAdsMutateRequest(input: {
   const approvalSummary = buildGoogleAdsApprovalSummary({
     currency: input.currency,
     dailyBudgetMinor: input.dailyBudgetMinor,
-    budgetCapMinor: input.budgetCapMinor,
   })
   const dailyBudgetMicros = googleAdsMicrosFromMinorUnits(input.dailyBudgetMinor, input.currency)
   const customerResource = `customers/${customerId}`

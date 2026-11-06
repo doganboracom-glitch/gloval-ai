@@ -16,8 +16,6 @@ const planInput = {
   customerId: '1234567890',
   currency: 'TRY',
   dailyBudgetMinor: 15000,
-  budgetCapMinor: 90000,
-  userDailyBudgetCapMinor: 250000,
   plan: { name: 'Search', keywords: ['site', 'design'] },
 }
 
@@ -35,6 +33,7 @@ describe('Google Ads approval fingerprints', () => {
     expect(createGoogleAdsPlanApprovalHash({ ...planInput, dailyBudgetMinor: 15001 })).not.toBe(baseline)
     expect(createGoogleAdsPlanApprovalHash({ ...planInput, plan: { name: 'Search', keywords: ['changed'] } })).not.toBe(baseline)
   })
+
 
   it('binds a management approval to the exact before and requested states', () => {
     const action = {

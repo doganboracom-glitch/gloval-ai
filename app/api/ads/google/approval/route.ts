@@ -2,10 +2,12 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
-import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
-import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
+import {
+  buildGoogleAdsApprovalSummary,
+  isSupportedGoogleAdsCurrency,
+  parseGoogleAdsPublishPlan,
+} from '@/lib/ads/google-ads-publish-plan'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
-import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
 
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const { data: planRow, error: planError } = await admin
     .from('ads_plans')
-    .select('id,user_id,connection_id,status,plan,version,approved_version,currency,daily_budget_minor,budget_cap_minor')
+    .select('id,user_id,connection_id,status,plan,version,approved_version,currency,daily_budget_minor')
     .eq('id', input.data.planId)
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
@@ -66,13 +68,8 @@ export async function POST(request: Request) {
     return googleAdsJson({ ok: false, error: 'unsupported_currency' }, 400)
   }
 
-  const userDailyBudgetCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
-  if (
-    !Number.isSafeInteger(planRow.daily_budget_minor) ||
-    !Number.isSafeInteger(planRow.budget_cap_minor) ||
-    (userDailyBudgetCapMinor !== null && (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor)
-  ) {
-    return googleAdsJson({ ok: false, error: 'budget_limit_exceeded' }, 400)
+  if (!Number.isSafeInteger(planRow.daily_budget_minor) || (planRow.daily_budget_minor as number) <= 0) {
+    return googleAdsJson({ ok: false, error: 'invalid_budget' }, 400)
   }
 
   let plan: ReturnType<typeof parseGoogleAdsPublishPlan>
@@ -87,7 +84,6 @@ export async function POST(request: Request) {
       ...buildGoogleAdsApprovalSummary({
         currency: connection.currency_code,
         dailyBudgetMinor: planRow.daily_budget_minor as number,
-        budgetCapMinor: planRow.budget_cap_minor as number,
       }),
       termsVersion: GOOGLE_ADS_PUBLISH_TERMS_VERSION,
     }
@@ -103,13 +99,11 @@ export async function POST(request: Request) {
     customerId: connection.external_account_id,
     currency: connection.currency_code,
     dailyBudgetMinor: planRow.daily_budget_minor as number,
-    budgetCapMinor: planRow.budget_cap_minor as number,
-    userDailyBudgetCapMinor,
     plan,
   })
 
   const rpc = admin as unknown as AdsRpcClient
-  const { data, error } = await rpc.rpc('ads_approve_google_ads_plan_v2', {
+  const { data, error } = await rpc.rpc('ads_approve_google_ads_plan_e2', {
     p_user_id: gate.userId,
     p_plan_id: planRow.id,
     p_expected_version: planRow.version,
@@ -117,8 +111,6 @@ export async function POST(request: Request) {
     p_customer_id: connection.external_account_id,
     p_currency: connection.currency_code,
     p_daily_budget_minor: planRow.daily_budget_minor,
-    p_budget_cap_minor: planRow.budget_cap_minor,
-    p_user_daily_budget_limit_minor: userDailyBudgetCapMinor,
     p_plan_hash: approvalHash,
     p_eu_political_advertising: input.data.euPoliticalAdvertising,
     p_eu_declaration_confirmed: input.data.declarationConfirmed,
@@ -132,11 +124,10 @@ export async function POST(request: Request) {
     return googleAdsJson({ ok: false, error: result.state ?? 'plan_not_approved' }, status)
   }
 
-  const acceptedAt = new Date().toISOString()
   const { data: savedAcceptance, error: acceptanceError } = await admin
     .from('ads_google_publish_approvals')
     .update({
-      terms_accepted_at: acceptedAt,
+      terms_accepted_at: new Date().toISOString(),
       approval_summary: { ...approvalSummary, termsVersion: GOOGLE_ADS_PUBLISH_TERMS_VERSION },
     })
     .eq('id', result.approval_id)

@@ -23,12 +23,10 @@ async function fetchAccess(url: string): Promise<HandoffAccess> {
 
 function handoffErrorText(code: string, isTr: boolean): string {
   const tr: Record<string, string> = {
-    budget_limit_exceeded: 'Tutar güvenlik tavanını aşıyor. Planı aktarmak için destek ekibiyle iletişime geçin.',
     ad_copy_insufficient: 'Plandaki reklam metni Google Ads kurallarını karşılamıyor. Çalışma alanında yeniden oluşturun.',
     connection_not_found: 'Bağlı Google Ads hesabı bulunamadı. Hesabı kontrol edin.',
   }
   const en: Record<string, string> = {
-    budget_limit_exceeded: 'The amount exceeds the safety ceiling. Contact support to transfer this plan.',
     ad_copy_insufficient: 'The ad copy in this plan does not meet Google Ads rules. Regenerate it in the workspace.',
     connection_not_found: 'The connected Google Ads account was not found. Check the account.',
   }

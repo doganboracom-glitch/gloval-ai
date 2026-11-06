@@ -1,5 +1,9 @@
 import { addCalendarMonths } from '@/lib/billing-utils'
-import { AI_CREDIT_CONFIG, toPlanCode } from '@/lib/pricing-config'
+import {
+  AI_CREDIT_CONFIG,
+  AI_CREDIT_FIRST_PERIOD_EFFECTIVE_AT,
+  toPlanCode,
+} from '@/lib/pricing-config'
 
 /**
  * Daily "plan credit sweep": gives paid subscribers the AI credits their plan
@@ -32,7 +36,10 @@ export type GrantRule = {
   expireUnused: boolean
 }
 
-export function resolveGrantRule(planCode: CreditPlanCode): GrantRule {
+export function resolveGrantRule(
+  planCode: CreditPlanCode,
+  firstPeriodBonusEligible = true,
+): GrantRule {
   switch (planCode) {
     case 'starter':
       return {
@@ -45,7 +52,9 @@ export function resolveGrantRule(planCode: CreditPlanCode): GrantRule {
     case 'pro':
       return {
         planCode,
-        firstCredits: AI_CREDIT_CONFIG.pro.initialCredits,
+        firstCredits: firstPeriodBonusEligible
+          ? AI_CREDIT_CONFIG.pro.initialCredits
+          : AI_CREDIT_CONFIG.pro.monthlyCredits,
         periodCredits: AI_CREDIT_CONFIG.pro.monthlyCredits,
         maxBalance: AI_CREDIT_CONFIG.pro.maxBalance,
         expireUnused: !AI_CREDIT_CONFIG.pro.rollover,
@@ -53,7 +62,9 @@ export function resolveGrantRule(planCode: CreditPlanCode): GrantRule {
     case 'ecommerce':
       return {
         planCode,
-        firstCredits: AI_CREDIT_CONFIG.ecommerce.initialCredits,
+        firstCredits: firstPeriodBonusEligible
+          ? AI_CREDIT_CONFIG.ecommerce.initialCredits
+          : AI_CREDIT_CONFIG.ecommerce.monthlyCredits,
         periodCredits: AI_CREDIT_CONFIG.ecommerce.monthlyCredits,
         maxBalance: AI_CREDIT_CONFIG.ecommerce.maxBalance,
         expireUnused: !AI_CREDIT_CONFIG.ecommerce.rollover,
@@ -161,6 +172,8 @@ export type PlanCreditSubscription = {
   productCategory: string | null
   /** `billing_plans.interval` */
   interval: string | null
+  /** Original subscription creation time, used to preserve the first-period cutover. */
+  createdAt: string
   periodStart: string | null
   periodEnd: string | null
 }
@@ -242,7 +255,10 @@ export function classifyPlanCreditSubscription(
   return {
     candidate: {
       sub,
-      rule: resolveGrantRule(mapped),
+      rule: resolveGrantRule(
+        mapped,
+        Date.parse(sub.createdAt) >= Date.parse(AI_CREDIT_FIRST_PERIOD_EFFECTIVE_AT),
+      ),
       cycle: sub.interval === 'year' ? 'yearly' : 'monthly',
       start: period.start,
       reason: planGrantReason(sub.id, period.start),

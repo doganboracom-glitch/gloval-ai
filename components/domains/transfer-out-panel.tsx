@@ -67,6 +67,12 @@ function outErrorText(code: TransferErrorCode, d: Dict['domains']): string {
       return d.outWindow.lockNotReleased
     case 'UNLOCK_INEFFECTIVE':
       return d.outWindow.unlockIneffective
+    case 'PENDING_OPERATION':
+      return d.outWindow.unlockPendingOperation
+    case 'LOCK_STATE_BLOCKED':
+      return d.outWindow.unlockStateBlocked
+    case 'OPERATION_INCOMPLETE':
+      return d.outWindow.unlockIncomplete
     case 'PROVIDER_ERROR':
       return d.outWindow.providerError
     case 'UNSUPPORTED_TLD':

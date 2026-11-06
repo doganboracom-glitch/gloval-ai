@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import { GoogleAdsPublishReview } from '@/components/ads/google-ads-publish-review'
 import { GoogleAdsAiPlanner } from '@/components/ads/google-ads-ai-planner'
+import { GoogleAdsCampaignManager } from '@/components/ads/google-ads-campaign-manager'
 import { AiSuggestionBadge, GoogleAdsSearchPreview } from '@/components/ads/google-ads-search-preview'
 import { currencyDigits, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
@@ -45,7 +46,6 @@ type PlanRow = {
   eu_political_advertising: 'yes' | 'no' | null
   currency: string
   daily_budget_minor: number | null
-  budget_cap_minor: number | null
   google_daily_budget_minor: number | null
   external_campaign_id: string | null
   publish_billing_verified: boolean | null
@@ -55,18 +55,6 @@ type PlanRow = {
 }
 
 type PlansPayload = { plans: PlanRow[] }
-type ManagementSnapshot = {
-  campaignId: string
-  campaignStatus: 'PAUSED' | 'ENABLED' | 'UNKNOWN'
-  dailyBudgetMicros: string
-  headlines: string[]
-  descriptions: string[]
-  stateHash: string
-  reviewStatus: 'approved' | 'disapproved' | 'review_in_progress' | 'unavailable'
-  billingVerified: boolean
-  paymentMethodWarning: boolean
-}
-type ManagementPayload = { snapshot: ManagementSnapshot }
 type ApiPayload = {
   ok?: boolean
   error?: string
@@ -106,7 +94,7 @@ type PlanForm = {
   displayUrl: string
 }
 
-type AiFieldKey = keyof PlanForm | 'dailyBudget' | 'budgetCap'
+type AiFieldKey = keyof PlanForm | 'dailyBudget'
 
 const ALL_PLAN_FIELDS: AiFieldKey[] = [
   'brand', 'sector', 'sectorLabel', 'services', 'language', 'keywords', 'negativeKeywords', 'country', 'cities',
@@ -276,7 +264,6 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-  budget_limit_exceeded: 'Bu tutar isteğe bağlı güvenlik tavanını aşıyor. Yardım için destek ekibiyle iletişime geçin.',
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -311,7 +298,6 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-  budget_limit_exceeded: 'This amount exceeds the optional safety ceiling. Contact support for assistance.',
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -446,7 +432,7 @@ export function GoogleAdsWorkspace({
         brand: 'Marka adı', sector: 'Sektör', sectorLabel: 'Sektör açıklaması', services: 'Ürün veya hizmetler (satır başına bir tane)',
         language: 'Reklam dili', country: 'Hedef ülke', cities: 'Hedef şehirler (satır başına bir tane)', url: 'Açılış sayfası URL’si',
         keywords: 'Anahtar kelimeler (satır başına bir tane)', negatives: 'Hariç tutulacak anahtar kelimeler', headlines: 'Başlıklar (satır başına bir tane)',
-        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe', cap: 'GLOVAL günlük bütçe üst sınırı',
+        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe',
         policyCategory: 'Kısıtlı içerik kategorisi', policyEvidence: 'Politika kanıtı', createHint: 'Planı kaydetmek Google Ads’te kampanya oluşturmaz.',
         reviewTitle: 'Onay ve yayınlama', noSelection: 'Yayınlamadan önce bir taslak plan seçin.',
         declaration: 'AB siyasi reklam beyanı', euNo: 'Hayır', euYes: 'Evet', confirmEu: 'Bu beyanın doğru olduğunu onaylıyorum.',
@@ -472,7 +458,7 @@ export function GoogleAdsWorkspace({
         brand: 'Brand name', sector: 'Sector', sectorLabel: 'Sector label', services: 'Products or services (one per line)',
         language: 'Ad language', country: 'Target country', cities: 'Target cities (one per line)', url: 'Landing page URL',
         keywords: 'Keywords (one per line)', negatives: 'Negative keywords', headlines: 'Headlines (one per line)',
-        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget', cap: 'GLOVAL daily budget ceiling',
+        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget',
         policyCategory: 'Restricted content category', policyEvidence: 'Policy evidence', createHint: 'Saving a draft does not create a Google Ads campaign.',
         reviewTitle: 'Approval and publishing', noSelection: 'Select a draft plan before publishing.',
         declaration: 'EU political advertising declaration', euNo: 'No', euYes: 'Yes', confirmEu: 'I confirm this declaration is accurate.',
@@ -499,7 +485,6 @@ export function GoogleAdsWorkspace({
     campaign: 'Kampanya / marka',
     finalUrl: 'Açılış sayfası',
     dailyBudget: 'Google Ads günlük bütçesi',
-    dailyPlanLimit: 'GLOVAL günlük plan üst sınırı',
     cpcCeiling: 'CPC teklif tavanı',
     targeting: 'Hedefleme',
     keywords: 'Anahtar kelimeler',
@@ -522,7 +507,6 @@ export function GoogleAdsWorkspace({
     campaign: 'Campaign / brand',
     finalUrl: 'Landing page',
     dailyBudget: 'Google Ads daily budget',
-    dailyPlanLimit: 'GLOVAL daily plan limit',
     cpcCeiling: 'CPC bid ceiling',
     targeting: 'Targeting',
     keywords: 'Keywords',
@@ -545,15 +529,10 @@ export function GoogleAdsWorkspace({
   const [planId, setPlanId] = useState<string | null>(null)
   const [form, setForm] = useState<PlanForm>(() => defaultPlanForm(initialAddress))
   const [dailyBudget, setDailyBudget] = useState('1000')
-  const [budgetCap, setBudgetCap] = useState('1000')
+  const [aiRecommendedBudgetMinor, setAiRecommendedBudgetMinor] = useState<number | null>(null)
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(initialTermsAccepted)
-  const [enableBudgetAcknowledged, setEnableBudgetAcknowledged] = useState(false)
-  const [enableBillingAcknowledged, setEnableBillingAcknowledged] = useState(false)
-  const [managementBudget, setManagementBudget] = useState('')
-  const [managementHeadlines, setManagementHeadlines] = useState('')
-  const [managementDescriptions, setManagementDescriptions] = useState('')
   const [pending, setPending] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [errorCode, setErrorCode] = useState<string | null>(null)
@@ -574,14 +553,6 @@ export function GoogleAdsWorkspace({
   const plans = plansData?.plans ?? []
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null
   const selectedConnection = availableConnections.find((connection) => connection.id === connectionId) ?? null
-  const activeCampaignPlan = selectedPlan?.status === 'published' ? selectedPlan : null
-  const managementKey = activeCampaignPlan ? `/api/ads/google/management?planId=${encodeURIComponent(activeCampaignPlan.id)}` : null
-  const { data: managementData, error: managementError, isLoading: managementLoading, mutate: mutateManagement } = useSWR<ManagementPayload>(
-    managementKey,
-    fetchJson,
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  )
-  const management = managementData?.snapshot
   const isEditable = !selectedPlan || ['draft', 'failed', 'approved'].includes(selectedPlan.status)
   const selectedCurrency = selectedPlan?.currency ?? selectedConnection?.currency ?? 'TRY'
   const journeyStage = availableConnections.length === 0
@@ -593,9 +564,6 @@ export function GoogleAdsWorkspace({
         : plans.length > 0
           ? 'draft'
           : 'connected'
-  const currentBudgetMajor = management ? Number(microsToMajor(management.dailyBudgetMicros, selectedCurrency)) : 0
-  const proposedBudgetMajor = Number(managementBudget || (management ? microsToMajor(management.dailyBudgetMicros, selectedCurrency) : '0'))
-  const isBudgetIncrease = Number.isFinite(proposedBudgetMajor) && proposedBudgetMajor > currentBudgetMajor
 
   const summary = useMemo(() => {
     if (!selectedPlan) return null
@@ -603,7 +571,6 @@ export function GoogleAdsWorkspace({
       return buildGoogleAdsApprovalSummary({
         currency: selectedPlan.currency,
         dailyBudgetMinor: selectedPlan.daily_budget_minor as number,
-        budgetCapMinor: selectedPlan.budget_cap_minor as number,
       })
     } catch {
       return null
@@ -621,14 +588,12 @@ export function GoogleAdsWorkspace({
     ].filter(Boolean).join(' · ')
     const currency = selectedPlan.currency
     const dailyBudgetAmount = minorToMajor(selectedPlan.daily_budget_minor, currency)
-    const dailyPlanLimitAmount = minorToMajor(selectedPlan.budget_cap_minor, currency)
 
     return {
       account: selectedConnection?.name ?? selectedConnection?.externalAccountId ?? copy.noTerms,
       campaign: typeof plan.brand === 'string' ? plan.brand : copy.noTerms,
       finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : copy.noTerms,
       dailyBudget: dailyBudgetAmount ? `${currency} ${dailyBudgetAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
-      dailyPlanLimit: dailyPlanLimitAmount ? `${currency} ${dailyPlanLimitAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
       cpcCeiling: summary ? `${currency} ${minorToMajor(summary.cpcBidCeilingMinor, currency)}` : copy.noTerms,
       targeting: targeting || copy.noTerms,
       keywords: stringArray(plan.keywords),
@@ -670,7 +635,7 @@ export function GoogleAdsWorkspace({
           : 'The budget was converted to your account currency approximately. Check it before saving.')
       }
       if (!suggestion.budget) {
-        nextNotices.push(errorText(suggestion.budgetIssue ?? 'invalid_budget', isTr))
+        nextNotices.push(errorText('invalid_budget', isTr))
       }
       const dropped = suggestion.adjustments.headlinesDropped + suggestion.adjustments.descriptionsDropped
       if (dropped > 0) {
@@ -685,8 +650,8 @@ export function GoogleAdsWorkspace({
       }
       setPlanId(null)
       setForm(formFromPlan(suggestion.plan as Record<string, unknown>))
+      setAiRecommendedBudgetMinor(suggestion.budget?.dailyMinor ?? null)
       setDailyBudget(suggestion.budget ? minorToMajor(suggestion.budget.dailyMinor, currency) : '')
-      setBudgetCap(suggestion.budget ? minorToMajor(suggestion.budget.capMinor, currency) : '')
       setEuPoliticalAdvertising('no')
       setConfirmedEu(false)
       setAcceptedTerms(false)
@@ -695,8 +660,7 @@ export function GoogleAdsWorkspace({
       const aiKeys = new Set<AiFieldKey>(ALL_PLAN_FIELDS)
       if (suggestion.budget) {
         aiKeys.add('dailyBudget')
-        aiKeys.add('budgetCap')
-      }
+        }
       setAiFields(aiKeys)
       setNotices(nextNotices)
       setAdvancedOpen(false)
@@ -744,8 +708,8 @@ export function GoogleAdsWorkspace({
     setAiFields(new Set())
     setNotices([])
     setForm(defaultPlanForm(initialAddress))
+    setAiRecommendedBudgetMinor(null)
     setDailyBudget('1000')
-    setBudgetCap('1000')
     setEuPoliticalAdvertising('no')
     setConfirmedEu(false)
     setAcceptedTerms(false)
@@ -759,12 +723,14 @@ export function GoogleAdsWorkspace({
     setEditorOpen(true)
     setAdvancedOpen(false)
     setNotices([])
-    setAiFields(fromAi ? new Set<AiFieldKey>([...ALL_PLAN_FIELDS, 'dailyBudget', 'budgetCap']) : new Set())
+    setAiFields(fromAi ? new Set<AiFieldKey>([...ALL_PLAN_FIELDS, 'dailyBudget']) : new Set())
     setPlanId(plan.id)
     setConnectionId(plan.connection_id ?? '')
     setForm(formFromPlan(plan.plan))
+    const storedRecommendation = Number(plan.plan.aiRecommendedDailyBudgetMinor)
+    setAiRecommendedBudgetMinor(Number.isSafeInteger(storedRecommendation) && storedRecommendation > 0 ? storedRecommendation : null)
     setDailyBudget(minorToMajor(plan.daily_budget_minor, plan.currency))
-    setBudgetCap(minorToMajor(plan.budget_cap_minor, plan.currency))
+
     setEuPoliticalAdvertising(plan.eu_political_advertising ?? 'no')
     setConfirmedEu(false)
     setAcceptedTerms(false)
@@ -772,9 +738,6 @@ export function GoogleAdsWorkspace({
     setErrorCode(null)
     setShowPublishReview(false)
     setFinalPublishConfirmed(false)
-    setManagementBudget(minorToMajor(plan.google_daily_budget_minor ?? plan.daily_budget_minor, plan.currency))
-    setManagementHeadlines('')
-    setManagementDescriptions('')
   }
 
   async function saveDraft() {
@@ -784,13 +747,14 @@ export function GoogleAdsWorkspace({
     setMessage(null)
     try {
       const dailyBudgetMinor = majorToMinor(dailyBudget, selectedConnection.currency ?? selectedCurrency)
-      const budgetCapMinor = majorToMinor(budgetCap, selectedConnection.currency ?? selectedCurrency)
-      if (!dailyBudgetMinor || !budgetCapMinor) throw new WorkspaceApiError('invalid_budget')
+      if (!dailyBudgetMinor) throw new WorkspaceApiError('invalid_budget')
       const body = {
         connectionId: selectedConnection.id,
-        plan: planFromForm(form),
+        plan: {
+          ...planFromForm(form),
+          ...(aiRecommendedBudgetMinor === null ? {} : { aiRecommendedDailyBudgetMinor: aiRecommendedBudgetMinor }),
+        },
         dailyBudgetMinor,
-        budgetCapMinor,
         ...(selectedPlan ? { planId: selectedPlan.id, expectedVersion: selectedPlan.version } : {}),
       }
       const response = await postJson('/api/ads/google/plans', selectedPlan ? 'PATCH' : 'POST', body)
@@ -861,44 +825,6 @@ export function GoogleAdsWorkspace({
     } catch (error) {
       if (phase === 'publish') setFinalPublishConfirmed(false)
       setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
-    } finally {
-      setPending(null)
-    }
-  }
-
-  async function applyAction(action: 'pause' | 'enable' | 'budget' | 'ad_copy') {
-    if (!activeCampaignPlan || !management || pending) return
-    setPending(action)
-    setErrorCode(null)
-    setMessage(null)
-    try {
-      const body: Record<string, unknown> = {
-        planId: activeCampaignPlan.id,
-        actionId: crypto.randomUUID(),
-        expectedVersion: activeCampaignPlan.version,
-        expectedStateHash: management.stateHash,
-        action,
-        confirm: true,
-        acknowledgedBillingWarning: enableBillingAcknowledged,
-        acknowledgedBudget: enableBudgetAcknowledged,
-      }
-      if (action === 'budget') {
-        const dailyBudgetMinor = majorToMinor(managementBudget, selectedCurrency)
-        if (!dailyBudgetMinor) throw new WorkspaceApiError('invalid_budget')
-        body.dailyBudgetMinor = dailyBudgetMinor
-      }
-      if (action === 'ad_copy') {
-        body.headlines = splitLines(managementHeadlines)
-        body.descriptions = splitLines(managementDescriptions)
-      }
-      await postJson('/api/ads/google/management', 'POST', body)
-      await Promise.all([mutatePlans(), mutateManagement()])
-      setMessage(isTr ? 'Değişiklik Google Ads’e uygulandı ve işlem geçmişine kaydedildi.' : 'The change was applied to Google Ads and recorded in the activity log.')
-      setEnableBudgetAcknowledged(false)
-      setEnableBillingAcknowledged(false)
-    } catch (error) {
-      setErrorCode(error instanceof WorkspaceApiError ? error.code : 'provider_error')
-      await mutateManagement()
     } finally {
       setPending(null)
     }
@@ -1018,10 +944,7 @@ export function GoogleAdsWorkspace({
                       <TextField id="google-ads-url" label={copy.url} value={form.finalUrl} onChange={(value) => { updateForm('finalUrl', value); if (!form.displayUrl) updateForm('displayUrl', value) }} placeholder="https://example.com" disabled={!isEditable || pending !== null} aiSuggested={isAi('finalUrl')} />
                     </div>
                     <TextAreaField id="google-ads-services" label={copy.services} value={form.services} onChange={(value) => updateForm('services', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('services')} />
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
-                      <TextField id="google-ads-budget-cap" label={`${copy.cap} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={budgetCap} onChange={(value) => { setBudgetCap(value); clearAi('budgetCap') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('budgetCap')} />
-                    </div>
+                    <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
                     <TextAreaField
                       id="google-ads-headlines"
                       label={copy.headlines}
@@ -1266,76 +1189,12 @@ export function GoogleAdsWorkspace({
             </Card>
           )}
 
-          {activeCampaignPlan ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{copy.management}</CardTitle>
-                <CardDescription>{copy.directBilling}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {managementLoading ? <Skeleton className="h-24" aria-label={copy.loading} /> : null}
-                {managementError ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{errorText(managementError instanceof WorkspaceApiError ? managementError.code : undefined, isTr)}</AlertDescription></Alert> : null}
-                {management ? (
-                  <>
-                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
-                      <div>
-                        <p className="text-sm font-medium">{copy.status}: {management.campaignStatus}</p>
-                        <p className="text-sm text-muted-foreground">{copy.review}: {management.reviewStatus}</p>
-                        <p className="text-sm text-muted-foreground">{copy.billing}: {management.billingVerified ? (isTr ? 'Doğrulandı' : 'Verified') : (isTr ? 'Uyarı' : 'Warning')}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {management.campaignStatus === 'ENABLED' ? (
-                          <Button type="button" variant="outline" onClick={() => void applyAction('pause')} disabled={pending !== null}>{copy.pause}</Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            onClick={() => void applyAction('enable')}
-                            disabled={pending !== null || killSwitchEnabled || management.reviewStatus !== 'approved' || !enableBudgetAcknowledged || (management.paymentMethodWarning && !enableBillingAcknowledged)}
-                          >
-                            {copy.enable}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    {management.campaignStatus !== 'ENABLED' ? (
-                      <FieldSet className="rounded-xl border border-border p-3">
-                        <FieldLegend>{copy.enable}</FieldLegend>
-                        <FieldGroup>
-                          <Field orientation="horizontal">
-                            <input id="google-ads-enable-budget-ack" type="checkbox" checked={enableBudgetAcknowledged} onChange={(event) => setEnableBudgetAcknowledged(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                            <FieldLabel htmlFor="google-ads-enable-budget-ack">{copy.reviewAcknowledged}</FieldLabel>
-                          </Field>
-                          {management.paymentMethodWarning ? (
-                            <>
-                              <Alert><AlertCircle aria-hidden="true" /><AlertDescription>{copy.billingWarning}</AlertDescription></Alert>
-                              <Field orientation="horizontal">
-                                <input id="google-ads-enable-billing-ack" type="checkbox" checked={enableBillingAcknowledged} onChange={(event) => setEnableBillingAcknowledged(event.target.checked)} className="size-4 rounded border-input accent-primary" />
-                                <FieldLabel htmlFor="google-ads-enable-billing-ack">{isTr ? 'Faturalama uyarısını anlıyorum.' : 'I acknowledge the billing warning.'}</FieldLabel>
-                              </Field>
-                            </>
-                          ) : null}
-                          {management.reviewStatus !== 'approved' ? <p className="text-sm text-muted-foreground">{copy.reviewRequired}</p> : null}
-                        </FieldGroup>
-                      </FieldSet>
-                    ) : null}
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <FieldGroup>
-                        <TextField id="google-ads-management-budget" label={`${copy.daily} (${selectedCurrency})`} value={managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)} onChange={setManagementBudget} type="number" />
-                        <p className="text-xs text-muted-foreground">{copy.before}: {selectedCurrency} {microsToMajor(management.dailyBudgetMicros, selectedCurrency)} · {copy.after}: {selectedCurrency} {managementBudget || microsToMajor(management.dailyBudgetMicros, selectedCurrency)}</p>
-                        <Button type="button" variant="outline" onClick={() => void applyAction('budget')} disabled={pending !== null || (killSwitchEnabled && isBudgetIncrease)}>{pending === 'budget' ? copy.saving : copy.apply}</Button>
-                      </FieldGroup>
-                      <FieldGroup>
-                        <TextAreaField id="google-ads-management-headlines" label={copy.headlines} value={managementHeadlines || management.headlines.join('\n')} onChange={setManagementHeadlines} rows={3} />
-                        <TextAreaField id="google-ads-management-descriptions" label={copy.descriptions} value={managementDescriptions || management.descriptions.join('\n')} onChange={setManagementDescriptions} rows={3} />
-                        <Button type="button" variant="outline" onClick={() => void applyAction('ad_copy')} disabled={pending !== null}>{pending === 'ad_copy' ? copy.saving : copy.apply}</Button>
-                      </FieldGroup>
-                    </div>
-                  </>
-                ) : !managementLoading && !managementError ? <p className="text-sm text-muted-foreground">{copy.noActive}</p> : null}
-              </CardContent>
-              <CardFooter className="text-xs text-muted-foreground">{copy.summaryGuarantee}</CardFooter>
-            </Card>
-          ) : null}
+          <GoogleAdsCampaignManager
+            plan={selectedPlan ? { id: selectedPlan.id, status: selectedPlan.status, version: selectedPlan.version } : null}
+            hasConnection={availableConnections.length > 0}
+            currency={selectedCurrency}
+            isTr={isTr}
+          />
         </div>
       </div>
 

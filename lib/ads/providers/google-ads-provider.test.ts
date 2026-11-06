@@ -53,7 +53,7 @@ function publishInput(overrides: Record<string, unknown> = {}) {
     context: PUBLISH_CONTEXT,
     planId: PLAN_ID,
     requestId: REQUEST_ID,
-    budget: { currency: 'TRY', dailyMinor: 15000, capMinor: 90000 },
+    budget: { currency: 'TRY', dailyMinor: 15000 },
     planJson: PUBLISH_PLAN,
     validateOnly: false,
     userConfirmed: true,
