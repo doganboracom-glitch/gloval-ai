@@ -5,11 +5,11 @@ const sdk = vi.hoisted(() => ({
   ModifyNameServer: vi.fn(),
   ModifyPrivacyProtectionStatus: vi.fn(),
   EnableTheftProtectionLock: vi.fn(),
-  DisableTheftProtectionLock: vi.fn(),
+  request: vi.fn(),
   GetContacts: vi.fn(),
   SaveContacts: vi.fn(),
   Renew: vi.fn(),
-  state: { lastResponse: null as unknown },
+  state: { lastResponse: null as unknown, lastParsedResponse: null as unknown },
 }))
 
 vi.mock('nodejs-dna/src/DNARest', () => ({
@@ -17,11 +17,14 @@ vi.mock('nodejs-dna/src/DNARest', () => ({
     get lastResponse() {
       return sdk.state.lastResponse
     }
+    get lastParsedResponse() {
+      return sdk.state.lastParsedResponse
+    }
     GetDetails = sdk.GetDetails
     ModifyNameServer = sdk.ModifyNameServer
     ModifyPrivacyProtectionStatus = sdk.ModifyPrivacyProtectionStatus
     EnableTheftProtectionLock = sdk.EnableTheftProtectionLock
-    DisableTheftProtectionLock = sdk.DisableTheftProtectionLock
+    request = sdk.request
     GetContacts = sdk.GetContacts
     SaveContacts = sdk.SaveContacts
     Renew = sdk.Renew
@@ -108,6 +111,7 @@ async function codeOf(p: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   vi.clearAllMocks()
   sdk.state.lastResponse = null
+  sdk.state.lastParsedResponse = null
 })
 
 describe('getManagedDetails', () => {
@@ -244,11 +248,12 @@ describe('setPrivacy and changeLock', () => {
     expect(sdk.ModifyPrivacyProtectionStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('lock: unlocks via the disable call and confirms', async () => {
+  it('lock: unlocks via the dedicated unlock endpoint and confirms', async () => {
     queueDetails(body({ lockStatus: true }), body({ lockStatus: false }))
-    sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
+    sdk.request.mockResolvedValue({})
     expect(await provider().changeLock(DOMAIN, false)).toEqual({ changed: true })
-    expect(sdk.DisableTheftProtectionLock).toHaveBeenCalledTimes(1)
+    expect(sdk.request).toHaveBeenCalledTimes(1)
+    expect(sdk.request).toHaveBeenCalledWith('POST', 'domains/unlock', { domainName: DOMAIN })
     expect(sdk.EnableTheftProtectionLock).not.toHaveBeenCalled()
   })
 
@@ -256,13 +261,13 @@ describe('setPrivacy and changeLock', () => {
     vi.useFakeTimers()
     try {
       queueDetails(body({ lockStatus: true }), body({ lockStatus: true }), body({ lockStatus: false }))
-      sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
+      sdk.request.mockResolvedValue({})
 
       const operation = provider().changeLock(DOMAIN, false)
       await vi.runAllTimersAsync()
       await expect(operation).resolves.toEqual({ changed: true })
       expect(sdk.GetDetails).toHaveBeenCalledTimes(3)
-      expect(sdk.DisableTheftProtectionLock).toHaveBeenCalledTimes(1)
+      expect(sdk.request).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
@@ -272,7 +277,7 @@ describe('setPrivacy and changeLock', () => {
     vi.useFakeTimers()
     try {
       queueDetails(body({ lockStatus: true }))
-      sdk.DisableTheftProtectionLock.mockResolvedValue({ result: 'OK' })
+      sdk.request.mockResolvedValue({})
 
       const operation = provider().changeLock(DOMAIN, false)
       const rejection = expect(operation).rejects.toMatchObject({
@@ -282,7 +287,7 @@ describe('setPrivacy and changeLock', () => {
       await vi.runAllTimersAsync()
       await rejection
       expect(sdk.GetDetails).toHaveBeenCalledTimes(6)
-      expect(sdk.DisableTheftProtectionLock).toHaveBeenCalledTimes(1)
+      expect(sdk.request).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }

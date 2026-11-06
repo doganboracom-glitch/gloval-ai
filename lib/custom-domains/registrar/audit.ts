@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { SAFE_PROVIDER_CODE } from './lock-error-codes'
 
 /**
  * Append-only audit trail for registrar-side domain mutations.
@@ -41,7 +42,7 @@ export type DomainAuditDetails = {
   httpStatus?: number
   /** Top-level response key names only, never values. Kept to 8 safe names. */
   bodyKeys?: string[]
-  /** Provider error code, `[A-Za-z0-9_:]` and at most 80 characters. */
+  /** Provider error code, `[A-Za-z0-9_:.]` and at most 80 characters. */
   errorCode?: string
   lockAfter5s?: DomainAuditLockShape
   lockAfter20s?: DomainAuditLockShape
@@ -130,7 +131,7 @@ function sanitizeDetails(details: DomainAuditDetails | undefined): Record<string
       continue
     }
     if (key === 'providerCode' || key === 'errorCode') {
-      if (typeof value === 'string' && /^[A-Za-z0-9_:]{1,80}$/.test(value)) out[key] = value
+      if (typeof value === 'string' && SAFE_PROVIDER_CODE.test(value)) out[key] = value
       continue
     }
     if (key === 'httpStatus') {
