@@ -7,6 +7,10 @@ const gateState = vi.hoisted(() => ({
 }))
 
 vi.mock('server-only', () => ({}))
+// Policy-block audit writes need a Supabase service role; the gate tests must not depend on env.
+vi.mock('@/lib/ads/google-ads-audit', () => ({
+  recordGoogleAdsPolicyBlock: vi.fn(async () => undefined),
+}))
 vi.mock('@/lib/ads/google-route-utils', async () => {
   const { resolveGoogleAdsAccess } = await vi.importActual<typeof import('@/lib/ads/env')>('@/lib/ads/env')
   return {

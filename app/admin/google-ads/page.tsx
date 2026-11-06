@@ -9,6 +9,7 @@ import {
 } from '@/lib/ads/env'
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const GOOGLE_ACCESS_LEVEL_CODE = 'google_access_level_insufficient'
 
 type AuditRow = {
   id: string
@@ -80,6 +81,8 @@ export default async function AdminGoogleAdsPage() {
     if (reason !== 'unknown') errorCounts.set(reason, (errorCounts.get(reason) ?? 0) + 1)
   }
 
+  const accessLevelCount = errorCounts.get(GOOGLE_ACCESS_LEVEL_CODE) ?? 0
+
   const perUser = new Map<string, { connections: number; attempts: number }>()
   for (const row of connections) {
     const current = perUser.get(row.user_id) ?? { connections: 0, attempts: 0 }
@@ -121,11 +124,16 @@ export default async function AdminGoogleAdsPage() {
         </Alert>
       ) : null}
 
-      <section aria-label="Yayınlama ölçümleri" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Yayınlama ölçümleri" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard label="Son 24 saatteki denemeler" value={queryFailed ? '—' : attemptsResult.count ?? 0} detail={queryFailed ? 'Veri alınamadı' : `${successCount} başarılı · ${failureCount} başarısız`} />
         <MetricCard label="Yayınlanan kampanya kayıtları (bilgi)" value={queryFailed ? '—' : campaignsResult.count ?? 0} detail="Yalnızca bilgilendirme; yayınlamayı sınırlamaz" />
         <MetricCard label="Etkin bağlantılar" value={queryFailed ? '—' : connections.length} detail={queryFailed ? 'Veri alınamadı' : `${perUser.size} kullanıcıda bağlı hesap var`} />
         <MetricCard label="Uzlaştırma bekleyenler" value={queryFailed ? '—' : reconcilingResult.count ?? 0} detail="Google Ads ile eşleştirme gerekli" />
+        <MetricCard
+          label="Google erişimi onaylanmadı (24 saat)"
+          value={queryFailed ? '—' : accessLevelCount}
+          detail={queryFailed ? 'Veri alınamadı' : `Kod: ${GOOGLE_ACCESS_LEVEL_CODE}`}
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

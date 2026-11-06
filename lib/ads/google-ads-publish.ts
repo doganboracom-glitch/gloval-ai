@@ -133,6 +133,7 @@ export type GoogleAdsPublishFailureReason =
   | 'api_quota_exceeded'
   | 'quota_check_failed'
   | 'not_authorized'
+  | 'google_access_level_insufficient'
   | 'configuration_missing'
   | 'status_update_failed'
   | 'plan_changed'
@@ -259,6 +260,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'api_quota_exceeded',
       'quota_check_failed',
       'not_authorized',
+      'google_access_level_insufficient',
       'configuration_missing',
       'status_update_failed',
       'plan_changed',

@@ -20,6 +20,7 @@ export type GoogleAdsErrorCode =
   | 'quota_check_failed'
   | 'reauth_required'
   | 'not_authorized'
+  | 'google_access_level_insufficient'
   | 'account_list_failed'
   | 'provider_unavailable'
   | 'provider_error'
@@ -71,6 +72,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'not_authenticated':
       return 401
     case 'csrf_failed':
+    case 'google_access_level_insufficient':
       return 403
     case 'rate_limited':
     case 'connection_limit_exceeded':
