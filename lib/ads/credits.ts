@@ -157,13 +157,13 @@ export async function beginAdsGooglePublishE2(
     expectedVersion: number
     approvalId: string
     approvalHash: string
-    userDailyBudgetLimitMinor: number
+    userDailyBudgetLimitMinor: number | null
     approvalSummary: GoogleAdsApprovalSummary
   },
   client: AdsRpcClient = defaultClient(),
 ): Promise<AdsPublishBeginResult> {
   adsChargeReason('publish', input.requestId)
-  const { data, error } = await client.rpc('ads_begin_google_ads_publish_e2', {
+  const { data, error } = await client.rpc('ads_begin_google_ads_publish_v2', {
     p_user_id: input.userId,
     p_plan_id: input.planId,
     p_request_id: input.requestId,

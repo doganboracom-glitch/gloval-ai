@@ -13,12 +13,7 @@ import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText, PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { fold } from '@/lib/visual-subjects'
 
-/**
- * Turns a public scan result into the Google Ads workspace form, and enforces
- * Google Ads length/count rules plus the server budget ceiling in code. It is
- * pure: the caller passes the account currency and the server cap, so this runs
- * the same way in a route and in tests.
- */
+/** Turns a public scan result into an editable, uncapped Google Ads workspace suggestion. */
 
 const MAX_BRAND = 80
 const MAX_SECTOR_LABEL = 60
@@ -89,9 +84,6 @@ export type SuggestedBudget = {
   currency: string
   dailyMinor: number
   capMinor: number
-  serverCapMinor: number
-  /** True when the suggestion was lowered to the server ceiling. */
-  clamped: boolean
   /** True when the amount was converted from TRY with a rough factor. */
   approximate: boolean
 }
@@ -99,7 +91,7 @@ export type SuggestedBudget = {
 export type PlanSuggestion = {
   plan: SuggestedPlan
   budget: SuggestedBudget | null
-  budgetIssue: 'cap_not_configured' | null
+  budgetIssue: 'budget_limit_exceeded' | null
   adjustments: { headlinesDropped: number; descriptionsDropped: number; toppedUp: boolean }
 }
 
@@ -176,31 +168,19 @@ function topUpDescriptions(current: string[], input: ScanResultInput, brand: str
 export function suggestDailyBudget(input: {
   scanDailyTry: number
   currency: string
-  serverCapMinor: number | null
-}): SuggestedBudget | null {
-  if (!input.serverCapMinor) return null
+}): SuggestedBudget {
   const unit = 10 ** currencyDigits(input.currency)
   const factor = APPROX_PER_TRY[input.currency]
   const approximate = input.currency !== 'TRY'
   const wantedMajor = factor === undefined ? FALLBACK_DAILY_MAJOR : input.scanDailyTry * factor
-  const wantedDaily = Math.max(unit, Math.round(wantedMajor * unit))
-  const wantedCap = Math.max(wantedDaily, wantedDaily * MAX_DAILY_SPEND_FACTOR)
-
-  const dailyMinor = Math.min(wantedDaily, input.serverCapMinor)
-  const capMinor = Math.max(dailyMinor, Math.min(wantedCap, input.serverCapMinor))
-  return {
-    currency: input.currency,
-    dailyMinor,
-    capMinor,
-    serverCapMinor: input.serverCapMinor,
-    clamped: dailyMinor < wantedDaily || capMinor < wantedCap,
-    approximate,
-  }
+  const dailyMinor = Math.max(unit, Math.round(wantedMajor * unit))
+  const capMinor = Math.max(dailyMinor, dailyMinor * MAX_DAILY_SPEND_FACTOR)
+  return { currency: input.currency, dailyMinor, capMinor, approximate }
 }
 
 export function buildPlanSuggestion(
   raw: unknown,
-  options: { currency: string | null; serverCapMinor: number | null },
+  options: { currency: string | null; budgetSanityCeilingMinor: number | null },
 ): PlanSuggestionResult {
   const parsed = scanResultInputSchema.safeParse(raw)
   if (!parsed.success) return { ok: false, error: 'invalid_request' }
@@ -264,15 +244,19 @@ export function buildPlanSuggestion(
     return { ok: false, error: 'invalid_publish_plan' }
   }
 
-  const budget = options.currency
-    ? suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency, serverCapMinor: options.serverCapMinor })
+  const suggestedBudget = options.currency
+    ? suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency })
     : null
+  const exceedsSanityCeiling = Boolean(
+    suggestedBudget && options.budgetSanityCeilingMinor !== null
+      && suggestedBudget.dailyMinor > options.budgetSanityCeilingMinor,
+  )
   return {
     ok: true,
     suggestion: {
       plan,
-      budget,
-      budgetIssue: options.currency && !options.serverCapMinor ? 'cap_not_configured' : null,
+      budget: exceedsSanityCeiling ? null : suggestedBudget,
+      budgetIssue: exceedsSanityCeiling ? 'budget_limit_exceeded' : null,
       adjustments: {
         headlinesDropped: headlineResult.dropped,
         descriptionsDropped: descriptionResult.dropped,

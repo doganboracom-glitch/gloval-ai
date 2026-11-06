@@ -1,20 +1,14 @@
 import 'server-only'
 
-import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import {
-  resolveGoogleAdsPublishDailyBudgetCapMinor,
+  resolveGoogleAdsBudgetSanityCeilingMinor,
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsKillSwitch,
-  resolveGoogleAdsPublishLimits,
   type GoogleAdsAccessIdentity,
 } from '@/lib/ads/env'
 import { recordGoogleAdsPolicyBlock } from '@/lib/ads/google-ads-audit'
-import {
-  finishGoogleAdsCampaignEnableCapacity,
-  reserveGoogleAdsCampaignEnableCapacity,
-} from '@/lib/ads/google-publish-capacity'
 import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText } from '@/lib/ads/planner'
@@ -206,7 +200,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         throw new GoogleAdsError('plan_changed')
       }
 
-      const userDailyBudgetLimitMinor = resolveGoogleAdsPublishDailyBudgetCapMinor(currency)
+      const budgetSanityCeilingMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
       const target: Record<string, unknown> = {}
       let actionType: string
       const planAction = input.action
@@ -233,13 +227,14 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         if (!Number.isSafeInteger(dailyBudgetMinor) || (dailyBudgetMinor ?? 0) <= 0) {
           throw new GoogleAdsError('invalid_budget')
         }
-        if (!userDailyBudgetLimitMinor || dailyBudgetMinor! > userDailyBudgetLimitMinor) {
+        if (budgetSanityCeilingMinor !== null && dailyBudgetMinor! > budgetSanityCeilingMinor) {
+          await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'budget_limit_exceeded', operation: 'budget_sanity_ceiling' })
           throw new GoogleAdsError('budget_limit_exceeded')
         }
         buildGoogleAdsApprovalSummary({
           currency,
           dailyBudgetMinor: dailyBudgetMinor as number,
-          budgetCapMinor: userDailyBudgetLimitMinor,
+          budgetCapMinor: Math.max(dailyBudgetMinor as number, plan.budget_cap_minor ?? dailyBudgetMinor as number),
         })
         target.dailyBudgetMinor = dailyBudgetMinor
         target.dailyBudgetMicros = googleAdsMicrosFromMinorUnits(dailyBudgetMinor as number, currency)
@@ -271,7 +266,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
 
       const admin = createAdminClient()
       const rpc = admin as unknown as AdsRpcClient
-      const { data: beginData, error: beginError } = await rpc.rpc('ads_begin_google_ads_campaign_action_e2', {
+      const { data: beginData, error: beginError } = await rpc.rpc('ads_begin_google_ads_campaign_action_v2', {
         p_user_id: input.userId,
         p_plan_id: plan.id,
         p_action_id: input.actionId,
@@ -280,7 +275,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         p_approval_hash: approvalHash,
         p_target: target,
         p_before_state: before,
-        p_user_daily_budget_limit_minor: userDailyBudgetLimitMinor,
+        p_user_daily_budget_limit_minor: budgetSanityCeilingMinor,
         p_user_confirmed: true,
       }).maybeSingle()
       if (beginError || !beginData) throw new GoogleAdsError('status_update_failed')
@@ -292,30 +287,6 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         throw new GoogleAdsError('publish_in_progress')
       }
       const actionId = begin.action_id ?? input.actionId
-      let enableCapacityActionId: string | null = null
-      if (input.action === 'enable') {
-        try {
-          const capacity = await reserveGoogleAdsCampaignEnableCapacity({
-            userId: input.userId,
-            planId: plan.id,
-            connectionId: connection.id,
-            requestId: randomUUID(),
-            limits: resolveGoogleAdsPublishLimits(),
-          })
-          enableCapacityActionId = capacity.actionId
-        } catch (error) {
-          const reason = error instanceof GoogleAdsError ? error.code : 'quota_check_failed'
-          await rpc.rpc('ads_finish_google_ads_campaign_action_e2', {
-            p_user_id: input.userId,
-            p_action_id: actionId,
-            p_result: 'failed',
-            p_after_state: null,
-            p_failure_reason: reason,
-          }).maybeSingle()
-          throw error
-        }
-      }
-
       const mutationInput = {
         externalAccountId: connection.external_account_id,
         loginCustomerId: connection.login_customer_id,
@@ -387,21 +358,13 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         if (!(error instanceof GoogleAdsError) || error.code === 'provider_unavailable') {
           throw error
         }
-        await rpc.rpc('ads_finish_google_ads_campaign_action_e2', {
+        await rpc.rpc('ads_finish_google_ads_campaign_action_v2', {
           p_user_id: input.userId,
           p_action_id: actionId,
           p_result: 'failed',
           p_after_state: null,
           p_failure_reason: error.code,
         }).maybeSingle()
-        if (enableCapacityActionId) {
-          await finishGoogleAdsCampaignEnableCapacity({
-            userId: input.userId,
-            actionId: enableCapacityActionId,
-            outcome: 'failure',
-            reasonCode: error.code,
-          })
-        }
         throw error
       }
 
@@ -423,7 +386,7 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
         context: access.context,
       }).then(snapshotState).catch(() => fallbackAfter)
       const afterState = { ...after }
-      const { data: finishData, error: finishError } = await rpc.rpc('ads_finish_google_ads_campaign_action_e2', {
+      const { data: finishData, error: finishError } = await rpc.rpc('ads_finish_google_ads_campaign_action_v2', {
         p_user_id: input.userId,
         p_action_id: actionId,
         p_result: 'applied',
@@ -434,14 +397,6 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
       if (finishError || !finish || (finish as { state?: string }).state !== 'applied') {
         throw new GoogleAdsError('status_update_failed')
       }
-      if (enableCapacityActionId) {
-        await finishGoogleAdsCampaignEnableCapacity({
-          userId: input.userId,
-          actionId: enableCapacityActionId,
-          outcome: 'success',
-        })
-      }
-
       return {
         actionId,
         approvalHash,

@@ -391,6 +391,54 @@ describe('Google Ads E2 publish service', () => {
     expect(deps.markFailed).not.toHaveBeenCalled()
   })
 
+  it('publishes an approved budget when no sanity ceiling is configured', async () => {
+    const noCeilingHash = createGoogleAdsPlanApprovalHash({
+      userId: USER_ID,
+      planId: PLAN_ID,
+      planVersion: 1,
+      connectionId: CONNECTION_ID,
+      customerId: '1234567890',
+      currency: 'TRY',
+      dailyBudgetMinor: 15000,
+      budgetCapMinor: 90000,
+      userDailyBudgetCapMinor: null,
+      plan: APPROVED_PLAN,
+    })
+    const { service, deps } = setup({
+      plan: plan({
+        approval_hash: noCeilingHash,
+        validation_hash: noCeilingHash,
+        approval_user_daily_budget_limit_minor: null,
+      }),
+    })
+
+    expect(await service.publish({ ...confirmedPublish, approvalHash: noCeilingHash }))
+      .toMatchObject({ ok: true, state: 'published', creditsCharged: 15 })
+    expect(deps.beginPublish).toHaveBeenCalledWith(
+      USER_ID,
+      PLAN_ID,
+      REQUEST_ID,
+      1,
+      expect.any(Object),
+      APPROVAL_ID,
+      noCeilingHash,
+      null,
+    )
+  })
+
+  it('rejects amounts above an explicitly configured sanity ceiling with the support error', async () => {
+    vi.stubEnv('GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR', '10000')
+    try {
+      const { service, deps, provider } = setup()
+
+      expect(await service.publish(confirmedPublish)).toMatchObject({ ok: false, reason: 'budget_limit_exceeded' })
+      expect(deps.beginPublish).not.toHaveBeenCalled()
+      expect(provider.publishCampaign).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('does not call Google when the user has insufficient credits', async () => {
     const { service, deps, provider } = setup({
       beginPublishResult: { ok: false, reason: 'insufficient_credits', balance: 2 },

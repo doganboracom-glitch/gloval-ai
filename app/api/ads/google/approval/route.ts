@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
 import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
-import { resolveGoogleAdsPublishDailyBudgetCapMinor } from '@/lib/ads/env'
+import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
 import { isSupportedGoogleAdsCurrency } from '@/lib/ads/google-ads-publish-plan'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
@@ -66,14 +66,11 @@ export async function POST(request: Request) {
     return googleAdsJson({ ok: false, error: 'unsupported_currency' }, 400)
   }
 
-  const userDailyBudgetCapMinor = resolveGoogleAdsPublishDailyBudgetCapMinor(connection.currency_code)
-  if (!userDailyBudgetCapMinor) {
-    return googleAdsJson({ ok: false, error: 'budget_limit_not_configured' }, 503)
-  }
+  const userDailyBudgetCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
   if (
     !Number.isSafeInteger(planRow.daily_budget_minor) ||
     !Number.isSafeInteger(planRow.budget_cap_minor) ||
-    (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor
+    (userDailyBudgetCapMinor !== null && (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor)
   ) {
     return googleAdsJson({ ok: false, error: 'budget_limit_exceeded' }, 400)
   }
@@ -112,7 +109,7 @@ export async function POST(request: Request) {
   })
 
   const rpc = admin as unknown as AdsRpcClient
-  const { data, error } = await rpc.rpc('ads_approve_google_ads_plan_e2', {
+  const { data, error } = await rpc.rpc('ads_approve_google_ads_plan_v2', {
     p_user_id: gate.userId,
     p_plan_id: planRow.id,
     p_expected_version: planRow.version,

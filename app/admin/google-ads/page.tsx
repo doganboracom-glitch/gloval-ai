@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   resolveGoogleAdsAccessMode,
+  resolveGoogleAdsBudgetSanityCeilingMinor,
   resolveGoogleAdsKillSwitch,
   resolveGoogleAdsPublishLimits,
 } from '@/lib/ads/env'
@@ -17,11 +18,12 @@ type AuditRow = {
   status: string
   target: Record<string, unknown> | null
   after_state: Record<string, unknown> | null
+  failure_reason: string | null
   created_at: string
 }
 
 function safeReason(row: AuditRow) {
-  const value = row.after_state?.reason_code ?? row.target?.reason_code
+  const value = row.after_state?.reason_code ?? row.target?.reason_code ?? row.failure_reason
   return typeof value === 'string' && /^[a-z0-9_]{1,64}$/.test(value) ? value : 'unknown'
 }
 
@@ -32,15 +34,15 @@ function timeLabel(value: string) {
 export default async function AdminGoogleAdsPage() {
   const admin = createAdminClient()
   const since = new Date(Date.now() - DAY_MS).toISOString()
-  const [attemptsResult, blockedResult, connectionsResult, campaignsResult, reconcilingResult, enableHoldsResult] = await Promise.all([
+  const [attemptsResult, blockedResult, connectionsResult, campaignsResult, reconcilingResult, successfulAttemptsResult, failedAttemptsResult] = await Promise.all([
     admin.from('ads_actions')
-      .select('id,user_id,action_type,status,target,after_state,created_at')
-      .eq('action_type', 'google_ads_publish_attempt_reserved')
+      .select('id,user_id,action_type,status,target,after_state,failure_reason,created_at', { count: 'exact' })
+      .eq('action_type', 'google_ads_publish_attempt_reserved_v2')
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(5_000),
     admin.from('ads_actions')
-      .select('id,user_id,action_type,status,target,after_state,created_at')
+      .select('id,user_id,action_type,status,target,after_state,failure_reason,created_at')
       .in('action_type', ['google_ads_publish_blocked', 'google_ads_policy_blocked'])
       .gte('created_at', since)
       .order('created_at', { ascending: false })
@@ -49,25 +51,30 @@ export default async function AdminGoogleAdsPage() {
     admin.from('ads_plans')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'published')
-      .in('google_campaign_status', ['ENABLED', 'PAUSED'])
       .not('external_campaign_id', 'is', null),
     admin.from('ads_plans')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'reconciling'),
     admin.from('ads_actions')
       .select('id', { count: 'exact', head: true })
-      .eq('action_type', 'google_ads_campaign_enable_capacity_reserved')
-      .eq('status', 'proposed'),
+      .eq('action_type', 'google_ads_publish_attempt_reserved_v2')
+      .eq('status', 'applied')
+      .gte('created_at', since),
+    admin.from('ads_actions')
+      .select('id', { count: 'exact', head: true })
+      .eq('action_type', 'google_ads_publish_attempt_reserved_v2')
+      .eq('status', 'failed')
+      .gte('created_at', since),
   ])
 
   const queryFailed = Boolean(
-    attemptsResult.error || blockedResult.error || connectionsResult.error || campaignsResult.error || reconcilingResult.error || enableHoldsResult.error,
+    attemptsResult.error || blockedResult.error || connectionsResult.error || campaignsResult.error || reconcilingResult.error || successfulAttemptsResult.error || failedAttemptsResult.error,
   )
   const attempts = (attemptsResult.data ?? []) as AuditRow[]
   const blocked = (blockedResult.data ?? []) as AuditRow[]
   const connections = connectionsResult.data ?? []
-  const successCount = attempts.filter((row) => row.status === 'applied').length
-  const failureCount = attempts.filter((row) => row.status === 'failed').length
+  const successCount = successfulAttemptsResult.count ?? 0
+  const failureCount = failedAttemptsResult.count ?? 0
   const errorCounts = new Map<string, number>()
   for (const row of [...attempts, ...blocked]) {
     const reason = safeReason(row)
@@ -87,6 +94,7 @@ export default async function AdminGoogleAdsPage() {
   }
 
   const limits = resolveGoogleAdsPublishLimits()
+  const budgetSanityCeilingMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
   const accessMode = resolveGoogleAdsAccessMode()
   const killSwitchEnabled = resolveGoogleAdsKillSwitch()
   const publishEnabled = process.env.GOOGLE_ADS_PUBLISH_ENABLED?.trim() === '1'
@@ -115,12 +123,11 @@ export default async function AdminGoogleAdsPage() {
         </Alert>
       ) : null}
 
-      <section aria-label="Yayınlama ölçümleri" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Son 24 saatteki denemeler" value={queryFailed ? '—' : attempts.length} detail={queryFailed ? 'Veri alınamadı' : `${successCount} başarılı · ${failureCount} başarısız`} />
-        <MetricCard label="Etkin kampanyalar" value={queryFailed ? '—' : campaignsResult.count ?? 0} detail="ENABLED ve PAUSED sayılır; REMOVED sayılmaz" />
+      <section aria-label="Yayınlama ölçümleri" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Son 24 saatteki denemeler" value={queryFailed ? '—' : attemptsResult.count ?? 0} detail={queryFailed ? 'Veri alınamadı' : `${successCount} başarılı · ${failureCount} başarısız`} />
+        <MetricCard label="Yayınlanan kampanya kayıtları (bilgi)" value={queryFailed ? '—' : campaignsResult.count ?? 0} detail="Yalnızca bilgilendirme; yayınlamayı sınırlamaz" />
         <MetricCard label="Etkin bağlantılar" value={queryFailed ? '—' : connections.length} detail={queryFailed ? 'Veri alınamadı' : `${perUser.size} kullanıcıda bağlı hesap var`} />
         <MetricCard label="Uzlaştırma bekleyenler" value={queryFailed ? '—' : reconcilingResult.count ?? 0} detail="Google Ads ile eşleştirme gerekli" />
-        <MetricCard label="Etkinleştirme rezervasyonları" value={queryFailed ? '—' : enableHoldsResult.count ?? 0} detail="Tamamlanana kadar etkin kampanya limitinde tutulur" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -133,9 +140,9 @@ export default async function AdminGoogleAdsPage() {
             <ConfigLine label="Erişim modu" value={accessMode} />
             <ConfigLine label="Genel yayınlama" value={publishEnabled ? 'Açık' : 'Kapalı'} />
             <ConfigLine label="Acil durdurma" value={killSwitchEnabled ? 'Etkin' : 'Devre dışı'} />
-            <ConfigLine label="Kullanıcı başına en fazla kampanya" value={limits.maxActiveCampaignsPerUser} />
             <ConfigLine label="Kullanıcı başına deneme / 24 saat" value={limits.dailyAttemptsPerUser} />
-            <ConfigLine label="Genel deneme / 24 saat" value={limits.dailyAttemptsGlobal} />
+            <ConfigLine label="Genel deneme / 24 saat" value={limits.dailyAttemptsGlobal ?? 'Sınırsız'} />
+            <ConfigLine label="Bütçe güvenlik tavanı" value={budgetSanityCeilingMinor ?? 'Sınırsız'} />
           </CardContent>
         </Card>
 

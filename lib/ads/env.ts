@@ -20,7 +20,6 @@ export const ADS_ENV = {
   googleAdsOAuthRedirectUri: 'GOOGLE_ADS_OAUTH_REDIRECT_URI',
   googleAdsAccessMode: 'GOOGLE_ADS_ACCESS_MODE',
   googleAdsKillSwitch: 'GOOGLE_ADS_KILL_SWITCH',
-  googleAdsMaxActiveCampaignsPerUser: 'GOOGLE_ADS_MAX_ACTIVE_CAMPAIGNS_PER_USER',
   googleAdsPublishDailyUserLimit: 'GOOGLE_ADS_PUBLISH_DAILY_USER_LIMIT',
   googleAdsPublishDailyGlobalLimit: 'GOOGLE_ADS_PUBLISH_DAILY_GLOBAL_LIMIT',
   googleAdsConnectEnabled: 'ADS_GOOGLE_CONNECT_ENABLED',
@@ -31,7 +30,7 @@ export const ADS_ENV = {
   googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
-  googleAdsPublishDailyBudgetCapsMinor: 'GOOGLE_ADS_PUBLISH_DAILY_BUDGET_CAPS_MINOR',
+  googleAdsBudgetSanityCeilingMinor: 'GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR',
   googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
 } as const
 
@@ -183,49 +182,44 @@ export function resolveGoogleAdsKillSwitch(env: Env = process.env): boolean {
   return env[ADS_ENV.googleAdsKillSwitch]?.trim() === '1'
 }
 
+const POSTGRES_INTEGER_MAX = 2_147_483_647
+
+function resolveOptionalPublishAttemptLimit(raw: string | undefined, fallback: number | null): number | null {
+  const value = raw?.trim()
+  if (!value) return fallback
+  if (!/^\d{1,10}$/.test(value)) return fallback
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= POSTGRES_INTEGER_MAX ? parsed : fallback
+}
+
 export type GoogleAdsPublishLimits = {
-  maxActiveCampaignsPerUser: number
   dailyAttemptsPerUser: number
-  dailyAttemptsGlobal: number
+  dailyAttemptsGlobal: number | null
 }
 
 export function resolveGoogleAdsPublishLimits(env: Env = process.env): GoogleAdsPublishLimits {
   return {
-    maxActiveCampaignsPerUser: resolvePositiveLimit(
-      env[ADS_ENV.googleAdsMaxActiveCampaignsPerUser], 2, 10,
-    ),
-    dailyAttemptsPerUser: resolvePositiveLimit(
-      env[ADS_ENV.googleAdsPublishDailyUserLimit], 5, 100,
-    ),
-    dailyAttemptsGlobal: resolvePositiveLimit(
-      env[ADS_ENV.googleAdsPublishDailyGlobalLimit], 100, 5_000,
+    dailyAttemptsPerUser: resolveOptionalPublishAttemptLimit(
+      env[ADS_ENV.googleAdsPublishDailyUserLimit], 30,
+    ) ?? 30,
+    dailyAttemptsGlobal: resolveOptionalPublishAttemptLimit(
+      env[ADS_ENV.googleAdsPublishDailyGlobalLimit], null,
     ),
   }
+}
+
+/** A missing ceiling means no application budget ceiling; malformed values fail closed. */
+export function resolveGoogleAdsBudgetSanityCeilingMinor(env: Env = process.env): number | null {
+  const raw = env[ADS_ENV.googleAdsBudgetSanityCeilingMinor]?.trim()
+  if (!raw) return null
+  if (!/^\d{1,10}$/.test(raw)) return 0
+  const parsed = Number(raw)
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= POSTGRES_INTEGER_MAX ? parsed : 0
 }
 
 /** Separate, fail-closed gate for the admin-only Google Ads validate_only test route. */
 export function resolveGoogleAdsValidateOnlyTestEnabled(env: Env = process.env): boolean {
   return env[ADS_ENV.googleAdsValidateOnlyTestEnabled]?.trim() === '1'
-}
-
-/** Fail closed until an explicit per-currency daily budget cap is configured. */
-export function resolveGoogleAdsPublishDailyBudgetCapMinor(
-  currency: string,
-  env: Env = process.env,
-): number | null {
-  if (!/^[A-Z]{3}$/.test(currency)) return null
-  const raw = env[ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]?.trim()
-  if (!raw || raw.length > 400) return null
-
-  const caps = new Map<string, number>()
-  for (const entry of raw.split(',')) {
-    const match = /^([A-Z]{3})=(\d{1,12})$/.exec(entry.trim())
-    if (!match) return null
-    const amount = Number(match[2])
-    if (!Number.isSafeInteger(amount) || amount <= 0 || caps.has(match[1])) return null
-    caps.set(match[1], amount)
-  }
-  return caps.get(currency) ?? null
 }
 
 export type GoogleAdsOAuthSettingsResult =

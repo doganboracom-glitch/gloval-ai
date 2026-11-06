@@ -40,7 +40,6 @@ export type GoogleAdsErrorCode =
   | 'disconnect_failed'
   | 'status_update_failed'
   | 'unsupported_currency'
-  | 'active_campaign_limit_reached'
   | 'user_publish_limit_reached'
   | 'global_publish_limit_reached'
   | 'kill_switch_active'
@@ -82,8 +81,7 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'flow_expired':
       return 404
     case 'connection_busy':
-    case 'active_campaign_limit_reached':
-    case 'terms_reaccept_required':
+      case 'terms_reaccept_required':
     case 'plan_changed':
   case 'plan_not_approved':
   case 'confirmation_required':

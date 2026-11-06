@@ -276,8 +276,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-    budget_limit_exceeded: 'Bu plan, kullanıcı için ayarlı toplam günlük bütçe sınırını aşacak.',
-    budget_limit_not_configured: 'Bu para birimi için günlük üst sınır yapılandırılmamış.',
+  budget_limit_exceeded: 'Bu tutar isteğe bağlı güvenlik tavanını aşıyor. Yardım için destek ekibiyle iletişime geçin.',
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -302,9 +301,8 @@ function errorText(code: string | undefined, isTr: boolean): string {
     site_policy_blocked: 'Açılış sayfası yayınlama güvenlik denetiminden geçemedi. İçeriği veya URL’yi kontrol edin.',
     publish_disabled: 'Google Ads erişimi veya yayınlama izni bu kullanıcı için etkin değil.',
     kill_switch_active: 'Güvenlik nedeniyle Google Ads yayınlama geçici olarak durduruldu.',
-    active_campaign_limit_reached: 'Kullanıcı başına etkin kampanya sınırına ulaşıldı.',
-    user_publish_limit_reached: '24 saatlik kullanıcı yayın denemesi sınırına ulaşıldı.',
-    global_publish_limit_reached: '24 saatlik genel yayın denemesi sınırına ulaşıldı.',
+  user_publish_limit_reached: '24 saat içindeki yayın denemesi kotanız doldu. Lütfen daha sonra tekrar deneyin.',
+  global_publish_limit_reached: 'Google Ads için genel 24 saatlik yayın denemesi kotası doldu. Lütfen daha sonra tekrar deneyin.',
     unsupported_currency: 'Yalnızca TRY, USD ve EUR ile yayın yapılabilir.',
     currency_mismatch: 'Google Ads hesabının para birimi planla eşleşmiyor.',
     terms_reaccept_required: 'Yayın koşulları güncellendi. Devam etmeden önce tekrar kabul edin.',
@@ -313,8 +311,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-    budget_limit_exceeded: 'This plan would exceed the configured aggregate daily budget limit for the user.',
-    budget_limit_not_configured: 'A daily cap is not configured for this currency.',
+  budget_limit_exceeded: 'This amount exceeds the optional safety ceiling. Contact support for assistance.',
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -339,9 +336,8 @@ function errorText(code: string | undefined, isTr: boolean): string {
     site_policy_blocked: 'The landing page did not pass the publishing security check. Review its content or URL.',
     publish_disabled: 'Google Ads access or publishing is not enabled for this user.',
     kill_switch_active: 'Google Ads publishing is temporarily stopped for safety.',
-    active_campaign_limit_reached: 'The per-user active campaign limit has been reached.',
-    user_publish_limit_reached: 'The 24-hour per-user publish attempt limit has been reached.',
-    global_publish_limit_reached: 'The 24-hour global publish attempt limit has been reached.',
+    user_publish_limit_reached: 'Your 24-hour publish attempt quota is used. Please try again later.',
+    global_publish_limit_reached: 'The global 24-hour Google Ads publish attempt quota is used. Please try again later.',
     unsupported_currency: 'Publishing supports TRY, USD, and EUR only.',
     currency_mismatch: 'The Google Ads account currency does not match this plan.',
     terms_reaccept_required: 'The publishing terms changed. Accept the current terms before continuing.',
@@ -668,11 +664,6 @@ export function GoogleAdsWorkspace({
       if (!suggestion) throw new WorkspaceApiError('provider_error')
       const currency = suggestion.budget?.currency ?? selectedConnection.currency ?? 'TRY'
       const nextNotices: string[] = []
-      if (suggestion.budget?.clamped) {
-        nextNotices.push(isTr
-          ? `Önerilen bütçe, sunucudaki üst sınır olan ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, true)} / gün değerine indirildi.`
-          : `The suggested budget was lowered to the server ceiling of ${formatCurrencyAmount(suggestion.budget.serverCapMinor, currency, false)} / day.`)
-      }
       if (suggestion.budget?.approximate) {
         nextNotices.push(isTr
           ? 'Bütçe, hesabınızın para birimine yaklaşık dönüşümle hesaplandı. Kaydetmeden önce kontrol edin.'

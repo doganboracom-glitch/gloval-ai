@@ -115,24 +115,27 @@ describe('Google Ads access configuration', () => {
     expect(adminDecision).toEqual({ mode: 'off', canConnect: true, canPublish: true, isAdmin: true })
   })
 
-  it('keeps publish kill switch and rate caps strict with bounded safe defaults', () => {
+  it('keeps publish attempts abuse-only with a 30-per-user default and no global default', () => {
     expect(resolveGoogleAdsKillSwitch({ GOOGLE_ADS_KILL_SWITCH: '1' })).toBe(true)
     expect(resolveGoogleAdsKillSwitch({ GOOGLE_ADS_KILL_SWITCH: 'true' })).toBe(false)
     expect(resolveGoogleAdsPublishLimits({})).toEqual({
-      maxActiveCampaignsPerUser: 2,
-      dailyAttemptsPerUser: 5,
-      dailyAttemptsGlobal: 100,
+      dailyAttemptsPerUser: 30,
+      dailyAttemptsGlobal: null,
     })
     expect(resolveGoogleAdsPublishLimits({
-      GOOGLE_ADS_MAX_ACTIVE_CAMPAIGNS_PER_USER: '3',
-      GOOGLE_ADS_PUBLISH_DAILY_USER_LIMIT: '20',
-      GOOGLE_ADS_PUBLISH_DAILY_GLOBAL_LIMIT: '500',
+      GOOGLE_ADS_PUBLISH_DAILY_USER_LIMIT: '250',
+      GOOGLE_ADS_PUBLISH_DAILY_GLOBAL_LIMIT: '20000',
     })).toEqual({
-      maxActiveCampaignsPerUser: 3,
-      dailyAttemptsPerUser: 20,
-      dailyAttemptsGlobal: 500,
+      dailyAttemptsPerUser: 250,
+      dailyAttemptsGlobal: 20000,
     })
-    expect(resolveGoogleAdsPublishLimits({ GOOGLE_ADS_MAX_ACTIVE_CAMPAIGNS_PER_USER: '11' }).maxActiveCampaignsPerUser).toBe(2)
+    expect(resolveGoogleAdsPublishLimits({
+      GOOGLE_ADS_PUBLISH_DAILY_USER_LIMIT: '',
+      GOOGLE_ADS_PUBLISH_DAILY_GLOBAL_LIMIT: '',
+    })).toEqual({
+      dailyAttemptsPerUser: 30,
+      dailyAttemptsGlobal: null,
+    })
   })
 
   it('keeps publishing disabled unless both explicit gates are configured', () => {

@@ -20,6 +20,7 @@ import {
   resolveGoogleAdsOAuthSettings,
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsValidateOnlyTestEnabled,
+  resolveGoogleAdsBudgetSanityCeilingMinor,
   resolveGoogleAdsKillSwitch,
   resolveGoogleAdsPublishLimits,
   type GoogleAdsAccessIdentity,
@@ -141,7 +142,6 @@ export type GoogleAdsPublishFailureReason =
   | 'ad_review_in_progress'
   | 'ad_review_status_unavailable'
   | 'kill_switch_active'
-  | 'active_campaign_limit_reached'
   | 'user_publish_limit_reached'
   | 'global_publish_limit_reached'
   | 'unsupported_currency'
@@ -194,7 +194,8 @@ export type GoogleAdsPublishServiceDeps = {
     approvalSummary: GoogleAdsApprovalSummary,
     approvalId: string,
     approvalHash: string,
-    userDailyBudgetLimitMinor: number,
+    userDailyBudgetLimitMinor: number | null
+,
   ) => Promise<AdsPublishBeginResult>
   markValidated: (input: {
     userId: string
@@ -270,8 +271,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'ad_review_in_progress',
       'ad_review_status_unavailable',
       'kill_switch_active',
-      'active_campaign_limit_reached',
-      'user_publish_limit_reached',
+          'user_publish_limit_reached',
       'global_publish_limit_reached',
       'unsupported_currency',
       'terms_reaccept_required',
@@ -298,6 +298,10 @@ function requirePlanBudget(plan: PublishPlanRow): { currency: string; dailyMinor
     (plan.daily_budget_minor ?? Number.MAX_SAFE_INTEGER) > (plan.budget_cap_minor ?? 0)
   ) {
     throw new GoogleAdsError('invalid_budget')
+  }
+  const budgetSanityCeilingMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
+  if (budgetSanityCeilingMinor !== null && (plan.daily_budget_minor ?? 0) > budgetSanityCeilingMinor) {
+    throw new GoogleAdsError('budget_limit_exceeded')
   }
   return {
     currency: plan.currency,
@@ -492,7 +496,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
       plan.version !== approvedVersion ||
       plan.approved_version !== approvedVersion
     ) return failed('plan_changed')
-    if (!plan.approval_id || !plan.approval_hash || !plan.approval_user_daily_budget_limit_minor) {
+    if (!plan.approval_id || !plan.approval_hash) {
       return failed('confirmation_required')
     }
     if (
@@ -655,7 +659,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
         !input.validateOnly &&
         (plan.validation_hash !== approvalHash || plan.validated_version !== expectedVersion)
       ) return failed('confirmation_required')
-      if (!plan.approval_id || !plan.approval_user_daily_budget_limit_minor) return failed('confirmation_required')
+      if (!plan.approval_id) return failed('confirmation_required')
     }
     const requestId = deps.createRequestId()
     if (!PLAN_ID_PATTERN.test(requestId)) return failed('invalid_request')
@@ -709,7 +713,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               currency: budget.currency,
               dailyBudgetMinor: budget.dailyMinor,
               budgetCapMinor: budget.capMinor,
-              userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor as number,
+              userDailyBudgetCapMinor: plan.approval_user_daily_budget_limit_minor ?? null,
               plan: planJson,
             })
             if (recomputedApprovalHash !== approvalHash) return failed('plan_changed')
@@ -781,7 +785,7 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               approvalSummary,
               plan.approval_id as string,
               approvalHash,
-              plan.approval_user_daily_budget_limit_minor as number,
+              plan.approval_user_daily_budget_limit_minor ?? null,
             )
           } catch {
             reservation = { ok: false, reason: 'reservation_failed', balance: 0 }
