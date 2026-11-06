@@ -1,21 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { ADS_ENV, resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
+import {
+  buildGoogleAdsApprovalSummary,
+  googleAdsMicrosFromMinorUnits,
+  maxGoogleAdsBudgetMinor,
+} from '@/lib/ads/google-ads-publish-plan'
 
-describe('optional Google Ads budget sanity ceiling', () => {
-  it('allows uncapped budgets when the optional setting is absent', () => {
-    expect(resolveGoogleAdsBudgetSanityCeilingMinor('TRY', {})).toBeNull()
+describe('Google Ads currency budget boundaries', () => {
+  it('accepts budgets above the old integer ceiling without a product cap', () => {
+    const summary = buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 2_147_483_648 })
+    expect(summary.dailyBudgetMinor).toBe(2_147_483_648)
+    expect(googleAdsMicrosFromMinorUnits(summary.dailyBudgetMinor, 'TRY')).toBe('21474836480000')
   })
 
-  it('reads optional currency-specific ceilings in minor units', () => {
-    const env = { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: 'TRY=250000,USD=12000' }
-    expect(resolveGoogleAdsBudgetSanityCeilingMinor('TRY', env)).toBe(250000)
-    expect(resolveGoogleAdsBudgetSanityCeilingMinor('USD', env)).toBe(12000)
-    expect(resolveGoogleAdsBudgetSanityCeilingMinor('EUR', env)).toBeNull()
+  it('accepts any positive minor-unit amount, including a fractional currency unit', () => {
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 1 }).dailyBudgetMinor).toBe(1)
+    expect(() => buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 0 }))
+      .toThrowError(expect.objectContaining({ code: 'invalid_budget' }))
   })
 
-  it('rejects malformed, duplicate, zero, fractional, or unsafe configured ceilings', () => {
-    for (const value of ['TRY=0', 'TRY=1.5', 'TRY=-4', 'TRY=nope', 'TRY=9007199254740992', 'TRY=1,TRY=2']) {
-      expect(() => resolveGoogleAdsBudgetSanityCeilingMinor('TRY', { [ADS_ENV.googleAdsPublishDailyBudgetCapsMinor]: value })).toThrow()
-    }
+  it('limits only amounts that cannot be represented exactly as Google Ads micros', () => {
+    const maximum = maxGoogleAdsBudgetMinor('TRY')
+    expect(Number.isSafeInteger(maximum)).toBe(true)
+    expect(googleAdsMicrosFromMinorUnits(maximum, 'TRY')).toBe(String(maximum * 10_000))
+    expect(() => googleAdsMicrosFromMinorUnits(maximum + 1, 'TRY'))
+      .toThrowError(expect.objectContaining({ code: 'invalid_budget' }))
+  })
+
+  it('uses zero-decimal currency precision', () => {
+    expect(googleAdsMicrosFromMinorUnits(3_000_000_000, 'KRW')).toBe('3000000000000000')
   })
 })

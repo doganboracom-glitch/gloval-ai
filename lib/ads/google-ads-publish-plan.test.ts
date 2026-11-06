@@ -33,7 +33,6 @@ const INPUT = {
   planJson: PLAN,
   requestId: '123e4567-e89b-42d3-a456-426614174002',
   dailyBudgetMinor: 15000,
-  budgetCapMinor: 90000,
   currency: 'TRY',
   validateOnly: false,
 }
@@ -87,13 +86,15 @@ describe('Google Ads publish plan compiler', () => {
   })
 
   it('calculates and rounds the Maximize Clicks CPC cap in the currency minor unit', () => {
-    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 15000, budgetCapMinor: 90000 }))
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 15000 }))
       .toMatchObject({ cpcBidCeilingMinor: 1500, cpcBidCeilingMicros: '15000000', currencyFractionDigits: 2 })
-    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 500, budgetCapMinor: 500 }))
-      .toMatchObject({ cpcBidCeilingMinor: 100, cpcBidCeilingMicros: '1000000' })
-    expect(buildGoogleAdsApprovalSummary({ currency: 'JPY', dailyBudgetMinor: 100, budgetCapMinor: 500 }))
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 500 }))
+      .toMatchObject({ cpcBidCeilingMinor: 50, cpcBidCeilingMicros: '500000' })
+    expect(buildGoogleAdsApprovalSummary({ currency: 'JPY', dailyBudgetMinor: 100 }))
       .toMatchObject({ cpcBidCeilingMinor: 10, cpcBidCeilingMicros: '10000000', currencyFractionDigits: 0 })
-    expect(() => buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 50, budgetCapMinor: 100 }))
+    expect(buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 50 }))
+      .toMatchObject({ cpcBidCeilingMinor: 5, cpcBidCeilingMicros: '50000' })
+    expect(() => buildGoogleAdsApprovalSummary({ currency: 'TRY', dailyBudgetMinor: 0 }))
       .toThrowError(expect.objectContaining({ code: 'invalid_budget' }))
   })
 
@@ -133,8 +134,10 @@ describe('Google Ads publish plan compiler', () => {
       .toThrowError(expect.objectContaining({ code: 'invalid_publish_plan' }))
   })
 
-  it('rejects a daily budget above the approved plan cap', () => {
-    expect(() => buildGoogleAdsMutateRequest({ ...INPUT, dailyBudgetMinor: 100000 }))
-      .toThrowError(expect.objectContaining({ code: 'invalid_budget' }))
+  it('does not cap a valid daily budget at the old plan reference amount', () => {
+    const request = buildGoogleAdsMutateRequest({ ...INPUT, dailyBudgetMinor: 100000 })
+    const budgetOperation = request.mutateOperations.find((operation) => 'campaignBudgetOperation' in operation)
+    expect((budgetOperation?.campaignBudgetOperation as { create: { amountMicros: string } }).create.amountMicros)
+      .toBe('1000000000')
   })
 })

@@ -44,7 +44,6 @@ type PlanRow = {
   eu_political_advertising: 'yes' | 'no' | null
   currency: string
   daily_budget_minor: number | null
-  budget_cap_minor: number | null
   google_daily_budget_minor: number | null
   external_campaign_id: string | null
   publish_billing_verified: boolean | null
@@ -93,7 +92,7 @@ type PlanForm = {
   displayUrl: string
 }
 
-type AiFieldKey = keyof PlanForm | 'dailyBudget' | 'budgetCap'
+type AiFieldKey = keyof PlanForm | 'dailyBudget'
 
 const ALL_PLAN_FIELDS: AiFieldKey[] = [
   'brand', 'sector', 'sectorLabel', 'services', 'language', 'keywords', 'negativeKeywords', 'country', 'cities',
@@ -263,7 +262,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Bilgileri kontrol edip tekrar deneyin.',
     invalid_publish_plan: 'Plan, başlıklar veya açıklamalar Google Ads koşullarını karşılamıyor.',
     invalid_budget: 'Bütçe veya CPC sınırı geçersiz.',
-    budget_sanity_ceiling_exceeded: 'Bu tutar yapılandırılmış teknik güvenlik tavanını aşıyor. Destekle iletişime geçin.',
+
     insufficient_credits: 'Yayınlama için yeterli kredi yok.',
     plan_changed: 'Plan veya kampanya durumu değişmiş. Yenileyip tekrar kontrol edin.',
     confirmation_required: 'Devam etmek için özeti gözden geçirip gereken ikinci onayı verin.',
@@ -291,7 +290,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-    budget_sanity_ceiling_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
+
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -411,7 +410,7 @@ export function GoogleAdsWorkspace({
         brand: 'Marka adı', sector: 'Sektör', sectorLabel: 'Sektör açıklaması', services: 'Ürün veya hizmetler (satır başına bir tane)',
         language: 'Reklam dili', country: 'Hedef ülke', cities: 'Hedef şehirler (satır başına bir tane)', url: 'Açılış sayfası URL’si',
         keywords: 'Anahtar kelimeler (satır başına bir tane)', negatives: 'Hariç tutulacak anahtar kelimeler', headlines: 'Başlıklar (satır başına bir tane)',
-        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe', cap: 'GLOVAL günlük bütçe üst sınırı',
+        descriptions: 'Açıklamalar (satır başına bir tane)', displayUrl: 'Görünen URL', daily: 'Günlük bütçe',
         policyCategory: 'Kısıtlı içerik kategorisi', policyEvidence: 'Politika kanıtı', createHint: 'Planı kaydetmek Google Ads’te kampanya oluşturmaz.',
         reviewTitle: 'Onay ve yayınlama', noSelection: 'Yayınlamadan önce bir taslak plan seçin.',
         declaration: 'AB siyasi reklam beyanı', euNo: 'Hayır', euYes: 'Evet', confirmEu: 'Bu beyanın doğru olduğunu onaylıyorum.',
@@ -437,7 +436,7 @@ export function GoogleAdsWorkspace({
         brand: 'Brand name', sector: 'Sector', sectorLabel: 'Sector label', services: 'Products or services (one per line)',
         language: 'Ad language', country: 'Target country', cities: 'Target cities (one per line)', url: 'Landing page URL',
         keywords: 'Keywords (one per line)', negatives: 'Negative keywords', headlines: 'Headlines (one per line)',
-        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget', cap: 'GLOVAL daily budget ceiling',
+        descriptions: 'Descriptions (one per line)', displayUrl: 'Display URL', daily: 'Daily budget',
         policyCategory: 'Restricted content category', policyEvidence: 'Policy evidence', createHint: 'Saving a draft does not create a Google Ads campaign.',
         reviewTitle: 'Approval and publishing', noSelection: 'Select a draft plan before publishing.',
         declaration: 'EU political advertising declaration', euNo: 'No', euYes: 'Yes', confirmEu: 'I confirm this declaration is accurate.',
@@ -464,7 +463,6 @@ export function GoogleAdsWorkspace({
     campaign: 'Kampanya / marka',
     finalUrl: 'Açılış sayfası',
     dailyBudget: 'Google Ads günlük bütçesi',
-    dailyPlanLimit: 'GLOVAL günlük plan üst sınırı',
     cpcCeiling: 'CPC teklif tavanı',
     targeting: 'Hedefleme',
     keywords: 'Anahtar kelimeler',
@@ -487,7 +485,6 @@ export function GoogleAdsWorkspace({
     campaign: 'Campaign / brand',
     finalUrl: 'Landing page',
     dailyBudget: 'Google Ads daily budget',
-    dailyPlanLimit: 'GLOVAL daily plan limit',
     cpcCeiling: 'CPC bid ceiling',
     targeting: 'Targeting',
     keywords: 'Keywords',
@@ -510,7 +507,6 @@ export function GoogleAdsWorkspace({
   const [planId, setPlanId] = useState<string | null>(null)
   const [form, setForm] = useState<PlanForm>(() => defaultPlanForm(initialAddress))
   const [dailyBudget, setDailyBudget] = useState('1000')
-  const [budgetCap, setBudgetCap] = useState('1000')
   const [aiRecommendedBudgetMinor, setAiRecommendedBudgetMinor] = useState<number | null>(null)
   const [euPoliticalAdvertising, setEuPoliticalAdvertising] = useState<'yes' | 'no'>('no')
   const [confirmedEu, setConfirmedEu] = useState(false)
@@ -544,7 +540,6 @@ export function GoogleAdsWorkspace({
       return buildGoogleAdsApprovalSummary({
         currency: selectedPlan.currency,
         dailyBudgetMinor: selectedPlan.daily_budget_minor as number,
-        budgetCapMinor: selectedPlan.budget_cap_minor as number,
       })
     } catch {
       return null
@@ -562,14 +557,12 @@ export function GoogleAdsWorkspace({
     ].filter(Boolean).join(' · ')
     const currency = selectedPlan.currency
     const dailyBudgetAmount = minorToMajor(selectedPlan.daily_budget_minor, currency)
-    const dailyPlanLimitAmount = minorToMajor(selectedPlan.budget_cap_minor, currency)
 
     return {
       account: selectedConnection?.name ?? selectedConnection?.externalAccountId ?? copy.noTerms,
       campaign: typeof plan.brand === 'string' ? plan.brand : copy.noTerms,
       finalUrl: typeof plan.finalUrl === 'string' ? plan.finalUrl : copy.noTerms,
       dailyBudget: dailyBudgetAmount ? `${currency} ${dailyBudgetAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
-      dailyPlanLimit: dailyPlanLimitAmount ? `${currency} ${dailyPlanLimitAmount} / ${isTr ? 'gün' : 'day'}` : copy.noTerms,
       cpcCeiling: summary ? `${currency} ${minorToMajor(summary.cpcBidCeilingMinor, currency)}` : copy.noTerms,
       targeting: targeting || copy.noTerms,
       keywords: stringArray(plan.keywords),
@@ -605,14 +598,13 @@ export function GoogleAdsWorkspace({
       if (!suggestion) throw new WorkspaceApiError('provider_error')
       const currency = suggestion.budget?.currency ?? selectedConnection.currency ?? 'TRY'
       const nextNotices: string[] = []
-      if (suggestion.budgetIssue) nextNotices.push(errorText(suggestion.budgetIssue, isTr))
       if (suggestion.budget?.approximate) {
         nextNotices.push(isTr
           ? 'Bütçe, hesabınızın para birimine yaklaşık dönüşümle hesaplandı. Kaydetmeden önce kontrol edin.'
           : 'The budget was converted to your account currency approximately. Check it before saving.')
       }
       if (!suggestion.budget) {
-        nextNotices.push(errorText(suggestion.budgetIssue ?? 'invalid_budget', isTr))
+        nextNotices.push(errorText('invalid_budget', isTr))
       }
       const dropped = suggestion.adjustments.headlinesDropped + suggestion.adjustments.descriptionsDropped
       if (dropped > 0) {
@@ -629,7 +621,6 @@ export function GoogleAdsWorkspace({
       setForm(formFromPlan(suggestion.plan as Record<string, unknown>))
       setAiRecommendedBudgetMinor(suggestion.budget?.dailyMinor ?? null)
       setDailyBudget(suggestion.budget ? minorToMajor(suggestion.budget.dailyMinor, currency) : '')
-      setBudgetCap(suggestion.budget ? minorToMajor(suggestion.budget.capMinor, currency) : '')
       setEuPoliticalAdvertising('no')
       setConfirmedEu(false)
       setAcceptedTerms(false)
@@ -638,8 +629,7 @@ export function GoogleAdsWorkspace({
       const aiKeys = new Set<AiFieldKey>(ALL_PLAN_FIELDS)
       if (suggestion.budget) {
         aiKeys.add('dailyBudget')
-        aiKeys.add('budgetCap')
-      }
+        }
       setAiFields(aiKeys)
       setNotices(nextNotices)
       setAdvancedOpen(false)
@@ -689,7 +679,6 @@ export function GoogleAdsWorkspace({
     setForm(defaultPlanForm(initialAddress))
     setAiRecommendedBudgetMinor(null)
     setDailyBudget('1000')
-    setBudgetCap('1000')
     setEuPoliticalAdvertising('no')
     setConfirmedEu(false)
     setAcceptedTerms(false)
@@ -703,14 +692,14 @@ export function GoogleAdsWorkspace({
     setEditorOpen(true)
     setAdvancedOpen(false)
     setNotices([])
-    setAiFields(fromAi ? new Set<AiFieldKey>([...ALL_PLAN_FIELDS, 'dailyBudget', 'budgetCap']) : new Set())
+    setAiFields(fromAi ? new Set<AiFieldKey>([...ALL_PLAN_FIELDS, 'dailyBudget']) : new Set())
     setPlanId(plan.id)
     setConnectionId(plan.connection_id ?? '')
     setForm(formFromPlan(plan.plan))
     const storedRecommendation = Number(plan.plan.aiRecommendedDailyBudgetMinor)
     setAiRecommendedBudgetMinor(Number.isSafeInteger(storedRecommendation) && storedRecommendation > 0 ? storedRecommendation : null)
     setDailyBudget(minorToMajor(plan.daily_budget_minor, plan.currency))
-    setBudgetCap(minorToMajor(plan.budget_cap_minor, plan.currency))
+
     setEuPoliticalAdvertising(plan.eu_political_advertising ?? 'no')
     setConfirmedEu(false)
     setAcceptedTerms(false)
@@ -727,8 +716,7 @@ export function GoogleAdsWorkspace({
     setMessage(null)
     try {
       const dailyBudgetMinor = majorToMinor(dailyBudget, selectedConnection.currency ?? selectedCurrency)
-      const budgetCapMinor = majorToMinor(budgetCap, selectedConnection.currency ?? selectedCurrency)
-      if (!dailyBudgetMinor || !budgetCapMinor) throw new WorkspaceApiError('invalid_budget')
+      if (!dailyBudgetMinor) throw new WorkspaceApiError('invalid_budget')
       const body = {
         connectionId: selectedConnection.id,
         plan: {
@@ -736,7 +724,6 @@ export function GoogleAdsWorkspace({
           ...(aiRecommendedBudgetMinor === null ? {} : { aiRecommendedDailyBudgetMinor: aiRecommendedBudgetMinor }),
         },
         dailyBudgetMinor,
-        budgetCapMinor,
         ...(selectedPlan ? { planId: selectedPlan.id, expectedVersion: selectedPlan.version } : {}),
       }
       const response = await postJson('/api/ads/google/plans', selectedPlan ? 'PATCH' : 'POST', body)
@@ -911,10 +898,7 @@ export function GoogleAdsWorkspace({
                       <TextField id="google-ads-url" label={copy.url} value={form.finalUrl} onChange={(value) => { updateForm('finalUrl', value); if (!form.displayUrl) updateForm('displayUrl', value) }} placeholder="https://example.com" disabled={!isEditable || pending !== null} aiSuggested={isAi('finalUrl')} />
                     </div>
                     <TextAreaField id="google-ads-services" label={copy.services} value={form.services} onChange={(value) => updateForm('services', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('services')} />
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
-                      <TextField id="google-ads-budget-cap" label={`${copy.cap} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={budgetCap} onChange={(value) => { setBudgetCap(value); clearAi('budgetCap') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('budgetCap')} />
-                    </div>
+                    <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
                     <TextAreaField
                       id="google-ads-headlines"
                       label={copy.headlines}

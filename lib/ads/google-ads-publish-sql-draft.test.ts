@@ -3,7 +3,8 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migrationSql = readFileSync(resolve(process.cwd(), 'scripts/106-ads-google-publish-e2.sql'), 'utf8')
-const lifecycleMigrationSql = readFileSync(resolve(process.cwd(), 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
+const liveLifecycleSql = readFileSync(resolve(process.cwd(), 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
+const lifecycleSql = readFileSync(resolve(process.cwd(), 'scripts/123-ads-google-remove-budget-cap.sql'), 'utf8')
 const vercelConfig = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8')) as {
   crons: Array<{ path: string; schedule: string }>
 }
@@ -24,17 +25,16 @@ describe('Google Ads E2 SQL draft', () => {
     expect(migrationSql).toContain('commit;')
   })
 
-  it('keeps the lifecycle migration unapplied, transaction-neutral, and on the confirmed V4 RPC', () => {
-    expect(lifecycleMigrationSql).toContain('UNAPPLIED DRAFT')
-    expect(lifecycleMigrationSql).not.toMatch(/^\s*(?:begin|commit)\s*;/im)
-    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_begin_google_ads_management_action_v3')
-    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_finish_google_ads_management_action_v3')
-    expect(lifecycleMigrationSql).toContain('drop function if exists public.ads_begin_google_ads_campaign_action_e2')
-    expect(lifecycleMigrationSql).toContain('ads_begin_google_ads_management_action_v4')
-    expect(lifecycleMigrationSql).toContain('p_risk_confirmed_amount_minor')
-    expect(lifecycleMigrationSql).toContain('budget_sanity_ceiling_exceeded')
-    expect(lifecycleMigrationSql).not.toContain('budget_increase_limit_exceeded')
-    expect(lifecycleMigrationSql).not.toContain('budget_cooldown_active')
+  it('keeps 120 as the legacy capped migration and leaves it outside the new upgrade', () => {
+    expect(liveLifecycleSql).toContain('p_budget_cap_minor')
+    expect(liveLifecycleSql).toContain('p_user_daily_budget_limit_minor')
+    expect(lifecycleSql).toContain('UNAPPLIED DRAFT')
+    expect(lifecycleSql).not.toMatch(/^\s*(?:begin|commit)\s*;/im)
+    expect(lifecycleSql).toContain('ads_begin_google_ads_management_action_v4')
+    expect(lifecycleSql).toContain('p_risk_confirmed_amount_minor')
+    expect(lifecycleSql).not.toContain('budget_sanity_ceiling_exceeded')
+    expect(lifecycleSql).not.toContain('budget_increase_limit_exceeded')
+    expect(lifecycleSql).not.toContain('budget_cooldown_active')
   })
 
   it('keeps the live six-argument read RPC and never recreates the old four-argument overload', () => {
@@ -122,5 +122,33 @@ describe('Google Ads E2 SQL draft', () => {
       path: '/api/cron/ads-publish-reconcile',
       schedule: '*/10 * * * *',
     })
+  })
+})
+
+describe('Google Ads uncapped lifecycle SQL draft', () => {
+  const functionDefinitions = [...lifecycleSql.matchAll(/create or replace function public\.[\s\S]*?\$\$;/gi)]
+
+  it('drops live budget-limited signatures and idempotently removes budget columns', () => {
+    expect(lifecycleSql).toContain('drop function if exists public.ads_approve_google_ads_plan_e2(uuid, uuid, integer, uuid, text, text, integer, integer, integer, text, text, boolean, boolean, jsonb)')
+    expect(lifecycleSql).toContain('drop function if exists public.ads_begin_google_ads_publish_e2(uuid, uuid, uuid, integer, uuid, text, integer, integer, bigint, smallint)')
+    expect(lifecycleSql).toContain('drop function if exists public.ads_begin_google_ads_management_action_v4(uuid, uuid, uuid, text, integer, text, jsonb, jsonb, integer, boolean, integer, boolean, uuid)')
+    expect(lifecycleSql).toContain('drop function if exists public.ads_finish_google_ads_management_action_v4(uuid, uuid, text, jsonb, text)')
+    expect(lifecycleSql).toContain('alter column daily_budget_minor type bigint')
+    expect(lifecycleSql).toContain('drop column if exists budget_cap_minor')
+    expect(lifecycleSql).toContain('drop column if exists approval_user_daily_budget_limit_minor')
+    expect(lifecycleSql).toContain('drop column if exists user_daily_budget_limit_minor')
+    expect(lifecycleSql).not.toContain('p_user_daily_budget_limit_minor <')
+    expect(lifecycleSql).not.toContain('v_target_budget > v_plan.budget_cap_minor')
+  })
+
+  it('hardens every lifecycle function and grants execute only to service_role', () => {
+    expect(functionDefinitions).toHaveLength(7)
+    for (const [definition] of functionDefinitions) {
+      expect(definition.toLowerCase()).toContain('security definer')
+      expect(definition.toLowerCase()).toContain("set search_path = ''")
+      expect(definition).not.toMatch(/p_budget_cap_minor|p_user_daily_budget_limit_minor/i)
+    }
+    expect(lifecycleSql).toMatch(/revoke all on function[\s\S]*?from public, anon, authenticated/i)
+    expect(lifecycleSql).toMatch(/grant execute on function[\s\S]*?to service_role/i)
   })
 })

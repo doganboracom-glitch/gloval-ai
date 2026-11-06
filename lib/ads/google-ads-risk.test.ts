@@ -8,7 +8,7 @@ import {
 describe('Google Ads amount-risk policy', () => {
   it('keeps ordinary budget amounts at or below every threshold on the standard confirmation path', () => {
     expect(evaluateGoogleAdsAmountRisk({
-      amountMinor: 99_999,
+      amountMinor: 49_999,
       currency: 'TRY',
       recommendedDailyBudgetMinor: 50_000,
       averageDailySpend30dMinor: 33_333,
@@ -16,12 +16,13 @@ describe('Google Ads amount-risk policy', () => {
     })).toMatchObject({ risky: false, reasons: [] })
   })
 
-  it('flags amounts above the saved plan budget reference', () => {
+  it('does not apply a saved campaign budget cap to otherwise ordinary amounts', () => {
     expect(evaluateGoogleAdsAmountRisk({
       amountMinor: 20_001,
       currency: 'TRY',
-      planBudgetCapMinor: 20_000,
-    }).reasons).toEqual(['above_plan_cap'])
+      recommendedDailyBudgetMinor: 20_000,
+      previousDailyBudgetMinor: 20_000,
+    })).toMatchObject({ risky: false, reasons: [] })
   })
 
   it('flags amounts above three times the proposed AI plan budget', () => {
@@ -40,12 +41,12 @@ describe('Google Ads amount-risk policy', () => {
     }).reasons).toEqual(['above_recent_spend'])
   })
 
-  it('flags a tenfold increase from the previous budget', () => {
+  it('flags an increase of five times or more from the previous budget', () => {
     expect(evaluateGoogleAdsAmountRisk({
-      amountMinor: 100_000,
+      amountMinor: 50_000,
       currency: 'TRY',
       previousDailyBudgetMinor: 10_000,
-    }).reasons).toContain('tenfold_previous_budget')
+    }).reasons).toContain('fivefold_previous_budget')
   })
 
   it('uses the configured 1,000 TRY equivalent threshold for foreign currencies', () => {
@@ -55,10 +56,11 @@ describe('Google Ads amount-risk policy', () => {
   it('requires the exact amount to be typed again for risky operations', () => {
     const risk = { risky: true, amountMinor: 75_000 }
     expect(googleAdsRiskConfirmationError(risk)).toBe('risk_confirmation_required')
-    expect(googleAdsRiskConfirmationError({ ...risk, riskConfirmedAmountMinor: 74_999 })).toBe('risk_confirmation_mismatch')
-    expect(googleAdsRiskConfirmationError({ ...risk, riskConfirmedAmountMinor: 75_000 })).toBeNull()
+    expect(googleAdsRiskConfirmationError({ ...risk, riskAcknowledged: true, riskConfirmedAmountMinor: 74_999 })).toBe('risk_confirmation_mismatch')
+    expect(googleAdsRiskConfirmationError({ ...risk, riskAcknowledged: true, riskConfirmedAmountMinor: 75_000 })).toBeNull()
+    expect(googleAdsRiskConfirmationError({ ...risk, riskAcknowledged: false, riskConfirmedAmountMinor: 75_000 })).toBe('risk_confirmation_required')
     expect(googleAdsRiskConfirmationError({ risky: false, amountMinor: 75_000 })).toBeNull()
-    expect(googleAdsRiskConfirmationError({ risky: false, amountMinor: 75_000, riskConfirmedAmountMinor: 75_000 })).toBe('risk_confirmation_mismatch')
+    expect(googleAdsRiskConfirmationError({ risky: false, amountMinor: 75_000, riskAcknowledged: true, riskConfirmedAmountMinor: 75_000 })).toBe('risk_confirmation_mismatch')
   })
 
   it('calculates the monthly commitment using 30.4 days', () => {

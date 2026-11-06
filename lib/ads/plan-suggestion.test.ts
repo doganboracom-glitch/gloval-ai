@@ -24,20 +24,11 @@ const scanResult = {
 }
 
 describe('Google Ads plan budget suggestions', () => {
-  it('does not clamp user-editable suggestions when no technical ceiling is configured', () => {
-    const result = buildPlanSuggestion(scanResult, { currency: 'TRY', serverCapMinor: null })
+  it('keeps large user-editable suggestions and records the initial AI recommendation', () => {
+    const result = buildPlanSuggestion(scanResult, { currency: 'TRY' })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.suggestion.budget?.dailyMinor).toBeGreaterThan(100_000)
     expect(result.suggestion.plan.aiRecommendedDailyBudgetMinor).toBe(result.suggestion.budget?.dailyMinor)
-    expect(result.suggestion.budgetIssue).toBeNull()
-  })
-
-  it('keeps the suggested amount intact and flags a configured technical ceiling for support', () => {
-    const result = buildPlanSuggestion(scanResult, { currency: 'TRY', serverCapMinor: 100_000 })
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.suggestion.budget?.dailyMinor).toBeGreaterThan(100_000)
-    expect(result.suggestion.budgetIssue).toBe('budget_sanity_ceiling_exceeded')
   })
 })
