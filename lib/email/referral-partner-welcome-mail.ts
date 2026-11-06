@@ -37,14 +37,14 @@ export function buildReferralPartnerWelcomeEmail({
     ? [
         `Komisyon, yönlendirdiğiniz yeni müşterinin yalnızca ilk başarılı abonelik ödemesindeki KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’idir.`,
         `Nakit ödemeye uygun komisyonlar ödeme tarihinden ${REFERRAL_HOLD_DAYS} gün sonra kullanılabilir olur; iadeler ve ters ibrazlarda bakiyeden düşülür.`,
-        `Bekleyen ve kullanılabilir komisyonlarınızın tamamını veya uygun bir kısmını, minimum dönüşüm tutarı olmadan AI kredisine çevirebilirsiniz. 1 kredi ${creditValue} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki farkı GLOVAL AI karşılar.`, 
+        `Bekleyen ve kullanılabilir komisyonlarınızın tamamını veya uygun bir kısmını, en az ${creditValue} TL olmak şartıyla AI kredisine çevirebilirsiniz. 1 AI kredisi ${creditValue} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki farkı GLOVAL AI karşılar.`,
         cashPayoutRule,
         'Vergi ve fatura yükümlülükleri ortaklık şartlarına göre uygulanır; ayrıntılar için paneldeki güncel şartları inceleyin.',
       ]
     : [
         `Commission is ${REFERRAL_COMMISSION_RATE_PERCENT}% of the VAT-exclusive amount of only the referred new customer’s first successful subscription payment.`,
         `Cash-eligible commissions become available ${REFERRAL_HOLD_DAYS} days after payment; refunds and chargebacks are deducted from the balance.`,
-        `All or an eligible portion of your pending and available commissions can be converted to AI credits without a minimum conversion amount. One credit is worth ${creditValue} TRY; the credit count is rounded up and GLOVAL AI covers the difference.`, 
+        `All or an eligible portion of your pending and available commissions can be converted to AI credits, provided the amount is at least ${creditValue} TRY. One credit is worth ${creditValue} TRY; the credit count is rounded up and GLOVAL AI covers the difference.`, 
         cashPayoutRule,
         'Tax and invoice obligations follow the partner terms; review the current terms in your dashboard.',
       ]

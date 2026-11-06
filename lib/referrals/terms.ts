@@ -8,12 +8,10 @@ import {
 } from './commission-config'
 
 const minimumPayoutTry = REFERRAL_PAYOUT_MIN_CENTS / 100
-const minimumPayoutTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
 const minimumPayoutEn = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(minimumPayoutTry)
 const vatMultiplier = ((100 + REFERRAL_VAT_RATE_PERCENT) / 100).toFixed(2)
 const creditValueTry = TRY_PER_CREDIT_CENTS / 100
 const maxCreditTopupTry = REFERRAL_MAX_CREDIT_TOPUP_CENTS / 100
-const maxCreditTopupTr = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
 const maxCreditTopupEn = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(maxCreditTopupTry)
 
 export const REFERRAL_TERMS_VERSION = 'v1.2'
@@ -31,11 +29,7 @@ export const REFERRAL_TERMS = {
       {
         heading: '1. Program, komisyon ve ödeme koşulları',
         paragraphs: [
-          `Komisyon yalnızca yönlendirilen yeni müşterinin ilk başarılı abonelik ödemesi için hesaplanır. Komisyon, KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’sidir; KDV hariç tutar, brüt ödeme tutarının ${vatMultiplier.replace('.', ',')}’ye bölünmesiyle hesaplanır ve kuruş aşağı yuvarlanır.`,
-          `Komisyon ödeme tarihinden itibaren ${REFERRAL_HOLD_DAYS} gün beklemede kalır. İlk ödeme bu süre içinde iptal edilir, iade edilir veya ters ibraz edilirse komisyon ters kayıtla iptal edilir. Bekleme süresi geçtikten sonraki bir iade veya ters ibraz, ortak bakiyesinde negatif düzeltme oluşturabilir.`, 
-          `Nakit ödeme talebi için en az ${minimumPayoutTr} TL kullanılabilir bakiye gerekir; bu tutarın tamamı veya en az bu eşik kadar bir bölümü istenebilir ve kalan bakiye ortak hesabında kalır. Aynı anda yalnızca bir açık nakit talebi bulunabilir. Fatura kesmesi gereken şirket ortakları (şahıs şirketleri dâhil) talep sırasında “KDV dahil, tutarın içinden” veya “KDV üstüne ekle” modunu seçer; fatura dökümü ve ödenecek tutar seçime göre hesaplanır, ödeme fatura onayından sonra işlenir. Bireysel/muaf ortaklardan fatura istenmez; gider belgesi GLOVAL tarafından düzenlenir. Vergi yükümlülüklerinin değerlendirilmesi ortağın sorumluluğundadır.`, 
-          'Dilerseniz bekleyen komisyonlarınızı da 14 günlük bekleme süresi dolmadan AI kredisine çevirebilirsiniz.',
-          `AI kredisine dönüştürmede minimum tutar yoktur; 1 kredi ${creditValueTry} TL değerindedir. Kredi adedi yukarı yuvarlanır ve aradaki en fazla ${maxCreditTopupTr} TL tutarındaki fark GLOVAL AI tarafından karşılanır. Bekleyen ve kullanılabilir komisyonların tamamı veya dönüştürülebilir bakiye sınırında daha düşük bir tutar, 14 günlük bekleme süresi dolmadan AI kredisine çevrilebilir. Negatif gelecek bakiye düzeltmesi varken yalnızca bakiyenin tamamı dönüştürülebilir.`,  
+          'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır. Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir. Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir. Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır. Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.',
         ],
       },
       {

@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldLabel } from '@/components/ui/field'
 import { acceptReferralTerms } from '@/lib/referrals/partner-actions'
 
 type Props = {
@@ -79,9 +78,12 @@ export function ReferralTermsReacceptance({ acceptedVersion, currentVersion }: P
   }
 
   return (
-    <section aria-labelledby="referral-terms-reacceptance-title" className="flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
-      <div className="flex flex-col gap-2">
-        <h3 id="referral-terms-reacceptance-title" className="text-base font-semibold text-foreground">
+    <section
+      aria-labelledby="referral-terms-reacceptance-title"
+      className="mt-8 flex w-full min-w-0 max-w-full flex-col gap-4 rounded-2xl border border-border bg-card/70 p-5"
+    >
+      <div className="flex min-w-0 flex-col gap-2">
+        <h3 id="referral-terms-reacceptance-title" className="text-base font-semibold text-foreground text-balance">
           {copy.title}
         </h3>
         <p className="text-sm leading-relaxed text-muted-foreground">
@@ -89,12 +91,12 @@ export function ReferralTermsReacceptance({ acceptedVersion, currentVersion }: P
             .replace('{previous}', previousVersion)
             .replace('{current}', currentVersion)}
         </p>
-        <Link href="/yasal/satis-ortakligi-sartlari" className="w-fit text-sm font-medium text-primary underline underline-offset-4">
+        <Link href="/yasal/satis-ortakligi-sartlari" className="w-fit max-w-full text-sm font-medium text-foreground underline underline-offset-4 hover:text-brand">
           {copy.link}
         </Link>
       </div>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <Field className="flex-row items-start gap-2" data-invalid={Boolean(error && !accepted)}>
+      <form onSubmit={handleSubmit} className="flex min-w-0 flex-col gap-4">
+        <div className="flex w-full min-w-0 items-start gap-3" data-invalid={Boolean(error && !accepted)}>
           <input
             id="referral-terms-reacceptance"
             type="checkbox"
@@ -103,18 +105,25 @@ export function ReferralTermsReacceptance({ acceptedVersion, currentVersion }: P
             aria-invalid={Boolean(error && !accepted)}
             aria-describedby={error ? 'referral-terms-reacceptance-error' : undefined}
             disabled={pending}
-            className="mt-1 size-4 shrink-0 accent-primary"
+            className="mt-0.5 size-4 shrink-0 accent-brand"
           />
-          <FieldLabel htmlFor="referral-terms-reacceptance" className="font-normal leading-relaxed">
+          <label
+            htmlFor="referral-terms-reacceptance"
+            className="min-w-0 flex-1 cursor-pointer text-sm leading-relaxed text-foreground"
+          >
             {copy.checkbox.replace('{version}', currentVersion)}
-          </FieldLabel>
-        </Field>
+          </label>
+        </div>
         {error && (
           <Alert variant="destructive" role="alert">
             <AlertDescription id="referral-terms-reacceptance-error">{error}</AlertDescription>
           </Alert>
         )}
-        <Button type="submit" disabled={!accepted || pending} className="w-fit gap-2">
+        <Button
+          type="submit"
+          disabled={!accepted || pending}
+          className="w-full gap-2 whitespace-nowrap bg-brand font-semibold text-brand-foreground hover:bg-brand/90 disabled:border disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 sm:w-fit"
+        >
           {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
           {pending ? copy.saving : copy.button}
         </Button>
