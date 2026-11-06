@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, Check } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -17,10 +17,30 @@ import {
   persistedFeedback,
   PUBLISH_STEPS,
   publishStepLabel,
+  splitSuccessMessage,
   type PublishProgressPlan,
 } from '@/lib/ads/publish-progress'
 
 type FeedbackPlan = PublishProgressPlan & { plan: Record<string, unknown> }
+
+/** Success message with the same visual weight as the destructive error alerts. */
+export function GoogleAdsSuccessNotice({ text }: { text: string }) {
+  const { title, detail } = splitSuccessMessage(text)
+  return (
+    <Alert
+      role="status"
+      className="flex items-start gap-3 border-2 border-emerald-700/40 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-400/50 dark:bg-emerald-950/60 dark:text-emerald-50"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white dark:bg-emerald-500 dark:text-emerald-950">
+        <CheckCircle2 className="size-6" aria-hidden="true" />
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="text-base font-bold leading-snug text-balance">{title}</p>
+        {detail ? <p className="text-sm leading-relaxed text-emerald-900 dark:text-emerald-100">{detail}</p> : null}
+      </div>
+    </Alert>
+  )
+}
 
 export function GoogleAdsPublishStepper({ plan, isTr }: { plan: PublishProgressPlan; isTr: boolean }) {
   const current = derivePublishStep(plan)
@@ -111,9 +131,10 @@ export function GoogleAdsReviewFeedback({
 
   const saved = persistedFeedback(plan, isTr)
   if (!saved) return null
+  if (saved.tone === 'success') return <GoogleAdsSuccessNotice text={saved.text} />
   return (
-    <Alert variant={saved.tone === 'error' ? 'destructive' : 'default'} role={saved.tone === 'success' ? 'status' : 'alert'}>
-      {saved.tone === 'success' ? <Check aria-hidden="true" /> : <AlertCircle aria-hidden="true" />}
+    <Alert variant={saved.tone === 'error' ? 'destructive' : 'default'} role="alert">
+      <AlertCircle aria-hidden="true" />
       <AlertDescription>{saved.text}</AlertDescription>
     </Alert>
   )

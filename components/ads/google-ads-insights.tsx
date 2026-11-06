@@ -113,7 +113,7 @@ function apiErrorMessage(error: unknown): string {
   if (!(error instanceof InsightsApiError)) return 'Rapor yüklenemedi. Biraz sonra tekrar deneyin.'
   switch (error.code) {
     case 'api_quota_exceeded':
-      return 'Google Ads günlük okuma kotası doldu. Kota yenilendiğinde tekrar deneyin; mevcut hesap kotası korunmaktadır.'
+      return 'Günlük Google Ads işlem sınırına ulaşıldı. Sınır 24 saat içinde yenilenir; yarın tekrar deneyin.'
     case 'rate_limited':
       return 'Bu Google Ads hesabı için rapor yenileme sınırına ulaşıldı. Daha sonra tekrar deneyin.'
     case 'reauth_required':
