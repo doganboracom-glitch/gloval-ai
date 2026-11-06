@@ -3,7 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
 import { buildGoogleAdsApprovalSummary, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
-import { resolveGoogleAdsBudgetSanityCeilingMinor } from '@/lib/ads/env'
 import { googleAdsJson } from '@/lib/ads/google-route-utils'
 import { publishGateResponse, requireGoogleAdsPublishRequest } from '@/lib/ads/google-publish-route'
 
@@ -33,7 +32,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const { data: planRow, error: planError } = await admin
     .from('ads_plans')
-    .select('id,user_id,connection_id,status,plan,version,approved_version,currency,daily_budget_minor,budget_cap_minor')
+    .select('id,user_id,connection_id,status,plan,version,approved_version,currency,daily_budget_minor')
     .eq('id', input.data.planId)
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
@@ -61,17 +60,8 @@ export async function POST(request: Request) {
     return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 409)
   }
 
-  let userDailyBudgetCapMinor: number | null
-  try {
-    userDailyBudgetCapMinor = resolveGoogleAdsBudgetSanityCeilingMinor()
-  } catch {
-    return googleAdsJson({ ok: false, error: 'configuration_missing' }, 503)
-  }
-  if (!Number.isSafeInteger(planRow.daily_budget_minor) || !Number.isSafeInteger(planRow.budget_cap_minor)) {
+  if (!Number.isSafeInteger(planRow.daily_budget_minor) || (planRow.daily_budget_minor as number) <= 0) {
     return googleAdsJson({ ok: false, error: 'invalid_budget' }, 400)
-  }
-  if (userDailyBudgetCapMinor !== null && (planRow.daily_budget_minor as number) > userDailyBudgetCapMinor) {
-    return googleAdsJson({ ok: false, error: 'budget_sanity_ceiling_exceeded' }, 400)
   }
 
   let plan: ReturnType<typeof parseGoogleAdsPublishPlan>
@@ -85,7 +75,6 @@ export async function POST(request: Request) {
     approvalSummary = buildGoogleAdsApprovalSummary({
       currency: connection.currency_code,
       dailyBudgetMinor: planRow.daily_budget_minor as number,
-      budgetCapMinor: planRow.budget_cap_minor as number,
     })
   } catch {
     return googleAdsJson({ ok: false, error: 'invalid_publish_plan' }, 400)
@@ -99,8 +88,6 @@ export async function POST(request: Request) {
     customerId: connection.external_account_id,
     currency: connection.currency_code,
     dailyBudgetMinor: planRow.daily_budget_minor as number,
-    budgetCapMinor: planRow.budget_cap_minor as number,
-    userDailyBudgetCapMinor,
     plan,
   })
 
@@ -113,8 +100,6 @@ export async function POST(request: Request) {
     p_customer_id: connection.external_account_id,
     p_currency: connection.currency_code,
     p_daily_budget_minor: planRow.daily_budget_minor,
-    p_budget_cap_minor: planRow.budget_cap_minor,
-    p_user_daily_budget_limit_minor: userDailyBudgetCapMinor,
     p_plan_hash: approvalHash,
     p_eu_political_advertising: input.data.euPoliticalAdvertising,
     p_eu_declaration_confirmed: input.data.declarationConfirmed,

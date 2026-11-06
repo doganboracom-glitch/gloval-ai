@@ -1,7 +1,7 @@
 export const GOOGLE_ADS_RISK_THRESHOLDS = {
   recommendedBudgetMultiplier: 3,
   recentDailySpendMultiplier: 3,
-  previousBudgetMultiplier: 10,
+  previousBudgetMultiplier: 5,
   absoluteTryMinor: 100_000,
   absoluteMinorByCurrency: {
     USD: 2_500,
@@ -16,10 +16,9 @@ export const GOOGLE_ADS_RISK_THRESHOLDS = {
 } as const
 
 export type GoogleAdsAmountRiskReason =
-  | 'above_plan_cap'
   | 'above_recommendation'
   | 'above_recent_spend'
-  | 'tenfold_previous_budget'
+  | 'fivefold_previous_budget'
   | 'absolute_threshold'
 
 export type GoogleAdsAmountRisk = {
@@ -39,9 +38,9 @@ export function evaluateGoogleAdsAmountRisk(input: {
   amountMinor: number
   currency: string
   recommendedDailyBudgetMinor?: number | null
-  planBudgetCapMinor?: number | null
   averageDailySpend30dMinor?: number | null
   previousDailyBudgetMinor?: number | null
+  previousPublishedBudgetMinor?: number | null
 }): GoogleAdsAmountRisk {
   const reasons: GoogleAdsAmountRiskReason[] = []
   const amount = input.amountMinor
@@ -49,11 +48,6 @@ export function evaluateGoogleAdsAmountRisk(input: {
 
   if (!Number.isSafeInteger(amount) || amount <= 0) {
     return { risky: false, reasons, absoluteThresholdMinor: threshold }
-  }
-
-  const planBudgetCap = input.planBudgetCapMinor
-  if (Number.isSafeInteger(planBudgetCap) && planBudgetCap! > 0 && amount > planBudgetCap!) {
-    reasons.push('above_plan_cap')
   }
 
   const recommended = input.recommendedDailyBudgetMinor
@@ -68,11 +62,14 @@ export function evaluateGoogleAdsAmountRisk(input: {
     reasons.push('above_recent_spend')
   }
 
-  const previous = input.previousDailyBudgetMinor
-  if (Number.isSafeInteger(previous) && previous! > 0 &&
-    amount >= previous! * GOOGLE_ADS_RISK_THRESHOLDS.previousBudgetMultiplier) {
-    reasons.push('tenfold_previous_budget')
+  const previousBudgets = [input.previousDailyBudgetMinor, input.previousPublishedBudgetMinor]
+  if (previousBudgets.some((previous) =>
+    Number.isSafeInteger(previous) && previous! > 0 &&
+    amount >= previous! * GOOGLE_ADS_RISK_THRESHOLDS.previousBudgetMultiplier
+  )) {
+    reasons.push('fivefold_previous_budget')
   }
+
 
   if (amount > threshold) reasons.push('absolute_threshold')
 
@@ -82,11 +79,14 @@ export function evaluateGoogleAdsAmountRisk(input: {
 export function googleAdsRiskConfirmationError(input: {
   risky: boolean
   amountMinor: number
+  riskAcknowledged?: boolean
   riskConfirmedAmountMinor?: number | null
 }): 'risk_confirmation_required' | 'risk_confirmation_mismatch' | null {
   const confirmed = input.riskConfirmedAmountMinor ?? null
-  if (!input.risky) return confirmed === null ? null : 'risk_confirmation_mismatch'
-  if (confirmed === null) return 'risk_confirmation_required'
+  if (!input.risky) {
+    return confirmed === null && input.riskAcknowledged !== true ? null : 'risk_confirmation_mismatch'
+  }
+  if (input.riskAcknowledged !== true || confirmed === null) return 'risk_confirmation_required'
   return confirmed === input.amountMinor ? null : 'risk_confirmation_mismatch'
 }
 
