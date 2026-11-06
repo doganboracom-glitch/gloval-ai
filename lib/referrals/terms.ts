@@ -29,7 +29,11 @@ export const REFERRAL_TERMS = {
       {
         heading: '1. Program, komisyon ve ödeme koşulları',
         paragraphs: [
-          'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır. Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir. Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir. Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır. Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.',
+          'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır.',
+          'Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir.',
+          'Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir.',
+          'Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır.',
+          'Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.',
         ],
       },
       {
