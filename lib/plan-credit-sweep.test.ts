@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { AI_CREDIT_CONFIG } from '@/lib/pricing-config'
 import {
+  AI_CREDIT_CONFIG,
+  AI_CREDIT_FIRST_PERIOD_EFFECTIVE_AT,
+} from '@/lib/pricing-config'
+import {
+  classifyPlanCreditSubscription,
   isPlanCreditDryRun,
   planGrantReason,
   previewPlanGrant,
@@ -13,7 +17,7 @@ import {
   type PlanCreditSubscription,
 } from '@/lib/plan-credit-sweep'
 
-const NOW = new Date('2026-10-08T12:00:00.000Z')
+const NOW = new Date('2026-11-08T12:00:00.000Z')
 
 function sub(overrides: Partial<PlanCreditSubscription> = {}): PlanCreditSubscription {
   return {
@@ -23,8 +27,9 @@ function sub(overrides: Partial<PlanCreditSubscription> = {}): PlanCreditSubscri
     planCode: 'ecommerce',
     productCategory: 'ecommerce',
     interval: 'month',
-    periodStart: '2026-10-08T10:47:06.158Z',
-    periodEnd: '2026-11-08T10:47:06.158Z',
+    createdAt: '2026-11-08T10:47:06.158Z',
+    periodStart: '2026-11-08T10:47:06.158Z',
+    periodEnd: '2026-12-08T10:47:06.158Z',
     ...overrides,
   }
 }
@@ -67,13 +72,89 @@ describe('resolveGrantRule', () => {
     })
     expect(resolveGrantRule('ecommerce').maxBalance).toBe(AI_CREDIT_CONFIG.ecommerce.maxBalance)
     expect(resolveGrantRule('starter')).toMatchObject({ maxBalance: null, expireUnused: !AI_CREDIT_CONFIG.starter.rollover })
+    expect(AI_CREDIT_CONFIG.starter.credits).toBe(100)
+    expect(AI_CREDIT_CONFIG.pro).toMatchObject({ initialCredits: 150, monthlyCredits: 50, maxBalance: 1000 })
+    expect(AI_CREDIT_CONFIG.ecommerce).toMatchObject({ initialCredits: 250, monthlyCredits: 100, maxBalance: 1000 })
+  })
+})
+
+describe('first-period cutover', () => {
+  it('grants the launch bonus only to subscriptions created on or after the cutover', () => {
+    const before = classifyPlanCreditSubscription(
+      sub({ createdAt: '2026-11-05T23:59:59.999Z' }),
+      NOW,
+    )
+    const at = classifyPlanCreditSubscription(
+      sub({ createdAt: AI_CREDIT_FIRST_PERIOD_EFFECTIVE_AT }),
+      NOW,
+    )
+
+    expect('candidate' in before && before.candidate.rule.firstCredits).toBe(100)
+    expect('candidate' in at && at.candidate.rule.firstCredits).toBe(250)
+  })
+
+  it('does not lower or expire an existing e-commerce balance when the new cap is lower', () => {
+    const legacySubscription = sub({
+      id: 'legacy-ecommerce',
+      createdAt: '2026-10-01T00:00:00.000Z',
+      planCode: 'ecommerce',
+      productCategory: 'ecommerce',
+    })
+    const classified = classifyPlanCreditSubscription(legacySubscription, NOW)
+    if (!('candidate' in classified)) throw new Error('expected an eligible legacy subscription')
+
+    const legacyLedger: LedgerEntry[] = [
+      {
+        kind: 'package',
+        amount: 500,
+        reason: planGrantReason(legacySubscription.id, new Date('2026-10-08T10:47:06.158Z')),
+        created_at: '2026-10-08T10:47:06.158Z',
+      },
+    ]
+    const originalLedger = structuredClone(legacyLedger)
+    const preview = previewPlanGrant(
+      legacyLedger,
+      classified.candidate.rule,
+      legacySubscription.id,
+      new Date('2026-11-08T10:47:06.158Z'),
+    )
+
+    expect(classified.candidate.rule.firstCredits).toBe(100)
+    expect(classified.candidate.rule.periodCredits).toBe(100)
+    expect(preview).toMatchObject({ firstPeriod: false, expired: 0, granted: 100 })
+    expect(legacyLedger).toEqual(originalLedger)
+  })
+
+  it('keeps an already-earned rollover balance above the new cap intact', () => {
+    const legacyLedger: LedgerEntry[] = [
+      {
+        kind: 'package',
+        amount: 1_100,
+        reason: planGrantReason('legacy-ecommerce', new Date('2026-10-08T10:47:06.158Z')),
+        created_at: '2026-10-08T10:47:06.158Z',
+      },
+    ]
+    const preview = previewPlanGrant(
+      legacyLedger,
+      resolveGrantRule('ecommerce'),
+      'legacy-ecommerce',
+      new Date('2026-11-08T10:47:06.158Z'),
+    )
+
+    expect(preview).toMatchObject({ expired: 0, granted: 0 })
+    expect(legacyLedger.reduce((sum, entry) => sum + entry.amount, 0)).toBe(1_100)
   })
 })
 
 describe('resolveCreditPeriod', () => {
   it('gives a monthly payment exactly one window, starting at the period start', () => {
     const start = new Date('2026-10-08T10:47:06.158Z')
-    const period = resolveCreditPeriod('pro', start, new Date('2026-11-08T10:47:06.158Z'), NOW)
+    const period = resolveCreditPeriod(
+      'pro',
+      start,
+      new Date('2026-11-08T10:47:06.158Z'),
+      new Date('2026-10-15T12:00:00.000Z'),
+    )
     expect(period?.index).toBe(0)
     expect(period?.start.toISOString()).toBe(start.toISOString())
   })
@@ -124,6 +205,7 @@ describe('previewPlanGrant', () => {
   })
 
   it('treats a period that was already written as a duplicate', () => {
+    // A historical grant remains valid after the plan's current allowance changes.
     const ledger: LedgerEntry[] = [{ kind: 'package', amount: 500, reason: planGrantReason('sub-1', start), created_at: NOW.toISOString() }]
     expect(previewPlanGrant(ledger, rule, 'sub-1', start).duplicate).toBe(true)
   })
@@ -137,6 +219,7 @@ describe('previewPlanGrant', () => {
   it('expires the unused part of the previous grant on a non-rollover plan', () => {
     const starter = resolveGrantRule('starter')
     const ledger: LedgerEntry[] = [
+      // Historical STARTER grant; changing the current allowance must not rewrite it.
       { kind: 'package', amount: 150, reason: planGrantReason('sub-1', new Date('2026-09-08T00:00:00.000Z')), created_at: '2026-09-08T00:00:00.000Z' },
       { kind: 'usage', amount: -40, reason: null, created_at: '2026-09-20T00:00:00.000Z' },
     ]
@@ -147,6 +230,52 @@ describe('previewPlanGrant', () => {
 })
 
 describe('sweepPlanCredits', () => {
+  it('uses the same initial and recurring credits for monthly and yearly plans', async () => {
+    const plans = ['starter', 'pro', 'ecommerce'] as const
+    const cycles = ['month', 'year'] as const
+    const subscriptions = plans.flatMap((planCode) =>
+      cycles.map((interval) =>
+        sub({
+          id: `${planCode}-${interval}`,
+          planCode,
+          productCategory: planCode === 'ecommerce' ? 'ecommerce' : 'corporate',
+          interval,
+          periodEnd: interval === 'year' ? '2027-11-08T10:47:06.158Z' : '2026-12-08T10:47:06.158Z',
+        }),
+      ),
+    )
+    const { store } = memoryStore(subscriptions)
+    const firstRun = await sweepPlanCredits({ store, dryRun: false, now: NOW })
+    expect(firstRun.granted.map(({ subscriptionId, amount }) => [subscriptionId, amount])).toEqual([
+      ['ecommerce-month', 250],
+      ['ecommerce-year', 250],
+      ['pro-month', 150],
+      ['pro-year', 150],
+      ['starter-month', 100],
+      ['starter-year', 100],
+    ])
+
+    for (const subscription of subscriptions) {
+      if (subscription.interval === 'month') {
+        subscription.periodStart = '2026-12-08T10:47:06.158Z'
+        subscription.periodEnd = '2027-01-08T10:47:06.158Z'
+      }
+    }
+    const renewalRun = await sweepPlanCredits({
+      store,
+      dryRun: false,
+      now: new Date('2026-12-09T12:00:00.000Z'),
+    })
+    expect(renewalRun.granted.map(({ subscriptionId, amount }) => [subscriptionId, amount])).toEqual([
+      ['ecommerce-month', 100],
+      ['ecommerce-year', 100],
+      ['pro-month', 50],
+      ['pro-year', 50],
+      ['starter-month', 100],
+      ['starter-year', 100],
+    ])
+  })
+
   it('dry run reports what would be granted and writes nothing', async () => {
     const { store, grants, ledger } = memoryStore([sub()])
     const summary = await sweepPlanCredits({ store, dryRun: true, now: NOW })

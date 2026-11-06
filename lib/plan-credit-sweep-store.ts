@@ -17,13 +17,14 @@ type SubscriptionDbRow = {
   id: string
   user_id: string
   status: string
+  created_at: string
   current_period_start: string | null
   current_period_end: string | null
   billing_plans: PlanEmbed | PlanEmbed[] | null
 }
 
 const COLUMNS =
-  'id, user_id, status, current_period_start, current_period_end, billing_plans!billing_subscriptions_plan_id_fkey(code, interval, product_category)'
+  'id, user_id, status, created_at, current_period_start, current_period_end, billing_plans!billing_subscriptions_plan_id_fkey(code, interval, product_category)'
 
 function toSubscription(row: SubscriptionDbRow): PlanCreditSubscription {
   const plan = Array.isArray(row.billing_plans) ? row.billing_plans[0] : row.billing_plans
@@ -34,6 +35,7 @@ function toSubscription(row: SubscriptionDbRow): PlanCreditSubscription {
     planCode: plan?.code ?? null,
     productCategory: plan?.product_category ?? null,
     interval: plan?.interval ?? null,
+    createdAt: row.created_at,
     periodStart: row.current_period_start,
     periodEnd: row.current_period_end,
   }
