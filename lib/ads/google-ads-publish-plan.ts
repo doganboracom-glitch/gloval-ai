@@ -201,7 +201,6 @@ export function buildGoogleAdsMutateRequest(input: {
   const approvalSummary = buildGoogleAdsApprovalSummary({
     currency: input.currency,
     dailyBudgetMinor: input.dailyBudgetMinor,
-    budgetCapMinor: input.budgetCapMinor,
   })
   const dailyBudgetMicros = googleAdsMicrosFromMinorUnits(input.dailyBudgetMinor, input.currency)
   const customerResource = `customers/${customerId}`

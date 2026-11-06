@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const migrationSql = readFileSync(resolve(process.cwd(), 'scripts/106-ads-google-publish-e2.sql'), 'utf8')
+const lifecycleSql = readFileSync(resolve(process.cwd(), 'scripts/120-ads-google-campaign-lifecycle.sql'), 'utf8')
 const vercelConfig = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8')) as {
   crons: Array<{ path: string; schedule: string }>
 }
@@ -108,5 +109,30 @@ describe('Google Ads E2 SQL draft', () => {
       path: '/api/cron/ads-publish-reconcile',
       schedule: '*/10 * * * *',
     })
+  })
+})
+
+describe('Google Ads uncapped lifecycle SQL draft', () => {
+  const functionDefinitions = [...lifecycleSql.matchAll(/create or replace function public\.[\s\S]*?\$\$;/gi)]
+
+  it('drops old budget-limited signatures and widens daily budget columns', () => {
+    expect(lifecycleSql).toContain('drop function if exists public.ads_approve_google_ads_plan_e2')
+    expect(lifecycleSql).toContain('drop function if exists public.ads_begin_google_ads_publish_e2')
+    expect(lifecycleSql).toContain('drop function if exists public.ads_begin_google_ads_management_action_v4')
+    expect(lifecycleSql).toContain('alter column daily_budget_minor type bigint')
+    expect(lifecycleSql).toContain('drop column if exists approval_user_daily_budget_limit_minor')
+    expect(lifecycleSql).not.toContain('p_user_daily_budget_limit_minor <')
+    expect(lifecycleSql).not.toContain('v_target_budget > v_plan.budget_cap_minor')
+  })
+
+  it('hardens every lifecycle function and grants execute only to service_role', () => {
+    expect(functionDefinitions).toHaveLength(5)
+    for (const [definition] of functionDefinitions) {
+      expect(definition.toLowerCase()).toContain('security definer')
+      expect(definition.toLowerCase()).toContain("set search_path = ''")
+      expect(definition).not.toMatch(/p_budget_cap_minor|p_user_daily_budget_limit_minor/i)
+    }
+    expect(lifecycleSql).toMatch(/revoke all on function[\s\S]*?from public, anon, authenticated/i)
+    expect(lifecycleSql).toMatch(/grant execute on function[\s\S]*?to service_role/i)
   })
 })

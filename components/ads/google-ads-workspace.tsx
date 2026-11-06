@@ -290,8 +290,7 @@ function errorText(code: string | undefined, isTr: boolean): string {
     invalid_request: 'Check the details and try again.',
     invalid_publish_plan: 'The plan, headlines, or descriptions do not meet Google Ads requirements.',
     invalid_budget: 'The budget or CPC ceiling is invalid.',
-budget_sanity_ceiling_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
-  budget_limit_exceeded: 'This amount exceeds the configured technical safety ceiling. Contact support.',
+
     insufficient_credits: 'There are not enough credits to publish.',
     plan_changed: 'The plan or campaign state changed. Refresh and review again.',
     confirmation_required: 'Review the summary and provide the required second confirmation before continuing.',
@@ -677,7 +676,6 @@ export function GoogleAdsWorkspace({
     setNotices([])
     setForm(defaultPlanForm(initialAddress))
     setDailyBudget('1000')
-    setBudgetCap('1000')
     setEuPoliticalAdvertising('no')
     setConfirmedEu(false)
     setAcceptedTerms(false)
@@ -892,10 +890,7 @@ export function GoogleAdsWorkspace({
                       <TextField id="google-ads-url" label={copy.url} value={form.finalUrl} onChange={(value) => { updateForm('finalUrl', value); if (!form.displayUrl) updateForm('displayUrl', value) }} placeholder="https://example.com" disabled={!isEditable || pending !== null} aiSuggested={isAi('finalUrl')} />
                     </div>
                     <TextAreaField id="google-ads-services" label={copy.services} value={form.services} onChange={(value) => updateForm('services', value)} disabled={!isEditable || pending !== null} rows={2} aiSuggested={isAi('services')} />
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
-                      <TextField id="google-ads-budget-cap" label={`${copy.cap} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={budgetCap} onChange={(value) => { setBudgetCap(value); clearAi('budgetCap') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('budgetCap')} />
-                    </div>
+                    <TextField id="google-ads-budget" label={`${copy.daily} (${selectedConnection?.currency ?? selectedCurrency})`} type="number" value={dailyBudget} onChange={(value) => { setDailyBudget(value); clearAi('dailyBudget') }} disabled={!isEditable || pending !== null} aiSuggested={isAi('dailyBudget')} />
                     <TextAreaField
                       id="google-ads-headlines"
                       label={copy.headlines}

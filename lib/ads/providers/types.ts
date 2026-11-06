@@ -84,8 +84,8 @@ export type GoogleAdsRefreshResult = {
   refreshToken: string | null
 }
 
-/** Money is always in minor units (kuruş) plus an ISO 4217 code. */
-export type AdsBudgetMinor = { currency: string; dailyMinor: number; capMinor: number }
+/** Daily budgets use positive currency minor units plus an ISO 4217 code. */
+export type AdsBudgetMinor = { currency: string; dailyMinor: number }
 
 export type AdsCampaignPublishInput = {
   externalAccountId: string

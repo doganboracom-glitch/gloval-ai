@@ -331,6 +331,8 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr, 
     setConfirmation({ ...next, budgetAmountMinor: amountMinor, risk })
     setRiskAmountText('')
     setRiskAck(false)
+    setActionAck(false)
+    setBudgetAck(false)
     setBillingAck(false)
   }
 
