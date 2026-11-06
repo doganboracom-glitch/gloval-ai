@@ -26,7 +26,6 @@ export const ADS_ENV = {
   googleAdsReadDailyGlobalLimit: 'ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT',
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
-  googleAdsBudgetSanityCeilingMinor: 'GOOGLE_ADS_BUDGET_SANITY_CEILING_MINOR',
   googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
 } as const
 
@@ -139,16 +138,6 @@ export function resolveGoogleAdsPublishAccess(userId: string | null, env: Env = 
 /** Separate, fail-closed gate for the admin-only Google Ads validate_only test route. */
 export function resolveGoogleAdsValidateOnlyTestEnabled(env: Env = process.env): boolean {
   return env[ADS_ENV.googleAdsValidateOnlyTestEnabled]?.trim() === '1'
-}
-
-/** Optional technical safety ceiling. No value means no configured ceiling. */
-export function resolveGoogleAdsBudgetSanityCeilingMinor(env: Env = process.env): number | null {
-  const raw = env[ADS_ENV.googleAdsBudgetSanityCeilingMinor]?.trim()
-  if (!raw) return null
-  if (!/^[1-9]\d{0,15}$/.test(raw)) throw new Error('invalid_google_ads_budget_sanity_ceiling')
-  const amount = Number(raw)
-  if (!Number.isSafeInteger(amount)) throw new Error('invalid_google_ads_budget_sanity_ceiling')
-  return amount
 }
 
 export type GoogleAdsOAuthSettingsResult =

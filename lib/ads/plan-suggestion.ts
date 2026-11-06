@@ -7,17 +7,14 @@ import {
   MIN_DESCRIPTIONS,
   MIN_HEADLINES,
 } from '@/lib/ads/ad-copy'
-import { MAX_DAILY_SPEND_FACTOR } from '@/lib/ads/budget'
-import { parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
+import { googleAdsMicrosFromMinorUnits, parseGoogleAdsPublishPlan } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText, PLAN_COUNTRIES, PLAN_SECTORS } from '@/lib/ads/planner'
 import { fold } from '@/lib/visual-subjects'
 
 /**
- * Turns a public scan result into the Google Ads workspace form, and enforces
- * Google Ads length/count rules plus the server budget ceiling in code. It is
- * pure: the caller passes the account currency and the server cap, so this runs
- * the same way in a route and in tests.
+ * Turns a public scan result into an editable Google Ads workspace suggestion
+ * while enforcing provider content and currency-precision rules.
  */
 
 const MAX_BRAND = 80
@@ -61,7 +58,7 @@ export const scanResultInputSchema = z.object({
     descriptions: z.array(text(500)).max(20),
     displayUrl: text(2048),
   }),
-  budget: z.object({ daily: z.number().positive().max(10_000_000) }),
+  budget: z.object({ daily: z.number().finite().positive() }),
   restricted: z.array(text(40)).max(20),
 })
 
@@ -88,8 +85,6 @@ export type SuggestedPlan = {
 export type SuggestedBudget = {
   currency: string
   dailyMinor: number
-  capMinor: number
-  serverCapMinor: number | null
   /** True when the amount was converted from TRY with a rough factor. */
   approximate: boolean
 }
@@ -97,13 +92,12 @@ export type SuggestedBudget = {
 export type PlanSuggestion = {
   plan: SuggestedPlan
   budget: SuggestedBudget | null
-  budgetIssue: 'budget_sanity_ceiling_exceeded' | null
   adjustments: { headlinesDropped: number; descriptionsDropped: number; toppedUp: boolean }
 }
 
 export type PlanSuggestionResult =
   | { ok: true; suggestion: PlanSuggestion }
-  | { ok: false; error: 'invalid_request' | 'invalid_publish_plan' | 'ad_copy_insufficient' | 'keywords_insufficient' }
+  | { ok: false; error: 'invalid_request' | 'invalid_publish_plan' | 'invalid_budget' | 'ad_copy_insufficient' | 'keywords_insufficient' }
 
 export function currencyDigits(currency: string): number {
   try {
@@ -174,26 +168,23 @@ function topUpDescriptions(current: string[], input: ScanResultInput, brand: str
 export function suggestDailyBudget(input: {
   scanDailyTry: number
   currency: string
-  serverCapMinor: number | null
 }): SuggestedBudget {
   const unit = 10 ** currencyDigits(input.currency)
   const factor = APPROX_PER_TRY[input.currency]
   const approximate = input.currency !== 'TRY'
   const wantedMajor = factor === undefined ? FALLBACK_DAILY_MAJOR : input.scanDailyTry * factor
-  const wantedDaily = Math.max(unit, Math.round(wantedMajor * unit))
-  const wantedCap = Math.max(wantedDaily, wantedDaily * MAX_DAILY_SPEND_FACTOR)
+  const wantedDaily = Math.max(1, Math.round(wantedMajor * unit))
+  googleAdsMicrosFromMinorUnits(wantedDaily, input.currency)
   return {
     currency: input.currency,
     dailyMinor: wantedDaily,
-    capMinor: wantedCap,
-    serverCapMinor: input.serverCapMinor,
     approximate,
   }
 }
 
 export function buildPlanSuggestion(
   raw: unknown,
-  options: { currency: string | null; serverCapMinor: number | null },
+  options: { currency: string | null },
 ): PlanSuggestionResult {
   const parsed = scanResultInputSchema.safeParse(raw)
   if (!parsed.success) return { ok: false, error: 'invalid_request' }
@@ -257,18 +248,19 @@ export function buildPlanSuggestion(
     return { ok: false, error: 'invalid_publish_plan' }
   }
 
-  const budget = options.currency
-    ? suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency, serverCapMinor: options.serverCapMinor })
-    : null
-  const budgetIssue = budget && options.serverCapMinor !== null && budget.dailyMinor > options.serverCapMinor
-    ? 'budget_sanity_ceiling_exceeded'
-    : null
+  let budget: SuggestedBudget | null = null
+  if (options.currency) {
+    try {
+      budget = suggestDailyBudget({ scanDailyTry: input.budget.daily, currency: options.currency })
+    } catch {
+      return { ok: false, error: 'invalid_budget' }
+    }
+  }
   return {
     ok: true,
     suggestion: {
       plan,
       budget,
-      budgetIssue,
       adjustments: {
         headlinesDropped: headlineResult.dropped,
         descriptionsDropped: descriptionResult.dropped,

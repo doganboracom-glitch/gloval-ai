@@ -885,9 +885,9 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         customerId,
         requestId: input.requestId,
         planJson: input.planJson,
-        dailyBudgetMinor: input.budget.dailyMinor,
-        budgetCapMinor: input.budget.capMinor,
-        currency: input.budget.currency,
+  dailyBudgetMinor: input.budget.dailyMinor,
+  currency: input.budget.currency,
+
         validateOnly: input.validateOnly,
         ...(geoTargetResourceNames.length > 0 ? { geoTargetResourceNames } : {}),
       })
