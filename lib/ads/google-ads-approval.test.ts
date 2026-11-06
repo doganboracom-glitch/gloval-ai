@@ -16,8 +16,6 @@ const planInput = {
   customerId: '1234567890',
   currency: 'TRY',
   dailyBudgetMinor: 15000,
-  budgetCapMinor: 90000,
-  userDailyBudgetCapMinor: 250000,
   plan: { name: 'Search', keywords: ['site', 'design'] },
 }
 

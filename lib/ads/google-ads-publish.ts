@@ -118,7 +118,6 @@ export type GoogleAdsPublishFailureReason =
   | 'destination_unreachable'
   | 'site_policy_blocked'
   | 'insufficient_credits'
-  | 'budget_sanity_ceiling_exceeded'
   | 'reservation_failed'
   | 'provider_error'
   | 'provider_unavailable'
@@ -177,7 +176,6 @@ export type GoogleAdsPublishServiceDeps = {
     approvalSummary: GoogleAdsApprovalSummary,
     approvalId: string,
     approvalHash: string,
-    userDailyBudgetLimitMinor: number | null,
   ) => Promise<AdsPublishBeginResult>
   markValidated: (input: {
     userId: string
@@ -353,7 +351,7 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
   loadPlan: defaultLoadPlan,
   withAccess: defaultWithAccess,
   preflightPublishUrl: preflightGoogleAdsPublishUrl,
-  beginPublish: (userId, planId, requestId, expectedVersion, approvalSummary, approvalId, approvalHash, userDailyBudgetLimitMinor) =>
+  beginPublish: (userId, planId, requestId, expectedVersion, approvalSummary, approvalId, approvalHash) =>
     beginAdsGooglePublishE2({
       userId,
       planId,
@@ -361,7 +359,6 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
       expectedVersion,
       approvalId,
       approvalHash,
-      userDailyBudgetLimitMinor,
       approvalSummary,
     }),
   markValidated: async (input) => {

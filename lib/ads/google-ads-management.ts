@@ -469,7 +469,7 @@ function assessPreparedActionRisk(
 function formatMinorCurrency(amountMinor: number, currency: string) {
   try {
     const formatter = new Intl.NumberFormat('tr-TR', { style: 'currency', currency })
-    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits
+    const fractionDigits = formatter.resolvedOptions().maximumFractionDigits ?? 2
     return formatter.format(amountMinor / 10 ** fractionDigits)
   } catch {
     return `${amountMinor.toLocaleString('tr-TR')} ${currency}`
@@ -808,6 +808,7 @@ async function runLoggedMutation(input: {
             amountMinor: input.prepared.action === 'budget'
               ? Number(input.prepared.target.dailyBudgetMinor)
               : minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
+            previousAmountMinor: minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
             stateVerified: true,
           })
           return { actionId: input.actionId, afterState: actual, stateVerified: true }
@@ -844,6 +845,7 @@ async function runLoggedMutation(input: {
     amountMinor: input.prepared.action === 'budget'
       ? Number(input.prepared.target.dailyBudgetMinor)
       : minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
+    previousAmountMinor: minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
     stateVerified: afterState !== null,
   })
   return { actionId: input.actionId, afterState, stateVerified: afterState !== null }

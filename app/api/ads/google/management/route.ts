@@ -24,6 +24,8 @@ const actionSchema = z.object({
   undoActionId: z.string().uuid().optional(),
   acknowledgedBillingWarning: z.boolean().optional(),
   acknowledgedBudget: z.boolean().optional(),
+  riskAcknowledged: z.boolean().optional(),
+  riskConfirmedAmountMinor: z.number().int().positive().safe().optional(),
   confirm: z.literal(true),
 })
 
@@ -76,6 +78,8 @@ export async function POST(request: Request) {
       undoActionId: input.data.undoActionId,
       acknowledgedBillingWarning: input.data.acknowledgedBillingWarning,
       acknowledgedBudget: input.data.acknowledgedBudget,
+      riskAcknowledged: input.data.riskAcknowledged,
+      riskConfirmedAmountMinor: input.data.riskConfirmedAmountMinor,
       userConfirmed: input.data.confirm,
     })
     return googleAdsJson({ ok: true, ...result })
