@@ -38,6 +38,7 @@ import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
 import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
 import { ReferralDashboardPanel } from '@/components/dashboard/referral-dashboard-panel'
+import { ReferralTermsReacceptance } from '@/components/settings/referral-terms-reacceptance'
 import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
 
 const headerActionClass =
@@ -56,6 +57,9 @@ export function DashboardClient({
   referralPayoutData = null,
   referralEnabled = false,
   hasReferralPartner = false,
+  needsReferralTermsAcceptance = false,
+  referralAcceptedTermsVersion = null,
+  referralCurrentTermsVersion = '',
   payoutsEnabled = false,
 }: {
   projects: ProjectListItem[]
@@ -75,6 +79,9 @@ export function DashboardClient({
   referralPayoutData?: ReferralPayoutPanelData | null
   referralEnabled?: boolean
   hasReferralPartner?: boolean
+  needsReferralTermsAcceptance?: boolean
+  referralAcceptedTermsVersion?: string | null
+  referralCurrentTermsVersion?: string
   payoutsEnabled?: boolean
 }) {
   const { t, lang } = useLanguage()
@@ -370,10 +377,10 @@ export function DashboardClient({
                   </div>
                 </Link>
 
-                <div className="mt-4 flex items-center justify-between gap-2">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <Link
                     href={`/editor/${p.id}`}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-primary hover:underline"
                   >
                     {t.dash.open}
                     <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
@@ -388,7 +395,7 @@ export function DashboardClient({
                           locked: !auraSiteIds.includes(p.id),
                         })
                       }
-                      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-accent"
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground hover:text-accent"
                     >
                       {auraSiteIds.includes(p.id) ? <Sparkles className="size-3.5" /> : <Lock className="size-3.5" />}
                       {t.dash.cursorAura.button}
@@ -399,7 +406,7 @@ export function DashboardClient({
                       href={tenantUrl(p.slug)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-accent"
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground hover:text-accent"
                     >
                       {t.dash.viewLive}
                       <ExternalLink className="size-3.5" />
@@ -419,6 +426,12 @@ export function DashboardClient({
               </li>
             ))}
           </ul>
+        )}
+        {needsReferralTermsAcceptance && (
+          <ReferralTermsReacceptance
+            acceptedVersion={referralAcceptedTermsVersion}
+            currentVersion={referralCurrentTermsVersion}
+          />
         )}
         <ReferralDashboardPanel
           data={referralDashboard}

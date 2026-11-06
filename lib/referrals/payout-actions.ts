@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRequestUser } from '@/lib/supabase/request-user'
 import { isReferralCashPayoutsEnabled, isReferralPayoutsEnabled } from '@/lib/referrals/core'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import { queueReferralPayoutNotification } from '@/lib/referrals/email-outbox'
 import type { ReferralPayoutMethod, ReferralVatMode } from '@/lib/referrals/partner-types'
 
@@ -19,7 +20,9 @@ type PayoutActionError =
   | 'partner_inactive'
   | 'insufficient_balance'
   | 'minimum_not_met'
-  | 'credit_minimum_not_met'
+  | 'credit_balance_empty'
+  | 'terms_required'
+  | 'partial_credit_must_be_multiple'
   | 'amount_exceeds_balance'
   | 'partial_unavailable_debt'
   | 'vat_mode_required'
@@ -66,9 +69,11 @@ function nonNegativeInteger(value: unknown): number | null {
 function mapRpcError(value: unknown, method: ReferralPayoutMethod, hasIban: boolean): PayoutActionError {
   if (value === 'not_owner' || value === 'not_found') return 'not_found'
   if (value === 'partner_closed') return 'partner_inactive'
-  if (value === 'credit_minimum_not_met') return 'credit_minimum_not_met'
-  if (value === 'minimum_not_met') return method === 'credit' ? 'credit_minimum_not_met' : 'minimum_not_met'
+  if (value === 'insufficient_balance') return method === 'credit' ? 'credit_balance_empty' : 'insufficient_balance'
+  if (value === 'credit_minimum_not_met') return 'credit_balance_empty'
+  if (value === 'minimum_not_met') return method === 'credit' ? 'credit_balance_empty' : 'minimum_not_met'
   if (value === 'amount_exceeds_balance') return 'amount_exceeds_balance'
+  if (value === 'partial_credit_must_be_multiple') return 'partial_credit_must_be_multiple'
   if (value === 'partial_unavailable_debt') return 'partial_unavailable_debt'
   if (value === 'vat_mode_required') return 'vat_mode_required'
   if (value === 'vat_mode_not_allowed') return 'vat_mode_not_allowed'
@@ -134,13 +139,14 @@ export async function createReferralPayoutRequest(input: {
     const admin = createAdminClient()
     const { data: partner, error: partnerError } = await admin
       .from('referral_partners')
-      .select('id,status,iban_last4,tax_status')
+      .select('id,status,iban_last4,tax_status,terms_version')
       .eq('user_id', authState.user.id)
       .maybeSingle()
 
     if (partnerError) return { ok: false, error: 'unavailable' }
     if (!partner) return { ok: false, error: 'not_found' }
     if (partner.status === 'closed') return { ok: false, error: 'partner_inactive' }
+    if (partner.terms_version !== REFERRAL_TERMS_VERSION) return { ok: false, error: 'terms_required' }
 
     if (payoutMethod === 'cash') {
       if (partner.tax_status !== 'individual' && partner.tax_status !== 'company') {

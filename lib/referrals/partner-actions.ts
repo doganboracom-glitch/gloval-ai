@@ -33,6 +33,7 @@ type PartnerActionResult =
   | { ok: false; error: PartnerActionError }
 
 type ClosePartnerResult = { ok: true } | { ok: false; error: PartnerActionError }
+type TermsAcceptanceResult = { ok: true } | { ok: false; error: PartnerActionError }
 
 export async function activateReferralPartner(input: {
   payeeName: unknown
@@ -138,6 +139,54 @@ export async function activateReferralPartner(input: {
   return { ok: false, error: 'program_unavailable' }
 }
 
+export async function acceptReferralTerms(input: {
+  termsAccepted: unknown
+  termsVersion: unknown
+}): Promise<TermsAcceptanceResult> {
+  if (!isReferralRuntimeReady()) return { ok: false, error: 'program_unavailable' }
+
+  const authState = await getRequestUser()
+  if (authState.kind !== 'authenticated') return { ok: false, error: 'not_authenticated' }
+  if (!input || typeof input !== 'object') return { ok: false, error: 'invalid_input' }
+  if (input.termsAccepted !== true || input.termsVersion !== REFERRAL_TERMS_VERSION) {
+    return { ok: false, error: 'terms_required' }
+  }
+
+  try {
+    const admin = createAdminClient()
+    const { data: partner, error: lookupError } = await admin
+      .from('referral_partners')
+      .select('id,status')
+      .eq('user_id', authState.user.id)
+      .maybeSingle()
+
+    if (lookupError) return { ok: false, error: 'program_unavailable' }
+    if (!partner || (partner.status !== 'active' && partner.status !== 'suspended')) {
+      return { ok: false, error: 'not_active' }
+    }
+
+    const { data, error } = await admin
+      .from('referral_partners')
+      .update({
+        terms_version: REFERRAL_TERMS_VERSION,
+        terms_accepted_at: new Date().toISOString(),
+      })
+      .eq('id', partner.id)
+      .in('status', ['active', 'suspended'])
+      .select('id')
+      .maybeSingle()
+
+    if (error) return { ok: false, error: 'program_unavailable' }
+    if (!data) return { ok: false, error: 'not_active' }
+
+    revalidatePath('/settings')
+    revalidatePath('/dashboard')
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'program_unavailable' }
+  }
+}
+
 export async function saveReferralPartnerIban(input: { iban: unknown }): Promise<
   | { ok: true; ibanLast4: string }
   | { ok: false; error: PartnerActionError }
@@ -160,14 +209,26 @@ export async function saveReferralPartnerIban(input: { iban: unknown }): Promise
   }
 
   try {
-    const { data, error } = await createAdminClient()
+    const admin = createAdminClient()
+    const { data: partner, error: lookupError } = await admin
+      .from('referral_partners')
+      .select('id,terms_version')
+      .eq('user_id', authState.user.id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    if (lookupError) return { ok: false, error: 'program_unavailable' }
+    if (!partner) return { ok: false, error: 'iban_unavailable' }
+    if (partner.terms_version !== REFERRAL_TERMS_VERSION) return { ok: false, error: 'terms_required' }
+
+    const { data, error } = await admin
       .from('referral_partners')
       .update({
         iban_ciphertext: encrypted.ciphertext,
         iban_key_version: encrypted.keyVersion,
         iban_last4: encrypted.last4,
       })
-      .eq('user_id', authState.user.id)
+      .eq('id', partner.id)
       .eq('status', 'active')
       .is('iban_ciphertext', null)
       .select('id')

@@ -5,6 +5,7 @@ import { getRequestUser } from '@/lib/supabase/request-user'
 import { requireAdmin } from '@/lib/mail/admin-guard'
 import { maskEmail } from '@/lib/store-order-privacy'
 import { isReferralPayoutsEnabled } from '@/lib/referrals/core'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import type {
   ReferralPartnerStatus,
   ReferralCommissionAdminRow,
@@ -76,7 +77,7 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
   try {
     const { data: partner, error: partnerError } = await admin
       .from('referral_partners')
-      .select('id,status,tax_status,iban_last4,tax_verified_at')
+      .select('id,status,tax_status,iban_last4,tax_verified_at,terms_version')
       .eq('user_id', authState.user.id)
       .maybeSingle()
 
@@ -85,6 +86,7 @@ export async function getReferralPayoutPanelData(): Promise<ReferralPayoutPanelD
     const status = partnerStatus(partner.status)
     if (!status) return null
     if (status === 'closed') return { state: null, unavailable: false }
+    if (partner.terms_version !== REFERRAL_TERMS_VERSION) return { state: null, unavailable: false }
 
     const tax = taxStatus(partner.tax_status)
     const syncResult = await admin.rpc('referral_sync_commissions', { p_partner_id: partner.id })

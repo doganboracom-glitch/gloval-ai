@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { getLegalDoc } from '@/lib/legal/documents'
+import { getLegalDoc, REFERRAL_PARTNER_TERMS_DOC } from '@/lib/legal/documents'
+import { REFERRAL_TERMS } from '@/lib/referrals/terms'
 
 const mocks = vi.hoisted(() => ({ lang: 'tr' as 'tr' | 'en' }))
 
@@ -17,6 +18,28 @@ import { LegalDocument } from '@/components/legal/legal-document'
 
 const privacyDoc = getLegalDoc('gizlilik-politikasi')
 if (!privacyDoc) throw new Error('Privacy policy document is unavailable')
+
+describe('referral terms section paragraphs', () => {
+  it('renders all five Turkish section 1 clauses as separate paragraphs with readable spacing', () => {
+    mocks.lang = 'tr'
+    const markup = renderToStaticMarkup(<LegalDocument doc={REFERRAL_PARTNER_TERMS_DOC} />)
+    const paragraphs = [...markup.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gu)].map((match) => match[1])
+    const expectedParagraphs = REFERRAL_TERMS.tr.sections[0].paragraphs
+
+    expect(expectedParagraphs).toHaveLength(5)
+    expect(paragraphs.filter((paragraph) => expectedParagraphs.some((expected) => expected === paragraph))).toEqual(expectedParagraphs)
+    expect(markup).toContain('class="mt-4 space-y-4"')
+  })
+
+  it('renders the English credit-conversion clause as one unchanged paragraph', () => {
+    mocks.lang = 'en'
+    const markup = renderToStaticMarkup(<LegalDocument doc={REFERRAL_PARTNER_TERMS_DOC} />)
+    const paragraphs = [...markup.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gu)].map((match) => match[1])
+    const expectedParagraph = REFERRAL_TERMS.en.sections[0].paragraphs[3]
+
+    expect(paragraphs.filter((paragraph) => paragraph === expectedParagraph)).toHaveLength(1)
+  })
+})
 
 describe('Google Ads privacy section anchor', () => {
   it.each([

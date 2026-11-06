@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { ReferralDashboardData, ReferralPayoutPanelData } from '@/lib/referrals/partner-types'
+import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const state = vi.hoisted(() => ({
   activate: vi.fn(),
   close: vi.fn(),
   saveIban: vi.fn(),
+  acceptTerms: vi.fn(),
 }))
 vi.mock('@/components/language-provider', () => ({ useLanguage: () => ({ lang: state.lang }) }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: state.refresh }) }))
@@ -21,6 +23,7 @@ vi.mock('@/lib/referrals/partner-actions', () => ({
   activateReferralPartner: state.activate,
   closeReferralPartner: state.close,
   saveReferralPartnerIban: state.saveIban,
+  acceptReferralTerms: state.acceptTerms,
 }))
 
 import { ReferralPartnerCard } from '@/components/settings/referral-partner-card'
@@ -31,6 +34,7 @@ beforeEach(() => {
   state.activate.mockReset()
   state.close.mockReset()
   state.saveIban.mockReset()
+  state.acceptTerms.mockReset()
 })
 
 afterEach(() => {
@@ -60,7 +64,7 @@ describe('referral partner settings card', () => {
     state.lang = 'en'
     const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
     }))
 
     expect(html.replace(/<[^>]*>/gu, '')).toContain('https://gloval.ai/?ref=PARTNER1234')
@@ -70,11 +74,40 @@ describe('referral partner settings card', () => {
     expect(html).toContain('Close partnership')
   })
 
+  it('requires existing partners to accept the current terms before showing partner tools', () => {
+    const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: 'v1.1' },
+    }))
+
+    expect(html).toContain('Güncellenen ortaklık şartlarını kabul edin')
+    expect(html).toContain('v1.1 sürümünden v1.2 sürümüne')
+    expect(html).not.toContain('https://gloval.ai/?ref=PARTNER1234')
+    expect(html).not.toContain('Ortaklığı kapat')
+  })
+
+  it('saves the updated terms acceptance and refreshes partner data', async () => {
+    state.acceptTerms.mockResolvedValueOnce({ ok: true })
+    render(createElement(ReferralPartnerCard, {
+      enabled: true,
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: 'v1.1' },
+    }))
+
+    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'Kabul et ve devam et' }))
+
+    await waitFor(() => expect(state.acceptTerms).toHaveBeenCalledWith({
+      termsAccepted: true,
+      termsVersion: REFERRAL_TERMS_VERSION,
+    }))
+    expect(state.refresh).toHaveBeenCalledOnce()
+  })
+
   it('shows the shared metrics and keeps referred customers in a collapsed details area', () => {
     state.lang = 'tr'
     const view = render(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       dashboardData: referralDashboardData,
     }))
 
@@ -102,7 +135,7 @@ describe('referral partner settings card', () => {
     state.lang = 'en'
     const english = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       dashboardData: deletedData,
     }))
     expect(english).toContain('Deleted account')
@@ -112,7 +145,7 @@ describe('referral partner settings card', () => {
     state.lang = 'tr'
     const turkish = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       dashboardData: deletedData,
     }))
     expect(turkish).toContain('Silinmiş hesap')
@@ -130,16 +163,17 @@ describe('referral partner settings card', () => {
     expect(html).toContain('overflow-y-auto')
     expect(html).toContain('KDV hariç tutarın %20')
     expect(html).toContain('1.000 TL')
-    expect(html).toContain('Dönüşüm için en az 3 TL gerekir')
-    expect(html).toContain('bekleyen ve kullanılabilir komisyonların tamamı')
+    expect(html).toContain('en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz')
+    expect(html).not.toContain('Dönüşüm için en az 3 TL gerekir')
+    expect(html).toContain('bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden')
     expect(html).toContain('14 gün')
-    expect(html).toContain('gider belgesi GLOVAL tarafından düzenlenir')
+    expect(html).toContain('gider belgesi GLOVAL tarafından hazırlanır')
     expect(html).toContain('TCKN veya vergi numarası bu uygulamada toplanmaz')
     expect(html).toContain('Şartların tamamını aç')
     expect(html).toContain('Türkiye IBAN')
   })
 
-  it('explains the separate credit and IBAN thresholds in settings', () => {
+  it('explains no-minimum credit conversion and the IBAN threshold in settings', () => {
     const payoutData: ReferralPayoutPanelData = {
       unavailable: false,
       state: {
@@ -163,13 +197,13 @@ describe('referral partner settings card', () => {
     }
     const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       payoutData,
       payoutsEnabled: true,
       cashPayoutsEnabled: true,
     }))
 
-    expect(html).toContain('Toplam bakiye en az 3 TL olduğunda beklemeden AI kredisine çevirebilirsiniz.')
+    expect(html).toContain('Pozitif toplam bakiyenizi beklemeden AI kredisine çevirebilirsiniz.')
     expect(html).toContain('IBAN ödemesi için 14 günlük bekleme tamamlanmalı ve kullanılabilir bakiye en az 1.000 TL olmalıdır.')
   })
 
@@ -197,7 +231,7 @@ describe('referral partner settings card', () => {
     }
     render(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       payoutData,
       payoutsEnabled: true,
     }))
@@ -231,7 +265,7 @@ describe('referral partner settings card', () => {
     }
     render(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
       payoutData,
       payoutsEnabled: true,
     }))
@@ -242,7 +276,7 @@ describe('referral partner settings card', () => {
   it('keeps the active referral link and asks for an IBAN after reactivation', () => {
     const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: null },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: null, termsVersion: REFERRAL_TERMS_VERSION },
     }))
 
     expect(html.replace(/<[^>]*>/gu, '')).toContain('https://gloval.ai/?ref=PARTNER1234')
@@ -254,7 +288,7 @@ describe('referral partner settings card', () => {
   it('links closed partners to support for reactivation', () => {
     const html = renderToStaticMarkup(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'closed', ibanLast4: null },
+      partner: { referralCode: 'PARTNER1234', status: 'closed', ibanLast4: null, termsVersion: null },
     }))
 
     expect(html).toContain('Yeniden etkinleştirme için bize yazın.')
@@ -266,7 +300,7 @@ describe('referral partner settings card', () => {
     state.saveIban.mockResolvedValueOnce({ ok: true, ibanLast4: '4321' })
     const { container } = render(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: null },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: null, termsVersion: REFERRAL_TERMS_VERSION },
     }))
 
     fireEvent.change(screen.getByLabelText('IBAN'), { target: { value: 'TR123456789012345678901234' } })
@@ -289,7 +323,7 @@ describe('referral partner settings card', () => {
     await waitFor(() => expect(state.activate).toHaveBeenCalled())
     view.rerender(createElement(ReferralPartnerCard, {
       enabled: true,
-      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321' },
+      partner: { referralCode: 'PARTNER1234', status: 'active', ibanLast4: '4321', termsVersion: REFERRAL_TERMS_VERSION },
     }))
 
     expect(screen.getByText('Satış ortaklığı etkinleştirildi.')).toBeTruthy()

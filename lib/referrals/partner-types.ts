@@ -6,6 +6,7 @@ export type ReferralPartnerSettings = {
   referralCode: string
   status: ReferralPartnerStatus
   ibanLast4: string | null
+  termsVersion: string | null
 }
 
 export type ReferralCustomer = {

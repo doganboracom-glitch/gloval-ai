@@ -597,8 +597,10 @@ const az: DeepPartial<Dict> = {
       kvkk: 'Məlumatların qorunması bildirişi',
       distanceSales: 'Məsafəli satış müqaviləsi',
       preInfo: 'Ön məlumatlandırma forması',
-      refund: 'İmtina və geri ödəmə',
-      delivery: 'Xidmətin göstərilməsi',
+  refund: 'İmtina və geri ödəmə',
+  delivery: 'Xidmətin göstərilməsi',
+  referralTerms: 'Tərəfdaşlıq proqramının şərtləri',
+
     },
   },
   cookie: {

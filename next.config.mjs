@@ -42,6 +42,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_WHOIS_LOOKUP_ENABLED: resolveWhoisEnabled(process.env) ? '1' : '0',
     NEXT_PUBLIC_ADS_FEATURE_UI: resolveAdsFeatureUi(process.env) ? '1' : '0',
+    NEXT_PUBLIC_REFERRAL_ENABLED: process.env.REFERRAL_ENABLED === '1' ? '1' : '0',
   },
   eslint: {
     ignoreDuringBuilds: true,

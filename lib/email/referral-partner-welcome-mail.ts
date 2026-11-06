@@ -1,4 +1,4 @@
-import { CREDIT_MIN_CENTS, REFERRAL_COMMISSION_RATE_PERCENT, REFERRAL_HOLD_DAYS, REFERRAL_PAYOUT_MIN_TRY, TRY_PER_CREDIT_CENTS } from '@/lib/referrals/commission-config'
+import { REFERRAL_COMMISSION_RATE_PERCENT, REFERRAL_HOLD_DAYS, REFERRAL_PAYOUT_MIN_TRY, TRY_PER_CREDIT_CENTS } from '@/lib/referrals/commission-config'
 import { escape, renderEmailLayout, renderEmailPlainText, type EmailLang } from './layout'
 
 export type ReferralPartnerWelcomeEmailInput = {
@@ -25,10 +25,6 @@ export function buildReferralPartnerWelcomeEmail({
     maximumFractionDigits: 0,
   }).format(REFERRAL_PAYOUT_MIN_TRY)
   const minimum = isTurkish ? `${formattedMinimum} TL` : `TRY ${formattedMinimum}`
-  const formattedCreditMinimum = new Intl.NumberFormat(isTurkish ? 'tr-TR' : 'en-US', {
-    maximumFractionDigits: 0,
-  }).format(CREDIT_MIN_CENTS / 100)
-  const creditMinimum = isTurkish ? `${formattedCreditMinimum} TL` : `TRY ${formattedCreditMinimum}`
   const creditValue = TRY_PER_CREDIT_CENTS / 100
   const cashPayoutRule = isTurkish
     ? cashPayoutsEnabled
@@ -41,14 +37,14 @@ export function buildReferralPartnerWelcomeEmail({
     ? [
         `Komisyon, yönlendirdiğiniz yeni müşterinin yalnızca ilk başarılı abonelik ödemesindeki KDV hariç tutarın %${REFERRAL_COMMISSION_RATE_PERCENT}’idir.`,
         `Nakit ödemeye uygun komisyonlar ödeme tarihinden ${REFERRAL_HOLD_DAYS} gün sonra kullanılabilir olur; iadeler ve ters ibrazlarda bakiyeden düşülür.`,
-        `Toplam bakiye en az ${creditMinimum} olduğunda, bekleyen ve kullanılabilir komisyonların tamamını beklemeden AI kredisine çevirebilirsiniz. 1 kredi ${creditValue} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki farkı GLOVAL AI karşılar.`,
+        `Bekleyen ve kullanılabilir komisyonlarınızın tamamını veya uygun bir kısmını, en az ${creditValue} TL olmak şartıyla AI kredisine çevirebilirsiniz. 1 AI kredisi ${creditValue} TL değerindedir; kredi adedi yukarı yuvarlanır ve aradaki farkı GLOVAL AI karşılar.`,
         cashPayoutRule,
         'Vergi ve fatura yükümlülükleri ortaklık şartlarına göre uygulanır; ayrıntılar için paneldeki güncel şartları inceleyin.',
       ]
     : [
         `Commission is ${REFERRAL_COMMISSION_RATE_PERCENT}% of the VAT-exclusive amount of only the referred new customer’s first successful subscription payment.`,
         `Cash-eligible commissions become available ${REFERRAL_HOLD_DAYS} days after payment; refunds and chargebacks are deducted from the balance.`,
-        `Once the total balance reaches ${creditMinimum}, all pending and available commissions can be converted to AI credits without waiting. One credit is worth ${creditValue} TRY; the credit count is rounded up and GLOVAL AI covers the difference.`,
+        `All or an eligible portion of your pending and available commissions can be converted to AI credits, provided the amount is at least ${creditValue} TRY. One credit is worth ${creditValue} TRY; the credit count is rounded up and GLOVAL AI covers the difference.`, 
         cashPayoutRule,
         'Tax and invoice obligations follow the partner terms; review the current terms in your dashboard.',
       ]

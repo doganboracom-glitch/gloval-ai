@@ -1,6 +1,5 @@
 import type { ReferralPayoutMethod, ReferralTaxStatus, ReferralVatMode } from './partner-types'
 import {
-  CREDIT_MIN_CENTS,
   REFERRAL_AMOUNT_MAX_DECIMALS,
   REFERRAL_COMMISSION_RATE_PERCENT,
   REFERRAL_CURRENCY_MINOR_UNITS,
@@ -10,11 +9,12 @@ import {
   TRY_PER_CREDIT_CENTS,
 } from './commission-config'
 
-export { CREDIT_MIN_CENTS, REFERRAL_CREDIT_VALUE_CENTS, REFERRAL_PAYOUT_MIN_CENTS, TRY_PER_CREDIT_CENTS } from './commission-config'
+export { REFERRAL_CREDIT_VALUE_CENTS, REFERRAL_PAYOUT_MIN_CENTS, TRY_PER_CREDIT_CENTS } from './commission-config'
 
 export type ReferralPayoutAmountError =
   | 'invalid_amount'
-  | 'credit_minimum_not_met'
+  | 'credit_balance_empty'
+  | 'partial_credit_must_be_multiple'
   | 'minimum_not_met'
   | 'amount_exceeds_balance'
   | 'partial_unavailable_debt'
@@ -187,14 +187,15 @@ export function validateReferralPayoutAmount(
   method: ReferralPayoutMethod,
   hasDebtBucket = false,
 ): ReferralPayoutAmountError | null {
-  if (!Number.isSafeInteger(maximumCents)) return 'invalid_amount'
-  const minimumCents = method === 'cash' ? REFERRAL_PAYOUT_MIN_CENTS : CREDIT_MIN_CENTS
+  if (!Number.isSafeInteger(maximumCents) || maximumCents < 0) return 'invalid_amount'
   const selectedCents = amountCents == null ? maximumCents : amountCents
 
   if (!Number.isSafeInteger(selectedCents)) return 'invalid_amount'
   if (selectedCents > maximumCents) return 'amount_exceeds_balance'
-  if (selectedCents < minimumCents || selectedCents <= 0) {
-    return method === 'cash' ? 'minimum_not_met' : 'credit_minimum_not_met'
+  if (selectedCents <= 0) return method === 'cash' ? 'minimum_not_met' : 'credit_balance_empty'
+  if (method === 'cash' && selectedCents < REFERRAL_PAYOUT_MIN_CENTS) return 'minimum_not_met'
+  if (method === 'credit' && selectedCents < maximumCents && selectedCents % TRY_PER_CREDIT_CENTS !== 0) {
+    return 'partial_credit_must_be_multiple'
   }
   if (method === 'credit' && hasDebtBucket && selectedCents < maximumCents) {
     return 'partial_unavailable_debt'
