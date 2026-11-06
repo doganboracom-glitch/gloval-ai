@@ -5,6 +5,11 @@ import { sendTransactionalEmail } from '@/lib/notify'
 import { COMPANY } from '@/lib/legal/company'
 import type { AdsRpcClient } from '@/lib/ads/credits'
 import {
+  buildAdsAdminCapEmail,
+  buildAdsAdminPublishFailureEmail,
+  buildAdsAdminReconcilingEmail,
+} from '@/lib/email/ads-mail'
+import {
   sanitizeGoogleErrorDetails,
   summarizeGoogleErrors,
   type GoogleErrorDetail,
@@ -81,18 +86,9 @@ export async function notifyAnonCap(
   try {
     const first = await deps.recordOnce(kind, { cap })
     if (!first) return
-    const subject =
-      level === 'half'
-        ? `GLOVAL Ads: anonim ücretsiz tarama kotasının %50'sine ulaşıldı (${cap})`
-        : `GLOVAL Ads: anonim ücretsiz tarama kotası doldu (${cap})`
-    const text =
-      level === 'half'
-        ? `Bugünkü anonim ücretsiz tarama sayısı tavanın yarısına ulaştı. Tavan: ${cap}. Gerekirse ADS_ANON_DAILY_CAP değerini gözden geçirin.`
-        : `Bugünkü anonim ücretsiz tarama tavanı doldu. Tavan: ${cap}. Yeni misafir taramaları yarına kadar giriş ister.`
+    const mail = buildAdsAdminCapEmail(level === 'half' ? 'anon_half' : 'anon_full', { cap })
     await deps.sendEmail({
-      subject,
-      text,
-      html: `<p>${text}</p>`,
+      ...mail,
       idempotencyKey: `${kind}-${new Date().toISOString().slice(0, 10)}`,
     })
   } catch (error) {
@@ -110,12 +106,8 @@ export async function notifyPolicyBlockCap(
   try {
     const first = await deps.recordOnce(kind, { cap, used })
     if (!first) return
-    const subject = `GLOVAL Ads: günlük politika engeli sınırına ulaşıldı (${used}/${cap})`
-    const text = `Günlük açık politika engeli deneme sınırına ulaşıldı. Kullanım: ${used}/${cap}. Yeni Ads AI istekleri yarına kadar bu sınır nedeniyle reddedilecek.`
     await deps.sendEmail({
-      subject,
-      text,
-      html: `<p>${text}</p>`,
+      ...buildAdsAdminCapEmail('policy_block', { cap, used }),
       idempotencyKey: `${kind}-${istanbulDay()}`,
     })
   } catch (error) {
@@ -134,12 +126,8 @@ export async function notifyGooglePublishReconciling(
   try {
     const first = await deps.recordOnce(kind, { planId, requestId, reason })
     if (!first) return
-    const subject = 'GLOVAL Ads: Google Ads yayını mutabakat bekliyor'
-    const text = `Google Ads yayın işlemi mutabakat gerektiriyor. Plan: ${planId}; deneme: ${requestId}; neden: ${reason}. Otomatik yeniden oluşturma yapılmadı; yönetici mutabakatı gerekiyor.`
     await deps.sendEmail({
-      subject,
-      text,
-      html: `<p>${text}</p>`,
+      ...buildAdsAdminReconcilingEmail({ planId, requestId, reason }),
       idempotencyKey: `${kind}-${istanbulDay()}`,
     })
   } catch (error) {
@@ -169,15 +157,14 @@ export async function notifyGooglePublishFailure(
       ...(googleSummary ? { googleErrors: googleSummary } : {}),
     })
     if (!first) return
-    const subject = 'GLOVAL Ads: Google Ads işlem hatası'
-    const action = stage === 'validate_only'
-      ? 'validate_only isteği başarısız oldu; bu mod Google Ads hesabında kampanya oluşturmaz.'
-      : 'Yayın isteği başarısız olarak kaydedildi ve kredi rezervasyonunun bırakılması istendi.'
-    const text = `Google Ads ${stage} işlemi için yönetici kontrolü gerekiyor. Plan: ${planId}; deneme: ${requestId}; hata kodu: ${safeReason}.${googleSummary ? ` Google hata kodu: ${googleSummary}.` : ''} ${action} Yeniden denemeden önce Google Ads hesabındaki durumu kontrol edin.`
     await deps.sendEmail({
-      subject,
-      text,
-      html: `<p>${text}</p>`,
+      ...buildAdsAdminPublishFailureEmail({
+        planId,
+        requestId,
+        reason: safeReason,
+        stage,
+        ...(googleSummary ? { googleSummary } : {}),
+      }),
       idempotencyKey: `${kind}-${istanbulDay()}`,
     })
   } catch (error) {

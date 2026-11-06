@@ -10,6 +10,13 @@ import {
   type AdsPublishBeginResult,
 } from '@/lib/ads/credits'
 import { createGoogleAdsPlanApprovalHash } from '@/lib/ads/google-ads-approval'
+import { logUserEvent } from '@/lib/notify'
+import {
+  buildAdsPublishFailedEmail,
+  buildAdsPublishSucceededEmail,
+  buildAdsValidationFailedEmail,
+  buildAdsValidationPassedEmail,
+} from '@/lib/email/ads-mail'
 import {
   notifyGooglePublishFailure,
   notifyGooglePublishReconciling,
@@ -129,6 +136,7 @@ export type GoogleAdsPublishFailureReason =
   | 'site_policy_blocked'
   | 'insufficient_credits'
   | 'reservation_failed'
+  | 'publish_not_started'
   | 'provider_error'
   | 'provider_unavailable'
   | 'api_quota_exceeded'
@@ -240,6 +248,50 @@ export type GoogleAdsPublishServiceDeps = {
     reason: GoogleAdsPublishFailureReason
     googleErrors: readonly GoogleErrorDetail[]
   }) => Promise<void>
+  notifyUser?: (input: PublishUserNotification) => Promise<void>
+}
+
+export type PublishUserNotification = {
+  userId: string
+  requestId: string
+  outcome: 'validation_passed' | 'validation_failed' | 'published' | 'failed'
+  reason?: string
+  creditsCharged?: number | null
+}
+
+/** Customer e-mail delivery is best-effort and never changes the publish result. */
+async function notifyUserOutcome(deps: GoogleAdsPublishServiceDeps, input: PublishUserNotification) {
+  try {
+    await deps.notifyUser?.(input)
+  } catch {
+    // Intentionally swallowed.
+  }
+}
+
+async function defaultNotifyUser(input: PublishUserNotification): Promise<void> {
+  const mail = (() => {
+    switch (input.outcome) {
+      case 'validation_passed':
+        return { subject: 'Google Ads planınız doğrulandı', build: () => buildAdsValidationPassedEmail() }
+      case 'validation_failed':
+        return { subject: 'Google Ads planınız doğrulanamadı', build: () => buildAdsValidationFailedEmail({ reason: input.reason }) }
+      case 'published':
+        return {
+          subject: 'Google Ads kampanyanız duraklatılmış olarak oluşturuldu',
+          build: () => buildAdsPublishSucceededEmail({ creditsCharged: input.creditsCharged }),
+        }
+      case 'failed':
+        return { subject: 'Google Ads yayını tamamlanamadı', build: () => buildAdsPublishFailedEmail({ reason: input.reason }) }
+    }
+  })()
+  await logUserEvent({
+    userId: input.userId,
+    type: `google_ads_publish_${input.outcome}`,
+    subject: mail.subject,
+    body: mail.subject,
+    userEmail: mail.build,
+    dedupeKey: `google_ads_publish_${input.outcome}_${input.requestId}`,
+  })
 }
 
 function googleErrorsOf(error: unknown): GoogleErrorDetail[] {
@@ -269,6 +321,7 @@ function failureReason(error: unknown): GoogleAdsPublishFailureReason {
       'currency_mismatch',
       'insufficient_credits',
       'reservation_failed',
+      'publish_not_started',
       'provider_error',
       'provider_unavailable',
       'api_quota_exceeded',
@@ -469,6 +522,7 @@ const defaultDeps: GoogleAdsPublishServiceDeps = {
     notifyGooglePublishReconciling(planId, requestId, undefined, reason),
   alertPublishFailure: (planId, requestId, reason, stage, googleErrors) =>
     notifyGooglePublishFailure(planId, requestId, reason, stage, undefined, googleErrors),
+  notifyUser: defaultNotifyUser,
   recordGoogleFailure: (input) =>
     recordGoogleAdsPolicyBlock({
       userId: input.userId,
@@ -789,6 +843,11 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                   approvalId: plan.approval_id as string,
                   approvalHash,
                 })
+                await notifyUserOutcome(deps, {
+                  userId: input.userId,
+                  requestId,
+                  outcome: 'validation_passed',
+                })
               }
               return {
                 ok: true,
@@ -813,6 +872,14 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
                 reason,
                 googleErrors,
               })
+              if (!validationTestMode) {
+                await notifyUserOutcome(deps, {
+                  userId: input.userId,
+                  requestId,
+                  outcome: 'validation_failed',
+                  reason,
+                })
+              }
               return failed(reason, undefined, googleErrors)
             }
           }
@@ -847,6 +914,24 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
           }
           if (!reservation.ok) {
             if (reservation.reason === 'reservation_failed') {
+              const current = await deps.loadPlan(input.userId, plan.id).catch(() => null)
+              const reservationTookEffect =
+                !current || (current.status === 'publishing' && current.publish_request_id === requestId)
+              if (!reservationTookEffect) {
+                await deps.finishPublishCapacity({
+                  userId: input.userId,
+                  actionId: capacityActionId,
+                  outcome: 'failure',
+                  reasonCode: 'publish_not_started',
+                })
+                await notifyUserOutcome(deps, {
+                  userId: input.userId,
+                  requestId,
+                  outcome: 'failed',
+                  reason: 'publish_not_started',
+                })
+                return failed('publish_not_started', reservation.balance)
+              }
               await deps.markReconciling({
                 userId: input.userId,
                 planId: plan.id,
@@ -926,6 +1011,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               actionId: capacityActionId,
               outcome: 'success',
             })
+            await notifyUserOutcome(deps, {
+              userId: input.userId,
+              requestId,
+              outcome: 'published',
+              creditsCharged: settlement.chargedAmount,
+            })
             return {
               ok: true,
               state: 'published',
@@ -1003,6 +1094,12 @@ export function createGoogleAdsPublishService(deps: GoogleAdsPublishServiceDeps 
               operation: 'publish',
               reason,
               googleErrors,
+            })
+            await notifyUserOutcome(deps, {
+              userId: input.userId,
+              requestId,
+              outcome: 'failed',
+              reason,
             })
             return failed(reason, reservation.balance, googleErrors)
           }
