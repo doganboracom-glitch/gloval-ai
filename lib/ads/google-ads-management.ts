@@ -601,6 +601,17 @@ async function resolvePreparedAction(input: ActionInput, access: GoogleAdsAccess
     } else {
       throw new GoogleAdsError('action_not_reversible')
     }
+    if (resolveGoogleAdsKillSwitch()) {
+      // Geri alma da bir etkinleştirme/bütçe artışı olabilir; kill switch açıkken bu yol da kapalı kalmalı.
+      if (action === 'enable') {
+        await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'enable' })
+        throw new GoogleAdsError('kill_switch_active')
+      }
+      if (action === 'budget' && BigInt(String(target.dailyBudgetMicros)) > BigInt(snapshot.dailyBudgetMicros)) {
+        await recordGoogleAdsPolicyBlock({ userId: input.userId, planId: plan.id, reason: 'kill_switch_active', operation: 'budget_increase' })
+        throw new GoogleAdsError('kill_switch_active')
+      }
+    }
     return { action, actionType: original.action_type, target, undoOf: original.id }
   }
 

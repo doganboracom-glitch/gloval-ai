@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const policyBlock = vi.hoisted(() => vi.fn(async () => undefined))
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/lib/ads/google-ads-audit', () => ({ recordGoogleAdsPolicyBlock: policyBlock }))
 
 import { createGoogleAdsPublishService, type GoogleAdsPublishServiceDeps } from '@/lib/ads/google-ads-publish'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
@@ -506,5 +509,59 @@ describe('Google Ads E2 publish service', () => {
     expect(result).toMatchObject({ ok: true, state: 'published', externalCampaignId: '456789', creditsCharged: 15 })
     expect(deps.beginPublish).not.toHaveBeenCalled()
     expect(provider.publishCampaign).not.toHaveBeenCalled()
+  })
+})
+
+describe('Google Ads kill switch (publish service)', () => {
+  beforeEach(() => vi.stubEnv('GOOGLE_ADS_KILL_SWITCH', '1'))
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    policyBlock.mockClear()
+  })
+
+  it('blocks a real publish before loading the plan, reserving credits or calling Google', async () => {
+    const { service, deps, provider } = setup()
+
+    expect(await service.publish(confirmedPublish)).toEqual({ ok: false, reason: 'kill_switch_active' })
+    expect(deps.loadPlan).not.toHaveBeenCalled()
+    expect(deps.beginPublish).not.toHaveBeenCalled()
+    expect(provider.publishCampaign).not.toHaveBeenCalled()
+    expect(policyBlock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'kill_switch_active', operation: 'publish' }))
+  })
+
+  it('still allows validate_only checks, which never mutate Google Ads', async () => {
+    const { service, provider } = setup({
+      publishResult: { externalCampaignId: null, status: 'paused', validateOnly: true, billingVerified: true, paymentMethodWarning: false },
+    })
+
+    const result = await service.publish({ ...confirmedPublish, validateOnly: true, finalConfirmation: false })
+
+    expect(result).not.toMatchObject({ reason: 'kill_switch_active' })
+    expect(provider.publishCampaign).toHaveBeenCalledWith(expect.objectContaining({ validateOnly: true }))
+  })
+
+  it('blocks enabling a campaign even with every acknowledgement', async () => {
+    const { service, provider } = setup({ plan: plan({ status: 'published', external_campaign_id: '456789' }) })
+
+    expect(await service.updateCampaignStatus({
+      userId: USER_ID,
+      planId: PLAN_ID,
+      status: 'enabled',
+      userConfirmed: true,
+      acknowledgedBillingWarning: true,
+      acknowledgedBudget: true,
+    })).toEqual({ ok: false, reason: 'kill_switch_active' })
+    expect(provider.getAdReviewStatus).not.toHaveBeenCalled()
+    expect(provider.setCampaignStatus).not.toHaveBeenCalled()
+    expect(policyBlock).toHaveBeenCalledWith(expect.objectContaining({ operation: 'enable' }))
+  })
+
+  it('keeps pausing a campaign available', async () => {
+    const { service, provider } = setup({ plan: plan({ status: 'published', external_campaign_id: '456789' }) })
+
+    const result = await service.updateCampaignStatus({ userId: USER_ID, planId: PLAN_ID, status: 'paused', userConfirmed: true })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(provider.setCampaignStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'paused', validateOnly: false }))
   })
 })
