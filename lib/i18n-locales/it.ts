@@ -626,8 +626,10 @@ const it: DeepPartial<Dict> = {
       kvkk: 'Informativa sulla protezione dei dati',
       distanceSales: 'Contratto di vendita a distanza',
       preInfo: 'Modulo informativo precontrattuale',
-      refund: 'Recesso e rimborso',
-      delivery: 'Erogazione del servizio',
+  refund: 'Recesso e rimborso',
+  delivery: 'Erogazione del servizio',
+  referralTerms: 'Termini del programma partner',
+
     },
   },
   cookie: {

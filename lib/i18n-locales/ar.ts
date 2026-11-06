@@ -542,8 +542,10 @@ const ar: DeepPartial<Dict> = {
       kvkk: 'سياسة حماية البيانات',
       distanceSales: 'عقد البيع عن بُعد',
       preInfo: 'نموذج المعلومات السابقة للتعاقد',
-      refund: 'الإلغاء والاسترداد',
-      delivery: 'تسليم الخدمة',
+  refund: 'الإلغاء والاسترداد',
+  delivery: 'تسليم الخدمة',
+  referralTerms: 'شروط برنامج الشراكة',
+
     },
   },
   cookie: {

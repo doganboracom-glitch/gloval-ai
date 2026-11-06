@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   rpcData: null as unknown,
   rpcError: null as any,
   rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
+  partnerTermsVersion: 'v1.2',
   requireAdminCalls: 0,
   requireAdminError: null as Error | null,
   adminClientCalls: 0,
@@ -36,7 +37,9 @@ vi.mock('@/lib/supabase/admin', () => ({
         select: () => ({
           eq: () => ({
             maybeSingle: async () => ({
-              data: table === 'referral_partners' ? { id: ownSummary.partnerId } : null,
+              data: table === 'referral_partners'
+                ? { id: ownSummary.partnerId, terms_version: state.partnerTermsVersion }
+                : null,
               error: null,
             }),
           }),
@@ -72,6 +75,7 @@ beforeEach(() => {
   state.rpcData = [ownSummary]
   state.rpcError = null
   state.rpcCalls = []
+  state.partnerTermsVersion = 'v1.2'
   state.requireAdminCalls = 0
   state.requireAdminError = null
   state.adminClientCalls = 0
@@ -110,6 +114,14 @@ describe('referral partner data', () => {
         args: { p_user_id: 'partner-user-id', p_include_customers: true },
       },
     ])
+  })
+
+  it('hides referral metrics until an existing partner accepts current terms', async () => {
+    vi.stubEnv('REFERRAL_ENABLED', '1')
+    state.partnerTermsVersion = 'v1.1'
+
+    await expect(getReferralDashboardData()).resolves.toBeNull()
+    expect(state.rpcCalls).toHaveLength(0)
   })
 
   it('keeps the admin summary read-only and masks partner emails', async () => {
