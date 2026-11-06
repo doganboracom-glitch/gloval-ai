@@ -7,7 +7,7 @@ import {
 
 const REFERRAL_SLUG = 'satis-ortakligi-sartlari'
 const TURKISH_CREDIT_CONVERSION_CLAUSE =
-  'AI kredisine dönüştürmede minimum tutar yoktur; 1 kredi 3 TL değerindedir. Kredi adedi yukarı yuvarlanır ve aradaki en fazla 2,99 TL tutarındaki fark GLOVAL AI tarafından karşılanır. Bekleyen ve kullanılabilir komisyonların tamamı veya dönüştürülebilir bakiye sınırında daha düşük bir tutar, 14 günlük bekleme süresi dolmadan AI kredisine çevrilebilir. Negatif gelecek bakiye düzeltmesi varken yalnızca bakiyenin tamamı dönüştürülebilir.'
+  'Komisyon, yalnızca yönlendirdiğiniz yeni müşterinin ilk başarılı abonelik ödemesi üzerinden, KDV hariç tutarın %20’si olarak hesaplanır. Kazanılan komisyon 14 gün beklemede kalır; bu süre içinde iptal, iade veya ters ibraz gerçekleşirse komisyon iptal edilir. Bekleme süresi sonrasında gerçekleşen iadeler bakiyenizde kesintiye veya negatif bakiyeye neden olabilir. Kullanılabilir bakiyeniz en az 1.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit olarak talep edebilirsiniz; aynı anda yalnızca bir açık ödeme talebiniz olabilir. Şirket sahibi veya şahıs şirketiyseniz ödeme talebinde KDV hesaplama yönteminizi seçerek fatura düzenlemelisiniz; bireysel veya muaf ortaklar için gider belgesi GLOVAL tarafından hazırlanır ve vergi yükümlülükleri ortağın sorumluluğundadır. Dilerseniz bekleyen komisyonlarınızı da 14 günün dolmasını beklemeden, en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz. 1 AI kredisi 3 TL değerindedir; kredi adedi yukarı yuvarlanır ve oluşan en fazla 2,99 TL fark GLOVAL AI tarafından karşılanır. Negatif bakiye düzeltmesi bulunan ortaklar yalnızca bakiyelerinin tamamını AI kredisine dönüştürebilir.'
 const ENGLISH_CREDIT_CONVERSION_CLAUSE =
   'AI credit conversion has no minimum amount. One credit is worth TRY 3; the credit count is rounded up and GLOVAL AI covers the difference, up to TRY 2.99. All pending and available commissions, or a smaller eligible amount up to the convertible balance, can be converted before the 14-day hold ends. A partial conversion is unavailable while a future-dated negative balance adjustment exists.'
 
@@ -22,13 +22,13 @@ describe('referral partner terms', () => {
     const englishTerms = REFERRAL_TERMS.en.sections.flatMap((section) => section.paragraphs).join(' ')
 
     expect(REFERRAL_TERMS_VERSION).toBe('v1.2')
-    expect(turkishTerms).toMatch(/ilk başarılı abonelik ödemesi.*%20.*KDV hariç/iu)
-    expect(turkishTerms).toMatch(/14 gün.*iade edilir/iu)
-    expect(turkishTerms).toMatch(/1\.000 TL.*AI kredisine.*1 kredi.*3 TL/iu)
-    expect(turkishTerms).toContain('minimum tutar yoktur')
-    expect(turkishTerms).not.toContain('Dönüşüm için en az 3 TL gerekir')
-    expect(turkishTerms).toMatch(/en az 1\.000 TL kullanılabilir bakiye.*tamamı veya en az bu eşik kadar bir bölümü.*KDV dahil.*KDV üstüne ekle/iu)
-    expect(turkishTerms).toMatch(/Şirket.*KDV.*fatura.*Bireysel.*fatura.*gider belgesi/iu)
+    expect(turkishTerms).toMatch(/ilk başarılı abonelik ödemesi.*KDV hariç tutarın %20/iu)
+    expect(turkishTerms).toMatch(/14 gün.*iade/iu)
+    expect(turkishTerms).toMatch(/1\.000 TL.*AI kredisine.*1 AI kredisi 3 TL/iu)
+    expect(turkishTerms).toContain('en az 3 TL olmak şartıyla AI kredisine dönüştürebilirsiniz')
+    expect(turkishTerms).not.toContain('minimum tutar yoktur')
+    expect(turkishTerms).toMatch(/en az 1\.000 TL olduğunda tamamını veya istediğiniz bir kısmını nakit.*KDV hesaplama yönteminizi seçerek fatura/iu)
+    expect(turkishTerms).toMatch(/Şirket sahibi.*KDV.*fatura.*bireysel veya muaf.*gider belgesi/iu)
     expect(turkishTerms).toMatch(/TCKN veya vergi numarası.*toplanmaz/iu)
     expect(turkishTerms).toMatch(/kötüye kullanım.*askıya alınabilir/iu)
     expect(englishTerms).toMatch(/first successful paid subscription charge.*20%.*excluding VAT/iu)
@@ -49,8 +49,10 @@ describe('referral partner terms', () => {
     expect(REFERRAL_TERMS.en.sections.at(-1)?.paragraphs.join(' ')).toContain('November 6, 2026')
   })
 
-  it('adds the exact Turkish and English credit-conversion clauses after cash payout terms', () => {
-    expect(REFERRAL_TERMS.tr.sections[0].paragraphs[4]).toBe(TURKISH_CREDIT_CONVERSION_CLAUSE)
+  it('uses the exact single Turkish section 1 paragraph and the English credit-conversion clause', () => {
+    expect(REFERRAL_TERMS.tr.sections[0].heading).toBe('1. Program, komisyon ve ödeme koşulları')
+    expect(REFERRAL_TERMS.tr.sections[0].paragraphs).toHaveLength(1)
+    expect(REFERRAL_TERMS.tr.sections[0].paragraphs[0]).toBe(TURKISH_CREDIT_CONVERSION_CLAUSE)
     expect(REFERRAL_TERMS.en.sections[0].paragraphs[4]).toBe(ENGLISH_CREDIT_CONVERSION_CLAUSE)
     expect(REFERRAL_TERMS_VERSION).toBe('v1.2')
     expect(REFERRAL_TERMS_UPDATED_AT).toBe('2026-11-06')

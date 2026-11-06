@@ -21,7 +21,7 @@ if (!privacyDoc) throw new Error('Privacy policy document is unavailable')
 
 describe('referral terms credit-conversion paragraph', () => {
   it.each([
-    ['tr', REFERRAL_TERMS.tr.sections[0].paragraphs[3]],
+    ['tr', REFERRAL_TERMS.tr.sections[0].paragraphs[0]],
     ['en', REFERRAL_TERMS.en.sections[0].paragraphs[3]],
   ] as const)('renders the %s clause as one unchanged paragraph', (locale, expectedParagraph) => {
     mocks.lang = locale
