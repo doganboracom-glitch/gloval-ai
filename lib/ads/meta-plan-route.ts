@@ -35,6 +35,30 @@ export async function guardMetaPublishRoute(request: Request, rate: { key: strin
   return { ok: true, access, admin: createAdminClient() }
 }
 
+/**
+ * Manage routes (activate / pause / budget). Needs at least the protective permission; the stricter `canManage`
+ * (money-increasing actions) is checked per action by the route. The Meta kill switch stops every Graph call.
+ */
+export async function guardMetaManageRoute(request: Request, rate: { key: string; limit: number }): Promise<Guard> {
+  if (!metaAdsFeatureEnabled()) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_found' }, 404) }
+  if (!isSameOriginMetaAdsPost(request)) return { ok: false, response: metaAdsJson({ ok: false, error: 'csrf_failed' }, 403) }
+  const access = await metaAdsRequestAccess()
+  if (!access) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_authenticated' }, 401) }
+  if (!access.decision.canConnect) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_found' }, 404) }
+  if (!access.decision.canManageProtective) return { ok: false, response: metaAdsJson({ ok: false, error: 'manage_not_allowed' }, 403) }
+  if (metaAdsKillSwitchActive()) return { ok: false, response: metaAdsJson({ ok: false, error: 'kill_switch_active' }, 503) }
+  if (!checkRateLimit(`${rate.key}:${access.userId}`, rate.limit, 60_000).allowed) {
+    return { ok: false, response: metaAdsJson({ ok: false, error: 'rate_limited' }, 429) }
+  }
+  return { ok: true, access, admin: createAdminClient() }
+}
+
+/** Managing needs an active connection that holds ads_management; a Page is not required. */
+export function assertMetaManageable(connection: MetaConnectionRow): void {
+  if (connection.status !== 'active') throw new MetaAdsError('reauth_required')
+  if (!(connection.scopes ?? []).includes('ads_management')) throw new MetaAdsError('publish_permission_missing')
+}
+
 export async function readJsonObject(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const body = await request.json()

@@ -8,6 +8,7 @@ import type { AdsWorkspaceProps } from '@/components/ads/ads-workspace-types'
 import { MetaAdsSettings } from '@/components/ads/meta-ads-settings'
 import { MetaAdsInsights } from '@/components/ads/meta-ads-insights'
 import { MetaPublishPanel } from '@/components/ads/meta-publish-panel'
+import { MetaOverviewPlans } from '@/components/ads/meta-overview-plans'
 import { hasMetaManagement, metaAccessLabel, metaAccountStatusLabel } from '@/lib/ads/meta-ads-shared'
 
 export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspaceProps) {
@@ -47,6 +48,12 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
                   <p className="text-xs text-muted-foreground">
                     {isTr ? 'Erişim: ' : 'Access: '}{metaAccessLabel(hasMetaManagement(connection), isTr)}
                   </p>
+                  <MetaOverviewPlans
+                    connectionId={connection.id}
+                    enabled={data.publishEnabled && connection.hasPage && connection.missingPublishScopes.length === 0}
+                    lang={isTr ? 'tr' : 'en'}
+                    onOpenPlans={() => onTabChange('plans')}
+                  />
                 </li>
               ))}
             </ul>
@@ -66,7 +73,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
       </AdsTabPanel>
 
       <AdsTabPanel tab="plans" active={tab}>
-        <MetaPublishPanel connections={metaConnections} publishEnabled={data.publishEnabled} onGoToSettings={() => onTabChange('settings')} />
+        <MetaPublishPanel connections={metaConnections} publishEnabled={data.publishEnabled} manage={data.metaManage} onGoToSettings={() => onTabChange('settings')} />
       </AdsTabPanel>
 
       <AdsTabPanel tab="reports" active={tab}>

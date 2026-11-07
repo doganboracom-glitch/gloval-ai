@@ -1,5 +1,6 @@
 import { META_APP_NOT_LIVE_MESSAGE, redactMetaErrorMessage } from '@/lib/ads/meta-error-detail'
 import { META_STEP_LABELS } from '@/lib/ads/meta-publish-errors'
+import { metaPlanStatusView } from '@/lib/ads/meta-plan-status'
 
 /** Client-safe helpers behind the Meta publish panel: error copy, form field order, stepper and partial-result state. */
 
@@ -155,18 +156,12 @@ export function describeStoredFailure(plan: { failureStep: string | null; failur
   return { message, detail }
 }
 
-export const META_PLAN_STATUS_LABELS: Record<string, string> = {
-  draft: 'Taslak',
-  validated: 'Doğrulandı',
-  approved: 'Onaylandı',
-  publishing: 'Oluşturuluyor',
-  partial: 'Kısmen oluştu',
-  failed: 'Başarısız',
-  published: 'Duraklatılmış',
-  active: 'Etkin',
-  user_paused: 'Duraklatıldı',
-  archived: 'Arşivlendi',
-}
+/** Turkish status labels, derived from the shared status mapping so they cannot drift. */
+export const META_PLAN_STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  ['draft', 'validated', 'approved', 'publishing', 'partial', 'failed', 'published', 'active', 'user_paused', 'archived'].map(
+    (status) => [status, metaPlanStatusView({ status }, 'tr').label],
+  ),
+)
 
 type PostFn = <T>(url: string, body: unknown) => Promise<({ ok: true } & T) | MetaApiError>
 

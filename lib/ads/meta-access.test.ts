@@ -17,7 +17,7 @@ const VERIFIED = { emailConfirmed: true, isAdmin: false }
 describe('Meta Ads erişim kapısı', () => {
   it('ayar yoksa kapalıdır ve kimse bağlanamaz', () => {
     expect(resolveMetaAdsAccessMode({})).toBe('off')
-    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, {})).toEqual({ mode: 'off', canConnect: false, canPublish: false, isAdmin: false })
+    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, {})).toEqual({ mode: 'off', canConnect: false, canPublish: false, canManage: false, canManageProtective: false, isAdmin: false })
   })
 
   it('bilinmeyen mod değeri kapalı sayılır (fail closed)', () => {
@@ -44,8 +44,27 @@ describe('Meta Ads erişim kapısı', () => {
       mode: 'open',
       canConnect: true,
       canPublish: false,
+      canManage: false,
+      canManageProtective: false,
       isAdmin: false,
     })
+  })
+
+  it('etkinleştirme/bütçe artırma: manage açık VE manage allowlistinde; duraklatma yalnızca allowlist ister', () => {
+    const base = { META_ADS_ACCESS_MODE: 'open' }
+    const listed = { META_ADS_MANAGE_ALLOWED_USER_IDS: USER_ID }
+    const none = resolveMetaAdsAccess(USER_ID, VERIFIED, base)
+    expect([none.canManage, none.canManageProtective]).toEqual([false, false])
+    const noSwitch = resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, ...listed })
+    expect([noSwitch.canManage, noSwitch.canManageProtective]).toEqual([false, true])
+    const switchOnly = resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, META_ADS_MANAGE_ENABLED: '1' })
+    expect([switchOnly.canManage, switchOnly.canManageProtective]).toEqual([false, false])
+    const full = resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, ...listed, META_ADS_MANAGE_ENABLED: '1' })
+    expect([full.canManage, full.canManageProtective]).toEqual([true, true])
+    const other = resolveMetaAdsAccess(OTHER_USER_ID, VERIFIED, { ...base, ...listed, META_ADS_MANAGE_ENABLED: '1' })
+    expect([other.canManage, other.canManageProtective]).toEqual([false, false])
+    const admin = resolveMetaAdsAccess(OTHER_USER_ID, { emailConfirmed: true, isAdmin: true }, { ...base, ...listed, META_ADS_MANAGE_ENABLED: '1' })
+    expect(admin.canManage).toBe(false)
   })
 
   it('yayın yalnızca kill switch açık VE kullanıcı yayın allowlistinde ise açılır', () => {

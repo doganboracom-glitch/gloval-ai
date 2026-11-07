@@ -35,12 +35,16 @@ export type MetaPlanRow = {
   failure_code: string | null
   failure_reason: string | null
   published_at: string | null
+  current_effective_status: string | null
+  last_synced_at: string | null
+  live_snapshot: Record<string, unknown> | null
+  activated_at: string | null
   created_at: string
   updated_at: string
 }
 
 const PLAN_SELECT =
-  'id,user_id,connection_id,status,content,version,currency,daily_budget_minor,request_id,image_sha256,plan_hash,approved_version,approved_at,approval_summary,validated_version,validated_at,meta_campaign_id,meta_adset_id,meta_image_hash,meta_creative_id,meta_ad_id,failure_step,failure_code,failure_reason,published_at,created_at,updated_at'
+  'id,user_id,connection_id,status,content,version,currency,daily_budget_minor,request_id,image_sha256,plan_hash,approved_version,approved_at,approval_summary,validated_version,validated_at,meta_campaign_id,meta_adset_id,meta_image_hash,meta_creative_id,meta_ad_id,failure_step,failure_code,failure_reason,published_at,current_effective_status,last_synced_at,live_snapshot,activated_at,created_at,updated_at'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -66,6 +70,10 @@ export function metaPlanView(row: MetaPlanRow) {
     failureCode: row.failure_code,
     failureReason: row.failure_reason,
     publishedAt: row.published_at,
+    effectiveStatus: row.current_effective_status,
+    lastSyncedAt: row.last_synced_at,
+    live: row.live_snapshot,
+    activatedAt: row.activated_at,
     updatedAt: row.updated_at,
   }
 }

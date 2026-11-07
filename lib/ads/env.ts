@@ -41,6 +41,8 @@ export const ADS_ENV = {
   metaLoginConfigIdManage: 'META_LOGIN_CONFIG_ID_MANAGE',
   metaAdsPublishEnabled: 'META_ADS_PUBLISH_ENABLED',
   metaAdsPublishAllowedUserIds: 'META_ADS_PUBLISH_ALLOWED_USER_IDS',
+  metaAdsManageEnabled: 'META_ADS_MANAGE_ENABLED',
+  metaAdsManageAllowedUserIds: 'META_ADS_MANAGE_ALLOWED_USER_IDS',
   metaPublishDailyUserLimit: 'META_PUBLISH_DAILY_USER_LIMIT',
   metaPublishDailyGlobalLimit: 'META_PUBLISH_DAILY_GLOBAL_LIMIT',
   metaWriteDailyUserLimit: 'META_WRITE_DAILY_USER_LIMIT',
@@ -282,6 +284,10 @@ export type MetaAdsAccessDecision = {
   canConnect: boolean
   /** Phase M2: paused-campaign publishing. Needs the kill switch on AND an explicit allowlist entry (admins too). */
   canPublish: boolean
+  /** Phase M3: activate / raise the budget. Needs META_ADS_MANAGE_ENABLED=1 AND a manage allowlist entry (admins too). */
+  canManage: boolean
+  /** Phase M3: spend-reducing actions (pause, lower the budget). Allowlist only, so the manage kill switch never traps a running campaign. */
+  canManageProtective: boolean
   isAdmin: boolean
 }
 
@@ -309,7 +315,14 @@ export function resolveMetaAdsAccess(
   const canPublish = canConnect
     && env[ADS_ENV.metaAdsPublishEnabled]?.trim() === '1'
     && isAllowedUser(normalizedUserId, env[ADS_ENV.metaAdsPublishAllowedUserIds])
-  return { mode, canConnect, canPublish, isAdmin }
+  const canManageProtective = canConnect && isAllowedUser(normalizedUserId, env[ADS_ENV.metaAdsManageAllowedUserIds])
+  const canManage = canManageProtective && env[ADS_ENV.metaAdsManageEnabled]?.trim() === '1'
+  return { mode, canConnect, canPublish, canManage, canManageProtective, isAdmin }
+}
+
+/** Manage kill switch (`META_ADS_MANAGE_ENABLED=1` must be set); the allowlist is checked per user. */
+export function resolveMetaManageEnabled(env: Env = process.env): boolean {
+  return env[ADS_ENV.metaAdsManageEnabled]?.trim() === '1'
 }
 
 /** Publish kill switch (`META_ADS_PUBLISH_ENABLED=1` must be set); the allowlist is checked per user. */
