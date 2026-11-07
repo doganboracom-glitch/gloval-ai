@@ -438,7 +438,7 @@ export function buildAdsCampaignActionEmail(input: {
 const RECONCILING_REASON_LABEL: Record<string, string> = {
   google_publish_result_unknown: 'Google yanıtı alınamadı; kampanyanın oluşup oluşmadığı belirsiz.',
   publish_result_persist_failed: 'Kampanya oluştu ancak sonuç kaydedilemedi.',
-  publish_failure_persist_failed: 'Yay��n başarısız oldu ancak kredi rezervasyonu bırakılamadı.',
+  publish_failure_persist_failed: 'Yayın başarısız oldu ancak kredi rezervasyonu bırakılamadı.',
   publish_reservation_result_unknown: 'Kredi rezervasyonu sonucu belirsiz; plan yayın durumunda kaldı.',
   publish_stale_timeout: 'Yayın beklenenden uzun sürdü ve zaman aşımına uğradı.',
   publish_refund_failed: 'Kredi iadesi tamamlanamadı.',

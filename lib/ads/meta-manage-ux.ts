@@ -4,41 +4,29 @@
  */
 import { dailyBudgetToMinor } from '@/lib/ads/meta-publish-plan'
 import { metaMinorToMajor } from '@/lib/ads/meta-ads-shared'
+import {
+  DISAPPROVED_EFFECTIVE_STATES,
+  REVIEW_EFFECTIVE_STATES,
+  metaPlanStatusView,
+  type MetaPlanStatusKey,
+  type MetaPlanTone,
+} from '@/lib/ads/meta-plan-status'
 
 export type MetaManageAction = 'activate' | 'pause' | 'budget'
 
 export const META_MANAGE_TERMS_VERSION = 'meta-manage-2026-07'
 
-export type MetaBadgeKey = 'draft' | 'paused' | 'active' | 'review' | 'disapproved' | 'partial' | 'failed' | 'publishing' | 'archived'
+export type MetaBadgeKey = MetaPlanStatusKey
 
-export type MetaBadge = { key: MetaBadgeKey; label: string; tone: 'neutral' | 'ok' | 'warn' | 'error' }
+export type MetaBadge = { key: MetaBadgeKey; label: string; tone: MetaPlanTone }
 
-const REVIEW_STATES = new Set(['PENDING_REVIEW', 'IN_PROCESS', 'PREAPPROVED'])
-const DISAPPROVED_STATES = new Set(['DISAPPROVED', 'WITH_ISSUES'])
+const REVIEW_STATES = REVIEW_EFFECTIVE_STATES
+const DISAPPROVED_STATES = DISAPPROVED_EFFECTIVE_STATES
 
-/** Single source for the plan status chip, so a plan never shows "Etkin" while Meta still reviews its ad. */
+/** Plan status chip data; delegates to the shared colour-language mapping so a plan never shows "Etkin" while Meta still reviews its ad. */
 export function metaPlanBadge(plan: { status: string; effectiveStatus?: string | null }): MetaBadge {
-  switch (plan.status) {
-    case 'active': {
-      const effective = plan.effectiveStatus ?? null
-      if (effective && DISAPPROVED_STATES.has(effective)) return { key: 'disapproved', label: 'Reddedildi', tone: 'error' }
-      if (effective && REVIEW_STATES.has(effective)) return { key: 'review', label: 'Meta incelemesinde', tone: 'warn' }
-      return { key: 'active', label: 'Etkin', tone: 'ok' }
-    }
-    case 'published':
-    case 'user_paused':
-      return { key: 'paused', label: 'Duraklatıldı', tone: 'neutral' }
-    case 'partial':
-      return { key: 'partial', label: 'Kısmi', tone: 'warn' }
-    case 'failed':
-      return { key: 'failed', label: 'Başarısız', tone: 'error' }
-    case 'publishing':
-      return { key: 'publishing', label: 'Oluşturuluyor', tone: 'warn' }
-    case 'archived':
-      return { key: 'archived', label: 'Arşivlendi', tone: 'neutral' }
-    default:
-      return { key: 'draft', label: 'Taslak', tone: 'neutral' }
-  }
+  const view = metaPlanStatusView(plan, 'tr')
+  return { key: view.key, label: view.label, tone: view.tone }
 }
 
 export type MetaManageVisibility = {

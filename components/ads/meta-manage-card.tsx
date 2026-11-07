@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { AlertCircle, CheckCircle2, ExternalLink, Pause, Play, RefreshCw } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { MetaPlanStatusChip } from '@/components/ads/meta-plan-status'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,6 @@ import {
   manageNeedsConsent,
   metaEffectiveStatusNote,
   metaManageVisibility,
-  metaPlanBadge,
   metaSpendConsentText,
   parseBudgetInput,
   type MetaManageAction,
@@ -50,13 +49,6 @@ async function postJson<T extends { ok: boolean }>(url: string, body: unknown): 
   }
 }
 
-const badgeTone = {
-  ok: 'default',
-  warn: 'secondary',
-  error: 'destructive',
-  neutral: 'outline',
-} as const
-
 export function MetaManageCard({
   plan,
   campaignUrl,
@@ -89,7 +81,6 @@ export function MetaManageCard({
   const current: MetaManagedPlan = synced?.ok && synced.plan ? { ...synced.plan, live: synced.live ?? synced.plan.live } : plan
   const live = current.live
   const visibility = metaManageVisibility({ status: current.status, canManage, canManageProtective, hasManagementScope })
-  const badge = metaPlanBadge({ status: current.status, effectiveStatus: current.effectiveStatus })
   const note = current.status === 'active' ? metaEffectiveStatusNote(current.effectiveStatus, live?.ad.reviewFeedback) : null
 
   const budgetParsed = budgetInput.trim() ? parseBudgetInput(budgetInput, current.currency) : null
@@ -143,7 +134,7 @@ export function MetaManageCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h3 id="meta-manage-title" className="text-sm font-semibold">Kampanya yönetimi</h3>
-          <Badge variant={badgeTone[badge.tone]}>{badge.label}</Badge>
+          <MetaPlanStatusChip plan={{ status: current.status, effectiveStatus: current.effectiveStatus }} />
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={() => void refresh()} disabled={busy !== null || isValidating}>
           <RefreshCw className="size-4" aria-hidden="true" />

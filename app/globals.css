@@ -99,6 +99,135 @@
   --sidebar-ring: oklch(0.66 0.2 298);
 }
 
+/* Meta plan status colour language (mapping: lib/ads/meta-plan-status.ts).
+   Single place to retune. Every value is light enough for >= 4.5:1 text contrast on the
+   dark card surface (oklch L 0.205); the border/glow reuse the same token. */
+:root {
+  --plan-draft: oklch(0.8 0.07 245);
+  --plan-paused: oklch(0.89 0.17 95);
+  --plan-partial: oklch(0.82 0.015 280);
+  --plan-active: oklch(0.85 0.21 150);
+  --plan-review: oklch(0.86 0.12 205);
+  --plan-error: oklch(0.77 0.19 22);
+  --plan-archived: oklch(0.7 0.01 280);
+  --plan-selected: oklch(0.76 0.19 298);
+}
+
+.plan-status {
+  --plan-c: var(--plan-draft);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid color-mix(in oklch, var(--plan-c) 60%, transparent);
+  border-radius: 9999px;
+  background: color-mix(in oklch, var(--plan-c) 10%, var(--card));
+  padding: 0.125rem 0.625rem;
+  color: var(--plan-c);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.plan-status > svg {
+  flex: none;
+}
+.plan-status--draft { --plan-c: var(--plan-draft); }
+.plan-status--paused { --plan-c: var(--plan-paused); }
+.plan-status--partial { --plan-c: var(--plan-partial); }
+.plan-status--active { --plan-c: var(--plan-active); }
+.plan-status--review { --plan-c: var(--plan-review); }
+.plan-status--error { --plan-c: var(--plan-error); }
+.plan-status--archived { --plan-c: var(--plan-archived); }
+
+.plan-status[data-glow="true"] {
+  box-shadow:
+    0 0 8px -1px color-mix(in oklch, var(--plan-c) 45%, transparent),
+    inset 0 0 6px -2px color-mix(in oklch, var(--plan-c) 30%, transparent);
+}
+.plan-status[data-pulse="true"] {
+  animation: plan-status-pulse 5s ease-in-out infinite;
+}
+@keyframes plan-status-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 6px -1px color-mix(in oklch, var(--plan-c) 30%, transparent),
+      inset 0 0 6px -2px color-mix(in oklch, var(--plan-c) 25%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 12px 0 color-mix(in oklch, var(--plan-c) 55%, transparent),
+      inset 0 0 6px -2px color-mix(in oklch, var(--plan-c) 35%, transparent);
+  }
+}
+
+/* Plan picker button: same status look, larger hit area, name stays readable. */
+.plan-picker {
+  min-height: 2.25rem;
+  border-radius: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: start;
+}
+.plan-picker:hover {
+  background: color-mix(in oklch, var(--plan-c) 18%, var(--card));
+}
+.plan-picker:focus-visible {
+  outline: 2px solid var(--plan-selected);
+  outline-offset: 2px;
+}
+.plan-picker__name {
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--foreground);
+}
+.plan-picker__sep {
+  color: var(--muted-foreground);
+}
+.plan-picker__status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--plan-c);
+  font-size: 0.75rem;
+}
+
+/* Selected plan: purple neon ring regardless of status; the pulse is replaced by a steady ring. */
+.plan-status[data-selected="true"] {
+  border-color: var(--plan-selected);
+  animation: none;
+  box-shadow:
+    0 0 0 2px var(--plan-selected),
+    0 0 14px 1px color-mix(in oklch, var(--plan-selected) 55%, transparent);
+}
+.plan-picker[data-selected="true"] .plan-picker__name {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-status {
+    transition: none;
+  }
+  .plan-status[data-pulse="true"] {
+    animation: none;
+  }
+}
+
+@media (max-width: 40rem) {
+  .plan-picker {
+    max-width: 100%;
+  }
+  .plan-picker__name {
+    max-width: 9rem;
+  }
+}
+
 .dark {
   color-scheme: dark;
   --background: oklch(0.145 0 0);
