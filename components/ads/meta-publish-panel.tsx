@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useLanguage } from '@/components/language-provider'
 import type { MetaConnectionView } from '@/lib/ads/meta-ads-shared'
+import { draftMetaCopyFromScan } from '@/lib/ads/meta-ai-draft'
+import { requestScan } from '@/lib/ads/scan-client'
 import {
   META_APPROVAL_TEXT,
   META_COUNTRIES,
@@ -119,6 +121,7 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
   const [form, setForm] = useState<PlanContent>(EMPTY)
   const [file, setFile] = useState<File | null>(null)
   const [terms, setTerms] = useState(false)
+  const [aiDrafted, setAiDrafted] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
 
@@ -151,6 +154,7 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
     setForm(next ? next.content : EMPTY)
     setFile(null)
     setTerms(false)
+    setAiDrafted(false)
     setNotice(null)
   }
 
@@ -212,6 +216,30 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
       return t('Kampanya Meta hesabınızda DURAKLATILMIŞ olarak oluşturuldu. Başlatmak için Meta Reklam Yöneticisi\'ni kullanın.', 'Campaign created PAUSED in your Meta account. Start it from Meta Ads Manager.')
     })
 
+  // Same site-scan draft the Google plan wizard uses. The result only fills editable fields; nothing is
+  // sent to Meta until the user saves, validates and approves the exact plan version.
+  const onAiDraft = () =>
+    run('ai', async () => {
+      const address = form.landingUrl.trim()
+      if (!address) {
+        setNotice({ tone: 'error', text: t('AI taslağı için önce hedef sayfa adresini yazın.', 'Enter the landing page address first to draft with AI.') })
+        return null
+      }
+      const outcome = await requestScan({ address, requestId: crypto.randomUUID() })
+      if (!outcome.ok) {
+        setNotice({ tone: 'error', text: t('AI taslağı hazırlanamadı. Adresi kontrol edip tekrar deneyin.', 'The AI draft could not be prepared. Check the address and try again.') })
+        return null
+      }
+      const draft = draftMetaCopyFromScan(outcome.result)
+      if (!draft) {
+        setNotice({ tone: 'error', text: t('Siteden yeterli metin çıkarılamadı. Alanları elle doldurun.', 'Not enough text could be extracted from the site. Fill in the fields manually.') })
+        return null
+      }
+      setForm((f) => ({ ...f, ...draft }))
+      setAiDrafted(true)
+      return t('AI önerisi alanlara yazıldı. Gözden geçirip düzenleyin; siz onaylamadan Meta\'da hiçbir şey oluşturulmaz.', 'AI suggestion filled in. Review and edit it; nothing is created in Meta until you approve.')
+    })
+
   const stage = plan?.status ?? 'new'
   const locked = ['publishing', 'published', 'active', 'user_paused', 'archived'].includes(stage)
   const validated = plan !== null && plan.validatedVersion === plan.version
@@ -262,6 +290,13 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
         <Field label={t('Hedef sayfa (https)', 'Landing page (https)')} className="md:col-span-2">
           <Input type="url" inputMode="url" value={form.landingUrl} maxLength={META_PLAN_LIMITS.landingUrl} onChange={(e) => set('landingUrl', e.target.value)} />
         </Field>
+        <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+          <Button type="button" size="sm" variant="outline" onClick={onAiDraft}>
+            {busy === 'ai' ? t('Taslak hazırlanıyor…', 'Preparing draft…') : t('Siteden AI taslağı öner', 'Suggest copy from site with AI')}
+          </Button>
+          {aiDrafted ? <Badge variant="secondary">{t('AI önerisi · düzenlenebilir', 'AI suggestion · editable')}</Badge> : null}
+          <span className="text-xs text-muted-foreground">{t('Hedef sayfadaki bilgilerden öneri üretir; AI kredisi kullanabilir.', 'Drafts from your landing page; may use AI credits.')}</span>
+        </div>
         <Field label={t('Ana metin', 'Primary text')} className="md:col-span-2">
           <Textarea rows={3} value={form.primaryText} maxLength={META_PLAN_LIMITS.primaryText} onChange={(e) => set('primaryText', e.target.value)} />
         </Field>

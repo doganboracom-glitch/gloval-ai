@@ -12,7 +12,7 @@
 create table if not exists public.ads_meta_plans (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  connection_id uuid not null references public.ads_connections(id) on delete restrict,
+  connection_id uuid not null references public.ads_connections(id) on delete no action,
   -- Status list is intentionally wider than M2 so Phase M3 (activate / pause / archive) needs no constraint change.
   status text not null default 'draft'
     check (status in ('draft', 'validated', 'approved', 'publishing', 'published', 'partial', 'failed', 'active', 'user_paused', 'archived')),

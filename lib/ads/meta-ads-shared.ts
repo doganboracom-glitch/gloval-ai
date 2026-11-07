@@ -139,6 +139,17 @@ export function metaAccountStatusLabel(status: number | null, isTr: boolean): { 
   return { label: isTr ? entry.tr : entry.en, healthy: entry.healthy }
 }
 
+/** True when the connection already holds every write permission needed for paused publishing. */
+export function hasMetaManagement(connection: Pick<MetaConnectionView, 'missingPublishScopes'>): boolean {
+  return connection.missingPublishScopes.length === 0
+}
+
+/** Access badge text: "read-only" is only truthful while ads_management has not been granted. */
+export function metaAccessLabel(canManage: boolean, isTr: boolean): string {
+  if (canManage) return isTr ? 'Okuma + duraklatılmış kampanya oluşturma' : 'Read + paused campaign creation'
+  return isTr ? 'Salt okunur' : 'Read-only'
+}
+
 /** Whole days until `iso`; negative when already past; null when unknown. */
 export function metaTokenDaysRemaining(iso: string | null, now = Date.now()): number | null {
   if (!iso) return null

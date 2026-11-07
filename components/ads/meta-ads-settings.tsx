@@ -13,6 +13,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   META_TOKEN_WARNING_DAYS,
+  hasMetaManagement,
+  metaAccessLabel,
   metaAccountStatusLabel,
   metaTokenDaysRemaining,
   type MetaAdAccountCandidate,
@@ -269,18 +271,23 @@ export function MetaAdsSettings({ connections, pendingFlowId, status, missingSco
   const { lang } = useLanguage()
   const isTr = lang === 'tr'
   const visible = connections.filter((connection) => connection.status !== 'revoked')
+  const canManage = visible.some((connection) => hasMetaManagement(connection))
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="meta-ads-title">
       <div className="flex flex-col gap-1">
         <h2 id="meta-ads-title" className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           {isTr ? 'Meta (Facebook ve Instagram)' : 'Meta (Facebook and Instagram)'}
-          <Badge variant="outline">{isTr ? 'Salt okunur' : 'Read-only'}</Badge>
+          <Badge variant="outline">{metaAccessLabel(canManage, isTr)}</Badge>
         </h2>
         <p className="text-sm text-muted-foreground">
-          {isTr
-            ? 'Reklam performansınızı görüntülemek için Meta reklam hesabınızı bağlayın. GLOVAL Ads Meta hesabınızda kampanya oluşturmaz, değiştirmez ve harcama yapmaz.'
-            : 'Connect your Meta ad account to view ad performance. GLOVAL Ads does not create or change campaigns, and never spends money in your Meta account.'}
+          {canManage
+            ? (isTr
+              ? 'Reklam performansınızı görüntüleyebilir ve onayınızla duraklatılmış kampanya oluşturabilirsiniz. Kampanyalar duraklatılmış açılır; GLOVAL Ads Meta hesabınızda harcama başlatmaz.'
+              : 'You can view ad performance and, with your approval, create paused campaigns. Campaigns are created paused; GLOVAL Ads never starts spending in your Meta account.')
+            : (isTr
+              ? 'Reklam performansınızı görüntülemek için Meta reklam hesabınızı bağlayın. Bu bağlantı yalnızca okuma erişimi verir; Meta hesabınızda kampanya oluşturulmaz veya değiştirilmez.'
+              : 'Connect your Meta ad account to view ad performance. This connection gives read-only access; no campaigns are created or changed in your Meta account.')}
         </p>
       </div>
 

@@ -3,7 +3,9 @@ import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import { createMetaApiClient } from '@/lib/ads/meta-api-client'
 import { withMetaAccess } from '@/lib/ads/meta-connections'
 import { EMPTY_OBJECTS, preflightMetaAccount, publishPausedMetaCampaign, type MetaPublishObjects } from '@/lib/ads/meta-publish'
-import { metaPlanHash, metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
+import { adsManagerUrl, metaPlanHash, metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
+import { buildMetaPublishResultEmail, type MetaPublishMailOutcome } from '@/lib/email/ads-mail'
+import { logUserEvent } from '@/lib/notify'
 import { META_STEP_LABELS } from '@/lib/ads/meta-publish-errors'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { META_CREATIVE_BUCKET, appendMetaAction, getMetaPlan, metaPlanView, saveMetaPlanObject } from '@/lib/ads/meta-plans-store'
@@ -19,6 +21,34 @@ const COLUMNS = {
   creative: 'meta_creative_id',
   ad: 'meta_ad_id',
 } as const
+
+const MAIL_SUBJECTS: Record<MetaPublishMailOutcome, string> = {
+  published: 'Meta kampanyanız duraklatılmış olarak oluşturuldu',
+  partial: 'Meta kampanyanız kısmen oluşturuldu',
+  failed: 'Meta yayını tamamlanamadı',
+}
+
+/** Best-effort customer e-mail; a delivery problem never changes the publish result. Deduped per request id. */
+async function notifyMetaPublishOutcome(input: {
+  userId: string
+  requestId: string
+  outcome: MetaPublishMailOutcome
+  campaignName: string
+  adsManagerUrl: string | null
+}) {
+  try {
+    await logUserEvent({
+      userId: input.userId,
+      type: `meta_ads_publish_${input.outcome}`,
+      subject: MAIL_SUBJECTS[input.outcome],
+      body: MAIL_SUBJECTS[input.outcome],
+      userEmail: () => buildMetaPublishResultEmail(input),
+      dedupeKey: `meta_ads_publish_${input.outcome}_${input.requestId}`,
+    })
+  } catch {
+    // Intentionally swallowed.
+  }
+}
 
 export async function POST(request: Request) {
   const guard = await guardMetaPublishRoute(request, { key: 'meta-plans-publish', limit: 3 })
@@ -89,11 +119,13 @@ export async function POST(request: Request) {
       adId: plan.meta_ad_id,
     }
 
+    let accountExternalId: string | null = null
     const outcome = await withMetaAccess({
       userId,
       connectionId: plan.connection_id,
       action: async ({ connection, accessToken, context }) => {
         assertMetaPublishable(connection)
+        accountExternalId = connection.external_account_id
         if (connection.currency_code !== plan.currency) throw new MetaAdsError('plan_changed')
         // Same hash as at approval: any change since then (content, image, account) blocks publishing.
         const hash = metaPlanHash(plan.content, { connectionId: connection.id, currency: plan.currency, imageSha: plan.image_sha256 })
@@ -127,14 +159,21 @@ export async function POST(request: Request) {
       },
     })
 
+    const mailOutcome: MetaPublishMailOutcome = outcome.ok ? 'published' : outcome.objects.campaignId ? 'partial' : 'failed'
     if (outcome.ok) {
       await finish('published', outcome.objects)
     } else {
-      const hasProgress = Boolean(outcome.objects.campaignId)
-      await finish(hasProgress ? 'partial' : 'failed', outcome.objects, {
+      await finish(mailOutcome === 'partial' ? 'partial' : 'failed', outcome.objects, {
         step: outcome.step, code: outcome.failure.code, reason: outcome.failure.metaReason ?? outcome.failure.message,
       })
     }
+    await notifyMetaPublishOutcome({
+      userId,
+      requestId: body.requestId,
+      outcome: mailOutcome,
+      campaignName: plan.content.name,
+      adsManagerUrl: accountExternalId && outcome.objects.campaignId ? adsManagerUrl(accountExternalId, outcome.objects.campaignId) : null,
+    })
     const fresh = await getMetaPlan(admin, userId, plan.id)
     if (outcome.ok) return metaAdsJson({ ok: true, plan: fresh ? metaPlanView(fresh) : null })
     return metaAdsJson({

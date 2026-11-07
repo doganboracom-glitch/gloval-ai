@@ -8,7 +8,7 @@ import type { AdsWorkspaceProps } from '@/components/ads/ads-workspace-types'
 import { MetaAdsSettings } from '@/components/ads/meta-ads-settings'
 import { MetaAdsInsights } from '@/components/ads/meta-ads-insights'
 import { MetaPublishPanel } from '@/components/ads/meta-publish-panel'
-import { metaAccountStatusLabel } from '@/lib/ads/meta-ads-shared'
+import { hasMetaManagement, metaAccessLabel, metaAccountStatusLabel } from '@/lib/ads/meta-ads-shared'
 
 export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspaceProps) {
   const { lang } = useLanguage()
@@ -43,6 +43,9 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {[connection.pageName, connection.instagramAccountName, connection.currency].filter(Boolean).join(' · ') || connection.externalAccountId}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isTr ? 'Erişim: ' : 'Access: '}{metaAccessLabel(hasMetaManagement(connection), isTr)}
                   </p>
                 </li>
               ))}
