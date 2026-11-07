@@ -18,8 +18,13 @@ import type { NextResponse } from 'next/server'
 
 type Guard = { ok: true; access: MetaAdsRequestAccess; admin: ReturnType<typeof createAdminClient> } | { ok: false; response: NextResponse }
 
-/** Every Meta publish route: feature flag, same-origin, signed-in, publish allowlist, kill switch, rate limit. */
-export async function guardMetaPublishRoute(request: Request, rate: { key: string; limit: number }): Promise<Guard> {
+type Decision = MetaAdsRequestAccess['decision']
+
+async function guardMetaRoute(
+  request: Request,
+  rate: { key: string; limit: number },
+  permitted: (decision: Decision) => boolean,
+): Promise<Guard> {
   if (!metaAdsFeatureEnabled()) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_found' }, 404) }
   if (request.method !== 'GET' && !isSameOriginMetaAdsPost(request)) {
     return { ok: false, response: metaAdsJson({ ok: false, error: 'csrf_failed' }, 403) }
@@ -27,12 +32,25 @@ export async function guardMetaPublishRoute(request: Request, rate: { key: strin
   const access = await metaAdsRequestAccess()
   if (!access) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_authenticated' }, 401) }
   if (!access.decision.canConnect) return { ok: false, response: metaAdsJson({ ok: false, error: 'not_found' }, 404) }
-  if (!access.decision.canPublish) return { ok: false, response: metaAdsJson({ ok: false, error: 'publish_not_allowed' }, 403) }
+  if (!permitted(access.decision)) return { ok: false, response: metaAdsJson({ ok: false, error: 'publish_not_allowed' }, 403) }
   if (metaAdsKillSwitchActive()) return { ok: false, response: metaAdsJson({ ok: false, error: 'kill_switch_active' }, 503) }
   if (!checkRateLimit(`${rate.key}:${access.userId}`, rate.limit, 60_000).allowed) {
     return { ok: false, response: metaAdsJson({ ok: false, error: 'rate_limited' }, 429) }
   }
   return { ok: true, access, admin: createAdminClient() }
+}
+
+/** Every Meta publish route: feature flag, same-origin, signed-in, publish allowlist, kill switch, rate limit. */
+export function guardMetaPublishRoute(request: Request, rate: { key: string; limit: number }): Promise<Guard> {
+  return guardMetaRoute(request, rate, (decision) => decision.canPublish)
+}
+
+/**
+ * Status read / sync routes: read-only toward Meta, so publish, manage or protective-manage permission is enough.
+ * Connect access, the kill switch and the rate limit still apply; a user with none of the permissions gets 403.
+ */
+export function guardMetaSyncRoute(request: Request, rate: { key: string; limit: number }): Promise<Guard> {
+  return guardMetaRoute(request, rate, (decision) => decision.canPublish || decision.canManage || decision.canManageProtective)
 }
 
 /**

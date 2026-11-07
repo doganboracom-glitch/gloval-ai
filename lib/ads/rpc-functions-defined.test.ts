@@ -91,6 +91,36 @@ describe('Supabase RPC adları scripts/*.sql ile uyumlu', () => {
     expect(publishFunctions.filter((name) => !called.has(name))).toEqual([])
   })
 
+  it('Meta yönetim RPC fonksiyonları 128 numaralı SQL dosyasında tanımlı ve kodda çağrılır', () => {
+    const manageFunctions = ['ads_reserve_meta_manage_action', 'ads_finish_meta_manage_action', 'ads_sync_meta_plan_state']
+    const source = readFileSync(path.join(ROOT, 'scripts', '128-ads-meta-manage.sql'), 'utf8')
+    expect(manageFunctions.filter((name) => !new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(source))).toEqual([])
+    expect(manageFunctions.filter((name) => !defined.has(name))).toEqual([])
+    expect(manageFunctions.filter((name) => !called.has(name))).toEqual([])
+  })
+
+  it('yönetim RPC fonksiyonları yalnızca beklenen rota dosyalarından çağrılır', () => {
+    expect(called.get('ads_reserve_meta_manage_action')?.map((file) => file.replace(/\\/g, '/'))).toEqual(['app/api/ads/meta/plans/manage/route.ts'])
+    expect(called.get('ads_finish_meta_manage_action')?.every((file) => file.replace(/\\/g, '/') === 'app/api/ads/meta/plans/manage/route.ts')).toBe(true)
+    expect(called.get('ads_sync_meta_plan_state')?.map((file) => file.replace(/\\/g, '/'))).toEqual(['app/api/ads/meta/plans/sync/route.ts'])
+  })
+
+  it('M3 uç noktaları hem tablo kısıtında hem kota RPC listesinde yer alır ve kodda kullanılır', () => {
+    const source = readFileSync(path.join(ROOT, 'scripts', '128-ads-meta-manage.sql'), 'utf8')
+    const endpoints = ['campaign.status', 'adset.status', 'ad.status', 'act.campaigns.update', 'act.adsets.update', 'act.ads.update']
+    for (const endpoint of endpoints) {
+      expect(source.split(`'${endpoint}'`).length - 1, endpoint).toBeGreaterThanOrEqual(2)
+    }
+    const managePath = path.join(ROOT, 'lib', 'ads', 'meta-manage.ts')
+    const code = readFileSync(managePath, 'utf8')
+    for (const endpoint of endpoints) expect(code, endpoint).toContain(`'${endpoint}'`)
+  })
+
+  it('senkron fonksiyonu sapmayı meta_status_sync denetim satırı olarak yalnızca bir yerde yazar', () => {
+    const source = readFileSync(path.join(ROOT, 'scripts', '128-ads-meta-manage.sql'), 'utf8')
+    expect(source.split("'meta_status_sync'").length - 1).toBe(1)
+  })
+
   it('Graph yazma uç noktaları kota RPC\'sinin izin listesinde yer alır', () => {
     const source = readFileSync(path.join(ROOT, 'scripts', '127-ads-meta-publish.sql'), 'utf8')
     const writeEndpoints = ['act.campaigns.create', 'act.adsets.create', 'act.adimages.create', 'act.adcreatives.create', 'act.ads.create']
