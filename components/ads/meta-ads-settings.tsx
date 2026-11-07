@@ -41,6 +41,7 @@ const STATUS_COPY: Record<string, [string, string]> = {
   configuration_missing: ['Meta bağlantısı şu anda yapılandırılmamış.', 'The Meta connection is not configured right now.'],
   kill_switch_active: ['Meta bağlantısı geçici olarak durduruldu.', 'The Meta connection is temporarily paused.'],
   not_found: ['Meta bağlantısı bu hesap için açık değil.', 'The Meta connection is not enabled for this account.'],
+  page_required: ['Reklamlar bir Facebook Sayfası adına yayınlanır. Devam etmek için bir sayfa seçin.', 'Ads run on behalf of a Facebook Page. Choose a page to continue.'],
   provider_error: ['Meta şu anda yanıt vermiyor. Lütfen biraz sonra tekrar deneyin.', 'Meta is not responding right now. Please try again shortly.'],
 }
 
@@ -78,14 +79,14 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
   const [message, setMessage] = useState<string | null>(null)
 
   async function submit() {
-    if (!accountId) return
+    if (!accountId || !pageId) return
     setSaving(true)
     setMessage(null)
     try {
       const response = await fetch('/api/ads/meta/select', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flowId, accountId, pageId: pageId || undefined }),
+        body: JSON.stringify({ flowId, accountId, pageId }),
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok) {
@@ -116,7 +117,7 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
       <CardHeader>
         <CardTitle>{isTr ? 'Reklam hesabınızı seçin' : 'Choose your ad account'}</CardTitle>
         <CardDescription>
-          {isTr ? 'Raporlanacak Meta reklam hesabını ve isterseniz ilişkili sayfayı seçin.' : 'Pick the Meta ad account to report on and, optionally, a related page.'}
+          {isTr ? 'Meta reklam hesabını ve reklamların adına yayınlanacağı Facebook Sayfasını seçin.' : 'Pick the Meta ad account and the Facebook Page your ads will run on behalf of.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -144,14 +145,15 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
         </fieldset>
         {data.pages.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <label htmlFor="meta-page" className="text-sm font-medium">{isTr ? 'Sayfa (isteğe bağlı)' : 'Page (optional)'}</label>
+            <label htmlFor="meta-page" className="text-sm font-medium">{isTr ? 'Facebook Sayfası (zorunlu)' : 'Facebook Page (required)'}</label>
             <select
               id="meta-page"
+              required
               value={pageId}
               onChange={(event) => setPageId(event.target.value)}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">{isTr ? 'Sayfa seçme' : 'No page'}</option>
+              <option value="">{isTr ? 'Sayfa seçin' : 'Choose a page'}</option>
               {data.pages.map((page) => (
                 <option key={page.pageId} value={page.pageId}>
                   {page.pageName ?? page.pageId}
@@ -159,11 +161,31 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
               ))}
             </select>
           </div>
-        ) : null}
+        ) : (
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>{isTr ? 'Facebook Sayfası bulunamadı' : 'No Facebook Page found'}</AlertTitle>
+            <AlertDescription>
+              <span>
+                {isTr
+                  ? 'Reklamlar bir Facebook Sayfası adına yayınlanır; bu Meta hesabında yönetebileceğiniz bir sayfa yok. Sayfa oluşturup hesabı yeniden bağlayın.'
+                  : 'Ads run on behalf of a Facebook Page and this Meta account manages none. Create a page, then connect again.'}
+              </span>
+              <a className="mt-1 block underline" href="https://www.facebook.com/pages/create" target="_blank" rel="noopener noreferrer">
+                {isTr ? 'Meta\'da sayfa oluştur' : 'Create a page on Meta'}
+              </a>
+            </AlertDescription>
+          </Alert>
+        )}
         {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
-        <Button type="button" className="self-start" disabled={!accountId || saving} onClick={submit}>
-          {saving ? (isTr ? 'Kaydediliyor…' : 'Saving…') : (isTr ? 'Hesabı bağla' : 'Connect account')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" disabled={!accountId || !pageId || saving} aria-describedby="meta-connect-hint" onClick={submit}>
+            {saving ? (isTr ? 'Kaydediliyor…' : 'Saving…') : (isTr ? 'Hesabı bağla' : 'Connect account')}
+          </Button>
+          <span id="meta-connect-hint" className="text-xs text-muted-foreground">
+            {isTr ? 'Reklamlar seçtiğiniz sayfa adına yayınlanır.' : 'Ads run on behalf of the page you choose.'}
+          </span>
+        </div>
       </CardContent>
     </Card>
   )
@@ -229,6 +251,14 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
         </p>
       ) : null}
 
+      {!needsReconnect && !connection.hasPage ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {isTr
+            ? 'Bu bağlantıda Facebook Sayfası seçili değil; reklam yayınlamak için sayfa gerekir. Hesabı yeniden bağlayıp bir sayfa seçin.'
+            : 'No Facebook Page is selected for this connection, and one is needed to publish ads. Reconnect and choose a page.'}
+        </p>
+      ) : null}
+
       {!needsReconnect && needsEngagementScope ? (
         <p className="text-sm text-muted-foreground">
           {isTr
@@ -240,6 +270,9 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
       <div className="flex flex-wrap items-center gap-2">
         {needsReconnect || expiringSoon || needsEngagementScope ? (
           <ConnectForm variant="outline" label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : expiringSoon ? (isTr ? 'Yenile' : 'Renew') : (isTr ? 'İzin ver' : 'Grant permission')} />
+        ) : null}
+        {!needsReconnect && !connection.hasPage && connection.missingPublishScopes.length === 0 ? (
+          <ConnectForm manage variant="outline" label={isTr ? 'Sayfa seçmek için yeniden bağla' : 'Reconnect to choose a page'} />
         ) : null}
         {!needsReconnect && connection.missingPublishScopes.length > 0 ? (
           <ConnectForm manage variant="outline" label={isTr ? 'Yönetim izni ver (duraklatılmış kampanya)' : 'Grant management permission (paused campaigns)'} />

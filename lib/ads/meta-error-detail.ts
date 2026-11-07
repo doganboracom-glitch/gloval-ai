@@ -123,6 +123,17 @@ export function classifyMetaError(httpStatus: number, detail: MetaErrorDetail | 
   return 'provider_error'
 }
 
+export const META_APP_NOT_LIVE_SUBCODE = 1885183
+export const META_APP_NOT_LIVE_MESSAGE =
+  'Meta uygulaması henüz canlı modda değil. Yönetici uygulamayı Canlı moda aldıktan sonra Devam et\'e basın.'
+
+/** Meta rejects writes from an app still in development mode (error_subcode 1885183). */
+export function isMetaAppNotLive(detail: Pick<MetaErrorDetail, 'subcode' | 'message' | 'userMessage'> | null | undefined): boolean {
+  if (!detail) return false
+  if (detail.subcode === META_APP_NOT_LIVE_SUBCODE) return true
+  return /development mode|geliştirme modu/i.test(`${detail.userMessage ?? ''} ${detail.message ?? ''}`)
+}
+
 /** Short, token-free one-liner for logs and the admin panel (`code/subcode type`). */
 export function formatMetaErrorCode(detail: MetaErrorDetail | null): string {
   if (!detail) return 'unknown'

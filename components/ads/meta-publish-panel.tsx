@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
+import { AlertCircle, CheckCircle2, CircleDashed, Sparkles, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,9 +20,27 @@ import {
   META_CTA_OPTIONS,
   META_PLAN_LIMITS,
   adsManagerUrl,
+  validateLandingUrl,
+  validateMetaPlanContent,
   type MetaCta,
   type MetaGender,
 } from '@/lib/ads/meta-publish-plan'
+import {
+  META_FIELD_LABELS,
+  META_FLOW_STEPS,
+  META_PLAN_STATUS_LABELS,
+  confirmAndCreate,
+  describeMetaApiError,
+  describePlanObjects,
+  describeStoredFailure,
+  metaFlowStepIndex,
+  orderFieldErrors,
+  toFieldErrors,
+  type MetaApiError,
+  type MetaFieldErrors,
+  type MetaFieldName,
+  type MetaPlanObjects,
+} from '@/lib/ads/meta-publish-ux'
 
 type PlanContent = {
   name: string
@@ -49,12 +68,15 @@ type PlanView = {
   currency: string
   approvedVersion: number | null
   validatedVersion: number | null
-  objects: { campaignId: string | null; adId: string | null }
+  objects: MetaPlanObjects
+  failureStep: string | null
+  failureCode: string | null
   failureReason: string | null
 }
 
 type ApiResult<T> = { ok: true } & T
-type ApiError = { ok: false; error: string; message?: string; metaReason?: string | null; fieldErrors?: Record<string, string>; blocked?: string[]; stepLabel?: string }
+
+type Notice = { tone: 'ok' | 'error'; text: string; detail?: string | null }
 
 const EMPTY: PlanContent = {
   name: '',
@@ -75,30 +97,37 @@ const EMPTY: PlanContent = {
 
 const listFetcher = (url: string) => fetch(url, { cache: 'no-store' }).then((response) => response.json())
 
-async function post<T>(url: string, body: unknown): Promise<ApiResult<T> | ApiError> {
+async function post<T>(url: string, body: unknown): Promise<ApiResult<T> | MetaApiError> {
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    return (await response.json()) as ApiResult<T> | ApiError
+    return (await response.json()) as ApiResult<T> | MetaApiError
   } catch {
     return { ok: false, error: 'network_error' }
   }
 }
 
-function describeError(error: ApiError): string {
-  const parts = [error.stepLabel ? `${error.stepLabel}: ` : '', error.message ?? '']
-  if (!error.message) {
-    if (error.fieldErrors) return Object.values(error.fieldErrors).join(' · ')
-    if (error.blocked?.length) return `Reklam metni izin verilmeyen ifade içeriyor: ${error.blocked.join(', ')}`
-    parts.push(error.error)
-  }
-  return parts.join('') + (error.metaReason ? ` (Meta: ${error.metaReason})` : '')
+const fieldId = (name: MetaFieldName) => `meta-field-${name}`
+
+function focusField(name: MetaFieldName) {
+  const element = document.getElementById(fieldId(name))
+  if (!element) return
+  element.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  element.focus({ preventScroll: true })
 }
 
-export function MetaPublishPanel({ connections, publishEnabled }: { connections: MetaConnectionView[]; publishEnabled: boolean }) {
+export function MetaPublishPanel({
+  connections,
+  publishEnabled,
+  onGoToSettings,
+}: {
+  connections: MetaConnectionView[]
+  publishEnabled: boolean
+  onGoToSettings?: () => void
+}) {
   const { lang } = useLanguage()
   const isTr = lang === 'tr'
   const t = (tr: string, en: string) => (isTr ? tr : en)
@@ -107,6 +136,7 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
     () => connections.filter((c) => c.status === 'active' && c.hasPage && c.missingPublishScopes.length === 0),
     [connections],
   )
+  const pageless = useMemo(() => connections.filter((c) => c.status === 'active' && !c.hasPage), [connections])
   const [connectionId, setConnectionId] = useState<string | null>(publishable[0]?.id ?? null)
   const connection = connections.find((c) => c.id === connectionId) ?? null
 
@@ -122,8 +152,18 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
   const [file, setFile] = useState<File | null>(null)
   const [terms, setTerms] = useState(false)
   const [aiDrafted, setAiDrafted] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
-  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [errors, setErrors] = useState<MetaFieldErrors>({})
+  const [focusRequest, setFocusRequest] = useState<{ field: MetaFieldName; n: number } | null>(null)
+
+  // Controls inside a disabled fieldset cannot take focus, so wait until the busy state is cleared.
+  useEffect(() => {
+    if (!focusRequest || busy !== null) return
+    focusField(focusRequest.field)
+    setFocusRequest(null)
+  }, [focusRequest, busy])
 
   if (!publishEnabled) {
     return (
@@ -133,21 +173,53 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
     )
   }
 
+  const pageNeeded = pageless.length > 0 ? <PageNeededCard names={pageless.map((c) => c.name ?? c.externalAccountId)} onGoToSettings={onGoToSettings} isTr={isTr} /> : null
+
   if (!connection) {
-    const needsPermission = connections.some((c) => c.status === 'active' && c.missingPublishScopes.length > 0)
+    const needsPermission = connections.some((c) => c.status === 'active' && c.hasPage && c.missingPublishScopes.length > 0)
     return (
-      <section className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-6">
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {needsPermission
-            ? t('Duraklatılmış kampanya oluşturmak için Ayarlar sekmesinden yönetim iznini verin. Bağladığınız hesapta bir Facebook Sayfası da olmalıdır.', 'Grant the management permission from Settings to create paused campaigns. The account also needs a Facebook Page.')
-            : t('Önce Ayarlar sekmesinden bir Meta reklam hesabı bağlayın.', 'Connect a Meta ad account from Settings first.')}
-        </p>
+      <section className="flex flex-col gap-3">
+        {pageNeeded}
+        {needsPermission || pageless.length === 0 ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-6">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {needsPermission
+                ? t('Duraklatılmış kampanya oluşturmak için Ayarlar sekmesinden yönetim iznini verin.', 'Grant the management permission from Settings to create paused campaigns.')
+                : t('Önce Ayarlar sekmesinden bir Meta reklam hesabı bağlayın.', 'Connect a Meta ad account from Settings first.')}
+            </p>
+            {onGoToSettings ? (
+              <Button type="button" variant="outline" className="self-start" onClick={onGoToSettings}>{t('Ayarlar\'a git', 'Go to Settings')}</Button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     )
   }
 
-  const set = <K extends keyof PlanContent>(key: K, value: PlanContent[K]) => setForm((f) => ({ ...f, [key]: value }))
-  const fail = (error: ApiError) => setNotice({ tone: 'error', text: describeError(error) })
+  const set = <K extends keyof PlanContent>(key: K, value: PlanContent[K]) => {
+    setForm((f) => ({ ...f, [key]: value }))
+    if (key in errors) setErrors((current) => ({ ...current, [key as MetaFieldName]: undefined }))
+    if (key === 'landingUrl') setAiError(null)
+  }
+
+  const showFieldErrors = (next: MetaFieldErrors) => {
+    setErrors(next)
+    const first = orderFieldErrors(next)[0]
+    if (first) setFocusRequest((current) => ({ field: first[0], n: (current?.n ?? 0) + 1 }))
+  }
+
+  const showError = (error: MetaApiError) => {
+    if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) showFieldErrors(toFieldErrors(error.fieldErrors))
+    const info = describeMetaApiError(error)
+    setNotice({ tone: 'error', text: info.message, detail: info.detail })
+  }
+
+  function validateForm(options: { requireImage: boolean }): MetaFieldErrors {
+    const checked = validateMetaPlanContent(form, { currency: connection?.currency ?? null })
+    const next = checked.ok ? {} : toFieldErrors(checked.errors)
+    if (options.requireImage && !form.imagePath && !file) next.imagePath = 'Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).'
+    return next
+  }
 
   function openPlan(next: PlanView | null) {
     setPlanId(next?.id ?? null)
@@ -155,12 +227,14 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
     setFile(null)
     setTerms(false)
     setAiDrafted(false)
+    setAiError(null)
     setNotice(null)
+    setErrors({})
   }
 
   async function save(): Promise<PlanView | null> {
     const result = await post<{ plan: PlanView }>('/api/ads/meta/plans', { connectionId, planId: planId ?? undefined, content: form })
-    if (!result.ok) { fail(result); return null }
+    if (!result.ok) { showError(result); return null }
     setPlanId(result.plan.id)
     await mutate()
     return result.plan
@@ -183,67 +257,104 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
     body.set('planId', id)
     body.set('file', file)
     const response = await fetch('/api/ads/meta/plans/image', { method: 'POST', body }).then((r) => r.json()).catch(() => null)
-    if (!response?.ok) { fail(response ?? { ok: false, error: 'network_error' }); return false }
+    if (!response?.ok) { showError(response ?? { ok: false, error: 'network_error' }); return false }
     setFile(null)
     return true
   }
 
-  const onSaveAndValidate = () =>
-    run('validate', async () => {
+  const onSaveDraft = () => {
+    const found = validateForm({ requireImage: false })
+    if (Object.keys(found).length > 0) {
+      showFieldErrors(found)
+      setNotice(null)
+      return
+    }
+    setErrors({})
+    void run('save', async () => ((await save()) ? t('Taslak kaydedildi.', 'Draft saved.') : null))
+  }
+
+  const onSaveAndValidate = () => {
+    const found = validateForm({ requireImage: true })
+    if (Object.keys(found).length > 0) {
+      showFieldErrors(found)
+      setNotice(null)
+      return
+    }
+    setErrors({})
+    void run('validate', async () => {
       const saved = await save()
       if (!saved || !(await uploadImage(saved.id))) return null
       const result = await post<{ checked: string[] }>('/api/ads/meta/plans/validate', { planId: saved.id })
       await mutate()
-      if (!result.ok) { fail(result); return null }
-      return t('Meta doğrulaması geçti. Onay adımına geçebilirsiniz; hiçbir şey oluşturulmadı.', 'Meta validation passed. You can approve now; nothing was created yet.')
+      if (!result.ok) { showError(result); return null }
+      return t('Meta doğrulaması geçti. Onaylayıp oluşturabilirsiniz; henüz hiçbir şey oluşturulmadı.', 'Meta validation passed. You can approve and create now; nothing was created yet.')
     })
+  }
 
-  const onApprove = () =>
-    run('approve', async () => {
-      if (!plan) return null
-      const result = await post('/api/ads/meta/plans/approval', { planId: plan.id, expectedVersion: plan.version, termsAccepted: terms })
-      await mutate()
-      if (!result.ok) { fail(result); return null }
-      return t('Onaylandı. Şimdi duraklatılmış olarak oluşturabilirsiniz.', 'Approved. You can now create it paused.')
-    })
+  const approved = plan !== null && plan.approvedVersion === plan.version
 
-  const onPublish = () =>
-    run('publish', async () => {
+  const onConfirmCreate = () =>
+    void run('publish', async () => {
       if (!plan) return null
-      const result = await post('/api/ads/meta/plans/publish', { planId: plan.id, requestId: crypto.randomUUID() })
+      const result = await confirmAndCreate({
+        post,
+        planId: plan.id,
+        version: plan.version,
+        alreadyApproved: approved,
+        termsAccepted: terms,
+        requestId: crypto.randomUUID(),
+      })
       await mutate()
-      if (!result.ok) { fail(result); return null }
+      if (!result.ok) { showError(result.error); return null }
       return t('Kampanya Meta hesabınızda DURAKLATILMIŞ olarak oluşturuldu. Başlatmak için Meta Reklam Yöneticisi\'ni kullanın.', 'Campaign created PAUSED in your Meta account. Start it from Meta Ads Manager.')
     })
 
   // Same site-scan draft the Google plan wizard uses. The result only fills editable fields; nothing is
   // sent to Meta until the user saves, validates and approves the exact plan version.
-  const onAiDraft = () =>
-    run('ai', async () => {
-      const address = form.landingUrl.trim()
-      if (!address) {
-        setNotice({ tone: 'error', text: t('AI taslağı için önce hedef sayfa adresini yazın.', 'Enter the landing page address first to draft with AI.') })
-        return null
-      }
-      const outcome = await requestScan({ address, requestId: crypto.randomUUID() })
+  const onAiDraft = () => {
+    const url = validateLandingUrl(form.landingUrl)
+    if (!url.ok) {
+      setAiError(t(`AI taslağı için geçerli bir https adresi girin. ${url.error}`, `Enter a valid https address for the AI draft. ${url.error}`))
+      setErrors((current) => ({ ...current, landingUrl: url.error }))
+      setFocusRequest((current) => ({ field: 'landingUrl', n: (current?.n ?? 0) + 1 }))
+      return
+    }
+    setAiError(null)
+    setErrors((current) => ({ ...current, landingUrl: undefined }))
+    void run('ai', async () => {
+      const outcome = await requestScan({ address: form.landingUrl.trim(), requestId: crypto.randomUUID() })
       if (!outcome.ok) {
-        setNotice({ tone: 'error', text: t('AI taslağı hazırlanamadı. Adresi kontrol edip tekrar deneyin.', 'The AI draft could not be prepared. Check the address and try again.') })
+        setAiError(t('AI taslağı hazırlanamadı. Adresi kontrol edip tekrar deneyin.', 'The AI draft could not be prepared. Check the address and try again.'))
         return null
       }
       const draft = draftMetaCopyFromScan(outcome.result)
       if (!draft) {
-        setNotice({ tone: 'error', text: t('Siteden yeterli metin çıkarılamadı. Alanları elle doldurun.', 'Not enough text could be extracted from the site. Fill in the fields manually.') })
+        setAiError(t('Siteden yeterli metin çıkarılamadı. Alanları elle doldurun.', 'Not enough text could be extracted from the site. Fill in the fields manually.'))
         return null
       }
       setForm((f) => ({ ...f, ...draft }))
+      setErrors((current) => ({ ...current, primaryText: undefined, headline: undefined, description: undefined, cta: undefined }))
       setAiDrafted(true)
       return t('AI önerisi alanlara yazıldı. Gözden geçirip düzenleyin; siz onaylamadan Meta\'da hiçbir şey oluşturulmaz.', 'AI suggestion filled in. Review and edit it; nothing is created in Meta until you approve.')
     })
+  }
 
   const stage = plan?.status ?? 'new'
   const locked = ['publishing', 'published', 'active', 'user_paused', 'archived'].includes(stage)
   const validated = plan !== null && plan.validatedVersion === plan.version
-  const approved = plan !== null && plan.approvedVersion === plan.version
+  const isPartial = plan?.status === 'partial'
+  const showApproval = validated && !locked && !(isPartial && approved)
+  const stepIndex = metaFlowStepIndex(plan)
+  const errorEntries = orderFieldErrors(errors)
+  const storedFailure = plan && !notice ? describeStoredFailure(plan) : null
+
+  const control = (name: MetaFieldName) => ({
+    id: fieldId(name),
+    'aria-invalid': errors[name] ? (true as const) : undefined,
+    'aria-describedby': errors[name] ? `${fieldId(name)}-error` : undefined,
+  })
+  const selectClass = (name: MetaFieldName) =>
+    `h-9 w-full rounded-md border bg-background px-2 text-sm ${errors[name] ? 'border-destructive ring-3 ring-destructive/20' : 'border-border'}`
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="meta-publish-title">
@@ -253,6 +364,26 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
           {t('Kampanya her zaman DURAKLATILMIŞ oluşturulur ve siz Meta Reklam Yöneticisi\'nden başlatana kadar harcama yapmaz.', 'Campaigns are always created PAUSED and never spend until you start them in Meta Ads Manager.')}
         </p>
       </div>
+
+      {pageNeeded}
+
+      <ol className="flex flex-wrap gap-2" aria-label={t('Yayın adımları', 'Publishing steps')}>
+        {META_FLOW_STEPS.map((label, index) => {
+          const done = index < stepIndex
+          const current = index === stepIndex
+          return (
+            <li
+              key={label}
+              aria-current={current ? 'step' : undefined}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${current ? 'border-brand text-foreground' : 'border-border text-muted-foreground'}`}
+            >
+              {done ? <CheckCircle2 className="size-3.5" aria-hidden="true" /> : <span aria-hidden="true">{index + 1}</span>}
+              {label}
+              {done ? <span className="sr-only">{t('(tamamlandı)', '(done)')}</span> : null}
+            </li>
+          )
+        })}
+      </ol>
 
       <div className="flex flex-wrap items-center gap-2">
         {publishable.length > 1 ? (
@@ -276,46 +407,73 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
           {plans.map((p) => (
             <li key={p.id}>
               <Button type="button" size="sm" variant={p.id === planId ? 'default' : 'outline'} onClick={() => openPlan(p)}>
-                {p.content.name || t('Adsız', 'Untitled')} · {p.status}
+                {p.content.name || t('Adsız', 'Untitled')} · {META_PLAN_STATUS_LABELS[p.status] ?? p.status}
               </Button>
             </li>
           ))}
         </ul>
       ) : null}
 
-      <fieldset disabled={locked || busy !== null} className="grid gap-4 md:grid-cols-2">
-        <Field label={t('Kampanya adı', 'Campaign name')} className="md:col-span-2">
-          <Input value={form.name} maxLength={META_PLAN_LIMITS.name} onChange={(e) => set('name', e.target.value)} />
-        </Field>
-        <Field label={t('Hedef sayfa (https)', 'Landing page (https)')} className="md:col-span-2">
-          <Input type="url" inputMode="url" value={form.landingUrl} maxLength={META_PLAN_LIMITS.landingUrl} onChange={(e) => set('landingUrl', e.target.value)} />
-        </Field>
-        <div className="flex flex-wrap items-center gap-2 md:col-span-2">
-          <Button type="button" size="sm" variant="outline" onClick={onAiDraft}>
-            {busy === 'ai' ? t('Taslak hazırlanıyor…', 'Preparing draft…') : t('Siteden AI taslağı öner', 'Suggest copy from site with AI')}
-          </Button>
-          {aiDrafted ? <Badge variant="secondary">{t('AI önerisi · düzenlenebilir', 'AI suggestion · editable')}</Badge> : null}
-          <span className="text-xs text-muted-foreground">{t('Hedef sayfadaki bilgilerden öneri üretir; AI kredisi kullanabilir.', 'Drafts from your landing page; may use AI credits.')}</span>
+      {errorEntries.length > 0 ? (
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <p className="font-medium">{t(`${errorEntries.length} alanı düzeltin:`, `Fix ${errorEntries.length} field(s):`)}</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {errorEntries.map(([name, message]) => (
+              <li key={name}>
+                <button type="button" className="text-left underline underline-offset-2" onClick={() => focusField(name)}>
+                  {META_FIELD_LABELS[name]}: {message}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
-        <Field label={t('Ana metin', 'Primary text')} className="md:col-span-2">
-          <Textarea rows={3} value={form.primaryText} maxLength={META_PLAN_LIMITS.primaryText} onChange={(e) => set('primaryText', e.target.value)} />
+      ) : null}
+
+      <fieldset disabled={locked || busy !== null} className="grid gap-4 md:grid-cols-2">
+        <Field name="name" label={t('Kampanya adı', 'Campaign name')} error={errors.name} className="md:col-span-2">
+          <Input {...control('name')} value={form.name} maxLength={META_PLAN_LIMITS.name} onChange={(e) => set('name', e.target.value)} />
         </Field>
-        <Field label={t('Başlık', 'Headline')}>
-          <Input value={form.headline} maxLength={META_PLAN_LIMITS.headline} onChange={(e) => set('headline', e.target.value)} />
+        <Field name="landingUrl" label={t('Hedef sayfa (https)', 'Landing page (https)')} error={errors.landingUrl} className="md:col-span-2">
+          <Input {...control('landingUrl')} type="url" inputMode="url" value={form.landingUrl} maxLength={META_PLAN_LIMITS.landingUrl} onChange={(e) => set('landingUrl', e.target.value)} />
         </Field>
-        <Field label={t('Açıklama (isteğe bağlı)', 'Description (optional)')}>
-          <Input value={form.description} maxLength={META_PLAN_LIMITS.description} onChange={(e) => set('description', e.target.value)} />
+        <div className="flex flex-col gap-2 md:col-span-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" onClick={onAiDraft} aria-describedby={aiError ? 'meta-ai-error' : undefined}>
+              <Sparkles className="size-4" aria-hidden="true" />
+              {busy === 'ai' ? t('Taslak hazırlanıyor…', 'Preparing draft…') : t('Siteden AI taslağı öner', 'Suggest copy from site with AI')}
+            </Button>
+            {aiDrafted ? <Badge variant="secondary">{t('AI önerisi · düzenlenebilir', 'AI suggestion · editable')}</Badge> : null}
+            <span className="text-xs text-muted-foreground">{t('Hedef sayfadaki bilgilerden öneri üretir; AI kredisi kullanabilir.', 'Drafts from your landing page; may use AI credits.')}</span>
+          </div>
+          {aiError ? (
+            <p id="meta-ai-error" role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              {aiError}
+            </p>
+          ) : null}
+        </div>
+        <Field name="primaryText" label={t('Ana metin', 'Primary text')} error={errors.primaryText} className="md:col-span-2">
+          <Textarea {...control('primaryText')} rows={3} value={form.primaryText} maxLength={META_PLAN_LIMITS.primaryText} onChange={(e) => set('primaryText', e.target.value)} />
         </Field>
-        <Field label={t('Harekete geçirici mesaj', 'Call to action')}>
-          <select className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm" value={form.cta} onChange={(e) => set('cta', e.target.value as MetaCta)}>
+        <Field name="headline" label={t('Başlık', 'Headline')} error={errors.headline}>
+          <Input {...control('headline')} value={form.headline} maxLength={META_PLAN_LIMITS.headline} onChange={(e) => set('headline', e.target.value)} />
+        </Field>
+        <Field name="description" label={t('Açıklama (isteğe bağlı)', 'Description (optional)')} error={errors.description}>
+          <Input {...control('description')} value={form.description} maxLength={META_PLAN_LIMITS.description} onChange={(e) => set('description', e.target.value)} />
+        </Field>
+        <Field name="cta" label={t('Harekete geçirici mesaj', 'Call to action')} error={errors.cta}>
+          <select {...control('cta')} className={selectClass('cta')} value={form.cta} onChange={(e) => set('cta', e.target.value as MetaCta)}>
             {META_CTA_OPTIONS.map((option) => <option key={option} value={option}>{META_CTA_LABELS[option]}</option>)}
           </select>
         </Field>
-        <Field label={t(`Günlük bütçe (${connection.currency ?? ''})`, `Daily budget (${connection.currency ?? ''})`)}>
-          <Input type="number" inputMode="decimal" min="0" step="0.01" value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} />
+        <Field name="dailyBudget" label={t(`Günlük bütçe (${connection.currency ?? ''})`, `Daily budget (${connection.currency ?? ''})`)} error={errors.dailyBudget}>
+          <Input {...control('dailyBudget')} type="number" inputMode="decimal" min="0" step="0.01" value={form.dailyBudget} onChange={(e) => set('dailyBudget', e.target.value)} />
         </Field>
-        <Field label={t('Ülkeler', 'Countries')} className="md:col-span-2">
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
+        <Field name="countries" label={t('Ülkeler', 'Countries')} error={errors.countries} className="md:col-span-2" group>
+          <div
+            {...{ id: fieldId('countries'), tabIndex: -1, role: 'group', 'aria-labelledby': 'meta-label-countries', 'aria-describedby': errors.countries ? `${fieldId('countries')}-error` : undefined }}
+            className={`flex flex-wrap gap-x-4 gap-y-2 rounded-md p-1 outline-none ${errors.countries ? 'ring-2 ring-destructive/40' : ''}`}
+          >
             {META_COUNTRIES.map((country) => (
               <label key={country.code} className="flex items-center gap-2 text-sm">
                 <Checkbox
@@ -329,44 +487,93 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
             ))}
           </div>
         </Field>
-        <Field label={t('Yaş (en az)', 'Min age')}>
-          <Input type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMin} onChange={(e) => set('ageMin', Number(e.target.value))} />
+        <Field name="ageMin" label={t('Yaş (en az)', 'Min age')} error={errors.ageMin}>
+          <Input {...control('ageMin')} type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMin} onChange={(e) => set('ageMin', Number(e.target.value))} />
         </Field>
-        <Field label={t('Yaş (en çok)', 'Max age')}>
-          <Input type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMax} onChange={(e) => set('ageMax', Number(e.target.value))} />
+        <Field name="ageMax" label={t('Yaş (en çok)', 'Max age')} error={errors.ageMax}>
+          <Input {...control('ageMax')} type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMax} onChange={(e) => set('ageMax', Number(e.target.value))} />
         </Field>
-        <Field label={t('Cinsiyet', 'Gender')}>
-          <select className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm" value={form.gender} onChange={(e) => set('gender', e.target.value as MetaGender)}>
+        <Field name="gender" label={t('Cinsiyet', 'Gender')} error={errors.gender}>
+          <select {...control('gender')} className={selectClass('gender')} value={form.gender} onChange={(e) => set('gender', e.target.value as MetaGender)}>
             <option value="all">{t('Hepsi', 'All')}</option>
             <option value="male">{t('Erkek', 'Men')}</option>
             <option value="female">{t('Kadın', 'Women')}</option>
           </select>
         </Field>
-        <Field label={t('Bitiş günü (isteğe bağlı)', 'End date (optional)')}>
-          <Input type="date" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)} />
+        <Field name="endDate" label={t('Bitiş günü (isteğe bağlı)', 'End date (optional)')} error={errors.endDate}>
+          <Input {...control('endDate')} type="date" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)} />
         </Field>
-        <Field label={t('Görsel (JPG/PNG, en çok 5 MB)', 'Image (JPG/PNG, max 5 MB)')} className="md:col-span-2">
-          <Input type="file" accept="image/jpeg,image/png" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <Field name="imagePath" label={t('Görsel (JPG/PNG, en çok 5 MB)', 'Image (JPG/PNG, max 5 MB)')} error={errors.imagePath} className="md:col-span-2">
+          <Input
+            {...control('imagePath')}
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={(e) => {
+              setFile(e.target.files?.[0] ?? null)
+              setErrors((current) => ({ ...current, imagePath: undefined }))
+            }}
+          />
           {form.imagePath && !file ? <span className="text-xs text-muted-foreground">{t('Görsel yüklendi.', 'Image uploaded.')}</span> : null}
         </Field>
       </fieldset>
 
       {notice ? (
-        <p role={notice.tone === 'error' ? 'alert' : 'status'} className={notice.tone === 'error' ? 'rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive' : 'rounded-lg border border-border bg-card p-3 text-sm'}>
-          {notice.text}
-        </p>
+        <div role={notice.tone === 'error' ? 'alert' : 'status'} className={notice.tone === 'error' ? 'rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive' : 'rounded-lg border border-border bg-card p-3 text-sm'}>
+          <p>{notice.text}</p>
+          {notice.detail ? (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer">{t('Ayrıntı', 'Details')}</summary>
+              <p className="mt-1 break-words">{notice.detail}</p>
+            </details>
+          ) : null}
+        </div>
       ) : null}
-      {plan?.failureReason && !notice ? <p className="text-sm text-destructive">{plan.failureReason}</p> : null}
 
-      {validated && !locked ? (
+      {isPartial && plan ? (
+        <PartialCard
+          plan={plan}
+          failure={storedFailure}
+          approved={approved}
+          busy={busy !== null}
+          running={busy === 'publish'}
+          onResume={onConfirmCreate}
+          isTr={isTr}
+        />
+      ) : storedFailure ? (
+        <div role="status" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+          <p>{storedFailure.message}</p>
+          {storedFailure.detail ? (
+            <details className="mt-2 text-xs">
+              <summary className="cursor-pointer">{t('Ayrıntı', 'Details')}</summary>
+              <p className="mt-1 break-words">{storedFailure.detail}</p>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showApproval ? (
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
           <p className="text-sm leading-relaxed">{META_APPROVAL_TEXT}</p>
           {!approved ? (
             <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={terms} onCheckedChange={(v) => setTerms(v === true)} />
+              <Checkbox checked={terms} onCheckedChange={(v) => setTerms(v === true)} aria-describedby="meta-approval-hint" />
               {t('Okudum, onaylıyorum', 'I have read and approve')}
             </label>
-          ) : null}
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('Onayınız kaydedildi; tekrar onay gerekmez.', 'Your approval is saved; no need to approve again.')}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" disabled={busy !== null || (!approved && !terms)} onClick={onConfirmCreate}>
+              {busy === 'publish'
+                ? t('Oluşturuluyor…', 'Creating…')
+                : approved
+                  ? (plan?.status === 'failed' ? t('Tekrar dene', 'Try again') : t('Duraklatılmış olarak oluştur', 'Create paused'))
+                  : t('Onayla ve duraklatılmış olarak oluştur', 'Approve and create paused')}
+            </Button>
+            {!approved && !terms ? (
+              <span id="meta-approval-hint" className="text-xs text-muted-foreground">{t('Devam etmek için onay kutusunu işaretleyin.', 'Tick the box to continue.')}</span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -378,31 +585,123 @@ export function MetaPublishPanel({ connections, publishEnabled }: { connections:
 
       {!locked ? (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void run('save', async () => ((await save()) ? t('Taslak kaydedildi.', 'Draft saved.') : null))}>
+          <Button type="button" variant="outline" disabled={busy !== null} onClick={onSaveDraft}>
             {t('Taslağı kaydet', 'Save draft')}
           </Button>
-          <Button type="button" disabled={busy !== null} onClick={() => void onSaveAndValidate()}>
+          <Button type="button" variant={showApproval ? 'outline' : 'default'} disabled={busy !== null} onClick={onSaveAndValidate}>
             {busy === 'validate' ? t('Doğrulanıyor…', 'Validating…') : t('Kaydet ve Meta ile doğrula', 'Save and validate with Meta')}
           </Button>
-          {validated && !approved ? (
-            <Button type="button" disabled={!terms || busy !== null} onClick={() => void onApprove()}>{t('Onayla', 'Approve')}</Button>
-          ) : null}
-          {approved ? (
-            <Button type="button" disabled={busy !== null} onClick={() => void onPublish()}>
-              {busy === 'publish' ? t('Oluşturuluyor…', 'Creating…') : t('Duraklatılmış olarak oluştur', 'Create paused')}
-            </Button>
-          ) : null}
         </div>
       ) : null}
     </section>
   )
 }
 
-function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
+function PageNeededCard({ names, onGoToSettings, isTr }: { names: string[]; onGoToSettings?: () => void; isTr: boolean }) {
+  return (
+    <div role="status" className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{isTr ? 'Önce sayfa seçin' : 'Choose a page first'}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {isTr
+            ? `Reklamlar bir Facebook Sayfası adına yayınlanır. ${names.join(', ')} bağlantısında sayfa seçili değil; Ayarlar sekmesinden hesabı yeniden bağlayıp bir sayfa seçin.`
+            : `Ads run on behalf of a Facebook Page. No page is selected for ${names.join(', ')}; reconnect it from Settings and pick a page.`}
+        </p>
+      </div>
+      {onGoToSettings ? (
+        <Button type="button" variant="outline" size="sm" onClick={onGoToSettings}>{isTr ? 'Ayarlar\'a git' : 'Go to Settings'}</Button>
+      ) : null}
+    </div>
+  )
+}
+
+function PartialCard({
+  plan,
+  failure,
+  approved,
+  busy,
+  running,
+  onResume,
+  isTr,
+}: {
+  plan: PlanView
+  failure: { message: string; detail: string | null } | null
+  approved: boolean
+  busy: boolean
+  running: boolean
+  onResume: () => void
+  isTr: boolean
+}) {
+  const rows = describePlanObjects(plan.objects, plan.failureStep)
+  const stateText = { ok: isTr ? 'Tamam' : 'Done', failed: isTr ? 'Başarısız' : 'Failed', missing: isTr ? 'Henüz oluşmadı' : 'Not created yet' }
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{isTr ? 'Kampanya kısmen oluşturuldu' : 'Campaign partially created'}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {isTr
+            ? 'Oluşan parçalar Meta hesabınızda duraklatılmış durumda; harcama yapmaz. Kaldığı yerden devam edebilirsiniz.'
+            : 'Created parts are paused in your Meta account and do not spend. You can continue where it stopped.'}
+        </p>
+      </div>
+      <ul className="flex flex-col gap-1.5" aria-label={isTr ? 'Oluşturulan nesneler' : 'Created objects'}>
+        {rows.map((row) => (
+          <li key={row.step} className="flex items-center gap-2 text-sm">
+            {row.state === 'ok' ? <CheckCircle2 className="size-4 text-brand" aria-hidden="true" /> : row.state === 'failed' ? <XCircle className="size-4 text-destructive" aria-hidden="true" /> : <CircleDashed className="size-4 text-muted-foreground" aria-hidden="true" />}
+            <span>{row.label}</span>
+            <span className={row.state === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>{stateText[row.state]}</span>
+          </li>
+        ))}
+      </ul>
+      {failure ? (
+        <div className="text-sm text-destructive">
+          <p>{failure.message}</p>
+          {failure.detail ? (
+            <details className="mt-1 text-xs">
+              <summary className="cursor-pointer">{isTr ? 'Ayrıntı' : 'Details'}</summary>
+              <p className="mt-1 break-words">{failure.detail}</p>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" disabled={busy || !approved} onClick={onResume}>
+          {running ? (isTr ? 'Devam ediyor…' : 'Continuing…') : (isTr ? 'Devam et' : 'Continue')}
+        </Button>
+        {!approved ? (
+          <span className="text-xs text-muted-foreground">{isTr ? 'Plan değişti; yeniden doğrulayıp onaylayın.' : 'The plan changed; validate and approve it again.'}</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function Field({
+  name,
+  label,
+  error,
+  className,
+  group,
+  children,
+}: {
+  name: MetaFieldName
+  label: string
+  error?: string
+  className?: string
+  group?: boolean
+  children: React.ReactNode
+}) {
   return (
     <div className={`flex flex-col gap-1.5 ${className ?? ''}`}>
-      <Label>{label}</Label>
+      {group ? (
+        <span id={`meta-label-${name}`} className="text-sm font-medium">{label}</span>
+      ) : (
+        <Label htmlFor={fieldId(name)}>{label}</Label>
+      )}
       {children}
+      {error ? (
+        <p id={`${fieldId(name)}-error`} className="text-sm text-destructive">{error}</p>
+      ) : null}
     </div>
   )
 }

@@ -42,6 +42,7 @@ export type MetaAdsErrorCode =
   | 'account_restricted'
   | 'budget_too_low'
   | 'meta_rejected'
+  | 'app_not_live'
   | 'write_outcome_unknown'
 
 export class MetaAdsError extends Error {
@@ -94,6 +95,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'plan_not_approved':
       return 409
     case 'meta_rejected':
+    case 'app_not_live':
     case 'payment_method_missing':
     case 'account_restricted':
     case 'budget_too_low':

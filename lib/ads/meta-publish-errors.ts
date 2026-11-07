@@ -1,5 +1,5 @@
 import { MetaAdsError, type MetaAdsErrorCode } from '@/lib/ads/meta-ads-error'
-import type { MetaErrorDetail } from '@/lib/ads/meta-error-detail'
+import { META_APP_NOT_LIVE_MESSAGE, isMetaAppNotLive, type MetaErrorDetail } from '@/lib/ads/meta-error-detail'
 
 export type MetaPublishStep = 'preflight' | 'campaign' | 'adset' | 'image' | 'creative' | 'ad'
 
@@ -60,6 +60,11 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
   const haystack = `${detail?.userMessage ?? ''} ${detail?.message ?? ''}`.toLowerCase()
   const code = detail?.code ?? null
   const subcode = detail?.subcode ?? null
+
+  // Checked before the code switch: Meta sends this as an OAuth-style code 200, which would otherwise read as a missing permission.
+  if (isMetaAppNotLive(detail)) {
+    return { code: 'app_not_live', message: META_APP_NOT_LIVE_MESSAGE, metaReason: reason, blamedFields: [] }
+  }
 
   switch (error.code) {
     case 'reauth_required':
