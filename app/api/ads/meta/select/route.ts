@@ -3,9 +3,10 @@ import { logUserEvent } from '@/lib/notify'
 import { buildMetaConnectedEmail } from '@/lib/email/ads-mail'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MetaAdsError } from '@/lib/ads/meta-ads-error'
-import type { MetaAdAccountCandidate, MetaPageCandidate } from '@/lib/ads/meta-ads-shared'
+import type { MetaAdAccountCandidate, MetaInstagramAccount, MetaPageCandidate } from '@/lib/ads/meta-ads-shared'
 import { saveMetaConnectionFromOAuth } from '@/lib/ads/meta-connections'
 import { metaTokenContext } from '@/lib/ads/meta-oauth-state'
+import { createConfiguredMetaProvider } from '@/lib/ads/meta-provider-factory'
 import {
   META_UUID_PATTERN,
   isSameOriginMetaAdsPost,
@@ -53,8 +54,6 @@ export function safePageCandidates(value: unknown): MetaPageCandidate[] {
     return [{
       pageId,
       pageName: str(row.pageName, 120),
-      instagramAccountId: typeof row.instagramAccountId === 'string' && NUMERIC_ID.test(row.instagramAccountId) ? row.instagramAccountId : null,
-      instagramAccountName: str(row.instagramAccountName, 120),
     }]
   })
 }
@@ -148,11 +147,22 @@ export async function POST(request: Request) {
   if (consumeError) return metaAdsJson({ error: 'provider_error' }, 503)
   if (!consumed) return metaAdsJson({ error: 'flow_expired' }, 404)
 
+  // Instagram comes from the ad account's instagram_accounts edge (ads_read); no access just leaves it empty.
+  let instagram: MetaInstagramAccount | null = null
+  const configured = createConfiguredMetaProvider()
+  if (configured.ok) {
+    const accounts = await configured.provider
+      .listInstagramAccounts({ accessToken, accountId, context: { userId, connectionId: null } })
+      .catch(() => [])
+    instagram = accounts[0] ?? null
+  }
+
   try {
     const connection = await saveMetaConnectionFromOAuth({
       userId,
       account,
       page,
+      instagram,
       accessToken,
       scopes: Array.isArray(flow.granted_scopes) ? flow.granted_scopes : [],
       tokenExpiresAt: typeof flow.pending_token_expires_at === 'string'

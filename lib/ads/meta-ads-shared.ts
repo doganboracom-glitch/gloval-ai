@@ -1,7 +1,26 @@
 /** Client-safe Meta Ads types and helpers (no server-only imports). */
 
-export const META_REQUIRED_SCOPES = ['ads_read', 'business_management', 'pages_show_list', 'instagram_basic'] as const
-export type MetaScope = (typeof META_REQUIRED_SCOPES)[number]
+/**
+ * Permissions every connection must have; a missing one rejects the connect.
+ * M2 will append `ads_management` and `pages_manage_ads` here (and only here).
+ */
+export const META_REQUIRED_SCOPES = ['ads_read', 'business_management', 'pages_show_list'] as const
+/** Permissions that unlock extra features; a missing one never rejects the connect. */
+export const META_OPTIONAL_SCOPES = ['pages_read_engagement'] as const
+export type MetaRequiredScope = (typeof META_REQUIRED_SCOPES)[number]
+export type MetaOptionalScope = (typeof META_OPTIONAL_SCOPES)[number]
+export type MetaScope = MetaRequiredScope | MetaOptionalScope
+
+/** Scope-mode login asks for both lists; config_id mode takes them from the Meta app Configuration. */
+export const META_REQUESTED_SCOPES: readonly MetaScope[] = [...META_REQUIRED_SCOPES, ...META_OPTIONAL_SCOPES]
+
+export function missingMetaRequiredScopes(granted: readonly string[]): MetaRequiredScope[] {
+  return META_REQUIRED_SCOPES.filter((scope) => !granted.includes(scope))
+}
+
+export function missingMetaOptionalScopes(granted: readonly string[]): MetaOptionalScope[] {
+  return META_OPTIONAL_SCOPES.filter((scope) => !granted.includes(scope))
+}
 
 export const META_RANGES = ['7d', '30d', '90d'] as const
 export type MetaAdsRange = (typeof META_RANGES)[number]
@@ -27,8 +46,12 @@ export type MetaAdAccountCandidate = {
 export type MetaPageCandidate = {
   pageId: string
   pageName: string | null
-  instagramAccountId: string | null
-  instagramAccountName: string | null
+}
+
+/** Read from the ad account's `instagram_accounts` edge (needs only `ads_read`). */
+export type MetaInstagramAccount = {
+  id: string
+  username: string | null
 }
 
 export type MetaInsightRow = {
@@ -70,6 +93,8 @@ export type MetaConnectionView = {
   pageName: string | null
   instagramAccountName: string | null
   accountStatus: number | null
+  /** Optional permissions the owner did not grant; the matching feature shows "permission needed". */
+  missingOptionalScopes: MetaOptionalScope[]
 }
 
 const ACCOUNT_STATUS_LABELS: Record<number, { tr: string; en: string; healthy: boolean }> = {

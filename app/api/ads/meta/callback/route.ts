@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveMetaRedirectUri } from '@/lib/ads/env'
 import { MetaAdsError, isMetaAdsError } from '@/lib/ads/meta-ads-error'
-import { META_REQUIRED_SCOPES } from '@/lib/ads/meta-ads-shared'
+import { missingMetaRequiredScopes } from '@/lib/ads/meta-ads-shared'
 import {
   META_OAUTH_CALLBACK_COOKIE_PATH,
   hashMetaOAuthState,
@@ -122,7 +122,8 @@ export async function GET(request: Request) {
     accessToken = token.accessToken
 
     const inspection = await provider.inspectToken({ accessToken, context })
-    const missing = META_REQUIRED_SCOPES.filter((scope) => !inspection.scopes.includes(scope))
+    if (!inspection.isValid) throw new MetaAdsError('oauth_failed')
+    const missing = missingMetaRequiredScopes(inspection.scopes)
     if (missing.length > 0) {
       // In config_id mode the user cannot change the permission list: the Meta app's Configuration is at fault.
       throw new MetaAdsError(configured.loginMode === 'config_id' ? 'config_permission_missing' : 'permission_missing', null, missing)

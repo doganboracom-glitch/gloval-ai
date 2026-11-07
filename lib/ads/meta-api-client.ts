@@ -17,6 +17,7 @@ export const META_API_ENDPOINTS = [
   'me.accounts',
   'me.permissions',
   'act.account',
+  'act.instagram_accounts',
   'act.insights',
   'act.campaigns',
   'debug_token',
@@ -143,7 +144,7 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
 
   return {
     async request(input) {
-      if (!META_API_ENDPOINTS.includes(input.endpoint) || !PATH_PATTERN.test(input.path) || input.path.includes('..')) {
+      if (!META_API_ENDPOINTS.includes(input.endpoint) || !PATH_PATTERN.test(input.path) || input.path.includes('..') || input.path.includes('//')) {
         throw new MetaAdsError('invalid_request')
       }
       const method = input.method ?? 'GET'

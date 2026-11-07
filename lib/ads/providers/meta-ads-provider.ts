@@ -2,11 +2,12 @@ import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import { META_AUTH_DIALOG_ORIGIN, type MetaApiClient, type MetaApiContext } from '@/lib/ads/meta-api-client'
 import {
   META_DATE_PRESETS,
-  META_REQUIRED_SCOPES,
+  META_REQUESTED_SCOPES,
   type MetaAdAccountCandidate,
   type MetaAdsRange,
   type MetaCampaignReport,
   type MetaInsightRow,
+  type MetaInstagramAccount,
   type MetaPageCandidate,
 } from '@/lib/ads/meta-ads-shared'
 import {
@@ -34,6 +35,7 @@ export interface MetaAdsProvider extends AdsProvider {
   inspectToken(input: { accessToken: string; context: MetaApiContext }): Promise<MetaTokenInspection>
   listAdAccounts(input: { accessToken: string; context: MetaApiContext }): Promise<MetaAdAccountCandidate[]>
   listPages(input: { accessToken: string; context: MetaApiContext }): Promise<MetaPageCandidate[]>
+  listInstagramAccounts(input: { accessToken: string; accountId: string; context: MetaApiContext }): Promise<MetaInstagramAccount[]>
   getAccountStatus(input: { accessToken: string; accountId: string; context: MetaApiContext }): Promise<number | null>
   getCampaigns(input: { accessToken: string; accountId: string; context: MetaApiContext }): Promise<Omit<MetaCampaignReport, keyof MetaInsightRow>[]>
   getInsights(input: {
@@ -204,22 +206,40 @@ export function createMetaAdsProvider(options: {
         endpoint: 'me.accounts',
         path: '/me/accounts',
         accessToken,
-        query: { fields: 'id,name,instagram_business_account{id,username}', limit: '100' },
+        query: { fields: 'id,name', limit: '100' },
         context,
       })
       const pages: MetaPageCandidate[] = []
       for (const item of dataArray(payload)) {
         const row = record(item)
         if (!row || typeof row.id !== 'string' || !FB_ID.test(row.id)) continue
-        const instagram = record(row.instagram_business_account)
-        pages.push({
-          pageId: row.id,
-          pageName: text(row.name),
-          instagramAccountId: typeof instagram?.id === 'string' && FB_ID.test(instagram.id) ? instagram.id : null,
-          instagramAccountName: text(instagram?.username),
-        })
+        pages.push({ pageId: row.id, pageName: text(row.name) })
       }
       return pages
+    },
+
+    /** Best effort: any failure (missing access, Meta error) yields an empty list instead of an error. */
+    async listInstagramAccounts({ accessToken, accountId, context }) {
+      const id = normalizeMetaAccountId(accountId)
+      if (!id) return []
+      try {
+        const payload = await client.request({
+          endpoint: 'act.instagram_accounts',
+          path: `/${id}/instagram_accounts`,
+          accessToken,
+          query: { fields: 'id,username', limit: '25' },
+          context,
+        })
+        const accounts: MetaInstagramAccount[] = []
+        for (const item of dataArray(payload)) {
+          const row = record(item)
+          if (!row || typeof row.id !== 'string' || !FB_ID.test(row.id)) continue
+          accounts.push({ id: row.id, username: text(row.username) })
+        }
+        return accounts
+      } catch {
+        return []
+      }
     },
 
     async getAccountStatus({ accessToken, accountId, context }) {
@@ -307,7 +327,7 @@ export function buildMetaAuthUrl(input: {
     // Login for Business defaults to a token response; the server-side flow needs an authorization code.
     url.searchParams.set('override_default_response_type', 'true')
   } else {
-    url.searchParams.set('scope', META_REQUIRED_SCOPES.join(','))
+    url.searchParams.set('scope', META_REQUESTED_SCOPES.join(','))
   }
   return url.toString()
 }

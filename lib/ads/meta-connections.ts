@@ -4,9 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { META_MAX_ACTIVE_CONNECTIONS } from '@/lib/ads/env'
 import { MetaAdsError, isMetaAdsError } from '@/lib/ads/meta-ads-error'
 import type { MetaApiContext } from '@/lib/ads/meta-api-client'
+import { missingMetaOptionalScopes } from '@/lib/ads/meta-ads-shared'
 import type {
   MetaAdAccountCandidate,
   MetaConnectionView,
+  MetaInstagramAccount,
   MetaPageCandidate,
 } from '@/lib/ads/meta-ads-shared'
 import { decryptAdsToken, encryptAdsToken, loadAdsTokenKeyring } from '@/lib/ads/token-crypto'
@@ -57,6 +59,7 @@ export function toMetaConnectionView(row: MetaConnectionRow): MetaConnectionView
     pageName: row.page_name,
     instagramAccountName: row.instagram_account_name,
     accountStatus: row.account_status,
+    missingOptionalScopes: missingMetaOptionalScopes(Array.isArray(row.scopes) ? row.scopes : []),
   }
 }
 
@@ -151,6 +154,7 @@ export async function saveMetaConnectionFromOAuth(input: {
   userId: string
   account: MetaAdAccountCandidate
   page: MetaPageCandidate | null
+  instagram?: MetaInstagramAccount | null
   accessToken: string
   scopes: string[]
   tokenExpiresAt: string
@@ -185,8 +189,8 @@ export async function saveMetaConnectionFromOAuth(input: {
     p_meta_business_id: input.account.businessId,
     p_page_id: input.page?.pageId ?? null,
     p_page_name: input.page?.pageName ?? null,
-    p_instagram_account_id: input.page?.instagramAccountId ?? null,
-    p_instagram_account_name: input.page?.instagramAccountName ?? null,
+    p_instagram_account_id: input.instagram?.id ?? null,
+    p_instagram_account_name: input.instagram?.username ?? null,
     p_account_status: input.account.accountStatus,
     p_max_active_connections: META_MAX_ACTIVE_CONNECTIONS,
   })

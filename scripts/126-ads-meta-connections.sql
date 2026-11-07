@@ -80,6 +80,7 @@ create table if not exists public.ads_meta_api_operations (
       'me.adaccounts',
       'me.accounts',
       'act.account',
+      'act.instagram_accounts',
       'act.insights',
       'act.campaigns',
       'debug_token',
@@ -149,7 +150,7 @@ begin
     raise exception 'request and user ids are required';
   end if;
   if p_endpoint is null or p_endpoint not in (
-    'me.adaccounts', 'me.accounts', 'act.account', 'act.insights', 'act.campaigns',
+    'me.adaccounts', 'me.accounts', 'act.account', 'act.instagram_accounts', 'act.insights', 'act.campaigns',
     'debug_token', 'oauth.token', 'me.permissions'
   ) then
     raise exception 'unsupported Meta API endpoint';

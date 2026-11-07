@@ -151,7 +151,7 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
               <option value="">{isTr ? 'Sayfa seçme' : 'No page'}</option>
               {data.pages.map((page) => (
                 <option key={page.pageId} value={page.pageId}>
-                  {page.pageName ?? page.pageId}{page.instagramAccountName ? ` · @${page.instagramAccountName}` : ''}
+                  {page.pageName ?? page.pageId}
                 </option>
               ))}
             </select>
@@ -174,6 +174,7 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
   const days = metaTokenDaysRemaining(connection.tokenExpiresAt)
   const needsReconnect = connection.status === 'error' || (days !== null && days < 0)
   const expiringSoon = !needsReconnect && days !== null && days <= META_TOKEN_WARNING_DAYS
+  const needsEngagementScope = connection.missingOptionalScopes.includes('pages_read_engagement')
   const state = metaAccountStatusLabel(connection.accountStatus, isTr)
 
   async function disconnect() {
@@ -225,9 +226,17 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
         </p>
       ) : null}
 
+      {!needsReconnect && needsEngagementScope ? (
+        <p className="text-sm text-muted-foreground">
+          {isTr
+            ? 'Sayfa etkileşim verileri için izin gerekli. Hesabı yeniden bağlayıp “pages_read_engagement” iznini verebilirsiniz; reklam raporları bundan etkilenmez.'
+            : 'Permission needed for page engagement data. Reconnect and grant “pages_read_engagement”; ad reports are not affected.'}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
-        {needsReconnect || expiringSoon ? (
-          <ConnectForm variant="outline" label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : (isTr ? 'Yenile' : 'Renew')} />
+        {needsReconnect || expiringSoon || needsEngagementScope ? (
+          <ConnectForm variant="outline" label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : expiringSoon ? (isTr ? 'Yenile' : 'Renew') : (isTr ? 'İzin ver' : 'Grant permission')} />
         ) : null}
         <Button type="button" variant="outline" onClick={() => setConfirming(true)}>
           {isTr ? 'Bağlantıyı kes' : 'Disconnect'}
