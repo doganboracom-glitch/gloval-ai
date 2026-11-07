@@ -15,7 +15,7 @@ export const ADS_PLATFORM_WORKSPACES: Partial<Record<AdsPlatformCatalogId, Compo
   meta: MetaAdsPlatformWorkspace,
 }
 
-/** Tabs a platform exposes; defaults to every tab. Meta is read-only (no plans/management yet). */
+/** Tabs a platform exposes; defaults to every tab. Meta has plans (paused publishing) but no live management yet. */
 export const ADS_PLATFORM_TABS: Partial<Record<AdsPlatformCatalogId, readonly AdsTabId[]>> = {
-  meta: ['overview', 'reports', 'settings'],
+  meta: ['overview', 'plans', 'reports', 'settings'],
 }

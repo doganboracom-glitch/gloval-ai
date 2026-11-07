@@ -18,6 +18,22 @@ export function missingMetaRequiredScopes(granted: readonly string[]): MetaRequi
   return META_REQUIRED_SCOPES.filter((scope) => !granted.includes(scope))
 }
 
+/**
+ * Third list (phase M2): permissions needed to create paused campaigns. A read-only connection that lacks them is
+ * still valid; the Plans tab just asks the owner to grant them.
+ */
+export const META_PUBLISH_SCOPES = ['ads_management', 'pages_read_engagement'] as const
+export type MetaPublishScope = (typeof META_PUBLISH_SCOPES)[number]
+
+/** Scope-mode "grant publishing" login: the read scopes plus the write permissions, de-duplicated. */
+export const META_MANAGE_REQUESTED_SCOPES: readonly string[] = [
+  ...new Set<string>([...META_REQUESTED_SCOPES, ...META_PUBLISH_SCOPES]),
+]
+
+export function missingMetaPublishScopes(granted: readonly string[]): MetaPublishScope[] {
+  return META_PUBLISH_SCOPES.filter((scope) => !granted.includes(scope))
+}
+
 export function missingMetaOptionalScopes(granted: readonly string[]): MetaOptionalScope[] {
   return META_OPTIONAL_SCOPES.filter((scope) => !granted.includes(scope))
 }
@@ -95,6 +111,12 @@ export type MetaConnectionView = {
   accountStatus: number | null
   /** Optional permissions the owner did not grant; the matching feature shows "permission needed". */
   missingOptionalScopes: MetaOptionalScope[]
+  /** Write permissions still missing for paused publishing (empty = management permission granted). */
+  missingPublishScopes: MetaPublishScope[]
+  /** True when a Facebook Page is linked; publishing needs one. */
+  hasPage: boolean
+  /** True when an Instagram account is linked, so Instagram placements can carry the creative. */
+  hasInstagram: boolean
 }
 
 const ACCOUNT_STATUS_LABELS: Record<number, { tr: string; en: string; healthy: boolean }> = {

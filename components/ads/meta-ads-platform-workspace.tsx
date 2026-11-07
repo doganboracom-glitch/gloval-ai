@@ -7,6 +7,7 @@ import { AdsTabPanel } from '@/components/ads/ads-tabs'
 import type { AdsWorkspaceProps } from '@/components/ads/ads-workspace-types'
 import { MetaAdsSettings } from '@/components/ads/meta-ads-settings'
 import { MetaAdsInsights } from '@/components/ads/meta-ads-insights'
+import { MetaPublishPanel } from '@/components/ads/meta-publish-panel'
 import { metaAccountStatusLabel } from '@/lib/ads/meta-ads-shared'
 
 export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspaceProps) {
@@ -25,8 +26,8 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
             </h2>
             <p className="text-sm text-muted-foreground">
               {isTr
-                ? `${activeConnections.length} bağlı reklam hesabı · yalnızca okuma erişimi`
-                : `${activeConnections.length} connected ad accounts · read-only access`}
+                ? `${activeConnections.length} bağlı reklam hesabı`
+                : `${activeConnections.length} connected ad accounts`}
             </p>
           </div>
 
@@ -59,6 +60,10 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
             </div>
           )}
         </section>
+      </AdsTabPanel>
+
+      <AdsTabPanel tab="plans" active={tab}>
+        <MetaPublishPanel connections={metaConnections} publishEnabled={data.publishEnabled} />
       </AdsTabPanel>
 
       <AdsTabPanel tab="reports" active={tab}>

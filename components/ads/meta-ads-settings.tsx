@@ -54,9 +54,10 @@ async function fetchJson<T>(url: string): Promise<T> {
   return payload as T
 }
 
-function ConnectForm({ label, variant = 'default' }: { label: string; variant?: 'default' | 'outline' }) {
+function ConnectForm({ label, variant = 'default', manage = false }: { label: string; variant?: 'default' | 'outline'; manage?: boolean }) {
   return (
     <form method="post" action="/api/ads/meta/connect">
+      {manage ? <input type="hidden" name="intent" value="manage" /> : null}
       <Button type="submit" variant={variant}>{label}</Button>
     </form>
   )
@@ -237,6 +238,9 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
       <div className="flex flex-wrap items-center gap-2">
         {needsReconnect || expiringSoon || needsEngagementScope ? (
           <ConnectForm variant="outline" label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : expiringSoon ? (isTr ? 'Yenile' : 'Renew') : (isTr ? 'İzin ver' : 'Grant permission')} />
+        ) : null}
+        {!needsReconnect && connection.missingPublishScopes.length > 0 ? (
+          <ConnectForm manage variant="outline" label={isTr ? 'Yönetim izni ver (duraklatılmış kampanya)' : 'Grant management permission (paused campaigns)'} />
         ) : null}
         <Button type="button" variant="outline" onClick={() => setConfirming(true)}>
           {isTr ? 'Bağlantıyı kes' : 'Disconnect'}

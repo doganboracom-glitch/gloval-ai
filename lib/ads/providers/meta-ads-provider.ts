@@ -2,6 +2,7 @@ import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import { META_AUTH_DIALOG_ORIGIN, type MetaApiClient, type MetaApiContext } from '@/lib/ads/meta-api-client'
 import {
   META_DATE_PRESETS,
+  META_MANAGE_REQUESTED_SCOPES,
   META_REQUESTED_SCOPES,
   type MetaAdAccountCandidate,
   type MetaAdsRange,
@@ -31,6 +32,8 @@ export type MetaLongLivedToken = {
 }
 
 export interface MetaAdsProvider extends AdsProvider {
+  /** Phase M2: login dialog that additionally asks for the write permissions (uses the manage Configuration when set). */
+  buildManageAuthUrl(input: AdsOAuthStartInput): string
   exchangeCodeForLongLivedToken(input: { code: string; redirectUri: string; context: MetaApiContext }): Promise<MetaLongLivedToken>
   inspectToken(input: { accessToken: string; context: MetaApiContext }): Promise<MetaTokenInspection>
   listAdAccounts(input: { accessToken: string; context: MetaApiContext }): Promise<MetaAdAccountCandidate[]>
@@ -104,8 +107,9 @@ export function createMetaAdsProvider(options: {
   appSecret: string
   apiVersion: string
   loginConfigId?: string | null
+  manageLoginConfigId?: string | null
 }): MetaAdsProvider {
-  const { client, appId, appSecret, apiVersion, loginConfigId = null } = options
+  const { client, appId, appSecret, apiVersion, loginConfigId = null, manageLoginConfigId = null } = options
 
   return {
     platform: 'meta',
@@ -114,6 +118,16 @@ export function createMetaAdsProvider(options: {
 
     buildAuthUrl(input: AdsOAuthStartInput): string {
       return buildMetaAuthUrl({ appId, apiVersion, redirectUri: input.redirectUri, state: input.state, loginConfigId })
+    },
+    buildManageAuthUrl(input: AdsOAuthStartInput): string {
+      return buildMetaAuthUrl({
+        appId,
+        apiVersion,
+        redirectUri: input.redirectUri,
+        state: input.state,
+        loginConfigId: manageLoginConfigId,
+        scopes: META_MANAGE_REQUESTED_SCOPES,
+      })
     },
     exchangeCode: async () => notImplemented('exchangeCode'),
     refreshAccessToken: async () => notImplemented('refreshAccessToken'),
@@ -316,6 +330,8 @@ export function buildMetaAuthUrl(input: {
   state: string
   /** Facebook Login for Business Configuration id; replaces `scope` when set. */
   loginConfigId?: string | null
+  /** Scope-mode override (used by the "grant publishing" login). */
+  scopes?: readonly string[]
 }): string {
   const url = new URL(`${META_AUTH_DIALOG_ORIGIN}/${input.apiVersion}/dialog/oauth`)
   url.searchParams.set('client_id', input.appId)
@@ -327,7 +343,7 @@ export function buildMetaAuthUrl(input: {
     // Login for Business defaults to a token response; the server-side flow needs an authorization code.
     url.searchParams.set('override_default_response_type', 'true')
   } else {
-    url.searchParams.set('scope', META_REQUESTED_SCOPES.join(','))
+    url.searchParams.set('scope', (input.scopes ?? META_REQUESTED_SCOPES).join(','))
   }
   return url.toString()
 }

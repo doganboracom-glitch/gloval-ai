@@ -2,7 +2,7 @@ import 'server-only'
 
 import { randomUUID } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { resolveMetaGraphApiVersion, resolveMetaReadDailyLimits } from '@/lib/ads/env'
+import { resolveMetaGraphApiVersion, resolveMetaReadDailyLimits, resolveMetaWriteDailyLimits } from '@/lib/ads/env'
 import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import {
   classifyMetaError,
@@ -22,10 +22,32 @@ export const META_API_ENDPOINTS = [
   'act.campaigns',
   'debug_token',
   'oauth.token',
+  // Phase M2 reads (idempotent re-find by gloval-req label, payment method check)
+  'act.adsets',
+  'act.adcreatives',
+  'act.ads',
+  'act.adimages',
+  'act.funding',
+  // Phase M2 writes. `.validate` = execution_options validate_only. Counted in a separate write quota.
+  'act.campaigns.create',
+  'act.adsets.create',
+  'act.adimages.create',
+  'act.adcreatives.create',
+  'act.ads.create',
+  'act.campaigns.validate',
+  'act.adsets.validate',
+  'act.adcreatives.validate',
+  'act.ads.validate',
 ] as const
 export type MetaApiEndpoint = (typeof META_API_ENDPOINTS)[number]
 
+/** Write endpoints are never retried and are counted against the write quota instead of the read quota. */
+export function isMetaWriteEndpoint(endpoint: MetaApiEndpoint): boolean {
+  return endpoint.endsWith('.create') || endpoint.endsWith('.validate')
+}
+
 export type MetaSafeErrorCode =
+  | 'outcome_unknown'
   | 'reauth_required'
   | 'permission_missing'
   | 'rate_limited'
@@ -72,6 +94,7 @@ export type MetaApiRequest = {
 
 const GRAPH_ORIGIN = 'https://graph.facebook.com'
 const DEFAULT_TIMEOUT_MS = 10_000
+const WRITE_TIMEOUT_FLOOR_MS = 25_000
 const DEFAULT_MAX_RETRIES = 2
 const PATH_PATTERN = /^\/[A-Za-z0-9_./-]{1,200}$/
 
@@ -149,7 +172,9 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
       }
       const method = input.method ?? 'GET'
       const apiVersion = deps.apiVersion ?? resolveMetaGraphApiVersion()
-      const limits = resolveMetaReadDailyLimits()
+      const isWrite = isMetaWriteEndpoint(input.endpoint)
+      if (isWrite && method !== 'POST') throw new MetaAdsError('invalid_request')
+      const limits = isWrite ? resolveMetaWriteDailyLimits() : resolveMetaReadDailyLimits()
       const requestId = randomUUID()
 
       const allowed = await reserveQuota({
@@ -186,9 +211,15 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
             body,
             cache: 'no-store',
             redirect: 'error',
-            signal: AbortSignal.timeout(timeoutMs),
+            signal: AbortSignal.timeout(isWrite ? Math.max(timeoutMs, WRITE_TIMEOUT_FLOOR_MS) : timeoutMs),
           })
         } catch {
+          // A timed-out or dropped write may still have been applied by Meta: callers must look the object up by label.
+          if (isWrite && !input.endpoint.endsWith('.validate')) {
+            lastError = new MetaAdsError('write_outcome_unknown')
+            lastSafeCode = 'outcome_unknown'
+            break
+          }
           lastError = new MetaAdsError('provider_unavailable')
           lastSafeCode = 'network_error'
           continue
@@ -208,6 +239,11 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
 
         const detail: MetaErrorDetail | null = extractMetaErrorDetail(payload)
         const klass = classifyMetaError(response.status, detail)
+        if (isWrite && klass === 'provider_unavailable' && !input.endpoint.endsWith('.validate')) {
+          lastError = new MetaAdsError('write_outcome_unknown', detail)
+          lastSafeCode = 'outcome_unknown'
+          break
+        }
         lastError = new MetaAdsError(toMetaErrorCode(klass), detail)
         lastSafeCode = safeCodeFor(klass)
         if (klass !== 'provider_unavailable') break

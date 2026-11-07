@@ -12,6 +12,10 @@ export type MetaErrorDetail = {
   type: string | null
   /** Redacted, at most 200 characters. Diagnostics only; never shown to end users. */
   message: string | null
+  /** Meta's own user-facing text (`error_user_msg`), redacted. Present only when Meta sent one. */
+  userMessage?: string
+  /** Request fields Meta blames (`error_data.blame_field_specs`), allow-listed to simple snake_case names. */
+  blameFields?: string[]
 }
 
 export const META_ERROR_MESSAGE_LIMIT = 200
@@ -66,7 +70,34 @@ export function extractMetaErrorDetail(payload: unknown): MetaErrorDetail | null
     type,
     message: redactMetaErrorMessage(error.message),
   }
+  const userMessage = redactMetaErrorMessage(error.error_user_msg)
+  if (userMessage) detail.userMessage = userMessage
+  const blameFields = extractBlameFields(error.error_data)
+  if (blameFields.length > 0) detail.blameFields = blameFields
   return detail.code === null && detail.subcode === null && !detail.type && !detail.message ? null : detail
+}
+
+const FIELD_NAME_PATTERN = /^[a-z][a-z0-9_]{0,59}$/
+
+function extractBlameFields(errorData: unknown): string[] {
+  let data = errorData
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data)
+    } catch {
+      return []
+    }
+  }
+  const specs = asRecord(data)?.blame_field_specs
+  if (!Array.isArray(specs)) return []
+  const fields = new Set<string>()
+  for (const spec of specs) {
+    for (const name of Array.isArray(spec) ? spec : [spec]) {
+      if (typeof name === 'string' && FIELD_NAME_PATTERN.test(name)) fields.add(name)
+      if (fields.size >= 8) return [...fields]
+    }
+  }
+  return [...fields]
 }
 
 /** Re-validates an already-extracted detail (e.g. read back from storage). */
