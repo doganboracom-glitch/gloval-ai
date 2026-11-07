@@ -46,7 +46,11 @@ function writeConsent(consent: ConsentChoice) {
   const payload = { ...consent, v: CONSENT_VERSION }
   const value = encodeURIComponent(JSON.stringify(payload))
   // 6 ay, site geneli. HttpOnly değil: tercih istemci tarafında okunmalı.
-  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=15552000; samesite=lax`
+  // iyzico POSTs the buyer back from its own origin; a Lax cookie is not sent on
+  // that cross-site POST, so the server could not see the marketing choice for
+  // the verified Purchase. Over HTTPS the choice cookie is therefore SameSite=None.
+  const crossSiteReadable = window.location.protocol === 'https:'
+  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=15552000; ${crossSiteReadable ? 'samesite=none; secure' : 'samesite=lax'}`
   try {
     window.localStorage.setItem(CONSENT_COOKIE, JSON.stringify(payload))
   } catch {

@@ -142,7 +142,7 @@ export function EditorClient({
           // Canonical public address of a published site is always its own
           // tenant subdomain (e.g. nakliyat.gloval.site), never the platform
           // host + /site/<slug> internal rewrite path.
-          trackPublishSite()
+          trackPublishSite(projectId)
           return { url: tenantUrl(result.slug) }
         },
         getPublishOptions: (next) => getPublishOptions({ id: projectId, schema: next }),

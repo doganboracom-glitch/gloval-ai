@@ -10,6 +10,7 @@ import {
   type AnalyticsParams,
   type PurchaseKind,
 } from '@/lib/analytics-events'
+import { metaEventIds, newEventNonce } from '@/lib/analytics/event-ids'
 
 /**
  * Consent-gated event dispatcher for GA4 and Meta Pixel.
@@ -99,7 +100,9 @@ function dispatch(vendor: Vendor, send: () => void): void {
 }
 
 function sendToGa(name: AnalyticsEventName, params: AnalyticsParams): void {
-  ensureGtag()('event', name, params)
+  // `event_id` is the Meta de-duplication key; GA4 has no use for it.
+  const { event_id: _eventId, ...gaParams } = params
+  ensureGtag()('event', name, gaParams)
 }
 
 function sendToMeta(name: AnalyticsEventName, params: AnalyticsParams): void {
@@ -134,8 +137,33 @@ export function trackEvent(
   return true
 }
 
-export function trackSignUp(method: 'email' | 'google' = 'email'): void {
-  trackEvent(ANALYTICS_EVENTS.signUp, { method })
+/**
+ * Mirrors a browser event to the server-side Conversions API through the
+ * same-origin bridge. Only attempted with marketing consent; the server
+ * re-checks the consent cookie itself. Failures are swallowed.
+ */
+export function reportServerEvent(payload: Record<string, unknown>): void {
+  if (typeof window === 'undefined') return
+  if (readConsent()?.marketing !== true) return
+  try {
+    void fetch('/api/analytics/meta-event', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+      credentials: 'same-origin',
+    }).catch(() => undefined)
+  } catch {
+    // Measurement must never affect the user's flow.
+  }
+}
+
+export function trackSignUp(method: 'email' | 'google' = 'email', userId?: string): void {
+  trackEvent(ANALYTICS_EVENTS.signUp, {
+    method,
+    ...(userId ? { event_id: metaEventIds.signup(userId) } : {}),
+  })
+  if (userId) reportServerEvent({ type: 'sign_up', userId })
 }
 
 export function trackGenerateSiteStarted(): void {
@@ -143,15 +171,26 @@ export function trackGenerateSiteStarted(): void {
 }
 
 export function trackGenerateSiteCompleted(source: 'ai' | 'fallback'): void {
-  trackEvent(ANALYTICS_EVENTS.generateSiteCompleted, { source })
+  const nonce = newEventNonce()
+  trackEvent(ANALYTICS_EVENTS.generateSiteCompleted, { source, event_id: metaEventIds.generate(nonce) })
+  reportServerEvent({ type: 'generate_site_completed', nonce, source })
 }
 
-export function trackPublishSite(): void {
-  trackEvent(ANALYTICS_EVENTS.publishSite)
+export function trackPublishSite(siteId?: string): void {
+  trackEvent(ANALYTICS_EVENTS.publishSite, siteId ? { event_id: metaEventIds.publish(siteId) } : {})
+  if (siteId) reportServerEvent({ type: 'publish_site', siteId })
 }
 
 export function trackBeginCheckout(params: { value?: number; currency?: string; item_category?: string } = {}): void {
-  trackEvent(ANALYTICS_EVENTS.beginCheckout, params)
+  const nonce = newEventNonce()
+  trackEvent(ANALYTICS_EVENTS.beginCheckout, { ...params, event_id: metaEventIds.checkout(nonce) })
+  reportServerEvent({
+    type: 'begin_checkout',
+    nonce,
+    value: params.value,
+    currency: params.currency,
+    category: params.item_category,
+  })
 }
 
 const SENT_PURCHASES_KEY = 'gloval_purchases_sent'
