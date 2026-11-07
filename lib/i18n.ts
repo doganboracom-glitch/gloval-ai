@@ -1020,7 +1020,8 @@ const dict = {
         preInfo: 'Ön Bilgilendirme Formu',
   refund: 'İptal ve İade',
   delivery: 'Hizmet Sunumu',
-  referralTerms: 'Satış Ortaklığı Şartları',
+      referralTerms: 'Satış Ortaklığı Şartları',
+      dataDeletion: 'Veri Silme Talimatları',
 
       },
     },
@@ -3336,7 +3337,8 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
         preInfo: 'Pre-Sale Information Form',
   refund: 'Cancellation & Refund',
   delivery: 'Service Delivery',
-  referralTerms: 'Referral Partner Terms',
+      referralTerms: 'Referral Partner Terms',
+      dataDeletion: 'Data Deletion Instructions',
 
       },
     },

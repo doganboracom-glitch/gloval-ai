@@ -60,6 +60,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
         { label: l.preInfo, href: '/yasal/on-bilgilendirme-formu' },
         { label: l.refund, href: '/yasal/iptal-ve-iade' },
         { label: l.delivery, href: '/yasal/hizmet-sunumu' },
+        { label: l.dataDeletion, href: '/yasal/veri-silme' },
         ...(showReferralTerms
           ? [{ label: l.referralTerms, href: '/yasal/satis-ortakligi-sartlari' }]
           : []),

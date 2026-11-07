@@ -91,7 +91,7 @@ describe('Google Ads legal disclosures', () => {
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
 
     expect(terms.lastUpdated).toBe('2026-11-05')
-    expect(privacy.lastUpdated).toBe('2026-11-05')
+    expect(privacy.lastUpdated).toBe('2026-11-07')
 
     for (const lang of ['tr', 'en'] as const) {
       const termsSection = terms[lang].sections.find((section) => section.heading.startsWith('8. '))
