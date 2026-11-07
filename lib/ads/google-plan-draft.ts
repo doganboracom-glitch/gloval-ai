@@ -34,7 +34,7 @@ export async function loadDraftConnection(
     .eq('user_id', userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-  if (error) return { ok: false, error: 'provider_error', status: 502 }
+  if (error) return { ok: false, error: 'provider_error', status: 503 }
   if (!data || data.status !== 'active') return { ok: false, error: 'connection_not_found', status: 404 }
   if (data.is_manager) return { ok: false, error: 'manager_account', status: 400 }
   if (!data.currency_code) return { ok: false, error: 'currency_mismatch', status: 400 }
@@ -85,7 +85,7 @@ export async function createDraftFromSuggestion(
       p_currency: connection.currency,
     })
     .maybeSingle()
-  if (error || !data) return { ok: false, error: 'provider_error', status: 502 }
+  if (error || !data) return { ok: false, error: 'provider_error', status: 503 }
   const result = data as { state?: string; plan_id?: string; plan_version?: number }
   if (result.state !== 'created' || !result.plan_id) {
     return { ok: false, error: result.state ?? 'invalid_request', status: result.state === 'connection_not_found' ? 404 : 400 }

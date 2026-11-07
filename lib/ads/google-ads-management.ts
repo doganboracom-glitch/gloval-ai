@@ -12,6 +12,7 @@ import { evaluateCopyPolicy } from '@/lib/ads/policy'
 import { isCleanText } from '@/lib/ads/planner'
 import { createGoogleAdsActionApprovalHash, hashGoogleAdsApprovalPayload } from '@/lib/ads/google-ads-approval'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
+import { explainGoogleReadRejection, type GoogleAdsManagementSection } from '@/lib/ads/google-read-error'
 import { buildGoogleAdsApprovalSummary, googleAdsMicrosFromMinorUnits } from '@/lib/ads/google-ads-publish-plan'
 import { evaluateGoogleAdsAmountRisk, googleAdsMonthlyBudgetUpperBoundMinor, googleAdsRiskConfirmationError } from '@/lib/ads/google-ads-risk'
 import { logUserEvent } from '@/lib/notify'
@@ -71,6 +72,15 @@ export type GoogleAdsManagementSnapshot = SnapshotState & {
   recommendationSource: 'ai' | 'saved' | 'unavailable'
   averageDailySpend30dMinor: number | null
 }
+
+/** Short Turkish reason per section whose Google read was rejected; the other sections still render. */
+export type GoogleAdsManagementSectionErrors = Partial<Record<GoogleAdsManagementSection, string>>
+
+/** The independently loaded sections that remain available even when the campaign-state read fails. */
+export type GoogleAdsManagementPartial = Pick<
+  GoogleAdsManagementSnapshot,
+  'reviewStatus' | 'billingVerified' | 'paymentMethodWarning' | 'performance'
+>
 
 export type GoogleAdsManagementAction = {
   id: string
@@ -195,7 +205,14 @@ function snapshotPerformanceRow(campaign: unknown): ManagementPerformance | null
   }
 }
 
-async function readPerformance(access: GoogleAdsAccess, plan: ManagementPlan): Promise<ManagementPerformance | null> {
+export function describeGoogleReadFailure(error: unknown): string {
+  return explainGoogleReadRejection(error instanceof GoogleAdsError ? error.details : [])
+}
+
+async function readPerformance(
+  access: GoogleAdsAccess,
+  plan: ManagementPlan,
+): Promise<{ value: ManagementPerformance | null; error: string | null }> {
   try {
     const report = await access.provider.getPerformance({
       customerId: access.connection.external_account_id,
@@ -206,9 +223,9 @@ async function readPerformance(access: GoogleAdsAccess, plan: ManagementPlan): P
       context: access.context,
     })
     const campaign = report.campaigns.find((row) => row.id === plan.external_campaign_id)
-    return snapshotPerformanceRow(campaign)
-  } catch {
-    return null
+    return { value: snapshotPerformanceRow(campaign), error: null }
+  } catch (error) {
+    return { value: null, error: describeGoogleReadFailure(error) }
   }
 }
 
@@ -246,32 +263,70 @@ async function readCampaignState(access: GoogleAdsAccess, plan: ManagementPlan) 
   })
 }
 
-async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
-  const state = await readCampaignState(access, plan)
-  const [review, billing, performance, averageDailySpend30dMinor] = state.campaignStatus === 'REMOVED'
-    ? [
-        { status: 'unavailable' as const },
-        { verified: false, paymentMethodWarning: false },
-        null,
-        null,
-      ]
-    : await Promise.all([
-        access.provider.getAdReviewStatus({
-          customerId: access.connection.external_account_id,
-          loginCustomerId: access.connection.login_customer_id,
-          campaignId: plan.external_campaign_id as string,
-          accessToken: access.accessToken,
-          context: access.context,
-        }),
-        access.provider.verifyBilling({
-          customerId: access.connection.external_account_id,
-          loginCustomerId: access.connection.login_customer_id,
-          accessToken: access.accessToken,
-          context: access.context,
-        }),
-        readPerformance(access, plan),
-        readAverageDailySpend30dMinor(access, plan),
-      ])
+/**
+ * Loads the campaign state, ad policy summary and performance independently: one rejected Google query only
+ * disables its own section. `stateError` is set (and `state` null) when the campaign-state read itself failed.
+ */
+export async function readSnapshotSections(access: GoogleAdsAccess, plan: ManagementPlan) {
+  const sectionErrors: GoogleAdsManagementSectionErrors = {}
+  let state: GoogleAdsCampaignManagementState | null = null
+  let stateError: unknown = null
+  try {
+    state = await readCampaignState(access, plan)
+  } catch (error) {
+    stateError = error
+    sectionErrors.campaign_state = describeGoogleReadFailure(error)
+  }
+
+  let partial: GoogleAdsManagementPartial = {
+    reviewStatus: 'unavailable',
+    billingVerified: false,
+    paymentMethodWarning: false,
+    performance: null,
+  }
+  let averageDailySpend30dMinor: number | null = null
+
+  if (state?.campaignStatus !== 'REMOVED') {
+    const [review, billing, performance, average] = await Promise.all([
+      access.provider.getAdReviewStatus({
+        customerId: access.connection.external_account_id,
+        loginCustomerId: access.connection.login_customer_id,
+        campaignId: plan.external_campaign_id as string,
+        accessToken: access.accessToken,
+        context: access.context,
+      }).then(
+        (value) => ({ status: value.status, error: null as string | null }),
+        (error: unknown) => ({ status: 'unavailable' as const, error: describeGoogleReadFailure(error) }),
+      ),
+      access.provider.verifyBilling({
+        customerId: access.connection.external_account_id,
+        loginCustomerId: access.connection.login_customer_id,
+        accessToken: access.accessToken,
+        context: access.context,
+      }).catch(() => ({ verified: false, paymentMethodWarning: false })),
+      readPerformance(access, plan),
+      readAverageDailySpend30dMinor(access, plan),
+    ])
+    if (review.error) sectionErrors.policy = review.error
+    if (performance.error) sectionErrors.performance = performance.error
+    partial = {
+      reviewStatus: review.status,
+      billingVerified: billing.verified,
+      paymentMethodWarning: billing.paymentMethodWarning,
+      performance: performance.value,
+    }
+    averageDailySpend30dMinor = average
+  }
+
+  return { state, stateError, partial, averageDailySpend30dMinor, sectionErrors }
+}
+
+function buildSnapshot(
+  plan: ManagementPlan,
+  state: GoogleAdsCampaignManagementState,
+  partial: GoogleAdsManagementPartial,
+  averageDailySpend30dMinor: number | null,
+): GoogleAdsManagementSnapshot {
   const storedAiRecommendation = plan.plan && typeof plan.plan === 'object'
     ? Number((plan.plan as Record<string, unknown>).aiRecommendedDailyBudgetMinor)
     : Number.NaN
@@ -280,19 +335,20 @@ async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
     : null
   const stateForHash = snapshotState(state)
   return {
-    state,
-    snapshot: {
-      ...stateForHash,
-      stateHash: snapshotHash(stateForHash),
-      reviewStatus: review.status,
-      billingVerified: billing.verified,
-      paymentMethodWarning: billing.paymentMethodWarning,
-      performance,
-      recommendedDailyBudgetMinor: aiRecommendation ?? plan.daily_budget_minor,
-      recommendationSource: aiRecommendation !== null ? 'ai' : plan.daily_budget_minor !== null ? 'saved' : 'unavailable',
-      averageDailySpend30dMinor,
-    } satisfies GoogleAdsManagementSnapshot,
+    ...stateForHash,
+    stateHash: snapshotHash(stateForHash),
+    ...partial,
+    recommendedDailyBudgetMinor: aiRecommendation ?? plan.daily_budget_minor,
+    recommendationSource: aiRecommendation !== null ? 'ai' : plan.daily_budget_minor !== null ? 'saved' : 'unavailable',
+    averageDailySpend30dMinor,
   }
+}
+
+/** Strict variant for mutations: the campaign state must be readable, otherwise nothing is changed. */
+async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
+  const { state, stateError, partial, averageDailySpend30dMinor } = await readSnapshotSections(access, plan)
+  if (!state) throw stateError instanceof GoogleAdsError ? stateError : new GoogleAdsError('provider_unavailable')
+  return { state, snapshot: buildSnapshot(plan, state, partial, averageDailySpend30dMinor) }
 }
 
 function validateAdCopy(headlines: string[], descriptions: string[]) {
@@ -434,12 +490,19 @@ export async function getGoogleAdsManagementSnapshot(
     connectionId: plan.connection_id as string,
     identity: accessIdentity,
     action: async (access) => {
-      const { state, snapshot } = await readSnapshot(access, plan)
+      const sections = await readSnapshotSections(access, plan)
+      const { state, stateError, partial, averageDailySpend30dMinor, sectionErrors } = sections
+      // Auth, quota and access failures affect every section, so they still fail the whole request with a precise code.
+      if (!state && stateError instanceof GoogleAdsError && stateError.code !== 'provider_error' && stateError.code !== 'provider_unavailable') {
+        throw stateError
+      }
       const actions = await listActions(userId, plan.id)
-      await reconcilePendingActions(userId, actions, snapshotState(state))
-      const refreshedActions = await listActions(userId, plan.id)
+      if (state) await reconcilePendingActions(userId, actions, snapshotState(state))
+      const refreshedActions = state ? await listActions(userId, plan.id) : actions
       return {
-        snapshot,
+        snapshot: state ? buildSnapshot(plan, state, partial, averageDailySpend30dMinor) : null,
+        partial,
+        sectionErrors,
         actions: refreshedActions.map(safeAction),
       }
     },

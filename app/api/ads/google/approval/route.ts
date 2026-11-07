@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-  if (planError) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (planError) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   if (!planRow) return googleAdsJson({ ok: false, error: 'plan_not_found' }, 404)
   if (!planRow.connection_id || !['draft', 'failed', 'approved'].includes(planRow.status)) {
     return googleAdsJson({ ok: false, error: 'plan_not_approved' }, 409)
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   if (!connection || connection.status !== 'active') return googleAdsJson({ ok: false, error: 'connection_not_found' }, 404)
   if (connection.is_manager) return googleAdsJson({ ok: false, error: 'manager_account' }, 400)
   if (!connection.currency_code || connection.currency_code !== planRow.currency) {
@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     p_terms_accepted: input.data.termsAccepted,
     p_approval_summary: approvalSummary,
   }).maybeSingle()
-  if (error || !data) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (error || !data) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   const result = data as { state?: string; approval_id?: string; plan_version?: number }
   if (result.state !== 'approved' || !result.approval_id) {
     const status = result.state === 'not_found' ? 404 : result.state === 'plan_changed' ? 409 : 400
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
     .select('id')
     .maybeSingle()
   if (acceptanceError || !savedAcceptance) {
-    return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+    return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   }
 
   return googleAdsJson({

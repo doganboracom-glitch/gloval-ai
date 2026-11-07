@@ -106,6 +106,18 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'configuration_missing':
     case 'publish_disabled':
     case 'kill_switch_active':
+    // Cloudflare replaces origin 502/504 with its own HTML page, which hides our JSON error code from the client.
+    case 'quota_check_failed':
+    case 'oauth_failed':
+    case 'account_list_failed':
+    case 'reauth_required':
+    case 'not_authorized':
+    case 'provider_unavailable':
+    case 'provider_error':
+    case 'disconnect_failed':
+    case 'status_update_failed':
+    case 'ad_review_status_unavailable':
+    case 'no_accounts':
       return 503
     case 'api_quota_exceeded':
       return 429
@@ -120,17 +132,5 @@ export function googleAdsHttpStatus(code: GoogleAdsErrorCode): number {
     case 'scope_missing':
     case 'manager_account':
       return 400
-    case 'quota_check_failed':
-    case 'oauth_failed':
-    case 'account_list_failed':
-    case 'reauth_required':
-    case 'not_authorized':
-    case 'provider_unavailable':
-    case 'provider_error':
-    case 'disconnect_failed':
-    case 'status_update_failed':
-    case 'ad_review_status_unavailable':
-    case 'no_accounts':
-      return 502
   }
 }

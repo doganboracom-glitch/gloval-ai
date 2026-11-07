@@ -99,6 +99,6 @@ export async function POST(request: Request) {
       const code = googleAdsErrorCode(error)
       return googleAdsJson({ ok: false, error: code }, googleAdsHttpStatus(code))
     }
-    return googleAdsJson({ ok: false, error: 'analysis_unavailable' }, 502)
+    return googleAdsJson({ ok: false, error: 'analysis_unavailable' }, 503)
   }
 }

@@ -163,7 +163,7 @@ describe('POST /api/ads/google/select', () => {
     mocks.saveConnection.mockRejectedValueOnce(new GoogleAdsError('provider_error'))
     const response = await POST(request())
 
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ ok: false, error: 'provider_error' })
     expect(mocks.revoke).toHaveBeenCalledWith('refresh-token-plaintext')
     expect(mocks.insertPayloads).toHaveLength(1)
@@ -182,7 +182,7 @@ describe('POST /api/ads/google/select', () => {
     mocks.revoke.mockRejectedValueOnce(new GoogleAdsError('disconnect_failed'))
     const response = await POST(request())
 
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(503)
     expect(mocks.revoke).toHaveBeenCalledWith('refresh-token-plaintext')
     expect(mocks.insertPayloads[0]?.account_candidates).toEqual(FLOW_ROW.account_candidates)
   })

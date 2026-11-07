@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   if (connectionId) query = query.eq('connection_id', connectionId)
 
   const { data, error } = await query
-  if (error) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (error) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   return googleAdsJson({ ok: true, plans: data ?? [] })
 }
 
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   if (!connection || connection.status !== 'active') return googleAdsJson({ ok: false, error: 'connection_not_found' }, 404)
   if (connection.is_manager) return googleAdsJson({ ok: false, error: 'manager_account' }, 400)
   if (!connection.currency_code) return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 400)
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     p_daily_budget_minor: input.data.dailyBudgetMinor,
     p_currency: connection.currency_code,
   }).maybeSingle()
-  if (error || !data) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (error || !data) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   const result = data as { state?: string; plan_id?: string; plan_version?: number }
   if (result.state !== 'created' || !result.plan_id) {
     const status = result.state === 'connection_not_found' ? 404 : 400
@@ -131,7 +131,7 @@ export async function PATCH(request: Request) {
     .eq('user_id', gate.userId)
     .eq('platform', 'google_ads')
     .maybeSingle()
-  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (connectionError) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   if (!connection || connection.status !== 'active') return googleAdsJson({ ok: false, error: 'connection_not_found' }, 404)
   if (connection.is_manager || !connection.currency_code) return googleAdsJson({ ok: false, error: 'currency_mismatch' }, 400)
 
@@ -153,7 +153,7 @@ export async function PATCH(request: Request) {
     .in('status', ['draft', 'failed', 'approved'])
     .select('id,version,status')
     .maybeSingle()
-  if (error) return googleAdsJson({ ok: false, error: 'provider_error' }, 502)
+  if (error) return googleAdsJson({ ok: false, error: 'provider_error' }, 503)
   if (!data) return googleAdsJson({ ok: false, error: 'plan_changed' }, 409)
   return googleAdsJson({ ok: true, planId: data.id, version: data.version, status: data.status })
 }

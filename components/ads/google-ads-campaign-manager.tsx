@@ -14,14 +14,21 @@ import { Field, FieldGroup, FieldLabel, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import type { GoogleAdsManagementAction, GoogleAdsManagementSnapshot } from '@/lib/ads/google-ads-management'
+import type {
+  GoogleAdsManagementAction,
+  GoogleAdsManagementPartial,
+  GoogleAdsManagementSectionErrors,
+  GoogleAdsManagementSnapshot,
+} from '@/lib/ads/google-ads-management'
 
 type Plan = { id: string; status: string; version: number }
 type ActionName = 'pause' | 'enable' | 'budget' | 'ad_copy' | 'keyword' | 'archive' | 'undo'
 type ManagementResponse = {
   ok?: boolean
   error?: string
-  snapshot?: GoogleAdsManagementSnapshot
+  snapshot?: GoogleAdsManagementSnapshot | null
+  partial?: GoogleAdsManagementPartial
+  sectionErrors?: GoogleAdsManagementSectionErrors
   actions?: GoogleAdsManagementAction[]
   stateVerified?: boolean
 }
@@ -232,7 +239,8 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   const [pending, setPending] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
-  const management = data?.snapshot
+  const management = data?.snapshot ?? undefined
+  const sectionErrors = data?.sectionErrors ?? {}
   const activity = data?.actions ?? []
   const activeCampaign = plan?.status === 'published' && management !== undefined && management.campaignStatus !== 'REMOVED'
   const currentBudget = management ? majorFromMicros(management.dailyBudgetMicros, currency) : ''
@@ -240,7 +248,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   const targetMinor = minorFromMajor(inputBudget, currency)
   const currentBudgetMinor = currentBudget ? minorFromMajor(currentBudget, currency) : null
   const currentStatus = management?.campaignStatus
-  const performance = management?.performance ?? null
+  const performance = management?.performance ?? data?.partial?.performance ?? null
   const recommendationLabel = management?.recommendationSource === 'ai'
     ? (isTr ? 'İlk AI önerisi' : 'Initial AI recommendation')
     : (isTr ? 'Kaydedilen başlangıç bütçesi' : 'Saved starting budget')
@@ -410,6 +418,33 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
           {error ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertTitle>{isTr ? 'Kampanya verisi alınamadı' : 'Campaign data unavailable'}</AlertTitle><AlertDescription>{errorMessage(error instanceof ManagementApiError ? error.code : undefined, isTr)}</AlertDescription></Alert> : null}
           {actionError ? <Alert variant="destructive"><AlertCircle aria-hidden="true" /><AlertDescription>{actionError}</AlertDescription></Alert> : null}
           {statusMessage ? <Alert><Check aria-hidden="true" /><AlertDescription>{statusMessage}</AlertDescription></Alert> : null}
+          {data && !management ? (
+            <>
+              <section className="flex flex-col gap-3 rounded-xl border border-border p-4" aria-label={isTr ? 'Kampanya durumu' : 'Campaign status'}>
+                <Alert variant="destructive">
+                  <AlertCircle aria-hidden="true" />
+                  <AlertTitle>{isTr ? 'Kampanya durumu alınamadı' : 'Campaign state unavailable'}</AlertTitle>
+                  <AlertDescription>{sectionErrors.campaign_state ?? (isTr ? 'Google bu bilgiyi vermedi.' : 'Google did not return this data.')} {isTr ? 'Bütçe, reklam metni ve anahtar kelime değişiklikleri durum okunana kadar kapalı.' : 'Budget, ad copy, and keyword changes stay disabled until the state can be read.'}</AlertDescription>
+                </Alert>
+                <p className="text-sm text-muted-foreground">{isTr ? 'Reklam incelemesi' : 'Ad review'}: <span className="font-medium text-foreground">{data.partial?.reviewStatus === 'approved' ? (isTr ? 'Onaylandı' : 'Approved') : data.partial?.reviewStatus === 'disapproved' ? (isTr ? 'Reddedildi' : 'Disapproved') : data.partial?.reviewStatus === 'review_in_progress' ? (isTr ? 'İncelemede' : 'In review') : (isTr ? 'Doğrulanamadı' : 'Unavailable')}</span></p>
+                {sectionErrors.policy ? <p className="text-sm text-destructive" role="status">{sectionErrors.policy}</p> : null}
+              </section>
+              {performance ? (
+                <section className="flex flex-col gap-3" aria-labelledby="ads-manager-performance-partial-title">
+                  <h3 id="ads-manager-performance-partial-title" className="font-semibold">{isTr ? 'Son 7 gün · Google Ads verisi' : 'Last 7 days · Google Ads data'}</h3>
+                  <dl className="grid grid-cols-2 gap-3 rounded-xl border border-border p-4 sm:grid-cols-5">
+                    {[
+                      [isTr ? 'Gösterim' : 'Impressions', formatCount(performance.impressions, isTr)],
+                      [isTr ? 'Tıklama' : 'Clicks', formatCount(performance.clicks, isTr)],
+                      ['CTR', `${(performance.ctr * 100).toFixed(2)}%`],
+                      [isTr ? 'Dönüşüm' : 'Conversions', formatCount(performance.conversions, isTr)],
+                      [isTr ? 'Harcama' : 'Spend', formatMicros(performance.costMicros, currency, isTr)],
+                    ].map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-medium">{value}</dd></div>)}
+                  </dl>
+                </section>
+              ) : <p className="text-sm text-muted-foreground">{sectionErrors.performance ?? (isTr ? 'Son 7 günlük performans verisi henüz alınamıyor.' : 'Seven-day performance data is unavailable.')}</p>}
+            </>
+          ) : null}
           {management ? (
             <>
               <section className="flex flex-col gap-3 rounded-xl border border-border p-4" aria-label={isTr ? 'Kampanya durumu' : 'Campaign status'}>
@@ -437,6 +472,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                   <p className="text-muted-foreground">{isTr ? 'Faturalama' : 'Billing'}: <span className="font-medium text-foreground">{management.billingVerified ? (isTr ? 'Doğrulandı' : 'Verified') : (isTr ? 'Dikkat gerekli' : 'Needs attention')}</span></p>
                   <p className="text-muted-foreground">{isTr ? 'Günlük bütçe' : 'Daily budget'}: <span className="font-medium text-foreground">{formatMicros(management.dailyBudgetMicros, currency, isTr)}</span></p>
                 </div>
+                {sectionErrors.policy ? <p className="text-sm text-destructive" role="status">{isTr ? 'Reklam incelemesi alınamadı: ' : 'Ad review unavailable: '}{sectionErrors.policy}</p> : null}
                 {management.campaignStatus === 'PAUSED' && management.reviewStatus !== 'approved' ? <p className="text-sm text-muted-foreground">{isTr ? 'Etkinleştirmeden önce Google reklam incelemesi tamamlanmalıdır.' : 'Google ad review must be approved before enabling.'}</p> : null}
                 {management.campaignStatus === 'PAUSED' && management.paymentMethodWarning ? <Alert><AlertCircle aria-hidden="true" /><AlertDescription>{isTr ? 'Google Ads faturalama yöntemi doğrulanamadı; etkinleştirme onayında bunu ayrıca kabul etmeniz gerekir.' : 'Google Ads could not verify the billing method; acknowledge this in the enable confirmation.'}</AlertDescription></Alert> : null}
 
@@ -459,7 +495,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                     {recommendations.map((item) => <Alert key={item.key}><AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><span>{item.text}</span><Button type="button" size="sm" variant="outline" onClick={() => goTo(item.target === 'copy' ? 'google-ads-manager-copy' : 'google-ads-manager-keywords')}>{item.target === 'copy' ? (isTr ? 'Reklam metnini incele' : 'Review ad copy') : (isTr ? 'Anahtar kelimeleri incele' : 'Review keywords')}</Button></AlertDescription></Alert>)}
                   </div> : null}
                 </section>
-              ) : activeCampaign ? <p className="text-sm text-muted-foreground">{isTr ? 'Son 7 günlük performans verisi henüz alınamıyor; veri olmadan öneri gösterilmiyor.' : 'Seven-day performance data is unavailable; no recommendations are shown without data.'}</p> : null}
+              ) : activeCampaign ? <p className="text-sm text-muted-foreground">{sectionErrors.performance ? `${sectionErrors.performance} ` : ''}{isTr ? 'Son 7 günlük performans verisi henüz alınamıyor; veri olmadan öneri gösterilmiyor.' : 'Seven-day performance data is unavailable; no recommendations are shown without data.'}</p> : null}
 
               {activeCampaign ? (
                 <div className="grid gap-5 xl:grid-cols-2">

@@ -21,7 +21,7 @@ function responseStatus(reason: string): number {
   if (reason === 'not_authorized' || reason === 'google_access_level_insufficient') return 403
   if (reason === 'plan_not_found' || reason === 'publish_disabled') return 404
   if (reason === 'api_quota_exceeded' || reason === 'rate_limited') return 429
-  if (reason === 'provider_unavailable') return 502
+  if (reason === 'provider_unavailable') return 503
   if (reason === 'provider_error' || reason === 'quota_check_failed' || reason === 'configuration_missing') return 503
   if (reason === 'invalid_request' || reason === 'confirmation_required' || reason === 'eu_political_declaration_required') return 400
   return 409

@@ -18,6 +18,7 @@ import {
   type GoogleAdsRefreshResult,
 } from '@/lib/ads/providers/types'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
+import type { GoogleAdsReadQuery } from '@/lib/ads/google-read-error'
 import {
   resolveGoogleAdsPublishAccess,
   resolveGoogleAdsValidateOnlyTestEnabled,
@@ -65,6 +66,8 @@ export type GoogleAdsApiCall = {
     | GoogleAdsMutateRequest
     | GoogleAdsAdMutateRequest
   context: AdsApiOperationContext
+  /** Names the read query so a Google rejection can be audited per query (admin panel). */
+  readQuery?: GoogleAdsReadQuery
 }
 
 export type GoogleAdsApiTransport = (input: GoogleAdsApiCall) => Promise<unknown>
@@ -493,6 +496,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
           query: `SELECT ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status FROM ad_group_ad WHERE campaign.id = ${campaignId} AND ad_group_ad.status != 'REMOVED'`,
         },
         context,
+        readQuery: 'ad_policy',
       })
       const rows = searchRows(payload)
       if (rows.length === 0) return { status: 'unavailable', adCount: 0 }
@@ -548,6 +552,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
           query: `SELECT campaign.id, campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM campaign WHERE segments.date DURING ${duration} AND campaign.status != 'REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 100`,
         },
         context,
+        readQuery: 'performance',
       })
 
       const campaigns: AdsCampaignPerformance[] = searchRows(payload).flatMap((row) => {
@@ -653,15 +658,25 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         loginCustomerId: input.loginCustomerId ? normalizeCustomerId(input.loginCustomerId) : null,
         context: input.context,
       }
-      const payload = await requestAdsApi({
+      // campaign_budget is only selectable from the campaign resource, so the budget and the ad are read separately.
+      const campaignPayload = await requestAdsApi({
         ...baseCall,
         body: {
-          query: `SELECT campaign.id, campaign.status, campaign_budget.resource_name, campaign_budget.amount_micros, ad_group.resource_name, ad_group_ad.ad.resource_name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE campaign.id = ${input.campaignId} AND ad_group_ad.status != 'REMOVED' AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD' ORDER BY ad_group_ad.ad.id LIMIT 1`,
+          query: `SELECT campaign.id, campaign.status, campaign_budget.resource_name, campaign_budget.amount_micros FROM campaign WHERE campaign.id = ${input.campaignId} LIMIT 1`,
         },
+        readQuery: 'campaign_state',
       })
-      const row = searchRows(payload)[0]
-      const campaign = asRecord(row?.campaign)
-      const budget = asRecord(row?.campaignBudget ?? row?.campaign_budget)
+      const adPayload = await requestAdsApi({
+        ...baseCall,
+        body: {
+          query: `SELECT ad_group.resource_name, ad_group_ad.ad.id, ad_group_ad.ad.resource_name, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions FROM ad_group_ad WHERE campaign.id = ${input.campaignId} AND ad_group_ad.status != 'REMOVED' AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD' ORDER BY ad_group_ad.ad.id LIMIT 1`,
+        },
+        readQuery: 'campaign_state',
+      })
+      const campaignRow = searchRows(campaignPayload)[0]
+      const row = searchRows(adPayload)[0]
+      const campaign = asRecord(campaignRow?.campaign)
+      const budget = asRecord(campaignRow?.campaignBudget ?? campaignRow?.campaign_budget)
       const adGroup = asRecord(row?.adGroup ?? row?.ad_group)
       const adGroupAd = asRecord(row?.adGroupAd ?? row?.ad_group_ad)
       const ad = asRecord(adGroupAd?.ad)
@@ -694,6 +709,7 @@ export function createGoogleAdsProvider(config: GoogleAdsProviderConfig): Google
         body: {
           query: `SELECT ad_group_criterion.resource_name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.negative FROM ad_group_criterion WHERE campaign.id = ${input.campaignId} AND ad_group_criterion.type = KEYWORD AND ad_group_criterion.status != REMOVED LIMIT 100`,
         },
+        readQuery: 'keywords',
       })
       const keywords = searchRows(keywordPayload).flatMap((keywordRow) => {
         const criterion = asRecord(keywordRow?.adGroupCriterion ?? keywordRow?.ad_group_criterion)

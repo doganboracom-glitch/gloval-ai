@@ -3,6 +3,7 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { GoogleAdsError } from '@/lib/ads/google-ads-error'
 import { resolveGoogleAdsReadDailyLimits } from '@/lib/ads/env'
+import { recordGoogleAdsReadRejection } from '@/lib/ads/google-ads-audit'
 import { extractGoogleErrorDetails, formatGoogleErrorCode } from '@/lib/ads/google-error-detail'
 import type {
   GoogleAdsAdMutateRequest,
@@ -305,6 +306,16 @@ export function createGoogleAdsApiTransport(input: {
           method: call.method,
           httpStatus: response.status,
           errors: googleErrors.map((item) => ({ code: formatGoogleErrorCode(item), fieldPath: item.fieldPath })),
+        })
+      }
+
+      if (call.readQuery && response.status >= 400 && response.status < 500 && response.status !== 429) {
+        await recordGoogleAdsReadRejection({
+          userId: input.userId,
+          connectionId: input.connectionId,
+          query: call.readQuery,
+          httpStatus: response.status,
+          googleErrors,
         })
       }
 
