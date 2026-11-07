@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { AdsScrollRow } from '@/components/ads/ads-scroll-row'
 import { cn } from '@/lib/utils'
 
 export type AdsTabId = 'overview' | 'plans' | 'management' | 'reports' | 'settings'
@@ -30,14 +31,17 @@ export function AdsTabList({
   active,
   onChange,
   isTr,
+  label,
 }: {
   active: AdsTabId
   onChange: (tab: AdsTabId) => void
   isTr: boolean
+  label?: string
 }) {
   const refs = useRef<Partial<Record<AdsTabId, HTMLButtonElement | null>>>({})
 
-  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+  function onKeyDown(event: KeyboardEvent<HTMLElement>) {
+    const index = ADS_TAB_IDS.indexOf(active)
     const last = ADS_TAB_IDS.length - 1
     const next = event.key === 'ArrowRight' ? (index === last ? 0 : index + 1)
       : event.key === 'ArrowLeft' ? (index === 0 ? last : index - 1)
@@ -52,12 +56,15 @@ export function AdsTabList({
   }
 
   return (
-    <div
+    <AdsScrollRow
       role="tablist"
-      aria-label={isTr ? 'Google Ads bölümleri' : 'Google Ads sections'}
-      className="flex gap-1 overflow-x-auto border-b border-border"
+      aria-label={label ?? (isTr ? 'Reklam bölümleri' : 'Ads sections')}
+      aria-orientation="horizontal"
+      activeKey={active}
+      onKeyDown={onKeyDown}
+      className="border-b border-border"
     >
-      {ADS_TAB_IDS.map((tab, index) => {
+      {ADS_TAB_IDS.map((tab) => {
         const selected = tab === active
         return (
           <button
@@ -70,17 +77,18 @@ export function AdsTabList({
             aria-controls={adsPanelId(tab)}
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab)}
-            onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              '-mb-px shrink-0 border-b-2 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              selected ? 'border-brand text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+              'inline-flex min-h-11 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              selected
+                ? 'border-brand bg-brand text-brand-foreground'
+                : 'border-border bg-transparent text-muted-foreground hover:border-brand/50 hover:bg-brand/10 hover:text-foreground',
             )}
           >
             {adsTabLabel(tab, isTr)}
           </button>
         )
       })}
-    </div>
+    </AdsScrollRow>
   )
 }
 

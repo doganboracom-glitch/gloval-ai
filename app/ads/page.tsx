@@ -7,6 +7,7 @@ import { AdsFaqSection } from '@/components/ads/sections/ads-faq-section'
 import { AdsHowItWorksSection } from '@/components/ads/sections/ads-how-it-works'
 import { AdsTrustSection } from '@/components/ads/sections/ads-trust-section'
 import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
+import { resolveAdsViewerAccess } from '@/lib/ads/viewer-access'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 
 type SearchParams = Promise<{ lang?: string | string[] }>
@@ -16,10 +17,11 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
   return buildPageMetadata('ads', resolveSeoLang(lang))
 }
 
-export default function AdsPage() {
+export default async function AdsPage() {
   if (!isAdsFeatureUiEnabled()) notFound()
+  const viewer = await resolveAdsViewerAccess()
   return (
-    <AdsPageClient>
+    <AdsPageClient viewer={viewer}>
       <AdsHowItWorksSection />
       <AdsExamplePreviewSection />
       <AdsCreditsSection />
