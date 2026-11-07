@@ -16,6 +16,7 @@ export type AdsDashboardData = {
   metaPendingFlowId: string | null
   metaStatus: string | null
   metaMissingScopes: string | null
+  metaManage: { canManage: boolean; canManageProtective: boolean }
 }
 
 export type AdsWorkspaceProps = {

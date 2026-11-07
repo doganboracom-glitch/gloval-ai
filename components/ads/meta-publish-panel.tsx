@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useLanguage } from '@/components/language-provider'
+import { MetaManageCard } from '@/components/ads/meta-manage-card'
+import type { MetaLiveState } from '@/lib/ads/meta-manage'
 import type { MetaConnectionView } from '@/lib/ads/meta-ads-shared'
 import { draftMetaCopyFromScan } from '@/lib/ads/meta-ai-draft'
 import { requestScan } from '@/lib/ads/scan-client'
@@ -72,6 +74,10 @@ type PlanView = {
   failureStep: string | null
   failureCode: string | null
   failureReason: string | null
+  dailyBudgetMinor: number | null
+  effectiveStatus: string | null
+  lastSyncedAt: string | null
+  live: MetaLiveState | null
 }
 
 type ApiResult<T> = { ok: true } & T
@@ -122,10 +128,12 @@ function focusField(name: MetaFieldName) {
 export function MetaPublishPanel({
   connections,
   publishEnabled,
+  manage = { canManage: false, canManageProtective: false },
   onGoToSettings,
 }: {
   connections: MetaConnectionView[]
   publishEnabled: boolean
+  manage?: { canManage: boolean; canManageProtective: boolean }
   onGoToSettings?: () => void
 }) {
   const { lang } = useLanguage()
@@ -577,7 +585,18 @@ export function MetaPublishPanel({
         </div>
       ) : null}
 
-      {plan?.objects.campaignId ? (
+      {plan?.objects.campaignId && ['published', 'user_paused', 'active'].includes(plan.status) ? (
+        <MetaManageCard
+          key={plan.id}
+          plan={plan}
+          campaignUrl={adsManagerUrl(connection.externalAccountId, plan.objects.campaignId)}
+          canManage={manage.canManage}
+          canManageProtective={manage.canManageProtective}
+          hasManagementScope={connection.missingPublishScopes.length === 0}
+          onChanged={() => mutate()}
+          onGoToSettings={onGoToSettings}
+        />
+      ) : plan?.objects.campaignId ? (
         <a className="text-sm underline" target="_blank" rel="noopener noreferrer" href={adsManagerUrl(connection.externalAccountId, plan.objects.campaignId)}>
           {t('Meta Reklam Yöneticisi\'nde aç', 'Open in Meta Ads Manager')}
         </a>

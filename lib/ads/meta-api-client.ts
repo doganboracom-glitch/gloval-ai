@@ -38,12 +38,20 @@ export const META_API_ENDPOINTS = [
   'act.adsets.validate',
   'act.adcreatives.validate',
   'act.ads.validate',
+  // Phase M3 reads (live status of the three objects, spend) and writes (status / budget updates).
+  'act.insights.campaign',
+  'campaign.status',
+  'adset.status',
+  'ad.status',
+  'act.campaigns.update',
+  'act.adsets.update',
+  'act.ads.update',
 ] as const
 export type MetaApiEndpoint = (typeof META_API_ENDPOINTS)[number]
 
 /** Write endpoints are never retried and are counted against the write quota instead of the read quota. */
 export function isMetaWriteEndpoint(endpoint: MetaApiEndpoint): boolean {
-  return endpoint.endsWith('.create') || endpoint.endsWith('.validate')
+  return endpoint.endsWith('.create') || endpoint.endsWith('.validate') || endpoint.endsWith('.update')
 }
 
 export type MetaSafeErrorCode =

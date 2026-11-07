@@ -44,6 +44,14 @@ export type MetaAdsErrorCode =
   | 'meta_rejected'
   | 'app_not_live'
   | 'write_outcome_unknown'
+  // Phase M3 (activate / pause / budget)
+  | 'manage_not_allowed'
+  | 'manage_in_progress'
+  | 'terms_required'
+  | 'transition_not_allowed'
+  | 'activation_blocked'
+  | 'ad_disapproved'
+  | 'payment_required'
 
 export class MetaAdsError extends Error {
   readonly code: MetaAdsErrorCode
@@ -78,6 +86,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'signature_invalid':
     case 'publish_not_allowed':
     case 'publish_permission_missing':
+    case 'manage_not_allowed':
       return 403
     case 'rate_limited':
     case 'api_quota_exceeded':
@@ -91,6 +100,8 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'plan_not_found':
       return 404
     case 'publish_in_progress':
+    case 'manage_in_progress':
+    case 'transition_not_allowed':
     case 'plan_changed':
     case 'plan_not_approved':
       return 409
@@ -104,6 +115,10 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'page_required':
     case 'image_invalid':
     case 'plan_invalid':
+    case 'terms_required':
+    case 'activation_blocked':
+    case 'ad_disapproved':
+    case 'payment_required':
       return 422
     case 'write_outcome_unknown':
       return 503

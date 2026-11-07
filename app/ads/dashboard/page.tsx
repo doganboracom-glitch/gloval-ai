@@ -68,10 +68,11 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
   const rawPlanId = firstValue(params.plan)
   const initialPlanId = rawPlanId && /^[0-9a-f-]{36}$/i.test(rawPlanId) ? rawPlanId : null
   const connections = await listGoogleAdsConnectionsForUser(user.id).catch(() => [])
-  const metaVisible = resolveMetaAdsAccess(user.id, {
+  const metaAccess = resolveMetaAdsAccess(user.id, {
     emailConfirmed: Boolean(user.email_confirmed_at),
     isAdmin: isAdminEmail(user.email),
-  }).canConnect
+  })
+  const metaVisible = metaAccess.canConnect
   const metaConnections = metaVisible ? await listMetaConnectionsForUser(user.id).catch(() => []) : []
   const metaFlow = firstValue(params.meta_flow)
 
@@ -92,6 +93,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
       metaPendingFlowId={metaFlow && META_UUID_PATTERN.test(metaFlow) ? metaFlow : null}
       metaStatus={firstValue(params.meta)}
       metaMissingScopes={firstValue(params.meta_missing)}
+      metaManage={{ canManage: metaAccess.canManage, canManageProtective: metaAccess.canManageProtective }}
       address={address}
       initialPlanId={initialPlanId}
       connections={connections}

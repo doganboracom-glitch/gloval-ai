@@ -47,6 +47,7 @@ export function AdsDashboardClient({
   metaPendingFlowId,
   metaStatus,
   metaMissingScopes,
+  metaManage,
 }: AdsDashboardClientProps) {
   const { t, lang } = useLanguage()
   const isTr = lang === 'tr'
@@ -97,6 +98,7 @@ export function AdsDashboardClient({
     metaPendingFlowId,
     metaStatus,
     metaMissingScopes,
+    metaManage,
   }
 
   return (

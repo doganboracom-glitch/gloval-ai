@@ -327,6 +327,61 @@ export function buildMetaPublishResultEmail(input: {
   })
 }
 
+export type MetaManageMailAction = 'activate' | 'pause' | 'budget'
+
+/** Customer-safe mail for a Meta activate / pause / budget change; never carries provider detail, ids or tokens. */
+export function buildMetaManageEmail(input: {
+  action: MetaManageMailAction
+  campaignName: string
+  dailyBudget: string
+  previousDailyBudget?: string
+  verified: boolean
+  adsManagerUrl?: string | null
+}): MailContent {
+  const campaignName = input.campaignName.trim().slice(0, 120) || 'Meta kampanyası'
+  const links: ReadonlyArray<[string, string]> | undefined = input.adsManagerUrl
+    ? [['Meta Reklam Yöneticisi', input.adsManagerUrl]]
+    : undefined
+  const details: Array<[string, string]> = [['Kampanya adı', campaignName]]
+  if (input.action === 'budget' && input.previousDailyBudget) details.push(['Önceki günlük bütçe', input.previousDailyBudget])
+  details.push([input.action === 'budget' ? 'Yeni günlük bütçe' : 'Günlük bütçe', input.dailyBudget])
+  const note = input.verified
+    ? 'Değişiklik Meta tarafında doğrulandı.'
+    : 'Değişiklik uygulandı; ancak Meta tarafındaki durum henüz doğrulanamadı.'
+  const steps = [
+    'Değişikliği Ads panelinden kontrol edebilirsiniz.',
+    'Bu işlemi siz yapmadıysanız hemen destek ekibimize yazın.',
+  ]
+  if (input.action === 'activate') {
+    return buildUserMail({
+      title: 'Meta kampanyanız etkinleştirildi',
+      summary: 'Meta (Facebook ve Instagram) kampanyanız etkinleştirildi. Reklamınız Meta incelemesinden geçtikten sonra gösterilmeye başlar; harcama ödeme yönteminizden günlük bütçeyi aşmayacak şekilde yapılır.',
+      note,
+      steps,
+      details,
+      links,
+    })
+  }
+  if (input.action === 'pause') {
+    return buildUserMail({
+      title: 'Meta kampanyanız duraklatıldı',
+      summary: 'Meta kampanyanız duraklatıldı. Yeniden başlatana kadar yeni harcama yapılmaz.',
+      note,
+      steps,
+      details,
+      links,
+    })
+  }
+  return buildUserMail({
+    title: 'Meta günlük bütçeniz güncellendi',
+    summary: 'Meta kampanyanızın günlük bütçesi güncellendi.',
+    note,
+    steps,
+    details,
+    links,
+  })
+}
+
 export type AdsCampaignAction = 'pause' | 'enable' | 'budget' | 'archive'
 
 const ACTION_TITLE: Record<AdsCampaignAction, string> = {
@@ -383,7 +438,7 @@ export function buildAdsCampaignActionEmail(input: {
 const RECONCILING_REASON_LABEL: Record<string, string> = {
   google_publish_result_unknown: 'Google yanıtı alınamadı; kampanyanın oluşup oluşmadığı belirsiz.',
   publish_result_persist_failed: 'Kampanya oluştu ancak sonuç kaydedilemedi.',
-  publish_failure_persist_failed: 'Yayın başarısız oldu ancak kredi rezervasyonu bırakılamadı.',
+  publish_failure_persist_failed: 'Yay��n başarısız oldu ancak kredi rezervasyonu bırakılamadı.',
   publish_reservation_result_unknown: 'Kredi rezervasyonu sonucu belirsiz; plan yayın durumunda kaldı.',
   publish_stale_timeout: 'Yayın beklenenden uzun sürdü ve zaman aşımına uğradı.',
   publish_refund_failed: 'Kredi iadesi tamamlanamadı.',
