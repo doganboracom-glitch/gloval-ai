@@ -44,7 +44,7 @@ describe('Google Ads publish plan compiler', () => {
     const budgetOperation = request.mutateOperations.find((operation) => 'campaignBudgetOperation' in operation)
 
     expect(request).toMatchObject({ partialFailure: false, validateOnly: false })
-    expect(request.mutateOperations).toHaveLength(10)
+    expect(request.mutateOperations).toHaveLength(12)
     const campaign = (campaignOperation?.campaignOperation as {
       create: { status: string; campaignBudget: string; targetSpend: { cpcBidCeilingMicros: string }; name: string }
     }).create
@@ -53,7 +53,21 @@ describe('Google Ads publish plan compiler', () => {
       campaignBudget: 'customers/1234567890/campaignBudgets/-1',
       targetSpend: { cpcBidCeilingMicros: '15000000' },
     })
-    expect(campaign.name).toContain('req-123e4567e89b42d3')
+    expect(campaign.name).not.toContain('req-')
+    expect(request.mutateOperations).toContainEqual({
+      labelOperation: { create: { resourceName: 'customers/1234567890/labels/-4', name: 'gloval-req-123e4567e89b42d3' } },
+    })
+    expect(request.mutateOperations).toContainEqual({
+      campaignLabelOperation: {
+        create: { campaign: 'customers/1234567890/campaigns/-2', label: 'customers/1234567890/labels/-4' },
+      },
+    })
+    const labelIndex = request.mutateOperations.findIndex((operation) => 'labelOperation' in operation)
+    const campaignIndex = request.mutateOperations.findIndex((operation) => 'campaignOperation' in operation)
+    const campaignLabelIndex = request.mutateOperations.findIndex((operation) => 'campaignLabelOperation' in operation)
+    expect(labelIndex).toBeLessThan(campaignLabelIndex)
+    expect(campaignIndex).toBeLessThan(campaignLabelIndex)
+    expect((budgetOperation?.campaignBudgetOperation as { create: { name: string } }).create.name).toContain('req-123e4567e89b42d3')
     const locationCriteria = request.mutateOperations.filter((operation) =>
       'campaignCriterionOperation' in operation &&
       Boolean((operation.campaignCriterionOperation as { create?: { location?: unknown } }).create?.location),
@@ -111,7 +125,7 @@ describe('Google Ads publish plan compiler', () => {
     const request = buildGoogleAdsMutateRequest({ ...INPUT, planJson })
     const campaignOperation = request.mutateOperations.find((operation) => 'campaignOperation' in operation)
 
-    expect(request.mutateOperations).toHaveLength(34)
+    expect(request.mutateOperations).toHaveLength(36)
     expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)
       .toHaveProperty('containsEuPoliticalAdvertising', 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING')
     expect((campaignOperation?.campaignOperation as { create: Record<string, unknown> }).create)

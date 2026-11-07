@@ -32,13 +32,15 @@ export async function GET(request: Request) {
   const gate = await requireGoogleAdsPublishRequest(request)
   if (publishGateResponse(gate)) return gate.response
 
-  const planId = new URL(request.url).searchParams.get('planId') ?? ''
+  const searchParams = new URL(request.url).searchParams
+  const planId = searchParams.get('planId') ?? ''
   if (!z.string().uuid().safeParse(planId).success) {
     return googleAdsJson({ ok: false, error: 'invalid_request' }, 400)
   }
+  const forceRefresh = searchParams.get('refresh') === '1'
 
   try {
-    const management = await getGoogleAdsManagementSnapshot(gate.userId, planId, gate.identity)
+    const management = await getGoogleAdsManagementSnapshot(gate.userId, planId, gate.identity, { forceRefresh })
     return googleAdsJson({ ok: true, ...management })
   } catch (error) {
     return googleAdsErrorResponse(error instanceof GoogleAdsError ? error : new GoogleAdsError('provider_error'))

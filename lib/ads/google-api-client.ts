@@ -15,8 +15,8 @@ import { GOOGLE_ADS_API_VERSION } from '@/lib/ads/providers/google-ads-provider'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const API_BASE = 'https://googleads.googleapis.com'
-const GOOGLE_ADS_READ_USER_LIMIT_MAX = 80
-const GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX = 1_200
+const GOOGLE_ADS_READ_USER_LIMIT_MAX = 600
+const GOOGLE_ADS_READ_GLOBAL_LIMIT_MAX = 1_800
 const SAFE_OUTCOMES = {
   rate_limited: 'rate_limited',
   provider_unavailable: 'provider_unavailable',

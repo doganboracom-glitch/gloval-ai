@@ -77,8 +77,8 @@ describe('Google Ads API quota transport', () => {
       p_user_id: CONTEXT.userId,
       p_connection_id: CONTEXT.connectionId,
       p_method: 'googleAds.searchStream',
-      p_user_daily_limit: 80,
-      p_global_daily_limit: 1200,
+      p_user_daily_limit: 400,
+      p_global_daily_limit: 1500,
     }))
     const init = fetcherMock.mock.calls[0]?.[1]
     const headers = new Headers(init?.headers)
@@ -89,8 +89,8 @@ describe('Google Ads API quota transport', () => {
     expect(headers.has('developer-token')).toBe(false)
   })
 
-  it('caps configured read limits to the 80/user and 1,200/project bucket', async () => {
-    vi.stubEnv('ADS_GOOGLE_READ_DAILY_USER_LIMIT', '240')
+  it('caps configured read limits to the 600/user and 1,800/project bucket', async () => {
+    vi.stubEnv('ADS_GOOGLE_READ_DAILY_USER_LIMIT', '900')
     vi.stubEnv('ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT', '2400')
     const fetcher = vi.fn(async () => jsonResponse([{ results: [] }])) as unknown as typeof fetch
     const transport = createGoogleAdsApiTransport({ userId: CONTEXT.userId, connectionId: CONTEXT.connectionId, fetcher })
@@ -98,8 +98,8 @@ describe('Google Ads API quota transport', () => {
     await transport(call())
 
     expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
-      p_user_daily_limit: 80,
-      p_global_daily_limit: 1200,
+      p_user_daily_limit: 600,
+      p_global_daily_limit: 1800,
     }))
   })
 
@@ -112,8 +112,8 @@ describe('Google Ads API quota transport', () => {
 
     expect(mocks.rpc).toHaveBeenCalledOnce()
     expect(mocks.rpc).toHaveBeenCalledWith('ads_reserve_google_api_operation', expect.objectContaining({
-      p_user_daily_limit: 80,
-      p_global_daily_limit: 1200,
+      p_user_daily_limit: 400,
+      p_global_daily_limit: 1500,
     }))
     expect(fetcher).not.toHaveBeenCalled()
   })

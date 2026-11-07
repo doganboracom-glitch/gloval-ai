@@ -239,7 +239,10 @@ export function buildAdsCampaignActionEmail(input: {
   previousDailyBudget?: string
   monthlyEstimate: string
   stateVerified: boolean
+  /** Set when the campaign has never been enabled before, so the mail announces the launch instead of a resume. */
+  firstEnable?: boolean
 }): MailContent {
+  const launched = input.action === 'enable' && input.firstEnable === true
   const details: Array<[string, string]> = []
   if (input.action === 'budget' && input.previousDailyBudget) {
     details.push(['Önceki günlük bütçe', input.previousDailyBudget])
@@ -253,8 +256,10 @@ export function buildAdsCampaignActionEmail(input: {
         'Bu işlemi siz yapmadıysanız hemen destek ekibimize yazın.',
       ]
   return buildUserMail({
-    title: ACTION_TITLE[input.action],
-    summary: ACTION_SUMMARY[input.action],
+    title: launched ? 'Kampanyanız yayına alındı' : ACTION_TITLE[input.action],
+    summary: launched
+      ? 'Google Ads kampanyanız ilk kez yayına alındı. Reklamlarınız Google incelemesinden geçtikten sonra gösterilmeye başlar.'
+      : ACTION_SUMMARY[input.action],
     note: input.stateVerified
       ? 'Değişiklik Google Ads tarafında doğrulandı.'
       : 'Değişiklik uygulandı; ancak Google Ads tarafındaki durum henüz doğrulanamadı.',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { AlertDialog } from '@base-ui/react/alert-dialog'
 import { AlertCircle, Archive, Check, Pause, Play, RefreshCw, RotateCcw, Trash2 } from 'lucide-react'
@@ -31,7 +31,13 @@ type ManagementResponse = {
   sectionErrors?: GoogleAdsManagementSectionErrors
   actions?: GoogleAdsManagementAction[]
   stateVerified?: boolean
+  /** Campaign state after a mutate; derived from the mutate target when Google could not be re-read. */
+  afterState?: Partial<GoogleAdsManagementSnapshot> | null
+  meta?: { cacheHit: boolean; refreshedAt: string; refreshLimited: boolean; retryAfterSeconds: number }
 }
+
+const REFRESH_COOLDOWN_SECONDS = 10
+
 type Confirmation = {
   action: ActionName
   payload?: Record<string, unknown>
@@ -58,6 +64,31 @@ async function fetchManagement(url: string): Promise<ManagementResponse> {
   const payload = await response.json() as ManagementResponse
   if (!response.ok || payload.ok !== true) throw new ManagementApiError(payload.error ?? 'provider_error')
   return payload
+}
+
+function actionAppliedMessage(action: ActionName, isTr: boolean) {
+  const tr: Record<ActionName, string> = {
+    enable: 'Kampanya etkinleştirildi, Google doğrulaması bekleniyor.',
+    pause: 'Kampanya duraklatıldı, Google doğrulaması bekleniyor.',
+    budget: 'Günlük bütçe güncellendi, Google doğrulaması bekleniyor.',
+    ad_copy: 'Reklam metni güncellendi, Google doğrulaması bekleniyor.',
+    keyword: 'Anahtar kelime değişikliği uygulandı, Google doğrulaması bekleniyor.',
+    archive: 'Kampanya arşivlendi, Google doğrulaması bekleniyor.',
+    undo: 'Geri alma uygulandı, Google doğrulaması bekleniyor.',
+  }
+  const en: Record<ActionName, string> = {
+    enable: 'Campaign enabled; waiting for Google to confirm.',
+    pause: 'Campaign paused; waiting for Google to confirm.',
+    budget: 'Daily budget updated; waiting for Google to confirm.',
+    ad_copy: 'Ad copy updated; waiting for Google to confirm.',
+    keyword: 'Keyword change applied; waiting for Google to confirm.',
+    archive: 'Campaign archived; waiting for Google to confirm.',
+    undo: 'Undo applied; waiting for Google to confirm.',
+  }
+  const tail = isTr
+    ? ' Google doğrulaması daha sonra tamamlanacak; işlemi tekrar uygulamayın.'
+    : ' Verification will complete later; do not repeat the change.'
+  return (isTr ? tr : en)[action] + tail
 }
 
 function currencyDigits(currency: string) {
@@ -239,6 +270,37 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   const [pending, setPending] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const [awaitingVerification, setAwaitingVerification] = useState(false)
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return
+    const timer = window.setTimeout(() => setCooldownSeconds((value) => Math.max(0, value - 1)), 1000)
+    return () => window.clearTimeout(timer)
+  }, [cooldownSeconds])
+
+  async function refreshFromGoogle() {
+    if (!liveKey || refreshing || pending || cooldownSeconds > 0) return
+    setRefreshing(true)
+    setCooldownSeconds(REFRESH_COOLDOWN_SECONDS)
+    setActionError(null)
+    try {
+      const fresh = await fetchManagement(`${liveKey}&refresh=1`)
+      await mutate(fresh, { revalidate: false })
+      if (fresh.meta?.refreshLimited) {
+        setCooldownSeconds(Math.max(1, fresh.meta.retryAfterSeconds))
+      } else if (fresh.snapshot) {
+        setAwaitingVerification(false)
+        setStatusMessage('')
+      }
+    } catch (caught) {
+      setActionError(errorMessage(caught instanceof ManagementApiError ? caught.code : undefined, isTr))
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const management = data?.snapshot ?? undefined
   const sectionErrors = data?.sectionErrors ?? {}
   const activity = data?.actions ?? []
@@ -301,10 +363,19 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
       })
       const result = await response.json() as ManagementResponse
       if (!response.ok || result.ok !== true) throw new ManagementApiError(result.error ?? 'provider_error')
-      await mutate()
-      setStatusMessage(result.stateVerified === false
-        ? (isTr ? 'Google Ads işlemi kabul etti; güncel durum okunamadı. Tekrar uygulamayın, yenileyip işlem günlüğünü kontrol edin.' : 'Google Ads accepted the change, but the latest state could not be read. Do not repeat it; refresh and check the activity log.')
-        : (isTr ? 'Değişiklik uygulandı ve işlem günlüğüne kaydedildi.' : 'Change applied and recorded in the activity log.'))
+      if (result.stateVerified === false && result.afterState) {
+        const derived = result.afterState
+        await mutate(
+          (current) => current?.snapshot ? { ...current, snapshot: { ...current.snapshot, ...derived } } : current,
+          { revalidate: false },
+        )
+        setAwaitingVerification(true)
+        setStatusMessage(actionAppliedMessage(action, isTr))
+      } else {
+        await mutate()
+        setAwaitingVerification(false)
+        setStatusMessage(isTr ? 'Değişiklik uygulandı ve işlem günlüğüne kaydedildi.' : 'Change applied and recorded in the activity log.')
+      }
       setBudgetValue('')
       setHeadlinesValue('')
       setDescriptionsValue('')
@@ -409,8 +480,11 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
             <CardTitle>{isTr ? 'Ads Manager' : 'Ads Manager'}</CardTitle>
             <CardDescription>{isTr ? 'Google Ads hesabına doğrudan yansır; uygulama harcamayı faturalandırmaz.' : 'Changes go directly to Google Ads; this app does not bill ad spend.'}</CardDescription>
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={() => void mutate()} disabled={isLoading || pending}>
-            <RefreshCw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Durumu yenile' : 'Refresh state'}
+          <Button type="button" size="sm" variant="outline" onClick={() => void refreshFromGoogle()} disabled={isLoading || pending || refreshing || cooldownSeconds > 0}>
+            <RefreshCw data-icon="inline-start" aria-hidden="true" />
+            {cooldownSeconds > 0
+              ? (isTr ? `Durumu yenile (${cooldownSeconds} sn)` : `Refresh state (${cooldownSeconds}s)`)
+              : (isTr ? 'Durumu yenile' : 'Refresh state')}
           </Button>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">

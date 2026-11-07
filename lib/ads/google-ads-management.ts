@@ -22,7 +22,19 @@ import {
   type AdsCampaignAction,
 } from '@/lib/email/ads-mail'
 import { withGoogleAdsPublishAccess, type GoogleAdsAccess } from '@/lib/ads/google-ads-publish'
+import {
+  deleteGoogleAdsReportCache,
+  getGoogleAdsReportCache,
+  setGoogleAdsReportCache,
+} from '@/lib/ads/google-ads-report-store'
 import type { GoogleAdsCampaignManagementState } from '@/lib/ads/providers/types'
+
+/** Server-side lifetime of the Ads Manager read bundle (state, policy, billing, performance). */
+export const GOOGLE_ADS_MANAGEMENT_CACHE_TTL_MS = 90 * 1000
+/** Minimum gap between two manual "refresh" reads that bypass the cache. */
+export const GOOGLE_ADS_MANAGEMENT_REFRESH_COOLDOWN_MS = 10 * 1000
+/** Short pause before the single verification retry that follows a successful mutate. */
+const POST_MUTATION_VERIFY_RETRY_DELAY_MS = 1500
 
 const MANAGEMENT_ACTION_TYPES = [
   'google_ads_campaign_status_update',
@@ -267,7 +279,27 @@ async function readCampaignState(access: GoogleAdsAccess, plan: ManagementPlan) 
  * Loads the campaign state, ad policy summary and performance independently: one rejected Google query only
  * disables its own section. `stateError` is set (and `state` null) when the campaign-state read itself failed.
  */
-export async function readSnapshotSections(access: GoogleAdsAccess, plan: ManagementPlan) {
+type SectionNeeds = { review: boolean; billing: boolean; performance: boolean; average: boolean }
+
+type SectionFallback = {
+  partial: GoogleAdsManagementPartial
+  averageDailySpend30dMinor: number | null
+}
+
+const EMPTY_PARTIAL: GoogleAdsManagementPartial = {
+  reviewStatus: 'unavailable',
+  billingVerified: false,
+  paymentMethodWarning: false,
+  performance: null,
+}
+
+export async function readSnapshotSections(
+  access: GoogleAdsAccess,
+  plan: ManagementPlan,
+  options: { needs?: Partial<SectionNeeds>; fallback?: SectionFallback | null } = {},
+) {
+  const needs: SectionNeeds = { review: true, billing: true, performance: true, average: true, ...options.needs }
+  const fallback: SectionFallback = options.fallback ?? { partial: EMPTY_PARTIAL, averageDailySpend30dMinor: null }
   const sectionErrors: GoogleAdsManagementSectionErrors = {}
   let state: GoogleAdsCampaignManagementState | null = null
   let stateError: unknown = null
@@ -278,34 +310,37 @@ export async function readSnapshotSections(access: GoogleAdsAccess, plan: Manage
     sectionErrors.campaign_state = describeGoogleReadFailure(error)
   }
 
-  let partial: GoogleAdsManagementPartial = {
-    reviewStatus: 'unavailable',
-    billingVerified: false,
-    paymentMethodWarning: false,
-    performance: null,
-  }
+  let partial: GoogleAdsManagementPartial = { ...EMPTY_PARTIAL }
   let averageDailySpend30dMinor: number | null = null
 
   if (state?.campaignStatus !== 'REMOVED') {
     const [review, billing, performance, average] = await Promise.all([
-      access.provider.getAdReviewStatus({
-        customerId: access.connection.external_account_id,
-        loginCustomerId: access.connection.login_customer_id,
-        campaignId: plan.external_campaign_id as string,
-        accessToken: access.accessToken,
-        context: access.context,
-      }).then(
-        (value) => ({ status: value.status, error: null as string | null }),
-        (error: unknown) => ({ status: 'unavailable' as const, error: describeGoogleReadFailure(error) }),
-      ),
-      access.provider.verifyBilling({
-        customerId: access.connection.external_account_id,
-        loginCustomerId: access.connection.login_customer_id,
-        accessToken: access.accessToken,
-        context: access.context,
-      }).catch(() => ({ verified: false, paymentMethodWarning: false })),
-      readPerformance(access, plan),
-      readAverageDailySpend30dMinor(access, plan),
+      needs.review
+        ? access.provider.getAdReviewStatus({
+            customerId: access.connection.external_account_id,
+            loginCustomerId: access.connection.login_customer_id,
+            campaignId: plan.external_campaign_id as string,
+            accessToken: access.accessToken,
+            context: access.context,
+          }).then(
+            (value) => ({ status: value.status, error: null as string | null }),
+            (error: unknown) => ({ status: 'unavailable' as const, error: describeGoogleReadFailure(error) }),
+          )
+        : Promise.resolve({ status: fallback.partial.reviewStatus, error: null as string | null }),
+      needs.billing
+        ? access.provider.verifyBilling({
+            customerId: access.connection.external_account_id,
+            loginCustomerId: access.connection.login_customer_id,
+            accessToken: access.accessToken,
+            context: access.context,
+          }).catch(() => ({ verified: false, paymentMethodWarning: false }))
+        : Promise.resolve({ verified: fallback.partial.billingVerified, paymentMethodWarning: fallback.partial.paymentMethodWarning }),
+      needs.performance
+        ? readPerformance(access, plan)
+        : Promise.resolve({ value: fallback.partial.performance, error: null as string | null }),
+      needs.average
+        ? readAverageDailySpend30dMinor(access, plan)
+        : Promise.resolve(fallback.averageDailySpend30dMinor),
     ])
     if (review.error) sectionErrors.policy = review.error
     if (performance.error) sectionErrors.performance = performance.error
@@ -344,11 +379,42 @@ function buildSnapshot(
   }
 }
 
-/** Strict variant for mutations: the campaign state must be readable, otherwise nothing is changed. */
-async function readSnapshot(access: GoogleAdsAccess, plan: ManagementPlan) {
-  const { state, stateError, partial, averageDailySpend30dMinor } = await readSnapshotSections(access, plan)
+/**
+ * Strict variant for mutations: the campaign state must be readable, otherwise nothing is changed. The state is
+ * always read live; policy, billing and spend sections are only re-read when the action depends on them and
+ * otherwise reuse the short-lived cached bundle, which keeps a mutation to a handful of Google reads.
+ */
+async function readSnapshot(
+  access: GoogleAdsAccess,
+  plan: ManagementPlan,
+  action: ActionInput['action'],
+  cached: ManagementReadBundle | null,
+) {
+  const needsFreshPolicy = action === 'enable'
+  const needsSpendAverage = (action === 'budget' || action === 'undo') && !cached
+  const { state, stateError, partial, averageDailySpend30dMinor } = await readSnapshotSections(access, plan, {
+    needs: { review: needsFreshPolicy, billing: needsFreshPolicy, performance: false, average: needsSpendAverage },
+    fallback: cached,
+  })
   if (!state) throw stateError instanceof GoogleAdsError ? stateError : new GoogleAdsError('provider_unavailable')
   return { state, snapshot: buildSnapshot(plan, state, partial, averageDailySpend30dMinor) }
+}
+
+type ManagementReadBundle = SectionFallback & { state: GoogleAdsCampaignManagementState }
+
+function managementCacheKey(plan: ManagementPlan) {
+  return { userId: plan.user_id, connectionId: plan.connection_id as string, key: `management:${plan.id}` }
+}
+
+async function readManagementBundleCache(plan: ManagementPlan) {
+  const cached = await getGoogleAdsReportCache<ManagementReadBundle>(managementCacheKey(plan))
+  const payload = cached?.payload
+  if (!cached || !payload || typeof payload !== 'object' || !payload.state || !payload.partial) return null
+  return { bundle: payload, refreshedAt: cached.refreshedAt }
+}
+
+async function invalidateManagementBundleCache(plan: ManagementPlan) {
+  await deleteGoogleAdsReportCache(managementCacheKey(plan))
 }
 
 function validateAdCopy(headlines: string[], descriptions: string[]) {
@@ -478,13 +544,44 @@ async function reconcilePendingActions(userId: string, actionRows: RawAction[], 
   }
 }
 
+export type GoogleAdsManagementReadMeta = {
+  cacheHit: boolean
+  refreshedAt: string
+  /** True when a manual refresh was ignored because the previous read was less than the cooldown ago. */
+  refreshLimited: boolean
+  retryAfterSeconds: number
+}
+
 export async function getGoogleAdsManagementSnapshot(
   userId: string,
   planId: string,
   accessIdentity?: GoogleAdsAccessIdentity,
+  options: { forceRefresh?: boolean } = {},
 ) {
   assertAccess(userId, accessIdentity)
   const plan = await loadManagementPlan(userId, planId)
+
+  const cached = await readManagementBundleCache(plan)
+  const cachedAgeMs = cached ? Date.now() - Date.parse(cached.refreshedAt) : Number.POSITIVE_INFINITY
+  const refreshLimited = Boolean(options.forceRefresh && cached && cachedAgeMs < GOOGLE_ADS_MANAGEMENT_REFRESH_COOLDOWN_MS)
+  if (cached && (!options.forceRefresh || refreshLimited)) {
+    const actions = await listActions(userId, plan.id)
+    const { state, partial, averageDailySpend30dMinor } = cached.bundle
+    const meta: GoogleAdsManagementReadMeta = {
+      cacheHit: true,
+      refreshedAt: cached.refreshedAt,
+      refreshLimited,
+      retryAfterSeconds: refreshLimited ? Math.max(1, Math.ceil((GOOGLE_ADS_MANAGEMENT_REFRESH_COOLDOWN_MS - cachedAgeMs) / 1000)) : 0,
+    }
+    return {
+      snapshot: buildSnapshot(plan, state, partial, averageDailySpend30dMinor),
+      partial,
+      sectionErrors: {} as GoogleAdsManagementSectionErrors,
+      actions: actions.map(safeAction),
+      meta,
+    }
+  }
+
   return withGoogleAdsPublishAccess({
     userId,
     connectionId: plan.connection_id as string,
@@ -499,11 +596,23 @@ export async function getGoogleAdsManagementSnapshot(
       const actions = await listActions(userId, plan.id)
       if (state) await reconcilePendingActions(userId, actions, snapshotState(state))
       const refreshedActions = state ? await listActions(userId, plan.id) : actions
+      let refreshedAt = new Date().toISOString()
+      // Only complete reads are cached; a partial or rejected read is retried by the next request.
+      if (state && Object.keys(sectionErrors).length === 0) {
+        const stored = await setGoogleAdsReportCache<ManagementReadBundle>({
+          ...managementCacheKey(plan),
+          payload: { state, partial, averageDailySpend30dMinor },
+          ttlMs: GOOGLE_ADS_MANAGEMENT_CACHE_TTL_MS,
+        })
+        refreshedAt = stored.refreshedAt
+      }
+      const meta: GoogleAdsManagementReadMeta = { cacheHit: false, refreshedAt, refreshLimited: false, retryAfterSeconds: 0 }
       return {
         snapshot: state ? buildSnapshot(plan, state, partial, averageDailySpend30dMinor) : null,
         partial,
         sectionErrors,
         actions: refreshedActions.map(safeAction),
+        meta,
       }
     },
   })
@@ -573,11 +682,13 @@ async function notifyCampaignAction(input: {
   amountMinor: number
   previousAmountMinor: number
   stateVerified: boolean
+  /** True when no enable has been applied for this campaign before, so it is going live for the first time. */
+  firstEnable?: boolean
 }) {
   if (!['pause', 'enable', 'budget', 'archive'].includes(input.prepared.action)) return
   const labels: Record<string, string> = {
     pause: 'duraklatıldı',
-    enable: 'devam ettirildi',
+    enable: input.firstEnable ? 'yayına alındı' : 'devam ettirildi',
     budget: 'günlük bütçesi güncellendi',
     archive: 'arşivlendi',
   }
@@ -606,6 +717,7 @@ async function notifyCampaignAction(input: {
           previousDailyBudget: formatMinorCurrency(input.previousAmountMinor, input.currency),
           monthlyEstimate,
           stateVerified: input.stateVerified,
+          firstEnable: input.firstEnable === true,
         }),
       emailAdmin: Boolean(input.risk?.risky),
       adminSubject: () => '[Google Ads] Riskli bütçe işlemi onaylandı',
@@ -920,7 +1032,9 @@ async function runLoggedMutation(input: {
         const actual = snapshotState(await readCampaignState(input.access, input.plan))
         if (actionMatchesTarget(actual, input.prepared.actionType, input.prepared.target)) {
           await finishAction({ userId: input.userId, actionId: input.actionId, result: 'applied', after: actual, failureReason: null })
+          await invalidateManagementBundleCache(input.plan)
           await notifyCampaignAction({
+            firstEnable: input.prepared.action === 'enable' && !(await hasPreviousEnable(input.userId, input.plan.id, input.actionId)),
             userId: input.userId, plan: input.plan, prepared: input.prepared, actionId: input.actionId,
             risk: input.risk, currency: input.currency,
             amountMinor: input.prepared.action === 'budget'
@@ -944,12 +1058,15 @@ async function runLoggedMutation(input: {
     throw error
   }
 
-  let afterState: SnapshotState | null = null
-  try {
-    afterState = snapshotState(await readCampaignState(input.access, input.plan))
-  } catch {
-    afterState = null
-  }
+  // Google already accepted the mutate. The follow-up read only verifies it, so a failed read (for example a
+  // quota rejection) must never hide the success: retry once after a short pause, then fall back to the state
+  // derived from the mutate target.
+  const afterState = await verifyAfterState(input.access, input.plan)
+  const derivedState = deriveStateFromTarget(snapshotState(input.beforeState), input.prepared.actionType, input.prepared.target)
+  await invalidateManagementBundleCache(input.plan)
+  const firstEnable = input.prepared.action === 'enable'
+    ? !(await hasPreviousEnable(input.userId, input.plan.id, input.actionId))
+    : false
   await finishAction({
     userId: input.userId,
     actionId: input.actionId,
@@ -965,8 +1082,86 @@ async function runLoggedMutation(input: {
       : minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
     previousAmountMinor: minorUnitsFromMicros(input.beforeState.dailyBudgetMicros, input.currency),
     stateVerified: afterState !== null,
+    firstEnable,
   })
-  return { actionId: input.actionId, afterState, stateVerified: afterState !== null }
+  return {
+    actionId: input.actionId,
+    afterState: afterState ?? derivedState,
+    stateVerified: afterState !== null,
+    derivedFromMutation: afterState === null,
+  }
+}
+
+async function verifyAfterState(access: GoogleAdsAccess, plan: ManagementPlan): Promise<SnapshotState | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, POST_MUTATION_VERIFY_RETRY_DELAY_MS))
+    try {
+      return snapshotState(await readCampaignState(access, plan))
+    } catch {
+      // Fall through to the single retry, then to the derived state.
+    }
+  }
+  return null
+}
+
+/** The state Google reports after a successful mutate, derived from what was asked for. */
+export function deriveStateFromTarget(
+  before: SnapshotState,
+  actionType: ManagementActionType,
+  target: Record<string, unknown>,
+): SnapshotState {
+  if (actionType === 'google_ads_campaign_status_update') {
+    const status = target.status
+    return status === 'ENABLED' || status === 'PAUSED' ? { ...before, campaignStatus: status } : before
+  }
+  if (actionType === 'google_ads_campaign_archive') return { ...before, campaignStatus: 'REMOVED' }
+  if (actionType === 'google_ads_budget_update') {
+    return target.dailyBudgetMicros != null ? { ...before, dailyBudgetMicros: String(target.dailyBudgetMicros) } : before
+  }
+  if (actionType === 'google_ads_ad_copy_update') {
+    return {
+      ...before,
+      headlines: Array.isArray(target.headlines) ? (target.headlines as string[]) : before.headlines,
+      descriptions: Array.isArray(target.descriptions) ? (target.descriptions as string[]) : before.descriptions,
+    }
+  }
+  if (target.keywordOperation === 'add' && typeof target.keywordText === 'string') {
+    return {
+      ...before,
+      keywords: [...before.keywords, {
+        resourceName: '',
+        text: target.keywordText,
+        matchType: target.keywordMatchType as SnapshotState['keywords'][number]['matchType'],
+        negative: target.keywordNegative === true,
+      }],
+    }
+  }
+  if (target.keywordOperation === 'remove') {
+    return { ...before, keywords: before.keywords.filter((keyword) => keyword.resourceName !== target.keywordResourceName) }
+  }
+  return before
+}
+
+/** A campaign counts as "first launch" until an enable action has already been applied for it. */
+async function hasPreviousEnable(userId: string, planId: string, currentActionId: string): Promise<boolean> {
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('ads_actions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('plan_id', planId)
+      .eq('action_type', 'google_ads_campaign_status_update')
+      .eq('status', 'applied')
+      .contains('target', { status: 'ENABLED' })
+      .neq('id', currentActionId)
+      .limit(1)
+    if (error) return true
+    return (data?.length ?? 0) > 0
+  } catch {
+    // Unknown history: use the neutral "resumed" wording rather than claiming a first launch.
+    return true
+  }
 }
 
 export async function applyGoogleAdsManagementAction(input: ActionInput) {
@@ -979,7 +1174,8 @@ export async function applyGoogleAdsManagementAction(input: ActionInput) {
     identity: input.accessIdentity,
     action: async (access) => {
       if (access.connection.is_manager) throw new GoogleAdsError('manager_account')
-      const { state, snapshot } = await readSnapshot(access, plan)
+      const cachedBundle = await readManagementBundleCache(plan)
+      const { state, snapshot } = await readSnapshot(access, plan, input.action, cachedBundle?.bundle ?? null)
       if (snapshot.stateHash !== input.expectedStateHash) throw new GoogleAdsError('plan_changed')
       const prepared = await resolvePreparedAction(input, access, plan, state, snapshot)
       const riskAssessment = assessPreparedActionRisk(prepared, access, plan, state, snapshot)

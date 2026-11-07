@@ -136,8 +136,8 @@ export function resolveGoogleAdsConnectAccess(
 
 const GOOGLE_ADS_EXPLORER_DAILY_QUOTA_MAX = 2_879
 const GOOGLE_ADS_CONNECT_MAX_ACTIVE_DEFAULT = 3
-const GOOGLE_ADS_READ_DAILY_USER_DEFAULT = 200
-const GOOGLE_ADS_READ_DAILY_GLOBAL_DEFAULT = 2_000
+const GOOGLE_ADS_READ_DAILY_USER_DEFAULT = 400
+const GOOGLE_ADS_READ_DAILY_GLOBAL_DEFAULT = 1_500
 
 function resolvePositiveLimit(raw: string | undefined, fallback: number, max: number): number {
   const value = raw?.trim()
