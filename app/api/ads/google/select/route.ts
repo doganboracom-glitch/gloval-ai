@@ -52,7 +52,7 @@ export async function GET(request: Request) {
     .gt('expires_at', now)
     .maybeSingle()
 
-  if (error) return googleAdsJson({ error: 'provider_error' }, 502)
+  if (error) return googleAdsJson({ error: 'provider_error' }, 503)
   if (!data) return googleAdsJson({ error: 'flow_expired' }, 404)
   return googleAdsJson({ accounts: safeCandidates(data.account_candidates) })
 }
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     .gt('expires_at', now)
     .maybeSingle()
 
-  if (flowError) return googleAdsJson({ error: 'provider_error' }, 502)
+  if (flowError) return googleAdsJson({ error: 'provider_error' }, 503)
   if (!flow || typeof flow.pending_refresh_token_enc !== 'string') {
     return googleAdsJson({ error: 'flow_expired' }, 404)
   }
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     .select('*')
     .maybeSingle()
 
-  if (consumeError) return googleAdsJson({ error: 'provider_error' }, 502)
+  if (consumeError) return googleAdsJson({ error: 'provider_error' }, 503)
   if (!consumed) return googleAdsJson({ error: 'flow_expired' }, 404)
 
   try {

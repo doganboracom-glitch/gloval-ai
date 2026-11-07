@@ -22,7 +22,7 @@ function responseStatus(reason: string): number {
   if (reason === 'plan_not_found' || reason === 'connection_not_found' || reason === 'publish_disabled') return 404
   if (reason === 'insufficient_credits') return 402
   if (reason === 'api_quota_exceeded' || reason === 'rate_limited') return 429
-  if (reason === 'provider_unavailable') return 502
+  if (reason === 'provider_unavailable') return 503
   if (
     reason === 'reservation_failed' ||
     reason === 'publish_not_started' ||
