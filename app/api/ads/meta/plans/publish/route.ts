@@ -149,6 +149,8 @@ export async function POST(request: Request) {
             return { bytes: new Uint8Array(await data.arrayBuffer()), filename: `${metaRequestTag(plan.request_id)}.${imagePath.endsWith('.png') ? 'png' : 'jpg'}` }
           },
           onStep: async (step, objectId, source) => {
+            // Already stored on the plan and already audited by the run that created it: re-saving would only add a duplicate ads_meta_actions row.
+            if (source === 'reused') return
             if (step !== 'preflight') await saveMetaPlanObject(admin, plan, COLUMNS[step], objectId)
             await appendMetaAction(admin, {
               userId, planId: plan.id, connectionId: plan.connection_id, actor: 'system', actionType: `meta_publish_${step}`,

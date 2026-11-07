@@ -83,4 +83,20 @@ describe('Supabase RPC adları scripts/*.sql ile uyumlu', () => {
     expect(metaFunctions.filter((name) => !defined.has(name))).toEqual([])
     expect(metaFunctions.filter((name) => !called.has(name))).toEqual([])
   })
+
+  it('Meta yayın RPC fonksiyonları 127 numaralı SQL dosyasında tanımlı ve kodda çağrılır', () => {
+    const publishFunctions = ['ads_approve_meta_plan', 'ads_reserve_meta_publish_capacity', 'ads_finish_meta_publish']
+    const source = readFileSync(path.join(ROOT, 'scripts', '127-ads-meta-publish.sql'), 'utf8')
+    expect(publishFunctions.filter((name) => !new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(source))).toEqual([])
+    expect(publishFunctions.filter((name) => !called.has(name))).toEqual([])
+  })
+
+  it('Graph yazma uç noktaları kota RPC\'sinin izin listesinde yer alır', () => {
+    const source = readFileSync(path.join(ROOT, 'scripts', '127-ads-meta-publish.sql'), 'utf8')
+    const writeEndpoints = ['act.campaigns.create', 'act.adsets.create', 'act.adimages.create', 'act.adcreatives.create', 'act.ads.create']
+    // Both the table check constraint and the RPC allow-list must name every write endpoint.
+    for (const endpoint of writeEndpoints) {
+      expect(source.split(`'${endpoint}'`).length - 1, endpoint).toBeGreaterThanOrEqual(2)
+    }
+  })
 })
