@@ -721,6 +721,62 @@ describe('POST /api/ads/meta/plans/sync', () => {
     expect((await sync({ planId: 'x' })).status).toBe(400)
   })
 
+  describe('izin kapıları', () => {
+    it('yalnızca koruyucu yönetim izni olan kullanıcı (yayın izni yok, yönetim bayrağı kapalı) senkron yapabilir', async () => {
+      vi.stubEnv('META_ADS_PUBLISH_ALLOWED_USER_IDS', OTHER_USER_ID)
+      vi.stubEnv('META_ADS_MANAGE_ENABLED', '0')
+      vi.stubEnv('META_ADS_MANAGE_ALLOWED_USER_IDS', USER_ID)
+      installGraph()
+      const response = await sync()
+      expect(response.status).not.toBe(403)
+      expect(response.status).not.toBe(401)
+      expect(response.status).not.toBe(404)
+      expect((await response.json()).error).not.toBe('publish_not_allowed')
+    })
+
+    it('yalnızca yayın izni olan kullanıcı hâlâ senkron yapabilir', async () => {
+      vi.stubEnv('META_ADS_MANAGE_ALLOWED_USER_IDS', OTHER_USER_ID)
+      installGraph()
+      const response = await sync()
+      expect(response.status).not.toBe(403)
+    })
+
+    it('hiçbir izni olmayan kullanıcı 403 alır ve Graph okunmaz', async () => {
+      vi.stubEnv('META_ADS_PUBLISH_ALLOWED_USER_IDS', OTHER_USER_ID)
+      vi.stubEnv('META_ADS_MANAGE_ALLOWED_USER_IDS', OTHER_USER_ID)
+      const g = installGraph()
+      const response = await sync()
+      expect(response.status).toBe(403)
+      expect((await response.json()).error).toBe('publish_not_allowed')
+      expect(g.calls).toHaveLength(0)
+      expect(syncCalls()).toHaveLength(0)
+    })
+
+    it('koruyucu izin kill switch\'i gevşetmez: 503', async () => {
+      vi.stubEnv('META_ADS_PUBLISH_ALLOWED_USER_IDS', OTHER_USER_ID)
+      vi.stubEnv('META_ADS_KILL_SWITCH', '1')
+      const g = installGraph()
+      expect((await sync()).status).toBe(503)
+      expect(g.calls).toHaveLength(0)
+    })
+
+    it('koruyucu izin hız sınırını gevşetmez: 429', async () => {
+      vi.stubEnv('META_ADS_PUBLISH_ALLOWED_USER_IDS', OTHER_USER_ID)
+      mocks.checkRateLimit.mockReturnValue({ allowed: false, retryAfterMs: 1000 })
+      const g = installGraph()
+      expect((await sync()).status).toBe(429)
+      expect(g.calls).toHaveLength(0)
+    })
+
+    it('izin listesi dışındaki kullanıcı (connect yok) 404 alır', async () => {
+      vi.stubEnv('META_ADS_ACCESS_MODE', 'allowlist')
+      vi.stubEnv('META_ADS_ALLOWED_USER_IDS', OTHER_USER_ID)
+      const g = installGraph()
+      expect((await sync()).status).toBe(404)
+      expect(g.calls).toHaveLength(0)
+    })
+  })
+
   it('başkasının planı / olmayan plan 404 plan_not_found', async () => {
     mocks.getMetaPlan.mockResolvedValue(null)
     const g = installGraph()

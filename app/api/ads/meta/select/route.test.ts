@@ -51,6 +51,7 @@ const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const OTHER_USER_ID = '123e4567-e89b-42d3-a456-426614174000'
 const FLOW_ID = '987e6543-e21b-42d3-a456-426614174000'
 const ACCOUNT_ID = 'act_123456789'
+const PAGE_ID = '555'
 
 const flowRow = {
   id: FLOW_ID,
@@ -154,9 +155,39 @@ describe('POST /api/ads/meta/select', () => {
     expect(mocks.logEvent).toHaveBeenCalledTimes(1)
   })
 
+  it('answers 422 page_required without a pageId and leaves the flow untouched', async () => {
+    for (const body of [
+      { flowId: FLOW_ID, accountId: ACCOUNT_ID },
+      { flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId: '' },
+    ]) {
+      const response = await POST(postRequest(body))
+      expect(response.status).toBe(422)
+      expect((await response.json()).error).toBe('page_required')
+    }
+    expect(mocks.from).not.toHaveBeenCalled()
+    expect(mocks.save).not.toHaveBeenCalled()
+    expect(mocks.logEvent).not.toHaveBeenCalled()
+  })
+
+  it('answers 400 for a pageId outside the flow page candidates and does not claim the flow', async () => {
+    for (const pageId of ['999', 'bad']) {
+      const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId }))
+      expect(response.status).toBe(400)
+    }
+    expect(mocks.save).not.toHaveBeenCalled()
+    expect(mocks.inserted).toEqual([])
+  })
+
+  it('saves the connection with a valid candidate pageId', async () => {
+    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId: PAGE_ID }))
+    expect(response.status).toBe(200)
+    expect(mocks.save).toHaveBeenCalledTimes(1)
+    expect(mocks.save.mock.calls[0][0].page).toEqual({ pageId: PAGE_ID, pageName: 'Test page' })
+  })
+
   it('still saves when the Instagram lookup fails', async () => {
     mocks.instagram.mockRejectedValue(new MetaAdsError('provider_error'))
-    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID }))
+    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId: PAGE_ID }))
 
     expect(response.status).toBe(200)
     expect(mocks.save.mock.calls[0][0].instagram).toBeNull()
@@ -213,7 +244,7 @@ describe('POST /api/ads/meta/select', () => {
   })
 
   it('rejects an account that was not one of the flow candidates', async () => {
-    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: 'act_999999999' }))
+    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: 'act_999999999', pageId: PAGE_ID }))
     expect(response.status).toBe(404)
     expect((await response.json()).error).toBe('account_not_found')
     expect(mocks.save).not.toHaveBeenCalled()
@@ -227,7 +258,7 @@ describe('POST /api/ads/meta/select', () => {
 
   it('does not save twice when the flow was already consumed', async () => {
     mocks.deleteResults = [{ data: null, error: null }]
-    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID }))
+    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId: PAGE_ID }))
     expect(response.status).toBe(404)
     expect((await response.json()).error).toBe('flow_expired')
     expect(mocks.save).not.toHaveBeenCalled()
@@ -235,7 +266,7 @@ describe('POST /api/ads/meta/select', () => {
 
   it('restores the flow so the user can retry after a save failure', async () => {
     mocks.save.mockRejectedValue(new MetaAdsError('connection_limit_exceeded'))
-    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID }))
+    const response = await POST(postRequest({ flowId: FLOW_ID, accountId: ACCOUNT_ID, pageId: PAGE_ID }))
 
     expect(response.status).toBe(429)
     expect((await response.json()).error).toBe('connection_limit_exceeded')
