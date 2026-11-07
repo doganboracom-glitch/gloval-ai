@@ -63,10 +63,18 @@ export function metaAdsErrorResponse(error: unknown): NextResponse {
   return metaAdsJson({ ok: false, error: code }, metaAdsHttpStatus(code))
 }
 
-/** Meta results land on the dashboard "Reklam hesapları" panel; `#settings` keeps the owner on that tab. */
+/**
+ * Builds the dashboard URL every Meta OAuth outcome lands on. `platform=meta` opens the Meta tab and
+ * `#settings` the account panel; the explicit fragment also stops Facebook from appending `#_=_`.
+ */
+export function buildMetaDashboardPath(values: Record<string, string>): string {
+  const params = new URLSearchParams({ platform: 'meta' })
+  for (const [key, value] of Object.entries(values)) params.set(key, value)
+  return `/ads/dashboard?${params.toString()}#settings`
+}
+
 export function metaAdsRedirect(request: Request, values: Record<string, string>): NextResponse {
-  const url = new URL('/ads/dashboard', request.url)
-  for (const [key, value] of Object.entries(values)) url.searchParams.set(key, value)
+  const url = new URL(buildMetaDashboardPath(values), request.url)
   const response = NextResponse.redirect(url, 303)
   for (const [key, value] of Object.entries(NO_STORE_HEADERS)) response.headers.set(key, value)
   response.headers.set('Referrer-Policy', 'no-referrer')

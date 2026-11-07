@@ -17,6 +17,7 @@ import { ADS_PATH } from '@/lib/ads/feature-flag'
 import {
   buildDashboardViewUrl,
   getAdsPlatformBySlug,
+  isFacebookHashRemnant,
   type AdsPlatformDefinition,
   type AdsPlatformGate,
   type AdsPlatformSlug,
@@ -57,9 +58,15 @@ export function AdsDashboardClient({
   )
 
   useEffect(() => {
+    if (isFacebookHashRemnant(window.location.hash)) {
+      const landingTab: AdsTabId =
+        pendingFlowId || googleStatus || metaPendingFlowId || metaStatus ? 'settings' : initialPlanId ? 'plans' : 'overview'
+      window.history.replaceState(null, '', buildDashboardViewUrl(window.location.search, initialPlatformSlug, landingTab))
+      return
+    }
     const fromHash = window.location.hash.replace('#', '')
     if (isTabId(fromHash) && !pendingFlowId && !googleStatus && !metaPendingFlowId && !metaStatus) setTab(fromHash)
-  }, [pendingFlowId, googleStatus, metaPendingFlowId, metaStatus])
+  }, [pendingFlowId, googleStatus, metaPendingFlowId, metaStatus, initialPlanId, initialPlatformSlug])
 
   const syncUrl = useCallback((slug: AdsPlatformSlug, nextTab: AdsTabId) => {
     window.history.replaceState(null, '', buildDashboardViewUrl(window.location.search, slug, nextTab))

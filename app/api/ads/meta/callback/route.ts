@@ -63,7 +63,7 @@ export async function GET(request: Request) {
 
   const access = await metaAdsRequestAccess()
   if (!access) {
-    return withCookieCleanup(NextResponse.redirect(new URL('/auth/login?next=/ads/dashboard', request.url), 303), flowId)
+    return withCookieCleanup(NextResponse.redirect(new URL(`/auth/login?next=${encodeURIComponent('/ads/dashboard?platform=meta')}`, request.url), 303), flowId)
   }
   const userId = access.userId
   if (claims.sub !== userId) return done({ meta: 'state_invalid' })

@@ -95,6 +95,14 @@ function redirectParams(response: Response) {
   return new URL(response.headers.get('location') ?? 'https://gloval.ai').searchParams
 }
 
+function expectMetaDashboardRedirect(response: Response) {
+  const location = new URL(response.headers.get('location') ?? 'https://gloval.ai')
+  expect(location.pathname).toBe('/ads/dashboard')
+  expect(location.searchParams.get('platform')).toBe('meta')
+  expect(location.hash).toBe('#settings')
+  return location.searchParams
+}
+
 function flowFound() {
   // 1st maybeSingle: the started-flow lookup, 2nd: the awaiting_account save.
   mocks.maybeSingleResults = [
@@ -133,7 +141,7 @@ describe('GET /api/ads/meta/callback', () => {
     flowFound()
     const response = await GET(callbackRequest({ code: 'oauth-code' }))
 
-    expect(redirectParams(response).get('meta_flow')).toBe(FLOW_ID)
+    expect(expectMetaDashboardRedirect(response).get('meta_flow')).toBe(FLOW_ID)
     expect(mocks.revoke).not.toHaveBeenCalled()
     expect(mocks.updates).toHaveLength(1)
     expect(mocks.updates[0]).toMatchObject({
@@ -149,7 +157,7 @@ describe('GET /api/ads/meta/callback', () => {
     flowFound()
     const response = await GET(callbackRequest({ error: 'access_denied' }))
 
-    expect(redirectParams(response).get('meta')).toBe('oauth_denied')
+    expect(expectMetaDashboardRedirect(response).get('meta')).toBe('oauth_denied')
     expect(mocks.exchange).not.toHaveBeenCalled()
     expect(mocks.deleteCalls).toBe(1)
   })
@@ -159,7 +167,7 @@ describe('GET /api/ads/meta/callback', () => {
     mocks.inspect.mockResolvedValue({ isValid: true, scopes: ['ads_read'], metaUserId: '1234567890', expiresAt: null })
     const response = await GET(callbackRequest({ code: 'oauth-code' }))
 
-    const params = redirectParams(response)
+    const params = expectMetaDashboardRedirect(response)
     expect(params.get('meta')).toBe('permission_missing')
     expect(params.get('meta_missing')).toBe('business_management,pages_show_list')
     expect(mocks.revoke).toHaveBeenCalledTimes(1)
@@ -204,7 +212,7 @@ describe('GET /api/ads/meta/callback', () => {
     mocks.cookieValue = 'a'.repeat(43)
     const response = await GET(request)
 
-    expect(redirectParams(response).get('meta')).toBe('state_invalid')
+    expect(expectMetaDashboardRedirect(response).get('meta')).toBe('state_invalid')
     expect(mocks.exchange).not.toHaveBeenCalled()
   })
 
@@ -242,6 +250,13 @@ describe('GET /api/ads/meta/callback', () => {
     const response = await GET(callbackRequest({ code: 'oauth-code', userId: OTHER_USER_ID }))
 
     expect(redirectParams(response).get('meta')).toBe('not_found')
+    expect(mocks.exchange).not.toHaveBeenCalled()
+  })
+
+  it('keeps platform=meta even when the state is malformed and no flow can be read', async () => {
+    const response = await GET(callbackRequest({ state: 'garbage', code: 'oauth-code' }))
+
+    expect(expectMetaDashboardRedirect(response).get('meta')).toBe('state_invalid')
     expect(mocks.exchange).not.toHaveBeenCalled()
   })
 
