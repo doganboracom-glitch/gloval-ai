@@ -28,6 +28,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/meta-token-expiry",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/cron/google-ads-reports/weekly",
       "schedule": "0 12 * * 1"
     },

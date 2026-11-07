@@ -15,6 +15,9 @@ import { GoogleAdsDashboard, type GoogleAdsConnectionView } from '@/components/a
 import { GoogleAdsWorkspace, type AdsPlanSummary } from '@/components/ads/google-ads-workspace'
 import { GoogleAdsInsights } from '@/components/ads/google-ads-insights'
 import { GoogleAdsCampaignManager } from '@/components/ads/google-ads-campaign-manager'
+import { MetaAdsSettings } from '@/components/ads/meta-ads-settings'
+import { MetaAdsInsights } from '@/components/ads/meta-ads-insights'
+import type { MetaConnectionView } from '@/lib/ads/meta-ads-shared'
 import { ADS_PATH } from '@/lib/ads/feature-flag'
 
 type AdsDashboardClientProps = {
@@ -26,6 +29,11 @@ type AdsDashboardClientProps = {
   publishEnabled: boolean
   killSwitchEnabled: boolean
   termsAcceptedAt: string | null
+  metaEnabled?: boolean
+  metaConnections?: MetaConnectionView[]
+  metaPendingFlowId?: string | null
+  metaStatus?: string | null
+  metaMissingScopes?: string | null
 }
 
 function isTabId(value: string): value is AdsTabId {
@@ -51,13 +59,18 @@ export function AdsDashboardClient({
   publishEnabled,
   killSwitchEnabled,
   termsAcceptedAt,
+  metaEnabled = false,
+  metaConnections = [],
+  metaPendingFlowId = null,
+  metaStatus = null,
+  metaMissingScopes = null,
 }: AdsDashboardClientProps) {
   const { t, lang } = useLanguage()
   const isTr = lang === 'tr'
   const copy = t.ads
 
   const [tab, setTab] = useState<AdsTabId>(() =>
-    pendingFlowId || googleStatus ? 'settings' : initialPlanId ? 'plans' : 'overview',
+    pendingFlowId || googleStatus || metaPendingFlowId || metaStatus ? 'settings' : initialPlanId ? 'plans' : 'overview',
   )
   const [plans, setPlans] = useState<AdsPlanSummary[]>([])
   const [managedPlanId, setManagedPlanId] = useState<string | null>(null)
@@ -65,8 +78,8 @@ export function AdsDashboardClient({
 
   useEffect(() => {
     const fromHash = window.location.hash.replace('#', '')
-    if (isTabId(fromHash) && !pendingFlowId && !googleStatus) setTab(fromHash)
-  }, [pendingFlowId, googleStatus])
+    if (isTabId(fromHash) && !pendingFlowId && !googleStatus && !metaPendingFlowId && !metaStatus) setTab(fromHash)
+  }, [pendingFlowId, googleStatus, metaPendingFlowId, metaStatus])
 
   const changeTab = useCallback((next: AdsTabId) => {
     setTab(next)
@@ -205,6 +218,7 @@ export function AdsDashboardClient({
 
           <AdsTabPanel tab="reports" active={tab}>
             <GoogleAdsInsights connections={connections} />
+            {metaEnabled ? <MetaAdsInsights connections={metaConnections} /> : null}
           </AdsTabPanel>
 
           <AdsTabPanel tab="settings" active={tab}>
@@ -213,6 +227,14 @@ export function AdsDashboardClient({
               pendingFlowId={pendingFlowId}
               oauthStatus={googleStatus}
             />
+            {metaEnabled ? (
+              <MetaAdsSettings
+                connections={metaConnections}
+                pendingFlowId={metaPendingFlowId}
+                status={metaStatus}
+                missingScopes={metaMissingScopes}
+              />
+            ) : null}
           </AdsTabPanel>
         </div>
       </main>
