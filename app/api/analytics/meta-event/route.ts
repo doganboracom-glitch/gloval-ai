@@ -11,6 +11,8 @@ import {
   type MetaCapiUser,
 } from '@/lib/analytics/meta-capi'
 import { loadCapiUser } from '@/lib/analytics/meta-capi-purchase'
+import { hitRateLimit } from '@/lib/store-auth-rate-limit'
+import { clientIpFromHeaders } from '@/lib/ads/client-ip'
 
 /**
  * Same-origin bridge for the server-side Meta events the browser reports about
@@ -18,11 +20,23 @@ import { loadCapiUser } from '@/lib/analytics/meta-capi-purchase'
  * Purchase is NOT accepted here: it is sent only from the verified payment
  * callback. Consent is read from the request's own cookie, so without marketing
  * consent the route does nothing at all.
+ *
+ * Session rules per event:
+ * - publish_site, begin_checkout: signed-in user required. begin_checkout only
+ *   fires from the /billing checkout dialog, and /billing redirects anonymous
+ *   visitors to login.
+ * - generate_site_completed: NO session required. The homepage generator is
+ *   open to anonymous visitors, so requiring a session would drop real events.
+ *   It is protected by the per-IP rate limit and the nonce check instead.
+ * - sign_up: the new user has no session yet (e-mail confirmation); it is
+ *   validated against the account's age instead.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const NEW_USER_WINDOW_MS = 15 * 60 * 1000
 const MAX_VALUE = 10_000_000
+const MAX_BODY_BYTES = 2048
+const RATE_LIMIT = { name: 'meta-event', limit: 30, windowSeconds: 60 } as const
 const CHECKOUT_CATEGORIES = ['subscription', 'one_time']
 
 type Prepared = {
@@ -36,8 +50,8 @@ function accepted() {
   return new NextResponse(null, { status: 202 })
 }
 
-function rejected(status = 400) {
-  return new NextResponse(null, { status })
+function rejected(status = 400, headers?: Record<string, string>) {
+  return new NextResponse(null, { status, headers })
 }
 
 async function sessionUser(): Promise<MetaCapiUser | undefined> {
@@ -108,15 +122,19 @@ async function prepare(body: Record<string, unknown>): Promise<Prepared | null> 
     case 'begin_checkout': {
       const nonce = typeof body.nonce === 'string' ? body.nonce : ''
       if (!EVENT_NONCE_PATTERN.test(nonce)) return null
+      const user = await sessionUser()
+      if (!user?.userId) return null
       const custom: MetaCapiCustomData = {}
-      if (typeof body.value === 'number' && Number.isFinite(body.value) && body.value >= 0 && body.value <= MAX_VALUE) {
-        custom.value = body.value
+      if (body.value !== undefined) {
+        const value = body.value
+        if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_VALUE) return null
+        custom.value = value
       }
       if (typeof body.currency === 'string' && /^[A-Z]{3}$/.test(body.currency)) custom.currency = body.currency
       if (typeof body.category === 'string' && CHECKOUT_CATEGORIES.includes(body.category)) {
         custom.content_category = body.category
       }
-      return { name: 'InitiateCheckout', eventId: metaEventIds.checkout(nonce), user: await sessionUser(), custom }
+      return { name: 'InitiateCheckout', eventId: metaEventIds.checkout(nonce), user, custom }
     }
     default:
       return null
@@ -132,9 +150,22 @@ export async function POST(request: Request) {
   // No marketing consent: nothing is read, looked up or sent.
   if (!context.marketingConsent) return accepted()
 
+  const declaredLength = Number(request.headers.get('content-length') ?? 0)
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return rejected(413)
+
+  const limit = await hitRateLimit({
+    ...RATE_LIMIT,
+    key: clientIpFromHeaders(request.headers) ?? 'unknown',
+  })
+  if (!limit.allowed) {
+    return rejected(429, { 'retry-after': String(Math.max(1, limit.retryAfterSeconds)) })
+  }
+
   let body: unknown
   try {
-    body = await request.json()
+    const text = await request.text()
+    if (text.length > MAX_BODY_BYTES) return rejected(413)
+    body = JSON.parse(text)
   } catch {
     return rejected()
   }
