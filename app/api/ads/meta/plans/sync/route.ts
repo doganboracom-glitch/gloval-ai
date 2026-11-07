@@ -3,7 +3,7 @@ import { resolveMetaGraphApiVersion } from '@/lib/ads/env'
 import { createMetaApiClient } from '@/lib/ads/meta-api-client'
 import { withMetaAccess } from '@/lib/ads/meta-connections'
 import { decideMetaSync, readMetaLiveState, toLiveSnapshot } from '@/lib/ads/meta-manage'
-import { guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
+import { guardMetaSyncRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { getMetaPlan, metaPlanView } from '@/lib/ads/meta-plans-store'
 import { metaAdsErrorResponse, metaAdsJson } from '@/lib/ads/meta-route-utils'
 
@@ -19,7 +19,7 @@ const FRESH_WINDOW_MS = 20_000
  * (paused or re-budgeted in Ads Manager, ad rejected) back onto the plan. Read-only toward Meta.
  */
 export async function POST(request: Request) {
-  const guard = await guardMetaPublishRoute(request, { key: 'meta-plans-sync', limit: 12 })
+  const guard = await guardMetaSyncRoute(request, { key: 'meta-plans-sync', limit: 12 })
   if (!guard.ok) return guard.response
   const body = await readJsonObject(request)
   if (!body || !isUuid(body.planId)) return metaAdsJson({ ok: false, error: 'invalid_request' }, 400)
