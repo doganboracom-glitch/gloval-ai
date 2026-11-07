@@ -149,6 +149,21 @@ export async function setGoogleAdsReportCache<T>(input: CacheKeyInput & {
   return cache
 }
 
+export async function deleteGoogleAdsReportCache(input: CacheKeyInput): Promise<void> {
+  localCache.delete(localKey(input))
+  try {
+    const admin = createAdminClient()
+    await admin
+      .from('ads_google_insights_cache')
+      .delete()
+      .eq('user_id', input.userId)
+      .eq('connection_id', input.connectionId)
+      .eq('cache_key', input.key)
+  } catch {
+    // Best-effort: the entry expires on its own when the database cache is unavailable.
+  }
+}
+
 export async function getGoogleAdsReportPreferences(userId: string): Promise<GoogleAdsReportPreferences | null> {
   const admin = createAdminClient()
   const { data, error } = await admin

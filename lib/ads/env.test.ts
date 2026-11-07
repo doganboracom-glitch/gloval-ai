@@ -67,7 +67,7 @@ describe('Google Ads access configuration', () => {
 
   it('uses bounded connection and daily-read defaults without changing environment values', () => {
     expect(resolveGoogleAdsMaxActiveConnections({})).toBe(3)
-    expect(resolveGoogleAdsReadDailyLimits({})).toEqual({ perUser: 200, global: 2_000 })
+    expect(resolveGoogleAdsReadDailyLimits({})).toEqual({ perUser: 400, global: 1_500 })
     expect(resolveGoogleAdsMaxActiveConnections({ ADS_GOOGLE_CONNECT_MAX_ACTIVE_CONNECTIONS: '5' })).toBe(5)
     expect(resolveGoogleAdsReadDailyLimits({
       ADS_GOOGLE_READ_DAILY_USER_LIMIT: '250',
@@ -77,7 +77,7 @@ describe('Google Ads access configuration', () => {
     expect(resolveGoogleAdsReadDailyLimits({
       ADS_GOOGLE_READ_DAILY_USER_LIMIT: '0',
       ADS_GOOGLE_READ_DAILY_GLOBAL_LIMIT: '2880',
-    })).toEqual({ perUser: 200, global: 2_000 })
+    })).toEqual({ perUser: 400, global: 1_500 })
   })
 
   it('fails closed when the enable flag or allowlist is absent or malformed', () => {

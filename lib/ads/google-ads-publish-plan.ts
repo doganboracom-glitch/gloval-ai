@@ -226,14 +226,26 @@ export function buildGoogleAdsMutateRequest(input: {
   }
   const requestMarker = `req-${input.requestId.replace(/[^A-Za-z0-9]/g, '').slice(0, 16)}`
   const campaignPrefix = `${plan.brand} - ${plan.sectorLabel || plan.sector}`
-  const campaignName = `${campaignPrefix.slice(0, 120 - requestMarker.length - 3).trim()} - ${requestMarker}`
+  const campaignName = campaignPrefix.slice(0, 120).trim()
+  const labelResource = `${customerResource}/labels/-4`
+  // The request marker lives on a Google Ads label (not the visible campaign name) so publish
+  // reconciliation can still find the campaign; budget names must be unique per account, so they keep it.
+  const labelName = `gloval-${requestMarker}`
   const adGroupName = `${plan.brand} - Search`.slice(0, 120)
   const operations: GoogleAdsMutateOperation[] = [
+    {
+      labelOperation: {
+        create: {
+          resourceName: labelResource,
+          name: labelName,
+        },
+      },
+    },
     {
       campaignBudgetOperation: {
         create: {
           resourceName: budgetResource,
-          name: `${campaignName} budget`,
+          name: `${campaignName.slice(0, 120 - requestMarker.length - 10).trim()} budget - ${requestMarker}`,
           amountMicros: dailyBudgetMicros,
           deliveryMethod: 'STANDARD',
           explicitlyShared: false,
@@ -262,6 +274,14 @@ export function buildGoogleAdsMutateRequest(input: {
           containsEuPoliticalAdvertising: plan.euPoliticalAdvertising === 'yes'
             ? 'CONTAINS_EU_POLITICAL_ADVERTISING'
             : 'DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING',
+        },
+      },
+    },
+    {
+      campaignLabelOperation: {
+        create: {
+          campaign: campaignResource,
+          label: labelResource,
         },
       },
     },

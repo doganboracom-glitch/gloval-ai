@@ -333,8 +333,8 @@ describe('Google Ads dashboard UI', () => {
       expect(dictionary[locale].ads).toMatchObject(expectedTranslations[locale])
     }
 
-    expect(dictionary.tr.ads.readOnlyNote).toBe('Bu panel salt okunurdur: kampanya oluşturma, düzenleme, durdurma veya yayınlama yapmaz.')
-    expect(dictionary.en.ads.readOnlyNote).toBe('This dashboard is read-only: it does not create, edit, pause, or publish campaigns.')
+    expect(dictionary.tr.ads.readOnlyNote).toBe('Bu panel hesap ve kampanya verilerini okur; kampanya oluşturma, etkinleştirme, duraklatma, bütçe ve reklam metni değişikliklerini yalnızca senin onayınla yapar.')
+    expect(dictionary.en.ads.readOnlyNote).toBe('This dashboard reads account and campaign data; it only creates campaigns or changes status, budgets, and ad text with your approval.')
   })
 
   it('opens an accessible dialog, traps focus, and returns focus after Escape', () => {
