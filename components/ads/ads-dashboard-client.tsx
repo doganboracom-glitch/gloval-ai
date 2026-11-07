@@ -11,7 +11,7 @@ import { AdsBetaBadge } from '@/components/ads/ads-page-client'
 import { AdsTabList, ADS_TAB_IDS, type AdsTabId } from '@/components/ads/ads-tabs'
 import { AdsPlatformSelector } from '@/components/ads/ads-platform-selector'
 import { AdsPlatformComingSoon } from '@/components/ads/ads-platform-coming-soon'
-import { ADS_PLATFORM_WORKSPACES } from '@/components/ads/ads-platform-workspaces'
+import { ADS_PLATFORM_TABS, ADS_PLATFORM_WORKSPACES } from '@/components/ads/ads-platform-workspaces'
 import type { AdsDashboardData } from '@/components/ads/ads-workspace-types'
 import { ADS_PATH } from '@/lib/ads/feature-flag'
 import {
@@ -42,6 +42,10 @@ export function AdsDashboardClient({
   publishEnabled,
   killSwitchEnabled,
   termsAcceptedAt,
+  metaConnections,
+  metaPendingFlowId,
+  metaStatus,
+  metaMissingScopes,
 }: AdsDashboardClientProps) {
   const { t, lang } = useLanguage()
   const isTr = lang === 'tr'
@@ -49,13 +53,13 @@ export function AdsDashboardClient({
 
   const [platformSlug, setPlatformSlug] = useState<AdsPlatformSlug>(initialPlatformSlug)
   const [tab, setTab] = useState<AdsTabId>(() =>
-    pendingFlowId || googleStatus ? 'settings' : initialPlanId ? 'plans' : 'overview',
+    pendingFlowId || googleStatus || metaPendingFlowId || metaStatus ? 'settings' : initialPlanId ? 'plans' : 'overview',
   )
 
   useEffect(() => {
     const fromHash = window.location.hash.replace('#', '')
-    if (isTabId(fromHash) && !pendingFlowId && !googleStatus) setTab(fromHash)
-  }, [pendingFlowId, googleStatus])
+    if (isTabId(fromHash) && !pendingFlowId && !googleStatus && !metaPendingFlowId && !metaStatus) setTab(fromHash)
+  }, [pendingFlowId, googleStatus, metaPendingFlowId, metaStatus])
 
   const syncUrl = useCallback((slug: AdsPlatformSlug, nextTab: AdsTabId) => {
     window.history.replaceState(null, '', buildDashboardViewUrl(window.location.search, slug, nextTab))
@@ -82,6 +86,10 @@ export function AdsDashboardClient({
     publishEnabled,
     killSwitchEnabled,
     termsAcceptedAt,
+    metaConnections,
+    metaPendingFlowId,
+    metaStatus,
+    metaMissingScopes,
   }
 
   return (
@@ -116,7 +124,7 @@ export function AdsDashboardClient({
 
         {Workspace ? (
           <div>
-            <AdsTabList active={tab} onChange={changeTab} isTr={isTr} />
+            <AdsTabList active={tab} onChange={changeTab} isTr={isTr} tabs={platform ? ADS_PLATFORM_TABS[platform.id] : undefined} />
             <Workspace tab={tab} onTabChange={changeTab} data={data} />
           </div>
         ) : platform ? (

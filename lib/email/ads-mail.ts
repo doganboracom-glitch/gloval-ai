@@ -183,6 +183,43 @@ export function buildAdsValidationPassedEmail(): MailContent {
   })
 }
 
+export function buildMetaConnectedEmail(input: { accountName?: string | null } = {}): MailContent {
+  return buildUserMail({
+    title: 'Meta reklam hesabınız bağlandı',
+    summary: 'Facebook ve Instagram reklam hesabınız GLOVAL Ads\'e bağlandı. Bu aşamada yalnızca okuma izinleri verildi; GLOVAL Ads Meta hesabınızda kampanya oluşturmaz, değiştirmez ve harcama yapmaz.',
+    steps: [
+      'Ads panelinin Raporlar sekmesinden Meta performansınızı görüntüleyin.',
+      'Bağlantıyı dilediğiniz zaman Ayarlar sekmesinden kesebilirsiniz.',
+    ],
+    details: input.accountName ? [['Reklam hesabı', input.accountName]] : undefined,
+  })
+}
+
+export function buildMetaTokenExpiringEmail(input: { daysLeft: number; accountName?: string | null }): MailContent {
+  const days = Math.max(1, Math.round(input.daysLeft))
+  return buildUserMail({
+    title: `Meta bağlantınız ${days} gün sonra sona erecek`,
+    summary: `Meta (Facebook ve Instagram) bağlantınızın erişim süresi ${days} gün içinde doluyor. Süre dolunca Meta raporları güncellenmez.`,
+    steps: [
+      'Ads panelinin Ayarlar sekmesini açın.',
+      'Meta kartında "Yenile" düğmesine basıp Meta hesabınızla yeniden onay verin.',
+    ],
+    details: input.accountName ? [['Reklam hesabı', input.accountName]] : undefined,
+  })
+}
+
+export function buildMetaTokenExpiredEmail(input: { accountName?: string | null } = {}): MailContent {
+  return buildUserMail({
+    title: 'Meta bağlantınızın süresi doldu',
+    summary: 'Meta (Facebook ve Instagram) bağlantınızın erişim süresi doldu; bu yüzden Meta raporları artık güncellenmiyor.',
+    steps: [
+      'Ads panelinin Ayarlar sekmesini açın.',
+      'Meta kartında "Yeniden bağla" düğmesine basıp hesabınızı yeniden onaylayın.',
+    ],
+    details: input.accountName ? [['Reklam hesabı', input.accountName]] : undefined,
+  })
+}
+
 export function buildAdsValidationFailedEmail(input: { reason?: string }): MailContent {
   const copy = failureCopy(input.reason)
   return buildUserMail({

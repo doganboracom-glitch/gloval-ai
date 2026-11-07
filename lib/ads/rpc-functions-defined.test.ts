@@ -72,4 +72,15 @@ describe('Supabase RPC adları scripts/*.sql ile uyumlu', () => {
     const missing = related.filter((name) => called.has(name) && !defined.has(name))
     expect(missing).toEqual([])
   })
+
+  it('Meta RPC fonksiyonları 126 numaralı SQL dosyasında tanımlı ve kodda çağrılır', () => {
+    const metaFunctions = [
+      'ads_reserve_meta_api_operation',
+      'ads_save_meta_connection_with_limit',
+      'ads_revoke_meta_user_connections',
+      'ads_meta_api_calls_15d',
+    ]
+    expect(metaFunctions.filter((name) => !defined.has(name))).toEqual([])
+    expect(metaFunctions.filter((name) => !called.has(name))).toEqual([])
+  })
 })

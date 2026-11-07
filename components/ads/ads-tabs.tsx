@@ -32,17 +32,19 @@ export function AdsTabList({
   onChange,
   isTr,
   label,
+  tabs = ADS_TAB_IDS,
 }: {
   active: AdsTabId
   onChange: (tab: AdsTabId) => void
   isTr: boolean
   label?: string
+  tabs?: readonly AdsTabId[]
 }) {
   const refs = useRef<Partial<Record<AdsTabId, HTMLButtonElement | null>>>({})
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
-    const index = ADS_TAB_IDS.indexOf(active)
-    const last = ADS_TAB_IDS.length - 1
+    const index = tabs.indexOf(active)
+    const last = tabs.length - 1
     const next = event.key === 'ArrowRight' ? (index === last ? 0 : index + 1)
       : event.key === 'ArrowLeft' ? (index === 0 ? last : index - 1)
         : event.key === 'Home' ? 0
@@ -50,7 +52,7 @@ export function AdsTabList({
             : null
     if (next === null) return
     event.preventDefault()
-    const tab = ADS_TAB_IDS[next]
+    const tab = tabs[next]
     onChange(tab)
     refs.current[tab]?.focus()
   }
@@ -64,7 +66,7 @@ export function AdsTabList({
       onKeyDown={onKeyDown}
       className="border-b border-border"
     >
-      {ADS_TAB_IDS.map((tab) => {
+      {tabs.map((tab) => {
         const selected = tab === active
         return (
           <button

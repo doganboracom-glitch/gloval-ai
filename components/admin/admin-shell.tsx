@@ -149,6 +149,7 @@ export function AdminShell({
       : []),
     { href: '/admin/ads-publishing', label: t.nav.adsPublishRecovery, icon: Clock3 },
     { href: '/admin/google-ads', label: 'Google Ads', icon: Megaphone },
+    { href: '/admin/meta-ads', label: 'Meta Ads', icon: Megaphone },
     { href: '/admin/domains', label: t.nav.domains, icon: Globe, exact: true },
     { href: '/admin/domains/handover', label: t.nav.domainHandover, icon: ArrowRightLeft },
     { href: '/admin/blog', label: blogAdminT(lang).nav, icon: Newspaper },

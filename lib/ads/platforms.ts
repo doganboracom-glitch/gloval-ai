@@ -27,7 +27,7 @@ export type AdsPlatformSlug = 'google' | 'meta' | 'tiktok' | 'x' | 'linkedin' | 
  * Server-evaluated access gates. A platform whose `gate` is not in the viewer's
  * `openGates` stays visible but is not reachable. `null` means no extra gate.
  */
-export type AdsPlatformGate = 'google_connect'
+export type AdsPlatformGate = 'google_connect' | 'meta_connect'
 
 type AdsPlatformLogoComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
 
@@ -38,6 +38,8 @@ export type AdsPlatformDefinition = {
   label: string
   status: AdsProviderStatus
   gate: AdsPlatformGate | null
+  /** Launched but still labelled Beta in the UI. */
+  beta?: boolean
   accentColor: string
   nameKey: AdsPlatformNameKey
   bodyKey: AdsPlatformBodyKey
@@ -61,8 +63,9 @@ export const ADS_PLATFORM_REGISTRY = [
     id: 'meta',
     slug: 'meta',
     label: 'Meta Ads',
-    status: 'coming_soon',
-    gate: null,
+    status: 'available',
+    gate: 'meta_connect',
+    beta: true,
     accentColor: '#0866ff',
     nameKey: 'platformMetaName',
     bodyKey: 'platformMetaBody',

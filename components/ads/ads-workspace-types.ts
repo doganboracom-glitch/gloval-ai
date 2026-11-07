@@ -1,5 +1,6 @@
 import type { AdsTabId } from '@/components/ads/ads-tabs'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
+import type { MetaConnectionView } from '@/lib/ads/meta-ads-shared'
 
 /** Server-provided data every platform workspace can read from. */
 export type AdsDashboardData = {
@@ -11,6 +12,10 @@ export type AdsDashboardData = {
   publishEnabled: boolean
   killSwitchEnabled: boolean
   termsAcceptedAt: string | null
+  metaConnections: MetaConnectionView[]
+  metaPendingFlowId: string | null
+  metaStatus: string | null
+  metaMissingScopes: string | null
 }
 
 export type AdsWorkspaceProps = {

@@ -31,6 +31,15 @@ export const ADS_ENV = {
   googleAdsPublishEnabled: 'GOOGLE_ADS_PUBLISH_ENABLED',
   googleAdsPublishAllowedUserIds: 'GOOGLE_ADS_PUBLISH_ALLOWED_USER_IDS',
   googleAdsValidateOnlyTestEnabled: 'GOOGLE_ADS_VALIDATE_ONLY_TEST_ENABLED',
+  metaAdsAccessMode: 'META_ADS_ACCESS_MODE',
+  metaAdsAllowedUserIds: 'META_ADS_ALLOWED_USER_IDS',
+  metaAdsKillSwitch: 'META_ADS_KILL_SWITCH',
+  metaAppId: 'META_APP_ID',
+  metaAppSecret: 'META_APP_SECRET',
+  metaGraphApiVersion: 'META_GRAPH_API_VERSION',
+  metaLoginConfigId: 'META_LOGIN_CONFIG_ID',
+  metaReadDailyUserLimit: 'META_READ_DAILY_USER_LIMIT',
+  metaReadDailyGlobalLimit: 'META_READ_DAILY_GLOBAL_LIMIT',
 } as const
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -253,5 +262,120 @@ export function resolveGoogleAdsOAuthSettings(env: Env = process.env): GoogleAds
       stateSecret,
       redirectUri,
     },
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Meta (Facebook + Instagram) — phase M1: connect + read only         */
+/* ------------------------------------------------------------------ */
+
+export type MetaAdsAccessMode = 'off' | 'allowlist' | 'open'
+export type MetaAdsAccessDecision = {
+  mode: MetaAdsAccessMode
+  canConnect: boolean
+  isAdmin: boolean
+}
+
+/** Default is `off`: every Meta route answers 404 until an operator opts in. Unknown values fail closed. */
+export function resolveMetaAdsAccessMode(env: Env = process.env): MetaAdsAccessMode {
+  const raw = env[ADS_ENV.metaAdsAccessMode]?.trim().toLowerCase()
+  if (!raw) return 'off'
+  return raw === 'open' || raw === 'allowlist' ? raw : 'off'
+}
+
+/** Verified e-mail is always required; then `open`, or `allowlist` + (admin or listed UUID). */
+export function resolveMetaAdsAccess(
+  userId: string | null,
+  identity: GoogleAdsAccessIdentity,
+  env: Env = process.env,
+): MetaAdsAccessDecision {
+  const mode = resolveMetaAdsAccessMode(env)
+  const normalizedUserId = userId?.trim().toLowerCase() ?? ''
+  const validUser = UUID_PATTERN.test(normalizedUserId)
+  const isAdmin = validUser && identity.isAdmin
+  const canConnect = validUser && identity.emailConfirmed && (
+    mode === 'open' ||
+    (mode === 'allowlist' && (isAdmin || isAllowedUser(normalizedUserId, env[ADS_ENV.metaAdsAllowedUserIds])))
+  )
+  return { mode, canConnect, isAdmin }
+}
+
+export function resolveMetaAdsKillSwitch(env: Env = process.env): boolean {
+  return env[ADS_ENV.metaAdsKillSwitch]?.trim() === '1'
+}
+
+/** Single pinned Graph API version. Override only through META_GRAPH_API_VERSION (format `vNN.N`). */
+export const META_GRAPH_API_VERSION_DEFAULT = 'v24.0'
+
+export function resolveMetaGraphApiVersion(env: Env = process.env): string {
+  const raw = env[ADS_ENV.metaGraphApiVersion]?.trim()
+  return raw && /^v\d{2}\.\d$/.test(raw) ? raw : META_GRAPH_API_VERSION_DEFAULT
+}
+
+/**
+ * Facebook Login for Business: permissions come from a Configuration created in the app dashboard, not from `scope`.
+ * Returns null (classic scope mode) when unset or malformed, so a typo can never leak into the authorization URL.
+ */
+export function resolveMetaLoginConfigId(env: Env = process.env): string | null {
+  const raw = env[ADS_ENV.metaLoginConfigId]?.trim()
+  return raw && /^\d{5,25}$/.test(raw) ? raw : null
+}
+
+export const META_MAX_ACTIVE_CONNECTIONS = 3
+const META_READ_DAILY_USER_DEFAULT = 400
+const META_READ_DAILY_GLOBAL_DEFAULT = 1_500
+const META_READ_DAILY_LIMIT_MAX = 100_000
+
+export function resolveMetaReadDailyLimits(env: Env = process.env): { perUser: number; global: number } {
+  return {
+    perUser: resolvePositiveLimit(env[ADS_ENV.metaReadDailyUserLimit], META_READ_DAILY_USER_DEFAULT, META_READ_DAILY_LIMIT_MAX),
+    global: resolvePositiveLimit(env[ADS_ENV.metaReadDailyGlobalLimit], META_READ_DAILY_GLOBAL_DEFAULT, META_READ_DAILY_LIMIT_MAX),
+  }
+}
+
+export type MetaAdsAppSettings = {
+  appId: string
+  /** Never log or return this value. */
+  appSecret: string
+  stateSecret: string
+  apiVersion: string
+  /** Set => Facebook Login for Business `config_id` mode; null => classic `scope` mode. */
+  loginConfigId: string | null
+}
+
+export type MetaAdsAppSettingsResult =
+  | { ok: true; settings: MetaAdsAppSettings }
+  | { ok: false; reason: 'configuration_missing' }
+
+export function resolveMetaAdsAppSettings(env: Env = process.env): MetaAdsAppSettingsResult {
+  const appId = env[ADS_ENV.metaAppId]?.trim()
+  const appSecret = env[ADS_ENV.metaAppSecret]?.trim()
+  const stateSecret = env[ADS_ENV.googleAdsOAuthStateSecret]
+  if (!appId || !/^\d{5,25}$/.test(appId) || !appSecret || !stateSecret || stateSecret.length < 32) {
+    return { ok: false, reason: 'configuration_missing' }
+  }
+  return {
+    ok: true,
+    settings: {
+      appId,
+      appSecret,
+      stateSecret,
+      apiVersion: resolveMetaGraphApiVersion(env),
+      loginConfigId: resolveMetaLoginConfigId(env),
+    },
+  }
+}
+
+export const META_OAUTH_CALLBACK_PATH = '/api/ads/meta/callback'
+
+/** `<origin>/api/ads/meta/callback`; plain http is only accepted for localhost outside production. */
+export function resolveMetaRedirectUri(requestUrl: string): string | null {
+  try {
+    const url = new URL(requestUrl)
+    const localHttp = process.env.NODE_ENV !== 'production' && url.protocol === 'http:' && url.hostname === 'localhost'
+    if (url.protocol !== 'https:' && !localHttp) return null
+    return `${url.origin}${META_OAUTH_CALLBACK_PATH}`
+  } catch {
+    return null
   }
 }
