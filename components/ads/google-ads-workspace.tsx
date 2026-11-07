@@ -22,7 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { GoogleAdsConnectionView } from '@/components/ads/google-ads-dashboard'
 import { GoogleAdsPublishReview } from '@/components/ads/google-ads-publish-review'
 import { GoogleAdsAiPlanner } from '@/components/ads/google-ads-ai-planner'
-import { GoogleAdsCampaignManager } from '@/components/ads/google-ads-campaign-manager'
+import { AdsDisclosure } from '@/components/ads/ads-disclosure'
 import { AiSuggestionBadge, GoogleAdsSearchPreview } from '@/components/ads/google-ads-search-preview'
 import { currencyDigits, type PlanSuggestion } from '@/lib/ads/plan-suggestion'
 import type { PublicScanResult } from '@/lib/ads/scan-orchestrator'
@@ -65,6 +65,19 @@ type PlanRow = {
 }
 
 type PlansPayload = { plans: PlanRow[] }
+
+export type AdsPlanSummary = {
+  id: string
+  status: string
+  version: number
+  currency: string
+  name: string | null
+  dailyBudgetMinor: number | null
+  googleDailyBudgetMinor: number | null
+  googleCampaignStatus: 'PAUSED' | 'ENABLED'
+  externalCampaignId: string | null
+  connectionId: string | null
+}
 type ApiPayload = {
   ok?: boolean
   error?: string
@@ -438,7 +451,16 @@ export function GoogleAdsWorkspace({
   connections,
   initialAddress,
   initialPlanId = null,
+  newPlanSignal = 0,
+  onPlansChange,
+  onSelectedPlanChange,
+  onOpenManagement,
 }: {
+  /** Increments when the shell asks for a fresh, empty plan. */
+  newPlanSignal?: number
+  onPlansChange?: (plans: AdsPlanSummary[]) => void
+  onSelectedPlanChange?: (planId: string | null) => void
+  onOpenManagement?: (planId: string) => void
   enabled: boolean
   publishEnabled?: boolean
   killSwitchEnabled?: boolean
@@ -600,6 +622,36 @@ export function GoogleAdsWorkspace({
   )
   const plans = plansData?.plans ?? []
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null
+
+  useEffect(() => {
+    onPlansChange?.(plans.map((plan) => ({
+      id: plan.id,
+      status: plan.status,
+      version: plan.version,
+      currency: plan.currency,
+      name: typeof plan.plan.brand === 'string' ? plan.plan.brand : null,
+      dailyBudgetMinor: plan.daily_budget_minor,
+      googleDailyBudgetMinor: plan.google_daily_budget_minor,
+      googleCampaignStatus: plan.google_campaign_status,
+      externalCampaignId: plan.external_campaign_id,
+      connectionId: plan.connection_id,
+    })))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plansData])
+
+  useEffect(() => {
+    onSelectedPlanChange?.(selectedPlan?.id ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan?.id])
+
+  const lastNewPlanSignal = useRef(newPlanSignal)
+  useEffect(() => {
+    if (newPlanSignal === lastNewPlanSignal.current) return
+    lastNewPlanSignal.current = newPlanSignal
+    clearSelection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newPlanSignal])
+
   const selectedConnection = availableConnections.find((connection) => connection.id === connectionId) ?? null
   const isEditable = !selectedPlan || ['draft', 'failed', 'approved'].includes(selectedPlan.status)
   const selectedCurrency = selectedPlan?.currency ?? selectedConnection?.currency ?? 'TRY'
@@ -905,7 +957,9 @@ export function GoogleAdsWorkspace({
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="google-ads-workspace-title">
-      <GoogleAdsSetupJourney stage={journeyStage} onStartPlan={() => startManual(initialAddress || form.finalUrl)} />
+      <AdsDisclosure id="google-ads-setup-journey" title={isTr ? 'Kurulum adımları' : 'Setup steps'} summary={isTr ? 'Bağlantıdan yayına kadar yol haritası' : 'Roadmap from connection to launch'} defaultOpen={journeyStage !== 'published'}>
+        <GoogleAdsSetupJourney stage={journeyStage} onStartPlan={() => startManual(initialAddress || form.finalUrl)} />
+      </AdsDisclosure>
       {killSwitchEnabled ? (
         <Alert role="status">
           <AlertCircle aria-hidden="true" />
@@ -936,15 +990,13 @@ export function GoogleAdsWorkspace({
         </div>
       </div>
 
-      <Alert>
-        <ShieldCheck aria-hidden="true" />
-        <AlertTitle>{copy.pausedNote}</AlertTitle>
-        <AlertDescription className="flex flex-col gap-1">
+      <AdsDisclosure id="google-ads-billing-note" title={copy.pausedNote} summary={isTr ? 'Faturalama, krediler ve onay güvencesi' : 'Billing, credits, and approval guarantee'}>
+        <div className="flex flex-col gap-1 text-sm leading-relaxed text-muted-foreground">
           <span>{copy.directBilling}</span>
           <span>{copy.credits}</span>
           <span>{copy.summaryGuarantee}</span>
-        </AlertDescription>
-      </Alert>
+        </div>
+      </AdsDisclosure>
 
       {availableConnections.length === 0 ? (
         <Alert variant="destructive">
@@ -1151,24 +1203,33 @@ export function GoogleAdsWorkspace({
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {plansLoading ? <Skeleton className="h-20" aria-label={copy.loading} /> : plans.map((plan) => (
-                <button
+                <div
                   key={plan.id}
-                  type="button"
-                  onClick={() => selectPlan(plan)}
-                  aria-pressed={planId === plan.id}
                   className={cn(
-                    'flex w-full flex-col gap-2 rounded-xl border p-3 text-left transition-colors',
+                    'flex flex-col gap-2 rounded-xl border p-3 transition-colors',
                     planId === plan.id ? 'border-brand/50 bg-brand/5' : 'border-border bg-card hover:bg-muted/50',
                   )}
                 >
-                  <span className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">{typeof plan.plan.brand === 'string' ? plan.plan.brand : (isTr ? 'Ads planı' : 'Ads plan')}</span>
-                    <Badge variant={plan.status === 'published' ? 'secondary' : 'outline'}>{statusText(plan.status, isTr)}</Badge>
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {plan.currency} · {minorToMajor(plan.daily_budget_minor, plan.currency)} / {isTr ? 'gün' : 'day'} · v{plan.version}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => selectPlan(plan)}
+                    aria-pressed={planId === plan.id}
+                    className="flex w-full flex-col gap-2 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-foreground">{typeof plan.plan.brand === 'string' ? plan.plan.brand : (isTr ? 'Ads planı' : 'Ads plan')}</span>
+                      <Badge variant={plan.status === 'published' ? 'secondary' : 'outline'}>{statusText(plan.status, isTr)}</Badge>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {plan.currency} · {minorToMajor(plan.daily_budget_minor, plan.currency)} / {isTr ? 'gün' : 'day'} · v{plan.version}
+                    </span>
+                  </button>
+                  {plan.status === 'published' && onOpenManagement ? (
+                    <Button type="button" size="sm" variant="outline" className="self-start" onClick={() => onOpenManagement(plan.id)}>
+                      {isTr ? 'Kampanyayı yönet' : 'Manage campaign'}
+                    </Button>
+                  ) : null}
+                </div>
               ))}
             </CardContent>
           </Card>
@@ -1299,13 +1360,6 @@ export function GoogleAdsWorkspace({
               </CardFooter>
             </Card>
           )}
-
-          <GoogleAdsCampaignManager
-            plan={selectedPlan ? { id: selectedPlan.id, status: selectedPlan.status, version: selectedPlan.version } : null}
-            hasConnection={availableConnections.length > 0}
-            currency={selectedCurrency}
-            isTr={isTr}
-          />
         </div>
       </div>
 

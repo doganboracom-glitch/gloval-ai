@@ -14,6 +14,7 @@ import { Field, FieldGroup, FieldLabel, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { AdsDisclosure, openAdsDisclosure } from '@/components/ads/ads-disclosure'
 import type {
   GoogleAdsManagementAction,
   GoogleAdsManagementPartial,
@@ -59,7 +60,13 @@ class ManagementApiError extends Error {
   }
 }
 
-async function fetchManagement(url: string): Promise<ManagementResponse> {
+export function managementKey(planId: string) {
+  return `/api/ads/google/management?planId=${encodeURIComponent(planId)}`
+}
+
+export type { ManagementResponse }
+
+export async function fetchManagement(url: string): Promise<ManagementResponse> {
   const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' })
   const payload = await response.json() as ManagementResponse
   if (!response.ok || payload.ok !== true) throw new ManagementApiError(payload.error ?? 'provider_error')
@@ -250,7 +257,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   currency: string
   isTr: boolean
 }) {
-  const liveKey = plan?.status === 'published' ? `/api/ads/google/management?planId=${encodeURIComponent(plan.id)}` : null
+  const liveKey = plan?.status === 'published' ? managementKey(plan.id) : null
   const { data, error, isLoading, mutate } = useSWR<ManagementResponse>(liveKey, fetchManagement, {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
@@ -439,7 +446,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
   }
 
   function goTo(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    openAdsDisclosure(id)
   }
 
   if (!hasConnection) {
@@ -590,8 +597,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                     </FieldGroup>
                   </section>
 
-                  <section id="google-ads-manager-copy" className="flex flex-col gap-3 rounded-xl border border-border p-4" aria-labelledby="ads-manager-copy-title">
-                    <div><h3 id="ads-manager-copy-title" className="font-semibold">{isTr ? 'Reklam metni' : 'Ad copy'}</h3><p className="text-sm text-muted-foreground">{isTr ? 'Değişiklik yayına gitmeden önce eski ve yeni metni karşılaştırıp onaylamanız gerekir.' : 'Review the old and new copy and confirm before the update is sent live.'}</p></div>
+                  <AdsDisclosure id="google-ads-manager-copy" title={isTr ? 'Reklam metni' : 'Ad copy'} summary={isTr ? 'Değişiklik yayına gitmeden önce eski ve yeni metni karşılaştırıp onaylamanız gerekir.' : 'Review the old and new copy and confirm before the update is sent live.'}>
                     <FieldGroup>
                       <Field><FieldLabel htmlFor="google-ads-manager-headlines">{isTr ? 'Başlıklar (satır başına bir tane)' : 'Headlines (one per line)'}</FieldLabel><Textarea id="google-ads-manager-headlines" rows={4} value={headlinesValue || management.headlines.join('\n')} onChange={(event) => setHeadlinesValue(event.target.value)} disabled={pending} /></Field>
                       <Field><FieldLabel htmlFor="google-ads-manager-descriptions">{isTr ? 'Açıklamalar (satır başına bir tane)' : 'Descriptions (one per line)'}</FieldLabel><Textarea id="google-ads-manager-descriptions" rows={4} value={descriptionsValue || management.descriptions.join('\n')} onChange={(event) => setDescriptionsValue(event.target.value)} disabled={pending} /></Field>
@@ -601,10 +607,9 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                         openConfirmation({ action: 'ad_copy', payload: { headlines, descriptions }, title: isTr ? 'Reklam metnini değiştir?' : 'Update ad copy?', description: isTr ? 'Yeni metin Google Ads’e gönderilecek. Onaylanana kadar mevcut reklam yayında kalır.' : 'The new copy will be sent to Google Ads. The current ad remains until the update is confirmed.', before: `${management.headlines.join(' · ')} / ${management.descriptions.join(' · ')}`, after: `${headlines.join(' · ')} / ${descriptions.join(' · ')}` })
                       }} disabled={pending}>{isTr ? 'Metni incele' : 'Review copy'}</Button>
                     </FieldGroup>
-                  </section>
+                  </AdsDisclosure>
 
-                  <section id="google-ads-manager-keywords" className="flex flex-col gap-3 rounded-xl border border-border p-4 xl:col-span-2" aria-labelledby="ads-manager-keywords-title">
-                    <div><h3 id="ads-manager-keywords-title" className="font-semibold">{isTr ? 'Anahtar kelimeler ve negatifler' : 'Keywords and negatives'}</h3><p className="text-sm text-muted-foreground">{isTr ? 'Canlı reklam grubundaki anahtar kelimeler. Ekleme ve kaldırma işlemleri ayrı ayrı onaylanır.' : 'Keywords from the live ad group. Additions and removals require separate confirmation.'}</p></div>
+                  <AdsDisclosure id="google-ads-manager-keywords" className="xl:col-span-2" title={isTr ? 'Anahtar kelimeler ve negatifler' : 'Keywords and negatives'} summary={isTr ? `${management.keywords.length} kelime · ekleme ve kaldırma ayrı ayrı onaylanır.` : `${management.keywords.length} keywords · additions and removals are confirmed separately.`}>
                     {management.keywords.length ? <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
                       {management.keywords.map((keyword) => <li key={keyword.resourceName} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{keyword.text}</span><Badge variant="outline">{keyword.negative ? (isTr ? 'Negatif' : 'Negative') : (isTr ? 'Pozitif' : 'Positive')}</Badge><span className="text-xs text-muted-foreground">{keyword.matchType}</span></div><Button type="button" size="sm" variant="outline" onClick={() => openConfirmation({ action: 'keyword', payload: { keywordOperation: 'remove', keywordResourceName: keyword.resourceName }, title: isTr ? 'Anahtar kelimeyi kaldır?' : 'Remove this keyword?', description: isTr ? 'Bu değişiklik Google Ads reklam grubuna yansır.' : 'This change will be applied to the Google Ads ad group.', before: keyword.text, after: isTr ? 'Kaldırıldı' : 'Removed' })} disabled={pending}><Trash2 data-icon="inline-start" aria-hidden="true" />{isTr ? 'Kaldır' : 'Remove'}</Button></li>)}
                     </ul> : <p className="text-sm text-muted-foreground">{isTr ? 'Bu reklam grubunda etkin anahtar kelime bulunamadı.' : 'No active keywords were found in this ad group.'}</p>}
@@ -614,16 +619,16 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                       <Field orientation="horizontal" className="md:pb-2"><Checkbox id="google-ads-manager-negative" checked={keywordNegative} onCheckedChange={(checked) => setKeywordNegative(checked === true)} disabled={pending} /><FieldLabel htmlFor="google-ads-manager-negative">{isTr ? 'Negatif kelime' : 'Negative keyword'}</FieldLabel></Field>
                     </FieldGroup>
                     <Button type="button" variant="outline" className="self-start" disabled={pending || !keywordValue.trim()} onClick={() => openConfirmation({ action: 'keyword', payload: { keywordOperation: 'add', keywordText: keywordValue.trim().replace(/\s+/g, ' '), keywordMatchType: keywordMatch, keywordNegative }, title: isTr ? (keywordNegative ? 'Negatif kelime ekle?' : 'Anahtar kelime ekle?') : (keywordNegative ? 'Add negative keyword?' : 'Add keyword?'), description: isTr ? 'Yeni eşleme Google Ads’e eklenecek.' : 'The new match will be added to Google Ads.', before: isTr ? 'Değişiklik yok' : 'No change', after: `${keywordNegative ? (isTr ? 'Negatif' : 'Negative') : (isTr ? 'Pozitif' : 'Positive')} · ${keywordValue.trim()} · ${keywordMatch}` })}>{isTr ? 'Anahtar kelimeyi incele' : 'Review keyword'}</Button>
-                  </section>
+                  </AdsDisclosure>
 
-                  <section className="flex flex-col gap-3 rounded-xl border border-border p-4 xl:col-span-2" aria-labelledby="ads-manager-archive-title">
-                    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 id="ads-manager-archive-title" className="font-semibold">{isTr ? 'Kampanyayı arşivle' : 'Archive campaign'}</h3><p className="text-sm leading-relaxed text-muted-foreground">{isTr ? 'Google Ads’te kalıcı olarak kaldırır. Geri alınamaz; önce kampanyayı duraklatın.' : 'Permanently removes it from Google Ads. This cannot be undone; pause the campaign first.'}</p></div><Button type="button" variant="destructive" onClick={() => openConfirmation({ action: 'archive', title: isTr ? 'Kampanyayı kalıcı olarak kaldır?' : 'Permanently remove campaign?', description: isTr ? 'Google Ads REMOVE çağrısı kalıcıdır; uygulamadan geri yüklenemez.' : 'The Google Ads REMOVE operation is permanent and cannot be restored from this app.', before: statusLabel(currentStatus ?? 'UNKNOWN', isTr), after: isTr ? 'Kalıcı kaldırıldı' : 'Permanently removed', irreversible: true })} disabled={pending || currentStatus !== 'PAUSED'}><Archive data-icon="inline-start" aria-hidden="true" />{isTr ? 'Kalıcı arşivle' : 'Archive permanently'}</Button></div>
-                  </section>
+                  <AdsDisclosure id="google-ads-manager-archive" className="xl:col-span-2" title={isTr ? 'Tehlikeli işlemler' : 'Danger zone'} summary={isTr ? 'Kampanyayı kalıcı olarak arşivleme.' : 'Permanently archive the campaign.'}>
+                    <div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="font-semibold">{isTr ? 'Kampanyayı arşivle' : 'Archive campaign'}</h4><p className="text-sm leading-relaxed text-muted-foreground">{isTr ? 'Google Ads’te kalıcı olarak kaldırır. Geri alınamaz; önce kampanyayı duraklatın.' : 'Permanently removes it from Google Ads. This cannot be undone; pause the campaign first.'}</p></div><Button type="button" variant="destructive" onClick={() => openConfirmation({ action: 'archive', title: isTr ? 'Kampanyayı kalıcı olarak kaldır?' : 'Permanently remove campaign?', description: isTr ? 'Google Ads REMOVE çağrısı kalıcıdır; uygulamadan geri yüklenemez.' : 'The Google Ads REMOVE operation is permanent and cannot be restored from this app.', before: statusLabel(currentStatus ?? 'UNKNOWN', isTr), after: isTr ? 'Kalıcı kaldırıldı' : 'Permanently removed', irreversible: true })} disabled={pending || currentStatus !== 'PAUSED'}><Archive data-icon="inline-start" aria-hidden="true" />{isTr ? 'Kalıcı arşivle' : 'Archive permanently'}</Button></div>
+                  </AdsDisclosure>
                 </div>
               ) : null}
 
-              <section className="flex flex-col gap-3 border-t border-border pt-5" aria-labelledby="ads-manager-activity-title">
-                <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="ads-manager-activity-title" className="font-semibold">{isTr ? 'İşlem geçmişi' : 'Activity log'}</h3><p className="text-sm text-muted-foreground">{isTr ? 'Kullanıcı, onay, önce/sonra ve geri alınabilirlik bilgileri.' : 'Actor, approval, before/after, and reversibility are recorded.'}</p></div><Button type="button" size="sm" variant="ghost" onClick={() => void mutate()} disabled={isLoading || pending}><RefreshCw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geçmişi yenile' : 'Refresh log'}</Button></div>
+              <AdsDisclosure id="google-ads-manager-activity" title={isTr ? 'İşlem geçmişi' : 'Activity log'} summary={isTr ? `${activity.length} kayıt · kullanıcı, onay, önce/sonra ve geri alınabilirlik bilgileri.` : `${activity.length} entries · actor, approval, before/after, and reversibility.`}>
+                <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" onClick={() => void mutate()} disabled={isLoading || pending}><RefreshCw data-icon="inline-start" aria-hidden="true" />{isTr ? 'Geçmişi yenile' : 'Refresh log'}</Button></div>
                 {activity.length ? <ol className="flex flex-col gap-2">
                   {activity.map((action) => {
                     const wasUndone = actionWasUndone(action, activity)
@@ -639,7 +644,7 @@ export function GoogleAdsCampaignManager({ plan, hasConnection, currency, isTr }
                     </li>
                   })}
                 </ol> : <p className="text-sm text-muted-foreground">{isTr ? 'Henüz yönetim işlemi yok.' : 'No management actions yet.'}</p>}
-              </section>
+              </AdsDisclosure>
             </>
           ) : null}
         </CardContent>
