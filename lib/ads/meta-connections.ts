@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { META_MAX_ACTIVE_CONNECTIONS } from '@/lib/ads/env'
 import { MetaAdsError, isMetaAdsError } from '@/lib/ads/meta-ads-error'
 import type { MetaApiContext } from '@/lib/ads/meta-api-client'
-import { missingMetaOptionalScopes } from '@/lib/ads/meta-ads-shared'
+import { missingMetaOptionalScopes, missingMetaPublishScopes } from '@/lib/ads/meta-ads-shared'
 import type {
   MetaAdAccountCandidate,
   MetaConnectionView,
@@ -60,6 +60,9 @@ export function toMetaConnectionView(row: MetaConnectionRow): MetaConnectionView
     instagramAccountName: row.instagram_account_name,
     accountStatus: row.account_status,
     missingOptionalScopes: missingMetaOptionalScopes(Array.isArray(row.scopes) ? row.scopes : []),
+    missingPublishScopes: missingMetaPublishScopes(Array.isArray(row.scopes) ? row.scopes : []),
+    hasPage: Boolean(row.page_id),
+    hasInstagram: Boolean(row.instagram_account_id),
   }
 }
 

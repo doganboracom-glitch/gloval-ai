@@ -17,7 +17,7 @@ const VERIFIED = { emailConfirmed: true, isAdmin: false }
 describe('Meta Ads erişim kapısı', () => {
   it('ayar yoksa kapalıdır ve kimse bağlanamaz', () => {
     expect(resolveMetaAdsAccessMode({})).toBe('off')
-    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, {})).toEqual({ mode: 'off', canConnect: false, isAdmin: false })
+    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, {})).toEqual({ mode: 'off', canConnect: false, canPublish: false, isAdmin: false })
   })
 
   it('bilinmeyen mod değeri kapalı sayılır (fail closed)', () => {
@@ -43,8 +43,18 @@ describe('Meta Ads erişim kapısı', () => {
     expect(resolveMetaAdsAccess(USER_ID, VERIFIED, { META_ADS_ACCESS_MODE: 'open' })).toEqual({
       mode: 'open',
       canConnect: true,
+      canPublish: false,
       isAdmin: false,
     })
+  })
+
+  it('yayın yalnızca kill switch açık VE kullanıcı yayın allowlistinde ise açılır', () => {
+    const base = { META_ADS_ACCESS_MODE: 'open' }
+    const listed = { META_ADS_PUBLISH_ALLOWED_USER_IDS: USER_ID }
+    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, ...listed }).canPublish).toBe(false)
+    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, META_ADS_PUBLISH_ENABLED: '1' }).canPublish).toBe(false)
+    expect(resolveMetaAdsAccess(USER_ID, VERIFIED, { ...base, ...listed, META_ADS_PUBLISH_ENABLED: '1' }).canPublish).toBe(true)
+    expect(resolveMetaAdsAccess(OTHER_USER_ID, VERIFIED, { ...base, ...listed, META_ADS_PUBLISH_ENABLED: '1' }).canPublish).toBe(false)
   })
 
   it('e-postası doğrulanmamış kullanıcı açık modda bile bağlanamaz', () => {

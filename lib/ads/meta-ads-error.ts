@@ -25,6 +25,24 @@ export type MetaAdsErrorCode =
   | 'kill_switch_active'
   | 'disconnect_failed'
   | 'signature_invalid'
+  // Phase M2 (paused publishing)
+  | 'publish_not_allowed'
+  | 'publish_permission_missing'
+  | 'publish_quota_exceeded'
+  | 'publish_in_progress'
+  | 'plan_not_found'
+  | 'plan_invalid'
+  | 'plan_not_approved'
+  | 'plan_changed'
+  | 'special_category_unsupported'
+  | 'policy_blocked'
+  | 'page_required'
+  | 'image_invalid'
+  | 'payment_method_missing'
+  | 'account_restricted'
+  | 'budget_too_low'
+  | 'meta_rejected'
+  | 'write_outcome_unknown'
 
 export class MetaAdsError extends Error {
   readonly code: MetaAdsErrorCode
@@ -57,16 +75,36 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
       return 401
     case 'csrf_failed':
     case 'signature_invalid':
+    case 'publish_not_allowed':
+    case 'publish_permission_missing':
       return 403
     case 'rate_limited':
     case 'api_quota_exceeded':
     case 'connection_limit_exceeded':
+    case 'publish_quota_exceeded':
       return 429
     case 'connection_not_found':
     case 'account_not_found':
     case 'state_invalid':
     case 'flow_expired':
+    case 'plan_not_found':
       return 404
+    case 'publish_in_progress':
+    case 'plan_changed':
+    case 'plan_not_approved':
+      return 409
+    case 'meta_rejected':
+    case 'payment_method_missing':
+    case 'account_restricted':
+    case 'budget_too_low':
+    case 'policy_blocked':
+    case 'special_category_unsupported':
+    case 'page_required':
+    case 'image_invalid':
+    case 'plan_invalid':
+      return 422
+    case 'write_outcome_unknown':
+      return 503
     case 'invalid_request':
     case 'oauth_denied':
     case 'permission_missing':

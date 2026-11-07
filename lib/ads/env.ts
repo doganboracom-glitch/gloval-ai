@@ -38,6 +38,13 @@ export const ADS_ENV = {
   metaAppSecret: 'META_APP_SECRET',
   metaGraphApiVersion: 'META_GRAPH_API_VERSION',
   metaLoginConfigId: 'META_LOGIN_CONFIG_ID',
+  metaLoginConfigIdManage: 'META_LOGIN_CONFIG_ID_MANAGE',
+  metaAdsPublishEnabled: 'META_ADS_PUBLISH_ENABLED',
+  metaAdsPublishAllowedUserIds: 'META_ADS_PUBLISH_ALLOWED_USER_IDS',
+  metaPublishDailyUserLimit: 'META_PUBLISH_DAILY_USER_LIMIT',
+  metaPublishDailyGlobalLimit: 'META_PUBLISH_DAILY_GLOBAL_LIMIT',
+  metaWriteDailyUserLimit: 'META_WRITE_DAILY_USER_LIMIT',
+  metaWriteDailyGlobalLimit: 'META_WRITE_DAILY_GLOBAL_LIMIT',
   metaReadDailyUserLimit: 'META_READ_DAILY_USER_LIMIT',
   metaReadDailyGlobalLimit: 'META_READ_DAILY_GLOBAL_LIMIT',
 } as const
@@ -273,6 +280,8 @@ export type MetaAdsAccessMode = 'off' | 'allowlist' | 'open'
 export type MetaAdsAccessDecision = {
   mode: MetaAdsAccessMode
   canConnect: boolean
+  /** Phase M2: paused-campaign publishing. Needs the kill switch on AND an explicit allowlist entry (admins too). */
+  canPublish: boolean
   isAdmin: boolean
 }
 
@@ -297,7 +306,43 @@ export function resolveMetaAdsAccess(
     mode === 'open' ||
     (mode === 'allowlist' && (isAdmin || isAllowedUser(normalizedUserId, env[ADS_ENV.metaAdsAllowedUserIds])))
   )
-  return { mode, canConnect, isAdmin }
+  const canPublish = canConnect
+    && env[ADS_ENV.metaAdsPublishEnabled]?.trim() === '1'
+    && isAllowedUser(normalizedUserId, env[ADS_ENV.metaAdsPublishAllowedUserIds])
+  return { mode, canConnect, canPublish, isAdmin }
+}
+
+/** Publish kill switch (`META_ADS_PUBLISH_ENABLED=1` must be set); the allowlist is checked per user. */
+export function resolveMetaPublishEnabled(env: Env = process.env): boolean {
+  return env[ADS_ENV.metaAdsPublishEnabled]?.trim() === '1'
+}
+
+/** Facebook Login for Business Configuration that includes the write permissions. Null when unset or malformed. */
+export function resolveMetaLoginConfigIdManage(env: Env = process.env): string | null {
+  const raw = env[ADS_ENV.metaLoginConfigIdManage]?.trim()
+  return raw && /^\d{5,25}$/.test(raw) ? raw : null
+}
+
+const META_PUBLISH_DAILY_USER_DEFAULT = 30
+const META_WRITE_DAILY_USER_DEFAULT = 300
+const META_WRITE_DAILY_GLOBAL_DEFAULT = 2_400
+const META_PUBLISH_LIMIT_MAX = 100_000
+
+/** Publish attempts per user per 24 h (default 30); the global limit is unset (null) unless configured. */
+export function resolveMetaPublishLimits(env: Env = process.env): { perUser: number; global: number | null } {
+  const rawGlobal = env[ADS_ENV.metaPublishDailyGlobalLimit]
+  return {
+    perUser: resolvePositiveLimit(env[ADS_ENV.metaPublishDailyUserLimit], META_PUBLISH_DAILY_USER_DEFAULT, META_PUBLISH_LIMIT_MAX),
+    global: rawGlobal?.trim() ? resolvePositiveLimit(rawGlobal, META_PUBLISH_LIMIT_MAX, META_PUBLISH_LIMIT_MAX) : null,
+  }
+}
+
+/** Graph write calls counted separately from reads (default 300 per user, 2400 global per 24 h). */
+export function resolveMetaWriteDailyLimits(env: Env = process.env): { perUser: number; global: number } {
+  return {
+    perUser: resolvePositiveLimit(env[ADS_ENV.metaWriteDailyUserLimit], META_WRITE_DAILY_USER_DEFAULT, META_PUBLISH_LIMIT_MAX),
+    global: resolvePositiveLimit(env[ADS_ENV.metaWriteDailyGlobalLimit], META_WRITE_DAILY_GLOBAL_DEFAULT, META_PUBLISH_LIMIT_MAX),
+  }
 }
 
 export function resolveMetaAdsKillSwitch(env: Env = process.env): boolean {

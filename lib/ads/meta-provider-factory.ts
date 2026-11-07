@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { resolveMetaAdsAppSettings } from '@/lib/ads/env'
+import { resolveMetaAdsAppSettings, resolveMetaLoginConfigIdManage } from '@/lib/ads/env'
 import { createMetaApiClient } from '@/lib/ads/meta-api-client'
 import { createMetaAdsProvider, type MetaAdsProvider } from '@/lib/ads/providers/meta-ads-provider'
 
@@ -20,6 +20,13 @@ export function createConfiguredMetaProvider(): MetaProviderResult {
     stateSecret,
     apiVersion,
     loginMode: loginConfigId ? 'config_id' : 'scope',
-    provider: createMetaAdsProvider({ client: createMetaApiClient(), appId, appSecret, apiVersion, loginConfigId }),
+    provider: createMetaAdsProvider({
+      client: createMetaApiClient(),
+      appId,
+      appSecret,
+      apiVersion,
+      loginConfigId,
+      manageLoginConfigId: resolveMetaLoginConfigIdManage(),
+    }),
   }
 }

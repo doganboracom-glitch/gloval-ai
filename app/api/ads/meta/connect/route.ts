@@ -52,7 +52,15 @@ export async function POST(request: Request) {
     return metaAdsRedirect(request, { meta: 'provider_error' })
   }
 
-  const authorizationUrl = configured.provider.buildAuthUrl({ state: state.state, redirectUri })
+  // Write permissions are only requested on explicit opt-in, and only for users allowed to publish.
+  const wantsManage = await request
+    .clone()
+    .formData()
+    .then((form) => form.get('intent') === 'manage')
+    .catch(() => false)
+  const authorizationUrl = wantsManage && access.decision.canPublish
+    ? configured.provider.buildManageAuthUrl({ state: state.state, redirectUri })
+    : configured.provider.buildAuthUrl({ state: state.state, redirectUri })
   const response = NextResponse.redirect(authorizationUrl, 303)
   response.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate')
   response.headers.set('Referrer-Policy', 'no-referrer')

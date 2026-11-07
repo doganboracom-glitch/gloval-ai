@@ -25,6 +25,14 @@ type UserMailInput = {
   note?: string
   steps: readonly string[]
   details?: ReadonlyArray<[string, string]>
+  /** Optional https links shown under the details, as [label, href]. */
+  links?: ReadonlyArray<[string, string]>
+}
+
+function linkList(links: ReadonlyArray<[string, string]>) {
+  return links
+    .map(([label, href]) => `<p style="margin:0 0 12px;"><a href="${escape(href)}">${escape(label)}</a></p>`)
+    .join('')
 }
 
 function buildUserMail(input: UserMailInput): MailContent {
@@ -32,13 +40,16 @@ function buildUserMail(input: UserMailInput): MailContent {
     paragraph(input.summary),
     input.note ? paragraph(input.note) : '',
     input.details?.length ? renderTable(input.details.map(([label, value]) => [label, value])) : '',
+    input.links?.length ? linkList(input.links) : '',
     renderSection('Ne yapmalısınız?', bulletList(input.steps)),
   ].join('')
   const detailLines = (input.details ?? []).map(([label, value]) => `${label}: ${value}`)
+  const linkLines = (input.links ?? []).map(([label, href]) => `${label}: ${href}`)
   const text = [
     input.summary,
     input.note ?? '',
     ...detailLines,
+    ...linkLines,
     '',
     'Ne yapmalısınız?',
     ...input.steps.map((step) => `- ${step}`),
@@ -202,7 +213,7 @@ export function buildMetaTokenExpiringEmail(input: { daysLeft: number; accountNa
     summary: `Meta (Facebook ve Instagram) bağlantınızın erişim süresi ${days} gün içinde doluyor. Süre dolunca Meta raporları güncellenmez.`,
     steps: [
       'Ads panelinin Ayarlar sekmesini açın.',
-      'Meta kartında "Yenile" düğmesine basıp Meta hesabınızla yeniden onay verin.',
+      'Meta kartında "Yenile" düğmesine basıp Meta hesab��nızla yeniden onay verin.',
     ],
     details: input.accountName ? [['Reklam hesabı', input.accountName]] : undefined,
   })
@@ -251,6 +262,68 @@ export function buildAdsPublishFailedEmail(input: { reason?: string }): MailCont
     summary: copy.summary,
     note: 'Yayın tamamlanamadığı için krediniz düşülmedi ve Google Ads hesabınızda yeni bir kampanya oluşturulmadı.',
     steps: copy.steps,
+  })
+}
+
+export type MetaPublishMailOutcome = 'published' | 'partial' | 'failed'
+
+/** Customer-safe wording for a failed or partial Meta publish; never includes provider detail, ids or tokens. */
+export function buildMetaPublishResultEmail(input: {
+  outcome: MetaPublishMailOutcome
+  campaignName: string
+  adsManagerUrl?: string | null
+}): MailContent {
+  const campaignName = input.campaignName.trim().slice(0, 120) || 'Meta kampanyası'
+  const link: ReadonlyArray<[string, string]> | undefined = input.adsManagerUrl
+    ? [['Meta Reklam Yöneticisi', input.adsManagerUrl]]
+    : undefined
+
+  if (input.outcome === 'published') {
+    return buildUserMail({
+      title: 'Meta kampanyanız duraklatılmış olarak oluşturuldu',
+      summary: 'Meta (Facebook ve Instagram) kampanyanız reklam hesabınızda oluşturuldu. Güvenliğiniz için kampanya duraklatılmış durumda; siz başlatana kadar harcama yapılmaz.',
+      note: 'Kampanyayı etkinleştirme bir sonraki aşamada GLOVAL Ads\'e eklenecek; o zamana kadar Meta Reklam Yöneticisi\'nden başlatabilirsiniz.',
+      steps: [
+        'Meta reklam hesabınızda ödeme yönteminin tanımlı olduğundan emin olun.',
+        'Reklamın Meta incelemesinden geçmesini bekleyin.',
+        'Hazır olduğunuzda kampanyayı Meta Reklam Yöneticisi\'nden başlatın.',
+      ],
+      details: [
+        ['Kampanya adı', campaignName],
+        ['Durum', 'Duraklatıldı'],
+      ],
+      links: link,
+    })
+  }
+
+  if (input.outcome === 'partial') {
+    return buildUserMail({
+      title: 'Meta kampanyanız kısmen oluşturuldu',
+      summary: 'Meta kampanyanızın bazı adımları tamamlanamadı. Kampanya duraklatılmış durumda; harcama yapılmıyor.',
+      note: 'Aynı planla yeniden denerseniz kaldığı yerden devam edilir ve tekrar nesne oluşturulmaz.',
+      steps: [
+        'Ads panelinde planı açıp yeniden deneyin.',
+        'Sorun sürerse destek ekibimize yazın.',
+      ],
+      details: [
+        ['Kampanya adı', campaignName],
+        ['Durum', 'Duraklatıldı (eksik)'],
+      ],
+      links: link,
+    })
+  }
+
+  return buildUserMail({
+    title: 'Meta yayını tamamlanamadı',
+    summary: 'Meta kampanyanız oluşturulamadı. Meta hesabınızda harcama yapılmadı.',
+    steps: [
+      'Ads panelinde planın ayrıntısındaki hata mesajını inceleyin.',
+      'Gerekli düzeltmeyi yapıp yeniden deneyin.',
+    ],
+    details: [
+      ['Kampanya adı', campaignName],
+      ['Durum', 'Oluşturulmadı'],
+    ],
   })
 }
 
