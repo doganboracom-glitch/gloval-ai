@@ -56,7 +56,7 @@ const link = (href: string, label: string, external = false): LegalBlock => ({
 
 const privacy: LegalDoc = {
   slug: 'gizlilik-politikasi',
-  lastUpdated: '2026-11-05',
+  lastUpdated: '2026-11-07',
   tr: {
     title: 'Gizlilik Politikası',
     description:
@@ -175,6 +175,22 @@ const privacy: LegalDoc = {
             'Google Ads verileriyle ilgili KVKK kapsamındaki haklarınız ve başvuru yöntemleri için mevcut KVKK Aydınlatma Metni sayfasını inceleyebilirsiniz.',
           ),
           link('/yasal/kvkk', 'KVKK Aydınlatma Metni'),
+        ],
+      },
+      {
+        id: 'meta-ads-verileri',
+        heading: 'Meta (Facebook ve Instagram) reklam verileri (GLOVAL Ads)',
+        blocks: [
+          p(
+            'GLOVAL Ads’e Meta (Facebook ve Instagram) hesabınızı bağlarsanız, verdiğiniz izinler kapsamında şu verileri alırız: reklam hesabı kimliği ve adı, İşletme portföyü ile Sayfa ad ve kimlikleri, Instagram hesap adı ve kimliği ile seçtiğiniz reklam hesabına ait kampanya, reklam seti, reklam ve performans verileri.',
+          ),
+          p(
+            'Bu verileri yalnızca kampanyalarınızı ve sonuçlarını size göstermek, ayrıca yalnızca siz bir işlemi açıkça onayladığınızda kampanya oluşturmak veya değiştirmek için kullanırız. Bu verileri satmayız, size reklam göstermek için kullanmayız ve bizim adımıza hizmet veren veri işleyenler dışında üçüncü taraflarla paylaşmayız. Erişim anahtarları şifrelenmiş olarak saklanır.',
+          ),
+          p(
+            'Meta bağlantısını GLOVAL Ads panelinde “Bağlantıyı kes” ile dilediğiniz zaman sonlandırabilirsiniz; bağlantı kesildiğinde saklanan erişim anahtarları silinir. Bağlantıyı kesmek Meta hesabınızdaki kampanyaları durdurmaz veya silmez. Reklam harcamaları doğrudan Meta tarafından reklam hesabınıza faturalandırılır. Meta ile ilgili verilerinizin silinmesini talep etmek için Veri Silme Talimatları sayfasına bakın.',
+          ),
+          link('/yasal/veri-silme', 'Veri Silme Talimatları'),
         ],
       },
       {
@@ -330,6 +346,22 @@ const privacy: LegalDoc = {
             'For your rights under KVKK and the applicable request procedure, see the existing Data Protection Notice.',
           ),
           link('/yasal/kvkk', 'Data Protection Notice (KVKK)'),
+        ],
+      },
+      {
+        id: 'meta-ads-data',
+        heading: 'Meta (Facebook and Instagram) ads data (GLOVAL Ads)',
+        blocks: [
+          p(
+            'If you connect your Meta (Facebook and Instagram) account to GLOVAL Ads, then within the permissions you grant we receive: your ad account ID and name, Business portfolio and Page names and IDs, your Instagram account name and ID, and the campaign, ad set, ad and performance data of the ad account you select.',
+          ),
+          p(
+            'We use this data only to show you your campaigns and their results and, only when you explicitly approve an action, to create or change campaigns. We do not sell this data, we do not use it to show you ads, and we do not share it with third parties other than data processors acting on our behalf. Access tokens are stored encrypted.',
+          ),
+          p(
+            'You can disconnect Meta at any time with “Disconnect” in the GLOVAL Ads panel; stored access tokens are deleted when you disconnect. Disconnecting does not pause or delete campaigns in your Meta account. Ad spend is billed directly by Meta to your ad account. To request deletion of your Meta-related data, see the Data Deletion Instructions page.',
+          ),
+          link('/yasal/veri-silme', 'Data Deletion Instructions'),
         ],
       },
       {
@@ -1501,6 +1533,153 @@ const about: LegalDoc = {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Veri Silme Talimatları — Data Deletion Instructions                         */
+/* -------------------------------------------------------------------------- */
+
+const dataDeletion: LegalDoc = {
+  slug: 'veri-silme',
+  lastUpdated: '2026-11-07',
+  tr: {
+    title: 'Veri Silme Talimatları',
+    description:
+      'GLOVAL AI hesabınızı ve Meta veya Google Ads bağlantılarınızla ilgili verilerinizi nasıl sildirebileceğinizi açıklar.',
+    intro: [
+      `Bu sayfa, ${COMPANY.brandName} hesabınızı ve hesabınıza bağlı verilerinizi (Meta ve Google Ads bağlantılarından gelen veriler dâhil) nasıl sildirebileceğinizi anlatır.`,
+    ],
+    sections: [
+      {
+        id: 'hesap-silme',
+        heading: '1. Hesabınızı kendiniz silin',
+        blocks: [
+          list([
+            'GLOVAL AI hesabınıza giriş yapın.',
+            'Ayarlar sayfasını açın.',
+            '“Tehlikeli Bölge” bölümünde “Hesabımı Sil” düğmesini seçin.',
+            'Açılan pencerede e-posta adresinizi yazarak silme işlemini onaylayın.',
+          ]),
+          link('/settings', 'Ayarlar sayfasını aç'),
+          p(
+            'Hesap silindiğinde web siteleriniz, siparişleriniz ve hesabınıza bağlı diğer veriler kalıcı olarak silinir; bu işlem geri alınamaz. Bağlı Meta ve Google Ads erişim anahtarları da silinir. Kayıtçıda kayıtlı bir alan adınız veya tamamlanmamış bir alan adı işleminiz varsa, hesap silinmeden önce alan adının devredilmesi ya da işlemin tamamlanması gerekir.',
+          ),
+        ],
+      },
+      {
+        id: 'meta-baglantisi',
+        heading: '2. Yalnızca Meta bağlantısıyla ilgili verileri silin',
+        blocks: [
+          p(
+            'Hesabınızı silmeden yalnızca Meta bağlantısını kaldırmak isterseniz GLOVAL Ads panelinde bağlı hesap için “Bağlantıyı kes” düğmesini kullanın. Bağlantı kesildiğinde GLOVAL AI’da saklanan Meta erişim anahtarları silinir.',
+          ),
+          p(
+            'GLOVAL AI’nın erişimini Meta tarafından da kaldırmak için Facebook hesabınızda Ayarlar ve gizlilik > Ayarlar > İşletme entegrasyonları bölümünden GLOVAL AI uygulamasını kaldırabilirsiniz. Bağlantıyı kesmek Meta hesabınızdaki kampanyaları durdurmaz veya silmez; bunları Meta’dan yönetmeniz gerekir.',
+          ),
+        ],
+      },
+      {
+        id: 'google-ads-baglantisi',
+        heading: '3. Google Ads bağlantısıyla ilgili verileri silin',
+        blocks: [
+          p(
+            'Google Ads bağlantısını GLOVAL Ads panelindeki “Bağlantıyı kes” düğmesiyle kaldırabilirsiniz; bu işlem Google tarafında erişimi iptal eder ve saklanan erişim anahtarını siler. Erişimi Google Hesabı izinlerinizden de kaldırabilirsiniz.',
+          ),
+          link('https://myaccount.google.com/permissions', 'Google Hesabı izinleri', true),
+        ],
+      },
+      {
+        id: 'e-posta-ile-talep',
+        heading: '4. E-posta ile silme talebi gönderin',
+        blocks: [
+          p(
+            `Hesabınıza erişemiyorsanız veya silme talebinizi yazılı iletmek isterseniz ${COMPANY.kvkkEmail} adresine, GLOVAL AI’ya kayıtlı e-posta adresinizden “Veri silme talebi” konulu bir e-posta gönderin. Kimliğinizi doğrulamak için ek bilgi isteyebiliriz. Talebinizi en geç 30 gün içinde sonuçlandırır ve size bildiririz.`,
+          ),
+          link('/iletisim', 'İletişim sayfası'),
+        ],
+      },
+      {
+        id: 'saklanan-kayitlar',
+        heading: '5. Silinmeyen veya anonimleştirilen kayıtlar',
+        blocks: [
+          p(
+            'Fatura ve ödeme gibi yasal saklama yükümlülüğüne tabi mali kayıtlar, mevzuatın gerektirdiği süre boyunca kimliğinizle ilişkilendirilmeden saklanabilir. Bu kayıtlar dışında kalan kişisel verileriniz silinir. Ayrıntılar için Gizlilik Politikası ve KVKK Aydınlatma Metni’ne bakın.',
+          ),
+          link('/yasal/gizlilik-politikasi', 'Gizlilik Politikası'),
+          link('/yasal/kvkk', 'KVKK Aydınlatma Metni'),
+        ],
+      },
+    ],
+  },
+  en: {
+    title: 'Data Deletion Instructions',
+    description:
+      'Explains how to delete your GLOVAL AI account and the data related to your Meta or Google Ads connections.',
+    intro: [
+      `This page explains how to delete your ${COMPANY.brandName} account and the data linked to it, including data received through Meta and Google Ads connections.`,
+    ],
+    sections: [
+      {
+        id: 'hesap-silme',
+        heading: '1. Delete your account yourself',
+        blocks: [
+          list([
+            'Sign in to your GLOVAL AI account.',
+            'Open the Settings page.',
+            'In the “Danger Zone” section, choose “Delete My Account”.',
+            'In the dialog, type your email address to confirm the deletion.',
+          ]),
+          link('/settings', 'Open Settings'),
+          p(
+            'When the account is deleted, your websites, orders and other data linked to the account are permanently deleted; this cannot be undone. Connected Meta and Google Ads access tokens are deleted as well. If you have a domain registered with the registrar or an unfinished domain operation, the domain must be transferred or the operation completed before the account can be deleted.',
+          ),
+        ],
+      },
+      {
+        id: 'meta-baglantisi',
+        heading: '2. Delete only data related to the Meta connection',
+        blocks: [
+          p(
+            'To remove only the Meta connection without deleting your account, use “Disconnect” for the connected account in the GLOVAL Ads panel. When you disconnect, the Meta access tokens stored by GLOVAL AI are deleted.',
+          ),
+          p(
+            'To also remove GLOVAL AI’s access on the Meta side, remove the GLOVAL AI app in your Facebook account under Settings & privacy > Settings > Business integrations. Disconnecting does not pause or delete campaigns in your Meta account; you need to manage them in Meta.',
+          ),
+        ],
+      },
+      {
+        id: 'google-ads-baglantisi',
+        heading: '3. Delete data related to the Google Ads connection',
+        blocks: [
+          p(
+            'You can remove the Google Ads connection with “Disconnect” in the GLOVAL Ads panel; this revokes access on Google’s side and deletes the stored access token. You can also remove access from your Google Account permissions.',
+          ),
+          link('https://myaccount.google.com/permissions', 'Google Account permissions', true),
+        ],
+      },
+      {
+        id: 'e-posta-ile-talep',
+        heading: '4. Send a deletion request by email',
+        blocks: [
+          p(
+            `If you cannot access your account or prefer to make your request in writing, email ${COMPANY.kvkkEmail} from the address registered with GLOVAL AI with the subject “Data deletion request”. We may ask for additional information to verify your identity. We will complete your request and notify you within 30 days at the latest.`,
+          ),
+          link('/iletisim', 'Contact page'),
+        ],
+      },
+      {
+        id: 'saklanan-kayitlar',
+        heading: '5. Records that are not deleted or are anonymized',
+        blocks: [
+          p(
+            'Financial records subject to a legal retention obligation, such as invoices and payments, may be kept without being linked to your identity for the period required by law. Your other personal data is deleted. For details, see the Privacy Policy and the Data Protection Notice.',
+          ),
+          link('/yasal/gizlilik-politikasi', 'Privacy Policy'),
+          link('/yasal/kvkk', 'Data Protection Notice (KVKK)'),
+        ],
+      },
+    ],
+  },
+}
+
+/* -------------------------------------------------------------------------- */
 /* Satış Ortaklığı — Referral Partner Terms                                    */
 /* -------------------------------------------------------------------------- */
 // Hukuk ve mali müşavir onayı gerekir.
@@ -1541,6 +1720,7 @@ export const LEGAL_DOCS: Record<string, LegalDoc> = {
   [refund.slug]: refund,
   [delivery.slug]: delivery,
   [about.slug]: about,
+  [dataDeletion.slug]: dataDeletion,
   ...(isReferralFeatureEnabled()
     ? { [REFERRAL_PARTNER_TERMS_DOC.slug]: REFERRAL_PARTNER_TERMS_DOC }
     : {}),

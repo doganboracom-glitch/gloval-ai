@@ -69,7 +69,7 @@ describe('Gizlilik Politikası — Veri Sorumlusu bloğu', () => {
   it('Google Ads bölümünü iki dilde, Limited Use beyanı ve bağlantılarıyla ekler', async () => {
     const { docs } = await load()
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
-    expect(privacy.lastUpdated).toBe('2026-11-05')
+    expect(privacy.lastUpdated).toBe('2026-11-07')
     expect(docs.getLegalDoc('kvkk')?.lastUpdated).toBeUndefined()
 
     const limitedUseStatements = {
@@ -85,7 +85,8 @@ describe('Gizlilik Politikası — Veri Sorumlusu bloğu', () => {
       const sectionIndex = sections.findIndex((section) => section.heading === heading)
       expect(sectionIndex).toBeGreaterThan(0)
       expect(sections[sectionIndex - 1].heading).toMatch(/^4\. /)
-      expect(sections[sectionIndex + 1].heading).toMatch(/^5\. /)
+      expect(sections[sectionIndex + 1].heading).toMatch(/^Meta /)
+      expect(sections[sectionIndex + 2].heading).toMatch(/^5\. /)
 
       const section = sections[sectionIndex] as Section
       expect(flatten(section)).toContain(limitedUseStatements[lang])
