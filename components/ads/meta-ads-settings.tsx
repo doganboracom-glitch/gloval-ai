@@ -33,6 +33,7 @@ const STATUS_COPY: Record<string, [string, string]> = {
   state_invalid: ['Bağlantı oturumu geçersiz veya süresi dolmuş. Lütfen yeniden başlatın.', 'The connection session is invalid or expired. Please start again.'],
   flow_expired: ['Hesap seçimi süresi doldu. Lütfen Meta hesabınızı yeniden bağlayın.', 'The account selection expired. Please connect your Meta account again.'],
   permission_missing: ['Gerekli izinlerin tümü verilmedi. Raporlama için tüm izinleri onaylamanız gerekir.', 'Not all required permissions were granted. All of them are needed for reporting.'],
+  config_permission_missing: ['Meta bağlantı yapılandırması eksik izin veriyor. Lütfen destek ekibiyle iletişime geçin.', 'The Meta connection configuration is missing required permissions. Please contact support.'],
   no_accounts: ['Bu Meta hesabında erişilebilir bir reklam hesabı bulunamadı.', 'No accessible ad account was found for this Meta user.'],
   rate_limited: ['Çok fazla deneme yaptınız. Birkaç dakika sonra tekrar deneyin.', 'Too many attempts. Try again in a few minutes.'],
   configuration_missing: ['Meta bağlantısı şu anda yapılandırılmamış.', 'The Meta connection is not configured right now.'],

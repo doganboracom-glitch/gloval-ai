@@ -101,8 +101,9 @@ export function createMetaAdsProvider(options: {
   appId: string
   appSecret: string
   apiVersion: string
+  loginConfigId?: string | null
 }): MetaAdsProvider {
-  const { client, appId, appSecret, apiVersion } = options
+  const { client, appId, appSecret, apiVersion, loginConfigId = null } = options
 
   return {
     platform: 'meta',
@@ -110,7 +111,7 @@ export function createMetaAdsProvider(options: {
     displayName: 'Meta (Facebook / Instagram)',
 
     buildAuthUrl(input: AdsOAuthStartInput): string {
-      return buildMetaAuthUrl({ appId, apiVersion, redirectUri: input.redirectUri, state: input.state })
+      return buildMetaAuthUrl({ appId, apiVersion, redirectUri: input.redirectUri, state: input.state, loginConfigId })
     },
     exchangeCode: async () => notImplemented('exchangeCode'),
     refreshAccessToken: async () => notImplemented('refreshAccessToken'),
@@ -288,12 +289,25 @@ export function createMetaAdsProvider(options: {
   }
 }
 
-export function buildMetaAuthUrl(input: { appId: string; apiVersion: string; redirectUri: string; state: string }): string {
+export function buildMetaAuthUrl(input: {
+  appId: string
+  apiVersion: string
+  redirectUri: string
+  state: string
+  /** Facebook Login for Business Configuration id; replaces `scope` when set. */
+  loginConfigId?: string | null
+}): string {
   const url = new URL(`${META_AUTH_DIALOG_ORIGIN}/${input.apiVersion}/dialog/oauth`)
   url.searchParams.set('client_id', input.appId)
   url.searchParams.set('redirect_uri', input.redirectUri)
   url.searchParams.set('state', input.state)
-  url.searchParams.set('scope', META_REQUIRED_SCOPES.join(','))
   url.searchParams.set('response_type', 'code')
+  if (input.loginConfigId) {
+    url.searchParams.set('config_id', input.loginConfigId)
+    // Login for Business defaults to a token response; the server-side flow needs an authorization code.
+    url.searchParams.set('override_default_response_type', 'true')
+  } else {
+    url.searchParams.set('scope', META_REQUIRED_SCOPES.join(','))
+  }
   return url.toString()
 }

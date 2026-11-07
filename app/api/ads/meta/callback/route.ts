@@ -123,7 +123,10 @@ export async function GET(request: Request) {
 
     const inspection = await provider.inspectToken({ accessToken, context })
     const missing = META_REQUIRED_SCOPES.filter((scope) => !inspection.scopes.includes(scope))
-    if (missing.length > 0) throw new MetaAdsError('permission_missing', null, missing)
+    if (missing.length > 0) {
+      // In config_id mode the user cannot change the permission list: the Meta app's Configuration is at fault.
+      throw new MetaAdsError(configured.loginMode === 'config_id' ? 'config_permission_missing' : 'permission_missing', null, missing)
+    }
 
     const accounts = await provider.listAdAccounts({ accessToken, context })
     if (accounts.length === 0) throw new MetaAdsError('no_accounts')

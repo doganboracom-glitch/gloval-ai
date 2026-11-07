@@ -37,6 +37,7 @@ export const ADS_ENV = {
   metaAppId: 'META_APP_ID',
   metaAppSecret: 'META_APP_SECRET',
   metaGraphApiVersion: 'META_GRAPH_API_VERSION',
+  metaLoginConfigId: 'META_LOGIN_CONFIG_ID',
   metaReadDailyUserLimit: 'META_READ_DAILY_USER_LIMIT',
   metaReadDailyGlobalLimit: 'META_READ_DAILY_GLOBAL_LIMIT',
 } as const
@@ -311,6 +312,15 @@ export function resolveMetaGraphApiVersion(env: Env = process.env): string {
   return raw && /^v\d{2}\.\d$/.test(raw) ? raw : META_GRAPH_API_VERSION_DEFAULT
 }
 
+/**
+ * Facebook Login for Business: permissions come from a Configuration created in the app dashboard, not from `scope`.
+ * Returns null (classic scope mode) when unset or malformed, so a typo can never leak into the authorization URL.
+ */
+export function resolveMetaLoginConfigId(env: Env = process.env): string | null {
+  const raw = env[ADS_ENV.metaLoginConfigId]?.trim()
+  return raw && /^\d{5,25}$/.test(raw) ? raw : null
+}
+
 export const META_MAX_ACTIVE_CONNECTIONS = 3
 const META_READ_DAILY_USER_DEFAULT = 400
 const META_READ_DAILY_GLOBAL_DEFAULT = 1_500
@@ -329,6 +339,8 @@ export type MetaAdsAppSettings = {
   appSecret: string
   stateSecret: string
   apiVersion: string
+  /** Set => Facebook Login for Business `config_id` mode; null => classic `scope` mode. */
+  loginConfigId: string | null
 }
 
 export type MetaAdsAppSettingsResult =
@@ -342,7 +354,16 @@ export function resolveMetaAdsAppSettings(env: Env = process.env): MetaAdsAppSet
   if (!appId || !/^\d{5,25}$/.test(appId) || !appSecret || !stateSecret || stateSecret.length < 32) {
     return { ok: false, reason: 'configuration_missing' }
   }
-  return { ok: true, settings: { appId, appSecret, stateSecret, apiVersion: resolveMetaGraphApiVersion(env) } }
+  return {
+    ok: true,
+    settings: {
+      appId,
+      appSecret,
+      stateSecret,
+      apiVersion: resolveMetaGraphApiVersion(env),
+      loginConfigId: resolveMetaLoginConfigId(env),
+    },
+  }
 }
 
 export const META_OAUTH_CALLBACK_PATH = '/api/ads/meta/callback'

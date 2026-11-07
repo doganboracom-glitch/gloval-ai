@@ -11,6 +11,7 @@ export type MetaAdsErrorCode =
   | 'oauth_denied'
   | 'oauth_failed'
   | 'permission_missing'
+  | 'config_permission_missing'
   | 'reauth_required'
   | 'token_expired'
   | 'no_accounts'
@@ -69,6 +70,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'invalid_request':
     case 'oauth_denied':
     case 'permission_missing':
+    case 'config_permission_missing':
     case 'no_accounts':
       return 400
     case 'configuration_missing':
