@@ -147,7 +147,7 @@ function SignUpForm() {
       if (attribution) void saveSignupAttribution({ userId: data.user.id, attribution })
       await saveEmailReferralAction({ userId: data.user.id })
     }
-    trackSignUp('email')
+    trackSignUp('email', data.user?.id)
     // If email confirmation is off, a session already exists → go to dashboard.
     const step = resolvePostSignUp({
       hasSession: !!data.session,

@@ -11,6 +11,20 @@ export const CONSENT_CHANGE_EVENT = 'gloval:cookie-consent-changed'
 
 type StoredConsent = CookieConsent & { v: number }
 
+const CONSENT_MAX_AGE_SECONDS = 15_552_000
+
+/**
+ * `document.cookie` assignment for the consent choice. iyzico POSTs the buyer
+ * back from its own origin, and a Lax cookie is not sent on that cross-site
+ * POST, so over HTTPS the cookie is SameSite=None; Secure. Plain HTTP (local
+ * development) cannot set Secure cookies and stays Lax.
+ */
+export function buildConsentCookie(consent: CookieConsent, protocol: string): string {
+  const value = encodeURIComponent(JSON.stringify({ ...consent, v: CONSENT_VERSION }))
+  const attributes = protocol === 'https:' ? 'samesite=none; secure' : 'samesite=lax'
+  return `${CONSENT_COOKIE}=${value}; path=/; max-age=${CONSENT_MAX_AGE_SECONDS}; ${attributes}`
+}
+
 /**
  * Reads the visitor's stored cookie choice. Pass the document of the page that
  * hosts the content: the editor preview renders inside a `src`-less iframe whose

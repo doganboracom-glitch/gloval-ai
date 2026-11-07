@@ -4,6 +4,8 @@
  * measurement-ID validation. Pure module, safe on client and server.
  */
 
+import { metaEventIds } from '@/lib/analytics/event-ids'
+
 export const ANALYTICS_EVENTS = {
   pageView: 'page_view',
   signUp: 'sign_up',
@@ -74,7 +76,10 @@ export function toMetaPayload(
     case 'page_view':
       return { data: {} }
     case 'sign_up':
-      return { data: { status: true, ...(flat.method ? { content_name: flat.method } : {}) } }
+      return {
+        data: { status: true, ...(flat.method ? { content_name: flat.method } : {}) },
+        ...(typeof flat.event_id === 'string' ? { eventId: flat.event_id } : {}),
+      }
     case 'begin_checkout':
       return {
         data: {
@@ -82,6 +87,7 @@ export function toMetaPayload(
           ...(typeof flat.currency === 'string' ? { currency: flat.currency } : {}),
           ...(typeof flat.item_category === 'string' ? { content_category: flat.item_category } : {}),
         },
+        ...(typeof flat.event_id === 'string' ? { eventId: flat.event_id } : {}),
       }
     case 'purchase':
       return {
@@ -91,9 +97,11 @@ export function toMetaPayload(
           content_type: 'product',
           ...(typeof flat.item_category === 'string' ? { content_category: flat.item_category } : {}),
         },
-        eventId: typeof flat.transaction_id === 'string' ? flat.transaction_id : undefined,
+        eventId: typeof flat.transaction_id === 'string' ? metaEventIds.purchase(flat.transaction_id) : undefined,
       }
-    default:
-      return { data: flat }
+    default: {
+      const { event_id: eventId, ...rest } = flat
+      return { data: rest, ...(typeof eventId === 'string' ? { eventId } : {}) }
+    }
   }
 }

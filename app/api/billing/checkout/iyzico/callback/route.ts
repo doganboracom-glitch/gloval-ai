@@ -6,6 +6,8 @@ import { extractPaidDetails } from '@/lib/payments/iyzico-paid-details'
 import { createHash } from 'node:crypto'
 import { settlePaymentResult, type SettleOutcome } from '@/lib/payments/settle'
 import { ADD_ON_PAYMENT_RETURN_QUERY } from '@/lib/billing-add-ons-route'
+import { buildCapiContext } from '@/lib/analytics/meta-capi-context'
+import { dispatchVerifiedPurchase } from '@/lib/analytics/meta-capi-purchase'
 
 /**
  * iyzico Checkout Form callback. Unlike Stripe, Checkout Form has no
@@ -211,12 +213,26 @@ async function handle(request: Request) {
   // A charge whose amount did not match the order is never shown as a success:
   // no right was granted, so the buyer must not be told otherwise.
   const succeeded = retrieved.paid && outcome !== 'payment_rejected'
+  const purchase = succeeded ? buildPurchaseSignal(outcome, paidDetails, token) : undefined
+
+  // Server-side Purchase for Meta CAPI: only after iyzico's retrieve confirmed
+  // payment AND settlement succeeded. Runs after the response; the event ID
+  // matches the browser Pixel's, so a replayed callback is counted once.
+  try {
+    dispatchVerifiedPurchase(
+      purchase,
+      token,
+      buildCapiContext(request.headers, { fallbackOrigin: new URL(request.url).origin }),
+    )
+  } catch {
+    // Measurement must never affect the payment result page.
+  }
 
   return callbackResponse(
     request,
     succeeded ? 'success' : 'failed',
     destination ?? (domainPurchase ? 'domains' : 'billing'),
-    succeeded ? buildPurchaseSignal(outcome, paidDetails, token) : undefined,
+    purchase,
   )
 }
 

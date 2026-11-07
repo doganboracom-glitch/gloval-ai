@@ -14,6 +14,7 @@ import {
   CONSENT_COOKIE,
   CONSENT_OPEN_EVENT,
   CONSENT_VERSION,
+  buildConsentCookie,
   readConsent,
   type CookieConsent as ConsentChoice,
 } from '@/lib/cookie-consent-storage'
@@ -44,9 +45,8 @@ const CHANGE_EVENT = CONSENT_CHANGE_EVENT
 
 function writeConsent(consent: ConsentChoice) {
   const payload = { ...consent, v: CONSENT_VERSION }
-  const value = encodeURIComponent(JSON.stringify(payload))
   // 6 ay, site geneli. HttpOnly değil: tercih istemci tarafında okunmalı.
-  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=15552000; samesite=lax`
+  document.cookie = buildConsentCookie(consent, window.location.protocol)
   try {
     window.localStorage.setItem(CONSENT_COOKIE, JSON.stringify(payload))
   } catch {
