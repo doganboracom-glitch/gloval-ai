@@ -109,6 +109,9 @@ export async function POST(request: Request) {
   if (!META_UUID_PATTERN.test(flowId) || !ACCOUNT_ID.test(accountId) || (pageId && !NUMERIC_ID.test(pageId))) {
     return metaAdsJson({ error: 'invalid_request' }, 400)
   }
+  // Ads are published on behalf of a Facebook Page, so a connection can never be created without one.
+  // Checked before the flow is claimed so the user can pick a page and retry.
+  if (!pageId) return metaAdsJson({ error: 'page_required' }, 422)
 
   const admin = createAdminClient()
   const { data: flow, error: flowError } = await admin

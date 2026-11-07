@@ -66,7 +66,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
       </AdsTabPanel>
 
       <AdsTabPanel tab="plans" active={tab}>
-        <MetaPublishPanel connections={metaConnections} publishEnabled={data.publishEnabled} />
+        <MetaPublishPanel connections={metaConnections} publishEnabled={data.publishEnabled} onGoToSettings={() => onTabChange('settings')} />
       </AdsTabPanel>
 
       <AdsTabPanel tab="reports" active={tab}>
