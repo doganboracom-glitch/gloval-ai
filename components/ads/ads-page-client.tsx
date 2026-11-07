@@ -7,6 +7,7 @@ import { SiteFooter } from '@/components/site-footer'
 import { AdsAddressForm } from '@/components/ads/ads-address-form'
 import { AdsPlatformGrid } from '@/components/ads/ads-platform-grid'
 import { AdsProductSwitch } from '@/components/ads/ads-product-switch'
+import type { AdsViewerAccess } from '@/lib/ads/platforms'
 
 export function AdsBetaBadge() {
   const { t } = useLanguage()
@@ -17,7 +18,7 @@ export function AdsBetaBadge() {
   )
 }
 
-export function AdsPageClient({ children }: { children: ReactNode }) {
+export function AdsPageClient({ children, viewer }: { children: ReactNode; viewer?: AdsViewerAccess }) {
   const { t } = useLanguage()
   const copy = t.ads
 
@@ -42,7 +43,7 @@ export function AdsPageClient({ children }: { children: ReactNode }) {
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">{copy.platformsSubtitle}</p>
           </div>
-          <AdsPlatformGrid />
+          <AdsPlatformGrid viewer={viewer} />
         </section>
 
         {children}

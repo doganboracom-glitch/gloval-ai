@@ -108,14 +108,16 @@ describe('Ads credits panel', () => {
 })
 
 describe('Ads platform and information sections', () => {
-  it('renders six channels with only Google Ads active and includes WhatsApp Ads', () => {
-    renderWithLanguage('tr', <AdsPlatformGrid />)
-
-    const cards = screen.getAllByRole('listitem')
-    expect(cards).toHaveLength(6)
-    expect(cards[0]?.textContent).toContain('Google Ads')
-    expect(cards[0]?.textContent).not.toContain('Yakında')
-    expect(cards.slice(1).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
+  it('renders six channels with Google Ads and Meta Ads active and includes WhatsApp Ads', () => {
+  renderWithLanguage('tr', <AdsPlatformGrid />)
+  
+  const cards = screen.getAllByRole('listitem')
+  expect(cards).toHaveLength(6)
+  expect(cards[0]?.textContent).toContain('Google Ads')
+  expect(cards[0]?.textContent).not.toContain('Yakında')
+  expect(cards[1]?.textContent).toContain('Meta')
+  expect(cards[1]?.textContent).not.toContain('Yakında')
+  expect(cards.slice(2).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
     expect(cards.every((card) => card.querySelector('svg'))).toBe(true)
     expect(cards[5]?.textContent).toContain('WhatsApp')
     expect(cards[5]?.textContent).toContain('WhatsApp Business reklamlarıyla sohbet başlatan kampanyalar.')

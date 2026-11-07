@@ -6,7 +6,9 @@ import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsAccess, resolveGoogleAdsKillSwitch, resolveMetaAdsAccess } from '@/lib/ads/env'
 import { listMetaConnectionsForUser } from '@/lib/ads/meta-connections'
-import { META_UUID_PATTERN, metaAdsFeatureEnabled } from '@/lib/ads/meta-route-utils'
+import { META_UUID_PATTERN } from '@/lib/ads/meta-route-utils'
+import { resolveDashboardPlatform } from '@/lib/ads/platforms'
+import { openGatesForUser } from '@/lib/ads/viewer-access'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
@@ -27,6 +29,7 @@ type SearchParams = Promise<{
   meta_flow?: string | string[]
   meta_missing?: string | string[]
   plan?: string | string[]
+  platform?: string | string[]
 }>
 
 function firstValue(value: string | string[] | undefined): string | null {
@@ -45,6 +48,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
     emailConfirmed: Boolean(user.email_confirmed_at),
     isAdmin: isAdminEmail(user.email),
   })
+  const openGates = openGatesForUser(user)
   if (!access.canConnect) notFound()
 
   const admin = createAdminClient()
@@ -64,7 +68,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
   const rawPlanId = firstValue(params.plan)
   const initialPlanId = rawPlanId && /^[0-9a-f-]{36}$/i.test(rawPlanId) ? rawPlanId : null
   const connections = await listGoogleAdsConnectionsForUser(user.id).catch(() => [])
-  const metaVisible = metaAdsFeatureEnabled() && resolveMetaAdsAccess(user.id, {
+  const metaVisible = resolveMetaAdsAccess(user.id, {
     emailConfirmed: Boolean(user.email_confirmed_at),
     isAdmin: isAdminEmail(user.email),
   }).canConnect
@@ -73,7 +77,8 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
 
   return (
     <AdsDashboardClient
-      metaEnabled={metaVisible}
+      initialPlatformSlug={resolveDashboardPlatform(firstValue(params.platform), openGates).slug}
+      openGates={openGates}
       metaConnections={metaConnections}
       metaPendingFlowId={metaFlow && META_UUID_PATTERN.test(metaFlow) ? metaFlow : null}
       metaStatus={firstValue(params.meta)}

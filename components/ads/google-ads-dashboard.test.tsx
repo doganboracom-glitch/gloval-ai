@@ -173,7 +173,7 @@ describe('Google Ads dashboard UI', () => {
 
   it('uses the registry for available and coming-soon platforms without making cards selectable', () => {
     const comingSoon = ADS_PLATFORM_REGISTRY.filter((platform) => platform.status === 'coming_soon')
-    expect(comingSoon.map((platform) => platform.id)).toEqual(['meta', 'tiktok', 'x', 'linkedin', 'whatsapp'])
+    expect(comingSoon.map((platform) => platform.id)).toEqual(['tiktok', 'x', 'linkedin', 'whatsapp'])
     const googlePlatform = ADS_PLATFORM_REGISTRY.find((platform) => platform.id === 'google_ads')
     expect(googlePlatform).toMatchObject({
       label: 'Google Ads',
