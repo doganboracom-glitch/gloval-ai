@@ -160,6 +160,27 @@ export function resolveDashboardPlatform(
   return fallback ?? ADS_PLATFORM_REGISTRY[0]
 }
 
+/**
+ * Raw `?platform=` value to use for the dashboard. An explicit `platform` always wins; when it is
+ * missing, a Meta OAuth result (`meta_flow` or `meta`) means the visitor belongs on the Meta tab,
+ * so a callback URL without `platform` never falls back to Google.
+ */
+export function resolveRequestedPlatformSlug(input: {
+  platform?: string | null
+  meta?: string | null
+  metaFlow?: string | null
+}): string | null {
+  const platform = input.platform?.trim()
+  if (platform) return platform
+  if (input.metaFlow?.trim() || input.meta?.trim()) return 'meta'
+  return null
+}
+
+/** Facebook appends `#_=_` to redirects that carry no fragment of their own. */
+export function isFacebookHashRemnant(hash: string): boolean {
+  return hash === '#_=_' || hash === '_=_'
+}
+
 export function buildAdsDashboardHref(slug: AdsPlatformSlug): string {
   return `${ADS_DASHBOARD_PATH}?platform=${slug}`
 }

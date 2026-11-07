@@ -7,7 +7,7 @@ import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsAccess, resolveGoogleAdsKillSwitch, resolveMetaAdsAccess } from '@/lib/ads/env'
 import { listMetaConnectionsForUser } from '@/lib/ads/meta-connections'
 import { META_UUID_PATTERN } from '@/lib/ads/meta-route-utils'
-import { resolveDashboardPlatform } from '@/lib/ads/platforms'
+import { resolveDashboardPlatform, resolveRequestedPlatformSlug } from '@/lib/ads/platforms'
 import { openGatesForUser } from '@/lib/ads/viewer-access'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -77,7 +77,16 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
 
   return (
     <AdsDashboardClient
-      initialPlatformSlug={resolveDashboardPlatform(firstValue(params.platform), openGates).slug}
+      initialPlatformSlug={
+        resolveDashboardPlatform(
+          resolveRequestedPlatformSlug({
+            platform: firstValue(params.platform),
+            meta: firstValue(params.meta),
+            metaFlow: metaFlow,
+          }),
+          openGates,
+        ).slug
+      }
       openGates={openGates}
       metaConnections={metaConnections}
       metaPendingFlowId={metaFlow && META_UUID_PATTERN.test(metaFlow) ? metaFlow : null}
