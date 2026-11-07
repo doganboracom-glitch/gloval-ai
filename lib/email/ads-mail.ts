@@ -213,7 +213,7 @@ export function buildMetaTokenExpiringEmail(input: { daysLeft: number; accountNa
     summary: `Meta (Facebook ve Instagram) bağlantınızın erişim süresi ${days} gün içinde doluyor. Süre dolunca Meta raporları güncellenmez.`,
     steps: [
       'Ads panelinin Ayarlar sekmesini açın.',
-      'Meta kartında "Yenile" düğmesine basıp Meta hesab��nızla yeniden onay verin.',
+      'Meta kartında "Yenile" düğmesine basıp Meta hesabınızla yeniden onay verin.',
     ],
     details: input.accountName ? [['Reklam hesabı', input.accountName]] : undefined,
   })

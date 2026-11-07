@@ -428,12 +428,28 @@ describe('POST /api/ads/meta/plans/publish: başarılı yayın', () => {
     const response = await publishPost(post('publish', publishBody))
     expect((await response.json()).ok).toBe(true)
     expect(graph.posts().map((call) => call.edge)).toEqual(['adimages', 'adcreatives', 'ads'])
-    // Reused steps are re-saved idempotently with the same id; only the missing ones are actually created.
-    const saved = mocks.saveMetaPlanObject.mock.calls.map((call) => [call[2], call[3]])
-    expect(saved).toEqual(expect.arrayContaining([['meta_campaign_id', '111111111111'], ['meta_adset_id', '222222222222']]))
-    expect(saved.map(([column]) => column)).toEqual(
-      ['meta_campaign_id', 'meta_adset_id', 'meta_image_hash', 'meta_creative_id', 'meta_ad_id'],
-    )
+    // Önceden oluşmuş adımlar yeniden kaydedilmez ve ads_meta_actions'a çift satır yazılmaz; yalnızca yeni adımlar kaydedilir.
+    expect(mocks.saveMetaPlanObject.mock.calls.map((call) => call[2])).toEqual(['meta_image_hash', 'meta_creative_id', 'meta_ad_id'])
+    const actions = mocks.appendMetaAction.mock.calls.map((call) => call[1] as { actionType: string; target: { source: string } })
+    expect(actions.map((action) => action.actionType)).toEqual(['meta_publish_image', 'meta_publish_creative', 'meta_publish_ad'])
+    expect(actions.every((action) => action.target.source === 'created')).toBe(true)
+  })
+
+  it('tüm nesneler önceden oluşmuşsa hiçbir kayıt ve denetim satırı eklenmez, Meta\'ya yazılmaz', async () => {
+    mocks.getMetaPlan.mockResolvedValue(planRow({
+      status: 'partial',
+      meta_campaign_id: '111111111111',
+      meta_adset_id: '222222222222',
+      meta_image_hash: 'abcdef1234567890abcd',
+      meta_creative_id: '444444444444',
+      meta_ad_id: '555555555555',
+    }))
+    const graph = installGraph()
+    const response = await publishPost(post('publish', publishBody))
+    expect((await response.json()).ok).toBe(true)
+    expect(graph.posts()).toHaveLength(0)
+    expect(mocks.saveMetaPlanObject).not.toHaveBeenCalled()
+    expect(mocks.appendMetaAction).not.toHaveBeenCalled()
   })
 
   it('e-posta gönderimi hata verse bile yayın sonucu değişmez', async () => {
