@@ -5,6 +5,8 @@ import { ADS_DASHBOARD_PATH, isAdsFeatureUiEnabled } from '@/lib/ads/feature-fla
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { listGoogleAdsConnectionsForUser } from '@/lib/ads/google-connections'
 import { resolveGoogleAdsAccess, resolveGoogleAdsKillSwitch } from '@/lib/ads/env'
+import { resolveDashboardPlatform } from '@/lib/ads/platforms'
+import { openGatesForUser } from '@/lib/ads/viewer-access'
 import { isAdminEmail } from '@/lib/mail/admin-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GOOGLE_ADS_PUBLISH_TERMS_VERSION } from '@/lib/ads/google-terms'
@@ -22,6 +24,7 @@ type SearchParams = Promise<{
   google?: string | string[]
   google_flow?: string | string[]
   plan?: string | string[]
+  platform?: string | string[]
 }>
 
 function firstValue(value: string | string[] | undefined): string | null {
@@ -40,6 +43,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
     emailConfirmed: Boolean(user.email_confirmed_at),
     isAdmin: isAdminEmail(user.email),
   })
+  const openGates = openGatesForUser(user)
   if (!access.canConnect) notFound()
 
   const admin = createAdminClient()
@@ -62,6 +66,8 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
 
   return (
     <AdsDashboardClient
+      initialPlatformSlug={resolveDashboardPlatform(firstValue(params.platform), openGates).slug}
+      openGates={openGates}
       address={address}
       initialPlanId={initialPlanId}
       connections={connections}
