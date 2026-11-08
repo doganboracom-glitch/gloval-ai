@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { MetaLiveState } from '@/lib/ads/meta-manage'
+import { requestMetaPlanSync } from '@/lib/ads/meta-overview-refresh'
 import {
   classifyBudgetChange,
   describeMetaManageError,
@@ -74,7 +75,7 @@ export function MetaManageCard({
 
   const { data: synced, mutate: mutateSync, isValidating } = useSWR<SyncResponse>(
     ['meta-sync', plan.id],
-    () => postJson<SyncResponse>('/api/ads/meta/plans/sync', { planId: plan.id }),
+    () => requestMetaPlanSync(plan.id) as Promise<SyncResponse>,
     { revalidateOnFocus: false, shouldRetryOnError: false },
   )
 
