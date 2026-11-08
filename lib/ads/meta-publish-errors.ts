@@ -1,5 +1,5 @@
 import { MetaAdsError, type MetaAdsErrorCode } from '@/lib/ads/meta-ads-error'
-import { formatMetaErrorDiagnostic, META_APP_NOT_LIVE_MESSAGE, isMetaAppNotLive, redactMetaErrorMessage, type MetaErrorDetail } from '@/lib/ads/meta-error-detail'
+import { formatMetaCodePair, formatMetaErrorDiagnostic, formatMetaTechnicalDetail, META_APP_NOT_LIVE_MESSAGE, isMetaAppNotLive, redactMetaErrorMessage, type MetaErrorDetail } from '@/lib/ads/meta-error-detail'
 
 export type MetaPublishStep = 'preflight' | 'campaign' | 'adset' | 'image' | 'creative' | 'ad'
 
@@ -44,6 +44,10 @@ export type MetaPublishFailure = {
   /** Bounded, redacted Meta diagnostics for the authenticated owner. */
   metaReason: string | null
   blamedFields: string[]
+  /** Redacted structured Meta error; null when Meta sent none. */
+  detail?: MetaErrorDetail | null
+  /** Graph endpoint key that failed (e.g. `act.ads.create`); absent for non-Graph failures. */
+  endpoint?: string | null
 }
 
 function fieldList(fields: readonly string[] | undefined): string[] {
@@ -67,6 +71,26 @@ function safeAgeMetaReason(detail: MetaErrorDetail | null): string | null {
  * `metaReason` is the already-redacted `error_user_msg`/message from {@link MetaErrorDetail}.
  */
 export function describeMetaPublishError(error: unknown, step: MetaPublishStep): MetaPublishFailure {
+  const failure = classifyMetaPublishError(error, step)
+  const detail = error instanceof MetaAdsError ? error.detail ?? null : null
+  return { ...failure, detail, endpoint: error instanceof MetaAdsError ? error.endpoint ?? null : null }
+}
+
+/**
+ * Stored on the plan (`failure_reason`, 600 chars in SQL): the Turkish summary is shortened first so Meta's
+ * code/subcode and error_user_msg are never the part that gets cut off.
+ */
+export function buildStoredFailureReason(failure: Pick<MetaPublishFailure, 'message' | 'metaReason' | 'detail' | 'endpoint'>, limit = 600): string {
+  const technical = formatMetaTechnicalDetail(failure.detail) ?? failure.metaReason
+  const endpoint = failure.endpoint ? `Uç nokta: ${failure.endpoint}` : null
+  const tail = [technical, endpoint].filter(Boolean).join(' | ')
+  if (!tail) return failure.message.slice(0, limit)
+  const room = Math.max(limit - tail.length - 3, 0)
+  const head = room > 0 ? failure.message.slice(0, room) : ''
+  return (head ? `${head} | ${tail}` : tail).slice(0, limit)
+}
+
+function classifyMetaPublishError(error: unknown, step: MetaPublishStep): Omit<MetaPublishFailure, 'detail' | 'endpoint'> {
   const label = META_STEP_LABELS[step]
   if (!(error instanceof MetaAdsError)) {
     return { code: 'meta_rejected', message: `${label} adımı tamamlanamadı.`, metaReason: null, blamedFields: [] }
@@ -121,6 +145,13 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       return { code: 'publish_permission_missing', message: 'Meta reklam yönetim iznini reddetti. Meta Business Ayarları’nda bağlanan hesabın reklam hesabında kampanya oluşturma yetkisini ve gerekli ek izinleri doğrulayın.', metaReason: reason, blamedFields: blamed }
     case 'rate_limited':
       return { code: 'rate_limited', message: 'Meta istek sınırına ulaşıldı. Biraz bekleyip tekrar deneyin.', metaReason: null, blamedFields: [] }
+    case 'meta_response_invalid':
+      return {
+        code: 'meta_response_invalid',
+        message: `Meta ${label.toLocaleLowerCase('tr-TR')} adımına başarılı (HTTP 200) yanıt verdi ancak yanıtta geçerli bir nesne kimliği yoktu. Reklam Yöneticisi’nde nesnenin oluşup oluşmadığını kontrol edip tekrar deneyin; aynı kampanya iki kez oluşturulmaz.`,
+        metaReason: reason,
+        blamedFields: [],
+      }
     case 'provider_unavailable':
     case 'write_outcome_unknown':
       return { code: error.code, message: 'Meta şu an yanıt vermedi. Sonucu doğrulamak için tekrar deneyin; aynı kampanya iki kez oluşturulmaz.', metaReason: null, blamedFields: [] }
@@ -162,5 +193,14 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
     return { code: 'special_category_unsupported', message: 'Meta bu içeriği özel reklam kategorisi olarak değerlendirdi; bu sürümde desteklenmiyor.', metaReason: reason, blamedFields: blamed }
   }
   const where = blamed.length > 0 ? ` Sorunlu alan: ${blamed.join(', ')}.` : ''
-  return { code: 'meta_rejected', message: `Meta ${label.toLocaleLowerCase('tr-TR')} adımını reddetti.${where}`, metaReason: reason, blamedFields: blamed }
+  // The bare generic sentence is only for failures where Meta gave us nothing to show.
+  const pair = formatMetaCodePair(detail)
+  const metaSays = detail?.userMessage ?? detail?.message ?? null
+  const specifics = `${pair ? ` Meta kodu: ${pair}.` : ''}${metaSays ? ` Meta: ${metaSays}` : ''}`
+  return {
+    code: 'meta_rejected',
+    message: `Meta ${label.toLocaleLowerCase('tr-TR')} adımını reddetti.${where}${specifics}`.slice(0, 320),
+    metaReason: reason,
+    blamedFields: blamed,
+  }
 }

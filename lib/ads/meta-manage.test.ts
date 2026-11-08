@@ -525,7 +525,7 @@ describe('Meta hatalarının güvenli kod ve Türkçe mesaja çevrilmesi', () =>
     expect(failure.message).toBe('Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.')
     expect(failure.metaReason).toBe('Instead, adjust the audience.')
     expect(failure.blamedFields).toEqual(['yaş aralığı'])
-    expect(JSON.stringify(failure)).not.toMatch(/1870189|provider-trace/i)
+    expect(`${failure.message} ${failure.metaReason}`).not.toMatch(/1870189|provider-trace/i)
   })
 })
 

@@ -6,7 +6,8 @@ import { EMPTY_OBJECTS, preflightMetaAccount, publishPausedMetaCampaign, type Me
 import { adsManagerUrl, metaPlanHash, metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
 import { buildMetaPublishResultEmail, type MetaPublishMailOutcome } from '@/lib/email/ads-mail'
 import { logUserEvent } from '@/lib/notify'
-import { META_STEP_LABELS } from '@/lib/ads/meta-publish-errors'
+import { META_STEP_LABELS, buildStoredFailureReason } from '@/lib/ads/meta-publish-errors'
+import { formatMetaCodePair, formatMetaTechnicalDetail, metaErrorAuditState } from '@/lib/ads/meta-error-detail'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { META_CREATIVE_BUCKET, appendMetaAction, getMetaPlan, metaPlanView, saveMetaPlanObject } from '@/lib/ads/meta-plans-store'
 import { metaAdsErrorResponse, metaAdsJson } from '@/lib/ads/meta-route-utils'
@@ -161,7 +162,6 @@ export async function POST(request: Request) {
             })
           },
           onWriteFailure: async (step, error) => {
-            const detail = error.detail
             await appendMetaAction(admin, {
               userId,
               planId: plan.id,
@@ -169,18 +169,7 @@ export async function POST(request: Request) {
               actor: 'system',
               actionType: `meta_publish_${step}`,
               target: { endpoint: error.endpoint },
-              afterState: {
-                meta_error: {
-                  endpoint: error.endpoint,
-                  code: detail?.code ?? null,
-                  subcode: detail?.subcode ?? null,
-                  type: detail?.type ?? null,
-                  fbtrace_id: detail?.traceId ?? null,
-                  error_user_title: detail?.userTitle ?? null,
-                  error_user_msg: detail?.userMessage ?? null,
-                  message: detail?.message ?? null,
-                },
-              },
+              afterState: { meta_error: { endpoint: error.endpoint, internal_code: error.code, ...metaErrorAuditState(error.detail) } },
               status: 'failed',
             })
           },
@@ -192,7 +181,14 @@ export async function POST(request: Request) {
     if (outcome.ok) {
       await finish('published', outcome.objects)
     } else {
-      const failureReason = [outcome.failure.message, outcome.failure.metaReason].filter(Boolean).join(' | ').slice(0, 600)
+      const failureReason = buildStoredFailureReason(outcome.failure)
+      if ('lookupFailures' in outcome && outcome.lookupFailures.length > 0) {
+        await appendMetaAction(admin, {
+          userId, planId: plan.id, connectionId: plan.connection_id, actor: 'system', actionType: 'meta_publish_tag_lookup',
+          target: { failures: outcome.lookupFailures.map((entry) => ({ step: entry.step, endpoint: entry.endpoint, code: entry.code })) },
+          status: 'failed',
+        }).catch(() => console.error('[meta-ads] lookup-failure audit failed'))
+      }
       await finish(mailOutcome === 'partial' ? 'partial' : 'failed', outcome.objects, {
         step: outcome.step, code: outcome.failure.code, reason: failureReason,
       })
@@ -213,6 +209,9 @@ export async function POST(request: Request) {
       stepLabel: META_STEP_LABELS[outcome.step],
       message: outcome.failure.message,
       metaReason: outcome.failure.metaReason,
+      technicalDetail: formatMetaTechnicalDetail(outcome.failure.detail),
+      metaCode: formatMetaCodePair(outcome.failure.detail),
+      endpoint: outcome.failure.endpoint ?? null,
       blamedFields: outcome.failure.blamedFields,
       partial: Boolean(outcome.objects.campaignId),
       plan: fresh ? metaPlanView(fresh) : null,

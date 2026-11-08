@@ -275,9 +275,12 @@ export async function validateMetaPlanRemote(
 
 /* ----------------------------- publish ----------------------------- */
 
+/** A by-tag lookup that errored (and was therefore skipped): without it a retry can silently re-create objects. */
+export type MetaLookupFailure = { step: MetaPublishStep; endpoint: string; code: string; message: string | null }
+
 export type MetaPublishOutcome =
-  | { ok: true; objects: MetaPublishObjects }
-  | { ok: false; step: MetaPublishStep; failure: MetaPublishFailure; objects: MetaPublishObjects }
+  | { ok: true; objects: MetaPublishObjects; lookupFailures: MetaLookupFailure[] }
+  | { ok: false; step: MetaPublishStep; failure: MetaPublishFailure; objects: MetaPublishObjects; lookupFailures: MetaLookupFailure[] }
 
 const WRITE_ENDPOINTS: Record<Exclude<MetaPublishStep, 'preflight'>, MetaApiRequest['endpoint']> = {
   campaign: 'act.campaigns.create',
@@ -287,9 +290,15 @@ const WRITE_ENDPOINTS: Record<Exclude<MetaPublishStep, 'preflight'>, MetaApiRequ
   ad: 'act.ads.create',
 }
 
-function logTagLookupFailure(step: Exclude<MetaPublishStep, 'preflight'>, error: unknown) {
+function logTagLookupFailure(step: Exclude<MetaPublishStep, 'preflight'>, error: unknown, sink: MetaLookupFailure[]) {
   const metaError = error instanceof MetaAdsError ? error : null
   const diagnostic = formatMetaErrorDiagnostic(metaError?.detail ?? null)
+  sink.push({
+    step,
+    endpoint: metaError?.endpoint ?? LOOKUPS[step].endpoint,
+    code: metaError?.code ?? 'provider_error',
+    message: metaError?.detail?.message ?? null,
+  })
   console.error(
     `[meta-ads] tag lookup failed step=${step} endpoint=${metaError?.endpoint ?? LOOKUPS[step].endpoint} code=${formatMetaErrorCode(metaError?.detail ?? null)}${diagnostic ? ` detail=${diagnostic}` : ''}`,
   )
@@ -317,6 +326,7 @@ export type MetaPublishDeps = Common & {
  */
 export async function publishPausedMetaCampaign(deps: MetaPublishDeps): Promise<MetaPublishOutcome> {
   const objects: MetaPublishObjects = { ...deps.objects }
+  const lookupFailures: MetaLookupFailure[] = []
 
   const create = async (
     step: Exclude<MetaPublishStep, 'preflight'>,
@@ -334,19 +344,20 @@ export async function publishPausedMetaCampaign(deps: MetaPublishDeps): Promise<
       id = await findObjectByTag(deps, step, deps.tag)
       if (id) source = 'found_by_tag'
     } catch (error) {
-      logTagLookupFailure(step, error)
+      logTagLookupFailure(step, error, lookupFailures)
       id = null
     }
     if (!id) {
       try {
         id = await write()
       } catch (error) {
-        if (error instanceof MetaAdsError && error.code === 'write_outcome_unknown') {
+        // Both mean "the write may have landed": an unusable 200 body is as ambiguous as a dropped connection.
+        if (error instanceof MetaAdsError && (error.code === 'write_outcome_unknown' || error.code === 'meta_response_invalid')) {
           try {
             id = await findObjectByTag(deps, step, deps.tag)
             if (id) source = 'found_by_tag'
           } catch (lookupError) {
-            logTagLookupFailure(step, lookupError)
+            logTagLookupFailure(step, lookupError, lookupFailures)
             id = null
           }
         }
@@ -415,7 +426,7 @@ export async function publishPausedMetaCampaign(deps: MetaPublishDeps): Promise<
         content: deps.content, adSetId, creativeId, tag: deps.tag,
       }))).id))
   } catch (error) {
-    return { ok: false, step, failure: describeMetaPublishError(error, step), objects }
+    return { ok: false, step, failure: describeMetaPublishError(error, step), objects, lookupFailures }
   }
-  return { ok: true, objects }
+  return { ok: true, objects, lookupFailures }
 }

@@ -160,6 +160,50 @@ export function formatMetaErrorCode(detail: MetaErrorDetail | null): string {
   return `${code}${subcode}${detail.type ? ` ${detail.type}` : ''}`
 }
 
+/** `100/1487` (or `100` when Meta sent no subcode); null when Meta sent no code at all. */
+export function formatMetaCodePair(detail: Pick<MetaErrorDetail, 'code' | 'subcode'> | null | undefined): string | null {
+  if (!detail || (detail.code === null && detail.subcode === null)) return null
+  return `${detail.code === null ? '?' : detail.code}${detail.subcode === null ? '' : `/${detail.subcode}`}`
+}
+
+export const META_TECHNICAL_DETAIL_LIMIT = 420
+
+/**
+ * Human-readable technical details for the owner: Meta code/subcode, Meta's own message, fbtrace_id and blamed
+ * fields. Unlike {@link formatMetaErrorDiagnostic} the code is never stripped and Meta's `error_user_msg` comes first.
+ * Everything is already redacted by {@link extractMetaErrorDetail}.
+ */
+export function formatMetaTechnicalDetail(detail: MetaErrorDetail | null | undefined): string | null {
+  if (!detail) return null
+  const pair = formatMetaCodePair(detail)
+  const pieces = [
+    pair ? `Meta kodu: ${pair}` : null,
+    detail.type ? `Tür: ${detail.type}` : null,
+    detail.userTitle ? `Başlık: ${detail.userTitle}` : null,
+    detail.userMessage ? `Meta açıklaması: ${detail.userMessage}` : null,
+    detail.message && detail.message !== detail.userMessage ? `Meta mesajı: ${detail.message}` : null,
+    detail.blameFields?.length ? `Sorunlu alanlar: ${detail.blameFields.join(', ')}` : null,
+    detail.traceId ? `fbtrace_id: ${detail.traceId}` : null,
+  ].filter((piece): piece is string => Boolean(piece))
+  const text = pieces.join(' | ').slice(0, META_TECHNICAL_DETAIL_LIMIT)
+  return text || null
+}
+
+/** Sanitized JSON for the audit row (`ads_meta_actions.after_state`); no token, no raw body. */
+export function metaErrorAuditState(detail: MetaErrorDetail | null | undefined): Record<string, unknown> | null {
+  if (!detail) return null
+  return {
+    code: detail.code,
+    subcode: detail.subcode,
+    type: detail.type,
+    fbtrace_id: detail.traceId ?? null,
+    error_user_title: detail.userTitle ?? null,
+    error_user_msg: detail.userMessage ?? null,
+    message: detail.message,
+    blame_field_specs: detail.blameFields ?? [],
+  }
+}
+
 /** Bounded, redacted diagnostic text for logs and the authenticated publish panel. */
 export function formatMetaErrorDiagnostic(detail: MetaErrorDetail | null): string | null {
   if (!detail) return null

@@ -135,10 +135,39 @@ async function defaultRecordOutcome(
   safeErrorCode: MetaSafeErrorCode | null,
 ): Promise<void> {
   const admin = createAdminClient()
-  await admin
+  const { error } = await admin
     .from('ads_meta_api_operations')
-    .update({ outcome, safe_error_code: safeErrorCode })
+    .update({ outcome, safe_error_code: dbSafeCode(safeErrorCode) })
     .eq('request_id', requestId)
+  if (error) throw new Error('outcome update rejected')
+}
+
+const GRAPH_OBJECT_ID = /^\d{5,25}$/
+const SAFE_KEY = /^[a-z_]{1,24}$/
+
+/**
+ * A `.create` call must hand back the new object's id (or the image hash). Returns a redacted, shape-only
+ * description (HTTP status + top-level key names, never values) when it did not; null when the response is usable.
+ */
+export function metaCreateResponseProblem(endpoint: MetaApiEndpoint, payload: unknown, status: number): MetaErrorDetail | null {
+  if (!endpoint.endsWith('.create')) return null
+  const record = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as Record<string, unknown>) : null
+  if (endpoint === 'act.adimages.create') {
+    const images = record?.images
+    const hashes = images && typeof images === 'object' ? Object.values(images as Record<string, unknown>) : []
+    if (hashes.some((entry) => entry && typeof entry === 'object' && typeof (entry as { hash?: unknown }).hash === 'string')) return null
+  } else {
+    const id = record?.id
+    if ((typeof id === 'string' || typeof id === 'number') && GRAPH_OBJECT_ID.test(String(id))) return null
+  }
+  const keys = record ? Object.keys(record).filter((key) => SAFE_KEY.test(key)).slice(0, 8) : []
+  const shape = record ? `alanlar: ${keys.length ? keys.join(', ') : '(yok)'}` : 'gövde boş veya JSON değil'
+  return { code: null, subcode: null, type: null, message: `HTTP ${status}; yanıtta geçerli nesne kimliği yok (${shape})` }
+}
+
+/** The DB check constraint on `safe_error_code` predates `outcome_unknown`; it is a dropped/timed-out connection. */
+function dbSafeCode(code: MetaSafeErrorCode | null): Exclude<MetaSafeErrorCode, 'outcome_unknown'> | null {
+  return code === 'outcome_unknown' ? 'network_error' : code
 }
 
 function toMetaErrorCode(klass: ReturnType<typeof classifyMetaError>) {
@@ -243,8 +272,19 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
         }
 
         if (response.ok) {
-          await settle(requestId, 'success', null)
-          return payload
+          const embedded = extractMetaErrorDetail(payload)
+          const invalid = embedded ? null : metaCreateResponseProblem(input.endpoint, payload, response.status)
+          if (!embedded && !invalid) {
+            await settle(requestId, 'success', null)
+            return payload
+          }
+          // HTTP 200 is not proof of success: Graph can embed an error, or omit the new object's id entirely.
+          const problem = embedded ?? invalid
+          const code = embedded ? toMetaErrorCode(classifyMetaError(response.status, embedded)) : 'meta_response_invalid'
+          lastError = new MetaAdsError(code, problem, [], input.endpoint)
+          lastSafeCode = 'provider_error'
+          log(`[meta-ads] graph 200 not accepted endpoint=${input.endpoint} http=${response.status} reason=${embedded ? 'embedded_error' : 'missing_object_id'} ${formatMetaErrorDiagnostic(problem)}`)
+          break
         }
 
         const detail: MetaErrorDetail | null = extractMetaErrorDetail(payload)

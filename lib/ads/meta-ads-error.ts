@@ -44,6 +44,8 @@ export type MetaAdsErrorCode =
   | 'budget_too_low'
   | 'age_range_not_allowed'
   | 'meta_rejected'
+  /** Meta answered HTTP 200 to a create call but the body has no usable object id (or carries an error object). */
+  | 'meta_response_invalid'
   | 'app_not_live'
   | 'write_outcome_unknown'
   // Phase M3 (activate / pause / budget)
@@ -124,6 +126,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'plan_not_approved':
       return 409
     case 'meta_rejected':
+    case 'meta_response_invalid':
     case 'app_not_live':
     case 'payment_method_missing':
     case 'account_restricted':
