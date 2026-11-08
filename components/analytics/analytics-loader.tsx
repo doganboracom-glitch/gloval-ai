@@ -104,6 +104,7 @@ export function AnalyticsLoader() {
     if (metaOn) {
       const fbq = ensureFbq()
       if (!metaInitialised.current) {
+        fbq('set', 'autoConfig', false, META_PIXEL_ID)
         fbq('init', META_PIXEL_ID)
         metaInitialised.current = true
       } else {
