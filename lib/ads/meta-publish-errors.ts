@@ -94,7 +94,7 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       code: 'age_range_not_allowed',
       message: 'Meta Advantage+ kitlede yaş aralığı öneri olarak kullanılmalı. En az yaşı 25’i, en çok yaşı 65’i aşmayacak şekilde düzenleyin veya Advantage+ kitleyi kapatın.',
       metaReason: null,
-      blamedFields: ['age_range'],
+      blamedFields: fieldList(['age_range']),
     }
   }
   if (code === 2635 || subcode === 1359188 || (subcode !== null && String(subcode).startsWith('1487'))) {

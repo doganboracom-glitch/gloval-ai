@@ -98,6 +98,7 @@ beforeEach(() => {
   mocks.plans = []
   setupSWR()
   mocks.requestScan.mockResolvedValue({ ok: true, result: {} })
+  vi.stubGlobal('crypto', { randomUUID: () => 'test-request-id' })
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: vi.fn(() => 'blob:creative-preview') })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: vi.fn() })
 })
@@ -148,7 +149,8 @@ describe('MetaPublishPanel', () => {
       finishScan?.({ ok: true, result: {} })
     })
 
-    expect(await screen.findByRole('status', { name: 'AI önerisi alanlara yazıldı — gözden geçirin.' })).toBeTruthy()
+    const successMessage = await screen.findByText('AI önerisi alanlara yazıldı — gözden geçirin.')
+    expect(successMessage.closest('[role="status"]')).toBeTruthy()
     const primaryText = screen.getByLabelText('Ana metin') as HTMLTextAreaElement
     await waitFor(() => expect(document.activeElement).toBe(primaryText))
     expect(primaryText.value).toBe('Yeni koleksiyonu keşfedin.')

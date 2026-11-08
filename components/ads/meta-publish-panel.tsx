@@ -819,7 +819,7 @@ export function MetaPublishPanel({
                   if (imageInputRef.current) imageInputRef.current.value = ''
                 }}
               >
-                <X data-icon="inline-start" aria-hidden="true" />
+                <Trash2 data-icon="inline-start" aria-hidden="true" />
                 {t('Kaldır', 'Remove')}
               </Button>
             </div>
