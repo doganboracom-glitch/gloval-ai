@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createRef } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CheckoutConfirmDialog,
   IYZICO_IFRAME_CARD_FIELDS_SCROLL_OFFSET_PX,
@@ -35,7 +35,9 @@ vi.mock('@/components/language-provider', () => ({
   }),
 }))
 
-vi.mock('@/lib/analytics', () => ({ trackBeginCheckout: vi.fn() }))
+const trackBeginCheckoutMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/analytics', () => ({ trackBeginCheckout: trackBeginCheckoutMock }))
 
 const item: CheckoutItem = {
   name: 'GLOVAL Pro',
@@ -70,6 +72,10 @@ function acceptConsentsAndPay() {
   fireEvent.click(screen.getByRole('button', { name: 'Ödeme yap' }))
 }
 
+beforeEach(() => {
+  trackBeginCheckoutMock.mockReset()
+})
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -77,6 +83,30 @@ afterEach(() => {
 })
 
 describe('CheckoutConfirmDialog payment step', () => {
+  it('reuses one checkout event nonce when the same confirmation handler is invoked twice', () => {
+    const props = makeProps()
+    render(<CheckoutConfirmDialog {...props} />)
+    const checkboxes = screen.getAllByRole('checkbox')
+    fireEvent.click(checkboxes[0])
+    fireEvent.click(checkboxes[1])
+    fireEvent.click(checkboxes[2])
+
+    const payButton = screen.getByRole('button', { name: 'Ödeme yap' })
+    act(() => {
+      payButton.click()
+      payButton.click()
+    })
+
+    expect(trackBeginCheckoutMock).toHaveBeenCalledTimes(2)
+    expect(trackBeginCheckoutMock.mock.calls[0]?.[0]).toEqual({
+      value: 99,
+      currency: 'TRY',
+      item_category: 'subscription',
+    })
+    expect(trackBeginCheckoutMock.mock.calls[0]?.[1]).toEqual(expect.any(String))
+    expect(trackBeginCheckoutMock.mock.calls[1]?.[1]).toBe(trackBeginCheckoutMock.mock.calls[0]?.[1])
+  })
+
   it('moves from the profile and consent step to the secure payment iframe', () => {
     const props = makeProps()
     const { rerender } = render(<CheckoutConfirmDialog {...props} />)

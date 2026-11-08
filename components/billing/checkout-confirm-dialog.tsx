@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { formatMoney } from '@/lib/billing-utils'
 import { trackBeginCheckout } from '@/lib/analytics'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import { BillingProfileGate } from '@/components/billing/billing-profile-gate'
 import { legalPath } from '@/lib/legal/documents'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
@@ -91,6 +92,7 @@ export function CheckoutConfirmDialog({
   const bodyRef = useRef<HTMLDivElement>(null)
   const iframeFrameRef = useRef<HTMLDivElement>(null)
   const autoScrolledRef = useRef(false)
+  const checkoutAttemptNonceRef = useRef<string | null>(null)
 
   function scrollToCardFieldsOnce() {
     const body = bodyRef.current
@@ -112,6 +114,7 @@ export function CheckoutConfirmDialog({
 
   useEffect(() => {
     if (!open) {
+      checkoutAttemptNonceRef.current = null
       setPaymentStarted(false)
       setPaymentMode('idle')
       setIframeLoaded(false)
@@ -409,12 +412,16 @@ export function CheckoutConfirmDialog({
     setTouched(true)
     if (!profileComplete || !consentsGiven) return
     setPaymentStarted(true)
+    const checkoutNonce = (checkoutAttemptNonceRef.current ??= newEventNonce())
     if (item) {
-      trackBeginCheckout({
-        value: item.priceCents / 100,
-        currency: item.currency,
-        item_category: item.recurring ? 'subscription' : 'one_time',
-      })
+      trackBeginCheckout(
+        {
+          value: item.priceCents / 100,
+          currency: item.currency,
+          item_category: item.recurring ? 'subscription' : 'one_time',
+        },
+        checkoutNonce,
+      )
     }
     onConfirm({ preInfo: okPreInfo, distance: okDistance, withdrawal: okWithdrawal })
   }

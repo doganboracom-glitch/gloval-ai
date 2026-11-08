@@ -14,6 +14,7 @@ import { websiteToPlan, type WebsiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/client'
 import { createProject } from '@/lib/projects'
 import { trackGenerateSiteStarted, trackGenerateSiteCompleted } from '@/lib/analytics'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import {
   stashPendingProject,
   peekPendingProject,
@@ -324,6 +325,7 @@ export function Hero() {
     const trimmed = value.trim()
     if (!trimmed || generationInFlightRef.current) return
     generationInFlightRef.current = true
+    const generationNonce = newEventNonce()
     stopAllVoiceInput()
     setLoading(true)
     setError(false)
@@ -347,7 +349,6 @@ export function Hero() {
       const site = data.website as WebsiteSchema
       if (!site || !site.meta) throw new Error('invalid')
       const generationSource = data.source === 'fallback' ? 'fallback' : 'ai'
-      trackGenerateSiteCompleted(generationSource)
       const generatedPlan = websiteToPlan(site)
 
       // A freshly generated site supersedes any restored draft. Drop the old
@@ -359,7 +360,7 @@ export function Hero() {
       setPlan(generatedPlan)
       setSource(generationSource)
       setImageStatus(data.image?.status ?? null)
-      trackGenerateSiteCompleted(generationSource)
+      trackGenerateSiteCompleted(generationSource, generationNonce)
     } catch {
       setError(true)
     } finally {

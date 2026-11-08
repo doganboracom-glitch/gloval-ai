@@ -62,12 +62,12 @@ export function AdsPlatformGrid({
               <Button
                 type="button"
                 variant="secondary"
-                size="lg"
+                size="sm"
                 data-testid="meta-approval-pending-button"
                 aria-disabled="true"
                 tabIndex={0}
                 title={copy.metaApprovalPendingTooltip}
-                className="mt-auto min-h-11 w-fit rounded-full cursor-not-allowed"
+                className="mt-auto h-auto min-h-11 w-full max-w-full cursor-not-allowed whitespace-normal rounded-full px-3 py-2 text-center text-xs leading-snug"
               >
                 {copy.metaApprovalPendingButton}
               </Button>

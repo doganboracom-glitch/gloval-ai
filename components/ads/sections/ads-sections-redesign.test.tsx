@@ -11,7 +11,8 @@ import { AdsFaqSection } from '@/components/ads/sections/ads-faq-section'
 import { AdsHowItWorksSection } from '@/components/ads/sections/ads-how-it-works'
 import { ADS_CREDIT_COSTS } from '@/lib/ads/credit-costs'
 import { adsSectionsCopy } from '@/lib/ads/ads-sections-copy'
-import { dictionary, LANG_COOKIE } from '@/lib/i18n'
+import { dictionary, LANG_COOKIE, type Lang } from '@/lib/i18n'
+import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode; className?: string }) => (
@@ -21,7 +22,7 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-function renderWithLanguage(lang: 'tr' | 'en', children: ReactNode) {
+function renderWithLanguage(lang: Lang, children: ReactNode) {
   return render(<LanguageProvider initialLang={lang}>{children}</LanguageProvider>)
 }
 
@@ -133,6 +134,44 @@ describe('Ads platform and information sections', () => {
     expect(cards.every((card) => card.querySelector('svg'))).toBe(true)
     expect(cards[5]?.textContent).toContain('WhatsApp')
     expect(cards[5]?.textContent).toContain('WhatsApp Business reklamlarıyla sohbet başlatan kampanyalar.')
+  })
+
+  it('keeps the passive Meta approval label inside its card in all supported locales', () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      document.cookie = `${LANG_COOKIE}=${locale}; path=/`
+      window.localStorage.setItem(LANG_COOKIE, locale)
+      const { unmount } = renderWithLanguage(locale, <AdsPlatformGrid />)
+      const metaCard = screen.getAllByRole('listitem')[1]
+      const pendingButton = screen.getByTestId('meta-approval-pending-button') as HTMLButtonElement
+      const classes = Array.from(pendingButton.classList)
+
+      expect(metaCard?.contains(pendingButton)).toBe(true)
+      expect(pendingButton.textContent).toBe(dictionary[locale].ads.metaApprovalPendingButton)
+      expect(classes).toEqual(
+        expect.arrayContaining(['w-full', 'max-w-full', 'whitespace-normal', 'text-center', 'text-xs', 'px-3']),
+      )
+      unmount()
+    }
+  })
+
+  it('wraps the longest translated Meta approval label within the card width', () => {
+    const longestLocale = SUPPORTED_LOCALES.reduce((longest, locale) =>
+      dictionary[locale].ads.metaApprovalPendingButton.length >
+      dictionary[longest].ads.metaApprovalPendingButton.length
+        ? locale
+        : longest,
+    )
+    const longestLabel = dictionary[longestLocale].ads.metaApprovalPendingButton
+    const { unmount } = renderWithLanguage(longestLocale, <AdsPlatformGrid />)
+    const pendingButton = screen.getByTestId('meta-approval-pending-button') as HTMLButtonElement
+
+    expect(longestLabel.length).toBeGreaterThan(30)
+    expect(pendingButton.textContent).toBe(longestLabel)
+    expect(Array.from(pendingButton.classList)).toEqual(
+      expect.arrayContaining(['max-w-full', 'whitespace-normal', 'text-center', 'text-xs']),
+    )
+    expect(screen.getAllByRole('listitem')[1]?.contains(pendingButton)).toBe(true)
+    unmount()
   })
 
   it('keeps the Meta sign-in CTA active when the server reports open access', () => {
