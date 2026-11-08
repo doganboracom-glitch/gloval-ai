@@ -16,6 +16,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
   const isTr = lang === 'tr'
   const { metaConnections, metaPendingFlowId, metaStatus, metaMissingScopes } = data
   const activeConnections = metaConnections.filter((connection) => connection.status === 'active')
+  const needsReauth = metaConnections.some((connection) => connection.status === 'error')
 
   return (
     <>
@@ -31,6 +32,17 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
                 : `${activeConnections.length} connected ad accounts`}
             </p>
           </div>
+
+          {needsReauth ? (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
+              <p className="text-sm text-foreground">
+                {isTr ? 'Meta bağlantınızın yenilenmesi gerekiyor.' : 'Your Meta connection needs to be renewed.'}
+              </p>
+              <Button type="button" size="sm" variant="outline" onClick={() => onTabChange('settings')}>
+                {isTr ? 'Ayarlar\'a git' : 'Go to Settings'}
+              </Button>
+            </div>
+          ) : null}
 
           {activeConnections.length ? (
             <ul className="grid gap-3 md:grid-cols-2">
@@ -56,6 +68,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
                     enabled={data.publishEnabled && connection.hasPage && connection.missingPublishScopes.length === 0}
                     lang={isTr ? 'tr' : 'en'}
                     onOpenPlans={() => onTabChange('plans')}
+                    onOpenSettings={() => onTabChange('settings')}
                   />
                 </li>
               ))}

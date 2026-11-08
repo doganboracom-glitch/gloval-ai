@@ -76,6 +76,14 @@ describe('MetaAdsSettings', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/ads/meta/select', expect.objectContaining({ method: 'POST' }))
   })
 
+  it('shows a reconnect badge instead of the account state when the connection is in error', () => {
+    const errored = { ...connection, status: 'error' } as unknown as MetaConnectionView
+    render(<MetaAdsSettings connections={[errored]} pendingFlowId={null} status={null} missingScopes={null} />)
+
+    expect(screen.getByText('Yeniden bağlantı gerekiyor')).toBeTruthy()
+    expect(screen.getByText(/Meta oturumunuz sona erdi/)).toBeTruthy()
+  })
+
   it('refreshes server data after a successful disconnect', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)

@@ -236,14 +236,19 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={state.healthy ? 'secondary' : 'outline'}>{state.label}</Badge>
-          {needsReconnect ? <Badge variant="destructive">{isTr ? 'Yeniden bağlanmalı' : 'Reconnect needed'}</Badge> : null}
+          {needsReconnect ? (
+            <Badge variant="destructive">{isTr ? 'Yeniden bağlantı gerekiyor' : 'Reconnection required'}</Badge>
+          ) : (
+            <Badge variant={state.healthy ? 'secondary' : 'outline'}>{state.label}</Badge>
+          )}
         </div>
       </div>
 
       {needsReconnect ? (
         <p className="text-sm text-muted-foreground">
-          {isTr ? 'Erişim süresi doldu; raporlar güncellenmiyor. Hesabı yeniden bağlayın.' : 'Access has expired and reports are not updating. Reconnect the account.'}
+          {connection.status === 'error'
+            ? (isTr ? 'Meta oturumunuz sona erdi veya izinler geri alındı. Raporlar güncellenmiyor; hesabı yeniden bağlayın.' : 'Your Meta session ended or the permissions were revoked. Reports are not updating; reconnect the account.')
+            : (isTr ? 'Erişim süresi doldu; raporlar güncellenmiyor. Hesabı yeniden bağlayın.' : 'Access has expired and reports are not updating. Reconnect the account.')}
         </p>
       ) : expiringSoon ? (
         <p className="text-sm text-muted-foreground">
