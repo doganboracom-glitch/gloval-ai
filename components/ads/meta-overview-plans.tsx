@@ -39,16 +39,19 @@ export function MetaOverviewPlans({
   enabled,
   lang,
   onOpenPlans,
+  onOpenSettings,
 }: {
   connectionId: string
   enabled: boolean
   lang: MetaPlanLang
   onOpenPlans: () => void
+  onOpenSettings?: () => void
 }) {
   const { data, mutate } = useSWR(enabled ? `/api/ads/meta/plans?connectionId=${connectionId}` : null, fetchPlans)
   const [refreshingId, setRefreshingId] = useState<string | null>(null)
   const [coolingDown, setCoolingDown] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [reauthPlanIds, setReauthPlanIds] = useState<Record<string, boolean>>({})
   const lockRef = useRef(false)
   const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -85,6 +88,10 @@ export function MetaOverviewPlans({
           ? describeMetaManageError({ error: result.error, message: result.message })
           : 'Could not refresh the status. Try again shortly.'
         setErrors((current) => ({ ...current, [planId]: text }))
+        setReauthPlanIds((current) => ({
+          ...current,
+          [planId]: result.error === 'reauth_required' || result.error === 'token_expired',
+        }))
       }
       setRefreshingId(null)
       setCoolingDown(true)
@@ -148,6 +155,14 @@ export function MetaOverviewPlans({
                 {error ? (
                   <p role="alert" className="text-xs text-destructive">
                     {error}
+                    {reauthPlanIds[plan.id] && onOpenSettings ? (
+                      <>
+                        {' '}
+                        <button type="button" onClick={onOpenSettings} className="rounded-sm underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                          {isTr ? 'Ayarlar\'a git' : 'Go to Settings'}
+                        </button>
+                      </>
+                    ) : null}
                   </p>
                 ) : null}
               </li>

@@ -208,7 +208,24 @@ export async function saveMetaConnectionFromOAuth(input: {
   return { id: row.connection_id }
 }
 
-/** Best-effort remote revoke, then the local token is always dropped. */
+/**
+ * `me/permissions` DELETE revokes the app grant for the whole Facebook user, so it would break every other GLOVAL
+ * connection sharing that `meta_user_id`. If the lookup fails we assume sharing and skip the remote revoke.
+ */
+async function hasOtherActiveConnectionForMetaUser(admin: AdminClient, connection: MetaConnectionRow): Promise<boolean> {
+  if (!connection.meta_user_id) return false
+  const { count, error } = await admin
+    .from('ads_connections')
+    .select('id', { count: 'exact', head: true })
+    .eq('platform', 'meta')
+    .eq('meta_user_id', connection.meta_user_id)
+    .eq('status', 'active')
+    .neq('id', connection.id)
+  if (error) return true
+  return (count ?? 0) > 0
+}
+
+/** Best-effort remote revoke (only when no other active connection shares the Meta user), then the local token is always dropped. */
 export async function disconnectMetaConnection(input: {
   userId: string
   connectionId: string
@@ -219,7 +236,7 @@ export async function disconnectMetaConnection(input: {
   if (!connection) throw new MetaAdsError('connection_not_found')
   if (connection.status === 'revoked' && !connection.refresh_token_enc) return
 
-  if (connection.refresh_token_enc) {
+  if (connection.refresh_token_enc && !(await hasOtherActiveConnectionForMetaUser(admin, connection))) {
     try {
       const keyring = loadAdsTokenKeyring()
       const accessToken = decryptAdsToken(connection.refresh_token_enc, metaConnectionTokenContext(connection), keyring)
