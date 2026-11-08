@@ -193,7 +193,7 @@ function post(path: string, body: unknown, headers: Record<string, string> = { o
 }
 
 const publishBody = { planId: PLAN_ID, requestId: REQUEST_ID }
-const finishCalls = () => mocks.rpcCalls.filter((call) => call.name === 'ads_finish_meta_publish')
+const finishCalls = () => mocks.rpcCalls.filter((call) => call.name === 'ads_finish_meta_publish_v2')
 
 function stubEnvOpen() {
   vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
@@ -207,8 +207,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   mocks.rpcCalls.length = 0
   for (const key of Object.keys(mocks.rpcResults)) delete mocks.rpcResults[key]
-  mocks.rpcResults.ads_reserve_meta_publish_capacity = { data: { state: 'reserved', action_id: ACTION_ID }, error: null }
-  mocks.rpcResults.ads_finish_meta_publish = { data: null, error: null }
+  mocks.rpcResults.ads_reserve_meta_publish_credits = { data: [{ state: 'reserved', action_id: ACTION_ID, balance: 85 }], error: null }
+  mocks.rpcResults.ads_finish_meta_publish_v2 = { data: [{ state: 'ok', credit_state: 'none', balance: 85, charged_amount: 0 }], error: null }
   mocks.connection = connectionRow()
   mocks.getRequestUser.mockResolvedValue({
     kind: 'authenticated',
@@ -306,7 +306,7 @@ describe('POST /api/ads/meta/plans/publish: plan koruması', () => {
     expect(body.ok).toBe(false)
     expect(body.error).toBe('plan_not_approved')
     expect(graph.calls).toHaveLength(0)
-    expect(mocks.rpcCalls.filter((call) => call.name === 'ads_reserve_meta_publish_capacity')).toHaveLength(0)
+    expect(mocks.rpcCalls.filter((call) => call.name === 'ads_reserve_meta_publish_credits')).toHaveLength(0)
   })
 
   it('plan bulunamazsa plan_not_found', async () => {
@@ -331,7 +331,8 @@ describe('POST /api/ads/meta/plans/publish: plan koruması', () => {
     const body = await response.json()
     expect(body).toMatchObject({ ok: true, alreadyPublished: true })
     expect(graph.calls).toHaveLength(0)
-    expect(mocks.rpcCalls).toHaveLength(0)
+    // Only the idempotent charge retry may run; no capacity reservation or finish happens for a published plan.
+    expect(mocks.rpcCalls.map((call) => call.name)).toEqual(['ads_settle_meta_publish_credit'])
   })
 
   it('onaydan sonra içerik değişirse (plan özeti uyuşmaz) plan_changed ve yazma yok', async () => {
@@ -351,7 +352,7 @@ describe('POST /api/ads/meta/plans/publish: plan koruması', () => {
   })
 
   it('yayın kapasitesi dolduysa publish_quota_exceeded ve Graph çağrılmaz', async () => {
-    mocks.rpcResults.ads_reserve_meta_publish_capacity = { data: { state: 'user_publish_limit_reached' }, error: null }
+    mocks.rpcResults.ads_reserve_meta_publish_credits = { data: [{ state: 'user_publish_limit_reached' }], error: null }
     const graph = installGraph()
     const response = await publishPost(post('publish', publishBody))
     expect((await response.json()).error).toBe('publish_quota_exceeded')

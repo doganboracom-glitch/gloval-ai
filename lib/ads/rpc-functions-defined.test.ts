@@ -88,7 +88,20 @@ describe('Supabase RPC adları scripts/*.sql ile uyumlu', () => {
     const publishFunctions = ['ads_approve_meta_plan', 'ads_reserve_meta_publish_capacity', 'ads_finish_meta_publish']
     const source = readFileSync(path.join(ROOT, 'scripts', '127-ads-meta-publish.sql'), 'utf8')
     expect(publishFunctions.filter((name) => !new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(source))).toEqual([])
-    expect(publishFunctions.filter((name) => !called.has(name))).toEqual([])
+    // Capacity reservation and finishing are now reached through the credit-aware 131 wrappers.
+    expect(called.has('ads_approve_meta_plan')).toBe(true)
+  })
+
+  it('Meta yayın kredi RPC fonksiyonları 131 numaralı SQL dosyasında tanımlı ve kodda çağrılır', () => {
+    const creditFunctions = [
+      'ads_meta_publish_credit_balance',
+      'ads_reserve_meta_publish_credits',
+      'ads_settle_meta_publish_credit',
+      'ads_finish_meta_publish_v2',
+    ]
+    const source = readFileSync(path.join(ROOT, 'scripts', '131-ads-meta-publish-credits.sql'), 'utf8')
+    expect(creditFunctions.filter((name) => !new RegExp(`function\\s+public\\.${name}\\s*\\(`, 'i').test(source))).toEqual([])
+    expect(creditFunctions.filter((name) => !called.has(name))).toEqual([])
   })
 
   it('Meta yönetim RPC fonksiyonları 128 numaralı SQL dosyasında tanımlı ve kodda çağrılır', () => {

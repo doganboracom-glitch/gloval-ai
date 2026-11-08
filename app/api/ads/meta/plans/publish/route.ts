@@ -3,6 +3,8 @@ import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import { createMetaApiClient } from '@/lib/ads/meta-api-client'
 import { withMetaAccess } from '@/lib/ads/meta-connections'
 import { EMPTY_OBJECTS, preflightMetaAccount, publishPausedMetaCampaign, type MetaPublishObjects } from '@/lib/ads/meta-publish'
+import { finishMetaPublish, reserveMetaPublish, settleMetaPublishCredit } from '@/lib/ads/meta-publish-credits'
+import { metaCreditStateNotice, type MetaCreditState } from '@/lib/ads/meta-publish-ux'
 import { adsManagerUrl, metaPlanHash, metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
 import { buildMetaPublishResultEmail, type MetaPublishMailOutcome } from '@/lib/email/ads-mail'
 import { logUserEvent } from '@/lib/notify'
@@ -63,7 +65,16 @@ export async function POST(request: Request) {
     const plan = await getMetaPlan(admin, userId, body.planId)
     if (!plan) throw new MetaAdsError('plan_not_found')
     if (plan.status === 'publishing') throw new MetaAdsError('publish_in_progress')
-    if (plan.status === 'published' || plan.meta_ad_id) return metaAdsJson({ ok: true, alreadyPublished: true, plan: metaPlanView(plan) })
+    if (plan.status === 'published' || plan.meta_ad_id) {
+      // A publish whose charge failed earlier is retried here (idempotent; never charges a plan twice).
+      const settled = await settleMetaPublishCredit(admin, userId, plan.id)
+      return metaAdsJson({
+        ok: true,
+        alreadyPublished: true,
+        credit: { state: settled, notice: metaCreditStateNotice(settled) },
+        plan: metaPlanView(plan),
+      })
+    }
     if (!['approved', 'partial', 'failed'].includes(plan.status) || plan.approved_version !== plan.version || !plan.plan_hash) {
       throw new MetaAdsError('plan_not_approved')
     }
@@ -77,40 +88,20 @@ export async function POST(request: Request) {
     const content = checked.value.content
 
     const limits = resolveMetaPublishLimits()
-    const { data: reserved, error: reserveError } = await admin.rpc('ads_reserve_meta_publish_capacity', {
-      p_user_id: userId,
-      p_plan_id: plan.id,
-      p_connection_id: plan.connection_id,
-      p_request_id: body.requestId,
-      p_daily_attempts_per_user: limits.perUser,
-      p_daily_attempts_global: limits.global,
-    }).maybeSingle()
-    if (reserveError || !reserved) throw new MetaAdsError('provider_error')
-    const reservation = reserved as { state?: string; action_id?: string }
-    if (reservation.state !== 'reserved' || !reservation.action_id) {
-      if (reservation.state === 'user_publish_limit_reached' || reservation.state === 'global_publish_limit_reached') {
-        throw new MetaAdsError('publish_quota_exceeded')
-      }
-      throw new MetaAdsError(reservation.state === 'plan_not_ready' ? 'plan_not_approved' : 'invalid_request')
-    }
-    const actionId = reservation.action_id
+    // Holds 15 credits and the daily attempt in one transaction; insufficient credits stop here, before any Meta write.
+    const { actionId } = await reserveMetaPublish(admin, {
+      userId,
+      planId: plan.id,
+      connectionId: plan.connection_id,
+      requestId: body.requestId,
+      perUserLimit: limits.perUser,
+      globalLimit: limits.global,
+    })
 
+    let creditState: MetaCreditState = 'none'
     const finish = async (outcome: 'published' | 'partial' | 'failed', objects: MetaPublishObjects, failure?: { step: string; code: string; reason: string }) => {
-      const { error } = await admin.rpc('ads_finish_meta_publish', {
-        p_user_id: userId,
-        p_plan_id: plan.id,
-        p_action_id: actionId,
-        p_outcome: outcome,
-        p_campaign_id: objects.campaignId,
-        p_adset_id: objects.adSetId,
-        p_image_hash: objects.imageHash,
-        p_creative_id: objects.creativeId,
-        p_ad_id: objects.adId,
-        p_failure_step: failure?.step ?? null,
-        p_failure_code: failure?.code ?? null,
-        p_failure_reason: failure?.reason ?? null,
-      })
-      if (error) console.error('[meta-ads] finish publish failed')
+      const result = await finishMetaPublish(admin, { userId, planId: plan.id, actionId, outcome, objects, failure })
+      creditState = result.creditState
     }
 
     const graph = createMetaApiClient()
@@ -204,7 +195,13 @@ export async function POST(request: Request) {
       adsManagerUrl: accountExternalId && outcome.objects.campaignId ? adsManagerUrl(accountExternalId, outcome.objects.campaignId) : null,
     })
     const fresh = await getMetaPlan(admin, userId, plan.id)
-    if (outcome.ok) return metaAdsJson({ ok: true, plan: fresh ? metaPlanView(fresh) : null })
+    if (outcome.ok) {
+      return metaAdsJson({
+        ok: true,
+        credit: { state: creditState, notice: metaCreditStateNotice(creditState) },
+        plan: fresh ? metaPlanView(fresh) : null,
+      })
+    }
     return metaAdsJson({
       ok: false,
       error: outcome.failure.code,
