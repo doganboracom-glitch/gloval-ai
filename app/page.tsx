@@ -11,6 +11,8 @@ import { FinalCta } from '@/components/final-cta'
 import { SiteFooter } from '@/components/site-footer'
 import { buildPageMetadata, resolveSeoLang } from '@/lib/seo/page-seo'
 import { getRequestUser } from '@/lib/supabase/request-user'
+import { COMPANY } from '@/lib/legal/company'
+import { ORGANIZATION_DATA, serializeJsonLd } from '@/lib/legal/organization'
 
 export async function generateMetadata({
   searchParams,
@@ -25,32 +27,29 @@ export async function generateMetadata({
 // canonical root and the highest-authority page. Only claims that match the
 // visible product: the brand/site identity and a freemium web-app with a real
 // free tier. No fabricated ratings or reviews.
+const siteUrl = COMPANY.siteUrl.replace(/\/+$/, '')
 const structuredData = {
   '@context': 'https://schema.org',
   '@graph': [
     {
-      '@type': 'Organization',
-      '@id': 'https://gloval.ai/#organization',
-      name: 'GLOVAL AI',
-      url: 'https://gloval.ai',
-      logo: 'https://gloval.ai/icon-512x512.png',
+      ...ORGANIZATION_DATA,
       description:
         'Yapay zeka ile saniyeler içinde çalışan, gerçek web siteleri kuran platform.',
     },
     {
       '@type': 'WebSite',
-      '@id': 'https://gloval.ai/#website',
-      url: 'https://gloval.ai',
-      name: 'GLOVAL AI',
+      '@id': `${siteUrl}/#website`,
+      url: COMPANY.siteUrl,
+      name: COMPANY.brandName,
       inLanguage: ['tr-TR', 'en'],
-      publisher: { '@id': 'https://gloval.ai/#organization' },
+      publisher: { '@id': ORGANIZATION_DATA['@id'] },
     },
     {
       '@type': 'SoftwareApplication',
-      name: 'GLOVAL AI',
+      name: COMPANY.brandName,
       applicationCategory: 'WebApplication',
       operatingSystem: 'Web',
-      url: 'https://gloval.ai',
+      url: COMPANY.siteUrl,
       description:
         'Yapay zeka ile kod yazmadan işletmeniz için web sitesi oluşturun, alan adı bağlayın ve yayınlayın.',
       offers: {
@@ -72,7 +71,7 @@ export default async function Page() {
       <script
         type="application/ld+json"
         // Authored in-repo, not user input.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(structuredData) }}
       />
       <SiteHeader />
       <main>

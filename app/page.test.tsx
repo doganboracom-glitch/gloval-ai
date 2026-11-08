@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ElementType, type ReactElement, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthState } from '@/lib/supabase/auth-state'
+import { COMPANY } from '@/lib/legal/company'
 import { Pricing } from '@/components/pricing'
 
 const mocks = vi.hoisted(() => ({ getRequestUser: vi.fn() }))
@@ -51,6 +52,39 @@ const authCases: Array<{ label: string; state: AuthState; isAuthenticated: boole
 
 beforeEach(() => {
   mocks.getRequestUser.mockReset()
+})
+
+describe('homepage Organization JSON-LD', () => {
+  it('serializes the official company details into the server page', async () => {
+    mocks.getRequestUser.mockResolvedValue({ kind: 'unauthenticated' })
+
+    const page = await Page()
+    const script = findElementByType<{
+      dangerouslySetInnerHTML?: { __html?: string }
+    }>(page, 'script')
+    const structuredData = JSON.parse(script?.props.dangerouslySetInnerHTML?.__html ?? '{}')
+    const organization = structuredData['@graph'].find(
+      (entry: { '@type'?: string }) => entry['@type'] === 'Organization',
+    )
+
+    expect(organization).toMatchObject({
+      name: COMPANY.brandName,
+      legalName: COMPANY.legalName,
+      url: COMPANY.siteUrl,
+      logo: new URL('/icon-512x512.png', COMPANY.siteUrl).toString(),
+      taxID: COMPANY.taxNumber,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: COMPANY.address,
+        addressCountry: 'TR',
+      },
+      email: COMPANY.supportEmail,
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: COMPANY.supportEmail,
+      },
+    })
+  })
 })
 
 describe('homepage pricing auth state', () => {

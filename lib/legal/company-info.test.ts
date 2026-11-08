@@ -86,12 +86,56 @@ describe('approved company details', () => {
   })
 })
 
-describe('JSON-LD Organization and e-mail footers', () => {
-  it('home page Organization declares only the brand, no legal name/address/phone', () => {
-    const src = readFileSync(join(ROOT, 'app/page.tsx'), 'utf8')
-    const org = src.slice(src.indexOf("'@type': 'Organization'"), src.indexOf("'@type': 'WebSite'"))
-    expect(org).toContain("name: 'GLOVAL AI'")
-    expect(org).not.toMatch(/telephone|streetAddress|legalName|DB AJANS/)
+describe('Organization JSON-LD and e-mail footers', () => {
+  it('includes the official company identity and contact details in Organization data', async () => {
+    const { COMPANY } = await loadCompany()
+    const { ORGANIZATION_DATA } = await import('@/lib/legal/organization')
+
+    expect(ORGANIZATION_DATA).toMatchObject({
+      '@type': 'Organization',
+      name: COMPANY.brandName,
+      legalName: COMPANY.legalName,
+      url: COMPANY.siteUrl,
+      logo: new URL('/icon-512x512.png', COMPANY.siteUrl).toString(),
+      taxID: COMPANY.taxNumber,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: COMPANY.address,
+        addressCountry: 'TR',
+      },
+      email: COMPANY.supportEmail,
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: COMPANY.supportEmail,
+      },
+    })
+  })
+
+  it('shows official business name, address and tax number on the about page in both languages', async () => {
+    const { COMPANY } = await loadCompany()
+    const { LEGAL_DOCS } = await import('@/lib/legal/documents')
+    const about = LEGAL_DOCS.hakkimizda
+
+    expect(about).toBeDefined()
+    for (const content of [about?.tr, about?.en]) {
+      const text = JSON.stringify(content)
+      expect(text).toContain(COMPANY.legalName)
+      expect(text).toContain(COMPANY.address)
+      expect(text).toContain(COMPANY.taxNumber)
+    }
+  })
+
+  it('shares the server-rendered footer across the homepage, ads and legal document routes', () => {
+    const footerSurfaces = [
+      ['homepage', 'app/page.tsx'],
+      ['/ads', 'components/ads/ads-page-client.tsx'],
+      ['/yasal/gizlilik-politikasi', 'components/legal/legal-document.tsx'],
+    ] as const
+
+    for (const [route, relativePath] of footerSurfaces) {
+      const src = readFileSync(join(ROOT, relativePath), 'utf8')
+      expect(src, route).toMatch(/<SiteFooter\s*\/>/)
+    }
   })
 
   it('e-mail footers use the GLOVAL AI brand and carry no company data', () => {

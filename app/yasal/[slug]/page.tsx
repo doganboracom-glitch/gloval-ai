@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { LegalDocument } from '@/components/legal/legal-document'
 import { getLegalDoc, LEGAL_SLUGS } from '@/lib/legal/documents'
+import { ORGANIZATION_DATA, serializeJsonLd } from '@/lib/legal/organization'
 
 /**
  * Tüm yasal dokümanlar tek bir dinamik rota üzerinden sunulur. İçerik
@@ -46,5 +47,21 @@ export default async function LegalPage({
   const { slug } = await params
   const doc = getLegalDoc(slug)
   if (!doc) notFound()
-  return <LegalDocument doc={doc} />
+
+  return (
+    <>
+      {slug === 'hakkimizda' && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd({
+              '@context': 'https://schema.org',
+              ...ORGANIZATION_DATA,
+            }),
+          }}
+        />
+      )}
+      <LegalDocument doc={doc} />
+    </>
+  )
 }

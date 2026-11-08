@@ -1553,6 +1553,17 @@ const about: LegalDoc = {
         ],
       },
       {
+        heading: 'İşletme Bilgileri',
+        id: 'isletme-bilgileri',
+        blocks: [
+          list([
+            `Resmi unvan: ${COMPANY.legalName}`,
+            `Vergi No: ${COMPANY.taxNumber}`,
+            `Adres: ${COMPANY.address}`,
+          ]),
+        ],
+      },
+      {
         heading: 'İletişim',
         blocks: [
           p(
@@ -1586,6 +1597,17 @@ const about: LegalDoc = {
             'One-click publishing and hosting/publishing infrastructure.',
             'Custom domain connection.',
             'Additional digital services such as business email and e-commerce.',
+          ]),
+        ],
+      },
+      {
+        heading: 'Company Information',
+        id: 'company-information',
+        blocks: [
+          list([
+            `Registered business name: ${COMPANY.legalName}`,
+            `Tax No: ${COMPANY.taxNumber}`,
+            `Address: ${COMPANY.address}`,
           ]),
         ],
       },
