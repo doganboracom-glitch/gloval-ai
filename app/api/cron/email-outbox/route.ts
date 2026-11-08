@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { processAddOnExpiryReminders } from '@/lib/addon-expiry-reminders'
 import { processDueEmailEvents } from '@/lib/email-outbox'
+import { enqueueBillingReminders } from '@/lib/billing-reminders'
 import { processContactAcks } from '@/lib/support/contact-ack'
 import { processMakerRequestEmails } from '@/lib/maker-requests/outbox'
 import { processReferralEmails } from '@/lib/referrals/email-outbox'
@@ -25,6 +26,17 @@ export async function GET(request: Request) {
     console.log(
       `[email-outbox] referral commissions ok=${commissionSync.ok} created=${commissionSync.created} reversed=${commissionSync.reversed} matured=${commissionSync.matured}`,
     )
+    // Queue first so reminders are delivered by the very same run.
+    let billingReminders: Awaited<ReturnType<typeof enqueueBillingReminders>> | { ok: false; error: 'sweep_failed' }
+    try {
+      billingReminders = await enqueueBillingReminders()
+      console.log(
+        `[email-outbox] billing reminders scanned=${billingReminders.scanned} queued=${billingReminders.queued} duplicates=${billingReminders.duplicates} failed=${billingReminders.failed}`,
+      )
+    } catch {
+      console.error('[email-outbox] billing reminder sweep failed; details omitted')
+      billingReminders = { ok: false, error: 'sweep_failed' }
+    }
     const result = await processDueEmailEvents({ deadlineMs })
     console.log(
       `[email-outbox] sweep processed=${result.sent + result.retry + result.failed + result.deferred} sent=${result.sent} retry=${result.retry} failed=${result.failed} deferred=${result.deferred}`,
@@ -53,7 +65,7 @@ export async function GET(request: Request) {
       console.error('[email-outbox] add-on reminder sweep failed; details omitted')
       addOnReminders = { ok: false, error: 'sweep_failed' }
     }
-    return NextResponse.json({ ok: true, ...result, contactAcks, makerRequests, referralEmails, addOnReminders, commissionSync })
+    return NextResponse.json({ ok: true, ...result, billingReminders, contactAcks, makerRequests, referralEmails, addOnReminders, commissionSync })
   } catch {
     console.log('[email-outbox] sweep failed: unknown')
     return NextResponse.json({ error: 'email_outbox_failed' }, { status: 500 })
