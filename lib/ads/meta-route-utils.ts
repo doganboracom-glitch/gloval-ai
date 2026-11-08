@@ -45,14 +45,24 @@ export async function metaAdsRequestAccess(): Promise<MetaAdsRequestAccess | nul
   }
 }
 
+/**
+ * CSRF guard shared by every Meta Ads POST route.
+ *
+ * A usable `Origin` is authoritative: same origin passes, any other origin fails regardless of
+ * other headers. When `Origin` is absent or the literal "null" (browsers send it after a
+ * client-side navigation out of a `Referrer-Policy: no-referrer` page such as /auth/*), the
+ * browser-controlled `Sec-Fetch-Site: same-origin` header is accepted instead. Anything else fails.
+ */
 export function isSameOriginMetaAdsPost(request: Request): boolean {
   const origin = request.headers.get('origin')
-  if (!origin) return false
-  try {
-    return new URL(origin).origin === new URL(request.url).origin
-  } catch {
-    return false
+  if (origin && origin !== 'null') {
+    try {
+      return new URL(origin).origin === new URL(request.url).origin
+    } catch {
+      return false
+    }
   }
+  return request.headers.get('sec-fetch-site') === 'same-origin'
 }
 
 export function metaAdsJson(body: unknown, status = 200): NextResponse {
