@@ -8,7 +8,7 @@ import { preflightMetaAccount, validateMetaPlanRemote } from '@/lib/ads/meta-pub
 import { metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { appendMetaAction, getMetaPlan, markMetaPlanValidated } from '@/lib/ads/meta-plans-store'
-import { metaAdsErrorResponse, metaAdsJson } from '@/lib/ads/meta-route-utils'
+import { metaAdsErrorResponse, metaAdsJson, metaDsaBlockedResponse } from '@/lib/ads/meta-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     const plan = await getMetaPlan(guard.admin, userId, body.planId)
     if (!plan) throw new MetaAdsError('plan_not_found')
     if (!['draft', 'validated', 'approved', 'failed', 'partial'].includes(plan.status)) throw new MetaAdsError('plan_changed')
+
+    const dsaBlocked = metaDsaBlockedResponse(plan.content.countries)
+    if (dsaBlocked) return dsaBlocked
 
     const checked = validateMetaPlanContent(plan.content, { currency: plan.currency, requireImage: true })
     if (!checked.ok) return metaAdsJson({ ok: false, error: 'plan_invalid', fieldErrors: checked.errors }, 400)

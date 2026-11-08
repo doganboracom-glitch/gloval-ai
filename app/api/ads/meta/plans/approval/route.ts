@@ -3,7 +3,8 @@ import { getMetaConnectionForUser } from '@/lib/ads/meta-connections'
 import { META_APPROVAL_TEXT, META_APPROVAL_VERSION, metaPlanHash } from '@/lib/ads/meta-publish-plan'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { getMetaPlan } from '@/lib/ads/meta-plans-store'
-import { metaAdsErrorResponse, metaAdsJson } from '@/lib/ads/meta-route-utils'
+import { countryName } from '@/lib/ads/meta-countries'
+import { metaAdsErrorResponse, metaAdsJson, metaDsaBlockedResponse } from '@/lib/ads/meta-route-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ export async function POST(request: Request) {
     const plan = await getMetaPlan(guard.admin, userId, body.planId)
     if (!plan) throw new MetaAdsError('plan_not_found')
     if (plan.version !== body.expectedVersion) throw new MetaAdsError('plan_changed')
+    const dsaBlocked = metaDsaBlockedResponse(plan.content.countries)
+    if (dsaBlocked) return dsaBlocked
     if (plan.validated_version !== plan.version) return metaAdsJson({ ok: false, error: 'validation_required' }, 409)
 
     const connection = await getMetaConnectionForUser(guard.admin, userId, plan.connection_id)
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
       campaignName: plan.content.name,
       landingUrl: plan.content.landingUrl,
       countries: plan.content.countries,
+      countryNames: plan.content.countries.map((code) => countryName(code)),
       endDate: plan.content.endDate,
     }
 

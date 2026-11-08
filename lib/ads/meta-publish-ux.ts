@@ -41,6 +41,9 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   account_restricted: 'Meta reklam hesabı kısıtlı veya devre dışı. Meta Business Support Home > Hesap Kalitesi bölümünde kısıtlamaları ve ödeme durumunu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
   age_range_not_allowed: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
+  dsa_info_required: 'AB ülkeleri için ek bilgi gerekiyor, yakında. Şimdilik AB/AEA ülkelerini hedeften çıkarın.',
+  ad_creation_access_missing: 'Seçili Facebook Sayfası için reklam oluşturma yetkiniz yok. Meta Business Suite > Sayfa erişimi bölümünde Reklam (ADVERTISE) veya Reklam oluşturma (CREATE_ADS) görevini verin.',
+  creative_unavailable: 'Oluşturulan reklam kreatifine erişilemiyor. Meta hesabı ve Sayfa erişimini kontrol edip tekrar deneyin.',
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
   kill_switch_active: 'Meta işlemleri geçici olarak durduruldu.',
   provider_error: 'Meta şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.',
@@ -68,7 +71,7 @@ export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | nu
 export function describeMetaApiError(error: MetaApiError): MetaUserError {
   const detail = shortenMetaDetail(error.metaReason)
   const known = error.error ? META_ERROR_MESSAGES[error.error] : undefined
-  if (error.error === 'age_range_not_allowed' && known) return { message: known, detail }
+  if ((error.error === 'age_range_not_allowed' || error.error === 'dsa_info_required') && known) return { message: known, detail }
   if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return { message: 'Formda düzeltilmesi gereken alanlar var.', detail: null }
   }
