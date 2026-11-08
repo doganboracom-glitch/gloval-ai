@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from '@testing-library/react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SiteFooter } from './site-footer'
 import { dictionary, type Lang } from '@/lib/i18n'
 import { SUPPORTED_LOCALES } from '@/lib/locale-registry'
 import { DOMAIN_LINK_NEW_UNTIL, isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
+import { COMPANY } from '@/lib/legal/company'
 
 const state: { lang: Lang } = { lang: 'tr' }
 
@@ -53,6 +55,28 @@ afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
   state.lang = 'tr'
+})
+
+describe('server-rendered company disclosure', () => {
+  it.each(['tr', 'en'] as const)('includes official company details in the initial %s HTML', (locale) => {
+    state.lang = locale
+    const markup = renderToStaticMarkup(<SiteFooter now={BEFORE} />)
+    const expected = [
+      `© ${new Date().getFullYear()} ${COMPANY.brandName}`,
+      locale === 'en'
+        ? `Operated by: ${COMPANY.legalName}`
+        : `İşleten: ${COMPANY.legalName}`,
+      locale === 'en'
+        ? `Tax No: ${COMPANY.taxNumber}`
+        : `Vergi No: ${COMPANY.taxNumber}`,
+      COMPANY.address,
+      COMPANY.supportEmail,
+    ].join(' · ')
+
+    expect(markup).toContain('data-testid="company-disclosure"')
+    expect(markup).toContain(expected)
+    expect(markup).not.toContain(String.fromCodePoint(0xfffd))
+  })
 })
 
 describe('GLOVAL Partner footer card', () => {

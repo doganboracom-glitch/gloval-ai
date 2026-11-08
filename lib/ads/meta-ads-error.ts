@@ -42,6 +42,7 @@ export type MetaAdsErrorCode =
   | 'payment_method_missing'
   | 'account_restricted'
   | 'budget_too_low'
+  | 'age_range_not_allowed'
   | 'meta_rejected'
   | 'app_not_live'
   | 'write_outcome_unknown'
@@ -127,6 +128,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'payment_method_missing':
     case 'account_restricted':
     case 'budget_too_low':
+    case 'age_range_not_allowed':
     case 'policy_blocked':
     case 'special_category_unsupported':
     case 'page_required':

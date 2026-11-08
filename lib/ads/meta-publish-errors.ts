@@ -1,5 +1,5 @@
 import { MetaAdsError, type MetaAdsErrorCode } from '@/lib/ads/meta-ads-error'
-import { formatMetaErrorDiagnostic, META_APP_NOT_LIVE_MESSAGE, isMetaAppNotLive, type MetaErrorDetail } from '@/lib/ads/meta-error-detail'
+import { formatMetaErrorDiagnostic, META_APP_NOT_LIVE_MESSAGE, isMetaAppNotLive, redactMetaErrorMessage, type MetaErrorDetail } from '@/lib/ads/meta-error-detail'
 
 export type MetaPublishStep = 'preflight' | 'campaign' | 'adset' | 'image' | 'creative' | 'ad'
 
@@ -11,6 +11,8 @@ export const META_STEP_LABELS: Record<MetaPublishStep, string> = {
   creative: 'Reklam kreatifi',
   ad: 'Reklam',
 }
+
+const META_ADVANTAGE_MAX_AGE_ERROR = { code: 100, subcode: 1870189 }
 
 const FIELD_LABELS: Record<string, string> = {
   name: 'ad',
@@ -31,6 +33,9 @@ const FIELD_LABELS: Record<string, string> = {
   call_to_action: 'eylem çağrısı',
   message: 'ana metin',
   description: 'açıklama',
+  age_min: 'yaş aralığı',
+  age_max: 'yaş aralığı',
+  age_range: 'yaş aralığı',
 }
 
 export type MetaPublishFailure = {
@@ -43,6 +48,18 @@ export type MetaPublishFailure = {
 
 function fieldList(fields: readonly string[] | undefined): string[] {
   return (fields ?? []).map((field) => FIELD_LABELS[field] ?? field)
+}
+
+function safeAgeMetaReason(detail: MetaErrorDetail | null): string | null {
+  const reason = redactMetaErrorMessage(detail?.userMessage ?? detail?.message)
+  if (!reason) return null
+  const safeReason = reason
+    .replace(/\(#\d+\)/g, '')
+    .replace(/\b(?:error[_ ]?code|code|error[_ ]?subcode|subcode)\s*[:=]?\s*\d+\b/gi, '')
+    .replace(/\b\d{5,}\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return safeReason || null
 }
 
 /**
@@ -111,7 +128,20 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       break
   }
 
-  if (subcode === 1359188 || (subcode !== null && String(subcode).startsWith('1487'))) {
+  const ageRelated =
+    step === 'adset' &&
+    ((code === META_ADVANTAGE_MAX_AGE_ERROR.code && subcode === META_ADVANTAGE_MAX_AGE_ERROR.subcode) ||
+      detail?.blameFields?.some((field) => ['age_min', 'age_max', 'age_range'].includes(field)) ||
+      /\b(?:age(?:_min|_max|_range)?|yaş(?:\s+aralığı)?)\b/.test(haystack))
+  if (ageRelated) {
+    return {
+      code: 'age_range_not_allowed',
+      message: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
+      metaReason: safeAgeMetaReason(detail),
+      blamedFields: fieldList(['age_range']),
+    }
+  }
+  if (code === 2635 || subcode === 1359188 || (subcode !== null && String(subcode).startsWith('1487'))) {
     const payment = /payment|funding|billing|ödeme|card/.test(haystack)
     return {
       code: payment ? 'payment_method_missing' : 'account_restricted',

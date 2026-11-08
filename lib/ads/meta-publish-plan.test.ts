@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAdSetForm, buildCreativeForm, dailyBudgetToMinor, metaApprovalText, validateLandingUrl, validateMetaPlanContent, META_DEFAULT_URL_TAGS } from '@/lib/ads/meta-publish-plan'
+import { buildAdSetForm, buildCreativeForm, dailyBudgetToMinor, isMetaAgeTargetingValid, metaApprovalText, metaPlanHash, validateLandingUrl, validateMetaPlanContent, META_DEFAULT_URL_TAGS } from '@/lib/ads/meta-publish-plan'
 
 const valid = {
   name: 'Yaz kampanyası',
@@ -11,6 +11,7 @@ const valid = {
   countries: ['TR'],
   ageMin: 18,
   ageMax: 65,
+  advantageAudience: true,
   gender: 'all',
   dailyBudget: '250.50',
   endDate: null,
@@ -105,6 +106,58 @@ describe('validateMetaPlanContent', () => {
     if (!underMinimum.ok) expect(underMinimum.errors.dailyBudget).toContain('minimum')
 
     expect(validateMetaPlanContent(valid, { currency: 'TRY', now, minimumBudgetMinor: 25_050 }).ok).toBe(true)
+  })
+})
+
+describe('Meta audience age targeting', () => {
+  function buildTargeting(content: typeof valid) {
+    const result = validateMetaPlanContent(content, { currency: 'TRY' })
+    if (!result.ok) throw new Error('Expected valid Meta plan content')
+    const adSet = buildAdSetForm({
+      content: result.value.content,
+      dailyBudgetMinor: result.value.dailyBudgetMinor,
+      campaignId: 'campaign-1',
+      tag: 'test-tag',
+      hasInstagram: false,
+    })
+    return JSON.parse(adSet.targeting)
+  }
+
+  it('keeps Advantage+ hard bounds and sends a narrower selected range as a suggestion', () => {
+    const targeting = buildTargeting({ ...valid, ageMin: 32, ageMax: 55 })
+    expect(targeting).toMatchObject({
+      age_min: 25,
+      age_max: 65,
+      age_range: [32, 55],
+      targeting_automation: { advantage_audience: 1 },
+    })
+  })
+
+  it('uses strict selected ages when Advantage+ is disabled', () => {
+    const targeting = buildTargeting({ ...valid, ageMin: 32, ageMax: 55, advantageAudience: false })
+    expect(targeting).toMatchObject({
+      age_min: 32,
+      age_max: 55,
+      targeting_automation: { advantage_audience: 0 },
+    })
+    expect(targeting).not.toHaveProperty('age_range')
+  })
+
+  it('checks the effective targeting bounds locally before any Meta request', () => {
+    expect(isMetaAgeTargetingValid({ ageMin: 32, ageMax: 55, advantageAudience: true })).toBe(true)
+    expect(isMetaAgeTargetingValid({ ageMin: 32, ageMax: 20, advantageAudience: true })).toBe(false)
+    const invalid = validateMetaPlanContent({ ...valid, ageMin: 32, ageMax: 20 }, { currency: 'TRY' })
+    expect(invalid.ok).toBe(false)
+    if (!invalid.ok) expect(invalid.errors.ageMax).toBeTruthy()
+  })
+
+  it('binds Advantage+ selection to the approval hash', () => {
+    const result = validateMetaPlanContent(valid, { currency: 'TRY' })
+    if (!result.ok) throw new Error('Expected valid Meta plan content')
+    const extra = { connectionId: 'connection-1', currency: 'TRY' }
+    expect(metaPlanHash(result.value.content, extra)).not.toBe(
+      metaPlanHash({ ...result.value.content, advantageAudience: false }, extra),
+    )
   })
 })
 

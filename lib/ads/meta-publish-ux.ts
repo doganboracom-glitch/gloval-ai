@@ -17,7 +17,7 @@ export type MetaApiError = {
 
 export type MetaUserError = { message: string; detail: string | null }
 
-const DETAIL_MAX = 300
+const DETAIL_MAX = 140
 
 export const META_ERROR_MESSAGES: Record<string, string> = {
   app_not_live: META_APP_NOT_LIVE_MESSAGE,
@@ -40,6 +40,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   payment_method_missing: 'Meta reklam hesabında ödeme yöntemi tanımlı değil. Meta Reklam Yöneticisi\'nden ekleyin.',
   account_restricted: 'Meta reklam hesabı kısıtlı veya devre dışı. Meta Business Support Home > Hesap Kalitesi bölümünde kısıtlamaları ve ödeme durumunu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
+  age_range_not_allowed: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
   kill_switch_active: 'Meta işlemleri geçici olarak durduruldu.',
   provider_error: 'Meta şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.',
@@ -49,33 +50,40 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   meta_confirmation_required: 'Meta plan durumu doğrulanamadı. Plan kaldırılmadı; yeniden deneyin.',
 }
 
-/** Masked and shortened: raw Meta text is only ever shown inside a collapsed "Ayrıntı" section. */
+/** Masked and shortened: raw Meta text is only ever shown inside a collapsed technical-details section. */
 export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | null {
   const redacted = redactMetaErrorMessage(value)
   if (!redacted) return null
-  const flat = redacted.replace(/\s+/g, ' ').trim()
+  const flat = redacted
+    .replace(/\(#\d+\)/g, '')
+    .replace(/\b(?:error[_ ]?code|code)\s*[:=]?\s*\d+\b/gi, '')
+    .replace(/\b(?:error[_ ]?subcode|subcode)\s*[:=]?\s*1870189\b/gi, '')
+    .replace(/\b1870189\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (!flat) return null
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
 }
 
 export function describeMetaApiError(error: MetaApiError): MetaUserError {
   const detail = shortenMetaDetail(error.metaReason)
+  const known = error.error ? META_ERROR_MESSAGES[error.error] : undefined
+  if (error.error === 'age_range_not_allowed' && known) return { message: known, detail }
   if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return { message: 'Formda düzeltilmesi gereken alanlar var.', detail: null }
   }
   if (error.blocked?.length) {
     return { message: `Reklam metni izin verilmeyen ifade içeriyor: ${error.blocked.join(', ')}`, detail: null }
   }
-  const known = META_ERROR_MESSAGES[error.error]
   if (error.error === 'app_not_live') return { message: META_APP_NOT_LIVE_MESSAGE, detail }
-  const base = error.message ?? known ?? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'
+  const base = known ?? error.message ?? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'
   const message = error.stepLabel && !base.startsWith(error.stepLabel) ? `${error.stepLabel}: ${base}` : base
   return { message, detail }
 }
 
 export const META_FIELD_ORDER = [
   'name', 'landingUrl', 'primaryText', 'headline', 'description', 'cta',
-  'optimizationGoal', 'dailyBudget', 'countries', 'ageMin', 'ageMax', 'gender', 'endDate', 'imagePath',
+  'optimizationGoal', 'dailyBudget', 'countries', 'ageMin', 'ageMax', 'advantageAudience', 'gender', 'endDate', 'imagePath',
 ] as const
 export type MetaFieldName = (typeof META_FIELD_ORDER)[number]
 
@@ -91,6 +99,7 @@ export const META_FIELD_LABELS: Record<MetaFieldName, string> = {
   countries: 'Ülkeler',
   ageMin: 'Yaş (en az)',
   ageMax: 'Yaş (en çok)',
+  advantageAudience: 'Advantage+ hedef kitle',
   gender: 'Cinsiyet',
   endDate: 'Bitiş günü',
   imagePath: 'Görsel',
@@ -158,7 +167,9 @@ export function describeStoredFailure(plan: { failureStep: string | null; failur
   const known = plan.failureCode ? META_ERROR_MESSAGES[plan.failureCode] : undefined
   const fallback = stepLabel ? `${stepLabel} adımı tamamlanamadı.` : 'Son işlem tamamlanamadı.'
   const message = known ?? fallback
-  const detail = shortenMetaDetail(plan.failureReason)
+  const detail = plan.failureCode === 'app_not_live' || plan.failureCode === 'age_range_not_allowed' || !known
+    ? shortenMetaDetail(plan.failureReason)
+    : null
   return { message, detail }
 }
 
