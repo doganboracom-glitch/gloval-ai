@@ -12,12 +12,13 @@ import { openCookiePreferences } from '@/components/cookie-consent'
 import { PaymentBadges } from '@/components/payment-badges'
 import { PLATFORM_PAYMENT_BADGES } from '@/lib/payment-badges'
 import { isDomainLinkNewBadgeActive } from '@/lib/footer-new-badge'
+import { COMPANY } from '@/lib/legal/company'
 
 const subscribeNoop = () => () => {}
 const serverBadgeSnapshot = () => false
 
 export function SiteFooter({ now }: { now?: Date } = {}) {
-  const { t } = useLanguage()
+  const { t, lang } = useLanguage()
   const l = t.footer.links
   const showReferralTerms = process.env.NEXT_PUBLIC_REFERRAL_ENABLED === '1'
   // The server (and hydration) snapshot is always "no badge", so cached or
@@ -172,6 +173,21 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
           <div className="flex justify-center sm:justify-end">
             <PaymentBadges badges={PLATFORM_PAYMENT_BADGES} className="justify-center sm:justify-end" />
           </div>
+        </div>
+        <div className="mx-auto max-w-6xl px-4 pb-5">
+          <p data-testid="company-disclosure" className="break-words text-xs leading-relaxed text-muted-foreground">
+            {[
+              `© ${new Date().getFullYear()} ${COMPANY.brandName}`,
+              lang === 'en'
+                ? `Operated by: ${COMPANY.legalName}`
+                : `İşleten: ${COMPANY.legalName}`,
+              lang === 'en'
+                ? `Tax No: ${COMPANY.taxNumber}`
+                : `Vergi No: ${COMPANY.taxNumber}`,
+              COMPANY.address,
+              COMPANY.supportEmail,
+            ].join(' · ')}
+          </p>
         </div>
       </div>
     </footer>
