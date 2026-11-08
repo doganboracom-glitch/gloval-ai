@@ -101,7 +101,7 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       return { code: 'reauth_required', message: 'Meta bağlantınızın süresi dolmuş. Bağlantıyı yenileyin.', metaReason: null, blamedFields: [] }
     case 'permission_missing':
     case 'config_permission_missing':
-      return { code: 'publish_permission_missing', message: 'Meta reklam yönetimi iznini reddetti. Meta Business Ayarları’nda bağlanan hesabın reklam hesabında kampanya oluşturma yetkisini ve gerekli reklam yönetimi izinlerini doğrulayın.', metaReason: reason, blamedFields: blamed }
+      return { code: 'publish_permission_missing', message: 'Meta reklam yönetim iznini reddetti. Meta Business Ayarları’nda bağlanan hesabın reklam hesabında kampanya oluşturma yetkisini ve gerekli ek izinleri doğrulayın.', metaReason: reason, blamedFields: blamed }
     case 'rate_limited':
       return { code: 'rate_limited', message: 'Meta istek sınırına ulaşıldı. Biraz bekleyip tekrar deneyin.', metaReason: null, blamedFields: [] }
     case 'provider_unavailable':

@@ -385,7 +385,7 @@ describe('Kısmi başarısızlık ve kaldığı yerden devam', () => {
         fbtrace_id: 'AbCdEfTrace123',
       }),
     })
-    const onWriteFailure = vi.fn(async () => undefined)
+    const onWriteFailure = vi.fn<(step: Exclude<MetaPublishStep, 'preflight'>, error: MetaAdsError) => Promise<void>>(async () => undefined)
     const { input } = deps(graph, { onWriteFailure })
     const result = await publishPausedMetaCampaign(input)
 
