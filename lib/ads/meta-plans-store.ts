@@ -55,6 +55,7 @@ export function metaPlanView(row: MetaPlanRow) {
     status: row.status,
     version: row.version,
     content: row.content,
+    hasStoredImage: Boolean(row.content.imagePath && row.image_sha256),
     currency: row.currency,
     dailyBudgetMinor: row.daily_budget_minor,
     approvedVersion: row.approved_version,
@@ -190,8 +191,8 @@ export async function markMetaPlanValidated(admin: Admin, plan: MetaPlanRow): Pr
   if (error) throw new MetaAdsError('provider_error')
 }
 
-export async function setMetaPlanImage(admin: Admin, plan: MetaPlanRow, imagePath: string, sha256: string): Promise<MetaPlanRow> {
-  return updateMetaPlanContentAndImage(admin, plan, { ...plan.content, imagePath }, sha256)
+export async function setMetaPlanImage(admin: Admin, plan: MetaPlanRow, imagePath: string, sha256: string, imageFilename: string): Promise<MetaPlanRow> {
+  return updateMetaPlanContentAndImage(admin, plan, { ...plan.content, imagePath, imageFilename }, sha256)
 }
 
 async function updateMetaPlanContentAndImage(admin: Admin, plan: MetaPlanRow, content: MetaPlanContent, sha256: string) {

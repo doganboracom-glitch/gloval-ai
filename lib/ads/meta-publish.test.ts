@@ -33,6 +33,7 @@ const CONTENT: MetaPlanContent = {
   countries: ['TR'],
   ageMin: 18,
   ageMax: 65,
+  advantageAudience: true,
   gender: 'all',
   dailyBudget: 100,
   optimizationGoal: 'LANDING_PAGE_VIEWS',

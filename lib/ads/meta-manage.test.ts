@@ -487,7 +487,7 @@ describe('Meta hatalarının güvenli kod ve Türkçe mesaja çevrilmesi', () =>
     ['reauth_required', 'reauth_required', 'süresi dolmuş'],
     ['token_expired', 'reauth_required', 'süresi dolmuş'],
     ['permission_missing', 'publish_permission_missing', 'yönetim izni'],
-    ['rate_limited', 'rate_limited', 'istek sınırı'],
+    ['rate_limited', 'rate_limited', 'istek sınırına'],
     ['write_outcome_unknown', 'write_outcome_unknown', 'yanıt vermedi'],
     ['provider_unavailable', 'provider_unavailable', 'yanıt vermedi'],
   ] as const)('%s -> %s', (input, code, fragment) => {
@@ -508,6 +508,24 @@ describe('Meta hatalarının güvenli kod ve Türkçe mesaja çevrilmesi', () =>
     const failure = describeMetaPublishError(new MetaAdsError('meta_rejected', detail as never), 'adset')
     expect(failure.code).toBe('meta_rejected')
     expect(failure.message).toContain('hedef kitle')
+  })
+
+  it('Meta code 100/1870189 eşleşmesini istenen güvenli Türkçe mesaja çevirir', () => {
+    const detail = {
+      code: 100,
+      subcode: 1870189,
+      type: 'OAuthException',
+      message: 'Instead, adjust the audience.',
+      userMessage: null,
+      blameFields: [],
+      traceId: 'provider-trace',
+    }
+    const failure = describeMetaPublishError(new MetaAdsError('meta_rejected', detail as never), 'adset')
+    expect(failure.code).toBe('age_range_not_allowed')
+    expect(failure.message).toBe('Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.')
+    expect(failure.metaReason).toBe('Instead, adjust the audience.')
+    expect(failure.blamedFields).toEqual(['yaş aralığı'])
+    expect(JSON.stringify(failure)).not.toMatch(/1870189|provider-trace/i)
   })
 })
 

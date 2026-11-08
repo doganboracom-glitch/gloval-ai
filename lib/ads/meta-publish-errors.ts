@@ -12,6 +12,8 @@ export const META_STEP_LABELS: Record<MetaPublishStep, string> = {
   ad: 'Reklam',
 }
 
+const META_ADVANTAGE_MAX_AGE_ERROR = { code: 100, subcode: 1870189 }
+
 const FIELD_LABELS: Record<string, string> = {
   name: 'ad',
   daily_budget: 'günlük bütçe',
@@ -31,12 +33,15 @@ const FIELD_LABELS: Record<string, string> = {
   call_to_action: 'eylem çağrısı',
   message: 'ana metin',
   description: 'açıklama',
+  age_min: 'yaş aralığı',
+  age_max: 'yaş aralığı',
+  age_range: 'yaş aralığı',
 }
 
 export type MetaPublishFailure = {
   code: MetaAdsErrorCode
   message: string
-  /** Meta's own wording, shown verbatim so the owner can fix the cause. */
+  /** Optional explanatory detail after credential and provider-code redaction. */
   metaReason: string | null
   blamedFields: string[]
 }
@@ -82,6 +87,19 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       break
   }
 
+  const ageRelated =
+    step === 'adset' &&
+    ((code === META_ADVANTAGE_MAX_AGE_ERROR.code && subcode === META_ADVANTAGE_MAX_AGE_ERROR.subcode) ||
+      detail?.blameFields?.some((field) => ['age_min', 'age_max', 'age_range'].includes(field)) ||
+      /\b(?:age(?:_min|_max|_range)?|yaş(?:\s+aralığı)?)\b/.test(haystack))
+  if (ageRelated) {
+    return {
+      code: 'age_range_not_allowed',
+      message: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
+      metaReason: reason,
+      blamedFields: fieldList(['age_range']),
+    }
+  }
   if (code === 2635 || subcode === 1359188 || (subcode !== null && String(subcode).startsWith('1487'))) {
     const payment = /payment|funding|billing|ödeme|card/.test(haystack)
     return {

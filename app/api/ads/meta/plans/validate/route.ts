@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
     const checked = validateMetaPlanContent(plan.content, { currency: plan.currency, requireImage: true })
     if (!checked.ok) return metaAdsJson({ ok: false, error: 'plan_invalid', fieldErrors: checked.errors }, 400)
+    if (!plan.content.imagePath || !plan.image_sha256) throw new MetaAdsError('image_invalid')
     const policy = evaluateMetaCopyPolicy([checked.value.content.name, checked.value.content.primaryText, checked.value.content.headline, checked.value.content.description])
     if (policy.blocked.length > 0) return metaAdsJson({ ok: false, error: 'policy_blocked', blocked: policy.blocked }, 400)
 

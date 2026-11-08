@@ -42,7 +42,7 @@ export function nextStepText(plan: PublishProgressPlan, isTr: boolean): string |
     case 'draft':
       return isTr ? 'Sonraki adım: Planı onaylayın.' : 'Next step: approve the plan.'
     case 'approved':
-      return isTr ? 'Sonraki adım: Google’da doğrulayın (validate_only).' : 'Next step: validate with Google (validate_only).'
+      return isTr ? 'Sonraki adım: Google ile yayın öncesi doğrulamayı çalıştırın.' : 'Next step: run the pre-publish check with Google.'
     case 'validated':
       return isTr ? 'Sonraki adım: Yayın öncesi özeti inceleyin ve kampanyayı duraklatılmış oluşturun.' : 'Next step: review the pre-publish summary and create the campaign paused.'
     case 'published':
@@ -84,8 +84,8 @@ export function persistedFeedback(plan: PublishProgressPlan, isTr: boolean): Per
       return {
         tone: 'success',
         text: isTr
-          ? 'Google validate_only doğrulaması başarılı. Kampanya henüz oluşturulmadı.'
-          : 'Google validate_only succeeded. The campaign has not been created yet.',
+          ? 'Google’ın yayın öncesi doğrulaması başarılı. Kampanya henüz oluşturulmadı.'
+          : 'Google’s pre-publish check passed. No campaign has been created yet.',
       }
     case 'approved':
       return {
