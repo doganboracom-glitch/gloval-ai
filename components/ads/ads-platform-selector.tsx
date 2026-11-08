@@ -45,7 +45,9 @@ export function AdsPlatformSelector({ copy, activeSlug, openGates, onSelect }: A
           const selected = accessible && platform.slug === activeSlug
           const badge = accessible
             ? null
-            : platform.status === 'available' ? copy.platformLimitedAccess : copy.comingSoon
+            : platform.slug === 'meta'
+              ? copy.metaApprovalPendingShort
+              : platform.status === 'available' ? copy.platformLimitedAccess : copy.comingSoon
 
           return (
             <button

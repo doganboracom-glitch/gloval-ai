@@ -1471,6 +1471,14 @@ const ar: DeepPartial<Dict> = {
   },
   ads: {
     newBadge: 'جديد',
+    metaApprovalPendingButton: 'بانتظار موافقة Meta',
+    metaApprovalPendingTooltip: 'ستُتاح بعد اكتمال مراجعة Meta للتطبيق',
+    metaApprovalPendingShort: 'بانتظار الموافقة',
+    metaAccessReadOnlyLabel: 'للقراءة فقط',
+    metaAccessManagedLabel: 'قراءة + إنشاء وإدارة الحملات المتوقفة بعد الموافقة',
+    metaConnectionReadOnlyBody: 'اربط حساب Meta الإعلاني لعرض الأداء. من دون أذونات الإدارة، يظل الوصول للقراءة فقط؛ ويتطلب إنشاء الحملات أو تعديلها أذونات منفصلة وموافقتك الصريحة.',
+    metaConnectionManagedBody: 'مع أذونات الإدارة، يمكنك إنشاء الحملات المتوقفة وإدارتها بعد موافقتك الصريحة. تبدأ الحملات الجديدة متوقفة؛ ولا تبدأ GLOVAL Ads الإنفاق الإعلاني.',
+    metaConnectReadScopesNote: 'يطلب الاتصال الأولي أذونات القراءة فقط؛ ويتطلب إنشاء الحملات وإدارتها أذونات منفصلة.',
     manualFallback: { title: 'مسودة خطة من معلومات النشاط التجاري', description: 'إذا تعذرت قراءة الموقع، أدخل معلومات النشاط أدناه. لن نتجاوز robots.txt أو ضوابط الوصول.', note: 'تعتمد هذه المسودة على المعلومات التي تقدمها فقط؛ لن يتم فحص الموقع أو التحقق من عنوان الوجهة.', resultTitle: 'مسودة خطة من معلومات النشاط التجاري', summaryTitle: 'معلومات النشاط المقدمة', businessLabel: 'اسم النشاط التجاري', industryLabel: 'المجال', servicesLabel: 'المنتجات أو الخدمات', locationLabel: 'نطاق الخدمة (اختياري)', languageLabel: 'لغة الإعلان', submitLabel: 'إنشاء مسودة' },
     disconnectDialog: {
       title: 'هل تريد قطع اتصال Google Ads؟',

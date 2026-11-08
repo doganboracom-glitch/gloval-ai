@@ -19,9 +19,9 @@ const tr = {
         badge: '',
       },
       {
-        title: 'Hesabını bağla, onayla ve yayınla',
-        body: 'Google Ads hesabı bağlantısı ve onaylı yayınlama akışı hazırlandığında açılacak.',
-        badge: 'Yakında',
+        title: 'Google Ads hesabını bağla, planı onayla ve kampanyayı oluştur',
+        body: 'Planını açıkça onayladığında kampanya Google Ads’te duraklatılmış olarak oluşturulur. Etkinleştirme ve her değişiklik ayrıca senin onayını gerektirir.',
+        badge: 'Onay gerekli',
       },
     ],
   },
@@ -55,7 +55,7 @@ const tr = {
   credits: {
     title: 'Kredi kullanımı',
     panelLabel: 'Kredi bilgileri',
-    intro: 'Tarama ve plan önizlemesinde günlük ücretsiz haklar önce kullanılır. Diğer işlemler açıldığında krediyle çalışır.',
+    intro: 'Tarama ve plan önizlemesinde günlük ücretsiz haklar önce kullanılır. Onaylı Google Ads kampanya yayınlama akışı 15 krediyi rezerve eder ve başarılı yayında tahsil eder; “Yakında” satırlar henüz tahsilat yapmaz.',
     actionHeader: 'İşlem',
     costHeader: 'Kredi',
     statusHeader: 'Durum',
@@ -64,7 +64,8 @@ const tr = {
     guestQuota: 'Misafir • günlük ücretsiz hak',
     afterFreeQuota: 'Ücretsiz haklar bitince tarama başına',
     imageTitle: 'Reklam görseli üretimi',
-    publishTitle: 'Kampanya yayınlama',
+    publishTitle: 'Google Ads kampanya yayınlama',
+    publishStatus: 'Erişim ve onay gerekli',
     reviseTitle: 'Kampanyayı yeniden düzenleme',
     weeklyOptimizationTitle: 'Haftalık optimizasyon',
     assistantTitle: 'Reklam asistanına soru',
@@ -81,11 +82,11 @@ const tr = {
     items: [
       {
         question: 'Ücretli mi?',
-        answer: 'Günlük ücretsiz tarama hakları vardır. Haklar bittikten sonraki tarama ve plan önizlemesi kredi tablosundaki güncel tutarı kullanır; Google Ads reklam bütçesi bu kredilerden ayrıdır.',
+        answer: 'Günlük ücretsiz tarama hakkı bulunur. Hak bittikten sonra her ek tarama ve plan önizlemesi 2 kredi kullanır. Onaylı Google Ads yayınlama akışı 15 kredi ayırır; başarılı yayınlamada tahsil edilir. Google ve Meta reklam bütçeleri GLOVAL kredilerinden ayrıdır.',
       },
       {
         question: 'Reklam bütçesini kime öderim?',
-        answer: 'Reklam harcaması doğrudan Google tarafından tahsil edilir. GLOVAL reklam bütçeni almaz veya yönetmez.',
+        answer: 'Reklam harcaması Google veya Meta tarafından doğrudan reklam hesabına faturalandırılır. GLOVAL reklam bütçeni tahsil etmez veya yönetmez.',
       },
       {
         question: 'Sitem GLOVAL ile yapılmadıysa kullanabilir miyim?',
@@ -93,7 +94,7 @@ const tr = {
       },
       {
         question: 'Hangi platformlar var?',
-        answer: 'Kanallar sırayla açılacak; ilk sırada Google Ads. Diğer platformlar hazır oldukça kullanıma açılacak.',
+        answer: 'Google Ads kullanıma açık. Meta erişimi uygulama incelemesi ve hesap izinlerine bağlı; diğer kanallar hazırlık aşamasında.',
       },
       {
         question: 'Verilerim nasıl kullanılır?',
@@ -102,11 +103,11 @@ const tr = {
       },
       {
         question: 'Reklam politikası dışında kalan siteler yayınlanabilir mi?',
-        answer: 'Google Ads politikalarını ihlal eden reklamlar yayınlanamaz; kısıtlı içerik türleri ek şartlara tabi olabilir. Uygunluk Google’ın güncel politikalarına göre değerlendirilir.',
+        answer: 'Google Ads veya Meta Ads politikalarını ihlal eden reklamlar yayınlanamaz; kısıtlı içerik türleri ek şartlara tabi olabilir. Uygunluk her platformun güncel politikalarına göre değerlendirilir.',
       },
       {
         question: 'Ne zaman yayınlayabilirim?',
-        answer: 'Yayınlama özelliği şu an Yakında. Hazır olduğunda açılacak; henüz bir tarih açıklanmadı.',
+        answer: 'Google Ads hesabına erişim ve plan onayı tamamlandığında kampanya duraklatılmış olarak oluşturulur. GLOVAL Ads kampanyayı otomatik etkinleştirmez; harcamanın başlaması için ayrıca senin işlemin gerekir. Meta erişimi uygulama incelemesi ve hesap izinlerine bağlıdır.',
       },
       {
         question: 'Sonuç garantisi var mı?',
@@ -139,9 +140,9 @@ const en: AdsSectionsCopy = {
         badge: '',
       },
       {
-        title: 'Connect your account, approve, and publish',
-        body: 'Google Ads account linking and publishing after your approval are still being prepared.',
-        badge: 'Coming soon',
+        title: 'Connect Google Ads, approve the plan, and create the campaign',
+        body: 'After you explicitly approve the plan, the campaign is created paused in Google Ads. Activation and each change require your separate approval.',
+        badge: 'Approval required',
       },
     ],
   },
@@ -175,7 +176,7 @@ const en: AdsSectionsCopy = {
   credits: {
     title: 'Credit usage',
     panelLabel: 'Credit details',
-    intro: 'Daily free allowances are used first for scans and plan previews. Other actions will use credits when available.',
+    intro: 'Daily free allowances are used first for scans and plan previews. Approved Google Ads publishing reserves 15 credits and charges them on success; rows marked “Coming soon” are not currently charged.',
     actionHeader: 'Action',
     costHeader: 'Credits',
     statusHeader: 'Status',
@@ -184,7 +185,8 @@ const en: AdsSectionsCopy = {
     guestQuota: 'Guest • free per day',
     afterFreeQuota: 'Per scan after free allowance',
     imageTitle: 'Ad image generation',
-    publishTitle: 'Campaign publishing',
+    publishTitle: 'Google Ads campaign publishing',
+    publishStatus: 'Access and approval required',
     reviseTitle: 'Campaign revision',
     weeklyOptimizationTitle: 'Weekly optimization',
     assistantTitle: 'Ask the Ads assistant',
@@ -201,11 +203,11 @@ const en: AdsSectionsCopy = {
     items: [
       {
         question: 'Is GLOVAL Ads paid?',
-        answer: 'A daily free scan allowance is available. After it runs out, scans and plan previews use the current amount shown in the credit table; the Google Ads budget is separate from those credits.',
+        answer: 'A daily free scan allowance is available. After it runs out, each additional scan and plan preview uses 2 credits. Approved Google Ads publishing reserves 15 credits and charges them on success. Google and Meta ad spend is separate from GLOVAL credits.',
       },
       {
         question: 'Who do I pay for the ad budget?',
-        answer: 'Google charges advertising spend directly. GLOVAL does not collect or manage your ad budget.',
+        answer: 'Google or Meta bills advertising spend directly to your ad account. GLOVAL does not collect or manage your media budget.',
       },
       {
         question: 'Can I use it if my site was not built with GLOVAL?',
@@ -213,7 +215,7 @@ const en: AdsSectionsCopy = {
       },
       {
         question: 'Which advertising platforms are available?',
-        answer: 'Channels will open one by one, starting with Google Ads. Other platforms will become available as they are ready.',
+        answer: 'Google Ads is available. Meta access depends on app-review status and account permissions; other channels are still being prepared.',
       },
       {
         question: 'How is my data used?',
@@ -222,11 +224,11 @@ const en: AdsSectionsCopy = {
       },
       {
         question: 'Can sites outside advertising policies be published?',
-        answer: 'Ads that violate Google Ads policies cannot be published; restricted content categories may have additional requirements. Eligibility is assessed against Google’s current policies.',
+        answer: 'Ads that violate Google Ads or Meta Ads policies cannot be published; restricted content categories may have additional requirements. Eligibility is assessed against each platform’s current policies.',
       },
       {
         question: 'When can I publish an ad?',
-        answer: 'Publishing is currently marked as coming soon. It will open when ready; no date has been announced.',
+        answer: 'After Google Ads access is available and you approve the plan, the campaign is created paused. GLOVAL Ads does not enable it automatically; you must take a separate action before spend can start. Meta access depends on app review and account permissions.',
       },
       {
         question: 'Are results guaranteed?',

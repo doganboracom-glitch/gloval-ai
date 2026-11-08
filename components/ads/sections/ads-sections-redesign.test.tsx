@@ -4,13 +4,14 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LanguageProvider } from '@/components/language-provider'
 import { AdsPlatformGrid } from '@/components/ads/ads-platform-grid'
+import { AdsPlatformSelector } from '@/components/ads/ads-platform-selector'
 import { AdsCreditsSection } from '@/components/ads/sections/ads-credits-section'
 import { AdsExamplePreviewSection } from '@/components/ads/sections/ads-example-preview'
 import { AdsFaqSection } from '@/components/ads/sections/ads-faq-section'
 import { AdsHowItWorksSection } from '@/components/ads/sections/ads-how-it-works'
 import { ADS_CREDIT_COSTS } from '@/lib/ads/credit-costs'
 import { adsSectionsCopy } from '@/lib/ads/ads-sections-copy'
-import { LANG_COOKIE } from '@/lib/i18n'
+import { dictionary, LANG_COOKIE } from '@/lib/i18n'
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode; className?: string }) => (
@@ -104,27 +105,43 @@ describe('Ads credits panel', () => {
     expect(billingLink.getAttribute('href')).toBe('/billing')
     expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.scanAndPreview))
     expect(table.textContent).toContain(String(ADS_CREDIT_COSTS.publish))
+    expect(table.textContent).toContain(adsSectionsCopy.tr.credits.publishTitle)
+    expect(table.textContent).toContain(adsSectionsCopy.tr.credits.publishStatus)
+    expect(table.textContent).toContain(adsSectionsCopy.tr.credits.comingSoon)
   })
 })
 
 describe('Ads platform and information sections', () => {
-  it('keeps Google sign-in available while showing Meta as coming soon', () => {
+  it('keeps Google sign-in and shows a focusable, passive Meta approval button', () => {
     renderWithLanguage('tr', <AdsPlatformGrid />)
 
     const cards = screen.getAllByRole('listitem')
+    const pendingButton = screen.getByTestId('meta-approval-pending-button') as HTMLButtonElement
     expect(cards).toHaveLength(6)
     expect(cards[0]?.textContent).toContain('Google Ads')
     expect(cards[0]?.textContent).toContain('Giriş yap ve başla')
     expect(cards[0]?.textContent).not.toContain('Yakında')
     expect(cards[0]?.querySelector('a')).not.toBeNull()
-    expect(cards[1]?.textContent).toContain('Meta')
-    expect(cards[1]?.textContent).toContain('Yakında')
+    expect(cards[1]?.textContent).toContain('Meta onayı bekleniyor')
     expect(cards[1]?.textContent).toContain('Facebook ve Instagram reklamları')
     expect(cards[1]?.querySelector('a')).toBeNull()
+    expect(pendingButton.getAttribute('aria-disabled')).toBe('true')
+    expect(pendingButton.hasAttribute('disabled')).toBe(false)
+    expect(pendingButton.tabIndex).toBe(0)
+    expect(pendingButton.title).toBe('Meta uygulama incelemesi tamamlanınca açılacak')
     expect(cards.slice(2).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
     expect(cards.every((card) => card.querySelector('svg'))).toBe(true)
     expect(cards[5]?.textContent).toContain('WhatsApp')
     expect(cards[5]?.textContent).toContain('WhatsApp Business reklamlarıyla sohbet başlatan kampanyalar.')
+  })
+
+  it('keeps the Meta sign-in CTA active when the server reports open access', () => {
+    renderWithLanguage('tr', <AdsPlatformGrid metaPublicAccessOpen />)
+
+    const metaCard = screen.getAllByRole('listitem')[1]
+    expect(metaCard?.textContent).toContain('Giriş yap ve başla')
+    expect(metaCard?.querySelector('a')).not.toBeNull()
+    expect(screen.queryByTestId('meta-approval-pending-button')).toBeNull()
   })
 
   it('preserves the gated Meta dashboard link for authorized viewers', () => {
@@ -133,6 +150,21 @@ describe('Ads platform and information sections', () => {
     const metaCard = screen.getAllByRole('listitem')[1]
     expect(metaCard?.querySelector('a')?.getAttribute('href')).toBe('/ads/dashboard?platform=meta')
     expect(metaCard?.textContent).toContain('Panele git')
+  })
+
+  it('labels inaccessible Meta selection as approval pending in the panel', () => {
+    const { container } = render(
+      <AdsPlatformSelector
+        copy={dictionary.tr.ads}
+        activeSlug="google"
+        openGates={[]}
+        onSelect={() => undefined}
+      />,
+    )
+    const metaOption = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Meta'))
+
+    expect(metaOption?.textContent).toContain('Onay bekleniyor')
+    expect(metaOption?.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('uses three step cards while preserving all existing step copy', () => {

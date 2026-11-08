@@ -1532,6 +1532,14 @@ const pl: DeepPartial<Dict> = {
   },
   ads: {
     newBadge: 'Nowe',
+    metaApprovalPendingButton: 'Oczekiwanie na zatwierdzenie przez Meta',
+    metaApprovalPendingTooltip: 'Funkcja będzie dostępna po zakończeniu przeglądu aplikacji przez Meta',
+    metaApprovalPendingShort: 'Oczekiwanie na zatwierdzenie',
+    metaAccessReadOnlyLabel: 'Tylko do odczytu',
+    metaAccessManagedLabel: 'Odczyt + zatwierdzone tworzenie i zarządzanie wstrzymanymi kampaniami',
+    metaConnectionReadOnlyBody: 'Połącz konto reklamowe Meta, aby przeglądać wyniki. Bez uprawnień do zarządzania dostęp pozostaje tylko do odczytu; tworzenie lub zmiana kampanii wymaga osobnych uprawnień i wyraźnej zgody.',
+    metaConnectionManagedBody: 'Z uprawnieniami do zarządzania możesz tworzyć i zarządzać wstrzymanymi kampaniami po wyraźnej zgodzie. Nowe kampanie zaczynają jako wstrzymane; GLOVAL Ads nie uruchamia wydatków reklamowych.',
+    metaConnectReadScopesNote: 'Pierwsze połączenie wymaga tylko uprawnień do odczytu; tworzenie i zarządzanie kampaniami wymaga osobnych uprawnień.',
     manualFallback: { title: 'Szkic planu na podstawie danych firmy', description: 'Jeśli nie można odczytać strony, podaj poniżej dane firmy. Nie omijamy robots.txt ani zabezpieczeń dostępu.', note: 'Szkic opiera się wyłącznie na podanych informacjach; strona nie jest skanowana, a adres docelowy nie jest weryfikowany.', resultTitle: 'Szkic planu na podstawie danych firmy', summaryTitle: 'Podane dane firmy', businessLabel: 'Nazwa firmy', industryLabel: 'Branża', servicesLabel: 'Produkty lub usługi', locationLabel: 'Obszar działania (opcjonalnie)', languageLabel: 'Język reklam', submitLabel: 'Utwórz szkic' },
     disconnectDialog: {
       title: 'Odłączyć Google Ads?',

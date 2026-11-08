@@ -12,7 +12,13 @@ import {
 } from '@/lib/ads/platforms'
 import { AdsPlatformIcon } from '@/components/ads/sections/ads-platform-icon'
 
-export function AdsPlatformGrid({ viewer = ADS_ANONYMOUS_VIEWER }: { viewer?: AdsViewerAccess }) {
+export function AdsPlatformGrid({
+  viewer = ADS_ANONYMOUS_VIEWER,
+  metaPublicAccessOpen = false,
+}: {
+  viewer?: AdsViewerAccess
+  metaPublicAccessOpen?: boolean
+}) {
   const { t } = useLanguage()
   const copy = t.ads
 
@@ -20,12 +26,14 @@ export function AdsPlatformGrid({ viewer = ADS_ANONYMOUS_VIEWER }: { viewer?: Ad
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
       {ADS_PLATFORM_REGISTRY.map((platform) => {
         const resolvedTarget = resolveAdsPlatformCardTarget(platform, viewer)
-        const isMetaComingSoonForAnonymous =
-          platform.slug === 'meta' && resolvedTarget.kind === 'link' && resolvedTarget.requiresLogin
-        const target = isMetaComingSoonForAnonymous
+        const isMetaApprovalPending =
+          platform.slug === 'meta' &&
+          !metaPublicAccessOpen &&
+          !viewer.openGates.includes('meta_connect')
+        const target = isMetaApprovalPending
           ? { kind: 'passive' as const, reason: 'coming_soon' as const }
           : resolvedTarget
-        const isActive = platform.status === 'available' && !isMetaComingSoonForAnonymous
+        const isActive = platform.status === 'available' && !isMetaApprovalPending
         const name = copy[platform.nameKey]
         const body = copy[platform.bodyKey]
 
@@ -49,7 +57,18 @@ export function AdsPlatformGrid({ viewer = ADS_ANONYMOUS_VIEWER }: { viewer?: Ad
                 <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
               </div>
             </div>
-            {target.kind === 'link' ? (
+            {isMetaApprovalPending ? (
+              <button
+                type="button"
+                data-testid="meta-approval-pending-button"
+                aria-disabled="true"
+                tabIndex={0}
+                title={copy.metaApprovalTooltip}
+                className="mt-auto inline-flex min-h-11 w-fit items-center rounded-full border border-border/70 bg-secondary/50 px-2.5 py-1 text-sm font-medium text-muted-foreground cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                {copy.metaApprovalPendingButton}
+              </button>
+            ) : target.kind === 'link' ? (
               <span className="mt-auto inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand">
                 {target.requiresLogin ? copy.platformCardSignIn : copy.platformCardOpen}
                 <ArrowRight className="size-4" aria-hidden="true" />

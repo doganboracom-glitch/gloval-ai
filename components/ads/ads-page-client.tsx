@@ -18,7 +18,15 @@ export function AdsBetaBadge() {
   )
 }
 
-export function AdsPageClient({ children, viewer }: { children: ReactNode; viewer?: AdsViewerAccess }) {
+export function AdsPageClient({
+  children,
+  viewer,
+  metaPublicAccessOpen = false,
+}: {
+  children: ReactNode
+  viewer?: AdsViewerAccess
+  metaPublicAccessOpen?: boolean
+}) {
   const { t } = useLanguage()
   const copy = t.ads
 
@@ -43,7 +51,7 @@ export function AdsPageClient({ children, viewer }: { children: ReactNode; viewe
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">{copy.platformsSubtitle}</p>
           </div>
-          <AdsPlatformGrid viewer={viewer} />
+          <AdsPlatformGrid viewer={viewer} metaPublicAccessOpen={metaPublicAccessOpen} />
         </section>
 
         {children}

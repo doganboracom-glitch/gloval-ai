@@ -184,8 +184,11 @@ describe('Google Ads dashboard UI', () => {
 
     render(<AdsPlatformGrid />)
 
-    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length + 1)
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length)
+    const metaApprovalButton = screen.getByTestId('meta-approval-pending-button')
+    expect(metaApprovalButton.getAttribute('aria-disabled')).toBe('true')
+    expect(metaApprovalButton.hasAttribute('disabled')).toBe(false)
+    expect(screen.getAllByRole('button')).toHaveLength(1)
     for (const platform of comingSoon) {
       expect(screen.getByRole('heading', { name: dictionary.en.ads[platform.nameKey] })).toBeTruthy()
     }

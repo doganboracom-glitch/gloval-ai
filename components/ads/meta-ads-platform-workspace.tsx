@@ -12,7 +12,7 @@ import { MetaOverviewPlans } from '@/components/ads/meta-overview-plans'
 import { hasMetaManagement, metaAccessLabel, metaAccountStatusLabel } from '@/lib/ads/meta-ads-shared'
 
 export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspaceProps) {
-  const { lang } = useLanguage()
+  const { lang, t } = useLanguage()
   const isTr = lang === 'tr'
   const { metaConnections, metaPendingFlowId, metaStatus, metaMissingScopes } = data
   const activeConnections = metaConnections.filter((connection) => connection.status === 'active')
@@ -46,7 +46,10 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
                     {[connection.pageName, connection.instagramAccountName, connection.currency].filter(Boolean).join(' · ') || connection.externalAccountId}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {isTr ? 'Erişim: ' : 'Access: '}{metaAccessLabel(hasMetaManagement(connection), isTr)}
+                    {isTr ? 'Erişim: ' : 'Access: '}{metaAccessLabel(hasMetaManagement(connection), {
+                      readOnly: t.ads.metaAccessReadOnlyLabel,
+                      managed: t.ads.metaAccessManagedLabel,
+                    })}
                   </p>
                   <MetaOverviewPlans
                     connectionId={connection.id}
