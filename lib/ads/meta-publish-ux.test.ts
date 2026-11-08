@@ -20,10 +20,21 @@ describe('Meta yayın hata metinleri', () => {
     expect(result.detail).toBeNull()
   })
 
-  it('bilinen kodu Türkçe açıklar ve ham Meta metnini ayrıntıya koyar', () => {
+  it('bilinen kodu Türkçe açıklar ve Meta tanısını ayrıntıya koyar', () => {
     const result = describeMetaApiError({ ok: false, error: 'page_required', metaReason: 'Some raw Meta text' })
     expect(result.message).toContain('Facebook Sayfası')
     expect(result.detail).toBe('Some raw Meta text')
+  })
+
+  it('reklamveren doğrulaması için Meta Business Support Home yolunu gösterir', () => {
+    const result = describeMetaApiError({
+      ok: false,
+      error: 'advertiser_verification_required',
+      metaReason: 'code=200 | error_subcode=1815010 | fbtrace_id=AbCdEfTrace123',
+    })
+    expect(result.message).toContain('Hesap Kalitesi')
+    expect(result.detail).toContain('error_subcode=1815010')
+    expect(result.detail).toContain('fbtrace_id=AbCdEfTrace123')
   })
 
   it('uygulama canlı değilse özel mesajı kullanır', () => {
@@ -47,7 +58,7 @@ describe('Meta yayın hata metinleri', () => {
 
   it('ayrıntıyı maskeler ve kısaltır', () => {
     const long = shortenMetaDetail('a'.repeat(500))
-    expect(long?.length).toBeLessThanOrEqual(140)
+    expect(long?.length).toBeLessThanOrEqual(300)
     expect(shortenMetaDetail('   ')).toBeNull()
     expect(shortenMetaDetail(null)).toBeNull()
   })
@@ -86,9 +97,10 @@ describe('Kısmi sonuç', () => {
     expect(rows.map((row) => row.state)).toEqual(['ok', 'ok', 'failed', 'missing', 'missing'])
   })
 
-  it('kayıtlı hatada ham Meta metnini yalnızca bilinmeyen kodda ayrıntı yapar', () => {
-    const known = describeStoredFailure({ failureStep: 'adset', failureCode: 'payment_method_missing', failureReason: 'raw' })
-    expect(known?.detail).toBeNull()
+  it('kayıtlı hatada ayrıntıyı bilinen kodlarda da gösterir', () => {
+    const known = describeStoredFailure({ failureStep: 'adset', failureCode: 'payment_method_missing', failureReason: 'Meta code=100 | fbtrace_id=AbCdEfTrace123' })
+    expect(known?.detail).toContain('code=100')
+    expect(known?.detail).toContain('fbtrace_id=AbCdEfTrace123')
     const unknown = describeStoredFailure({ failureStep: 'adset', failureCode: 'weird', failureReason: 'raw reason' })
     expect(unknown?.message).toContain('adımı tamamlanamadı')
     expect(unknown?.detail).toBe('raw reason')

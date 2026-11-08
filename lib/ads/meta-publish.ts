@@ -4,6 +4,7 @@
  * runs under the route handlers and under the mocked tests (no real Meta call).
  */
 import { MetaAdsError } from '@/lib/ads/meta-ads-error'
+import { formatMetaErrorCode, formatMetaErrorDiagnostic } from '@/lib/ads/meta-error-detail'
 import type { MetaApiContext, MetaApiRequest } from '@/lib/ads/meta-api-client'
 import {
   buildAdForm,
@@ -50,8 +51,40 @@ export type MetaPreflight =
   | { ok: true; currency: string | null }
   | { ok: false; failure: MetaPublishFailure }
 
-/** Reads account_status and funding before any write; a missing payment method is reported up front. */
-export async function preflightMetaAccount(input: Common): Promise<MetaPreflight> {
+const PAGE_ACCESS_MESSAGE = 'Meta bağlantısı seçilen Facebook Sayfası için reklam erişimini doğrulayamadı. Meta Business Suite > Sayfa erişimi bölümünde reklam yetkisini (ADVERTISE veya MANAGE) kontrol edin.'
+const INSTAGRAM_ACCESS_MESSAGE = 'Seçilen Instagram hesabı bu reklam hesabında kullanılamıyor. Meta Business Suite’te profesyonel Instagram hesabının bağlı Facebook Sayfasına ve reklam hesabına erişimi olduğunu doğrulayın.'
+
+type MetaPreflightAccess = { pageId?: string | null; instagramAccountId?: string | null }
+
+function accessFailure(message: string, metaReason: string | null = null): MetaPreflight {
+  return { ok: false, failure: { code: 'page_required', message, metaReason, blamedFields: [] } }
+}
+
+async function findPageAccess(input: Common, pageId: string): Promise<Record<string, unknown> | null> {
+  const query: Record<string, string> = { fields: 'id,tasks', limit: '100' }
+  for (let page = 0; page < 3; page += 1) {
+    const body = asRecord(await input.graph.request({
+      endpoint: 'me.accounts',
+      path: '/me/accounts',
+      accessToken: input.accessToken,
+      query,
+      context: input.context,
+    }))
+    const rows = Array.isArray(body.data) ? body.data : []
+    const found = rows.map(asRecord).find((row) => String(row.id ?? '') === pageId)
+    if (found) return found
+
+    const paging = asRecord(body.paging)
+    const cursors = asRecord(paging.cursors)
+    const after = typeof cursors.after === 'string' ? cursors.after : ''
+    if (typeof paging.next !== 'string' || !after) break
+    query.after = after
+  }
+  return null
+}
+
+/** Reads account status, funding, and (when supplied) Page/Instagram access before any write. */
+export async function preflightMetaAccount(input: Common, access?: MetaPreflightAccess): Promise<MetaPreflight> {
   let body: Record<string, unknown>
   try {
     body = asRecord(await input.graph.request({
@@ -66,12 +99,15 @@ export async function preflightMetaAccount(input: Common): Promise<MetaPreflight
   }
   const status = Number(body.account_status)
   if (Number.isFinite(status) && status !== 1) {
+    const disableReasons = Array.isArray(body.disable_reason)
+      ? body.disable_reason.filter((value): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0).slice(0, 5)
+      : []
     return {
       ok: false,
       failure: {
         code: 'account_restricted',
-        message: 'Reklam hesabı şu an aktif görünmüyor. Meta Reklam Yöneticisi\'nden hesap durumunu kontrol edin.',
-        metaReason: null,
+        message: 'Reklam hesabı Meta tarafından etkin değil olarak işaretlenmiş. Meta Business Support Home > Hesap Kalitesi bölümünde kısıtlamayı, ödeme durumunu ve istenen reklamveren doğrulamasını kontrol edin.',
+        metaReason: disableReasons.length ? `Meta disable_reason: ${disableReasons.join(', ')}` : null,
         blamedFields: [],
       },
     }
@@ -87,6 +123,44 @@ export async function preflightMetaAccount(input: Common): Promise<MetaPreflight
       },
     }
   }
+
+  if (access?.pageId) {
+    let page: Record<string, unknown> | null
+    try {
+      page = await findPageAccess(input, access.pageId)
+    } catch (error) {
+      const failure = describeMetaPublishError(error, 'preflight')
+      if (failure.code === 'publish_permission_missing') return accessFailure(PAGE_ACCESS_MESSAGE, failure.metaReason)
+      return { ok: false, failure }
+    }
+    if (!page) return accessFailure(PAGE_ACCESS_MESSAGE)
+    const tasks = Array.isArray(page.tasks) ? page.tasks.filter((task): task is string => typeof task === 'string') : []
+    if (tasks.length > 0 && !tasks.includes('ADVERTISE') && !tasks.includes('MANAGE')) {
+      return accessFailure(PAGE_ACCESS_MESSAGE, `Meta Page tasks: ${tasks.join(', ')}`)
+    }
+  }
+
+  if (access?.instagramAccountId) {
+    let body: Record<string, unknown>
+    try {
+      body = asRecord(await input.graph.request({
+        endpoint: 'act.instagram_accounts',
+        path: `/${input.accountId}/instagram_accounts`,
+        accessToken: input.accessToken,
+        query: { fields: 'id,username', limit: '25' },
+        context: input.context,
+      }))
+    } catch (error) {
+      const failure = describeMetaPublishError(error, 'preflight')
+      if (failure.code === 'publish_permission_missing') return accessFailure(INSTAGRAM_ACCESS_MESSAGE, failure.metaReason)
+      return { ok: false, failure }
+    }
+    const accounts = Array.isArray(body.data) ? body.data.map(asRecord) : []
+    if (!accounts.some((account) => String(account.id ?? '') === access.instagramAccountId)) {
+      return accessFailure(INSTAGRAM_ACCESS_MESSAGE)
+    }
+  }
+
   return { ok: true, currency: typeof body.currency === 'string' ? body.currency : null }
 }
 
@@ -103,30 +177,42 @@ const LOOKUPS: Record<'campaign' | 'adset' | 'image' | 'creative' | 'ad', Lookup
 }
 
 /** Finds an object this request already created, by the gloval-req tag in its name. GET only, so it may retry. */
+const MAX_TAG_LOOKUP_PAGES = 3
+const TAG_LOOKUP_PAGE_SIZE = '100'
+
 export async function findObjectByTag(
   input: Common,
   kind: keyof typeof LOOKUPS,
   tag: string,
 ): Promise<string | null> {
   const lookup = LOOKUPS[kind]
-  const query: Record<string, string> = { fields: `${lookup.idField},name`, limit: '100' }
-  if (kind !== 'image') query.filtering = JSON.stringify([{ field: 'name', operator: 'CONTAIN', value: tag }])
-  const body = asRecord(await input.graph.request({
-    endpoint: lookup.endpoint,
-    path: `/${input.accountId}/${lookup.edge}`,
-    accessToken: input.accessToken,
-    query,
-    context: input.context,
-  }))
-  const rows = Array.isArray(body.data) ? body.data : []
-  for (const row of rows) {
-    const record = asRecord(row)
-    if (typeof record.name !== 'string' || !record.name.includes(tag)) continue
-    const id = kind === 'image'
-      ? (typeof record.hash === 'string' && /^[A-Za-z0-9]{8,64}$/.test(record.hash) ? record.hash : null)
-      : numericId(record.id)
-    if (id) return id
+  const query: Record<string, string> = { fields: `${lookup.idField},name`, limit: TAG_LOOKUP_PAGE_SIZE }
+
+  for (let page = 0; page < MAX_TAG_LOOKUP_PAGES; page += 1) {
+    const body = asRecord(await input.graph.request({
+      endpoint: lookup.endpoint,
+      path: `/${input.accountId}/${lookup.edge}`,
+      accessToken: input.accessToken,
+      query,
+      context: input.context,
+    }))
+    const rows = Array.isArray(body.data) ? body.data : []
+    for (const row of rows) {
+      const record = asRecord(row)
+      if (typeof record.name !== 'string' || !record.name.includes(tag)) continue
+      const id = kind === 'image'
+        ? (typeof record.hash === 'string' && /^[A-Za-z0-9]{8,64}$/.test(record.hash) ? record.hash : null)
+        : numericId(record.id)
+      if (id) return id
+    }
+
+    const paging = asRecord(body.paging)
+    const cursors = asRecord(paging.cursors)
+    const after = typeof cursors.after === 'string' ? cursors.after : ''
+    if (typeof paging.next !== 'string' || !after) break
+    query.after = after
   }
+
   return null
 }
 
@@ -193,6 +279,22 @@ export type MetaPublishOutcome =
   | { ok: true; objects: MetaPublishObjects }
   | { ok: false; step: MetaPublishStep; failure: MetaPublishFailure; objects: MetaPublishObjects }
 
+const WRITE_ENDPOINTS: Record<Exclude<MetaPublishStep, 'preflight'>, MetaApiRequest['endpoint']> = {
+  campaign: 'act.campaigns.create',
+  adset: 'act.adsets.create',
+  image: 'act.adimages.create',
+  creative: 'act.adcreatives.create',
+  ad: 'act.ads.create',
+}
+
+function logTagLookupFailure(step: Exclude<MetaPublishStep, 'preflight'>, error: unknown) {
+  const metaError = error instanceof MetaAdsError ? error : null
+  const diagnostic = formatMetaErrorDiagnostic(metaError?.detail ?? null)
+  console.error(
+    `[meta-ads] tag lookup failed step=${step} endpoint=${metaError?.endpoint ?? LOOKUPS[step].endpoint} code=${formatMetaErrorCode(metaError?.detail ?? null)}${diagnostic ? ` detail=${diagnostic}` : ''}`,
+  )
+}
+
 export type MetaPublishDeps = Common & {
   content: MetaPlanContent
   dailyBudgetMinor: number
@@ -205,6 +307,8 @@ export type MetaPublishDeps = Common & {
   objects: MetaPublishObjects
   /** Persist progress and append an audit row right after every created/re-found object. */
   onStep: (step: MetaPublishStep, objectId: string, source: 'created' | 'reused' | 'found_by_tag') => Promise<void>
+  /** Persist a safe diagnostic when a Meta write request fails; lookup errors remain non-blocking. */
+  onWriteFailure?: (step: Exclude<MetaPublishStep, 'preflight'>, error: MetaAdsError) => Promise<void>
 }
 
 /**
@@ -229,7 +333,8 @@ export async function publishPausedMetaCampaign(deps: MetaPublishDeps): Promise<
     try {
       id = await findObjectByTag(deps, step, deps.tag)
       if (id) source = 'found_by_tag'
-    } catch {
+    } catch (error) {
+      logTagLookupFailure(step, error)
       id = null
     }
     if (!id) {
@@ -240,11 +345,21 @@ export async function publishPausedMetaCampaign(deps: MetaPublishDeps): Promise<
           try {
             id = await findObjectByTag(deps, step, deps.tag)
             if (id) source = 'found_by_tag'
-          } catch {
+          } catch (lookupError) {
+            logTagLookupFailure(step, lookupError)
             id = null
           }
         }
-        if (!id) throw error
+        if (!id) {
+          if (error instanceof MetaAdsError && error.endpoint === WRITE_ENDPOINTS[step]) {
+            try {
+              await deps.onWriteFailure?.(step, error)
+            } catch {
+              console.error(`[meta-ads] failed-write audit callback failed step=${step} endpoint=${error.endpoint}`)
+            }
+          }
+          throw error
+        }
       }
     }
     if (!id) throw new MetaAdsError('provider_error')

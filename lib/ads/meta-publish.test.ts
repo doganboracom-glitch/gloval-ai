@@ -14,7 +14,7 @@ import {
   type MetaPublishObjects,
 } from '@/lib/ads/meta-publish'
 import { metaRequestTag, type MetaPlanContent } from '@/lib/ads/meta-publish-plan'
-import type { MetaPublishStep } from '@/lib/ads/meta-publish-errors'
+import { describeMetaPublishError, type MetaPublishStep } from '@/lib/ads/meta-publish-errors'
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000'
 const TOKEN = 'EAAGm0PX4ZCpsBAKsecrettoken1234567890'
@@ -144,6 +144,47 @@ beforeEach(() => {
   vi.unstubAllEnvs()
 })
 
+describe('Kullanılabilir Meta hata yönlendirmeleri', () => {
+  it('Sayfa/Instagram izin reddini aksiyon önerisi ve trace ayrıntısıyla açıklar', () => {
+    const failure = describeMetaPublishError(new MetaAdsError('permission_missing', {
+      code: 200,
+      subcode: 1815010,
+      type: 'OAuthException',
+      message: 'No permission to advertise on this Page',
+      userMessage: 'Instagram account is not authorized',
+      traceId: 'AbCdEfTrace123',
+      blameFields: ['page_id', 'instagram_user_id'],
+    }), 'ad')
+
+    expect(failure.code).toBe('page_required')
+    expect(failure.message).toContain('Instagram')
+    expect(failure.metaReason).toContain('error_subcode=1815010')
+    expect(failure.metaReason).toContain('fbtrace_id=AbCdEfTrace123')
+  })
+
+  it('reklamveren doğrulama reddini ayrı kodla sınıflandırır', () => {
+    const failure = describeMetaPublishError(new MetaAdsError('provider_error', {
+      code: 100,
+      subcode: null,
+      type: 'OAuthException',
+      message: 'Advertiser verification is required before running ads',
+    }), 'ad')
+
+    expect(failure.code).toBe('advertiser_verification_required')
+    expect(failure.message).toContain('Hesap Kalitesi')
+  })
+
+  it('kampanya hesabı kısıtlamasını yayın ön kontrolüyle eşleştirir', () => {
+    const failure = describeMetaPublishError(new MetaAdsError('provider_error', {
+      code: 273,
+      subcode: null,
+      type: 'OAuthException',
+      message: 'Ad account is disabled',
+    }), 'ad')
+    expect(failure.code).toBe('account_restricted')
+  })
+})
+
 describe('Meta yayın sırası ve PAUSED', () => {
   it('kampanya -> reklam seti -> görsel -> kreatif -> reklam sırasıyla yazar ve nesne kimliklerini döndürür', async () => {
     const { graph, posts } = setup()
@@ -191,7 +232,8 @@ describe('Meta yayın sırası ve PAUSED', () => {
     const firstCampaignPost = calls.findIndex((call) => call.method === 'POST' && call.edge === 'campaigns')
     const lookup = calls.slice(0, firstCampaignPost).find((call) => call.method === 'GET' && call.edge === 'campaigns')
     expect(lookup).toBeDefined()
-    expect(lookup?.query.filtering).toContain(TAG)
+    expect(lookup?.query).toMatchObject({ fields: 'id,name', limit: '100' })
+    expect(lookup?.query).not.toHaveProperty('filtering')
     expect(posts().find((call) => call.edge === 'campaigns')?.form.name).toContain(TAG)
   })
 
@@ -264,7 +306,9 @@ describe('Zaman aşımı: sonuç belirsiz, etiketle aranıp çiftlenmeden kullan
     expect(steps[0]).toEqual({ step: 'campaign', id: IDS.campaigns, source: 'found_by_tag' })
     const lookups = calls.filter((call) => call.method === 'GET' && call.edge === 'campaigns')
     expect(lookups).toHaveLength(2)
-    expect(lookups.every((call) => call.query.filtering?.includes(TAG))).toBe(true)
+    expect(lookups.every((call) => !('filtering' in call.query))).toBe(true)
+    expect(lookups[0]?.query.after).toBeUndefined()
+    expect(lookups[1]?.query.after).toBeUndefined()
     expect(posts().map((call) => call.edge)).toEqual(['campaigns', 'adsets', 'adimages', 'adcreatives', 'ads'])
     if (result.ok) expect(result.objects.campaignId).toBe(IDS.campaigns)
   })
@@ -294,6 +338,34 @@ describe('Zaman aşımı: sonuç belirsiz, etiketle aranıp çiftlenmeden kullan
     expect(steps.find((entry) => entry.step === 'adset')).toEqual({ step: 'adset', id: IDS.adsets, source: 'found_by_tag' })
   })
 
+  it('etiketi son kayıtlarda istemci tarafında bulmak için sayfalar', async () => {
+    const { graph, calls } = setup({
+      'GET campaigns': (call, index) => index === 0
+        ? json({ data: [], paging: { next: 'https://graph.facebook.com/next', cursors: { after: 'cursor-1' } } })
+        : json({ data: [{ id: IDS.campaigns, name: `Yaz kampanyası [${TAG}]` }] }),
+    })
+    const found = await findObjectByTag({ graph, accessToken: TOKEN, context, accountId: ACCOUNT, apiVersion: 'v24.0' }, 'campaign', TAG)
+    const lookups = calls.filter((call) => call.method === 'GET' && call.edge === 'campaigns')
+
+    expect(found).toBe(IDS.campaigns)
+    expect(lookups).toHaveLength(2)
+    expect(lookups[1]?.query.after).toBe('cursor-1')
+    expect(lookups.every((call) => !('filtering' in call.query))).toBe(true)
+  })
+
+  it('sayfalama aramasını üç istekle sınırlar', async () => {
+    const { graph, calls } = setup({
+      'GET campaigns': (_call, index) => json({
+        data: [],
+        paging: { next: 'https://graph.facebook.com/next', cursors: { after: `cursor-${index}` } },
+      }),
+    })
+    const found = await findObjectByTag({ graph, accessToken: TOKEN, context, accountId: ACCOUNT, apiVersion: 'v24.0' }, 'campaign', TAG)
+
+    expect(found).toBeNull()
+    expect(calls.filter((call) => call.method === 'GET' && call.edge === 'campaigns')).toHaveLength(3)
+  })
+
   it('farklı etikete ait nesne eşleşmez', async () => {
     const { graph } = setup({
       'GET campaigns': () => json({ data: [{ id: '777777777777', name: 'Başka [gloval-req-aaaaaaaaaaaa]' }] }),
@@ -304,6 +376,35 @@ describe('Zaman aşımı: sonuç belirsiz, etiketle aranıp çiftlenmeden kullan
 })
 
 describe('Kısmi başarısızlık ve kaldığı yerden devam', () => {
+  it('Meta yazma hatasında geri çağrıyla adımın güvenli hata bilgisini kaydeder', async () => {
+    const { graph } = setup({
+      'POST ads': () => graphError(200, 400, 'No permission to advertise on this Page', {
+        error_subcode: 1815010,
+        error_user_title: 'Page permissions are required',
+        error_user_msg: 'Access denied for jane@example.com',
+        fbtrace_id: 'AbCdEfTrace123',
+      }),
+    })
+    const onWriteFailure = vi.fn(async () => undefined)
+    const { input } = deps(graph, { onWriteFailure })
+    const result = await publishPausedMetaCampaign(input)
+
+    expect(result.ok).toBe(false)
+    expect(onWriteFailure).toHaveBeenCalledTimes(1)
+    expect(onWriteFailure.mock.calls[0]?.[0]).toBe('ad')
+    expect(onWriteFailure.mock.calls[0]?.[1]).toMatchObject({
+      endpoint: 'act.ads.create',
+      detail: {
+        code: 200,
+        subcode: 1815010,
+        type: 'OAuthException',
+        traceId: 'AbCdEfTrace123',
+        userTitle: 'Page permissions are required',
+        userMessage: 'Access denied for [email]',
+      },
+    })
+  })
+
   it('reklam seti reddedilince kampanya kimliği kaydedilir ve hata adımı adset olur', async () => {
     const { graph, posts } = setup({ 'POST adsets': () => graphError(100, 400, 'Invalid parameter', { error_data: { blame_field_specs: [['daily_budget']] } }) })
     const { input, steps } = deps(graph)
@@ -523,7 +624,7 @@ describe('Token sızıntısı yok', () => {
     expect(JSON.stringify(recordOutcome.mock.calls)).not.toContain(TOKEN)
   })
 
-  it('MetaAdsError.detail ham gövde, fbtrace_id veya token taşımaz', async () => {
+  it('MetaAdsError.detail ham gövde veya token taşımaz, fbtrace_id saklar', async () => {
     const { graph } = setup({
       'GET ': () => graphError(100, 400, `access_token=${TOKEN}`, { fbtrace_id: 'ABCtrace123' }),
     })
@@ -536,7 +637,7 @@ describe('Token sızıntısı yok', () => {
     expect(caught).toBeInstanceOf(MetaAdsError)
     const serialized = JSON.stringify((caught as MetaAdsError).detail)
     expect(serialized).not.toContain(TOKEN)
-    expect(serialized).not.toContain('ABCtrace123')
+    expect(serialized).toContain('ABCtrace123')
     expect(String((caught as MetaAdsError).message)).not.toContain(TOKEN)
   })
 })

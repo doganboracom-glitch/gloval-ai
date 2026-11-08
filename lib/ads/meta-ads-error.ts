@@ -37,6 +37,7 @@ export type MetaAdsErrorCode =
   | 'special_category_unsupported'
   | 'policy_blocked'
   | 'page_required'
+  | 'advertiser_verification_required'
   | 'image_invalid'
   | 'payment_method_missing'
   | 'account_restricted'
@@ -63,13 +64,21 @@ export class MetaAdsError extends Error {
   readonly detail: MetaErrorDetail | null
   /** Permissions the user did not grant; only filled for `permission_missing`. */
   readonly missingScopes: readonly string[]
+  /** Meta Graph endpoint that produced this error; null for local/preflight failures. */
+  readonly endpoint: string | null
 
-  constructor(code: MetaAdsErrorCode, detail: MetaErrorDetail | null = null, missingScopes: readonly string[] = []) {
+  constructor(
+    code: MetaAdsErrorCode,
+    detail: MetaErrorDetail | null = null,
+    missingScopes: readonly string[] = [],
+    endpoint: string | null = null,
+  ) {
     super(code)
     this.name = 'MetaAdsError'
     this.code = code
     this.detail = detail
     this.missingScopes = missingScopes
+    this.endpoint = endpoint
   }
 }
 
@@ -121,6 +130,7 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'policy_blocked':
     case 'special_category_unsupported':
     case 'page_required':
+    case 'advertiser_verification_required':
     case 'image_invalid':
     case 'plan_invalid':
     case 'terms_required':

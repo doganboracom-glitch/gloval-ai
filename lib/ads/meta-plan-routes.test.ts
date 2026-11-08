@@ -174,6 +174,7 @@ function installGraph(override: GraphHandler = () => undefined) {
     if (custom instanceof Error) throw custom
     if (custom) return custom
     if (method === 'GET' && edge === '') return json({ account_status: 1, currency: 'TRY', funding_source: '123456789' })
+    if (method === 'GET' && edge === 'accounts') return json({ data: [{ id: '987654321012', tasks: ['ADVERTISE', 'MANAGE'] }] })
     if (method === 'GET') return json({ data: [] })
     if (edge === 'adimages') return json({ images: { 'creative.jpg': { hash: 'abcdef1234567890abcd' } } })
     const ids: Record<string, string> = { campaigns: '111111111111', adsets: '222222222222', adcreatives: '444444444444', ads: '555555555555' }
@@ -392,6 +393,80 @@ describe('POST /api/ads/meta/plans/publish: ön kontrol', () => {
     const response = await publishPost(post('publish', publishBody))
     expect((await response.json()).error).toBe('account_restricted')
     expect(graph.posts()).toHaveLength(0)
+  })
+
+  it('seçilen Sayfa için reklam yetkisi yoksa hiçbir Meta yazması başlamaz', async () => {
+    const graph = installGraph((method, edge) =>
+      method === 'GET' && edge === 'accounts' ? json({ data: [{ id: '987654321012', tasks: ['ANALYZE'] }] }) : undefined)
+    const response = await publishPost(post('publish', publishBody))
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body).toMatchObject({ error: 'page_required', step: 'preflight' })
+    expect(body.message).toContain('ADVERTISE')
+    expect(graph.posts()).toHaveLength(0)
+  })
+
+  it('Instagram hesabı reklam hesabında erişilebilir değilse ön kontrolde durur', async () => {
+    mocks.connection = connectionRow({ instagram_account_id: '17841400000000001' })
+    const graph = installGraph((method, edge) =>
+      method === 'GET' && edge === 'instagram_accounts' ? json({ data: [] }) : undefined)
+    const response = await publishPost(post('publish', publishBody))
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body).toMatchObject({ error: 'page_required', step: 'preflight' })
+    expect(body.message).toContain('Instagram')
+    expect(graph.posts()).toHaveLength(0)
+  })
+})
+
+describe('POST /api/ads/meta/plans/publish: Meta hata denetimi', () => {
+  it('başarısız Graph yazmasını maskeli hata ayrıntısıyla denetim kaydına ve plana yazar', async () => {
+    const graph = installGraph((method, edge) => method === 'POST' && edge === 'campaigns'
+      ? json({
+          error: {
+            code: 200,
+            error_subcode: 1815010,
+            type: 'OAuthException',
+            message: 'No permission to advertise on this Page',
+            error_user_title: 'Page permissions are required',
+            error_user_msg: 'Access denied for jane@example.com',
+            fbtrace_id: 'AbCdEfTrace123',
+          },
+        }, 403)
+      : undefined)
+
+    const response = await publishPost(post('publish', publishBody))
+    const body = await response.json()
+    const auditAction = mocks.appendMetaAction.mock.calls.find((call) => call[1]?.status === 'failed')?.[1]
+
+    expect(response.status).toBe(422)
+    expect(body).toMatchObject({ ok: false, error: 'page_required', step: 'campaign', partial: false })
+    expect(body.metaReason).toContain('code=200')
+    expect(body.metaReason).toContain('error_subcode=1815010')
+    expect(body.metaReason).toContain('fbtrace_id=AbCdEfTrace123')
+    expect(auditAction).toMatchObject({
+      actionType: 'meta_publish_campaign',
+      target: { endpoint: 'act.campaigns.create' },
+      status: 'failed',
+      afterState: {
+        meta_error: {
+          endpoint: 'act.campaigns.create',
+          code: 200,
+          subcode: 1815010,
+          type: 'OAuthException',
+          fbtrace_id: 'AbCdEfTrace123',
+          error_user_title: 'Page permissions are required',
+          error_user_msg: 'Access denied for [email]',
+          message: 'No permission to advertise on this Page',
+        },
+      },
+    })
+    expect(JSON.stringify(auditAction)).not.toContain('jane@example.com')
+    expect(JSON.stringify(auditAction)).not.toContain(TOKEN)
+    expect(finishCalls()[0].args.p_failure_reason).toContain('fbtrace_id=AbCdEfTrace123')
+    expect(graph.posts().map((call) => call.edge)).toEqual(['campaigns'])
   })
 })
 

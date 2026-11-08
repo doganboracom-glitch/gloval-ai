@@ -132,7 +132,10 @@ export async function POST(request: Request) {
         if (hash !== plan.plan_hash) throw new MetaAdsError('plan_changed')
 
         const common = { graph, accessToken, context, accountId: connection.external_account_id, apiVersion }
-        const pre = await preflightMetaAccount(common)
+        const pre = await preflightMetaAccount(common, {
+          pageId: connection.page_id,
+          instagramAccountId: connection.instagram_account_id,
+        })
         if (!pre.ok) return { ok: false as const, step: 'preflight' as const, failure: pre.failure, objects: startObjects }
 
         return publishPausedMetaCampaign({
@@ -157,6 +160,30 @@ export async function POST(request: Request) {
               target: { object_id: objectId, source }, status: 'applied',
             })
           },
+          onWriteFailure: async (step, error) => {
+            const detail = error.detail
+            await appendMetaAction(admin, {
+              userId,
+              planId: plan.id,
+              connectionId: plan.connection_id,
+              actor: 'system',
+              actionType: `meta_publish_${step}`,
+              target: { endpoint: error.endpoint },
+              afterState: {
+                meta_error: {
+                  endpoint: error.endpoint,
+                  code: detail?.code ?? null,
+                  subcode: detail?.subcode ?? null,
+                  type: detail?.type ?? null,
+                  fbtrace_id: detail?.traceId ?? null,
+                  error_user_title: detail?.userTitle ?? null,
+                  error_user_msg: detail?.userMessage ?? null,
+                  message: detail?.message ?? null,
+                },
+              },
+              status: 'failed',
+            })
+          },
         })
       },
     })
@@ -165,8 +192,9 @@ export async function POST(request: Request) {
     if (outcome.ok) {
       await finish('published', outcome.objects)
     } else {
+      const failureReason = [outcome.failure.message, outcome.failure.metaReason].filter(Boolean).join(' | ').slice(0, 600)
       await finish(mailOutcome === 'partial' ? 'partial' : 'failed', outcome.objects, {
-        step: outcome.step, code: outcome.failure.code, reason: outcome.failure.metaReason ?? outcome.failure.message,
+        step: outcome.step, code: outcome.failure.code, reason: failureReason,
       })
     }
     await notifyMetaPublishOutcome({

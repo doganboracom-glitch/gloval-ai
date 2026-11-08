@@ -167,6 +167,45 @@ describe('Meta Graph API istemcisi', () => {
     expect(error.detail).toMatchObject({ code: 190, type: 'OAuthException' })
   })
 
+  it('Meta hata kodunu, alt kodu ve trace kimliğini maskeli biçimde loglar ve uç noktayı hataya ekler', async () => {
+    const { client, log } = setup([json({
+      error: {
+        code: 200,
+        error_subcode: 1815010,
+        type: 'OAuthException',
+        message: 'Permission denied for phone +90 555 123 45 67',
+        error_user_title: 'Page access for jane@example.com',
+        error_user_msg: 'Access access_token=supersecret and account 123456789012',
+        fbtrace_id: 'AbCdEfTrace123',
+      },
+    }, 403)])
+    const error = await failure(client.request({
+      endpoint: 'act.ads.create',
+      path: '/act_12345/ads',
+      method: 'POST',
+      accessToken: TOKEN,
+      form: { name: 'test' },
+      context,
+    }))
+    const logged = log.mock.calls.map((call) => String(call[0])).join('\n')
+
+    expect(error.endpoint).toBe('act.ads.create')
+    expect(error.detail).toMatchObject({
+      code: 200,
+      subcode: 1815010,
+      traceId: 'AbCdEfTrace123',
+      userTitle: 'Page access for [email]',
+      userMessage: 'Access [redacted] and account [phone]',
+    })
+    expect(logged).toContain('endpoint=act.ads.create')
+    expect(logged).toContain('code=200/1815010 OAuthException')
+    expect(logged).toContain('fbtrace_id=AbCdEfTrace123')
+    expect(logged).not.toContain('jane@example.com')
+    expect(logged).not.toContain('supersecret')
+    expect(logged).not.toContain('+90 555')
+    expect(logged.length).toBeLessThan(600)
+  })
+
   it('izin verilmeyen uç nokta ve tehlikeli yolları reddeder', async () => {
     const { client, fetchImpl, reserveQuota } = setup([json({})])
     const base = { accessToken: TOKEN, context }
