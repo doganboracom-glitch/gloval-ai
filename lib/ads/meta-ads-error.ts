@@ -43,6 +43,9 @@ export type MetaAdsErrorCode =
   | 'account_restricted'
   | 'budget_too_low'
   | 'age_range_not_allowed'
+  | 'dsa_info_required'
+  | 'ad_creation_access_missing'
+  | 'creative_unavailable'
   | 'meta_rejected'
   | 'app_not_live'
   | 'write_outcome_unknown'
@@ -129,6 +132,9 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'account_restricted':
     case 'budget_too_low':
     case 'age_range_not_allowed':
+    case 'dsa_info_required':
+    case 'ad_creation_access_missing':
+    case 'creative_unavailable':
     case 'policy_blocked':
     case 'special_category_unsupported':
     case 'page_required':

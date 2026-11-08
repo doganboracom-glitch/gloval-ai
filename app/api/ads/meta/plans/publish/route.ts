@@ -9,7 +9,7 @@ import { logUserEvent } from '@/lib/notify'
 import { META_STEP_LABELS } from '@/lib/ads/meta-publish-errors'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
 import { META_CREATIVE_BUCKET, appendMetaAction, getMetaPlan, metaPlanView, saveMetaPlanObject } from '@/lib/ads/meta-plans-store'
-import { metaAdsErrorResponse, metaAdsJson } from '@/lib/ads/meta-route-utils'
+import { metaAdsErrorResponse, metaAdsJson, metaDsaBlockedResponse } from '@/lib/ads/meta-route-utils'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -66,6 +66,9 @@ export async function POST(request: Request) {
     if (!['approved', 'partial', 'failed'].includes(plan.status) || plan.approved_version !== plan.version || !plan.plan_hash) {
       throw new MetaAdsError('plan_not_approved')
     }
+
+    const dsaBlocked = metaDsaBlockedResponse(plan.content.countries)
+    if (dsaBlocked) return dsaBlocked
 
     const checked = validateMetaPlanContent(plan.content, { currency: plan.currency, requireImage: true })
     if (!checked.ok || !plan.content.imagePath || !plan.image_sha256) throw new MetaAdsError('plan_invalid')

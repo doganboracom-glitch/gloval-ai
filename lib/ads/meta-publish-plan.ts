@@ -4,6 +4,7 @@
  */
 import { createHash } from 'node:crypto'
 import { normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
+import { dsaCountriesMessage, isKnownCountryCode } from '@/lib/ads/meta-countries'
 
 export const META_CTA_OPTIONS = ['LEARN_MORE', 'SHOP_NOW', 'SIGN_UP', 'CONTACT_US', 'GET_QUOTE'] as const
 export type MetaCta = (typeof META_CTA_OPTIONS)[number]
@@ -20,7 +21,7 @@ export const META_OPTIMIZATION_GOALS = ['LANDING_PAGE_VIEWS', 'LINK_CLICKS'] as 
 export type MetaOptimizationGoal = (typeof META_OPTIMIZATION_GOALS)[number]
 export const META_DEFAULT_URL_TAGS = 'utm_source=facebook&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}'
 
-/** Verified short list of ISO 3166-1 alpha-2 codes offered for geo targeting. */
+/** Quick-pick shortlist shown as checkboxes; every ISO country is selectable via the "Diğer ülkeler" menu. */
 export const META_COUNTRIES: ReadonlyArray<{ code: string; name: string }> = [
   { code: 'TR', name: 'Türkiye' },
   { code: 'DE', name: 'Almanya' },
@@ -41,7 +42,6 @@ export const META_COUNTRIES: ReadonlyArray<{ code: string; name: string }> = [
   { code: 'CA', name: 'Kanada' },
   { code: 'AU', name: 'Avustralya' },
 ]
-const COUNTRY_CODES = new Set(META_COUNTRIES.map((country) => country.code))
 
 export const META_SPECIAL_TOPICS = ['none', 'credit', 'employment', 'housing', 'politics'] as const
 export type MetaSpecialTopic = (typeof META_SPECIAL_TOPICS)[number]
@@ -52,7 +52,7 @@ export const META_PLAN_LIMITS = {
   headline: 80,
   description: 120,
   landingUrl: 1000,
-  maxCountries: 10,
+  maxCountries: 25,
   ageMin: 18,
   ageMax: 65,
 } as const
@@ -220,7 +220,14 @@ export type ValidatedPlan = {
 
 export function validateMetaPlanContent(
   input: unknown,
-  options: { currency: string | null; now?: Date; requireImage?: boolean; minimumBudgetMinor?: number | null },
+  options: {
+    currency: string | null
+    now?: Date
+    requireImage?: boolean
+    minimumBudgetMinor?: number | null
+    /** Reject EU/EEA countries (Meta needs DSA advertiser/payer details the app cannot collect yet). Drafts may still be saved. */
+    blockDsaCountries?: boolean
+  },
 ): { ok: true; value: ValidatedPlan } | { ok: false; errors: MetaPlanFieldErrors } {
   const errors: MetaPlanFieldErrors = {}
   const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
@@ -252,7 +259,11 @@ export function validateMetaPlanContent(
     : []
   if (countries.length === 0) errors.countries = 'En az bir ülke seçin.'
   else if (countries.length > META_PLAN_LIMITS.maxCountries) errors.countries = `En fazla ${META_PLAN_LIMITS.maxCountries} ülke seçilebilir.`
-  else if (countries.some((c) => !COUNTRY_CODES.has(c))) errors.countries = 'Listede olmayan bir ülke seçildi.'
+  else if (countries.some((c) => !isKnownCountryCode(c))) errors.countries = 'Listede olmayan bir ülke seçildi.'
+  else if (options.blockDsaCountries) {
+    const dsaMessage = dsaCountriesMessage(countries)
+    if (dsaMessage) errors.countries = dsaMessage
+  }
 
   const ageMin = Number(raw.ageMin)
   const ageMax = Number(raw.ageMax)

@@ -7,6 +7,7 @@ import { isAdsFeatureUiEnabled } from '@/lib/ads/feature-flag'
 import { resolveMetaAdsAccess, resolveMetaAdsKillSwitch } from '@/lib/ads/env'
 import type { GoogleAdsAccessIdentity, MetaAdsAccessDecision } from '@/lib/ads/env'
 import { metaAdsErrorCode, metaAdsHttpStatus } from '@/lib/ads/meta-ads-error'
+import { dsaBlockedCountries, dsaCountriesMessage } from '@/lib/ads/meta-countries'
 
 const NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store, no-cache, must-revalidate',
@@ -56,6 +57,18 @@ export function isSameOriginMetaAdsPost(request: Request): boolean {
 
 export function metaAdsJson(body: unknown, status = 200): NextResponse {
   return NextResponse.json(body, { status, headers: NO_STORE_HEADERS })
+}
+
+/** 422 response when the plan targets EU/EEA countries (DSA details are not collected yet); null when it does not. */
+export function metaDsaBlockedResponse(countries: readonly string[]): NextResponse | null {
+  const message = dsaCountriesMessage(countries)
+  if (!message) return null
+  return metaAdsJson({
+    ok: false,
+    error: 'dsa_info_required',
+    fieldErrors: { countries: message },
+    blockedCountries: dsaBlockedCountries(countries),
+  }, metaAdsHttpStatus('dsa_info_required'))
 }
 
 export function metaAdsErrorResponse(error: unknown): NextResponse {

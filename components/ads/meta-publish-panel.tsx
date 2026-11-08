@@ -16,8 +16,8 @@ import type { MetaLiveState } from '@/lib/ads/meta-manage'
 import type { MetaConnectionView } from '@/lib/ads/meta-ads-shared'
 import { draftMetaCopyFromScan } from '@/lib/ads/meta-ai-draft'
 import { requestScan } from '@/lib/ads/scan-client'
+import { MetaCountryPicker } from '@/components/ads/meta-country-picker'
 import {
-  META_COUNTRIES,
   META_OPTIMIZATION_GOALS,
   metaCurrencyOffset,
   metaApprovalText,
@@ -317,6 +317,7 @@ export function MetaPublishPanel({
     const checked = validateMetaPlanContent(form, {
       currency: connection?.currency ?? null,
       minimumBudgetMinor,
+      blockDsaCountries: options.requireImage,
     })
     const next: MetaFieldErrors = checked.ok ? {} : toFieldErrors(checked.errors)
   if (errors.imagePath && !(plan?.hasStoredImage && !file)) next.imagePath = errors.imagePath
@@ -738,22 +739,16 @@ export function MetaPublishPanel({
           </span>
         </Field>
         <Field name="countries" label={t('Ülkeler', 'Countries')} error={errors.countries} className="md:col-span-2" group>
-          <div
-            {...{ id: fieldId('countries'), tabIndex: -1, role: 'group', 'aria-labelledby': 'meta-label-countries', 'aria-describedby': errors.countries ? `${fieldId('countries')}-error` : undefined }}
-            className={`flex flex-wrap gap-x-4 gap-y-2 rounded-md p-1 outline-none ${errors.countries ? 'ring-2 ring-destructive/40' : ''}`}
-          >
-            {META_COUNTRIES.map((country) => (
-              <label key={country.code} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={form.countries.includes(country.code)}
-                  onCheckedChange={(checked) =>
-                    set('countries', checked ? [...form.countries, country.code].slice(0, META_PLAN_LIMITS.maxCountries) : form.countries.filter((c) => c !== country.code))
-                  }
-                />
-                {country.name}
-              </label>
-            ))}
-          </div>
+          <MetaCountryPicker
+            id={fieldId('countries')}
+            value={form.countries}
+            max={META_PLAN_LIMITS.maxCountries}
+            isTr={isTr}
+            invalid={Boolean(errors.countries)}
+            labelledBy="meta-label-countries"
+            describedBy={errors.countries ? `${fieldId('countries')}-error` : undefined}
+            onChange={(next) => set('countries', next)}
+          />
         </Field>
         <Field name="ageMin" label={t('Yaş (en az)', 'Min age')} error={errors.ageMin}>
           <Input {...control('ageMin')} type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMin} onChange={(e) => set('ageMin', Number(e.target.value))} />
