@@ -16,6 +16,10 @@ export const META_CTA_LABELS: Record<MetaCta, string> = {
   GET_QUOTE: 'Teklif al',
 }
 
+export const META_OPTIMIZATION_GOALS = ['LANDING_PAGE_VIEWS', 'LINK_CLICKS'] as const
+export type MetaOptimizationGoal = (typeof META_OPTIMIZATION_GOALS)[number]
+export const META_DEFAULT_URL_TAGS = 'utm_source=facebook&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}'
+
 /** Verified short list of ISO 3166-1 alpha-2 codes offered for geo targeting. */
 export const META_COUNTRIES: ReadonlyArray<{ code: string; name: string }> = [
   { code: 'TR', name: 'Türkiye' },
@@ -73,6 +77,8 @@ export type MetaPlanContent = {
   ageMin: number
   ageMax: number
   gender: MetaGender
+  optimizationGoal: MetaOptimizationGoal
+  utmTracking: boolean
   /** Major currency units of the ad account (e.g. 250.5 TRY). Converted to minor units server-side. */
   dailyBudget: number | string
   /** Optional inclusive end day, `YYYY-MM-DD`. Empty = runs until stopped. */
@@ -169,7 +175,7 @@ export type ValidatedPlan = {
 
 export function validateMetaPlanContent(
   input: unknown,
-  options: { currency: string | null; now?: Date; requireImage?: boolean },
+  options: { currency: string | null; now?: Date; requireImage?: boolean; minimumBudgetMinor?: number | null },
 ): { ok: true; value: ValidatedPlan } | { ok: false; errors: MetaPlanFieldErrors } {
   const errors: MetaPlanFieldErrors = {}
   const raw = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
@@ -212,6 +218,13 @@ export function validateMetaPlanContent(
   }
 
   const gender: MetaGender = raw.gender === 'male' || raw.gender === 'female' ? raw.gender : 'all'
+  const optimizationGoal = (META_OPTIMIZATION_GOALS as readonly string[]).includes(String(raw.optimizationGoal ?? 'LANDING_PAGE_VIEWS'))
+    ? ((raw.optimizationGoal ?? 'LANDING_PAGE_VIEWS') as MetaOptimizationGoal)
+    : 'LANDING_PAGE_VIEWS'
+  if (raw.optimizationGoal !== undefined && !(META_OPTIMIZATION_GOALS as readonly string[]).includes(String(raw.optimizationGoal))) {
+    errors.optimizationGoal = 'Geçerli bir optimizasyon hedefi seçin.'
+  }
+  const utmTracking = raw.utmTracking !== false
 
   const budget = dailyBudgetToMinor(raw.dailyBudget as number | string, options.currency)
   if (!budget.ok) {
@@ -221,6 +234,18 @@ export function validateMetaPlanContent(
       too_many_decimals: 'Bu para biriminde bütçe en fazla 2 ondalık (JPY/KRW gibi para birimlerinde ondalıksız) olabilir.',
       amount_too_small: 'Günlük bütçe sıfırdan büyük olmalı.',
     }[budget.error]
+  } else if (
+    typeof options.minimumBudgetMinor === 'number' &&
+    Number.isSafeInteger(options.minimumBudgetMinor) &&
+    options.minimumBudgetMinor > 0 &&
+    budget.minor < options.minimumBudgetMinor
+  ) {
+    const offset = metaCurrencyOffset(options.currency) ?? 100
+    const formattedMinimum = (options.minimumBudgetMinor / offset).toLocaleString('tr-TR', {
+      minimumFractionDigits: offset === 100 ? 2 : 0,
+      maximumFractionDigits: offset === 100 ? 2 : 0,
+    })
+    errors.dailyBudget = `Bu reklam hesabı için Meta'nın minimum günlük bütçesi ${formattedMinimum} ${options.currency}.`
   }
 
   let endDate: string | null = null
@@ -251,6 +276,7 @@ export function validateMetaPlanContent(
       content: {
         name, landingUrl: url.url, primaryText, headline, description, cta, countries, ageMin, ageMax, gender,
         dailyBudget: typeof raw.dailyBudget === 'number' ? raw.dailyBudget : String(raw.dailyBudget).trim(),
+        optimizationGoal, utmTracking,
         endDate, imagePath, specialTopic,
       },
     },
@@ -373,7 +399,7 @@ export function buildAdSetForm(input: {
     status: 'PAUSED',
     daily_budget: String(input.dailyBudgetMinor),
     billing_event: 'IMPRESSIONS',
-    optimization_goal: 'LINK_CLICKS',
+    optimization_goal: input.content.optimizationGoal ?? 'LANDING_PAGE_VIEWS',
     bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
     destination_type: 'WEBSITE',
     targeting: JSON.stringify(targeting),
@@ -409,6 +435,7 @@ export function buildCreativeForm(input: {
     name: taggedName(input.content.name, input.tag, ' - Kreatif'),
     object_story_spec: JSON.stringify(spec),
   }
+  if (input.content.utmTracking !== false) form.url_tags = META_DEFAULT_URL_TAGS
   if (input.validateOnly) form.execution_options = VALIDATE_ONLY
   return form
 }
@@ -435,6 +462,7 @@ export function metaPlanHash(content: MetaPlanContent, extra: { connectionId: st
   const canonical = JSON.stringify([
     content.name, content.landingUrl, content.primaryText, content.headline, content.description, content.cta,
     [...content.countries].sort(), content.ageMin, content.ageMax, content.gender, String(content.dailyBudget),
+    content.optimizationGoal ?? 'LANDING_PAGE_VIEWS', content.utmTracking !== false,
     content.endDate, content.imagePath, extra.connectionId, extra.currency, extra.imageSha ?? null,
   ])
   return createHash('sha256').update(canonical).digest('hex')
@@ -442,6 +470,23 @@ export function metaPlanHash(content: MetaPlanContent, extra: { connectionId: st
 
 export const META_APPROVAL_TEXT =
   'Bu kampanyanın Meta reklam hesabımda DURAKLATILMIŞ olarak oluşturulmasını onaylıyorum. Kampanya, siz Meta Reklam Yöneticisi\'nden başlatana kadar harcama yapmaz. Günlük bütçe ve reklam metni yukarıda gördüğüm gibidir.'
+
+export function metaApprovalText(content: MetaPlanContent, lang: 'tr' | 'en'): string {
+  const goal = content.optimizationGoal ?? 'LANDING_PAGE_VIEWS'
+  const goalLabel = lang === 'tr'
+    ? goal === 'LANDING_PAGE_VIEWS' ? 'yönlendirme sayfası görüntülemeleri' : 'bağlantı tıklamaları'
+    : goal === 'LANDING_PAGE_VIEWS' ? 'landing page views' : 'link clicks'
+  const pixelNote = goal === 'LANDING_PAGE_VIEWS'
+    ? lang === 'tr' ? ' Sitede Meta Pixel kurulu olmalıdır.' : ' A Meta Pixel must be installed on the website.'
+    : ''
+  const trackingNote = content.utmTracking !== false
+    ? lang === 'tr' ? ' UTM etiketleri hedef bağlantıya eklenir.' : ' UTM tags are appended to the destination link.'
+    : lang === 'tr' ? ' UTM etiketleri kapalıdır.' : ' UTM tags are disabled.'
+
+  return lang === 'tr'
+    ? `Bu plan ${goalLabel} hedefiyle Meta hesabınızda DURAKLATILMIŞ olarak oluşturulacaktır. Kampanya Meta Reklam Yöneticisi’nden başlatılana kadar harcama yapmaz.${pixelNote}${trackingNote} Günlük bütçe, hedef sayfa ve reklam metni yukarıda gördüğünüz gibidir.`
+    : `This plan will be created PAUSED in your Meta account with the ${goalLabel} goal. It will not spend until started in Meta Ads Manager.${pixelNote}${trackingNote} The daily budget, destination URL and ad copy are shown above.`
+}
 
 export const META_APPROVAL_VERSION = 1
 

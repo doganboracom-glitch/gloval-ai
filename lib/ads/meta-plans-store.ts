@@ -79,7 +79,7 @@ export function metaPlanView(row: MetaPlanRow) {
 }
 
 export async function getMetaPlan(admin: Admin, userId: string, planId: string): Promise<MetaPlanRow | null> {
-  const { data, error } = await admin.from('ads_meta_plans').select(PLAN_SELECT).eq('id', planId).eq('user_id', userId).maybeSingle()
+  const { data, error } = await admin.from('ads_meta_plans').select(PLAN_SELECT).eq('id', planId).eq('user_id', userId).is('deleted_at', null).maybeSingle()
   if (error) throw new MetaAdsError('provider_error')
   return (data as MetaPlanRow | null) ?? null
 }
@@ -90,10 +90,40 @@ export async function listMetaPlans(admin: Admin, userId: string, connectionId: 
     .select(PLAN_SELECT)
     .eq('user_id', userId)
     .eq('connection_id', connectionId)
+    .is('deleted_at', null)
     .order('updated_at', { ascending: false })
     .limit(20)
   if (error) throw new MetaAdsError('provider_error')
   return (data as MetaPlanRow[] | null) ?? []
+}
+
+export async function softDeleteMetaPlan(admin: Admin, input: {
+  userId: string
+  planId: string
+  metaStatuses: import('@/lib/ads/meta-plan-deletion').MetaPlanDeletionStatuses | null
+}): Promise<void> {
+  const { data, error } = await admin.rpc('ads_soft_delete_meta_plan', {
+    p_user_id: input.userId,
+    p_plan_id: input.planId,
+    p_meta_statuses: input.metaStatuses,
+  })
+  if (error) throw new MetaAdsError('provider_error')
+  const result = (Array.isArray(data) ? data[0] : data) as { state?: string } | null
+  switch (result?.state) {
+    case 'deleted':
+      return
+    case 'active':
+      throw new MetaAdsError('meta_plan_active')
+    case 'plan_busy':
+      throw new MetaAdsError('meta_plan_busy')
+    case 'meta_confirmation_required':
+      throw new MetaAdsError('meta_confirmation_required')
+    case 'invalid_request':
+      throw new MetaAdsError('invalid_request')
+    case 'not_found':
+    default:
+      throw new MetaAdsError('plan_not_found')
+  }
 }
 
 export async function createMetaPlan(admin: Admin, input: {
@@ -140,6 +170,7 @@ export async function updateMetaPlanContent(admin: Admin, plan: MetaPlanRow, inp
     })
     .eq('id', plan.id)
     .eq('user_id', plan.user_id)
+    .is('deleted_at', null)
     .eq('version', plan.version)
     .select(PLAN_SELECT)
     .maybeSingle()
@@ -154,6 +185,7 @@ export async function markMetaPlanValidated(admin: Admin, plan: MetaPlanRow): Pr
     .update({ status: plan.status === 'partial' ? 'partial' : 'validated', validated_version: plan.version, validated_at: new Date().toISOString() })
     .eq('id', plan.id)
     .eq('user_id', plan.user_id)
+    .is('deleted_at', null)
     .eq('version', plan.version)
   if (error) throw new MetaAdsError('provider_error')
 }
@@ -179,6 +211,7 @@ async function updateMetaPlanContentAndImage(admin: Admin, plan: MetaPlanRow, co
     })
     .eq('id', plan.id)
     .eq('user_id', plan.user_id)
+    .is('deleted_at', null)
     .eq('version', plan.version)
     .select(PLAN_SELECT)
     .maybeSingle()
@@ -188,7 +221,7 @@ async function updateMetaPlanContentAndImage(admin: Admin, plan: MetaPlanRow, co
 }
 
 export async function saveMetaPlanObject(admin: Admin, plan: MetaPlanRow, column: 'meta_campaign_id' | 'meta_adset_id' | 'meta_image_hash' | 'meta_creative_id' | 'meta_ad_id', value: string) {
-  const { error } = await admin.from('ads_meta_plans').update({ [column]: value }).eq('id', plan.id).eq('user_id', plan.user_id)
+  const { error } = await admin.from('ads_meta_plans').update({ [column]: value }).eq('id', plan.id).eq('user_id', plan.user_id).is('deleted_at', null)
   if (error) throw new MetaAdsError('provider_error')
 }
 

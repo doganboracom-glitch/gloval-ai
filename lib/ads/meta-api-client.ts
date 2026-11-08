@@ -28,6 +28,7 @@ export const META_API_ENDPOINTS = [
   'act.ads',
   'act.adimages',
   'act.funding',
+  'act.minimum_budgets',
   // Phase M2 writes. `.validate` = execution_options validate_only. Counted in a separate write quota.
   'act.campaigns.create',
   'act.adsets.create',

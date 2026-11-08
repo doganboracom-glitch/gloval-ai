@@ -3,6 +3,7 @@ import { MetaAdsError } from '@/lib/ads/meta-ads-error'
 import { createMetaApiClient } from '@/lib/ads/meta-api-client'
 import { withMetaAccess } from '@/lib/ads/meta-connections'
 import { evaluateMetaCopyPolicy } from '@/lib/ads/meta-ad-policy'
+import { getMetaMinimumDailyBudget } from '@/lib/ads/meta-budget'
 import { preflightMetaAccount, validateMetaPlanRemote } from '@/lib/ads/meta-publish'
 import { metaRequestTag, validateMetaPlanContent } from '@/lib/ads/meta-publish-plan'
 import { assertMetaPublishable, guardMetaPublishRoute, isUuid, readJsonObject } from '@/lib/ads/meta-plan-route'
@@ -37,6 +38,28 @@ export async function POST(request: Request) {
       action: async ({ connection, accessToken, context }) => {
         assertMetaPublishable(connection)
         if (connection.currency_code !== plan.currency) throw new MetaAdsError('plan_changed')
+        let minimumBudgetMinor: number | null = null
+        try {
+          minimumBudgetMinor = await getMetaMinimumDailyBudget({
+            graph,
+            accessToken,
+            context,
+            accountId: connection.external_account_id,
+            connectionId: connection.id,
+            currency: connection.currency_code ?? '',
+            optimizationGoal: checked.value.content.optimizationGoal ?? 'LANDING_PAGE_VIEWS',
+          })
+        } catch {
+          // The Meta validate_only request below remains authoritative when this read is unavailable.
+        }
+        const checkedWithMetaMinimum = validateMetaPlanContent(plan.content, {
+          currency: plan.currency,
+          requireImage: true,
+          minimumBudgetMinor,
+        })
+        if (!checkedWithMetaMinimum.ok) {
+          return { ok: false as const, fieldErrors: checkedWithMetaMinimum.errors }
+        }
         const common = { graph, accessToken, context, accountId: connection.external_account_id, apiVersion }
         const pre = await preflightMetaAccount(common)
         if (!pre.ok) return { ok: false as const, step: 'preflight' as const, failure: pre.failure }
@@ -57,6 +80,9 @@ export async function POST(request: Request) {
       },
     })
 
+    if (!result.ok && 'fieldErrors' in result) {
+      return metaAdsJson({ ok: false, error: 'plan_invalid', fieldErrors: result.fieldErrors }, 400)
+    }
     if (!result.ok) {
       await appendMetaAction(guard.admin, {
         userId, planId: plan.id, connectionId: plan.connection_id, actor: 'system', actionType: 'meta_validate_only',
