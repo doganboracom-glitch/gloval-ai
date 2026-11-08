@@ -158,39 +158,90 @@ export function reportServerEvent(payload: Record<string, unknown>): void {
   }
 }
 
+const MAX_REMEMBERED_EVENT_IDS = 200
+const rememberedEventIds = new Set<string>()
+const rememberedEventOrder: string[] = []
+
+function rememberEventId(eventId: string): void {
+  rememberedEventIds.add(eventId)
+  rememberedEventOrder.push(eventId)
+  if (rememberedEventOrder.length > MAX_REMEMBERED_EVENT_IDS) {
+    const expired = rememberedEventOrder.shift()
+    if (expired) rememberedEventIds.delete(expired)
+  }
+}
+
+function trackEventAndReportOnce(
+  eventId: string,
+  name: AnalyticsEventName,
+  params: AnalyticsParams,
+  serverPayload?: Record<string, unknown>,
+): void {
+  if (rememberedEventIds.has(eventId)) return
+  if (!trackEvent(name, params)) return
+  rememberEventId(eventId)
+  if (serverPayload) reportServerEvent(serverPayload)
+}
+
 export function trackSignUp(method: 'email' | 'google' = 'email', userId?: string): void {
-  trackEvent(ANALYTICS_EVENTS.signUp, {
-    method,
-    ...(userId ? { event_id: metaEventIds.signup(userId) } : {}),
-  })
-  if (userId) reportServerEvent({ type: 'sign_up', userId })
+  if (!userId) {
+    trackEvent(ANALYTICS_EVENTS.signUp, { method })
+    return
+  }
+  const eventId = metaEventIds.signup(userId)
+  trackEventAndReportOnce(
+    eventId,
+    ANALYTICS_EVENTS.signUp,
+    { method, event_id: eventId },
+    { type: 'sign_up', userId },
+  )
 }
 
 export function trackGenerateSiteStarted(): void {
   trackEvent(ANALYTICS_EVENTS.generateSiteStarted)
 }
 
-export function trackGenerateSiteCompleted(source: 'ai' | 'fallback'): void {
-  const nonce = newEventNonce()
-  trackEvent(ANALYTICS_EVENTS.generateSiteCompleted, { source, event_id: metaEventIds.generate(nonce) })
-  reportServerEvent({ type: 'generate_site_completed', nonce, source })
+export function trackGenerateSiteCompleted(source: 'ai' | 'fallback', nonce: string): void {
+  const eventId = metaEventIds.generate(nonce)
+  trackEventAndReportOnce(
+    eventId,
+    ANALYTICS_EVENTS.generateSiteCompleted,
+    { source, event_id: eventId },
+    { type: 'generate_site_completed', nonce, source },
+  )
 }
 
 export function trackPublishSite(siteId?: string): void {
-  trackEvent(ANALYTICS_EVENTS.publishSite, siteId ? { event_id: metaEventIds.publish(siteId) } : {})
-  if (siteId) reportServerEvent({ type: 'publish_site', siteId })
+  if (!siteId) {
+    trackEvent(ANALYTICS_EVENTS.publishSite)
+    return
+  }
+  const eventId = metaEventIds.publish(siteId)
+  trackEventAndReportOnce(
+    eventId,
+    ANALYTICS_EVENTS.publishSite,
+    { event_id: eventId },
+    { type: 'publish_site', siteId },
+  )
 }
 
-export function trackBeginCheckout(params: { value?: number; currency?: string; item_category?: string } = {}): void {
-  const nonce = newEventNonce()
-  trackEvent(ANALYTICS_EVENTS.beginCheckout, { ...params, event_id: metaEventIds.checkout(nonce) })
-  reportServerEvent({
-    type: 'begin_checkout',
-    nonce,
-    value: params.value,
-    currency: params.currency,
-    category: params.item_category,
-  })
+export function trackBeginCheckout(
+  params: { value?: number; currency?: string; item_category?: string } = {},
+  nonce: string = newEventNonce(),
+): void {
+  const eventId = metaEventIds.checkout(nonce)
+  trackEventAndReportOnce(
+    eventId,
+    ANALYTICS_EVENTS.beginCheckout,
+    { ...params, event_id: eventId },
+    {
+      type: 'begin_checkout',
+      nonce,
+      value: params.value,
+      currency: params.currency,
+      category: params.item_category,
+    },
+  )
 }
 
 const SENT_PURCHASES_KEY = 'gloval_purchases_sent'
