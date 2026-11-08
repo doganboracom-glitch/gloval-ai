@@ -1560,6 +1560,7 @@ const es: DeepPartial<Dict> = {
     noticeTerms: 'Para las condiciones de cancelación y reembolso, consulta:',
   },
   ads: {
+    newBadge: 'Nuevo',
     manualFallback: { title: 'Borrador con datos del negocio', description: 'Si no se puede leer el sitio, introduce los datos del negocio abajo. No eludimos robots.txt ni los controles de acceso.', note: 'Este borrador se basa solo en los datos que proporcionas; el sitio no se analiza y la URL de destino no se verifica.', resultTitle: 'Borrador con datos del negocio', summaryTitle: 'Datos del negocio proporcionados', businessLabel: 'Nombre del negocio', industryLabel: 'Sector', servicesLabel: 'Productos o servicios', locationLabel: 'Zona de servicio (opcional)', languageLabel: 'Idioma del anuncio', submitLabel: 'Crear borrador' },
     addressLabel: 'Dirección del sitio web',
     addressGuidance: 'Escribe aquí el enlace web',

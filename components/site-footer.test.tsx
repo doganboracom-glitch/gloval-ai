@@ -98,17 +98,17 @@ describe('GLOVAL Partner footer card', () => {
 })
 
 describe('footer GLOVAL Ads link badge', () => {
-  it('shows the "Yakında" badge next to the link when the flag is on', () => {
+  it('shows the "Yeni" badge next to the link when the flag is on', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteFooter now={BEFORE} />)
     const link = screen.getByRole('link', { name: /GLOVAL Ads/ })
     expect(link.getAttribute('href')).toBe('/ads')
     expect(link.contains(screen.getByTestId('ads-soon-badge'))).toBe(true)
-    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('Yakında')
+    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('Yeni')
     expect(screen.queryByTestId('ads-new-badge')).toBeNull()
   })
 
-  it('uses the same badge look as the domain link badge', () => {
+  it('uses the same badge style as Domain Sorgula', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteFooter now={BEFORE} />)
     expect(screen.getByTestId('ads-soon-badge').className).toBe(
@@ -116,11 +116,11 @@ describe('footer GLOVAL Ads link badge', () => {
     )
   })
 
-  it('shows the English badge text in English', () => {
+  it('shows the English new badge text in English', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     state.lang = 'en'
     render(<SiteFooter now={BEFORE} />)
-    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('Coming soon')
+    expect(screen.getByTestId('ads-soon-badge').textContent).toBe('New')
   })
 
   it('keeps the badge long after the domain badge has expired', () => {

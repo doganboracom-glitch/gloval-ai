@@ -1530,6 +1530,7 @@ const ru: DeepPartial<Dict> = {
     noticeTerms: 'Условия отмены и возврата смотрите здесь:',
   },
   ads: {
+    newBadge: 'Новое',
     manualFallback: { title: 'Черновик плана по данным компании', description: 'Если сайт нельзя прочитать, укажите сведения о компании ниже. Мы не обходим robots.txt и средства контроля доступа.', note: 'Черновик основан только на предоставленных данных; сайт не сканируется, а целевой URL не проверяется.', resultTitle: 'Черновик плана по данным компании', summaryTitle: 'Предоставленные сведения о компании', businessLabel: 'Название компании', industryLabel: 'Отрасль', servicesLabel: 'Товары или услуги', locationLabel: 'Регион обслуживания (необязательно)', languageLabel: 'Язык объявления', submitLabel: 'Создать черновик' },
     disconnectDialog: {
       title: 'Отключить Google Ads?',

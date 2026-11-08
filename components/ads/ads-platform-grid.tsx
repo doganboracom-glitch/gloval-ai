@@ -19,8 +19,13 @@ export function AdsPlatformGrid({ viewer = ADS_ANONYMOUS_VIEWER }: { viewer?: Ad
   return (
     <ul className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
       {ADS_PLATFORM_REGISTRY.map((platform) => {
-        const isActive = platform.status === 'available'
-        const target = resolveAdsPlatformCardTarget(platform, viewer)
+        const resolvedTarget = resolveAdsPlatformCardTarget(platform, viewer)
+        const isMetaComingSoonForAnonymous =
+          platform.slug === 'meta' && resolvedTarget.kind === 'link' && resolvedTarget.requiresLogin
+        const target = isMetaComingSoonForAnonymous
+          ? { kind: 'passive' as const, reason: 'coming_soon' as const }
+          : resolvedTarget
+        const isActive = platform.status === 'available' && !isMetaComingSoonForAnonymous
         const name = copy[platform.nameKey]
         const body = copy[platform.bodyKey]
 

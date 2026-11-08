@@ -139,7 +139,7 @@ export function SiteFooter({ now }: { now?: Date } = {}) {
                         data-testid="ads-soon-badge"
                         className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
                       >
-                        {t.ads.comingSoon}
+                        {t.ads.newBadge}
                       </span>
                     )}
                   </Link>

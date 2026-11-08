@@ -108,19 +108,31 @@ describe('Ads credits panel', () => {
 })
 
 describe('Ads platform and information sections', () => {
-  it('renders six channels with Google Ads and Meta Ads active and includes WhatsApp Ads', () => {
-  renderWithLanguage('tr', <AdsPlatformGrid />)
-  
-  const cards = screen.getAllByRole('listitem')
-  expect(cards).toHaveLength(6)
-  expect(cards[0]?.textContent).toContain('Google Ads')
-  expect(cards[0]?.textContent).not.toContain('Yakında')
-  expect(cards[1]?.textContent).toContain('Meta')
-  expect(cards[1]?.textContent).not.toContain('Yakında')
-  expect(cards.slice(2).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
+  it('keeps Google sign-in available while showing Meta as coming soon', () => {
+    renderWithLanguage('tr', <AdsPlatformGrid />)
+
+    const cards = screen.getAllByRole('listitem')
+    expect(cards).toHaveLength(6)
+    expect(cards[0]?.textContent).toContain('Google Ads')
+    expect(cards[0]?.textContent).toContain('Giriş yap ve başla')
+    expect(cards[0]?.textContent).not.toContain('Yakında')
+    expect(cards[0]?.querySelector('a')).not.toBeNull()
+    expect(cards[1]?.textContent).toContain('Meta')
+    expect(cards[1]?.textContent).toContain('Yakında')
+    expect(cards[1]?.textContent).toContain('Facebook ve Instagram reklamları')
+    expect(cards[1]?.querySelector('a')).toBeNull()
+    expect(cards.slice(2).every((card) => card.textContent?.includes('Yakında'))).toBe(true)
     expect(cards.every((card) => card.querySelector('svg'))).toBe(true)
     expect(cards[5]?.textContent).toContain('WhatsApp')
     expect(cards[5]?.textContent).toContain('WhatsApp Business reklamlarıyla sohbet başlatan kampanyalar.')
+  })
+
+  it('preserves the gated Meta dashboard link for authorized viewers', () => {
+    renderWithLanguage('tr', <AdsPlatformGrid viewer={{ authenticated: true, openGates: ['meta_connect'] as const }} />)
+
+    const metaCard = screen.getAllByRole('listitem')[1]
+    expect(metaCard?.querySelector('a')?.getAttribute('href')).toBe('/ads/dashboard?platform=meta')
+    expect(metaCard?.textContent).toContain('Panele git')
   })
 
   it('uses three step cards while preserving all existing step copy', () => {
