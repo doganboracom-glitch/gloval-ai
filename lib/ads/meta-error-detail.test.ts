@@ -4,6 +4,7 @@ import {
   classifyMetaError,
   extractMetaErrorDetail,
   formatMetaErrorCode,
+  formatMetaErrorDiagnostic,
   redactMetaErrorMessage,
   sanitizeMetaErrorDetail,
 } from '@/lib/ads/meta-error-detail'
@@ -33,7 +34,7 @@ describe('Meta hata ayrıntısı maskeleme', () => {
     const message = redactMetaErrorMessage('User jane@example.com opened https://graph.facebook.com/v24.0/me?access_token=x for act 1234567890123')
     expect(message).toContain('[email]')
     expect(message).toContain('[url]')
-    expect(message).toContain('[id]')
+    expect(message).toContain('[phone]')
     expect(message).not.toContain('jane@example.com')
     expect(message).not.toContain('1234567890123')
   })
@@ -45,7 +46,7 @@ describe('Meta hata ayrıntısı maskeleme', () => {
     expect(redactMetaErrorMessage(42)).toBeNull()
   })
 
-  it('yalnızca izin verilen alanları çıkarır; fbtrace_id ve ham gövde atılır', () => {
+  it('yalnızca izin verilen alanları çıkarır; trace kimliği saklanır, ham gövde atılır', () => {
     const detail = extractMetaErrorDetail({
       error: {
         message: 'Session has expired for the user',
@@ -57,9 +58,46 @@ describe('Meta hata ayrıntısı maskeleme', () => {
       },
       debug: 'raw',
     })
-    expect(detail).toEqual({ code: 190, subcode: 463, type: 'OAuthException', message: 'Session has expired for the user' })
-    expect(JSON.stringify(detail)).not.toContain('AbCdEfTrace')
+    expect(detail).toEqual({
+      code: 190,
+      subcode: 463,
+      type: 'OAuthException',
+      message: 'Session has expired for the user',
+      traceId: 'AbCdEfTrace',
+    })
+    expect(JSON.stringify(detail)).toContain('AbCdEfTrace')
     expect(JSON.stringify(detail)).not.toContain('raw')
+  })
+
+  it('başlık, kullanıcı metni ve trace kimliğini maskeli biçimde saklar; kodları tanıda korur', () => {
+    const detail = extractMetaErrorDetail({
+      error: {
+        code: 200,
+        error_subcode: 1815010,
+        type: 'OAuthException',
+        error_user_title: 'Page access for jane@example.com',
+        error_user_msg: 'Grant access for +90 555 123 45 67',
+        message: 'Permission denied for account 123456789012',
+        fbtrace_id: 'AbCdEfTrace123',
+      },
+    })
+
+    expect(detail).toMatchObject({
+      code: 200,
+      subcode: 1815010,
+      userTitle: 'Page access for [email]',
+      userMessage: 'Grant access for [phone]',
+      message: 'Permission denied for account [phone]',
+      traceId: 'AbCdEfTrace123',
+    })
+    const diagnostic = formatMetaErrorDiagnostic(detail)
+    expect(diagnostic).toContain('code=200')
+    expect(diagnostic).toContain('error_subcode=1815010')
+    expect(diagnostic).toContain('fbtrace_id=AbCdEfTrace123')
+    expect(diagnostic).not.toContain('jane@example.com')
+    expect(diagnostic).not.toContain('+90 555')
+    expect(diagnostic?.length).toBeLessThanOrEqual(300)
+    expect(redactMetaErrorMessage(diagnostic)).toContain('error_subcode=1815010')
   })
 
   it('geçersiz tür ve sayıları yok sayar, boş yükte null döner', () => {

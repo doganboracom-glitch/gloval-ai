@@ -21,8 +21,9 @@ const DETAIL_MAX = 140
 
 export const META_ERROR_MESSAGES: Record<string, string> = {
   app_not_live: META_APP_NOT_LIVE_MESSAGE,
-  page_required: 'Reklam yayınlamak için bir Facebook Sayfası seçili olmalı. Ayarlar sekmesinden hesabı sayfa seçerek yeniden bağlayın.',
-  publish_permission_missing: 'Duraklatılmış kampanya için yönetim izni gerekli. Ayarlar sekmesinden izni verin.',
+  page_required: 'Meta, bağlı Facebook Sayfası veya Instagram hesabı için reklam erişimini reddetti. Meta Business Suite’te Sayfa erişimi ve reklam yetkisini; Instagram yerleşimi kullanılıyorsa profesyonel hesabın aynı Sayfaya bağlı olduğunu kontrol edin.',
+  advertiser_verification_required: 'Meta reklamveren, işletme veya kimlik doğrulaması istiyor. Meta Business Support Home > Hesap Kalitesi bölümündeki adımları tamamlayıp yeniden deneyin.',
+  publish_permission_missing: 'Meta reklam yönetimi iznini reddetti. Meta Business Ayarları’nda reklam hesabı kampanya yetkisini ve gerekli reklam yönetimi izinlerini doğrulayın.',
   reauth_required: 'Meta erişimi sona ermiş. Ayarlar sekmesinden hesabı yeniden bağlayın.',
   network_error: 'Bağlantı kurulamadı. İnternetinizi kontrol edip tekrar deneyin.',
   rate_limited: 'Çok fazla deneme yaptınız. Birkaç dakika sonra tekrar deneyin.',
@@ -37,7 +38,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   publish_in_progress: 'Yayın şu anda sürüyor. Birkaç saniye sonra yenileyin.',
   publish_quota_exceeded: 'Günlük yayın deneme limitine ulaşıldı. Yarın tekrar deneyin.',
   payment_method_missing: 'Meta reklam hesabında ödeme yöntemi tanımlı değil. Meta Reklam Yöneticisi\'nden ekleyin.',
-  account_restricted: 'Meta reklam hesabı kısıtlı. Meta Reklam Yöneticisi\'nden durumu kontrol edin.',
+  account_restricted: 'Meta reklam hesabı kısıtlı veya devre dışı. Meta Business Support Home > Hesap Kalitesi bölümünde kısıtlamaları ve ödeme durumunu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
   age_range_not_allowed: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
@@ -55,7 +56,9 @@ export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | nu
   if (!redacted) return null
   const flat = redacted
     .replace(/\(#\d+\)/g, '')
-    .replace(/\b(?:error[_ ]?code|error[_ ]?subcode|subcode)\s*[:=]?\s*\d+\b/gi, '')
+    .replace(/\b(?:error[_ ]?code|code)\s*[:=]?\s*\d+\b/gi, '')
+    .replace(/\b(?:error[_ ]?subcode|subcode)\s*[:=]?\s*1870189\b/gi, '')
+    .replace(/\b1870189\b/g, '')
     .replace(/\s+/g, ' ')
     .trim()
   if (!flat) return null

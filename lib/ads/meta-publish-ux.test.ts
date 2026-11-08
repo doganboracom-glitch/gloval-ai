@@ -20,10 +20,21 @@ describe('Meta yayın hata metinleri', () => {
     expect(result.detail).toBeNull()
   })
 
-  it('bilinen kodu Türkçe açıklar ve ham Meta metnini ayrıntıya koyar', () => {
+  it('bilinen kodu Türkçe açıklar ve Meta tanısını ayrıntıya koyar', () => {
     const result = describeMetaApiError({ ok: false, error: 'page_required', metaReason: 'Some raw Meta text' })
     expect(result.message).toContain('Facebook Sayfası')
     expect(result.detail).toBe('Some raw Meta text')
+  })
+
+  it('reklamveren doğrulaması için Meta Business Support Home yolunu gösterir', () => {
+    const result = describeMetaApiError({
+      ok: false,
+      error: 'advertiser_verification_required',
+      metaReason: 'code=200 | error_subcode=1815010 | fbtrace_id=AbCdEfTrace123',
+    })
+    expect(result.message).toContain('Hesap Kalitesi')
+    expect(result.detail).toContain('error_subcode=1815010')
+    expect(result.detail).toContain('fbtrace_id=AbCdEfTrace123')
   })
 
   it('uygulama canlı değilse özel mesajı kullanır', () => {

@@ -1,8 +1,8 @@
 /**
  * Safe, allow-list based summary of a Graph API error response.
  *
- * Only the numeric code/subcode, the error type and a short redacted message survive. The raw response body,
- * request headers, `fbtrace_id` and credentials are never copied, so the result is safe to log and store.
+ * Only diagnostic fields are retained. User text is redacted and bounded; raw response bodies, request headers,
+ * credentials, and arbitrary Meta fields are never copied.
  */
 
 export type MetaErrorDetail = {
@@ -10,16 +10,22 @@ export type MetaErrorDetail = {
   subcode: number | null
   /** e.g. `OAuthException`. */
   type: string | null
-  /** Redacted, at most 200 characters. Diagnostics only; never shown to end users. */
+  /** Redacted, at most 300 characters. */
   message: string | null
+  /** Meta's own user-facing title, redacted. Present only when Meta sent one. */
+  userTitle?: string
   /** Meta's own user-facing text (`error_user_msg`), redacted. Present only when Meta sent one. */
   userMessage?: string
+  /** Opaque Graph request trace ID, retained for support diagnostics. */
+  traceId?: string
   /** Request fields Meta blames (`error_data.blame_field_specs`), allow-listed to simple snake_case names. */
   blameFields?: string[]
 }
 
-export const META_ERROR_MESSAGE_LIMIT = 200
+export const META_ERROR_MESSAGE_LIMIT = 300
+export const META_ERROR_DIAGNOSTIC_LIMIT = 300
 const TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,39}$/
+const TRACE_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 export type MetaErrorClass =
   | 'reauth_required'
@@ -46,14 +52,17 @@ export function redactMetaErrorMessage(value: unknown): string | null {
   const cleaned = value
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]+/g, ' ')
-    .replace(/\b(?:access[-_ ]?token|input[-_ ]?token|client[-_ ]?secret|app[-_ ]?secret|fb[-_ ]?exchange[-_ ]?token|signed[-_ ]?request|authorization|code)\b\s*[:=]\s*\S+/gi, '[redacted]')
+    .replace(/\b(?:access[-_ ]?token|refresh[-_ ]?token|input[-_ ]?token|token|client[-_ ]?secret|app[-_ ]?secret|appsecret[-_ ]?proof|fb[-_ ]?exchange[-_ ]?token|signed[-_ ]?request|authorization|password|api[-_ ]?key)\b\s*[:=]\s*\S+/gi, '[redacted]')
     .replace(/\bBearer\s+\S+/gi, '[redacted]')
     .replace(/\bEA[A-Za-z0-9]{12,}/g, '[redacted]')
     .replace(/\b\d{5,25}\|[\w-]{10,}/g, '[redacted]')
     .replace(/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, '[redacted]')
     .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]')
     .replace(/https?:\/\/\S+/gi, '[url]')
-    .replace(/\d{6,}/g, '[id]')
+    .replace(/\+?\d[\d .()-]{6,}\d/g, '[phone]')
+    .replace(/\b\d{6,}\b/g, (match, offset, source: string) =>
+      /\b(?:code|error_subcode)=$/i.test(source.slice(0, offset)) && match.length <= 9 ? match : '[id]',
+    )
     .replace(/\s+/g, ' ')
     .trim()
   return cleaned ? cleaned.slice(0, META_ERROR_MESSAGE_LIMIT) : null
@@ -70,11 +79,16 @@ export function extractMetaErrorDetail(payload: unknown): MetaErrorDetail | null
     type,
     message: redactMetaErrorMessage(error.message),
   }
+  const userTitle = redactMetaErrorMessage(error.error_user_title)
+  if (userTitle) detail.userTitle = userTitle
   const userMessage = redactMetaErrorMessage(error.error_user_msg)
   if (userMessage) detail.userMessage = userMessage
+  if (typeof error.fbtrace_id === 'string' && TRACE_ID_PATTERN.test(error.fbtrace_id)) detail.traceId = error.fbtrace_id
   const blameFields = extractBlameFields(error.error_data)
   if (blameFields.length > 0) detail.blameFields = blameFields
-  return detail.code === null && detail.subcode === null && !detail.type && !detail.message ? null : detail
+  return detail.code === null && detail.subcode === null && !detail.type && !detail.message && !detail.userTitle && !detail.userMessage && !detail.traceId && !detail.blameFields?.length
+    ? null
+    : detail
 }
 
 const FIELD_NAME_PATTERN = /^[a-z][a-z0-9_]{0,59}$/
@@ -109,6 +123,10 @@ export function sanitizeMetaErrorDetail(value: unknown): MetaErrorDetail | null 
     subcode: safeInteger(record.subcode),
     type: typeof record.type === 'string' && TYPE_PATTERN.test(record.type) ? record.type : null,
     message: redactMetaErrorMessage(record.message),
+    ...(redactMetaErrorMessage(record.userTitle) ? { userTitle: redactMetaErrorMessage(record.userTitle)! } : {}),
+    ...(redactMetaErrorMessage(record.userMessage) ? { userMessage: redactMetaErrorMessage(record.userMessage)! } : {}),
+    ...(typeof record.traceId === 'string' && TRACE_ID_PATTERN.test(record.traceId) ? { traceId: record.traceId } : {}),
+    ...(Array.isArray(record.blameFields) ? { blameFields: record.blameFields.filter((field): field is string => typeof field === 'string' && FIELD_NAME_PATTERN.test(field)).slice(0, 8) } : {}),
   }
 }
 
@@ -140,4 +158,21 @@ export function formatMetaErrorCode(detail: MetaErrorDetail | null): string {
   const code = detail.code === null ? '?' : String(detail.code)
   const subcode = detail.subcode === null ? '' : `/${detail.subcode}`
   return `${code}${subcode}${detail.type ? ` ${detail.type}` : ''}`
+}
+
+/** Bounded, redacted diagnostic text for logs and the authenticated publish panel. */
+export function formatMetaErrorDiagnostic(detail: MetaErrorDetail | null): string | null {
+  if (!detail) return null
+  const pieces = [
+    detail.code === null ? null : `code=${detail.code}`,
+    detail.subcode === null ? null : `error_subcode=${detail.subcode}`,
+    detail.type ? `type=${detail.type}` : null,
+    detail.traceId ? `fbtrace_id=${detail.traceId}` : null,
+    detail.userTitle ? `başlık: ${detail.userTitle}` : null,
+    detail.userMessage ? `Meta: ${detail.userMessage}` : null,
+    detail.message ? `mesaj: ${detail.message}` : null,
+    detail.blameFields?.length ? `alanlar: ${detail.blameFields.join(', ')}` : null,
+  ].filter((piece): piece is string => Boolean(piece))
+  const text = pieces.join(' | ').slice(0, META_ERROR_DIAGNOSTIC_LIMIT)
+  return text || null
 }

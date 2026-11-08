@@ -8,6 +8,7 @@ import {
   classifyMetaError,
   extractMetaErrorDetail,
   formatMetaErrorCode,
+  formatMetaErrorDiagnostic,
   type MetaErrorDetail,
 } from '@/lib/ads/meta-error-detail'
 
@@ -225,11 +226,11 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
         } catch {
           // A timed-out or dropped write may still have been applied by Meta: callers must look the object up by label.
           if (isWrite && !input.endpoint.endsWith('.validate')) {
-            lastError = new MetaAdsError('write_outcome_unknown')
+            lastError = new MetaAdsError('write_outcome_unknown', null, [], input.endpoint)
             lastSafeCode = 'outcome_unknown'
             break
           }
-          lastError = new MetaAdsError('provider_unavailable')
+          lastError = new MetaAdsError('provider_unavailable', null, [], input.endpoint)
           lastSafeCode = 'network_error'
           continue
         }
@@ -249,16 +250,17 @@ export function createMetaApiClient(deps: MetaApiClientDeps = {}): MetaApiClient
         const detail: MetaErrorDetail | null = extractMetaErrorDetail(payload)
         const klass = classifyMetaError(response.status, detail)
         if (isWrite && klass === 'provider_unavailable' && !input.endpoint.endsWith('.validate')) {
-          lastError = new MetaAdsError('write_outcome_unknown', detail)
+          lastError = new MetaAdsError('write_outcome_unknown', detail, [], input.endpoint)
           lastSafeCode = 'outcome_unknown'
           break
         }
-        lastError = new MetaAdsError(toMetaErrorCode(klass), detail)
+        lastError = new MetaAdsError(toMetaErrorCode(klass), detail, [], input.endpoint)
         lastSafeCode = safeCodeFor(klass)
         if (klass !== 'provider_unavailable') break
       }
 
-      log(`[meta-ads] graph request failed endpoint=${input.endpoint} code=${formatMetaErrorCode(lastError.detail)}`)
+      const diagnostic = formatMetaErrorDiagnostic(lastError.detail)
+      log(`[meta-ads] graph request failed endpoint=${input.endpoint} code=${formatMetaErrorCode(lastError.detail)}${diagnostic ? ` detail=${diagnostic}` : ''}`)
       await settle(requestId, 'error', lastSafeCode)
       throw lastError
     },
