@@ -76,6 +76,8 @@ export type MetaPlanContent = {
   countries: string[]
   ageMin: number
   ageMax: number
+  /** Advantage+ treats age selection as guidance; disabling it makes the selected range strict. */
+  advantageAudience: boolean
   gender: MetaGender
   optimizationGoal: MetaOptimizationGoal
   utmTracking: boolean
@@ -86,6 +88,47 @@ export type MetaPlanContent = {
   /** Private storage path of the uploaded creative (set by the image upload route, never by the client). */
   imagePath: string | null
   specialTopic: MetaSpecialTopic
+}
+
+export type MetaAgeTargeting = {
+  age_min: number
+  age_max: number
+  age_range?: [number, number]
+  targeting_automation: { advantage_audience: 0 | 1 }
+}
+
+/** Converts the requested range to Meta's Advantage+ constraints plus an optional preferred range. */
+export function metaAgeTargeting(content: Pick<MetaPlanContent, 'ageMin' | 'ageMax' | 'advantageAudience'>): MetaAgeTargeting {
+  if (!content.advantageAudience) {
+    return {
+      age_min: content.ageMin,
+      age_max: content.ageMax,
+      targeting_automation: { advantage_audience: 0 },
+    }
+  }
+
+  const hasNarrowerPreference = content.ageMin > 25 || content.ageMax < META_PLAN_LIMITS.ageMax
+  return {
+    age_min: Math.min(content.ageMin, 25),
+    age_max: META_PLAN_LIMITS.ageMax,
+    ...(hasNarrowerPreference ? { age_range: [content.ageMin, content.ageMax] as [number, number] } : {}),
+    targeting_automation: { advantage_audience: 1 },
+  }
+}
+
+export function isMetaAgeTargetingValid(content: Pick<MetaPlanContent, 'ageMin' | 'ageMax' | 'advantageAudience'>): boolean {
+  const targeting = metaAgeTargeting(content)
+  const maxHardMinimum = content.advantageAudience ? 25 : META_PLAN_LIMITS.ageMax
+  const range = targeting.age_range
+  return (
+    Number.isInteger(targeting.age_min) &&
+    targeting.age_min >= META_PLAN_LIMITS.ageMin &&
+    targeting.age_min <= maxHardMinimum &&
+    Number.isInteger(targeting.age_max) &&
+    targeting.age_max >= targeting.age_min &&
+    targeting.age_max <= META_PLAN_LIMITS.ageMax &&
+    (!range || (Number.isInteger(range[0]) && Number.isInteger(range[1]) && range[0] >= META_PLAN_LIMITS.ageMin && range[0] <= range[1] && range[1] <= META_PLAN_LIMITS.ageMax))
+  )
 }
 
 export type MetaPlanFieldErrors = Partial<Record<keyof MetaPlanContent, string>>
@@ -211,10 +254,14 @@ export function validateMetaPlanContent(
 
   const ageMin = Number(raw.ageMin)
   const ageMax = Number(raw.ageMax)
+  const advantageAudience = raw.advantageAudience !== false
   if (!Number.isInteger(ageMin) || ageMin < META_PLAN_LIMITS.ageMin || ageMin > META_PLAN_LIMITS.ageMax) {
     errors.ageMin = 'Alt yaş 18 ile 65 arasında olmalı.'
   } else if (!Number.isInteger(ageMax) || ageMax < ageMin || ageMax > META_PLAN_LIMITS.ageMax) {
     errors.ageMax = 'Üst yaş, alt yaştan küçük olamaz ve en fazla 65 olabilir.'
+  }
+  if (!isMetaAgeTargetingValid({ ageMin, ageMax, advantageAudience }) && !errors.ageMin && !errors.ageMax) {
+    errors.ageMin = 'Meta için yaş sınırları geçersiz. Advantage+ alt sınırı en fazla 25, üst sınırı en fazla 65 olabilir.'
   }
 
   const gender: MetaGender = raw.gender === 'male' || raw.gender === 'female' ? raw.gender : 'all'
@@ -274,7 +321,7 @@ export function validateMetaPlanContent(
     value: {
       dailyBudgetMinor: budget.minor,
       content: {
-        name, landingUrl: url.url, primaryText, headline, description, cta, countries, ageMin, ageMax, gender,
+        name, landingUrl: url.url, primaryText, headline, description, cta, countries, ageMin, ageMax, advantageAudience, gender,
         dailyBudget: typeof raw.dailyBudget === 'number' ? raw.dailyBudget : String(raw.dailyBudget).trim(),
         optimizationGoal, utmTracking,
         endDate, imagePath, specialTopic,
@@ -383,10 +430,7 @@ export function buildAdSetForm(input: {
 }): Record<string, string> {
   const targeting: Record<string, unknown> = {
     geo_locations: { countries: input.content.countries },
-    age_min: input.content.ageMin,
-    age_max: input.content.ageMax,
-    // Advantage+ audience is the default; age/gender act as suggestions to Meta's delivery.
-    targeting_automation: { advantage_audience: 1 },
+    ...metaAgeTargeting(input.content),
   }
   if (input.content.gender === 'male') targeting.genders = [1]
   if (input.content.gender === 'female') targeting.genders = [2]
@@ -461,7 +505,7 @@ export function buildAdForm(input: {
 export function metaPlanHash(content: MetaPlanContent, extra: { connectionId: string; currency: string | null; imageSha?: string | null }): string {
   const canonical = JSON.stringify([
     content.name, content.landingUrl, content.primaryText, content.headline, content.description, content.cta,
-    [...content.countries].sort(), content.ageMin, content.ageMax, content.gender, String(content.dailyBudget),
+    [...content.countries].sort(), content.ageMin, content.ageMax, content.advantageAudience, content.gender, String(content.dailyBudget),
     content.optimizationGoal ?? 'LANDING_PAGE_VIEWS', content.utmTracking !== false,
     content.endDate, content.imagePath, extra.connectionId, extra.currency, extra.imageSha ?? null,
   ])

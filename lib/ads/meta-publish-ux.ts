@@ -39,6 +39,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   payment_method_missing: 'Meta reklam hesabında ödeme yöntemi tanımlı değil. Meta Reklam Yöneticisi\'nden ekleyin.',
   account_restricted: 'Meta reklam hesabı kısıtlı. Meta Reklam Yöneticisi\'nden durumu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
+  age_range_not_allowed: 'Meta Advantage+ kitlede yaş aralığı öneri olarak kullanılır. En az yaşı 25’i, en çok yaşı 65’i aşmayacak şekilde düzenleyin veya Advantage+ kitleyi kapatın.',
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
   kill_switch_active: 'Meta işlemleri geçici olarak durduruldu.',
   provider_error: 'Meta şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.',
@@ -52,13 +53,17 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
 export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | null {
   const redacted = redactMetaErrorMessage(value)
   if (!redacted) return null
-  const flat = redacted.replace(/\s+/g, ' ').trim()
+  const flat = redacted
+    .replace(/\(#\d+\)/g, '')
+    .replace(/\b(?:error[_ ]?code|error[_ ]?subcode|subcode)\s*[:=]?\s*\d+\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (!flat) return null
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
 }
 
 export function describeMetaApiError(error: MetaApiError): MetaUserError {
-  const detail = shortenMetaDetail(error.metaReason)
+  const detail = error.error === 'age_range_not_allowed' ? null : shortenMetaDetail(error.metaReason)
   if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return { message: 'Formda düzeltilmesi gereken alanlar var.', detail: null }
   }
@@ -74,7 +79,7 @@ export function describeMetaApiError(error: MetaApiError): MetaUserError {
 
 export const META_FIELD_ORDER = [
   'name', 'landingUrl', 'primaryText', 'headline', 'description', 'cta',
-  'optimizationGoal', 'dailyBudget', 'countries', 'ageMin', 'ageMax', 'gender', 'endDate', 'imagePath',
+  'optimizationGoal', 'dailyBudget', 'countries', 'ageMin', 'ageMax', 'advantageAudience', 'gender', 'endDate', 'imagePath',
 ] as const
 export type MetaFieldName = (typeof META_FIELD_ORDER)[number]
 
@@ -90,6 +95,7 @@ export const META_FIELD_LABELS: Record<MetaFieldName, string> = {
   countries: 'Ülkeler',
   ageMin: 'Yaş (en az)',
   ageMax: 'Yaş (en çok)',
+  advantageAudience: 'Advantage+ hedef kitle',
   gender: 'Cinsiyet',
   endDate: 'Bitiş günü',
   imagePath: 'Görsel',

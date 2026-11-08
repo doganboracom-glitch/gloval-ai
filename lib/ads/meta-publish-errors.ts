@@ -31,12 +31,15 @@ const FIELD_LABELS: Record<string, string> = {
   call_to_action: 'eylem çağrısı',
   message: 'ana metin',
   description: 'açıklama',
+  age_min: 'yaş aralığı',
+  age_max: 'yaş aralığı',
+  age_range: 'yaş aralığı',
 }
 
 export type MetaPublishFailure = {
   code: MetaAdsErrorCode
   message: string
-  /** Meta's own wording, shown verbatim so the owner can fix the cause. */
+  /** Optional explanatory detail after credential and provider-code redaction. */
   metaReason: string | null
   blamedFields: string[]
 }
@@ -82,6 +85,18 @@ export function describeMetaPublishError(error: unknown, step: MetaPublishStep):
       break
   }
 
+  const ageRelated =
+    step === 'adset' &&
+    (detail?.blameFields?.some((field) => ['age_min', 'age_max', 'age_range'].includes(field)) ||
+      /\b(?:age(?:_min|_max|_range)?|yaş(?:\s+aralığı)?)\b/.test(haystack))
+  if (ageRelated) {
+    return {
+      code: 'age_range_not_allowed',
+      message: 'Meta Advantage+ kitlede yaş aralığı öneri olarak kullanılmalı. En az yaşı 25’i, en çok yaşı 65’i aşmayacak şekilde düzenleyin veya Advantage+ kitleyi kapatın.',
+      metaReason: null,
+      blamedFields: ['age_range'],
+    }
+  }
   if (code === 2635 || subcode === 1359188 || (subcode !== null && String(subcode).startsWith('1487'))) {
     const payment = /payment|funding|billing|ödeme|card/.test(haystack)
     return {

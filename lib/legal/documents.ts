@@ -135,7 +135,7 @@ const privacy: LegalDoc = {
         id: 'google-ads-verileri',
         blocks: [
           p(
-            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Bağlı hesabınızda yalnızca planı onaylamanız ve yayın öncesi ayrı onay vermeniz hâlinde, onaylanan kampanya planı Google Ads API’ye gönderilir ve kampanya duraklatılmış (PAUSED) durumda oluşturulur; ayrıca etkinleştirilmedikçe reklam yayınlanmaz. validate_only doğrulaması Google Ads isteğini sınar ve hesapta kampanya oluşturmaz. Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, GLOVAL yöneticisi kaydedilmiş bir taslak planı yalnızca doğrulama amacıyla Google Ads API’ye gönderebilir; bu test kampanya oluşturmaz veya hesap durumunu değiştirmez.',
+            'GLOVAL Ads, Google Ads hesabınıza yalnızca bağlantıyı başlatmanız ve Google izin ekranında onay vermeniz hâlinde erişir. Bağlı hesabınızda yalnızca planı onaylamanız ve yayın öncesi ayrı onay vermeniz hâlinde, onaylanan kampanya planı Google Ads API’ye gönderilir ve kampanya duraklatılmış (PAUSED) durumda oluşturulur; ayrıca etkinleştirilmedikçe reklam yayınlanmaz. Yayın öncesi doğrulama Google Ads isteğini sınar ve hesapta kampanya oluşturmaz. Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, GLOVAL yöneticisi kaydedilmiş bir taslak planı yalnızca doğrulama amacıyla Google Ads API’ye gönderebilir; bu test kampanya oluşturmaz veya hesap durumunu değiştirmez.',
           ),
           p(
             'Hesap seçimi sırasında erişilebilir müşteri hesaplarının kimliği, adı, para birimi ve yönetici/alt hesap ilişkisi okunabilir. Seçtiğiniz müşteri hesabı için son 7 veya 30 güne ait raporda en fazla 100 kampanyanın adı ve durumu ile gösterim, tıklama, harcama ve dönüşüm ölçümleri alınır.',
@@ -306,7 +306,7 @@ const privacy: LegalDoc = {
         id: 'google-ads-verileri',
         blocks: [
           p(
-            'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. A campaign plan is sent to the Google Ads API only after you approve the plan and provide a separate final confirmation. The campaign is created paused (PAUSED) and will not serve ads unless you separately enable it. The validate_only check validates the API request without creating a campaign in the account. When a separate server-side flag is enabled, an authorized GLOVAL administrator may submit a saved draft plan via validate_only solely to validate the request; this test does not create a campaign or change account status.',
+            'GLOVAL Ads accesses your Google Ads account only when you initiate the connection and grant permission in Google. A campaign plan is sent to the Google Ads API only after you approve the plan and provide a separate final confirmation. The campaign is created paused (PAUSED) and will not serve ads unless you separately enable it. The pre-publish check verifies the Google Ads request without creating a campaign in the account. When a separate server-side flag is enabled, an authorized GLOVAL administrator may submit a saved draft plan via validate_only solely to validate the request; this test does not create a campaign or change account status.',
           ),
           p(
             'During account selection, accessible customer account IDs, names, currencies and manager/client-account relationships may be read. For the customer account you select, the service reads up to 100 campaigns in a report covering the last 7 or 30 days, including campaign names and statuses, impressions, clicks, spend and conversions.',
@@ -758,7 +758,7 @@ const cookies: LegalDoc = {
             'Google Ads hesabınızı bağladıktan sonra, kampanya planını onaylamanız ve yayın öncesi ayrı bir son onay vermeniz hâlinde GLOVAL AI, gösterilen planı Google Ads API üzerinden sizin adınıza hesabınıza gönderebilir ve kampanya, reklam grubu, reklam ve bütçe kayıtlarını oluşturabilir. Kampanya başlangıçta duraklatılmış (PAUSED) oluşturulur; siz ayrıca etkinleştirmedikçe reklam gösterimi başlamaz. Onaylanmamış bir plan gönderilmez.',
           ),
           p(
-            'Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, yetkili bir GLOVAL yöneticisi kaydedilmiş bir taslağı validate_only modunda yalnızca istek doğrulaması için Google Ads API’ye gönderebilir. Bu test kampanya oluşturmaz veya hesap durumunu değiştirmez; ancak plan alanları doğrulama amacıyla Google’a iletilir.',
+            'Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, yetkili bir GLOVAL yöneticisi kaydedilmiş bir taslağı yalnızca istek doğrulaması amacıyla Google Ads API’ye gönderebilir. Bu test kampanya oluşturmaz veya hesap durumunu değiştirmez; ancak plan alanları doğrulama amacıyla Google’a iletilir.',
           ),
           p(
             'Son onay ekranında Google Ads hesabı, marka/plan, açılış sayfası URL’si, reklam başlık ve açıklamaları, anahtar kelimeler, hedefleme, günlük bütçe ve CPC teklif tavanı gösterilir. Google Ads reklam ücretleri doğrudan Google tarafından bağlı hesabınızdan tahsil edilir; GLOVAL AI reklam bütçesini tutmaz. Günlük bütçe ve GLOVAL’ın plan limitleri toplam harcama için kesin bir tavan garantisi değildir; gerçek harcama Google Ads bütçe kurallarına göre değişebilir. Varsa GLOVAL kredi bedeli ayrıca gösterilir.',
@@ -878,7 +878,7 @@ const cookies: LegalDoc = {
             'After you connect a Google Ads account, if you approve a campaign plan and provide a separate final confirmation before publishing, GLOVAL AI may submit the displayed plan through the Google Ads API on your behalf and create campaign, ad group, ad and budget records in that account. The campaign is created paused (PAUSED); ads will not serve unless you separately enable it. An unapproved plan is not submitted.',
           ),
           p(
-            'When a separate server-side flag is enabled and administrator access is verified, an authorised GLOVAL administrator may submit a saved draft in validate_only mode solely to validate the request. This test does not create a campaign or change account status, but plan fields are sent to Google for validation.',
+            'When a separate server-side flag is enabled and administrator access is verified, an authorised GLOVAL administrator may submit a saved draft solely to validate the request before publication. This test does not create a campaign or change account status, but plan fields are sent to Google for validation.',
           ),
           p(
             'The final confirmation shows the Google Ads account, brand/plan, landing page URL, ad headlines and descriptions, keywords, targeting, daily budget and CPC bid ceiling. Google bills advertising charges directly to your connected account; GLOVAL AI does not hold campaign funds. The daily budget and GLOVAL plan limits are not a guaranteed cap on total spend; actual spend can vary under Google Ads budget rules. Any GLOVAL credit charge is shown separately.',

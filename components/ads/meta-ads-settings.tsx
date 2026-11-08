@@ -93,7 +93,7 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
         setMessage(statusMessage(typeof payload?.error === 'string' ? payload.error : 'provider_error', isTr))
         return
       }
-      router.replace('/ads/dashboard#settings')
+      router.replace('/ads/dashboard?platform=meta#settings')
       router.refresh()
     } catch {
       setMessage(statusMessage('provider_error', isTr))

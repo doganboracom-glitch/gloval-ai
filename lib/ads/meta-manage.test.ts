@@ -509,6 +509,25 @@ describe('Meta hatalarının güvenli kod ve Türkçe mesaja çevrilmesi', () =>
     expect(failure.code).toBe('meta_rejected')
     expect(failure.message).toContain('hedef kitle')
   })
+
+  it('Advantage+ yaş sınırı reddini güvenli Türkçe mesaja çevirir', () => {
+    const detail = {
+      code: 100,
+      subcode: 1870189,
+      type: 'OAuthException',
+      message: 'You can add a lower maximum age as a suggestion.',
+      userMessage: null,
+      blameFields: ['age_max'],
+      traceId: 'provider-trace',
+    }
+    const failure = describeMetaPublishError(new MetaAdsError('meta_rejected', detail as never), 'adset')
+    expect(failure.code).toBe('age_range_not_allowed')
+    expect(failure.message).toContain('Advantage+')
+    expect(failure.message).toContain('65')
+    expect(failure.metaReason).toBeNull()
+    expect(failure.blamedFields).toEqual(['yaş aralığı'])
+    expect(JSON.stringify(failure)).not.toMatch(/1870189|age_max|provider-trace/i)
+  })
 })
 
 describe('token sızıntısı yok', () => {

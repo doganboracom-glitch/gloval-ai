@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { AlertCircle, CheckCircle2, CircleDashed, Sparkles, Trash2, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, CircleDashed, ImagePlus, LoaderCircle, Sparkles, Trash2, XCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ import {
   META_CTA_LABELS,
   META_CTA_OPTIONS,
   META_PLAN_LIMITS,
+  META_IMAGE_MAX_BYTES,
   adsManagerUrl,
   validateLandingUrl,
   validateMetaPlanContent,
@@ -80,6 +81,7 @@ const EMPTY: PlanContent = {
   countries: ['TR'],
   ageMin: 18,
   ageMax: 65,
+  advantageAudience: true,
   gender: 'all',
   optimizationGoal: 'LANDING_PAGE_VIEWS',
   utmTracking: true,
@@ -90,6 +92,16 @@ const EMPTY: PlanContent = {
 }
 
 const listFetcher = (url: string) => fetch(url, { cache: 'no-store' }).then((response) => response.json())
+
+function editablePlanContent(content: PlanContent): PlanContent {
+  return {
+    ...EMPTY,
+    ...content,
+    advantageAudience: content.advantageAudience !== false,
+    optimizationGoal: content.optimizationGoal ?? 'LANDING_PAGE_VIEWS',
+    utmTracking: content.utmTracking ?? true,
+  }
+}
 
 async function post<T>(url: string, body: unknown): Promise<ApiResult<T> | MetaApiError> {
   try {
@@ -109,7 +121,8 @@ const fieldId = (name: MetaFieldName) => `meta-field-${name}`
 function focusField(name: MetaFieldName) {
   const element = document.getElementById(fieldId(name))
   if (!element) return
-  element.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  element.scrollIntoView?.({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' })
   element.focus({ preventScroll: true })
 }
 
@@ -155,6 +168,10 @@ export function MetaPublishPanel({
   const [planId, setPlanId] = useState<string | null>(null)
   const plan = plans.find((p) => p.id === planId) ?? null
   const [file, setFile] = useState<File | null>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const [aiHighlights, setAiHighlights] = useState<MetaFieldName[]>([])
   const [terms, setTerms] = useState(false)
   const [aiDrafted, setAiDrafted] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -162,6 +179,35 @@ export function MetaPublishPanel({
   const [notice, setNotice] = useState<Notice | null>(null)
   const [errors, setErrors] = useState<MetaFieldErrors>({})
   const [focusRequest, setFocusRequest] = useState<{ field: MetaFieldName; n: number } | null>(null)
+
+  useEffect(() => {
+    if (publishable.some((item) => item.id === connectionId)) return
+    const nextId = publishable[0]?.id ?? null
+    if (nextId !== connectionId) {
+      setConnectionId(nextId)
+      setPlanId(null)
+      setForm(EMPTY)
+      setFile(null)
+      setTerms(false)
+      setErrors({})
+    }
+  }, [connectionId, publishable])
+
+  useEffect(() => {
+    if (!file || typeof URL.createObjectURL !== 'function') {
+      setImagePreviewUrl(null)
+      return
+    }
+    const previewUrl = URL.createObjectURL(file)
+    setImagePreviewUrl(previewUrl)
+    return () => URL.revokeObjectURL(previewUrl)
+  }, [file])
+
+  useEffect(() => {
+    if (aiHighlights.length === 0) return
+    const timeoutId = window.setTimeout(() => setAiHighlights([]), 1800)
+    return () => window.clearTimeout(timeoutId)
+  }, [aiHighlights])
 
   // Controls inside a disabled fieldset cannot take focus, so wait until the busy state is cleared.
   useEffect(() => {
@@ -207,6 +253,27 @@ export function MetaPublishPanel({
     if (key === 'landingUrl') setAiError(null)
   }
 
+  const selectImageFile = (selectedFile: File | undefined) => {
+    if (!selectedFile) return
+    if (selectedFile.size === 0) {
+      setFile(null)
+      setErrors((current) => ({ ...current, imagePath: t('Dosya boş. Başka bir JPG veya PNG seçin.', 'This file is empty. Choose another JPG or PNG.') }))
+      return
+    }
+    if (selectedFile.size > META_IMAGE_MAX_BYTES) {
+      setFile(null)
+      setErrors((current) => ({ ...current, imagePath: t('Görsel 5 MB sınırını aşıyor. Daha küçük bir dosya seçin.', 'The image exceeds 5 MB. Choose a smaller file.') }))
+      return
+    }
+    if (selectedFile.type && !['image/jpeg', 'image/jpg', 'image/png'].includes(selectedFile.type)) {
+      setFile(null)
+      setErrors((current) => ({ ...current, imagePath: t('Bu dosya türü desteklenmiyor. JPG veya PNG seçin.', 'This file type is not supported. Choose JPG or PNG.') }))
+      return
+    }
+    setFile(selectedFile)
+    setErrors((current) => ({ ...current, imagePath: undefined }))
+  }
+
   const showFieldErrors = (next: MetaFieldErrors) => {
     setErrors(next)
     const first = orderFieldErrors(next)[0]
@@ -224,19 +291,15 @@ export function MetaPublishPanel({
       currency: connection?.currency ?? null,
       minimumBudgetMinor,
     })
-    const next = checked.ok ? {} : toFieldErrors(checked.errors)
-    if (options.requireImage && !form.imagePath && !file) next.imagePath = 'Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).'
+    const next: MetaFieldErrors = checked.ok ? {} : toFieldErrors(checked.errors)
+    if (errors.imagePath) next.imagePath = errors.imagePath
+    if (options.requireImage && !form.imagePath && !file) next.imagePath = t('Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).', 'Add a JPG or PNG image for the ad (up to 5 MB).')
     return next
   }
 
   function openPlan(next: PlanView | null) {
     setPlanId(next?.id ?? null)
-    setForm(next ? {
-      ...EMPTY,
-      ...next.content,
-      optimizationGoal: next.content.optimizationGoal ?? 'LANDING_PAGE_VIEWS',
-      utmTracking: next.content.utmTracking ?? true,
-    } : EMPTY)
+    setForm(next ? editablePlanContent(next.content) : EMPTY)
     setFile(null)
     setTerms(false)
     setAiDrafted(false)
@@ -249,6 +312,7 @@ export function MetaPublishPanel({
     const result = await post<{ plan: PlanView }>('/api/ads/meta/plans', { connectionId, planId: planId ?? undefined, content: form })
     if (!result.ok) { showError(result); return null }
     setPlanId(result.plan.id)
+    setForm(editablePlanContent(result.plan.content))
     await mutate()
     return result.plan
   }
@@ -270,7 +334,18 @@ export function MetaPublishPanel({
     body.set('planId', id)
     body.set('file', file)
     const response = await fetch('/api/ads/meta/plans/image', { method: 'POST', body }).then((r) => r.json()).catch(() => null)
-    if (!response?.ok) { showError(response ?? { ok: false, error: 'network_error' }); return false }
+    if (!response?.ok) {
+      if (response?.error === 'image_invalid' && typeof response.message === 'string') {
+        setErrors((current) => ({ ...current, imagePath: isTr ? response.message : t('Seçilen görsel koşulları karşılamıyor. JPG/PNG kullanın; görselin boyut ve oranını kontrol edin.', 'The selected image does not meet the requirements. Use JPG/PNG and check its size and dimensions.') }))
+        setNotice({ tone: 'error', text: t('Görsel yüklenemedi. Görsel alanındaki açıklamayı kontrol edin.', 'The image could not be uploaded. Check the requirements in the image field.') })
+      } else {
+        showError(response ?? { ok: false, error: 'network_error' })
+      }
+      return false
+    }
+    if (response.plan?.content) {
+      setForm((current) => ({ ...current, imagePath: response.plan.content.imagePath ?? null }))
+    }
     setFile(null)
     return true
   }
@@ -353,34 +428,44 @@ export function MetaPublishPanel({
   const onAiDraft = () => {
     const url = validateLandingUrl(form.landingUrl)
     if (!url.ok) {
+      setAiDrafted(false)
       setAiError(t(`AI taslağı için geçerli bir https adresi girin. ${url.error}`, `Enter a valid https address for the AI draft. ${url.error}`))
       setErrors((current) => ({ ...current, landingUrl: url.error }))
       setFocusRequest((current) => ({ field: 'landingUrl', n: (current?.n ?? 0) + 1 }))
       return
     }
     setAiError(null)
+    setAiDrafted(false)
     setErrors((current) => ({ ...current, landingUrl: undefined }))
     void run('ai', async () => {
-      const outcome = await requestScan({ address: form.landingUrl.trim(), requestId: crypto.randomUUID() })
-      if (!outcome.ok) {
+      try {
+        const outcome = await requestScan({ address: form.landingUrl.trim(), requestId: crypto.randomUUID() })
+        if (!outcome.ok) {
+          setAiError(t('AI taslağı hazırlanamadı. Adresi kontrol edip tekrar deneyin.', 'The AI draft could not be prepared. Check the address and try again.'))
+          return null
+        }
+        const draft = draftMetaCopyFromScan(outcome.result)
+        if (!draft) {
+          setAiError(t('Siteden yeterli metin çıkarılamadı. Alanları elle doldurun.', 'Not enough text could be extracted from the site. Fill in the fields manually.'))
+          return null
+        }
+        setForm((current) => ({ ...current, ...draft }))
+        setErrors((current) => ({ ...current, primaryText: undefined, headline: undefined, description: undefined, cta: undefined }))
+        setAiDrafted(true)
+        setAiHighlights(['primaryText', 'headline', 'description', 'cta'])
+        setFocusRequest((current) => ({ field: 'primaryText', n: (current?.n ?? 0) + 1 }))
+        return null
+      } catch {
         setAiError(t('AI taslağı hazırlanamadı. Adresi kontrol edip tekrar deneyin.', 'The AI draft could not be prepared. Check the address and try again.'))
         return null
       }
-      const draft = draftMetaCopyFromScan(outcome.result)
-      if (!draft) {
-        setAiError(t('Siteden yeterli metin çıkarılamadı. Alanları elle doldurun.', 'Not enough text could be extracted from the site. Fill in the fields manually.'))
-        return null
-      }
-      setForm((f) => ({ ...f, ...draft }))
-      setErrors((current) => ({ ...current, primaryText: undefined, headline: undefined, description: undefined, cta: undefined }))
-      setAiDrafted(true)
-      return t('AI önerisi alanlara yazıldı. Gözden geçirip düzenleyin; siz onaylamadan Meta\'da hiçbir şey oluşturulmaz.', 'AI suggestion filled in. Review and edit it; nothing is created in Meta until you approve.')
     })
   }
 
   const stage = plan?.status ?? 'new'
   const locked = ['publishing', 'published', 'active', 'user_paused', 'archived'].includes(stage)
   const validated = plan !== null && plan.validatedVersion === plan.version
+  const planContentChanged = plan !== null && (file !== null || JSON.stringify(form) !== JSON.stringify(editablePlanContent(plan.content)))
   const isPartial = plan?.status === 'partial'
   const showApproval = validated && !locked && !(isPartial && approved)
   const stepIndex = metaFlowStepIndex(plan)
@@ -394,6 +479,8 @@ export function MetaPublishPanel({
   })
   const selectClass = (name: MetaFieldName) =>
     `h-9 w-full rounded-md border bg-background px-2 text-sm ${errors[name] ? 'border-destructive ring-3 ring-destructive/20' : 'border-border'}`
+  const highlightClass = (name: MetaFieldName) =>
+    aiHighlights.includes(name) ? 'ring-2 ring-brand/50 motion-safe:animate-pulse motion-reduce:animate-none' : undefined
   const currencyOffset = metaCurrencyOffset(connection.currency)
   const minimumBudgetText = minimumBudgetMinor !== null && currencyOffset && connection.currency
     ? new Intl.NumberFormat(isTr ? 'tr-TR' : 'en-US', { style: 'currency', currency: connection.currency }).format(minimumBudgetMinor / currencyOffset)
@@ -517,30 +604,40 @@ export function MetaPublishPanel({
         <div className="flex flex-col gap-2 md:col-span-2">
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" onClick={onAiDraft} aria-describedby={aiError ? 'meta-ai-error' : undefined}>
-              <Sparkles className="size-4" aria-hidden="true" />
-              {busy === 'ai' ? t('Taslak hazırlanıyor…', 'Preparing draft…') : t('Siteden AI taslağı öner', 'Suggest copy from site with AI')}
+              <Sparkles data-icon="inline-start" aria-hidden="true" />
+              {t('Siteden AI taslağı öner', 'Suggest copy from site with AI')}
             </Button>
-            {aiDrafted ? <Badge variant="secondary">{t('AI önerisi · düzenlenebilir', 'AI suggestion · editable')}</Badge> : null}
+            {busy === 'ai' ? (
+              <span role="status" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 motion-safe:animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                {t('Taslak hazırlanıyor…', 'Preparing draft…')}
+              </span>
+            ) : null}
+            {aiDrafted ? (
+              <span role="status" aria-live="polite" aria-atomic="true" className="text-sm text-brand">
+                {t('AI önerisi alanlara yazıldı — gözden geçirin.', 'AI suggestions filled the fields — review them.')}
+              </span>
+            ) : null}
+            {aiError ? (
+              <span id="meta-ai-error" role="alert" className="inline-flex items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-sm text-destructive">
+                <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
+                {aiError}
+              </span>
+            ) : null}
             <span className="text-xs text-muted-foreground">{t('Hedef sayfadaki bilgilerden öneri üretir; AI kredisi kullanabilir.', 'Drafts from your landing page; may use AI credits.')}</span>
           </div>
-          {aiError ? (
-            <p id="meta-ai-error" role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-2.5 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {aiError}
-            </p>
-          ) : null}
         </div>
         <Field name="primaryText" label={t('Ana metin', 'Primary text')} error={errors.primaryText} className="md:col-span-2">
-          <Textarea {...control('primaryText')} rows={3} value={form.primaryText} maxLength={META_PLAN_LIMITS.primaryText} onChange={(e) => set('primaryText', e.target.value)} />
+          <Textarea {...control('primaryText')} rows={3} value={form.primaryText} maxLength={META_PLAN_LIMITS.primaryText} className={highlightClass('primaryText')} onChange={(e) => set('primaryText', e.target.value)} />
         </Field>
         <Field name="headline" label={t('Başlık', 'Headline')} error={errors.headline}>
-          <Input {...control('headline')} value={form.headline} maxLength={META_PLAN_LIMITS.headline} onChange={(e) => set('headline', e.target.value)} />
+          <Input {...control('headline')} value={form.headline} maxLength={META_PLAN_LIMITS.headline} className={highlightClass('headline')} onChange={(e) => set('headline', e.target.value)} />
         </Field>
         <Field name="description" label={t('Açıklama (isteğe bağlı)', 'Description (optional)')} error={errors.description}>
-          <Input {...control('description')} value={form.description} maxLength={META_PLAN_LIMITS.description} onChange={(e) => set('description', e.target.value)} />
+          <Input {...control('description')} value={form.description} maxLength={META_PLAN_LIMITS.description} className={highlightClass('description')} onChange={(e) => set('description', e.target.value)} />
         </Field>
         <Field name="cta" label={t('Harekete geçirici mesaj', 'Call to action')} error={errors.cta}>
-          <select {...control('cta')} className={selectClass('cta')} value={form.cta} onChange={(e) => set('cta', e.target.value as PlanContent['cta'])}>
+          <select {...control('cta')} className={`${selectClass('cta')} ${highlightClass('cta') ?? ''}`} value={form.cta} onChange={(e) => set('cta', e.target.value as PlanContent['cta'])}>
             {META_CTA_OPTIONS.map((option) => <option key={option} value={option}>{META_CTA_LABELS[option]}</option>)}
           </select>
         </Field>
@@ -602,8 +699,8 @@ export function MetaPublishPanel({
             {minimumBudgetText
               ? t(`Meta’nın bu hesapta bağlantı tıklamaları için önerdiği günlük minimum: ${minimumBudgetText}. Ülke/hedefleme sınırını Meta doğrulaması uygular.`, `Meta’s account minimum for link clicks: ${minimumBudgetText} per day. Meta validation enforces country and targeting limits.`)
               : form.optimizationGoal === 'LANDING_PAGE_VIEWS'
-                ? t('Meta bu hedef için doğrudan bir minimum alanı yayımlamıyor; seçilen ülkeler için kesin alt sınırı validate_only doğrular.', 'Meta does not publish a directly mapped minimum field for this goal; validate_only checks the exact floor for the selected countries.')
-                : t('Meta’nın hesap minimumu alınamadı; validate_only ülke/hedefleme dahil kesin tutarı kontrol eder.', 'The Meta account minimum is unavailable; validate_only checks the exact amount, including country and targeting rules.')}
+                ? t('Meta bu hedef için doğrudan bir minimum alanı yayımlamıyor; kesin alt sınır plan doğrulamasında kontrol edilir.', 'Meta does not publish a directly mapped minimum for this goal; the plan check confirms the exact floor.')
+                : t('Meta’nın hesap minimumu alınamadı; ülke ve hedefleme kuralları dahil kesin tutar plan doğrulamasında kontrol edilir.', 'The Meta account minimum is unavailable; the plan check confirms the exact amount, including country and targeting rules.')}
           </span>
         </Field>
         <Field name="countries" label={t('Ülkeler', 'Countries')} error={errors.countries} className="md:col-span-2" group>
@@ -630,6 +727,24 @@ export function MetaPublishPanel({
         <Field name="ageMax" label={t('Yaş (en çok)', 'Max age')} error={errors.ageMax}>
           <Input {...control('ageMax')} type="number" min={META_PLAN_LIMITS.ageMin} max={META_PLAN_LIMITS.ageMax} value={form.ageMax} onChange={(e) => set('ageMax', Number(e.target.value))} />
         </Field>
+        <Field name="advantageAudience" label={t('Yaş hedeflemesi', 'Age targeting')} error={errors.advantageAudience} className="md:col-span-2" group>
+          <div id={fieldId('advantageAudience')} tabIndex={-1} role="group" aria-labelledby="meta-label-advantageAudience" aria-describedby={errors.advantageAudience ? `${fieldId('advantageAudience')}-error` : undefined} className="flex flex-col gap-2 rounded-md border border-border p-3">
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={!form.advantageAudience}
+                aria-invalid={errors.advantageAudience ? true : undefined}
+                aria-describedby={errors.advantageAudience ? `${fieldId('advantageAudience')}-error` : undefined}
+                onCheckedChange={(checked) => set('advantageAudience', checked !== true)}
+              />
+              <span>{t('Yaş aralığını kesin uygula (Advantage+ kitleyi kapat)', 'Apply the age range strictly (turn off Advantage+ audience)')}</span>
+            </label>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {form.advantageAudience
+                ? t('Advantage+ açıkken daha dar yaş aralığı öneri olarak iletilir; kesin sınırları uygulamak için kutuyu işaretleyin.', 'With Advantage+ on, a narrower age range is sent as a suggestion. Check the box to apply it as a strict limit.')
+                : t('Advantage+ kapalı; seçtiğiniz en az ve en çok yaş kesin hedefleme sınırlarıdır.', 'Advantage+ is off; the selected minimum and maximum ages are strict targeting limits.')}
+            </p>
+          </div>
+        </Field>
         <Field name="gender" label={t('Cinsiyet', 'Gender')} error={errors.gender}>
           <select {...control('gender')} className={selectClass('gender')} value={form.gender} onChange={(e) => set('gender', e.target.value as PlanContent['gender'])}>
             <option value="all">{t('Hepsi', 'All')}</option>
@@ -640,17 +755,77 @@ export function MetaPublishPanel({
         <Field name="endDate" label={t('Bitiş günü (isteğe bağlı)', 'End date (optional)')} error={errors.endDate}>
           <Input {...control('endDate')} type="date" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)} />
         </Field>
-        <Field name="imagePath" label={t('Görsel (JPG/PNG, en çok 5 MB)', 'Image (JPG/PNG, max 5 MB)')} error={errors.imagePath} className="md:col-span-2">
-          <Input
+        <Field name="imagePath" label={t('Reklam görseli', 'Ad image')} error={errors.imagePath} className="md:col-span-2">
+          <input
             {...control('imagePath')}
+            ref={imageInputRef}
+            className="sr-only"
             type="file"
             accept="image/jpeg,image/png"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null)
-              setErrors((current) => ({ ...current, imagePath: undefined }))
+            tabIndex={-1}
+            aria-hidden="true"
+            onChange={(event) => {
+              selectImageFile(event.target.files?.[0])
+              event.target.value = ''
             }}
           />
-          {form.imagePath && !file ? <span className="text-xs text-muted-foreground">{t('Görsel yüklendi.', 'Image uploaded.')}</span> : null}
+          <div
+            role="group"
+            aria-label={t('Reklam görseli yükleme alanı', 'Ad image upload area')}
+            onDragOver={(event) => {
+              event.preventDefault()
+              if (!locked && busy === null) setIsDraggingImage(true)
+            }}
+            onDragLeave={(event) => {
+              const nextTarget = event.relatedTarget
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setIsDraggingImage(false)
+            }}
+            onDrop={(event) => {
+              event.preventDefault()
+              setIsDraggingImage(false)
+              if (!locked && busy === null) selectImageFile(event.dataTransfer.files[0])
+            }}
+            className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-5 text-center transition-colors motion-reduce:transition-none ${errors.imagePath ? 'border-destructive bg-destructive/5' : isDraggingImage ? 'border-brand bg-muted/50' : 'border-border bg-muted/20'}`}
+          >
+            <button
+              type="button"
+              aria-label={t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}
+              aria-invalid={errors.imagePath ? true : undefined}
+              aria-describedby={errors.imagePath ? `meta-image-help ${fieldId('imagePath')}-error` : 'meta-image-help'}
+              onClick={() => imageInputRef.current?.click()}
+              className="flex flex-col items-center gap-2 rounded-md px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ImagePlus className="size-7 text-muted-foreground" aria-hidden="true" />
+              <span>{isDraggingImage ? t('Görseli buraya bırakın', 'Drop the image here') : t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}</span>
+            </button>
+            <p id="meta-image-help" className="text-xs leading-relaxed text-muted-foreground">
+              {t('JPG/PNG, 1:1 oran önerilir (1080×1080), en fazla 5 MB.', 'JPG/PNG, 1:1 ratio recommended (1080×1080), up to 5 MB.')}
+            </p>
+          </div>
+          {file ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3">
+              {imagePreviewUrl ? <img src={imagePreviewUrl} alt={t('Seçilen reklam görselinin önizlemesi', 'Preview of the selected ad image')} className="size-16 rounded-md border border-border object-cover" /> : null}
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <p className="break-all text-sm font-medium">{file.name}</p>
+                <p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                aria-label={t('Seçilen görseli kaldır', 'Remove selected image')}
+                onClick={() => {
+                  setFile(null)
+                  if (imageInputRef.current) imageInputRef.current.value = ''
+                }}
+              >
+                <X data-icon="inline-start" aria-hidden="true" />
+                {t('Kaldır', 'Remove')}
+              </Button>
+            </div>
+          ) : form.imagePath ? (
+            <p className="text-xs text-muted-foreground">{t('Görsel yüklenmiş. Yeni bir görsel seçerek değiştirebilirsiniz.', 'Image uploaded. Choose a new image to replace it.')}</p>
+          ) : null}
         </Field>
       </fieldset>
 
@@ -659,6 +834,8 @@ export function MetaPublishPanel({
           plan={plan}
           failure={storedFailure}
           approved={approved}
+          validated={validated}
+          contentChanged={planContentChanged}
           busy={busy !== null}
           running={busy === 'publish'}
           onResume={onConfirmCreate}
@@ -761,6 +938,8 @@ function PartialCard({
   plan,
   failure,
   approved,
+  validated,
+  contentChanged,
   busy,
   running,
   onResume,
@@ -769,12 +948,15 @@ function PartialCard({
   plan: PlanView
   failure: { message: string; detail: string | null } | null
   approved: boolean
+  validated: boolean
+  contentChanged: boolean
   busy: boolean
   running: boolean
   onResume: () => void
   isTr: boolean
 }) {
   const rows = describePlanObjects(plan.objects, plan.failureStep)
+  const canResume = Boolean(plan.objects.campaignId) && validated && approved && !contentChanged
   const stateText = { ok: isTr ? 'Tamam' : 'Done', failed: isTr ? 'Başarısız' : 'Failed', missing: isTr ? 'Henüz oluşmadı' : 'Not created yet' }
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
@@ -782,10 +964,21 @@ function PartialCard({
         <p className="text-sm font-medium">{isTr ? 'Kampanya kısmen oluşturuldu' : 'Campaign partially created'}</p>
         <p className="text-sm leading-relaxed text-muted-foreground">
           {isTr
-            ? 'Oluşan parçalar Meta hesabınızda duraklatılmış durumda; harcama yapmaz. Kaldığı yerden devam edebilirsiniz.'
-            : 'Created parts are paused in your Meta account and do not spend. You can continue where it stopped.'}
+            ? 'Oluşan parçalar Meta hesabınızda duraklatılmış durumda; harcama yapmaz.'
+            : 'Created parts are paused in your Meta account and do not spend.'}
+        </p>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {isTr ? 'Devam, mevcut Meta kampanya kimliğiyle sürer; yeni kampanya oluşturmaz: ' : 'Continue resumes the existing Meta campaign; it will not create a new one: '}
+          {plan.objects.campaignId ? <code className="break-all font-mono text-foreground">{plan.objects.campaignId}</code> : <span>{isTr ? 'kampanya kimliği henüz yok' : 'campaign ID not available'}</span>}
         </p>
       </div>
+      {!validated || !approved || contentChanged ? (
+        <p role="note" className="rounded-md border border-brand/30 bg-muted/40 p-3 text-sm leading-relaxed">
+          {isTr
+            ? 'Plan içeriği değişti veya doğrulama/onay güncel değil. Devam etmeden önce planı kaydedip Meta ile yeniden doğrulayın ve bu sürümü yeniden onaylayın.'
+            : 'The plan changed or its validation/approval is no longer current. Save the plan, validate it with Meta, and approve this version again before continuing.'}
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-1.5" aria-label={isTr ? 'Oluşturulan nesneler' : 'Created objects'}>
         {rows.map((row) => (
           <li key={row.step} className="flex items-center gap-2 text-sm">
@@ -807,12 +1000,9 @@ function PartialCard({
         </div>
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" disabled={busy || !approved} onClick={onResume}>
+        <Button type="button" disabled={busy || !canResume} onClick={onResume}>
           {running ? (isTr ? 'Devam ediyor…' : 'Continuing…') : (isTr ? 'Devam et' : 'Continue')}
         </Button>
-        {!approved ? (
-          <span className="text-xs text-muted-foreground">{isTr ? 'Plan değişti; yeniden doğrulayıp onaylayın.' : 'The plan changed; validate and approve it again.'}</span>
-        ) : null}
       </div>
     </div>
   )

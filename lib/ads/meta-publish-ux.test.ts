@@ -45,11 +45,18 @@ describe('Meta yayın hata metinleri', () => {
     expect(describeMetaApiError({ ok: false, error: 'zzz' }).message).toBe('İşlem tamamlanamadı. Lütfen tekrar deneyin.')
   })
 
-  it('ayrıntıyı maskeler ve kısaltır', () => {
+  it('ayrıntıyı maskeler, kodları kaldırır ve kısaltır', () => {
     const long = shortenMetaDetail('a'.repeat(500))
     expect(long?.length).toBeLessThanOrEqual(140)
+    expect(shortenMetaDetail('(#100) Error code: 1870189 - age range invalid')).not.toMatch(/#100|1870189/i)
     expect(shortenMetaDetail('   ')).toBeNull()
     expect(shortenMetaDetail(null)).toBeNull()
+  })
+
+  it('Advantage+ yaş hatasında ham sağlayıcı ayrıntısını göstermez', () => {
+    const result = describeMetaApiError({ ok: false, error: 'age_range_not_allowed', metaReason: '(#100) age_max rejected 1870189' })
+    expect(result.message).toContain('Advantage+')
+    expect(result.detail).toBeNull()
   })
 })
 
