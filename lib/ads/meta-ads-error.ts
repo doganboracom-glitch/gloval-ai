@@ -63,6 +63,8 @@ export type MetaAdsErrorCode =
   | 'meta_inactive_unconfirmed'
   | 'meta_plan_busy'
   | 'meta_confirmation_required'
+  // Publish credit rule (15 credits held at reservation, charged only on a fully published plan)
+  | 'insufficient_credits'
 
 export class MetaAdsError extends Error {
   readonly code: MetaAdsErrorCode
@@ -149,6 +151,8 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'ad_disapproved':
     case 'payment_required':
       return 422
+    case 'insufficient_credits':
+      return 402
     case 'write_outcome_unknown':
       return 503
     case 'invalid_request':

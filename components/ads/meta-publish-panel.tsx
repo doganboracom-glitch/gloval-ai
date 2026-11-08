@@ -37,10 +37,14 @@ import {
   describeMetaApiError,
   describePlanObjects,
   describeStoredFailure,
+  metaCreditBalanceText,
+  metaCreditSummaryText,
+  metaCreditsInsufficient,
   metaFlowStepIndex,
   orderFieldErrors,
   toFieldErrors,
   type MetaApiError,
+  type MetaCreditInfo,
   type MetaFieldErrors,
   type MetaFieldName,
   type MetaPlanObjects,
@@ -173,6 +177,14 @@ export function MetaPublishPanel({
     listFetcher,
     { dedupingInterval: 10 * 60 * 1000, revalidateOnFocus: false, revalidateOnReconnect: false },
   )
+  const { data: creditsResponse, mutate: mutateCredits } = useSWR<{ ok: boolean; credits?: MetaCreditInfo | null }>(
+    connectionId && publishEnabled ? '/api/ads/meta/plans/credits' : null,
+    listFetcher,
+    { revalidateOnFocus: true },
+  )
+  const credits = creditsResponse?.ok ? creditsResponse.credits ?? null : null
+  const creditsInsufficient = metaCreditsInsufficient(credits)
+  const creditBalanceText = metaCreditBalanceText(isTr ? 'tr' : 'en', credits)
   const plans = data?.plans ?? []
   const minimumBudgetMinor = minimumBudgetResponse?.ok ? minimumBudgetResponse.minimumDailyBudgetMinor ?? null : null
 
@@ -427,9 +439,10 @@ export function MetaPublishPanel({
         termsAccepted: terms,
         requestId: crypto.randomUUID(),
       })
-      await mutate()
+      await Promise.all([mutate(), mutateCredits()])
       if (!result.ok) { showError(result.error); return null }
-      return t('Kampanya Meta hesabınızda DURAKLATILMIŞ olarak oluşturuldu. Başlatmak için Meta Reklam Yöneticisi\'ni kullanın.', 'Campaign created PAUSED in your Meta account. Start it from Meta Ads Manager.')
+      const created = t('Kampanya Meta hesabınızda DURAKLATILMIŞ olarak oluşturuldu. Başlatmak için Meta Reklam Yöneticisi\'ni kullanın.', 'Campaign created PAUSED in your Meta account. Start it from Meta Ads Manager.')
+      return result.creditNotice ? `${created} ${result.creditNotice}` : created
     })
   }
 
@@ -916,6 +929,16 @@ export function MetaPublishPanel({
       {showApproval ? (
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
           <p className="text-sm leading-relaxed">{metaApprovalText(form, isTr ? 'tr' : 'en')}</p>
+          <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/40 p-3 text-sm" data-testid="meta-credit-summary">
+            <p className="font-medium">{metaCreditSummaryText(isTr ? 'tr' : 'en')}</p>
+            {creditBalanceText ? <p className="text-muted-foreground">{creditBalanceText}</p> : null}
+            {creditsInsufficient ? (
+              <p role="alert" className="text-destructive">
+                {t('Yayınlamak için en az 15 AI krediniz olmalı. Kredi satın alın veya yükseltin; yeterli kredi yokken Meta’da hiçbir şey oluşturulmaz.', 'You need at least 15 AI credits to publish. Buy credits or upgrade; nothing is created in Meta without enough credits.')}{' '}
+                <a href="/billing" className="underline underline-offset-2">{t('Kredi satın al', 'Get credits')}</a>
+              </p>
+            ) : null}
+          </div>
           {!approved ? (
             <label className="flex items-center gap-2 text-sm">
               <Checkbox checked={terms} onCheckedChange={(v) => setTerms(v === true)} aria-describedby="meta-approval-hint" />
@@ -925,7 +948,7 @@ export function MetaPublishPanel({
             <p className="text-sm text-muted-foreground">{t('Onayınız kaydedildi; tekrar onay gerekmez.', 'Your approval is saved; no need to approve again.')}</p>
           )}
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" disabled={busy !== null || (!approved && !terms)} onClick={onConfirmCreate}>
+            <Button type="button" disabled={busy !== null || creditsInsufficient || (!approved && !terms)} onClick={onConfirmCreate}>
               {busy === 'publish'
                 ? t('Oluşturuluyor…', 'Creating…')
                 : approved

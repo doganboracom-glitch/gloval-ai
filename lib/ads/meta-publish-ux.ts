@@ -37,6 +37,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   terms_not_accepted: 'Devam etmek için onay kutusunu işaretleyin.',
   publish_in_progress: 'Yayın şu anda sürüyor. Birkaç saniye sonra yenileyin.',
   publish_quota_exceeded: 'Günlük yayın deneme limitine ulaşıldı. Yarın tekrar deneyin.',
+  insufficient_credits: 'Yayınlamak için en az 15 AI krediniz olmalı. Yeterli kredi olmadığından Meta’da hiçbir nesne oluşturulmadı ve kredi düşmedi. Kredi satın alıp tekrar deneyin.',
   payment_method_missing: 'Meta reklam hesabında ödeme yöntemi tanımlı değil. Meta Reklam Yöneticisi\'nden ekleyin.',
   account_restricted: 'Meta reklam hesabı kısıtlı veya devre dışı. Meta Business Support Home > Hesap Kalitesi bölümünde kısıtlamaları ve ödeme durumunu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
@@ -66,6 +67,42 @@ export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | nu
     .trim()
   if (!flat) return null
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
+}
+
+/** Publish credit rule shown in the approval summary (same rule as Google Ads). */
+export const META_PUBLISH_CREDIT_COST = 15
+
+export type MetaCreditInfo = { balance: number; reserved: number; available: number; cost: number }
+export type MetaCreditState = 'charged' | 'already_charged' | 'charge_pending' | 'released' | 'no_reservation' | 'none'
+
+export function metaCreditSummaryText(lang: 'tr' | 'en', cost = META_PUBLISH_CREDIT_COST): string {
+  return lang === 'tr'
+    ? `Başarılı yayında ${cost} AI kredisi düşer; yayın başarısız olursa düşmez.`
+    : `${cost} AI credits are charged on a successful publish; nothing is charged if the publish fails.`
+}
+
+export function metaCreditBalanceText(lang: 'tr' | 'en', info: MetaCreditInfo | null): string | null {
+  if (!info) return null
+  if (lang === 'tr') {
+    return info.reserved > 0
+      ? `Mevcut bakiye: ${info.balance} kredi (${info.reserved} kredi açık yayın için ayrıldı, kullanılabilir: ${info.available}).`
+      : `Mevcut bakiye: ${info.balance} kredi.`
+  }
+  return info.reserved > 0
+    ? `Current balance: ${info.balance} credits (${info.reserved} held for open publishes, spendable: ${info.available}).`
+    : `Current balance: ${info.balance} credits.`
+}
+
+export function metaCreditsInsufficient(info: MetaCreditInfo | null): boolean {
+  return info !== null && info.available < info.cost
+}
+
+/** Warning shown after a publish that succeeded but whose credit charge did not go through yet. */
+export function metaCreditStateNotice(state: string | null | undefined): string | null {
+  if (state === 'charge_pending') {
+    return 'Kampanya oluşturuldu ancak 15 kredilik ücret şu an düşülemedi. Yayınınız geri alınmadı; krediniz yeterli olduğunda ücret otomatik olarak yeniden denenir.'
+  }
+  return null
 }
 
 export function describeMetaApiError(error: MetaApiError): MetaUserError {
@@ -186,7 +223,7 @@ export const META_PLAN_STATUS_LABELS: Record<string, string> = Object.fromEntrie
 type PostFn = <T>(url: string, body: unknown) => Promise<({ ok: true } & T) | MetaApiError>
 
 export type ConfirmAndCreateResult =
-  | { ok: true; approvalSkipped: boolean }
+  | { ok: true; approvalSkipped: boolean; creditNotice?: string | null }
   | { ok: false; phase: 'approval' | 'publish'; error: MetaApiError }
 
 /**
@@ -211,7 +248,10 @@ export async function confirmAndCreate(input: {
     if (!approval.ok) return { ok: false, phase: 'approval', error: approval }
     input.onApproved?.()
   }
-  const published = await input.post('/api/ads/meta/plans/publish', { planId: input.planId, requestId: input.requestId })
+  const published = await input.post<{ credit?: { state?: string; notice?: string | null } }>('/api/ads/meta/plans/publish', { planId: input.planId, requestId: input.requestId })
   if (!published.ok) return { ok: false, phase: 'publish', error: published }
-  return { ok: true, approvalSkipped: input.alreadyApproved }
+  const creditNotice = published.credit?.notice ?? null
+  return creditNotice
+    ? { ok: true, approvalSkipped: input.alreadyApproved, creditNotice }
+    : { ok: true, approvalSkipped: input.alreadyApproved }
 }
