@@ -18,7 +18,7 @@ const NEW_BADGE_COPY: Record<Lang, string> = {
 
 const META_ACCESS_COPY_KEYS = [
   'metaApprovalPendingButton',
-  'metaApprovalTooltip',
+  'metaApprovalPendingTooltip',
   'metaApprovalPendingShort',
   'metaAccessReadOnlyLabel',
   'metaAccessManagedLabel',
@@ -43,7 +43,7 @@ describe('GLOVAL Ads new badge and access translations', () => {
 
   it('keeps the requested Turkish approval copy and platform coming-soon copy independent', () => {
     expect(dictionary.tr.ads.metaApprovalPendingButton).toBe('Meta onayı bekleniyor')
-    expect(dictionary.tr.ads.metaApprovalTooltip).toBe('Meta uygulama incelemesi tamamlanınca açılacak')
+    expect(dictionary.tr.ads.metaApprovalPendingTooltip).toBe('Meta uygulama incelemesi tamamlanınca açılacak')
     expect(dictionary.tr.ads.metaApprovalPendingShort).toBe('Onay bekleniyor')
     expect(dictionary.tr.ads.comingSoon).toBe('Yakında')
     expect(dictionary.en.ads.comingSoon).toBe('Coming soon')

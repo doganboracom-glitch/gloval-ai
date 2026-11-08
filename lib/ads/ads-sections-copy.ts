@@ -20,7 +20,7 @@ const tr = {
       },
       {
         title: 'Google Ads hesabını bağla, planı onayla ve kampanyayı oluştur',
-        body: 'Planını açıkça onayladığında kampanya Google Ads’te duraklatılmış olarak oluşturulur. Etkinleştirme ve her değişiklik ayrıca senin onayını gerektirir.',
+        body: 'Planını açıkça onayladığında kampanya Google Ads’te duraklatılmış olarak oluşturulur. Etkinleştirme ve her değişiklik ayrıca senin onayını gerektirir. GLOVAL Ads senin ayrı işlemin olmadan reklam harcaması başlatmaz.',
         badge: 'Onay gerekli',
       },
     ],
@@ -94,7 +94,7 @@ const tr = {
       },
       {
         question: 'Hangi platformlar var?',
-        answer: 'Google Ads kullanıma açık. Meta erişimi uygulama incelemesi ve hesap izinlerine bağlı; diğer kanallar hazırlık aşamasında.',
+        answer: 'Google Ads erişimi uygun hesaplarda kullanılabilir; kampanya işlemleri onay gerektirir. Meta erişimi uygulama incelemesi ve hesap izinlerine bağlı; diğer kanallar hazırlık aşamasında.',
       },
       {
         question: 'Verilerim nasıl kullanılır?',
@@ -141,7 +141,7 @@ const en: AdsSectionsCopy = {
       },
       {
         title: 'Connect Google Ads, approve the plan, and create the campaign',
-        body: 'After you explicitly approve the plan, the campaign is created paused in Google Ads. Activation and each change require your separate approval.',
+        body: 'After you explicitly approve the plan, the campaign is created paused in Google Ads. Activation and each change require your separate approval. GLOVAL Ads does not start ad spend without your separate action.',
         badge: 'Approval required',
       },
     ],
@@ -215,7 +215,7 @@ const en: AdsSectionsCopy = {
       },
       {
         question: 'Which advertising platforms are available?',
-        answer: 'Google Ads is available. Meta access depends on app-review status and account permissions; other channels are still being prepared.',
+        answer: 'Google Ads is available to eligible accounts; campaign actions require approval. Meta access depends on app-review status and account permissions; other channels are still being prepared.',
       },
       {
         question: 'How is my data used?',

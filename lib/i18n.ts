@@ -2046,10 +2046,10 @@ const dict = {
       dashboardTitle: 'GLOVAL Ads',
       dashboardSubtitle: 'Reklam planlarını ve bağlantılarını buradan yönet.',
       connectionTitle: 'Google Ads’i bağla (Beta)',
-      connectionBody: 'GLOVAL Ads hesap ve kampanya verilerini okur. Açık onayınla duraklatılmış kampanyalar oluşturabilir ve kampanya durumunu, bütçeyi ya da reklam metnini yönetebilir. Yeni kampanyalar duraklatılmış başlar; etkinleştirme ve her değişiklik ayrı onayını gerektirir.'
+      connectionBody: 'GLOVAL Ads hesap ve kampanya verilerini okur. Açık onayınla duraklatılmış kampanyalar oluşturabilir ve kampanya durumunu, bütçeyi ya da reklam metnini yönetebilir. Yeni kampanyalar duraklatılmış başlar; etkinleştirme ve her değişiklik ayrı onayını gerektirir. GLOVAL Ads senin ayrı işlemin olmadan reklam harcaması başlatmaz.',
       connectionButton: 'Google hesabını bağla',
       reconnectButton: 'Yeniden bağla',
-      readOnlyNote: 'Panel hesap ve kampanya verilerini okur. Açık onayınla duraklatılmış kampanyalar oluşturabilir; durum, bütçe ve reklam metni değişiklikleri ayrı onayını gerektirir. Yeni kampanyalar duraklatılmış başlar.'
+      readOnlyNote: 'Panel hesap ve kampanya verilerini okur. Açık onayınla duraklatılmış kampanyalar oluşturabilir; durum, bütçe ve reklam metni değişiklikleri ayrı onayını gerektirir. Yeni kampanyalar duraklatılmış başlar; GLOVAL Ads onayın olmadan reklam harcaması başlatmaz.',
       privacyPolicyLink: 'Gizlilik Politikası’ndaki Google Ads bölümü',
       accountStatusActive: 'Bağlı',
       accountStatusError: 'Yeniden bağla',
@@ -4378,10 +4378,10 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       dashboardTitle: 'GLOVAL Ads',
       dashboardSubtitle: 'Manage your ad plans and connections here.',
       connectionTitle: 'Connect Google Ads (beta)',
-      connectionBody: 'GLOVAL Ads reads account and campaign data. With your explicit approval, it can create paused campaigns and manage campaign status, budgets, and ad text. New campaigns start paused; activation and each change require your separate approval.'
+      connectionBody: 'GLOVAL Ads reads account and campaign data. With your explicit approval, it can create paused campaigns and manage campaign status, budgets, and ad text. New campaigns start paused; activation and each change require your separate approval. GLOVAL Ads does not start ad spend without your separate action.',
       connectionButton: 'Connect Google account',
       reconnectButton: 'Reconnect',
-      readOnlyNote: 'This dashboard reads account and campaign data. With your explicit approval, it can create paused campaigns and manage campaign status, budgets, and ad text. New campaigns start paused.'
+      readOnlyNote: 'This dashboard reads account and campaign data. With your explicit approval, it can create paused campaigns and manage campaign status, budgets, and ad text. New campaigns start paused; GLOVAL Ads does not start ad spend without your approval.',
       privacyPolicyLink: 'Google Ads section in the Privacy Policy',
       accountStatusActive: 'Connected',
       accountStatusError: 'Reconnect required',

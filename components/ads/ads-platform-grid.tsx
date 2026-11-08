@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useLanguage } from '@/components/language-provider'
 import { cn } from '@/lib/utils'
 import {
@@ -58,16 +59,18 @@ export function AdsPlatformGrid({
               </div>
             </div>
             {isMetaApprovalPending ? (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="lg"
                 data-testid="meta-approval-pending-button"
                 aria-disabled="true"
                 tabIndex={0}
-                title={copy.metaApprovalTooltip}
-                className="mt-auto inline-flex min-h-11 w-fit items-center rounded-full border border-border/70 bg-secondary/50 px-2.5 py-1 text-sm font-medium text-muted-foreground cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                title={copy.metaApprovalPendingTooltip}
+                className="mt-auto min-h-11 w-fit rounded-full cursor-not-allowed"
               >
                 {copy.metaApprovalPendingButton}
-              </button>
+              </Button>
             ) : target.kind === 'link' ? (
               <span className="mt-auto inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand">
                 {target.requiresLogin ? copy.platformCardSignIn : copy.platformCardOpen}
