@@ -1531,6 +1531,7 @@ const az: DeepPartial<Dict> = {
     noticeTerms: 'Ləğv və geri qaytarma şərtləri üçün baxın:',
   },
   ads: {
+    newBadge: 'Yeni',
     manualFallback: { title: 'Biznes məlumatları ilə plan qaralaması', description: 'Saytı oxumaq mümkün deyilsə, aşağıda biznes məlumatlarını daxil et. robots.txt və giriş nəzarətini keçmirik.', note: 'Qaralama yalnız verdiyin məlumatlara əsaslanır; sayt skan edilmir və hədəf URL yoxlanmır.', resultTitle: 'Biznes məlumatları ilə plan qaralaması', summaryTitle: 'Təqdim edilən biznes məlumatları', businessLabel: 'Biznesin adı', industryLabel: 'Sahə', servicesLabel: 'Məhsul və ya xidmətlər', locationLabel: 'Xidmət bölgəsi (istəyə görə)', languageLabel: 'Reklam dili', submitLabel: 'Qaralama yarat' },
     disconnectDialog: {
       title: 'Google Ads bağlantısı kəsilsin?',

@@ -1532,6 +1532,7 @@ const pt: DeepPartial<Dict> = {
     noticeTerms: 'Para as condições de cancelamento e reembolso, consulte:',
   },
   ads: {
+    newBadge: 'Novo',
     manualFallback: { title: 'Rascunho com dados da empresa', description: 'Se não for possível ler o site, informe abaixo os dados da empresa. Não contornamos robots.txt nem os controles de acesso.', note: 'Este rascunho usa apenas os dados fornecidos; o site não é analisado e a URL de destino não é verificada.', resultTitle: 'Rascunho com dados da empresa', summaryTitle: 'Dados da empresa informados', businessLabel: 'Nome da empresa', industryLabel: 'Setor', servicesLabel: 'Produtos ou serviços', locationLabel: 'Área atendida (opcional)', languageLabel: 'Idioma do anúncio', submitLabel: 'Criar rascunho' },
     disconnectDialog: {
       title: 'Desconectar o Google Ads?',

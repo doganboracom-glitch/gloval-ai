@@ -78,9 +78,9 @@ export function SiteHeader() {
   const soonBadge = (testId: string) => (
     <span
       data-testid={testId}
-      className="rounded-full border border-violet-400/30 bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-300"
+      className="rounded-full border border-brand/40 bg-brand/10 px-1.5 py-0.5 text-[11px] font-semibold uppercase leading-none tracking-wide text-brand"
     >
-      {t.ads.comingSoon}
+      {t.ads.newBadge}
     </span>
   )
   const domainNewBadge = () => (

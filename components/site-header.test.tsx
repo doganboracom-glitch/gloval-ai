@@ -64,6 +64,17 @@ afterEach(() => {
 })
 
 describe('site header navigation', () => {
+  it.each(SUPPORTED_LOCALES)('%s shows the localized GLOVAL Ads new badge', (locale) => {
+    vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
+    state.lang = locale
+    render(<SiteHeader />)
+    const mobileNav = openMobileMenu()
+    const badge = within(mobileNav).getByTestId('mobile-nav-ads-soon-badge')
+
+    expect(badge.textContent).toBe(dictionary[locale].ads.newBadge)
+    expect(badge.className).toContain('uppercase')
+  })
+
   it.each(SUPPORTED_LOCALES)('%s hides landing links only on Ads routes', (locale) => {
     state.lang = locale
     const nav = dictionary[locale].nav

@@ -1559,6 +1559,7 @@ const it: DeepPartial<Dict> = {
     noticeTerms: 'Per le condizioni di annullamento e rimborso consulta:',
   },
   ads: {
+    newBadge: 'Nuovo',
     manualFallback: { title: 'Bozza basata sulle informazioni aziendali', description: 'Se non è possibile leggere il sito, inserisci qui i dati dell’attività. Non aggiriamo robots.txt né i controlli di accesso.', note: 'La bozza usa solo le informazioni fornite; sito e indirizzo di destinazione non vengono verificati.', resultTitle: 'Bozza basata sulle informazioni aziendali', summaryTitle: 'Dati aziendali forniti', businessLabel: 'Nome attività', industryLabel: 'Settore', servicesLabel: 'Prodotti o servizi', locationLabel: 'Area servita (facoltativa)', languageLabel: 'Lingua degli annunci', submitLabel: 'Crea bozza' },
     addressLabel: 'Indirizzo del sito web',
     addressGuidance: 'Inserisci qui il link del sito',

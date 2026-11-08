@@ -1560,6 +1560,7 @@ const de: DeepPartial<Dict> = {
     noticeTerms: 'Bedingungen zu Stornierung und Erstattung finden Sie hier:',
   },
   ads: {
+    newBadge: 'Neu',
     manualFallback: { title: 'Planentwurf aus Unternehmensangaben', description: 'Wenn die Website nicht gelesen werden kann, gib unten die Unternehmensangaben ein. robots.txt und Zugriffsschutz werden nicht umgangen.', note: 'Dieser Entwurf basiert nur auf deinen Angaben; die Website wird nicht gescannt und die Zieladresse nicht überprüft.', resultTitle: 'Planentwurf aus Unternehmensangaben', summaryTitle: 'Angegebene Unternehmensdaten', businessLabel: 'Unternehmensname', industryLabel: 'Branche', servicesLabel: 'Produkte oder Dienstleistungen', locationLabel: 'Einsatzgebiet (optional)', languageLabel: 'Anzeigensprache', submitLabel: 'Entwurf erstellen' },
     addressLabel: 'Website-Adresse',
     addressGuidance: 'Website-Link hier eingeben',
