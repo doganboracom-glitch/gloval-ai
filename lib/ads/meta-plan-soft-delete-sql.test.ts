@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const migrations = [
@@ -44,16 +44,6 @@ afterAll(async () => {
   await db.close()
 })
 
-beforeEach(async () => {
-  await db.exec(`
-    delete from public.ads_meta_actions;
-    delete from public.ads_meta_plans;
-    delete from public.ads_meta_api_operations;
-    delete from public.ads_connections;
-    delete from auth.users;
-  `)
-})
-
 async function newUser(): Promise<string> {
   counter += 1
   const { rows } = await db.query<{ id: string }>(
@@ -83,13 +73,15 @@ async function newPlan(userId: string, connectionId: string, status: 'draft' | '
     return rows[0].id
   }
 
+  counter += 1
+  const idBase = 100_000_000_000 + counter * 10
   const { rows } = await db.query<{ id: string }>(
     `insert into public.ads_meta_plans (
        user_id, connection_id, status, content, currency, approved_at, plan_hash, approved_version, published_at,
        meta_campaign_id, meta_adset_id, meta_ad_id
-     ) values ($1, $2, $3, '{}'::jsonb, 'TRY', now(), repeat('a', 64), 1, now(), 'campaign-1', 'adset-1', 'ad-1')
+     ) values ($1, $2, $3, '{}'::jsonb, 'TRY', now(), repeat('a', 64), 1, now(), $4, $5, $6)
      returning id`,
-    [userId, connectionId, status],
+    [userId, connectionId, status, String(idBase + 1), String(idBase + 2), String(idBase + 3)],
   )
   return rows[0].id
 }
@@ -185,7 +177,9 @@ describe('ads_soft_delete_meta_plan', () => {
     )
 
     expect(result.rows[0].allowed).toBe(true)
-    expect((await db.query(`select endpoint from public.ads_meta_api_operations where request_id = $1`, [requestId])).rows[0].endpoint)
-      .toBe('act.minimum_budgets')
+    const operation = await db.query<{ endpoint: string }>(
+      `select endpoint from public.ads_meta_api_operations where request_id = $1`, [requestId],
+    )
+    expect(operation.rows[0].endpoint).toBe('act.minimum_budgets')
   })
 })

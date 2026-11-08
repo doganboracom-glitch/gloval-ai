@@ -164,6 +164,6 @@ describe('Meta optimization and tracking settings', () => {
     expect(landingPagePlan.ok).toBe(true)
     if (!landingPagePlan.ok) return
     expect(metaApprovalText(landingPagePlan.value.content, 'en')).toContain('A Meta Pixel must be installed')
-    expect(metaApprovalText(landingPagePlan.value.content, 'en')).toContain('Landing page views')
+    expect(metaApprovalText(landingPagePlan.value.content, 'en')).toContain('landing page views')
   })
 })
