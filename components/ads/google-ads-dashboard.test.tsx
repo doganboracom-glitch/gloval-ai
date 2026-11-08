@@ -184,7 +184,7 @@ describe('Google Ads dashboard UI', () => {
 
     render(<AdsPlatformGrid />)
 
-    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length)
+    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length + 1)
     expect(screen.queryAllByRole('button')).toHaveLength(0)
     for (const platform of comingSoon) {
       expect(screen.getByRole('heading', { name: dictionary.en.ads[platform.nameKey] })).toBeTruthy()

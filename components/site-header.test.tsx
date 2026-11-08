@@ -70,9 +70,10 @@ describe('site header navigation', () => {
     render(<SiteHeader />)
     const mobileNav = openMobileMenu()
     const badge = within(mobileNav).getByTestId('mobile-nav-ads-soon-badge')
+    const domainBadge = within(mobileNav).getByTestId('mobile-nav-domain-new-badge')
 
     expect(badge.textContent).toBe(dictionary[locale].ads.newBadge)
-    expect(badge.className).toContain('uppercase')
+    expect(badge.className).toBe(domainBadge.className)
   })
 
   it.each(SUPPORTED_LOCALES)('%s hides landing links only on Ads routes', (locale) => {

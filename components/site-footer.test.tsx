@@ -108,13 +108,12 @@ describe('footer GLOVAL Ads link badge', () => {
     expect(screen.queryByTestId('ads-new-badge')).toBeNull()
   })
 
-  it('uses the uppercase brand style for the new badge', () => {
+  it('uses the same badge style as Domain Sorgula', () => {
     vi.stubEnv('NEXT_PUBLIC_ADS_FEATURE_UI', '1')
     render(<SiteFooter now={BEFORE} />)
-    const badgeClassName = screen.getByTestId('ads-soon-badge').className
-    expect(badgeClassName).toContain('uppercase')
-    expect(badgeClassName).toContain('border-brand/40')
-    expect(badgeClassName).toContain('text-brand')
+    expect(screen.getByTestId('ads-soon-badge').className).toBe(
+      screen.getByTestId('domain-new-badge').className,
+    )
   })
 
   it('shows the English new badge text in English', () => {
