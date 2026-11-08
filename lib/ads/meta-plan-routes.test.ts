@@ -95,6 +95,8 @@ const CONTENT: MetaPlanContent = {
   ageMax: 65,
   gender: 'all',
   dailyBudget: 100,
+  optimizationGoal: 'LANDING_PAGE_VIEWS',
+  utmTracking: true,
   endDate: null,
   imagePath: `${USER_ID}/0f1e2d3c-4b5a-4968-8776-655443322110.jpg`,
   specialTopic: 'none',

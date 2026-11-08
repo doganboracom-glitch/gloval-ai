@@ -30,23 +30,31 @@ export function MetaOverviewPlans({
 }) {
   const { data } = useSWR(enabled ? `/api/ads/meta/plans?connectionId=${connectionId}` : null, fetchPlans)
   const plans = data?.plans ?? []
-  if (!enabled || plans.length === 0) return null
+  const activePlans = plans.filter((plan) => plan.status !== 'archived')
+  const archivedCount = plans.length - activePlans.length
+  if (!enabled || (activePlans.length === 0 && archivedCount === 0)) return null
 
   const isTr = lang === 'tr'
-  const visible = plans.slice(0, MAX_VISIBLE)
-  const hidden = plans.length - visible.length
+  const visible = activePlans.slice(0, MAX_VISIBLE)
+  const hidden = activePlans.length - visible.length
 
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-3">
       <p className="text-xs font-medium text-muted-foreground">{isTr ? 'Planlar' : 'Plans'}</p>
-      <ul className="flex flex-col gap-2" aria-label={isTr ? 'Plan özetleri' : 'Plan summaries'}>
-        {visible.map((plan) => (
-          <li key={plan.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <span className="min-w-0 max-w-full truncate text-sm">{plan.content.name || (isTr ? 'Adsız' : 'Untitled')}</span>
-            <MetaPlanStatusChip plan={{ status: plan.status, effectiveStatus: plan.effectiveStatus }} lang={lang} />
-          </li>
-        ))}
-      </ul>
+      {visible.length > 0 ? (
+        <ul className="flex flex-col gap-2" aria-label={isTr ? 'Plan özetleri' : 'Plan summaries'}>
+          {visible.map((plan) => (
+            <li key={plan.id} className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <span className="min-w-0 max-w-full truncate text-sm">{plan.content.name || (isTr ? 'Adsız' : 'Untitled')}</span>
+              <MetaPlanStatusChip plan={{ status: plan.status, effectiveStatus: plan.effectiveStatus }} lang={lang} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          {isTr ? `${archivedCount} arşivlenmiş plan gizli.` : `${archivedCount} archived plan(s) hidden.`}
+        </p>
+      )}
       <button
         type="button"
         onClick={onOpenPlans}

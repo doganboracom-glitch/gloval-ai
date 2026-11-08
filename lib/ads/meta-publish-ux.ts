@@ -42,6 +42,10 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
   kill_switch_active: 'Meta işlemleri geçici olarak durduruldu.',
   provider_error: 'Meta şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.',
+  meta_plan_active: 'Plan Meta’da hâlâ etkin. Önce Reklam Yöneticisi’nde duraklatın; plan kaldırılmadı.',
+  meta_inactive_unconfirmed: 'Meta’da kampanyanın etkin olmadığını doğrulayamadık. Nesne silinmiş veya erişilemez olabilir; plan kaldırılmadı.',
+  meta_plan_busy: 'Plan üzerinde başka bir işlem sürüyor. İşlem bitince tekrar deneyin.',
+  meta_confirmation_required: 'Meta plan durumu doğrulanamadı. Plan kaldırılmadı; yeniden deneyin.',
 }
 
 /** Masked and shortened: raw Meta text is only ever shown inside a collapsed "Ayrıntı" section. */
@@ -70,7 +74,7 @@ export function describeMetaApiError(error: MetaApiError): MetaUserError {
 
 export const META_FIELD_ORDER = [
   'name', 'landingUrl', 'primaryText', 'headline', 'description', 'cta',
-  'dailyBudget', 'countries', 'ageMin', 'ageMax', 'gender', 'endDate', 'imagePath',
+  'optimizationGoal', 'dailyBudget', 'countries', 'ageMin', 'ageMax', 'gender', 'endDate', 'imagePath',
 ] as const
 export type MetaFieldName = (typeof META_FIELD_ORDER)[number]
 
@@ -82,6 +86,7 @@ export const META_FIELD_LABELS: Record<MetaFieldName, string> = {
   description: 'Açıklama',
   cta: 'Harekete geçirici mesaj',
   dailyBudget: 'Günlük bütçe',
+  optimizationGoal: 'Optimizasyon hedefi',
   countries: 'Ülkeler',
   ageMin: 'Yaş (en az)',
   ageMax: 'Yaş (en çok)',

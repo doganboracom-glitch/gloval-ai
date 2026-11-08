@@ -52,6 +52,10 @@ export type MetaAdsErrorCode =
   | 'activation_blocked'
   | 'ad_disapproved'
   | 'payment_required'
+  | 'meta_plan_active'
+  | 'meta_inactive_unconfirmed'
+  | 'meta_plan_busy'
+  | 'meta_confirmation_required'
 
 export class MetaAdsError extends Error {
   readonly code: MetaAdsErrorCode
@@ -102,6 +106,10 @@ export function metaAdsHttpStatus(code: MetaAdsErrorCode): number {
     case 'publish_in_progress':
     case 'manage_in_progress':
     case 'transition_not_allowed':
+    case 'meta_plan_active':
+    case 'meta_inactive_unconfirmed':
+    case 'meta_plan_busy':
+    case 'meta_confirmation_required':
     case 'plan_changed':
     case 'plan_not_approved':
       return 409
