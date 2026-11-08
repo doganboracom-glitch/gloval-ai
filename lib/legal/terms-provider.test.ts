@@ -89,14 +89,17 @@ describe('Google Ads legal disclosures', () => {
     const { docs } = await load()
     const terms = docs.getLegalDoc('kullanim-kosullari')!
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
+    const cookies = docs.getLegalDoc('cerez-politikasi')!
 
-    expect(terms.lastUpdated).toBe('2026-11-05')
-    expect(privacy.lastUpdated).toBe('2026-11-07')
+    expect(terms.lastUpdated).toBe('2026-11-08')
+    expect(privacy.lastUpdated).toBe('2026-11-08')
+    expect(cookies.lastUpdated).toBe('2026-11-08')
 
     for (const lang of ['tr', 'en'] as const) {
       const termsSection = terms[lang].sections.find((section) => section.heading.startsWith('8. '))
       expect(termsSection).toBeDefined()
       const termsText = flatten(termsSection as Section).join(' ').toLowerCase()
+      const termsFullText = terms[lang].sections.flatMap((section) => flatten(section)).join(' ').toLowerCase()
       const privacyText = privacy[lang].sections.flatMap((section) => flatten(section)).join(' ').toLowerCase()
 
       expect(termsText).toContain('google ads')
@@ -105,7 +108,14 @@ describe('Google Ads legal disclosures', () => {
       expect(termsText).toMatch(/cancel|iptal/)
       expect(privacyText).toMatch(/campaign plan|kampanya plan/)
       expect(privacyText).toMatch(/google ads api/)
+      expect(termsText).toMatch(/yalnızca doğrulama modunda \(validate_only\)|validation-only mode \(validate_only\)/)
+      expect(termsText).toMatch(/meta marketing api|meta reklam hesabı/)
+      expect(termsFullText).toMatch(/15 ai kredisi|15 ai credits/)
+      expect(privacyText).toMatch(/kredi kullanımınız|credit usage/)
       expect(privacyText).toMatch(/pause|duraklat/)
+      expect(privacyText).toMatch(/conversions api|dönüşümler api/)
+      expect(privacyText).toContain('_fbp')
+      expect(privacyText).toContain('sha-256')
     }
   })
 })

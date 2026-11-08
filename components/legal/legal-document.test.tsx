@@ -18,6 +18,8 @@ import { LegalDocument } from '@/components/legal/legal-document'
 
 const privacyDoc = getLegalDoc('gizlilik-politikasi')
 if (!privacyDoc) throw new Error('Privacy policy document is unavailable')
+const cookiesDoc = getLegalDoc('cerez-politikasi')
+if (!cookiesDoc) throw new Error('Cookie policy document is unavailable')
 
 describe('referral terms section paragraphs', () => {
   it('renders all five Turkish section 1 clauses as separate paragraphs with readable spacing', () => {
@@ -38,6 +40,40 @@ describe('referral terms section paragraphs', () => {
     const expectedParagraph = REFERRAL_TERMS.en.sections[0].paragraphs[3]
 
     expect(paragraphs.filter((paragraph) => paragraph === expectedParagraph)).toHaveLength(1)
+  })
+})
+
+describe('Meta Pixel privacy section anchor', () => {
+  it('uses a matching section id and follows the Meta Ads section in both languages', () => {
+    const trPixelIndex = privacyDoc.tr.sections.findIndex((section) => section.id === 'meta-pixel-capi')
+    const enPixelIndex = privacyDoc.en.sections.findIndex((section) => section.id === 'meta-pixel-capi')
+    const trAdsIndex = privacyDoc.tr.sections.findIndex((section) => section.id === 'meta-ads-verileri')
+    const enAdsIndex = privacyDoc.en.sections.findIndex((section) => section.id === 'meta-ads-data')
+
+    expect(trPixelIndex).toBeGreaterThanOrEqual(0)
+    expect(enPixelIndex).toBeGreaterThanOrEqual(0)
+    expect(privacyDoc.tr.sections[trPixelIndex]?.id).toBe(privacyDoc.en.sections[enPixelIndex]?.id)
+    expect(trPixelIndex).toBe(trAdsIndex + 1)
+    expect(enPixelIndex).toBe(enAdsIndex + 1)
+  })
+
+  it.each([
+    ['tr', 'Meta Pixel ve Dönüşümler API’si'],
+    ['en', 'Meta Pixel and Conversions API'],
+  ] as const)('renders one anchored heading in %s', (locale, heading) => {
+    mocks.lang = locale
+    const markup = renderToStaticMarkup(<LegalDocument doc={privacyDoc} />)
+    const ids = markup.match(/id="meta-pixel-capi"/g) ?? []
+    const targetHeadings = markup.match(/<h2\b[^>]*id="meta-pixel-capi"[^>]*>[\s\S]*?<\/h2>/g) ?? []
+    expect(ids).toHaveLength(1)
+    expect(targetHeadings).toHaveLength(1)
+    expect(targetHeadings[0]).toContain(heading)
+  })
+
+  it.each(['tr', 'en'] as const)('links the %s cookie policy to the privacy section', (locale) => {
+    mocks.lang = locale
+    const markup = renderToStaticMarkup(<LegalDocument doc={cookiesDoc} />)
+    expect(markup).toContain('href="/yasal/gizlilik-politikasi#meta-pixel-capi"')
   })
 })
 
