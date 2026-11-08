@@ -79,6 +79,21 @@ const partialPlan = {
   live: null,
 }
 
+const savedImagePlan = {
+  ...partialPlan,
+  status: 'draft',
+  approvedVersion: null,
+  validatedVersion: null,
+  failureStep: null,
+  failureCode: null,
+  content: {
+    ...planContent,
+    imagePath: 'user-id/9f23a5a1-1234-4e76-bac3-11a9e1234567.png',
+    imageFilename: 'saved-campaign.png',
+  },
+  hasStoredImage: true,
+}
+
 function setupSWR() {
   mocks.useSWR.mockImplementation((key: unknown) => ({
     data: typeof key === 'string' && key.includes('/minimum-budget')
@@ -106,6 +121,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   if (originalCreateObjectURL) Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: originalCreateObjectURL })
   else Reflect.deleteProperty(URL, 'createObjectURL')
   if (originalRevokeObjectURL) Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: originalRevokeObjectURL })
@@ -169,5 +185,76 @@ describe('MetaPublishPanel', () => {
     fireEvent.change(screen.getByLabelText('Yaş (en az)'), { target: { value: '32' } })
     expect(screen.getByText(/Plan içeriği değişti veya doğrulama\/onay güncel değil/)).toBeTruthy()
     expect(continueButton.disabled).toBe(true)
+  })
+
+  it('edits and validates a saved-image plan without uploading the image again', async () => {
+    mocks.plans = [savedImagePlan]
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const payload = url.endsWith('/validate')
+        ? { ok: true, checked: [] }
+        : { ok: true, plan: savedImagePlan }
+      return { ok: true, json: async () => payload }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPanel()
+    fireEvent.click(screen.getByText('Test planı'))
+
+    expect(await screen.findByAltText('Kayıtlı reklam görselinin önizlemesi')).toBeTruthy()
+    expect(screen.getByText('saved-campaign.png')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Görseli değiştir' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Yaş (en az)'), { target: { value: '32' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet ve Meta ile doğrula' }))
+
+    expect(await screen.findByText('Meta doğrulaması geçti. Onaylayıp oluşturabilirsiniz; henüz hiçbir şey oluşturulmadı.')).toBeTruthy()
+    const requestedUrls = fetchMock.mock.calls.map(([input]) => String(input))
+    expect(requestedUrls).toContain('/api/ads/meta/plans')
+    expect(requestedUrls).toContain('/api/ads/meta/plans/validate')
+    expect(requestedUrls.some((url) => url.endsWith('/image'))).toBe(false)
+  })
+
+  it('still requires an image when the plan has no saved creative', () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet ve Meta ile doğrula' }))
+    expect(screen.getByText('Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).')).toBeTruthy()
+  })
+
+  it('uploads a newly selected image as the replacement for a saved creative', async () => {
+    mocks.plans = [savedImagePlan]
+    const replacementPlan = {
+      ...savedImagePlan,
+      version: savedImagePlan.version + 1,
+      content: {
+        ...savedImagePlan.content,
+        imagePath: 'user-id/2a23a5a1-1234-4e76-bac3-11a9e1234567.png',
+        imageFilename: 'replacement.png',
+      },
+    }
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+  const url = String(input)
+  const payload = url.endsWith('/image')
+        ? { ok: true, plan: replacementPlan }
+        : url.endsWith('/validate')
+          ? { ok: true, checked: [] }
+          : { ok: true, plan: savedImagePlan }
+      return { ok: true, json: async () => payload }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const { container } = renderPanel()
+    fireEvent.click(screen.getByText('Test planı'))
+    await screen.findByText('saved-campaign.png')
+    fireEvent.click(screen.getByRole('button', { name: 'Görseli değiştir' }))
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const replacement = new File(['png'], 'replacement.png', { type: 'image/png' })
+    fireEvent.change(input, { target: { files: [replacement] } })
+    expect(screen.getByText('replacement.png')).toBeTruthy()
+    expect(input.value).toBe('')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet ve Meta ile doğrula' }))
+    expect(await screen.findByText('Meta doğrulaması geçti. Onaylayıp oluşturabilirsiniz; henüz hiçbir şey oluşturulmadı.')).toBeTruthy()
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/image'))
+    expect(uploadCall).toBeTruthy()
+    const uploadedForm = uploadCall?.[1]?.body as FormData
+    expect((uploadedForm.get('file') as File).name).toBe('replacement.png')
   })
 })

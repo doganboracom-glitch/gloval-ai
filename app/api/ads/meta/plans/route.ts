@@ -46,16 +46,20 @@ export async function POST(request: Request) {
     if (typeof body.planId === 'string') {
       const existing = await getMetaPlan(guard.admin, userId, body.planId)
       if (!existing || existing.connection_id !== connection.id) throw new MetaAdsError('plan_not_found')
-      // Keep the uploaded creative: the client never sets imagePath.
+      // Image storage metadata is server-owned; preserve the uploaded creative across content edits.
       plan = await updateMetaPlanContent(guard.admin, existing, {
-        content: { ...content, imagePath: existing.content.imagePath ?? null },
+        content: {
+          ...content,
+          imagePath: existing.content.imagePath ?? null,
+          imageFilename: existing.content.imageFilename ?? null,
+        },
         dailyBudgetMinor: checked.value.dailyBudgetMinor,
       })
     } else {
       plan = await createMetaPlan(guard.admin, {
         userId,
         connectionId: connection.id,
-        content: { ...content, imagePath: null },
+        content: { ...content, imagePath: null, imageFilename: null },
         currency: connection.currency_code,
         dailyBudgetMinor: checked.value.dailyBudgetMinor,
       })

@@ -87,6 +87,8 @@ export type MetaPlanContent = {
   endDate: string | null
   /** Private storage path of the uploaded creative (set by the image upload route, never by the client). */
   imagePath: string | null
+  /** Display-only original name, set by the image upload route and preserved by plan edits. */
+  imageFilename?: string | null
   specialTopic: MetaSpecialTopic
 }
 
@@ -324,7 +326,7 @@ export function validateMetaPlanContent(
         name, landingUrl: url.url, primaryText, headline, description, cta, countries, ageMin, ageMax, advantageAudience, gender,
         dailyBudget: typeof raw.dailyBudget === 'number' ? raw.dailyBudget : String(raw.dailyBudget).trim(),
         optimizationGoal, utmTracking,
-        endDate, imagePath, specialTopic,
+        endDate, imagePath, imageFilename: null, specialTopic,
       },
     },
   }

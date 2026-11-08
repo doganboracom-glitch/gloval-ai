@@ -54,6 +54,7 @@ type PlanView = {
   status: string
   version: number
   content: PlanContent
+  hasStoredImage: boolean
   currency: string
   approvedVersion: number | null
   validatedVersion: number | null
@@ -88,6 +89,7 @@ const EMPTY: PlanContent = {
   dailyBudget: '',
   endDate: null,
   imagePath: null,
+  imageFilename: null,
   specialTopic: 'none',
 }
 
@@ -98,6 +100,7 @@ function editablePlanContent(content: PlanContent): PlanContent {
     ...EMPTY,
     ...content,
     advantageAudience: content.advantageAudience !== false,
+    imageFilename: content.imageFilename ?? null,
     optimizationGoal: content.optimizationGoal ?? 'LANDING_PAGE_VIEWS',
     utmTracking: content.utmTracking ?? true,
   }
@@ -170,7 +173,17 @@ export function MetaPublishPanel({
   const [file, setFile] = useState<File | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const [failedSavedPreviewKey, setFailedSavedPreviewKey] = useState<string | null>(null)
   const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const savedImagePreviewKey = plan?.hasStoredImage ? `${plan.id}:${plan.version}` : null
+  const savedImagePreviewUrl = plan?.hasStoredImage
+    ? `/api/ads/meta/plans/image?planId=${encodeURIComponent(plan.id)}&v=${plan.version}`
+    : null
+  const savedImageFilename = plan?.content.imageFilename || (
+    plan?.content.imagePath?.toLowerCase().endsWith('.png')
+      ? t('Kayıtlı görsel.png', 'Saved image.png')
+      : t('Kayıtlı görsel.jpg', 'Saved image.jpg')
+  )
   const [aiHighlights, setAiHighlights] = useState<MetaFieldName[]>([])
   const [terms, setTerms] = useState(false)
   const [aiDrafted, setAiDrafted] = useState(false)
@@ -188,6 +201,8 @@ export function MetaPublishPanel({
       setPlanId(null)
       setForm(EMPTY)
       setFile(null)
+      setIsDraggingImage(false)
+      if (imageInputRef.current) imageInputRef.current.value = ''
       setTerms(false)
       setErrors({})
     }
@@ -292,8 +307,8 @@ export function MetaPublishPanel({
       minimumBudgetMinor,
     })
     const next: MetaFieldErrors = checked.ok ? {} : toFieldErrors(checked.errors)
-    if (errors.imagePath) next.imagePath = errors.imagePath
-    if (options.requireImage && !form.imagePath && !file) next.imagePath = t('Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).', 'Add a JPG or PNG image for the ad (up to 5 MB).')
+  if (errors.imagePath && !(plan?.hasStoredImage && !file)) next.imagePath = errors.imagePath
+  if (options.requireImage && !file && !plan?.hasStoredImage) next.imagePath = t('Reklam için bir görsel yükleyin (JPG veya PNG, en çok 5 MB).', 'Add a JPG or PNG image for the ad (up to 5 MB).')
     return next
   }
 
@@ -301,6 +316,8 @@ export function MetaPublishPanel({
     setPlanId(next?.id ?? null)
     setForm(next ? editablePlanContent(next.content) : EMPTY)
     setFile(null)
+    setIsDraggingImage(false)
+    if (imageInputRef.current) imageInputRef.current.value = ''
     setTerms(false)
     setAiDrafted(false)
     setAiError(null)
@@ -344,7 +361,11 @@ export function MetaPublishPanel({
       return false
     }
     if (response.plan?.content) {
-      setForm((current) => ({ ...current, imagePath: response.plan.content.imagePath ?? null }))
+      setForm((current) => ({
+        ...current,
+        imagePath: response.plan.content.imagePath ?? null,
+        imageFilename: response.plan.content.imageFilename ?? null,
+      }))
     }
     setFile(null)
     return true
@@ -769,62 +790,93 @@ export function MetaPublishPanel({
               event.target.value = ''
             }}
           />
-          <div
-            role="group"
-            aria-label={t('Reklam görseli yükleme alanı', 'Ad image upload area')}
-            onDragOver={(event) => {
-              event.preventDefault()
-              if (!locked && busy === null) setIsDraggingImage(true)
-            }}
-            onDragLeave={(event) => {
-              const nextTarget = event.relatedTarget
-              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setIsDraggingImage(false)
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              setIsDraggingImage(false)
-              if (!locked && busy === null) selectImageFile(event.dataTransfer.files[0])
-            }}
-            className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-5 text-center transition-colors motion-reduce:transition-none ${errors.imagePath ? 'border-destructive bg-destructive/5' : isDraggingImage ? 'border-brand bg-muted/50' : 'border-border bg-muted/20'}`}
-          >
-            <button
-              type="button"
-              aria-label={t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}
-              aria-invalid={errors.imagePath ? true : undefined}
-              aria-describedby={errors.imagePath ? `meta-image-help ${fieldId('imagePath')}-error` : 'meta-image-help'}
-              onClick={() => imageInputRef.current?.click()}
-              className="flex flex-col items-center gap-2 rounded-md px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          {!file && !plan?.hasStoredImage ? (
+            <div
+              role="group"
+              aria-label={t('Reklam görseli yükleme alanı', 'Ad image upload area')}
+              onDragOver={(event) => {
+                event.preventDefault()
+                if (!locked && busy === null) setIsDraggingImage(true)
+              }}
+              onDragLeave={(event) => {
+                const nextTarget = event.relatedTarget
+                if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setIsDraggingImage(false)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                setIsDraggingImage(false)
+                if (!locked && busy === null) selectImageFile(event.dataTransfer.files[0])
+              }}
+              className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-5 text-center transition-colors motion-reduce:transition-none ${errors.imagePath ? 'border-destructive bg-destructive/5' : isDraggingImage ? 'border-brand bg-muted/50' : 'border-border bg-muted/20'}`}
             >
-              <ImagePlus className="size-7 text-muted-foreground" aria-hidden="true" />
-              <span>{isDraggingImage ? t('Görseli buraya bırakın', 'Drop the image here') : t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}</span>
-            </button>
-            <p id="meta-image-help" className="text-xs leading-relaxed text-muted-foreground">
-              {t('JPG/PNG, 1:1 oran önerilir (1080×1080), en fazla 5 MB.', 'JPG/PNG, 1:1 ratio recommended (1080×1080), up to 5 MB.')}
-            </p>
-          </div>
+              <button
+                type="button"
+                aria-label={t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}
+                aria-invalid={errors.imagePath ? true : undefined}
+                aria-describedby={errors.imagePath ? `meta-image-help ${fieldId('imagePath')}-error` : 'meta-image-help'}
+                onClick={() => imageInputRef.current?.click()}
+                className="flex flex-col items-center gap-2 rounded-md px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ImagePlus className="size-7 text-muted-foreground" aria-hidden="true" />
+                <span>{isDraggingImage ? t('Görseli buraya bırakın', 'Drop the image here') : t('Görsel seç veya buraya sürükle', 'Choose an image or drag it here')}</span>
+              </button>
+              <p id="meta-image-help" className="text-xs leading-relaxed text-muted-foreground">
+                {t('JPG/PNG, 1:1 oran önerilir (1080×1080), en fazla 5 MB.', 'JPG/PNG, 1:1 ratio recommended (1080×1080), up to 5 MB.')}
+              </p>
+            </div>
+          ) : null}
           {file ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3">
+            <div className={`flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 ${errors.imagePath ? 'border-destructive ring-2 ring-destructive/20' : 'border-border'}`}>
               {imagePreviewUrl ? <img src={imagePreviewUrl} alt={t('Seçilen reklam görselinin önizlemesi', 'Preview of the selected ad image')} className="size-16 rounded-md border border-border object-cover" /> : null}
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <p className="break-all text-sm font-medium">{file.name}</p>
                 <p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                aria-label={t('Seçilen görseli kaldır', 'Remove selected image')}
-                onClick={() => {
-                  setFile(null)
-                  if (imageInputRef.current) imageInputRef.current.value = ''
-                }}
-              >
-                <Trash2 data-icon="inline-start" aria-hidden="true" />
-                {t('Kaldır', 'Remove')}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => imageInputRef.current?.click()}>
+                  <ImagePlus data-icon="inline-start" aria-hidden="true" />
+                  {t('Görseli değiştir', 'Change image')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-label={t('Seçilen görseli kaldır', 'Remove selected image')}
+                  onClick={() => {
+                    setFile(null)
+                    if (imageInputRef.current) imageInputRef.current.value = ''
+                    setErrors((current) => ({ ...current, imagePath: undefined }))
+                  }}
+                >
+                  <Trash2 data-icon="inline-start" aria-hidden="true" />
+                  {plan?.hasStoredImage ? t('Kayıtlı görsele dön', 'Use saved image') : t('Kaldır', 'Remove')}
+                </Button>
+              </div>
+            </div>
+          ) : plan?.hasStoredImage ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3">
+              {savedImagePreviewUrl && savedImagePreviewKey !== failedSavedPreviewKey ? (
+                <img
+                  key={savedImagePreviewKey}
+                  src={savedImagePreviewUrl}
+                  alt={t('Kayıtlı reklam görselinin önizlemesi', 'Preview of the saved ad image')}
+                  onError={() => setFailedSavedPreviewKey(savedImagePreviewKey)}
+                  className="size-16 rounded-md border border-border object-cover"
+                />
+              ) : (
+                <div role="img" aria-label={t('Görsel önizlemesi yüklenemedi', 'Image preview could not be loaded')} className="flex size-16 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground">
+                  {t('Önizleme yok', 'No preview')}
+                </div>
+              )}
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <Badge variant="secondary" className="w-fit">{t('Kayıtlı görsel', 'Saved image')}</Badge>
+                <p className="break-all text-sm font-medium">{savedImageFilename}</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={() => imageInputRef.current?.click()}>
+                <ImagePlus data-icon="inline-start" aria-hidden="true" />
+                {t('Görseli değiştir', 'Change image')}
               </Button>
             </div>
-          ) : form.imagePath ? (
-            <p className="text-xs text-muted-foreground">{t('Görsel yüklenmiş. Yeni bir görsel seçerek değiştirebilirsiniz.', 'Image uploaded. Choose a new image to replace it.')}</p>
           ) : null}
         </Field>
       </fieldset>
