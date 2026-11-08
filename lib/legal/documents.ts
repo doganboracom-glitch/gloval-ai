@@ -56,7 +56,7 @@ const link = (href: string, label: string, external = false): LegalBlock => ({
 
 const privacy: LegalDoc = {
   slug: 'gizlilik-politikasi',
-  lastUpdated: '2026-11-07',
+  lastUpdated: '2026-11-08',
   tr: {
     title: 'Gizlilik Politikası',
     description:
@@ -144,6 +144,9 @@ const privacy: LegalDoc = {
             'Yayınlama için seçtiğiniz planın kampanya adı, reklam başlıkları ve açıklamaları, anahtar kelimeler/negatif anahtar kelimeler, hedefleme, son URL, günlük bütçe ve teklif sınırı Google Ads hesabınıza gönderilir. Kampanya planı, onay sürümü/zamanı, Google müşteri/kampanya kimliği ve durum bilgileri yayınlama ve kampanya yönetimi için GLOVAL AI veritabanında saklanır; performans raporları ise istek üzerine alınır ve kalıcı olarak saklanmaz.',
           ),
           p(
+            'Kredi kullanımınız (işlem türü, miktar, zaman ve ilgili yayın kaydı) faturalama ve itiraz süreçleri için hesabınızla ilişkilendirilerek saklanır.',
+          ),
+          p(
             'Bu akışta Google OAuth ve Google Ads API (izin ve veri sorguları), Vercel (uygulama barındırma ve çalıştırma) ve Supabase (kimlik doğrulama ve veritabanı) kullanılır. Bağlantı ve hesap metaverileri ile Google yenileme tokenı Supabase’te saklanır; yenileme tokenı AES-256-GCM ile şifrelenir, istemciye gönderilmez ve uygulama günlüklerine yazılmaz.',
           ),
           p(
@@ -190,7 +193,28 @@ const privacy: LegalDoc = {
           p(
             'Meta bağlantısını GLOVAL Ads panelinde “Bağlantıyı kes” ile dilediğiniz zaman sonlandırabilirsiniz; bağlantı kesildiğinde saklanan erişim anahtarları silinir. Bağlantıyı kesmek Meta hesabınızdaki kampanyaları durdurmaz veya silmez. Reklam harcamaları doğrudan Meta tarafından reklam hesabınıza faturalandırılır. Meta ile ilgili verilerinizin silinmesini talep etmek için Veri Silme Talimatları sayfasına bakın.',
           ),
+          p(
+            `Bağlantı ve izinler: Meta hesabınızı ilk bağladığınızda GLOVAL Ads yalnızca okuma izinleri ister (reklam hesabı, kampanya ve performans verileri, işletme portföyü, Sayfa listesi). Kampanya oluşturma ve yönetme için gereken yönetim izni ayrı bir adımda ve yalnızca siz isterseniz verilir. Bu izni dilediğiniz zaman Facebook hesabınızdan (Ayarlar ve gizlilik > Ayarlar > İşletme entegrasyonları) kaldırabilirsiniz.`,
+          ),
+          p(
+            'Kampanya oluşturma: Yönetim izni verilmişse ve planı onaylarsanız GLOVAL, onayladığınız kampanya, reklam seti, görsel ve reklamı Meta Marketing API üzerinden reklam hesabınıza duraklatılmış durumda oluşturur. Kampanyayı etkinleştirmek veya günlük bütçeyi artırmak ayrı bir açık onay gerektirir; duraklatmak veya bütçeyi azaltmak için ek onay gerekmez. Yüklediğiniz reklam görseli yalnızca bu işlem için Meta’ya iletilir.',
+          ),
+          p(
+            'Saklama: Meta erişim anahtarı şifrelenmiş saklanır ve süresi dolmadan önce size e-posta ile bildirilir; bağlantıyı kestiğinizde veya Meta’dan uygulamayı kaldırdığınızda ya da veri silme talebi ilettiğinizde GLOVAL bağlantıyı iptal eder ve anahtarı siler. Kampanya planlarınız, onay kayıtları ve Meta nesne kimlikleri hesabınız silinene kadar saklanır; panelden bir planı sildiğinizde plan listeden kaldırılır, denetim kaydı yasal gereklilik ve güvenlik amacıyla ilişkilendirilmeden tutulabilir.',
+          ),
+          p(
+            'Erişim durumu: Meta bağlantısı Meta’nın uygulama incelemesi ve izin onayı sürecine tabidir; bu süreçte özellik kademeli olarak açılır ve bazı hesaplarda kullanılamayabilir.',
+          ),
           link('/yasal/veri-silme', 'Veri Silme Talimatları'),
+        ],
+      },
+      {
+        id: 'meta-pixel-capi',
+        heading: 'Meta Pixel ve Dönüşümler API’si',
+        blocks: [
+          p(
+            'Pazarlama çerezlerini kabul ederseniz, reklam performansını ölçmek için tarayıcıda Meta Pixel çalışır ve bazı olaylar (sayfa görüntüleme, site oluşturma, kayıt, ödeme başlatma ve tamamlama) sunucumuzdan Meta Dönüşümler API’si ile de iletilir. Bu olaylarla olay adı ve zamanı, ödeme tutarı ve para birimi, IP adresi, tarayıcı bilgisi ve Meta çerez kimlikleri (_fbp/_fbc) gönderilir; e-posta ve telefon yalnızca geri döndürülemez biçimde özetlenerek (SHA-256) iletilir. Tercihinizi "Çerez tercihleri"nden dilediğiniz zaman değiştirebilirsiniz; pazarlama onayı yoksa bu veriler gönderilmez. Veriler, Meta Platforms Ireland Ltd. tarafından kendi gizlilik politikası kapsamında işlenir ve yurt dışına aktarılır.',
+          ),
         ],
       },
       {
@@ -315,6 +339,9 @@ const privacy: LegalDoc = {
             'The campaign plan’s campaign/brand name, ad headlines and descriptions, keywords and negative keywords, targeting, final URL, daily budget, bid ceiling, approval version/time, and Google customer/campaign IDs and status are stored in the GLOVAL AI database to provide publishing and campaign management. Performance reports are fetched from the Google Ads API when requested and returned for display in the connected user’s dashboard; report contents are not persistently stored.',
           ),
           p(
+            'Your credit usage (operation type, amount, time and the related publish record) is stored linked to your account for billing and dispute processes.',
+          ),
+          p(
             'This flow uses Google OAuth and the Google Ads API (authorization and data queries), Vercel (application hosting and runtime) and Supabase (authentication and database). Connection and account metadata and the Google refresh token are stored in Supabase. The refresh token is encrypted with AES-256-GCM, is not sent to the client and is not written to application logs.',
           ),
           p(
@@ -361,7 +388,28 @@ const privacy: LegalDoc = {
           p(
             'You can disconnect Meta at any time with “Disconnect” in the GLOVAL Ads panel; stored access tokens are deleted when you disconnect. Disconnecting does not pause or delete campaigns in your Meta account. Ad spend is billed directly by Meta to your ad account. To request deletion of your Meta-related data, see the Data Deletion Instructions page.',
           ),
+          p(
+            `Connection and permissions: When you first connect your Meta account, GLOVAL Ads requests read-only permissions (ad account, campaign and performance data, business portfolio, Page list). The management permission required to create and manage campaigns is granted in a separate step and only if you choose to. You can remove this permission at any time in your Facebook account (Settings & privacy > Settings > Business integrations).`,
+          ),
+          p(
+            'Creating campaigns: If you grant management permission and approve the plan, GLOVAL creates the approved campaign, ad set, image and ad in your ad account through the Meta Marketing API in a paused state. Activating the campaign or increasing the daily budget requires separate explicit approval; pausing or reducing the budget does not require additional approval. An uploaded ad image is sent to Meta only for this operation.',
+          ),
+          p(
+            'Storage: The Meta access token is stored encrypted and we notify you by email before it expires; when you disconnect, remove the app from Meta or submit a data-deletion request, GLOVAL revokes the connection and deletes the token. Campaign plans, approval records and Meta object IDs are retained until account deletion; when you delete a plan in the dashboard, it is removed from the list, but audit records may be retained without association for legal requirements and security.',
+          ),
+          p(
+            'Availability: Meta connection is subject to Meta’s app review and permission approval; the feature is released gradually during this process and may not be available for some accounts.',
+          ),
           link('/yasal/veri-silme', 'Data Deletion Instructions'),
+        ],
+      },
+      {
+        id: 'meta-pixel-capi',
+        heading: 'Meta Pixel and Conversions API',
+        blocks: [
+          p(
+            'If you accept marketing cookies, the Meta Pixel runs in your browser to measure ad performance, and some events (page view, site generation, sign-up, checkout start and completion) are also sent from our server through the Meta Conversions API. These events include the event name and time, purchase amount and currency, IP address, browser information and Meta cookie identifiers (_fbp/_fbc); email and phone are sent only in irreversibly hashed form (SHA-256). You can change your choice at any time under "Cookie preferences"; without marketing consent this data is not sent. The data is processed by Meta Platforms Ireland Ltd. under its own privacy policy and is transferred abroad.',
+          ),
         ],
       },
       {
@@ -579,6 +627,7 @@ const kvkk: LegalDoc = {
 
 const cookies: LegalDoc = {
   slug: 'cerez-politikasi',
+  lastUpdated: '2026-11-08',
   tr: {
     title: 'Çerez Politikası',
     description:
@@ -603,6 +652,10 @@ const cookies: LegalDoc = {
             'Analitik çerezler: Hizmetin nasıl kullanıldığını anlamak için toplu/istatistiksel ölçüm sağlar. Yalnızca açık rızanızla etkinleşir.',
             'Pazarlama çerezleri: Kampanya ve tanıtım faaliyetlerinin ölçümü için kullanılabilir. Yalnızca açık rızanızla etkinleşir.',
           ]),
+          p(
+            'Pazarlama çerezlerine onay verirseniz Meta Pixel (_fbp/_fbc) ve sunucu tarafı Conversions API reklam ölçümü için kullanılır; pazarlama onayı olmadan bu veriler gönderilmez. Tercihinizi “Çerez tercihleri” bağlantısından dilediğiniz zaman değiştirebilirsiniz. Ayrıntılar için:',
+          ),
+          link('/yasal/gizlilik-politikasi#meta-pixel-capi', 'Gizlilik Politikası: Meta Pixel ve Dönüşümler API’si'),
         ],
       },
       {
@@ -642,6 +695,10 @@ const cookies: LegalDoc = {
             'Analytics cookies: Provide aggregate/statistical measurement to understand how the service is used. Enabled only with your explicit consent.',
             'Marketing cookies: May be used to measure campaigns and promotional activity. Enabled only with your explicit consent.',
           ]),
+          p(
+            'If you consent to marketing cookies, Meta Pixel (_fbp/_fbc) and the server-side Conversions API are used for ad measurement; this data is not sent without marketing consent. You can change your choice at any time using the “Cookie preferences” link. For details, see:',
+          ),
+          link('/yasal/gizlilik-politikasi#meta-pixel-capi', 'Privacy Policy: Meta Pixel and Conversions API'),
         ],
       },
       {
@@ -665,7 +722,7 @@ const cookies: LegalDoc = {
 
   const terms: LegalDoc = {
     slug: 'kullanim-kosullari',
-    lastUpdated: '2026-11-05',
+    lastUpdated: '2026-11-08',
     tr: {
     title: 'Kullanım Koşulları',
     description:
@@ -730,6 +787,9 @@ const cookies: LegalDoc = {
           p(
             'Hizmet; ücretsiz ve ücretli paketler hâlinde sunulur. Her paketin site/sayfa limitleri, AI kredi kuralları ve özellik kapsamı fiyatlandırma sayfasında belirtilir. Ücretli paketler seçtiğiniz ödeme dönemine göre (aylık/yıllık) ücretlendirilir.',
           ),
+          p(
+            `Google Ads kampanya yayınlama işlemi şu an 15 AI kredisi değerindedir; kredi yalnızca yayın Google Ads’te başarıyla tamamlandığında kesinleşir, işlem başarısız olursa kredi tahsil edilmez ya da hesabınıza geri bırakılır. Site taraması ve plan önizlemesi için günlük ücretsiz haklar önce kullanılır, ardından işlem başına 2 kredi uygulanır. Kredi bedelleri fiyatlandırma sayfasında güncel olarak gösterilir.`,
+          ),
         ],
       },
       {
@@ -758,13 +818,16 @@ const cookies: LegalDoc = {
             'Google Ads hesabınızı bağladıktan sonra, kampanya planını onaylamanız ve yayın öncesi ayrı bir son onay vermeniz hâlinde GLOVAL AI, gösterilen planı Google Ads API üzerinden sizin adınıza hesabınıza gönderebilir ve kampanya, reklam grubu, reklam ve bütçe kayıtlarını oluşturabilir. Kampanya başlangıçta duraklatılmış (PAUSED) oluşturulur; siz ayrıca etkinleştirmedikçe reklam gösterimi başlamaz. Onaylanmamış bir plan gönderilmez.',
           ),
           p(
-            'Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, yetkili bir GLOVAL yöneticisi kaydedilmiş bir taslağı validate_only modunda yalnızca istek doğrulaması için Google Ads API’ye gönderebilir. Bu test kampanya oluşturmaz veya hesap durumunu değiştirmez; ancak plan alanları doğrulama amacıyla Google’a iletilir.',
+            'Ayrı sunucu bayrağı etkin ve yönetici erişimi doğrulanmışsa, yetkili bir GLOVAL yöneticisi kaydedilmiş bir taslağı yalnızca doğrulama modunda (validate_only), yalnızca isteği doğrulamak amacıyla Google Ads API’ye gönderebilir. Bu test kampanya oluşturmaz veya hesap durumunu değiştirmez; ancak plan alanları doğrulama amacıyla Google’a iletilir.',
           ),
           p(
             'Son onay ekranında Google Ads hesabı, marka/plan, açılış sayfası URL’si, reklam başlık ve açıklamaları, anahtar kelimeler, hedefleme, günlük bütçe ve CPC teklif tavanı gösterilir. Google Ads reklam ücretleri doğrudan Google tarafından bağlı hesabınızdan tahsil edilir; GLOVAL AI reklam bütçesini tutmaz. Günlük bütçe ve GLOVAL’ın plan limitleri toplam harcama için kesin bir tavan garantisi değildir; gerçek harcama Google Ads bütçe kurallarına göre değişebilir. Varsa GLOVAL kredi bedeli ayrıca gösterilir.',
           ),
           p(
             'Reklam içeriğinin doğruluğu ve hukuka/Google Ads politikalarına uygunluğu size aittir; yayın veya performans sonucu garanti edilmez. Harcamayı durdurmak için kampanyayı GLOVAL bağlantısı kullanılabilirken panelden veya doğrudan Google Ads hesabından duraklatın. GLOVAL aboneliğini iptal etmek, hesabı kapatmak ya da Google bağlantısını kesmek mevcut kampanyayı duraklatmaz veya silmez ve Google tahsilatını durdurmaz; kampanyayı Google Ads’te ayrıca durdurmanız gerekir.',
+          ),
+          p(
+            `Meta (Facebook ve Instagram) reklamları: Meta reklam hesabınızı bağladıktan ve yönetim iznini ayrıca verdikten sonra, planı onaylamanız hâlinde GLOVAL AI, gösterilen kampanya, reklam seti, görsel ve reklam kayıtlarını Meta Marketing API üzerinden sizin adınıza duraklatılmış olarak oluşturabilir. Kampanyayı etkinleştirmek veya günlük bütçeyi artırmak ayrı bir açık onay gerektirir ve onay ekranında hesap, hedef sayfa, metinler, hedef kitle ve günlük bütçe gösterilir. Reklam ücretleri doğrudan Meta tarafından reklam hesabınıza ve ödeme yönteminize faturalandırılır; GLOVAL AI reklam bütçesini tutmaz. Reklam içeriğinin, görsellerin ve hedef sayfanın doğruluğu ile Meta Reklam Standartları’na ve yürürlükteki mevzuata uygunluğu size aittir; Meta reklamı reddedebilir, kısıtlayabilir veya inceleme sonucunu geciktirebilir; yayın, performans ya da sonuç garanti edilmez. Harcamayı durdurmak için kampanyayı GLOVAL panelinden veya doğrudan Meta Reklam Yöneticisi’nden duraklatın. GLOVAL aboneliğini iptal etmek, hesabı kapatmak veya bağlantıyı kesmek mevcut kampanyayı duraklatmaz veya silmez ve Meta tahsilatını durdurmaz. Meta entegrasyonu, Meta’nın izin ve uygulama inceleme süreçlerine tabidir; özellik kademeli açılabilir, kesinti veya kısıtlamalar olabilir.`,
           ),
         ],
       },
@@ -850,6 +913,9 @@ const cookies: LegalDoc = {
           p(
             'The service is offered in free and paid packages. Each package’s site/page limits, AI credit rules and feature scope are stated on the pricing page. Paid packages are charged according to the billing cycle you choose (monthly/yearly).',
           ),
+          p(
+            'Publishing a Google Ads campaign is currently worth 15 AI credits; the credit is finalized only when the publish succeeds in Google Ads, and if the operation fails the credit is not charged or is released back to your account. Daily free allowances are used first for site scanning and plan preview, then 2 credits per operation apply. Current credit values are shown on the pricing page.',
+          ),
         ],
       },
       {
@@ -878,13 +944,16 @@ const cookies: LegalDoc = {
             'After you connect a Google Ads account, if you approve a campaign plan and provide a separate final confirmation before publishing, GLOVAL AI may submit the displayed plan through the Google Ads API on your behalf and create campaign, ad group, ad and budget records in that account. The campaign is created paused (PAUSED); ads will not serve unless you separately enable it. An unapproved plan is not submitted.',
           ),
           p(
-            'When a separate server-side flag is enabled and administrator access is verified, an authorised GLOVAL administrator may submit a saved draft in validate_only mode solely to validate the request. This test does not create a campaign or change account status, but plan fields are sent to Google for validation.',
+            'When a separate server-side flag is enabled and administrator access is verified, an authorised GLOVAL administrator may submit a saved draft solely in validation-only mode (validate_only) to validate the request. This test does not create a campaign or change account status, but plan fields are sent to Google for validation.',
           ),
           p(
             'The final confirmation shows the Google Ads account, brand/plan, landing page URL, ad headlines and descriptions, keywords, targeting, daily budget and CPC bid ceiling. Google bills advertising charges directly to your connected account; GLOVAL AI does not hold campaign funds. The daily budget and GLOVAL plan limits are not a guaranteed cap on total spend; actual spend can vary under Google Ads budget rules. Any GLOVAL credit charge is shown separately.',
           ),
           p(
             'You are responsible for the accuracy and legal and Google Ads policy compliance of ad content; publication or performance results are not guaranteed. To stop spend, pause the campaign in the GLOVAL dashboard while connected or directly in Google Ads. Cancelling your GLOVAL subscription, closing your account or disconnecting Google does not pause or delete an existing campaign or stop Google billing; you must pause the campaign separately in Google Ads.',
+          ),
+          p(
+            `Meta (Facebook and Instagram) ads: After you connect your Meta ad account and separately grant the management permission, and once you approve a plan, GLOVAL AI may create the displayed campaign, ad set, image and ad on your behalf through the Meta Marketing API in a paused state. Activating a campaign or increasing the daily budget requires a separate explicit approval, and the approval screen shows the account, destination page, texts, audience and daily budget. Ad charges are billed by Meta directly to your ad account and payment method; GLOVAL AI does not hold your ad budget. You are responsible for the accuracy of ad content, images and the destination page and for their compliance with Meta’s Advertising Standards and applicable law; Meta may reject or restrict an ad or delay its review, and no delivery, performance or result is guaranteed. To stop spending, pause the campaign in the GLOVAL panel or directly in Meta Ads Manager. Cancelling your GLOVAL subscription, closing your account or disconnecting does not pause or delete an existing campaign and does not stop Meta’s charges. The Meta integration is subject to Meta’s permission and app review processes; the feature may be released gradually and interruptions or restrictions may occur.`,
           ),
         ],
       },
