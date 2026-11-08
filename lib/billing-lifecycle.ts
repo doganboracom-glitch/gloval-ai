@@ -115,6 +115,9 @@ export async function reconcileSubscriptionLifecycle(now = new Date()): Promise<
         subject: notice.subject,
         body: notice.body,
         dedupeKey: notice.dedupeKey,
+        // The in-app notice stays; the customer email now comes from the
+        // subscription reminders in the email outbox (lib/billing-reminders.ts).
+        skipUserEmail: true,
       })
       if (delivered) {
         result.notified++

@@ -5,13 +5,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { tenantUrl } from '@/lib/domains'
 import { SUPPORT_EMAIL, sendTransactionalEmailDetailed } from '@/lib/notify'
 import { renderEmailLayout, renderStepCard, renderTable, escape } from '@/lib/email/layout'
-import { resolveEmailLang } from '@/lib/email/lang'
+import { resolveEmailLang, type EmailLang } from '@/lib/email/lang'
 import { getPlanCodeForUser } from '@/lib/billing'
 import { toPlanCode } from '@/lib/pricing-config'
 import {
   buildLifecycleCopy,
   firstNameOf,
   lifecycleCopyToText,
+  type LifecycleCopy,
   type LifecycleKind,
 } from '@/lib/email/lifecycle-copy'
 import {
@@ -24,6 +25,8 @@ import {
   sanitizeErrorCode,
 } from '@/lib/email-outbox-policy'
 import { deliverInvoiceReady, type InvoiceDeliveryOutcome } from '@/lib/invoices/email-delivery'
+import { isBillingReminderKind, type BillingReminderKind } from '@/lib/billing-reminders-core'
+import { prepareBillingReminder } from '@/lib/billing-reminders-delivery'
 
 /**
  * Lifecycle email outbox backed by `public.email_events`.
@@ -42,7 +45,7 @@ const DASHBOARD_URL = 'https://gloval.ai/dashboard'
 const UNIQUE_VIOLATION = '23505'
 const CRON_BATCH_LIMIT = 25
 
-type EventKind = LifecycleKind | 'invoice_ready'
+type EventKind = LifecycleKind | 'invoice_ready' | BillingReminderKind
 
 type EventRow = {
   id: string
@@ -51,12 +54,14 @@ type EventRow = {
   project_id: string | null
   invoice_id: string | null
   file_sha256: string | null
+  dedupe_key: string | null
   status: 'pending' | 'processing' | 'sent' | 'failed'
   attempts: number
   lease_until: string | null
 }
 
-const EVENT_COLUMNS = 'id, user_id, kind, project_id, invoice_id, file_sha256, status, attempts, lease_until'
+const EVENT_COLUMNS =
+  'id, user_id, kind, project_id, invoice_id, file_sha256, dedupe_key, status, attempts, lease_until'
 
 /* -------------------------------- producers ------------------------------- */
 
@@ -197,6 +202,27 @@ export async function enqueueInvoiceReadyEmail(input: {
     return 'queued'
   } catch (error) {
     console.log('[email-outbox] enqueue invoice email failed:', error instanceof Error ? error.message : 'unknown')
+    return 'failed'
+  }
+}
+
+/* --------------------------- subscription reminders --------------------------- */
+
+/**
+ * Queues one subscription reminder. The caller builds the dedupe key
+ * (subscription + billing period + kind); a repeat is a no-op. No immediate
+ * attempt: the cron run that queued it delivers it right after. Never throws.
+ */
+export async function enqueueBillingReminderEmail(input: {
+  userId: string
+  kind: BillingReminderKind
+  dedupeKey: string
+}): Promise<'queued' | 'duplicate' | 'failed'> {
+  try {
+    const id = await insertEvent({ user_id: input.userId, kind: input.kind, dedupe_key: input.dedupeKey })
+    return id ? 'queued' : 'duplicate'
+  } catch (error) {
+    console.log('[email-outbox] enqueue billing reminder failed:', error instanceof Error ? error.message : 'unknown')
     return 'failed'
   }
 }
@@ -397,6 +423,12 @@ async function deliver(row: EventRow): Promise<Outcome> {
     return outcome
   }
 
+  if (isBillingReminderKind(row.kind)) {
+    const prepared = await prepareBillingReminder(row, lang)
+    if (prepared.type !== 'copy') return prepared
+    return sendCopy(row, user.email, lang, prepared.copy)
+  }
+
   let siteName: string | undefined
   let siteUrl: string | undefined
   if (row.kind !== 'account_welcome') {
@@ -419,7 +451,7 @@ async function deliver(row: EventRow): Promise<Outcome> {
   }
 
   const copy = buildLifecycleCopy({
-    kind: row.kind,
+    kind: row.kind as LifecycleKind,
     lang,
     name,
     siteName,
@@ -429,6 +461,10 @@ async function deliver(row: EventRow): Promise<Outcome> {
     plan,
   })
 
+  return sendCopy(row, user.email, lang, copy)
+}
+
+async function sendCopy(row: EventRow, to: string, lang: EmailLang, copy: LifecycleCopy): Promise<Outcome> {
   const body = [
     ...copy.paragraphs.map((p) => `<p style="margin:0 0 14px;">${escape(p)}</p>`),
     copy.steps ? renderStepCard(copy.steps.title, copy.steps.items) : '',
@@ -449,7 +485,7 @@ async function deliver(row: EventRow): Promise<Outcome> {
   })
 
   const result = await sendTransactionalEmailDetailed({
-    to: user.email,
+    to,
     subject: copy.subject,
     html,
     text: lifecycleCopyToText(copy),
