@@ -145,9 +145,11 @@ export function hasMetaManagement(connection: Pick<MetaConnectionView, 'missingP
 }
 
 /** Access badge text: "read-only" is only truthful while ads_management has not been granted. */
-export function metaAccessLabel(canManage: boolean, isTr: boolean): string {
-  if (canManage) return isTr ? 'Okuma + duraklatılmış kampanya oluşturma' : 'Read + paused campaign creation'
-  return isTr ? 'Salt okunur' : 'Read-only'
+export function metaAccessLabel(
+  canManage: boolean,
+  labels: { readOnly: string; managed: string },
+): string {
+  return canManage ? labels.managed : labels.readOnly
 }
 
 /** Whole days until `iso`; negative when already past; null when unknown. */

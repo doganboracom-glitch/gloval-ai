@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { dictionary } from '@/lib/i18n'
 import { draftMetaCopyFromScan } from '@/lib/ads/meta-ai-draft'
 import { evaluateMetaCopyPolicy } from '@/lib/ads/meta-ad-policy'
 import { META_PLAN_LIMITS } from '@/lib/ads/meta-publish-plan'
@@ -52,9 +53,19 @@ describe('Meta access labels', () => {
     expect(hasMetaManagement({ missingPublishScopes: ['ads_management'] })).toBe(false)
   })
 
-  it('only says read-only while management is not granted', () => {
-    expect(metaAccessLabel(false, true)).toBe('Salt okunur')
-    expect(metaAccessLabel(true, true)).not.toBe('Salt okunur')
-    expect(metaAccessLabel(true, false)).toContain('paused')
+  it('shows read-only only without management permission and localizes the managed label', () => {
+    const trLabels = {
+      readOnly: dictionary.tr.ads.metaAccessReadOnlyLabel,
+      managed: dictionary.tr.ads.metaAccessManagedLabel,
+    }
+    const enLabels = {
+      readOnly: dictionary.en.ads.metaAccessReadOnlyLabel,
+      managed: dictionary.en.ads.metaAccessManagedLabel,
+    }
+
+    expect(metaAccessLabel(false, trLabels)).toBe('Salt okunur')
+    expect(metaAccessLabel(true, trLabels)).toBe(trLabels.managed)
+    expect(metaAccessLabel(false, enLabels)).toBe('Read-only')
+    expect(metaAccessLabel(true, enLabels)).toContain('paused')
   })
 })

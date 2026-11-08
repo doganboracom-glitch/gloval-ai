@@ -1532,6 +1532,14 @@ const az: DeepPartial<Dict> = {
   },
   ads: {
     newBadge: 'Yeni',
+    metaApprovalPendingButton: 'Meta təsdiqi gözlənilir',
+    metaApprovalPendingTooltip: 'Meta tətbiq yoxlamasını tamamladıqdan sonra açılacaq',
+    metaApprovalPendingShort: 'Təsdiq gözlənilir',
+    metaAccessReadOnlyLabel: 'Yalnız oxu',
+    metaAccessManagedLabel: 'Oxuma + təsdiqlə dayandırılmış kampaniyaların yaradılması və idarə edilməsi',
+    metaConnectionReadOnlyBody: 'Performansı görmək üçün Meta reklam hesabınızı qoşun. İdarəetmə icazələri yoxdursa, giriş yalnız oxuma üçündür; kampaniya yaratmaq və ya dəyişmək üçün ayrıca icazələr və açıq təsdiq tələb olunur.',
+    metaConnectionManagedBody: 'İdarəetmə icazələri ilə açıq təsdiqinizdən sonra dayandırılmış kampaniyalar yarada və idarə edə bilərsiniz. Yeni kampaniyalar dayandırılmış başlayır; GLOVAL Ads reklam xərclərini başlatmır.',
+    metaConnectReadScopesNote: 'İlkin qoşulma yalnız oxuma icazələri istəyir; kampaniya yaratmaq və idarə etmək üçün ayrıca icazələr tələb olunur.',
     manualFallback: { title: 'Biznes məlumatları ilə plan qaralaması', description: 'Saytı oxumaq mümkün deyilsə, aşağıda biznes məlumatlarını daxil et. robots.txt və giriş nəzarətini keçmirik.', note: 'Qaralama yalnız verdiyin məlumatlara əsaslanır; sayt skan edilmir və hədəf URL yoxlanmır.', resultTitle: 'Biznes məlumatları ilə plan qaralaması', summaryTitle: 'Təqdim edilən biznes məlumatları', businessLabel: 'Biznesin adı', industryLabel: 'Sahə', servicesLabel: 'Məhsul və ya xidmətlər', locationLabel: 'Xidmət bölgəsi (istəyə görə)', languageLabel: 'Reklam dili', submitLabel: 'Qaralama yarat' },
     disconnectDialog: {
       title: 'Google Ads bağlantısı kəsilsin?',

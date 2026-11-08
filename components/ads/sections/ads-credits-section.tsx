@@ -11,7 +11,6 @@ export function AdsCreditsSection() {
   const copy = t.ads.sections.credits
   const comingSoonRows = [
     { label: copy.imageTitle, cost: ADS_CREDIT_COSTS.image },
-    { label: copy.publishTitle, cost: ADS_CREDIT_COSTS.publish },
     { label: copy.reviseTitle, cost: ADS_CREDIT_COSTS.revise },
     { label: copy.weeklyOptimizationTitle, cost: ADS_CREDIT_COSTS.weeklyOptimization },
     { label: copy.assistantTitle, cost: ADS_CREDIT_COSTS.assistant },
@@ -64,6 +63,17 @@ export function AdsCreditsSection() {
               <td className="px-2 py-4 text-center sm:px-4">
                 <span className="inline-flex rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
                   {copy.availableNow}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th scope="row" className="px-3 py-4 text-left font-medium sm:px-4">
+                {copy.publishTitle}
+              </th>
+              <td className="px-2 py-4 text-center font-mono font-semibold sm:px-4">{ADS_CREDIT_COSTS.publish}</td>
+              <td className="px-2 py-4 text-center sm:px-4">
+                <span className="inline-flex rounded-full border border-brand/30 bg-brand/5 px-2.5 py-1 text-xs font-medium text-brand">
+                  {copy.publishStatus}
                 </span>
               </td>
             </tr>

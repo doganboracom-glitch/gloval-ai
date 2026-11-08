@@ -1533,6 +1533,14 @@ const pt: DeepPartial<Dict> = {
   },
   ads: {
     newBadge: 'Novo',
+    metaApprovalPendingButton: 'Aguardando aprovação da Meta',
+    metaApprovalPendingTooltip: 'Será ativado quando a Meta concluir a revisão do aplicativo',
+    metaApprovalPendingShort: 'Aprovação pendente',
+    metaAccessReadOnlyLabel: 'Somente leitura',
+    metaAccessManagedLabel: 'Leitura + criação e gestão aprovadas de campanhas pausadas',
+    metaConnectionReadOnlyBody: 'Conecte sua conta de anúncios da Meta para ver o desempenho. Sem permissões de gestão, o acesso é somente leitura; criar ou alterar campanhas exige permissões separadas e sua aprovação explícita.',
+    metaConnectionManagedBody: 'Com permissões de gestão, você pode criar e gerir campanhas pausadas após sua aprovação explícita. Novas campanhas começam pausadas; a GLOVAL Ads não inicia gastos com anúncios.',
+    metaConnectReadScopesNote: 'A conexão inicial solicita apenas permissões de leitura; criar e gerir campanhas exige permissões separadas.',
     manualFallback: { title: 'Rascunho com dados da empresa', description: 'Se não for possível ler o site, informe abaixo os dados da empresa. Não contornamos robots.txt nem os controles de acesso.', note: 'Este rascunho usa apenas os dados fornecidos; o site não é analisado e a URL de destino não é verificada.', resultTitle: 'Rascunho com dados da empresa', summaryTitle: 'Dados da empresa informados', businessLabel: 'Nome da empresa', industryLabel: 'Setor', servicesLabel: 'Produtos ou serviços', locationLabel: 'Área atendida (opcional)', languageLabel: 'Idioma do anúncio', submitLabel: 'Criar rascunho' },
     disconnectDialog: {
       title: 'Desconectar o Google Ads?',

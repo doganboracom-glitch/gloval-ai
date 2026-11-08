@@ -184,8 +184,11 @@ describe('Google Ads dashboard UI', () => {
 
     render(<AdsPlatformGrid />)
 
-    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length + 1)
-    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getAllByText(copy.comingSoon)).toHaveLength(comingSoon.length)
+    const metaApprovalButton = screen.getByTestId('meta-approval-pending-button')
+    expect(metaApprovalButton.getAttribute('aria-disabled')).toBe('true')
+    expect(metaApprovalButton.hasAttribute('disabled')).toBe(false)
+    expect(screen.getAllByRole('button')).toHaveLength(1)
     for (const platform of comingSoon) {
       expect(screen.getByRole('heading', { name: dictionary.en.ads[platform.nameKey] })).toBeTruthy()
     }
@@ -333,8 +336,8 @@ describe('Google Ads dashboard UI', () => {
       expect(dictionary[locale].ads).toMatchObject(expectedTranslations[locale])
     }
 
-    expect(dictionary.tr.ads.readOnlyNote).toBe('Bu panel hesap ve kampanya verilerini okur; kampanya oluşturma, etkinleştirme, duraklatma, bütçe ve reklam metni değişikliklerini yalnızca senin onayınla yapar.')
-    expect(dictionary.en.ads.readOnlyNote).toBe('This dashboard reads account and campaign data; it only creates campaigns or changes status, budgets, and ad text with your approval.')
+    expect(dictionary.tr.ads.readOnlyNote).toBe('Panel hesap ve kampanya verilerini okur. Açık onayınla duraklatılmış kampanyalar oluşturabilir; durum, bütçe ve reklam metni değişiklikleri ayrı onayını gerektirir. Yeni kampanyalar duraklatılmış başlar; GLOVAL Ads onayın olmadan reklam harcaması başlatmaz.')
+    expect(dictionary.en.ads.readOnlyNote).toBe('This dashboard reads account and campaign data. With your explicit approval, it can create paused campaigns and manage campaign status, budgets, and ad text. New campaigns start paused; GLOVAL Ads does not start ad spend without your approval.')
   })
 
   it('opens an accessible dialog, traps focus, and returns focus after Escape', () => {

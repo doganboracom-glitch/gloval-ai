@@ -1532,6 +1532,14 @@ const et: DeepPartial<Dict> = {
   },
   ads: {
     newBadge: 'Uus',
+    metaApprovalPendingButton: 'Meta kinnitus ootel',
+    metaApprovalPendingTooltip: 'Avaneb, kui Meta lõpetab rakenduse ülevaatuse',
+    metaApprovalPendingShort: 'Kinnitus ootel',
+    metaAccessReadOnlyLabel: 'Ainult lugemine',
+    metaAccessManagedLabel: 'Lugemine + kinnitatud peatatud kampaaniate loomine ja haldamine',
+    metaConnectionReadOnlyBody: 'Ühenda Meta reklaamikonto, et näha tulemusi. Haldusõigusteta jääb ligipääs ainult lugemiseks; kampaaniate loomine või muutmine nõuab eraldi õigusi ja sinu selgesõnalist kinnitust.',
+    metaConnectionManagedBody: 'Haldusõigustega saad pärast selgesõnalist kinnitust luua ja hallata peatatud kampaaniaid. Uued kampaaniad algavad peatatud olekus; GLOVAL Ads ei käivita reklaamikulu.',
+    metaConnectReadScopesNote: 'Esmane ühendus küsib ainult lugemisõigusi; kampaaniate loomiseks ja haldamiseks on vaja eraldi õigusi.',
     manualFallback: { title: 'Koosta plaani mustand ettevõtte andmete põhjal', description: 'Kui saiti ei saa lugeda, sisesta allpool ettevõtte andmed. Me ei möödu robots.txt-ist ega juurdepääsukontrollist.', note: 'Mustand põhineb ainult sinu esitatud andmetel; saiti ei skannita ja siht-URL-i ei kontrollita.', resultTitle: 'Koosta plaani mustand ettevõtte andmete põhjal', summaryTitle: 'Esitatud ettevõtte andmed', businessLabel: 'Ettevõtte nimi', industryLabel: 'Tegevusala', servicesLabel: 'Tooted või teenused', locationLabel: 'Teeninduspiirkond (valikuline)', languageLabel: 'Reklaami keel', submitLabel: 'Loo mustand' },
     disconnectDialog: {
       title: 'Kas katkestada Google Adsi ühendus?',

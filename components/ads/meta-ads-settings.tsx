@@ -301,7 +301,7 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
 }
 
 export function MetaAdsSettings({ connections, pendingFlowId, status, missingScopes }: Props) {
-  const { lang } = useLanguage()
+  const { lang, t } = useLanguage()
   const isTr = lang === 'tr'
   const visible = connections.filter((connection) => connection.status !== 'revoked')
   const canManage = visible.some((connection) => hasMetaManagement(connection))
@@ -311,16 +311,15 @@ export function MetaAdsSettings({ connections, pendingFlowId, status, missingSco
       <div className="flex flex-col gap-1">
         <h2 id="meta-ads-title" className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           {isTr ? 'Meta (Facebook ve Instagram)' : 'Meta (Facebook and Instagram)'}
-          <Badge variant="outline">{metaAccessLabel(canManage, isTr)}</Badge>
+          <Badge variant="outline">
+            {metaAccessLabel(canManage, {
+              readOnly: t.ads.metaAccessReadOnlyLabel,
+              managed: t.ads.metaAccessManagedLabel,
+            })}
+          </Badge>
         </h2>
         <p className="text-sm text-muted-foreground">
-          {canManage
-            ? (isTr
-              ? 'Reklam performansınızı görüntüleyebilir ve onayınızla duraklatılmış kampanya oluşturabilirsiniz. Kampanyalar duraklatılmış açılır; GLOVAL Ads Meta hesabınızda harcama başlatmaz.'
-              : 'You can view ad performance and, with your approval, create paused campaigns. Campaigns are created paused; GLOVAL Ads never starts spending in your Meta account.')
-            : (isTr
-              ? 'Reklam performansınızı görüntülemek için Meta reklam hesabınızı bağlayın. Bu bağlantı yalnızca okuma erişimi verir; Meta hesabınızda kampanya oluşturulmaz veya değiştirilmez.'
-              : 'Connect your Meta ad account to view ad performance. This connection gives read-only access; no campaigns are created or changed in your Meta account.')}
+          {canManage ? t.ads.metaConnectionManagedBody : t.ads.metaConnectionReadOnlyBody}
         </p>
       </div>
 
@@ -345,7 +344,7 @@ export function MetaAdsSettings({ connections, pendingFlowId, status, missingSco
         <Card>
           <CardContent className="flex flex-col items-start gap-4 pt-6">
             <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{isTr ? 'Yalnızca okuma izinleri istenir.' : 'Only read permissions are requested.'}</li>
+              <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{t.ads.metaConnectReadScopesNote}</li>
               <li className="flex items-start gap-2"><RefreshCw className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{isTr ? 'Erişim yaklaşık 60 gün sürer; bitmeden e-posta ile hatırlatırız.' : 'Access lasts about 60 days; we email you before it ends.'}</li>
             </ul>
             <ConnectForm label={isTr ? 'Meta hesabını bağla' : 'Connect Meta account'} />
