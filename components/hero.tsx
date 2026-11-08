@@ -51,6 +51,9 @@ export function Hero() {
   // pass a state-based check and create duplicate projects. A ref blocks the
   // second call in the same tick.
   const savingRef = useRef(false)
+  // State updates are asynchronous; this prevents two rapid submit paths from
+  // starting duplicate generation requests and firing completion twice.
+  const generationInFlightRef = useRef(false)
   // When true, the live preview opens with the conversational editor panel open.
   const [startWithEditor, setStartWithEditor] = useState(false)
   // True when the site currently shown was rehydrated from a pending draft
@@ -319,7 +322,8 @@ export function Hero() {
 
   async function generate(value: string) {
     const trimmed = value.trim()
-    if (!trimmed || loading) return
+    if (!trimmed || generationInFlightRef.current) return
+    generationInFlightRef.current = true
     stopAllVoiceInput()
     setLoading(true)
     setError(false)
@@ -342,19 +346,24 @@ export function Hero() {
       const data = await res.json()
       const site = data.website as WebsiteSchema
       if (!site || !site.meta) throw new Error('invalid')
+      const generationSource = data.source === 'fallback' ? 'fallback' : 'ai'
+      trackGenerateSiteCompleted(generationSource)
+      const generatedPlan = websiteToPlan(site)
+
       // A freshly generated site supersedes any restored draft. Drop the old
       // stash and its token so the two can never be confused on save.
       clearPendingProject()
       restoredTokenRef.current = newToken()
       setRestored(false)
       setWebsite(site)
-      setPlan(websiteToPlan(site))
-      setSource(data.source === 'fallback' ? 'fallback' : 'ai')
+      setPlan(generatedPlan)
+      setSource(generationSource)
       setImageStatus(data.image?.status ?? null)
-      trackGenerateSiteCompleted(data.source === 'fallback' ? 'fallback' : 'ai')
+      trackGenerateSiteCompleted(generationSource)
     } catch {
       setError(true)
     } finally {
+      generationInFlightRef.current = false
       setLoading(false)
     }
   }

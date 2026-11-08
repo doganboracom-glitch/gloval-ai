@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   rateAllowed: true,
   sent: [] as Array<Record<string, unknown>>,
   rateKeys: [] as string[],
+  signupUser: null as { id: string; email: string; created_at: string } | null,
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -25,7 +26,10 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
     auth: {
       admin: {
-        getUserById: async () => ({ data: { user: null }, error: { message: 'none' } }),
+        getUserById: async () =>
+          state.signupUser
+            ? { data: { user: state.signupUser }, error: null }
+            : { data: { user: null }, error: { message: 'none' } },
       },
     },
   }),
@@ -51,6 +55,7 @@ vi.mock('@/lib/analytics/meta-capi-purchase', () => ({
 
 import { POST } from './route'
 import { CONSENT_COOKIE, CONSENT_VERSION } from '@/lib/cookie-consent-storage'
+import { metaEventIds } from '@/lib/analytics/event-ids'
 
 const ORIGIN = 'https://gloval.ai'
 const NONCE = 'nonce-12345678'
@@ -87,6 +92,21 @@ describe('meta-event bridge route', () => {
     state.rateAllowed = true
     state.sent = []
     state.rateKeys = []
+    state.signupUser = null
+  })
+
+  it('maps a newly created sign_up to the same deterministic event ID as Pixel', async () => {
+    const userId = '5b3f3de9-9039-4ef9-9095-82c8f37bfeb2'
+    state.signupUser = { id: userId, email: 'new@example.com', created_at: new Date().toISOString() }
+
+    const res = await post({ type: 'sign_up', userId })
+
+    expect(res.status).toBe(202)
+    expect(state.sent).toHaveLength(1)
+    expect(state.sent[0]).toMatchObject({
+      name: 'CompleteRegistration',
+      eventId: metaEventIds.signup(userId),
+    })
   })
 
   it('does nothing without marketing consent: no rate limit, no send', async () => {
