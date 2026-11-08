@@ -53,10 +53,11 @@ describe('Meta yayın hata metinleri', () => {
     expect(shortenMetaDetail(null)).toBeNull()
   })
 
-  it('Advantage+ yaş hatasında ham sağlayıcı ayrıntısını göstermez', () => {
-    const result = describeMetaApiError({ ok: false, error: 'age_range_not_allowed', metaReason: '(#100) age_max rejected 1870189' })
-    expect(result.message).toContain('Advantage+')
-    expect(result.detail).toBeNull()
+  it('Advantage+ yaş hatasında eşlenen mesajı ham API mesajına tercih eder ve Meta metnini maskeli teknik ayrıntıda tutar', () => {
+    const result = describeMetaApiError({ ok: false, error: 'age_range_not_allowed', message: 'Instead, do something else.', metaReason: '(#100) age_max rejected 1870189', fieldErrors: { ageMax: 'Invalid maximum age' } })
+    expect(result.message).toBe('Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.')
+    expect(result.detail).toContain('age_max rejected')
+    expect(result.detail).not.toMatch(/#100|1870189/i)
   })
 })
 
@@ -93,7 +94,15 @@ describe('Kısmi sonuç', () => {
     expect(rows.map((row) => row.state)).toEqual(['ok', 'ok', 'failed', 'missing', 'missing'])
   })
 
-  it('kayıtlı hatada ham Meta metnini yalnızca bilinmeyen kodda ayrıntı yapar', () => {
+  it('kayıtlı Advantage+ yaş hatasını güvenli mesajla verir, maskeli metni teknik ayrıntıda tutar', () => {
+    const age = describeStoredFailure({
+      failureStep: 'adset',
+      failureCode: 'age_range_not_allowed',
+      failureReason: '(#100) You can add a lower maximum age as a suggestion. 1870189',
+    })
+    expect(age?.message).toBe('Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.')
+    expect(age?.detail).toContain('lower maximum age')
+    expect(age?.detail).not.toMatch(/#100|1870189/i)
     const known = describeStoredFailure({ failureStep: 'adset', failureCode: 'payment_method_missing', failureReason: 'raw' })
     expect(known?.detail).toBeNull()
     const unknown = describeStoredFailure({ failureStep: 'adset', failureCode: 'weird', failureReason: 'raw reason' })

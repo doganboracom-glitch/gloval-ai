@@ -173,18 +173,36 @@ describe('MetaPublishPanel', () => {
     expect(primaryText.className).toContain('motion-safe:animate-pulse')
   })
 
-  it('keeps a partial campaign from resuming after an unsaved plan edit', async () => {
+  it('shows the saved version summary and blocks resuming a partial campaign after an unsaved edit', async () => {
     mocks.plans = [partialPlan]
     renderPanel()
     fireEvent.click(screen.getByText('Test planı'))
 
     expect(await screen.findByText('campaign-existing-123')).toBeTruthy()
+    expect(screen.getByText('Kayıtlı sürüm')).toBeTruthy()
+    expect(screen.getByText('v2')).toBeTruthy()
+    expect(screen.getByText('18–65')).toBeTruthy()
+    expect(screen.getByText(/250,50/)).toBeTruthy()
+
     const continueButton = screen.getByRole('button', { name: 'Devam et' }) as HTMLButtonElement
     expect(continueButton.disabled).toBe(false)
 
     fireEvent.change(screen.getByLabelText('Yaş (en az)'), { target: { value: '32' } })
-    expect(screen.getByText(/Plan içeriği değişti veya doğrulama\/onay güncel değil/)).toBeTruthy()
+    expect(screen.getByText('Formdaki değişiklikler kaydedilmedi. Önce \'Kaydet ve Meta ile doğrula\'ya basın, sonra onaylayıp devam edin.')).toBeTruthy()
     expect(continueButton.disabled).toBe(true)
+  })
+
+  it('shows the safe age-range message and keeps masked Meta text under technical details', async () => {
+    mocks.plans = [{ ...partialPlan, failureReason: '(#100) You can add a lower maximum age as a suggestion. 1870189' }]
+    renderPanel()
+    fireEvent.click(screen.getByText('Test planı'))
+
+    expect(await screen.findByText('Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.')).toBeTruthy()
+    const detailsLabel = screen.getByText('Teknik ayrıntı')
+    expect(detailsLabel.tagName).toBe('SUMMARY')
+    fireEvent.click(detailsLabel)
+    expect(screen.getByText(/lower maximum age/)).toBeTruthy()
+    expect(screen.queryByText(/1870189|#100/)).toBeNull()
   })
 
   it('edits and validates a saved-image plan without uploading the image again', async () => {

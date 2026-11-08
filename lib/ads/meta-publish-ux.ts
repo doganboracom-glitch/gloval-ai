@@ -39,7 +39,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   payment_method_missing: 'Meta reklam hesabında ödeme yöntemi tanımlı değil. Meta Reklam Yöneticisi\'nden ekleyin.',
   account_restricted: 'Meta reklam hesabı kısıtlı. Meta Reklam Yöneticisi\'nden durumu kontrol edin.',
   image_invalid: 'Görsel geçersiz. JPG veya PNG, en çok 5 MB bir görsel yükleyin.',
-  age_range_not_allowed: 'Meta Advantage+ kitlede yaş aralığı öneri olarak kullanılır. En az yaşı 25’i, en çok yaşı 65’i aşmayacak şekilde düzenleyin veya Advantage+ kitleyi kapatın.',
+  age_range_not_allowed: 'Meta Advantage+ kitle, en çok yaşın 65 olmasını ister. Yaş aralığını 18-65 yapın.',
   policy_blocked: 'Reklam metni izin verilmeyen bir ifade içeriyor.',
   kill_switch_active: 'Meta işlemleri geçici olarak durduruldu.',
   provider_error: 'Meta şu anda yanıt vermiyor. Biraz sonra tekrar deneyin.',
@@ -49,7 +49,7 @@ export const META_ERROR_MESSAGES: Record<string, string> = {
   meta_confirmation_required: 'Meta plan durumu doğrulanamadı. Plan kaldırılmadı; yeniden deneyin.',
 }
 
-/** Masked and shortened: raw Meta text is only ever shown inside a collapsed "Ayrıntı" section. */
+/** Masked and shortened: raw Meta text is only ever shown inside a collapsed technical-details section. */
 export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | null {
   const redacted = redactMetaErrorMessage(value)
   if (!redacted) return null
@@ -63,16 +63,17 @@ export function shortenMetaDetail(value: unknown, max = DETAIL_MAX): string | nu
 }
 
 export function describeMetaApiError(error: MetaApiError): MetaUserError {
-  const detail = error.error === 'age_range_not_allowed' ? null : shortenMetaDetail(error.metaReason)
+  const detail = shortenMetaDetail(error.metaReason)
+  const known = error.error ? META_ERROR_MESSAGES[error.error] : undefined
+  if (error.error === 'age_range_not_allowed' && known) return { message: known, detail }
   if (error.fieldErrors && Object.keys(error.fieldErrors).length > 0) {
     return { message: 'Formda düzeltilmesi gereken alanlar var.', detail: null }
   }
   if (error.blocked?.length) {
     return { message: `Reklam metni izin verilmeyen ifade içeriyor: ${error.blocked.join(', ')}`, detail: null }
   }
-  const known = META_ERROR_MESSAGES[error.error]
   if (error.error === 'app_not_live') return { message: META_APP_NOT_LIVE_MESSAGE, detail }
-  const base = error.message ?? known ?? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'
+  const base = known ?? error.message ?? 'İşlem tamamlanamadı. Lütfen tekrar deneyin.'
   const message = error.stepLabel && !base.startsWith(error.stepLabel) ? `${error.stepLabel}: ${base}` : base
   return { message, detail }
 }
@@ -163,7 +164,9 @@ export function describeStoredFailure(plan: { failureStep: string | null; failur
   const known = plan.failureCode ? META_ERROR_MESSAGES[plan.failureCode] : undefined
   const fallback = stepLabel ? `${stepLabel} adımı tamamlanamadı.` : 'Son işlem tamamlanamadı.'
   const message = known ?? fallback
-  const detail = plan.failureCode === 'app_not_live' || !known ? shortenMetaDetail(plan.failureReason) : null
+  const detail = plan.failureCode === 'app_not_live' || plan.failureCode === 'age_range_not_allowed' || !known
+    ? shortenMetaDetail(plan.failureReason)
+    : null
   return { message, detail }
 }
 

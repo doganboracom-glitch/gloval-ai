@@ -106,6 +106,17 @@ function editablePlanContent(content: PlanContent): PlanContent {
   }
 }
 
+function formatPlanBudget(value: string | number, currency: string, isTr: boolean): string {
+  const text = String(value)
+  const amount = Number(text)
+  if (!Number.isFinite(amount)) return `${text} ${currency}`
+  try {
+    return new Intl.NumberFormat(isTr ? 'tr-TR' : 'en-US', { style: 'currency', currency }).format(amount)
+  } catch {
+    return `${value} ${currency}`
+  }
+}
+
 async function post<T>(url: string, body: unknown): Promise<ApiResult<T> | MetaApiError> {
   try {
     const response = await fetch(url, {
@@ -171,6 +182,7 @@ export function MetaPublishPanel({
   const [planId, setPlanId] = useState<string | null>(null)
   const plan = plans.find((p) => p.id === planId) ?? null
   const [file, setFile] = useState<File | null>(null)
+  const planContentChanged = plan !== null && (file !== null || JSON.stringify(form) !== JSON.stringify(editablePlanContent(plan.content)))
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
   const [failedSavedPreviewKey, setFailedSavedPreviewKey] = useState<string | null>(null)
@@ -402,7 +414,8 @@ export function MetaPublishPanel({
 
   const approved = plan !== null && plan.approvedVersion === plan.version
 
-  const onConfirmCreate = () =>
+  const onConfirmCreate = () => {
+    if (plan?.status === 'partial' && planContentChanged) return
     void run('publish', async () => {
       if (!plan) return null
       const result = await confirmAndCreate({
@@ -417,6 +430,7 @@ export function MetaPublishPanel({
       if (!result.ok) { showError(result.error); return null }
       return t('Kampanya Meta hesabınızda DURAKLATILMIŞ olarak oluşturuldu. Başlatmak için Meta Reklam Yöneticisi\'ni kullanın.', 'Campaign created PAUSED in your Meta account. Start it from Meta Ads Manager.')
     })
+  }
 
   async function deletePlan(planToDelete: PlanView) {
     const confirmed = window.confirm(t(
@@ -486,7 +500,6 @@ export function MetaPublishPanel({
   const stage = plan?.status ?? 'new'
   const locked = ['publishing', 'published', 'active', 'user_paused', 'archived'].includes(stage)
   const validated = plan !== null && plan.validatedVersion === plan.version
-  const planContentChanged = plan !== null && (file !== null || JSON.stringify(form) !== JSON.stringify(editablePlanContent(plan.content)))
   const isPartial = plan?.status === 'partial'
   const showApproval = validated && !locked && !(isPartial && approved)
   const stepIndex = metaFlowStepIndex(plan)
@@ -596,7 +609,7 @@ export function MetaPublishPanel({
       {notice ? (
         <div role={notice.tone === 'error' ? 'alert' : 'status'} aria-live={notice.tone === 'error' ? 'assertive' : 'polite'} className={notice.tone === 'error' ? 'rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive' : 'rounded-lg border border-border bg-card p-3 text-sm'}>
           <p>{notice.text}</p>
-          {notice.detail ? <details className="mt-2 text-xs"><summary className="cursor-pointer">{t('Ayrıntı', 'Details')}</summary><p className="mt-1 break-words">{notice.detail}</p></details> : null}
+          {notice.detail ? <details className="mt-2 text-xs"><summary className="cursor-pointer">{t('Teknik ayrıntı', 'Technical details')}</summary><p className="mt-1 break-words">{notice.detail}</p></details> : null}
         </div>
       ) : null}
 
@@ -898,7 +911,7 @@ export function MetaPublishPanel({
           <p>{storedFailure.message}</p>
           {storedFailure.detail ? (
             <details className="mt-2 text-xs">
-              <summary className="cursor-pointer">{t('Ayrıntı', 'Details')}</summary>
+              <summary className="cursor-pointer">{t('Teknik ayrıntı', 'Technical details')}</summary>
               <p className="mt-1 break-words">{storedFailure.detail}</p>
             </details>
           ) : null}
@@ -1024,11 +1037,29 @@ function PartialCard({
           {plan.objects.campaignId ? <code className="break-all font-mono text-foreground">{plan.objects.campaignId}</code> : <span>{isTr ? 'kampanya kimliği henüz yok' : 'campaign ID not available'}</span>}
         </p>
       </div>
+      <dl aria-label={isTr ? 'Devam edilecek kayıtlı plan özeti' : 'Saved plan summary for continuation'} className="grid gap-3 rounded-md border border-border bg-muted/40 p-3 text-sm sm:grid-cols-3">
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-muted-foreground">{isTr ? 'Kayıtlı sürüm' : 'Saved version'}</dt>
+          <dd className="font-medium">v{plan.version}</dd>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-muted-foreground">{isTr ? 'Yaş aralığı' : 'Age range'}</dt>
+          <dd className="font-medium">{plan.content.ageMin}–{plan.content.ageMax}</dd>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <dt className="text-muted-foreground">{isTr ? 'Günlük bütçe' : 'Daily budget'}</dt>
+          <dd className="font-medium">{formatPlanBudget(plan.content.dailyBudget, plan.currency, isTr)}</dd>
+        </div>
+      </dl>
       {!validated || !approved || contentChanged ? (
         <p role="note" className="rounded-md border border-brand/30 bg-muted/40 p-3 text-sm leading-relaxed">
-          {isTr
-            ? 'Plan içeriği değişti veya doğrulama/onay güncel değil. Devam etmeden önce planı kaydedip Meta ile yeniden doğrulayın ve bu sürümü yeniden onaylayın.'
-            : 'The plan changed or its validation/approval is no longer current. Save the plan, validate it with Meta, and approve this version again before continuing.'}
+          {contentChanged
+            ? isTr
+              ? 'Formdaki değişiklikler kaydedilmedi. Önce \'Kaydet ve Meta ile doğrula\'ya basın, sonra onaylayıp devam edin.'
+              : 'Changes in the form are not saved. First select “Save and validate with Meta”, then approve and continue.'
+            : isTr
+              ? 'Kayıtlı plan sürümünün Meta doğrulaması veya onayı güncel değil. Devam etmeden önce planı yeniden doğrulayıp onaylayın.'
+              : 'The saved plan version is no longer validated or approved. Validate it with Meta and approve it again before continuing.'}
         </p>
       ) : null}
       <ul className="flex flex-col gap-1.5" aria-label={isTr ? 'Oluşturulan nesneler' : 'Created objects'}>
@@ -1045,7 +1076,7 @@ function PartialCard({
           <p>{failure.message}</p>
           {failure.detail ? (
             <details className="mt-1 text-xs">
-              <summary className="cursor-pointer">{isTr ? 'Ayrıntı' : 'Details'}</summary>
+              <summary className="cursor-pointer">{isTr ? 'Teknik ayrıntı' : 'Technical details'}</summary>
               <p className="mt-1 break-words">{failure.detail}</p>
             </details>
           ) : null}
