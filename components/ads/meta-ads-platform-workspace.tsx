@@ -102,6 +102,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
           pendingFlowId={metaPendingFlowId}
           status={metaStatus}
           missingScopes={metaMissingScopes}
+          canPublish={data.metaManage.canPublish === true}
         />
       </AdsTabPanel>
     </>

@@ -27,6 +27,8 @@ type Props = {
   pendingFlowId: string | null
   status: string | null
   missingScopes: string | null
+  /** Meta access decision's canPublish for this user (not the Google publish flag). */
+  canPublish?: boolean
 }
 
 const STATUS_COPY: Record<string, [string, string]> = {
@@ -191,7 +193,7 @@ function MetaAccountChooser({ flowId, isTr }: { flowId: string; isTr: boolean })
   )
 }
 
-function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; isTr: boolean }) {
+function ConnectionCard({ connection, isTr, canPublish }: { connection: MetaConnectionView; isTr: boolean; canPublish: boolean }) {
   const router = useRouter()
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -200,6 +202,8 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
   const needsReconnect = connection.status === 'error' || (days !== null && days < 0)
   const expiringSoon = !needsReconnect && days !== null && days <= META_TOKEN_WARNING_DAYS
   const needsEngagementScope = connection.missingOptionalScopes.includes('pages_read_engagement')
+  // ads_management was granted before: reconnect in one consent screen. The server still re-checks canPublish.
+  const reconnectWithManagement = needsReconnect && canPublish && !connection.missingPublishScopes.includes('ads_management')
   const state = metaAccountStatusLabel(connection.accountStatus, isTr)
 
   async function disconnect() {
@@ -274,7 +278,11 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
 
       <div className="flex flex-wrap items-center gap-2">
         {needsReconnect || expiringSoon || needsEngagementScope ? (
-          <ConnectForm variant="outline" label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : expiringSoon ? (isTr ? 'Yenile' : 'Renew') : (isTr ? 'İzin ver' : 'Grant permission')} />
+          <ConnectForm
+            variant="outline"
+            manage={reconnectWithManagement}
+            label={needsReconnect ? (isTr ? 'Yeniden bağla' : 'Reconnect') : expiringSoon ? (isTr ? 'Yenile' : 'Renew') : (isTr ? 'İzin ver' : 'Grant permission')}
+          />
         ) : null}
         {!needsReconnect && !connection.hasPage && connection.missingPublishScopes.length === 0 ? (
           <ConnectForm manage variant="outline" label={isTr ? 'Sayfa seçmek için yeniden bağla' : 'Reconnect to choose a page'} />
@@ -305,7 +313,7 @@ function ConnectionCard({ connection, isTr }: { connection: MetaConnectionView; 
   )
 }
 
-export function MetaAdsSettings({ connections, pendingFlowId, status, missingScopes }: Props) {
+export function MetaAdsSettings({ connections, pendingFlowId, status, missingScopes, canPublish = false }: Props) {
   const { lang, t } = useLanguage()
   const isTr = lang === 'tr'
   const visible = connections.filter((connection) => connection.status !== 'revoked')
@@ -343,7 +351,7 @@ export function MetaAdsSettings({ connections, pendingFlowId, status, missingSco
 
       {visible.length > 0 ? (
         <ul className="flex flex-col gap-3">
-          {visible.map((connection) => <ConnectionCard key={connection.id} connection={connection} isTr={isTr} />)}
+          {visible.map((connection) => <ConnectionCard key={connection.id} connection={connection} isTr={isTr} canPublish={canPublish} />)}
         </ul>
       ) : !pendingFlowId ? (
         <Card>

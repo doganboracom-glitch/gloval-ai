@@ -93,7 +93,7 @@ export default async function AdsDashboardPage({ searchParams }: { searchParams:
       metaPendingFlowId={metaFlow && META_UUID_PATTERN.test(metaFlow) ? metaFlow : null}
       metaStatus={firstValue(params.meta)}
       metaMissingScopes={firstValue(params.meta_missing)}
-      metaManage={{ canManage: metaAccess.canManage, canManageProtective: metaAccess.canManageProtective }}
+      metaManage={{ canManage: metaAccess.canManage, canManageProtective: metaAccess.canManageProtective, canPublish: metaAccess.canPublish }}
       address={address}
       initialPlanId={initialPlanId}
       connections={connections}
