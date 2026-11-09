@@ -84,6 +84,48 @@ describe('MetaAdsSettings', () => {
     expect(screen.getByText(/Meta oturumunuz sona erdi/)).toBeTruthy()
   })
 
+  describe('reconnect intent', () => {
+    function intentOf(button: HTMLElement) {
+      const form = button.closest('form')
+      expect(form?.getAttribute('action')).toBe('/api/ads/meta/connect')
+      return (form?.querySelector('input[name="intent"]') as HTMLInputElement | null)?.value ?? null
+    }
+
+    it('sends intent=manage when ads_management was granted and the user can publish', () => {
+      const errored = { ...connection, status: 'error', missingPublishScopes: [] } as unknown as MetaConnectionView
+      render(<MetaAdsSettings connections={[errored]} pendingFlowId={null} status={null} missingScopes={null} canPublish />)
+
+      expect(intentOf(screen.getByRole('button', { name: 'Yeniden bağla' }))).toBe('manage')
+    })
+
+    it('still sends intent=manage when only pages_read_engagement is missing', () => {
+      const errored = { ...connection, status: 'error', missingPublishScopes: ['pages_read_engagement'] } as unknown as MetaConnectionView
+      render(<MetaAdsSettings connections={[errored]} pendingFlowId={null} status={null} missingScopes={null} canPublish />)
+
+      expect(intentOf(screen.getByRole('button', { name: 'Yeniden bağla' }))).toBe('manage')
+    })
+
+    it('sends no intent when ads_management is not in the connection scopes', () => {
+      const errored = { ...connection, status: 'error', missingPublishScopes: ['ads_management'] } as unknown as MetaConnectionView
+      render(<MetaAdsSettings connections={[errored]} pendingFlowId={null} status={null} missingScopes={null} canPublish />)
+
+      expect(intentOf(screen.getByRole('button', { name: 'Yeniden bağla' }))).toBeNull()
+    })
+
+    it('sends no intent when the user cannot publish', () => {
+      const errored = { ...connection, status: 'error', missingPublishScopes: [] } as unknown as MetaConnectionView
+      render(<MetaAdsSettings connections={[errored]} pendingFlowId={null} status={null} missingScopes={null} />)
+
+      expect(intentOf(screen.getByRole('button', { name: 'Yeniden bağla' }))).toBeNull()
+    })
+
+    it('keeps the first connection read-only and single-stage', () => {
+      render(<MetaAdsSettings connections={[]} pendingFlowId={null} status={null} missingScopes={null} canPublish />)
+
+      expect(intentOf(screen.getByRole('button', { name: 'Meta hesabını bağla' }))).toBeNull()
+    })
+  })
+
   it('refreshes server data after a successful disconnect', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     vi.stubGlobal('fetch', fetchMock)
