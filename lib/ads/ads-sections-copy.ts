@@ -55,7 +55,7 @@ const tr = {
   credits: {
     title: 'Kredi kullanımı',
     panelLabel: 'Kredi bilgileri',
-    intro: 'Tarama ve plan önizlemesinde günlük ücretsiz haklar önce kullanılır. Onaylı Google Ads kampanya yayınlama akışı 15 krediyi rezerve eder ve başarılı yayında tahsil eder; “Yakında” satırlar henüz tahsilat yapmaz.',
+    intro: 'Tarama ve plan önizlemesinde günlük ücretsiz haklar önce kullanılır. Onaylı Google Ads ve Meta (Facebook ve Instagram) yayınlama akışı 15 krediyi rezerve eder ve başarılı yayında tahsil eder; “Yakında” satırlar henüz tahsilat yapmaz.',
     actionHeader: 'İşlem',
     costHeader: 'Kredi',
     statusHeader: 'Durum',
@@ -64,7 +64,7 @@ const tr = {
     guestQuota: 'Misafir • günlük ücretsiz hak',
     afterFreeQuota: 'Ücretsiz haklar bitince tarama başına',
     imageTitle: 'Reklam görseli üretimi',
-    publishTitle: 'Google Ads kampanya yayınlama',
+    publishTitle: 'Google Ads ve Meta kampanya yayınlama',
     publishStatus: 'Erişim ve onay gerekli',
     reviseTitle: 'Kampanyayı yeniden düzenleme',
     weeklyOptimizationTitle: 'Haftalık optimizasyon',
@@ -82,7 +82,7 @@ const tr = {
     items: [
       {
         question: 'Ücretli mi?',
-        answer: 'Günlük ücretsiz tarama hakkı bulunur. Hak bittikten sonra her ek tarama ve plan önizlemesi 2 kredi kullanır. Onaylı Google Ads yayınlama akışı 15 kredi ayırır; başarılı yayınlamada tahsil edilir. Google ve Meta reklam bütçeleri GLOVAL kredilerinden ayrıdır.',
+        answer: 'Günlük ücretsiz tarama hakkı bulunur. Hak bittikten sonra her ek tarama ve plan önizlemesi 2 kredi kullanır. Onaylı yayınlama akışı (Google Ads veya Meta) 15 kredi ayırır; kredi yalnızca yayın başarıyla tamamlandığında tahsil edilir, başarısız ya da yarım kalan yayında serbest bırakılır. Google ve Meta reklam bütçeleri GLOVAL kredilerinden ayrıdır.',
       },
       {
         question: 'Reklam bütçesini kime öderim?',
@@ -176,7 +176,7 @@ const en: AdsSectionsCopy = {
   credits: {
     title: 'Credit usage',
     panelLabel: 'Credit details',
-    intro: 'Daily free allowances are used first for scans and plan previews. Approved Google Ads publishing reserves 15 credits and charges them on success; rows marked “Coming soon” are not currently charged.',
+    intro: 'Daily free allowances are used first for scans and plan previews. Approved Google Ads and Meta (Facebook and Instagram) publishing reserves 15 credits and charges them on success; rows marked “Coming soon” are not currently charged.',
     actionHeader: 'Action',
     costHeader: 'Credits',
     statusHeader: 'Status',
@@ -185,7 +185,7 @@ const en: AdsSectionsCopy = {
     guestQuota: 'Guest • free per day',
     afterFreeQuota: 'Per scan after free allowance',
     imageTitle: 'Ad image generation',
-    publishTitle: 'Google Ads campaign publishing',
+    publishTitle: 'Google Ads and Meta campaign publishing',
     publishStatus: 'Access and approval required',
     reviseTitle: 'Campaign revision',
     weeklyOptimizationTitle: 'Weekly optimization',
@@ -203,7 +203,7 @@ const en: AdsSectionsCopy = {
     items: [
       {
         question: 'Is GLOVAL Ads paid?',
-        answer: 'A daily free scan allowance is available. After it runs out, each additional scan and plan preview uses 2 credits. Approved Google Ads publishing reserves 15 credits and charges them on success. Google and Meta ad spend is separate from GLOVAL credits.',
+        answer: 'A daily free scan allowance is available. After it runs out, each additional scan and plan preview uses 2 credits. The approved publishing flow (Google Ads or Meta) reserves 15 credits; credits are charged only when the publish completes successfully and are released if it fails or is only partly completed. Google and Meta ad spend is separate from GLOVAL credits.',
       },
       {
         question: 'Who do I pay for the ad budget?',
