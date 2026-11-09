@@ -139,9 +139,10 @@ export function MetaAdsInsights({ connections }: { connections: MetaConnectionVi
           </div>
 
           {report.campaigns.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-              {isTr ? 'Bu aralıkta kampanya verisi yok.' : 'No campaign data in this range.'}
-            </p>
+            <div className="flex flex-col gap-1 rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
+              <p>{isTr ? 'Bu aralıkta kampanya verisi yok.' : 'No campaign data in this range.'}</p>
+              <p>{isTr ? 'Rapor verisi, reklamın gösterim almaya başladıktan sonra görünür. Durumu yenile ile güncelleyebilirsin.' : 'Report data appears once your ad starts getting impressions. Use Refresh status to update.'}</p>
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-border">
               <Table>

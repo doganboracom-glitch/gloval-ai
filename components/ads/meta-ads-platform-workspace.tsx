@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { AdsTabPanel } from '@/components/ads/ads-tabs'
 import type { AdsWorkspaceProps } from '@/components/ads/ads-workspace-types'
 import { MetaAdsSettings } from '@/components/ads/meta-ads-settings'
+import { MetaGettingStarted } from '@/components/ads/meta-getting-started'
 import { MetaAdsInsights } from '@/components/ads/meta-ads-insights'
 import { MetaPublishPanel } from '@/components/ads/meta-publish-panel'
 import { MetaOverviewPlans } from '@/components/ads/meta-overview-plans'
@@ -74,16 +75,7 @@ export function MetaAdsPlatformWorkspace({ tab, onTabChange, data }: AdsWorkspac
               ))}
             </ul>
           ) : (
-            <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {isTr
-                  ? 'Başlamak için Ayarlar sekmesinden Meta reklam hesabınızı bağlayın.'
-                  : 'To begin, connect your Meta ad account from the Settings tab.'}
-              </p>
-              <Button type="button" size="sm" variant="outline" onClick={() => onTabChange('settings')}>
-                {isTr ? 'Hesap bağla' : 'Connect account'}
-              </Button>
-            </div>
+            <MetaGettingStarted />
           )}
         </section>
       </AdsTabPanel>

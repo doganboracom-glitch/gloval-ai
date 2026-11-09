@@ -59,7 +59,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return payload as T
 }
 
-function ConnectForm({ label, variant = 'default', manage = false }: { label: string; variant?: 'default' | 'outline'; manage?: boolean }) {
+export function ConnectForm({ label, variant = 'default', manage = false }: { label: string; variant?: 'default' | 'outline'; manage?: boolean }) {
   return (
     <form method="post" action="/api/ads/meta/connect">
       {manage ? <input type="hidden" name="intent" value="manage" /> : null}
