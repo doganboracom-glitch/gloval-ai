@@ -91,7 +91,7 @@ describe('Google Ads legal disclosures', () => {
     const privacy = docs.getLegalDoc('gizlilik-politikasi')!
     const cookies = docs.getLegalDoc('cerez-politikasi')!
 
-    expect(terms.lastUpdated).toBe('2026-11-08')
+    expect(terms.lastUpdated).toBe('2026-11-09')
     expect(privacy.lastUpdated).toBe('2026-11-08')
     expect(cookies.lastUpdated).toBe('2026-11-08')
 

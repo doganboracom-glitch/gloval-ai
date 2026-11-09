@@ -722,7 +722,7 @@ const cookies: LegalDoc = {
 
   const terms: LegalDoc = {
     slug: 'kullanim-kosullari',
-    lastUpdated: '2026-11-08',
+    lastUpdated: '2026-11-09',
     tr: {
     title: 'Kullanım Koşulları',
     description:
@@ -788,7 +788,10 @@ const cookies: LegalDoc = {
             'Hizmet; ücretsiz ve ücretli paketler hâlinde sunulur. Her paketin site/sayfa limitleri, AI kredi kuralları ve özellik kapsamı fiyatlandırma sayfasında belirtilir. Ücretli paketler seçtiğiniz ödeme dönemine göre (aylık/yıllık) ücretlendirilir.',
           ),
           p(
-            `Google Ads kampanya yayınlama işlemi şu an 15 AI kredisi değerindedir; kredi yalnızca yayın Google Ads’te başarıyla tamamlandığında kesinleşir, işlem başarısız olursa kredi tahsil edilmez ya da hesabınıza geri bırakılır. Site taraması ve plan önizlemesi için günlük ücretsiz haklar önce kullanılır, ardından işlem başına 2 kredi uygulanır. Kredi bedelleri fiyatlandırma sayfasında güncel olarak gösterilir.`,
+            'Google Ads veya Meta (Facebook ve Instagram) reklam kampanyası yayınlama işlemi şu an 15 AI kredisi değerindedir. Google Ads’te kredi yalnızca yayın başarıyla tamamlandığında kesinleşir. Meta’da yayın başlarken 15 kredi ayrılır; kredi, kampanya, reklam seti, görsel, kreatif ve reklamın Meta’da eksiksiz oluşturulmasıyla kesinleşir. Yayın kısmen tamamlanır ya da başarısız olursa ayrılan kredi serbest bırakılır ve tahsil edilmez. Her plan için en fazla bir kez kredi kesilir. Kampanyayı etkinleştirme, duraklatma ve bütçe değiştirme işlemleri ek kredi gerektirmez.',
+          ),
+          p(
+            'Reklam harcamaları AI kredilerinden bağımsızdır ve doğrudan Google veya Meta’daki reklam hesabınız üzerinden ödenir. Site taraması ve plan önizlemesi için günlük ücretsiz haklar önce kullanılır, ardından işlem başına 2 kredi uygulanır. Kredi bedelleri fiyatlandırma sayfasında güncel olarak gösterilir.',
           ),
         ],
       },
@@ -914,7 +917,10 @@ const cookies: LegalDoc = {
             'The service is offered in free and paid packages. Each package’s site/page limits, AI credit rules and feature scope are stated on the pricing page. Paid packages are charged according to the billing cycle you choose (monthly/yearly).',
           ),
           p(
-            'Publishing a Google Ads campaign is currently worth 15 AI credits; the credit is finalized only when the publish succeeds in Google Ads, and if the operation fails the credit is not charged or is released back to your account. Daily free allowances are used first for site scanning and plan preview, then 2 credits per operation apply. Current credit values are shown on the pricing page.',
+            'Publishing a Google Ads or Meta (Facebook and Instagram) ad campaign is currently worth 15 AI credits. For Google Ads, the credit is finalized only when the publish succeeds. For Meta, 15 credits are reserved when publishing starts and are finalized only when the campaign, ad set, image, creative and ad have all been created in Meta. If the publish is only partly completed or fails, the reserved credits are released and not charged. Credits are charged at most once per plan. Activating, pausing or changing the budget of a campaign requires no additional credits.',
+          ),
+          p(
+            'Ad spend is separate from AI credits and is paid directly through your own Google or Meta ad account. Daily free allowances are used first for site scanning and plan preview, then 2 credits per operation apply. Current credit values are shown on the pricing page.',
           ),
         ],
       },
