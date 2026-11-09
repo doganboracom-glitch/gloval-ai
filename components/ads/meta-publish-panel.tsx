@@ -580,6 +580,15 @@ export function MetaPublishPanel({
         <Button type="button" size="sm" variant="outline" onClick={() => openPlan(null)}>{t('Yeni plan', 'New plan')}</Button>
       </div>
 
+      {data?.ok && plans.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {t('Henüz planın yok. Web sitenin adresinden bir reklam planı oluştur.', 'You have no plans yet. Create an ad plan from your website address.')}
+          </p>
+          <Button type="button" size="sm" onClick={() => { openPlan(null); focusField('landingUrl') }}>{t('Yeni plan oluştur', 'Create new plan')}</Button>
+        </div>
+      ) : null}
+
       {plans.length > 0 ? (
         <div className="flex flex-col gap-2">
           {archivedCount > 0 ? (
