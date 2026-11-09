@@ -19,8 +19,8 @@ const tr = {
         badge: '',
       },
       {
-        title: 'Google Ads hesabını bağla, planı onayla ve kampanyayı oluştur',
-        body: 'Planını açıkça onayladığında kampanya Google Ads’te duraklatılmış olarak oluşturulur. Etkinleştirme ve her değişiklik ayrıca senin onayını gerektirir. GLOVAL Ads senin ayrı işlemin olmadan reklam harcaması başlatmaz.',
+        title: 'Google Ads veya Meta hesabını bağla, planı onayla ve kampanyayı oluştur',
+        body: 'Planını açıkça onayladığında kampanya Google Ads veya Meta’da duraklatılmış olarak oluşturulur. Etkinleştirme ve her değişiklik ayrıca senin onayını gerektirir. GLOVAL Ads senin ayrı işlemin olmadan reklam harcaması başlatmaz.',
         badge: 'Onay gerekli',
       },
     ],
@@ -140,8 +140,8 @@ const en: AdsSectionsCopy = {
         badge: '',
       },
       {
-        title: 'Connect Google Ads, approve the plan, and create the campaign',
-        body: 'After you explicitly approve the plan, the campaign is created paused in Google Ads. Activation and each change require your separate approval. GLOVAL Ads does not start ad spend without your separate action.',
+        title: 'Connect your Google Ads or Meta account, approve the plan and create the campaign',
+        body: 'After you explicitly approve the plan, the campaign is created paused in Google Ads or Meta. Activation and each change require your separate approval. GLOVAL Ads does not start ad spend without your separate action.',
         badge: 'Approval required',
       },
     ],
