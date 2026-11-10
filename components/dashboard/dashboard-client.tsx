@@ -36,6 +36,7 @@ import { BrandLogo } from '@/components/brand-logo'
 import type { PlanCode } from '@/lib/pricing-config'
 import { tenantUrl } from '@/lib/domains'
 import { BillingProfileBanner } from '@/components/billing/billing-profile-banner'
+import { HeardFromCard } from '@/components/dashboard/heard-from-card'
 import { DashboardQuickLinks } from '@/components/dashboard/dashboard-quick-links'
 import { ReferralDashboardPanel } from '@/components/dashboard/referral-dashboard-panel'
 import { ReferralTermsReacceptance } from '@/components/settings/referral-terms-reacceptance'
@@ -61,6 +62,7 @@ export function DashboardClient({
   referralAcceptedTermsVersion = null,
   referralCurrentTermsVersion = '',
   payoutsEnabled = false,
+  askHeardFrom = false,
 }: {
   projects: ProjectListItem[]
   /** Ids of the sites that hold an active Aura İmleç right. */
@@ -83,6 +85,8 @@ export function DashboardClient({
   referralAcceptedTermsVersion?: string | null
   referralCurrentTermsVersion?: string
   payoutsEnabled?: boolean
+  /** New account that has not answered the optional "how did you hear about us" question. */
+  askHeardFrom?: boolean
 }) {
   const { t, lang } = useLanguage()
   const router = useRouter()
@@ -227,6 +231,8 @@ export function DashboardClient({
         )}
 
         <BillingProfileBanner show={showBillingProfileReminder} />
+
+        {askHeardFrom && <HeardFromCard />}
 
         {deletedNotice && (
           <div

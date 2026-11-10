@@ -112,7 +112,12 @@ describe('profiles application write paths', () => {
       { file: 'app/api/auth/forgot-password/route.ts', method: 'update' },
       { file: 'lib/account.ts', method: 'update' },
       { file: 'lib/admin/actions.ts', method: 'update' },
+      { file: 'lib/heard-from-actions.ts', method: 'update' },
     ])
+
+    const heardFromSource = read('lib/heard-from-actions.ts')
+    expect(heardFromSource).toMatch(/\.update\(\{\s*heard_from:\s*value\s*\}\)\s*\.eq\('id',\s*user\.id\)/)
+    expect(heardFromSource).not.toMatch(/createAdminClient/)
 
     const accountSource = read('lib/account.ts')
     const ownProfileAction = accountSource.match(/export async function updateOwnProfile[\s\S]*?\n}/)?.[0] ?? ''

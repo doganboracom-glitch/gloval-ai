@@ -18,6 +18,7 @@ import { getReferralDashboardData, getReferralPartnerForCurrentUser } from '@/li
 import { getReferralPayoutPanelData } from '@/lib/referrals/payout-data'
 import { REFERRAL_TERMS_VERSION } from '@/lib/referrals/terms'
 import { nonCritical, withOneRetry } from '@/lib/dashboard-resilience'
+import { isWithinHeardFromWindow, shouldAskHeardFrom } from '@/lib/heard-from'
 
 // The dashboard is per-user, auth-gated data that must never be served from a
 // stale full-route cache — always render it dynamically so a project created
@@ -91,6 +92,26 @@ export default async function DashboardPage() {
     available: false,
     complete: false,
   }))
+  // Optional question for fresh accounts only. A failed read (e.g. column not
+  // migrated yet) just hides the card; it can never affect the dashboard.
+  const askHeardFrom = isWithinHeardFromWindow(user.created_at)
+    ? await nonCritical(
+        'heardFrom',
+        async () => {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('heard_from')
+            .eq('id', user.id)
+            .maybeSingle()
+          if (error) throw error
+          return shouldAskHeardFrom({
+            heardFrom: (data as { heard_from?: string | null } | null)?.heard_from,
+            createdAt: user.created_at,
+          })
+        },
+        false,
+      )
+    : false
   const showBillingProfileReminder =
     subscription?.status === 'active' &&
     (currentPlan?.price_cents ?? 0) > 0 &&
@@ -119,6 +140,7 @@ export default async function DashboardPage() {
         planCode={toPlanCode(currentPlan?.code)}
         billingAlert={billingAlert}
         showBillingProfileReminder={showBillingProfileReminder}
+        askHeardFrom={askHeardFrom}
       />
     </>
   )
