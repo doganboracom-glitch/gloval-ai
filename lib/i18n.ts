@@ -889,7 +889,12 @@ const dict = {
       choiceBrowsePackages: 'Paketlere göz at',
       packagesOnlyTitle: 'Bu site için bir paket gerekiyor',
       freeBlockedStorefront:
-        'E-ticaret mağazaları FREE pakette yayınlanamaz. Mağazanızı yayınlamak için bir paket seçin; düzenlemeleriniz korunur.',
+        'E-ticaret mağazaları FREE pakette yayınlanamaz. FREE paket sadece kurumsal web sitelerini kapsar, düzenlemelerinizi paket almadan tamamlayabilirsiniz.',
+      publishChoiceStorefrontTitle: 'Bu site için E-Ticaret paketi gerekiyor',
+      publishChoiceStorefrontSupportBefore: 'Bir sorun olduğunu düşünüyorsanız ',
+      publishChoiceStorefrontSupportLink: 'destek',
+      publishChoiceStorefrontSupportAfter: ' ekibine yazın.',
+      publishChoiceStorefrontSupportLinkLabel: 'Destek ekibine yazın',
       freeBlockedPages:
         'Siteniz FREE paketin {limit} sayfa sınırını aşıyor. Yayınlamak için bir paket seçin veya sayfa sayısını azaltın; düzenlemeleriniz korunur.',
     },
@@ -3255,7 +3260,12 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
     choiceBrowsePackages: 'Browse packages',
     packagesOnlyTitle: 'This site needs a package',
     freeBlockedStorefront:
-      'Online stores cannot be published on the FREE plan. Choose a package to publish your store; your edits are kept.',
+      "E-commerce stores can't be published on the FREE plan. The FREE plan covers corporate websites only; you can finish your edits without buying a plan.",
+    publishChoiceStorefrontTitle: 'An E-commerce plan is required for this site',
+    publishChoiceStorefrontSupportBefore: 'If you think something is wrong, write to our ',
+    publishChoiceStorefrontSupportLink: 'support',
+    publishChoiceStorefrontSupportAfter: ' team.',
+    publishChoiceStorefrontSupportLinkLabel: 'Contact the support team',
     freeBlockedPages:
       'Your site exceeds the FREE plan limit of {limit} pages. Choose a package to publish, or reduce the number of pages; your edits are kept.',
   },
