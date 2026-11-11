@@ -105,6 +105,7 @@ export function DemoCartIsland({ lang, checkoutHref }: { lang: Lang; checkoutHre
           bottom-left is reserved for the phone/WhatsApp actions. */}
       <button
         type="button"
+        data-demo-floating=""
         onClick={() => setOpen(true)}
         aria-label={t(lang, 'Sepeti aç', 'Open cart')}
         className="fixed bottom-24 right-4 z-[9997] inline-flex h-12 w-12 items-center justify-center rounded-full shadow-lg outline-none transition-transform duration-200 hover:scale-105 focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-95 sm:bottom-28 sm:right-6 sm:h-14 sm:w-14"

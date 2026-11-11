@@ -842,7 +842,8 @@ input.ads-address-input {
 [data-demo-cta-root] {
   padding-bottom: calc(var(--demo-cta-h) + env(safe-area-inset-bottom));
 }
-[data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+[data-demo-cta-root]
+  :is(.fixed.z-\[9998\], [data-gloval-badge].fixed, [data-demo-floating].fixed) {
   translate: 0 calc(-1 * var(--demo-cta-h));
 }
 /* The cookie card sits above the strip instead of covering it. It is rendered
@@ -851,9 +852,54 @@ input.ads-address-input {
 html:has([data-demo-cta-root]) .cookie-card {
   translate: 0 calc(-64px - env(safe-area-inset-bottom));
 }
+/* On phones the default (collapsed) card is shrunk on demo pages so it stays a
+   thin bar over the strip instead of climbing over the hero headline and its
+   main button. Pure presentation: the card's markup, copy and consent logic are
+   untouched, and the expanded preferences panel keeps its normal layout. */
+@media (max-width: 639px) {
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) {
+    max-height: none;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) .cookie-icon-tile {
+    display: none;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:first-child {
+    padding: 0.5rem 0.75rem 0.25rem;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-title {
+    line-height: 1.5rem;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-desc {
+    margin-top: 0;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child {
+    gap: 0.375rem;
+    padding: 0 0.75rem 0.5rem;
+    flex-wrap: nowrap;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > button {
+    height: 2rem;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    font-size: 0.75rem;
+  }
+  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > .cookie-btn-text {
+    width: auto;
+    flex: 0 0 auto;
+  }
+}
 /* While the cookie card is open it owns the bottom-left corner, so the floating
    controls wait until the visitor has answered instead of covering its buttons. */
-html[data-cookie-banner] [data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+html[data-cookie-banner]
+  [data-demo-cta-root]
+  :is(.fixed.z-\[9998\], [data-gloval-badge].fixed, [data-demo-floating].fixed) {
   visibility: hidden;
 }
 

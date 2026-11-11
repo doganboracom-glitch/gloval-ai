@@ -81,6 +81,30 @@ const DEMO_REVIEWS_TR: Record<string, Review[]> = {
     { quote: 'Sitede aradığımı kolayca buldum, ödeme adımları da sade ve anlaşılırdı.', author: 'Şule K.', role: 'Alıcı, Eskişehir' },
     { quote: 'Küçük bir markadan alışveriş yapmayı seviyorum. Ürün sağlam, ilgi de samimiydi.', author: 'Arda N.', role: 'Alıcı, Antalya' },
   ],
+  'oto-cekici': [
+    { quote: 'Konumumu gönderdim, nereye çekileceğini birlikte netleştirdik. Aracım özenle taşındı.', author: 'Sinan K.', role: 'Sürücü, Kocaeli' },
+    { quote: 'Yol kenarında ne yapacağımı bilmiyordum. Telefondaki kişi sakin sakin yönlendirdi.', author: 'Aslı M.', role: 'Sürücü, Ankara' },
+    { quote: 'Akü bitmişti, yerinde takviye ile araç çalıştı. Gereksiz işlem önermediler.', author: 'Tarık Y.', role: 'Sürücü, Bursa' },
+    { quote: 'Aracı kayar kasaya alırken neyi nasıl yapacaklarını önceden anlattılar. Güven verdi.', author: 'Nihal D.', role: 'Sürücü, İzmir' },
+  ],
+  nakliyat: [
+    { quote: 'Keşifte eşyalarımıza tek tek baktılar, teklif buna göre geldi. Taşınma günü plan işledi.', author: 'Burcu A.', role: 'Ev sahibi, İstanbul' },
+    { quote: 'Kırılacak eşyalar ayrı paketlendi. Yeni evde hiçbir şey zarar görmemişti.', author: 'Cenk T.', role: 'Kiracı, Ankara' },
+    { quote: 'Ofisi hafta sonu taşıdık, pazartesi sabahı herkes yerine oturdu.', author: 'Pınar S.', role: 'Ofis yöneticisi, İzmir' },
+    { quote: 'Yüksek katta asansörle indirme işini sorunsuz yaptılar. Mobilyaları da yerine kurdular.', author: 'Erol B.', role: 'Ev sahibi, Bursa' },
+  ],
+  'kombi-klima': [
+    { quote: 'Randevu saatinde geldiler, yapılacak işi ve ücreti işlemden önce söylediler.', author: 'Hatice N.', role: 'Ev sahibi, Ankara' },
+    { quote: 'Kombinin bakımı sonrası evin ısınması düzeldi. Neleri kontrol ettiklerini de anlattılar.', author: 'Volkan E.', role: 'Ev sahibi, Eskişehir' },
+    { quote: 'Klimayı nereye takacağımıza birlikte karar verdik, montaj düzgün ve temiz bitti.', author: 'Seda C.', role: 'Daire sahibi, İzmir' },
+    { quote: 'Petekler ısınmıyordu, temizlik sonrası tüm odalar eşit ısınıyor.', author: 'Ramazan U.', role: 'Ev sahibi, Bursa' },
+  ],
+  insaat: [
+    { quote: 'Ön görüşmede ne istediğimizi dinlediler, teklif kalem kalem geldi. Bu bize rahatlık verdi.', author: 'Murat G.', role: 'Arsa sahibi, Ankara' },
+    { quote: 'Tadilat boyunca ilerlemeyi düzenli paylaştılar. Aynı kişiyle görüşmek işi kolaylaştırdı.', author: 'Leyla H.', role: 'Daire sahibi, İstanbul' },
+    { quote: 'Malzeme seçeneklerini birlikte değerlendirdik, seçtiklerimiz teklifte yazıyordu.', author: 'İsmail P.', role: 'Ev sahibi, İzmir' },
+    { quote: 'Keşif ve ölçüm yerinde yapıldı, iş programı baştan paylaşıldı.', author: 'Gülşen Ö.', role: 'Dükkân sahibi, Bursa' },
+  ],
 }
 
 const DEMO_REVIEWS_EN: Record<string, Review[]> = {
@@ -147,6 +171,30 @@ const DEMO_REVIEWS_EN: Record<string, Review[]> = {
     { quote: 'They made no fuss when I asked for an exchange. The process was simple and quickly sorted.', author: 'Vic D.', role: 'Buyer' },
     { quote: 'I found what I wanted on the site easily, and the payment steps were plain and clear.', author: 'Sue K.', role: 'Buyer' },
     { quote: 'I like buying from a small brand. The product is solid and the care felt personal.', author: 'Arlo N.', role: 'Buyer' },
+  ],
+  'oto-cekici': [
+    { quote: 'I sent my location and we agreed together where the car would go. It was carried with care.', author: 'Sam K.', role: 'Driver' },
+    { quote: 'I did not know what to do at the roadside. The person on the phone guided me calmly.', author: 'Amy M.', role: 'Driver' },
+    { quote: 'The battery was flat and a jump-start got the car going on the spot. No unnecessary extras were suggested.', author: 'Troy Y.', role: 'Driver' },
+    { quote: 'They explained how they would load the car onto the flatbed before they started. That built trust.', author: 'Nina D.', role: 'Driver' },
+  ],
+  nakliyat: [
+    { quote: 'At the survey they looked at our belongings one by one and the quote followed from that. Moving day went to plan.', author: 'Bea A.', role: 'Homeowner' },
+    { quote: 'Fragile items were packed separately. Nothing was damaged at the new place.', author: 'Cole T.', role: 'Tenant' },
+    { quote: 'We moved the office over a weekend and everyone was at their desk on Monday morning.', author: 'Page S.', role: 'Office manager' },
+    { quote: 'They handled the furniture lift on a high floor without a hitch and set the furniture up again too.', author: 'Eli B.', role: 'Homeowner' },
+  ],
+  'kombi-klima': [
+    { quote: 'They arrived at the booked time and told me the work and the price before starting.', author: 'Hana N.', role: 'Homeowner' },
+    { quote: 'After the boiler service the flat heats properly again. They also explained what they checked.', author: 'Vic E.', role: 'Homeowner' },
+    { quote: 'We chose the spot for the AC together, and the installation finished neat and clean.', author: 'Sara C.', role: 'Flat owner' },
+    { quote: 'The radiators were not heating. After the flush every room warms evenly.', author: 'Ray U.', role: 'Homeowner' },
+  ],
+  insaat: [
+    { quote: 'At the first meeting they listened to what we wanted, and the quote came item by item. That gave us peace of mind.', author: 'Max G.', role: 'Plot owner' },
+    { quote: 'They shared progress regularly during the renovation. Dealing with one person made it easier.', author: 'Lea H.', role: 'Flat owner' },
+    { quote: 'We went through the material options together and our choices were written in the quote.', author: 'Ian P.', role: 'Homeowner' },
+    { quote: 'The survey and measuring were done on site, and the work programme was shared from the start.', author: 'Gwen O.', role: 'Shop owner' },
   ],
 }
 

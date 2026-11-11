@@ -58,6 +58,7 @@ export function DemoFloatingActions({
 
   return (
     <div
+      data-demo-floating=""
       className="fixed left-4 z-[9999] flex flex-col gap-3 sm:left-6"
       style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
     >

@@ -16,7 +16,20 @@ import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 
 const LANGS = ['tr', 'en'] as const
 const SLUGS = ['oto-cekici', 'nakliyat', 'kombi-klima', 'insaat']
-const SECTION_ORDER = ['hero', 'services', 'process', 'features', 'about', 'faq', 'contact', 'footer']
+const SECTION_ORDER = [
+  'announcement',
+  'hero',
+  'services',
+  'gallery',
+  'process',
+  'features',
+  'testimonials',
+  'references',
+  'about',
+  'faq',
+  'contact',
+  'footer',
+]
 
 const CTA: Record<string, { tr: string; en: string }> = {
   'oto-cekici': { tr: 'Hemen ara', en: 'Call now' },
@@ -51,7 +64,7 @@ function copyOf(site: WebsiteSchema): string[] {
   const out: string[] = []
   const walk = (value: unknown, key = '') => {
     if (typeof value === 'string') {
-      if (!['type', 'icon', 'href', 'variant', 'phone', 'email', 'copyright', 'trustText'].includes(key)) out.push(value)
+      if (!['type', 'icon', 'href', 'src', 'aspectRatio', 'variant', 'phone', 'email', 'copyright', 'trustText'].includes(key)) out.push(value)
     } else if (Array.isArray(value)) {
       for (const entry of value) walk(entry, key)
     } else if (value && typeof value === 'object') {
@@ -69,7 +82,8 @@ describe('sector landing demos: registry', () => {
     expect(landingDemos.map((d) => d.slug)).toEqual(SLUGS)
     expect(landingDemoSlugs.sort()).toEqual([...SLUGS].sort())
     expect(demos).toHaveLength(8)
-    expect(demos.every((d) => d.campaign === undefined)).toBe(true)
+    expect(demos.every((d) => typeof d.campaign === 'string' && /^[a-z_]+$/.test(d.campaign))).toBe(true)
+    expect(new Set(allDemos.map((d) => d.campaign)).size).toBe(12)
     expect(allDemos).toHaveLength(12)
     expect(new Set(allDemoSlugs).size).toBe(12)
     for (const slug of SLUGS) expect(getDemo(slug)?.slug).toBe(slug)
@@ -130,13 +144,22 @@ describe.each(SLUGS)('sector landing demo %s', (slug) => {
     expect(site.meta.name).toMatch(/^(Örnek|Sample) /)
   })
 
-  it.each(LANGS)('carries no invented proof: no reviews, figures, photos or claims (%s)', (lang) => {
+  it.each(LANGS)('carries no invented figures or claims; reviews and logos are labelled samples (%s)', (lang) => {
     const site = build(slug, lang)
     const types = site.sections.map((s) => s.type)
-    for (const banned of ['testimonials', 'references', 'stats', 'pricing', 'team', 'gallery', 'portfolio']) {
+    for (const banned of ['stats', 'pricing', 'team', 'portfolio']) {
       expect(types).not.toContain(banned)
     }
-    expect(JSON.stringify(site.sections)).not.toMatch(/"src"|"image"|"imagePrompt"/)
+    const reviews = section(site, 'testimonials')
+    expect(reviews.items.length).toBeGreaterThanOrEqual(3)
+    expect(reviews.pageEnabled).toBe(false)
+    expect(reviews.subtitle).toMatch(lang === 'tr' ? /kurgusal/i : /fictional/i)
+    const refs = section(site, 'references')
+    expect(refs.items.length).toBeGreaterThan(0)
+    expect(refs.pageEnabled).toBe(false)
+    expect(refs.subtitle).toMatch(lang === 'tr' ? /kurgusal/i : /fictional/i)
+    expect(section(site, 'gallery').items.length).toBeGreaterThanOrEqual(3)
+    for (const item of section(site, 'services').items) expect(item.src).toMatch(/^\/demos\/.+\.webp$/)
     for (const text of copyOf(site)) {
       expect(text, text).not.toMatch(/\d/)
       expect(text, text).not.toMatch(CLAIM)
@@ -270,12 +293,12 @@ describe('sector landing demos: "Ücretsiz dene" strip', () => {
     expect(demoCtaStripVars(false)).toEqual({})
   })
 
-  it('raises the same fixed controls the site cookie card raises', () => {
+  it('raises the same fixed controls the site cookie card raises, plus the demo-only ones', () => {
     const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
     const cookie = css.match(/html\[data-cookie-banner-site\] :is\((.+?)\)\s*\{\s*translate:/)
-    const strip = css.match(/\[data-demo-cta-root\] :is\((.+?)\)\s*\{\s*translate:/)
+    const strip = css.match(/\[data-demo-cta-root\]\s+:is\((.+?)\)\s*\{\s*translate:/)
     expect(cookie).not.toBeNull()
-    expect(strip?.[1]).toBe(cookie?.[1])
+    expect(strip?.[1]).toBe(`${cookie?.[1]}, [data-demo-floating].fixed`)
   })
 
   it('lifts the cookie card by exactly the strip height', () => {

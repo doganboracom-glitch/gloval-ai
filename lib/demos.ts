@@ -43,6 +43,7 @@ export type Demo = {
 export const demos: Demo[] = [
   {
     slug: 'kahve',
+    campaign: 'kahve',
     brand: { tr: 'Kahve Durağı', en: 'Roast House' },
     tag: { tr: 'Kahve Dükkanı', en: 'Coffee Shop' },
     description: {
@@ -56,6 +57,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'mimarlik',
+    campaign: 'mimarlik',
     brand: { tr: 'Atölye Mimarlık', en: 'Atelier Studio' },
     tag: { tr: 'Mimarlık Ofisi', en: 'Architecture' },
     description: {
@@ -69,6 +71,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'dis-klinigi',
+    campaign: 'dis_klinigi',
     brand: { tr: 'Denta Estetik', en: 'Denta Care' },
     tag: { tr: 'Diş Kliniği', en: 'Dental Clinic' },
     description: {
@@ -82,6 +85,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'emlak',
+    campaign: 'emlak',
     brand: { tr: 'Emlak Vizyon', en: 'Vista Realty' },
     tag: { tr: 'Gayrimenkul', en: 'Real Estate' },
     description: {
@@ -95,6 +99,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'guzellik',
+    campaign: 'guzellik',
     brand: { tr: 'Zarafet Güzellik', en: 'Lumière Beauty' },
     tag: { tr: 'Güzellik & Bakım', en: 'Beauty & Care' },
     description: {
@@ -108,6 +113,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'hukuk',
+    campaign: 'hukuk',
     brand: { tr: 'Adalet Hukuk', en: 'Meridian Law' },
     tag: { tr: 'Hukuk Bürosu', en: 'Law Firm' },
     description: {
@@ -121,6 +127,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'restoran',
+    campaign: 'restoran',
     brand: { tr: 'Lezzet Durağı', en: 'Savor Kitchen' },
     tag: { tr: 'Restoran', en: 'Restaurant' },
     description: {
@@ -134,6 +141,7 @@ export const demos: Demo[] = [
   },
   {
     slug: 'eticaret',
+    campaign: 'eticaret',
     brand: { tr: 'Vitrin Studio', en: 'Vitrin Studio' },
     tag: { tr: 'E-Ticaret', en: 'E-Commerce' },
     description: {
@@ -232,7 +240,10 @@ export const allDemoSlugs = allDemos.map((d) => d.slug)
  */
 export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   const site = fallbackWebsite(pickLang(demo.prompt, lang), toBilingual(lang))
-  if (applyDemoLanding(site, demo, lang === 'en' ? 'en' : 'tr')) return site
+  if (applyDemoLanding(site, demo, lang === 'en' ? 'en' : 'tr')) {
+    addDemoAnnouncement(site, demo.slug, lang === 'en' ? 'en' : 'tr', '#contact')
+    return site
+  }
   applyDemoImages(site, demoImages[demo.slug])
   customizeDemoSite(site, demo.slug, lang)
   applyDemoHeroStyle(site, demo.slug)
