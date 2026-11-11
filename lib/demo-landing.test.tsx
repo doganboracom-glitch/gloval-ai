@@ -10,6 +10,7 @@ import { isMeasurementSurface } from '@/lib/analytics-config'
 import { ATTRIBUTION_KEYS } from '@/lib/attribution'
 import { DEMO_CTA_STRIP_HEIGHT_PX, demoCtaHref, demoCtaStripVars } from '@/lib/demo-chrome'
 import { LANDING_DEMOS, LANDING_DEMO_PHONE, landingDemoSlugs } from '@/lib/demo-landing'
+import { LANDING_SERVICE_PAGES } from '@/lib/demo-landing-services'
 import { allDemoSlugs, allDemos, buildDemoSite, demos, getDemo, landingDemos } from '@/lib/demos'
 import { resolveContactActions } from '@/lib/site-contact-actions'
 import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
@@ -107,7 +108,9 @@ describe.each(SLUGS)('sector landing demo %s', (slug) => {
     const site = build(slug, lang)
     expect(websiteSchema.safeParse(site).success).toBe(true)
     expect(site.sections.map((s) => s.type)).toEqual(SECTION_ORDER)
-    expect(site.pages.map((p) => p.slug)).toEqual(['home', lang === 'tr' ? 'hakkimizda' : 'about'])
+    expect(site.pages.map((p) => p.slug)).toEqual(
+      lang === 'tr' ? ['home', 'hakkimizda', 'hizmetlerimiz'] : ['home', 'about', 'services'],
+    )
     expect(site.meta.language).toBe(lang)
     expect(JSON.stringify(build(slug, lang))).toBe(JSON.stringify(site))
 
@@ -309,5 +312,53 @@ describe('sector landing demos: "Ücretsiz dene" strip', () => {
     const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
     const lift = css.match(/html:has\(\[data-demo-cta-root\]\) \.cookie-card\s*\{\s*translate: 0 calc\(-(\d+)px/)
     expect(Number(lift?.[1])).toBe(DEMO_CTA_STRIP_HEIGHT_PX)
+  })
+})
+
+describe.each(SLUGS)('sector landing demo %s: service pages', (slug) => {
+  it.each(LANGS)('every card links to an existing detail page with the shared structure (%s)', (lang) => {
+    const site = build(slug, lang)
+    const services = section(site, 'services')
+    const slugs = services.items.map((i) => i.slug)
+    expect(services.items.length).toBeGreaterThanOrEqual(3)
+    expect(services.items.length).toBeLessThanOrEqual(4)
+    expect(services.detail?.pageEnabled).toBe(true)
+    expect(services.detail?.linkEnabled).toBe(true)
+    expect(new Set(slugs).size).toBe(slugs.length)
+    for (const item of services.items) {
+      expect(item.slug).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+      expect(item.pageEnabled).toBe(true)
+      expect(item.sample).toBe(true)
+      expect(item.src).toMatch(/^\/demos\/[a-z-]+\/services\/.+\.webp$/)
+      const headings = (item.detail ?? []).map((b) => b.heading)
+      expect(headings).toEqual(
+        lang === 'tr'
+          ? ['Hizmet hakkında', 'Hizmete neler dahil', 'Nasıl çalışıyoruz']
+          : ['About this service', 'What the service includes', 'How we work'],
+      )
+      const [, includes, steps] = item.detail ?? []
+      expect(includes.body.split('\n').length).toBeGreaterThanOrEqual(3)
+      expect(includes.body.split('\n').length).toBeLessThanOrEqual(5)
+      expect(steps.body.split('\n').length).toBeGreaterThanOrEqual(3)
+      expect(steps.body.split('\n').length).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('uses the same slugs in Turkish and English, one per card', () => {
+    const tr = section(build(slug, 'tr'), 'services').items.map((i) => i.slug)
+    const en = section(build(slug, 'en'), 'services').items.map((i) => i.slug)
+    expect(tr).toEqual(en)
+    expect([...tr].sort()).toEqual(Object.values(LANDING_SERVICE_PAGES[slug]).map((p) => p.slug).sort())
+  })
+
+  it.each(LANGS)('rendered cards link to /hizmet pages and the detail copy makes no claims (%s)', (lang) => {
+    const site = build(slug, lang)
+    const html = renderToStaticMarkup(<WebsiteRenderer site={site} />)
+    expect(html).not.toContain('href="undefined')
+    const detailCopy = section(site, 'services').items.flatMap((i) => (i.detail ?? []).map((b) => b.body))
+    for (const text of detailCopy) {
+      expect(text).not.toMatch(CLAIM)
+      expect(text).not.toMatch(/\d/)
+    }
   })
 })
