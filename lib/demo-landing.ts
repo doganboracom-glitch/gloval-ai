@@ -3,6 +3,8 @@ import { aboutLabel } from '@/lib/about-media'
 import { buildStarterAboutDetail, findAboutSection, syncDetailPages } from '@/lib/section-detail'
 import { demoReferenceItems } from '@/lib/demo-references'
 import { demoTestimonialItems } from '@/lib/demo-testimonials'
+import { LANDING_SERVICES_CTA, LANDING_SERVICE_PAGES, servicePageBlocks } from '@/lib/demo-landing-services'
+import { defaultServicesLinkLabel, syncServicesPage } from '@/lib/service-pages'
 
 /**
  * Sector landing demos
@@ -841,5 +843,45 @@ export function applyDemoLanding(
     site.sections = site.sections.map((section) => (section === about ? { ...about, detail } : section))
     site.pages = syncDetailPages(site).pages
   }
+
+  attachServicePages(site, demo.slug, lang)
   return true
+}
+
+/**
+ * Gives every service card its own page (`/demo/<slug>/hizmet/<item>`) plus the
+ * list page (`/demo/<slug>/hizmetler`), through the same `detail` fields and
+ * `syncServicesPage` the showcase demos use. Card titles and photos stay as they
+ * are; only the slug and the page text are added.
+ */
+function attachServicePages(site: WebsiteSchema, slug: string, lang: Lang): void {
+  const pagesByTitle = LANDING_SERVICE_PAGES[slug]
+  const section = site.sections.find((s): s is Extract<Section, { type: 'services' }> => s.type === 'services')
+  if (!pagesByTitle || !section) return
+
+  const items = section.items.map((item) => {
+    const source = LANDING_DEMOS[slug].services.items.find((i) => i.title[lang] === item.title)
+    const page = source ? pagesByTitle[source.title.tr] : undefined
+    if (!page) return item
+    return {
+      ...item,
+      slug: page.slug,
+      pageEnabled: true,
+      sample: true,
+      detail: servicePageBlocks(page, lang),
+    }
+  })
+
+  const detail = {
+    pageEnabled: true,
+    linkEnabled: true,
+    linkLabel: defaultServicesLinkLabel(lang),
+    ctaTitle: LANDING_SERVICES_CTA.title[lang],
+    ctaText: LANDING_SERVICES_CTA.text[lang],
+    ctaLabel: LANDING_SERVICES_CTA.label[lang],
+  }
+  site.sections = site.sections.map((s) => (s === section ? { ...section, items, detail } : s))
+  const synced = syncServicesPage(site)
+  site.pages = synced.pages
+  site.sections = synced.sections
 }
