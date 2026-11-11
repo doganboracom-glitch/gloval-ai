@@ -590,8 +590,9 @@ export const landingDemoSlugs = Object.keys(LANDING_DEMOS)
  */
 type Story = { body: L; highlights: L[]; images: Photo[] }
 
-const aboutPhotos = (slug: string, alts: [L, L, L]): Photo[] =>
-  alts.map((alt, i) => photo(`/demos/${slug}/about${i + 1}.webp`, alt.tr, alt.en))
+// URLs are written out literally so scripts/hash-demo-assets.mjs can rewrite
+// them to their content-hashed names (a template string would stay unhashed).
+const aboutPhotos = (shots: [string, L][]): Photo[] => shots.map(([url, alt]) => photo(url, alt.tr, alt.en))
 
 const LANDING_STORY: Record<string, Story> = {
   'oto-cekici': {
@@ -600,10 +601,10 @@ const LANDING_STORY: Record<string, Story> = {
       'Nobody plans to be stranded. We start with clear information to ease the moment for the driver. We take your location and share the price and timing before we set off. We load your vehicle with care and drop it where you choose. This page is a fictional example.',
     ),
     highlights: [l('Net bilgi', 'Clear information'), l('Özenli yükleme', 'Careful loading'), l('Bölgeyi bilen ekip', 'A team that knows the area')],
-    images: aboutPhotos('oto-cekici', [
-      l('Çekici sürücüsünün geceleri yol kenarında çalıştığı bir sahne', 'A tow driver working at the roadside at night'),
-      l('Aracın kayar kasaya sabitlenmesi', 'A vehicle being secured to a flatbed'),
-      l('Boş bir yolda duran çekici', 'A tow truck parked on a quiet road'),
+    images: aboutPhotos([
+      ['/demos/oto-cekici/about1.b1e99cbf.webp', l('Çekici sürücüsünün geceleri yol kenarında çalıştığı bir sahne', 'A tow driver working at the roadside at night')],
+      ['/demos/oto-cekici/about2.a924dd0c.webp', l('Aracın kayar kasaya sabitlenmesi', 'A vehicle being secured to a flatbed')],
+      ['/demos/oto-cekici/about3.b2cd8182.webp', l('Boş bir yolda duran çekici', 'A tow truck parked on a quiet road')],
     ]),
   },
   nakliyat: {
@@ -612,10 +613,10 @@ const LANDING_STORY: Record<string, Story> = {
       'Moving is tiring; we turn it into a planned, calm job. We first see your belongings on site and settle what is needed together. We pack with care and build the schedule around your date. The price comes in a written quote. This page is a fictional example.',
     ),
     highlights: [l('Ücretsiz keşif', 'Free survey'), l('Özenli paketleme', 'Careful packing'), l('Yazılı teklif', 'Written quote')],
-    images: aboutPhotos('nakliyat', [
-      l('Koliler ve eşyalar taşıma için hazırlanmış bir oda', 'A room with boxes and furniture ready to move'),
-      l('Kırılacak eşyanın koruyucu malzemeyle sarılması', 'Fragile items wrapped in protective material'),
-      l('Taşıma aracına yerleştirilmiş koliler', 'Boxes arranged inside a moving vehicle'),
+    images: aboutPhotos([
+      ['/demos/nakliyat/about1.e59536f9.webp', l('Koliler ve eşyalar taşıma için hazırlanmış bir oda', 'A room with boxes and furniture ready to move')],
+      ['/demos/nakliyat/about2.b8607030.webp', l('Kırılacak eşyanın koruyucu malzemeyle sarılması', 'Fragile items wrapped in protective material')],
+      ['/demos/nakliyat/about3.4556ec17.webp', l('Taşıma aracına yerleştirilmiş koliler', 'Boxes arranged inside a moving vehicle')],
     ]),
   },
   'kombi-klima': {
@@ -624,10 +625,10 @@ const LANDING_STORY: Record<string, Story> = {
       'Keeping a home comfortable means servicing its appliances on time. Our team handles maintenance and service calmly, with open communication. We inspect the fault on site and explain what will be done before we start. Checks before the season help reduce surprises. This page is a fictional example.',
     ),
     highlights: [l('Periyodik bakım', 'Regular maintenance'), l('Yerinde tespit', 'On-site diagnosis'), l('Net bilgilendirme', 'Clear explanations')],
-    images: aboutPhotos('kombi-klima', [
-      l('Alet çantası açık bir servis tezgâhı', 'A service bench with an open tool bag'),
-      l('Duvardaki klima iç ünitesine yakın bakış', 'A close look at a wall-mounted indoor AC unit'),
-      l('Kombi bağlantılarının yakın çekimi', 'A close-up of boiler pipe connections'),
+    images: aboutPhotos([
+      ['/demos/kombi-klima/about1.f2ca6718.webp', l('Alet çantası açık bir servis tezgâhı', 'A service bench with an open tool bag')],
+      ['/demos/kombi-klima/about2.2f5f9b28.webp', l('Duvardaki klima iç ünitesine yakın bakış', 'A close look at a wall-mounted indoor AC unit')],
+      ['/demos/kombi-klima/about3.47cce841.webp', l('Kombi bağlantılarının yakın çekimi', 'A close-up of boiler pipe connections')],
     ]),
   },
   insaat: {
@@ -636,10 +637,10 @@ const LANDING_STORY: Record<string, Story> = {
       'A good building starts with a good plan. We manage the project from start to finish and keep the process transparent. We share what is being done at each stage and work with selected suppliers. You deal with one contact and we aim for a turnkey result. This page is a fictional example.',
     ),
     highlights: [l('Proje yönetimi', 'Project management'), l('Şeffaf süreç', 'Transparent process'), l('Tek muhatap', 'One point of contact')],
-    images: aboutPhotos('insaat', [
-      l('Şantiye ofisinde plan inceleyen bir masa', 'A site-office table with plans being reviewed'),
-      l('Yükselen bir betonarme iskelet', 'A rising reinforced-concrete frame'),
-      l('Hazır bir iç mekânın yakın çekimi', 'A close shot of a finished interior'),
+    images: aboutPhotos([
+      ['/demos/insaat/about1.2d36fbf0.webp', l('Şantiye ofisinde plan inceleyen bir masa', 'A site-office table with plans being reviewed')],
+      ['/demos/insaat/about2.575dd29a.webp', l('Yükselen bir betonarme iskelet', 'A rising reinforced-concrete frame')],
+      ['/demos/insaat/about3.5d2a1bd2.webp', l('Hazır bir iç mekânın yakın çekimi', 'A close shot of a finished interior')],
     ]),
   },
 }

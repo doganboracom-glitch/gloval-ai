@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { demoImages } from '@/lib/demo-images'
+import { allDemos, buildDemoSite } from '@/lib/demos'
 
 const root = process.cwd()
 const demosDir = join(root, 'public', 'demos')
@@ -48,6 +49,40 @@ describe('demo image assets', () => {
     }
     expect(refs).toBeGreaterThan(50)
     expect(broken).toEqual([])
+  })
+
+  it('source never builds or writes an unhashed /demos url', () => {
+    const sources = ['app', 'components', 'lib'].flatMap((d) =>
+      walk(join(root, d), (f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f)),
+    )
+    const offenders: string[] = []
+    for (const file of sources) {
+      const text = readFileSync(file, 'utf8')
+      // `/demos/${slug}/about1.webp` is invisible to the hash script and 404s.
+      for (const m of text.matchAll(/\/demos\/[^'"`\s)]*\$\{[^'"`\s)]*/g)) {
+        offenders.push(`${relative(root, file)}: ${m[0]}`)
+      }
+      for (const m of text.matchAll(/\/demos\/[\w\-/.]+?\.webp/g)) {
+        if (!HASHED.test(m[0])) offenders.push(`${relative(root, file)}: ${m[0]}`)
+      }
+    }
+    // Fix with: node scripts/hash-demo-assets.mjs
+    expect(offenders).toEqual([])
+  })
+
+  it('every /demos image a built demo site renders (incl. about photos) exists in public/', () => {
+    const urls = new Set<string>()
+    for (const demo of allDemos) {
+      for (const lang of ['tr', 'en'] as const) {
+        const json = JSON.stringify(buildDemoSite(demo, lang))
+        for (const m of json.matchAll(/\/demos\/[\w\-/.]+?\.webp/g)) urls.add(m[0])
+      }
+    }
+    const aboutUrls = [...urls].filter((u) => /\/about\d\./.test(u))
+    // 4 landing demos x 3 about photos
+    expect(aboutUrls).toHaveLength(12)
+    const bad = [...urls].filter((u) => !HASHED.test(u) || !existsSync(join(root, 'public', u)))
+    expect(bad).toEqual([])
   })
 
   it('every image in the demo image map exists on disk', () => {
