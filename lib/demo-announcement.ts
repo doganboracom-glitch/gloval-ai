@@ -142,6 +142,22 @@ export const DEMO_ANNOUNCEMENT_POOLS: Record<string, Bilingual> = {
       'Visit the store regularly for new arrivals.',
     ],
   },
+  'oto-cekici': {
+    tr: ['Yolda kaldıysanız konumunuzu paylaşın, size en yakın ekibi yönlendirelim.'],
+    en: ['Stranded on the road? Share your location and we will send the nearest crew.'],
+  },
+  nakliyat: {
+    tr: ['Ücretsiz keşif için taşınma tarihinizi bize iletin.'],
+    en: ['Send us your moving date to book a free survey.'],
+  },
+  'kombi-klima': {
+    tr: ['Sezon öncesi bakım için servis randevusu alın.'],
+    en: ['Book a service appointment for pre-season maintenance.'],
+  },
+  insaat: {
+    tr: ['Projeniz için ön görüşme talep edin.'],
+    en: ['Request an introductory meeting for your project.'],
+  },
 }
 
 /** Stable 32-bit FNV-1a hash; the same slug always yields the same value (no Math.random, no hydration drift). */

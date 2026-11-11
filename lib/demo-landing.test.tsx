@@ -17,6 +17,7 @@ import { websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 const LANGS = ['tr', 'en'] as const
 const SLUGS = ['oto-cekici', 'nakliyat', 'kombi-klima', 'insaat']
 const SECTION_ORDER = [
+  'announcement',
   'hero',
   'services',
   'gallery',
@@ -81,7 +82,8 @@ describe('sector landing demos: registry', () => {
     expect(landingDemos.map((d) => d.slug)).toEqual(SLUGS)
     expect(landingDemoSlugs.sort()).toEqual([...SLUGS].sort())
     expect(demos).toHaveLength(8)
-    expect(demos.every((d) => d.campaign === undefined)).toBe(true)
+    expect(demos.every((d) => typeof d.campaign === 'string' && /^[a-z_]+$/.test(d.campaign))).toBe(true)
+    expect(new Set(allDemos.map((d) => d.campaign)).size).toBe(12)
     expect(allDemos).toHaveLength(12)
     expect(new Set(allDemoSlugs).size).toBe(12)
     for (const slug of SLUGS) expect(getDemo(slug)?.slug).toBe(slug)
@@ -291,12 +293,12 @@ describe('sector landing demos: "Ücretsiz dene" strip', () => {
     expect(demoCtaStripVars(false)).toEqual({})
   })
 
-  it('raises the same fixed controls the site cookie card raises', () => {
+  it('raises the same fixed controls the site cookie card raises, plus the demo-only ones', () => {
     const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
     const cookie = css.match(/html\[data-cookie-banner-site\] :is\((.+?)\)\s*\{\s*translate:/)
-    const strip = css.match(/\[data-demo-cta-root\] :is\((.+?)\)\s*\{\s*translate:/)
+    const strip = css.match(/\[data-demo-cta-root\]\s+:is\((.+?)\)\s*\{\s*translate:/)
     expect(cookie).not.toBeNull()
-    expect(strip?.[1]).toBe(cookie?.[1])
+    expect(strip?.[1]).toBe(`${cookie?.[1]}, [data-demo-floating].fixed`)
   })
 
   it('lifts the cookie card by exactly the strip height', () => {

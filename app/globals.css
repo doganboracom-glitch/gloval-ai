@@ -842,7 +842,8 @@ input.ads-address-input {
 [data-demo-cta-root] {
   padding-bottom: calc(var(--demo-cta-h) + env(safe-area-inset-bottom));
 }
-[data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+[data-demo-cta-root]
+  :is(.fixed.z-\[9998\], [data-gloval-badge].fixed, [data-demo-floating].fixed) {
   translate: 0 calc(-1 * var(--demo-cta-h));
 }
 /* The cookie card sits above the strip instead of covering it. It is rendered
@@ -853,7 +854,9 @@ html:has([data-demo-cta-root]) .cookie-card {
 }
 /* While the cookie card is open it owns the bottom-left corner, so the floating
    controls wait until the visitor has answered instead of covering its buttons. */
-html[data-cookie-banner] [data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+html[data-cookie-banner]
+  [data-demo-cta-root]
+  :is(.fixed.z-\[9998\], [data-gloval-badge].fixed, [data-demo-floating].fixed) {
   visibility: hidden;
 }
 
