@@ -1,4 +1,6 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { aboutLabel } from '@/lib/about-media'
+import { buildStarterAboutDetail, findAboutSection, syncDetailPages } from '@/lib/section-detail'
 import { demoReferenceItems } from '@/lib/demo-references'
 import { demoTestimonialItems } from '@/lib/demo-testimonials'
 
@@ -146,7 +148,7 @@ const COMMON = {
   contactNav: l('İletişim', 'Contact'),
   processNav: l('Nasıl Çalışır', 'How It Works'),
   whyNav: l('Neden Biz', 'Why Us'),
-  areaNav: l('Bölgeler', 'Areas'),
+  aboutNav: l('Hakkımızda', 'About'),
   faqNav: l('SSS', 'FAQ'),
   samplePhone: l('Örnek numara', 'Sample number'),
   samplePlace: l('örnek', 'sample'),
@@ -580,6 +582,88 @@ export const LANDING_DEMOS: Record<string, LandingDemoContent> = {
 
 export const landingDemoSlugs = Object.keys(LANDING_DEMOS)
 
+/**
+ * The "Hakkımızda" story under the feature strip. Fictional, claim-free copy
+ * (no founding year, customer count, award or certificate), the same way the
+ * showcase demos word theirs. The three photos are generated illustrations
+ * that differ from the gallery and service shots.
+ */
+type Story = { body: L; highlights: L[]; images: Photo[] }
+
+const aboutPhotos = (slug: string, alts: [L, L, L]): Photo[] =>
+  alts.map((alt, i) => photo(`/demos/${slug}/about${i + 1}.webp`, alt.tr, alt.en))
+
+const LANDING_STORY: Record<string, Story> = {
+  'oto-cekici': {
+    body: l(
+      'Yolda kalmak kimsenin planında yoktur. Biz, o anda sürücünün stresini azaltmak için işe net bilgiyle başlarız. Konumunuzu alır, ücreti ve süreyi yola çıkmadan paylaşırız. Aracınızı özenle yükler, istediğiniz adrese bırakırız. Bu sayfa kurgusal bir örnektir.',
+      'Nobody plans to be stranded. We start with clear information to ease the moment for the driver. We take your location and share the price and timing before we set off. We load your vehicle with care and drop it where you choose. This page is a fictional example.',
+    ),
+    highlights: [l('Net bilgi', 'Clear information'), l('Özenli yükleme', 'Careful loading'), l('Bölgeyi bilen ekip', 'A team that knows the area')],
+    images: aboutPhotos('oto-cekici', [
+      l('Çekici sürücüsünün geceleri yol kenarında çalıştığı bir sahne', 'A tow driver working at the roadside at night'),
+      l('Aracın kayar kasaya sabitlenmesi', 'A vehicle being secured to a flatbed'),
+      l('Boş bir yolda duran çekici', 'A tow truck parked on a quiet road'),
+    ]),
+  },
+  nakliyat: {
+    body: l(
+      'Taşınmak yorucudur; biz bunu planlı ve sakin bir işe çeviririz. Önce eşyalarınızı yerinde görür, ihtiyacı birlikte netleştiririz. Paketlemeyi özenle yapar, tarihinize göre taşıma programı hazırlarız. Fiyatı yazılı teklifle paylaşırız. Bu sayfa kurgusal bir örnektir.',
+      'Moving is tiring; we turn it into a planned, calm job. We first see your belongings on site and settle what is needed together. We pack with care and build the schedule around your date. The price comes in a written quote. This page is a fictional example.',
+    ),
+    highlights: [l('Ücretsiz keşif', 'Free survey'), l('Özenli paketleme', 'Careful packing'), l('Yazılı teklif', 'Written quote')],
+    images: aboutPhotos('nakliyat', [
+      l('Koliler ve eşyalar taşıma için hazırlanmış bir oda', 'A room with boxes and furniture ready to move'),
+      l('Kırılacak eşyanın koruyucu malzemeyle sarılması', 'Fragile items wrapped in protective material'),
+      l('Taşıma aracına yerleştirilmiş koliler', 'Boxes arranged inside a moving vehicle'),
+    ]),
+  },
+  'kombi-klima': {
+    body: l(
+      'Konforun sürmesi için cihazların zamanında bakımı gerekir. Ekibimiz bakım ve servis işini sakin ve açık bir iletişimle yürütür. Arızayı yerinde inceler, ne yapılacağını işlemden önce anlatırız. Sezon öncesi kontrollerle sürprizleri azaltmayı hedefleriz. Bu sayfa kurgusal bir örnektir.',
+      'Keeping a home comfortable means servicing its appliances on time. Our team handles maintenance and service calmly, with open communication. We inspect the fault on site and explain what will be done before we start. Checks before the season help reduce surprises. This page is a fictional example.',
+    ),
+    highlights: [l('Periyodik bakım', 'Regular maintenance'), l('Yerinde tespit', 'On-site diagnosis'), l('Net bilgilendirme', 'Clear explanations')],
+    images: aboutPhotos('kombi-klima', [
+      l('Alet çantası açık bir servis tezgâhı', 'A service bench with an open tool bag'),
+      l('Duvardaki klima iç ünitesine yakın bakış', 'A close look at a wall-mounted indoor AC unit'),
+      l('Kombi bağlantılarının yakın çekimi', 'A close-up of boiler pipe connections'),
+    ]),
+  },
+  insaat: {
+    body: l(
+      'İyi bir yapı, iyi bir planla başlar. Projeyi baştan sona düzenli yöneterek süreci şeffaf tutarız. Her aşamada neyin yapıldığını sizinle paylaşır, seçili tedarikçilerle çalışırız. Siz tek bir muhatapla ilerler, anahtar teslim sonucu bekleriz. Bu sayfa kurgusal bir örnektir.',
+      'A good building starts with a good plan. We manage the project from start to finish and keep the process transparent. We share what is being done at each stage and work with selected suppliers. You deal with one contact and we aim for a turnkey result. This page is a fictional example.',
+    ),
+    highlights: [l('Proje yönetimi', 'Project management'), l('Şeffaf süreç', 'Transparent process'), l('Tek muhatap', 'One point of contact')],
+    images: aboutPhotos('insaat', [
+      l('Şantiye ofisinde plan inceleyen bir masa', 'A site-office table with plans being reviewed'),
+      l('Yükselen bir betonarme iskelet', 'A rising reinforced-concrete frame'),
+      l('Hazır bir iç mekânın yakın çekimi', 'A close shot of a finished interior'),
+    ]),
+  },
+}
+
+function storySection(slug: string, lang: Lang): Section[] {
+  const story = LANDING_STORY[slug]
+  if (!story) return []
+  return [
+    {
+      type: 'about',
+      title: lang === 'tr' ? 'Hakkımızda' : 'About us',
+      body: story.body[lang],
+      highlights: story.highlights.map((h) => h[lang]),
+      media: {
+        enabled: true,
+        layout: 'collage',
+        images: story.images.map((image) => ({ src: image.src, alt: image.alt[lang], origin: 'generated' })),
+        label: aboutLabel(lang),
+        cta: { label: lang === 'tr' ? 'İletişime geç' : 'Get in touch', href: '#contact' },
+      },
+    },
+  ]
+}
+
 function iconItems(items: IconItem[], lang: Lang) {
   return items.map(({ icon, title, text }) => ({ icon, title: title[lang], description: text[lang] }))
 }
@@ -658,6 +742,7 @@ function buildSections(slug: string, content: LandingDemoContent, brand: string,
       primaryButton: cta,
       trustText: `${COMMON.samplePhone[lang]}: ${LANDING_DEMO_PHONE}`,
     },
+    ...storySection(slug, lang),
     {
       type: 'services',
       title: COMMON.services[lang],
@@ -739,7 +824,7 @@ export function applyDemoLanding(
       { label: COMMON.services[lang], href: '#services' },
       { label: COMMON.processNav[lang], href: '#process' },
       { label: COMMON.whyNav[lang], href: '#features' },
-      { label: COMMON.areaNav[lang], href: '#about' },
+      { label: COMMON.aboutNav[lang], href: '#about' },
       { label: COMMON.faqNav[lang], href: '#faq' },
       { label: COMMON.contactNav[lang], href: '#contact' },
     ],
@@ -747,5 +832,13 @@ export function applyDemoLanding(
   }
   site.pages = [{ slug: 'home', title: brand, isHome: true }]
   site.sections = buildSections(demo.slug, content, brand, lang)
+
+  // The story's long page (`/demo/<slug>/hakkimizda`) backs its "Daha fazlası…" link.
+  const about = findAboutSection(site)
+  if (about && LANDING_STORY[demo.slug]) {
+    const detail = { ...buildStarterAboutDetail(site, about), sample: false }
+    site.sections = site.sections.map((section) => (section === about ? { ...about, detail } : section))
+    site.pages = syncDetailPages(site).pages
+  }
   return true
 }

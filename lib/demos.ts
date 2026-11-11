@@ -242,6 +242,7 @@ export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   const site = fallbackWebsite(pickLang(demo.prompt, lang), toBilingual(lang))
   if (applyDemoLanding(site, demo, lang === 'en' ? 'en' : 'tr')) {
     addDemoAnnouncement(site, demo.slug, lang === 'en' ? 'en' : 'tr', '#contact')
+    addDemoHeroStrip(site, demo.slug, lang === 'en' ? 'en' : 'tr')
     return site
   }
   applyDemoImages(site, demoImages[demo.slug])

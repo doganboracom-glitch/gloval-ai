@@ -19,6 +19,8 @@ const SLUGS = ['oto-cekici', 'nakliyat', 'kombi-klima', 'insaat']
 const SECTION_ORDER = [
   'announcement',
   'hero',
+  'heroStrip',
+  'about',
   'services',
   'gallery',
   'process',
@@ -64,7 +66,7 @@ function copyOf(site: WebsiteSchema): string[] {
   const out: string[] = []
   const walk = (value: unknown, key = '') => {
     if (typeof value === 'string') {
-      if (!['type', 'icon', 'href', 'src', 'aspectRatio', 'variant', 'phone', 'email', 'copyright', 'trustText'].includes(key)) out.push(value)
+      if (!['type', 'icon', 'href', 'src', 'aspectRatio', 'variant', 'phone', 'email', 'copyright', 'trustText', 'level', 'origin', 'layout'].includes(key)) out.push(value)
     } else if (Array.isArray(value)) {
       for (const entry of value) walk(entry, key)
     } else if (value && typeof value === 'object') {
@@ -105,7 +107,7 @@ describe.each(SLUGS)('sector landing demo %s', (slug) => {
     const site = build(slug, lang)
     expect(websiteSchema.safeParse(site).success).toBe(true)
     expect(site.sections.map((s) => s.type)).toEqual(SECTION_ORDER)
-    expect(site.pages).toHaveLength(1)
+    expect(site.pages.map((p) => p.slug)).toEqual(['home', lang === 'tr' ? 'hakkimizda' : 'about'])
     expect(site.meta.language).toBe(lang)
     expect(JSON.stringify(build(slug, lang))).toBe(JSON.stringify(site))
 
@@ -164,7 +166,9 @@ describe.each(SLUGS)('sector landing demo %s', (slug) => {
       expect(text, text).not.toMatch(/\d/)
       expect(text, text).not.toMatch(CLAIM)
     }
-    const places = section(site, 'about').highlights ?? []
+    const abouts = site.sections.filter((s) => s.type === 'about') as Array<{ highlights?: string[] }>
+    expect(abouts).toHaveLength(2)
+    const places = abouts[abouts.length - 1].highlights ?? []
     expect(places.length).toBeGreaterThan(0)
     for (const place of places) expect(place).toMatch(lang === 'tr' ? /\(örnek\)$/ : /\(sample\)$/)
   })
