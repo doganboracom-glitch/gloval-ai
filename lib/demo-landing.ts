@@ -1,4 +1,6 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
+import { demoReferenceItems } from '@/lib/demo-references'
+import { demoTestimonialItems } from '@/lib/demo-testimonials'
 
 /**
  * Sector landing demos
@@ -8,12 +10,14 @@ import type { Section, WebsiteSchema } from '@/lib/website-schema'
  * the showcase demos and rendered by the same `WebsiteRenderer`; only the copy
  * and the palette are decided here.
  *
- * Copy rules: no reviews, customer counts, years, awards, certificates,
+ * Copy rules: no customer counts, years, awards, certificates,
  * round-the-clock or guarantee claims, and no digits at all. The phone number
  * is the fixed placeholder below, there is no street address and no real
  * company name. Region names carry an explicit "(örnek)" marker.
- * Images: none. Every block is text plus a lucide icon, so nothing here can
- * pass for a photo of a real business.
+ * Reviews and reference logos are fictional, flagged `sample` and labelled as
+ * examples; they have no standalone pages. Photos are generated illustrations
+ * (`LANDING_MEDIA`): no faces, plates, text or logos, so none can pass for a
+ * real business.
  */
 
 type Lang = 'tr' | 'en'
@@ -40,6 +44,83 @@ export type LandingDemoContent = {
   contact: { title: L; text: L; email: string }
 }
 
+type Photo = { src: string; alt: L }
+type LandingMedia = {
+  hero: Photo
+  gallery: Photo[]
+  /** Keyed by the Turkish service title; services without a photo are left out of the page. */
+  services: Record<string, Photo>
+}
+
+const photo = (src: string, tr: string, en: string): Photo => ({ src, alt: { tr, en } })
+
+/**
+ * Illustrative stock-style photography generated for the demos. No real business,
+ * no people's faces, no plates, no text and no logos appear in any of them.
+ */
+const LANDING_MEDIA: Record<string, LandingMedia> = {
+  'oto-cekici': {
+    hero: photo('/demos/oto-cekici/hero.21be1322.webp', 'Kayar kasa çekici otoyolda alacakaranlıkta', 'A flatbed tow truck on a motorway at dusk'),
+    gallery: [
+      photo('/demos/oto-cekici/g1.1d13cdff.webp', 'Gece aracın çekici kasasına çekilmesi', 'A vehicle being winched onto a flatbed at night'),
+      photo('/demos/oto-cekici/g2.8f8ddcdb.webp', 'Yol yardım aracı otoyolda', 'A roadside rescue vehicle on the motorway'),
+      photo('/demos/oto-cekici/g3.bef238cd.webp', 'Dörtlü flaşörleri yanan arızalı binek araç', 'A broken-down car with its hazard lights on'),
+      photo('/demos/oto-cekici/g4.895b49b6.webp', 'Gece otoyolunda araç ışıkları', 'Vehicle lights on a night motorway'),
+    ],
+    services: {
+      'Oto çekici': photo('/demos/oto-cekici/services/oto-cekici.ad8f5ca7.webp', 'Kayar kasa çekici', 'A flatbed tow truck'),
+      'Yol yardım': photo('/demos/oto-cekici/services/yol-yardim.d4a254fc.webp', 'Yol kenarında yardım', 'Roadside help'),
+      'Akü takviye': photo('/demos/oto-cekici/services/aku-takviye.47c6ad4a.webp', 'Akü takviye kabloları', 'Jump-start cables on a battery'),
+      'Lastik desteği': photo('/demos/oto-cekici/services/lastik-destegi.08ec6c55.webp', 'Lastik değişimi', 'A tyre change'),
+    },
+  },
+  nakliyat: {
+    hero: photo('/demos/nakliyat/hero.63738dff.webp', 'Nakliyat kamyonu gün ışığında', 'A moving truck in daylight'),
+    gallery: [
+      photo('/demos/nakliyat/g1.762d12d9.webp', 'Oturma odasında taşınma kolileri', 'Moving boxes in a living room'),
+      photo('/demos/nakliyat/g2.fa432c88.webp', 'Koruyucu örtüyle sarılmış koltuk', 'A sofa wrapped in protective cover'),
+      photo('/demos/nakliyat/g3.2ec0b532.webp', 'Eşyalarla dolu kamyon kasası', 'A truck loaded with furniture and boxes'),
+      photo('/demos/nakliyat/g4.c47c099c.webp', 'Paketleme malzemeleri', 'Packing supplies laid out'),
+    ],
+    services: {
+      'Evden eve taşıma': photo('/demos/nakliyat/services/evden-eve.7b3303c3.webp', 'Taşınma sırasında ev içi', 'A home interior mid-move'),
+      'Ofis taşıma': photo('/demos/nakliyat/services/ofis-tasima.108a22d0.webp', 'Taşınmakta olan ofis', 'An office being moved'),
+      'Asansörlü taşıma': photo('/demos/nakliyat/services/asansorlu.43747bcb.webp', 'Dış cephe asansörü', 'An exterior furniture lift'),
+      Paketleme: photo('/demos/nakliyat/services/paketleme.722ef3ba.webp', 'Kırılacak eşya paketleme', 'Packing fragile items'),
+    },
+  },
+  'kombi-klima': {
+    hero: photo('/demos/kombi-klima/hero.c93c3fef.webp', 'Duvara monte klima ve kombi bulunan aydınlık oturma odası', 'A bright living room with a wall-mounted AC and a combi boiler'),
+    gallery: [
+      photo('/demos/kombi-klima/g1.4aa11444.webp', 'Kombi bakımı yapan teknisyen', 'A technician servicing a boiler'),
+      photo('/demos/kombi-klima/g2.86c53995.webp', 'Klima montajı yapan teknisyen', 'A technician installing an air conditioner'),
+      photo('/demos/kombi-klima/g3.346e9f10.webp', 'Kapısı açık, alet dolu servis aracı', 'A service van with its side door open and tools inside'),
+      photo('/demos/kombi-klima/g4.a1f800ed.webp', 'Duvardaki petek', 'A wall radiator'),
+    ],
+    services: {
+      'Kombi bakımı': photo('/demos/kombi-klima/services/kombi-bakimi.d53c149e.webp', 'Kombi bakımı', 'Boiler maintenance'),
+      'Klima montajı': photo('/demos/kombi-klima/services/klima-montaji.2a65e5d1.webp', 'Klima montajı', 'AC installation'),
+      'Petek temizliği': photo('/demos/kombi-klima/services/petek-temizligi.a53d2dfc.webp', 'Petek temizliği', 'Radiator flushing'),
+      'Klima bakımı': photo('/demos/kombi-klima/services/klima-bakimi.5a03d6df.webp', 'Klima bakımı', 'AC maintenance'),
+    },
+  },
+  insaat: {
+    hero: photo('/demos/insaat/hero.f89cf15a.webp', 'Vinç ve iskele ile yükselen bir yapı', 'A building rising under a crane and scaffolding'),
+    gallery: [
+      photo('/demos/insaat/g1.90a83574.webp', 'Şantiyede kule vinç', 'A tower crane on a building site'),
+      photo('/demos/insaat/g2.eabea145.webp', 'Masada mimari plan', 'An architectural plan on a table'),
+      photo('/demos/insaat/g3.5c71d9c7.webp', 'Tamamlanmış bir cephe', 'A completed building facade'),
+      photo('/demos/insaat/g4.8dd360c8.webp', 'Kazı yapan iş makinesi', 'An excavator at work'),
+    ],
+    services: {
+      'Konut inşaatı': photo('/demos/insaat/services/konut-insaati.8eadcabb.webp', 'Yapım aşamasında konut', 'A home under construction'),
+      'Tadilat ve yenileme': photo('/demos/insaat/services/tadilat.c588d20c.webp', 'Tadilat çalışması', 'Renovation work'),
+      'Kaba yapı': photo('/demos/insaat/services/kaba-yapi.fc121289.webp', 'Kaba yapı çalışması', 'Structural work'),
+      'Keşif ve metraj': photo('/demos/insaat/services/kesif-metraj.e233598d.webp', 'Keşif ve ölçüm', 'Survey and measuring'),
+    },
+  },
+}
+
 const l = (tr: string, en: string): L => ({ tr, en })
 const item = (icon: string, title: L, text: L): IconItem => ({ icon, title, text })
 const qa = (q: L, a: L): Question => ({ q, a })
@@ -50,6 +131,18 @@ const COMMON = {
   why: l('Neden biz?', 'Why us'),
   area: l('Hizmet bölgemiz', 'Service area'),
   faq: l('Sıkça sorulan sorular', 'Frequently asked questions'),
+  gallery: l('Galeri', 'Gallery'),
+  gallerySub: l('Bu demodaki görseller örnek amaçlıdır.', 'The images in this demo are illustrative.'),
+  reviews: l('Örnek müşteri yorumları', 'Sample customer reviews'),
+  reviewsSub: l(
+    'Bu demodaki yorumlar kurgusaldır; sektörün nasıl görüneceğini göstermek için yazılmıştır.',
+    'The reviews in this demo are fictional, written to show how this kind of site would look.',
+  ),
+  references: l('Örnek referanslar', 'Sample references'),
+  referencesSub: l(
+    'Bu demodaki firmalar kurgusaldır; logo alanının nasıl görüneceğini göstermek için eklenmiştir.',
+    'The companies in this demo are fictional, added to show how the logo area would look.',
+  ),
   contactNav: l('İletişim', 'Contact'),
   processNav: l('Nasıl Çalışır', 'How It Works'),
   whyNav: l('Neden Biz', 'Why Us'),
@@ -491,12 +584,73 @@ function iconItems(items: IconItem[], lang: Lang) {
   return items.map(({ icon, title, text }) => ({ icon, title: title[lang], description: text[lang] }))
 }
 
-function buildSections(content: LandingDemoContent, brand: string, lang: Lang): Section[] {
+function buildSections(slug: string, content: LandingDemoContent, brand: string, lang: Lang): Section[] {
   const cta = { label: content.cta[lang], href: '#contact' }
+  const media = LANDING_MEDIA[slug]
+  const heroImage = media
+    ? {
+        imagePrompt: content.hero.title[lang],
+        src: media.hero.src,
+        alt: media.hero.alt[lang],
+        aspectRatio: '16/9' as const,
+      }
+    : undefined
+  const serviceItems = iconItems(content.services.items, lang)
+    .map((service, i): { icon: string; title: string; description: string; src?: string; alt?: string } => {
+      const shot = media?.services[content.services.items[i].title.tr]
+      return shot ? { ...service, src: shot.src, alt: shot.alt[lang] } : service
+    })
+    .filter((service) => !media || Boolean(service.src))
+  const reviews = demoTestimonialItems(slug, lang)
+  const referenceItems = media ? demoReferenceItems(slug) : []
+
+  const gallery: Section[] = media
+    ? [
+        {
+          type: 'gallery',
+          title: COMMON.gallery[lang],
+          subtitle: COMMON.gallerySub[lang],
+          items: media.gallery.map((shot) => ({
+            imagePrompt: shot.alt[lang],
+            src: shot.src,
+            alt: shot.alt[lang],
+            aspectRatio: '4/3' as const,
+          })),
+        },
+      ]
+    : []
+  const testimonials: Section[] = reviews.length
+    ? [
+        {
+          type: 'testimonials',
+          title: COMMON.reviews[lang],
+          subtitle: COMMON.reviewsSub[lang],
+          items: reviews,
+          showAvatars: true,
+          pageEnabled: false,
+          linkEnabled: false,
+        },
+      ]
+    : []
+  const references: Section[] = referenceItems.length
+    ? [
+        {
+          type: 'references',
+          title: COMMON.references[lang],
+          subtitle: COMMON.referencesSub[lang],
+          items: referenceItems,
+          pageEnabled: false,
+          linkEnabled: false,
+          autoplay: true,
+        },
+      ]
+    : []
+
   return [
     {
       type: 'hero',
-      variant: 'centered',
+      variant: heroImage ? 'showcase' : 'centered',
+      ...(heroImage ? { layout: 'full-bleed' as const, align: 'center' as const, overlay: 55, image: heroImage } : {}),
       badge: content.hero.badge[lang],
       title: content.hero.title[lang],
       description: content.hero.text[lang],
@@ -508,8 +662,9 @@ function buildSections(content: LandingDemoContent, brand: string, lang: Lang): 
       type: 'services',
       title: COMMON.services[lang],
       subtitle: content.services.subtitle[lang],
-      items: iconItems(content.services.items, lang),
+      items: serviceItems,
     },
+    ...gallery,
     {
       type: 'process',
       title: COMMON.process[lang],
@@ -522,6 +677,8 @@ function buildSections(content: LandingDemoContent, brand: string, lang: Lang): 
       subtitle: content.why.subtitle[lang],
       items: iconItems(content.why.items, lang),
     },
+    ...testimonials,
+    ...references,
     {
       type: 'about',
       title: COMMON.area[lang],
@@ -589,6 +746,6 @@ export function applyDemoLanding(
     cta: { label: content.cta[lang], href: '#contact' },
   }
   site.pages = [{ slug: 'home', title: brand, isHome: true }]
-  site.sections = buildSections(content, brand, lang)
+  site.sections = buildSections(demo.slug, content, brand, lang)
   return true
 }
