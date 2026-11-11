@@ -1,8 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { Package, Rocket } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import type { PublishOptions } from '@/lib/free-publish'
+import { NEW_TICKET_PATH } from '@/lib/support/prefill'
 
 type Choice = Exclude<PublishOptions, { mode: 'direct' }>
 
@@ -33,6 +35,7 @@ export function PublishChoiceDialog({
           ? p.freeBlockedPages.replace('{limit}', String(choice.limit ?? '—'))
           : p.siteLimit.replace('{used}', String(choice.used ?? '—')).replace('{total}', String(choice.total ?? '—'))
       : null
+  const isStorefrontBlock = choice.mode === 'packages_only' && choice.block === 'storefront'
 
   return (
     <div
@@ -40,18 +43,33 @@ export function PublishChoiceDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="publish-choice-title"
-      aria-describedby="publish-choice-body"
+      aria-describedby={isStorefrontBlock ? 'publish-choice-body publish-choice-support' : 'publish-choice-body'}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()
       }}
     >
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
         <h2 id="publish-choice-title" className="text-base font-semibold text-foreground">
-          {reason ? p.packagesOnlyTitle : p.choiceTitle}
+          {isStorefrontBlock ? p.publishChoiceStorefrontTitle : reason ? p.packagesOnlyTitle : p.choiceTitle}
         </h2>
         <p id="publish-choice-body" className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {reason ?? p.choiceBody}
         </p>
+        {isStorefrontBlock && (
+          <p id="publish-choice-support" className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            <em>
+              {p.publishChoiceStorefrontSupportBefore}
+              <Link
+                href={NEW_TICKET_PATH}
+                aria-label={p.publishChoiceStorefrontSupportLinkLabel}
+                className="font-medium text-primary underline underline-offset-4 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {p.publishChoiceStorefrontSupportLink}
+              </Link>
+              {p.publishChoiceStorefrontSupportAfter}
+            </em>
+          </p>
+        )}
         <div className="mt-6 flex flex-col gap-2">
           {!reason && (
             <button
