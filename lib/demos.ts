@@ -11,6 +11,7 @@ import { applyDemoServices } from '@/lib/demo-services'
 import { applyDemoTestimonials } from '@/lib/demo-testimonials'
 import { applyDemoReferences } from '@/lib/demo-references'
 import { applyDemoTeam } from '@/lib/demo-team'
+import { applyDemoLanding } from '@/lib/demo-landing'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { MENU_MAX } from '@/lib/site-menu'
 
@@ -32,6 +33,11 @@ export type Demo = {
   tag: { tr: string; en: string }
   description: { tr: string; en: string }
   prompt: { tr: string; en: string }
+  /**
+   * `utm_campaign` of the sticky "Ücretsiz dene" strip. Only demos that carry
+   * it show the strip.
+   */
+  campaign?: string
 }
 
 export const demos: Demo[] = [
@@ -141,11 +147,83 @@ export const demos: Demo[] = [
   },
 ]
 
+/**
+ * Sector landing demos: one-page sites used as ad and sales landing pages.
+ * Same `Demo` shape, same route and same renderer as the showcase demos above.
+ * They live in their own list because the showcase demos are full sites
+ * (catalog, sub-pages, sample reviews and team), while these deliberately ship
+ * without reviews, figures or photos; their content is in `lib/demo-landing.ts`.
+ */
+export const landingDemos: Demo[] = [
+  {
+    slug: 'oto-cekici',
+    brand: { tr: 'Örnek Oto Kurtarma', en: 'Sample Towing' },
+    tag: { tr: 'Oto Kurtarıcı & Çekici', en: 'Towing & Recovery' },
+    description: {
+      tr: 'Oto kurtarma ve çekici firmaları için arama odaklı, tek sayfalık açılış sitesi.',
+      en: 'A one-page, call-first landing site for towing and recovery businesses.',
+    },
+    prompt: {
+      tr: '"Örnek Oto Kurtarma" için oto kurtarıcı ve çekici açılış sayfası: hizmetler, nasıl çalışır, hizmet bölgesi ve iletişim.',
+      en: 'A towing and recovery landing page for "Sample Towing": services, how it works, service area and contact.',
+    },
+    campaign: 'oto_cekici',
+  },
+  {
+    slug: 'nakliyat',
+    brand: { tr: 'Örnek Nakliyat', en: 'Sample Movers' },
+    tag: { tr: 'Nakliyat & Evden Eve Taşıma', en: 'Moving & Relocation' },
+    description: {
+      tr: 'Nakliyat firmaları için keşif talebi toplayan, tek sayfalık açılış sitesi.',
+      en: 'A one-page landing site that collects survey requests for moving companies.',
+    },
+    prompt: {
+      tr: '"Örnek Nakliyat" için nakliyat ve evden eve taşıma açılış sayfası: hizmetler, nasıl çalışır, hizmet bölgesi ve iletişim.',
+      en: 'A moving and relocation landing page for "Sample Movers": services, how it works, service area and contact.',
+    },
+    campaign: 'nakliyat',
+  },
+  {
+    slug: 'kombi-klima',
+    brand: { tr: 'Örnek Kombi & Klima Servisi', en: 'Sample Heating & Cooling' },
+    tag: { tr: 'Kombi & Klima Servisi', en: 'Boiler & AC Service' },
+    description: {
+      tr: 'Kombi ve klima servisleri için servis kaydı odaklı, tek sayfalık açılış sitesi.',
+      en: 'A one-page, service-request landing site for boiler and AC technicians.',
+    },
+    prompt: {
+      tr: '"Örnek Kombi & Klima Servisi" için kombi ve klima servisi açılış sayfası: hizmetler, nasıl çalışır, hizmet bölgesi ve iletişim.',
+      en: 'A boiler and AC service landing page for "Sample Heating & Cooling": services, how it works, service area and contact.',
+    },
+    campaign: 'kombi_klima',
+  },
+  {
+    slug: 'insaat',
+    brand: { tr: 'Örnek İnşaat', en: 'Sample Construction' },
+    tag: { tr: 'İnşaat & Taahhüt', en: 'Construction & Contracting' },
+    description: {
+      tr: 'İnşaat ve taahhüt firmaları için teklif talebi odaklı, tek sayfalık açılış sitesi.',
+      en: 'A one-page, quote-request landing site for construction and contracting firms.',
+    },
+    prompt: {
+      tr: '"Örnek İnşaat" için inşaat ve taahhüt açılış sayfası: hizmetler, nasıl çalışır, hizmet bölgesi ve iletişim.',
+      en: 'A construction and contracting landing page for "Sample Construction": services, how it works, service area and contact.',
+    },
+    campaign: 'insaat',
+  },
+]
+
+/** Every demo with a `/demo/[slug]` page: the showcase demos, then the sector landing demos. */
+export const allDemos: Demo[] = [...demos, ...landingDemos]
+
 export function getDemo(slug: string): Demo | undefined {
-  return demos.find((d) => d.slug === slug)
+  return allDemos.find((d) => d.slug === slug)
 }
 
+/** Showcase demos only: the ones that also have sub-routes (about, services, ...). */
 export const demoSlugs = demos.map((d) => d.slug)
+
+export const allDemoSlugs = allDemos.map((d) => d.slug)
 
 /**
  * Builds the full, renderable website schema for a demo in the given language,
@@ -154,6 +232,7 @@ export const demoSlugs = demos.map((d) => d.slug)
  */
 export function buildDemoSite(demo: Demo, lang: Lang): WebsiteSchema {
   const site = fallbackWebsite(pickLang(demo.prompt, lang), toBilingual(lang))
+  if (applyDemoLanding(site, demo, lang === 'en' ? 'en' : 'tr')) return site
   applyDemoImages(site, demoImages[demo.slug])
   customizeDemoSite(site, demo.slug, lang)
   applyDemoHeroStyle(site, demo.slug)

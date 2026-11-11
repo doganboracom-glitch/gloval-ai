@@ -16,6 +16,36 @@ export function demoStickyOffsetVars(showBanner: boolean): Record<string, string
   return showBanner ? { '--site-sticky-offset': `${DEMO_BANNER_HEIGHT_PX}px` } : {}
 }
 
+/**
+ * Height of the sticky "Ücretsiz dene" strip pinned to the bottom of the sector
+ * landing demos. Single source, like the banner height: the strip renders with
+ * exactly this height and the demo root publishes it as `--demo-cta-h`, which
+ * globals.css uses to reserve the space and to raise the site's fixed controls
+ * (phone, WhatsApp, back-to-top) above the strip.
+ */
+export const DEMO_CTA_STRIP_HEIGHT_PX = 64
+
+export function demoCtaStripVars(showStrip: boolean): Record<string, string> {
+  return showStrip ? { '--demo-cta-h': `${DEMO_CTA_STRIP_HEIGHT_PX}px` } : {}
+}
+
+/**
+ * Where the strip's button goes: the platform home page (the existing "try it"
+ * flow), tagged so the first-touch attribution capture records the demo.
+ * The home page is used rather than `/auth/*` because auth routes are not a
+ * measurement surface, so campaign parameters are not read there.
+ */
+export function demoCtaHref(campaign: string, lang: string): string {
+  const params = new URLSearchParams({
+    utm_source: 'demo',
+    utm_medium: 'landing',
+    utm_campaign: campaign,
+    utm_content: 'demo_cta',
+  })
+  if (lang === 'en') params.set('lang', 'en')
+  return `/?${params.toString()}`
+}
+
 export function withLang(path: string, lang: string): string {
   const sep = path.includes('?') ? '&' : '?'
   return `${path}${sep}lang=${lang}`

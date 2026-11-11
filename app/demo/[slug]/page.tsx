@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { demoStickyOffsetVars } from '@/lib/demo-chrome'
+import { demoCtaHref, demoCtaStripVars, demoStickyOffsetVars } from '@/lib/demo-chrome'
 import { DemoBanner } from '@/components/demo-site/demo-banner'
+import { DemoCtaStrip } from '@/components/demo-site/demo-cta-strip'
 import { DemoHeaderActions } from '@/components/demo-site/demo-header-actions'
-import { getDemo, demoSlugs, buildDemoSite } from '@/lib/demos'
+import { getDemo, allDemoSlugs, buildDemoSite } from '@/lib/demos'
 import { getCatalog } from '@/lib/demo-catalog'
 import { resolveAboutDetail } from '@/lib/section-detail'
 import { resolveServices } from '@/lib/service-pages'
@@ -16,7 +17,7 @@ import { resolveTheme, themeToCssVars } from '@/components/website-renderer/them
 import { DemoCartProvider, DemoCartIsland } from '@/components/demo-site/demo-store'
 
 export function generateStaticParams() {
-  return demoSlugs.map((slug) => ({ slug }))
+  return allDemoSlugs.map((slug) => ({ slug }))
 }
 
 // Demo content locale (tr/en only) is a separate, narrower concept from the
@@ -74,7 +75,16 @@ export default async function DemoPage({
   const isPreview = preview === '1'
 
   const backLabel = lang === 'tr' ? 'gloval.ai’a dön' : 'Back to gloval.ai'
-  const demoBadge = lang === 'tr' ? 'Demo çalışma · Örnek içerik' : 'Demo project · Example content'
+  // Sector landing demos (the ones with a campaign) are labelled "Örnek demo" and
+  // get the sticky strip that leads back to gloval.ai.
+  const showCtaStrip = Boolean(demo.campaign) && !isPreview
+  const demoBadge = demo.campaign
+    ? lang === 'tr'
+      ? 'Örnek demo'
+      : 'Sample demo'
+    : lang === 'tr'
+      ? 'Demo çalışma · Örnek içerik'
+      : 'Demo project · Example content'
 
   // The global floating phone/WhatsApp CTAs live here too (the landing page uses
   // WebsiteRenderer directly, not DemoChrome). Wrap them in the demo's theme
@@ -131,7 +141,11 @@ export default async function DemoPage({
               : null
 
   const content = (
-    <div className="min-h-svh bg-white text-black" style={demoStickyOffsetVars(!isPreview)}>
+    <div
+      className="min-h-svh bg-white text-black"
+      style={{ ...demoStickyOffsetVars(!isPreview), ...demoCtaStripVars(showCtaStrip) }}
+      data-demo-cta-root={showCtaStrip ? '' : undefined}
+    >
       {/* Thin demo banner so visitors know this is a generated example. */}
       {!isPreview && <DemoBanner backLabel={backLabel} badge={`${demoBadge} · ${demo.tag[lang]}`} />}
 
@@ -165,6 +179,19 @@ export default async function DemoPage({
         <div style={floatingVars}>
           <DemoCartIsland lang={lang} checkoutHref={checkoutHref} />
         </div>
+      )}
+
+      {showCtaStrip && demo.campaign && (
+        <DemoCtaStrip
+          href={demoCtaHref(demo.campaign, lang)}
+          lead={lang === 'tr' ? 'Bu bir örnek demodur.' : 'This is a sample demo.'}
+          text={
+            lang === 'tr'
+              ? 'Kendi sitenizi GLOVAL AI ile dakikalar içinde kurun.'
+              : 'Build your own site in minutes with GLOVAL AI.'
+          }
+          cta={lang === 'tr' ? 'Ücretsiz dene' : 'Try for free'}
+        />
       )}
     </div>
   )
