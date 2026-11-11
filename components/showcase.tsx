@@ -5,7 +5,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { SectionHeading } from '@/components/features'
 import { DemoPreviewFrame } from '@/components/demo-preview-frame'
-import { demos } from '@/lib/demos'
+import { allDemos } from '@/lib/demos'
 import { pickLang, toBilingual } from '@/lib/i18n'
 
 export function Showcase() {
@@ -19,7 +19,7 @@ export function Showcase() {
       <SectionHeading title={t.showcase.title} subtitle={t.showcase.subtitle} />
 
       <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {demos.map((demo) => (
+        {allDemos.map((demo) => (
           <Link
             key={demo.slug}
             href={`/demo/${demo.slug}${lang === 'en' ? '?lang=en' : ''}`}

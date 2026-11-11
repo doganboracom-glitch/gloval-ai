@@ -833,6 +833,30 @@ input.ads-address-input {
     );
   }
 }
+/* ---- Demo "Ücretsiz dene" strip (sector landing demos) -------------------
+   `[data-demo-cta-root]` + `--demo-cta-h` exist only on demo pages that show
+   the strip (see lib/demo-chrome.ts). The page reserves the strip's height
+   below the footer, and the site's fixed controls are raised above it through
+   the same markup-based selector the site cookie card uses, so the renderer
+   itself is unchanged. */
+[data-demo-cta-root] {
+  padding-bottom: calc(var(--demo-cta-h) + env(safe-area-inset-bottom));
+}
+[data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+  translate: 0 calc(-1 * var(--demo-cta-h));
+}
+/* The cookie card sits above the strip instead of covering it. It is rendered
+   outside the demo root, so `--demo-cta-h` is out of scope: 64px mirrors
+   DEMO_CTA_STRIP_HEIGHT_PX (lib/demo-landing.test.tsx keeps the two equal). */
+html:has([data-demo-cta-root]) .cookie-card {
+  translate: 0 calc(-64px - env(safe-area-inset-bottom));
+}
+/* While the cookie card is open it owns the bottom-left corner, so the floating
+   controls wait until the visitor has answered instead of covering its buttons. */
+html[data-cookie-banner] [data-demo-cta-root] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
+  visibility: hidden;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html[data-cookie-banner-site] :is(.fixed.z-\[9998\], [data-gloval-badge].fixed) {
     transition: translate 200ms ease-out;
