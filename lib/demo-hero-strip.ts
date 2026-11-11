@@ -14,6 +14,62 @@ type Box = readonly [icon: string, title: string, text: string]
 type Bilingual = { tr: readonly Box[]; en: readonly Box[] }
 
 export const DEMO_HERO_STRIP_BOXES: Record<string, Bilingual> = {
+  'oto-cekici': {
+    tr: [
+      ['map-pin', 'Konum paylaşımı', 'Konumunuzu iletin, ekip yönlendirilsin'],
+      ['message-circle', 'Önce net bilgi', 'Ücret ve süre çağrıda netleşir'],
+      ['shield-check', 'Özenli yükleme', 'Aracınız dikkatle taşınır'],
+      ['users', 'Bölgeyi bilen ekip', 'Şehir içi ve çevresi'],
+    ],
+    en: [
+      ['map-pin', 'Share your location', 'Send where you are and we route a crew'],
+      ['message-circle', 'Clear info first', 'Price and timing are settled on the call'],
+      ['shield-check', 'Careful loading', 'Your vehicle is moved with care'],
+      ['users', 'Local crew', 'In town and the surrounding area'],
+    ],
+  },
+  nakliyat: {
+    tr: [
+      ['house', 'Ücretsiz keşif', 'Eşyalarınız yerinde görülür'],
+      ['package', 'Özenli paketleme', 'Koli ve koruma malzemesi'],
+      ['calendar', 'Planlı taşıma', 'Tarihinize göre program'],
+      ['mail', 'Yazılı teklif', 'Net fiyat bilgisi'],
+    ],
+    en: [
+      ['house', 'Free survey', 'We see your belongings on site'],
+      ['package', 'Careful packing', 'Boxes and protective materials'],
+      ['calendar', 'Planned move', 'A schedule built around your date'],
+      ['mail', 'Written quote', 'Clear price information'],
+    ],
+  },
+  'kombi-klima': {
+    tr: [
+      ['calendar', 'Periyodik bakım', 'Sezon öncesi kontrol'],
+      ['wrench', 'Montaj ve servis', 'Kombi ve klima'],
+      ['zap', 'Arıza tespiti', 'Yerinde inceleme'],
+      ['message-circle', 'Net bilgilendirme', 'İşlem öncesi açıklama'],
+    ],
+    en: [
+      ['calendar', 'Regular maintenance', 'A check before the season'],
+      ['wrench', 'Installation and service', 'Boilers and air conditioners'],
+      ['zap', 'Fault finding', 'Inspected on site'],
+      ['message-circle', 'Clear explanations', 'We explain before we start'],
+    ],
+  },
+  insaat: {
+    tr: [
+      ['ruler', 'Proje yönetimi', 'Planlamadan teslime'],
+      ['hammer', 'Kaliteli malzeme', 'Seçili tedarikçiler'],
+      ['badge-check', 'Şeffaf süreç', 'Düzenli bilgilendirme'],
+      ['house', 'Anahtar teslim', 'Tek muhatap'],
+    ],
+    en: [
+      ['ruler', 'Project management', 'From planning to handover'],
+      ['hammer', 'Quality materials', 'Selected suppliers'],
+      ['badge-check', 'Transparent process', 'Regular updates'],
+      ['house', 'Turnkey', 'One point of contact'],
+    ],
+  },
   kahve: {
     tr: [
       ['coffee', 'Taze çekim', 'Kahveniz siparişle hazırlanır'],

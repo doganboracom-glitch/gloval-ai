@@ -3,7 +3,7 @@
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import type { PaymentBadgeSet } from '@/lib/payment-badges'
 import { resolveTheme } from '@/components/website-renderer/theme'
-import { aboutDetailLink } from '@/lib/section-detail'
+import { aboutDetailLink, findAboutSection } from '@/lib/section-detail'
 import { resolveServices, servicePath } from '@/lib/service-pages'
 import { resolveGalleryPages } from '@/lib/gallery-pages'
 import { AnnouncementBar } from '@/components/website-renderer/sections/announcement-bar'
@@ -72,7 +72,7 @@ export function SectionRenderer({
           data={section}
           siteName={meta.name}
           colors={site ? resolveTheme(site) : null}
-          moreLink={site ? aboutDetailLink(site) : null}
+          moreLink={site && findAboutSection(site) === section ? aboutDetailLink(site) : null}
         />
       )
     case 'services': {
