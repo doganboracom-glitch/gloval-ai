@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { useLanguage } from '@/components/language-provider'
@@ -10,16 +11,35 @@ export const HANDOFF_ACCESS_PATH = '/api/ads/google/handoff-access'
 export const HANDOFF_CREATE_PATH = '/api/ads/google/plans/from-scan'
 export const ADS_WORKSPACE_PATH = '/ads/dashboard'
 
-type HandoffAccess = { eligible: boolean; connectionId?: string }
+export const GOOGLE_CONNECT_PATH = '/api/ads/google/connect'
+const LOGIN_PATH = '/auth/login'
+
+export type HandoffAccessState = 'signed_out' | 'needs_connect' | 'ready' | 'unavailable' | 'error'
+type HandoffAccess = { state: HandoffAccessState; connectionId?: string }
 
 async function fetchAccess(url: string): Promise<HandoffAccess> {
   const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' })
-  if (!response.ok) return { eligible: false }
-  const body = (await response.json().catch(() => null)) as HandoffAccess | null
-  return body?.eligible === true && typeof body.connectionId === 'string'
-    ? { eligible: true, connectionId: body.connectionId }
-    : { eligible: false }
+  if (!response.ok) return { state: 'error' }
+  const body = (await response.json().catch(() => null)) as
+    | { state?: string; eligible?: boolean; connectionId?: string }
+    | null
+  if (body?.state === 'ready' && body.eligible === true && typeof body.connectionId === 'string') {
+    return { state: 'ready', connectionId: body.connectionId }
+  }
+  if (body?.state === 'signed_out' || body?.state === 'needs_connect' || body?.state === 'unavailable') {
+    return { state: body.state }
+  }
+  return { state: 'error' }
 }
+
+/** Where the user lands after signing in: the workspace, with this scan's address prefilled. */
+export function buildHandoffLoginHref(host: string): string {
+  const next = `${ADS_WORKSPACE_PATH}?url=${encodeURIComponent(host)}`
+  return `${LOGIN_PATH}?next=${encodeURIComponent(next)}`
+}
+
+const ACTION_CLASS =
+  'inline-flex h-10 items-center rounded-xl bg-brand px-4 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-60'
 
 function handoffErrorText(code: string, isTr: boolean): string {
   const tr: Record<string, string> = {
@@ -34,8 +54,9 @@ function handoffErrorText(code: string, isTr: boolean): string {
 }
 
 /**
- * Bottom action of the public preview. Entitled users get a one-click transfer
- * of the plan they already see; everyone else keeps the disabled "soon" button.
+ * Bottom action of the public preview. The server reports the caller's state:
+ * signed out goes to login, signed in without a Google account starts the
+ * Google connect flow, and a ready account transfers the plan already shown.
  */
 export function AdsHandoffAction({ result }: { result: PublicScanResult }) {
   const { t, lang } = useLanguage()
@@ -72,7 +93,25 @@ export function AdsHandoffAction({ result }: { result: PublicScanResult }) {
     }
   }
 
-  if (data?.eligible && data.connectionId) {
+  if (data?.state === 'signed_out') {
+    return (
+      <Link href={buildHandoffLoginHref(result.host)} className={ACTION_CLASS}>
+        {copy.actionLogin}
+      </Link>
+    )
+  }
+
+  if (data?.state === 'needs_connect') {
+    return (
+      <form method="post" action={GOOGLE_CONNECT_PATH}>
+        <button type="submit" className={ACTION_CLASS}>
+          {copy.publishAction}
+        </button>
+      </form>
+    )
+  }
+
+  if (data?.state === 'ready' && data.connectionId) {
     const connectionId = data.connectionId
     return (
       <div className="flex flex-col gap-2">
@@ -80,7 +119,7 @@ export function AdsHandoffAction({ result }: { result: PublicScanResult }) {
           type="button"
           onClick={() => void transfer(connectionId)}
           disabled={pending}
-          className="inline-flex h-10 items-center rounded-xl bg-brand px-4 text-sm font-medium text-brand-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-60"
+          className={ACTION_CLASS}
         >
           {pending
             ? isTr ? 'Taslak hazırlanıyor…' : 'Preparing draft…'
@@ -97,13 +136,18 @@ export function AdsHandoffAction({ result }: { result: PublicScanResult }) {
   }
 
   return (
-    <button
-      type="button"
-      disabled
-      className="inline-flex h-10 cursor-not-allowed items-center rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground"
-    >
-      {copy.publishSoon}
-      <span className="ms-2 rounded-full bg-background px-2 py-0.5 text-xs">{copy.comingSoon}</span>
-    </button>
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        disabled
+        aria-busy={!data}
+        className="inline-flex h-10 cursor-not-allowed items-center rounded-xl bg-secondary px-4 text-sm font-medium text-muted-foreground"
+      >
+        {copy.publishAction}
+      </button>
+      {data?.state === 'unavailable' ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{copy.publishUnavailable}</p>
+      ) : null}
+    </div>
   )
 }
