@@ -12,6 +12,7 @@ const requestScan = vi.fn<
   (input: { address: string; requestId: string; manual?: ManualPlanInput }) => Promise<ClientScanOutcome>
 >()
 const swrCalls: string[] = []
+let handoffAccess: { state: string; connectionId?: string } | undefined
 
 vi.mock('@/components/language-provider', () => ({
   useLanguage: () => ({ lang: 'tr', t: dictionary.tr }),
@@ -19,7 +20,7 @@ vi.mock('@/components/language-provider', () => ({
 vi.mock('swr', () => ({
   default: (key: string) => {
     swrCalls.push(key)
-    return { data: undefined }
+    return { data: key === '/api/ads/google/handoff-access' ? handoffAccess : undefined }
   },
 }))
 vi.mock('next/navigation', () => ({
@@ -52,6 +53,7 @@ function submitAddress(value: string) {
 beforeEach(() => {
   requestScan.mockReset()
   swrCalls.length = 0
+  handoffAccess = undefined
 })
 afterEach(cleanup)
 
@@ -244,7 +246,55 @@ describe('AdsAddressForm', () => {
     expect(screen.getByText(/Diş İmplant Uzmanı \| İstanbul Diş Kliniği \| Randevu Alın/)).toBeTruthy()
     expect(screen.getByText('diş implant fiyatları')).toBeTruthy()
     expect(screen.getByText(copy.previewNote)).toBeTruthy()
-    expect((screen.getByRole('button', { name: new RegExp(copy.publishSoon) }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByText(copy.comingSoon)).toBeNull()
+    expect((screen.getByRole('button', { name: copy.publishAction }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('offers sign in with a return path to the workspace when signed out', async () => {
+    handoffAccess = { state: 'signed_out' }
+    requestScan.mockResolvedValue({ ok: true, result: sampleScanResult })
+    render(<AdsAddressForm />)
+    submitAddress('ornek.com')
+
+    const link = await screen.findByRole('link', { name: copy.actionLogin })
+    const href = link.getAttribute('href')!
+    expect(href.startsWith('/auth/login?next=')).toBe(true)
+    const next = new URL(href, 'https://gloval.ai').searchParams.get('next')!
+    expect(next).toBe(`/ads/dashboard?url=${encodeURIComponent(sampleScanResult.host)}`)
+    expect(screen.queryByText(copy.comingSoon)).toBeNull()
+  })
+
+  it('starts the Google connect flow when signed in without a connected account', async () => {
+    handoffAccess = { state: 'needs_connect' }
+    requestScan.mockResolvedValue({ ok: true, result: sampleScanResult })
+    render(<AdsAddressForm />)
+    submitAddress('ornek.com')
+
+    const button = (await screen.findByRole('button', { name: copy.publishAction })) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+    const form = button.closest('form')!
+    expect(form.getAttribute('action')).toBe('/api/ads/google/connect')
+    expect(form.getAttribute('method')?.toLowerCase()).toBe('post')
+  })
+
+  it('offers the plan transfer when a Google account is ready', async () => {
+    handoffAccess = { state: 'ready', connectionId: 'conn-1' }
+    requestScan.mockResolvedValue({ ok: true, result: sampleScanResult })
+    render(<AdsAddressForm />)
+    submitAddress('ornek.com')
+
+    const button = (await screen.findByRole('button', { name: 'Bu planı Google Ads’e hazırla' })) as HTMLButtonElement
+    expect(button.disabled).toBe(false)
+  })
+
+  it('explains an unavailable state without a coming-soon label', async () => {
+    handoffAccess = { state: 'unavailable' }
+    requestScan.mockResolvedValue({ ok: true, result: sampleScanResult })
+    render(<AdsAddressForm />)
+    submitAddress('ornek.com')
+
+    expect(await screen.findByText(copy.publishUnavailable)).toBeTruthy()
+    expect(screen.queryByText(copy.comingSoon)).toBeNull()
   })
 
   it('renders hostile text from the plan as plain text', async () => {

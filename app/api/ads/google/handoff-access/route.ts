@@ -8,25 +8,31 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const NOT_ELIGIBLE = { eligible: false } as const
+const UNAVAILABLE = { state: 'unavailable', eligible: false } as const
 
 /**
- * Tells the public /ads page whether to offer "prepare for Google Ads". Every
- * reason for saying no (signed out, flag off, no publish access, no usable
- * account) returns the same body, so the page reveals nothing about why.
+ * Tells the public /ads page which action to offer under a scan result:
+ * - `signed_out`: no session, offer sign in / sign up.
+ * - `needs_connect`: signed in and allowed to connect, but no usable Google Ads account yet.
+ * - `ready`: signed in, allowed to publish and has a usable account (`eligible`, with `connectionId`).
+ * - `unavailable`: flag off, no access for this account, or a lookup failure. One body for
+ *   every such reason, so the page reveals nothing about why.
+ * The state is only ever about the caller's own session.
  */
 export async function GET() {
-  if (!googleAdsFeatureEnabled()) return googleAdsJson(NOT_ELIGIBLE)
+  if (!googleAdsFeatureEnabled()) return googleAdsJson(UNAVAILABLE)
 
   let access: Awaited<ReturnType<typeof googleAdsRequestAccess>>
   try {
     access = await googleAdsRequestAccess()
   } catch {
-    return googleAdsJson(NOT_ELIGIBLE)
+    return googleAdsJson(UNAVAILABLE)
   }
-  const userId = access?.userId
-  if (!access || !userId || !access.decision.canPublish) return googleAdsJson(NOT_ELIGIBLE)
-  if (!checkRateLimit(`google-ads-handoff-access:${userId}`, 60, 60_000).allowed) return googleAdsJson(NOT_ELIGIBLE)
+  if (!access) return googleAdsJson({ state: 'signed_out', eligible: false })
+
+  const userId = access.userId
+  if (!userId || !access.decision.canConnect) return googleAdsJson(UNAVAILABLE)
+  if (!checkRateLimit(`google-ads-handoff-access:${userId}`, 60, 60_000).allowed) return googleAdsJson(UNAVAILABLE)
 
   const { data, error } = await createAdminClient()
     .from('ads_connections')
@@ -38,6 +44,8 @@ export async function GET() {
     .not('currency_code', 'is', null)
     .limit(1)
     .maybeSingle()
-  if (error || !data) return googleAdsJson(NOT_ELIGIBLE)
-  return googleAdsJson({ eligible: true, connectionId: data.id })
+  if (error) return googleAdsJson(UNAVAILABLE)
+  if (!data) return googleAdsJson({ state: 'needs_connect', eligible: false })
+  if (!access.decision.canPublish) return googleAdsJson(UNAVAILABLE)
+  return googleAdsJson({ state: 'ready', eligible: true, connectionId: data.id })
 }
