@@ -31,6 +31,21 @@ describe('draft reminder email', () => {
     expect(site.html).not.toContain('E-Ticaret paketi')
   })
 
+  it('places the opt-out link in the footer, below the footer text and above the brand link', () => {
+    for (const lang of ['tr', 'en'] as const) {
+      const { html, text } = buildDraftReminderEmail({ ...base, kind: 'd7', lang })
+      const stop = html.indexOf('draft-reminders/unsubscribe')
+      const footerText = html.indexOf(lang === 'tr' ? 'hizmet bildirimidir' : 'service notice')
+      const brand = html.indexOf('>gloval.ai</a>')
+      const secondaryCta = html.indexOf('/support/new')
+      expect(secondaryCta).toBeGreaterThan(-1)
+      expect(stop).toBeGreaterThan(secondaryCta)
+      expect(stop).toBeGreaterThan(footerText)
+      expect(stop).toBeLessThan(brand)
+      expect(text.trimEnd().split('\n').at(-1)).toContain(base.unsubscribeUrl)
+    }
+  })
+
   it('escapes the opt-out URL and keeps the final reminder wording honest', () => {
     const mail = buildDraftReminderEmail({ ...base, kind: 'm12', lang: 'en', unsubscribeUrl: 'https://x.test/?a=1&b="2"' })
     expect(mail.html).toContain('a=1&amp;b=&quot;2&quot;')
