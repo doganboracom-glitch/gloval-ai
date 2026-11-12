@@ -100,9 +100,8 @@ export function buildDraftReminderEmail(input: DraftReminderEmailInput): { subje
   const ecommerceHtml = isEcommerce
     ? `<p style="margin:14px 0 0;color:#6b6473;font-size:14px;">${escape(labels.ecommerce)}</p>`
     : ''
-  const body =
-    `<p style="margin:0;">${escape(copy.body)}</p>${ecommerceHtml}` +
-    `<p style="margin:22px 0 0;font-size:13px;"><a class="link" href="${escape(unsubscribeUrl)}" style="color:#6d43bd;text-decoration:underline;">${escape(labels.stop)}</a></p>`
+  const body = `<p style="margin:0;">${escape(copy.body)}</p>${ecommerceHtml}`
+  const stopHtml = `<a class="link" href="${escape(unsubscribeUrl)}" style="color:#6d43bd;text-decoration:underline;">${escape(labels.stop)}</a>`
 
   const html = renderEmailLayout({
     lang,
@@ -112,6 +111,7 @@ export function buildDraftReminderEmail(input: DraftReminderEmailInput): { subje
     cta: { label: labels.resume, href: editorUrl },
     secondaryCta: { label: labels.support, href: supportUrl },
     footer: labels.footer,
+    footerExtraHtml: stopHtml,
   })
 
   const textParts = [
@@ -119,9 +119,8 @@ export function buildDraftReminderEmail(input: DraftReminderEmailInput): { subje
     ...(isEcommerce ? [labels.ecommerce] : []),
     `${labels.resume}: ${editorUrl}`,
     `${labels.support}: ${supportUrl}`,
-    `${labels.stopText} ${unsubscribeUrl}`,
   ]
-  const text = renderEmailPlainText(copy.subject, textParts.join('\n\n'), labels.footer)
+  const text = `${renderEmailPlainText(copy.subject, textParts.join('\n\n'), labels.footer)}\n\n${labels.stopText} ${unsubscribeUrl}`
 
   return { subject: copy.subject, html, text }
 }
