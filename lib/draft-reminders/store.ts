@@ -9,6 +9,9 @@ const DAY_MS = 86_400_000
 // Superset of "inactive for 7 Turkey days": the planner makes the exact decision.
 const CANDIDATE_MIN_AGE_MS = 6 * DAY_MS
 const IN_CHUNK = 200
+// Must only list columns that exist on `profiles`; an unknown one makes PostgREST answer 400.
+// Kept as a string literal so the Supabase client can infer the row type from it.
+export const PROFILE_SELECT = 'id, email, status, draft_reminders_opt_out'
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = []
@@ -51,7 +54,7 @@ export function createSupabaseDraftReminderStore(now: Date): DraftReminderStore 
       for (const ids of chunk(userIds, IN_CHUNK)) {
         const { data, error } = await admin
           .from('profiles')
-          .select('id, email, status, language, draft_reminders_opt_out')
+          .select(PROFILE_SELECT)
           .in('id', ids)
         if (error) throw new Error('profiles_query_failed')
         for (const row of data ?? []) {
@@ -59,7 +62,6 @@ export function createSupabaseDraftReminderStore(now: Date): DraftReminderStore 
             id: row.id as string,
             email: (row.email as string | null) ?? null,
             status: (row.status as string | null) ?? null,
-            language: (row.language as string | null) ?? null,
             optOut: row.draft_reminders_opt_out === true,
           })
         }

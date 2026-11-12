@@ -23,7 +23,6 @@ export type OwnerProfile = {
   id: string
   email: string | null
   status: string | null
-  language: string | null
   optOut: boolean
 }
 
@@ -191,7 +190,7 @@ async function processReminder(
 
   const email = deps.buildEmail({
     kind,
-    lang: [recipient.locale, profile.language],
+    lang: [recipient.locale],
     projectId: candidate.projectId,
     userId: candidate.ownerId,
     isEcommerce: candidate.projectType === 'ecommerce',
