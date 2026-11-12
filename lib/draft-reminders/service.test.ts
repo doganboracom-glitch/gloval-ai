@@ -26,7 +26,7 @@ function project(id: string, owner: string, extra: Partial<DraftCandidate> = {})
 }
 
 function profile(id: string, extra: Partial<OwnerProfile> = {}): OwnerProfile {
-  return { id, email: `${id}@mail.com`, status: 'active', language: 'tr', optOut: false, ...extra }
+  return { id, email: `${id}@mail.com`, status: 'active', optOut: false, ...extra }
 }
 
 function setup(world: Partial<World>, config: Partial<DraftReminderConfig> = {}, overrides: Partial<DraftReminderDeps> = {}) {
