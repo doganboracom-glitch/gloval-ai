@@ -9,6 +9,7 @@ import { useLanguage } from '@/components/language-provider'
 import { useCookieBannerDoc } from '@/components/cookie-banner-doc-context'
 import { COOKIE_BANNER_DOC_LABEL, cookieBannerHref } from '@/lib/cookie-policy-link'
 import { isAuthPath } from '@/lib/analytics-config'
+import { ANALYTICS_MODE, isVercelAnalyticsActive } from '@/lib/vercel-analytics'
 import {
   CONSENT_CHANGE_EVENT,
   CONSENT_COOKIE,
@@ -33,9 +34,11 @@ import {
  * - Zorunlu çerezler her zaman etkindir (rıza gerektirmez).
  * - Analitik ve pazarlama çerezleri yalnızca kullanıcı AÇIKÇA kabul ederse
  *   etkinleşir. Tercih, hem cookie hem localStorage'a yazılır.
- * - Vercel Analytics YALNIZCA analitik rızası verildiğinde (ve production'da)
- *   yüklenir; rıza yoksa hiç mount edilmez. Yani banner dekoratif değildir,
- *   tercihi fiilen uygular.
+ * - Vercel Analytics varsayılan ("consent") modda YALNIZCA analitik rızası
+ *   verildiğinde (ve production'da) yüklenir; rıza yoksa hiç mount edilmez.
+ *   NEXT_PUBLIC_ANALYTICS_MODE="always" ise platform sayfalarında onaydan
+ *   bağımsız yüklenir (bkz. lib/vercel-analytics.ts). GA4 / Meta Pixel her
+ *   zaman onaya bağlıdır.
  * - Footer'daki "Çerez tercihleri" butonu `openCookiePreferences()` ile bu
  *   paneli yeniden açar.
  */
@@ -101,6 +104,7 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
 
   const [consent, setConsent] = useState<ConsentChoice | null>(null)
   const [ready, setReady] = useState(false)
+  const [hostname, setHostname] = useState('')
   const [open, setOpen] = useState(false)
   const [customize, setCustomize] = useState(false)
   const [draftAnalytics, setDraftAnalytics] = useState(false)
@@ -110,6 +114,7 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
   useEffect(() => {
     const existing = readConsent()
     setConsent(existing)
+    setHostname(window.location.hostname)
     setReady(true)
     if (!existing) setOpen(true)
   }, [])
@@ -147,7 +152,15 @@ export function CookieConsent({ variant = 'platform' }: { variant?: CookieBanner
 
   const pathname = usePathname()
   const isAuthSurface = isAuthPath(pathname ?? '')
-  const analyticsAllowed = ready && consent?.analytics === true && !isAuthSurface
+  // Published customer sites keep the consent behaviour even in "always" mode.
+  const analyticsAllowed =
+    ready &&
+    isVercelAnalyticsActive({
+      mode: variant === 'platform' ? ANALYTICS_MODE : 'consent',
+      consent,
+      hostname,
+      pathname: pathname ?? '',
+    })
   const siteDoc = useCookieBannerDoc()
   const bannerDoc = siteDoc === undefined ? 'cerez-politikasi' : siteDoc
   const cookiePolicyHref = cookieBannerHref(bannerDoc, pathname ?? '')

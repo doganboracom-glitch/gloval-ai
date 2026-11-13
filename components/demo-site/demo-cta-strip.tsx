@@ -1,5 +1,8 @@
+'use client'
+
 import { ArrowRight } from 'lucide-react'
 import { DEMO_CTA_STRIP_HEIGHT_PX } from '@/lib/demo-chrome'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 
 /**
  * Sticky strip at the bottom of a sector landing demo: says the page is a
@@ -12,7 +15,10 @@ export function DemoCtaStrip({
   lead,
   text,
   cta,
+  demo,
 }: {
+  /** Demo slug, sent as the only property of the anonymous click event. */
+  demo?: string
   href: string
   /** Short bold opener, e.g. "Bu bir örnek demodur." */
   lead: string
@@ -39,6 +45,7 @@ export function DemoCtaStrip({
         <a
           href={href}
           data-demo-cta
+          onClick={() => trackFunnelEvent(VERCEL_FUNNEL_EVENTS.demoCtaClick, { demo })}
           className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brand px-4 text-sm font-semibold text-brand-foreground outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         >
           {cta}

@@ -13,6 +13,7 @@ import {
 } from '@/lib/auth-redirect'
 import { validateEmail } from '@/lib/email-validation'
 import { trackSignUp } from '@/lib/analytics'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 import { peekPendingProject } from '@/lib/pending-project'
 import { createSignupDraft } from '@/lib/signup-draft-actions'
 import {
@@ -60,6 +61,7 @@ function SignUpForm() {
 
   useEffect(() => {
     setHasSignupIdea(Boolean(readSignupIdea()))
+    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupView)
   }, [])
 
   const signupNext = resolveSignUpNextPath(next, hasSignupIdea)
@@ -93,6 +95,7 @@ function SignUpForm() {
       return
     }
     setLoading(true)
+    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupSubmit, { method: 'email' })
     const supabase = createClient()
     // Park the visitor's unsaved draft on the server, bound to this e-mail, so the
     // verification link can restore it from any tab or device. Never blocks sign-up.

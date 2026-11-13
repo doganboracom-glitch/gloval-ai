@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
 import { prepareReferralSignupIntent } from '@/lib/referrals/client'
 import { useLanguage } from '@/components/language-provider'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 
 type Provider = 'google'
 
@@ -23,6 +24,7 @@ export function OAuthButtons({ mode, next }: { mode: 'login' | 'signup'; next?: 
 
   async function handleClick(provider: Provider) {
     setPending(provider)
+    if (mode === 'signup') trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupSubmit, { method: provider })
     await prepareReferralSignupIntent(mode === 'signup' ? 'oauth' : 'login')
     const supabase = createClient()
     const redirectTo = getAuthCallbackUrl('/auth/oauth-callback')
