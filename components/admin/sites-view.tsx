@@ -201,6 +201,12 @@ export function SitesView({ sites }: { sites: AdminSite[] }) {
                     {t.sites.products}
                   </Link>
                 )}
+                <Link
+                  href={`/admin/sites/handover?project=${s.id}`}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium transition-colors hover:bg-muted"
+                >
+                  Devret
+                </Link>
                 <button
                   type="button"
                   onClick={() => setAuraSite({ id: s.id, name: s.name })}
