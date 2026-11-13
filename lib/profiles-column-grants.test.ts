@@ -110,6 +110,7 @@ describe('profiles application write paths', () => {
       { file: 'app/api/auth/forgot-password/route.ts', method: 'update' },
       { file: 'app/api/auth/forgot-password/route.ts', method: 'update' },
       { file: 'app/api/auth/forgot-password/route.ts', method: 'update' },
+      { file: 'app/api/draft-reminders/unsubscribe/route.ts', method: 'update' },
       { file: 'lib/account.ts', method: 'update' },
       { file: 'lib/admin/actions.ts', method: 'update' },
       { file: 'lib/heard-from-actions.ts', method: 'update' },
@@ -136,5 +137,13 @@ describe('profiles application write paths', () => {
     const resetSource = read('app/api/auth/forgot-password/route.ts')
     expect(resetSource).toMatch(/const admin = createAdminClient\(\)/)
     expect(resetSource).toMatch(/admin\.from\('profiles'\)\.update\(\{\s*password_reset_blocked_until:/)
+
+    const unsubscribeSource = read('app/api/draft-reminders/unsubscribe/route.ts')
+    expect(unsubscribeSource).toMatch(/import \{ createAdminClient \} from '@\/lib\/supabase\/admin'/)
+    expect(unsubscribeSource).toMatch(
+      /await createAdminClient\(\)\s*\.from\('profiles'\)\s*\.update\(\{\s*draft_reminders_opt_out:\s*true,\s*draft_reminders_opt_out_at:/,
+    )
+    expect(unsubscribeSource).toMatch(/verifyOptOutToken\(token\)/)
+    expect(unsubscribeSource).toMatch(/origin !== new URL\(request\.url\)\.origin/)
   })
 })
