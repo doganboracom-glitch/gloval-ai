@@ -282,12 +282,15 @@ begin
   get diagnostics v_n = row_count; v_counts := v_counts || jsonb_build_object('project_entitlements', v_n);
 
   -- The previous owner's suspension list must not keep pointing at a site they no longer own.
+  -- suspended_project_ids is JSONB: an array of uuid strings (lib/billing-lifecycle.ts writes string[]).
   update public.billing_subscriptions
-     set suspended_project_ids = array(
-           select x from unnest(suspended_project_ids) x where x::text <> p_project_id::text)
+     set suspended_project_ids = coalesce(
+           (select jsonb_agg(e) from jsonb_array_elements(suspended_project_ids) e
+             where (e #>> '{}') <> p_project_id::text), '[]'::jsonb)
    where user_id = p_expected_from_user_id
-     and suspended_project_ids is not null
-     and p_project_id::text = any (select y::text from unnest(suspended_project_ids) y);
+     and jsonb_typeof(suspended_project_ids) = 'array'
+     and exists (select 1 from jsonb_array_elements(suspended_project_ids) e
+                  where (e #>> '{}') = p_project_id::text);
   get diagnostics v_n = row_count;
 
   v_result := jsonb_build_object(

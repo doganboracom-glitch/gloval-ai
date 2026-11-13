@@ -21,13 +21,27 @@ create table auth.users (
   email text, email_confirmed_at timestamptz, banned_until timestamptz, deleted_at timestamptz,
   created_at timestamptz not null default now());
 create table public.profiles (id uuid primary key);
+-- Column types / nullability / defaults below mirror the production schema (checked via
+-- information_schema.columns). Only columns the migration touches, plus every NOT NULL column
+-- tests have to satisfy, are listed.
 create table public.projects (
-  id uuid primary key default gen_random_uuid(), owner_id uuid, name text not null default 'Site',
-  status text not null default 'draft', project_type text not null default 'corporate',
-  slug text, published boolean not null default false, client_token text);
+  id uuid primary key default gen_random_uuid(), owner_id uuid not null, name text not null default 'Untitled',
+  sector text, language text not null default 'tr', prompt text, schema_data jsonb not null,
+  status text not null default 'draft', created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(), slug text, published boolean not null default false,
+  published_at timestamptz, published_version_id uuid, project_type text not null default 'corporate',
+  commerce_mode text not null default 'none', reminders_muted boolean not null default false,
+  reminders_muted_at timestamptz, client_token text);
 create table public.custom_domains (
   id uuid primary key default gen_random_uuid(), user_id uuid not null, domain text not null unique,
-  website_project_id uuid, status text not null default 'active');
+  status text not null default 'pending', is_primary boolean not null default false,
+  provider text not null default 'supabase', dns jsonb not null default '[]'::jsonb,
+  website_project_id uuid, email_enabled boolean not null default false, order_id uuid,
+  verified_at timestamptz, expires_at timestamptz, created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(), mail_access_status text not null default 'active',
+  mail_grace_started_at timestamptz, mail_grace_ends_at timestamptz,
+  mail_access_sync_pending boolean not null default false, mail_transfer_hold_at timestamptz,
+  mail_transfer_hold_handover_id uuid);
 create table public.ecommerce_products (id uuid primary key default gen_random_uuid(), project_id uuid, owner_id uuid);
 create table public.ecommerce_orders (id uuid primary key default gen_random_uuid(), project_id uuid, owner_id uuid);
 create table public.ecommerce_categories (id uuid primary key default gen_random_uuid(), project_id uuid, owner_id uuid);
@@ -35,15 +49,33 @@ create table public.ecommerce_product_variants (id uuid primary key default gen_
 create table public.ecommerce_payment_settings (project_id uuid primary key, owner_id uuid);
 create table public.project_entitlements (
   id uuid primary key default gen_random_uuid(), project_id uuid not null, user_id uuid not null,
-  code text not null, name text, status text not null default 'active', unique (project_id, code));
-create table public.billing_plans (id uuid primary key default gen_random_uuid(), code text not null, product_category text);
+  code text not null, name text not null, status text not null default 'active',
+  provider text not null default 'mock', provider_ref text, amount_cents int not null default 0,
+  currency text not null default 'TRY', granted_at timestamptz default now(),
+  created_at timestamptz not null default now(), unique (project_id, code));
+create table public.billing_plans (
+  id uuid primary key default gen_random_uuid(), code text not null, name text not null, description text,
+  price_cents int not null default 0, currency text not null default 'TRY', interval text not null default 'month',
+  trial_days int not null default 0, features jsonb not null default '[]'::jsonb, provider_price_id text,
+  active boolean not null default true, sort_order int not null default 0,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  product_category text);
 create table public.billing_subscriptions (
-  id uuid primary key default gen_random_uuid(), user_id uuid not null, plan_id uuid, status text not null default 'active',
-  current_period_end timestamptz, suspended_project_ids uuid[] not null default '{}');
+  id uuid primary key default gen_random_uuid(), user_id uuid, plan_id uuid not null,
+  status text not null default 'trialing', provider text not null default 'mock', provider_ref text,
+  current_period_start timestamptz not null default now(), current_period_end timestamptz,
+  trial_ends_at timestamptz, cancel_at_period_end boolean not null default false,
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  pending_plan_id uuid, pending_change_ref text, grace_period_ends_at timestamptz, suspended_at timestamptz,
+  suspension_reason text, suspended_project_ids jsonb not null default '[]'::jsonb);
 create table public.user_addon_entitlements (
   id uuid primary key default gen_random_uuid(), user_id uuid not null, addon_code text not null,
-  status text not null default 'active', starts_at timestamptz, expires_at timestamptz, subscription_id uuid);
-create table public.user_limit_overrides (user_id uuid primary key, site_limit int, expires_at timestamptz);
+  kind text not null, status text not null default 'active', starts_at timestamptz not null default now(),
+  expires_at timestamptz not null, idempotency_key text not null, source text,
+  created_at timestamptz not null default now(), subscription_id uuid not null, purchase_id uuid);
+create table public.user_limit_overrides (
+  user_id uuid not null, site_limit int, expires_at timestamptz, reason text, updated_by text not null,
+  updated_at timestamptz not null default now());
 -- user-history tables that must NEVER move
 create table public.ads_brands (id uuid primary key default gen_random_uuid(), user_id uuid, project_id uuid);
 create table public.support_tickets (id uuid primary key default gen_random_uuid(), user_id uuid, project_id uuid);
@@ -87,8 +119,8 @@ async function newProject(
 ) {
   counter += 1
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.projects (owner_id, name, project_type, published, slug, client_token)
-     values ($1,$2,$3,$4,$5,$6) returning id`,
+    `insert into public.projects (owner_id, name, project_type, published, slug, client_token, schema_data)
+     values ($1,$2,$3,$4,$5,$6,'{}'::jsonb) returning id`,
     [owner, opts.name ?? 'Demo Site', opts.type ?? 'corporate', opts.published ?? false, `slug-${counter}`, opts.token ?? null],
   )
   return rows[0].id
@@ -96,7 +128,7 @@ async function newProject(
 
 async function givePlan(userId: string, code: string) {
   const plan = await db.query<{ id: string }>(
-    `insert into public.billing_plans (code, product_category) values ($1,'plan') returning id`,
+    `insert into public.billing_plans (code, name, product_category) values ($1,$1,'plan') returning id`,
     [code],
   )
   const sub = await db.query<{ id: string }>(
@@ -142,7 +174,7 @@ describe('admin_handover_project', () => {
        insert into public.ecommerce_categories (project_id, owner_id) values ($1,$2);
        insert into public.ecommerce_product_variants (project_id, owner_id) values ($1,$2),($1,$2),($1,$2);
        insert into public.ecommerce_payment_settings (project_id, owner_id) values ($1,$2);
-       insert into public.project_entitlements (project_id, user_id, code) values ($1,$2,'aura_cursor');`,
+       insert into public.project_entitlements (project_id, user_id, code, name) values ($1,$2,'aura_cursor','Aura İmleç');`,
       [pid, from.id],
     )
     const r = await handover(pid, from.id, to.id)
@@ -281,27 +313,74 @@ describe('admin_handover_project', () => {
       const from = await newUser()
       const to = await newUser()
       const subId = await givePlan(to.id, 'pro')
-      await db.query(`insert into public.user_addon_entitlements (user_id, addon_code, subscription_id) values ($1,'extra_corporate_site_1',$2)`, [to.id, subId])
+      await db.query(`insert into public.user_addon_entitlements (user_id, addon_code, kind, expires_at, idempotency_key, subscription_id)
+       values ($1,'extra_corporate_site_1','site', now() + interval '20 days', 'addon-' || gen_random_uuid()::text, $2)`, [to.id, subId])
       for (let i = 0; i < 3; i++) await newProject(to.id, { published: true })
       const pid = await newProject(from.id, { published: true })
       expect((await handover(pid, from.id, to.id)).state).toBe('ok') // pro 3 + 1 add-on = 4
       const p2 = await newProject(from.id, { published: true })
       expect((await handover(p2, from.id, to.id)).state).toBe('quota_exceeded')
-      await db.query(`insert into public.user_limit_overrides (user_id, site_limit) values ($1, 10)`, [to.id])
+      await db.query(`insert into public.user_limit_overrides (user_id, site_limit, updated_by) values ($1, 10, 'admin@example.com')`, [to.id])
       expect((await handover(p2, from.id, to.id)).state).toBe('ok')
     })
   })
 
-  it('removes the project from the old owner suspended_project_ids', async () => {
-    const from = await newUser()
-    const to = await newUser()
-    const pid = await newProject(from.id)
-    const keep = await newProject(from.id)
-    const subId = await givePlan(from.id, 'pro')
-    await db.query(`update public.billing_subscriptions set suspended_project_ids = array[$1::uuid, $2::uuid] where id = $3`, [pid, keep, subId])
-    await handover(pid, from.id, to.id)
-    const { rows } = await db.query<{ ids: string[] }>(`select suspended_project_ids ids from public.billing_subscriptions where id = $1`, [subId])
-    expect(rows[0].ids).toEqual([keep])
+  describe('billing_subscriptions.suspended_project_ids (jsonb array of uuid strings)', () => {
+    async function suspendedIds(subId: string) {
+      const { rows } = await db.query<{ ids: unknown }>(
+        `select suspended_project_ids ids from public.billing_subscriptions where id = $1`, [subId])
+      return rows[0].ids
+    }
+
+    it('removes only this project id from the old owner list and keeps the others', async () => {
+      const from = await newUser()
+      const to = await newUser()
+      const pid = await newProject(from.id)
+      const keep = await newProject(from.id)
+      const subId = await givePlan(from.id, 'pro')
+      await db.query(
+        `update public.billing_subscriptions set suspended_project_ids = $1::jsonb where id = $2`,
+        [JSON.stringify([pid, keep]), subId],
+      )
+      const r = await handover(pid, from.id, to.id)
+      expect(r).toMatchObject({ ok: true, state: 'ok', suspended_ids_cleaned: 1 })
+      expect(await suspendedIds(subId)).toEqual([keep])
+    })
+
+    it('leaves an empty array untouched and does not error', async () => {
+      const from = await newUser()
+      const to = await newUser()
+      const pid = await newProject(from.id)
+      const subId = await givePlan(from.id, 'pro')
+      const r = await handover(pid, from.id, to.id)
+      expect(r).toMatchObject({ ok: true, state: 'ok', suspended_ids_cleaned: 0 })
+      expect(await suspendedIds(subId)).toEqual([])
+    })
+
+    it('does not error on a JSON null (non-array) value and leaves it as is', async () => {
+      const from = await newUser()
+      const to = await newUser()
+      const pid = await newProject(from.id)
+      const subId = await givePlan(from.id, 'pro')
+      await db.query(`update public.billing_subscriptions set suspended_project_ids = 'null'::jsonb where id = $1`, [subId])
+      const r = await handover(pid, from.id, to.id)
+      expect(r).toMatchObject({ ok: true, state: 'ok', suspended_ids_cleaned: 0 })
+      expect(await suspendedIds(subId)).toBeNull()
+    })
+
+    it('does not touch another user subscription that lists the same project id', async () => {
+      const from = await newUser()
+      const to = await newUser()
+      const other = await newUser()
+      const pid = await newProject(from.id)
+      const otherSub = await givePlan(other.id, 'pro')
+      await db.query(
+        `update public.billing_subscriptions set suspended_project_ids = $1::jsonb where id = $2`,
+        [JSON.stringify([pid]), otherSub],
+      )
+      await handover(pid, from.id, to.id)
+      expect(await suspendedIds(otherSub)).toEqual([pid])
+    })
   })
 
   it('does NOT move user-history tables or draft reminders', async () => {
@@ -498,7 +577,7 @@ describe('migration', () => {
       `insert into auth.users (email, email_confirmed_at) values ('a@x.com', now()),('b@x.com', now()) returning id`,
     )
     await own.query(`insert into public.profiles (id) values ($1),($2)`, [u[0].id, u[1].id])
-    const { rows: p } = await own.query<{ id: string }>(`insert into public.projects (owner_id) values ($1) returning id`, [u[0].id])
+    const { rows: p } = await own.query<{ id: string }>(`insert into public.projects (owner_id, schema_data) values ($1, '{}'::jsonb) returning id`, [u[0].id])
     const { rows } = await own.query<{ r: Result }>(
       `select public.admin_handover_project($1,$2,$3,'a@x.com','long enough reason','nt-1',false) as r`,
       [p[0].id, u[0].id, u[1].id],
