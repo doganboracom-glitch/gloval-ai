@@ -14,6 +14,7 @@ import { websiteToPlan, type WebsiteSchema } from '@/lib/website-schema'
 import { createClient } from '@/lib/supabase/client'
 import { createProject } from '@/lib/projects'
 import { trackGenerateSiteStarted, trackGenerateSiteCompleted } from '@/lib/analytics'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 import { newEventNonce } from '@/lib/analytics/event-ids'
 import {
   stashPendingProject,
@@ -332,6 +333,7 @@ export function Hero() {
     setAnonLimitReached(false)
     setSignupHandoffError(null)
     trackGenerateSiteStarted()
+    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.homePromptSubmit)
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',

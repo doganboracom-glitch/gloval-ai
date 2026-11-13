@@ -21,12 +21,17 @@ export function isAuthPath(pathname: string): boolean {
   return pathname === '/auth' || pathname.startsWith('/auth/') || pathname === '/forgot-password'
 }
 
-export function isMeasurementSurface(hostname: string, pathname: string): boolean {
+/** The host / route part of `isMeasurementSurface`, without the auth-route exclusion. */
+export function isMeasurementHost(hostname: string, pathname: string): boolean {
   const host = hostname.toLowerCase()
   if (!host) return false
-  if (isAuthPath(pathname)) return false
   if (isForeignHost(host)) return false
   if (host === TENANT_ROOT_DOMAIN || host.endsWith(`.${TENANT_ROOT_DOMAIN}`)) return false
   if (pathname === '/site' || pathname.startsWith('/site/')) return false
   return true
+}
+
+export function isMeasurementSurface(hostname: string, pathname: string): boolean {
+  if (isAuthPath(pathname)) return false
+  return isMeasurementHost(hostname, pathname)
 }

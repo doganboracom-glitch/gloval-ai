@@ -183,6 +183,7 @@ export default async function DemoPage({
 
       {showCtaStrip && demo.campaign && (
         <DemoCtaStrip
+          demo={slug}
           href={demoCtaHref(demo.campaign, lang)}
           lead={lang === 'tr' ? 'Bu bir örnek demodur.' : 'This is a sample demo.'}
           text={

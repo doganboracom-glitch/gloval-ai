@@ -9,6 +9,7 @@ import { AdsScanResult } from '@/components/ads/ads-scan-result'
 import { useAdsScan } from '@/components/ads/use-ads-scan'
 import { MAX_SITE_ADDRESS_LENGTH, normalizeSiteAddress } from '@/lib/ads/normalize-site-address'
 import { describeScanError } from '@/lib/ads/scan-messages'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 import type { ManualPlanInput } from '@/lib/ads/manual-plan'
 import type { ScanStage } from '@/lib/ads/scan-client'
 
@@ -55,6 +56,7 @@ export function AdsAddressForm() {
     }
     setValidationError(null)
     setValue(result.host)
+    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.adsScanSubmit)
     void startSiteScan(result.host)
   }
 

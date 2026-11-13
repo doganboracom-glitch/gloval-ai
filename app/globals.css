@@ -852,24 +852,27 @@ input.ads-address-input {
 html:has([data-demo-cta-root]) .cookie-card {
   translate: 0 calc(-64px - env(safe-area-inset-bottom));
 }
-/* On phones the default (collapsed) card is shrunk on demo pages so it stays a
-   thin bar over the strip instead of climbing over the hero headline and its
-   main button. Pure presentation: the card's markup, copy and consent logic are
-   untouched, and the expanded preferences panel keeps its normal layout. */
+/* On phones the default (collapsed) card is a compact bottom bar on EVERY page
+   (platform and published sites, demos included): icon hidden, description
+   clamped to two lines, the three buttons on one row. That keeps it from
+   climbing over the hero headline, the main CTA and the input field. Pure
+   presentation: the card's markup, copy and consent logic are untouched, and
+   the expanded preferences panel keeps its normal layout. The page reserves
+   the card's measured height through `html[data-cookie-banner]` above. */
 @media (max-width: 639px) {
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) {
+  .cookie-card:not(:has(.cookie-divider.border-t)) {
     max-height: none;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) .cookie-icon-tile {
+  .cookie-card:not(:has(.cookie-divider.border-t)) .cookie-icon-tile {
     display: none;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:first-child {
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:first-child {
     padding: 0.5rem 0.75rem 0.25rem;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-title {
+  .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-title {
     line-height: 1.5rem;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-desc {
+  .cookie-card:not(:has(.cookie-divider.border-t)) #cookie-desc {
     margin-top: 0;
     font-size: 0.6875rem;
     line-height: 1.25;
@@ -879,18 +882,26 @@ html:has([data-demo-cta-root]) .cookie-card {
     line-clamp: 2;
     overflow: hidden;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child {
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child {
     gap: 0.375rem;
     padding: 0 0.75rem 0.5rem;
     flex-wrap: nowrap;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > button {
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > button {
     height: 2rem;
     min-width: 0;
     padding-inline: 0.5rem;
     font-size: 0.75rem;
+    line-height: 1;
+    white-space: nowrap;
   }
-  html:has([data-demo-cta-root]) .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > .cookie-btn-text {
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > .cookie-btn-primary {
+    flex: 1 0 auto;
+  }
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > .cookie-btn-outline {
+    flex: 1 1 auto;
+  }
+  .cookie-card:not(:has(.cookie-divider.border-t)) > div:last-child > .cookie-btn-text {
     width: auto;
     flex: 0 0 auto;
   }
