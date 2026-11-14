@@ -12,6 +12,7 @@ describe('campaign funnel event names', () => {
   it('uses fixed campaign events and the non-identifying campaign label', () => {
     expect(VERCEL_FUNNEL_EVENTS.campaignWhatsappClick).toBe('campaign_whatsapp_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignSignupClick).toBe('campaign_signup_click')
+    expect(VERCEL_FUNNEL_EVENTS.campaignPricingClick).toBe('campaign_pricing_click')
   })
 })
 
