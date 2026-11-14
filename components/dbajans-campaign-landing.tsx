@@ -14,6 +14,7 @@ import {
 } from '@/lib/vercel-analytics'
 import { getCommonPlanCopy } from '@/lib/plan-copy'
 import { PLANS, planPrice } from '@/lib/pricing-config'
+import { allDemos } from '@/lib/demos'
 
 const starterPlan = PLANS.find((plan) => plan.code === 'starter')
 const startingPrice = starterPlan ? planPrice(starterPlan, 'monthly').price : null
@@ -120,6 +121,56 @@ export function DbAjansCampaignLanding() {
               )}
             </article>
           ))}
+        </section>
+
+        <section aria-labelledby="dbajans-demos-title" className="pb-10 sm:pb-12">
+          <div className="text-center">
+            <p className="mx-auto inline-flex items-center rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground sm:text-sm">
+              Örnek siteler
+            </p>
+            <h2
+              id="dbajans-demos-title"
+              className="mx-auto mt-3 max-w-3xl text-balance font-display text-2xl font-bold leading-tight tracking-tight sm:text-3xl"
+            >
+              Hazır örnek sitelere göz atın
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Bir örneğe tıklayın, sitenizin nasıl görüneceğini kendiniz inceleyin.
+            </p>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            {allDemos.map((demo) => (
+              <Link
+                key={demo.slug}
+                href={`/demo/${demo.slug}`}
+                target="_blank"
+                rel="noopener"
+                aria-label={`${demo.brand.tr} örnek sitesini incele (yeni sekmede açılır)`}
+                onClick={() =>
+                  trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignDemoClick, {
+                    campaign: 'dbajans',
+                    demo: demo.slug,
+                  })
+                }
+                className="group flex h-full min-w-0 flex-col rounded-2xl border border-border bg-card p-5 transition-colors hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <span className="inline-flex w-fit max-w-full rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium leading-relaxed text-brand">
+                  {demo.tag.tr}
+                </span>
+                <h3 className="mt-3 font-display text-base font-semibold leading-snug text-foreground sm:text-lg">
+                  {demo.brand.tr}
+                </h3>
+                <p className="mt-2 line-clamp-3 text-pretty text-sm leading-relaxed text-muted-foreground">
+                  {demo.description.tr}
+                </p>
+                <span className="mt-auto inline-flex items-center gap-2 pt-4 text-sm font-medium text-brand">
+                  Örneği incele
+                  <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1 motion-reduce:transition-none" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </section>
 
         <div className="flex justify-center pb-14 sm:pb-16">
