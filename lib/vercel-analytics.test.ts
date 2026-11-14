@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { isVercelAnalyticsActive, resolveAnalyticsMode } from './vercel-analytics'
+import {
+  isVercelAnalyticsActive,
+  resolveAnalyticsMode,
+  VERCEL_FUNNEL_EVENTS,
+} from './vercel-analytics'
 
 const granted = { necessary: true, analytics: true, marketing: false } as const
 const denied = { necessary: true, analytics: false, marketing: false } as const
+
+describe('campaign funnel event names', () => {
+  it('uses fixed campaign events and the non-identifying campaign label', () => {
+    expect(VERCEL_FUNNEL_EVENTS.campaignWhatsappClick).toBe('campaign_whatsapp_click')
+    expect(VERCEL_FUNNEL_EVENTS.campaignSignupClick).toBe('campaign_signup_click')
+  })
+})
 
 describe('resolveAnalyticsMode', () => {
   it('defaults to consent', () => {

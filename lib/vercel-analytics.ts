@@ -53,6 +53,8 @@ export const VERCEL_FUNNEL_EVENTS = {
   adsScanSubmit: 'ads_scan_submit',
   pricingView: 'pricing_view',
   planCtaClick: 'plan_cta_click',
+  campaignWhatsappClick: 'campaign_whatsapp_click',
+  campaignSignupClick: 'campaign_signup_click',
 } as const
 
 export type VercelFunnelEvent = (typeof VERCEL_FUNNEL_EVENTS)[keyof typeof VERCEL_FUNNEL_EVENTS]
@@ -64,6 +66,7 @@ export type FunnelProps = {
   page?: 'sign-up' | 'login'
   plan?: 'free' | 'starter' | 'pro' | 'ecommerce'
   billing?: 'monthly' | 'yearly'
+  campaign?: 'dbajans'
 }
 
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,63}$/
