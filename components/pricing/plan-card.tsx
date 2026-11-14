@@ -19,6 +19,7 @@ import {
   type Plan,
   type PlanCode,
 } from '@/lib/pricing-config'
+import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 
 export function PlanCard({
   plan,
@@ -175,6 +176,12 @@ export function PlanCard({
           variant={plan.featured ? 'brand' : 'secondary'}
           size="lg"
           className="mt-5 w-full"
+          onClick={() =>
+            trackFunnelEvent(VERCEL_FUNNEL_EVENTS.planCtaClick, {
+              plan: plan.code,
+              billing: cycle,
+            })
+          }
         >
           {view.cta}
         </LinkButton>
