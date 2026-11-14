@@ -28,18 +28,20 @@ export function Pricing({
   const [creditRulesOpen, setCreditRulesOpen] = useState(false)
   const { lang } = useLanguage()
   const yearlyHighlight = getCommonPlanCopy(lang).yearlyHighlight
-  const sectionRef = useRef<HTMLElement>(null)
-  usePricingViewTracking(sectionRef)
+  const pricingHeadingRef = useRef<HTMLHeadingElement>(null)
+  usePricingViewTracking(pricingHeadingRef)
 
   return (
     <section
-      ref={sectionRef}
       id="pricing"
       className="scroll-mt-20 border-y border-border bg-secondary/20 py-20 sm:py-28"
     >
       <div className="mx-auto max-w-7xl px-4">
         <header className="mx-auto max-w-2xl text-center">
-          <h2 className="text-balance font-display text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2
+            ref={pricingHeadingRef}
+            className="text-balance font-display text-3xl font-bold tracking-tight sm:text-4xl"
+          >
             İşletmen için doğru GLOVAL’ı seç.
           </h2>
           <p className="mt-3 text-pretty text-lg text-muted-foreground">
