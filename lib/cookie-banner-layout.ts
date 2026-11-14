@@ -21,6 +21,14 @@
 
 export const COOKIE_BANNER_HEIGHT_VAR = '--cookie-banner-h'
 
+/**
+ * Measured height of the card, published on <html> only while it is on screen
+ * (removed on close, so `var(--cookie-card-offset, 0px)` is 0 without a card).
+ * Platform floating controls (scroll-to-top, ...) use the `.cookie-float-bottom`
+ * class in globals.css, which lifts their `bottom` by this value on phones.
+ */
+export const COOKIE_CARD_OFFSET_VAR = '--cookie-card-offset'
+
 /** Attribute toggled on <html> only while the card is on screen. */
 export const COOKIE_BANNER_ATTR = 'data-cookie-banner'
 
@@ -180,8 +188,10 @@ export function applyBannerInset(
   root.removeAttribute(COOKIE_BANNER_SITE_ATTR)
   if (typeof height === 'number' && height > 0) {
     root.style.setProperty(COOKIE_BANNER_HEIGHT_VAR, `${Math.ceil(height)}px`)
+    root.style.setProperty(COOKIE_CARD_OFFSET_VAR, `${Math.ceil(height)}px`)
     root.setAttribute(variant === 'site' ? COOKIE_BANNER_SITE_ATTR : COOKIE_BANNER_ATTR, '')
     return
   }
   root.style.removeProperty(COOKIE_BANNER_HEIGHT_VAR)
+  root.style.removeProperty(COOKIE_CARD_OFFSET_VAR)
 }

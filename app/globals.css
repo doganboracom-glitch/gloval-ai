@@ -797,6 +797,26 @@ input.ads-address-input {
   }
 }
 
+/* ---- Platform floating controls above the cookie card ---------------------
+   `.cookie-float-bottom` replaces a `bottom-*` utility on a fixed bottom-right
+   control (scroll-to-top, dashboard jump link, credit toast). On phones the
+   card spans the full width, so the control rides on top of it:
+   `--cookie-card-offset` is the card's measured height and exists only while
+   the card is open (0 otherwise, so the control returns to its normal place).
+   From 640px the card is a bottom-LEFT bubble, so nothing is lifted.
+   `--cookie-float-gap` is the control's own distance from the bottom edge.
+   Demo pages keep their own mechanism (`[data-demo-cta-root]` above). */
+.cookie-float-bottom {
+  bottom: calc(
+    var(--cookie-card-offset, 0px) + var(--cookie-float-gap, 1.25rem) + env(safe-area-inset-bottom)
+  );
+}
+@media (min-width: 640px) {
+  .cookie-float-bottom {
+    bottom: calc(var(--cookie-float-gap, 1.25rem) + env(safe-area-inset-bottom));
+  }
+}
+
 /* ---- Cookie card, SITE variant (published customer sites) ----------------
    `html[data-cookie-banner-site]` + `--cookie-banner-h` exist only while the
    centered site card is on screen. Phones: same space reservation as the

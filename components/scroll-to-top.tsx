@@ -75,7 +75,7 @@ export function ScrollToTop() {
       onClick={scrollWindowToTop}
       aria-hidden={!show}
       tabIndex={show ? 0 : -1}
-      className={`fixed bottom-6 right-6 z-[60] inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg outline-none transition-all duration-200 hover:scale-105 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 ${
+      className={`cookie-float-bottom fixed right-6 z-[60] [--cookie-float-gap:1.5rem] inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand text-brand-foreground shadow-lg outline-none transition-all duration-200 hover:scale-105 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-95 ${
         show
           ? 'pointer-events-auto translate-y-0 opacity-100'
           : 'pointer-events-none translate-y-3 opacity-0'

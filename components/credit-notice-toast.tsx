@@ -50,7 +50,7 @@ export function CreditNoticeToast() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md items-start gap-3 rounded-xl border border-brand/40 bg-card p-4 text-card-foreground shadow-lg sm:left-auto sm:right-4 sm:mx-0"
+      className="cookie-float-bottom fixed inset-x-4 z-50 mx-auto [--cookie-float-gap:1rem] motion-safe:transition-[bottom] flex max-w-md items-start gap-3 rounded-xl border border-brand/40 bg-card p-4 text-card-foreground shadow-lg sm:left-auto sm:right-4 sm:mx-0"
     >
       <Sparkles className="mt-0.5 size-5 shrink-0 text-brand" aria-hidden="true" />
       <div className="min-w-0 flex-1">
