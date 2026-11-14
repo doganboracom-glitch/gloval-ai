@@ -16,7 +16,7 @@ export function AuthShell({
   footer,
 }: {
   title: string
-  subtitle: string
+  subtitle: React.ReactNode
   children: React.ReactNode
   footer?: React.ReactNode
 }) {
@@ -48,7 +48,7 @@ export function AuthShell({
 
         <div className="auth-card rounded-2xl border border-border bg-card/70 p-6 shadow-xl backdrop-blur-sm sm:p-8">
           <h1 className="font-display text-2xl font-bold tracking-tight text-balance">{title}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{subtitle}</p>
           <div className="auth-body mt-6">{children}</div>
         </div>
 
