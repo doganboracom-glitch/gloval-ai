@@ -56,6 +56,7 @@ export const VERCEL_FUNNEL_EVENTS = {
   campaignWhatsappClick: 'campaign_whatsapp_click',
   campaignSignupClick: 'campaign_signup_click',
   campaignPricingClick: 'campaign_pricing_click',
+  campaignDemoClick: 'campaign_demo_click',
 } as const
 
 export type VercelFunnelEvent = (typeof VERCEL_FUNNEL_EVENTS)[keyof typeof VERCEL_FUNNEL_EVENTS]

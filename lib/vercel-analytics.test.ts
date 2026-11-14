@@ -13,6 +13,7 @@ describe('campaign funnel event names', () => {
     expect(VERCEL_FUNNEL_EVENTS.campaignWhatsappClick).toBe('campaign_whatsapp_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignSignupClick).toBe('campaign_signup_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignPricingClick).toBe('campaign_pricing_click')
+    expect(VERCEL_FUNNEL_EVENTS.campaignDemoClick).toBe('campaign_demo_click')
   })
 })
 
