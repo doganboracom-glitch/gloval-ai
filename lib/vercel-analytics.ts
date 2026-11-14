@@ -51,12 +51,20 @@ export const VERCEL_FUNNEL_EVENTS = {
   signupSubmit: 'signup_submit',
   demoCtaClick: 'demo_cta_click',
   adsScanSubmit: 'ads_scan_submit',
+  pricingView: 'pricing_view',
+  planCtaClick: 'plan_cta_click',
 } as const
 
 export type VercelFunnelEvent = (typeof VERCEL_FUNNEL_EVENTS)[keyof typeof VERCEL_FUNNEL_EVENTS]
 
 /** Property values are constrained to short fixed labels (method name, demo slug). */
-export type FunnelProps = { method?: 'email' | 'google'; demo?: string; page?: 'sign-up' | 'login' }
+export type FunnelProps = {
+  method?: 'email' | 'google'
+  demo?: string
+  page?: 'sign-up' | 'login'
+  plan?: 'free' | 'starter' | 'pro' | 'ecommerce'
+  billing?: 'monthly' | 'yearly'
+}
 
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,63}$/
 

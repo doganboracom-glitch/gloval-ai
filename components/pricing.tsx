@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
+import { usePricingViewTracking } from '@/components/pricing/use-pricing-view-tracking'
 import { PlanGrid } from '@/components/pricing/plan-grid'
 import { PricingJetBand } from '@/components/pricing/pricing-jet-band'
 import { ComparisonAccordion } from '@/components/pricing/comparison-accordion'
@@ -27,9 +28,12 @@ export function Pricing({
   const [creditRulesOpen, setCreditRulesOpen] = useState(false)
   const { lang } = useLanguage()
   const yearlyHighlight = getCommonPlanCopy(lang).yearlyHighlight
+  const sectionRef = useRef<HTMLElement>(null)
+  usePricingViewTracking(sectionRef)
 
   return (
     <section
+      ref={sectionRef}
       id="pricing"
       className="scroll-mt-20 border-y border-border bg-secondary/20 py-20 sm:py-28"
     >
