@@ -125,6 +125,13 @@ const LANDING_MEDIA: Record<string, LandingMedia> = {
   },
 }
 
+export function getLandingDemoHeroImage(slug: string): { src: string; alt: string } | null {
+  const hero = LANDING_MEDIA[slug]?.hero
+  if (!hero) return null
+
+  return { src: hero.src, alt: hero.alt.tr }
+}
+
 const l = (tr: string, en: string): L => ({ tr, en })
 const item = (icon: string, title: L, text: L): IconItem => ({ icon, title, text })
 const qa = (q: L, a: L): Question => ({ q, a })
