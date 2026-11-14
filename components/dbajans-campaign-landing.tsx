@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, Eye, MessageCircle, WalletCards } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
@@ -15,10 +16,32 @@ import {
 import { getCommonPlanCopy } from '@/lib/plan-copy'
 import { PLANS, planPrice } from '@/lib/pricing-config'
 import { allDemos } from '@/lib/demos'
+import { demoImages } from '@/lib/demo-images'
+import { getLandingDemoHeroImage } from '@/lib/demo-landing'
 
 const starterPlan = PLANS.find((plan) => plan.code === 'starter')
 const startingPrice = starterPlan ? planPrice(starterPlan, 'monthly').price : null
 const commonPlanCopy = getCommonPlanCopy('tr')
+
+export function getDemoCardImage(slug: string): { src: string; alt: string } | null {
+  const demo = allDemos.find((candidate) => candidate.slug === slug)
+  if (!demo) return null
+
+  const showcaseHero = demoImages[slug]?.hero
+  if (showcaseHero) {
+    return { src: showcaseHero, alt: `${demo.brand.tr} örnek sitesi görseli` }
+  }
+
+  return getLandingDemoHeroImage(slug)
+}
+
+function WhatsappIcon() {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="size-5 fill-current">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.768.967-.941 1.166-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.52-.075-.149-.669-1.612-.916-2.206-.242-.579-.487-.5-.67-.51l-.57-.01c-.198 0-.52.074-.793.372-.272.297-1.04 1.016-1.04 2.479s1.065 2.875 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.262.489 1.693.625.712.227 1.36.195 1.872.118.571-.085 1.758-.718 2.006-1.412.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.87 9.87 0 0 1-1.516-5.26c.002-5.45 4.439-9.886 9.893-9.886 2.64 0 5.122 1.03 6.99 2.898a9.825 9.825 0 0 1 2.9 6.99c-.003 5.45-4.44 9.885-9.893 9.885m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.156 11.89c-.002 2.096.547 4.142 1.588 5.947L0 24l6.335-1.66a11.89 11.89 0 0 0 5.71 1.455h.005c6.555 0 11.89-5.335 11.893-11.89a11.82 11.82 0 0 0-3.479-8.418z" />
+    </svg>
+  )
+}
 
 const campaignBenefits = [
   {
@@ -70,14 +93,14 @@ export function DbAjansCampaignLanding() {
               href={DBAJANS_WHATSAPP_URL}
               variant="brand"
               size="lg"
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto bg-[#25D366] font-semibold text-[#0B1F14] shadow-[0_8px_24px_rgba(37,211,102,0.35)] transition-colors hover:bg-[#1EBE5A] hover:opacity-100 active:bg-[#19A84F] focus-visible:ring-[#0B1F14] focus-visible:ring-offset-2 motion-reduce:transition-none"
               onClick={() =>
                 trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignWhatsappClick, {
                   campaign: 'dbajans',
                 })
               }
             >
-              <MessageCircle aria-hidden="true" className="size-5" />
+              <WhatsappIcon />
               WhatsApp&apos;tan yazın
             </LinkButton>
             <LinkButton
@@ -140,36 +163,57 @@ export function DbAjansCampaignLanding() {
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-            {allDemos.map((demo) => (
-              <Link
-                key={demo.slug}
-                href={`/demo/${demo.slug}`}
-                target="_blank"
-                rel="noopener"
-                aria-label={`${demo.brand.tr} örnek sitesini incele (yeni sekmede açılır)`}
-                onClick={() =>
-                  trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignDemoClick, {
-                    campaign: 'dbajans',
-                    demo: demo.slug,
-                  })
-                }
-                className="group flex h-full min-w-0 flex-col rounded-2xl border border-border bg-card p-5 transition-colors hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <span className="inline-flex w-fit max-w-full rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium leading-relaxed text-brand">
-                  {demo.tag.tr}
-                </span>
-                <h3 className="mt-3 font-display text-base font-semibold leading-snug text-foreground sm:text-lg">
-                  {demo.brand.tr}
-                </h3>
-                <p className="mt-2 line-clamp-3 text-pretty text-sm leading-relaxed text-muted-foreground">
-                  {demo.description.tr}
-                </p>
-                <span className="mt-auto inline-flex items-center gap-2 pt-4 text-sm font-medium text-brand">
-                  Örneği incele
-                  <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1 motion-reduce:transition-none" />
-                </span>
-              </Link>
-            ))}
+            {allDemos.map((demo) => {
+              const image = getDemoCardImage(demo.slug)
+
+              return (
+                <Link
+                  key={demo.slug}
+                  href={`/demo/${demo.slug}`}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={`${demo.brand.tr} örnek sitesini incele (yeni sekmede açılır)`}
+                  onClick={() =>
+                    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignDemoClick, {
+                      campaign: 'dbajans',
+                      demo: demo.slug,
+                    })
+                  }
+                  className="group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-brand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  {image ? (
+                    <div className="relative aspect-video w-full overflow-hidden rounded-t-2xl">
+                      <Image
+                        src={image.src}
+                        alt={image.alt}
+                        fill
+                        sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                        className="object-cover transition-transform duration-300 motion-reduce:transition-none motion-safe:group-hover:scale-[1.03]"
+                      />
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-1 flex-col p-5">
+                    <span className="inline-flex w-fit max-w-full rounded-full bg-brand/10 px-2.5 py-1 text-xs font-medium leading-relaxed text-brand">
+                      {demo.tag.tr}
+                    </span>
+                    <h3 className="mt-3 font-display text-base font-semibold leading-snug text-foreground sm:text-lg">
+                      {demo.brand.tr}
+                    </h3>
+                    <p className="mt-2 line-clamp-3 text-pretty text-sm leading-relaxed text-muted-foreground">
+                      {demo.description.tr}
+                    </p>
+                    <span className="mt-auto inline-flex items-center gap-2 pt-4 text-sm font-medium text-brand">
+                      Örneği incele
+                      <ArrowRight aria-hidden="true" className="size-4 transition-transform group-hover:translate-x-1 motion-reduce:transition-none" />
+                    </span>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         </section>
 
