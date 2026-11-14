@@ -9,6 +9,7 @@ import {
   COOKIE_BANNER_MOBILE_MAX_WIDTH,
   COOKIE_BANNER_HEIGHT_VAR,
   COOKIE_BANNER_Z_CLASS,
+  COOKIE_CARD_OFFSET_VAR,
   applyBannerInset,
   type BannerInsetRoot,
 } from './cookie-banner-layout'
@@ -33,6 +34,14 @@ describe('applyBannerInset', () => {
     applyBannerInset(root, 79.4)
     expect(vars.get(COOKIE_BANNER_HEIGHT_VAR)).toBe('80px')
     expect(attrs.has(COOKIE_BANNER_ATTR)).toBe(true)
+  })
+
+  it('publishes the card offset for floating controls and clears it on close', () => {
+    const { root, vars } = fakeRoot()
+    applyBannerInset(root, 79.4)
+    expect(vars.get(COOKIE_CARD_OFFSET_VAR)).toBe('80px')
+    applyBannerInset(root, null)
+    expect(vars.has(COOKIE_CARD_OFFSET_VAR)).toBe(false)
   })
 
   it('releases the space together with the flag when the banner closes', () => {
@@ -105,6 +114,21 @@ describe('stylesheet rules', () => {
     expect(phoneBlock).toContain('html[data-cookie-banner] body')
     const occurrences = css.split('html[data-cookie-banner] body').length - 1
     expect(occurrences).toBe(1)
+  })
+
+  it('lifts platform floating controls by the card offset on phones only', () => {
+    expect(css).toMatch(
+      /\.cookie-float-bottom\s*\{\s*bottom:\s*calc\(\s*var\(--cookie-card-offset, 0px\) \+ var\(--cookie-float-gap, 1\.25rem\) \+ env\(safe-area-inset-bottom\)\s*\)/,
+    )
+    expect(css).toMatch(
+      /@media \(min-width: 640px\)\s*\{\s*\.cookie-float-bottom\s*\{\s*bottom:\s*calc\(var\(--cookie-float-gap, 1\.25rem\)/,
+    )
+  })
+
+  it('scroll-to-top uses the shared lift class instead of a fixed bottom', () => {
+    const src = readFileSync(join(process.cwd(), 'components/scroll-to-top.tsx'), 'utf8')
+    expect(src).toContain('cookie-float-bottom')
+    expect(src).not.toMatch(/\bbottom-6\b/)
   })
 
   it('does not shrink modal overlays to make room for the card', () => {

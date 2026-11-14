@@ -93,7 +93,7 @@ export function ReferralJumpLink({
         section.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
       }}
       aria-label={ariaLabel}
-      className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] right-4 z-30 inline-flex min-h-10 items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:transition-colors sm:right-6"
+      className="cookie-float-bottom fixed right-4 z-30 [--cookie-float-gap:5.25rem] inline-flex min-h-10 items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-lg hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:transition-[color,background-color,bottom] sm:right-6"
     >
       {label}
     </a>
