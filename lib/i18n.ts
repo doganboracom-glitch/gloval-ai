@@ -690,6 +690,15 @@ const dict = {
           orDivider: 'veya',
       oauthRedirecting: 'Yönlendiriliyor...',
       oauthFailed: 'Sosyal hesapla giriş tamamlanamadı. Lütfen tekrar deneyin.',
+      googleNoVerification: 'E-posta doğrulaması gerekmez.',
+      verifySentTo: '{email} adresine bir doğrulama bağlantısı gönderdik.',
+      verifySentGeneric: 'E-posta adresine bir doğrulama bağlantısı gönderdik.',
+      verifySpamHint:
+        'E-posta gelmediyse Spam veya Gereksiz klasörüne de bak. Outlook, Hotmail ve MSN adreslerinde e-postanın ulaşması birkaç dakika sürebilir.',
+      resendAgain: 'Tekrar gönder',
+      resendIn: 'Tekrar göndermek için {s} sn.',
+      resentGeneric: 'Bu adres için doğrulama bekleniyorsa bağlantıyı yeniden gönderdik.',
+      useDifferentEmail: 'Farklı e-posta kullan',
     },
     dash: {
       heardFrom: {
@@ -3063,7 +3072,16 @@ verifiedBody: 'Your email is verified. You can continue in the tab on your compu
       signupWithGoogle: 'Sign up with Google',
       orDivider: 'or',
     oauthRedirecting: 'Redirecting...',
-    oauthFailed: "We couldn't complete sign-in with that account. Please try again.",
+      oauthFailed: "We couldn't complete sign-in with that account. Please try again.",
+      googleNoVerification: 'No email verification needed.',
+      verifySentTo: 'We sent a verification link to {email}.',
+      verifySentGeneric: 'We sent a verification link to your email address.',
+      verifySpamHint:
+        "If it doesn't arrive, check your Spam or Junk folder too. Outlook, Hotmail and MSN addresses can take a few minutes to receive it.",
+      resendAgain: 'Resend',
+      resendIn: 'Resend in {s}s',
+      resentGeneric: 'If this address is waiting for verification, we sent the link again.',
+      useDifferentEmail: 'Use a different email',
   },
   dash: {
     heardFrom: {

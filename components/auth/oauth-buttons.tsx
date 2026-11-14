@@ -43,20 +43,23 @@ export function OAuthButtons({ mode, next }: { mode: 'login' | 'signup'; next?: 
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       <button
         type="button"
         onClick={() => handleClick('google')}
         disabled={disabled}
-        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border border-input bg-background/60 text-sm font-medium text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-brand text-sm font-semibold text-brand-foreground shadow-sm transition-colors hover:bg-brand/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {pending === 'google' ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : (
-          <Image src="/icons/google.svg" alt="" width={18} height={18} aria-hidden />
-        )}
+        <span className="flex size-7 items-center justify-center rounded-full bg-white">
+          {pending === 'google' ? (
+            <Loader2 className="size-4 animate-spin text-neutral-700" />
+          ) : (
+            <Image src="/icons/google.svg" alt="" width={18} height={18} aria-hidden />
+          )}
+        </span>
         {mode === 'login' ? t.auth.continueWithGoogle : t.auth.signupWithGoogle}
       </button>
+      <p className="text-center text-xs text-muted-foreground">{t.auth.googleNoVerification}</p>
     </div>
   )
 }

@@ -19,6 +19,13 @@ import { AuthShell } from '@/components/auth/auth-shell'
 import { LinkButton } from '@/components/link-button'
 import { buildSignUpLoginHref } from '@/lib/auth-redirect'
 import { sanitizeNextPath } from '@/lib/safe-redirect'
+import { resendSignupVerification } from '@/lib/signup-resend-actions'
+import { RESEND_COOLDOWN_SECONDS } from '@/lib/signup-resend-core'
+import {
+  cooldownRemainingSeconds,
+  readPendingVerification,
+  storePendingVerification,
+} from '@/lib/signup-pending-verification'
 
 const POLL_MS = 3000
 const MAX_BUSY_RETRIES = 10
@@ -30,6 +37,46 @@ export default function SignUpSuccessPage() {
   const [draftFailed, setDraftFailed] = useState(false)
   const [loginHref, setLoginHref] = useState('/auth/login')
   const runningRef = useRef(false)
+  const [email, setEmail] = useState<string | null>(null)
+  const [sentAt, setSentAt] = useState<number | null>(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
+
+  useEffect(() => {
+    const pending = readPendingVerification()
+    if (pending) {
+      setEmail(pending.email)
+      setSentAt(pending.sentAt)
+      setSecondsLeft(cooldownRemainingSeconds(pending.sentAt))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (sentAt === null || secondsLeft <= 0) return
+    const timer = setInterval(() => {
+      setSecondsLeft(cooldownRemainingSeconds(sentAt))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [sentAt, secondsLeft])
+
+  async function handleResend() {
+    if (!email || resending || secondsLeft > 0) return
+    const params = new URLSearchParams(window.location.search)
+    const now = Date.now()
+    setResending(true)
+    setResent(false)
+    await resendSignupVerification({
+      email,
+      next: params.get('next') ?? undefined,
+      draft: readSignupDraftToken() ?? undefined,
+    }).catch(() => null)
+    storePendingVerification(email, now)
+    setSentAt(now)
+    setSecondsLeft(RESEND_COOLDOWN_SECONDS)
+    setResent(true)
+    setResending(false)
+  }
 
   useEffect(() => {
     setDraftFailed(readSignupDraftFailed())
@@ -105,7 +152,10 @@ export default function SignUpSuccessPage() {
   }, [router])
 
   return (
-    <AuthShell title={t.auth.checkEmail} subtitle={t.auth.checkEmailBody}>
+    <AuthShell
+      title={t.auth.checkEmail}
+      subtitle={email ? t.auth.verifySentTo.replace('{email}', email) : t.auth.verifySentGeneric}
+    >
       <div className="flex flex-col items-center gap-6 py-2 text-center">
         <div className="flex size-14 items-center justify-center rounded-full bg-primary/15 text-primary">
           <MailCheck className="size-7" />
@@ -127,8 +177,29 @@ export default function SignUpSuccessPage() {
         )}
         <div className="flex w-full items-start gap-3 rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-left">
           <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm leading-relaxed text-muted-foreground">{t.auth.checkEmailSpam}</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{t.auth.verifySpamHint}</p>
         </div>
+        {email && (
+          <div className="flex w-full flex-col items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending || secondsLeft > 0}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-input bg-background/60 text-sm font-medium text-foreground transition-colors hover:bg-secondary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {secondsLeft > 0
+                ? t.auth.resendIn.replace('{s}', String(secondsLeft))
+                : t.auth.resendAgain}
+            </button>
+            <p role="status" className="min-h-5 text-xs text-muted-foreground">
+              {resent ? t.auth.resentGeneric : ''}
+            </p>
+            <a href="/auth/sign-up" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground">
+              {t.auth.useDifferentEmail}
+            </a>
+          </div>
+        )}
         <LinkButton href={loginHref} variant="secondary" className="w-full">
           {t.auth.toLogin}
         </LinkButton>

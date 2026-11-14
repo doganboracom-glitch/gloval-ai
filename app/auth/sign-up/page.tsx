@@ -24,7 +24,8 @@ import {
   setSignupDraftFailed,
   storeSignupDraftToken,
 } from '@/lib/signup-draft-client'
-import { readAttribution } from '@/lib/attribution'
+  import { storePendingVerification } from '@/lib/signup-pending-verification'
+  import { readAttribution } from '@/lib/attribution'
 import { saveSignupAttribution } from '@/lib/signup-attribution'
 import { saveEmailReferralAction } from '@/lib/referrals/actions'
 import { prepareReferralSignupIntent } from '@/lib/referrals/client'
@@ -178,6 +179,7 @@ function SignUpForm() {
       router.refresh()
       return
     }
+    storePendingVerification(email.trim().toLowerCase())
     router.push(buildSignUpSuccessHref(next))
   }
 
