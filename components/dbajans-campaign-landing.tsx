@@ -99,11 +99,14 @@ export function DbAjansCampaignLanding() {
           </p>
         </section>
 
-        <section aria-label="GLOVAL AI avantajları" className="grid gap-3 pb-14 sm:grid-cols-3 sm:gap-4 sm:pb-20">
+        <section aria-label="GLOVAL AI avantajları" className="grid gap-3 pb-8 sm:grid-cols-3 sm:gap-4 sm:pb-10">
           {campaignBenefits.map(({ icon: Icon, title, description }, index) => (
-            <article key={title} className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <article
+              key={title}
+              className="rounded-2xl border border-brand/55 bg-card p-5 shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-brand)_40%,transparent),0_0_24px_color-mix(in_oklab,var(--color-brand)_25%,transparent)] transition-shadow hover:shadow-[0_0_0_1px_color-mix(in_oklab,var(--color-brand)_50%,transparent),0_0_30px_color-mix(in_oklab,var(--color-brand)_35%,transparent)] motion-reduce:transition-none sm:p-6"
+            >
               <div className="flex items-center gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
                   <Icon aria-hidden="true" className="size-5" />
                 </span>
                 <h2 className="font-display text-base font-semibold leading-snug sm:text-lg">{title}</h2>
@@ -119,6 +122,22 @@ export function DbAjansCampaignLanding() {
           ))}
         </section>
 
+        <div className="flex justify-center pb-14 sm:pb-16">
+          <LinkButton
+            href="/#pricing"
+            variant="brand"
+            size="lg"
+            className="w-full sm:w-auto"
+            onClick={() =>
+              trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignPricingClick, {
+                campaign: 'dbajans',
+              })
+            }
+          >
+            Paketlere göz at
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </LinkButton>
+        </div>
 
         <footer className="border-t border-border py-6 text-center text-xs leading-relaxed text-muted-foreground">
           GLOVAL AI · DB AJANS&apos;a özel bilgilendirme sayfası
