@@ -17,15 +17,29 @@ vi.mock('@/lib/cookie-consent-storage', async (importOriginal) => ({
 
 type ObserverCallback = (entries: Array<Record<string, unknown>>) => void
 
-const observers: Array<{ callback: ObserverCallback; disconnected: boolean }> = []
+type ObserverRecord = {
+  callback: ObserverCallback
+  disconnected: boolean
+  target: Element | null
+  threshold: number | number[]
+}
+
+const observers: ObserverRecord[] = []
 
 class FakeIntersectionObserver {
-  private readonly record: { callback: ObserverCallback; disconnected: boolean }
-  constructor(callback: ObserverCallback) {
-    this.record = { callback, disconnected: false }
+  private readonly record: ObserverRecord
+  constructor(callback: ObserverCallback, options?: IntersectionObserverInit) {
+    this.record = {
+      callback,
+      disconnected: false,
+      target: null,
+      threshold: options?.threshold ?? 0,
+    }
     observers.push(this.record)
   }
-  observe() {}
+  observe(target: Element) {
+    this.record.target = target
+  }
   unobserve() {}
   takeRecords() {
     return []
@@ -35,14 +49,14 @@ class FakeIntersectionObserver {
   }
 }
 
-function reportVisibility(ratio: number, visibleHeight = 0) {
+function reportIntersection(isIntersecting: boolean) {
   for (const observer of observers) {
     if (observer.disconnected) continue
     observer.callback([
       {
-        isIntersecting: ratio > 0 || visibleHeight > 0,
-        intersectionRatio: ratio,
-        intersectionRect: { height: visibleHeight },
+        isIntersecting,
+        intersectionRatio: isIntersecting ? 1 : 0,
+        intersectionRect: { height: isIntersecting ? 1 : 0 },
         rootBounds: { height: 800 },
       },
     ])
@@ -83,50 +97,59 @@ afterEach(() => {
 })
 
 describe('isPricingSectionViewed', () => {
-  it('counts half of the section or half of the viewport', () => {
-    const base = { isIntersecting: true, rootBounds: { height: 800 } }
-    expect(isPricingSectionViewed({ ...base, intersectionRatio: 0.5, intersectionRect: { height: 10 } })).toBe(true)
-    expect(isPricingSectionViewed({ ...base, intersectionRatio: 0.1, intersectionRect: { height: 400 } })).toBe(true)
-    expect(isPricingSectionViewed({ ...base, intersectionRatio: 0.1, intersectionRect: { height: 399 } })).toBe(false)
-    expect(
-      isPricingSectionViewed({ isIntersecting: false, intersectionRatio: 0, intersectionRect: { height: 0 }, rootBounds: null }),
-    ).toBe(false)
+  it('uses intersection state without requiring a minimum visible share', () => {
+    expect(isPricingSectionViewed({ isIntersecting: true })).toBe(true)
+    expect(isPricingSectionViewed({ isIntersecting: false })).toBe(false)
   })
 })
 
 describe('pricing_view', () => {
+  it('observes the pricing heading with a zero threshold', () => {
+    vi.mocked(readConsent).mockReturnValue(granted)
+    renderPricing()
+
+    expect(observers).toHaveLength(1)
+    expect(observers[0].target).toBe(screen.getByRole('heading', { name: 'İşletmen için doğru GLOVAL’ı seç.' }))
+    expect(observers[0].threshold).toBe(0)
+  })
+
+  it('tracks when opened directly at #pricing', () => {
+    vi.mocked(readConsent).mockReturnValue(granted)
+    window.history.replaceState({}, '', '/#pricing')
+    renderPricing()
+    reportIntersection(true)
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('pricing_view', undefined)
+  })
+
+  it('tracks when scrolling into pricing, without waiting for the whole section', () => {
+    vi.mocked(readConsent).mockReturnValue(granted)
+    renderPricing()
+    reportIntersection(false)
+    expect(trackMock).not.toHaveBeenCalled()
+
+    reportIntersection(true)
+    reportIntersection(true)
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('pricing_view', undefined)
+  })
+
   it('sends nothing while analytics is not allowed', () => {
     vi.mocked(readConsent).mockReturnValue(denied)
     renderPricing()
-    reportVisibility(0.9)
+    reportIntersection(true)
     expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('sends nothing before the section is half visible', () => {
-    vi.mocked(readConsent).mockReturnValue(granted)
-    renderPricing()
-    reportVisibility(0.2, 100)
-    expect(trackMock).not.toHaveBeenCalled()
-  })
-
-  it('sends exactly once, without properties, per page view', () => {
-    vi.mocked(readConsent).mockReturnValue(granted)
-    renderPricing()
-    reportVisibility(0.6)
-    reportVisibility(0.9)
-    reportVisibility(0.7)
-    expect(trackMock).toHaveBeenCalledTimes(1)
-    expect(trackMock).toHaveBeenCalledWith('pricing_view', undefined)
   })
 
   it('still sends once if consent arrives after the first sighting', () => {
     vi.mocked(readConsent).mockReturnValue(denied)
     renderPricing()
-    reportVisibility(0.8)
+    reportIntersection(true)
     expect(trackMock).not.toHaveBeenCalled()
     vi.mocked(readConsent).mockReturnValue(granted)
-    reportVisibility(0.8)
-    reportVisibility(0.8)
+    reportIntersection(true)
+    reportIntersection(true)
     expect(trackMock).toHaveBeenCalledTimes(1)
   })
 })
