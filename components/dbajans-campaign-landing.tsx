@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Check, Eye, MessageCircle, Minus, WalletCards } from 'lucide-react'
+import { ArrowRight, Eye, MessageCircle, WalletCards } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { LinkButton } from '@/components/link-button'
 import {
@@ -12,12 +12,10 @@ import {
   VERCEL_FUNNEL_EVENTS,
   trackFunnelEvent,
 } from '@/lib/vercel-analytics'
-import { buildPlanView, getCommonPlanCopy, splitPlanItems } from '@/lib/plan-copy'
+import { getCommonPlanCopy } from '@/lib/plan-copy'
 import { PLANS, planPrice } from '@/lib/pricing-config'
-import type { Plan } from '@/lib/pricing-config'
 
-const campaignPlans = PLANS.filter((plan) => plan.code === 'free' || plan.code === 'starter')
-const starterPlan = campaignPlans.find((plan) => plan.code === 'starter')
+const starterPlan = PLANS.find((plan) => plan.code === 'starter')
 const startingPrice = starterPlan ? planPrice(starterPlan, 'monthly').price : null
 const commonPlanCopy = getCommonPlanCopy('tr')
 
@@ -38,73 +36,6 @@ const campaignBenefits = [
     description: 'Sitenizi birlikte hazırlayabiliriz.',
   },
 ]
-
-function CampaignPlanCard({ plan }: { plan: Plan }) {
-  const view = buildPlanView(plan.code, 'monthly', 'tr')
-  const { featured } = splitPlanItems(view, 3)
-  const { price, period } = planPrice(plan, 'monthly')
-
-  return (
-    <article
-      className={`flex h-full flex-col rounded-2xl border p-5 sm:p-6 ${
-        plan.featured ? 'border-brand/50 bg-card' : 'border-border bg-card'
-      }`}
-    >
-      <header>
-        <p className="font-display text-sm font-bold tracking-widest text-muted-foreground">
-          {view.name}
-        </p>
-        <h3 className="mt-2 text-balance font-display text-xl font-semibold leading-snug">
-          {view.headline}
-        </h3>
-        <p className="mt-2 text-pretty text-sm leading-relaxed text-muted-foreground">
-          {view.description}
-        </p>
-      </header>
-
-      <div className="mt-5">
-        <p className="flex flex-wrap items-baseline gap-x-1.5">
-          <span className="font-display text-3xl font-bold tabular-nums tracking-tight">
-            {price}
-          </span>
-          {period && <span className="text-sm text-muted-foreground">{commonPlanCopy.perMonth}</span>}
-        </p>
-        {plan.monthlyPrice === 0 && (
-          <p className="mt-1 text-xs leading-relaxed text-brand">{commonPlanCopy.noCardRequired}</p>
-        )}
-      </div>
-
-      <ul className="mt-5 flex flex-col gap-3" aria-label={`${view.name} planının öne çıkan özellikleri`}>
-        {featured.map((item) => (
-          <li key={item.id} className="flex items-start gap-2.5 text-sm leading-relaxed">
-            {item.excluded ? (
-              <Minus aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-brand" />
-            )}
-            <span className={item.excluded ? 'text-muted-foreground' : 'text-foreground'}>
-              {item.label}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <LinkButton
-        href="/auth/sign-up"
-        variant={plan.featured ? 'brand' : 'secondary'}
-        className="mt-6 w-full"
-        onClick={() =>
-          trackFunnelEvent(VERCEL_FUNNEL_EVENTS.campaignSignupClick, {
-            campaign: 'dbajans',
-            plan: plan.code,
-          })
-        }
-      >
-        Ücretsiz dene
-      </LinkButton>
-    </article>
-  )
-}
 
 export function DbAjansCampaignLanding() {
   return (
@@ -188,28 +119,6 @@ export function DbAjansCampaignLanding() {
           ))}
         </section>
 
-        <section id="campaign-pricing" aria-labelledby="campaign-pricing-title" className="pb-16 sm:pb-20">
-          <div className="mb-6 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-brand">Güncel paket özeti</p>
-              <h2 id="campaign-pricing-title" className="mt-2 text-balance font-display text-2xl font-bold tracking-tight sm:text-3xl">
-                Size uygun planla başlayın
-              </h2>
-            </div>
-            <Link
-              href="/#pricing"
-              className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-semibold text-foreground underline decoration-brand/60 underline-offset-4 transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:self-auto"
-            >
-              Tüm paketleri gör
-              <ArrowRight aria-hidden="true" className="size-4" />
-            </Link>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {campaignPlans.map((plan) => (
-              <CampaignPlanCard key={plan.code} plan={plan} />
-            ))}
-          </div>
-        </section>
 
         <footer className="border-t border-border py-6 text-center text-xs leading-relaxed text-muted-foreground">
           GLOVAL AI · DB AJANS&apos;a özel bilgilendirme sayfası
