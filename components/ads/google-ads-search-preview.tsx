@@ -40,13 +40,14 @@ export function GoogleAdsSearchPreview({
   const isTr = lang === 'tr'
   const title = headlines.slice(0, MAX_SHOWN_HEADLINES).join(' | ')
   const shownDescriptions = descriptions.slice(0, MAX_SHOWN_DESCRIPTIONS)
+  const fullUrl = displayUrl.trim() || finalUrl.trim()
   const url = readableUrl(displayUrl, finalUrl)
   const empty = !title && shownDescriptions.length === 0
 
   return (
     <section
       aria-labelledby="google-ads-preview-title"
-      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4"
+      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id="google-ads-preview-title" className="text-sm font-semibold">
@@ -65,15 +66,15 @@ export function GoogleAdsSearchPreview({
             : 'Your ad appears here once a plan is generated or you add a headline.'}
         </p>
       ) : (
-        <div className="flex flex-col gap-1 rounded-xl border border-border bg-background p-4" data-testid="ad-preview">
-          <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-            <span className="font-bold text-foreground">{isTr ? 'Sponsorlu' : 'Sponsored'}</span>
-            <span aria-hidden="true">·</span>
-            <span className="break-all">{url}</span>
+        <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-border bg-background p-4" data-testid="ad-preview">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+            <span className="shrink-0 font-bold text-foreground">{isTr ? 'Sponsorlu' : 'Sponsored'}</span>
+            <span aria-hidden="true" className="shrink-0">·</span>
+            <span className="min-w-0 flex-1 truncate break-all" title={fullUrl}>{url}</span>
           </p>
-          <p className="text-pretty text-lg font-medium leading-snug text-brand" data-testid="preview-headline">{title}</p>
+          <p className="min-w-0 break-words text-pretty text-lg font-medium leading-snug text-brand" data-testid="preview-headline">{title}</p>
           {shownDescriptions.map((line) => (
-            <p key={line} className="text-sm leading-relaxed text-foreground">{line}</p>
+            <p key={line} className="min-w-0 break-words text-sm leading-relaxed text-foreground">{line}</p>
           ))}
         </div>
       )}
