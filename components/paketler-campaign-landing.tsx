@@ -142,9 +142,10 @@ export function PaketlerCampaignLanding() {
           </p>
           <h1
             id="paketler-hero-title"
-            className="mx-auto mt-5 max-w-4xl text-balance font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl"
+            className="mx-auto mt-5 max-w-4xl text-balance font-display text-3xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl"
           >
-            Bütçene uygun <span className="text-brand">web sitesi çözümleri</span>
+            <span className="block">Bütçene uygun</span>{' '}
+            <span className="block whitespace-nowrap text-brand">web sitesi çözümleri</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             Güncel fiyatları karşılaştırın, size uyan paketle başlayın.
