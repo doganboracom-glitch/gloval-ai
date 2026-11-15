@@ -6,7 +6,7 @@ import { WebsiteRenderer } from '@/components/website-renderer/website-renderer'
 import { HeroStripIconPicker } from '@/components/editor/hero-strip-fields'
 import { buildSampleSite } from '@/lib/__fixtures__/sample-site'
 import { DEMO_HERO_STRIP_BOXES, demoHeroStripItems } from '@/lib/demo-hero-strip'
-import { buildDemoSite, demos } from '@/lib/demos'
+import { allDemos, buildDemoSite, demos } from '@/lib/demos'
 import { guardEdit } from '@/lib/edit-guard'
 import {
   HERO_STRIP_ICONS,
@@ -69,7 +69,9 @@ describe('(a) appearance of the strip', () => {
     expect(floating.match(/<li/g)).toHaveLength(4)
     expect(floating).toContain('rounded-2xl')
     expect(floating).toContain('sm:p-5 lg:p-6')
+    expect(floating).toContain('-mt-6 px-4 pb-6 sm:-mt-12')
     expect(floating).toContain('var(--site-card)')
+    expect(floating).toContain('border-color:var(--site-border)')
     expect(floating).toContain('color-mix(in srgb, var(--site-accent) 14%, var(--site-card))')
     expect(floating).toContain('motion-safe:[@media(hover:hover)]:hover:-translate-y-1')
     expect(floating).toContain('motion-safe:[@media(hover:hover)]:hover:shadow-[0_24px_48px_-18px_rgba(0,0,0,0.32)]')
@@ -168,12 +170,15 @@ describe('(d) demos', () => {
     }
   })
 
-  it('every demo site carries one sample-flagged strip under its hero, and still parses', () => {
-    for (const demo of demos) {
+  it('every demo site carries one floating, sample-flagged four-item strip under its hero, and still parses', () => {
+    expect(allDemos).toHaveLength(12)
+    for (const demo of allDemos) {
       for (const lang of ['tr', 'en'] as const) {
         const site = buildDemoSite(demo, lang)
         const strips = site.sections.filter((s): s is StripSection => s.type === 'heroStrip')
-        expect(strips, demo.slug).toHaveLength(1)
+        expect(strips, `${demo.slug} ${lang}`).toHaveLength(1)
+        expect(strips[0].variant, `${demo.slug} ${lang}`).toBe('floating')
+        expect(strips[0].items, `${demo.slug} ${lang}`).toHaveLength(4)
         expect(strips[0].sample).toBe(true)
         expect(strips[0].items.every((i) => i.sample === true)).toBe(true)
         const heroIdx = site.sections.findIndex((s) => s.type === 'hero')

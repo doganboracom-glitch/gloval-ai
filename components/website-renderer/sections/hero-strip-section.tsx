@@ -35,7 +35,7 @@ export function HeroStripSection({ data }: { data: HeroStripData }) {
     return (
       <section
         id="hero-strip"
-        className="relative z-10 scroll-mt-20 -mt-8 px-4 pb-6 sm:-mt-14 sm:px-6 sm:pb-8"
+        className="relative z-10 scroll-mt-20 -mt-6 px-4 pb-6 sm:-mt-12 sm:px-6 sm:pb-8"
         data-hero-strip
         data-hero-strip-variant="floating"
       >
