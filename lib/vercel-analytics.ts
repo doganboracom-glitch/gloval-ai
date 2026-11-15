@@ -68,7 +68,7 @@ export type FunnelProps = {
   page?: 'sign-up' | 'login'
   plan?: 'free' | 'starter' | 'pro' | 'ecommerce'
   billing?: 'monthly' | 'yearly'
-  campaign?: 'dbajans'
+  campaign?: 'dbajans' | 'paketler'
 }
 
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,63}$/
