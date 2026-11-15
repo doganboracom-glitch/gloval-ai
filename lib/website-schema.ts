@@ -862,6 +862,7 @@ export const heroStripItemSchema = z.object({
 export const heroStripSection = z.object({
   type: z.literal('heroStrip'),
   ...sectionEditorMeta,
+  variant: z.literal('floating').optional().describe('Render as overlapping floating cards'),
   items: z.array(heroStripItemSchema).min(LIST_LIMITS.heroStrip.min).max(LIST_LIMITS.heroStrip.max),
 })
 

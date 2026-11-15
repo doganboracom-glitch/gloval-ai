@@ -59,6 +59,30 @@ describe('(a) appearance of the strip', () => {
     expect(out).not.toMatch(/#[0-9a-f]{3,6}\b/i)
   })
 
+  it('renders an opt-in floating 2x2 mobile / 4-column desktop card grid', () => {
+    const floating = renderToStaticMarkup(
+      <HeroStripSection data={{ ...realStrip(), variant: 'floating' }} />,
+    )
+    expect(floating).toContain('data-hero-strip-variant="floating"')
+    expect(floating).toContain('grid-cols-2')
+    expect(floating).toContain('lg:grid-cols-4')
+    expect(floating.match(/<li/g)).toHaveLength(4)
+    expect(floating).toContain('rounded-2xl')
+    expect(floating).toContain('sm:p-5 lg:p-6')
+    expect(floating).toContain('var(--site-card)')
+    expect(floating).toContain('color-mix(in srgb, var(--site-accent) 14%, var(--site-card))')
+    expect(floating).toContain('motion-safe:[@media(hover:hover)]:hover:-translate-y-1')
+    expect(floating).toContain('motion-safe:[@media(hover:hover)]:hover:shadow-[0_24px_48px_-18px_rgba(0,0,0,0.32)]')
+  })
+
+  it('keeps the original markup when the variant is omitted', () => {
+    expect(out).toContain('class="scroll-mt-20 border-y"')
+    expect(out).toContain('class="mx-auto grid w-full max-w-6xl gap-px grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"')
+    expect(out).toContain('class="flex items-center gap-3 px-6 py-5"')
+    expect(out).not.toContain('data-hero-strip-variant')
+    expect(out).not.toContain('rounded-2xl')
+  })
+
   it('has no headings, links, buttons or hover styles', () => {
     expect(out).not.toMatch(/<h[1-6]/)
     expect(out).not.toMatch(/<a[\s>]/)
