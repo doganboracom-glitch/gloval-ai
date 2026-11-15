@@ -9,6 +9,7 @@ type CampaignName = NonNullable<FunnelProps['campaign']>
 type CampaignEvent =
   | typeof VERCEL_FUNNEL_EVENTS.campaignSignupClick
   | typeof VERCEL_FUNNEL_EVENTS.campaignPricingClick
+  | typeof VERCEL_FUNNEL_EVENTS.campaignFaqClick
   | typeof VERCEL_FUNNEL_EVENTS.campaignWhatsappClick
 
 type CampaignTrackedLinkProps = {
