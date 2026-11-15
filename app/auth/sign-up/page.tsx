@@ -1,9 +1,9 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   buildSignUpLoginHref,
@@ -36,6 +36,44 @@ import { keepAuthFieldVisibleOnMobile } from '@/components/auth/mobile-field-scr
 import { Button } from '@/components/ui/button'
 import { OAuthButtons, OAuthDivider } from '@/components/auth/oauth-buttons'
 
+type SignupErrorReason = 'validation' | 'email_taken' | 'weak_password' | 'network' | 'other'
+
+const SIGNUP_EMAIL_INVALID_MESSAGE = 'Geçerli bir e-posta adresi gir.'
+
+function getSignupErrorReason(error: unknown): SignupErrorReason {
+  const details = error && typeof error === 'object' ? (error as Record<string, unknown>) : {}
+  const message = typeof details.message === 'string' ? details.message.toLowerCase() : ''
+  const code = typeof details.code === 'string' ? details.code.toLowerCase() : ''
+  const name = typeof details.name === 'string' ? details.name : ''
+
+  if (code === 'email_address_invalid' || (message.includes('invalid') && message.includes('email'))) {
+    return 'validation'
+  }
+  if (
+    code === 'email_exists' ||
+    code === 'user_already_exists' ||
+    message.includes('already') ||
+    message.includes('registered')
+  ) {
+    return 'email_taken'
+  }
+  if (
+    code === 'weak_password' ||
+    (message.includes('password') && /weak|short|at least|minimum|strength|length/.test(message))
+  ) {
+    return 'weak_password'
+  }
+  if (
+    name === 'AuthRetryableFetchError' ||
+    error instanceof TypeError ||
+    details.status === 0 ||
+    /network|fetch|timeout|connection/.test(message)
+  ) {
+    return 'network'
+  }
+  return 'other'
+}
+
 export default function SignUpPage() {
   return (
     <Suspense fallback={null}>
@@ -52,6 +90,10 @@ function SignUpForm() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [draftLost, setDraftLost] = useState(false)
@@ -72,7 +114,7 @@ function SignUpForm() {
     const check = validateEmail(value)
     setSuggestion(check.suggestion ?? null)
     if (!check.ok) {
-      setEmailError(t.auth.emailInvalid)
+      setEmailError(SIGNUP_EMAIL_INVALID_MESSAGE)
       return false
     }
     setEmailError(null)
@@ -89,7 +131,24 @@ function SignUpForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (!checkEmail(email)) return
+    setPasswordError(null)
+    if (!email.trim()) {
+      setEmailError(SIGNUP_EMAIL_INVALID_MESSAGE)
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupError, { reason: 'validation' })
+      emailRef.current?.focus()
+      return
+    }
+    if (!checkEmail(email)) {
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupError, { reason: 'validation' })
+      emailRef.current?.focus()
+      return
+    }
+    if (!password) {
+      setPasswordError('Şifreni gir.')
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupError, { reason: 'validation' })
+      passwordRef.current?.focus()
+      return
+    }
     // A likely provider typo (gmial.com) is flagged once; a second submit goes through.
     if (validateEmail(email).suggestion && !typoAcknowledged) {
       setTypoAcknowledged(true)
@@ -121,7 +180,7 @@ function SignUpForm() {
     const callbackUrl = new URL(getAuthCallbackUrl())
     for (const [key, value] of callbackParams) callbackUrl.searchParams.set(key, value)
     await prepareReferralSignupIntent('email')
-    const { data, error } = await supabase.auth.signUp({
+    const signupResponse = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
@@ -133,13 +192,30 @@ function SignUpForm() {
           ...(draftToken ? { signup_draft_token: draftToken } : {}),
         },
       },
+    }).catch((signupError: unknown) => {
+      const reason = getSignupErrorReason(signupError)
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupError, { reason })
+      setError(reason === 'network' ? 'Bağlantı sorunu yaşandı. Lütfen tekrar deneyin.' : t.auth.unexpected)
+      setLoading(false)
+      return null
     })
+    if (!signupResponse) return
+    const { data, error } = signupResponse
     if (error) {
       const msg = error.message.toLowerCase()
+      const reason = getSignupErrorReason(error)
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupError, { reason })
       if (msg.includes('rate') || error.status === 429) setError(t.auth.tooManyRequests)
-      else if (error.code === 'email_address_invalid' || msg.includes('invalid') && msg.includes('email'))
-        setEmailError(t.auth.emailInvalid)
-      else if (msg.includes('already') || msg.includes('registered')) setError(t.auth.invalidCreds)
+      else if (reason === 'validation') {
+        setEmailError(SIGNUP_EMAIL_INVALID_MESSAGE)
+        emailRef.current?.focus()
+      } else if (reason === 'email_taken') {
+        setEmailError('Bu e-posta adresiyle devam edilemiyor. Giriş yapmayı deneyebilirsin.')
+        emailRef.current?.focus()
+      } else if (reason === 'weak_password') {
+        setPasswordError('Şifre en az 8 karakter olmalı.')
+        passwordRef.current?.focus()
+      } else if (reason === 'network') setError('Bağlantı sorunu yaşandı. Lütfen tekrar deneyin.')
       else setError(t.auth.unexpected)
       setLoading(false)
       return
@@ -227,9 +303,18 @@ function SignUpForm() {
           next={signupNext === '/dashboard' ? undefined : signupNext}
         />
         <OAuthDivider />
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Field label={t.auth.fullName} type="text" value={fullName} onChange={setFullName} autoComplete="name" />
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           <Field
+            id="signup-full-name"
+            label={t.auth.fullName}
+            type="text"
+            value={fullName}
+            onChange={setFullName}
+            autoComplete="name"
+            placeholder="Adın Soyadın"
+          />
+          <Field
+            id="signup-email"
             label={t.auth.email}
             type="email"
             value={email}
@@ -242,6 +327,8 @@ function SignUpForm() {
             onBlur={() => email && checkEmail(email)}
             autoComplete="email"
             required
+            placeholder="ornek@ornek.com"
+            inputRef={emailRef}
             error={emailError}
           />
           {suggestion && (
@@ -257,35 +344,81 @@ function SignUpForm() {
             </p>
           )}
           <Field
+            id="signup-password"
             label={t.auth.password}
-            type="password"
+            type={passwordVisible ? 'text' : 'password'}
             value={password}
-            onChange={setPassword}
+            onChange={(value) => {
+              setPassword(value)
+              setPasswordError(null)
+            }}
             autoComplete="new-password"
             required
+            placeholder="En az 8 karakter"
+            inputRef={passwordRef}
+            error={passwordError}
+            trailingAction={
+              <button
+                type="button"
+                aria-label="Şifreyi göster/gizle"
+                aria-pressed={passwordVisible}
+                aria-controls="signup-password"
+                title={passwordVisible ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                onClick={() => setPasswordVisible((visible) => !visible)}
+                className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {passwordVisible ? <EyeOff aria-hidden="true" className="size-4" /> : <Eye aria-hidden="true" className="size-4" />}
+              </button>
+            }
           />
           {error && (
-            <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
           )}
-          <Button type="submit" size="lg" disabled={loading} className="mt-2 w-full">
-            {loading ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                {t.auth.signingUp}
-              </>
-            ) : (
-              t.auth.signup
-            )}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="submit"
+              size="lg"
+              variant="brand"
+              disabled={loading}
+              className="h-12 w-full disabled:bg-muted disabled:text-muted-foreground"
+            >
+              {loading ? (
+                <>
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                  {t.auth.signingUp}
+                </>
+              ) : (
+                t.auth.signup
+              )}
+            </Button>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              Ücretsiz plan: kredi kartı gerekmez.
+            </p>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              E-posta ile kayıtta doğrulama bağlantısı göndeririz.
+            </p>
+          </div>
         </form>
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+          Hesap oluşturarak{' '}
+          <Link href="/yasal/kullanim-kosullari" target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">
+            Kullanım Koşulları
+          </Link>{' '}
+          ve{' '}
+          <Link href="/yasal/gizlilik-politikasi" target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline-offset-4 hover:underline">
+            Gizlilik Politikası&apos;nı
+          </Link>{' '}
+          kabul etmiş olursun.
+        </p>
       </div>
     </AuthShell>
   )
 }
 
 function Field({
+  id,
   label,
   type,
   value,
@@ -294,7 +427,11 @@ function Field({
   required,
   onBlur,
   error,
+  placeholder,
+  inputRef,
+  trailingAction,
 }: {
+  id: string
   label: string
   type: string
   value: string
@@ -303,26 +440,36 @@ function Field({
   required?: boolean
   onBlur?: () => void
   error?: string | null
+  placeholder?: string
+  inputRef?: React.Ref<HTMLInputElement>
+  trailingAction?: React.ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        autoComplete={autoComplete}
-        onFocus={keepAuthFieldVisibleOnMobile}
-        required={required}
-        aria-invalid={error ? true : undefined}
-        className="h-11 rounded-lg border border-input bg-background/60 px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-destructive"
-      />
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          ref={inputRef}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          autoComplete={autoComplete}
+          onFocus={keepAuthFieldVisibleOnMobile}
+          required={required}
+          placeholder={placeholder}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className="h-11 w-full rounded-lg border border-input bg-background/60 px-3 pr-12 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-destructive"
+        />
+        {trailingAction}
+      </div>
       {error && (
-        <span role="alert" className="text-sm text-destructive">
+        <p id={`${id}-error`} role="alert" className="text-sm leading-relaxed text-destructive">
           {error}
-        </span>
+        </p>
       )}
-    </label>
+    </div>
   )
 }

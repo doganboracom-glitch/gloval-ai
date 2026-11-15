@@ -8,13 +8,14 @@ import {
 const granted = { necessary: true, analytics: true, marketing: false } as const
 const denied = { necessary: true, analytics: false, marketing: false } as const
 
-describe('campaign funnel event names', () => {
-  it('uses fixed campaign events and the non-identifying campaign label', () => {
+describe('fixed funnel event names', () => {
+  it('uses fixed event names and non-identifying campaign labels', () => {
     expect(VERCEL_FUNNEL_EVENTS.campaignWhatsappClick).toBe('campaign_whatsapp_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignSignupClick).toBe('campaign_signup_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignPricingClick).toBe('campaign_pricing_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignFaqClick).toBe('campaign_faq_click')
     expect(VERCEL_FUNNEL_EVENTS.campaignDemoClick).toBe('campaign_demo_click')
+    expect(VERCEL_FUNNEL_EVENTS.signupError).toBe('signup_error')
   })
 })
 

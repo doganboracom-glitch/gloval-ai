@@ -13,13 +13,23 @@ const signUp = vi.fn()
 const createSignupDraft = vi.fn()
 const resumeSignupDraft = vi.fn()
 const getSession = vi.fn()
+const funnelAnalytics = vi.hoisted(() => ({
+  trackFunnelEvent: vi.fn(),
+  VERCEL_FUNNEL_EVENTS: {
+    signupView: 'signup_view',
+    signupSubmit: 'signup_submit',
+    signupError: 'signup_error',
+  },
+}))
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace, refresh }),
   useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a>,
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode; target?: string; rel?: string; className?: string }) => (
+    <a href={href} {...props}>{children}</a>
+  ),
 }))
 vi.mock('@/components/language-provider', () => ({ useLanguage: () => ({ t, lang: 'tr' }) }))
 vi.mock('@/components/auth/auth-shell', () => ({
@@ -47,6 +57,7 @@ vi.mock('@/lib/auth-redirect', async (importOriginal) => {
   return { ...actual, getAuthCallbackUrl: () => 'https://gloval.ai/auth/callback' }
 })
 vi.mock('@/lib/analytics', () => ({ trackSignUp: vi.fn() }))
+vi.mock('@/lib/vercel-analytics', () => funnelAnalytics)
 vi.mock('@/lib/attribution', () => ({ readAttribution: () => null }))
 vi.mock('@/lib/signup-attribution', () => ({ saveSignupAttribution: vi.fn() }))
 
@@ -71,6 +82,65 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+})
+
+describe('sign-up form presentation and failure analytics', () => {
+  it('toggles password visibility and keeps the legal links explicit and external', () => {
+    render(<SignUpPage />)
+
+    const password = screen.getByLabelText(t.auth.password) as HTMLInputElement
+    const toggle = screen.getByRole('button', { name: 'Şifreyi göster/gizle' })
+    expect(password.type).toBe('password')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(password.type).toBe('text')
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(toggle)
+    expect(password.type).toBe('password')
+
+    for (const [label, href] of [
+      ['Kullanım Koşulları', '/yasal/kullanim-kosullari'],
+      ["Gizlilik Politikası'nı", '/yasal/gizlilik-politikasi'],
+    ]) {
+      const link = screen.getByRole('link', { name: label })
+      expect(link.getAttribute('href')).toBe(href)
+      expect(link.getAttribute('target')).toBe('_blank')
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    }
+    expect(screen.getByText('Ücretsiz plan: kredi kartı gerekmez.')).toBeTruthy()
+    expect(screen.getByText('E-posta ile kayıtta doğrulama bağlantısı göndeririz.')).toBeTruthy()
+  })
+
+  it('shows a Turkish email error and focuses the first invalid field on submit', () => {
+    render(<SignUpPage />)
+    const email = screen.getByLabelText(t.auth.email)
+    fireEvent.submit(screen.getByRole('button', { name: t.auth.signup }).closest('form')!)
+
+    expect(screen.getByText('Geçerli bir e-posta adresi gir.')).toBeTruthy()
+    expect(document.activeElement).toBe(email)
+    expect(funnelAnalytics.trackFunnelEvent).toHaveBeenCalledWith('signup_error', { reason: 'validation' })
+  })
+
+  it('tracks weak-password failures with a reason only and shows the message by the password field', async () => {
+    signUp.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: 'Password should be at least 8 characters', code: 'weak_password', status: 400 },
+    })
+    render(<SignUpPage />)
+    fireEvent.change(screen.getByLabelText(t.auth.fullName), { target: { value: 'Ada Lovelace' } })
+    fireEvent.change(screen.getByLabelText(t.auth.email), { target: { value: 'ada@example.com' } })
+    fireEvent.change(screen.getByLabelText(t.auth.password), { target: { value: 'short' } })
+    fireEvent.submit(screen.getByRole('button', { name: t.auth.signup }).closest('form')!)
+
+    const passwordError = await screen.findByText('Şifre en az 8 karakter olmalı.')
+    expect(passwordError).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByLabelText(t.auth.password))
+    const errorCall = funnelAnalytics.trackFunnelEvent.mock.calls.find(([event]) => event === 'signup_error')
+    expect(errorCall).toEqual(['signup_error', { reason: 'weak_password' }])
+    expect(JSON.stringify(errorCall)).not.toContain('ada@example.com')
+    expect(JSON.stringify(errorCall)).not.toContain('Ada Lovelace')
+    expect(JSON.stringify(errorCall)).not.toContain('short')
+  })
 })
 
 describe('sign-up with a draft that could not be saved', () => {

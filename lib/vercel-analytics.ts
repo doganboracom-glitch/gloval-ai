@@ -49,6 +49,7 @@ export const VERCEL_FUNNEL_EVENTS = {
   homePromptSubmit: 'home_prompt_submit',
   signupView: 'signup_view',
   signupSubmit: 'signup_submit',
+  signupError: 'signup_error',
   demoCtaClick: 'demo_cta_click',
   adsScanSubmit: 'ads_scan_submit',
   pricingView: 'pricing_view',
@@ -62,9 +63,10 @@ export const VERCEL_FUNNEL_EVENTS = {
 
 export type VercelFunnelEvent = (typeof VERCEL_FUNNEL_EVENTS)[keyof typeof VERCEL_FUNNEL_EVENTS]
 
-/** Property values are constrained to short fixed labels (method name, demo slug). */
+/** Property values are constrained to short predefined labels; user input is never attached. */
 export type FunnelProps = {
   method?: 'email' | 'google'
+  reason?: 'validation' | 'email_taken' | 'weak_password' | 'network' | 'other'
   demo?: string
   page?: 'sign-up' | 'login'
   plan?: 'free' | 'starter' | 'pro' | 'ecommerce'
