@@ -1,4 +1,4 @@
-import { ArrowRight, Check, MessageCircle } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import { BrandLogo } from '@/components/brand-logo'
 import { CampaignDemoSection } from '@/components/campaign-demo-section'
 import { CampaignTrackedLink } from '@/components/campaign-tracked-link'
@@ -169,9 +169,11 @@ export function PaketlerCampaignLanding() {
                 campaign="paketler"
                 variant="secondary"
                 size="lg"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto bg-[#25D366] font-semibold text-[#0B1F14] shadow-[0_8px_24px_rgba(37,211,102,0.35)] transition-colors hover:bg-[#1EBE5A] hover:opacity-100 active:bg-[#19A84F] focus-visible:ring-[#0B1F14] focus-visible:ring-offset-2 motion-reduce:transition-none"
               >
-                <MessageCircle aria-hidden="true" className="size-4" />
+                <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className="size-5 fill-current">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.768.967-.941 1.166-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.52-.075-.149-.669-1.612-.916-2.206-.242-.579-.487-.5-.67-.51l-.57-.01c-.198 0-.52.074-.793.372-.272.297-1.04 1.016-1.04 2.479s1.065 2.875 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.262.489 1.693.625.712.227 1.36.195 1.872.118.571-.085 1.758-.718 2.006-1.412.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.87 9.87 0 0 1-1.516-5.26c.002-5.45 4.439-9.886 9.893-9.886 2.64 0 5.122 1.03 6.99 2.898a9.825 9.825 0 0 1 2.9 6.99c-.003 5.45-4.44 9.885-9.893 9.885m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.156 11.89c-.002 2.096.547 4.142 1.588 5.947L0 24l6.335-1.66a11.89 11.89 0 0 0 5.71 1.455h.005c6.555 0 11.89-5.335 11.893-11.89a11.82 11.82 0 0 0-3.479-8.418z" />
+                </svg>
                 WhatsApp&apos;tan yazın
               </CampaignTrackedLink>
             </div>
@@ -189,14 +191,14 @@ export function PaketlerCampaignLanding() {
 
         <div className="flex justify-center pb-14 sm:pb-16">
           <CampaignTrackedLink
-            href="/#pricing"
-            eventName={VERCEL_FUNNEL_EVENTS.campaignPricingClick}
+            href="/sss"
+            eventName={VERCEL_FUNNEL_EVENTS.campaignFaqClick}
             campaign="paketler"
             variant="brand"
             size="lg"
             className="w-full sm:w-auto"
           >
-            Paketlere göz at
+            Sıkça Sorulan Sorular
             <ArrowRight aria-hidden="true" className="size-4" />
           </CampaignTrackedLink>
         </div>
