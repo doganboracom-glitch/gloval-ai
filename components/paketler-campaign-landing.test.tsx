@@ -8,6 +8,14 @@ import { PLANS } from '@/lib/pricing-config'
 afterEach(cleanup)
 
 describe('Paketler campaign landing', () => {
+  it('keeps the hero title as one accessible sentence', () => {
+    render(<PaketlerCampaignLanding />)
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Bütçene uygun web sitesi çözümleri' }),
+    ).toBeTruthy()
+  })
+
   it('links the final campaign CTA to the FAQ in the same tab', () => {
     render(<PaketlerCampaignLanding />)
 
