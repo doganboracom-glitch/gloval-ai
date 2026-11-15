@@ -203,5 +203,5 @@ export function addDemoHeroStrip(site: WebsiteSchema, slug: string, lang: 'tr' |
   if (!items) return
   if (site.sections.some((s) => s.type === 'heroStrip')) return
   if (!site.sections.some((s) => s.type === 'hero' || s.type === 'slider')) return
-  site.sections.splice(demoHeroStripIndex(site.sections), 0, { type: 'heroStrip', items, sample: true } as Section)
+  site.sections.splice(demoHeroStripIndex(site.sections), 0, { type: 'heroStrip', variant: 'floating', items, sample: true } as Section)
 }
