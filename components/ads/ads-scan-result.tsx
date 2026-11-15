@@ -62,20 +62,25 @@ function AdPreviewCard({ result }: { result: PublicScanResult }) {
   const headline = result.ad.headlines.slice(0, 3).join(' | ')
   const descriptions = result.ad.descriptions.slice(0, 2)
   return (
-    <section aria-labelledby="ads-preview" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
+    <section
+      aria-labelledby="ads-preview"
+      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-border bg-card p-5"
+    >
       <h3 id="ads-preview" className="text-lg font-semibold">
         {copy.adPreviewTitle}
       </h3>
-      <div className="flex flex-col gap-1 rounded-xl border border-border bg-background p-4">
-        <p className="text-sm text-muted-foreground">
-          <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-semibold text-foreground">
+      <div className="flex min-w-0 flex-col gap-1 overflow-hidden rounded-xl border border-border bg-background p-4">
+        <p className="flex min-w-0 items-center text-sm text-muted-foreground">
+          <span className="me-2 shrink-0 rounded border border-border px-1.5 py-0.5 text-xs font-semibold text-foreground">
             {copy.adLabel}
           </span>
-          {result.ad.displayUrl}
+          <span className="min-w-0 flex-1 truncate break-all" title={result.ad.displayUrl}>
+            {result.ad.displayUrl}
+          </span>
         </p>
-        <p className="text-lg font-medium text-brand">{headline}</p>
+        <p className="min-w-0 break-words text-lg font-medium text-brand">{headline}</p>
         {descriptions.map((line) => (
-          <p key={line} className="text-sm leading-relaxed text-foreground">
+          <p key={line} className="min-w-0 break-words text-sm leading-relaxed text-foreground">
             {line}
           </p>
         ))}
