@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDemoCardImage } from '@/components/dbajans-campaign-landing'
+import { getDemoCardImage } from '@/components/campaign-demo-section'
 import { allDemos } from '@/lib/demos'
 
 describe('getDemoCardImage', () => {

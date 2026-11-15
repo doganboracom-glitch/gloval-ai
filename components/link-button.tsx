@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react'
 import { cn } from '@/lib/utils'
 
 type Variant = 'primary' | 'brand' | 'secondary' | 'ghost'
@@ -31,7 +32,7 @@ export function LinkButton({
   variant?: Variant
   size?: Size
   className?: string
-  onClick?: () => void
+  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void
 }) {
   return (
     <a
