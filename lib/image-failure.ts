@@ -55,7 +55,13 @@ export function sanitizeFailureReason(err: unknown): string {
 export function imageGenerationFailedResponse(route: string, err: unknown): Response {
   console.error(`[image-failure] route=${route} reason=${sanitizeFailureReason(err)}`)
   return Response.json(
-    { error: IMAGE_FAILED_CODE, message: IMAGE_FAILED_USER_MESSAGE, charged: false },
+    {
+      error: IMAGE_FAILED_CODE,
+      status: 'failed',
+      reason: 'provider_error',
+      message: IMAGE_FAILED_USER_MESSAGE,
+      charged: false,
+    },
     { status: 502 },
   )
 }

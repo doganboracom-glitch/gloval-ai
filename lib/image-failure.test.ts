@@ -27,7 +27,13 @@ describe('generation-failed response', () => {
     const res = imageGenerationFailedResponse('hero-image', new Error('provider timeout'))
     expect(res.status).toBe(502)
     const body = await res.json()
-    expect(body).toEqual({ error: IMAGE_FAILED_CODE, message: IMAGE_FAILED_USER_MESSAGE, charged: false })
+    expect(body).toEqual({
+      error: IMAGE_FAILED_CODE,
+      status: 'failed',
+      reason: 'provider_error',
+      message: IMAGE_FAILED_USER_MESSAGE,
+      charged: false,
+    })
     expect(IMAGE_FAILED_USER_MESSAGE).toBe('Görsel şu an üretilemedi, kredi düşülmedi, tekrar deneyin.')
     expect(IMAGE_FAILED_USER_MESSAGE).not.toContain('Yeterli AI krediniz yok')
   })

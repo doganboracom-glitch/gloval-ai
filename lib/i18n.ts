@@ -164,6 +164,10 @@ const dict = {
       imageFailedTitle: 'Hero görseli hazırlanamadı',
       imageFailedBody:
         'Site yapısı hazırlandı ancak görsel üretimi başarısız oldu. Görseli yeniden oluşturmayı deneyebilirsin.',
+      imageFailedTemporary: 'Görsel şu an üretilemedi, tekrar deneyebilirsiniz.',
+      imageFailedUnclear: 'Bu iş koluna uygun görsel belirlenemedi. Görsel yükleyin veya AI ile tarif ederek üretin.',
+      imageFailedDisabled: 'Görsel üretimi şu anda kullanılamıyor. Görsel yükleyebilir veya daha sonra tekrar deneyebilirsiniz.',
+      imageFailedStorage: 'Görsel oluşturuldu ancak kaydedilemedi. Lütfen yeniden deneyin; krediniz düşülmedi.',
       retryImage: 'Görseli yeniden oluştur',
       retryingImage: 'Görsel yeniden oluşturuluyor...',
     },
@@ -2550,6 +2554,10 @@ const dict = {
       imageFailedTitle: 'Hero image could not be generated',
       imageFailedBody:
         'The site structure is ready but image generation failed. You can try regenerating the image.',
+      imageFailedTemporary: 'The image could not be generated right now. Please try again.',
+      imageFailedUnclear: 'We could not determine an image for this business. Upload one or describe it for AI generation.',
+      imageFailedDisabled: 'AI image generation is unavailable right now. You can upload an image or try again later.',
+      imageFailedStorage: 'The image was generated but could not be saved. Please try again; no credits were used.',
       retryImage: 'Regenerate image',
       retryingImage: 'Regenerating image...',
     },

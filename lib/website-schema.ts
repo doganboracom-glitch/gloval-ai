@@ -938,6 +938,14 @@ export const sectionSchema = z.discriminatedUnion('type', [
  * build the published `<title>` as `name - seoTitle`. It is optional so every
  * previously saved schema stays valid (and the title falls back to `name`).
  */
+export const visualSubjectCacheSchema = z.object({
+  version: z.literal(1),
+  signature: z.string().regex(/^[a-f0-9]{64}$/),
+  business: z.string().min(2).max(100),
+  subject: z.string().min(20).max(600),
+  avoid: z.string().max(400).optional(),
+}).strict()
+
 export const siteMetaSchema = z.object({
   name: z.string().describe('The website / brand name'),
   tagline: z.string().describe('A one-line tagline'),
@@ -945,6 +953,7 @@ export const siteMetaSchema = z.object({
   language: z.enum(['tr', 'en']),
   tone: z.string().describe('Two or three words describing the visual tone'),
   audience: z.string().describe('Who the site is for, in a few words'),
+  visualSubjectCache: visualSubjectCacheSchema.optional(),
   seoTitle: z
     .string()
     .optional()

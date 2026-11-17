@@ -888,6 +888,16 @@ export function WebsitePreview({
     }
   }
 
+  const heroImageFailureMessage = useCallback(
+    (reason?: string) => {
+      if (reason === 'timeout' || reason === 'provider_error') return t.hero.imageFailedTemporary
+      if (reason === 'storage_failed') return t.hero.imageFailedStorage
+      if (reason === 'disabled') return t.hero.imageFailedDisabled
+      return reason ? t.hero.imageFailedUnclear : t.editor.imageFailedNoCharge
+    },
+    [t],
+  )
+
   /**
    * Regenerates ONLY the hero/slider image from a freeform description (or
    * links a direct URL). This is a dedicated path — never the whole-site AI
@@ -920,6 +930,11 @@ export function WebsitePreview({
           return false
         }
         if (!res.ok) {
+          const failureBody = await res.clone().json().catch(() => null)
+          if (typeof failureBody?.reason === 'string') {
+            flashToast('err', heroImageFailureMessage(failureBody.reason))
+            return false
+          }
           const storageMessage = await readImageStorageFailure(res)
           if (storageMessage) {
             flashToast('err', storageMessage)
@@ -942,17 +957,17 @@ export function WebsitePreview({
           flashToast('ok', t.editor.success)
           return true
         }
-        flashToast('err', t.editor.imageFailedNoCharge)
+        flashToast('err', heroImageFailureMessage(data.image?.reason))
         return false
       } catch (err) {
         debug('hero image error:', err instanceof Error ? err.message : err)
-        flashToast('err', t.editor.imageFailedNoCharge)
+        flashToast('err', heroImageFailureMessage('provider_error'))
         return false
       } finally {
         setHeroImageWorking(false)
       }
     },
-    [commitSchema, t],
+    [commitSchema, heroImageFailureMessage, t],
   )
 
   /**
@@ -1053,6 +1068,11 @@ export function WebsitePreview({
             return
           }
           if (!res.ok) {
+            const failureBody = await res.clone().json().catch(() => null)
+            if (typeof failureBody?.reason === 'string') {
+              flashToast('err', heroImageFailureMessage(failureBody.reason))
+              return
+            }
             const storageMessage = await readImageStorageFailure(res)
             if (storageMessage) {
               flashToast('err', storageMessage)
@@ -1071,17 +1091,19 @@ export function WebsitePreview({
           commitSchema(parsed.data)
           flashToast(
             status === 'generated' || status === 'linked' ? 'ok' : 'err',
-            status === 'generated' || status === 'linked' ? t.editor.success : t.editor.imageFailedNoCharge,
+            status === 'generated' || status === 'linked'
+              ? t.editor.success
+              : heroImageFailureMessage(data.image?.reason),
           )
         } catch (err) {
           debug('slide image error:', err instanceof Error ? err.message : err)
-          flashToast('err', t.editor.imageFailedNoCharge)
+          flashToast('err', heroImageFailureMessage('provider_error'))
         } finally {
           setWorkingSlide(null)
         }
       })()
     },
-    [commitSchema, t],
+    [commitSchema, heroImageFailureMessage, t],
   )
 
   /**

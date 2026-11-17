@@ -238,6 +238,7 @@ async function runGenerate(
           // 'completed' -> real image; 'failed' -> provider on but no image;
           // 'skipped'   -> no provider configured (prompt-only fallback).
           status: img.available ? (img.generated ? 'completed' : 'failed') : 'skipped',
+          ...(img.reason ? { reason: img.reason } : {}),
         },
       })
     } catch (err) {
@@ -273,6 +274,7 @@ async function runGenerate(
           available: img.available,
           generated: img.generated,
           status: img.available ? (img.generated ? 'completed' : 'failed') : 'skipped',
+          ...(img.reason ? { reason: img.reason } : {}),
         },
       })
     }

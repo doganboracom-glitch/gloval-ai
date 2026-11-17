@@ -103,6 +103,8 @@ describe('imageStorageErrorResponse', () => {
     expect(res.status).toBe(502)
     expect(await res.json()).toEqual({
       error: IMAGE_STORAGE_ERROR_CODE,
+      status: 'failed',
+      reason: 'storage_failed',
       message: IMAGE_STORAGE_USER_MESSAGE,
       charged: 0,
     })

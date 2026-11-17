@@ -94,7 +94,9 @@ export async function POST(req: Request) {
     try {
       const outcome = await applySlideImageRequest(site, slideIndex, request.trim())
       const generated = outcome.status === 'generated' || outcome.status === 'linked'
-      if (!generated) console.log('[v0] slide-image request not generated, status:', outcome.status)
+      if (!generated) {
+        console.info('[hero-image-outcome]', { status: outcome.status, reason: outcome.reason ?? 'provider_error' })
+      }
       const insufficientBalance = await chargeIfGenerated(generated)
       if (insufficientBalance !== null) {
         return Response.json({ error: 'Out of credits', balance: insufficientBalance }, { status: 402 })
@@ -106,6 +108,7 @@ export async function POST(req: Request) {
           generated,
           status: outcome.status,
           imagePrompt: outcome.imagePrompt,
+          ...(outcome.reason ? { reason: outcome.reason } : {}),
         },
       })
     } catch (err) {
@@ -120,7 +123,9 @@ export async function POST(req: Request) {
     try {
       const outcome = await applyHeroImageRequest(site, request.trim())
       const generated = outcome.status === 'generated' || outcome.status === 'linked'
-      if (!generated) console.log('[v0] hero-image request not generated, status:', outcome.status)
+      if (!generated) {
+        console.info('[hero-image-outcome]', { status: outcome.status, reason: outcome.reason ?? 'provider_error' })
+      }
       const insufficientBalance = await chargeIfGenerated(generated)
       if (insufficientBalance !== null) {
         return Response.json({ error: 'Out of credits', balance: insufficientBalance }, { status: 402 })
@@ -132,6 +137,7 @@ export async function POST(req: Request) {
           generated,
           status: outcome.status,
           imagePrompt: outcome.imagePrompt,
+          ...(outcome.reason ? { reason: outcome.reason } : {}),
         },
       })
     } catch (err) {
@@ -168,9 +174,10 @@ export async function POST(req: Request) {
       if (slide.image && !slide.image.src) slide.image.src = previousSlideSrcs[i]
     })
     if (!img.generated) {
-      console.log('[v0] hero-image retry: generation did not succeed', {
+      console.info('[hero-image-outcome]', {
         available: img.available,
         generated: img.generated,
+        reason: img.reason ?? 'provider_error',
       })
     }
     // Every generated image failed to be stored: tell the user why, charge nothing.
@@ -186,6 +193,7 @@ export async function POST(req: Request) {
         available: img.available,
         generated: img.generated,
         status: img.available ? (img.generated ? 'completed' : 'failed') : 'skipped',
+        ...(img.reason ? { reason: img.reason } : {}),
         ...(img.storageFailed > 0 ? { storageFailed: img.storageFailed } : {}),
       },
     })

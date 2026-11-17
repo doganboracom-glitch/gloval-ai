@@ -81,6 +81,35 @@ describe('logo flow is exempt from the text rules and the text guard', () => {
     expect(generateImage).toHaveBeenCalledTimes(1)
   })
 
+  it('passes supported 16:9 aspect ratio to Recraft without an unsupported size', async () => {
+    await generateSiteImage({
+      prompt: 'A construction site with workers and scaffolding',
+      aspectRatio: '16:9',
+      model: 'recraft/recraft-v4.1-flash',
+      allowText: true,
+    })
+
+    const options = generateImage.mock.calls[0]?.[0] as { aspectRatio?: string; size?: string }
+    expect(options.aspectRatio).toBe('16:9')
+    expect(options.size).toBeUndefined()
+  })
+
+  it('uses BFL provider dimensions for a 16:9 Klein fallback image', async () => {
+    await generateSiteImage({
+      prompt: 'A construction site with workers and scaffolding',
+      aspectRatio: '16:9',
+      model: 'bfl/flux-2-klein-4b',
+      allowText: true,
+    })
+
+    const options = generateImage.mock.calls[0]?.[0] as {
+      aspectRatio?: string
+      providerOptions?: { blackForestLabs?: { width?: number; height?: number } }
+    }
+    expect(options.providerOptions?.blackForestLabs).toEqual({ width: 1360, height: 765 })
+    expect(options.aspectRatio).toBeUndefined()
+  })
+
   it('control: a normal photo gets the ban, is checked, and is regenerated once when text is found', async () => {
     await generateSiteImage({ prompt: 'A sunlit cafe interior', aspectRatio: '16:9' })
     expect(sentPrompt()).toContain(NO_TEXT_RULE)

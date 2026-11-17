@@ -81,9 +81,8 @@ export type VisualTopic = {
 type TopicEntry = VisualTopic & { keys: string[] }
 
 /**
- * Keyword → scene dictionary. Keys are already diacritic-folded. Order matters:
- * the FIRST entry with a matching key wins, so more specific businesses are
- * listed before broader ones.
+ * Keyword → scene dictionary. Keys are normalized with diacritic-folded word
+ * matching; topic selection scores every entry rather than relying on order.
  */
 const TOPICS: TopicEntry[] = [
   {
@@ -93,7 +92,7 @@ const TOPICS: TopicEntry[] = [
       'two uniformed movers carrying wrapped furniture and stacked cardboard boxes into an open white moving truck parked on a city street, hand truck and moving blankets visible, daytime',
   },
   {
-    keys: ['lojistik', 'logistics', 'kargo', 'cargo', 'freight', 'tir filo', 'filo', 'depolama', 'warehouse', 'ambar', 'tedarik zinciri', 'supply chain'],
+    keys: ['lojistik', 'logistics', 'kargo', 'cargo', 'freight forwarding', 'freight forwarder', 'tir filo', 'fleet management', 'freight company', 'depolama', 'warehouse', 'ambar', 'tedarik zinciri', 'supply chain'],
     business: 'logistics & freight company',
     subject:
       'a logistics warehouse loading dock with a truck backed in, a forklift moving stacked pallets and workers in high-visibility vests scanning parcels',
@@ -117,13 +116,13 @@ const TOPICS: TopicEntry[] = [
       'a tidy dry-cleaning shop counter with freshly pressed garments in protective covers on a conveyor rail',
   },
   {
-    keys: ['oto servis', 'oto tamir', 'kaporta', 'lastik', 'oto yikama', 'car wash', 'auto repair', 'car service', 'mekanik', 'egzoz'],
+    keys: ['oto servis', 'oto tamir', 'kaporta', 'oto yikama', 'car wash', 'auto repair', 'car service', 'egzoz'],
     business: 'auto service & repair shop',
     subject:
       'a clean modern auto repair workshop with a car on a lift and a mechanic in uniform working with professional tools',
   },
   {
-    keys: ['rent a car', 'arac kirala', 'araba kirala', 'car rental', 'transfer hizmet', 'vip transfer', 'taksi', 'taxi', 'sofor'],
+    keys: ['rent a car', 'arac kirala', 'araba kirala', 'car rental', 'soforlu arac kiralama', 'chauffeur transfer', 'vip transfer', 'taksi', 'taxi'],
     business: 'car rental & transfer service',
     subject:
       'a row of clean rental cars lined up in front of a modern rental office with a chauffeur opening a passenger door',
@@ -153,19 +152,19 @@ const TOPICS: TopicEntry[] = [
       'a spacious modern gym interior with matte black equipment, a trainer coaching an athlete, dramatic side lighting',
   },
   {
-    keys: ['otel', 'hotel', 'pansiyon', 'butik otel', 'konaklama', 'apart', 'resort', 'villa kirala'],
+    keys: ['otel', 'hotel', 'pansiyon', 'butik otel', 'konaklama', 'apart otel', 'aparthotel', 'resort', 'villa kirala'],
     business: 'hotel / hospitality business',
     subject:
       'an elegant boutique hotel lobby and terrace at golden hour with warm lighting, plants and a welcoming reception',
   },
   {
-    keys: ['tur', 'turizm', 'seyahat', 'travel agency', 'tour', 'gezi', 'tatil'],
+    keys: ['seyahat acentesi', 'turizm acentesi', 'travel agency', 'tour operator', 'gezi turu', 'tur organizasyonu', 'tatil paketi', 'holiday booking'],
     business: 'travel agency / tour operator',
     subject:
       'a smiling travel guide with a small group of travellers overlooking a scenic coastal landmark, bright natural light',
   },
   {
-    keys: ['kurs', 'egitim', 'dershane', 'akademi', 'dil okul', 'language school', 'education', 'training center', 'ozel ders'],
+    keys: ['kurs merkezi', 'meslek kursu', 'dil kursu', 'yazilim kursu', 'programlama kursu', 'dershane', 'dil okul', 'language school', 'training center', 'training academy', 'coding bootcamp', 'ozel ders'],
     business: 'education & training academy',
     subject:
       'a bright modern classroom with engaged adult students and an instructor at a large display screen',
@@ -177,10 +176,9 @@ const TOPICS: TopicEntry[] = [
       'a colorful, safe preschool playroom with soft mats, wooden toys and natural daylight through big windows',
   },
   {
-    keys: ['elektrik', 'electrician', 'tesisat', 'plumb', 'su tesisat', 'kombi', 'klima', 'hvac', 'dogalgaz'],
-    business: 'electrical & plumbing services',
-    subject:
-      'a technician in branded workwear with a tool bag installing equipment in a residential utility area, focused and professional',
+    keys: ['elektrikci', 'elektrik tesisati', 'elektrik taahhut', 'electrician', 'electrical contractor', 'electrical service'],
+    business: 'electrical contractor',
+    subject: 'a licensed electrician installing a residential electrical panel with organized wiring and safe professional tools, realistic utility-room setting',
   },
   {
     keys: ['peyzaj', 'landscap', 'bahce', 'garden', 'cim', 'havuz', 'pool'],
@@ -195,7 +193,7 @@ const TOPICS: TopicEntry[] = [
       'a styled contemporary living room with designer furniture, layered textures and soft natural light',
   },
   {
-    keys: ['cicek', 'florist', 'flower'],
+    keys: ['cicekci', 'cicek dukkan', 'florist', 'flower shop'],
     business: 'flower shop',
     subject:
       'a charming florist workshop bench with fresh seasonal bouquets being arranged, soft daylight',
@@ -246,7 +244,7 @@ const TOPICS: TopicEntry[] = [
       'fruits, vegetables, fresh produce, greengrocer stalls, supermarket aisles, grocery shelves, baskets of produce',
   },
   {
-    keys: ['market', 'bakkal', 'manav', 'grocery', 'greengrocer', 'supermarket'],
+    keys: ['bakkal', 'manav', 'grocery store', 'food market', 'greengrocer', 'supermarket'],
     business: 'grocery store / greengrocer',
     subject:
       'an inviting neighbourhood grocery interior with abundant fresh produce neatly displayed under clean lighting',
@@ -258,19 +256,19 @@ const TOPICS: TopicEntry[] = [
       'a clean modern pharmacy interior with organized shelves and a pharmacist in a white coat at the counter',
   },
   {
-    keys: ['fizyoterapi', 'physiotherapy', 'diyetisyen', 'dietitian', 'psikolog', 'psycholog', 'terapi', 'danismanlik merkez'],
+    keys: ['fizyoterapi', 'physiotherapy', 'diyetisyen', 'dietitian', 'psikolog', 'psycholog', 'psychotherapy practice', 'therapy practice', 'danismanlik merkez'],
     business: 'health & therapy practice',
     subject:
       'a calm, minimal therapy room with soft neutral tones, a comfortable seating arrangement and gentle daylight',
   },
   {
-    keys: ['hastane', 'poliklinik', 'tip merkez', 'clinic', 'saglik merkez', 'goz merkez', 'estetik cerrah'],
+    keys: ['hastane', 'poliklinik', 'tip merkez', 'medical clinic', 'saglik merkez', 'goz merkez', 'estetik cerrah'],
     business: 'medical clinic',
     subject:
       'a bright, modern medical clinic reception with clean white surfaces and reassuring soft blue accents',
   },
   {
-    keys: ['berber', 'barber', 'erkek kuafor'],
+    keys: ['berber', 'berberi', 'berber salonu', 'barber', 'barbershop', 'erkek kuafor'],
     business: 'barbershop',
     subject:
       'a stylish barbershop interior with leather chairs, warm Edison lighting and a barber finishing a haircut',
@@ -294,7 +292,7 @@ const TOPICS: TopicEntry[] = [
       'a clean professional tattoo studio with an artist working under a focused lamp, moody atmosphere',
   },
   {
-    keys: ['guvenlik', 'security', 'kamera sistem', 'alarm sistem', 'cctv'],
+    keys: ['guvenlik sistemleri', 'security systems', 'security camera', 'kamera sistemi', 'alarm sistemi', 'cctv installation'],
     business: 'security systems company',
     subject:
       'a security control room with multiple monitors showing camera feeds and a technician installing a CCTV camera',
@@ -333,13 +331,13 @@ const TOPICS: TopicEntry[] = [
       'a tailoring atelier with fabric rolls, a sewing machine in use and garments on a rack, warm workshop light',
   },
   {
-    keys: ['tarim', 'agriculture', 'sera', 'greenhouse', 'ciftlik', 'farm', 'hayvancilik', 'zeytinyag', 'bal '],
+    keys: ['tarim', 'agriculture', 'sera', 'greenhouse', 'ciftlik', 'farm', 'hayvancilik', 'zeytinyag'],
     business: 'agriculture / farm business',
     subject:
       'a sunlit farm field with rows of healthy crops and a farmer inspecting produce, golden hour',
   },
   {
-    keys: ['hafriyat', 'excavat', 'insaat', 'construction', 'muteahhit', 'beton', 'demir celik', 'iskele'],
+    keys: ['hafriyat', 'excavation', 'insaat firmasi', 'insaat sirketi', 'construction company', 'building contractor', 'muteahhit', 'muteahhitler', 'beton santrali', 'demir celik', 'iskele', 'celik konstruksiyon', 'steel construction', 'structural steel', 'steel fabrication', 'steel frame'],
     business: 'construction company',
     subject:
       'an active construction site with an excavator, steel framework and engineers in hard hats reviewing plans',
@@ -351,19 +349,19 @@ const TOPICS: TopicEntry[] = [
       'a stone workshop with polished marble slabs standing in racks and a craftsman finishing an edge',
   },
   {
-    keys: ['celik kapi', 'pvc dogram', 'aluminyum', 'cam balkon', 'joinery', 'window'],
+    keys: ['pvc dogram', 'aluminyum dograma', 'aluminyum ve pvc dograma', 'aluminyum pvc', 'cam balkon', 'window systems', 'window manufacturer', 'joinery'],
     business: 'doors & windows manufacturer',
     subject:
       'a modern showroom of aluminium and PVC window systems with a technician measuring a frame',
   },
   {
-    keys: ['gunes panel', 'solar', 'enerji', 'energy', 'yenilenebilir'],
+    keys: ['gunes panel', 'gunes enerjisi', 'solar energy', 'solar panel installation', 'renewable energy', 'renewable energy company'],
     business: 'solar & renewable energy company',
     subject:
       'technicians installing solar panels on a large rooftop under a clear blue sky, wide cinematic view',
   },
   {
-    keys: ['bilgisayar tamir', 'telefon tamir', 'teknik servis', 'repair service', 'beyaz esya servis'],
+    keys: ['bilgisayar tamir', 'telefon tamir', 'teknik servis', 'device repair', 'electronics repair'],
     business: 'technical repair service',
     subject:
       'a technician at a well-lit repair bench with precision tools disassembling a device, organized parts trays',
@@ -409,7 +407,6 @@ const TOPICS: TopicEntry[] = [
       'band',
       'concert',
       'konser',
-      'muzik',
     ],
     business: 'live music & nightlife venue',
     subject:
@@ -426,85 +423,272 @@ const TOPICS: TopicEntry[] = [
       'event organization',
       'event management',
       'event production',
-      'event',
-      'etkinlik',
-      'organizasyon',
-      'davet',
+      'etkinlik planlama',
+      'etkinlik organizasyonu',
+      'organizasyon firmasi',
+      'davet organizasyonu',
+      'party planning',
       'party planner',
       'party organizer',
-      'party',
       'parti organizasyonu',
-      'parti',
-      'kutlama',
-      'celebration',
+      'kutlama organizasyonu',
+      'celebration planning',
     ],
     business: 'event planning & production',
     subject:
       'a celebration venue being prepared for an event, coordinated banquet tables and floral decor, discreet event lighting and a production crew in the background',
     avoid: 'readable signage, logos, generic corporate offices, unrelated storefronts',
   },
+  {
+    keys: ['locksmith', 'cilingir', 'anahtarci', 'anahtar kopyalama', 'key cutting', 'lock repair', 'locksmith service'],
+    business: 'locksmith & key service',
+    subject: 'a professional locksmith at a clean key-cutting bench, precision key machine and neatly arranged lock cylinders, natural workshop light',
+    avoid: 'mechanic garages, tire shops, unrelated construction sites, readable signs or logos',
+  },
+  {
+    keys: ['ozel okul', 'private school', 'high school', 'primary school', 'elementary school', 'kolej', 'ilkokul', 'ortaokul', 'lise', 'school enrollment'],
+    business: 'private school',
+    subject: 'a welcoming school entrance and bright classroom with students learning together, books and learning materials visible, natural daylight',
+  },
+  {
+    keys: ['music school', 'music academy', 'music lesson', 'music lessons', 'music class', 'music classes', 'music education', 'music teacher', 'muzik okulu', 'muzik akademisi', 'muzik dersi', 'muzik kursu', 'muzik egitimi', 'muzik ogretmeni'],
+    business: 'music school',
+    subject: 'a real music school lesson with a teacher guiding a student at a piano, instrument cases and sheet music in a bright practice room, no stage or nightclub lighting',
+    avoid: 'concert stages, nightclubs, DJ booths, unrelated retail interiors',
+  },
+  {
+    keys: ['ebe klinigi', 'ebelik', 'dogum evi', 'birth center', 'midwife clinic', 'midwifery clinic', 'midwife practice', 'maternity care clinic'],
+    business: 'midwifery & maternity care clinic',
+    subject: 'a calm, modern maternity care consultation room with a midwife speaking warmly with an expecting parent, clean clinical tools and soft daylight',
+    avoid: 'surgical scenes, hospital emergency rooms, readable signage or logos',
+  },
+  {
+    keys: ['kitapci', 'kitabevi', 'kitap evi', 'bookshop', 'bookstore', 'independent bookstore', 'indie bookstore'],
+    business: 'independent bookstore',
+    subject: 'an independent neighborhood bookstore with carefully arranged shelves, a small new-release display and a bookseller helping a visitor, warm natural light',
+    avoid: 'library checkout machines, supermarket aisles, readable book titles, logos',
+  },
+  {
+    keys: ['kombi servisi', 'kombi bakimi', 'kombi montaji', 'boiler service', 'boiler repair', 'boiler maintenance', 'heating system service'],
+    business: 'boiler & heating service',
+    subject: 'a qualified heating technician servicing a wall-mounted boiler in a tidy utility room, diagnostic tools and pipework clearly visible',
+  },
+  {
+    keys: ['klima servisi', 'klima bakimi', 'klima montaji', 'air conditioning repair', 'air conditioning service', 'air conditioner installation', 'hvac service', 'hvac contractor'],
+    business: 'air conditioning & HVAC service',
+    subject: 'an HVAC technician carefully installing or servicing an indoor air-conditioning unit, gauges and clean tools visible in a real home interior',
+  },
+  {
+    keys: ['tesisatci', 'tesisat ustasi', 'sihhi tesisat', 'su tesisati', 'su kacagi tamiri', 'plumber', 'plumbing service', 'pipe fitting', 'leak repair'],
+    business: 'plumbing service',
+    subject: 'a plumber in workwear repairing a clean residential water-pipe connection under a sink, practical tools and fittings visible',
+  },
+  {
+    keys: ['beyaz esya servisi', 'beyaz esya tamiri', 'appliance repair', 'white goods repair', 'washer repair', 'refrigerator repair', 'dishwasher repair'],
+    business: 'home appliance repair service',
+    subject: 'a skilled appliance repair technician diagnosing a washing machine on a clean service bench, replacement parts and tools organized nearby',
+  },
+  {
+    keys: ['boya badana', 'boya ustasi', 'ic cephe boya', 'ic mekan boya', 'painting contractor', 'house painter', 'interior painting'],
+    business: 'painting & decorating contractor',
+    subject: 'a professional decorator carefully painting a bright room, clean roller tools and neatly protected trim, natural daylight',
+  },
+  {
+    keys: ['hali yikama', 'hali temizleme', 'carpet cleaning', 'rug cleaning', 'hali yikama fabrikasi'],
+    business: 'carpet & rug cleaning service',
+    subject: 'a carpet-cleaning professional using an extraction machine on a patterned rug in a tidy cleaning workshop, equipment and clean water visible',
+  },
+  {
+    keys: ['hirdavat', 'hirdavatci', 'hirdavat magazasi', 'hardware store', 'builders merchant', 'building supplies store'],
+    business: 'hardware & building supplies store',
+    subject: 'a neighborhood hardware shop with organized hand tools, fasteners and building supplies on shelves, a shopkeeper helping a customer',
+  },
+  {
+    keys: ['camci', 'cam ve ayna', 'cam ayna atoly', 'ayna imalat', 'ayna tasarim', 'glass and mirror', 'mirror shop', 'glazier', 'glass workshop', 'glass cutting service'],
+    business: 'glass & mirror workshop',
+    subject: 'a glazier measuring and finishing a glass panel at a clean glass-and-mirror workshop, protective gloves and cutting tools visible',
+  },
+  {
+    keys: ['cati', 'cati kaplama', 'cati izolasyon', 'cati ustasi', 'cati ve izolasyon', 'su yalitim', 'roofing contractor', 'roof insulation', 'roofing company', 'waterproofing service'],
+    business: 'roofing & waterproofing contractor',
+    subject: 'roofing professionals applying a waterproof membrane to a real roof, safety harnesses and roofing tools visible under daylight',
+  },
+  {
+    keys: ['asma tavan', 'tavan sistemleri', 'suspended ceiling', 'drop ceiling installer', 'acoustic ceiling installation'],
+    business: 'suspended ceiling & interior systems contractor',
+    subject: 'an installer fitting a clean suspended ceiling grid inside a modern room, measured panels and practical installation tools visible',
+  },
+  {
+    keys: ['celik kapi', 'guvenlik kapi', 'celik guvenlik kapi', 'security door', 'steel security door', 'security gate installation'],
+    business: 'security door & gate company',
+    subject: 'a sturdy modern steel security door being installed by a technician at a finished residential entrance, accurate hardware and clean workmanship',
+  },
+  {
+    keys: ['oto lastik', 'lastikci', 'lastik servisi', 'lastik tamiri', 'tire shop', 'tire service', 'tire repair', 'tyre shop', 'tyre fitting'],
+    business: 'tire shop & service',
+    subject: 'a tire technician fitting a new tire on a wheel-balancing machine inside a clean automotive tire service bay',
+    avoid: 'general mechanic garages, engine repair, construction machinery, unrelated retail goods',
+  },
+  {
+    keys: ['oto kuafor', 'arac detayli temizlik', 'oto detay', 'car detailing', 'auto detailing', 'paint correction', 'ceramic coating service', 'detailing studio'],
+    business: 'automotive detailing studio',
+    subject: 'a detailer carefully polishing a clean modern car in a bright detailing bay, microfiber cloths and paint-correction tools visible, premium documentary photography',
+  },
+  {
+    keys: ['freight brokerage', 'freight broker', 'lojistik broker', 'tasimacilik araciligi', 'nakliye komisyoncusu'],
+    business: 'freight brokerage & dispatch service',
+    subject: 'a freight dispatcher coordinating truck routes at a professional logistics desk with a route board and a truck yard visible through the window',
+  },
+  {
+    keys: ['fotograf ve video', 'video prodüksiyon', 'video production', 'photo video studio', 'film production', 'wedding photography', 'dugun fotografciligi', 'dugun fotografcisi', 'wedding photographer', 'fotograf studyosu'],
+    business: 'photography & video production studio',
+    subject: 'a professional photographer and videographer preparing a camera and lighting setup for a wedding shoot, real production equipment and an elegant venue in soft focus',
+  },
+  {
+    keys: ['kuafor', 'hair salon', 'hairdresser', 'hair studio', 'hair styling salon'],
+    business: 'hair salon',
+    subject: 'a contemporary hair salon with styling chairs, mirrors and a stylist finishing a client haircut, bright natural light',
+  },
+  {
+    keys: ['mental health counselor', 'mental health counselling', 'mental health counseling', 'psychotherapist', 'psychotherapy practice', 'counselor practice', 'counselling center', 'counseling center', 'psikoterapi', 'psikoterapi merkezi', 'psikolojik danismanlik', 'ruh sagligi danismani'],
+    business: 'mental health counseling practice',
+    subject: 'a calm, private counseling room with two comfortable chairs, a mental health professional listening attentively and soft natural light',
+  },
+  {
+    keys: ['bal uretimi', 'bal ureticisi', 'aricilik', 'beekeeper', 'honey producer', 'honey farm', 'honey production'],
+    business: 'beekeeping & honey producer',
+    subject: 'a beekeeper in protective clothing inspecting healthy hives in a flowering orchard, honey jars and beekeeping tools nearby',
+  },
+  {
+    keys: ['emlak', 'emlak ofisi', 'gayrimenkul danismanligi', 'real estate agency', 'real estate agent', 'property agency', 'property consultant'],
+    business: 'real estate agency',
+    subject: 'a real estate agent presenting a bright modern home interior to a couple, architectural details and a welcoming living space in view',
+  },
+  {
+    keys: ['mimarlik', 'mimar', 'mimarlik ofisi', 'architecture studio', 'architectural design firm', 'architect office'],
+    business: 'architecture studio',
+    subject: 'an architect reviewing a refined building model and technical drawings inside a contemporary architecture studio with daylight',
+  },
 ]
 
 /**
- * Resolves the most fitting photographable scene for a freeform brief.
- * Returns `null` when nothing matches, so the caller can fall back to its own
- * sector-based default.
+ * Resolves all matching topics with source-weighted evidence. Specific phrases
+ * score above incidental single-word matches; close competing topics are marked
+ * ambiguous for the async brief fallback to resolve.
  */
-export function resolveVisualTopic(text: string): VisualTopic | null {
-  const t = fold(text)
-  if (!t) return null
+export type VisualTopicSignals = {
+  businessName?: string
+  tagline?: string
+  serviceTitles?: string[]
+  audience?: string
+  rest?: string
+}
 
-  const musicEducation = [
-    'music school',
-    'music academy',
-    'music lesson',
-    'music lessons',
-    'music class',
-    'music classes',
-    'music education',
-    'music teacher',
-    'muzik okulu',
-    'muzik akademisi',
-    'muzik dersi',
-    'muzik kursu',
-    'muzik egitimi',
-    'muzik ogretmeni',
-  ].some((key) => foldedWordIncludes(t, key))
-  const explicitMusicPerformance = [
-    'dj',
-    'disc jockey',
-    'nightclub',
-    'night club',
-    'nightlife',
-    'gece kulubu',
-    'live music',
-    'music venue',
-    'music event',
-    'music festival',
-    'musician',
-    'band',
-    'concert',
-    'konser',
-    'canli muzik',
-    'muzik etkinligi',
-    'muzik grubu',
-  ].some((key) => foldedWordIncludes(t, key))
+export type VisualTopicCandidate = {
+  topic: VisualTopic
+  score: number
+  matchedKeys: string[]
+  matchedSources: string[]
+}
 
-  for (const entry of TOPICS) {
-    if (
-      entry.business === 'live music & nightlife venue' &&
-      musicEducation &&
-      !explicitMusicPerformance
-    ) {
-      continue
+export type VisualTopicResolution = {
+  topic: VisualTopic | null
+  bestTopic: VisualTopic | null
+  ambiguous: boolean
+  candidates: VisualTopicCandidate[]
+}
+
+const MUSIC_EDUCATION_KEYS = [
+  'music school', 'music academy', 'music lesson', 'music lessons', 'music class',
+  'music classes', 'music education', 'music teacher', 'muzik okulu',
+  'muzik akademisi', 'muzik dersi', 'muzik kursu', 'muzik egitimi', 'muzik ogretmeni',
+]
+const MUSIC_PERFORMANCE_KEYS = [
+  'dj', 'disc jockey', 'nightclub', 'night club', 'nightlife', 'gece kulubu',
+  'live music', 'music venue', 'music event', 'music festival', 'musician',
+  'canli muzik', 'muzik etkinligi', 'muzik grubu',
+]
+
+const VISUAL_SIGNAL_WEIGHTS = {
+  businessName: 18,
+  tagline: 18,
+  serviceTitle: 6,
+  audience: 5,
+  rest: 2,
+} as const
+
+function keySpecificity(key: string): number {
+  const normalized = key.trim()
+  const wordCount = normalized.split(/\s+/).length
+  return 1 + Math.max(0, wordCount - 1) * 0.45 + Math.min(normalized.length, 40) / 160
+}
+
+function matchingTopicKey(keys: string[], text: string): string | undefined {
+  return keys
+    .filter((key) => foldedWordIncludes(text, key))
+    .sort((a, b) => keySpecificity(b) - keySpecificity(a))[0]
+}
+
+export function resolveVisualTopicSignals(signals: VisualTopicSignals): VisualTopicResolution {
+  const sourceTexts = [
+    { name: 'businessName', text: signals.businessName || '', weight: VISUAL_SIGNAL_WEIGHTS.businessName },
+    { name: 'tagline', text: signals.tagline || '', weight: VISUAL_SIGNAL_WEIGHTS.tagline },
+    ...(signals.serviceTitles || []).map((text, index) => ({
+      name: `serviceTitle:${index}`,
+      text,
+      weight: VISUAL_SIGNAL_WEIGHTS.serviceTitle,
+    })),
+    { name: 'audience', text: signals.audience || '', weight: VISUAL_SIGNAL_WEIGHTS.audience },
+    { name: 'rest', text: signals.rest || '', weight: VISUAL_SIGNAL_WEIGHTS.rest },
+  ].filter((source) => fold(source.text))
+
+  const allText = fold(sourceTexts.map((source) => source.text).join(' '))
+  const musicEducation = MUSIC_EDUCATION_KEYS.some((key) => foldedWordIncludes(allText, key))
+  const explicitMusicPerformance = MUSIC_PERFORMANCE_KEYS.some((key) => foldedWordIncludes(allText, key))
+
+  const candidates = TOPICS.flatMap((entry): VisualTopicCandidate[] => {
+    if (entry.business === 'live music & nightlife venue' && musicEducation && !explicitMusicPerformance) {
+      return []
     }
-    // Word-boundary match: a short key like "tur" must NOT match inside
-    // "olustur" (the folded "oluştur" present in nearly every prompt).
-    if (entry.keys.some((k) => foldedWordIncludes(t, k))) {
-      return { business: entry.business, subject: entry.subject, avoid: entry.avoid }
+
+    const matchedKeys: string[] = []
+    const matchedSources: string[] = []
+    let score = 0
+
+    for (const source of sourceTexts) {
+      const key = matchingTopicKey(entry.keys, fold(source.text))
+      if (!key) continue
+      score += source.weight * keySpecificity(key)
+      matchedKeys.push(key)
+      matchedSources.push(source.name)
     }
+
+    if (!score) return []
+    return [{
+      topic: { business: entry.business, subject: entry.subject, avoid: entry.avoid },
+      score,
+      matchedKeys,
+      matchedSources,
+    }]
+  }).sort((a, b) => b.score - a.score)
+
+  const best = candidates[0]
+  const runnerUp = candidates[1]
+  const ambiguous = Boolean(
+    best && runnerUp && best.score - runnerUp.score <= Math.max(1, best.score * 0.12),
+  )
+
+  return {
+    topic: !ambiguous ? best?.topic ?? null : null,
+    bestTopic: best?.topic ?? null,
+    ambiguous,
+    candidates: candidates.slice(0, 5),
   }
-  return null
+}
+
+/** Returns an unambiguous keyword topic, or `null` for no match / close tie. */
+export function resolveVisualTopic(text: string): VisualTopic | null {
+  return resolveVisualTopicSignals({ rest: text }).topic
 }
 
 /**

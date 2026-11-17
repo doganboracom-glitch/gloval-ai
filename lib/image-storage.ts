@@ -35,7 +35,13 @@ export class ImageStorageError extends Error {
 /** JSON body + status for a route that hit an `ImageStorageError`; never charged. */
 export function imageStorageErrorResponse(): Response {
   return Response.json(
-    { error: IMAGE_STORAGE_ERROR_CODE, message: IMAGE_STORAGE_USER_MESSAGE, charged: 0 },
+    {
+      error: IMAGE_STORAGE_ERROR_CODE,
+      status: 'failed',
+      reason: 'storage_failed',
+      message: IMAGE_STORAGE_USER_MESSAGE,
+      charged: 0,
+    },
     { status: 502 },
   )
 }
