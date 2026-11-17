@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { ServiceDetailFields } from '@/components/editor/service-detail-fields'
 import { describe, expect, it } from 'vitest'
 import { fallbackWebsite, websiteSchema, type WebsiteSchema } from '@/lib/website-schema'
 import { applyOperation } from '@/lib/website-edit-operations'
 import { SERVICE_ITEM_LIMITS, SERVICE_LIST_LIMITS } from '@/lib/service-item-limits'
-import { findPublicService, resolveServices, syncServicesPage } from '@/lib/service-pages'
+import { findPublicService, resolveServices, resolveServicesCta, syncServicesPage } from '@/lib/service-pages'
 import { stripSampleContent } from '@/lib/sample-content'
 
 const read = (path: string) => readFileSync(join(process.cwd(), path), 'utf8')
@@ -40,6 +42,8 @@ describe('service item fields: one definition of the limits', () => {
       'lib/service-pages.ts',
       'lib/website-edit-operations.ts',
       'lib/service-detail-background.ts',
+      'lib/section-detail.ts',
+      'lib/service-card.ts',
       'components/editor/service-card-editor.tsx',
     ]
     for (const file of consumers) {
@@ -86,6 +90,64 @@ describe('service item fields: one definition of the limits', () => {
     const bad = structuredClone(site)
     ;(bad.sections[index] as Services).items[0].seoTitle = 'x'.repeat(SERVICE_ITEM_LIMITS.seoTitle + 1)
     expect(websiteSchema.safeParse(bad).success).toBe(false)
+  })
+})
+
+describe('service closing call to action', () => {
+  it('uses the same public defaults independently for each empty custom field', () => {
+    const site = fallbackWebsite('Kahve atölyesi', 'tr')
+    expect(resolveServicesCta(site, undefined)).toEqual({
+      title: 'Kahve Atölyesi ile görüşün',
+      text: 'İhtiyacınızı bize iletin, size geri dönelim.',
+      label: 'İletişime geçin',
+    })
+    expect(
+      resolveServicesCta(site, {
+        ctaTitle: '  Özel başlık  ',
+        ctaText: '  ',
+        ctaLabel: '  Teklif isteyin  ',
+      }),
+    ).toEqual({
+      title: 'Özel başlık',
+      text: 'İhtiyacınızı bize iletin, size geri dönelim.',
+      label: 'Teklif isteyin',
+    })
+  })
+
+  it('hides the legacy CTA fields when all three values are empty', () => {
+    const { site, index } = siteWith(ITEMS)
+    const section = servicesOf(site, index)
+    const markup = renderToStaticMarkup(
+      <ServiceDetailFields site={site} index={index} section={section} onDispatch={() => undefined} />,
+    )
+    expect(markup).not.toContain('Gelişmiş: Alt çağrı bandı')
+    expect(markup).not.toContain('Alt çağrı başlığı')
+    expect(markup).not.toContain('Alt çağrı metni')
+    expect(markup).not.toContain('Alt çağrı buton metni')
+  })
+
+  it('keeps populated legacy CTA fields in collapsed advanced details even when service pages are off', () => {
+    const { site, index } = siteWith(ITEMS)
+    const section = servicesOf(site, index)
+    const legacySection: Services = {
+      ...section,
+      detail: { ...section.detail, pageEnabled: false, ctaText: 'Hizmetiniz için bize ulaşın.' },
+    }
+    const legacySite = {
+      ...site,
+      sections: site.sections.map((current, sectionIndex) => (sectionIndex === index ? legacySection : current)),
+    }
+    const markup = renderToStaticMarkup(
+      <ServiceDetailFields site={legacySite} index={index} section={legacySection} onDispatch={() => undefined} />,
+    )
+    const details = markup.match(/<details[^>]*>[\s\S]*?<\/details>/)?.[0] ?? ''
+    expect(details).not.toBe('')
+    expect(details).not.toContain(' open')
+    expect(details).toContain('Gelişmiş: Alt çağrı bandı')
+    expect(details).toContain('Alt çağrı başlığı')
+    expect(details).toContain('Alt çağrı metni')
+    expect(details).toContain('Alt çağrı buton metni')
+    expect(details.match(/<(?:input|textarea)\b/g)).toHaveLength(3)
   })
 })
 
