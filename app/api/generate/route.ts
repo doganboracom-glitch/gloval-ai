@@ -8,6 +8,7 @@ import { seedTestimonialsSection } from '@/lib/testimonials'
 import { dropAiReferences } from '@/lib/references'
 import { stripAiTeam } from '@/lib/team'
 import { seedContactActions } from '@/lib/site-contact-actions'
+import { ensureGeneratedHeroStrip } from '@/lib/generated-hero-strip'
 import { addMissingToMenu, seedProductsSubmenu } from '@/lib/site-menu'
 import { seedFooterColumns, seedFooterLegal } from '@/lib/footer-links'
 import { withLivePageLinks } from '@/lib/live-page-links'
@@ -220,7 +221,7 @@ async function runGenerate(
           addMissingToMenu(
             seedFooterLegal(
               seedFooterColumns(
-                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seedAboutCopy(seededAbout, aboutCopy), aboutDetail))), pageLimit), normalizedLang, pageLimit))),
+                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seedAboutCopy(ensureGeneratedHeroStrip(seededAbout, normalizedLang), aboutCopy), aboutDetail))), pageLimit), normalizedLang, pageLimit))),
                 normalizedLang,
               ),
               normalizedLang,
@@ -257,7 +258,7 @@ async function runGenerate(
           addMissingToMenu(
             seedFooterLegal(
               seedFooterColumns(
-                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(seededAbout))), pageLimit), normalizedLang, pageLimit))),
+                seedProductsSubmenu(seedContactActions(finalizeGeneratedPages(syncSectionPages(seedTestimonialsSection(seedServicesDetail(seedAboutDetail(ensureGeneratedHeroStrip(seededAbout, normalizedLang)))), pageLimit), normalizedLang, pageLimit))),
                 normalizedLang,
               ),
               normalizedLang,

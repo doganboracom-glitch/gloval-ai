@@ -114,6 +114,16 @@ export function heroStripInsertIndex(sections: ReadonlyArray<{ type: string }>):
   return sections[0]?.type === 'hero' ? 1 : 0
 }
 
+/**
+ * Where a strip placed automatically (demos, newly generated sites) goes: right below the opening run of
+ * hero / slider sections, skipping an announcement band at the very top.
+ */
+export function heroStripPlacementIndex(sections: ReadonlyArray<{ type: string }>): number {
+  let index = sections[0]?.type === 'announcement' ? 1 : 0
+  while (index < sections.length && (sections[index].type === 'hero' || sections[index].type === 'slider')) index++
+  return index
+}
+
 export type HeroStripItemLike = {
   icon: string
   title: string

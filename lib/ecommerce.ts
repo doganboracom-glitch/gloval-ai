@@ -19,6 +19,7 @@ import { discardProjectImageUrls, removeUnreferencedProjectImages } from '@/lib/
 import { createProductImageCleanupDeps, getProductImageStorageBase } from '@/lib/product-image-store'
 import { fallbackWebsite } from '@/lib/website-schema'
 import { ensureContactSection } from '@/lib/contact-section'
+import { ensureGeneratedHeroStrip } from '@/lib/generated-hero-strip'
 import { ensureStoreAboutSection } from '@/lib/about-section'
 import { createProject } from '@/lib/projects'
 import { getMyCurrentPlan } from '@/lib/billing'
@@ -110,7 +111,10 @@ export async function createEcommerceProject(input: {
 }): Promise<string> {
   const language = input.language === 'en' ? 'en' : 'tr'
   const prompt = input.prompt?.trim() || (language === 'tr' ? 'online mağaza' : 'online store')
-  const schema = ensureStoreAboutSection(ensureContactSection(fallbackWebsite(prompt, language)))
+  const schema = ensureGeneratedHeroStrip(
+    ensureStoreAboutSection(ensureContactSection(fallbackWebsite(prompt, language))),
+    language,
+  )
   const id = await createProject({
     name: schema.meta.name,
     sector: 'ecommerce',
