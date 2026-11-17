@@ -158,6 +158,37 @@ function bflDimensions(aspectRatio: ImageAspect): { width: number; height: numbe
   }
 }
 
+type ImageModelOptions =
+  | { providerOptions: { blackForestLabs: { width: number; height: number } } }
+  | { size: `${number}x${number}` }
+  | { aspectRatio: ImageAspect }
+
+function recraftSize(aspectRatio: ImageAspect): `${number}x${number}` {
+  switch (aspectRatio) {
+    case '1:1':
+      return '1024x1024'
+    case '4:3':
+      return '1216x896'
+    case '3:2':
+      return '1280x832'
+    case '3:4':
+      return '896x1216'
+    case '9:16':
+      return '768x1344'
+    case '16:9':
+    default:
+      return '1344x768'
+  }
+}
+
+export function getImageModelOptions(modelId: string, aspectRatio: ImageAspect): ImageModelOptions {
+  if (modelId.startsWith('bfl/flux-2-klein')) {
+    return { providerOptions: { blackForestLabs: bflDimensions(aspectRatio) } }
+  }
+  if (modelId.startsWith('recraft/')) return { size: recraftSize(aspectRatio) }
+  return { aspectRatio }
+}
+
 /**
  * Vercel AI Gateway image provider. Uses the AI SDK's `generateImage` with a
  * gateway image model. Zero-config for some gateway providers in v0; otherwise
@@ -178,9 +209,7 @@ const gatewayProvider: ImageProvider = {
     const modelId = model || resolveImageModel()
     try {
       const { generateImage, gateway } = await import('ai')
-      const modelAspectOptions = modelId.startsWith('bfl/flux-2-klein')
-        ? { providerOptions: { blackForestLabs: bflDimensions(aspectRatio) } }
-        : { aspectRatio }
+      const modelAspectOptions = getImageModelOptions(modelId, aspectRatio)
       const { image, warnings } = await generateImage({
         model: gateway.imageModel(modelId),
         prompt,

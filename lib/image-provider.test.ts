@@ -5,6 +5,7 @@ import {
   IMAGE_FAILURE_REASONS,
   generateWithModelFallback,
   getImageFallbackModel,
+  getImageModelOptions,
   resolveImageModel,
 } from './image-provider'
 
@@ -30,6 +31,15 @@ describe('image model strategy', () => {
     expect(getImageFallbackModel()).toBe(DEFAULT_IMAGE_FALLBACK_MODEL)
     vi.stubEnv('IMAGE_MODEL_FALLBACK', 'custom/fast')
     expect(getImageFallbackModel()).toBe('custom/fast')
+  })
+
+  it('uses model-supported size parameters for Recraft and FLUX.2 Klein', () => {
+    expect(getImageModelOptions('recraft/recraft-v4.1-flash', '16:9')).toEqual({ size: '1344x768' })
+    expect(getImageModelOptions('recraft/recraft-v4.1-flash', '4:3')).toEqual({ size: '1216x896' })
+    expect(getImageModelOptions('bfl/flux-2-klein-4b', '16:9')).toEqual({
+      providerOptions: { blackForestLabs: { width: 1360, height: 765 } },
+    })
+    expect(getImageModelOptions('google/imagen', '16:9')).toEqual({ aspectRatio: '16:9' })
   })
 
   it('switches to the fast model when the quality attempt times out and aborts it', async () => {
