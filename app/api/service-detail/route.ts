@@ -8,7 +8,7 @@ import { checkFreeDailyActionLimit, freeDailyLimitResponseBody } from '@/lib/fre
 import { generateServiceDetail } from '@/lib/service-detail-ai'
 import { findServicesSection } from '@/lib/service-pages'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 /**
  * POST /api/service-detail
@@ -49,5 +49,5 @@ export async function POST(req: Request) {
 
   const charge = await consumeCredits(userId, cost, 'serviceDetail')
   if (!charge.ok) return Response.json({ error: 'Out of credits', balance: charge.balance }, { status: 402 })
-  return Response.json({ blocks: result.blocks, charged: cost })
+  return Response.json({ blocks: result.blocks, description: result.description, icon: result.icon, charged: cost })
 }

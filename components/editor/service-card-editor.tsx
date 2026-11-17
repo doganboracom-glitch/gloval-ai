@@ -1,0 +1,587 @@
+'use client'
+
+import { useId, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, ChevronUp, Plus, Sparkles, Trash2, Upload } from 'lucide-react'
+import type { WebsiteSchema } from '@/lib/website-schema'
+import type { EditOperation } from '@/lib/website-edit-operations'
+import { isUsableImageSrc } from '@/lib/about-media'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
+import { canRemoveEntry } from '@/lib/list-limits'
+import { servicePath } from '@/lib/service-pages'
+import { suggestServiceAlt } from '@/lib/service-image'
+import {
+  META_DESCRIPTION_RANGE,
+  SERVICE_MIN_WORDS,
+  countWords,
+  filterServiceIcons,
+  hasLegacyServiceSeo,
+  metaDescriptionState,
+  resolveServiceSeo,
+  serviceIconLabel,
+  wordGoalStatus,
+} from '@/lib/service-card'
+import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
+import { DynamicIcon } from '@/components/website-renderer/icon'
+
+type ServicesData = Extract<WebsiteSchema['sections'][number], { type: 'services' }>
+type ServiceItem = ServicesData['items'][number]
+type Lang = 'tr' | 'en'
+
+const COPY = {
+  tr: {
+    title: 'Başlık',
+    googlePreview: "Google'da görünür:",
+    description: 'Kısa açıklama',
+    descriptionHint: "Anasayfada ve Google'da (meta açıklama) görünür",
+    metaBadge: 'META AÇIKLAMA',
+    chars: 'karakter',
+    icon: 'İkon',
+    iconSearch: 'İkon ara…',
+    iconNone: 'Eşleşen ikon yok.',
+    iconPick: 'İkon seç',
+    iconPreview: 'Anasayfada görünüşü',
+    image: 'Görsel',
+    upload: 'Görsel yükle',
+    remove: 'Kaldır',
+    alt: 'Alt metin',
+    page: 'Hizmet sayfası',
+    itemPage: 'Bu hizmetin sayfası açık',
+    slug: 'Sayfa adresi',
+    content: 'Detaylı içerik',
+    words: 'kelime',
+    wordGoal: 'hedef: en az',
+    blockHeading: 'Alt başlık',
+    blockBody: 'Metin (madde için satır başına "- " kullanın)',
+    addBlock: 'Blok ekle',
+    moveUp: 'Yukarı taşı',
+    moveDown: 'Aşağı taşı',
+    aiWrite: 'AI ile metin yaz',
+    aiWriting: 'Yazılıyor…',
+    sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
+    approve: 'İçeriği onayla',
+    advanced: "Gelişmiş: Google'da farklı göster",
+    seoTitle: 'SEO başlığı (eski)',
+    seoDescription: 'SEO açıklaması (eski)',
+    expand: 'Aç',
+    collapse: 'Kapat',
+  },
+  en: {
+    title: 'Title',
+    googlePreview: 'Shown on Google as:',
+    description: 'Short description',
+    descriptionHint: 'Shown on the home page and on Google (meta description)',
+    metaBadge: 'META DESCRIPTION',
+    chars: 'characters',
+    icon: 'Icon',
+    iconSearch: 'Search icons…',
+    iconNone: 'No matching icon.',
+    iconPick: 'Choose icon',
+    iconPreview: 'How it looks on the home page',
+    image: 'Image',
+    upload: 'Upload image',
+    remove: 'Remove',
+    alt: 'Alt text',
+    page: 'Service page',
+    itemPage: 'This service has its own page',
+    slug: 'Page address',
+    content: 'Detailed content',
+    words: 'words',
+    wordGoal: 'goal: at least',
+    blockHeading: 'Subheading',
+    blockBody: 'Text (use "- " per line for a list)',
+    addBlock: 'Add block',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    aiWrite: 'Write text with AI',
+    aiWriting: 'Writing…',
+    sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
+    approve: 'Approve content',
+    advanced: 'Advanced: show something different on Google',
+    seoTitle: 'SEO title (legacy)',
+    seoDescription: 'SEO description (legacy)',
+    expand: 'Expand',
+    collapse: 'Collapse',
+  },
+} as const
+
+type Copy = (typeof COPY)[Lang]
+
+/** A textarea that reports every keystroke (for live counters) and commits on blur. */
+function DraftArea({
+  label,
+  value,
+  rows,
+  hint,
+  badge,
+  maxLength,
+  onDraft,
+  onCommit,
+  describedBy,
+}: {
+  label: string
+  value: string
+  rows: number
+  hint?: string
+  badge?: string
+  maxLength?: number
+  onDraft?: (draft: string) => void
+  onCommit: (value: string) => void
+  describedBy?: string
+}) {
+  const [draft, setDraft] = useState(value)
+  const dirty = useRef(false)
+  const hintId = useId()
+  if (!dirty.current && draft !== value) setDraft(value)
+
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        {label}
+        {badge ? (
+          <span className="rounded-sm bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-brand">
+            {badge}
+          </span>
+        ) : null}
+      </span>
+      <textarea
+        rows={rows}
+        value={draft}
+        maxLength={maxLength}
+        aria-describedby={[hint ? hintId : '', describedBy ?? ''].filter(Boolean).join(' ') || undefined}
+        onChange={(e) => {
+          dirty.current = true
+          setDraft(e.target.value)
+          onDraft?.(e.target.value)
+        }}
+        onBlur={() => {
+          dirty.current = false
+          if (draft !== value) onCommit(draft)
+        }}
+        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+      />
+      {hint ? (
+        <span id={hintId} className="text-xs text-muted-foreground">
+          {hint}
+        </span>
+      ) : null}
+    </label>
+  )
+}
+
+const STATE_CLASS = {
+  good: 'text-emerald-600 dark:text-emerald-400',
+  warn: 'text-amber-600 dark:text-amber-400',
+} as const
+
+/** Searchable icon grid with a preview of the homepage card header. */
+export function ServiceIconPicker({
+  value,
+  title,
+  lang,
+  c,
+  onChange,
+}: {
+  value: string
+  title: string
+  lang: Lang
+  c: Copy
+  onChange: (key: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const inputId = useId()
+  const matches = filterServiceIcons(query)
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={inputId} className="text-xs text-muted-foreground">
+        {c.icon}
+      </label>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-background p-2" aria-label={c.iconPreview}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand">
+          <DynamicIcon name={value || 'sparkles'} className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="truncate text-sm font-medium">{title}</span>
+      </div>
+      <input
+        id={inputId}
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={c.iconSearch}
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+      />
+      <div
+        role="group"
+        aria-label={c.iconPick}
+        className="grid max-h-36 grid-cols-6 gap-1 overflow-y-auto rounded-md border border-border bg-background p-1"
+      >
+        {matches.map((key) => {
+          const active = key === value
+          const label = serviceIconLabel(key, lang)
+          return (
+            <button
+              key={key}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-pressed={active}
+              onClick={() => onChange(key)}
+              className={`flex h-8 items-center justify-center rounded-md border text-foreground transition-colors ${
+                active ? 'border-brand bg-brand/15 text-brand' : 'border-transparent hover:bg-muted'
+              }`}
+            >
+              <DynamicIcon name={key} className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )
+        })}
+        {matches.length === 0 ? (
+          <p className="col-span-6 px-1 py-2 text-center text-[11px] text-muted-foreground">{c.iconNone}</p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+export function ServiceCardEditor({
+  site,
+  index,
+  item,
+  itemIndex,
+  total,
+  lang,
+  pageOn,
+  listSlug,
+  busy,
+  writing,
+  onWriteWithAi,
+  onDispatch,
+  projectId,
+}: {
+  site: WebsiteSchema
+  index: number
+  item: ServiceItem
+  itemIndex: number
+  total: number
+  lang: Lang
+  pageOn: boolean
+  listSlug: string
+  busy: boolean
+  writing: boolean
+  onWriteWithAi: () => void
+  onDispatch: (op: EditOperation) => void
+  projectId: string | null
+}) {
+  const c = COPY[lang]
+  const [open, setOpen] = useState(false)
+  const [descDraft, setDescDraft] = useState<string | null>(null)
+  const [bodyDrafts, setBodyDrafts] = useState<Record<number, string>>({})
+  const bodyId = useId()
+
+  const blocks = item.detail ?? []
+  const itemOn = item.pageEnabled !== false
+  const hasImage = isUsableImageSrc(item.src)
+  const fallbackAlt = suggestServiceAlt(site, item.title, lang)
+  const siteName = site.navigation.logoText
+  const seo = resolveServiceSeo(
+    { title: item.title, description: item.description, seoTitle: item.seoTitle, seoDescription: item.seoDescription },
+    siteName,
+  )
+  const meta = metaDescriptionState(descDraft ?? item.description)
+  const wordCount = blocks.reduce(
+    (sum, block, b) => sum + countWords(block.heading) + countWords(bodyDrafts[b] ?? block.body),
+    0,
+  )
+  const goal = wordGoalStatus(wordCount, SERVICE_MIN_WORDS)
+
+  const setField = (field: 'title' | 'description' | 'icon', value: string) =>
+    onDispatch({ op: 'updateItemField', index, itemIndex, field, value })
+  const patchItem = (p: Extract<EditOperation, { op: 'updateServiceItem' }>['patch']) =>
+    onDispatch({ op: 'updateServiceItem', index, item: itemIndex, patch: p })
+  const updateBlock = (b: number, next: Partial<(typeof blocks)[number]>) =>
+    patchItem({ blocks: blocks.map((x, k) => (k === b ? { ...x, ...next } : x)) })
+
+  return (
+    <div className="flex flex-col rounded-lg border border-border bg-background/60">
+      <div className="flex items-center gap-1 p-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left text-sm font-medium hover:bg-muted"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-brand/15 text-brand">
+            <DynamicIcon name={item.icon || 'sparkles'} className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+          <span className="truncate">
+            {itemIndex + 1}. {item.title || '—'}
+          </span>
+          <span className="sr-only">{open ? c.collapse : c.expand}</span>
+        </button>
+        <IconBtn
+          label={c.moveUp}
+          small
+          disabled={itemIndex === 0}
+          onClick={() => onDispatch({ op: 'moveItem', index, itemIndex, direction: 'up' })}
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </IconBtn>
+        <IconBtn
+          label={c.moveDown}
+          small
+          disabled={itemIndex === total - 1}
+          onClick={() => onDispatch({ op: 'moveItem', index, itemIndex, direction: 'down' })}
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </IconBtn>
+        <IconBtn
+          label={c.remove}
+          small
+          disabled={!canRemoveEntry('services', total)}
+          onClick={() => onDispatch({ op: 'removeItem', index, itemIndex })}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </IconBtn>
+      </div>
+
+      {open && (
+        <div id={bodyId} className="flex flex-col gap-4 border-t border-border p-3">
+          <div className="flex flex-col gap-1">
+            <TextField label={c.title} value={item.title} onCommit={(v) => setField('title', v)} />
+            <p className="truncate text-xs text-muted-foreground" aria-live="polite">
+              {c.googlePreview} <span className="text-foreground">{seo.title}</span>
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <DraftArea
+              label={c.description}
+              badge={c.metaBadge}
+              hint={c.descriptionHint}
+              rows={3}
+              value={item.description}
+              onDraft={setDescDraft}
+              onCommit={(v) => {
+                setDescDraft(null)
+                setField('description', v)
+              }}
+            />
+            <p
+              className={`text-xs ${
+                meta.state === 'good' ? STATE_CLASS.good : meta.state === 'empty' ? 'text-muted-foreground' : STATE_CLASS.warn
+              }`}
+              aria-live="polite"
+            >
+              {meta.length} {c.chars} ({META_DESCRIPTION_RANGE.min}-{META_DESCRIPTION_RANGE.max})
+            </p>
+          </div>
+
+          <ServiceIconPicker
+            value={item.icon ?? ''}
+            title={item.title}
+            lang={lang}
+            c={c}
+            onChange={(key) => setField('icon', key)}
+          />
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted-foreground">{c.image}</span>
+            {hasImage && (
+              <div className="flex items-start gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.src}
+                  alt=""
+                  className="h-14 w-14 shrink-0 rounded-md border border-border object-cover"
+                />
+                <div className="flex-1">
+                  <TextField
+                    label={c.alt}
+                    value={item.alt ?? ''}
+                    placeholder={fallbackAlt}
+                    onCommit={(v) => patchItem({ alt: v.trim() || fallbackAlt })}
+                  />
+                </div>
+                <IconBtn label={c.remove} small onClick={() => patchItem({ src: '', alt: '' })}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </IconBtn>
+              </div>
+            )}
+            <UploadButton
+              label={c.upload}
+              icon={<Upload className="h-3.5 w-3.5" />}
+              onFile={(dataUri) => patchItem({ src: dataUri, alt: item.alt || fallbackAlt })}
+            />
+            <AiImagePreviewPanel
+              site={site}
+              sectionKey={`services:${index}.${itemIndex}`}
+              projectId={projectId}
+              canAdd
+              disabled={busy}
+              onUse={(image) => {
+                if (isUsableImageSrc(image.src)) patchItem({ src: image.src, alt: image.alt || fallbackAlt })
+              }}
+            />
+          </div>
+
+          {pageOn && (
+            <div className="flex flex-col gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.page}</span>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--color-brand)]"
+                  checked={itemOn}
+                  onChange={(e) => patchItem({ pageEnabled: e.target.checked })}
+                />
+                {c.itemPage}
+              </label>
+
+              {itemOn && (
+                <>
+                  {item.sample ? (
+                    <div role="note" className="flex flex-col gap-2 rounded-md border border-brand/40 bg-brand/10 p-3 text-xs">
+                      <p className="text-muted-foreground">{c.sample}</p>
+                      <button
+                        type="button"
+                        onClick={() => patchItem({ approve: true })}
+                        className="self-start font-medium text-brand hover:underline"
+                      >
+                        {c.approve}
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <TextField
+                    label={c.slug}
+                    value={item.slug ?? ''}
+                    mono
+                    hint={listSlug && item.slug ? servicePath(listSlug, item.slug) : undefined}
+                    onCommit={(v) => patchItem({ slug: v })}
+                  />
+
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">{c.content}</span>
+                      <span
+                        className={`text-xs ${goal.reached ? STATE_CLASS.good : STATE_CLASS.warn}`}
+                        aria-live="polite"
+                      >
+                        {goal.count} {c.words} ({c.wordGoal} {goal.goal})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={onWriteWithAi}
+                      className="inline-flex items-center gap-1.5 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                      {writing ? c.aiWriting : c.aiWrite}
+                    </button>
+                    {blocks.map((block, b) => (
+                      <div key={b} className="flex flex-col gap-2 rounded-md border border-border p-2">
+                        <div className="flex items-end gap-1">
+                          <div className="flex-1">
+                            <TextField
+                              label={c.blockHeading}
+                              value={block.heading ?? ''}
+                              onCommit={(v) => updateBlock(b, { heading: v })}
+                            />
+                          </div>
+                          <IconBtn
+                            label={c.moveUp}
+                            small
+                            disabled={b === 0}
+                            onClick={() => {
+                              const next = [...blocks]
+                              ;[next[b - 1], next[b]] = [next[b], next[b - 1]]
+                              setBodyDrafts({})
+                              patchItem({ blocks: next })
+                            }}
+                          >
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          </IconBtn>
+                          <IconBtn
+                            label={c.moveDown}
+                            small
+                            disabled={b === blocks.length - 1}
+                            onClick={() => {
+                              const next = [...blocks]
+                              ;[next[b + 1], next[b]] = [next[b], next[b + 1]]
+                              setBodyDrafts({})
+                              patchItem({ blocks: next })
+                            }}
+                          >
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </IconBtn>
+                          <IconBtn
+                            label={c.remove}
+                            small
+                            onClick={() => {
+                              setBodyDrafts({})
+                              patchItem({ blocks: blocks.filter((_, k) => k !== b) })
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </IconBtn>
+                        </div>
+                        <DraftArea
+                          label={c.blockBody}
+                          rows={5}
+                          value={block.body}
+                          onDraft={(draft) => setBodyDrafts((prev) => ({ ...prev, [b]: draft }))}
+                          onCommit={(v) => {
+                            setBodyDrafts((prev) => {
+                              const { [b]: _drop, ...rest } = prev
+                              return rest
+                            })
+                            updateBlock(b, { body: v })
+                          }}
+                        />
+                      </div>
+                    ))}
+                    {blocks.length < SERVICE_ITEM_LIMITS.blocks && (
+                      <GhostButton onClick={() => patchItem({ blocks: [...blocks, { level: 'h2', body: '' }] })}>
+                        <Plus className="h-3.5 w-3.5" />
+                        {c.addBlock}
+                      </GhostButton>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {hasLegacyServiceSeo(item) && (
+            <details className="rounded-md border border-border">
+              <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium">{c.advanced}</summary>
+              <div className="flex flex-col gap-3 border-t border-border p-3">
+                <TextField
+                  label={c.seoTitle}
+                  value={item.seoTitle ?? ''}
+                  maxLength={SERVICE_ITEM_LIMITS.seoTitle}
+                  onCommit={(v) => patchItem({ seoTitle: v })}
+                />
+                <TextField
+                  label={c.seoDescription}
+                  value={item.seoDescription ?? ''}
+                  multiline
+                  rows={2}
+                  maxLength={SERVICE_ITEM_LIMITS.seoDescription}
+                  onCommit={(v) => patchItem({ seoDescription: v })}
+                />
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -25,6 +25,7 @@ import {
 import {
   findPublicService,
   serviceDescription,
+  serviceTitle,
   servicePath,
 } from "@/lib/service-pages";
 import {
@@ -94,7 +95,7 @@ export async function buildSitePageMetadata(
       };
     const { entry } = found;
     const canonical = `${origin}${servicePath(found.resolved.listSlug, entry.slug)}`;
-    const title = `${entry.title} | ${site.name}`;
+    const title = serviceTitle(entry, site.name);
     const description =
       serviceDescription(entry) ||
       site.schema.meta.description ||

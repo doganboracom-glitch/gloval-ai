@@ -1,28 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
-import { isUsableImageSrc } from '@/lib/about-media'
-import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
+import { canAddEntry, canRemoveEntry, limitReason } from '@/lib/list-limits'
 import {
   defaultServicesLinkLabel,
   findServicesPage,
   serviceDetailHint,
-  servicePath,
   withServiceSlugs,
 } from '@/lib/service-pages'
-import { suggestServiceAlt } from '@/lib/service-image'
-import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { GhostButton, TextField } from '@/components/editor/editor-fields'
+import { ServiceCardEditor } from '@/components/editor/service-card-editor'
 import { useEditorProjectId, useSitePublished } from '@/components/editor/published-context'
-import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
 
 type ServicesData = Extract<WebsiteSchema['sections'][number], { type: 'services' }>
 
 const COPY = {
   tr: {
-    heading: 'Hizmet sayfaları',
+    heading: 'Hizmetler',
+    addService: 'Hizmet ekle',
     pageToggle: 'Her hizmet için ayrı sayfa oluştur',
     linkToggle: 'Ana sayfada "Tüm hizmetlerimiz" bağlantısını göster',
     linkLabel: 'Bağlantı metni',
@@ -57,7 +55,8 @@ const COPY = {
     aiDaily: 'Günlük ücretsiz işlem limitine ulaştınız.',
   },
   en: {
-    heading: 'Service pages',
+    heading: 'Services',
+    addService: 'Add service',
     pageToggle: 'Create a separate page for each service',
     linkToggle: 'Show the "All our services" link on the home page',
     linkLabel: 'Link label',
@@ -227,156 +226,41 @@ export function ServiceDetailFields({
           ) : null}
 
           <div className="flex flex-col gap-2">
-            {items.map((item, i) => {
-              const blocks = item.detail ?? []
-              const itemOn = item.pageEnabled !== false
-              const hasImage = isUsableImageSrc(item.src)
-              const fallbackAlt = suggestServiceAlt(site, item.title, lang)
-              const updateBlock = (b: number, next: Partial<(typeof blocks)[number]>) =>
-                patchItem(i, { blocks: blocks.map((x, k) => (k === b ? { ...x, ...next } : x)) })
-              return (
-                <details key={i} className="rounded-md border border-border">
-                  <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium">
-                    {item.title || `#${i + 1}`}
-                  </summary>
-                  <div className="flex flex-col gap-3 border-t border-border p-3">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-[var(--color-brand)]"
-                        checked={itemOn}
-                        onChange={(e) => patchItem(i, { pageEnabled: e.target.checked })}
-                      />
-                      {c.itemPage}
-                    </label>
-
-                    {itemOn && (
-                      <>
-                        {item.sample ? (
-                          <div role="note" className="flex flex-col gap-2 rounded-md border border-brand/40 bg-brand/10 p-3 text-xs">
-                            <p className="text-muted-foreground">{c.sample}</p>
-                            <button
-                              type="button"
-                              onClick={() => patchItem(i, { approve: true })}
-                              className="self-start font-medium text-brand hover:underline"
-                            >
-                              {c.approve}
-                            </button>
-                          </div>
-                        ) : null}
-
-                        <TextField
-                          label={c.slug}
-                          value={item.slug ?? ''}
-                          mono
-                          hint={listSlug && item.slug ? servicePath(listSlug, item.slug) : undefined}
-                          onCommit={(v) => patchItem(i, { slug: v })}
-                        />
-                        <TextField
-                          label={c.seoTitle}
-                          value={item.seoTitle ?? ''}
-                          maxLength={SERVICE_ITEM_LIMITS.seoTitle}
-                          onCommit={(v) => patchItem(i, { seoTitle: v })}
-                        />
-                        <TextField
-                          label={c.seoDescription}
-                          value={item.seoDescription ?? ''}
-                          multiline
-                          rows={2}
-                          maxLength={SERVICE_ITEM_LIMITS.seoDescription}
-                          onCommit={(v) => patchItem(i, { seoDescription: v })}
-                        />
-
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">{c.image}</span>
-                          {hasImage && (
-                            <div className="flex items-start gap-2">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={item.src}
-                                alt=""
-                                className="h-14 w-14 shrink-0 rounded-md border border-border object-cover"
-                              />
-                              <div className="flex-1">
-                                <TextField
-                                  label={c.alt}
-                                  value={item.alt ?? ''}
-                                  onCommit={(v) => patchItem(i, { alt: v.trim() || fallbackAlt })}
-                                />
-                              </div>
-                              <IconBtn label={c.remove} small onClick={() => patchItem(i, { src: '', alt: '' })}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </IconBtn>
-                            </div>
-                          )}
-                          <UploadButton
-                            label={c.upload}
-                            icon={<Upload className="h-3.5 w-3.5" />}
-                            onFile={(dataUri) => patchItem(i, { src: dataUri, alt: item.alt || fallbackAlt })}
-                          />
-                          <AiImagePreviewPanel
-                            site={site}
-                            sectionKey={`services:${index}.${i}`}
-                            projectId={projectId}
-                            canAdd
-                            disabled={writing !== null}
-                            onUse={(image) => {
-                              if (isUsableImageSrc(image.src)) patchItem(i, { src: image.src, alt: image.alt || fallbackAlt })
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                          <span className="text-xs font-medium text-muted-foreground">{c.blocks}</span>
-                          <button
-                            type="button"
-                            disabled={writing !== null}
-                            onClick={() => void writeWithAi(i)}
-                            className="inline-flex items-center gap-1.5 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
-                          >
-                            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                            {writing === i ? c.aiWriting : c.aiWrite}
-                          </button>
-                          {blocks.map((block, b) => (
-                            <div key={b} className="flex flex-col gap-2 rounded-md border border-border p-2">
-                              <div className="flex items-end gap-2">
-                                <div className="flex-1">
-                                  <TextField
-                                    label={c.blockHeading}
-                                    value={block.heading ?? ''}
-                                    onCommit={(v) => updateBlock(b, { heading: v })}
-                                  />
-                                </div>
-                                <IconBtn
-                                  label={c.remove}
-                                  small
-                                  onClick={() => patchItem(i, { blocks: blocks.filter((_, k) => k !== b) })}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </IconBtn>
-                              </div>
-                              <TextField
-                                label={c.blockBody}
-                                value={block.body}
-                                multiline
-                                rows={4}
-                                onCommit={(v) => updateBlock(b, { body: v })}
-                              />
-                            </div>
-                          ))}
-                          {blocks.length < SERVICE_ITEM_LIMITS.blocks && (
-                            <GhostButton onClick={() => patchItem(i, { blocks: [...blocks, { level: 'h2', body: '' }] })}>
-                              <Plus className="h-3.5 w-3.5" />
-                              {c.addBlock}
-                            </GhostButton>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </details>
-              )
-            })}
+            {items.map((item, i) => (
+              <ServiceCardEditor
+                key={i}
+                site={site}
+                index={index}
+                item={item}
+                itemIndex={i}
+                total={items.length}
+                lang={lang}
+                pageOn={pageOn}
+                listSlug={listSlug}
+                busy={writing !== null}
+                writing={writing === i}
+                onWriteWithAi={() => void writeWithAi(i)}
+                onDispatch={onDispatch}
+                projectId={projectId}
+              />
+            ))}
+            <GhostButton
+              disabled={!canAddEntry('services', items.length)}
+              onClick={() => onDispatch({ op: 'addItem', index })}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {c.addService}
+            </GhostButton>
+            {!canAddEntry('services', items.length) && (
+              <p className="text-xs text-muted-foreground" data-testid="list-limit-add-reason">
+                {limitReason('services', 'add', lang)}
+              </p>
+            )}
+            {!canRemoveEntry('services', items.length) && (
+              <p className="text-xs text-muted-foreground" data-testid="list-limit-remove-reason">
+                {limitReason('services', 'remove', lang)}
+              </p>
+            )}
           </div>
         </>
       )}
