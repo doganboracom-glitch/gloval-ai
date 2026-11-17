@@ -2,6 +2,7 @@ import type { Section, WebsiteSchema } from '@/lib/website-schema'
 import { SITE_PAGE_HARD_CAP } from '@/lib/pricing-config'
 import { isUsableImageSrc, usableAboutImages } from '@/lib/about-media'
 import { readMoreLabel, resolveAboutCopy } from '@/lib/about-copy'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 
 /**
  * Section detail pages
@@ -17,9 +18,9 @@ import { readMoreLabel, resolveAboutCopy } from '@/lib/about-copy'
 export const DETAIL_KINDS = ['about'] as const
 export type DetailKind = (typeof DETAIL_KINDS)[number]
 
-export const MAX_DETAIL_BLOCKS = 12
+export const MAX_DETAIL_BLOCKS = SERVICE_ITEM_LIMITS.blocks
 export const MAX_DETAIL_IMAGES = 3
-export const MAX_DETAIL_BODY = 5000
+export const MAX_DETAIL_BODY = SERVICE_ITEM_LIMITS.blockBody
 
 type Lang = 'tr' | 'en'
 type AboutData = Extract<Section, { type: 'about' }>

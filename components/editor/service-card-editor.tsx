@@ -1,7 +1,7 @@
 'use client'
 
-import { useId, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronUp, Plus, Sparkles, Trash2, Upload } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight, ChevronUp, Sparkles, Trash2, Upload } from 'lucide-react'
 import type { WebsiteSchema } from '@/lib/website-schema'
 import type { EditOperation } from '@/lib/website-edit-operations'
 import { isUsableImageSrc } from '@/lib/about-media'
@@ -12,15 +12,17 @@ import { suggestServiceAlt } from '@/lib/service-image'
 import {
   META_DESCRIPTION_RANGE,
   SERVICE_MIN_WORDS,
+  blocksToText,
   countWords,
   filterServiceIcons,
   hasLegacyServiceSeo,
   metaDescriptionState,
+  normalizeServiceText,
   resolveServiceSeo,
   serviceIconLabel,
   wordGoalStatus,
 } from '@/lib/service-card'
-import { GhostButton, IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
+import { IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
 import { DynamicIcon } from '@/components/website-renderer/icon'
 
@@ -33,7 +35,7 @@ const COPY = {
     title: 'Başlık',
     googlePreview: "Google'da görünür:",
     description: 'Kısa açıklama',
-    descriptionHint: "Anasayfada ve Google'da (meta açıklama) görünür",
+    shortDescriptionHint: "Anasayfada ve Google'da (meta açıklama) görünür",
     metaBadge: 'META AÇIKLAMA',
     chars: 'karakter',
     icon: 'İkon',
@@ -48,12 +50,14 @@ const COPY = {
     page: 'Hizmet sayfası',
     itemPage: 'Bu hizmetin sayfası açık',
     slug: 'Sayfa adresi',
-    content: 'Detaylı içerik',
+    content: 'Detaylı açıklama',
+    descriptionHint: 'Hizmetinizi ayrıntılı anlatın (en az 300 kelime). Alt başlık için satırı "## " ile başlatın, madde işareti için "- " kullanın.',
+    descriptionPlaceholder: '## Hizmet nedir?\nHizmetinizi kısaca anlatın.\n\n## Nasıl çalışır?\n- İlk adım\n- İkinci adım',
+    headingWarning: (limit: number) => `Bir alt başlık ${limit} karakter sınırını aşıyor. Yazdığınız metin korunuyor; başlığı kısaltıp tekrar deneyin.`,
+    paragraphWarning: (limit: number) => `Bir paragraf ${limit} karakter sınırını aşıyor ve paragraf sınırında bölünemiyor. Yazdığınız metin korunuyor; kısaltın veya paragrafı ayırın.`,
+    blockWarning: (count: number, limit: number) => `${count} blok sınırından sonra gelen metin son bloğa ${limit} karakter sınırını aşmadan sığmıyor. Yazdığınız metin korunuyor; kısaltın veya paragrafları ayırın.`,
     words: 'kelime',
     wordGoal: 'hedef: en az',
-    blockHeading: 'Alt başlık',
-    blockBody: 'Metin (madde için satır başına "- " kullanın)',
-    addBlock: 'Blok ekle',
     moveUp: 'Yukarı taşı',
     moveDown: 'Aşağı taşı',
     aiWrite: 'AI ile metin yaz',
@@ -70,7 +74,7 @@ const COPY = {
     title: 'Title',
     googlePreview: 'Shown on Google as:',
     description: 'Short description',
-    descriptionHint: 'Shown on the home page and on Google (meta description)',
+    shortDescriptionHint: 'Shown on the home page and on Google (meta description)',
     metaBadge: 'META DESCRIPTION',
     chars: 'characters',
     icon: 'Icon',
@@ -85,12 +89,14 @@ const COPY = {
     page: 'Service page',
     itemPage: 'This service has its own page',
     slug: 'Page address',
-    content: 'Detailed content',
+    content: 'Detailed description',
+    descriptionHint: 'Describe your service in detail (at least 300 words). Start a line with "## " for a subheading and use "- " for bullet points.',
+    descriptionPlaceholder: '## What is the service?\nDescribe the result.\n\n## How it works\n- First step\n- Second step',
+    headingWarning: (limit: number) => `A subheading exceeds the ${limit}-character limit. Your text is preserved; shorten the heading to save.`,
+    paragraphWarning: (limit: number) => `A paragraph exceeds the ${limit}-character limit and cannot be split at a paragraph boundary. Your text is preserved; shorten or split the paragraph.`,
+    blockWarning: (count: number, limit: number) => `Text beyond the ${count}-block limit does not fit in the last block without exceeding ${limit} characters. Your text is preserved; shorten or split paragraphs.`,
     words: 'words',
     wordGoal: 'goal: at least',
-    blockHeading: 'Subheading',
-    blockBody: 'Text (use "- " per line for a list)',
-    addBlock: 'Add block',
     moveUp: 'Move up',
     moveDown: 'Move down',
     aiWrite: 'Write text with AI',
@@ -107,7 +113,7 @@ const COPY = {
 
 type Copy = (typeof COPY)[Lang]
 
-/** A textarea that reports every keystroke (for live counters) and commits on blur. */
+/** A textarea that reports every keystroke and commits valid drafts on blur. */
 function DraftArea({
   label,
   value,
@@ -115,6 +121,10 @@ function DraftArea({
   hint,
   badge,
   maxLength,
+  placeholder,
+  resizable = false,
+  headerRight,
+  syncKey,
   onDraft,
   onCommit,
   describedBy,
@@ -125,29 +135,48 @@ function DraftArea({
   hint?: string
   badge?: string
   maxLength?: number
+  placeholder?: string
+  resizable?: boolean
+  headerRight?: React.ReactNode
+  syncKey?: unknown
   onDraft?: (draft: string) => void
-  onCommit: (value: string) => void
+  onCommit: (value: string) => void | boolean
   describedBy?: string
 }) {
   const [draft, setDraft] = useState(value)
   const dirty = useRef(false)
+  const previousSyncKey = useRef(syncKey)
+  const textareaId = useId()
   const hintId = useId()
+
+  useEffect(() => {
+    if (Object.is(previousSyncKey.current, syncKey)) return
+    previousSyncKey.current = syncKey
+    dirty.current = false
+    setDraft(value)
+  }, [syncKey, value])
+
   if (!dirty.current && draft !== value) setDraft(value)
 
   return (
-    <label className="flex flex-col gap-1">
-      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-        {label}
-        {badge ? (
-          <span className="rounded-sm bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-brand">
-            {badge}
-          </span>
-        ) : null}
-      </span>
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor={textareaId} className="flex items-center gap-2 text-xs text-muted-foreground">
+          {label}
+          {badge ? (
+            <span className="rounded-sm bg-brand/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-brand">
+              {badge}
+            </span>
+          ) : null}
+        </label>
+        {headerRight}
+      </div>
       <textarea
+        id={textareaId}
         rows={rows}
         value={draft}
         maxLength={maxLength}
+        placeholder={placeholder}
         aria-describedby={[hint ? hintId : '', describedBy ?? ''].filter(Boolean).join(' ') || undefined}
         onChange={(e) => {
           dirty.current = true
@@ -155,17 +184,20 @@ function DraftArea({
           onDraft?.(e.target.value)
         }}
         onBlur={() => {
-          dirty.current = false
-          if (draft !== value) onCommit(draft)
+          if (draft === value) {
+            dirty.current = false
+            return
+          }
+          if (onCommit(draft) !== false) dirty.current = false
         }}
-        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+        className={`w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary ${resizable ? 'resize-y' : 'resize-none'}`}
       />
       {hint ? (
         <span id={hintId} className="text-xs text-muted-foreground">
           {hint}
         </span>
       ) : null}
-    </label>
+    </div>
   )
 }
 
@@ -275,7 +307,6 @@ export function ServiceCardEditor({
   const c = COPY[lang]
   const [open, setOpen] = useState(false)
   const [descDraft, setDescDraft] = useState<string | null>(null)
-  const [bodyDrafts, setBodyDrafts] = useState<Record<number, string>>({})
   const bodyId = useId()
 
   const blocks = item.detail ?? []
@@ -288,18 +319,15 @@ export function ServiceCardEditor({
     siteName,
   )
   const meta = metaDescriptionState(descDraft ?? item.description)
-  const wordCount = blocks.reduce(
-    (sum, block, b) => sum + countWords(block.heading) + countWords(bodyDrafts[b] ?? block.body),
-    0,
-  )
+  const descriptionValue = descDraft ?? blocksToText(blocks)
+  const normalizedDescription = normalizeServiceText(descriptionValue)
+  const wordCount = countWords(descriptionValue)
   const goal = wordGoalStatus(wordCount, SERVICE_MIN_WORDS)
 
   const setField = (field: 'title' | 'description' | 'icon', value: string) =>
     onDispatch({ op: 'updateItemField', index, itemIndex, field, value })
   const patchItem = (p: Extract<EditOperation, { op: 'updateServiceItem' }>['patch']) =>
     onDispatch({ op: 'updateServiceItem', index, item: itemIndex, patch: p })
-  const updateBlock = (b: number, next: Partial<(typeof blocks)[number]>) =>
-    patchItem({ blocks: blocks.map((x, k) => (k === b ? { ...x, ...next } : x)) })
 
   return (
     <div className="flex flex-col rounded-lg border border-border bg-background/60">
@@ -363,7 +391,7 @@ export function ServiceCardEditor({
             <DraftArea
               label={c.description}
               badge={c.metaBadge}
-              hint={c.descriptionHint}
+              hint={c.shortDescriptionHint}
               rows={3}
               value={item.description}
               onDraft={setDescDraft}
@@ -467,92 +495,51 @@ export function ServiceCardEditor({
                   />
 
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-muted-foreground">{c.content}</span>
-                      <span
-                        className={`text-xs ${goal.reached ? STATE_CLASS.good : STATE_CLASS.warn}`}
-                        aria-live="polite"
-                      >
-                        {goal.count} {c.words} ({c.wordGoal} {goal.goal})
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={onWriteWithAi}
-                      className="inline-flex items-center gap-1.5 self-start text-xs font-medium text-brand hover:underline disabled:opacity-50"
-                    >
-                      <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                      {writing ? c.aiWriting : c.aiWrite}
-                    </button>
-                    {blocks.map((block, b) => (
-                      <div key={b} className="flex flex-col gap-2 rounded-md border border-border p-2">
-                        <div className="flex items-end gap-1">
-                          <div className="flex-1">
-                            <TextField
-                              label={c.blockHeading}
-                              value={block.heading ?? ''}
-                              onCommit={(v) => updateBlock(b, { heading: v })}
-                            />
-                          </div>
-                          <IconBtn
-                            label={c.moveUp}
-                            small
-                            disabled={b === 0}
-                            onClick={() => {
-                              const next = [...blocks]
-                              ;[next[b - 1], next[b]] = [next[b], next[b - 1]]
-                              setBodyDrafts({})
-                              patchItem({ blocks: next })
-                            }}
+                    <DraftArea
+                      label={c.content}
+                      value={descriptionValue}
+                      rows={12}
+                      hint={c.descriptionHint}
+                      placeholder={c.descriptionPlaceholder}
+                      resizable
+                      syncKey={blocks}
+                      onDraft={setDescDraft}
+                      onCommit={(text) => {
+                        const parsed = normalizeServiceText(text)
+                        if (parsed.warning) return false
+                        setDescDraft(null)
+                        patchItem({ blocks: parsed.blocks })
+                        return true
+                      }}
+                      headerRight={
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span
+                            className={`text-xs ${goal.reached ? STATE_CLASS.good : STATE_CLASS.warn}`}
+                            aria-live="polite"
                           >
-                            <ChevronUp className="h-3.5 w-3.5" />
-                          </IconBtn>
-                          <IconBtn
-                            label={c.moveDown}
-                            small
-                            disabled={b === blocks.length - 1}
-                            onClick={() => {
-                              const next = [...blocks]
-                              ;[next[b + 1], next[b]] = [next[b], next[b + 1]]
-                              setBodyDrafts({})
-                              patchItem({ blocks: next })
-                            }}
+                            {goal.count} {c.words} ({c.wordGoal} {goal.goal})
+                          </span>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={onWriteWithAi}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-brand hover:underline disabled:opacity-50"
                           >
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          </IconBtn>
-                          <IconBtn
-                            label={c.remove}
-                            small
-                            onClick={() => {
-                              setBodyDrafts({})
-                              patchItem({ blocks: blocks.filter((_, k) => k !== b) })
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </IconBtn>
+                            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                            {writing ? c.aiWriting : c.aiWrite}
+                          </button>
                         </div>
-                        <DraftArea
-                          label={c.blockBody}
-                          rows={5}
-                          value={block.body}
-                          onDraft={(draft) => setBodyDrafts((prev) => ({ ...prev, [b]: draft }))}
-                          onCommit={(v) => {
-                            setBodyDrafts((prev) => {
-                              const { [b]: _drop, ...rest } = prev
-                              return rest
-                            })
-                            updateBlock(b, { body: v })
-                          }}
-                        />
-                      </div>
-                    ))}
-                    {blocks.length < SERVICE_ITEM_LIMITS.blocks && (
-                      <GhostButton onClick={() => patchItem({ blocks: [...blocks, { level: 'h2', body: '' }] })}>
-                        <Plus className="h-3.5 w-3.5" />
-                        {c.addBlock}
-                      </GhostButton>
-                    )}
+                      }
+                    />
+                    {normalizedDescription.warning ? (
+                      <p role="status" aria-live="polite" className={`text-xs ${STATE_CLASS.warn}`}>
+                        {normalizedDescription.warning === 'heading-too-long'
+                          ? c.headingWarning(SERVICE_ITEM_LIMITS.blockHeading)
+                          : normalizedDescription.warning === 'paragraph-too-long'
+                            ? c.paragraphWarning(SERVICE_ITEM_LIMITS.blockBody)
+                            : c.blockWarning(SERVICE_ITEM_LIMITS.blocks, SERVICE_ITEM_LIMITS.blockBody)}
+                      </p>
+                    ) : null}
                   </div>
                 </>
               )}

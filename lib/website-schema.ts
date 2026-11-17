@@ -82,9 +82,9 @@ export const aboutMediaSchema = z.object({
  * `sections`, so the section and its detail page stay one owner-editable unit.
  */
 export const sectionDetailBlockSchema = z.object({
-  heading: z.string().max(140).optional(),
+  heading: z.string().max(SERVICE_ITEM_LIMITS.blockHeading).optional(),
   level: z.enum(['h2', 'h3']).optional(),
-  body: z.string().max(5000),
+  body: z.string().max(SERVICE_ITEM_LIMITS.blockBody),
 })
 
 export const sectionDetailSchema = z.object({

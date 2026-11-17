@@ -16,7 +16,6 @@ import { ServiceCardEditor } from '@/components/editor/service-card-editor'
 import { useEditorProjectId, useSitePublished } from '@/components/editor/published-context'
 
 type ServicesData = Extract<WebsiteSchema['sections'][number], { type: 'services' }>
-
 const COPY = {
   tr: {
     heading: 'Hizmetler',
@@ -28,6 +27,7 @@ const COPY = {
     ctaTitle: 'Alt çağrı başlığı',
     ctaText: 'Alt çağrı metni',
     ctaLabel: 'Alt çağrı buton metni',
+    advancedCta: 'Gelişmiş: Alt çağrı bandı',
     off: 'Sayfalar kapalıyken bağlantılar gizlenir ve adresler 404 döner.',
     suggestTitle: 'Hizmetleriniz için ayrı sayfalar oluşturabilirsiniz',
     suggestBody: 'Yayındaki siteniz değişmez; açtığınızda yeniden yayınlayınca görünür. Metinler siz onaylayana kadar örnek olarak işaretlenir.',
@@ -61,9 +61,10 @@ const COPY = {
     linkToggle: 'Show the "All our services" link on the home page',
     linkLabel: 'Link label',
     listTitle: 'List page title',
-    ctaTitle: 'Closing call-to-action title',
-    ctaText: 'Closing call-to-action text',
-    ctaLabel: 'Closing call-to-action button label',
+    ctaTitle: 'Bottom CTA title',
+    ctaText: 'Bottom CTA text',
+    ctaLabel: 'Bottom CTA button text',
+    advancedCta: 'Advanced: Bottom CTA band',
     off: 'While the pages are off, links are hidden and the addresses return 404.',
     suggestTitle: 'You can create a page for each of your services',
     suggestBody: 'Your live site does not change; the pages show up once you publish again. The text stays marked as a sample until you approve it.',
@@ -106,6 +107,7 @@ export function ServiceDetailFields({
   const lang = site.meta.language === 'en' ? 'en' : 'tr'
   const c = COPY[lang]
   const detail = section.detail
+  const hasCustomCta = Boolean(detail?.ctaTitle?.trim() || detail?.ctaText?.trim() || detail?.ctaLabel?.trim())
   const pageOn = !!detail && detail.pageEnabled !== false
   const published = useSitePublished()
   const projectId = useEditorProjectId()
@@ -186,6 +188,31 @@ export function ServiceDetailFields({
       </label>
       {!pageOn ? <p className="text-xs text-muted-foreground">{c.off}</p> : null}
 
+      {hasCustomCta && (
+        <details className="rounded-md border border-border">
+          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium">{c.advancedCta}</summary>
+          <div className="flex flex-col gap-3 border-t border-border p-3">
+            <TextField
+              label={c.ctaTitle}
+              value={detail?.ctaTitle ?? ''}
+              onCommit={(value) => patchList({ ctaTitle: value })}
+            />
+            <TextField
+              label={c.ctaText}
+              value={detail?.ctaText ?? ''}
+              multiline
+              rows={2}
+              onCommit={(value) => patchList({ ctaText: value })}
+            />
+            <TextField
+              label={c.ctaLabel}
+              value={detail?.ctaLabel ?? ''}
+              onCommit={(value) => patchList({ ctaLabel: value })}
+            />
+          </div>
+        </details>
+      )}
+
       {pageOn && (
         <>
           <label className="flex items-center gap-2 text-sm">
@@ -209,15 +236,7 @@ export function ServiceDetailFields({
             value={detail?.heading ?? section.title}
             onCommit={(v) => patchList({ heading: v })}
           />
-          <TextField label={c.ctaTitle} value={detail?.ctaTitle ?? ''} onCommit={(v) => patchList({ ctaTitle: v })} />
-          <TextField
-            label={c.ctaText}
-            value={detail?.ctaText ?? ''}
-            multiline
-            rows={2}
-            onCommit={(v) => patchList({ ctaText: v })}
-          />
-          <TextField label={c.ctaLabel} value={detail?.ctaLabel ?? ''} onCommit={(v) => patchList({ ctaLabel: v })} />
+
 
           {notice ? (
             <p role="status" className="text-xs text-muted-foreground">

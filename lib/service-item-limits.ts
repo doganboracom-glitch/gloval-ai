@@ -11,6 +11,8 @@ export const SERVICE_ITEM_LIMITS = {
   alt: 200,
   seoTitle: 120,
   seoDescription: 320,
+  blockHeading: 140,
+  blockBody: 5000,
   blocks: 12,
 } as const
 

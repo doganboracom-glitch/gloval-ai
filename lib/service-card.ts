@@ -1,4 +1,5 @@
 import { HERO_STRIP_ICONS, HERO_STRIP_ICON_LABELS } from '@/lib/hero-strip'
+import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 
 /**
  * Pure helpers behind the unified service card (editor) and the service SEO
@@ -6,7 +7,114 @@ import { HERO_STRIP_ICONS, HERO_STRIP_ICON_LABELS } from '@/lib/hero-strip'
  * the renderer, the generator and the tests can all share it.
  */
 
-type BlockLike = { heading?: string; body?: string }
+type BlockLike = { heading?: string; level?: 'h2' | 'h3'; body?: string }
+
+export type ServiceTextBlock = { heading?: string; level?: 'h2' | 'h3'; body: string }
+export type ServiceTextWarning = 'heading-too-long' | 'paragraph-too-long' | 'block-limit'
+export type NormalizedServiceText = { blocks: ServiceTextBlock[]; warning: ServiceTextWarning | null }
+
+export function blocksToText(blocks: ReadonlyArray<ServiceTextBlock> | null | undefined): string {
+  return (blocks ?? [])
+    .map((block) => {
+      const heading = block.heading?.trim()
+      const body = block.body.trim()
+      const headingLine = heading ? `${block.level === 'h3' ? '###' : '##'} ${heading}` : ''
+      return [headingLine, body].filter(Boolean).join('\n\n')
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export function textToBlocks(text: string): ServiceTextBlock[] {
+  const blocks: ServiceTextBlock[] = []
+  let heading: string | undefined
+  let level: 'h2' | 'h3' | undefined
+  let bodyLines: string[] = []
+
+  const flush = () => {
+    const normalizedHeading = heading?.trim()
+    const body = bodyLines.join('\n').trim()
+    if (normalizedHeading || body) {
+      blocks.push({
+        ...(normalizedHeading ? { heading: normalizedHeading, level: level ?? 'h2' } : {}),
+        body,
+      })
+    }
+    heading = undefined
+    level = undefined
+    bodyLines = []
+  }
+
+  for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
+    const match = /^(#{2,3}) (.*)$/.exec(line)
+    if (match) {
+      flush()
+      heading = match[2]
+      level = match[1].length === 3 ? 'h3' : 'h2'
+    } else {
+      bodyLines.push(line)
+    }
+  }
+  flush()
+  return blocks
+}
+
+function splitBodyAtParagraphs(body: string): string[] | null {
+  const trimmed = body.trim()
+  if (!trimmed) return ['']
+
+  const paragraphs = trimmed.split(/\n[ \t]*\n+/).map((paragraph) => paragraph.trim()).filter(Boolean)
+  const chunks: string[] = []
+  let current = ''
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > SERVICE_ITEM_LIMITS.blockBody) return null
+    const combined = current ? `${current}\n\n${paragraph}` : paragraph
+    if (combined.length > SERVICE_ITEM_LIMITS.blockBody) {
+      chunks.push(current)
+      current = paragraph
+    } else {
+      current = combined
+    }
+  }
+
+  if (current) chunks.push(current)
+  return chunks.length > 0 ? chunks : ['']
+}
+
+export function normalizeServiceText(text: string): NormalizedServiceText {
+  const expanded: ServiceTextBlock[] = []
+
+  for (const block of textToBlocks(text)) {
+    if (block.heading && block.heading.length > SERVICE_ITEM_LIMITS.blockHeading) {
+      return { blocks: [], warning: 'heading-too-long' }
+    }
+
+    const bodyParts = splitBodyAtParagraphs(block.body)
+    if (!bodyParts) return { blocks: [], warning: 'paragraph-too-long' }
+
+    bodyParts.forEach((body, index) => {
+      expanded.push({
+        ...(index === 0 && block.heading ? { heading: block.heading, level: block.level ?? 'h2' } : {}),
+        body,
+      })
+    })
+  }
+
+  if (expanded.length > SERVICE_ITEM_LIMITS.blocks) {
+    const lastIndex = SERVICE_ITEM_LIMITS.blocks - 1
+    const last = expanded[lastIndex]
+    const overflow = expanded
+      .slice(SERVICE_ITEM_LIMITS.blocks)
+      .map((block) => [block.heading, block.body].filter(Boolean).join('\n\n'))
+      .filter(Boolean)
+    const mergedBody = [last.body, ...overflow].filter(Boolean).join('\n\n')
+    if (mergedBody.length > SERVICE_ITEM_LIMITS.blockBody) return { blocks: [], warning: 'block-limit' }
+    expanded.splice(lastIndex, expanded.length - lastIndex, { ...last, body: mergedBody })
+  }
+
+  return { blocks: expanded, warning: null }
+}
 
 // "Words" are runs of letters/digits (any script, so ç ğ ı ö ş ü count), joined by an inner apostrophe or hyphen.
 const WORD = /[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu
