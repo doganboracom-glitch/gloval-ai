@@ -40,7 +40,7 @@ describe('service item fields: one definition of the limits', () => {
       'lib/service-pages.ts',
       'lib/website-edit-operations.ts',
       'lib/service-detail-background.ts',
-      'components/editor/service-detail-fields.tsx',
+      'components/editor/service-card-editor.tsx',
     ]
     for (const file of consumers) {
       expect(read(file), file).toMatch(/service-item-limits/)
@@ -114,7 +114,7 @@ describe('editor panel compatibility with the new page structure', () => {
   })
 
   it('the fields component edits through the parent onChange, so history and autosave still see every change', () => {
-    const src = read('components/editor/service-detail-fields.tsx')
+    const src = read('components/editor/service-detail-fields.tsx') + read('components/editor/service-card-editor.tsx')
     expect(src).toMatch(/updateServiceItem/)
     expect(src).toMatch(/updateServicesDetail/)
     expect(src).not.toMatch(/useReducer|createStore|localStorage/)

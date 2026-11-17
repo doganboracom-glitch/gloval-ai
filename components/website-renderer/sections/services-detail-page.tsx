@@ -254,7 +254,7 @@ export function ServicesDetailPage({ site, itemSlug }: { site: WebsiteSchema; it
                   src={entry.image.src}
                   alt={entry.image.alt}
                   decoding="async"
-                  className="aspect-[16/9] w-full object-cover"
+                  className="aspect-[4/3] w-full object-cover"
                 />
               </div>
             ) : null}

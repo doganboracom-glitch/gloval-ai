@@ -65,9 +65,12 @@ export function fillServiceImages(site: WebsiteSchema): { site: WebsiteSchema; f
   return { site: { ...site, sections: site.sections.map((s) => (s === section ? { ...section, items } : s)) }, filled }
 }
 
-type Written = Map<number, { title: string; blocks: DetailBlock[] }>
+type Written = Map<number, { title: string; blocks: DetailBlock[]; description?: string; icon?: string }>
 
-/** Merges generated text into the LATEST draft; an item the owner touched meanwhile is skipped. */
+/**
+ * Merges generated text into the LATEST draft; an item the owner touched meanwhile is skipped.
+ * The card's own description and icon are only filled when the owner has none.
+ */
 export function applyServiceText(site: WebsiteSchema, written: Written): { site: WebsiteSchema; applied: number } {
   const section = findServicesSection(site)
   if (!section) return { site, applied: 0 }
@@ -76,7 +79,13 @@ export function applyServiceText(site: WebsiteSchema, written: Written): { site:
     const entry = written.get(index)
     if (!entry || entry.title !== item.title || hasText(item) || item.pageEnabled === false) return item
     applied += 1
-    return { ...item, detail: entry.blocks, sample: true }
+    return {
+      ...item,
+      detail: entry.blocks,
+      sample: true,
+      ...(entry.description && !item.description.trim() ? { description: entry.description } : {}),
+      ...(entry.icon && !item.icon ? { icon: entry.icon } : {}),
+    }
   })
   if (!applied) return { site, applied: 0 }
   return { site: { ...site, sections: site.sections.map((s) => (s === section ? { ...section, items } : s)) }, applied }
@@ -101,7 +110,12 @@ export async function runServiceDetailBackground(deps: ServiceBackgroundDeps): P
       for (const index of targets) {
         const result = await deps.write(first.site, index)
         if (result.written && result.blocks.length) {
-          written.set(index, { title: section.items[index].title, blocks: result.blocks })
+          written.set(index, {
+            title: section.items[index].title,
+            blocks: result.blocks,
+            description: result.description,
+            icon: result.icon,
+          })
         }
       }
     }

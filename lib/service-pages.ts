@@ -4,6 +4,7 @@ import { isUsableImageSrc } from '@/lib/about-media'
 import { cleanDetailBlocks, syncDetailPages, type DetailBlock } from '@/lib/section-detail'
 import { slugifyPageSlug, uniquePageSlug } from '@/lib/page-slugs'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
+import { resolveServiceSeo } from '@/lib/service-card'
 import { syncGalleryPages } from '@/lib/gallery-pages'
 import { syncTestimonialsPage } from '@/lib/testimonials'
 import { syncReferencesPage } from '@/lib/references'
@@ -244,12 +245,17 @@ export function findPublicService(site: WebsiteSchema, listSlug: string, itemSlu
   return { resolved, entry: resolved.items[index], index }
 }
 
-/** Plain-text digest for meta descriptions; the owner's SEO text wins. */
+/**
+ * Meta description: a legacy `seoDescription` wins when set, otherwise the card's
+ * Kısa açıklama (so the text the owner reads in the editor is what Google shows).
+ */
 export function serviceDescription(entry: ServiceEntry): string {
-  if (entry.seoDescription) return entry.seoDescription.slice(0, SERVICE_ITEM_LIMITS.seoDescription)
-  const firstBlock = entry.blocks.find((b) => b.body)?.body
-  const source = firstBlock || entry.description
-  return source.replace(/\s+/g, ' ').trim().slice(0, 160)
+  return resolveServiceSeo(entry, '').description.slice(0, SERVICE_ITEM_LIMITS.seoDescription)
+}
+
+/** `<title>` for a service page: legacy `seoTitle`, else "<Başlık> | <Firma adı>". */
+export function serviceTitle(entry: ServiceEntry, siteName: string): string {
+  return resolveServiceSeo(entry, siteName).title
 }
 
 /**

@@ -317,7 +317,7 @@ export function SectionInspector({
         <HeroStripFields index={index} section={section} lang={site.meta.language} onDispatch={onDispatch} />
       )}
 
-      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && section.type !== 'team' && section.type !== 'heroStrip' && items.length > 0 && (
+      {!managedProducts && section.type !== 'footer' && section.type !== 'announcement' && section.type !== 'testimonials' && section.type !== 'references' && section.type !== 'team' && section.type !== 'heroStrip' && section.type !== 'services' && items.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-xs font-medium text-muted-foreground">{ui.itemsLabel}</span>
           {items.map((item, itemIndex) => (
