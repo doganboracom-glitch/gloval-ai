@@ -40,6 +40,7 @@ export function buildSiteGenerateSystem(
     `with a title, a short description, and form field labels; leave mapEmbed unset. ` +
     `Use the available section types richly and appropriately: hero, about, services, features, ` +
     `stats, testimonials, gallery, portfolio, process, team, pricing, faq, contact, cta, footer. ` +
+    `Do NOT output a "heroStrip" section: the strip under the hero is added automatically. ` +
     suggestedCountsPromptHint() +
     `Set meta.seoTitle to a short, keyword-rich search phrase (3-6 words) that helps this ` +
     `business rank on Google: lead with the city or district when the brief mentions one, ` +

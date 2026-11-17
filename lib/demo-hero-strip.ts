@@ -1,4 +1,4 @@
-import type { HeroStripItemLike } from '@/lib/hero-strip'
+import { heroStripPlacementIndex, type HeroStripItemLike } from '@/lib/hero-strip'
 import type { Section, WebsiteSchema } from '@/lib/website-schema'
 
 /**
@@ -6,8 +6,8 @@ import type { Section, WebsiteSchema } from '@/lib/website-schema'
  * numbers and no unverifiable claim (no "N years", "%100", "leader", "best",
  * "authorized"): every box is a plain statement of what the business does.
  * Boxes and the section are flagged `sample`, the same "Örnek içerik" pattern
- * the other demo sections use. Real, AI-generated customer sites never get one
- * automatically.
+ * the other demo sections use. Newly generated customer sites get their own,
+ * non-sample strip from `lib/generated-hero-strip.ts`.
  */
 
 type Box = readonly [icon: string, title: string, text: string]
@@ -192,9 +192,7 @@ export function demoHeroStripItems(slug: string, lang: 'tr' | 'en'): HeroStripIt
 
 /** Right below the opening run of hero / slider sections, skipping an announcement band at the very top. */
 export function demoHeroStripIndex(sections: readonly Section[]): number {
-  let index = sections[0]?.type === 'announcement' ? 1 : 0
-  while (index < sections.length && (sections[index].type === 'hero' || sections[index].type === 'slider')) index++
-  return index
+  return heroStripPlacementIndex(sections)
 }
 
 /** Adds the sample strip to a demo site, in place. Skipped when the home list has no hero or already has a strip. */
