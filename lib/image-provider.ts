@@ -10,8 +10,8 @@
  *  - Safe by default: if no provider is configured (no API key / env var), the
  *    system is NEVER broken — `generateImage` simply resolves to `null` and the
  *    renderer falls back to its themed gradient placeholder.
- *  - Never throws: every failure (misconfig, timeout, provider error) is caught
- *    and turned into a controlled `null` fallback.
+ *  - Never throws: the quality model has a bounded fast-model fallback, and
+ *    every failure is returned as a prompt-free reason code.
  */
 
 import { withImagePromptRules } from './image-prompt-rules'
@@ -19,87 +19,111 @@ import { generateWithTextGuard } from './image-text-guard'
 
 export type ImageAspect = '1:1' | '4:3' | '3:2' | '16:9' | '3:4' | '9:16'
 
+export const IMAGE_FAILURE_REASONS = [
+  'low_confidence_skipped',
+  'timeout',
+  'provider_error',
+  'storage_failed',
+  'text_guard_exhausted',
+  'relevance_mismatch',
+  'disabled',
+] as const
+
+export type ImageFailureReason = (typeof IMAGE_FAILURE_REASONS)[number]
+export type ProviderFailureReason = Extract<ImageFailureReason, 'timeout' | 'provider_error' | 'disabled'>
+
+export const DEFAULT_IMAGE_QUALITY_MODEL = 'recraft/recraft-v4.1-flash'
+export const DEFAULT_IMAGE_FALLBACK_MODEL = 'bfl/flux-2-klein-4b'
+export const IMAGE_PRIMARY_TIMEOUT_MS = 13_000
+export const IMAGE_FALLBACK_TIMEOUT_MS = 5_000
+const MAX_IMAGE_PRIMARY_TIMEOUT_MS = 13_000
+
+export function resolveImageModel(requested?: string): string {
+  return (
+    requested?.trim() ||
+    process.env.IMAGE_MODEL?.trim() ||
+    process.env.IMAGE_MODEL_QUALITY?.trim() ||
+    DEFAULT_IMAGE_QUALITY_MODEL
+  )
+}
+
+export function getImageFallbackModel(): string {
+  return process.env.IMAGE_MODEL_FALLBACK?.trim() || DEFAULT_IMAGE_FALLBACK_MODEL
+}
+
 export type ImageRequest = {
   prompt: string
   aspectRatio?: ImageAspect
   /** Logos/wordmarks only: skips the no-text rules and the text guard. */
   allowText?: boolean
-  /** Gateway image model id for this request; defaults to `IMAGE_MODEL` or the site default. */
+  /** Gateway image model id for this request; defaults to `IMAGE_MODEL` or the quality model. */
   model?: string
+  /** Disable the automatic fast-model fallback for a single deliberate model attempt. */
+  allowFallback?: boolean
+  /** Receives a prompt-free failure code when no image is generated. */
+  onFailure?: (reason: ProviderFailureReason) => void
+  /** Abort signal from the bounded model-attempt runner. */
+  signal?: AbortSignal
 }
 
 export type ImageResult = { src: string; provider: string } | null
 
-/**
- * Translates an aspect ratio into a concrete `WxH` size accepted by common
- * image models (gpt-image-1 supports 1024x1024 / 1536x1024 / 1024x1536).
- */
-function aspectToSize(aspect: ImageAspect): `${number}x${number}` {
-  switch (aspect) {
-    case '1:1':
-      return '1024x1024'
-    case '3:4':
-    case '9:16':
-      return '1024x1536'
-    case '4:3':
-    case '3:2':
-    case '16:9':
-    default:
-      return '1536x1024'
-  }
-}
-
 /* -------------------------------------------------------------------------- */
-/*  Safe error diagnostics                                                    */
+/*  Bounded primary / fallback model attempts                                 */
 /* -------------------------------------------------------------------------- */
 
-const MAX_DIAG_TEXT = 600
+export type ModelFallbackResult<T> =
+  | { result: T; model: string; fallbackUsed: boolean }
+  | { result: null; reason: Extract<ImageFailureReason, 'timeout' | 'provider_error'>; model: string; fallbackUsed: boolean }
 
-/** Strips credential-looking tokens and bounds length before anything is logged. */
-function redact(value: unknown): string {
-  const text = typeof value === 'string' ? value : safeStringify(value)
-  return text
-    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
-    .replace(/\b(sk|vck|vercel|gw|key)[-_][A-Za-z0-9_-]{12,}/gi, '[redacted]')
-    .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]*/g, '[redacted-jwt]')
-    .replace(/data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{40,}/gi, '[base64 omitted]')
-    .slice(0, MAX_DIAG_TEXT)
-}
+export async function generateWithModelFallback<T>(
+  generate: (model: string, signal: AbortSignal) => Promise<T | null>,
+  {
+    primaryModel,
+    fallbackModel,
+    primaryTimeoutMs = IMAGE_PRIMARY_TIMEOUT_MS,
+    fallbackTimeoutMs = IMAGE_FALLBACK_TIMEOUT_MS,
+  }: {
+    primaryModel: string
+    fallbackModel?: string
+    primaryTimeoutMs?: number
+    fallbackTimeoutMs?: number
+  },
+): Promise<ModelFallbackResult<T>> {
+  const attempts = [
+    { model: primaryModel, timeoutMs: primaryTimeoutMs },
+    ...(fallbackModel && fallbackModel !== primaryModel
+      ? [{ model: fallbackModel, timeoutMs: fallbackTimeoutMs }]
+      : []),
+  ]
+  let sawTimeout = false
+  let lastModel = primaryModel
 
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? String(value)
-  } catch {
-    return String(value)
+  for (const [index, attempt] of attempts.entries()) {
+    lastModel = attempt.model
+    const controller = new AbortController()
+    let timedOut = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const generated = await Promise.race([
+      generate(attempt.model, controller.signal).catch(() => null),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => {
+          timedOut = true
+          controller.abort()
+          resolve(null)
+        }, Math.max(1, attempt.timeoutMs))
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+    if (generated) return { result: generated, model: attempt.model, fallbackUsed: index > 0 }
+    if (timedOut) sawTimeout = true
   }
-}
 
-/**
- * Extracts only the diagnostic fields we want in logs: error class, HTTP
- * status, gateway generation id, retryability, and a redacted/truncated
- * message plus the upstream cause. Never includes request headers or env.
- */
-function describeProviderError(
-  err: unknown,
-  context?: { modelId: string; size: string },
-): Record<string, unknown> {
-  const e = (err ?? {}) as Record<string, unknown>
-  const cause = (e.cause ?? undefined) as Record<string, unknown> | undefined
   return {
-    ...context,
-    name: typeof e.name === 'string' ? e.name : typeof err,
-    statusCode: e.statusCode ?? cause?.statusCode,
-    generationId: e.generationId,
-    isRetryable: e.isRetryable,
-    message: redact(err instanceof Error ? err.message : err),
-    cause: cause
-      ? {
-          name: cause.name,
-          statusCode: cause.statusCode,
-          message: redact(typeof cause.message === 'string' ? cause.message : ''),
-          responseBody: cause.responseBody ? redact(cause.responseBody) : undefined,
-        }
-      : undefined,
+    result: null,
+    reason: sawTimeout ? 'timeout' : 'provider_error',
+    model: lastModel,
+    fallbackUsed: attempts.length > 1,
   }
 }
 
@@ -115,6 +139,55 @@ export interface ImageProvider {
 /* -------------------------------------------------------------------------- */
 /*  Providers                                                                 */
 /* -------------------------------------------------------------------------- */
+
+function bflDimensions(aspectRatio: ImageAspect): { width: number; height: number } {
+  switch (aspectRatio) {
+    case '1:1':
+      return { width: 1024, height: 1024 }
+    case '4:3':
+      return { width: 1280, height: 960 }
+    case '3:2':
+      return { width: 1536, height: 1024 }
+    case '3:4':
+      return { width: 960, height: 1280 }
+    case '9:16':
+      return { width: 765, height: 1360 }
+    case '16:9':
+    default:
+      return { width: 1360, height: 765 }
+  }
+}
+
+type ImageModelOptions =
+  | { providerOptions: { blackForestLabs: { width: number; height: number } } }
+  | { size: `${number}x${number}` }
+  | { aspectRatio: ImageAspect }
+
+function recraftSize(aspectRatio: ImageAspect): `${number}x${number}` {
+  switch (aspectRatio) {
+    case '1:1':
+      return '1024x1024'
+    case '4:3':
+      return '1216x896'
+    case '3:2':
+      return '1280x832'
+    case '3:4':
+      return '896x1216'
+    case '9:16':
+      return '768x1344'
+    case '16:9':
+    default:
+      return '1344x768'
+  }
+}
+
+export function getImageModelOptions(modelId: string, aspectRatio: ImageAspect): ImageModelOptions {
+  if (modelId.startsWith('bfl/flux-2-klein')) {
+    return { providerOptions: { blackForestLabs: bflDimensions(aspectRatio) } }
+  }
+  if (modelId.startsWith('recraft/')) return { size: recraftSize(aspectRatio) }
+  return { aspectRatio }
+}
 
 /**
  * Vercel AI Gateway image provider. Uses the AI SDK's `generateImage` with a
@@ -132,45 +205,27 @@ const gatewayProvider: ImageProvider = {
         process.env.IMAGE_PROVIDER === 'gateway',
     )
   },
-  async generate({ prompt, aspectRatio = '16:9', model }) {
-    let currentContext: { modelId: string; size: string } | undefined
+  async generate({ prompt, aspectRatio = '16:9', model, signal }) {
+    const modelId = model || resolveImageModel()
     try {
       const { generateImage, gateway } = await import('ai')
-      // Default to a FAST, high-quality gateway image model. `openai/gpt-image-1`
-      // was the previous default but takes ~45-60s per image on the gateway,
-      // which always blew past the safety timeout below and returned null — so
-      // every hero silently fell back to the gradient placeholder.
-      // `prodia/flux-fast-schnell` (the next default) started failing with
-      // "Job type is no longer available" once Prodia deprecated that job type
-      // on their end, even though the gateway still lists the model id. Verified
-      // directly against the gateway: `bfl/flux-2-klein-4b` produces comparable
-      // photographic quality in ~3s. Override with `IMAGE_MODEL` if a specific
-      // model is required.
-      const modelId = model || process.env.IMAGE_MODEL || 'bfl/flux-2-klein-4b'
-      // `size` (WxH) is the broadly-compatible knob (e.g. gpt-image-1 rejects
-      // `aspectRatio`), so we translate our aspect into a concrete size.
-      const size = aspectToSize(aspectRatio)
-      currentContext = { modelId, size }
+      const modelAspectOptions = getImageModelOptions(modelId, aspectRatio)
       const { image, warnings } = await generateImage({
         model: gateway.imageModel(modelId),
         prompt,
-        size,
+        ...modelAspectOptions,
+        abortSignal: signal,
+        maxRetries: 0,
       })
-      // The gateway reports parameters a model ignored (e.g. an unsupported
-      // `size`) as warnings rather than errors — surface them.
       if (warnings?.length) {
-        console.log(
-          '[v0] image-provider(gateway) warnings:',
-          safeStringify({ modelId, size, warnings }),
-        )
+        console.warn('[image-generation-model-warning]', {
+          model: modelId,
+          warningCount: warnings.length,
+        })
       }
       const mediaType = image.mediaType || 'image/png'
       return { src: `data:${mediaType};base64,${image.base64}`, provider: 'gateway' }
-    } catch (err) {
-      console.log(
-        '[v0] image-provider(gateway) error:',
-        safeStringify(describeProviderError(err, currentContext)),
-      )
+    } catch {
       return null
     }
   },
@@ -327,38 +382,63 @@ export async function generateTryOnImage({
  */
 export async function generateSiteImage(
   req: ImageRequest,
-  {
-    // Must stay safely below the calling route's `maxDuration` (60s) so the
-    // controlled `null` fallback can fire before the function is killed. The
-    // default fast model returns in ~2-3s; 25s leaves generous headroom for a
-    // slow response while still guaranteeing the fallback. Any override is
-    // hard-capped at 25s for the same reason.
-    timeoutMs = Math.min(Number(process.env.IMAGE_TIMEOUT_MS) || 25_000, 25_000),
-  }: { timeoutMs?: number } = {},
+  { timeoutMs }: { timeoutMs?: number } = {},
 ): Promise<ImageResult> {
   const provider = getImageProvider()
-  if (!provider.isConfigured()) return null
+  const primaryModel = resolveImageModel(req.model)
+  const fallbackModel = req.allowFallback === false ? undefined : getImageFallbackModel()
+  const envTimeout = Number(process.env.IMAGE_TIMEOUT_MS)
+  const requestedTimeout = timeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0
+    ? envTimeout
+    : IMAGE_PRIMARY_TIMEOUT_MS)
+  const primaryTimeoutMs = Math.max(1, Math.min(requestedTimeout, MAX_IMAGE_PRIMARY_TIMEOUT_MS))
 
-  // Photographic prompts always carry the shared no-text rules and are
-  // text-checked afterwards; logos legitimately contain a wordmark.
+  if (!provider.isConfigured()) {
+    req.onFailure?.('disabled')
+    console.info('[image-generation]', { reason: 'disabled', model: primaryModel })
+    return null
+  }
+
   const guarded = !req.allowText
   const finalReq: ImageRequest = guarded
     ? { ...req, prompt: withImagePromptRules(req.prompt) }
     : req
+  let lastFailure: Extract<ImageFailureReason, 'timeout' | 'provider_error'> | undefined
 
-  const generateOnce = async (): Promise<ImageResult> =>
-    Promise.race([
-      provider.generate(finalReq),
-      new Promise<ImageResult>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
-    ])
+  const generateOnce = async (): Promise<ImageResult> => {
+    const attempt = await generateWithModelFallback(
+      (model, signal) => provider.generate({ ...finalReq, model, signal }),
+      {
+        primaryModel,
+        fallbackModel,
+        primaryTimeoutMs,
+        fallbackTimeoutMs: IMAGE_FALLBACK_TIMEOUT_MS,
+      },
+    )
+    if (!attempt.result) lastFailure = attempt.reason
+    else lastFailure = undefined
+    return attempt.result
+  }
 
   try {
-    return guarded ? await generateWithTextGuard(generateOnce) : await generateOnce()
-  } catch (err) {
-    console.log(
-      '[v0] generateSiteImage error:',
-      err instanceof Error ? err.message : err,
-    )
+    const result = guarded ? await generateWithTextGuard(generateOnce) : await generateOnce()
+    if (result) return result
+
+    const reason = lastFailure ?? 'provider_error'
+    req.onFailure?.(reason)
+    console.info('[image-generation]', {
+      reason,
+      model: primaryModel,
+      fallbackModel: fallbackModel ?? null,
+    })
+    return null
+  } catch {
+    req.onFailure?.('provider_error')
+    console.info('[image-generation]', {
+      reason: 'provider_error',
+      model: primaryModel,
+      fallbackModel: fallbackModel ?? null,
+    })
     return null
   }
 }

@@ -114,7 +114,7 @@ describe('automatic hero image attachment', () => {
     expect(heroOf(site).slides.map((slide) => slide.image.src)).toEqual(originalSlides)
   })
 
-  it('keeps the neutral abstract fallback when a low-confidence image request fails', async () => {
+  it('tries a neutral abstract image for an unknown brief instead of skipping generation', async () => {
     generateSiteImage.mockResolvedValue(null)
     const site = makeSite()
     site.meta.name = 'Kivu'
@@ -130,7 +130,8 @@ describe('automatic hero image attachment', () => {
     expect(out.heroPrompt).toMatch(/abstract editorial composition/i)
     expect(out.heroPrompt).toMatch(/Do NOT depict:.*unrelated people/i)
     expect(out.generated).toBe(false)
-    expect(generateSiteImage).not.toHaveBeenCalled()
+    expect(out.reason).toBe('provider_error')
+    expect(generateSiteImage).toHaveBeenCalledTimes(3)
     expect(heroOf(site).image.src).toBeUndefined()
     expect(heroOf(site).slides[0].image.src).toBeUndefined()
   })

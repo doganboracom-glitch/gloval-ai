@@ -1,18 +1,29 @@
+import { createHash } from 'node:crypto'
+import { z } from 'zod'
 import { detectSector, type Sector } from '@/lib/sector-profiles'
 import type { WebsiteSchema, SiteImageRef } from '@/lib/website-schema'
 import {
   generateSiteImage,
+  getImageFallbackModel,
+  IMAGE_FALLBACK_TIMEOUT_MS,
   imageGenerationAvailable,
   type ImageAspect,
+  type ImageFailureReason,
+  type ImageResult,
+  type ProviderFailureReason,
 } from '@/lib/image-provider'
 import { ImageStorageError, persistImageDataUri } from '@/lib/image-storage'
+import { generateWithRelevanceGuard } from '@/lib/image-text-guard'
 import { imagePromptRules, stripBrandNameFromImagePrompt, wantsIllustrationStyle } from '@/lib/image-prompt-rules'
 import {
   describeVisualRequest,
   findGeneratedTopic,
   resolveVisualTopic,
+  resolveVisualTopicSignals,
   stripImagePromptBoilerplate,
   variationCue,
+  type VisualTopic,
+  type VisualTopicSignals,
 } from '@/lib/visual-subjects'
 
 /**
@@ -23,8 +34,8 @@ import {
  * sector images. It extracts the signals a good image needs (sector, business
  * type, style, audience, visual need) and composes a single descriptive prompt,
  * then (best-effort) resolves it to a real image via the server-side provider.
- * Unknown default-sector briefs are marked low-confidence and keep the renderer's
- * gradient rather than generating a speculative stock scene.
+ * Unknown default-sector briefs use a validated text-model inference when
+ * available, otherwise a neutral abstract scene; missing keywords never skip generation.
  */
 
 export type Brief = {
@@ -109,20 +120,102 @@ function styleDescriptor(prompt: string, site?: WebsiteSchema): string {
  * …) that the coarse `Sector` list cannot express. Only when no keyword matches
  * do we fall back to the sector scene, and finally to a neutral abstract image.
  */
+function buildVisualTopicSignals(prompt: string, site?: WebsiteSchema): VisualTopicSignals {
+  const serviceTitles = (site?.sections ?? []).flatMap((section) => {
+    if (section.type === 'services' || section.type === 'features') {
+      return section.items.map((item) => item.title.trim()).filter(Boolean)
+    }
+    return []
+  })
+  const businessName = site?.meta.name?.trim() || site?.navigation?.logoText?.trim()
+  return {
+    ...(businessName ? { businessName } : {}),
+    ...(site?.meta.tagline ? { tagline: site.meta.tagline } : {}),
+    serviceTitles: Array.from(new Set(serviceTitles)).slice(0, 30),
+    ...(site?.meta.audience ? { audience: site.meta.audience } : {}),
+    ...(prompt.trim() ? { rest: prompt.trim() } : {}),
+  }
+}
+
+const visualSubjectPredictionSchema = z.object({
+  business: z.string().trim().min(2).max(100),
+  subject: z.string().trim().min(20).max(600),
+  avoid: z.string().trim().max(400).optional().nullable(),
+}).strict()
+
+const VISUAL_SUBJECT_MODEL = 'google/gemini-2.5-flash-lite'
+const VISUAL_SUBJECT_TIMEOUT_MS = 6_000
+
+type VisualSubjectInference = (signals: VisualTopicSignals) => Promise<VisualTopic | null>
+
+function visualSubjectSignature(signals: VisualTopicSignals): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      businessName: signals.businessName ?? '',
+      tagline: signals.tagline ?? '',
+      serviceTitles: signals.serviceTitles ?? [],
+      audience: signals.audience ?? '',
+      rest: signals.rest ?? '',
+    }))
+    .digest('hex')
+}
+
+export function parseVisualSubjectPrediction(text: string, brandName?: string): VisualTopic | null {
+  try {
+    const raw = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+    const parsed = visualSubjectPredictionSchema.safeParse(JSON.parse(raw))
+    if (!parsed.success) return null
+    const business = stripBrandNameFromImagePrompt(parsed.data.business, brandName)
+    const subject = stripBrandNameFromImagePrompt(parsed.data.subject, brandName)
+    const avoid = parsed.data.avoid
+      ? stripBrandNameFromImagePrompt(parsed.data.avoid, brandName)
+      : undefined
+    if (!business || !subject) return null
+    return { business, subject, ...(avoid ? { avoid } : {}) }
+  } catch {
+    return null
+  }
+}
+
+async function inferVisualTopic(signals: VisualTopicSignals): Promise<VisualTopic | null> {
+  try {
+    const { generateText } = await import('ai')
+    const { text } = await generateText({
+      model: VISUAL_SUBJECT_MODEL,
+      temperature: 0,
+      maxOutputTokens: 260,
+      abortSignal: AbortSignal.timeout(VISUAL_SUBJECT_TIMEOUT_MS),
+      prompt: [
+        'Infer the real business category from the site details and return exactly one JSON object with keys business, subject, and avoid.',
+        'All three values must be in English. business is a short category label. subject is one concrete, photographable scene naming a plausible person, tool, or place. avoid is a short list of look-alike subjects that would misrepresent this business.',
+        'Do not include a brand name, readable text, signage, watermark, logo, or invented claims in the scene. Do not guess facts absent from the supplied details. If the category is unclear, choose a restrained, plausible professional scene rather than an unrelated industry.',
+        `Business name: ${signals.businessName || '(not supplied)'}`,
+        `Tagline: ${signals.tagline || '(not supplied)'}`,
+        `Audience: ${signals.audience || '(not supplied)'}`,
+        `Service titles: ${(signals.serviceTitles || []).join('; ') || '(not supplied)'}`,
+        `Brief details: ${signals.rest || '(not supplied)'}`,
+      ].join('\n'),
+    })
+    return parseVisualSubjectPrediction(text, signals.businessName)
+  } catch {
+    return null
+  }
+}
+
 export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
   const sector = detectSector(prompt)
-  // The site's own signals are part of the brief: a site created earlier can be
-  // re-analyzed from its name/tagline/audience even without the original text.
+  const signals = buildVisualTopicSignals(prompt, site)
+  const resolution = resolveVisualTopicSignals(signals)
+  const topic = resolution.topic
   const haystack = [
     prompt,
-    site?.meta.name,
-    site?.meta.tagline,
-    site?.meta.audience,
-    site?.navigation?.logoText,
+    signals.businessName,
+    signals.tagline,
+    signals.audience,
+    ...(signals.serviceTitles || []),
   ]
     .filter(Boolean)
     .join(' ')
-  const topic = resolveVisualTopic(haystack)
 
   const confidence: Brief['confidence'] =
     topic ? 'high' : sector === 'default' ? 'low' : 'medium'
@@ -146,6 +239,55 @@ export function analyzeBrief(prompt: string, site?: WebsiteSchema): Brief {
     visualNeed,
     avoid,
     illustrative: wantsIllustrationStyle(haystack),
+  }
+}
+
+export async function resolveVisualBrief(
+  prompt: string,
+  site?: WebsiteSchema,
+  infer: VisualSubjectInference = inferVisualTopic,
+): Promise<Brief> {
+  const signals = buildVisualTopicSignals(prompt, site)
+  const resolution = resolveVisualTopicSignals(signals)
+  const baseBrief = analyzeBrief(prompt, site)
+  if (resolution.topic) return baseBrief
+
+  const signature = visualSubjectSignature(signals)
+  const cache = site?.meta.visualSubjectCache
+  let inferredTopic: VisualTopic | null = null
+
+  if (cache?.version === 1 && cache.signature === signature) {
+    inferredTopic = {
+      business: cache.business,
+      subject: cache.subject,
+      ...(cache.avoid ? { avoid: cache.avoid } : {}),
+    }
+  } else {
+    try {
+      inferredTopic = await infer(signals)
+    } catch {
+      inferredTopic = null
+    }
+    if (inferredTopic && site) {
+      site.meta.visualSubjectCache = {
+        version: 1,
+        signature,
+        business: inferredTopic.business,
+        subject: inferredTopic.subject,
+        ...(inferredTopic.avoid ? { avoid: inferredTopic.avoid } : {}),
+      }
+    }
+  }
+
+  const topic = inferredTopic ?? resolution.bestTopic
+  if (!topic) return baseBrief
+
+  return {
+    ...baseBrief,
+    businessType: topic.business,
+    confidence: 'high',
+    visualNeed: topic.subject,
+    avoid: topic.avoid,
   }
 }
 
@@ -193,7 +335,11 @@ export function buildHeroImagePrompt(brief: Brief, extra?: string, brandName?: s
  * the design. Turkish wording is mapped to English visual vocabulary first
  * (see `describeVisualRequest`) because image models are English-centric.
  */
-export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema): string {
+export function buildRequestedImagePrompt(
+  request: string,
+  site?: WebsiteSchema,
+  resolvedBrief?: Brief,
+): string {
   // The editor shows the stored prompt verbatim, so an unedited "regenerate"
   // sends all the builder boilerplate back; strip it before re-interpreting.
   let clean = stripImagePromptBoilerplate(request)
@@ -203,11 +349,14 @@ export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema)
   // replaced by the site's own scene. Text the user wrote by hand never contains
   // a whole dictionary sentence, so genuine edits are left alone.
   const siteTopic = site
-    ? resolveVisualTopic(
-        [site.meta.name, site.meta.tagline, site.meta.audience, site.navigation?.logoText]
-          .filter(Boolean)
-          .join(' '),
-      )
+    ? resolveVisualTopicSignals(buildVisualTopicSignals('', site)).topic ??
+      (resolvedBrief
+        ? {
+            business: resolvedBrief.businessType,
+            subject: resolvedBrief.visualNeed,
+            avoid: resolvedBrief.avoid,
+          }
+        : null)
     : null
   const stale = findGeneratedTopic(clean)
   if (stale && siteTopic && stale.subject !== siteTopic.subject) {
@@ -215,7 +364,7 @@ export function buildRequestedImagePrompt(request: string, site?: WebsiteSchema)
   }
 
   const subject = describeVisualRequest(clean)
-  const brief = analyzeBrief(
+  const brief = resolvedBrief ?? analyzeBrief(
     `${clean} ${site?.meta.name ?? ''} ${site?.meta.tagline ?? ''}`,
     site,
   )
@@ -311,10 +460,9 @@ export function preserveResolvedImages(
 }
 
 export type HeroImageOutcome = {
-  /** 'generated' | 'linked' (direct URL) | 'failed' | 'skipped' (no provider). */
   status: 'generated' | 'linked' | 'failed' | 'skipped'
-  /** The prompt that was stored on the hero image. */
   imagePrompt: string
+  reason?: ImageFailureReason
 }
 
 /**
@@ -337,12 +485,15 @@ export async function applyHeroImageRequest(
     | undefined
 
   const trimmed = (request || '').trim()
-  const brief = analyzeBrief(trimmed || site.meta.name, site)
+  const directUrl = /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : null
+  const brief = directUrl
+    ? analyzeBrief(trimmed || site.meta.name, site)
+    : await resolveVisualBrief(trimmed || site.meta.name, site)
   const imagePrompt = trimmed
-    ? buildRequestedImagePrompt(trimmed, site)
+    ? buildRequestedImagePrompt(trimmed, site, brief)
     : buildHeroImagePrompt(brief, site.meta.tagline, site.meta.name)
 
-  if (!hero) return { status: 'failed', imagePrompt }
+  if (!hero) return { status: 'failed', imagePrompt, reason: 'provider_error' }
 
   const altBase =
     site.meta.language === 'tr'
@@ -354,8 +505,6 @@ export async function applyHeroImageRequest(
   const variantIsSlider = hero.variant === 'slider' || (!hero.variant && slides.length > 1)
 
   // A direct URL is honoured verbatim — this is the manual escape hatch.
-  const directUrl = /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : null
-
   const targets: SiteImageRef[] = []
   const assign = (current: SiteImageRef | undefined): SiteImageRef => {
     const next: SiteImageRef = {
@@ -375,15 +524,32 @@ export async function applyHeroImageRequest(
   if (variantIsSlider && slides[0]) slides[0].image = assign(slides[0].image)
 
   if (directUrl) return { status: 'linked', imagePrompt }
-  if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt }
+  if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt, reason: 'disabled' }
 
-  const res = await generateSiteImage({
-    prompt: `${imagePrompt} ${variationCue()}`,
-    aspectRatio: toProviderAspect(targets[0]?.aspectRatio),
-  })
-  if (!res) return { status: 'failed', imagePrompt }
+  let failureReason: ProviderFailureReason | undefined
+  const res = await generateRelevantSiteImage(
+    `${imagePrompt} ${variationCue()}`,
+    toProviderAspect(targets[0]?.aspectRatio),
+    brief.businessType,
+    (reason) => {
+      failureReason = reason
+    },
+  )
+  if (!res) {
+    return {
+      status: failureReason === 'disabled' ? 'skipped' : 'failed',
+      imagePrompt,
+      reason: failureReason ?? 'provider_error',
+    }
+  }
 
-  const src = await persistImageDataUri(res.src)
+  let src: string
+  try {
+    src = await persistImageDataUri(res.src)
+  } catch (error) {
+    if (!(error instanceof ImageStorageError)) throw error
+    return { status: 'failed', imagePrompt, reason: 'storage_failed' }
+  }
   for (const target of targets) target.src = src
   return { status: 'generated', imagePrompt }
 }
@@ -408,20 +574,21 @@ export async function applySlideImageRequest(
     | undefined
 
   const trimmed = (request || '').trim()
-  const brief = analyzeBrief(trimmed || site.meta.name, site)
+  const directUrl = /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : null
+  const brief = directUrl
+    ? analyzeBrief(trimmed || site.meta.name, site)
+    : await resolveVisualBrief(trimmed || site.meta.name, site)
   const slide = hero?.slides?.[slideIndex]
   const imagePrompt = trimmed
-    ? buildRequestedImagePrompt(trimmed, site)
+    ? buildRequestedImagePrompt(trimmed, site, brief)
     : buildHeroImagePrompt(brief, slide?.title || site.meta.tagline, site.meta.name)
 
-  if (!hero || !slide) return { status: 'failed', imagePrompt }
+  if (!hero || !slide) return { status: 'failed', imagePrompt, reason: 'provider_error' }
 
   const altBase =
     site.meta.language === 'tr'
       ? `${site.meta.name} tanıtım görseli`
       : `${site.meta.name} hero image`
-
-  const directUrl = /^https?:\/\/\S+$/i.test(trimmed) ? trimmed : null
 
   const targets: SiteImageRef[] = []
   const assign = (current: SiteImageRef | undefined): SiteImageRef => {
@@ -441,15 +608,32 @@ export async function applySlideImageRequest(
   if (slideIndex === 0) hero.image = assign(hero.image)
 
   if (directUrl) return { status: 'linked', imagePrompt }
-  if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt }
+  if (!imageGenerationAvailable()) return { status: 'skipped', imagePrompt, reason: 'disabled' }
 
-  const res = await generateSiteImage({
-    prompt: `${imagePrompt} ${variationCue()}`,
-    aspectRatio: toProviderAspect(targets[0]?.aspectRatio),
-  })
-  if (!res) return { status: 'failed', imagePrompt }
+  let failureReason: ProviderFailureReason | undefined
+  const res = await generateRelevantSiteImage(
+    `${imagePrompt} ${variationCue()}`,
+    toProviderAspect(targets[0]?.aspectRatio),
+    brief.businessType,
+    (reason) => {
+      failureReason = reason
+    },
+  )
+  if (!res) {
+    return {
+      status: failureReason === 'disabled' ? 'skipped' : 'failed',
+      imagePrompt,
+      reason: failureReason ?? 'provider_error',
+    }
+  }
 
-  const src = await persistImageDataUri(res.src)
+  let src: string
+  try {
+    src = await persistImageDataUri(res.src)
+  } catch (error) {
+    if (!(error instanceof ImageStorageError)) throw error
+    return { status: 'failed', imagePrompt, reason: 'storage_failed' }
+  }
   for (const target of targets) target.src = src
   return { status: 'generated', imagePrompt }
 }
@@ -471,6 +655,38 @@ function toProviderAspect(aspect?: SiteImageRef['aspectRatio']): ImageAspect {
     default:
       return '16:9'
   }
+}
+
+async function generateRelevantSiteImage(
+  prompt: string,
+  aspectRatio: ImageAspect,
+  business: string,
+  onFailure?: (reason: ProviderFailureReason) => void,
+): Promise<ImageResult> {
+  let lastFailure: ProviderFailureReason | undefined
+  const image = await generateWithRelevanceGuard(
+    async (attempt) => {
+      let attemptFailure: ProviderFailureReason | undefined
+      const retry = attempt === 'retry'
+      const result = await generateSiteImage(
+        {
+          prompt: retry ? `${prompt} ${variationCue()}` : prompt,
+          aspectRatio,
+          ...(retry ? { model: getImageFallbackModel(), allowFallback: false } : {}),
+          onFailure: (reason) => {
+            attemptFailure = reason
+          },
+        },
+        retry ? { timeoutMs: IMAGE_FALLBACK_TIMEOUT_MS } : undefined,
+      )
+      if (!result && attemptFailure) lastFailure = attemptFailure
+      return result
+    },
+    business,
+  )
+
+  if (!image) onFailure?.(lastFailure ?? 'provider_error')
+  return image
 }
 
 /** Ensures a hero/slide has a structured `image` object carrying the prompt. */
@@ -506,18 +722,29 @@ export async function attachHeroImage(
   available: boolean
   /** Images that were generated but could not be stored (never written to the schema). */
   storageFailed: number
+  reason?: ImageFailureReason
 }> {
-  const brief = analyzeBrief(prompt, site)
+  const brief = await resolveVisualBrief(prompt, site)
   const available = imageGenerationAvailable()
   let generated = false
   let storageFailed = 0
+  let failureReason: ProviderFailureReason | undefined
 
   const hero = site.sections.find((s) => s.type === 'hero') as
     | Extract<WebsiteSchema['sections'][number], { type: 'hero' }>
     | undefined
 
   const heroPrompt = buildHeroImagePrompt(brief, site?.meta?.tagline, site?.meta?.name)
-  if (!hero) return { brief, heroPrompt, generated, available, storageFailed }
+  if (!hero) {
+    return {
+      brief,
+      heroPrompt,
+      generated,
+      available,
+      storageFailed,
+      reason: available ? 'provider_error' : 'disabled',
+    }
+  }
 
   const altBase =
     site.meta.language === 'tr'
@@ -535,15 +762,13 @@ export async function attachHeroImage(
     slide.image = ensureImageRef(slide.image, slide.imagePrompt, slidePrompt, altBase)
   }
 
-  // 3) Best-effort real images. The FIRST visible image is generated on its
-  //    own and awaited before the rest, so the primary hero/slide visual is
-  //    guaranteed even if the slower secondary images time out (priority:
-  //    "the first hero image must always be produced"). Remaining images then
-  //    run in PARALLEL so latency does not compound. Any failure is a silent
-  //    no-op that leaves the prompt-only fallback intact.
-  // An unclassified brief has no reliable subject; keep the themed gradient
-  // rather than asking the model to invent a potentially unrelated stock scene.
-  if (available && brief.confidence !== 'low') {
+  // 3) Best-effort real images. The first visible image is always awaited and
+  //    retained as the primary outcome; remaining attempts run concurrently so
+  //    their latency does not compound. Any failed target keeps its prompt-only
+  //    fallback intact.
+  // Unresolved businesses still get a neutral, prompt-safe image attempt; the
+  // resolver must never suppress generation solely because the dictionary missed.
+  if (available) {
     const MAX_IMAGES = 3
 
     // A slider shows slides[0] first; every other variant shows hero.image.
@@ -567,34 +792,51 @@ export async function attachHeroImage(
     // throws when storage fails: that image keeps NO new src (never base64),
     // counts as not generated, and is reported via `storageFailed`.
     const gen = async (img: SiteImageRef) => {
-      const res = await generateSiteImage({
-        prompt: img.imagePrompt,
-        aspectRatio: toProviderAspect(img.aspectRatio),
-      })
+      const res = await generateRelevantSiteImage(
+        img.imagePrompt,
+        toProviderAspect(img.aspectRatio),
+        brief.businessType,
+        (reason) => {
+          failureReason = reason
+        },
+      )
       if (!res) return null
       try {
         img.src = await persistImageDataUri(res.src)
       } catch (err) {
         if (!(err instanceof ImageStorageError)) throw err
         storageFailed += 1
+        failureReason = 'provider_error'
         return null
       }
       return img
     }
 
-    // 3a) Guarantee the first visible image.
+    // Generate the primary hero and secondary images concurrently. The primary
+    // promise is still awaited before returning; secondary failures stay best-effort.
     const [primary, ...rest] = targets
-    if (primary) {
-      const res = await gen(primary)
-      if (res) generated = true
-    }
-
-    // 3b) Best-effort fill the remaining images in parallel.
-    if (rest.length) {
-      const results = await Promise.all(rest.map(gen))
-      if (results.some(Boolean)) generated = true
-    }
+    const [primaryResult, secondaryResults] = await Promise.all([
+      primary ? gen(primary) : Promise.resolve(null),
+      Promise.all(rest.map(gen)),
+    ])
+    if (primaryResult || secondaryResults.some(Boolean)) generated = true
   }
 
-  return { brief, heroPrompt, generated, available, storageFailed }
+  const reason: ImageFailureReason | undefined =
+    storageFailed > 0
+      ? 'storage_failed'
+      : generated
+        ? undefined
+        : available
+          ? failureReason ?? 'provider_error'
+          : 'disabled'
+  if (reason) console.info('[hero-image-outcome]', { reason, available, generated, storageFailed })
+  return {
+    brief,
+    heroPrompt,
+    generated,
+    available,
+    storageFailed,
+    ...(reason ? { reason } : {}),
+  }
 }

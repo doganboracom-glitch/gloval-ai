@@ -40,12 +40,10 @@ export function Hero() {
   const [error, setError] = useState(false)
   const [anonLimitReached, setAnonLimitReached] = useState(false)
   const [signupHandoffError, setSignupHandoffError] = useState<'too-long' | 'unavailable' | null>(null)
-  // Hero image outcome for the current site: 'completed' (real image),
-  // 'failed' (provider on but no image — show retry), 'skipped' (no provider),
-  // or null. Drives the failure banner + "regenerate image" retry button.
   const [imageStatus, setImageStatus] = useState<
     'completed' | 'failed' | 'skipped' | null
   >(null)
+  const [imageFailureReason, setImageFailureReason] = useState<string | null>(null)
   const [retryingImage, setRetryingImage] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -329,6 +327,8 @@ export function Hero() {
     const generationNonce = newEventNonce()
     stopAllVoiceInput()
     setLoading(true)
+    setImageStatus(null)
+    setImageFailureReason(null)
     setError(false)
     setAnonLimitReached(false)
     setSignupHandoffError(null)
@@ -362,6 +362,7 @@ export function Hero() {
       setPlan(generatedPlan)
       setSource(generationSource)
       setImageStatus(data.image?.status ?? null)
+      setImageFailureReason(data.image?.reason ?? null)
       trackGenerateSiteCompleted(generationSource, generationNonce)
     } catch {
       setError(true)
@@ -385,15 +386,22 @@ export function Hero() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schema: website, prompt: prompt.trim() || undefined }),
       })
-      if (!res.ok) throw new Error('failed')
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setImageStatus('failed')
+        setImageFailureReason(body?.reason ?? 'provider_error')
+        return
+      }
       const data = await res.json()
       const site = data.website as WebsiteSchema
       if (!site || !site.meta) throw new Error('invalid')
       setWebsite(site)
       setPlan(websiteToPlan(site))
       setImageStatus(data.image?.status ?? null)
+      setImageFailureReason(data.image?.reason ?? null)
     } catch {
       setImageStatus('failed')
+      setImageFailureReason('provider_error')
     } finally {
       setRetryingImage(false)
     }
@@ -648,7 +656,7 @@ export function Hero() {
                     {t.hero.fallbackNote}
                   </p>
                 )}
-                {imageStatus === 'failed' && (
+                {(imageStatus === 'failed' || imageStatus === 'skipped') && (
                   <div className="flex flex-col gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -656,7 +664,17 @@ export function Hero() {
                         <p className="font-medium text-foreground">
                           {t.hero.imageFailedTitle}
                         </p>
-                        <p className="text-muted-foreground">{t.hero.imageFailedBody}</p>
+                        <p className="text-muted-foreground">
+                          {imageFailureReason === 'timeout' || imageFailureReason === 'provider_error'
+                            ? t.hero.imageFailedTemporary
+                            : imageFailureReason === 'storage_failed'
+                              ? t.hero.imageFailedStorage
+                              : imageFailureReason === 'disabled'
+                                ? t.hero.imageFailedDisabled
+                                : imageFailureReason
+                                  ? t.hero.imageFailedUnclear
+                                  : t.hero.imageFailedBody}
+                        </p>
                       </div>
                     </div>
                     <button

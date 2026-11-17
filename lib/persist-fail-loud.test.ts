@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const generateSiteImage = vi.fn()
 const persist = vi.fn()
@@ -78,7 +78,10 @@ const asSite = (site: ReturnType<typeof makeSite>) => site as unknown as Website
 const post = (url: string, body: unknown) =>
   new Request(`http://test.local${url}`, { method: 'POST', body: JSON.stringify(body) })
 
+afterEach(() => vi.unstubAllEnvs())
+
 beforeEach(() => {
+  vi.stubEnv('IMAGE_RELEVANCE_CHECK', 'off')
   generateSiteImage.mockReset()
   persist.mockReset()
   consumeCredits.mockReset()

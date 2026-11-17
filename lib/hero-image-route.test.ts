@@ -64,7 +64,10 @@ async function regenerate(site: ReturnType<typeof makeSite>) {
       body: JSON.stringify({ schema: site, prompt: 'yoga studio' }),
     }),
   )
-  const body = (await res.json()) as { website: { sections: unknown[] }; image: { status: string } }
+  const body = (await res.json()) as {
+    website: { sections: unknown[] }
+    image: { status: string; reason?: string }
+  }
   return { res, body, hero: body.website.sections[0] as Hero }
 }
 
@@ -97,6 +100,7 @@ describe('bulk hero regeneration', () => {
     const { body, hero } = await regenerate(makeSite())
 
     expect(body.image.status).toBe('failed')
+    expect(body.image.reason).toBe('provider_error')
     expect(hero.image.src).toBe('old-hero')
     expect(hero.slides.map((s) => s.image.src)).toEqual([
       'old-slide-0',
