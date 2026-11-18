@@ -1,5 +1,6 @@
 import {
   computeDomainQuote,
+  isSafePositiveInt,
   toQuoteView,
   type DomainPriceSnapshot,
   type FxRate,
@@ -32,6 +33,37 @@ export type OrderPricing =
       paymentAmount: { amountCents: number; currency: 'TRY' }
     }
   | { ok: false; reason: PricingFailure }
+
+export type ClientDomainQuote = { grossMinor: unknown; currency: unknown }
+
+export function clientQuoteMatchesAmount(
+  quoted: ClientDomainQuote | undefined,
+  amount: { amountCents: number; currency: string },
+): boolean {
+  return (
+    quoted !== undefined &&
+    isSafePositiveInt(quoted.grossMinor) &&
+    quoted.grossMinor === amount.amountCents &&
+    quoted.currency === amount.currency
+  )
+}
+
+export function persistedOrderAmountMatches(
+  amount: { amountCents: number; currency: string },
+  row: { price_cents: unknown; currency: unknown; price_snapshot: unknown },
+): boolean {
+  const snapshot = row.price_snapshot
+  if (!snapshot || typeof snapshot !== 'object') return false
+  const snapshotGrossMinor = (snapshot as { grossTryMinor?: unknown }).grossTryMinor
+  const storedAmount = Number(row.price_cents)
+  return (
+    Number.isSafeInteger(storedAmount) &&
+    storedAmount === amount.amountCents &&
+    row.currency === amount.currency &&
+    isSafePositiveInt(snapshotGrossMinor) &&
+    snapshotGrossMinor === amount.amountCents
+  )
+}
 
 export function resolveOrderPricing(input: {
   price: RegistrarPriceInput

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   loadPricingContext: vi.fn(),
   getDomainEntitlement: vi.fn(),
   listDomainsForUser: vi.fn(),
+  persistedPriceOverride: null as number | null,
 }))
 
 function makeBuilder(table: string) {
@@ -26,7 +27,18 @@ function makeBuilder(table: string) {
     upsert: record('upsert'),
     select: () => builder,
     eq: () => builder,
-    single: async () => ({ data: { id: 'order-1' }, error: null }),
+    single: async () => {
+      const inserted = [...mocks.ops].reverse().find((op) => op.table === table && op.op === 'insert')?.payload
+      return {
+        data: {
+          id: 'order-1',
+          price_cents: mocks.persistedPriceOverride ?? inserted?.price_cents,
+          currency: inserted?.currency,
+          price_snapshot: inserted?.price_snapshot,
+        },
+        error: null,
+      }
+    },
     then: (resolve: (value: unknown) => unknown) => resolve({ data: null, error: null }),
   }
   return builder
@@ -71,13 +83,19 @@ vi.mock('@/lib/custom-domains/pricing/context', () => ({ loadPricingContext: moc
 import { startMyDomainPurchase } from './actions'
 
 const contact = {} as Parameters<typeof startMyDomainPurchase>[2]
+const consents = { preInfo: true, distance: true, withdrawal: true }
+const quoteForYears = (years: number) => ({ grossMinor: 117_000 * (years >= 1 && years <= 10 ? years : 1), currency: 'TRY' })
+const startPurchase = (years = 1, expectedQuote = quoteForYears(years)) =>
+  startMyDomainPurchase('example.com', years, contact, consents, undefined, expectedQuote)
 const tableOps = (table: string, op?: Op['op']) =>
   mocks.ops.filter((o) => o.table === table && (!op || o.op === op))
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.ops.length = 0
+  mocks.persistedPriceOverride = null
   vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'error').mockImplementation(() => {})
   mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'u@example.com' } } })
   mocks.getDomainEntitlement.mockReturnValue({ allowed: true, maxDomains: 5 })
   mocks.listDomainsForUser.mockResolvedValue([])
@@ -95,16 +113,17 @@ beforeEach(() => {
 })
 
 describe('startMyDomainPurchase - order creation before payment', () => {
-  it('persists a consistent price_snapshot and charges exactly the snapshot gross (1 USD = 50 TRY, +50% margin, +20% VAT)', async () => {
-    const result = await startMyDomainPurchase('example.com', 2, contact, { preInfo: true, distance: true, withdrawal: true })
+  it('persists and charges the exact snapshot gross after the shared price increase (10 USD at 50 TRY/USD, +50% margin, +20% VAT)', async () => {
+    const result = await startPurchase(2)
 
     expect(result).toEqual({ ok: true, orderId: 'order-1', redirectUrl: 'https://sandbox-pay.example/checkout' })
 
     const [insert] = tableOps('domain_orders', 'insert')
     const snapshot = insert.payload.price_snapshot as Record<string, number | string | null>
 
-    // 10.00 USD * 50 = 500.00 TRY cost/year; net 750.00; VAT 150.00; gross 900.00/year; x2 years.
+    // 10.00 USD * 50 = 500.00 TRY cost/year; 50% margin and 20% VAT, then the shared price increase = 1,170.00 TRY/year.
     expect(snapshot).toMatchObject({
+      version: 2,
       periodYears: 2,
       providerCostMinor: 1000,
       providerCurrency: 'USD',
@@ -112,11 +131,11 @@ describe('startMyDomainPurchase - order creation before payment', () => {
       fxSource: 'fixed_manual_rate',
       costTryMinor: 100_000,
       marginBps: 5000,
-      netTryMinor: 150_000,
+      netTryMinor: 195_000,
       vatBps: 2000,
-      vatTryMinor: 30_000,
-      grossTryMinor: 180_000,
-      unitGrossTryMinor: 90_000,
+      vatTryMinor: 39_000,
+      grossTryMinor: 234_000,
+      unitGrossTryMinor: 117_000,
       renewal: null,
     })
     expect((snapshot.netTryMinor as number) + (snapshot.vatTryMinor as number)).toBe(snapshot.grossTryMinor)
@@ -148,7 +167,7 @@ describe('startMyDomainPurchase - order creation before payment', () => {
   })
 
   it('never registers the domain before payment is confirmed (redirect flow)', async () => {
-    await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
+    await startPurchase(1)
 
     expect(mocks.registerDomain).not.toHaveBeenCalled()
     expect(mocks.finalizeDomainOrder).not.toHaveBeenCalled()
@@ -160,7 +179,7 @@ describe('startMyDomainPurchase - order creation before payment', () => {
   it('only finalizes immediately when the provider reports the charge completed synchronously', async () => {
     mocks.createIntent.mockResolvedValue({ status: 'paid', action: 'completed', reference: 'sync-ref' })
 
-    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
+    const result = await startPurchase(1)
 
     expect(result).toEqual({ ok: true, orderId: 'order-1' })
     expect(mocks.finalizeDomainOrder).toHaveBeenCalledTimes(1)
@@ -183,14 +202,23 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
     mocks.getDomainEntitlement.mockReturnValue({ allowed: false, maxDomains: 0 })
     mocks.listDomainsForUser.mockResolvedValue([{ domain: 'other.com' }])
 
-    const result = await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })
+    const result = await startPurchase(1)
     expect(result).toMatchObject({ ok: true })
   })
 
   it('returns ALREADY_OWNED without any write or payment', async () => {
     mocks.listDomainsForUser.mockResolvedValue([{ domain: 'example.com' }])
-    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'ALREADY_OWNED' })
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'ALREADY_OWNED' })
 
+    expect(mocks.ops).toHaveLength(0)
+    expect(mocks.createIntent).not.toHaveBeenCalled()
+  })
+
+  it('blocks a stale displayed quote before creating an order or payment', async () => {
+    expect(await startPurchase(1, { grossMinor: 116_999, currency: 'TRY' })).toEqual({
+      ok: false,
+      error: 'PRICING_UNAVAILABLE',
+    })
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
@@ -202,7 +230,7 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
   ])('returns UNAVAILABLE when the domain is %s', async (_label, rows) => {
     mocks.checkAvailability.mockResolvedValue(rows)
 
-    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'UNAVAILABLE' })
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'UNAVAILABLE' })
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
@@ -210,13 +238,13 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
   it('returns FAILED without any write when the availability re-check throws', async () => {
     mocks.checkAvailability.mockRejectedValue(new Error('registrar down'))
 
-    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'FAILED' })
     expect(mocks.ops).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
   it('normalises an invalid period to 1 year instead of trusting the client', async () => {
-    await startMyDomainPurchase('example.com', 99, contact, { preInfo: true, distance: true, withdrawal: true })
+    await startPurchase(99)
 
     const [insert] = tableOps('domain_orders', 'insert')
     expect(insert.payload.period_years).toBe(1)
@@ -225,10 +253,21 @@ describe('startMyDomainPurchase - guards run before any write or payment', () =>
 })
 
 describe('startMyDomainPurchase - payment initialisation failures keep records consistent', () => {
+  it('blocks payment and fails the order when the persisted amount differs from the quote', async () => {
+    mocks.persistedPriceOverride = 117_001
+
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
+    expect(tableOps('domain_orders', 'insert')).toHaveLength(1)
+    expect(tableOps('domain_orders', 'update').map((op) => op.payload)).toEqual([
+      { status: 'failed', error_message: 'price_mismatch' },
+    ])
+    expect(mocks.createIntent).not.toHaveBeenCalled()
+  })
+
   it('marks the order failed and writes no billing transaction when createIntent throws', async () => {
     mocks.createIntent.mockRejectedValue(new Error('psp unreachable'))
 
-    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'FAILED' })
 
     expect(tableOps('domain_orders', 'insert')).toHaveLength(1)
     expect(tableOps('domain_orders', 'update').map((o) => o.payload)).toEqual([
@@ -241,7 +280,7 @@ describe('startMyDomainPurchase - payment initialisation failures keep records c
   it('marks the order failed and writes no billing transaction when the intent comes back failed', async () => {
     mocks.createIntent.mockResolvedValue({ status: 'failed', action: 'none', reference: 'x' })
 
-    expect(await startMyDomainPurchase('example.com', 1, contact, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startPurchase(1)).toEqual({ ok: false, error: 'FAILED' })
 
     expect(tableOps('domain_orders', 'update').map((o) => o.payload.status)).toEqual(['failed'])
     expect(tableOps('billing_transactions')).toHaveLength(0)

@@ -13,13 +13,13 @@ describe('fixed manual USD/TRY rate', () => {
     expect(r.ok && r.snapshot.costTryMinor).toBe(50_000)
   })
 
-  it('adds a 50% margin on the cost, then 20% VAT on the margin-inclusive amount', () => {
+  it('keeps the 50% margin and 20% VAT calculation, then increases the customer total', () => {
     const r = resolveOrderPricing({ price: { registerCents: 1000, currency: 'USD' }, periodYears: 1, context, now: NOW })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.snapshot.netTryMinor).toBe(75_000)
-    expect(r.snapshot.vatTryMinor).toBe(15_000)
-    expect(r.snapshot.grossTryMinor).toBe(90_000)
+    expect(r.snapshot.netTryMinor).toBe(97_500)
+    expect(r.snapshot.vatTryMinor).toBe(19_500)
+    expect(r.snapshot.grossTryMinor).toBe(117_000)
   })
 
   it('does not apply any conversion to TRY prices', () => {

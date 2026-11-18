@@ -7,7 +7,9 @@
  * involved in a monetary result. Every step rounds half-up to the minor unit.
  */
 
-export const PRICING_VERSION = 1
+export const PRICING_VERSION = 2
+/** The only additional multiplier applied to customer-facing domain prices. */
+export const DOMAIN_PRICE_INCREASE = 1.30
 /** Retail markup over the TL cost: 50.00% expressed in basis points. */
 export const MARGIN_BPS = 5000
 /** A daily rate older than this is treated as unusable (daily refresh + slack). */
@@ -109,6 +111,19 @@ export function roundDiv(numerator: bigint, denominator: bigint): bigint {
   return (numerator * BigInt(2) + denominator) / (denominator * BigInt(2))
 }
 
+/** Apply the single customer-facing price multiplier with half-up minor-unit rounding. */
+export function applyDomainPriceIncrease(priceMinor: undefined): undefined
+export function applyDomainPriceIncrease(priceMinor: number): number
+export function applyDomainPriceIncrease(priceMinor: number | undefined): number | undefined {
+  if (priceMinor === undefined) return undefined
+  if (!Number.isSafeInteger(priceMinor) || priceMinor < 0) throw new RangeError('invalid_price_minor')
+  const multiplier = BigInt(Math.round(DOMAIN_PRICE_INCREASE * 100))
+  const increased = roundDiv(BigInt(priceMinor) * multiplier, BigInt(100))
+  const result = Number(increased)
+  if (!Number.isSafeInteger(result)) throw new RangeError('pricing_overflow')
+  return result
+}
+
 export function isSafePositiveInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
@@ -167,9 +182,6 @@ export function computeDomainQuote(input: ComputeQuoteInput): QuoteResult {
   // Provider price is per year; convert, mark up and tax one year, then scale
   // by the period so the displayed per-year price and the charged total agree.
   const unitCostTry = roundDiv(BigInt(costMinor) * BigInt(rateMicros), MICROS)
-  const unitNet = unitCostTry + roundDiv(unitCostTry * BigInt(MARGIN_BPS), BPS)
-  const unitVat = roundDiv(unitNet * BigInt(vatBps), BPS)
-  const unitGross = unitNet + unitVat
   const years = BigInt(periodYears)
 
   const toSafe = (value: bigint): number => {
@@ -179,6 +191,11 @@ export function computeDomainQuote(input: ComputeQuoteInput): QuoteResult {
   }
 
   try {
+    const netBeforeIncrease = unitCostTry + roundDiv(unitCostTry * BigInt(MARGIN_BPS), BPS)
+    const vatBeforeIncrease = roundDiv(netBeforeIncrease * BigInt(vatBps), BPS)
+    const unitGross = BigInt(applyDomainPriceIncrease(toSafe(netBeforeIncrease + vatBeforeIncrease)))
+    const unitNet = roundDiv(unitGross * BPS, BPS + BigInt(vatBps))
+    const unitVat = unitGross - unitNet
     const snapshot: DomainPriceSnapshot = {
       version: PRICING_VERSION,
       periodYears,

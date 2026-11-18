@@ -67,7 +67,16 @@ export function RenewalCard({
     if (!consent.allGiven) return
     setError(null)
     startTransition(async () => {
-      const res = await startMyDomainRenewal(domain, years, consent.consents)
+      const displayedQuote = quote?.ok ? quote.quote : null
+      if (!displayedQuote) {
+        setError(d.mgLoadFailed)
+        setConfirming(false)
+        return
+      }
+      const res = await startMyDomainRenewal(domain, years, consent.consents, undefined, {
+        grossMinor: displayedQuote.totalGrossMinor,
+        currency: displayedQuote.currency,
+      })
       if (!res.ok) {
         setError('reason' in res ? d.mgLoadFailed : errorText(res.error))
         setConfirming(false)

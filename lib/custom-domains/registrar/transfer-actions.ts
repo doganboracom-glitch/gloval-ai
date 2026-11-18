@@ -12,7 +12,13 @@ import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } fr
 import { listDomainsForUser } from '../service'
 import { toQuoteView, type DomainQuoteView } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
-import { resolveOrderPricing, type OrderPricing } from '../pricing/order'
+import {
+  clientQuoteMatchesAmount,
+  persistedOrderAmountMatches,
+  resolveOrderPricing,
+  type ClientDomainQuote,
+  type OrderPricing,
+} from '../pricing/order'
 import { resolveEmailLang } from '@/lib/email/lang'
 import { isTransferLockChangeEnabled } from './capabilities'
 import { recordDomainAuditEvent } from './audit'
@@ -137,12 +143,23 @@ export async function startMyTransferIn(
   authCode: string,
   consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
+  expectedQuote?: ClientDomainQuote,
 ): Promise<StartTransferInResult> {
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
   // Everything (eligibility, lock, price) is re-derived server-side here.
   const prepared = await prepareTransferIn(domainInput, authCode)
   if (!prepared.ok) return prepared
   const { userId, email, domain, tld, pricing } = prepared
+  if (!clientQuoteMatchesAmount(expectedQuote, pricing.paymentAmount)) {
+    console.error('[domains] transfer quote changed; checkout blocked', {
+      domain,
+      expectedGrossMinor: expectedQuote?.grossMinor,
+      expectedCurrency: expectedQuote?.currency,
+      currentGrossMinor: pricing.paymentAmount.amountCents,
+      currentCurrency: pricing.paymentAmount.currency,
+    })
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
+  }
 
   const encrypted = encryptAuthCode(authCode.trim())
   if (!encrypted) return { ok: false, error: 'NOT_CONFIGURED' }
@@ -161,7 +178,7 @@ export async function startMyTransferIn(
       price_snapshot: pricing.orderFields.price_snapshot,
       auth_code_enc: encrypted,
     })
-    .select('id')
+    .select('id, price_cents, currency, price_snapshot')
     .single()
   if (insertErr || !row) {
     // Unique partial index: an open transfer for this user+domain already exists.
@@ -173,6 +190,17 @@ export async function startMyTransferIn(
       .from('domain_transfers')
       .update({ status: 'failed', error_message: message, auth_code_enc: null })
       .eq('id', row.id)
+  }
+  if (!persistedOrderAmountMatches(pricing.paymentAmount, row)) {
+    console.error('[domains] transfer order amount mismatch; checkout blocked', {
+      transferId: row.id,
+      orderGrossMinor: row.price_cents,
+      orderCurrency: row.currency,
+      quotedGrossMinor: pricing.paymentAmount.amountCents,
+      quotedCurrency: pricing.paymentAmount.currency,
+    })
+    await abort('price_mismatch')
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
   }
 
   const providerId = getPlatformPaymentProviderId()

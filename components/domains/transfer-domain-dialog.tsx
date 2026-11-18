@@ -76,11 +76,15 @@ export function TransferDomainDialog({ onClose }: { onClose: () => void }) {
   }
 
   function handlePay() {
+    if (step.name !== 'confirm') return
     consent.markTouched()
     if (!consent.allGiven) return
     setError(null)
     startTransition(async () => {
-      const res = await startMyTransferIn(domain, authCode, consent.consents)
+      const res = await startMyTransferIn(step.domain, authCode, consent.consents, undefined, {
+        grossMinor: step.quote.grossMinor,
+        currency: step.quote.currency,
+      })
       if (!res.ok) return setError(transferErrorText(res.error, d, t.billing.checkout.required))
       // The code is only needed in memory until now.
       setAuthCode('')

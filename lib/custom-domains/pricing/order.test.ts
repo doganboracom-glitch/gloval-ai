@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { FxRate } from './calc'
-import { priceAvailabilityRows, resolveOrderPricing, type PricingContext } from './order'
+import {
+  clientQuoteMatchesAmount,
+  persistedOrderAmountMatches,
+  priceAvailabilityRows,
+  resolveOrderPricing,
+  type PricingContext,
+} from './order'
 
 const NOW = new Date('2026-03-10T12:00:00.000Z')
 
@@ -24,7 +30,7 @@ describe('resolveOrderPricing', () => {
     })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.paymentAmount).toEqual({ amountCents: 138_600, currency: 'TRY' })
+    expect(r.paymentAmount).toEqual({ amountCents: 180_180, currency: 'TRY' })
     expect(r.orderFields.price_cents).toBe(r.paymentAmount.amountCents)
     expect(r.orderFields.currency).toBe('TRY')
     expect(r.orderFields.price_snapshot).toBe(r.snapshot)
@@ -44,7 +50,7 @@ describe('resolveOrderPricing', () => {
     })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.snapshot.grossTryMinor).toBe(69_300)
+    expect(r.snapshot.grossTryMinor).toBe(90_090)
     expect(r.snapshot.marginBps).toBe(5000)
     expect(r.snapshot.vatBps).toBe(2000)
     expect(r.snapshot.fxRateMicros).toBe(38_500_000)
@@ -92,7 +98,7 @@ describe('resolveOrderPricing', () => {
     expect(before.ok && after.ok).toBe(true)
     if (!before.ok || !after.ok) return
     // The persisted snapshot/amount of the first order is a plain value copy.
-    expect(before.paymentAmount.amountCents).toBe(69_300)
+    expect(before.paymentAmount.amountCents).toBe(90_090)
     expect(before.orderFields.price_snapshot.fxRateMicros).toBe(38_500_000)
     expect(after.paymentAmount.amountCents).not.toBe(before.paymentAmount.amountCents)
   })
@@ -109,7 +115,7 @@ describe('priceAvailabilityRows', () => {
       ctx(),
       NOW,
     )
-    expect(rows[0].quote).toEqual({ currency: 'TRY', netMinor: 57_750, vatMinor: 11_550, grossMinor: 69_300, vatBps: 2000 })
+    expect(rows[0].quote).toEqual({ currency: 'TRY', netMinor: 75_075, vatMinor: 15_015, grossMinor: 90_090, vatBps: 2000 })
     expect(rows[1].quote).toBeNull()
     expect(rows[2].quote).toBeNull()
   })
@@ -133,5 +139,77 @@ describe('priceAvailabilityRows', () => {
       NOW,
     )
     expect(rows[0].quote).toBeNull()
+  })
+
+  it('uses one quote for .com, .com.tr, .net and .org display, order, and payment amounts', () => {
+    const inputs = [
+      { domain: 'a.com', tld: 'com', registerCents: 1000 },
+      { domain: 'a.com.tr', tld: 'com.tr', registerCents: 1200 },
+      { domain: 'a.net', tld: 'net', registerCents: 1400 },
+      { domain: 'a.org', tld: 'org', registerCents: 1600 },
+    ]
+    const rows = priceAvailabilityRows(
+      inputs.map(({ domain, tld, registerCents }) => ({
+        domain,
+        tld,
+        status: 'available' as const,
+        price: { registerCents, currency: 'USD' },
+      })),
+      ctx(),
+      NOW,
+    )
+
+    inputs.forEach((input, index) => {
+      const row = rows[index]
+      const pricing = resolveOrderPricing({
+        price: { registerCents: input.registerCents, currency: 'USD' },
+        periodYears: 1,
+        context: ctx(),
+        now: NOW,
+      })
+      expect(row.quote).not.toBeNull()
+      expect(pricing.ok).toBe(true)
+      if (!row.quote || !pricing.ok) return
+      expect(row.quote).toEqual({
+        currency: pricing.paymentAmount.currency,
+        netMinor: pricing.snapshot.unitNetTryMinor,
+        vatMinor: pricing.snapshot.unitVatTryMinor,
+        grossMinor: pricing.paymentAmount.amountCents,
+        vatBps: pricing.snapshot.vatBps,
+      })
+      expect(pricing.snapshot.providerCostMinor).toBe(input.registerCents)
+      expect(pricing.orderFields.price_cents).toBe(pricing.paymentAmount.amountCents)
+      expect(
+        clientQuoteMatchesAmount(
+          { grossMinor: row.quote.grossMinor, currency: row.quote.currency },
+          pricing.paymentAmount,
+        ),
+      ).toBe(true)
+      expect(persistedOrderAmountMatches(pricing.paymentAmount, pricing.orderFields)).toBe(true)
+    })
+  })
+
+  it('rejects stale browser quotes and persisted amounts before charging', () => {
+    const pricing = resolveOrderPricing({
+      price: { registerCents: 1000, currency: 'USD' },
+      periodYears: 1,
+      context: ctx(),
+      now: NOW,
+    })
+    expect(pricing.ok).toBe(true)
+    if (!pricing.ok) return
+
+    expect(
+      clientQuoteMatchesAmount(
+        { grossMinor: pricing.paymentAmount.amountCents - 1, currency: 'TRY' },
+        pricing.paymentAmount,
+      ),
+    ).toBe(false)
+    expect(
+      persistedOrderAmountMatches(pricing.paymentAmount, {
+        ...pricing.orderFields,
+        price_cents: pricing.paymentAmount.amountCents - 1,
+      }),
+    ).toBe(false)
   })
 })
