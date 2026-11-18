@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MARGIN_BPS,
   MAX_RATE_AGE_MS,
+  applyDomainPriceIncrease,
   computeDomainQuote,
   parseVatPercentToBps,
   roundDiv,
@@ -43,6 +44,22 @@ describe('roundDiv', () => {
   })
 })
 
+describe('applyDomainPriceIncrease', () => {
+  it('uses the single multiplier with half-up minor-unit rounding', () => {
+    expect(applyDomainPriceIncrease(69_300)).toBe(90_090)
+    expect(applyDomainPriceIncrease(1)).toBe(1)
+    expect(applyDomainPriceIncrease(3)).toBe(4)
+    expect(applyDomainPriceIncrease(0)).toBe(0)
+    expect(applyDomainPriceIncrease(undefined)).toBeUndefined()
+  })
+
+  it('rejects unsafe amounts', () => {
+    for (const amount of [-1, 1.5, Number.NaN, 2 ** 60]) {
+      expect(() => applyDomainPriceIncrease(amount)).toThrow(RangeError)
+    }
+  })
+})
+
 describe('parseVatPercentToBps', () => {
   it('parses sane percentages', () => {
     expect(parseVatPercentToBps('20')).toBe(2000)
@@ -62,11 +79,11 @@ describe('computeDomainQuote', () => {
     const r = quote({ costMinor: 10_000, currency: 'TRY', fx: undefined })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    // 100.00 TRY cost -> +50% = 150.00 net -> 20% VAT = 30.00 -> 180.00 gross
+    // 100.00 TRY cost -> 150.00 net -> 30.00 VAT -> 180.00 gross before the shared increase, then 234.00.
     expect(r.snapshot.costTryMinor).toBe(10_000)
-    expect(r.snapshot.netTryMinor).toBe(15_000)
-    expect(r.snapshot.vatTryMinor).toBe(3_000)
-    expect(r.snapshot.grossTryMinor).toBe(18_000)
+    expect(r.snapshot.netTryMinor).toBe(19_500)
+    expect(r.snapshot.vatTryMinor).toBe(3_900)
+    expect(r.snapshot.grossTryMinor).toBe(23_400)
     expect(r.snapshot.fxSource).toBe('identity')
     expect(r.snapshot.fxRateMicros).toBe(1_000_000)
   })
@@ -75,12 +92,12 @@ describe('computeDomainQuote', () => {
     const r = quote()
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    // 10.00 USD * 38.50 = 385.00 TRY cost; +50% = 577.50 net; 20% VAT = 115.50; gross 693.00
+    // 10.00 USD * 38.50 = 385.00 TRY cost; 577.50 net + 115.50 VAT = 693.00 gross before the shared increase, then 900.90.
     expect(r.snapshot.costTryMinor).toBe(38_500)
     expect(r.snapshot.marginBps).toBe(MARGIN_BPS)
-    expect(r.snapshot.netTryMinor).toBe(57_750)
-    expect(r.snapshot.vatTryMinor).toBe(11_550)
-    expect(r.snapshot.grossTryMinor).toBe(69_300)
+    expect(r.snapshot.netTryMinor).toBe(75_075)
+    expect(r.snapshot.vatTryMinor).toBe(15_015)
+    expect(r.snapshot.grossTryMinor).toBe(90_090)
     expect(r.snapshot.netTryMinor + r.snapshot.vatTryMinor).toBe(r.snapshot.grossTryMinor)
     expect(r.snapshot.providerCostMinor).toBe(1000)
     expect(r.snapshot.providerCurrency).toBe('USD')
@@ -96,10 +113,10 @@ describe('computeDomainQuote', () => {
     const r = quote({ periodYears: 3 })
     expect(r.ok).toBe(true)
     if (!r.ok) return
-    expect(r.snapshot.unitGrossTryMinor).toBe(69_300)
-    expect(r.snapshot.grossTryMinor).toBe(207_900)
-    expect(r.snapshot.netTryMinor).toBe(57_750 * 3)
-    expect(r.snapshot.vatTryMinor).toBe(11_550 * 3)
+    expect(r.snapshot.unitGrossTryMinor).toBe(90_090)
+    expect(r.snapshot.grossTryMinor).toBe(270_270)
+    expect(r.snapshot.netTryMinor).toBe(75_075 * 3)
+    expect(r.snapshot.vatTryMinor).toBe(15_015 * 3)
   })
 
   it('supports a zero VAT rate', () => {
@@ -116,16 +133,17 @@ describe('computeDomainQuote', () => {
       expect(r.ok).toBe(true)
       if (!r.ok) return
       expect(r.snapshot.costTryMinor).toBe(3)
-      expect(r.snapshot.netTryMinor).toBe(5) // 3 + round(1.5) = 5
+      expect(r.snapshot.netTryMinor).toBe(7) // 3 + round(1.5) = 5 before the shared increase, which rounds 6.5 up to 7.
     })
 
     it('rounds VAT half up and keeps net + VAT = gross', () => {
       const r = quote({ costMinor: 3, currency: 'TRY', fx: undefined, vatBps: 2000 })
       expect(r.ok).toBe(true)
       if (!r.ok) return
-      // net 5, VAT 20% = 1.00 -> 1, gross 6
+      // The old gross of 6 rounds to 8 after the shared increase; the inclusive VAT split remains exact.
+      expect(r.snapshot.netTryMinor).toBe(7)
       expect(r.snapshot.vatTryMinor).toBe(1)
-      expect(r.snapshot.grossTryMinor).toBe(6)
+      expect(r.snapshot.grossTryMinor).toBe(8)
     })
 
     it('rounds the FX conversion half up (0.5 kuruş -> 1)', () => {
@@ -248,7 +266,7 @@ describe('computeDomainQuote', () => {
       if (!second.ok) return
 
       expect(first.snapshot).toEqual(frozen)
-      expect(first.snapshot.grossTryMinor).toBe(69_300)
+      expect(first.snapshot.grossTryMinor).toBe(90_090)
       expect(second.snapshot.grossTryMinor).not.toBe(first.snapshot.grossTryMinor)
     })
   })
@@ -260,9 +278,9 @@ describe('computeDomainQuote', () => {
       if (!r.ok) return
       expect(toQuoteView(r.snapshot)).toEqual({
         currency: 'TRY',
-        netMinor: 57_750,
-        vatMinor: 11_550,
-        grossMinor: 69_300,
+        netMinor: 75_075,
+        vatMinor: 15_015,
+        grossMinor: 90_090,
         vatBps: 2000,
       })
     })

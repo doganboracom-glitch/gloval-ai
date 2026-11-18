@@ -237,7 +237,18 @@ export function BuyDomainDialog({ onClose, initialDomain }: { onClose: () => voi
                   setPurchaseError(null)
                   startTransition(async () => {
                     try {
-                      const res = await startMyDomainPurchase(step.result.domain, periodYears, contact, consents)
+                      const displayedQuote = step.result.quote
+                      const expectedQuote = displayedQuote
+                        ? { grossMinor: displayedQuote.grossMinor * periodYears, currency: displayedQuote.currency }
+                        : undefined
+                      const res = await startMyDomainPurchase(
+                        step.result.domain,
+                        periodYears,
+                        contact,
+                        consents,
+                        undefined,
+                        expectedQuote,
+                      )
                       if (!res.ok) {
                         if (res.error === 'BILLING_PROFILE_INCOMPLETE') await refreshPrecheck()
                         setPurchaseError(describePurchaseError(res.error, d, t.billing.checkout.required))

@@ -10,6 +10,7 @@ import { getPlatformPaymentProvider, getPlatformPaymentProviderId } from '@/lib/
 import type { CheckoutBuyer } from '@/lib/billing'
 import { buildConsentColumns, hasAllCheckoutConsents, type CheckoutConsents } from '@/lib/checkout-consent'
 import type { DomainErrorCode } from '../types'
+import { clientQuoteMatchesAmount, persistedOrderAmountMatches, type ClientDomainQuote } from '../pricing/order'
 import { recordDomainAuditEvent } from './audit'
 import { finalizeRenewal, getLatestRenewal, quoteRenewal, type RenewalView } from './renewal-service'
 
@@ -82,6 +83,7 @@ export async function startMyDomainRenewal(
   years: number,
   consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
+  expectedQuote?: ClientDomainQuote,
 ): Promise<StartRenewalResult> {
   const authState = await getRequestUser()
   if (authState.kind === 'unavailable') return authUnavailableActionResult()
@@ -94,6 +96,17 @@ export async function startMyDomainRenewal(
   const result = await quoteRenewal(userId, domain, years)
   if (!result.ok) return result
   const quote = result.quote
+  const paymentAmount = { amountCents: quote.totalGrossMinor, currency: quote.paymentCurrency }
+  if (!clientQuoteMatchesAmount(expectedQuote, paymentAmount)) {
+    console.error('[domains] renewal quote changed; checkout blocked', {
+      domain: quote.domain,
+      expectedGrossMinor: expectedQuote?.grossMinor,
+      expectedCurrency: expectedQuote?.currency,
+      currentGrossMinor: paymentAmount.amountCents,
+      currentCurrency: paymentAmount.currency,
+    })
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
+  }
 
   const admin = createAdminClient()
   const priceCents = quote.totalGrossMinor
@@ -114,10 +127,27 @@ export async function startMyDomainRenewal(
       price_snapshot: quote.snapshot,
       baseline_expires_raw: quote.baselineExpiresRaw,
     })
-    .select('id')
+    .select('id, price_cents, currency, price_snapshot')
     .single()
   if (insertErr || !row) {
     return { ok: false, error: insertErr?.code === '23505' ? 'RENEWAL_IN_PROGRESS' : 'UNEXPECTED_ERROR' }
+  }
+  if (!persistedOrderAmountMatches(paymentAmount, row)) {
+    console.error('[domains] renewal order amount mismatch; checkout blocked', {
+      renewalId: row.id,
+      orderGrossMinor: row.price_cents,
+      orderCurrency: row.currency,
+      quotedGrossMinor: paymentAmount.amountCents,
+      quotedCurrency: paymentAmount.currency,
+    })
+    warnOnError(
+      'domainRenewal.markPriceMismatch',
+      await admin
+        .from('domain_renewals')
+        .update({ status: 'failed', error_message: 'price_mismatch', updated_at: new Date().toISOString() })
+        .eq('id', row.id),
+    )
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
   }
 
   const providerId = getPlatformPaymentProviderId()

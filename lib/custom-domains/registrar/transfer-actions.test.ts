@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   finalizeTransferIn: vi.fn(),
   syncTransfersForUser: vi.fn(),
   insertError: null as null | { code: string },
+  persistedPriceOverride: null as number | null,
 }))
 
 function makeBuilder(table: string) {
@@ -35,8 +36,19 @@ function makeBuilder(table: string) {
     eq: () => builder,
     order: () => builder,
     limit: () => builder,
-    single: async () =>
-      mocks.insertError ? { data: null, error: mocks.insertError } : { data: { id: 'tr-1' }, error: null },
+    single: async () => {
+      if (mocks.insertError) return { data: null, error: mocks.insertError }
+      const inserted = [...mocks.ops].reverse().find((op) => op.table === table && op.op === 'insert')?.payload
+      return {
+        data: {
+          id: 'tr-1',
+          price_cents: mocks.persistedPriceOverride ?? inserted?.price_cents,
+          currency: inserted?.currency,
+          price_snapshot: inserted?.price_snapshot,
+        },
+        error: null,
+      }
+    },
     maybeSingle: async () => ({ data: mocks.rows[table]?.[0] ?? null, error: null }),
     then: (resolve: (value: unknown) => unknown) => resolve({ data: mocks.rows[table] ?? [], error: null }),
   }
@@ -94,6 +106,10 @@ import {
 const EPP = 'EPP-SECRET-xyz-987'
 const ops = (table: string, op?: Op['op']) => mocks.ops.filter((o) => o.table === table && (!op || o.op === op))
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString()
+const transferConsents = { preInfo: true, distance: true, withdrawal: true }
+const displayedTransferQuote = { grossMinor: 93_600, currency: 'TRY' }
+const startTransfer = (expectedQuote = displayedTransferQuote) =>
+  startMyTransferIn('example.com', EPP, transferConsents, undefined, expectedQuote)
 
 function ownedByUs(domain: string) {
   mocks.listDomainsForUser.mockResolvedValue([{ id: 'cd-1', domain, source: 'registrar' }])
@@ -106,7 +122,9 @@ beforeEach(() => {
   mocks.ops.length = 0
   mocks.rows = {}
   mocks.insertError = null
+  mocks.persistedPriceOverride = null
   vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'error').mockImplementation(() => {})
   mocks.getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'u@example.com' } } })
   mocks.listDomainsForUser.mockResolvedValue([])
   mocks.loadPricingContext.mockImplementation(async () => ({ vatBps: 2000, rates: getFixedRates(new Date()) }))
@@ -168,33 +186,50 @@ describe('transfer-in: pricing', () => {
   it('blocks when the provider has no transfer price (null) and never falls back to the register price', async () => {
     mocks.getTransferPrice.mockResolvedValue(null)
     expect(await checkMyTransferIn('example.com', EPP)).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
-    const started = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+    const started = await startTransfer()
     expect(started).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
     expect(ops('domain_transfers', 'insert')).toHaveLength(0)
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
-  it('charges the transfer price: 8 USD * 50 = 400 TRY cost, +50% margin, +20% VAT = 720.00 TRY', async () => {
-    const result = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+  it('charges 8 USD at the unchanged cost, then applies the 50% margin, 20% VAT, and shared price increase', async () => {
+    const result = await startTransfer()
     expect(result).toEqual({ ok: true, transferId: 'tr-1', redirectUrl: 'https://sandbox-pay.example/checkout' })
 
     const [insert] = ops('domain_transfers', 'insert')
-    expect(insert.payload).toMatchObject({ user_id: 'user-1', status: 'pending_payment', price_cents: 72_000, currency: 'TRY' })
+    expect(insert.payload).toMatchObject({ user_id: 'user-1', status: 'pending_payment', price_cents: 93_600, currency: 'TRY' })
     expect(insert.payload.price_snapshot).toMatchObject({
       providerCostMinor: 800,
       providerCurrency: 'USD',
       fxRateMicros: 50_000_000,
       marginBps: 5000,
       vatBps: 2000,
-      grossTryMinor: 72_000,
+      grossTryMinor: 93_600,
     })
     expect(mocks.createIntent).toHaveBeenCalledWith(
-      expect.objectContaining({ orderId: 'domtrf_tr-1', amountCents: 72_000, currency: 'TRY' }),
+      expect.objectContaining({ orderId: 'domtrf_tr-1', amountCents: 93_600, currency: 'TRY' }),
     )
   })
 
+  it('blocks a changed customer quote before inserting a transfer', async () => {
+    expect(await startTransfer({ grossMinor: 93_599, currency: 'TRY' })).toEqual({
+      ok: false,
+      error: 'PRICING_UNAVAILABLE',
+    })
+    expect(ops('domain_transfers', 'insert')).toHaveLength(0)
+    expect(mocks.createIntent).not.toHaveBeenCalled()
+  })
+
+  it('blocks payment when the persisted transfer amount differs from the quote', async () => {
+    mocks.persistedPriceOverride = 93_601
+
+    expect(await startTransfer()).toEqual({ ok: false, error: 'PRICING_UNAVAILABLE' })
+    expect(mocks.createIntent).not.toHaveBeenCalled()
+    expect(ops('billing_transactions', 'upsert')).toHaveLength(0)
+  })
+
   it('stores the EPP code only encrypted and never in the intent, ledger or client response', async () => {
-    const result = await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+    const result = await startTransfer()
     expect(JSON.stringify(result)).not.toContain(EPP)
     const [insert] = ops('domain_transfers', 'insert')
     expect(insert.payload.auth_code_enc).toBeTruthy()
@@ -204,7 +239,7 @@ describe('transfer-in: pricing', () => {
   })
 
   it('writes the consent evidence on the transfer ledger row', async () => {
-    await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+    await startTransfer()
     const [tx] = ops('billing_transactions', 'upsert')
     expect(tx.payload).toMatchObject({
       consent_pre_info: true,
@@ -216,20 +251,20 @@ describe('transfer-in: pricing', () => {
   })
 
   it('does not submit the transfer before payment completes', async () => {
-    await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })
+    await startTransfer()
     expect(mocks.startTransferIn).not.toHaveBeenCalled()
     expect(mocks.finalizeTransferIn).not.toHaveBeenCalled()
   })
 
   it('reports PENDING_EXISTS on a duplicate open transfer (unique index)', async () => {
     mocks.insertError = { code: '23505' }
-    expect(await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'PENDING_EXISTS' })
+    expect(await startTransfer()).toEqual({ ok: false, error: 'PENDING_EXISTS' })
     expect(mocks.createIntent).not.toHaveBeenCalled()
   })
 
   it('fails the order and clears the code when the payment provider throws', async () => {
     mocks.createIntent.mockRejectedValue(new Error('psp down'))
-    expect(await startMyTransferIn('example.com', EPP, { preInfo: true, distance: true, withdrawal: true })).toEqual({ ok: false, error: 'FAILED' })
+    expect(await startTransfer()).toEqual({ ok: false, error: 'FAILED' })
     const failed = ops('domain_transfers', 'update').find((o) => o.payload.status === 'failed')
     expect(failed?.payload).toMatchObject({ status: 'failed', auth_code_enc: null, error_message: 'payment_init_failed' })
   })

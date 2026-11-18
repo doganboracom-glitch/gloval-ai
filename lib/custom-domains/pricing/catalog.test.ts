@@ -32,9 +32,9 @@ describe('priceTldRegistrations', () => {
     expect(result[0].popular).toBe(true)
     expect(result[0].quote).toMatchObject({
       currency: 'TRY',
-      netMinor: 57_750,
-      vatMinor: 11_550,
-      grossMinor: 69_300,
+      netMinor: 75_075,
+      vatMinor: 15_015,
+      grossMinor: 90_090,
       vatBps: 2000,
     })
     expect(result[1].popular).toBe(false)

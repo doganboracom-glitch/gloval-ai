@@ -29,7 +29,13 @@ import { RegistrarError, type RegistrantContact } from './types'
 import { purchaseCodeFromRegistrarError } from './purchase-errors'
 import type { PricedDomainResult } from '../pricing/calc'
 import { loadPricingContext } from '../pricing/context'
-import { priceAvailabilityRows, resolveOrderPricing } from '../pricing/order'
+import {
+  clientQuoteMatchesAmount,
+  persistedOrderAmountMatches,
+  priceAvailabilityRows,
+  resolveOrderPricing,
+  type ClientDomainQuote,
+} from '../pricing/order'
 
 /**
  * Server actions for buying a brand-new domain through the registrar. Kept
@@ -167,6 +173,7 @@ export async function startMyDomainPurchase(
   contact: RegistrantContact,
   consents: CheckoutConsents | undefined,
   buyer?: CheckoutBuyer,
+  expectedQuote?: ClientDomainQuote,
 ): Promise<StartPurchaseResult> {
   const { userId, email } = await requireUser()
   if (!hasAllCheckoutConsents(consents)) return { ok: false, error: 'CONSENT_REQUIRED' }
@@ -224,6 +231,16 @@ export async function startMyDomainPurchase(
     console.log('[v0] startMyDomainPurchase: pricing unavailable', pricing.reason)
     return { ok: false, error: 'PRICING_UNAVAILABLE' }
   }
+  if (!clientQuoteMatchesAmount(expectedQuote, pricing.paymentAmount)) {
+    console.error('[domains] registration quote changed; checkout blocked', {
+      domain: parsed.domain,
+      expectedGrossMinor: expectedQuote?.grossMinor,
+      expectedCurrency: expectedQuote?.currency,
+      currentGrossMinor: pricing.paymentAmount.amountCents,
+      currentCurrency: pricing.paymentAmount.currency,
+    })
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
+  }
 
   const admin = createAdminClient()
   const priceCents = pricing.paymentAmount.amountCents
@@ -240,11 +257,25 @@ export async function startMyDomainPurchase(
       ...pricing.orderFields,
       provider_response: { contact },
     })
-    .select('id')
+    .select('id, price_cents, currency, price_snapshot')
     .single()
   if (orderErr || !order) {
     console.error('[domains] order insert failed', { code: orderErr?.code ?? 'no_row' })
     return { ok: false, error: 'FAILED' }
+  }
+  if (!persistedOrderAmountMatches(pricing.paymentAmount, order)) {
+    console.error('[domains] registration order amount mismatch; checkout blocked', {
+      orderId: order.id,
+      orderGrossMinor: order.price_cents,
+      orderCurrency: order.currency,
+      quotedGrossMinor: pricing.paymentAmount.amountCents,
+      quotedCurrency: pricing.paymentAmount.currency,
+    })
+    warnOnError(
+      'domainPurchase.markPriceMismatch',
+      await admin.from('domain_orders').update({ status: 'failed', error_message: 'price_mismatch' }).eq('id', order.id),
+    )
+    return { ok: false, error: 'PRICING_UNAVAILABLE' }
   }
 
   const providerId = getPlatformPaymentProviderId()
