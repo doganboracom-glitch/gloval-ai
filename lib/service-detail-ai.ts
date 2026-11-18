@@ -125,6 +125,7 @@ const BRIEF: Record<Lang, (iconList: string) => string> = {
 export type ServiceDetailWrite = {
   blocks: DetailBlock[]
   written: boolean
+  reason?: 'thin_facts' | 'generation_failed' | 'grounding_failed' | 'invalid_service'
   /** Grounded Kısa açıklama (120-160 chars), only when the model's text passed the guard. */
   description?: string
   /** Validated icon key from the service icon set. */
@@ -158,7 +159,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 /**
  * Writes one service's card + page text: Kısa açıklama, an icon and 3-4 blocks
- * (>= 300 words, one retry when shorter). `written` is true only when the model's
+ * (300-word target, one retry when shorter). `written` is true only when the model's
  * text survived the grounding guard; otherwise the free starter is returned, so
  * callers can charge only for real output. Never throws.
  */
@@ -170,10 +171,16 @@ export async function generateServiceDetail(
 ): Promise<ServiceDetailWrite> {
   const section = findServicesSection(site)
   const item = section?.items[itemIndexInSection]
-  if (!section || !item) return { blocks: [], written: false }
+  if (!section || !item) return { blocks: [], written: false, reason: 'invalid_service' }
   const lang: Lang = site.meta.language === 'en' ? 'en' : 'tr'
   const starter = buildStarterServiceBlocks(item)
-  if (!hasEnoughServiceFacts(site, item)) return { blocks: starter, written: false }
+  if (!hasEnoughServiceFacts(site, item)) {
+    console.info('[service-detail] skipped for insufficient facts', {
+      reason: 'thin_facts',
+      descriptionCharacters: item.description.trim().length,
+    })
+    return { blocks: starter, written: false, reason: 'thin_facts' }
+  }
   const facts = collectServiceFacts(site, item)
   const iconList = SERVICE_ICONS.join(', ')
 
@@ -187,14 +194,17 @@ export async function generateServiceDetail(
   ].join('\n')
 
   let best: { blocks: DetailBlock[]; words: number; description?: string; icon?: string } | null = null
+  let attempts = 0
+  let providerFailed = false
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
+      attempts = attempt + 1
       const retryNote: string =
         attempt === 0 || !best
           ? ''
           : lang === 'tr'
-            ? `\nÖnceki deneme yalnızca ${best.words} kelimeydi. Aynı gerçeklere bağlı kalarak daha ayrıntılı yaz; EN AZ ${SERVICE_MIN_WORDS} kelime olsun.`
-            : `\nThe previous attempt was only ${best.words} words. Stay within the same facts but write in more depth; AT LEAST ${SERVICE_MIN_WORDS} words.`
+            ? `\nÖnceki deneme yalnızca ${best.words} kelimeydi. Aynı doğrulanmış gerçekleri koru; yalnızca bu gerçeklerden doğrudan çıkarılabilen ayrıntıları ekle. Uydurma bilgi ekleme ve en az ${SERVICE_MIN_WORDS} kelimeyi hedefle.`
+            : `\nThe previous attempt was only ${best.words} words. Keep the same verified facts and add detail only when directly supported by them. Do not invent facts; aim for at least ${SERVICE_MIN_WORDS} words.`
       const result: { object: z.infer<typeof outputSchema> } = await withTimeout(
         generateStructured({
           // Background generation always uses the standard tier, whatever the plan.
@@ -223,8 +233,25 @@ export async function generateServiceDetail(
       if (words >= SERVICE_MIN_WORDS) break
     }
   } catch (err) {
-    console.log('[service-detail] generation failed:', err instanceof Error ? err.message : 'unknown')
+    providerFailed = true
+    console.error('[service-detail] generation failed', {
+      attempt: attempts,
+      reason: err instanceof Error && err.message === 'service_write_timeout' ? 'timeout' : 'provider_error',
+    })
   }
-  if (!best) return { blocks: starter, written: false }
+  if (!best) {
+    const reason = providerFailed ? 'generation_failed' : 'grounding_failed'
+    if (!providerFailed) {
+      console.warn('[service-detail] all generated blocks rejected', { attempts, reason })
+    }
+    return { blocks: starter, written: false, reason }
+  }
+  if (best.words < SERVICE_MIN_WORDS) {
+    console.info('[service-detail] returned below word target', {
+      wordCount: best.words,
+      targetWords: SERVICE_MIN_WORDS,
+      attempts,
+    })
+  }
   return { blocks: best.blocks, written: true, description: best.description, icon: best.icon }
 }

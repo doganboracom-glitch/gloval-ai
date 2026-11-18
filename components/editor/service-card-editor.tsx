@@ -8,19 +8,17 @@ import { isUsableImageSrc } from '@/lib/about-media'
 import { SERVICE_ITEM_LIMITS } from '@/lib/service-item-limits'
 import { canRemoveEntry } from '@/lib/list-limits'
 import { servicePath } from '@/lib/service-pages'
+import { AI_ACTION_COSTS } from '@/lib/ai-action-costs'
 import { suggestServiceAlt } from '@/lib/service-image'
 import {
   META_DESCRIPTION_RANGE,
-  SERVICE_MIN_WORDS,
   blocksToText,
-  countWords,
   filterServiceIcons,
   hasLegacyServiceSeo,
   metaDescriptionState,
   normalizeServiceText,
   resolveServiceSeo,
   serviceIconLabel,
-  wordGoalStatus,
 } from '@/lib/service-card'
 import { IconBtn, TextField, UploadButton } from '@/components/editor/editor-fields'
 import { AiImagePreviewPanel } from '@/components/editor/ai-image-preview-panel'
@@ -51,17 +49,16 @@ const COPY = {
     itemPage: 'Bu hizmetin sayfası açık',
     slug: 'Sayfa adresi',
     content: 'Detaylı açıklama',
-    descriptionHint: 'Hizmetinizi ayrıntılı anlatın (en az 300 kelime). Alt başlık için satırı "## " ile başlatın, madde işareti için "- " kullanın.',
+    descriptionHint: 'Hizmetinizi ayrıntılı anlatın. Alt başlık için satırı "## " ile başlatın, madde işareti için "- " kullanın.',
     descriptionPlaceholder: '## Hizmet nedir?\nHizmetinizi kısaca anlatın.\n\n## Nasıl çalışır?\n- İlk adım\n- İkinci adım',
     headingWarning: (limit: number) => `Bir alt başlık ${limit} karakter sınırını aşıyor. Yazdığınız metin korunuyor; başlığı kısaltıp tekrar deneyin.`,
     paragraphWarning: (limit: number) => `Bir paragraf ${limit} karakter sınırını aşıyor ve paragraf sınırında bölünemiyor. Yazdığınız metin korunuyor; kısaltın veya paragrafı ayırın.`,
     blockWarning: (count: number, limit: number) => `${count} blok sınırından sonra gelen metin son bloğa ${limit} karakter sınırını aşmadan sığmıyor. Yazdığınız metin korunuyor; kısaltın veya paragrafları ayırın.`,
-    words: 'kelime',
-    wordGoal: 'hedef: en az',
     moveUp: 'Yukarı taşı',
     moveDown: 'Aşağı taşı',
     aiWrite: 'AI ile metin yaz',
     aiWriting: 'Yazılıyor…',
+    aiCostUnit: 'kredi / üretim',
     sample: 'Bu metin platform tarafından örnek olarak hazırlandı. İşletmenize uygunsa onaylayın ya da düzenleyin.',
     approve: 'İçeriği onayla',
     advanced: "Gelişmiş: Google'da farklı göster",
@@ -90,17 +87,16 @@ const COPY = {
     itemPage: 'This service has its own page',
     slug: 'Page address',
     content: 'Detailed description',
-    descriptionHint: 'Describe your service in detail (at least 300 words). Start a line with "## " for a subheading and use "- " for bullet points.',
+    descriptionHint: 'Describe your service in detail. Start a line with "## " for a subheading and use "- " for bullet points.',
     descriptionPlaceholder: '## What is the service?\nDescribe the result.\n\n## How it works\n- First step\n- Second step',
     headingWarning: (limit: number) => `A subheading exceeds the ${limit}-character limit. Your text is preserved; shorten the heading to save.`,
     paragraphWarning: (limit: number) => `A paragraph exceeds the ${limit}-character limit and cannot be split at a paragraph boundary. Your text is preserved; shorten or split the paragraph.`,
     blockWarning: (count: number, limit: number) => `Text beyond the ${count}-block limit does not fit in the last block without exceeding ${limit} characters. Your text is preserved; shorten or split paragraphs.`,
-    words: 'words',
-    wordGoal: 'goal: at least',
     moveUp: 'Move up',
     moveDown: 'Move down',
     aiWrite: 'Write text with AI',
     aiWriting: 'Writing…',
+    aiCostUnit: 'credit per generation',
     sample: 'This text was drafted by the platform as a sample. Approve or edit it if it fits your business.',
     approve: 'Approve content',
     advanced: 'Advanced: show something different on Google',
@@ -321,9 +317,6 @@ export function ServiceCardEditor({
   const meta = metaDescriptionState(descDraft ?? item.description)
   const descriptionValue = descDraft ?? blocksToText(blocks)
   const normalizedDescription = normalizeServiceText(descriptionValue)
-  const wordCount = countWords(descriptionValue)
-  const goal = wordGoalStatus(wordCount, SERVICE_MIN_WORDS)
-
   const setField = (field: 'title' | 'description' | 'icon', value: string) =>
     onDispatch({ op: 'updateItemField', index, itemIndex, field, value })
   const patchItem = (p: Extract<EditOperation, { op: 'updateServiceItem' }>['patch']) =>
@@ -513,11 +506,8 @@ export function ServiceCardEditor({
                       }}
                       headerRight={
                         <div className="flex flex-wrap items-center gap-3">
-                          <span
-                            className={`text-xs ${goal.reached ? STATE_CLASS.good : STATE_CLASS.warn}`}
-                            aria-live="polite"
-                          >
-                            {goal.count} {c.words} ({c.wordGoal} {goal.goal})
+                          <span className="text-xs text-muted-foreground">
+                            {AI_ACTION_COSTS.serviceDetail} {c.aiCostUnit}
                           </span>
                           <button
                             type="button"

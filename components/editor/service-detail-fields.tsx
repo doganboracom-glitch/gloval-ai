@@ -14,6 +14,7 @@ import {
 import { GhostButton, TextField } from '@/components/editor/editor-fields'
 import { ServiceCardEditor } from '@/components/editor/service-card-editor'
 import { useEditorProjectId, useSitePublished } from '@/components/editor/published-context'
+import { SERVICE_DETAIL_REQUEST_TIMEOUT_MS } from '@/lib/ai-action-costs'
 
 type ServicesData = Extract<WebsiteSchema['sections'][number], { type: 'services' }>
 const COPY = {
@@ -51,6 +52,7 @@ const COPY = {
     aiWriting: 'Yazılıyor…',
     aiThin: 'Sitenizde bu hizmet için yeterli bilgi yok; kısa bir başlangıç metni hazırlandı. Bilgi ekleyip yeniden deneyin.',
     aiFailed: 'Metin yazılamadı. Lütfen tekrar deneyin.',
+    aiTimeout: 'İstek zaman aşımına uğradı. Lütfen yeniden deneyin.',
     aiNoCredits: 'AI krediniz yetersiz.',
     aiDaily: 'Günlük ücretsiz işlem limitine ulaştınız.',
   },
@@ -88,6 +90,7 @@ const COPY = {
     aiWriting: 'Writing…',
     aiThin: 'Your site has too little information about this service, so a short starter text was prepared. Add details and try again.',
     aiFailed: 'Could not write the text. Please try again.',
+    aiTimeout: 'The request timed out. Please try again.',
     aiNoCredits: 'Not enough AI credits.',
     aiDaily: 'You reached the free daily action limit.',
   },
@@ -127,25 +130,38 @@ export function ServiceDetailFields({
     if (writing !== null) return
     setWriting(item)
     setNotice(null)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), SERVICE_DETAIL_REQUEST_TIMEOUT_MS)
     try {
       const res = await fetch('/api/service-detail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schema: site, item }),
+        signal: controller.signal,
       })
       if (res.status === 402) throw new Error(c.aiNoCredits)
       if (res.status === 429) throw new Error(c.aiDaily)
       if (!res.ok) throw new Error(c.aiFailed)
       const data = (await res.json()) as {
         blocks?: { heading?: string; level?: 'h2' | 'h3'; body: string }[]
+        description?: string
+        icon?: string
         thinFacts?: boolean
       }
       if (!Array.isArray(data.blocks) || data.blocks.length === 0) throw new Error(c.aiFailed)
-      patchItem(item, { blocks: data.blocks, pageEnabled: true })
+      patchItem(item, {
+        blocks: data.blocks,
+        ...(data.description ? { description: data.description } : {}),
+        ...(data.icon ? { icon: data.icon } : {}),
+        pageEnabled: true,
+      })
       if (data.thinFacts) setNotice(c.aiThin)
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : c.aiFailed)
+      if (err instanceof Error && err.name === 'AbortError') setNotice(c.aiTimeout)
+      else if (err instanceof Error && (err.message === c.aiNoCredits || err.message === c.aiDaily)) setNotice(err.message)
+      else setNotice(c.aiFailed)
     } finally {
+      clearTimeout(timeoutId)
       setWriting(null)
     }
   }
