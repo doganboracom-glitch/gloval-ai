@@ -3,6 +3,7 @@ import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAdsLedgerReason } from '@/lib/ads/credit-costs'
 import { LOGO_EMBLEM_CREDITS } from '@/lib/logo-studio/rules'
+import { AI_ACTION_COSTS as SHARED_AI_ACTION_COSTS } from '@/lib/ai-action-costs'
 
 /**
  * Server-only AI credit helpers.
@@ -20,10 +21,12 @@ import { LOGO_EMBLEM_CREDITS } from '@/lib/logo-studio/rules'
  */
 
 /** Cost, in AI credits, per server-side action. Kept in sync with the
- * marketing table in `lib/pricing-config.ts#CREDIT_COSTS` ("Metni düzelt/
- * yeniden yaz" = 1, "Bölüm içeriği oluştur" = 2). */
+  * marketing table in `lib/pricing-config.ts#CREDIT_COSTS` ("Metni düzelt/
+  * yeniden yaz" = 1, "Bölüm içeriği oluştur" = 2). Service-detail copy uses
+  * the client-safe shared cost from `lib/ai-action-costs.ts`. */
 export const AI_ACTION_COSTS = {
   edit: 1,
+  serviceDetail: SHARED_AI_ACTION_COSTS.serviceDetail,
   heroImage: 2,
   sectionImage: 2,
   /** Per generated logo alternative — see `app/api/logo-image/route.ts`. */
