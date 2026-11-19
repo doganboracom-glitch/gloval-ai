@@ -2,7 +2,7 @@
 
 import type { ComponentProps, MouseEvent, ReactNode } from 'react'
 import { LinkButton } from '@/components/link-button'
-import { ATTRIBUTION_KEYS, snapshotFromLocation } from '@/lib/attribution'
+import { ATTRIBUTION_UTM_KEYS, snapshotFromLocation } from '@/lib/attribution'
 import { VERCEL_FUNNEL_EVENTS, trackFunnelEvent, type FunnelProps } from '@/lib/vercel-analytics'
 
 type CampaignName = NonNullable<FunnelProps['campaign']>
@@ -31,7 +31,7 @@ function appendAttribution(href: string): string | null {
   if (!attribution) return null
 
   const destination = new URL(href, window.location.origin)
-  for (const key of ATTRIBUTION_KEYS) {
+  for (const key of ATTRIBUTION_UTM_KEYS) {
     const value = attribution.params[key]
     if (value && !destination.searchParams.has(key)) {
       destination.searchParams.set(key, value)

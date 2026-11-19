@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { WebsitePreview } from '@/components/website-preview'
 import {
@@ -85,6 +86,7 @@ export function EditorClient({
 }) {
   const router = useRouter()
   const { t } = useLanguage()
+  const hasPublishedRef = useRef(published)
 
   return (
     <ProjectIdContext.Provider value={projectId}>
@@ -142,7 +144,10 @@ export function EditorClient({
           // Canonical public address of a published site is always its own
           // tenant subdomain (e.g. nakliyat.gloval.site), never the platform
           // host + /site/<slug> internal rewrite path.
-          trackPublishSite(projectId)
+          if (!hasPublishedRef.current) {
+            hasPublishedRef.current = true
+            trackPublishSite()
+          }
           return { url: tenantUrl(result.slug) }
         },
         getPublishOptions: (next) => getPublishOptions({ id: projectId, schema: next }),

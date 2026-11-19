@@ -159,10 +159,17 @@ describe('meta capi consent and event ids', () => {
     })
   })
 
-  it('uses the same event ID in the browser Pixel and the server', () => {
-    const browser = toMetaPayload('purchase', { transaction_id: 'order_123456', value: 1, currency: 'TRY' })
-    expect(browser.eventId).toBe(metaEventIds.purchase('order_123456'))
-    const other = toMetaPayload('sign_up', { method: 'email', event_id: metaEventIds.signup('u-1') })
-    expect(other.eventId).toBe(metaEventIds.signup('u-1'))
+  it('keeps purchase payloads free of transaction and customer identifiers', () => {
+    const browser = toMetaPayload('purchase', {
+      event_id: 'purchase:attempt-1',
+      transaction_id: 'order_123456',
+      value: 1,
+      currency: 'TRY',
+      item_category: 'subscription',
+    })
+    expect(browser.eventId).toBe('purchase:attempt-1')
+    expect(browser.data).toEqual({ value: 1, currency: 'TRY' })
+    const other = toMetaPayload('sign_up', { method: 'email', event_id: 'signup:attempt-1' })
+    expect(other.eventId).toBe('signup:attempt-1')
   })
 })

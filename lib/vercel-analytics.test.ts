@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CONSENT_COOKIE, CONSENT_VERSION } from '@/lib/cookie-consent-storage'
+
+const trackMock = vi.hoisted(() => vi.fn())
+vi.mock('@vercel/analytics', () => ({ track: trackMock }))
+
 import {
   isVercelAnalyticsActive,
   resolveAnalyticsMode,
+  trackFunnelEvent,
   VERCEL_FUNNEL_EVENTS,
 } from './vercel-analytics'
 
@@ -63,5 +70,67 @@ describe('isVercelAnalyticsActive', () => {
     expect(
       isVercelAnalyticsActive({ mode: 'always', consent: null, hostname: 'acme.gloval.site', pathname: '/' }),
     ).toBe(false)
+  })
+})
+
+describe('trackFunnelEvent', () => {
+  afterEach(() => {
+    document.cookie = `${CONSENT_COOKIE}=; max-age=0; path=/`
+    window.history.replaceState({}, '', '/')
+    vi.unstubAllEnvs()
+    trackMock.mockReset()
+  })
+
+  it('sends first-touch labels and deduplicates a stable occurrence key', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    document.cookie = `${CONSENT_COOKIE}=${encodeURIComponent(JSON.stringify({
+      v: CONSENT_VERSION,
+      necessary: true,
+      analytics: true,
+      marketing: false,
+    }))}; path=/`
+
+    expect(
+      trackFunnelEvent(
+        VERCEL_FUNNEL_EVENTS.landingView,
+        { utm_content: 'hero', landing_path: '/paketler' },
+        'landing-view-1',
+      ),
+    ).toBe(true)
+    trackFunnelEvent(
+      VERCEL_FUNNEL_EVENTS.landingView,
+      { utm_content: 'hero', landing_path: '/paketler' },
+      'landing-view-1',
+    )
+
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('landing_view', {
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+      utm_content: 'hero',
+      landing_path: '/paketler',
+    })
+  })
+
+  it('filters personal-looking labels and swallows vendor failures', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    document.cookie = `${CONSENT_COOKIE}=${encodeURIComponent(JSON.stringify({
+      v: CONSENT_VERSION,
+      necessary: true,
+      analytics: true,
+      marketing: false,
+    }))}; path=/`
+    trackMock.mockImplementation(() => {
+      throw new Error('analytics unavailable')
+    })
+
+    expect(() =>
+      trackFunnelEvent(
+        VERCEL_FUNNEL_EVENTS.landingView,
+        { utm_source: 'ada@example.com', landing_path: '/u/123456789' },
+        'landing-view-2',
+      ),
+    ).not.toThrow()
   })
 })

@@ -19,6 +19,8 @@ import {
 } from '@/components/domains/purchase-error'
 import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import type { CheckoutConsents } from '@/lib/checkout-consent'
+import { trackBeginCheckout } from '@/lib/analytics'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import {
   getMyDomainPurchasePrecheck,
   searchMyDomainAvailability,
@@ -408,6 +410,10 @@ function ContactStep({
     if (!isValid || pending || blocked || !price) return
     consent.markTouched()
     if (!consent.allGiven) return
+    trackBeginCheckout(
+      { value: grossTotal / 100, currency: price.currency, item_category: 'domain' },
+      newEventNonce(),
+    )
     onSubmit(periodYears, contact, consent.consents)
   }
 

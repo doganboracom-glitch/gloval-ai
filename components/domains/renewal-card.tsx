@@ -5,6 +5,8 @@ import useSWR from 'swr'
 import { Loader2 } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
+import { trackBeginCheckout } from '@/lib/analytics'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import { fill } from '@/components/domains/domain-chrome'
 import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import {
@@ -73,6 +75,10 @@ export function RenewalCard({
         setConfirming(false)
         return
       }
+      trackBeginCheckout(
+        { value: displayedQuote.totalGrossMinor / 100, currency: displayedQuote.currency, item_category: 'domain' },
+        newEventNonce(),
+      )
       const res = await startMyDomainRenewal(domain, years, consent.consents, undefined, {
         grossMinor: displayedQuote.totalGrossMinor,
         currency: displayedQuote.currency,
