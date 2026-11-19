@@ -1,28 +1,39 @@
-import { describe, expect, it } from 'vitest'
-import { ATTRIBUTION_LIMITS, sanitizeAttribution } from './attribution'
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  ATTRIBUTION_COOKIE,
+  ATTRIBUTION_LIMITS,
+  readAttribution,
+  sanitizeAttribution,
+  shouldReplaceAttribution,
+  snapshotFromLocation,
+} from './attribution'
 
-const base = { params: {}, landing_path: '/', referrer_domain: null, captured_at: 1_700_000_000_000 }
+const base = { params: {}, landing_path: '/', captured_at: 1_700_000_000_000 }
 
 describe('sanitizeAttribution field limits', () => {
-  it('caps utm_* at 200 and click ids at 500 characters', () => {
+  it('caps UTM values at 200 characters and converts click IDs to booleans', () => {
     const result = sanitizeAttribution({
       ...base,
       params: {
         utm_source: 'a'.repeat(900),
         utm_campaign: 'b'.repeat(900),
-        gclid: 'g'.repeat(900),
-        fbclid: 'f'.repeat(900),
+        gclid: 'not-retained',
+        fbclid: '',
       },
     })
     expect(result?.params.utm_source).toHaveLength(ATTRIBUTION_LIMITS.utm)
     expect(result?.params.utm_campaign).toHaveLength(200)
-    expect(result?.params.gclid).toHaveLength(ATTRIBUTION_LIMITS.clickId)
-    expect(result?.params.fbclid).toHaveLength(500)
+    expect(result?.params.gclid).toBe(true)
+    expect(result?.params.fbclid).toBe(false)
+    expect(JSON.stringify(result)).not.toContain('not-retained')
   })
 
-  it('keeps a realistic click id intact (longer than the utm cap)', () => {
-    const gclid = 'x'.repeat(320)
-    expect(sanitizeAttribution({ ...base, params: { gclid } })?.params.gclid).toBe(gclid)
+  it('keeps boolean click presence without retaining click IDs', () => {
+    expect(sanitizeAttribution({ ...base, params: { gclid: true, fbclid: false } })?.params).toEqual({
+      gclid: true,
+      fbclid: false,
+    })
   })
 
   it('ignores unknown parameter keys', () => {
@@ -49,19 +60,33 @@ describe('landing_path', () => {
   })
 })
 
-describe('referrer_domain', () => {
-  it('accepts a bare hostname and lowercases it', () => {
-    expect(sanitizeAttribution({ ...base, referrer_domain: 'WWW.Google.com' })?.referrer_domain).toBe('www.google.com')
+describe('first-touch cookie behavior', () => {
+  afterEach(() => {
+    document.cookie = `${ATTRIBUTION_COOKIE}=; max-age=0; path=/`
+    window.history.replaceState({}, '', '/')
   })
 
-  it('rejects URLs, paths, ports and other non-hostname input', () => {
-    for (const value of ['https://google.com', 'google.com/search', 'google.com:443', 'a b.com', 'a..b', '.a.com']) {
-      expect(sanitizeAttribution({ ...base, referrer_domain: value })?.referrer_domain).toBeNull()
+  it('keeps the first campaign touch and normalizes legacy click IDs on read', () => {
+    const first = {
+      ...base,
+      captured_at: Date.now(),
+      params: { utm_source: 'meta', utm_campaign: 'spring', gclid: 'legacy-click-value' },
     }
+    document.cookie = `${ATTRIBUTION_COOKIE}=${encodeURIComponent(JSON.stringify(first))}; path=/; max-age=1800; samesite=lax`
+    window.history.replaceState({}, '', '/second?utm_source=google&gclid=another-value')
+    expect(snapshotFromLocation()?.params.utm_source).toBe('google')
+    expect(shouldReplaceAttribution(readAttribution())).toBe(false)
+    expect(readAttribution()?.params).toEqual({ utm_source: 'meta', utm_campaign: 'spring', gclid: true })
+    expect(document.cookie).not.toContain('legacy-click-value')
+    expect(document.cookie).not.toContain('another-value')
   })
 
-  it('rejects hostnames over 255 characters', () => {
-    expect(sanitizeAttribution({ ...base, referrer_domain: `${'a'.repeat(300)}.com` })?.referrer_domain).toBeNull()
+  it('captures click-ID presence as booleans and excludes query strings from landing paths', () => {
+    window.history.replaceState({}, '', '/paketler?utm_source=google&gclid=secret&fbclid=')
+    expect(snapshotFromLocation()).toMatchObject({
+      params: { utm_source: 'google', gclid: true, fbclid: true },
+      landing_path: '/paketler',
+    })
   })
 })
 

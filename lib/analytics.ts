@@ -11,6 +11,13 @@ import {
   type PurchaseKind,
 } from '@/lib/analytics-events'
 import { metaEventIds, newEventNonce } from '@/lib/analytics/event-ids'
+import { attributionEventParams, landingViewEventParams, type Attribution } from '@/lib/attribution'
+import {
+  trackFunnelEvent,
+  VERCEL_FUNNEL_EVENTS,
+  type FunnelProps,
+  type VercelFunnelEvent,
+} from '@/lib/vercel-analytics'
 
 /**
  * Consent-gated event dispatcher for GA4 and Meta Pixel.
@@ -83,7 +90,13 @@ export function ensureFbq(): FbqFn {
 export function setVendorReady(vendor: Vendor): void {
   ready[vendor] = true
   const queued = pending[vendor].splice(0)
-  queued.forEach((send) => send())
+  queued.forEach((send) => {
+    try {
+      send()
+    } catch {
+      // Analytics vendors must never interrupt the application flow.
+    }
+  })
 }
 
 export function resetVendor(vendor: Vendor): void {
@@ -93,7 +106,11 @@ export function resetVendor(vendor: Vendor): void {
 
 function dispatch(vendor: Vendor, send: () => void): void {
   if (ready[vendor]) {
-    send()
+    try {
+      send()
+    } catch {
+      // Analytics vendors must never interrupt the application flow.
+    }
     return
   }
   if (pending[vendor].length < MAX_PENDING) pending[vendor].push(send)
@@ -123,18 +140,22 @@ export function trackEvent(
   params: AnalyticsParams = {},
   options: { vendors?: Vendor[] } = {},
 ): boolean {
-  if (typeof window === 'undefined') return false
-  if (!isMeasurementSurface(window.location.hostname, window.location.pathname)) return false
+  try {
+    if (typeof window === 'undefined') return false
+    if (!isMeasurementSurface(window.location.hostname, window.location.pathname)) return false
 
-  const allowed = allowedVendors(readConsent())
-  const targets = options.vendors ? allowed.filter((v) => options.vendors!.includes(v)) : allowed
-  if (targets.length === 0) return false
+    const allowed = allowedVendors(readConsent())
+    const targets = options.vendors ? allowed.filter((v) => options.vendors!.includes(v)) : allowed
+    if (targets.length === 0) return false
 
-  for (const vendor of targets) {
-    if (vendor === 'ga') dispatch('ga', () => sendToGa(name, params))
-    else dispatch('meta', () => sendToMeta(name, params))
+    for (const vendor of targets) {
+      if (vendor === 'ga') dispatch('ga', () => sendToGa(name, params))
+      else dispatch('meta', () => sendToMeta(name, params))
+    }
+    return true
+  } catch {
+    return false
   }
-  return true
 }
 
 /**
@@ -171,81 +192,108 @@ function rememberEventId(eventId: string): void {
   }
 }
 
-function trackEventAndReportOnce(
+function trackFunnelEventOnce(
   eventId: string,
   name: AnalyticsEventName,
   params: AnalyticsParams,
-  serverPayload?: Record<string, unknown>,
-): void {
-  if (rememberedEventIds.has(eventId)) return
-  if (!trackEvent(name, params)) return
+  vercelName?: VercelFunnelEvent,
+  vercelProps?: FunnelProps,
+): boolean {
+  if (rememberedEventIds.has(eventId)) return true
+  let accepted = trackEvent(name, params)
+  if (vercelName) accepted = trackFunnelEvent(vercelName, vercelProps, eventId) || accepted
+  if (!accepted) return false
   rememberEventId(eventId)
-  if (serverPayload) reportServerEvent(serverPayload)
+  return true
 }
 
-export function trackSignUp(method: 'email' | 'google' = 'email', userId?: string): void {
-  if (!userId) {
-    trackEvent(ANALYTICS_EVENTS.signUp, { method })
-    return
-  }
-  const eventId = metaEventIds.signup(userId)
-  trackEventAndReportOnce(
+export function trackLandingView(attribution: Attribution | null, nonce: string): boolean {
+  const eventId = `landing:${nonce}`
+  const props = landingViewEventParams(attribution)
+  return trackFunnelEventOnce(
+    eventId,
+    ANALYTICS_EVENTS.landingView,
+    { ...props, event_id: eventId },
+    VERCEL_FUNNEL_EVENTS.landingView,
+    props,
+  )
+}
+
+export function trackSignupStart(nonce: string): boolean {
+  const eventId = `signup_start:${nonce}`
+  const params = attributionEventParams()
+  return trackFunnelEventOnce(
+    eventId,
+    ANALYTICS_EVENTS.signupStart,
+    { ...params, event_id: eventId },
+    VERCEL_FUNNEL_EVENTS.signupStart,
+  )
+}
+
+export function trackSignUp(method: 'email' | 'google' = 'email', nonce: string = newEventNonce()): boolean {
+  const eventId = metaEventIds.signup(nonce)
+  const params = { method, ...attributionEventParams(), event_id: eventId }
+  return trackFunnelEventOnce(
     eventId,
     ANALYTICS_EVENTS.signUp,
-    { method, event_id: eventId },
-    { type: 'sign_up', userId },
+    params,
+    VERCEL_FUNNEL_EVENTS.signUp,
+    { method },
   )
 }
 
-export function trackGenerateSiteStarted(): void {
-  trackEvent(ANALYTICS_EVENTS.generateSiteStarted)
+export function trackGenerateSiteStarted(nonce: string): boolean {
+  const eventId = metaEventIds.generateStart(nonce)
+  const params = { ...attributionEventParams(), event_id: eventId }
+  return trackFunnelEventOnce(
+    eventId,
+    ANALYTICS_EVENTS.generateSiteStarted,
+    params,
+    VERCEL_FUNNEL_EVENTS.siteGenerateStart,
+  )
 }
 
-export function trackGenerateSiteCompleted(source: 'ai' | 'fallback', nonce: string): void {
+export function trackGenerateSiteCompleted(source: 'ai' | 'fallback', nonce: string): boolean {
   const eventId = metaEventIds.generate(nonce)
-  trackEventAndReportOnce(
+  const params = { source, ...attributionEventParams(), event_id: eventId }
+  return trackFunnelEventOnce(
     eventId,
     ANALYTICS_EVENTS.generateSiteCompleted,
-    { source, event_id: eventId },
-    { type: 'generate_site_completed', nonce, source },
+    params,
+    VERCEL_FUNNEL_EVENTS.siteGenerateSuccess,
+    { source },
   )
 }
 
-export function trackPublishSite(siteId?: string): void {
-  if (!siteId) {
-    trackEvent(ANALYTICS_EVENTS.publishSite)
-    return
-  }
-  const eventId = metaEventIds.publish(siteId)
-  trackEventAndReportOnce(
+export function trackPublishSite(eventNonce: string = newEventNonce()): boolean {
+  const eventId = metaEventIds.publish(eventNonce)
+  const params = { ...attributionEventParams(), event_id: eventId }
+  return trackFunnelEventOnce(
     eventId,
     ANALYTICS_EVENTS.publishSite,
-    { event_id: eventId },
-    { type: 'publish_site', siteId },
+    params,
+    VERCEL_FUNNEL_EVENTS.publishSuccess,
   )
 }
 
 export function trackBeginCheckout(
   params: { value?: number; currency?: string; item_category?: string } = {},
   nonce: string = newEventNonce(),
-): void {
+): boolean {
   const eventId = metaEventIds.checkout(nonce)
-  trackEventAndReportOnce(
+  const eventParams = { ...attributionEventParams(), ...params, event_id: eventId }
+  return trackFunnelEventOnce(
     eventId,
     ANALYTICS_EVENTS.beginCheckout,
-    { ...params, event_id: eventId },
-    {
-      type: 'begin_checkout',
-      nonce,
-      value: params.value,
-      currency: params.currency,
-      category: params.item_category,
-    },
+    eventParams,
+    VERCEL_FUNNEL_EVENTS.beginCheckout,
+    { value: params.value, currency: params.currency },
   )
 }
 
 const SENT_PURCHASES_KEY = 'gloval_purchases_sent'
 const MAX_REMEMBERED_PURCHASES = 50
+const sentPurchaseIds = new Set<string>()
 
 function readSentPurchases(): string[] {
   try {
@@ -270,24 +318,32 @@ export function trackPurchase(purchase: {
 }): boolean {
   if (typeof window === 'undefined') return false
   const sent = readSentPurchases()
-  if (sent.includes(purchase.transaction_id)) return false
+  if (sent.includes(purchase.transaction_id) || sentPurchaseIds.has(purchase.transaction_id)) return false
 
-  const accepted = trackEvent(ANALYTICS_EVENTS.purchase, {
-    transaction_id: purchase.transaction_id,
+  const eventId = metaEventIds.purchase(newEventNonce())
+  const params = {
+    ...attributionEventParams(),
     value: purchase.value,
     currency: purchase.currency,
-    item_category: purchase.item_category,
-    items: [{ item_id: purchase.item_category, item_name: purchase.item_category, price: purchase.value, quantity: 1 }],
-  })
+    event_id: eventId,
+  }
+  const accepted = trackFunnelEventOnce(
+    eventId,
+    ANALYTICS_EVENTS.purchase,
+    params,
+    VERCEL_FUNNEL_EVENTS.purchase,
+    { value: purchase.value, currency: purchase.currency },
+  )
   if (!accepted) return false
 
+  sentPurchaseIds.add(purchase.transaction_id)
   try {
     window.localStorage.setItem(
       SENT_PURCHASES_KEY,
       JSON.stringify([...sent, purchase.transaction_id].slice(-MAX_REMEMBERED_PURCHASES)),
     )
   } catch {
-    // Without storage the in-flight duplicate guard is best effort.
+    // The in-memory guard still prevents duplicate deliveries in this page.
   }
   return true
 }

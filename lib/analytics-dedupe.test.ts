@@ -7,7 +7,9 @@ import {
   setVendorReady,
   trackBeginCheckout,
   trackGenerateSiteCompleted,
+  trackGenerateSiteStarted,
   trackPublishSite,
+  trackPurchase,
   trackSignUp,
 } from '@/lib/analytics'
 
@@ -19,12 +21,6 @@ vi.mock('@/lib/analytics-config', () => ({
 
 let pixel: ReturnType<typeof vi.fn>
 let bridgeFetch: ReturnType<typeof vi.fn<typeof fetch>>
-
-function serverPayload() {
-  const call = bridgeFetch.mock.calls.find(([input]) => String(input) === '/api/analytics/meta-event')
-  expect(call).toBeDefined()
-  return JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>
-}
 
 function pixelEvent(eventName: string) {
   const call = pixel.mock.calls.find(([, name]) => name === eventName)
@@ -40,6 +36,7 @@ beforeEach(() => {
     analytics: false,
     marketing: true,
   }))}; path=/`
+  window.localStorage.removeItem('gloval_purchases_sent')
 
   pixel = vi.fn()
   Object.defineProperty(window, 'fbq', { configurable: true, value: pixel })
@@ -56,64 +53,95 @@ afterEach(() => {
   Object.defineProperty(window, 'fbq', { configurable: true, value: undefined })
 })
 
-describe('browser Pixel and server bridge event IDs', () => {
-  it('emits sign_up once with the same browser and server ID when the callback repeats', () => {
-    const userId = '5b3f3de9-9039-4ef9-9095-82c8f37bfeb2'
-    trackSignUp('email', userId)
-    trackSignUp('email', userId)
+describe('privacy-safe funnel events', () => {
+  it('emits sign_up once with an opaque occurrence ID', () => {
+    const nonce = 'email-signup-attempt-1'
+    trackSignUp('email', nonce)
+    trackSignUp('email', nonce)
 
     const browser = pixelEvent('CompleteRegistration')
-    const bridge = serverPayload()
-    const eventId = metaEventIds.signup(userId)
-
-    expect(browser[3]).toEqual({ eventID: eventId })
-    expect(bridge).toMatchObject({ type: 'sign_up', userId })
+    expect(browser[2]).toMatchObject({
+      status: true,
+      content_name: 'email',
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
+    expect(String((browser[3] as Record<string, unknown>)?.eventID)).toMatch(/^signup:[A-Za-z0-9_-]+$/)
+    expect(JSON.stringify(browser[2])).not.toContain(nonce)
     expect(pixel.mock.calls.filter(([, name]) => name === 'CompleteRegistration')).toHaveLength(1)
-    expect(bridgeFetch.mock.calls).toHaveLength(1)
+    expect(bridgeFetch).not.toHaveBeenCalled()
   })
 
-  it('emits publish_site once with the same browser and server ID when the callback repeats', () => {
-    const siteId = '3f2b8c1e-5a4d-4e6f-9b7a-1c2d3e4f5a6b'
-    trackPublishSite(siteId)
-    trackPublishSite(siteId)
+  it('emits publish_success once per attempt without a site identifier', () => {
+    const nonce = 'publish-attempt-1'
+    trackPublishSite(nonce)
+    trackPublishSite(nonce)
 
-    const browser = pixelEvent('PublishSite')
-    const bridge = serverPayload()
-    const eventId = metaEventIds.publish(siteId)
-
-    expect(browser[3]).toEqual({ eventID: eventId })
-    expect(bridge).toMatchObject({ type: 'publish_site', siteId })
-    expect(pixel.mock.calls.filter(([, name]) => name === 'PublishSite')).toHaveLength(1)
-    expect(bridgeFetch.mock.calls).toHaveLength(1)
+    const browser = pixelEvent('PublishSuccess')
+    expect(browser[3]).toEqual({ eventID: metaEventIds.publish(nonce) })
+    expect(browser[2]).toMatchObject({ utm_source: 'direct', utm_medium: 'direct', utm_campaign: 'direct' })
+    expect(JSON.stringify(browser[2])).not.toContain(nonce)
+    expect(pixel.mock.calls.filter(([, name]) => name === 'PublishSuccess')).toHaveLength(1)
+    expect(bridgeFetch).not.toHaveBeenCalled()
   })
 
-  it('emits begin_checkout once per attempt with the same browser and server ID', () => {
+  it('emits begin_checkout once per checkout attempt with campaign props', () => {
     const params = { value: 299, currency: 'TRY', item_category: 'subscription' }
     const nonce = 'checkout-attempt-1'
     trackBeginCheckout(params, nonce)
     trackBeginCheckout(params, nonce)
 
     const browser = pixelEvent('InitiateCheckout')
-    const bridge = serverPayload()
-    expect(bridge).toMatchObject({ type: 'begin_checkout', nonce })
+    expect(browser[2]).toMatchObject({
+      value: 299,
+      currency: 'TRY',
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
     expect(browser[3]).toEqual({ eventID: metaEventIds.checkout(nonce) })
     expect(pixel.mock.calls.filter(([, name]) => name === 'InitiateCheckout')).toHaveLength(1)
-    expect(bridgeFetch.mock.calls).toHaveLength(1)
   })
 
-  it('reports repeated processing of the same generation response once', () => {
-    const response = { source: 'ai' as const }
+  it('emits generation start and success once per attempt', () => {
     const nonce = 'generation-attempt-1'
-    trackGenerateSiteCompleted(response.source, nonce)
-    trackGenerateSiteCompleted(response.source, nonce)
+    trackGenerateSiteStarted(nonce)
+    trackGenerateSiteStarted(nonce)
+    trackGenerateSiteCompleted('ai', nonce)
+    trackGenerateSiteCompleted('ai', nonce)
 
-    const browser = pixelEvent('GenerateSiteCompleted')
-    const bridge = serverPayload()
-    expect(browser[0]).toBe('trackCustom')
-    expect(browser[2]).toEqual({ source: response.source })
-    expect(browser[3]).toEqual({ eventID: metaEventIds.generate(nonce) })
-    expect(bridge).toMatchObject({ type: 'generate_site_completed', source: response.source, nonce })
-    expect(pixel.mock.calls.filter(([, name]) => name === 'GenerateSiteCompleted')).toHaveLength(1)
-    expect(bridgeFetch.mock.calls).toHaveLength(1)
+    const started = pixelEvent('SiteGenerateStart')
+    const completed = pixelEvent('SiteGenerateSuccess')
+    expect(started[3]).toEqual({ eventID: metaEventIds.generateStart(nonce) })
+    expect(completed[2]).toMatchObject({ source: 'ai', utm_source: 'direct' })
+    expect(completed[3]).toEqual({ eventID: metaEventIds.generate(nonce) })
+    expect(pixel.mock.calls.filter(([, name]) => name === 'SiteGenerateStart')).toHaveLength(1)
+    expect(pixel.mock.calls.filter(([, name]) => name === 'SiteGenerateSuccess')).toHaveLength(1)
+    expect(bridgeFetch).not.toHaveBeenCalled()
+  })
+
+  it('emits purchase with value, currency, and attribution only', () => {
+    const purchase = { transaction_id: 'tx_private_123456', value: 499, currency: 'TRY', item_category: 'subscription' as const }
+    expect(trackPurchase(purchase)).toBe(true)
+    expect(trackPurchase(purchase)).toBe(false)
+
+    const browser = pixelEvent('Purchase')
+    expect(browser[2]).toMatchObject({
+      value: 499,
+      currency: 'TRY',
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
+    expect(JSON.stringify(browser)).not.toContain(purchase.transaction_id)
+    expect(pixel.mock.calls.filter(([, name]) => name === 'Purchase')).toHaveLength(1)
+  })
+
+  it('swallows vendor errors so instrumentation cannot interrupt the caller', () => {
+    pixel.mockImplementation(() => {
+      throw new Error('analytics unavailable')
+    })
+    expect(() => trackSignUp('email', 'signup-error-attempt')).not.toThrow()
   })
 })

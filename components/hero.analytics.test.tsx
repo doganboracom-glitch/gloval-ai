@@ -2,7 +2,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONSENT_COOKIE, CONSENT_VERSION } from '@/lib/cookie-consent-storage'
-import { metaEventIds } from '@/lib/analytics/event-ids'
 import { resetVendor, setVendorReady } from '@/lib/analytics'
 
 const mocks = vi.hoisted(() => ({
@@ -67,12 +66,6 @@ let source: Source
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>
 let pixel: ReturnType<typeof vi.fn>
 
-function bridgePayload() {
-  const call = fetchMock.mock.calls.find(([input]) => String(input) === '/api/analytics/meta-event')
-  expect(call).toBeDefined()
-  return JSON.parse(String(call?.[1]?.body)) as Record<string, unknown>
-}
-
 beforeEach(() => {
   source = 'ai'
   mocks.routerPush.mockReset()
@@ -135,16 +128,19 @@ describe('homepage generate → save and edit flow', () => {
       expect(generateCalls).toHaveLength(1)
 
       const pixelCall = pixel.mock.calls.find(
-        ([method, name]) => method === 'trackCustom' && name === 'GenerateSiteCompleted',
+        ([method, name]) => method === 'trackCustom' && name === 'SiteGenerateSuccess',
       )
       expect(pixelCall).toBeDefined()
-      expect(pixelCall?.[2]).toEqual({ source: generationSource })
-
-      const payload = bridgePayload()
-      expect(payload).toMatchObject({ type: 'generate_site_completed', source: generationSource })
-      expect(pixelCall?.[3]).toEqual({ eventID: metaEventIds.generate(String(payload.nonce)) })
+      expect(pixelCall?.[2]).toMatchObject({
+        source: generationSource,
+        utm_source: 'direct',
+        utm_medium: 'direct',
+        utm_campaign: 'direct',
+      })
+      expect(String((pixelCall?.[3] as Record<string, unknown>)?.eventID)).toMatch(/^generate:/)
+      expect(fetchMock.mock.calls.filter(([input]) => String(input) === '/api/analytics/meta-event')).toHaveLength(0)
       expect(
-        pixel.mock.calls.filter(([, name]) => name === 'GenerateSiteCompleted'),
+        pixel.mock.calls.filter(([, name]) => name === 'SiteGenerateSuccess'),
       ).toHaveLength(1)
 
       fireEvent.click(screen.getByRole('button', { name: 'save & edit' }))

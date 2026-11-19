@@ -12,6 +12,7 @@ vi.mock('@/lib/analytics-config', () => ({
   GA_MEASUREMENT_ID: null,
   META_PIXEL_ID: '123456789012345',
   isMeasurementSurface: () => true,
+  isMeasurementHost: () => true,
 }))
 
 import { AnalyticsLoader } from './analytics-loader'

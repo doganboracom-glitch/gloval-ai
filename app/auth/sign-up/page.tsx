@@ -104,7 +104,6 @@ function SignUpForm() {
 
   useEffect(() => {
     setHasSignupIdea(Boolean(readSignupIdea()))
-    trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupView)
   }, [])
 
   const signupNext = resolveSignUpNextPath(next, hasSignupIdea)
@@ -221,13 +220,13 @@ function SignUpForm() {
       return
     }
     if (draftToken) clearSignupIdea()
-    // Existing analytics attribution stays fire-and-forget; signed referral binding is best-effort server-side.
+    // Persist consented attribution before the user leaves for e-mail verification.
     if (data.user?.id) {
       const attribution = readAttribution()
-      if (attribution) void saveSignupAttribution({ userId: data.user.id, attribution })
+      if (attribution) await saveSignupAttribution({ userId: data.user.id, attribution })
       await saveEmailReferralAction({ userId: data.user.id })
     }
-    trackSignUp('email', data.user?.id)
+    trackSignUp('email')
     // If email confirmation is off, a session already exists → go to dashboard.
     const step = resolvePostSignUp({
       hasSession: !!data.session,

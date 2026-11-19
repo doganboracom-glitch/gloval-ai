@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Script from 'next/script'
 import { CONSENT_CHANGE_EVENT, readConsent, type CookieConsent } from '@/lib/cookie-consent-storage'
-import { GA_MEASUREMENT_ID, META_PIXEL_ID, isMeasurementSurface } from '@/lib/analytics-config'
+import { GA_MEASUREMENT_ID, META_PIXEL_ID, isMeasurementHost, isMeasurementSurface } from '@/lib/analytics-config'
 import {
   clearVendorCookies,
   ensureFbq,
@@ -12,8 +12,13 @@ import {
   resetVendor,
   setVendorReady,
   trackEvent,
+  trackLandingView,
+  trackSignupStart,
+  trackSignUp,
 } from '@/lib/analytics'
-import { ANALYTICS_EVENTS } from '@/lib/analytics-events'
+import { ANALYTICS_EVENTS, OAUTH_SIGNUP_EVENT_PARAM } from '@/lib/analytics-events'
+import { readAttribution, snapshotFromLocation, type Attribution } from '@/lib/attribution'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import { useAttributionCapture } from '@/components/analytics/use-attribution-capture'
 import { usePurchaseReturn } from '@/components/analytics/use-purchase-return'
 
@@ -27,6 +32,7 @@ export function AnalyticsLoader() {
   const pathname = usePathname()
   const [consent, setConsent] = useState<CookieConsent | null>(null)
   const [surfaceOk, setSurfaceOk] = useState(false)
+  const [attributionSurfaceOk, setAttributionSurfaceOk] = useState(false)
 
   const gaWasOn = useRef(false)
   const metaWasOn = useRef(false)
@@ -34,24 +40,71 @@ export function AnalyticsLoader() {
   const metaInitialised = useRef(false)
   const gaLastPath = useRef<string | null>(null)
   const metaLastPath = useRef<string | null>(null)
+  const initialLandingRef = useRef<Attribution | null>(null)
+  const landingEventNonceRef = useRef<string | null>(null)
+  const landingEventSentRef = useRef(false)
+  const signupStartNonceRef = useRef<string | null>(null)
+  const signupStartSentRef = useRef(false)
 
   useEffect(() => {
     const sync = () => setConsent(readConsent())
     sync()
+    initialLandingRef.current = snapshotFromLocation()
+    landingEventNonceRef.current = newEventNonce()
     window.addEventListener(CONSENT_CHANGE_EVENT, sync)
     return () => window.removeEventListener(CONSENT_CHANGE_EVENT, sync)
   }, [])
 
   useEffect(() => {
     setSurfaceOk(isMeasurementSurface(window.location.hostname, pathname))
+    setAttributionSurfaceOk(isMeasurementHost(window.location.hostname, pathname))
   }, [pathname])
 
   const gaOn = surfaceOk && Boolean(GA_MEASUREMENT_ID) && consent?.analytics === true
   const metaOn = surfaceOk && Boolean(META_PIXEL_ID) && consent?.marketing === true
   const marketingOn = consent?.marketing === true
 
-  useAttributionCapture(consent, surfaceOk)
+  useAttributionCapture(consent, attributionSurfaceOk)
   usePurchaseReturn(pathname)
+
+  useEffect(() => {
+    if (!surfaceOk || landingEventSentRef.current || !landingEventNonceRef.current) return
+    const timer = window.setTimeout(() => {
+      const firstTouch = readAttribution()
+      const initialLanding = initialLandingRef.current
+      const landing = firstTouch
+        ? { ...firstTouch, landing_path: initialLanding?.landing_path ?? firstTouch.landing_path }
+        : initialLanding
+      if (trackLandingView(landing, landingEventNonceRef.current!)) landingEventSentRef.current = true
+    }, 150)
+    return () => window.clearTimeout(timer)
+  }, [pathname, surfaceOk, gaOn, metaOn, consent])
+
+  useEffect(() => {
+    if (pathname !== '/auth/sign-up') {
+      signupStartNonceRef.current = null
+      signupStartSentRef.current = false
+      return
+    }
+    if (!surfaceOk || signupStartSentRef.current) return
+    signupStartNonceRef.current ??= newEventNonce()
+    const timer = window.setTimeout(() => {
+      if (signupStartNonceRef.current && trackSignupStart(signupStartNonceRef.current)) {
+        signupStartSentRef.current = true
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [pathname, surfaceOk, gaOn, metaOn, consent])
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const signupEventNonce = url.searchParams.get(OAUTH_SIGNUP_EVENT_PARAM)
+    if (!signupEventNonce) return
+    const tracked = trackSignUp('google', signupEventNonce)
+    if (!tracked && readConsent()?.analytics !== false) return
+    url.searchParams.delete(OAUTH_SIGNUP_EVENT_PARAM)
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [pathname, consent, gaOn, metaOn])
 
   useEffect(() => {
     if (!GA_MEASUREMENT_ID) return
@@ -126,7 +179,7 @@ export function AnalyticsLoader() {
     const timer = window.setTimeout(() => {
       const params = {
         page_path: pathname,
-        page_location: window.location.href,
+        page_location: `${window.location.origin}${pathname ?? ''}`,
         page_title: document.title,
       }
       if (gaOn && gaLastPath.current !== pathname) {

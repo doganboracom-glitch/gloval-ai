@@ -120,7 +120,11 @@ describe('pricing_view', () => {
     reportIntersection(true)
 
     expect(trackMock).toHaveBeenCalledTimes(1)
-    expect(trackMock).toHaveBeenCalledWith('pricing_view', undefined)
+    expect(trackMock).toHaveBeenCalledWith('pricing_view', {
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
   })
 
   it('tracks when scrolling into pricing, without waiting for the whole section', () => {
@@ -132,7 +136,11 @@ describe('pricing_view', () => {
     reportIntersection(true)
     reportIntersection(true)
     expect(trackMock).toHaveBeenCalledTimes(1)
-    expect(trackMock).toHaveBeenCalledWith('pricing_view', undefined)
+    expect(trackMock).toHaveBeenCalledWith('pricing_view', {
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
   })
 
   it('sends nothing while analytics is not allowed', () => {
@@ -166,7 +174,13 @@ describe('plan_cta_click', () => {
       expect(cta).toBeTruthy()
       fireEvent.click(cta as HTMLElement)
       expect(trackMock).toHaveBeenCalledTimes(1)
-      expect(trackMock).toHaveBeenCalledWith('plan_cta_click', { plan: code, billing: 'monthly' })
+      expect(trackMock).toHaveBeenCalledWith('plan_cta_click', {
+        plan: code,
+        billing: 'monthly',
+        utm_source: 'direct',
+        utm_medium: 'direct',
+        utm_campaign: 'direct',
+      })
     }
   })
 
@@ -175,7 +189,13 @@ describe('plan_cta_click', () => {
     renderPricing()
     fireEvent.click(screen.getByRole('tab', { name: 'Yıllık' }))
     fireEvent.click(document.getElementById('plan-pro')?.querySelector('a') as HTMLElement)
-    expect(trackMock).toHaveBeenCalledWith('plan_cta_click', { plan: 'pro', billing: 'yearly' })
+    expect(trackMock).toHaveBeenCalledWith('plan_cta_click', {
+      plan: 'pro',
+      billing: 'yearly',
+      utm_source: 'direct',
+      utm_medium: 'direct',
+      utm_campaign: 'direct',
+    })
   })
 
   it('sends nothing while analytics is not allowed', () => {

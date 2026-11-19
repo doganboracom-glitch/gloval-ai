@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { getAuthCallbackUrl } from '@/lib/auth-redirect'
 import { prepareReferralSignupIntent } from '@/lib/referrals/client'
 import { useLanguage } from '@/components/language-provider'
+import { readConsent } from '@/lib/cookie-consent-storage'
+import { OAUTH_SIGNUP_FLOW_PARAM, PENDING_OAUTH_SIGNUP_COOKIE } from '@/lib/analytics-events'
 import { trackFunnelEvent, VERCEL_FUNNEL_EVENTS } from '@/lib/vercel-analytics'
 
 type Provider = 'google'
@@ -14,8 +16,8 @@ type Provider = 'google'
 /**
  * Social sign-in buttons shared by the login and sign-up screens. OAuth does
  * not distinguish "log in" from "sign up" — Supabase creates the account on
- * first authorization — so both pages trigger the exact same
- * `signInWithOAuth` call and only the button copy changes per `mode`.
+ * first authorization — so both modes use the same provider flow. Signup mode
+ * adds a short-lived, consented marker for attribution after the callback.
  */
 export function OAuthButtons({ mode, next }: { mode: 'login' | 'signup'; next?: string }) {
   const { t } = useLanguage()
@@ -24,22 +26,37 @@ export function OAuthButtons({ mode, next }: { mode: 'login' | 'signup'; next?: 
 
   async function handleClick(provider: Provider) {
     setPending(provider)
-    if (mode === 'signup') trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupSubmit, { method: provider })
+    if (mode === 'signup') {
+      trackFunnelEvent(VERCEL_FUNNEL_EVENTS.signupSubmit, { method: provider })
+      try {
+        if (readConsent()?.analytics === true) {
+          const secure = window.location.protocol === 'https:' ? '; secure' : ''
+          document.cookie = `${PENDING_OAUTH_SIGNUP_COOKIE}=${Date.now()}; path=/; max-age=600; samesite=lax${secure}`
+        }
+      } catch {
+        // A tracking-cookie failure must not block OAuth.
+      }
+    }
     await prepareReferralSignupIntent(mode === 'signup' ? 'oauth' : 'login')
     const supabase = createClient()
-    const redirectTo = getAuthCallbackUrl('/auth/oauth-callback')
+    const redirectUrl = new URL(getAuthCallbackUrl('/auth/oauth-callback'))
+    if (next) redirectUrl.searchParams.set('next', next)
+    if (mode === 'signup') redirectUrl.searchParams.set(OAUTH_SIGNUP_FLOW_PARAM, '1')
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: {
-        redirectTo: next
-          ? `${redirectTo}?next=${encodeURIComponent(next)}`
-          : redirectTo,
-      },
+      options: { redirectTo: redirectUrl.toString() },
     })
     // On success the browser is already being navigated away to the
     // provider's consent screen, so there is nothing else to do here. Only
     // an immediate, local failure (e.g. provider not enabled) reaches this.
-    if (error) setPending(null)
+    if (error) {
+      setPending(null)
+      try {
+        document.cookie = `${PENDING_OAUTH_SIGNUP_COOKIE}=; path=/; max-age=0; samesite=lax`
+      } catch {
+        // A tracking-cookie failure must not hide the OAuth error.
+      }
+    }
   }
 
   return (

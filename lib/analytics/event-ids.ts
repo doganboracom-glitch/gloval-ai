@@ -17,7 +17,8 @@ export const metaEventIds = {
   purchase: (transactionId: string) => `purchase:${part(transactionId)}`,
   signup: (userId: string) => `signup:${part(userId)}`,
   publish: (siteId: string) => `publish:${part(siteId)}`,
-  /** Per attempt: the nonce is generated in the browser and sent to both channels. */
+  /** Per attempt: nonces never include prompts or project identifiers. */
+  generateStart: (nonce: string) => `generate_start:${part(nonce)}`,
   generate: (nonce: string) => `generate:${part(nonce)}`,
   checkout: (nonce: string) => `checkout:${part(nonce)}`,
 } as const
@@ -26,6 +27,10 @@ export const metaEventIds = {
 export const EVENT_NONCE_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export function newEventNonce(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  } catch {
+    // Analytics IDs are best-effort; privacy restrictions must not block product flows.
+  }
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
 }

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, CheckCircle2, Loader2, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import { Button } from '@/components/ui/button'
+import { trackBeginCheckout } from '@/lib/analytics'
+import { newEventNonce } from '@/lib/analytics/event-ids'
 import { CheckoutConsentFields, useCheckoutConsents } from '@/components/billing/checkout-consent-fields'
 import {
   checkMyTransferIn,
@@ -81,6 +83,10 @@ export function TransferDomainDialog({ onClose }: { onClose: () => void }) {
     if (!consent.allGiven) return
     setError(null)
     startTransition(async () => {
+      trackBeginCheckout(
+        { value: step.quote.grossMinor / 100, currency: step.quote.currency, item_category: 'domain' },
+        newEventNonce(),
+      )
       const res = await startMyTransferIn(step.domain, authCode, consent.consents, undefined, {
         grossMinor: step.quote.grossMinor,
         currency: step.quote.currency,
